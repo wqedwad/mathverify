@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import sympy as sp
-from sympy import S, Interval, FiniteSet, Union, ImageSet, ConditionSet, Lambda, pi, oo
+from sympy import S, Interval, FiniteSet, Union, ImageSet, ConditionSet, Lambda, oo
 
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run

@@ -2,7 +2,6 @@
 answer-key isolation of the verifier inputs, mutation bookkeeping."""
 from collections import Counter
 
-import pytest
 
 from mathverify.ir import ProblemIR, FORBIDDEN_KEYS
 from mathverify.solution import Solution

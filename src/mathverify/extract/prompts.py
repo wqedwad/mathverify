@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..llm.schemas import ir_to_llm, PARAM_DOC
+from ..llm.schemas import ir_to_llm
 
 ROOT = Path(__file__).resolve().parents[3]
 

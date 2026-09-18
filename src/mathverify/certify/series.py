@@ -15,11 +15,11 @@ from typing import Any
 
 import mpmath as mp
 import sympy as sp
-from sympy import S, oo, Function, Lambda
+from sympy import oo, Function, Lambda
 
 from ..equiv import answers_equivalent
 from ..equiv.numeric import num_equal
-from ..normalize.parse import parse_relation, parse_expr_str, build_namespace, ParseError
+from ..normalize.parse import parse_relation, parse_expr_str, ParseError
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
 

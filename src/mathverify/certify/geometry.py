@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 import sympy as sp
-from sympy import Eq, sqrt
+from sympy import Eq
 
 from ..equiv import answers_equivalent
 from .base import Ctx, Timer, result, unknown, parse_or_unknown

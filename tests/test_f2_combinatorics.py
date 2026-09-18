@@ -4,7 +4,7 @@ import pytest
 import sympy as sp
 
 from mathverify.certify.combinatorics import (compile_predicate, PredicateError, space_size, count_exact,
-                                              certify_probability, certify_count, ENUM_CAP)
+                                              certify_probability, ENUM_CAP)
 from mathverify.verifier import verify
 
 

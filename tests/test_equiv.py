@@ -2,7 +2,7 @@
 Handoff §7: rule-based recall >= 0.95 on equivalent-form pairs, FP = 0."""
 import pytest
 import sympy as sp
-from sympy import pi, sqrt, log, exp, I, Rational, Interval, FiniteSet, Union, S, oo
+from sympy import pi, log, Interval, FiniteSet, S, oo
 
 from mathverify.equiv import answers_equivalent
 from mathverify.normalize.parse import parse_expr_str, parse_set_str, parse_answer

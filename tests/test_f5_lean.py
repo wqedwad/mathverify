@@ -3,7 +3,7 @@
 import pytest
 import sympy as sp
 
-from mathverify.formal.statement import build_statement, sympy_to_lean, LeanPrintError, relation_to_lean
+from mathverify.formal.statement import build_statement, sympy_to_lean, LeanPrintError
 from mathverify.formal import SAFE_AXIOMS
 
 a, b, x = sp.symbols("a b x", real=True)
@@ -70,6 +70,81 @@ def test_out_of_scope_returns_none(evalset_items):
     for iid in ("ayt-lim-001", "tyt-geo-001", "tyt-ola-001"):
         it = next(i for i in evalset_items if i["id"] == iid)
         assert build_statement(it["problem_ir"], it["solution"]["claimed_answer"]) is None
+
+
+# ------------------------------------------------------------------ faithfulness of templates
+def test_the_cas_must_not_pre_compute_the_target(evalset_items):
+    """A normal parse folds `gcd(84,120) + lcm(4,6)` to 24 and the theorem degenerates to
+    `24 = 24`. Structural parsing keeps the operations so Lean recomputes them."""
+    it = next(i for i in evalset_items if i["id"] == "tyt-say-001")     # gcd(84, 120) = 12
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st is not None
+    assert "Int.gcd" in st.goal and st.goal.strip() != "12 = 12"
+
+
+def test_a_tautological_statement_is_rejected():
+    from mathverify.formal.statement import LeanStatement, is_trivial
+    triv = LeanStatement("t", "", [], "5 = 5", "ℝ", "closed_arithmetic")
+    assert is_trivial(triv)
+    real = LeanStatement("t", "", [], "Real.sqrt 25 = 5", "ℝ", "closed_arithmetic")
+    assert not is_trivial(real)
+    quantified = LeanStatement("t", "", [], "∀ x : ℝ, x = x", "ℝ", "k")
+    assert not is_trivial(quantified)
+
+
+def test_solution_set_template_asserts_that_each_root_really_is_one(evalset_items):
+    """A bare guarded iff is vacuously true for a root the domain excludes, so the statement
+    must also claim that every listed root satisfies the conditions and the equation.
+    tyt-den-010 adds the extraneous root 0 to the true answer {5}: the extra conjunct
+    `sqrt(4+0) = -2+0` is false, which is what keeps the wrong claim unprovable."""
+    ok = next(i for i in evalset_items if i["id"] == "tyt-den-002")     # {5}, correct
+    bad = next(i for i in evalset_items if i["id"] == "tyt-den-010")    # {0, 5}, extraneous root
+    s_ok = build_statement(ok["problem_ir"], ok["solution"]["claimed_answer"])
+    s_bad = build_statement(bad["problem_ir"], bad["solution"]["claimed_answer"])
+    assert s_ok is not None and s_bad is not None
+    assert s_ok.kind == s_bad.kind == "solve_equation_set"
+    assert "∧" in s_ok.goal and "∧" in s_bad.goal
+    assert s_ok.goal != s_bad.goal
+
+
+def test_a_root_that_makes_the_expression_undefined_is_refused_not_guessed(evalset_items):
+    """tyt-den-011 claims the root 3 for an equation with x - 3 in a denominator: substituting
+    gives a division by zero, which has no faithful Lean rendering, so the template abstains
+    (L7 is positive-only, so abstaining is safe; the deterministic layers refute the item)."""
+    it = next(i for i in evalset_items if i["id"] == "tyt-den-011")
+    assert build_statement(it["problem_ir"], it["solution"]["claimed_answer"]) is None
+
+
+def test_inequality_template_pins_the_claimed_set_into_the_domain(evalset_items):
+    """tyt-esf-012 differs from the correct answer only at an endpoint that the domain excludes;
+    without the second half of the statement the guarded iff cannot tell them apart."""
+    ok = next(i for i in evalset_items if i["id"] == "tyt-esf-002")
+    bad = next(i for i in evalset_items if i["id"] == "tyt-esf-012")
+    s_ok = build_statement(ok["problem_ir"], ok["solution"]["claimed_answer"])
+    s_bad = build_statement(bad["problem_ir"], bad["solution"]["claimed_answer"])
+    for st in (s_ok, s_bad):
+        assert st is not None and st.goal.count("∀") == 2
+    assert s_ok.goal != s_bad.goal
+
+
+def test_matrix_literals_carry_their_element_type(evalset_items):
+    it = next(i for i in evalset_items if i["id"] == "uni-la-004")
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st is not None and "Matrix (Fin 2) (Fin 2) ℝ" in st.goal
+    assert "*ᵥ" not in st.goal and "Matrix.mulVec" in st.goal
+
+
+def test_templates_cover_the_expected_task_kinds(evalset_items):
+    from collections import Counter
+    kinds = Counter()
+    for it in evalset_items:
+        st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+        if st:
+            kinds[st.kind] += 1
+    assert sum(kinds.values()) >= 110
+    for expected in ("evaluate_system", "closed_arithmetic", "solve_equation_set", "equation_of_iff",
+                     "linalg_inverse", "series_sum_finite", "count_integers_finset"):
+        assert kinds[expected] > 0, expected
 
 
 # ------------------------------------------------------------------ real Lean

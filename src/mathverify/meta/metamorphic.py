@@ -17,12 +17,11 @@ import random
 from typing import Any
 
 import sympy as sp
-from sympy import S
 
 from ..certify.base import Timer, result, unknown
 from ..equiv import answers_equivalent
 from ..intake.structured import load_problem_ir
-from ..normalize.parse import build_namespace, parse_relation, parse_expr_str, parse_answer, DOMAIN_ASSUMPTIONS
+from ..normalize.parse import build_namespace, parse_relation, parse_expr_str, parse_answer
 
 __all__ = ["perturb_ir", "metamorphic_check", "l5_layer"]
 

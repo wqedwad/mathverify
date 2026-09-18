@@ -15,13 +15,12 @@ l4_layer(...) — compares the claimed answer with the re-solver's answer:
 """
 from __future__ import annotations
 
-import json
 import time
 from typing import Any
 
 import sympy as sp
 
-from ..certify.base import Timer, result, unknown, make_ctx
+from ..certify.base import Timer, result, unknown
 from ..equiv import answers_equivalent
 from ..intake.structured import load_problem_ir, load_solution, SchemaError
 from ..llm import get_client, other_family, LLMError

@@ -18,7 +18,7 @@ from ..intake.restructure import extract_final_answer
 from ..intake.structured import load_problem_ir, load_solution, SchemaError
 from ..llm import get_client, LLMError
 from ..llm.schemas import SOLUTION_SCHEMA, solution_from_llm
-from ..normalize.parse import build_namespace, parse_answer, parse_relation, ParseError
+from ..normalize.parse import build_namespace, parse_answer, parse_relation
 from .prompts import RESTRUCTURE_SYSTEM
 from .roundtrip import render_ir
 

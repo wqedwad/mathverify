@@ -7,7 +7,7 @@ from typing import Any
 
 import mpmath as mp
 import sympy as sp
-from sympy import S, oo
+from sympy import S
 
 from ..equiv import answers_equivalent
 from ..equiv.numeric import num_equal

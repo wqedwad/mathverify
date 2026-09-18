@@ -18,7 +18,7 @@ from typing import Any
 from ..certify.base import Timer, result, unknown
 from ..llm import get_client, other_family, LLMError
 from ..llm.schemas import _obj, _s
-from .lean_client import LeanClient, LeanResult, get_lean, LeanUnavailable
+from .lean_client import LeanClient, get_lean, LeanUnavailable
 from .statement import LeanStatement, build_statement
 
 __all__ = ["prove_statement", "l7_layer", "TACTIC_LADDER", "IFF_LADDER", "ladder_for", "PROOF_SCHEMA",
@@ -64,10 +64,77 @@ IFF_LADDER = [
 ]
 
 
-def ladder_for(kind: str) -> list[str]:
-    if kind in ("solve_equation_set", "solve_equation_iff"):
-        return IFF_LADDER + TACTIC_LADDER
-    return TACTIC_LADDER
+# ∀ x y, (claimed curve equation) ↔ (the one the conditions determine)
+EQUATION_OF_LADDER = [
+    "  intro x y\n  constructor <;> intro h <;> linarith",
+    "  intro x y\n  constructor <;> intro h <;> nlinarith [h, sq_nonneg x, sq_nonneg y]",
+    "  intro x y\n  constructor <;> intro h <;> ring_nf at h ⊢ <;> linarith",
+    "  intro x y\n  constructor <;> intro h <;> ring_nf at h ⊢ <;> nlinarith [h]",
+]
+
+# ∀ x, (inequality) ↔ (a < x ∧ x < b), and the rational case ∀ x, d ≠ 0 → (p/d ≥ 0 ↔ ...)
+INEQ_LADDER = [
+    "  intro x\n  constructor\n  · intro h\n    constructor <;> nlinarith\n  · rintro ⟨h1, h2⟩\n    nlinarith",
+    "  intro x\n  constructor\n  · intro h\n    refine ⟨by nlinarith, by nlinarith⟩\n  · rintro ⟨h1, h2⟩\n    nlinarith [h1, h2, mul_pos (sub_pos.mpr h1) (sub_pos.mpr h2)]",
+    "  intro x hx\n  rw [ge_iff_le, div_nonneg_iff]\n  constructor\n"
+    "  · rintro (⟨h1, h2⟩ | ⟨h1, h2⟩)\n    · right; linarith\n"
+    "    · left\n      rcases lt_or_eq_of_le h2 with h3 | h3\n      · linarith\n      · exact absurd h3 hx\n"
+    "  · rintro (h | h)\n    · right; constructor <;> linarith\n    · left; constructor <;> linarith",
+    "  intro x hx\n  rw [ge_iff_le, div_nonneg_iff]\n  constructor\n"
+    "  · rintro (⟨h1, h2⟩ | ⟨h1, h2⟩)\n    · left; linarith\n"
+    "    · right\n      rcases lt_or_eq_of_le h2 with h3 | h3\n      · linarith\n      · exact absurd h3 hx\n"
+    "  · rintro (h | h)\n    · left; constructor <;> linarith\n    · right; constructor <;> linarith",
+    "  intro x\n  constructor <;> intro h <;> [skip; skip] <;> nlinarith",
+]
+
+# matrix goals over Fin n: entry-wise after `ext` / `funext`. Measured in this toolchain:
+# `dotProduct` lives at the root (not `Matrix.dotProduct`), and every matrix literal needs its
+# element type ascribed or it elaborates as ℕ.
+MATRIX_LADDER = [
+    "  constructor <;>\n    (ext i j; fin_cases i <;> fin_cases j <;>\n"
+    "      norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ])",
+    "  ext i j\n  fin_cases i <;> fin_cases j <;>\n"
+    "    norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ, pow_succ]",
+    "  refine ⟨?_, ?_⟩\n"
+    "  · funext i\n    fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]\n"
+    "  · intro h\n    have h0 := congrFun h 0\n    norm_num at h0",
+    "  refine ⟨?_, by norm_num [Matrix.det_fin_two]⟩\n"
+    "  funext i\n  fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]",
+    "  norm_num [Matrix.det_fin_two, Matrix.mul_fin_two, Matrix.one_fin_two]",
+]
+
+COUNT_LADDER = [
+    "  refine ⟨fun x hx => ?_, by decide⟩\n  simp only [Finset.mem_Icc, abs_lt] at *\n  omega",
+    "  refine ⟨fun x hx => ?_, by decide⟩\n  simp only [Finset.mem_Icc] at *\n  nlinarith [hx]",
+    "  refine ⟨fun x hx => ?_, by decide⟩\n  simp only [Finset.mem_Icc]\n  constructor <;> nlinarith [hx]",
+]
+
+SUM_LADDER = ["  decide", "  norm_num [Finset.sum_Icc_succ_top]", "  simp [Finset.sum_Icc_succ_top]; norm_num"]
+
+EXTREMUM_LADDER = [
+    "  constructor\n  · norm_num\n  · intro x hx\n    obtain ⟨h1, h2⟩ := hx\n    nlinarith [h1, h2, sq_nonneg x]",
+]
+
+_BY_KIND = {
+    "solve_equation_set": IFF_LADDER,
+    "solve_equation_iff": IFF_LADDER,
+    "solve_inequality_iff": INEQ_LADDER,
+    "equation_of_iff": EQUATION_OF_LADDER,
+    "linalg_inverse": MATRIX_LADDER,
+    "linalg_matrix_expr": MATRIX_LADDER,
+    "linalg_eigenvector": MATRIX_LADDER,
+    "linalg_solve_system": MATRIX_LADDER,
+    "linalg_eigenvalues": MATRIX_LADDER,
+    "count_integers_finset": COUNT_LADDER,
+    "series_sum_finite": SUM_LADDER,
+    "extremum_max": EXTREMUM_LADDER,
+    "extremum_min": EXTREMUM_LADDER,
+}
+
+
+def ladder_for(kind: str, hints: tuple[str, ...] = ()) -> list[str]:
+    """Statement-specific hints first, then the ladder for that template, then the generic one."""
+    return list(hints) + _BY_KIND.get(kind, []) + TACTIC_LADDER
 
 PROOF_SCHEMA = _obj({
     "proof": _s("Lean 4 tactic block, each line indented by two spaces, no 'theorem' header, no sorry"),
@@ -114,7 +181,7 @@ def prove_statement(stmt: LeanStatement, *, solver_family: str | None = None, le
         out["errors"].append(f"lean_unavailable: {type(e).__name__}: {e}")
         return out
     # 1/2 deterministic tactic ladder
-    for tac in ladder_for(stmt.kind):
+    for tac in ladder_for(stmt.kind, getattr(stmt, "hints", ())):
         code = stmt.theorem(tac)
         out["statement"] = code.split(":= by")[0].strip()
         try:

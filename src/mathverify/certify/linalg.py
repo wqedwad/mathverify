@@ -16,7 +16,7 @@ from typing import Any
 import sympy as sp
 from sympy import Matrix, eye, FiniteSet
 
-from ..equiv import answers_equivalent, as_matrix as _as_matrix, matrices_equal
+from ..equiv import as_matrix as _as_matrix, matrices_equal
 from ..equiv.sets import scalar_equal, set_equal
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown

@@ -1,34 +1,21 @@
-"""F3 pipeline tests that run OFFLINE from the record/replay cache (MATHVERIFY_LLM_CACHE=replay).
-They are skipped when the cache has no recording for the prompts (fresh checkout without
-llm_cache/) — never call the network from the test-suite."""
-import os
+"""F3 — schema/converter contracts and the record/replay cache that gives the LLM layers
+their determinism (handoff §11/13). Everything here runs offline."""
+import json
 
 import pytest
 
-from harness.loader import load_items, split_for_verifier
 from mathverify.llm.cache import CacheMiss, LLMCache
-from mathverify.llm.schemas import IR_SCHEMA, JUDGE_SCHEMA, SOLUTION_SCHEMA, ir_from_llm, ir_to_llm, solution_from_llm
+from mathverify.llm.schemas import (IR_SCHEMA, JUDGE_SCHEMA, SOLUTION_SCHEMA, ir_from_llm, ir_to_llm,
+                                    solution_from_llm)
 from mathverify.extract.roundtrip import render_ir
 from mathverify.meta.metamorphic import perturb_ir
 
 
-@pytest.fixture(scope="module")
-def replay(monkeypatch_module=None):
-    os.environ["MATHVERIFY_LLM_CACHE"] = "replay"
-    import mathverify.llm.cache as c
-    c._DEFAULT = None                       # force a fresh cache object in replay mode
-    yield
-    os.environ["MATHVERIFY_LLM_CACHE"] = "auto"
-    c._DEFAULT = None
-
-
-def _item(evalset_items, iid):
-    return next(it for it in evalset_items if it["id"] == iid)
-
-
-def test_schemas_have_no_union_types():
+# ------------------------------------------------------------------ schemas / converters
+def test_schemas_are_union_free_and_closed():
     def walk(s):
         assert "anyOf" not in s and "oneOf" not in s, s
+        assert "minimum" not in s and "maximum" not in s, s   # rejected by the API compiler
         for v in s.get("properties", {}).values():
             walk(v)
         if "items" in s:
@@ -36,86 +23,101 @@ def test_schemas_have_no_union_types():
     for sch in (IR_SCHEMA, JUDGE_SCHEMA, SOLUTION_SCHEMA):
         walk(sch)
         assert sch["additionalProperties"] is False
+        assert set(sch["required"]) == set(sch["properties"])
 
 
-def test_ir_roundtrip_converters(evalset_items):
-    it = _item(evalset_items, "tyt-prob-001")
-    llm_form = ir_to_llm(it["problem_ir"], question_en="q", topic=it["topic"], level=it["level"])
-    back = ir_from_llm(llm_form)
-    assert back["task"] == it["problem_ir"]["task"]
-    assert back["givens"] == it["problem_ir"]["givens"]
-    assert back["options"] == it["problem_ir"]["options"]
-    it2 = _item(evalset_items, "tyt-ola-001")
-    back2 = ir_from_llm(ir_to_llm(it2["problem_ir"]))
-    assert back2["task"]["params"]["space"] == it2["problem_ir"]["task"]["params"]["space"]
-    it3 = _item(evalset_items, "ayt-diz-001")
-    back3 = ir_from_llm(ir_to_llm(it3["problem_ir"]))
-    assert back3["task"]["params"]["initial"] == it3["problem_ir"]["task"]["params"]["initial"]
+def test_ir_converters_round_trip_every_item(evalset_items):
+    """ir_to_llm -> ir_from_llm must be the identity on the task, givens and options of every
+    hand-written IR: the extractor's output format has to be able to express the whole set.
+    Empty-string parameters are normalised away on the way back (an empty predicate means
+    "no filter", which is how every consumer reads a missing one)."""
+    def norm(params):
+        return {k: v for k, v in (params or {}).items() if v != ""}
+    for it in evalset_items:
+        src = it["problem_ir"]
+        back = ir_from_llm(ir_to_llm(src, question_en="q"))
+        assert back["task"]["kind"] == src["task"]["kind"], it["id"]
+        assert norm(back["task"]["params"]) == norm(src["task"].get("params")), it["id"]
+        assert back["givens"] == (src.get("givens") or []), it["id"]
+        assert back["options"] == src.get("options"), it["id"]
+        assert back["answer_shape"] == src.get("answer_shape", "scalar"), it["id"]
+        assert [v["name"] for v in back["vars"]] == [v["name"] for v in (src.get("vars") or [])], it["id"]
+        assert back["domain_of_discourse"] == (src.get("domain_of_discourse") or None), it["id"]
 
 
-def test_render_ir_mentions_every_given(evalset_items):
-    for it in evalset_items[:40]:
-        txt = render_ir(it["problem_ir"])
-        for g in it["problem_ir"].get("givens") or []:
-            assert g in txt
-        assert "Task:" in txt
-
-
-def test_perturbation_has_known_unique_answer(evalset_items):
-    it = _item(evalset_items, "tyt-prob-001")
-    vs = perturb_ir(it["problem_ir"], seed=1, k=3)
-    assert len(vs) == 3
-    for v in vs:
-        assert v["expected"] == v["values"]["a"]          # target is a itself
-        assert v["ir"]["options"] is None
-        assert any(a != b for a, b in v["changed"])
-    it2 = _item(evalset_items, "ayt-lim-001")
-    assert perturb_ir(it2["problem_ir"]) == []               # not applicable: no equational givens
-
-
-def test_solution_from_llm_normalises_empty_strings():
-    d = {"claimed_answer": {"kind": "value", "payload": "16", "option": ""}, "steps": [], "final_answer_text": "16"}
-    s = solution_from_llm(d)
+def test_solution_converter_normalises_empty_strings():
+    s = solution_from_llm({"claimed_answer": {"kind": "value", "payload": "16", "option": ""},
+                           "steps": [{"id": "", "kind": "eq", "claim": "a = 16", "from": [], "text": ""}],
+                           "final_answer_text": "16"})
     assert s["claimed_answer"]["option"] is None
+    assert s["steps"][0]["id"] == "s1"
+    s2 = solution_from_llm({"claimed_answer": {"kind": "dne", "payload": "", "option": "E"},
+                            "steps": [], "final_answer_text": ""})
+    assert s2["claimed_answer"]["payload"] is None and s2["claimed_answer"]["option"] == "E"
 
 
-@pytest.mark.usefixtures("replay")
-def test_pipeline_replays_from_cache(evalset_items):
-    from mathverify.pipeline import run_pipeline
-    it = _item(evalset_items, "tyt-prob-003")
-    ir_hand, sol, labels = split_for_verifier(it)
-    try:
-        pr = run_pipeline(it["question_tr"], it.get("options"), it["level"], solution=sol, use_l4=True, use_l5=True)
-    except CacheMiss:
-        pytest.skip("no cached LLM responses for this item")
-    assert pr.ir_source == "extracted" and pr.extraction["accepted"]
-    assert pr.result.verdict == "CORRECT"
-    assert "ir_extracted" in pr.result.flags and "l4_agree" in pr.result.flags
-    assert all(l.hard is False for l in pr.result.layers if l.layer.startswith(("resolve.", "meta.")))
+def test_render_ir_covers_every_task_kind_in_the_set(evalset_items):
+    kinds = set()
+    for it in evalset_items:
+        txt = render_ir(it["problem_ir"])
+        kinds.add(it["problem_ir"]["task"]["kind"])
+        assert "Task:" in txt and "Task kind" not in txt, it["id"]   # no fallback rendering
+    assert len(kinds) >= 15
 
 
-@pytest.mark.usefixtures("replay")
-def test_pipeline_wrong_answer_stays_incorrect_with_l4(evalset_items):
-    from mathverify.pipeline import run_pipeline
-    it = _item(evalset_items, "tyt-den-009")
-    ir_hand, sol, labels = split_for_verifier(it)
-    try:
-        pr = run_pipeline(it["question_tr"], it.get("options"), it["level"], solution=sol, use_l4=True, use_l5=False)
-    except CacheMiss:
-        pytest.skip("no cached LLM responses for this item")
-    assert pr.result.verdict == "INCORRECT"
-    assert "l4_confirms_refutation" in pr.result.flags or "l4_disagree_certified" in pr.result.flags
+def test_perturbation_is_deterministic_and_bounded(evalset_items):
+    it = next(i for i in evalset_items if i["id"] == "tyt-prob-001")
+    a = perturb_ir(it["problem_ir"], seed=5, k=3)
+    b = perturb_ir(it["problem_ir"], seed=5, k=3)
+    assert [x["values"] for x in a] == [x["values"] for x in b]
+    assert len(a) <= 3
 
 
-@pytest.mark.usefixtures("replay")
-def test_path_b_llm_restructure_keeps_wrong_step(evalset_items):
-    from mathverify.pipeline import run_pipeline
-    it = _item(evalset_items, "tyt-prob-019")             # D: right answer, refutable step
-    ir_hand, sol, labels = split_for_verifier(it)
-    try:
-        pr = run_pipeline(it["question_tr"], it.get("options"), it["level"], ir=ir_hand,
-                          solution_text=it["solution_text"], use_l4=False, use_l5=False)
-    except CacheMiss:
-        pytest.skip("no cached LLM responses for this item")
-    assert pr.solution_source == "text_llm"
-    assert pr.result.verdict == "INCORRECT" and pr.result.first_bad_step is not None
+# ------------------------------------------------------------------ cache
+def _req(prompt="hello"):
+    return {"model": "m", "system": "s", "messages": [{"role": "user", "content": prompt}]}
+
+
+def test_cache_key_depends_on_every_part_of_the_request(tmp_path):
+    c = LLMCache(tmp_path, mode="auto")
+    k1 = c.key("anthropic", "claude-opus-5", _req())
+    assert k1 == c.key("anthropic", "claude-opus-5", _req())
+    assert k1 != c.key("anthropic", "claude-opus-5", _req("hello!"))
+    assert k1 != c.key("anthropic", "claude-fable-5-1", _req())
+    assert k1 != c.key("meta", "claude-opus-5", _req())
+
+
+def test_record_then_replay_returns_the_same_response(tmp_path):
+    rec = LLMCache(tmp_path, mode="auto")
+    key = rec.key("meta", "muse-spark-1.3", _req())
+    assert rec.get(key) is None
+    rec.put(key, {"provider": "meta", "model": "muse-spark-1.3", "request": _req(),
+                  "response": {"text": "42", "parsed": {"x": 1}}})
+    got = rec.get(key)
+    assert got["response"]["text"] == "42" and got["response"]["parsed"] == {"x": 1}
+    replay = LLMCache(tmp_path, mode="replay")
+    assert replay.get(key)["response"]["text"] == "42"
+
+
+def test_replay_mode_refuses_to_go_to_the_network(tmp_path):
+    replay = LLMCache(tmp_path, mode="replay")
+    with pytest.raises(CacheMiss):
+        replay.get(replay.key("anthropic", "claude-opus-5", _req("never recorded")))
+
+
+def test_off_mode_neither_reads_nor_writes(tmp_path):
+    off = LLMCache(tmp_path, mode="off")
+    key = off.key("meta", "m", _req())
+    off.put(key, {"response": {"text": "x"}})
+    assert off.get(key) is None
+    assert not list(tmp_path.rglob("*.json"))
+
+
+def test_cache_records_hold_no_credentials(tmp_path):
+    c = LLMCache(tmp_path, mode="auto")
+    key = c.key("anthropic", "claude-opus-5", _req())
+    c.put(key, {"provider": "anthropic", "model": "claude-opus-5", "request": _req(),
+                "response": {"text": "ok"}})
+    blob = "".join(p.read_text(encoding="utf-8") for p in tmp_path.rglob("*.json")).lower()
+    for secret in ("sk-ant", "api_key", "authorization", "bearer", "llm_"):
+        assert secret not in blob

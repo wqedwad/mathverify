@@ -5,11 +5,10 @@ state, and no decision logic — decisions live in `certify/` and `equiv/`.
 """
 from __future__ import annotations
 
-from typing import Any
 
 import mpmath as mp
 import sympy as sp
-from sympy import S, Interval, FiniteSet, Poly, oo
+from sympy import S, Interval, Poly, oo
 
 
 # ----------------------------------------------------------------------------

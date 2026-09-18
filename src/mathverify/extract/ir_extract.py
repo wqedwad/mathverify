@@ -21,8 +21,8 @@ from ..intake.structured import load_problem_ir, SchemaError
 from ..ir import LeakageError
 from ..llm import get_client, LLMError
 from ..llm.schemas import IR_SCHEMA, ir_from_llm
-from ..normalize.parse import build_namespace, parse_relation, parse_expr_str, parse_answer, ParseError
-from .prompts import EXTRACT_SYSTEM, exemplar_block, extraction_user_prompt, extraction_system_blocks
+from ..normalize.parse import build_namespace, parse_relation, parse_expr_str, parse_answer
+from .prompts import exemplar_block, extraction_user_prompt, extraction_system_blocks
 from .roundtrip import judge_roundtrip
 
 __all__ = ["extract_ir", "validate_ir", "normalize_task", "ExtractResult"]

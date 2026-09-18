@@ -16,11 +16,20 @@ from harness.loader import load_items, split_for_verifier  # noqa: E402
 
 
 def _answer_is_right(it, ir, sol, labels) -> bool:
-    """Harness-side (label) check of whether the CLAIMED VALUE equals the gold answer."""
+    """Is the CLAIMED VALUE mathematically right? (The formal layer certifies the value, not
+    the reasoning, so this is the reference a Lean proof must be judged against.)
+
+    Cells A, B and D carry a correct answer by construction — including B items whose answer is
+    a valid but non-canonical representative (e.g. a different eigenvector), which a literal
+    comparison with the gold string would wrongly call wrong. Only C items need the comparison,
+    because some of them are wrong solely in the option letter while the value is right.
+    """
     import sympy as sp
     from mathverify.normalize.parse import build_namespace, parse_answer
     from mathverify.intake.structured import load_problem_ir
     from mathverify.equiv import answers_equivalent
+    if labels["cell"] in ("A", "B", "D"):
+        return True
     ca = sol["claimed_answer"]
     gold = it["gold_answer"]
     try:
@@ -33,7 +42,7 @@ def _answer_is_right(it, ir, sol, labels) -> bool:
         ok, _ = answers_equivalent(a, b, shape=shape)
         return bool(ok)
     except Exception:
-        return labels["cell"] in ("A", "B", "D")
+        return False
 
 
 def main(argv=None):

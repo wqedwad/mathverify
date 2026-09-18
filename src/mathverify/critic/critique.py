@@ -2,16 +2,15 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import Any
 
 import sympy as sp
 
-from ..certify.base import Timer, result, unknown, make_ctx
+from ..certify.base import Timer, result, unknown
 from ..certify.domain import relation_holds_at
-from ..intake.structured import load_problem_ir, load_solution
+from ..intake.structured import load_problem_ir
 from ..llm import get_client, other_family, LLMError
-from ..llm.schemas import _obj, _s, _arr
+from ..llm.schemas import _obj, _s
 from ..normalize.parse import build_namespace, parse_relation
 from ..extract.prompts import CRITIC_SYSTEM, META_SYSTEM
 from ..extract.roundtrip import render_ir

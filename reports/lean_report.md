@@ -1,33 +1,47 @@
 # F5 (Lean) taraması — modelsiz, deterministik ifade + Mathlib taktik merdiveni
 
-- Öğe: **260** · Lean ifadesi üretilebilen: **68** (26.2%)
-- Kanıtlanan: **49** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **49**
+- Öğe: **260** · Lean ifadesi üretilebilen: **114** (43.8%)
+- Kanıtlanan: **81** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **81**
 - **Yanlış cevaplı öğelerde kanıt (FP): 0** ✓ hedef 0
-- Kapsama (tüm sette formal sertifika): 18.8% · ifadesi olanlar içinde: 72.1%
-- Şablon türleri: {'closed_arithmetic': 38, 'evaluate_system': 29, 'solve_equation_set': 1}
-- Süre: 35 s (ortalama 133 ms/öğe)
+- Kapsama (tüm sette formal sertifika): 31.2% · ifadesi olanlar içinde: 71.1%
+- Şablon türleri: {'equation_of_iff': 10, 'closed_arithmetic': 28, 'series_sum_finite': 4, 'extremum_max': 3, 'solve_equation_set': 12, 'evaluate_system': 32, 'solve_inequality_iff': 5, 'count_integers_finset': 3, 'linalg_inverse': 3, 'linalg_eigenvalues': 3, 'linalg_eigenvector': 3, 'linalg_solve_system': 4, 'linalg_matrix_expr': 4}
+- Süre: 54 s (ortalama 208 ms/öğe)
 
-- Sertifikalı öğelerin hücre dağılımı: {'A': 20, 'B': 16, 'D': 12, 'C': 1} (D hücresi = cevabı doğru, adımı bozuk: formal katman cevabı onaylar, adımı değil)
-- Kullanılan taktikler: {'  norm_num': 27, '  nlinarith': 2, '  linarith': 10, '  omega': 10}
+- Sertifikalı öğelerin hücre dağılımı: {'A': 35, 'B': 28, 'D': 17, 'C': 1} (D hücresi = cevabı doğru, adımı bozuk: formal katman cevabı onaylar, adımı değil)
+- Kullanılan taktikler: {'  intro x y\n  constructor <;> intro h <;> linarith': 6, '  rw [show (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 5 ^ 2 by norm_num,\n     Real.sqrt_sq (by norm_num : (0:ℝ) ≤ 5)]': 3, '  norm_num': 13, '  decide': 3, '  rw [show ((75 * Real.pi) / 180) = Real.pi / 6 + Real.pi / 4 by ring, Real.sin_add]\n  simp only [Real.sin_pi_div_four, Real.cos_pi_div_four, Real.sin_pi_div_six, Real.cos_pi_div_six, Real.sin_pi_div_three, Real.cos_pi_div_three, Real.sin_pi_div_two, Real.cos_pi_div_two]\n  rw [show Real.sqrt 6 = Real.sqrt 2 * Real.sqrt 3 from by\n        rw [← Real.sqrt_mul (by norm_num : (0:ℝ) ≤ 2)]; norm_num]\n  ring': 3, '  refine ⟨⟨3, by norm_num, by norm_num⟩, fun x hx => ?_⟩\n  obtain ⟨h1, h2⟩ := hx\n  nlinarith [h1, h2, sq_nonneg (x - 3), sq_nonneg (x + (3 / 2 : ℝ)), mul_nonneg (by linarith : (0:ℝ) ≤ 3 - x) (sq_nonneg (x - 3)), mul_nonneg (by linarith : (0:ℝ) ≤ 3 - x) (sq_nonneg (x + (3 / 2 : ℝ))), mul_nonneg (by linarith : (0:ℝ) ≤ x - (-2 : ℝ)) (sq_nonneg (x - 3)), mul_nonneg (by linarith : (0:ℝ) ≤ x - (-2 : ℝ)) (sq_nonneg (x + (3 / 2 : ℝ)))]': 2, '  refine ⟨fun x h1 h2 => ?_, by norm_num, by norm_num, by norm_num⟩\n  rw [← Real.log_mul (by linarith) (by linarith)]\n  constructor\n  · intro h\n    have hinj := Real.log_injOn_pos (Set.mem_Ioi.mpr (by nlinarith)) (Set.mem_Ioi.mpr (by norm_num : (0:ℝ) < 3)) h\n    nlinarith [hinj]\n  · rintro rfl\n    norm_num': 2, '  refine ⟨fun x h1 => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    have hnn : (0:ℝ) ≤ Real.sqrt (4 + x) := Real.sqrt_nonneg _\n    have hsq := Real.sq_sqrt (show (0:ℝ) ≤ (4 + x) by linarith)\n    nlinarith [h, hsq, hnn]\n  · rintro rfl\n    norm_num': 3, '  refine fun x h1 => ?_\n  intro h\n  field_simp at h\n  exact h1 (by linarith)': 1, "  refine ⟨fun x => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    rcases (abs_eq (by norm_num : (0:ℝ) ≤ 5)).mp h with h' | h'\n    · right; linarith\n    · left; linarith\n  · rintro (rfl | rfl) <;> rw [abs_eq (by norm_num : (0:ℝ) ≤ 5)] <;> norm_num": 3, '  nlinarith': 1, '  intro x\n  constructor\n  · intro h\n    constructor <;> nlinarith\n  · rintro ⟨h1, h2⟩\n    nlinarith': 2, '  refine ⟨fun x hx => ?_, fun x hm => ?_⟩\n  · rw [ge_iff_le, div_nonneg_iff]\n    constructor\n    · rintro (⟨h1, h2⟩ | ⟨h1, h2⟩)\n      · right; linarith\n      · left\n        rcases lt_or_eq_of_le h2 with h3 | h3\n        · linarith\n        · exact absurd h3 hx\n    · rintro (h | h)\n      · right; constructor <;> linarith\n      · left; constructor <;> linarith\n  · rcases hm with h | h <;> intro hc <;> linarith': 1, '  refine ⟨fun x hx => ?_, by decide⟩\n  simp only [Finset.mem_Icc, abs_lt] at *\n  omega': 1, '  refine ⟨fun x h1 => ?_, by norm_num, by norm_num⟩\n  rw [div_eq_iff h1]\n  constructor <;> intro h <;> linarith': 1, '  linarith': 10, '  omega': 13, '  refine ⟨fun x hx => ?_, by decide⟩\n  simp only [Finset.mem_Icc]\n  constructor <;> nlinarith [hx]': 1, '  constructor <;>\n    (ext i j; fin_cases i <;> fin_cases j <;>\n      norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ])': 2, '  norm_num [Matrix.det_fin_two, Matrix.one_fin_two]\n  intro t\n  constructor\n  · intro h\n    have hf : (t - 1) * (t - 3) = 0 := by nlinarith\n    rcases mul_eq_zero.mp hf with h1 | h1\n    · left; linarith\n    · right; linarith\n  · rintro (h | h) <;> subst h <;> norm_num': 2, '  refine ⟨?_, ?_⟩\n  · funext i\n    fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]\n  · intro h\n    have h0 := congrFun h 0\n    norm_num at h0': 2, '  refine ⟨?_, by norm_num [Matrix.det_fin_two]⟩\n  funext i\n  fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]': 3, '  ext i j\n  fin_cases i <;> fin_cases j <;>\n    norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ, pow_succ]': 3}
 
-## İfadesi üretilip kanıtlanamayanlar (19)
+## İfadesi üretilip kanıtlanamayanlar (33)
 
-- ayt-ana-012 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : 5 = 25`
-- ayt-ana-014 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : 4 = 20`
-- ayt-ana-015 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : 6 = 12`
-- ayt-ana-022 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : 6 = 7`
-- ayt-trig-012 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : ((Real.sqrt 2 / 4) + (Real.sqrt 6 / 4)) = (((-Real.sqrt 2) / 4) + (Real.sqrt 6 / 4))`
-- ayt-trig-019 [closed_arithmetic] cevap doğru: `theorem mv_claim  : ((Real.sqrt 2 / 4) + (Real.sqrt 6 / 4)) = (Real.sqrt (2 + Real.sqrt 3) / 2)`
-- tyt-den-003 [solve_equation_set] cevap doğru: `theorem mv_claim  : (∀ x : ℝ, (((-3 : ℝ) + x) ≠ 0) → ¬((x / ((-3 : ℝ) + x)) = (2 + (3 / ((-3 : ℝ) + x)))))`
-- tyt-den-012 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (m : ℝ) (h1 : ((-16 : ℝ) + ((1 + m) ^ 2)) = 0) (h2 : m > 0) : m = 15`
+- ayt-ana-011 [equation_of_iff] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : ∀ x y : ℝ, ((y = ((3 / 2 : ℝ) + (x / 2))) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))`
+- ayt-ana-012 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : Real.sqrt (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 25`
+- ayt-ana-013 [equation_of_iff] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : ∀ x y : ℝ, ((((((-1 : ℝ) + y) ^ 2) + ((2 + x) ^ 2)) = 9) ↔ ((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 9))`
+- ayt-ana-014 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (|(((3 * 3) + (4 * 4)) + (-5 : ℝ))| / 5) = 20`
+- ayt-ana-016 [equation_of_iff] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : ∀ x y : ℝ, (((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 3) ↔ ((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 9))`
+- ayt-ana-021 [equation_of_iff] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : ∀ x y : ℝ, ((y = (1 + (2 * x))) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))`
+- ayt-diz-016 [series_sum_finite] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (∑ k ∈ Finset.Icc (1 : ℤ) 10, ((k ^ 2) : ℤ)) = 330`
+- ayt-trig-012 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : Real.sin ((75 * Real.pi) / 180) = ((Real.sqrt 6 + (-Real.sqrt 2)) / 4)`
+- ayt-trig-019 [closed_arithmetic] cevap doğru: `theorem mv_claim : Real.sin ((75 * Real.pi) / 180) = (Real.sqrt (2 + Real.sqrt 3) / 2)`
+- ayt-tur-011 [extremum_max] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (∃ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) ∧ ((x ^ 3) + ((-3 : ℝ) * x)) = 2) ∧ (∀ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) → ((x ^ 3) + ((-3 : ℝ) * x)) `
+- tyt-den-010 [solve_equation_set] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (∀ x : ℝ, ((4 + x) ≥ 0) → ((Real.sqrt (4 + x) = ((-2 : ℝ) + x)) ↔ (x = 0 ∨ x = 5))) ∧ (4 ≥ 0) ∧ (2 = (-2 : ℝ)) ∧ (9 ≥ 0) ∧ (3 = 3)`
+- tyt-den-012 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (m : ℝ) (h1 : (((m + 1) ^ 2) + (-(4 * 4))) = 0) (h2 : m > 0) : m = 15`
+- tyt-esf-011 [solve_inequality_iff] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (∀ x : ℝ, ((((-14 : ℝ) + (x ^ 2) + ((-5 : ℝ) * x)) < 0) ↔ ((x < (-2 : ℝ)) ∨ (7 < x))))`
+- tyt-esf-012 [solve_inequality_iff] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (∀ x : ℝ, ((2 + x) ≠ 0) → (((((-1 : ℝ) + x) / (2 + x)) ≥ 0) ↔ ((x ≤ (-2 : ℝ)) ∨ (1 ≤ x)))) ∧ (∀ x : ℝ, ((x ≤ (-2 : ℝ)) ∨ (1 ≤ x)) →`
+- tyt-esf-013 [solve_equation_set] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (∀ x : ℝ, (((-1 : ℝ) + x) ≠ 0) → ((((3 + (2 * x)) / ((-1 : ℝ) + x)) = 5) ↔ (x = (2 / 3 : ℝ)))) ∧ ((-1 / 3 : ℝ) ≠ 0) ∧ ((-13 : ℝ) = `
 - tyt-prob-013 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (a b : ℤ) (h1 : (a + b) = 30) (h2 : ((2 * a) + (4 * b)) = 88) (h3 : 0 < a) (h4 : 0 < b) : a = 14`
-- tyt-prob-014 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (t : ℝ) (h1 : (t / 2) = 1) (h2 : 0 < t) : t = 3`
-- tyt-prob-015 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (x : ℝ) (h1 : (5 + (3 * x)) = ((-7 : ℝ) + (5 * x))) : x = 1`
-- tyt-prob-016 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (o b : ℤ) (h1 : b = (4 * o)) (h2 : (5 + b) = (15 + (3 * o))) (h3 : 0 < o) (h4 : 0 < b) : b = 30`
-- tyt-prob-017 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (x : ℝ) (h1 : ((6 * x) / 5) = 360) (h2 : 0 < x) : x = 288`
-- tyt-say-010 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : 12 = 24`
-- tyt-say-011 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (a b : ℤ) (h1 : (a + b) = 11) (h2 : (((-9 : ℤ) * a) + (9 * b)) = 27) (h3 : a ≥ 1) (h4 : a ≤ 9) (h5 : b ≥ 0) (h6 : b ≤ 9) : (b + (10 *`
-- uni-011 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : (-2 : ℝ) = 2`
-- uni-014 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : 3 = 1`
-- uni-020 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : (-2 : ℝ) = (-1 : ℝ)`
-- uni-la-017 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim  : 0 = 4`
+- tyt-prob-014 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (t : ℝ) (h1 : ((9 * t) / 18) = 1) (h2 : 0 < t) : t = 3`
+- tyt-prob-015 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (x : ℝ) (h1 : ((3 * x) + 5) = ((5 * x) + (-7))) : x = 1`
+- tyt-prob-016 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (o b : ℤ) (h1 : b = (4 * o)) (h2 : (b + 5) = (3 * (o + 5))) (h3 : 0 < o) (h4 : 0 < b) : b = 30`
+- tyt-prob-017 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (x : ℝ) (h1 : ((120 * x) / 100) = 360) (h2 : 0 < x) : x = 288`
+- tyt-say-010 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (Int.gcd 84 120 : ℝ) = 24`
+- tyt-say-011 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (a b : ℤ) (h1 : (a + b) = 11) (h2 : ((10 * b) + a + (-((10 * a) + b))) = 27) (h3 : a ≥ 1) (h4 : a ≤ 9) (h5 : b ≥ 0) (h6 : b ≤ 9) : ((`
+- tyt-say-012 [evaluate_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim (n : ℤ) (h1 : (n % 2) = 0) (h2 : (n + n + 2 + n + 4) = 78) (h3 : 0 ≤ n) : (n + 4) = 30`
+- tyt-say-013 [count_integers_finset] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (∀ x : ℤ, ((((-14 : ℤ) + (x ^ 2) + ((-5 : ℤ) * x)) < 0)) → x ∈ Finset.Icc (-2 : ℤ) 7) ∧ ((Finset.Icc (-2 : ℤ) 7).filter (fun x => (`
+- uni-011 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (-2 : ℝ) = 2`
+- uni-014 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : 3 = 1`
+- uni-020 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (-2 : ℝ) = (-1 : ℝ)`
+- uni-la-012 [linalg_inverse] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : ((!![1, 2; 3, 4] : Matrix (Fin 2) (Fin 2) ℝ) * (!![4, (-2 : ℝ); (-3 : ℝ), 1] : Matrix (Fin 2) (Fin 2) ℝ) = 1) ∧ ((!![4, (-2 : ℝ); (`
+- uni-la-013 [linalg_eigenvalues] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : ∀ t : ℝ, (((!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) - t • (1 : Matrix (Fin 2) (Fin 2) ℝ)).det = 0) ↔ (t = 1 ∨ t = 2)`
+- uni-la-014 [linalg_eigenvector] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (Matrix.mulVec (!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) ![1, (-1 : ℝ)] = 3 • ![1, (-1 : ℝ)]) ∧ ((![1, (-1 : ℝ)] : Fin 2 → ℝ) ≠ 0`
+- uni-la-015 [linalg_solve_system] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : (Matrix.mulVec (!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ) ![14, 16] = ![30, 88]) ∧ ((!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ).de`
+- uni-la-016 [linalg_matrix_expr] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : ((!![1, 1; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ) ^ 3) = (!![1, 2; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ)`
+- uni-la-017 [closed_arithmetic] cevap YANLIŞ (kanıtlanamaması beklenir): `theorem mv_claim : 0 = 4`

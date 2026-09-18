@@ -5,7 +5,7 @@ Measured (SymPy 1.14.0): solveset(cos(2x)=1/2, Reals) is a Union of ImageSets;
 Rule: reduce to one period and compare finite sets.
 """
 import sympy as sp
-from sympy import S, cos, pi, Union, ImageSet, Lambda, Interval, FiniteSet, Mod, Eq
+from sympy import S, cos, pi, Union, ImageSet, Lambda, Interval, FiniteSet, Eq
 
 from mathverify.certify.trig import periodic_solution_set_equal, detect_period
 

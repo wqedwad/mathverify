@@ -12,7 +12,7 @@ evidence and the caller lowers confidence). Too few evaluable points => None.
 from __future__ import annotations
 
 import random
-from typing import Any, Iterable
+from typing import Any
 
 import mpmath as mp
 import sympy as sp

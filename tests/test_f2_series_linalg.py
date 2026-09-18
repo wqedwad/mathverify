@@ -1,5 +1,4 @@
 """F2 — recurrences/series and linear algebra certificates."""
-import sympy as sp
 
 from mathverify.verifier import verify
 

@@ -23,13 +23,27 @@ from .cache import LLMCache, CacheMiss, default_cache
 
 __all__ = ["LLMResponse", "LLMClient", "LLMError", "LLMCreditError", "LLMAuthError", "extract_json",
            "PRICING", "cost_usd", "LLMCache", "CacheMiss", "default_cache", "load_env", "get_client",
-           "other_family", "available_families", "FAMILIES", "ROLE_FAMILY", "llm_versions"]
+           "other_family", "available_families", "FAMILIES", "ROLE_FAMILY", "llm_versions",
+           "set_client_override", "clear_client_overrides"]
 
 FAMILIES = ("anthropic", "meta")
 ROLE_FAMILY = {"extractor": "anthropic", "judge_a": "anthropic", "judge_b": "meta", "solver": "meta"}
 
 _ENV_LOADED = False
 _CLIENTS: dict[str, Any] = {}
+_OVERRIDES: dict[str, Any] = {}
+
+
+def set_client_override(family: str, client: Any) -> None:
+    """Force `get_client(family)` to return `client`. Used to pin a specific model in
+    production and to run the LLM layers against scripted clients in the test-suite."""
+    if family not in FAMILIES:
+        raise ValueError(f"unknown family {family!r}")
+    _OVERRIDES[family] = client
+
+
+def clear_client_overrides() -> None:
+    _OVERRIDES.clear()
 
 
 def load_env() -> None:
@@ -64,6 +78,8 @@ def other_family(family: str) -> str:
 
 
 def get_client(family: str, model: str | None = None):
+    if family in _OVERRIDES:
+        return _OVERRIDES[family]
     load_env()
     key = f"{family}:{model or ''}"
     if key in _CLIENTS:

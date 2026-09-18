@@ -1,6 +1,5 @@
 """F2 — synthetic geometry by numeric realisation: determined targets are certified,
 underdetermined targets are UNKNOWN (never guessed), degenerate configurations are rejected."""
-import pytest
 import sympy as sp
 
 from mathverify.certify.geometry_numeric import certify_geometry, GeoProblem
