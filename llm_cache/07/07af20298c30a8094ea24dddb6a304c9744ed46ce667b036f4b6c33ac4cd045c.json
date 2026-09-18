@@ -1,0 +1,188 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "resolve",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 16000,
+  "system": "You are a careful mathematics solver. Solve the given Turkish question and report the solution in the verifier's structured format so that every quantitative claim can be machine-checked.\n\nRules for steps (this is what makes your work verifiable):\n- Each step is ONE relation in canonical SymPy-like syntax (explicit '*', '**' for powers, sqrt, log natural, Abs, pi, oo, degrees as 30°).\n- kind eq: a relation about the unknowns derived from the givens or earlier steps; `from` lists the step ids it uses ([] when it follows from the problem statement alone).\n- kind compute: an explicit calculation \"operation = result\": 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit((x**2 - 4)/(x - 2), x, 2) = 4, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20, gcd(84, 120) = 12.\n- kind case: a case assumption; branch steps cite it in `from`. kind assert: domain conditions. kind note: prose. kind conclude: the final statement / option.\n- Use the symbol names you are told to use for the unknowns; declare nothing else — if you need an auxiliary symbol, keep that step as a note.\n- Check domain conditions (log arguments, even roots, denominators, one-sided limits) explicitly.\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite; payload canonical; option = the chosen letter for multiple choice (\"\" if open-ended). Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Question (Turkish)\nP(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?\nA) 2  B) 3  C) 4  D) 20  E) 6\n\n## Notation\nanswer shape expected: scalar\n\n## Structured solution (JSON)"
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "xhigh",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"claimed_answer\":{\"kind\":\"value\",\"payload\":\"4\",\"option\":\"C\"},\"steps\":[{\"id\":\"s1\",\"kind\":\"note\",\"claim\":\"\",\"from\":[],\"text\":\"Nokta-doğru uzaklık formülü: d = Abs(a*x0 + b*y0 + c)/sqrt(a**2 + b**2), burada a=3, b=4, c=-5, (x0,y0)=(3,4).\"},{\"id\":\"s2\",\"kind\":\"compute\",\"claim\":\"3*3 + 4*4 - 5 = 20\",\"from\":[],\"text\":\"Doğru denkleminde noktanın koordinatları yerine konur: 9 + 16 - 5 = 20.\"},{\"id\":\"s3\",\"kind\":\"compute\",\"claim\":\"sqrt(3**2 + 4**2) = 5\",\"from\":[],\"text\":\"Katsayıların normu: sqrt(9+16) = sqrt(25) = 5.\"},{\"id\":\"s4\",\"kind\":\"compute\",\"claim\":\"Abs(20)/5 = 4\",\"from\":[\"s2\",\"s3\"],\"text\":\"Uzaklık = 20/5 = 4 birim.\"},{\"id\":\"s5\",\"kind\":\"conclude\",\"claim\":\"4\",\"from\":[\"s4\"],\"text\":\"Uzaklık 4 birimdir; seçenek C.\"}],\"final_answer_text\":\"P(3,4) noktasının doğruya uzaklığı |3·3+4·4−5|/√(3²+4²) = 20/5 = 4 birimdir. (C)\"}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "value",
+    "payload": "4",
+    "option": "C"
+   },
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "note",
+     "claim": "",
+     "from": [],
+     "text": "Nokta-doğru uzaklık formülü: d = Abs(a*x0 + b*y0 + c)/sqrt(a**2 + b**2), burada a=3, b=4, c=-5, (x0,y0)=(3,4)."
+    },
+    {
+     "id": "s2",
+     "kind": "compute",
+     "claim": "3*3 + 4*4 - 5 = 20",
+     "from": [],
+     "text": "Doğru denkleminde noktanın koordinatları yerine konur: 9 + 16 - 5 = 20."
+    },
+    {
+     "id": "s3",
+     "kind": "compute",
+     "claim": "sqrt(3**2 + 4**2) = 5",
+     "from": [],
+     "text": "Katsayıların normu: sqrt(9+16) = sqrt(25) = 5."
+    },
+    {
+     "id": "s4",
+     "kind": "compute",
+     "claim": "Abs(20)/5 = 4",
+     "from": [
+      "s2",
+      "s3"
+     ],
+     "text": "Uzaklık = 20/5 = 4 birim."
+    },
+    {
+     "id": "s5",
+     "kind": "conclude",
+     "claim": "4",
+     "from": [
+      "s4"
+     ],
+     "text": "Uzaklık 4 birimdir; seçenek C."
+    }
+   ],
+   "final_answer_text": "P(3,4) noktasının doğruya uzaklığı |3·3+4·4−5|/√(3²+4²) = 20/5 = 4 birimdir. (C)"
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1403,
+  "output_tokens": 558,
+  "cost_usd": 0.020965,
+  "latency_ms": 7138.835999998264,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "xhigh",
+   "tag": "resolve",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:59:29"
+}

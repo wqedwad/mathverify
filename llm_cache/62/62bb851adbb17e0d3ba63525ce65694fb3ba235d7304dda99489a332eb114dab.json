@@ -1,0 +1,82 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 4000,
+  "system": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\na₁ = 1, a₂ = 3 ve n ≥ 3 için aₙ = aₙ₋₁ + 2aₙ₋₂ olduğuna göre a₆ kaçtır?\nA) 21  B) 32  C) 43  D) 64  E) 85\n\n## Formalisation (rendered)\nUnknowns: n is a positive integer\nTask: Sequence a(n) = a(n-1) + 2*a(n-2) with initial terms {'1': '1', '2': '3'}; find the term with index 6\nExpected answer shape: scalar\nOptions: A) 21  B) 32  C) 43  D) 64  E) 85\nSanity conditions on the answer: ans > 0\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"recurrence_term\", \"params\": {\"recurrence\": \"a(n) = a(n-1) + 2*a(n-2)\", \"initial\": {\"1\": \"1\", \"2\": \"3\"}, \"index\": 6, \"var\": \"n\"}}, \"vars\": [{\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"scalar\", \"options\": {\"A\": \"21\", \"B\": \"32\", \"C\": \"43\", \"D\": \"64\", \"E\": \"85\"}, \"units\": null, \"sanity\": [\"ans > 0\"], \"domain_of_discourse\": null, \"topic\": \"diziler\", \"level\": \"AYT\", \"question_en\": \"Given a(1) = 1, a(2) = 3 and a(n) = a(n-1) + 2*a(n-2) for n >= 3, what is a(6)?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"score\":9,\"faithful\":true,\"discrepancies\":[\"The condition n ≥ 3 for the recurrence is not explicitly encoded, though it is implied by the two given initial terms\"],\"notes\":\"The IR faithfully captures the recurrence a(n)=a(n-1)+2a(n-2), initial terms a(1)=1, a(2)=3, target index 6, scalar answer shape, and all five options verbatim. No derived or solved quantity appears. Only trivial notational looseness (implicit n≥3 domain of the recurrence).\"}",
+  "parsed": {
+   "score": 9,
+   "faithful": true,
+   "discrepancies": [
+    "The condition n ≥ 3 for the recurrence is not explicitly encoded, though it is implied by the two given initial terms"
+   ],
+   "notes": "The IR faithfully captures the recurrence a(n)=a(n-1)+2a(n-2), initial terms a(1)=1, a(2)=3, target index 6, scalar answer shape, and all five options verbatim. No derived or solved quantity appears. Only trivial notational looseness (implicit n≥3 domain of the recurrence)."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1201,
+  "output_tokens": 316,
+  "cost_usd": 0.013905,
+  "latency_ms": 5181.213900010334,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-19T00:00:35"
+}

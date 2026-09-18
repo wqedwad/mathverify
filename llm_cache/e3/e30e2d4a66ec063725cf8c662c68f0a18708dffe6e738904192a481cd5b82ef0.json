@@ -1,0 +1,82 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "smoke_judge",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 2000,
+  "system": "Answer in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "Give score 7, faithful true, one discrepancy 'none', notes 'ok'."
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "low",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (Anthropic structured outputs reject minimum/maximum, so the range is validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"score\": 7, \"faithful\": true, \"discrepancies\": [\"none\"], \"notes\": \"ok\"}",
+  "parsed": {
+   "score": 7,
+   "faithful": true,
+   "discrepancies": [
+    "none"
+   ],
+   "notes": "ok"
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 375,
+  "output_tokens": 37,
+  "cost_usd": 0.0028,
+  "latency_ms": 3210.8698000083677,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "low",
+   "tag": "smoke_judge",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:35:19"
+}

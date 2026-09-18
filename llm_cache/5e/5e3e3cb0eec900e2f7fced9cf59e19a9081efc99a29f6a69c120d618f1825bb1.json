@@ -1,0 +1,80 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON."
+   },
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\nlog(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?\nA) {0}  B) {4}  C) {0, 4}  D) {1}  E) {}\n\n## Formalisation (rendered)\nUnknowns: x is a real number\nGiven (all hold): log(x - 1) + log(x - 3) = log(3)\nTask: Find all x satisfying the equation log(x - 1) + log(x - 3) = log(3) (solution set asked)\nExpected answer shape: set\nOptions: A) {0}  B) {4}  C) {0, 4}  D) {1}  E) {}\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"solve_equation\", \"params\": {\"var\": \"x\"}}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"log(x - 1) + log(x - 3) = log(3)\"], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"set\", \"options\": {\"A\": \"{0}\", \"B\": \"{4}\", \"C\": \"{0, 4}\", \"D\": \"{1}\", \"E\": \"{}\"}, \"units\": null, \"sanity\": [], \"domain_of_discourse\": null, \"topic\": \"denklem\", \"level\": \"TYT\", \"question_en\": \"Which of the following is the solution set of the equation log(x - 1) + log(x - 3) = log 3?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "high",
+  "max_completion_tokens": 4000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"discrepancies\":[],\"faithful\":true,\"notes\":\"Equation, unknown x, set answer shape and all five options reproduced exactly with no added constraints, no base change, and no pre-solved value.\",\"score\":10}",
+  "parsed": {
+   "discrepancies": [],
+   "faithful": true,
+   "notes": "Equation, unknown x, set answer shape and all five options reproduced exactly with no added constraints, no base change, and no pre-solved value.",
+   "score": 10
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 680,
+  "output_tokens": 1226,
+  "cost_usd": 0.0060605,
+  "latency_ms": 16106.630700000096,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0b64c-a057-7584-a1a9-aaa30ebd990f",
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "streamed": false
+  }
+ },
+ "recorded_at": "2026-09-18T23:54:29"
+}

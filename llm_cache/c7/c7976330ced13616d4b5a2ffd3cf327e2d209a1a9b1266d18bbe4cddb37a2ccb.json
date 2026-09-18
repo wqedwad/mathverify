@@ -1,0 +1,80 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON."
+   },
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\nİlk terimi 5 ve ortak farkı 3 olan aritmetik dizinin 20. terimi kaçtır?\nA) 59  B) 60  C) 62  D) 65  E) 68\n\n## Formalisation (rendered)\nUnknowns: n is a positive integer\nTask: Sequence a(n) = a(n-1) + 3 with initial terms {'1': '5'}; find the term with index 20\nExpected answer shape: scalar\nOptions: A) 59  B) 60  C) 62  D) 65  E) 68\nSanity conditions on the answer: ans > 5\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"recurrence_term\", \"params\": {\"recurrence\": \"a(n) = a(n-1) + 3\", \"initial\": {\"1\": \"5\"}, \"index\": 20, \"var\": \"n\"}}, \"vars\": [{\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"scalar\", \"options\": {\"A\": \"59\", \"B\": \"60\", \"C\": \"62\", \"D\": \"65\", \"E\": \"68\"}, \"units\": null, \"sanity\": [\"ans > 5\"], \"domain_of_discourse\": null, \"topic\": \"diziler\", \"level\": \"AYT\", \"question_en\": \"An arithmetic sequence has first term 5 and common difference 3. What is its 20th term?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "high",
+  "max_completion_tokens": 4000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"discrepancies\":[],\"faithful\":true,\"notes\":\"First term 5, difference 3, 20th term target, 1-indexed initial, options and scalar shape all preserved; no answer or derived value in IR; sanity ans>5 is entailed and harmless.\",\"score\":10}",
+  "parsed": {
+   "discrepancies": [],
+   "faithful": true,
+   "notes": "First term 5, difference 3, 20th term target, 1-indexed initial, options and scalar shape all preserved; no answer or derived value in IR; sanity ans>5 is entailed and harmless.",
+   "score": 10
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 669,
+  "output_tokens": 1861,
+  "cost_usd": 0.0087455,
+  "latency_ms": 28518.07610000833,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0b652-61dd-7681-802c-d9d0a6b397e1",
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "streamed": false
+  }
+ },
+ "recorded_at": "2026-09-19T00:00:46"
+}

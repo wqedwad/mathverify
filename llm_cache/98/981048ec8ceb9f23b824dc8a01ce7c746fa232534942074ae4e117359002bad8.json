@@ -1,0 +1,83 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "smoke_judge",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "Answer in JSON."
+   },
+   {
+    "role": "user",
+    "content": "Give score 7, faithful true, one discrepancy 'none', notes 'ok'."
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "low",
+  "max_completion_tokens": 2000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 10
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"discrepancies\":[\"none\"],\"faithful\":true,\"notes\":\"ok\",\"score\":7}",
+  "parsed": {
+   "discrepancies": [
+    "none"
+   ],
+   "faithful": true,
+   "notes": "ok",
+   "score": 7
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 118,
+  "output_tokens": 255,
+  "cost_usd": 0.0,
+  "latency_ms": 6692.65089998953,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0b639-44ad-71dd-a32d-3712f9482771",
+  "meta": {
+   "effort": "low",
+   "tag": "smoke_judge",
+   "streamed": false
+  }
+ },
+ "recorded_at": "2026-09-18T23:33:20"
+}

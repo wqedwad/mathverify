@@ -1,0 +1,202 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "resolve",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 16000,
+  "system": "You are a careful mathematics solver. Solve the given Turkish question and report the solution in the verifier's structured format so that every quantitative claim can be machine-checked.\n\nRules for steps (this is what makes your work verifiable):\n- Each step is ONE relation in canonical SymPy-like syntax (explicit '*', '**' for powers, sqrt, log natural, Abs, pi, oo, degrees as 30°).\n- kind eq: a relation about the unknowns derived from the givens or earlier steps; `from` lists the step ids it uses ([] when it follows from the problem statement alone).\n- kind compute: an explicit calculation \"operation = result\": 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit((x**2 - 4)/(x - 2), x, 2) = 4, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20, gcd(84, 120) = 12.\n- kind case: a case assumption; branch steps cite it in `from`. kind assert: domain conditions. kind note: prose. kind conclude: the final statement / option.\n- Use the symbol names you are told to use for the unknowns; declare nothing else — if you need an auxiliary symbol, keep that step as a note.\n- Check domain conditions (log arguments, even roots, denominators, one-sided limits) explicitly.\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite; payload canonical; option = the chosen letter for multiple choice (\"\" if open-ended). Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Question (Turkish)\nA(1, 2) ve B(4, 8) noktalarından geçen doğrunun denklemi aşağıdakilerden hangisidir?\nA) y = 2*x  B) y = 2*x + 1  C) y = x + 1  D) y = 3*x - 1  E) y = (x + 3)/2\n\n## Notation\nunknown symbols to use: x, y\nanswer shape expected: equation\n\n## Structured solution (JSON)"
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "xhigh",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"claimed_answer\":{\"kind\":\"equation\",\"payload\":\"y = 2*x\",\"option\":\"A\"},\"steps\":[{\"id\":\"s1\",\"kind\":\"compute\",\"claim\":\"(8 - 2)/(4 - 1) = 2\",\"from\":[],\"text\":\"A(1,2) ve B(4,8) noktalarından geçen doğrunun eğimi m = (8-2)/(4-1) = 2 bulunur.\"},{\"id\":\"s2\",\"kind\":\"eq\",\"claim\":\"y - 2 = 2*(x - 1)\",\"from\":[\"s1\"],\"text\":\"Noktа-eğim formülü ile A(1,2) noktası kullanılarak doğru yazılır.\"},{\"id\":\"s3\",\"kind\":\"eq\",\"claim\":\"y = 2*x\",\"from\":[\"s2\"],\"text\":\"Düzenlenirse y = 2x - 2 + 2 = 2x elde edilir.\"},{\"id\":\"s4\",\"kind\":\"compute\",\"claim\":\"at(2*x, x, 4) = 8\",\"from\":[\"s3\"],\"text\":\"Kontrol: x = 4 için y = 8, yani B(4,8) doğru üzerindedir.\"},{\"id\":\"s5\",\"kind\":\"compute\",\"claim\":\"at(2*x, x, 1) = 2\",\"from\":[\"s3\"],\"text\":\"Kontrol: x = 1 için y = 2, yani A(1,2) doğru üzerindedir.\"},{\"id\":\"s6\",\"kind\":\"conclude\",\"claim\":\"y = 2*x\",\"from\":[\"s3\",\"s4\",\"s5\"],\"text\":\"Doğrunun denklemi y = 2x'tir; doğru seçenek A.\"}],\"final_answer_text\":\"Doğrunun denklemi y = 2x olup cevap A şıkkıdır.\"}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "equation",
+    "payload": "y = 2*x",
+    "option": "A"
+   },
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "compute",
+     "claim": "(8 - 2)/(4 - 1) = 2",
+     "from": [],
+     "text": "A(1,2) ve B(4,8) noktalarından geçen doğrunun eğimi m = (8-2)/(4-1) = 2 bulunur."
+    },
+    {
+     "id": "s2",
+     "kind": "eq",
+     "claim": "y - 2 = 2*(x - 1)",
+     "from": [
+      "s1"
+     ],
+     "text": "Noktа-eğim formülü ile A(1,2) noktası kullanılarak doğru yazılır."
+    },
+    {
+     "id": "s3",
+     "kind": "eq",
+     "claim": "y = 2*x",
+     "from": [
+      "s2"
+     ],
+     "text": "Düzenlenirse y = 2x - 2 + 2 = 2x elde edilir."
+    },
+    {
+     "id": "s4",
+     "kind": "compute",
+     "claim": "at(2*x, x, 4) = 8",
+     "from": [
+      "s3"
+     ],
+     "text": "Kontrol: x = 4 için y = 8, yani B(4,8) doğru üzerindedir."
+    },
+    {
+     "id": "s5",
+     "kind": "compute",
+     "claim": "at(2*x, x, 1) = 2",
+     "from": [
+      "s3"
+     ],
+     "text": "Kontrol: x = 1 için y = 2, yani A(1,2) doğru üzerindedir."
+    },
+    {
+     "id": "s6",
+     "kind": "conclude",
+     "claim": "y = 2*x",
+     "from": [
+      "s3",
+      "s4",
+      "s5"
+     ],
+     "text": "Doğrunun denklemi y = 2x'tir; doğru seçenek A."
+    }
+   ],
+   "final_answer_text": "Doğrunun denklemi y = 2x olup cevap A şıkkıdır."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1447,
+  "output_tokens": 634,
+  "cost_usd": 0.023085,
+  "latency_ms": 8611.241199978394,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "xhigh",
+   "tag": "resolve",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:58:38"
+}

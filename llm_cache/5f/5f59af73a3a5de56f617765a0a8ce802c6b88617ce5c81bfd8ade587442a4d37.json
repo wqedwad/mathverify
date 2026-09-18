@@ -1,0 +1,80 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 4000,
+  "system": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\nP(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?\nA) 2  B) 3  C) 4  D) 20  E) 6\n\n## Formalisation (rendered)\nTask: Find the value of: point_line_dist(3, 4, 3, 4, -5)\nExpected answer shape: scalar, units: birim\nOptions: A) 2  B) 3  C) 4  D) 20  E) 6\nSanity conditions on the answer: ans > 0\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"evaluate\", \"params\": {\"expr\": \"point_line_dist(3, 4, 3, 4, -5)\"}}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"scalar\", \"options\": {\"A\": \"2\", \"B\": \"3\", \"C\": \"4\", \"D\": \"20\", \"E\": \"6\"}, \"units\": \"birim\", \"sanity\": [\"ans > 0\"], \"domain_of_discourse\": null, \"topic\": \"analitik geometri\", \"level\": \"AYT\", \"question_en\": \"What is the distance, in units, from the point P(3, 4) to the line 3x + 4y - 5 = 0?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"score\":10,\"faithful\":true,\"discrepancies\":[],\"notes\":\"The IR encodes the distance from P(3,4) to the line 3x+4y-5=0 via point_line_dist(x0=3, y0=4, a=3, b=4, c=-5), matching the original givens exactly. Options, units (birim), scalar answer shape, and task kind (evaluate) are all correct. No derived or pre-solved quantity appears; the sanity condition ans > 0 is a harmless generic constraint.\"}",
+  "parsed": {
+   "score": 10,
+   "faithful": true,
+   "discrepancies": [],
+   "notes": "The IR encodes the distance from P(3,4) to the line 3x+4y-5=0 via point_line_dist(x0=3, y0=4, a=3, b=4, c=-5), matching the original givens exactly. Options, units (birim), scalar answer shape, and task kind (evaluate) are all correct. No derived or pre-solved quantity appears; the sanity condition ans > 0 is a harmless generic constraint."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1071,
+  "output_tokens": 307,
+  "cost_usd": 0.01303,
+  "latency_ms": 4976.502999983495,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:58:51"
+}

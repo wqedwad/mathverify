@@ -20,10 +20,23 @@ THRESH_POS = 0.90
 THRESH_NEG = 0.90
 
 # Flags that by themselves forbid a CORRECT verdict (the certificate may be computed on
-# a wrong problem object).
-_BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "parse_error"}
+# a wrong problem object). F3 additions: an IR that failed its round-trip audit, a
+# restructured solution whose answer disagrees with the deterministic extractor, and an
+# L4 re-solve whose *certified* answer differs from the claim (two certified answers for
+# one IR means the IR does not pin the problem).
+_BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "parse_error",
+                         "ir_unfaithful", "restructure_answer_mismatch", "l4_disagree_certified",
+                         # F4: a critic error that survived the deterministic cross-check AND the
+                         # other family's meta-verification. It abstains, never flips to INCORRECT:
+                         # an LLM signal may not veto a hard certificate (§4), and [10] measures
+                         # 75-85% false rejection when step checkers are trusted outright.
+                         "critic_error_confirmed"}
+# Soft confidence reducers (handoff §4: long repair trajectories, timeouts, contradictions,
+# L4 disagreement, L5 method failure). Never averaged with hard layers.
 _CONFIDENCE_PENALTY = {"cas_timeout": 0.03, "symbolic_numeric_disagreement": 0.10,
-                       "numeric_not_converged": 0.05, "completeness_uncertified": 0.0}
+                       "numeric_not_converged": 0.05, "completeness_uncertified": 0.0,
+                       "l4_disagree_uncertified": 0.03, "l4_undecided": 0.0, "l5_method_failed": 0.08,
+                       "ir_repaired_once": 0.02, "ir_repaired_twice": 0.05, "roundtrip_borderline": 0.02}
 
 
 def _noisy_or(confs: list[float]) -> float:
@@ -77,8 +90,10 @@ def fuse(layers: list[LayerResult]) -> dict[str, Any]:
     if primary_pass:
         blocked = [f for f in flags if f in _BLOCK_POSITIVE_FLAGS]
         if blocked:
-            trace.append(f"Pozitif sertifika var ama engelleyici bayrak(lar) mevcut: {blocked} -> UNKNOWN.")
-            return {"verdict": "UNKNOWN", "confidence": 0.0, "first_bad_step": None,
+            fbs = next((l.first_bad_step for l in layers if l.first_bad_step is not None and not l.hard), None)
+            trace.append(f"Pozitif sertifika var ama engelleyici bayrak(lar) mevcut: {blocked} -> UNKNOWN."
+                         + (f" İşaretlenen adım: {fbs}." if fbs else ""))
+            return {"verdict": "UNKNOWN", "confidence": 0.0, "first_bad_step": fbs,
                     "trace": "\n".join(trace), "flags": flags}
         conf = _noisy_or([l.confidence for l in primary_pass])
         conf = min(conf, 0.995)

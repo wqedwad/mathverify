@@ -1,0 +1,80 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 4000,
+  "system": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\nlog(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?\nA) {0}  B) {4}  C) {0, 4}  D) {1}  E) {}\n\n## Formalisation (rendered)\nUnknowns: x is a real number\nGiven (all hold): log(x - 1) + log(x - 3) = log(3)\nTask: Find all x satisfying the equation log(x - 1) + log(x - 3) = log(3) (solution set asked)\nExpected answer shape: set\nOptions: A) {0}  B) {4}  C) {0, 4}  D) {1}  E) {}\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"solve_equation\", \"params\": {\"var\": \"x\"}}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"log(x - 1) + log(x - 3) = log(3)\"], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"set\", \"options\": {\"A\": \"{0}\", \"B\": \"{4}\", \"C\": \"{0, 4}\", \"D\": \"{1}\", \"E\": \"{}\"}, \"units\": null, \"sanity\": [], \"domain_of_discourse\": null, \"topic\": \"denklem\", \"level\": \"TYT\", \"question_en\": \"Which of the following is the solution set of the equation log(x - 1) + log(x - 3) = log 3?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"score\":9,\"faithful\":true,\"discrepancies\":[],\"notes\":\"The IR reproduces the equation, the unknown (x real), the 'solution set' task and answer shape, and all five options verbatim. No derived or pre-solved quantity appears. The domain restrictions (x-1>0, x-3>0) are left implicit in the log expressions, exactly as in the original statement, so nothing is added or removed; listing them explicitly would have been optional. Minor notation only.\"}",
+  "parsed": {
+   "score": 9,
+   "faithful": true,
+   "discrepancies": [],
+   "notes": "The IR reproduces the equation, the unknown (x real), the 'solution set' task and answer shape, and all five options verbatim. No derived or pre-solved quantity appears. The domain restrictions (x-1>0, x-3>0) are left implicit in the log expressions, exactly as in the original statement, so nothing is added or removed; listing them explicitly would have been optional. Minor notation only."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1131,
+  "output_tokens": 327,
+  "cost_usd": 0.01383,
+  "latency_ms": 6990.505900001153,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:54:13"
+}

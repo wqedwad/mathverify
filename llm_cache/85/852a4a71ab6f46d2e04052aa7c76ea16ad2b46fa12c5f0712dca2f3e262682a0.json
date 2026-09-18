@@ -1,0 +1,380 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "smoke_ir",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "You formalise Turkish math questions into a JSON problem IR. Use canonical SymPy syntax with explicit '*' (e.g. 3*x + 2*y = 12). Fill every field; use null for unused params."
+   },
+   {
+    "role": "user",
+    "content": "Bir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Kaç tavuk vardır? A) 12 B) 14 C) 16 D) 18 E) 20"
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "high",
+  "max_completion_tokens": 12000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "task": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "antiderivative",
+          "closed_form",
+          "count_integers",
+          "count_roots",
+          "count_solutions",
+          "count_structures",
+          "definite_integral",
+          "derivative",
+          "domain_of",
+          "equation_of",
+          "evaluate",
+          "extremum",
+          "limit",
+          "linalg",
+          "probability",
+          "recurrence_term",
+          "series_sum",
+          "simplify_expression",
+          "solve_equation",
+          "solve_inequality",
+          "synthetic_geometry",
+          "tangent_line",
+          "trig_solve",
+          "proof",
+          "unsupported"
+         ]
+        },
+        "params": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "key": {
+            "type": "string",
+            "description": "parameter name"
+           },
+           "value": {
+            "type": "string",
+            "description": "scalar value, '' if the parameter is list-valued"
+           },
+           "list": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            },
+            "description": "list value, [] if scalar"
+           }
+          },
+          "required": [
+           "key",
+           "value",
+           "list"
+          ],
+          "additionalProperties": false
+         },
+         "description": "task parameters as key/value/list triples"
+        }
+       },
+       "required": [
+        "kind",
+        "params"
+       ],
+       "additionalProperties": false
+      },
+      "vars": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "domain": {
+          "type": "string",
+          "enum": [
+           "complex",
+           "integer",
+           "natural",
+           "nonneg_integer",
+           "nonneg_real",
+           "positive_integer",
+           "positive_real",
+           "rational",
+           "real"
+          ]
+         },
+         "constraints": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "name",
+         "domain",
+         "constraints"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "givens": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "relations in canonical syntax that the problem states"
+      },
+      "functions": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "expr": {
+          "type": "string"
+         },
+         "args": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "params": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "domain": {
+          "type": "string",
+          "description": "'' if unrestricted"
+         }
+        },
+        "required": [
+         "name",
+         "expr",
+         "args",
+         "params",
+         "domain"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "unknown_of_interest": {
+       "type": "string",
+       "description": "'' if not applicable"
+      },
+      "answer_shape": {
+       "type": "string",
+       "enum": [
+        "condition_on_param",
+        "count",
+        "dne_or_scalar",
+        "equation",
+        "expression",
+        "interval",
+        "proof",
+        "scalar",
+        "set"
+       ]
+      },
+      "options": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "letter": {
+          "type": "string"
+         },
+         "value": {
+          "type": "string",
+          "description": "canonical expression of the option text"
+         }
+        },
+        "required": [
+         "letter",
+         "value"
+        ],
+        "additionalProperties": false
+       },
+       "description": "[] for open-ended questions"
+      },
+      "units": {
+       "type": "string",
+       "description": "'' if none"
+      },
+      "sanity": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "relations on `ans` every valid answer must satisfy"
+      },
+      "domain_of_discourse": {
+       "type": "string",
+       "description": "restriction stated by the PROBLEM on the main variable, '' if none"
+      },
+      "topic": {
+       "type": "string"
+      },
+      "level": {
+       "type": "string",
+       "enum": [
+        "TYT",
+        "AYT",
+        "UNI"
+       ]
+      },
+      "question_en": {
+       "type": "string",
+       "description": "faithful English restatement of the question"
+      },
+      "assumptions": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "anything you had to assume or could not encode"
+      },
+      "confidence": {
+       "type": "integer",
+       "description": "0-10 self-assessed confidence"
+      }
+     },
+     "required": [
+      "task",
+      "vars",
+      "givens",
+      "functions",
+      "unknown_of_interest",
+      "answer_shape",
+      "options",
+      "units",
+      "sanity",
+      "domain_of_discourse",
+      "topic",
+      "level",
+      "question_en",
+      "assumptions",
+      "confidence"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"answer_shape\": \"scalar\", \"assumptions\": [\"Each chicken has 1 head and 2 feet\", \"Each sheep has 1 head and 4 feet\"], \"confidence\": 10, \"domain_of_discourse\": \"\", \"functions\": [], \"givens\": [\"t + k = 30\", \"2*t + 4*k = 88\"], \"level\": \"TYT\", \"options\": [{\"letter\": \"A\", \"value\": \"12\"}, {\"letter\": \"B\", \"value\": \"14\"}, {\"letter\": \"C\", \"value\": \"16\"}, {\"letter\": \"D\", \"value\": \"18\"}, {\"letter\": \"E\", \"value\": \"20\"}], \"question_en\": \"On a farm, the total number of heads of chickens and sheep is 30, and the total number of feet is 88. How many chickens are there?\", \"sanity\": [\"0 <= ans\", \"ans <= 30\"], \"task\": {\"kind\": \"solve_equation\", \"params\": [{\"key\": \"equations\", \"list\": [\"t + k = 30\", \"2*t + 4*k = 88\"], \"value\": \"\"}, {\"key\": \"unknown\", \"list\": [], \"value\": \"t\"}]}, \"topic\": \"linear_equations\", \"units\": \"\", \"unknown_of_interest\": \"t\", \"vars\": [{\"constraints\": [\"t <= 30\"], \"domain\": \"nonneg_integer\", \"name\": \"t\"}, {\"constraints\": [\"k <= 30\"], \"domain\": \"nonneg_integer\", \"name\": \"k\"}]}",
+  "parsed": {
+   "answer_shape": "scalar",
+   "assumptions": [
+    "Each chicken has 1 head and 2 feet",
+    "Each sheep has 1 head and 4 feet"
+   ],
+   "confidence": 10,
+   "domain_of_discourse": "",
+   "functions": [],
+   "givens": [
+    "t + k = 30",
+    "2*t + 4*k = 88"
+   ],
+   "level": "TYT",
+   "options": [
+    {
+     "letter": "A",
+     "value": "12"
+    },
+    {
+     "letter": "B",
+     "value": "14"
+    },
+    {
+     "letter": "C",
+     "value": "16"
+    },
+    {
+     "letter": "D",
+     "value": "18"
+    },
+    {
+     "letter": "E",
+     "value": "20"
+    }
+   ],
+   "question_en": "On a farm, the total number of heads of chickens and sheep is 30, and the total number of feet is 88. How many chickens are there?",
+   "sanity": [
+    "0 <= ans",
+    "ans <= 30"
+   ],
+   "task": {
+    "kind": "solve_equation",
+    "params": [
+     {
+      "key": "equations",
+      "list": [
+       "t + k = 30",
+       "2*t + 4*k = 88"
+      ],
+      "value": ""
+     },
+     {
+      "key": "unknown",
+      "list": [],
+      "value": "t"
+     }
+    ]
+   },
+   "topic": "linear_equations",
+   "units": "",
+   "unknown_of_interest": "t",
+   "vars": [
+    {
+     "constraints": [
+      "t <= 30"
+     ],
+     "domain": "nonneg_integer",
+     "name": "t"
+    },
+    {
+     "constraints": [
+      "k <= 30"
+     ],
+     "domain": "nonneg_integer",
+     "name": "k"
+    }
+   ]
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 811,
+  "output_tokens": 3120,
+  "cost_usd": 0.0,
+  "latency_ms": 44518.15479999641,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0b640-6bda-7399-8669-30cea9bb6fab",
+  "meta": {
+   "effort": "high",
+   "tag": "smoke_ir",
+   "streamed": false
+  }
+ },
+ "recorded_at": "2026-09-18T23:41:09"
+}

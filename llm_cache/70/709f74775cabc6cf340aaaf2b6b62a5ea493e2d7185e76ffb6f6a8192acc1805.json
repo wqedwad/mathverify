@@ -1,0 +1,80 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 4000,
+  "system": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\nA(1, 2) ve B(4, 8) noktalarından geçen doğrunun denklemi aşağıdakilerden hangisidir?\nA) y = 2*x  B) y = 2*x + 1  C) y = x + 1  D) y = 3*x - 1  E) y = (x + 3)/2\n\n## Formalisation (rendered)\nUnknowns: x is a real number; y is a real number\nTask: Find the equation of the line_points determined by {\"p1\": [\"1\", \"2\"], \"p2\": [\"4\", \"8\"]}\nExpected answer shape: equation\nOptions: A) y = 2*x  B) y = 2*x + 1  C) y = x + 1  D) y = 3*x - 1  E) y = (x + 3)/2\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"equation_of\", \"params\": {\"object\": \"line_points\", \"p1\": [\"1\", \"2\"], \"p2\": [\"4\", \"8\"]}}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}, {\"name\": \"y\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"equation\", \"options\": {\"A\": \"y = 2*x\", \"B\": \"y = 2*x + 1\", \"C\": \"y = x + 1\", \"D\": \"y = 3*x - 1\", \"E\": \"y = (x + 3)/2\"}, \"units\": null, \"sanity\": [], \"domain_of_discourse\": null, \"topic\": \"analitik geometri\", \"level\": \"AYT\", \"question_en\": \"Which of the following is the equation of the line passing through the points A(1, 2) and B(4, 8)?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"score\":9,\"faithful\":true,\"discrepancies\":[],\"notes\":\"Points A(1,2) and B(4,8) are correctly encoded as p1/p2; task kind equation_of a line through two points matches the question; answer shape 'equation' and all five options are reproduced verbatim with correct Turkish number reading. No givens are needed beyond the points, nothing extra is added, and no solved/derived quantity (e.g., slope or final equation) appears in the IR. Minor harmless notation issues only: coordinates stored as strings and unknown_of_interest left null while x, y are declared as free real variables.\"}",
+  "parsed": {
+   "score": 9,
+   "faithful": true,
+   "discrepancies": [],
+   "notes": "Points A(1,2) and B(4,8) are correctly encoded as p1/p2; task kind equation_of a line through two points matches the question; answer shape 'equation' and all five options are reproduced verbatim with correct Turkish number reading. No givens are needed beyond the points, nothing extra is added, and no solved/derived quantity (e.g., slope or final equation) appears in the IR. Minor harmless notation issues only: coordinates stored as strings and unknown_of_interest left null while x, y are declared as free real variables."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1208,
+  "output_tokens": 326,
+  "cost_usd": 0.01419,
+  "latency_ms": 5730.502599995816,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:58:06"
+}

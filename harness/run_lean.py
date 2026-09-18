@@ -1,0 +1,96 @@
+"""F5 sweep with NO model calls: deterministic statement + Mathlib tactic ladder + audits.
+
+    python -m harness.run_lean [--limit N] [--timeout 60]
+
+Measures the F5 gate directly: how many items get a formal certificate, and whether any
+item whose claimed answer is WRONG is ever proved (must be zero: a false statement is
+unprovable, so a proof here would mean the statement does not say what the claim says).
+"""
+from __future__ import annotations
+import argparse, json, sys, time
+from collections import Counter
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src")); sys.path.insert(0, str(ROOT))
+from harness.loader import load_items, split_for_verifier  # noqa: E402
+
+
+def _answer_is_right(it, ir, sol, labels) -> bool:
+    """Harness-side (label) check of whether the CLAIMED VALUE equals the gold answer."""
+    import sympy as sp
+    from mathverify.normalize.parse import build_namespace, parse_answer
+    from mathverify.intake.structured import load_problem_ir
+    from mathverify.equiv import answers_equivalent
+    ca = sol["claimed_answer"]
+    gold = it["gold_answer"]
+    try:
+        ns = build_namespace(load_problem_ir(ir))
+        if ca["kind"] == "dne":
+            return str(gold).strip().upper() == "DNE"
+        a = parse_answer(ca["kind"], ca["payload"], ns)
+        shape = "set" if isinstance(a, sp.Set) else ("count" if ca["kind"] == "count" else "scalar")
+        b = parse_answer("set" if shape == "set" else ("count" if shape == "count" else "value"), gold, ns)
+        ok, _ = answers_equivalent(a, b, shape=shape)
+        return bool(ok)
+    except Exception:
+        return labels["cell"] in ("A", "B", "D")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--timeout", type=float, default=60.0)
+    ap.add_argument("--out", default=str(ROOT / "reports"))
+    args = ap.parse_args(argv)
+    from mathverify.formal import build_statement, prove_statement, get_lean
+    items = load_items(ROOT / "evalset" / "items")
+    if args.limit:
+        items = items[:args.limit]
+    t0 = time.time()
+    get_lean()
+    recs, kinds = [], Counter()
+    for i, it in enumerate(items, 1):
+        ir, sol, labels = split_for_verifier(it)
+        st = build_statement(ir, sol["claimed_answer"])
+        rec = {"id": it["id"], "cell": labels["cell"], "topic": labels["topic"],
+               # the formal layer certifies the claimed VALUE, so the reference is the value
+               # itself: a C item whose only defect is the option letter has a right value
+               "answer_right": _answer_is_right(it, ir, sol, labels), "task": ir["task"]["kind"],
+               "statement": bool(st), "kind": st.kind if st else None, "proved": False, "clean": None}
+        if st is not None:
+            kinds[st.kind] += 1
+            r = prove_statement(st, use_model=False, tactic_timeout=args.timeout)
+            rec.update({"proved": r["proved"], "clean": (r.get("audit") or {}).get("clean"),
+                        "proof": r.get("proof"), "audit": r.get("audit"), "ms": round(r["ms"]),
+                        "stmt_text": r.get("statement")})
+        recs.append(rec)
+        if i % 20 == 0 or rec["proved"]:
+            print(f"[{i}/{len(items)}] {rec['id']:<16} stmt={rec['statement']} proved={rec['proved']} clean={rec['clean']}", flush=True)
+    n = len(recs)
+    with_stmt = [r for r in recs if r["statement"]]
+    proved = [r for r in recs if r["proved"]]
+    certified = [r for r in proved if r["clean"]]
+    fp = [r for r in certified if not r["answer_right"]]
+    out = Path(args.out); out.mkdir(exist_ok=True)
+    (out / "lean_results.json").write_text(json.dumps({"records": recs}, ensure_ascii=False, indent=1), encoding="utf-8")
+    md = "# F5 (Lean) taraması — modelsiz, deterministik ifade + Mathlib taktik merdiveni\n\n"
+    md += f"- Öğe: **{n}** · Lean ifadesi üretilebilen: **{len(with_stmt)}** ({len(with_stmt)/n:.1%})\n"
+    md += f"- Kanıtlanan: **{len(proved)}** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **{len(certified)}**\n"
+    md += f"- **Yanlış cevaplı öğelerde kanıt (FP): {len(fp)}** {'✓ hedef 0' if not fp else '✗ ' + str([r['id'] for r in fp])}\n"
+    md += f"- Kapsama (tüm sette formal sertifika): {len(certified)/n:.1%} · ifadesi olanlar içinde: {len(certified)/max(1,len(with_stmt)):.1%}\n"
+    md += f"- Şablon türleri: {dict(kinds)}\n"
+    md += f"- Süre: {time.time()-t0:.0f} s (ortalama {(time.time()-t0)/n*1000:.0f} ms/öğe)\n\n"
+    byc = Counter(r["cell"] for r in certified)
+    md += f"- Sertifikalı öğelerin hücre dağılımı: {dict(byc)} (D hücresi = cevabı doğru, adımı bozuk: formal katman cevabı onaylar, adımı değil)\n"
+    used = Counter(r["proof"] for r in certified)
+    md += f"- Kullanılan taktikler: {dict(used)}\n"
+    unproved = [r for r in with_stmt if not r["proved"]]
+    md += f"\n## İfadesi üretilip kanıtlanamayanlar ({len(unproved)})\n\n"
+    for r in unproved[:40]:
+        md += f"- {r['id']} [{r['kind']}] {('cevap doğru' if r['answer_right'] else 'cevap YANLIŞ (kanıtlanamaması beklenir)')}: `{(r.get('stmt_text') or '')[:150]}`\n"
+    (out / "lean_report.md").write_text(md, encoding="utf-8")
+    print(md)
+
+
+if __name__ == "__main__":
+    main()

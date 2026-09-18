@@ -1,0 +1,212 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "metamorphic",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 16000,
+  "system": "You are a careful mathematics solver. Solve the given Turkish question and report the solution in the verifier's structured format so that every quantitative claim can be machine-checked.\n\nRules for steps (this is what makes your work verifiable):\n- Each step is ONE relation in canonical SymPy-like syntax (explicit '*', '**' for powers, sqrt, log natural, Abs, pi, oo, degrees as 30°).\n- kind eq: a relation about the unknowns derived from the givens or earlier steps; `from` lists the step ids it uses ([] when it follows from the problem statement alone).\n- kind compute: an explicit calculation \"operation = result\": 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit((x**2 - 4)/(x - 2), x, 2) = 4, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20, gcd(84, 120) = 12.\n- kind case: a case assumption; branch steps cite it in `from`. kind assert: domain conditions. kind note: prose. kind conclude: the final statement / option.\n- Use the symbol names you are told to use for the unknowns; declare nothing else — if you need an auxiliary symbol, keep that step as a note.\n- Check domain conditions (log arguments, even roots, denominators, one-sided limits) explicitly.\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite; payload canonical; option = the chosen letter for multiple choice (\"\" if open-ended). Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Question (Turkish)\nBir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?\n\n## Modified instance\nSolve the SAME problem with these data instead (all other conditions unchanged, no options — give the value): a + b = 22; 2*a + 4*b = 80\n\n## Notation\nunknown symbols to use: a, b\nanswer shape expected: scalar\n\n## Method to follow\nReproduce exactly the method of this earlier solution of the original instance, step by step, with the new numbers (do not switch to a different method):\ns1: [eq] b = 30 - a\ns2: [eq] 2*a + 4*(30 - a) = 88\ns3: [eq] -2*a + 120 = 88\ns4: [eq] a = 14 — −2a = −28 (aritmetik hata)\n\n## Structured solution (JSON)"
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"claimed_answer\":{\"kind\":\"value\",\"payload\":\"4\",\"option\":\"\"},\"steps\":[{\"id\":\"s1\",\"kind\":\"eq\",\"claim\":\"b = 22 - a\",\"from\":[],\"text\":\"Baş sayısı denkleminden b yalnız bırakılır: a + b = 22 olduğundan b = 22 - a.\"},{\"id\":\"s2\",\"kind\":\"eq\",\"claim\":\"2*a + 4*(22 - a) = 80\",\"from\":[\"s1\"],\"text\":\"Ayak denkleminde b yerine 22 - a yazılır.\"},{\"id\":\"s3\",\"kind\":\"eq\",\"claim\":\"-2*a + 88 = 80\",\"from\":[\"s2\"],\"text\":\"Parantez açılıp benzer terimler toplanır: 2a + 88 - 4a = -2a + 88.\"},{\"id\":\"s4\",\"kind\":\"eq\",\"claim\":\"a = 4\",\"from\":[\"s3\"],\"text\":\"-2a = 80 - 88 = -8, buradan a = 4.\"},{\"id\":\"s5\",\"kind\":\"compute\",\"claim\":\"22 - 4 = 18\",\"from\":[\"s1\",\"s4\"],\"text\":\"b = 18 koyun bulunur.\"},{\"id\":\"s6\",\"kind\":\"compute\",\"claim\":\"2*4 + 4*18 = 80\",\"from\":[\"s4\",\"s5\"],\"text\":\"Kontrol: ayak sayısı 8 + 72 = 80, doğru.\"},{\"id\":\"s7\",\"kind\":\"conclude\",\"claim\":\"a = 4\",\"from\":[\"s4\",\"s6\"],\"text\":\"Çiftlikte 4 tavuk vardır.\"}],\"final_answer_text\":\"Tavuk sayısı a = 4 (koyun sayısı b = 18).\"}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "value",
+    "payload": "4",
+    "option": ""
+   },
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "eq",
+     "claim": "b = 22 - a",
+     "from": [],
+     "text": "Baş sayısı denkleminden b yalnız bırakılır: a + b = 22 olduğundan b = 22 - a."
+    },
+    {
+     "id": "s2",
+     "kind": "eq",
+     "claim": "2*a + 4*(22 - a) = 80",
+     "from": [
+      "s1"
+     ],
+     "text": "Ayak denkleminde b yerine 22 - a yazılır."
+    },
+    {
+     "id": "s3",
+     "kind": "eq",
+     "claim": "-2*a + 88 = 80",
+     "from": [
+      "s2"
+     ],
+     "text": "Parantez açılıp benzer terimler toplanır: 2a + 88 - 4a = -2a + 88."
+    },
+    {
+     "id": "s4",
+     "kind": "eq",
+     "claim": "a = 4",
+     "from": [
+      "s3"
+     ],
+     "text": "-2a = 80 - 88 = -8, buradan a = 4."
+    },
+    {
+     "id": "s5",
+     "kind": "compute",
+     "claim": "22 - 4 = 18",
+     "from": [
+      "s1",
+      "s4"
+     ],
+     "text": "b = 18 koyun bulunur."
+    },
+    {
+     "id": "s6",
+     "kind": "compute",
+     "claim": "2*4 + 4*18 = 80",
+     "from": [
+      "s4",
+      "s5"
+     ],
+     "text": "Kontrol: ayak sayısı 8 + 72 = 80, doğru."
+    },
+    {
+     "id": "s7",
+     "kind": "conclude",
+     "claim": "a = 4",
+     "from": [
+      "s4",
+      "s6"
+     ],
+     "text": "Çiftlikte 4 tavuk vardır."
+    }
+   ],
+   "final_answer_text": "Tavuk sayısı a = 4 (koyun sayısı b = 18)."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1614,
+  "output_tokens": 811,
+  "cost_usd": 0.028345,
+  "latency_ms": 10668.907300016144,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "metamorphic",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:56:05"
+}

@@ -1,0 +1,173 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "restructure",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 12000,
+  "system": "You convert a free-text math solution (Turkish or English) into the verifier's structured solution format WITHOUT changing its mathematical content. Do not fix errors, do not add steps, do not solve the problem yourself: transcribe what the solution actually claims, including wrong steps.\n\nYou are given the problem IR (its variable names, functions and givens). Use exactly those symbol names in step claims.\n\nStep kinds:\n- eq: a relation the solution asserts about the unknowns (\"b = 30 - a\", \"x**2 - 4*x = 0\", \"x in {0, 4}\") — one relation per step, canonical syntax, `from` = ids of the steps it is derived from ([] if from the givens).\n- compute: a calculation \"lhs = rhs\" where lhs is an explicit operation: 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit(sin(3*x)/x, x, 0) = 3, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20.\n- case: a case assumption (\"2*x - 3 = 5\"); later steps of that branch reference it in `from`.\n- assert: domain/definedness remarks (\"x > 3\", \"x - 2 >= 0\").\n- note: prose that has no single checkable relation.\n- conclude: statements that define an object or announce the result (\"y = 2*x - 1\", the option letter).\nDefinitions of new symbols not in the IR (u = sqrt(x+4)) are notes, not eq.\n\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite, payload in canonical syntax (sets as {..}, intervals as (..), + C allowed for antiderivatives, \"\" for dne), option = the letter the solution picks (\"\" if none). If the solution states several final answers, take the last one. Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Problem IR (rendered)\nTask: Find the value of: tri_area(0, 0, 4, 0, 0, 3)\nExpected answer shape: scalar\nOptions: A) 5  B) 6  C) 7  D) 12  E) 24\n\n## Problem IR (JSON)\n{\"task\": {\"kind\": \"evaluate\", \"params\": {\"expr\": \"tri_area(0, 0, 4, 0, 0, 3)\"}}, \"vars\": [], \"givens\": [], \"answer_shape\": \"scalar\", \"options\": {\"A\": \"5\", \"B\": \"6\", \"C\": \"7\", \"D\": \"12\", \"E\": \"24\"}, \"level\": \"AYT\", \"topic\": \"analitik geometri\"}\n\n## Solution text to transcribe\nDik kenarlar 4 ve 3: alan 4·3/2 = 6. Cevap: B\n\n## Structured solution (JSON)"
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"claimed_answer\":{\"kind\":\"value\",\"payload\":\"6\",\"option\":\"B\"},\"steps\":[{\"id\":\"s1\",\"kind\":\"note\",\"claim\":\"\",\"from\":[],\"text\":\"Dik kenarlar 4 ve 3.\"},{\"id\":\"s2\",\"kind\":\"compute\",\"claim\":\"4*3/2 = 6\",\"from\":[\"s1\"],\"text\":\"Alan 4·3/2 = 6.\"},{\"id\":\"s3\",\"kind\":\"conclude\",\"claim\":\"tri_area(0, 0, 4, 0, 0, 3) = 6\",\"from\":[\"s2\"],\"text\":\"Cevap: B\"}],\"final_answer_text\":\"Alan 6, seçenek B\"}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "value",
+    "payload": "6",
+    "option": "B"
+   },
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "note",
+     "claim": "",
+     "from": [],
+     "text": "Dik kenarlar 4 ve 3."
+    },
+    {
+     "id": "s2",
+     "kind": "compute",
+     "claim": "4*3/2 = 6",
+     "from": [
+      "s1"
+     ],
+     "text": "Alan 4·3/2 = 6."
+    },
+    {
+     "id": "s3",
+     "kind": "conclude",
+     "claim": "tri_area(0, 0, 4, 0, 0, 3) = 6",
+     "from": [
+      "s2"
+     ],
+     "text": "Cevap: B"
+    }
+   ],
+   "final_answer_text": "Alan 6, seçenek B"
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1663,
+  "output_tokens": 223,
+  "cost_usd": 0.01389,
+  "latency_ms": 3878.927899990231,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "restructure",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:58:40"
+}

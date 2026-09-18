@@ -1,0 +1,218 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "resolve",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 16000,
+  "system": "You are a careful mathematics solver. Solve the given Turkish question and report the solution in the verifier's structured format so that every quantitative claim can be machine-checked.\n\nRules for steps (this is what makes your work verifiable):\n- Each step is ONE relation in canonical SymPy-like syntax (explicit '*', '**' for powers, sqrt, log natural, Abs, pi, oo, degrees as 30°).\n- kind eq: a relation about the unknowns derived from the givens or earlier steps; `from` lists the step ids it uses ([] when it follows from the problem statement alone).\n- kind compute: an explicit calculation \"operation = result\": 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit((x**2 - 4)/(x - 2), x, 2) = 4, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20, gcd(84, 120) = 12.\n- kind case: a case assumption; branch steps cite it in `from`. kind assert: domain conditions. kind note: prose. kind conclude: the final statement / option.\n- Use the symbol names you are told to use for the unknowns; declare nothing else — if you need an auxiliary symbol, keep that step as a note.\n- Check domain conditions (log arguments, even roots, denominators, one-sided limits) explicitly.\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite; payload canonical; option = the chosen letter for multiple choice (\"\" if open-ended). Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Question (Turkish)\nBir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?\nA) 12  B) 14  C) 16  D) 18  E) 20\n\n## Notation\nunknown symbols to use: a, b\nanswer shape expected: scalar\n\n## Structured solution (JSON)"
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "xhigh",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"claimed_answer\":{\"kind\":\"value\",\"payload\":\"16\",\"option\":\"C\"},\"steps\":[{\"id\":\"s1\",\"kind\":\"note\",\"claim\":\"\",\"from\":[],\"text\":\"a = tavuk sayısı, b = koyun sayısı olsun.\"},{\"id\":\"s2\",\"kind\":\"eq\",\"claim\":\"a + b = 30\",\"from\":[],\"text\":\"Baş sayısı toplamı 30.\"},{\"id\":\"s3\",\"kind\":\"eq\",\"claim\":\"2*a + 4*b = 88\",\"from\":[],\"text\":\"Tavuk 2 ayaklı, koyun 4 ayaklı; toplam ayak 88.\"},{\"id\":\"s4\",\"kind\":\"eq\",\"claim\":\"a + 2*b = 44\",\"from\":[\"s3\"],\"text\":\"Ayak denklemi 2'ye bölündü.\"},{\"id\":\"s5\",\"kind\":\"eq\",\"claim\":\"b = 14\",\"from\":[\"s2\",\"s4\"],\"text\":\"İki denklem taraf tarafa çıkarılınca b = 44 - 30 = 14.\"},{\"id\":\"s6\",\"kind\":\"eq\",\"claim\":\"a = 16\",\"from\":[\"s2\",\"s5\"],\"text\":\"a = 30 - 14 = 16.\"},{\"id\":\"s7\",\"kind\":\"compute\",\"claim\":\"2*16 + 4*14 = 88\",\"from\":[\"s5\",\"s6\"],\"text\":\"Kontrol: ayak sayısı 32 + 56 = 88, doğru.\"},{\"id\":\"s8\",\"kind\":\"conclude\",\"claim\":\"a = 16\",\"from\":[\"s6\",\"s7\"],\"text\":\"Çiftlikte 16 tavuk vardır (C şıkkı).\"}],\"final_answer_text\":\"Çiftlikte 16 tavuk (ve 14 koyun) vardır — seçenek C.\"}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "value",
+    "payload": "16",
+    "option": "C"
+   },
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "note",
+     "claim": "",
+     "from": [],
+     "text": "a = tavuk sayısı, b = koyun sayısı olsun."
+    },
+    {
+     "id": "s2",
+     "kind": "eq",
+     "claim": "a + b = 30",
+     "from": [],
+     "text": "Baş sayısı toplamı 30."
+    },
+    {
+     "id": "s3",
+     "kind": "eq",
+     "claim": "2*a + 4*b = 88",
+     "from": [],
+     "text": "Tavuk 2 ayaklı, koyun 4 ayaklı; toplam ayak 88."
+    },
+    {
+     "id": "s4",
+     "kind": "eq",
+     "claim": "a + 2*b = 44",
+     "from": [
+      "s3"
+     ],
+     "text": "Ayak denklemi 2'ye bölündü."
+    },
+    {
+     "id": "s5",
+     "kind": "eq",
+     "claim": "b = 14",
+     "from": [
+      "s2",
+      "s4"
+     ],
+     "text": "İki denklem taraf tarafa çıkarılınca b = 44 - 30 = 14."
+    },
+    {
+     "id": "s6",
+     "kind": "eq",
+     "claim": "a = 16",
+     "from": [
+      "s2",
+      "s5"
+     ],
+     "text": "a = 30 - 14 = 16."
+    },
+    {
+     "id": "s7",
+     "kind": "compute",
+     "claim": "2*16 + 4*14 = 88",
+     "from": [
+      "s5",
+      "s6"
+     ],
+     "text": "Kontrol: ayak sayısı 32 + 56 = 88, doğru."
+    },
+    {
+     "id": "s8",
+     "kind": "conclude",
+     "claim": "a = 16",
+     "from": [
+      "s6",
+      "s7"
+     ],
+     "text": "Çiftlikte 16 tavuk vardır (C şıkkı)."
+    }
+   ],
+   "final_answer_text": "Çiftlikte 16 tavuk (ve 14 koyun) vardır — seçenek C."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1440,
+  "output_tokens": 636,
+  "cost_usd": 0.0231,
+  "latency_ms": 8205.218200018862,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "xhigh",
+   "tag": "resolve",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:55:46"
+}

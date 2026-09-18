@@ -7,3 +7,6 @@ dist/
 .pytest_cache/
 .hypothesis/
 reports/*.json
+.env
+.env.*
+llm_cache/*.tmp

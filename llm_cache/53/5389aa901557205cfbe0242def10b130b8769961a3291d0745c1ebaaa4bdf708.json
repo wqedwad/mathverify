@@ -1,0 +1,82 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 4000,
+  "system": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\nA(1, 2) ve B(4, 6) noktaları arasındaki uzaklık kaç birimdir?\nA) 3  B) 4  C) 5  D) 25  E) 7\n\n## Formalisation (rendered)\nTask: Find the value of: dist(1, 2, 4, 6)\nExpected answer shape: scalar, units: birim\nOptions: A) 3  B) 4  C) 5  D) 25  E) 7\nSanity conditions on the answer: ans > 0\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"evaluate\", \"params\": {\"expr\": \"dist(1, 2, 4, 6)\"}}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"scalar\", \"options\": {\"A\": \"3\", \"B\": \"4\", \"C\": \"5\", \"D\": \"25\", \"E\": \"7\"}, \"units\": \"birim\", \"sanity\": [\"ans > 0\"], \"domain_of_discourse\": null, \"topic\": \"analitik geometri\", \"level\": \"AYT\", \"question_en\": \"What is the distance, in units, between the points A(1, 2) and B(4, 6)?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"score\":9,\"faithful\":true,\"discrepancies\":[\"The helper function `dist(1, 2, 4, 6)` is used without being declared in `functions`; its meaning (Euclidean distance between (1,2) and (4,6)) is only implicit — harmless notational shorthand.\"],\"notes\":\"Givens (points A(1,2), B(4,6)), target (distance in units), options, answer shape and units all match the original. No derived or pre-solved quantity is present; the sanity condition ans > 0 is a legitimate non-revealing constraint.\"}",
+  "parsed": {
+   "score": 9,
+   "faithful": true,
+   "discrepancies": [
+    "The helper function `dist(1, 2, 4, 6)` is used without being declared in `functions`; its meaning (Euclidean distance between (1,2) and (4,6)) is only implicit — harmless notational shorthand."
+   ],
+   "notes": "Givens (points A(1,2), B(4,6)), target (distance in units), options, answer shape and units all match the original. No derived or pre-solved quantity is present; the sanity condition ans > 0 is a legitimate non-revealing constraint."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1040,
+  "output_tokens": 292,
+  "cost_usd": 0.0125,
+  "latency_ms": 6039.065100019798,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:58:05"
+}

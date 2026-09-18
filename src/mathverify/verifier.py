@@ -181,21 +181,41 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
 
 def verify(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
            timeout: float = 8.0, run_steps: bool = True) -> VerificationResult:
+    """Deterministic verification: certificates + step refuter + fusion."""
     t_start = time.perf_counter()
+    layers, clean_flags = verify_layers(problem_ir, solution, seed=seed, timeout=timeout, run_steps=run_steps)
+    return fuse_layers(layers, extra_flags=clean_flags, started=t_start)
+
+
+def fuse_layers(layers: list[LayerResult], extra_flags: list[str] | None = None, started: float | None = None,
+                versions_extra: dict[str, str] | None = None) -> VerificationResult:
+    """Fuse any list of layers (deterministic ones plus, in F3+, LLM-derived soft layers)."""
+    fused = fuse(layers)
+    total_ms = (time.perf_counter() - started) * 1000 if started else 0.0
+    trace = fused["trace"] + f"\nToplam süre: {total_ms:.0f} ms"
+    all_flags = list(fused["flags"]) + [f for f in (extra_flags or []) if f not in fused["flags"]]
+    versions = _versions()
+    if versions_extra:
+        versions.update(versions_extra)
+    return VerificationResult(verdict=fused["verdict"], confidence=fused["confidence"],
+                              first_bad_step=fused["first_bad_step"], layers=layers,
+                              decision_trace=trace, versions=versions, flags=all_flags)
+
+
+def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
+                  timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
+    """Run the deterministic layers and return (layers, flags) without fusing."""
     if isinstance(problem_ir, dict):
         problem_ir = ProblemIR.from_dict(problem_ir)
     if isinstance(solution, dict):
         solution = Solution.from_dict(solution)
     layers: list[LayerResult] = []
-    flags: list[str] = []
 
     try:
         ctx = make_ctx(problem_ir, seed=seed, timeout=timeout)
     except Exception as e:  # noqa: BLE001
         layers.append(unknown("ir.parse", f"ir_namespace_error: {type(e).__name__}: {e}", flags=["parse_error"]))
-        fused = fuse(layers)
-        return VerificationResult(verdict="UNKNOWN", confidence=0.0, first_bad_step=None, layers=layers,
-                                  decision_trace=fused["trace"], versions=_versions(), flags=fused["flags"])
+        return layers, []
 
     # fill payload from option letter if the solver only gave a letter
     ca = solution.claimed_answer
@@ -241,13 +261,7 @@ def verify(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 
             layers.append(unknown("steps.refute", f"layer_exception: {type(e).__name__}: {str(e)[:200]}",
                                   flags=["layer_exception"]))
 
-    fused = fuse(layers)
-    total_ms = (time.perf_counter() - t_start) * 1000
-    trace = fused["trace"] + f"\nToplam süre: {total_ms:.0f} ms"
-    all_flags = list(fused["flags"]) + [f for f in clean_flags if f not in fused["flags"]]
-    return VerificationResult(verdict=fused["verdict"], confidence=fused["confidence"],
-                              first_bad_step=fused["first_bad_step"], layers=layers,
-                              decision_trace=trace, versions=_versions(), flags=all_flags)
+    return layers, clean_flags
 
 
 def cache_key(problem_ir: dict, solution: dict) -> str:

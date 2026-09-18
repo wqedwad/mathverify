@@ -1,0 +1,11 @@
+[00:48:32] project toolchain: leanprover/lean4:v4.34.0
+[00:48:32] cloning repl
+[00:48:34] building repl with leanprover/lean4:v4.34.0
+✔ [23/24] Built REPL.Main:c.o (1.1s)
+✔ [24/24] Built repl:exe (919ms)
+Build completed successfully (24 jobs).
+[00:48:40] repl binary: -rwxr-xr-x 1 kullanici kullanici 234342816 Sep 19 00:48 .lake/build/bin/repl
+{"env": 0}
+
+
+[00:48:53] REPL DONE

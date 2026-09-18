@@ -1,0 +1,1076 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "smoke_ir",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "You formalise Turkish math questions into a JSON problem IR. Use canonical SymPy syntax with explicit '*' (e.g. 3*x + 2*y = 12). Fill every field; use null for unused params."
+   },
+   {
+    "role": "user",
+    "content": "Bir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Kaç tavuk vardır? A) 12 B) 14 C) 16 D) 18 E) 20"
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "high",
+  "max_completion_tokens": 12000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "task": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "antiderivative",
+          "closed_form",
+          "count_integers",
+          "count_roots",
+          "count_solutions",
+          "count_structures",
+          "definite_integral",
+          "derivative",
+          "domain_of",
+          "equation_of",
+          "evaluate",
+          "extremum",
+          "limit",
+          "linalg",
+          "probability",
+          "recurrence_term",
+          "series_sum",
+          "simplify_expression",
+          "solve_equation",
+          "solve_inequality",
+          "synthetic_geometry",
+          "tangent_line",
+          "trig_solve",
+          "proof",
+          "unsupported"
+         ]
+        },
+        "params": {
+         "type": "object",
+         "properties": {
+          "expr": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "expression to evaluate / simplify / count roots of"
+          },
+          "var": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "main variable name"
+          },
+          "equation": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "equation for solve_equation (else givens[0])"
+          },
+          "inequality": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "inequality for solve_inequality (else givens)"
+          },
+          "to": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "limit point: number, oo, -oo"
+          },
+          "side": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "'+' or '-' for one-sided limits, else null"
+          },
+          "integrand": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "a": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "lower bound"
+          },
+          "b": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "upper bound, or vector b for solve_system"
+          },
+          "f": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "function expression"
+          },
+          "at": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "evaluation point"
+          },
+          "order": {
+           "anyOf": [
+            {
+             "type": "integer"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "derivative order"
+          },
+          "interval": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "interval like [-2, 3] or (0, oo)"
+          },
+          "which": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "max|min|argmax|argmin|local_max|local_min|local_argmax|local_argmin"
+          },
+          "object": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "equation_of object: line_points|line_point_slope|line_point_parallel|line_point_perpendicular|circle_center_radius|circle_center_point|circle_diameter|perpendicular_bisector|tangent_to_circle_at_point"
+          },
+          "p1": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "point [x, y]"
+          },
+          "p2": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "p": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "center": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "point": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "radius": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "line": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "a line equation"
+          },
+          "slope": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "lo": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "hi": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "distinct": {
+           "anyOf": [
+            {
+             "type": "boolean"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "count distinct roots (default true)"
+          },
+          "points": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "synthetic_geometry point names"
+          },
+          "constraints": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "synthetic_geometry constraints (equations only)"
+          },
+          "target": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "synthetic_geometry target expression"
+          },
+          "space": {
+           "anyOf": [
+            {
+             "type": "object",
+             "properties": {
+              "structure": {
+               "type": "string",
+               "description": "permutation|combination|sequence|multiset_combination|arrangement_all|product"
+              },
+              "n": {
+               "anyOf": [
+                {
+                 "type": "integer"
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "k": {
+               "anyOf": [
+                {
+                 "type": "integer"
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "elements": {
+               "anyOf": [
+                {
+                 "type": "array",
+                 "items": {
+                  "type": "string"
+                 }
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "sets": {
+               "anyOf": [
+                {
+                 "type": "array",
+                 "items": {
+                  "type": "array",
+                  "items": {
+                   "type": "string"
+                  }
+                 }
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              }
+             },
+             "required": [
+              "structure",
+              "n",
+              "k",
+              "elements",
+              "sets"
+             ],
+             "additionalProperties": false
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "predicate": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "count_structures predicate over the tuple t"
+          },
+          "event": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "probability event predicate over the tuple t"
+          },
+          "recurrence": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "e.g. a(n) = a(n-1) + 2*a(n-2)"
+          },
+          "initial": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "object",
+              "properties": {
+               "index": {
+                "type": "integer"
+               },
+               "value": {
+                "type": "string"
+               }
+              },
+              "required": [
+               "index",
+               "value"
+              ],
+              "additionalProperties": false
+             }
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "index": {
+           "anyOf": [
+            {
+             "type": "integer"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "term index for recurrence_term"
+          },
+          "name": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "sequence name (default a)"
+          },
+          "term": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "series term in var"
+          },
+          "op": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "linalg op: matrix_expr|eigenvalues|eigenvector|inverse|solve_system"
+          },
+          "matrix": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Matrix([[...],[...]])"
+          },
+          "eigenvalue": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "A": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "coefficient matrix"
+          },
+          "dep": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "dependent variable for tangent_line (default y)"
+          },
+          "x": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "y": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "bounds": {
+           "anyOf": [
+            {
+             "type": "array",
+             "items": {
+              "type": "object",
+              "properties": {
+               "var": {
+                "type": "string"
+               },
+               "lo": {
+                "type": "string"
+               },
+               "hi": {
+                "type": "string"
+               }
+              },
+              "required": [
+               "var",
+               "lo",
+               "hi"
+              ],
+              "additionalProperties": false
+             }
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "count_solutions integer boxes"
+          },
+          "rel_tol": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "declared relative tolerance when the question asks for an approximation"
+          }
+         },
+         "required": [
+          "expr",
+          "var",
+          "equation",
+          "inequality",
+          "to",
+          "side",
+          "integrand",
+          "a",
+          "b",
+          "f",
+          "at",
+          "order",
+          "interval",
+          "which",
+          "object",
+          "p1",
+          "p2",
+          "p",
+          "center",
+          "point",
+          "radius",
+          "line",
+          "slope",
+          "lo",
+          "hi",
+          "distinct",
+          "points",
+          "constraints",
+          "target",
+          "space",
+          "predicate",
+          "event",
+          "recurrence",
+          "initial",
+          "index",
+          "name",
+          "term",
+          "op",
+          "matrix",
+          "eigenvalue",
+          "A",
+          "dep",
+          "x",
+          "y",
+          "bounds",
+          "rel_tol"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "kind",
+        "params"
+       ],
+       "additionalProperties": false
+      },
+      "vars": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "domain": {
+          "type": "string",
+          "enum": [
+           "complex",
+           "integer",
+           "natural",
+           "nonneg_integer",
+           "nonneg_real",
+           "positive_integer",
+           "positive_real",
+           "rational",
+           "real"
+          ]
+         },
+         "constraints": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "name",
+         "domain",
+         "constraints"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "givens": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "relations in canonical syntax"
+      },
+      "functions": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "expr": {
+          "type": "string"
+         },
+         "args": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "params": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "domain": {
+          "anyOf": [
+           {
+            "type": "string"
+           },
+           {
+            "type": "null"
+           }
+          ]
+         }
+        },
+        "required": [
+         "name",
+         "expr",
+         "args",
+         "params",
+         "domain"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "unknown_of_interest": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "answer_shape": {
+       "type": "string",
+       "enum": [
+        "condition_on_param",
+        "count",
+        "dne_or_scalar",
+        "equation",
+        "expression",
+        "interval",
+        "proof",
+        "scalar",
+        "set"
+       ]
+      },
+      "options": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "letter": {
+            "type": "string"
+           },
+           "value": {
+            "type": "string",
+            "description": "canonical expression of the option"
+           }
+          },
+          "required": [
+           "letter",
+           "value"
+          ],
+          "additionalProperties": false
+         }
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "units": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "sanity": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "sanity relations on `ans`"
+      },
+      "domain_of_discourse": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "from the PROBLEM statement, e.g. 'x > 0'; null if unrestricted"
+      },
+      "topic": {
+       "type": "string"
+      },
+      "level": {
+       "type": "string",
+       "enum": [
+        "TYT",
+        "AYT",
+        "UNI"
+       ]
+      },
+      "question_en": {
+       "type": "string",
+       "description": "faithful English restatement"
+      },
+      "assumptions": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "anything you had to assume or could not encode"
+      },
+      "confidence": {
+       "type": "integer",
+       "description": "0-10 self-assessed confidence"
+      }
+     },
+     "required": [
+      "task",
+      "vars",
+      "givens",
+      "functions",
+      "unknown_of_interest",
+      "answer_shape",
+      "options",
+      "units",
+      "sanity",
+      "domain_of_discourse",
+      "topic",
+      "level",
+      "question_en",
+      "assumptions",
+      "confidence"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"answer_shape\": \"scalar\", \"assumptions\": [\"Each chicken has 1 head and 2 feet\", \"Each sheep has 1 head and 4 feet\"], \"confidence\": 10, \"domain_of_discourse\": null, \"functions\": [], \"givens\": [\"tavuk + koyun = 30\", \"2*tavuk + 4*koyun = 88\"], \"level\": \"TYT\", \"options\": [{\"letter\": \"A\", \"value\": \"12\"}, {\"letter\": \"B\", \"value\": \"14\"}, {\"letter\": \"C\", \"value\": \"16\"}, {\"letter\": \"D\", \"value\": \"18\"}, {\"letter\": \"E\", \"value\": \"20\"}], \"question_en\": \"The total number of heads of chickens and sheep on a farm is 30, and the total number of feet is 88. How many chickens are there? A) 12 B) 14 C) 16 D) 18 E) 20\", \"sanity\": [\"ans >= 0\", \"ans <= 30\"], \"task\": {\"kind\": \"solve_equation\", \"params\": {\"A\": null, \"a\": null, \"at\": null, \"b\": null, \"bounds\": null, \"center\": null, \"constraints\": null, \"dep\": null, \"distinct\": null, \"eigenvalue\": null, \"equation\": null, \"event\": null, \"expr\": null, \"f\": null, \"hi\": null, \"index\": null, \"inequality\": null, \"initial\": null, \"integrand\": null, \"interval\": null, \"line\": null, \"lo\": null, \"matrix\": null, \"name\": null, \"object\": null, \"op\": null, \"order\": null, \"p\": null, \"p1\": null, \"p2\": null, \"point\": null, \"points\": null, \"predicate\": null, \"radius\": null, \"recurrence\": null, \"rel_tol\": null, \"side\": null, \"slope\": null, \"space\": null, \"target\": null, \"term\": null, \"to\": null, \"var\": \"tavuk\", \"which\": null, \"x\": null, \"y\": null}}, \"topic\": \"linear equations\", \"units\": null, \"unknown_of_interest\": \"tavuk\", \"vars\": [{\"constraints\": [], \"domain\": \"nonneg_integer\", \"name\": \"tavuk\"}, {\"constraints\": [], \"domain\": \"nonneg_integer\", \"name\": \"koyun\"}]}",
+  "parsed": {
+   "answer_shape": "scalar",
+   "assumptions": [
+    "Each chicken has 1 head and 2 feet",
+    "Each sheep has 1 head and 4 feet"
+   ],
+   "confidence": 10,
+   "domain_of_discourse": null,
+   "functions": [],
+   "givens": [
+    "tavuk + koyun = 30",
+    "2*tavuk + 4*koyun = 88"
+   ],
+   "level": "TYT",
+   "options": [
+    {
+     "letter": "A",
+     "value": "12"
+    },
+    {
+     "letter": "B",
+     "value": "14"
+    },
+    {
+     "letter": "C",
+     "value": "16"
+    },
+    {
+     "letter": "D",
+     "value": "18"
+    },
+    {
+     "letter": "E",
+     "value": "20"
+    }
+   ],
+   "question_en": "The total number of heads of chickens and sheep on a farm is 30, and the total number of feet is 88. How many chickens are there? A) 12 B) 14 C) 16 D) 18 E) 20",
+   "sanity": [
+    "ans >= 0",
+    "ans <= 30"
+   ],
+   "task": {
+    "kind": "solve_equation",
+    "params": {
+     "A": null,
+     "a": null,
+     "at": null,
+     "b": null,
+     "bounds": null,
+     "center": null,
+     "constraints": null,
+     "dep": null,
+     "distinct": null,
+     "eigenvalue": null,
+     "equation": null,
+     "event": null,
+     "expr": null,
+     "f": null,
+     "hi": null,
+     "index": null,
+     "inequality": null,
+     "initial": null,
+     "integrand": null,
+     "interval": null,
+     "line": null,
+     "lo": null,
+     "matrix": null,
+     "name": null,
+     "object": null,
+     "op": null,
+     "order": null,
+     "p": null,
+     "p1": null,
+     "p2": null,
+     "point": null,
+     "points": null,
+     "predicate": null,
+     "radius": null,
+     "recurrence": null,
+     "rel_tol": null,
+     "side": null,
+     "slope": null,
+     "space": null,
+     "target": null,
+     "term": null,
+     "to": null,
+     "var": "tavuk",
+     "which": null,
+     "x": null,
+     "y": null
+    }
+   },
+   "topic": "linear equations",
+   "units": null,
+   "unknown_of_interest": "tavuk",
+   "vars": [
+    {
+     "constraints": [],
+     "domain": "nonneg_integer",
+     "name": "tavuk"
+    },
+    {
+     "constraints": [],
+     "domain": "nonneg_integer",
+     "name": "koyun"
+    }
+   ]
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 2102,
+  "output_tokens": 3387,
+  "cost_usd": 0.0,
+  "latency_ms": 41390.642300015315,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0b63b-cc1c-77b4-b972-201da7042569",
+  "meta": {
+   "effort": "high",
+   "tag": "smoke_ir",
+   "streamed": false
+  }
+ },
+ "recorded_at": "2026-09-18T23:36:06"
+}

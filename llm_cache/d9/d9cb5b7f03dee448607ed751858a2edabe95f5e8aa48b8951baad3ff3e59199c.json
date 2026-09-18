@@ -1,0 +1,80 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON."
+   },
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\nMerkezi M(2, −1) ve yarıçapı 3 olan çemberin denklemi aşağıdakilerden hangisidir?\nA) (x - 2)**2 + (y + 1)**2 = 9  B) (x + 2)**2 + (y - 1)**2 = 9  C) (x - 2)**2 + (y + 1)**2 = 3  D) x**2 + y**2 - 4*x + 2*y + 4 = 0  E) (x - 2)**2 + (y - 1)**2 = 9\n\n## Formalisation (rendered)\nUnknowns: x is a real number; y is a real number\nTask: Find the equation of the circle_center_radius determined by {\"center\": [\"2\", \"-1\"], \"radius\": \"3\"}\nExpected answer shape: equation\nOptions: A) (x - 2)**2 + (y + 1)**2 = 9  B) (x + 2)**2 + (y - 1)**2 = 9  C) (x - 2)**2 + (y + 1)**2 = 3  D) x**2 + y**2 - 4*x + 2*y + 4 = 0  E) (x - 2)**2 + (y - 1)**2 = 9\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"equation_of\", \"params\": {\"object\": \"circle_center_radius\", \"center\": [\"2\", \"-1\"], \"radius\": \"3\"}}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}, {\"name\": \"y\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"equation\", \"options\": {\"A\": \"(x - 2)**2 + (y + 1)**2 = 9\", \"B\": \"(x + 2)**2 + (y - 1)**2 = 9\", \"C\": \"(x - 2)**2 + (y + 1)**2 = 3\", \"D\": \"x**2 + y**2 - 4*x + 2*y + 4 = 0\", \"E\": \"(x - 2)**2 + (y - 1)**2 = 9\"}, \"units\": null, \"sanity\": [], \"domain_of_discourse\": null, \"topic\": \"analitik geometri\", \"level\": \"AYT\", \"question_en\": \"Find the equation of the circle with center M(2, -1) and radius 3.\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "high",
+  "max_completion_tokens": 4000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"discrepancies\":[],\"faithful\":true,\"notes\":\"Center (2,-1), radius 3, task kind and all 5 options match original exactly; no answer or derived equation in IR.\",\"score\":10}",
+  "parsed": {
+   "discrepancies": [],
+   "faithful": true,
+   "notes": "Center (2,-1), radius 3, task kind and all 5 options match original exactly; no answer or derived equation in IR.",
+   "score": 10
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 903,
+  "output_tokens": 1521,
+  "cost_usd": 0.007593,
+  "latency_ms": 22437.539000005927,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0b650-4394-71da-b5c3-86431d727276",
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "streamed": false
+  }
+ },
+ "recorded_at": "2026-09-18T23:58:27"
+}

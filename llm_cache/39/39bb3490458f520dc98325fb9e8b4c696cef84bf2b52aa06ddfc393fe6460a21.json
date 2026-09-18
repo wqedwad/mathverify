@@ -1,0 +1,373 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "ir_extract",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 20000,
+  "system": "You are the formalisation front-end of a deterministic mathematics verifier. You convert a Turkish (TYT / AYT / university) math question into a Problem IR that computer-algebra certificates (SymPy, z3, mpmath) execute afterwards.\n\nYou do NOT solve the problem. The IR states the problem exactly as posed; it never contains the answer, a solved value, a simplified target, or any derived quantity. A \"helpful\" IR that pre-computes something silently corrupts every verdict.\n\n## Expression syntax (machine-parsed, SymPy-like)\n- Products need an explicit '*': 3*x, 2*a + 4*b, (x + 1)*(x - 2). Powers: x**2. Fractions: 1/2. Decimal point '.', Turkish \"3,5\" -> 3.5, \"10.000\" -> 10000, \"%25\" -> 25/100, \"30°\" -> 30° (keep the degree sign) or deg(30).\n- Functions: sqrt, log (natural; log(x, 10) for base 10), exp, sin, cos, tan, cot, asin, acos, atan, Abs, floor, ceiling, gcd, lcm, factorial, binomial, Mod, Max, Min; constants pi, E, oo, I.\n- Relations: =, <, <=, >, >=, !=; chains like 0 <= p <= 1 are allowed.\n- Sets and intervals: {1, 2}, (-2, 7), [-2, 7), (-oo, -2) U [1, oo), EmptySet.\n- Helpers: at(expr, var, value) evaluates expr at var=value; dist(x1, y1, x2, y2); slope(x1, y1, x2, y2); tri_area(x1, y1, x2, y2, x3, y3); point_line_dist(x0, y0, a, b, c) for a*x + b*y + c = 0; det(Matrix([[1, 2], [3, 4]])), trace(...), rank(...), eigmax(...), eigmin(...).\n- Named functions of the problem go in `functions` ({\"name\": \"f\", \"expr\": \"2*x + 3\", \"args\": [\"x\"], \"params\": []}) and are then used as f(2), f(g(x)), diff(f(x), x), at(diff(f(x), x), x, 1). Parameters inside a function (like k in x**3 + k*x) go in that function's `params` AND in `vars`.\n- Every other symbol used anywhere must be declared in `vars` with a domain: real, positive_real, nonneg_real, integer, positive_integer, nonneg_integer, natural, rational, complex. Counts of people/objects are positive_integer; \"tam sayı\" integer; \"doğal sayı\" nonneg_integer; digits integer with constraints 0..9.\n- Word constraints become var constraints: \"birbirinden farklı\" -> x != y; \"ardışık\" -> y = x + 1; \"iki basamaklı\" -> n >= 10 and n <= 99 (two constraints); \"pozitif\" -> x > 0.\n\n## Task kinds (exactly one) and their params (key/value/list triples)\n- evaluate: params expr = the quantity the question asks for, in terms of the declared unknowns; givens = ALL equations/inequalities the problem states. Use this for word problems, systems, \"x + y kaçtır\", function values f(3), compositions, gcd/lcm/remainders (expr like gcd(84, 120) or Mod(5**100, 7)), coordinate-geometry quantities (dist(...), tri_area(...)), determinants.\n- solve_equation: a SINGLE equation in ONE unknown whose solution (set) is asked; params var (equation optional, else givens[0]); answer_shape set (or scalar if one value asked). Keep sqrt/log/rational/abs equations in their original form (the domain traps are checked downstream).\n- solve_inequality: params var; givens hold the inequality; answer_shape interval (or set).\n- count_integers: \"kaç tam sayı\" satisfying givens; params var; var domain integer; answer_shape count.\n- count_roots: \"kaç farklı reel kök\"; params expr (the polynomial), var, optional distinct; answer_shape count.\n- domain_of: \"tanım kümesi\"; params expr, var; answer_shape set.\n- limit: params expr, var, to (number, oo, -oo), optional side '+' or '-'; answer_shape dne_or_scalar when a \"yoktur/limit yoktur\" option exists, else scalar.\n- derivative: params f, var, optional order, optional at (value -> scalar) ; answer_shape expression or scalar.\n- antiderivative: params integrand, var; answer_shape expression.\n- definite_integral: params integrand, var, a, b; answer_shape scalar.\n- tangent_line: params f, var, at, dep (default y); answer_shape equation.\n- extremum: params f, var, interval (e.g. [-2, 3], (0, oo)), which = max | min | argmax | argmin | local_max | local_min | local_argmax | local_argmin; answer_shape scalar.\n- trig_solve: params var, optional interval (e.g. [0, 2*pi)); the equation is givens[0]; answer_shape set (general solutions use k as an integer parameter, e.g. {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}).\n- equation_of: params object = line_points (p1, p2) | line_point_slope (p, slope) | line_point_parallel / line_point_perpendicular (p, line) | circle_center_radius (center, radius) | circle_center_point (center, point) | circle_diameter (p1, p2) | perpendicular_bisector (p1, p2) | tangent_to_circle_at_point (center, point); points as lists [\"x\", \"y\"]; vars x and y declared; answer_shape equation.\n- synthetic_geometry: geometry stated with lengths/angles and point names but no coordinates. params points (list of point names, first two fix the frame), constraints (list of EQUATIONS: dist(A,B) = 6, angle(A,B,C) = 90 (degrees), dist(A,B)**2 = dist(A,C)**2, midpoint(M, A, B), parallel(A,B,C,D), perpendicular(A,B,C,D), collinear(A,B,C), equidistant(P,A,B)), target (dist(A,C), angle(A,B,C), area(A,B,C), perimeter(A,B,C)); answer_shape scalar; no vars needed.\n- probability: params space (JSON string: {\"structure\": \"product\", \"sets\": [[1,2,3,4,5,6],[1,2,3,4,5,6]]} for dice/coins; {\"structure\": \"combination\", \"elements\": [\"k1\",\"k2\",\"k3\",\"m1\",\"m2\"], \"k\": 2} for drawing without replacement; \"sequence\" with replacement; \"permutation\" ordered) and event (a Python-style predicate over the outcome tuple t: sum(t) == 7, t.count('T') >= 2, all(x[0] == 'k' for x in t)); answer_shape scalar; sanity ans >= 0, ans <= 1.\n- count_structures: params space (as above; \"arrangement_all\" for all orderings) and optional predicate; answer_shape count.\n- recurrence_term: params recurrence (a(n) = a(n-1) + 2*a(n-2)), initial (list of \"index=value\"), index, var n; answer_shape scalar.\n- closed_form: params recurrence, initial, var; answer_shape expression (general term in n).\n- series_sum: params term, var, lo, hi (hi may be oo); answer_shape scalar.\n- linalg: params op = inverse (matrix) | eigenvalues (matrix; answer_shape set) | eigenvector (matrix, eigenvalue) | solve_system (A, b as \"(30, 88)\") | matrix_expr (expr); answer_shape expression unless noted.\n- proof / unsupported: only when nothing above fits; explain in assumptions.\n\nDecision rules: a quantity asked from several relations -> evaluate (never solve_equation with more than one given). \"kaç ... vardır\" -> a count kind. \"en büyük/en küçük değeri\" over an interval -> extremum; \"yerel\" -> local_*. Coordinates present -> evaluate/equation_of, no coordinates -> synthetic_geometry.\n\n## Multiple choice\nList every option as a canonical expression (sets as {..}, intervals as (..), equations as y = 2*x, matrices as Matrix([[..]]), \"limit yoktur\" as the text yoktur). answer_shape must match the options: set for solution sets, interval for inequalities, count for \"kaç\", equation for line/circle equations, expression for general terms / derivatives / antiderivatives (write + C as in the options), dne_or_scalar for limits with a yoktur option, scalar otherwise.\n\n## domain_of_discourse and sanity\ndomain_of_discourse only when the PROBLEM restricts the main variable (\"x > 0\", \"x in (0, oo)\"); never derive it from the expressions. sanity: relations on `ans` any valid answer must satisfy (ans > 0 for lengths, ans >= 0 and ans <= 1 for probabilities, ans <= 30 when the count cannot exceed the total).\n\n## Output\nJSON matching the schema. Fill every field; \"\" and [] mean \"none\". question_en is a faithful English restatement (no solving). assumptions lists anything you had to assume or could not encode. confidence 0-10.\n",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Exemplars (hand-written, trusted)\n### Question\nBir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?\nA) 12  B) 14  C) 16  D) 18  E) 20\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"a\", \"list\": []}]}, \"vars\": [{\"name\": \"a\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"b\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [\"a + b = 30\", \"2*a + 4*b = 88\"], \"functions\": [], \"unknown_of_interest\": \"a\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"12\"}, {\"letter\": \"B\", \"value\": \"14\"}, {\"letter\": \"C\", \"value\": \"16\"}, {\"letter\": \"D\", \"value\": \"18\"}, {\"letter\": \"E\", \"value\": \"20\"}], \"units\": \"\", \"sanity\": [\"ans > 0\", \"ans < 30\"], \"domain_of_discourse\": \"\", \"topic\": \"problemler\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nBir babanın yaşı oğlunun yaşının 4 katıdır. 5 yıl sonra babanın yaşı oğlunun yaşının 3 katı olacaktır. Baba bugün kaç yaşındadır?\nA) 30  B) 36  C) 40  D) 44  E) 48\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"b\", \"list\": []}]}, \"vars\": [{\"name\": \"o\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"b\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [\"b = 4*o\", \"b + 5 = 3*(o + 5)\"], \"functions\": [], \"unknown_of_interest\": \"b\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"30\"}, {\"letter\": \"B\", \"value\": \"36\"}, {\"letter\": \"C\", \"value\": \"40\"}, {\"letter\": \"D\", \"value\": \"44\"}, {\"letter\": \"E\", \"value\": \"48\"}], \"units\": \"\", \"sanity\": [\"ans > 18\"], \"domain_of_discourse\": \"\", \"topic\": \"problemler\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nİki basamaklı bir doğal sayının rakamları toplamı 11'dir. Rakamlarının yerleri değiştirildiğinde elde edilen sayı, sayının kendisinden 27 fazla olduğuna göre bu sayı kaçtır?\nA) 38  B) 47  C) 56  D) 65  E) 74\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"10*a + b\", \"list\": []}]}, \"vars\": [{\"name\": \"a\", \"domain\": \"integer\", \"constraints\": [\"a >= 1\", \"a <= 9\"]}, {\"name\": \"b\", \"domain\": \"integer\", \"constraints\": [\"b >= 0\", \"b <= 9\"]}], \"givens\": [\"a + b = 11\", \"(10*b + a) - (10*a + b) = 27\"], \"functions\": [], \"unknown_of_interest\": \"10*a + b\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"38\"}, {\"letter\": \"B\", \"value\": \"47\"}, {\"letter\": \"C\", \"value\": \"56\"}, {\"letter\": \"D\", \"value\": \"65\"}, {\"letter\": \"E\", \"value\": \"74\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"sayılar\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nx² − 5x − 14 < 0 eşitsizliğini sağlayan kaç farklı x tam sayısı vardır?\nA) 6  B) 7  C) 8  D) 9  E) 10\n### IR\n{\"task\": {\"kind\": \"count_integers\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"integer\", \"constraints\": []}], \"givens\": [\"x**2 - 5*x - 14 < 0\"], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"count\", \"options\": [{\"letter\": \"A\", \"value\": \"6\"}, {\"letter\": \"B\", \"value\": \"7\"}, {\"letter\": \"C\", \"value\": \"8\"}, {\"letter\": \"D\", \"value\": \"9\"}, {\"letter\": \"E\", \"value\": \"10\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"sayılar\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\n5^100 sayısının 7 ile bölümünden kalan kaçtır?\nA) 1  B) 2  C) 3  D) 4  E) 5\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"Mod(5**100, 7)\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"1\"}, {\"letter\": \"B\", \"value\": \"2\"}, {\"letter\": \"C\", \"value\": \"3\"}, {\"letter\": \"D\", \"value\": \"4\"}, {\"letter\": \"E\", \"value\": \"5\"}], \"units\": \"\", \"sanity\": [\"ans >= 0\", \"ans < 7\"], \"domain_of_discourse\": \"\", \"topic\": \"sayılar\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nlog(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?\nA) {0}  B) {4}  C) {0, 4}  D) {1}  E) {}\n### IR\n{\"task\": {\"kind\": \"solve_equation\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"log(x - 1) + log(x - 3) = log(3)\"], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"set\", \"options\": [{\"letter\": \"A\", \"value\": \"{0}\"}, {\"letter\": \"B\", \"value\": \"{4}\"}, {\"letter\": \"C\", \"value\": \"{0, 4}\"}, {\"letter\": \"D\", \"value\": \"{1}\"}, {\"letter\": \"E\", \"value\": \"{}\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"denklem\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\n|2x − 3| = 5 denkleminin çözüm kümesi aşağıdakilerden hangisidir?\nA) {4}  B) {-1, 4}  C) {-4, 1}  D) {1, 4}  E) {-1}\n### IR\n{\"task\": {\"kind\": \"solve_equation\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"Abs(2*x - 3) = 5\"], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"set\", \"options\": [{\"letter\": \"A\", \"value\": \"{4}\"}, {\"letter\": \"B\", \"value\": \"{-1, 4}\"}, {\"letter\": \"C\", \"value\": \"{-4, 1}\"}, {\"letter\": \"D\", \"value\": \"{1, 4}\"}, {\"letter\": \"E\", \"value\": \"{-1}\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"denklem\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nx² − (m + 1)x + 4 = 0 denkleminin çakışık iki reel kökü olduğuna göre m'nin pozitif değeri kaçtır?\nA) 1  B) 3  C) 5  D) 7  E) 15\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"m\", \"list\": []}]}, \"vars\": [{\"name\": \"m\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"(m + 1)**2 - 4*4 = 0\", \"m > 0\"], \"functions\": [], \"unknown_of_interest\": \"m\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"1\"}, {\"letter\": \"B\", \"value\": \"3\"}, {\"letter\": \"C\", \"value\": \"5\"}, {\"letter\": \"D\", \"value\": \"7\"}, {\"letter\": \"E\", \"value\": \"15\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"denklem\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nx² − 5x − 14 < 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?\nA) (-2, 7)  B) [-2, 7]  C) (-oo, -2) U (7, oo)  D) (-7, 2)  E) (2, 7)\n### IR\n{\"task\": {\"kind\": \"solve_inequality\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"x**2 - 5*x - 14 < 0\"], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"interval\", \"options\": [{\"letter\": \"A\", \"value\": \"(-2, 7)\"}, {\"letter\": \"B\", \"value\": \"[-2, 7]\"}, {\"letter\": \"C\", \"value\": \"(-oo, -2) U (7, oo)\"}, {\"letter\": \"D\", \"value\": \"(-7, 2)\"}, {\"letter\": \"E\", \"value\": \"(2, 7)\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"eşitsizlik\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\n(x − 1)/(x + 2) ≥ 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?\nA) (-oo, -2) U [1, oo)  B) (-oo, -2] U [1, oo)  C) [-2, 1]  D) (-2, 1)  E) (-oo, -2) U (1, oo)\n### IR\n{\"task\": {\"kind\": \"solve_inequality\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"(x - 1)/(x + 2) >= 0\"], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"interval\", \"options\": [{\"letter\": \"A\", \"value\": \"(-oo, -2) U [1, oo)\"}, {\"letter\": \"B\", \"value\": \"(-oo, -2] U [1, oo)\"}, {\"letter\": \"C\", \"value\": \"[-2, 1]\"}, {\"letter\": \"D\", \"value\": \"(-2, 1)\"}, {\"letter\": \"E\", \"value\": \"(-oo, -2) U (1, oo)\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"eşitsizlik\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nf(x) = 2x + 3 ve g(x) = x² − 1 olduğuna göre (f∘g)(2) kaçtır?\nA) 7  B) 8  C) 9  D) 10  E) 11\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"f(g(2))\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [{\"name\": \"f\", \"expr\": \"2*x + 3\", \"args\": [\"x\"], \"params\": [], \"domain\": \"\"}, {\"name\": \"g\", \"expr\": \"x**2 - 1\", \"args\": [\"x\"], \"params\": [], \"domain\": \"\"}], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"7\"}, {\"letter\": \"B\", \"value\": \"8\"}, {\"letter\": \"C\", \"value\": \"9\"}, {\"letter\": \"D\", \"value\": \"10\"}, {\"letter\": \"E\", \"value\": \"11\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"fonksiyonlar\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nf(x) = (2x + 3)/(x − 1) olduğuna göre f⁻¹(5) kaçtır?\nA) 2/3  B) 8/3  C) 3  D) 10/3  E) 4\n### IR\n{\"task\": {\"kind\": \"solve_equation\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"equation\", \"value\": \"f(x) = 5\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"f(x) = 5\"], \"functions\": [{\"name\": \"f\", \"expr\": \"(2*x + 3)/(x - 1)\", \"args\": [\"x\"], \"params\": [], \"domain\": \"x != 1\"}], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"2/3\"}, {\"letter\": \"B\", \"value\": \"8/3\"}, {\"letter\": \"C\", \"value\": \"3\"}, {\"letter\": \"D\", \"value\": \"10/3\"}, {\"letter\": \"E\", \"value\": \"4\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"fonksiyonlar\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nP(x) = x³ − 2x² + kx + 6 polinomunun (x − 3) ile bölümünden kalan 0 olduğuna göre k kaçtır?\nA) -5  B) -3  C) 3  D) 5  E) 7\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"k\", \"list\": []}]}, \"vars\": [{\"name\": \"k\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"P(3) = 0\"], \"functions\": [{\"name\": \"P\", \"expr\": \"x**3 - 2*x**2 + k*x + 6\", \"args\": [\"x\"], \"params\": [\"k\"], \"domain\": \"\"}], \"unknown_of_interest\": \"k\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"-5\"}, {\"letter\": \"B\", \"value\": \"-3\"}, {\"letter\": \"C\", \"value\": \"3\"}, {\"letter\": \"D\", \"value\": \"5\"}, {\"letter\": \"E\", \"value\": \"7\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"polinom\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nP(x) = x⁵ − 3x³ + x + 1 polinomunun kaç farklı reel kökü vardır?\nA) 1  B) 2  C) 3  D) 4  E) 5\n### IR\n{\"task\": {\"kind\": \"count_roots\", \"params\": [{\"key\": \"expr\", \"value\": \"x**5 - 3*x**3 + x + 1\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"count\", \"options\": [{\"letter\": \"A\", \"value\": \"1\"}, {\"letter\": \"B\", \"value\": \"2\"}, {\"letter\": \"C\", \"value\": \"3\"}, {\"letter\": \"D\", \"value\": \"4\"}, {\"letter\": \"E\", \"value\": \"5\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"polinom\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nlim_{x→0} |x|/x limiti için aşağıdakilerden hangisi doğrudur?\nA) -1  B) 0  C) 1  D) 2  E) limit yoktur\n### IR\n{\"task\": {\"kind\": \"limit\", \"params\": [{\"key\": \"expr\", \"value\": \"Abs(x)/x\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"to\", \"value\": \"0\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"dne_or_scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"-1\"}, {\"letter\": \"B\", \"value\": \"0\"}, {\"letter\": \"C\", \"value\": \"1\"}, {\"letter\": \"D\", \"value\": \"2\"}, {\"letter\": \"E\", \"value\": \"limit yoktur\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"limit\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nlim_{x→0⁺} x·ln x limitinin değeri kaçtır?\nA) -1  B) 0  C) 1  D) -∞  E) ∞\n### IR\n{\"task\": {\"kind\": \"limit\", \"params\": [{\"key\": \"expr\", \"value\": \"x*log(x)\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"to\", \"value\": \"0\", \"list\": []}, {\"key\": \"side\", \"value\": \"+\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"dne_or_scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"-1\"}, {\"letter\": \"B\", \"value\": \"0\"}, {\"letter\": \"C\", \"value\": \"1\"}, {\"letter\": \"D\", \"value\": \"-∞\"}, {\"letter\": \"E\", \"value\": \"∞\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"limit\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nf(x) = x³ − 3x fonksiyonunun [−2, 3] aralığındaki en büyük değeri kaçtır?\nA) 2  B) 16  C) 18  D) 20  E) 24\n### IR\n{\"task\": {\"kind\": \"extremum\", \"params\": [{\"key\": \"f\", \"value\": \"x**3 - 3*x\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"interval\", \"value\": \"[-2, 3]\", \"list\": []}, {\"key\": \"which\", \"value\": \"max\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"2\"}, {\"letter\": \"B\", \"value\": \"16\"}, {\"letter\": \"C\", \"value\": \"18\"}, {\"letter\": \"D\", \"value\": \"20\"}, {\"letter\": \"E\", \"value\": \"24\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"türev\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\ny = x² eğrisine x = 1 apsisli noktasından çizilen teğetin denklemi aşağıdakilerden hangisidir?\nA) y = 2*x - 1  B) y = 2*x + 1  C) y = x  D) y = 2*x  E) y = x + 1\n### IR\n{\"task\": {\"kind\": \"tangent_line\", \"params\": [{\"key\": \"f\", \"value\": \"x**2\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"at\", \"value\": \"1\", \"list\": []}, {\"key\": \"dep\", \"value\": \"y\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}, {\"name\": \"y\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"equation\", \"options\": [{\"letter\": \"A\", \"value\": \"y = 2*x - 1\"}, {\"letter\": \"B\", \"value\": \"y = 2*x + 1\"}, {\"letter\": \"C\", \"value\": \"y = x\"}, {\"letter\": \"D\", \"value\": \"y = 2*x\"}, {\"letter\": \"E\", \"value\": \"y = x + 1\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"türev\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nf(x) = ln(x² + 1) fonksiyonunun türevi aşağıdakilerden hangisidir?\nA) 2*x/(x**2 + 1)  B) 1/(x**2 + 1)  C) 2*x*log(x**2 + 1)  D) x/(x**2 + 1)  E) 2/(x**2 + 1)\n### IR\n{\"task\": {\"kind\": \"derivative\", \"params\": [{\"key\": \"f\", \"value\": \"log(x**2 + 1)\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"expression\", \"options\": [{\"letter\": \"A\", \"value\": \"2*x/(x**2 + 1)\"}, {\"letter\": \"B\", \"value\": \"1/(x**2 + 1)\"}, {\"letter\": \"C\", \"value\": \"2*x*log(x**2 + 1)\"}, {\"letter\": \"D\", \"value\": \"x/(x**2 + 1)\"}, {\"letter\": \"E\", \"value\": \"2/(x**2 + 1)\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"türev\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nx > 0 olmak üzere f(x) = x + 4/x fonksiyonunun en küçük değeri kaçtır?\nA) 2  B) 4  C) 6  D) 8  E) 0\n### IR\n{\"task\": {\"kind\": \"extremum\", \"params\": [{\"key\": \"f\", \"value\": \"x + 4/x\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"interval\", \"value\": \"(0, oo)\", \"list\": []}, {\"key\": \"which\", \"value\": \"min\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"positive_real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"2\"}, {\"letter\": \"B\", \"value\": \"4\"}, {\"letter\": \"C\", \"value\": \"6\"}, {\"letter\": \"D\", \"value\": \"8\"}, {\"letter\": \"E\", \"value\": \"0\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"x > 0\", \"topic\": \"türev\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nf(x) = x³ − 6x² + 9x + 1 fonksiyonunun yerel maksimum değeri kaçtır?\nA) 1  B) 3  C) 5  D) 7  E) 9\n### IR\n{\"task\": {\"kind\": \"extremum\", \"params\": [{\"key\": \"f\", \"value\": \"x**3 - 6*x**2 + 9*x + 1\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"which\", \"value\": \"local_max\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"1\"}, {\"letter\": \"B\", \"value\": \"3\"}, {\"letter\": \"C\", \"value\": \"5\"}, {\"letter\": \"D\", \"value\": \"7\"}, {\"letter\": \"E\", \"value\": \"9\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"türev\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nf(x) = x³ + ax² + bx fonksiyonu x = 1 noktasında yerel ekstremuma sahiptir ve f(1) = −3'tür. a·b çarpımı kaçtır?\nA) -5  B) -4  C) 4  D) 5  E) 6\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"a*b\", \"list\": []}]}, \"vars\": [{\"name\": \"a\", \"domain\": \"real\", \"constraints\": []}, {\"name\": \"b\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"at(diff(f(x), x), x, 1) = 0\", \"f(1) = -3\"], \"functions\": [{\"name\": \"f\", \"expr\": \"x**3 + a*x**2 + b*x\", \"args\": [\"x\"], \"params\": [\"a\", \"b\"], \"domain\": \"\"}], \"unknown_of_interest\": \"a*b\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"-5\"}, {\"letter\": \"B\", \"value\": \"-4\"}, {\"letter\": \"C\", \"value\": \"4\"}, {\"letter\": \"D\", \"value\": \"5\"}, {\"letter\": \"E\", \"value\": \"6\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"türev\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\n∫ ln x dx integrali aşağıdakilerden hangisine eşittir? (C sabit)\nA) x*log(x) - x + C  B) x*log(x) + C  C) log(x)/x + C  D) x*log(x) + x + C  E) 1/x + C\n### IR\n{\"task\": {\"kind\": \"antiderivative\", \"params\": [{\"key\": \"integrand\", \"value\": \"log(x)\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"expression\", \"options\": [{\"letter\": \"A\", \"value\": \"x*log(x) - x + C\"}, {\"letter\": \"B\", \"value\": \"x*log(x) + C\"}, {\"letter\": \"C\", \"value\": \"log(x)/x + C\"}, {\"letter\": \"D\", \"value\": \"x*log(x) + x + C\"}, {\"letter\": \"E\", \"value\": \"1/x + C\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"integral\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\n∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?\nA) 6  B) 21  C) 23  D) 25  E) 27\n### IR\n{\"task\": {\"kind\": \"definite_integral\", \"params\": [{\"key\": \"integrand\", \"value\": \"Abs(x - 1) + Abs(x + 2)\", \"list\": []}, {\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"a\", \"value\": \"-3\", \"list\": []}, {\"key\": \"b\", \"value\": \"3\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"6\"}, {\"letter\": \"B\", \"value\": \"21\"}, {\"letter\": \"C\", \"value\": \"23\"}, {\"letter\": \"D\", \"value\": \"25\"}, {\"letter\": \"E\", \"value\": \"27\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"integral\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\ncos 2x = 1/2 denkleminin [0, 2π) aralığındaki çözüm kümesi aşağıdakilerden hangisidir?\nA) {pi/6, 5*pi/6}  B) {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}  C) {pi/3, 5*pi/3}  D) {pi/6, 11*pi/6}  E) {pi/3, 2*pi/3, 4*pi/3, 5*pi/3}\n### IR\n{\"task\": {\"kind\": \"trig_solve\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}, {\"key\": \"interval\", \"value\": \"[0, 2*pi)\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"cos(2*x) = 1/2\"], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"set\", \"options\": [{\"letter\": \"A\", \"value\": \"{pi/6, 5*pi/6}\"}, {\"letter\": \"B\", \"value\": \"{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}\"}, {\"letter\": \"C\", \"value\": \"{pi/3, 5*pi/3}\"}, {\"letter\": \"D\", \"value\": \"{pi/6, 11*pi/6}\"}, {\"letter\": \"E\", \"value\": \"{pi/3, 2*pi/3, 4*pi/3, 5*pi/3}\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"trigonometri\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nsin x = 1/2 denkleminin çözüm kümesi aşağıdakilerden hangisidir? (k ∈ Z)\nA) {pi/6 + 2*k*pi}  B) {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}  C) {pi/6 + k*pi}  D) {pi/6 + k*pi, 5*pi/6 + k*pi}  E) {pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}\n### IR\n{\"task\": {\"kind\": \"trig_solve\", \"params\": [{\"key\": \"var\", \"value\": \"x\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [\"sin(x) = 1/2\"], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"set\", \"options\": [{\"letter\": \"A\", \"value\": \"{pi/6 + 2*k*pi}\"}, {\"letter\": \"B\", \"value\": \"{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}\"}, {\"letter\": \"C\", \"value\": \"{pi/6 + k*pi}\"}, {\"letter\": \"D\", \"value\": \"{pi/6 + k*pi, 5*pi/6 + k*pi}\"}, {\"letter\": \"E\", \"value\": \"{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"trigonometri\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nsin 75° değeri aşağıdakilerden hangisidir?\nA) (sqrt(6) + sqrt(2))/4  B) (sqrt(6) - sqrt(2))/4  C) sqrt(3)/2  D) (sqrt(2) + 1)/2  E) sqrt(2)/2\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"sin(75°)\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"(sqrt(6) + sqrt(2))/4\"}, {\"letter\": \"B\", \"value\": \"(sqrt(6) - sqrt(2))/4\"}, {\"letter\": \"C\", \"value\": \"sqrt(3)/2\"}, {\"letter\": \"D\", \"value\": \"(sqrt(2) + 1)/2\"}, {\"letter\": \"E\", \"value\": \"sqrt(2)/2\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"trigonometri\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nA(1, 2) ve B(4, 8) noktalarından geçen doğrunun denklemi aşağıdakilerden hangisidir?\nA) y = 2*x  B) y = 2*x + 1  C) y = x + 1  D) y = 3*x - 1  E) y = (x + 3)/2\n### IR\n{\"task\": {\"kind\": \"equation_of\", \"params\": [{\"key\": \"object\", \"value\": \"line_points\", \"list\": []}, {\"key\": \"p1\", \"value\": \"\", \"list\": [\"1\", \"2\"]}, {\"key\": \"p2\", \"value\": \"\", \"list\": [\"4\", \"8\"]}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}, {\"name\": \"y\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"equation\", \"options\": [{\"letter\": \"A\", \"value\": \"y = 2*x\"}, {\"letter\": \"B\", \"value\": \"y = 2*x + 1\"}, {\"letter\": \"C\", \"value\": \"y = x + 1\"}, {\"letter\": \"D\", \"value\": \"y = 3*x - 1\"}, {\"letter\": \"E\", \"value\": \"y = (x + 3)/2\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"analitik geometri\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nMerkezi M(2, −1) ve yarıçapı 3 olan çemberin denklemi aşağıdakilerden hangisidir?\nA) (x - 2)**2 + (y + 1)**2 = 9  B) (x + 2)**2 + (y - 1)**2 = 9  C) (x - 2)**2 + (y + 1)**2 = 3  D) x**2 + y**2 - 4*x + 2*y + 4 = 0  E) (x - 2)**2 + (y - 1)**2 = 9\n### IR\n{\"task\": {\"kind\": \"equation_of\", \"params\": [{\"key\": \"object\", \"value\": \"circle_center_radius\", \"list\": []}, {\"key\": \"center\", \"value\": \"\", \"list\": [\"2\", \"-1\"]}, {\"key\": \"radius\", \"value\": \"3\", \"list\": []}]}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": []}, {\"name\": \"y\", \"domain\": \"real\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"equation\", \"options\": [{\"letter\": \"A\", \"value\": \"(x - 2)**2 + (y + 1)**2 = 9\"}, {\"letter\": \"B\", \"value\": \"(x + 2)**2 + (y - 1)**2 = 9\"}, {\"letter\": \"C\", \"value\": \"(x - 2)**2 + (y + 1)**2 = 3\"}, {\"letter\": \"D\", \"value\": \"x**2 + y**2 - 4*x + 2*y + 4 = 0\"}, {\"letter\": \"E\", \"value\": \"(x - 2)**2 + (y - 1)**2 = 9\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"analitik geometri\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nP(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?\nA) 2  B) 3  C) 4  D) 20  E) 6\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"point_line_dist(3, 4, 3, 4, -5)\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"2\"}, {\"letter\": \"B\", \"value\": \"3\"}, {\"letter\": \"C\", \"value\": \"4\"}, {\"letter\": \"D\", \"value\": \"20\"}, {\"letter\": \"E\", \"value\": \"6\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"analitik geometri\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nABC dik üçgeninde m(∠B) = 90°, |AB| = 6 cm ve |BC| = 8 cm'dir. |AC| kaç cm'dir?\nA) 8  B) 9  C) 10  D) 12  E) 14\n### IR\n{\"task\": {\"kind\": \"synthetic_geometry\", \"params\": [{\"key\": \"points\", \"value\": \"\", \"list\": [\"A\", \"B\", \"C\"]}, {\"key\": \"constraints\", \"value\": \"\", \"list\": [\"dist(A,B) = 6\", \"dist(B,C) = 8\", \"angle(A,B,C) = 90\"]}, {\"key\": \"target\", \"value\": \"dist(A,C)\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"8\"}, {\"letter\": \"B\", \"value\": \"9\"}, {\"letter\": \"C\", \"value\": \"10\"}, {\"letter\": \"D\", \"value\": \"12\"}, {\"letter\": \"E\", \"value\": \"14\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"geometri\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nABC üçgeninde |AB| = |AC| ve m(∠A) = 40°'dir. m(∠B) kaç derecedir?\nA) 40  B) 50  C) 60  D) 70  E) 80\n### IR\n{\"task\": {\"kind\": \"synthetic_geometry\", \"params\": [{\"key\": \"points\", \"value\": \"\", \"list\": [\"A\", \"B\", \"C\"]}, {\"key\": \"constraints\", \"value\": \"\", \"list\": [\"dist(A,B)**2 = dist(A,C)**2\", \"angle(B,A,C) = 40\"]}, {\"key\": \"target\", \"value\": \"angle(A,B,C)\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"40\"}, {\"letter\": \"B\", \"value\": \"50\"}, {\"letter\": \"C\", \"value\": \"60\"}, {\"letter\": \"D\", \"value\": \"70\"}, {\"letter\": \"E\", \"value\": \"80\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"geometri\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nİki zar birlikte atılıyor. Üst yüze gelen sayıların toplamının 7 olma olasılığı kaçtır?\nA) 1/12  B) 1/9  C) 1/6  D) 5/36  E) 1/4\n### IR\n{\"task\": {\"kind\": \"probability\", \"params\": [{\"key\": \"space\", \"value\": \"{\\\"structure\\\": \\\"product\\\", \\\"sets\\\": [[1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]]}\", \"list\": []}, {\"key\": \"event\", \"value\": \"sum(t) == 7\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"1/12\"}, {\"letter\": \"B\", \"value\": \"1/9\"}, {\"letter\": \"C\", \"value\": \"1/6\"}, {\"letter\": \"D\", \"value\": \"5/36\"}, {\"letter\": \"E\", \"value\": \"1/4\"}], \"units\": \"\", \"sanity\": [\"ans >= 0\", \"ans <= 1\"], \"domain_of_discourse\": \"\", \"topic\": \"olasılık\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\n6 kişilik bir gruptan 3 kişilik bir komite kaç farklı şekilde seçilebilir?\nA) 15  B) 18  C) 20  D) 30  E) 120\n### IR\n{\"task\": {\"kind\": \"count_structures\", \"params\": [{\"key\": \"space\", \"value\": \"{\\\"structure\\\": \\\"combination\\\", \\\"n\\\": 6, \\\"k\\\": 3}\", \"list\": []}, {\"key\": \"predicate\", \"value\": \"\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"count\", \"options\": [{\"letter\": \"A\", \"value\": \"15\"}, {\"letter\": \"B\", \"value\": \"18\"}, {\"letter\": \"C\", \"value\": \"20\"}, {\"letter\": \"D\", \"value\": \"30\"}, {\"letter\": \"E\", \"value\": \"120\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"olasılık\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nBir torbada 3 kırmızı ve 2 mavi top vardır. Aynı anda çekilen 2 topun ikisinin de kırmızı olma olasılığı kaçtır?\nA) 1/5  B) 3/10  C) 9/25  D) 1/2  E) 3/5\n### IR\n{\"task\": {\"kind\": \"probability\", \"params\": [{\"key\": \"space\", \"value\": \"{\\\"structure\\\": \\\"combination\\\", \\\"elements\\\": [\\\"k1\\\", \\\"k2\\\", \\\"k3\\\", \\\"m1\\\", \\\"m2\\\"], \\\"k\\\": 2}\", \"list\": []}, {\"key\": \"event\", \"value\": \"all(x[0] == 'k' for x in t)\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"1/5\"}, {\"letter\": \"B\", \"value\": \"3/10\"}, {\"letter\": \"C\", \"value\": \"9/25\"}, {\"letter\": \"D\", \"value\": \"1/2\"}, {\"letter\": \"E\", \"value\": \"3/5\"}], \"units\": \"\", \"sanity\": [\"ans >= 0\", \"ans <= 1\"], \"domain_of_discourse\": \"\", \"topic\": \"olasılık\", \"level\": \"TYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\na₁ = 1, a₂ = 3 ve n ≥ 3 için aₙ = aₙ₋₁ + 2aₙ₋₂ olduğuna göre a₆ kaçtır?\nA) 21  B) 32  C) 43  D) 64  E) 85\n### IR\n{\"task\": {\"kind\": \"recurrence_term\", \"params\": [{\"key\": \"recurrence\", \"value\": \"a(n) = a(n-1) + 2*a(n-2)\", \"list\": []}, {\"key\": \"initial\", \"value\": \"\", \"list\": [\"1=1\", \"2=3\"]}, {\"key\": \"index\", \"value\": \"6\", \"list\": []}, {\"key\": \"var\", \"value\": \"n\", \"list\": []}]}, \"vars\": [{\"name\": \"k\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"21\"}, {\"letter\": \"B\", \"value\": \"32\"}, {\"letter\": \"C\", \"value\": \"43\"}, {\"letter\": \"D\", \"value\": \"64\"}, {\"letter\": \"E\", \"value\": \"85\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"diziler\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nİlk terimi 3 ve ortak çarpanı 2 olan geometrik dizinin genel terimi aşağıdakilerden hangisidir?\nA) 3*2**n  B) 3*2**(n-1)  C) 2*3**(n-1)  D) 6**(n-1)  E) 3**n\n### IR\n{\"task\": {\"kind\": \"closed_form\", \"params\": [{\"key\": \"recurrence\", \"value\": \"a(n) = 2*a(n-1)\", \"list\": []}, {\"key\": \"initial\", \"value\": \"\", \"list\": [\"1=3\"]}, {\"key\": \"var\", \"value\": \"n\", \"list\": []}]}, \"vars\": [{\"name\": \"k\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"expression\", \"options\": [{\"letter\": \"A\", \"value\": \"3*2**n\"}, {\"letter\": \"B\", \"value\": \"3*2**(n-1)\"}, {\"letter\": \"C\", \"value\": \"2*3**(n-1)\"}, {\"letter\": \"D\", \"value\": \"6**(n-1)\"}, {\"letter\": \"E\", \"value\": \"3**n\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"diziler\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\n1² + 2² + … + 10² toplamı kaçtır?\nA) 285  B) 330  C) 385  D) 440  E) 505\n### IR\n{\"task\": {\"kind\": \"series_sum\", \"params\": [{\"key\": \"term\", \"value\": \"k**2\", \"list\": []}, {\"key\": \"var\", \"value\": \"k\", \"list\": []}, {\"key\": \"lo\", \"value\": \"1\", \"list\": []}, {\"key\": \"hi\", \"value\": \"10\", \"list\": []}]}, \"vars\": [{\"name\": \"k\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"285\"}, {\"letter\": \"B\", \"value\": \"330\"}, {\"letter\": \"C\", \"value\": \"385\"}, {\"letter\": \"D\", \"value\": \"440\"}, {\"letter\": \"E\", \"value\": \"505\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"diziler\", \"level\": \"AYT\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nA = [[1, 2], [3, 4]] matrisinin tersi aşağıdakilerden hangisidir?\nA) Matrix([[-2, 1], [3/2, -1/2]])  B) Matrix([[4, -2], [-3, 1]])  C) Matrix([[-4, 2], [3, -1]])  D) Matrix([[1, -2], [-3, 4]])  E) Matrix([[2, -1], [-3/2, 1/2]])\n### IR\n{\"task\": {\"kind\": \"linalg\", \"params\": [{\"key\": \"op\", \"value\": \"inverse\", \"list\": []}, {\"key\": \"matrix\", \"value\": \"Matrix([[1,2],[3,4]])\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"expression\", \"options\": [{\"letter\": \"A\", \"value\": \"Matrix([[-2, 1], [3/2, -1/2]])\"}, {\"letter\": \"B\", \"value\": \"Matrix([[4, -2], [-3, 1]])\"}, {\"letter\": \"C\", \"value\": \"Matrix([[-4, 2], [3, -1]])\"}, {\"letter\": \"D\", \"value\": \"Matrix([[1, -2], [-3, 4]])\"}, {\"letter\": \"E\", \"value\": \"Matrix([[2, -1], [-3/2, 1/2]])\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"lineer cebir\", \"level\": \"UNI\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nx + y = 30 ve 2x + 4y = 88 sistemini matris yöntemiyle çözünüz. (x, y) çifti nedir?\nA) (16, 14)  B) (14, 16)  C) (18, 12)  D) (12, 18)  E) (20, 10)\n### IR\n{\"task\": {\"kind\": \"linalg\", \"params\": [{\"key\": \"op\", \"value\": \"solve_system\", \"list\": []}, {\"key\": \"A\", \"value\": \"Matrix([[1,1],[2,4]])\", \"list\": []}, {\"key\": \"b\", \"value\": \"(30, 88)\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"expression\", \"options\": [{\"letter\": \"A\", \"value\": \"(16, 14)\"}, {\"letter\": \"B\", \"value\": \"(14, 16)\"}, {\"letter\": \"C\", \"value\": \"(18, 12)\"}, {\"letter\": \"D\", \"value\": \"(12, 18)\"}, {\"letter\": \"E\", \"value\": \"(20, 10)\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"lineer cebir\", \"level\": \"UNI\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nA = [[1, 2], [3, 4]] matrisinin determinantı kaçtır?\nA) -2  B) -1  C) 0  D) 1  E) 2\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"det(Matrix([[1, 2], [3, 4]]))\", \"list\": []}]}, \"vars\": [], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"-2\"}, {\"letter\": \"B\", \"value\": \"-1\"}, {\"letter\": \"C\", \"value\": \"0\"}, {\"letter\": \"D\", \"value\": \"1\"}, {\"letter\": \"E\", \"value\": \"2\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"lineer cebir\", \"level\": \"UNI\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n### Question\nΣ_{k=1}^{∞} 1/(k(k+1)) serisinin toplamı kaçtır?\nA) 1/2  B) 1  C) 2  D) log(2)  E) ∞\n### IR\n{\"task\": {\"kind\": \"evaluate\", \"params\": [{\"key\": \"expr\", \"value\": \"Sum(1/(k*(k + 1)), (k, 1, oo))\", \"list\": []}]}, \"vars\": [{\"name\": \"k\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"scalar\", \"options\": [{\"letter\": \"A\", \"value\": \"1/2\"}, {\"letter\": \"B\", \"value\": \"1\"}, {\"letter\": \"C\", \"value\": \"2\"}, {\"letter\": \"D\", \"value\": \"log(2)\"}, {\"letter\": \"E\", \"value\": \"∞\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"reel analiz\", \"level\": \"UNI\", \"question_en\": \"(omitted in exemplar)\", \"assumptions\": [], \"confidence\": 10}\n\n## Task\n\nLevel hint: AYT\n\n### Question\nİlk terimi 3 ve ortak çarpanı 2 olan geometrik dizinin genel terimi aşağıdakilerden hangisidir?\nA) 3*2**n  B) 3*2**(n-1)  C) 2*3**(n-1)  D) 6**(n-1)  E) 3**n\n\n### IR (JSON)"
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "max",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "task": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "antiderivative",
+          "closed_form",
+          "count_integers",
+          "count_roots",
+          "count_solutions",
+          "count_structures",
+          "definite_integral",
+          "derivative",
+          "domain_of",
+          "equation_of",
+          "evaluate",
+          "extremum",
+          "limit",
+          "linalg",
+          "probability",
+          "recurrence_term",
+          "series_sum",
+          "simplify_expression",
+          "solve_equation",
+          "solve_inequality",
+          "synthetic_geometry",
+          "tangent_line",
+          "trig_solve",
+          "proof",
+          "unsupported"
+         ]
+        },
+        "params": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "key": {
+            "type": "string",
+            "description": "parameter name"
+           },
+           "value": {
+            "type": "string",
+            "description": "scalar value, '' if the parameter is list-valued"
+           },
+           "list": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            },
+            "description": "list value, [] if scalar"
+           }
+          },
+          "required": [
+           "key",
+           "value",
+           "list"
+          ],
+          "additionalProperties": false
+         },
+         "description": "task parameters as key/value/list triples"
+        }
+       },
+       "required": [
+        "kind",
+        "params"
+       ],
+       "additionalProperties": false
+      },
+      "vars": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "domain": {
+          "type": "string",
+          "enum": [
+           "complex",
+           "integer",
+           "natural",
+           "nonneg_integer",
+           "nonneg_real",
+           "positive_integer",
+           "positive_real",
+           "rational",
+           "real"
+          ]
+         },
+         "constraints": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "name",
+         "domain",
+         "constraints"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "givens": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "relations in canonical syntax that the problem states"
+      },
+      "functions": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "expr": {
+          "type": "string"
+         },
+         "args": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "params": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "domain": {
+          "type": "string",
+          "description": "'' if unrestricted"
+         }
+        },
+        "required": [
+         "name",
+         "expr",
+         "args",
+         "params",
+         "domain"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "unknown_of_interest": {
+       "type": "string",
+       "description": "'' if not applicable"
+      },
+      "answer_shape": {
+       "type": "string",
+       "enum": [
+        "condition_on_param",
+        "count",
+        "dne_or_scalar",
+        "equation",
+        "expression",
+        "interval",
+        "proof",
+        "scalar",
+        "set"
+       ]
+      },
+      "options": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "letter": {
+          "type": "string"
+         },
+         "value": {
+          "type": "string",
+          "description": "canonical expression of the option text"
+         }
+        },
+        "required": [
+         "letter",
+         "value"
+        ],
+        "additionalProperties": false
+       },
+       "description": "[] for open-ended questions"
+      },
+      "units": {
+       "type": "string",
+       "description": "'' if none"
+      },
+      "sanity": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "relations on `ans` every valid answer must satisfy"
+      },
+      "domain_of_discourse": {
+       "type": "string",
+       "description": "restriction stated by the PROBLEM on the main variable, '' if none"
+      },
+      "topic": {
+       "type": "string"
+      },
+      "level": {
+       "type": "string",
+       "enum": [
+        "TYT",
+        "AYT",
+        "UNI"
+       ]
+      },
+      "question_en": {
+       "type": "string",
+       "description": "faithful English restatement of the question"
+      },
+      "assumptions": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "description": "anything you had to assume or could not encode"
+      },
+      "confidence": {
+       "type": "integer",
+       "description": "0-10 self-assessed confidence"
+      }
+     },
+     "required": [
+      "task",
+      "vars",
+      "givens",
+      "functions",
+      "unknown_of_interest",
+      "answer_shape",
+      "options",
+      "units",
+      "sanity",
+      "domain_of_discourse",
+      "topic",
+      "level",
+      "question_en",
+      "assumptions",
+      "confidence"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"task\": {\"kind\": \"closed_form\", \"params\": [{\"key\": \"recurrence\", \"value\": \"a(n) = 2*a(n-1)\", \"list\": []}, {\"key\": \"initial\", \"value\": \"\", \"list\": [\"1=3\"]}, {\"key\": \"var\", \"value\": \"n\", \"list\": []}]}, \"vars\": [{\"name\": \"k\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": \"\", \"answer_shape\": \"expression\", \"options\": [{\"letter\": \"A\", \"value\": \"3*2**n\"}, {\"letter\": \"B\", \"value\": \"3*2**(n-1)\"}, {\"letter\": \"C\", \"value\": \"2*3**(n-1)\"}, {\"letter\": \"D\", \"value\": \"6**(n-1)\"}, {\"letter\": \"E\", \"value\": \"3**n\"}], \"units\": \"\", \"sanity\": [], \"domain_of_discourse\": \"\", \"topic\": \"diziler\", \"level\": \"AYT\", \"question_en\": \"What is the general term of the geometric sequence whose first term is 3 and whose common ratio is 2?\", \"assumptions\": [\"Indexing starts at n = 1 with a(1) = 3.\"], \"confidence\": 10}",
+  "parsed": {
+   "task": {
+    "kind": "closed_form",
+    "params": [
+     {
+      "key": "recurrence",
+      "value": "a(n) = 2*a(n-1)",
+      "list": []
+     },
+     {
+      "key": "initial",
+      "value": "",
+      "list": [
+       "1=3"
+      ]
+     },
+     {
+      "key": "var",
+      "value": "n",
+      "list": []
+     }
+    ]
+   },
+   "vars": [
+    {
+     "name": "k",
+     "domain": "positive_integer",
+     "constraints": []
+    },
+    {
+     "name": "n",
+     "domain": "positive_integer",
+     "constraints": []
+    }
+   ],
+   "givens": [],
+   "functions": [],
+   "unknown_of_interest": "",
+   "answer_shape": "expression",
+   "options": [
+    {
+     "letter": "A",
+     "value": "3*2**n"
+    },
+    {
+     "letter": "B",
+     "value": "3*2**(n-1)"
+    },
+    {
+     "letter": "C",
+     "value": "2*3**(n-1)"
+    },
+    {
+     "letter": "D",
+     "value": "6**(n-1)"
+    },
+    {
+     "letter": "E",
+     "value": "3**n"
+    }
+   ],
+   "units": "",
+   "sanity": [],
+   "domain_of_discourse": "",
+   "topic": "diziler",
+   "level": "AYT",
+   "question_en": "What is the general term of the geometric sequence whose first term is 3 and whose common ratio is 2?",
+   "assumptions": [
+    "Indexing starts at n = 1 with a(1) = 3."
+   ],
+   "confidence": 10
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 23538,
+  "output_tokens": 424,
+  "cost_usd": 0.12829,
+  "latency_ms": 4821.226300002309,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "max",
+   "tag": "ir_extract",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:59:37"
+}

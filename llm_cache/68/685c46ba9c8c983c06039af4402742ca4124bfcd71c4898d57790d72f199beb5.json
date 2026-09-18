@@ -1,0 +1,201 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "resolve",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 16000,
+  "system": "You are a careful mathematics solver. Solve the given Turkish question and report the solution in the verifier's structured format so that every quantitative claim can be machine-checked.\n\nRules for steps (this is what makes your work verifiable):\n- Each step is ONE relation in canonical SymPy-like syntax (explicit '*', '**' for powers, sqrt, log natural, Abs, pi, oo, degrees as 30°).\n- kind eq: a relation about the unknowns derived from the givens or earlier steps; `from` lists the step ids it uses ([] when it follows from the problem statement alone).\n- kind compute: an explicit calculation \"operation = result\": 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit((x**2 - 4)/(x - 2), x, 2) = 4, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20, gcd(84, 120) = 12.\n- kind case: a case assumption; branch steps cite it in `from`. kind assert: domain conditions. kind note: prose. kind conclude: the final statement / option.\n- Use the symbol names you are told to use for the unknowns; declare nothing else — if you need an auxiliary symbol, keep that step as a note.\n- Check domain conditions (log arguments, even roots, denominators, one-sided limits) explicitly.\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite; payload canonical; option = the chosen letter for multiple choice (\"\" if open-ended). Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Question (Turkish)\n∫₀¹ x·eˣ dx integralinin değeri kaçtır?\nA) 0  B) 1  C) E - 1  D) E/2  E) 2*E - 1\n\n## Notation\nunknown symbols to use: x\nanswer shape expected: scalar\n\n## Structured solution (JSON)"
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "xhigh",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"claimed_answer\":{\"kind\":\"value\",\"payload\":\"1\",\"option\":\"B\"},\"steps\":[{\"id\":\"s1\",\"kind\":\"note\",\"claim\":\"\",\"from\":[],\"text\":\"Kısmi integrasyon: u = x, dv = exp(x) dx alınır; du = dx, v = exp(x).\"},{\"id\":\"s2\",\"kind\":\"compute\",\"claim\":\"Integral(x*exp(x), x) = x*exp(x) - exp(x)\",\"from\":[\"s1\"],\"text\":\"Belirsiz integral: ∫ x e^x dx = x e^x - e^x (+C).\"},{\"id\":\"s3\",\"kind\":\"compute\",\"claim\":\"at(x*exp(x) - exp(x), x, 1) = 0\",\"from\":[\"s2\"],\"text\":\"Üst sınır değeri: 1·e - e = 0.\"},{\"id\":\"s4\",\"kind\":\"compute\",\"claim\":\"at(x*exp(x) - exp(x), x, 0) = -1\",\"from\":[\"s2\"],\"text\":\"Alt sınır değeri: 0·1 - 1 = -1.\"},{\"id\":\"s5\",\"kind\":\"compute\",\"claim\":\"Integral(x*exp(x), (x, 0, 1)) = 1\",\"from\":[\"s3\",\"s4\"],\"text\":\"Belirli integral: 0 - (-1) = 1.\"},{\"id\":\"s6\",\"kind\":\"conclude\",\"claim\":\"Integral(x*exp(x), (x, 0, 1)) = 1\",\"from\":[\"s5\"],\"text\":\"İntegralin değeri 1'dir; doğru seçenek B.\"}],\"final_answer_text\":\"∫₀¹ x·e^x dx = [x e^x - e^x]₀¹ = 0 - (-1) = 1 → seçenek B\"}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "value",
+    "payload": "1",
+    "option": "B"
+   },
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "note",
+     "claim": "",
+     "from": [],
+     "text": "Kısmi integrasyon: u = x, dv = exp(x) dx alınır; du = dx, v = exp(x)."
+    },
+    {
+     "id": "s2",
+     "kind": "compute",
+     "claim": "Integral(x*exp(x), x) = x*exp(x) - exp(x)",
+     "from": [
+      "s1"
+     ],
+     "text": "Belirsiz integral: ∫ x e^x dx = x e^x - e^x (+C)."
+    },
+    {
+     "id": "s3",
+     "kind": "compute",
+     "claim": "at(x*exp(x) - exp(x), x, 1) = 0",
+     "from": [
+      "s2"
+     ],
+     "text": "Üst sınır değeri: 1·e - e = 0."
+    },
+    {
+     "id": "s4",
+     "kind": "compute",
+     "claim": "at(x*exp(x) - exp(x), x, 0) = -1",
+     "from": [
+      "s2"
+     ],
+     "text": "Alt sınır değeri: 0·1 - 1 = -1."
+    },
+    {
+     "id": "s5",
+     "kind": "compute",
+     "claim": "Integral(x*exp(x), (x, 0, 1)) = 1",
+     "from": [
+      "s3",
+      "s4"
+     ],
+     "text": "Belirli integral: 0 - (-1) = 1."
+    },
+    {
+     "id": "s6",
+     "kind": "conclude",
+     "claim": "Integral(x*exp(x), (x, 0, 1)) = 1",
+     "from": [
+      "s5"
+     ],
+     "text": "İntegralin değeri 1'dir; doğru seçenek B."
+    }
+   ],
+   "final_answer_text": "∫₀¹ x·e^x dx = [x e^x - e^x]₀¹ = 0 - (-1) = 1 → seçenek B"
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1404,
+  "output_tokens": 630,
+  "cost_usd": 0.02277,
+  "latency_ms": 7980.726699985098,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "xhigh",
+   "tag": "resolve",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:54:50"
+}

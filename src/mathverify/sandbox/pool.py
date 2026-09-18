@@ -304,15 +304,35 @@ class Sandbox:
                              fn_path, ["cas_error"])
 
 
-_DEFAULT: Sandbox | None = None
+import threading as _threading
+
+_LOCAL = _threading.local()
+_ALL: list[Sandbox] = []
+_ALL_LOCK = _threading.Lock()
+
+
+def _close_all() -> None:  # pragma: no cover - process exit
+    with _ALL_LOCK:
+        for sb in _ALL:
+            try:
+                sb.close()
+            except Exception:
+                pass
+
+
+atexit.register(_close_all)
 
 
 def get_sandbox() -> Sandbox:
-    global _DEFAULT
-    if _DEFAULT is None:
-        _DEFAULT = Sandbox()
-        atexit.register(_DEFAULT.close)
-    return _DEFAULT
+    """One worker per calling thread: the pipe protocol is strictly request/response, so
+    concurrent verifications (F3 harness thread pool) must not share a worker."""
+    sb = getattr(_LOCAL, "sandbox", None)
+    if sb is None:
+        sb = Sandbox()
+        _LOCAL.sandbox = sb
+        with _ALL_LOCK:
+            _ALL.append(sb)
+    return sb
 
 
 def run(fn_path: str, *args, timeout: float = 5.0, seed: int = 0, **kwargs) -> CasResult:

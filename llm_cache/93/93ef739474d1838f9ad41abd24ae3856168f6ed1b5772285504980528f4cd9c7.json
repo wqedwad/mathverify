@@ -1,0 +1,82 @@
+{
+ "provider": "anthropic",
+ "model": "claude-opus-5",
+ "tag": "roundtrip_judge",
+ "request": {
+  "model": "claude-opus-5",
+  "max_tokens": 4000,
+  "system": "You audit formalisations of Turkish math questions. You receive the ORIGINAL question (with its options) and a FORMALISATION (a rendered description plus the raw IR). Decide whether the formalisation states exactly the same problem: same givens (nothing missing, nothing added), same unknown/target, same domain restrictions, same options and answer shape, same units and angle conventions, correct Turkish number reading (3,5 = 3.5; 10.000 = 10000), correct task kind, and NO solved or derived quantity (the IR must not contain the answer or a simplified form of the target).\n\nScoring: 10 = exactly the same problem; 9 = the same problem up to harmless notation; 8 or below = something is missing, extra, changed, or pre-solved — list every discrepancy concretely. Set faithful=false whenever score <= 8. You are not asked to solve the problem; do not judge whether it is easy or hard. Reply in JSON.",
+  "messages": [
+   {
+    "role": "user",
+    "content": "## Original question (Turkish)\na₁ = a₂ = 1 ve aₙ = aₙ₋₁ + aₙ₋₂ (Fibonacci) dizisinin genel terimi aşağıdakilerden hangisidir?\nA) (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)  B) (((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)  C) ((1+sqrt(5))/2)**n  D) (((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5)  E) 2**(n-1)\n\n## Formalisation (rendered)\nUnknowns: n is a positive integer; k is a positive integer\nTask: Sequence a(n) = a(n-1) + a(n-2) with initial terms {'1': '1', '2': '1'}; find the general term in n\nExpected answer shape: expression\nOptions: A) (((1 + sqrt(5))/2)**n - ((1 - sqrt(5))/2)**n)/sqrt(5)  B) (((1 + sqrt(5))/2)**n + ((1 - sqrt(5))/2)**n)/sqrt(5)  C) ((1 + sqrt(5))/2)**n  D) (((1 + sqrt(5))/2)**(n - 1) - ((1 - sqrt(5))/2)**(n - 1))/sqrt(5)  E) 2**(n - 1)\n\n## Formalisation (raw IR JSON)\n{\"task\": {\"kind\": \"closed_form\", \"params\": {\"recurrence\": \"a(n) = a(n-1) + a(n-2)\", \"initial\": {\"1\": \"1\", \"2\": \"1\"}, \"var\": \"n\"}}, \"vars\": [{\"name\": \"n\", \"domain\": \"positive_integer\", \"constraints\": []}, {\"name\": \"k\", \"domain\": \"positive_integer\", \"constraints\": []}], \"givens\": [], \"functions\": [], \"unknown_of_interest\": null, \"answer_shape\": \"expression\", \"options\": {\"A\": \"(((1 + sqrt(5))/2)**n - ((1 - sqrt(5))/2)**n)/sqrt(5)\", \"B\": \"(((1 + sqrt(5))/2)**n + ((1 - sqrt(5))/2)**n)/sqrt(5)\", \"C\": \"((1 + sqrt(5))/2)**n\", \"D\": \"(((1 + sqrt(5))/2)**(n - 1) - ((1 - sqrt(5))/2)**(n - 1))/sqrt(5)\", \"E\": \"2**(n - 1)\"}, \"units\": null, \"sanity\": [], \"domain_of_discourse\": null, \"topic\": \"diziler\", \"level\": \"AYT\", \"question_en\": \"The sequence is defined by a_1 = a_2 = 1 and a_n = a_(n-1) + a_(n-2) (Fibonacci). Which of the following is its general (closed-form) term?\"}\n\nAudit the formalisation. Reply in JSON."
+   }
+  ],
+  "thinking": {
+   "type": "adaptive"
+  },
+  "output_config": {
+   "effort": "high",
+   "format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "score": {
+       "type": "integer",
+       "description": "0-10 fidelity score (validated client-side)"
+      },
+      "faithful": {
+       "type": "boolean"
+      },
+      "discrepancies": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "notes": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "score",
+      "faithful",
+      "discrepancies",
+      "notes"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  "betas": [
+   "server-side-fallback-2026-07-01"
+  ],
+  "fallbacks": "default"
+ },
+ "response": {
+  "text": "{\"score\":9,\"faithful\":true,\"discrepancies\":[\"An extra unused variable 'k' (positive integer) is declared in vars, which has no counterpart in the original question (harmless, unused)\"],\"notes\":\"Recurrence a(n)=a(n-1)+a(n-2) with a1=a2=1, task kind closed_form, answer shape expression, and all five options are reproduced exactly as in the original. No derived or pre-solved quantity is included. Only nitpick is the spurious unused variable k; otherwise the statement matches the original exactly.\"}",
+  "parsed": {
+   "score": 9,
+   "faithful": true,
+   "discrepancies": [
+    "An extra unused variable 'k' (positive integer) is declared in vars, which has no counterpart in the original question (harmless, unused)"
+   ],
+   "notes": "Recurrence a(n)=a(n-1)+a(n-2) with a1=a2=1, task kind closed_form, answer shape expression, and all five options are reproduced exactly as in the original. No derived or pre-solved quantity is included. Only nitpick is the spurious unused variable k; otherwise the statement matches the original exactly."
+  },
+  "provider": "anthropic",
+  "model": "claude-opus-5",
+  "input_tokens": 1670,
+  "output_tokens": 319,
+  "cost_usd": 0.016325,
+  "latency_ms": 6415.2146999840625,
+  "stop_reason": "end_turn",
+  "request_id": null,
+  "meta": {
+   "effort": "high",
+   "tag": "roundtrip_judge",
+   "stop_details": null
+  }
+ },
+ "recorded_at": "2026-09-18T23:59:06"
+}
