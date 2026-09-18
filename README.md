@@ -38,7 +38,7 @@ uv pip install --python .venv/Scripts/python.exe -e . pytest pytest-timeout hypo
 ```
 
 ```bash
-.venv/Scripts/python.exe -m pytest tests -q            # §6 E1–E10 sözleşmeleri + birim testleri (183 test)
+.venv/Scripts/python.exe -m pytest tests -q            # §6 E1–E10 sözleşmeleri + birim testleri (184 test; bellek sınırı testi platforma göre atlanır)
 ```
 
 ```bash
