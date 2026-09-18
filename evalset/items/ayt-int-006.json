@@ -1,0 +1,89 @@
+{
+ "id": "ayt-int-006",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "6",
+  "B": "21",
+  "C": "23",
+  "D": "25",
+  "E": "27"
+ },
+ "gold_answer": "23",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "Abs(x - 1) + Abs(x + 2)",
+    "var": "x",
+    "a": "-3",
+    "b": "3"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "21",
+   "C": "23",
+   "D": "25",
+   "E": "27"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "23",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "|x−1| grafiği altındaki alan iki üçgen: tabanlar 4 ve 2"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "(4**2 + 2**2)/2 = 10",
+    "from": [],
+    "text": "∫|x−1| = 16/2 + 4/2"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "(1**2 + 5**2)/2 = 13",
+    "from": [],
+    "text": "∫|x+2| = 1/2 + 25/2"
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "10 + 13 = 23",
+    "from": [
+     "s2",
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Alan olarak: ∫|x−1| = 10, ∫|x+2| = 13; toplam 23. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "geometrik alan hesabı; ilkel kullanılmadı",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

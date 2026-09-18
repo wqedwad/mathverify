@@ -1,0 +1,74 @@
+{
+ "id": "ayt-int-011",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "6",
+  "B": "21",
+  "C": "23",
+  "D": "25",
+  "E": "27"
+ },
+ "gold_answer": "23",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "Abs(x - 1) + Abs(x + 2)",
+    "var": "x",
+    "a": "-3",
+    "b": "3"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "21",
+   "C": "23",
+   "D": "25",
+   "E": "27"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "6",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "Abs(x - 1) + Abs(x + 2) = 2*x + 1",
+    "from": [],
+    "text": "mutlak değerler kaldırıldı (yanlış)"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Integral(2*x + 1, (x, -3, 3)) = 6",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "∫₋₃³ (2x + 1) dx = 6. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "missing_case mutation of ayt-int-002",
+ "provenance": "sentetik",
+ "mutation": "missing_case",
+ "derived_from": "ayt-int-002"
+}

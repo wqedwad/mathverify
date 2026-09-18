@@ -1,0 +1,64 @@
+{
+ "id": "ayt-lim-009",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→0} |x|/x limiti için aşağıdakilerden hangisi doğrudur?",
+ "options": {
+  "A": "-1",
+  "B": "0",
+  "C": "1",
+  "D": "2",
+  "E": "limit yoktur"
+ },
+ "gold_answer": "DNE",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "Abs(x)/x",
+    "var": "x",
+    "to": "0"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "2",
+   "E": "limit yoktur"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Limit(Abs(x)/x, x, 0) = 1",
+    "from": [],
+    "text": "x > 0 için |x| = x alındı; soldan bakılmadı"
+   }
+  ]
+ },
+ "solution_text": "|x|/x = x/x = 1. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "one_sided_limit mutation of ayt-lim-003",
+ "provenance": "sentetik",
+ "mutation": "one_sided_limit",
+ "derived_from": "ayt-lim-003"
+}

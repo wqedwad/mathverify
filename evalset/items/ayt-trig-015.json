@@ -1,0 +1,71 @@
+{
+ "id": "ayt-trig-015",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "sin x = 1/2 denkleminin çözüm kümesi aşağıdakilerden hangisidir? (k ∈ Z)",
+ "options": {
+  "A": "{pi/6 + 2*k*pi}",
+  "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+  "C": "{pi/6 + k*pi}",
+  "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+  "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+ },
+ "gold_answer": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "sin(x) = 1/2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{pi/6 + 2*k*pi}",
+   "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+   "C": "{pi/6 + k*pi}",
+   "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+   "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{pi/6 + 2*k*pi}",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "sin(pi/6) = 1/2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "II. bölge unutuldu"
+   }
+  ]
+ },
+ "solution_text": "x = π/6 + 2kπ. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "missing_case mutation of ayt-trig-002",
+ "provenance": "sentetik",
+ "mutation": "missing_case",
+ "derived_from": "ayt-trig-002"
+}

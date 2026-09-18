@@ -1,0 +1,87 @@
+{
+ "id": "tyt-esf-008",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "eşitsizlik",
+ "question_tr": "x² − 5x − 14 < 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(-2, 7)",
+  "B": "[-2, 7]",
+  "C": "(-oo, -2) U (7, oo)",
+  "D": "(-7, 2)",
+  "E": "(2, 7)"
+ },
+ "gold_answer": "(-2, 7)",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_inequality",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "x**2 - 5*x - 14 < 0"
+  ],
+  "answer_shape": "interval",
+  "options": {
+   "A": "(-2, 7)",
+   "B": "[-2, 7]",
+   "C": "(-oo, -2) U (7, oo)",
+   "D": "(-7, 2)",
+   "E": "(2, 7)"
+  },
+  "level": "TYT",
+  "topic": "eşitsizlik"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "(-2, 7)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "kökler −2 ve 7"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "0**2 - 5*0 - 14 = -14",
+    "from": [],
+    "text": "x = 0 test noktası"
+   },
+   {
+    "id": "s3",
+    "kind": "assert",
+    "claim": "-14 < 0",
+    "from": [
+     "s2"
+    ],
+    "text": "aradaki bölge sağlar"
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "10**2 - 5*10 - 14 = 36",
+    "from": [],
+    "text": "x = 10 test noktası sağlamaz"
+   }
+  ]
+ },
+ "solution_text": "Kökler −2, 7. x = 0 denenirse −14 < 0 ✓, x = 10 için 36 > 0 ✗. Çözüm (−2, 7). Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "test noktası yöntemi",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -1,0 +1,109 @@
+{
+ "id": "tyt-prob-009",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir babanın yaşı oğlunun yaşının 4 katıdır. 5 yıl sonra babanın yaşı oğlunun yaşının 3 katı olacaktır. Baba bugün kaç yaşındadır?",
+ "options": {
+  "A": "30",
+  "B": "36",
+  "C": "40",
+  "D": "44",
+  "E": "48"
+ },
+ "gold_answer": "40",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "b"
+   }
+  },
+  "vars": [
+   {
+    "name": "o",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "b",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "b = 4*o",
+   "b + 5 = 3*(o + 5)"
+  ],
+  "unknown_of_interest": "b",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "30",
+   "B": "36",
+   "C": "40",
+   "D": "44",
+   "E": "48"
+  },
+  "sanity": [
+   "ans > 18"
+  ],
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "40",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "b - o = 3*o",
+    "from": [],
+    "text": "bugünkü yaş farkı"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "b - o = 2*(o + 5)",
+    "from": [],
+    "text": "5 yıl sonraki yaş farkı"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "3*o = 2*(o + 5)",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "yaş farkı değişmez"
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "o = 10",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "eq",
+    "claim": "b = 40",
+    "from": [
+     "s4"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Yaş farkı sabittir. Bugün fark 3o, 5 yıl sonra fark 2(o+5). 3o = 2o + 10 ⇒ o = 10 ⇒ baba 40. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "yaş farkı değişmezliği; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

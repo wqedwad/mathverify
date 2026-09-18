@@ -1,0 +1,73 @@
+{
+ "id": "ayt-tur-002",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "f(x) = x²·eˣ olduğuna göre f'(0) kaçtır?",
+ "options": {
+  "A": "-1",
+  "B": "0",
+  "C": "1",
+  "D": "2",
+  "E": "E"
+ },
+ "gold_answer": "0",
+ "problem_ir": {
+  "task": {
+   "kind": "derivative",
+   "params": {
+    "f": "x**2*exp(x)",
+    "var": "x",
+    "at": "0"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "2",
+   "E": "E"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "0",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x**2*exp(x), x) = (2*x + x**2)*exp(x)",
+    "from": [],
+    "text": "çarpım kuralı"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at((2*x + x**2)*exp(x), x, 0) = 0",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "f' = (2x + x²)eˣ ⇒ f'(0) = 0. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

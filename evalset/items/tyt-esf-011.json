@@ -1,0 +1,73 @@
+{
+ "id": "tyt-esf-011",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "eşitsizlik",
+ "question_tr": "x² − 5x − 14 < 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(-2, 7)",
+  "B": "[-2, 7]",
+  "C": "(-oo, -2) U (7, oo)",
+  "D": "(-7, 2)",
+  "E": "(2, 7)"
+ },
+ "gold_answer": "(-2, 7)",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_inequality",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "x**2 - 5*x - 14 < 0"
+  ],
+  "answer_shape": "interval",
+  "options": {
+   "A": "(-2, 7)",
+   "B": "[-2, 7]",
+   "C": "(-oo, -2) U (7, oo)",
+   "D": "(-7, 2)",
+   "E": "(2, 7)"
+  },
+  "level": "TYT",
+  "topic": "eşitsizlik"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "(-oo, -2) U (7, oo)",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x**2 - 5*x - 14 = (x - 7)*(x + 2)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "dış bölge alındı (yön hatası)"
+   }
+  ]
+ },
+ "solution_text": "(x − 7)(x + 2) < 0 ⇒ x < −2 veya x > 7. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "inequality_direction mutation of tyt-esf-001",
+ "provenance": "sentetik",
+ "mutation": "inequality_direction",
+ "derived_from": "tyt-esf-001"
+}

@@ -1,0 +1,73 @@
+{
+ "id": "ayt-lim-001",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→2} (x² − 4)/(x − 2) limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "2",
+  "C": "4",
+  "D": "8",
+  "E": "limit yoktur"
+ },
+ "gold_answer": "4",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(x**2 - 4)/(x - 2)",
+    "var": "x",
+    "to": "2"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "2",
+   "C": "4",
+   "D": "8",
+   "E": "limit yoktur"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "4",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "(x**2 - 4)/(x - 2) = x + 2",
+    "from": [],
+    "text": "x ≠ 2 için sadeleştir"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Limit(x + 2, x, 2) = 4",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "(x−2)(x+2)/(x−2) = x + 2 → 4. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

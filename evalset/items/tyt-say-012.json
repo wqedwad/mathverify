@@ -1,0 +1,85 @@
+{
+ "id": "tyt-say-012",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "Ardışık üç çift doğal sayının toplamı 78 olduğuna göre bu sayıların en büyüğü kaçtır?",
+ "options": {
+  "A": "24",
+  "B": "26",
+  "C": "28",
+  "D": "30",
+  "E": "32"
+ },
+ "gold_answer": "28",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "n + 4"
+   }
+  },
+  "vars": [
+   {
+    "name": "n",
+    "domain": "nonneg_integer"
+   }
+  ],
+  "givens": [
+   "Mod(n, 2) = 0",
+   "n + (n + 2) + (n + 4) = 78"
+  ],
+  "unknown_of_interest": "n + 4",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "24",
+   "B": "26",
+   "C": "28",
+   "D": "30",
+   "E": "32"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "30",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "3*n = 78",
+    "from": [],
+    "text": "6 unutuldu"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "n = 26",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "n + 4 = 30",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "3n = 78 ⇒ n = 26 ⇒ en büyüğü 30. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-say-004",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-say-004"
+}

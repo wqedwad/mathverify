@@ -1,0 +1,72 @@
+{
+ "id": "ayt-int-001",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫ ln x dx integrali aşağıdakilerden hangisine eşittir? (C sabit)",
+ "options": {
+  "A": "x*log(x) - x + C",
+  "B": "x*log(x) + C",
+  "C": "log(x)/x + C",
+  "D": "x*log(x) + x + C",
+  "E": "1/x + C"
+ },
+ "gold_answer": "x*log(x) - x + C",
+ "problem_ir": {
+  "task": {
+   "kind": "antiderivative",
+   "params": {
+    "integrand": "log(x)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "x*log(x) - x + C",
+   "B": "x*log(x) + C",
+   "C": "log(x)/x + C",
+   "D": "x*log(x) + x + C",
+   "E": "1/x + C"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "x*log(x) - x + C",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "kısmi integrasyon: u = ln x, dv = dx"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Integral(log(x), x) = x*log(x) - x",
+    "from": [
+     "s1"
+    ],
+    "text": "x ln x − ∫ x·(1/x) dx"
+   }
+  ]
+ },
+ "solution_text": "u = ln x, dv = dx ⇒ x ln x − ∫ dx = x ln x − x + C. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -1,0 +1,75 @@
+{
+ "id": "ayt-ana-018",
+ "cell": "D",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "P(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?",
+ "options": {
+  "A": "2",
+  "B": "3",
+  "C": "4",
+  "D": "20",
+  "E": "6"
+ },
+ "gold_answer": "4",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "point_line_dist(3, 4, 3, 4, -5)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "20",
+   "E": "6"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "4",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "3*3 + 4*4 - 5 = 25",
+    "from": [],
+    "text": "yanlış toplama"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sqrt(3**2 + 4**2) = 5",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "25/5 = 4",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "yanlış bölme; sonuç tesadüfen doğru"
+   }
+  ]
+ },
+ "solution_text": "25/5 = 4. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of ayt-ana-004",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "ayt-ana-004"
+}

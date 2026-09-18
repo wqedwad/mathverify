@@ -1,0 +1,74 @@
+{
+ "id": "ayt-ana-020",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "P(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?",
+ "options": {
+  "A": "2",
+  "B": "3",
+  "C": "4",
+  "D": "20",
+  "E": "6"
+ },
+ "gold_answer": "4",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "point_line_dist(3, 4, 3, 4, -5)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "20",
+   "E": "6"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "4",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "P'den doğruya dik doğrultu (3,4) yönünde; birim vektör (3/5, 4/5)"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "(3*3 + 4*4 - 5)/5 = 4",
+    "from": [],
+    "text": "işaretli uzaklık"
+   },
+   {
+    "id": "s3",
+    "kind": "assert",
+    "claim": "4 > 0",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Normal vektörle izdüşüm: (9 + 16 − 5)/5 = 4. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "vektörel izdüşüm; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

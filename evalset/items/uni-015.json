@@ -1,0 +1,75 @@
+{
+ "id": "uni-015",
+ "cell": "D",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[1, 2], [3, 4]] matrisinin determinantı kaçtır?",
+ "options": {
+  "A": "-2",
+  "B": "-1",
+  "C": "0",
+  "D": "1",
+  "E": "2"
+ },
+ "gold_answer": "-2",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "det(Matrix([[1, 2], [3, 4]]))"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-2",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "1*4 = 5",
+    "from": [],
+    "text": "yanlış"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "2*3 = 7",
+    "from": [],
+    "text": "yanlış"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "5 - 7 = -2",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "1·4 = 5, 2·3 = 7, 5 − 7 = −2. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of uni-002",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "uni-002"
+}

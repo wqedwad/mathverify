@@ -1,0 +1,97 @@
+{
+ "id": "ayt-int-002",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "6",
+  "B": "21",
+  "C": "23",
+  "D": "25",
+  "E": "27"
+ },
+ "gold_answer": "23",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "Abs(x - 1) + Abs(x + 2)",
+    "var": "x",
+    "a": "-3",
+    "b": "3"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "21",
+   "C": "23",
+   "D": "25",
+   "E": "27"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "23",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "kırılma noktaları x = −2 ve x = 1"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Integral(-2*x - 1, (x, -3, -2)) = 4",
+    "from": [],
+    "text": "[−3,−2]: (1−x) + (−x−2)"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Integral(3, (x, -2, 1)) = 9",
+    "from": [],
+    "text": "[−2,1]: (1−x) + (x+2)"
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "Integral(2*x + 1, (x, 1, 3)) = 10",
+    "from": [],
+    "text": "[1,3]: (x−1) + (x+2)"
+   },
+   {
+    "id": "s5",
+    "kind": "compute",
+    "claim": "4 + 9 + 10 = 23",
+    "from": [
+     "s2",
+     "s3",
+     "s4"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Parçalara ayır: [−3,−2]: 4, [−2,1]: 9, [1,3]: 10; toplam 23. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

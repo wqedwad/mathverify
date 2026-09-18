@@ -1,0 +1,81 @@
+{
+ "id": "tyt-esf-002",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "eşitsizlik",
+ "question_tr": "(x − 1)/(x + 2) ≥ 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(-oo, -2) U [1, oo)",
+  "B": "(-oo, -2] U [1, oo)",
+  "C": "[-2, 1]",
+  "D": "(-2, 1)",
+  "E": "(-oo, -2) U (1, oo)"
+ },
+ "gold_answer": "(-oo, -2) U [1, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_inequality",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "(x - 1)/(x + 2) >= 0"
+  ],
+  "answer_shape": "interval",
+  "options": {
+   "A": "(-oo, -2) U [1, oo)",
+   "B": "(-oo, -2] U [1, oo)",
+   "C": "[-2, 1]",
+   "D": "(-2, 1)",
+   "E": "(-oo, -2) U (1, oo)"
+  },
+  "level": "TYT",
+  "topic": "eşitsizlik"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "(-oo, -2) U [1, oo)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "assert",
+    "claim": "x != -2",
+    "from": [],
+    "text": "payda"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "işaret tablosu: −2'nin solunda +, arada −, 1'in sağında +"
+   },
+   {
+    "id": "s3",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "1 dahil, −2 hariç"
+   }
+  ]
+ },
+ "solution_text": "Kritik noktalar −2 (payda, hariç) ve 1 (dahil). İşaret tablosundan (−∞, −2) ∪ [1, ∞). Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

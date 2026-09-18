@@ -1,0 +1,76 @@
+{
+ "id": "uni-013",
+ "cell": "C",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "Σ_{k=1}^{∞} 1/(k(k+1)) serisinin toplamı kaçtır?",
+ "options": {
+  "A": "1/2",
+  "B": "1",
+  "C": "2",
+  "D": "log(2)",
+  "E": "∞"
+ },
+ "gold_answer": "1",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "Sum(1/(k*(k + 1)), (k, 1, oo))"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/2",
+   "B": "1",
+   "C": "2",
+   "D": "log(2)",
+   "E": "∞"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1/2",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "1/(k*(k + 1)) = 1/k - 1/(k + 1)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Sum(1/k - 1/(k + 1), (k, 1, oo)) = 1/2",
+    "from": [
+     "s1"
+    ],
+    "text": "ilk terim 1/2 sanıldı"
+   }
+  ]
+ },
+ "solution_text": "Teleskopik toplam ilk terime eşittir: 1/2. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "arithmetic_slip mutation of uni-004",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "uni-004"
+}

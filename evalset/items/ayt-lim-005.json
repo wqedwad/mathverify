@@ -1,0 +1,73 @@
+{
+ "id": "ayt-lim-005",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→1} (√x − 1)/(x − 1) limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1/4",
+  "C": "1/2",
+  "D": "1",
+  "E": "2"
+ },
+ "gold_answer": "1/2",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(sqrt(x) - 1)/(x - 1)",
+    "var": "x",
+    "to": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "1/4",
+   "C": "1/2",
+   "D": "1",
+   "E": "2"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1/2",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "(sqrt(x) - 1)/(x - 1) = 1/(sqrt(x) + 1)",
+    "from": [],
+    "text": "x − 1 = (√x−1)(√x+1)"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Limit(1/(sqrt(x) + 1), x, 1) = 1/2",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "x − 1 = (√x − 1)(√x + 1) ⇒ 1/(√x + 1) → 1/2. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

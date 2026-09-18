@@ -1,0 +1,87 @@
+{
+ "id": "ayt-tur-006",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "f(x) = x³ − 6x² + 9x + 1 fonksiyonunun yerel maksimum değeri kaçtır?",
+ "options": {
+  "A": "1",
+  "B": "3",
+  "C": "5",
+  "D": "7",
+  "E": "9"
+ },
+ "gold_answer": "5",
+ "problem_ir": {
+  "task": {
+   "kind": "extremum",
+   "params": {
+    "f": "x**3 - 6*x**2 + 9*x + 1",
+    "var": "x",
+    "which": "local_max"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "5",
+   "D": "7",
+   "E": "9"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "5",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x**3 - 6*x**2 + 9*x + 1, x) = 3*x**2 - 12*x + 9",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "3*x**2 - 12*x + 9 = 3*(x - 1)*(x - 3)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s2"
+    ],
+    "text": "işaret: x = 1'de + → −, yerel maksimum"
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "at(x**3 - 6*x**2 + 9*x + 1, x, 1) = 5",
+    "from": [],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "f' = 3(x−1)(x−3); x = 1'de yerel maksimum f(1) = 5. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -1,0 +1,73 @@
+{
+ "id": "ayt-trig-002",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "sin x = 1/2 denkleminin çözüm kümesi aşağıdakilerden hangisidir? (k ∈ Z)",
+ "options": {
+  "A": "{pi/6 + 2*k*pi}",
+  "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+  "C": "{pi/6 + k*pi}",
+  "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+  "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+ },
+ "gold_answer": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "sin(x) = 1/2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{pi/6 + 2*k*pi}",
+   "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+   "C": "{pi/6 + k*pi}",
+   "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+   "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "sin(pi/6) = 1/2",
+    "from": [],
+    "text": "temel açı"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "sin(π − π/6) = sin(5π/6) = 1/2; periyot 2π"
+   }
+  ]
+ },
+ "solution_text": "x = π/6 + 2kπ veya x = 5π/6 + 2kπ. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

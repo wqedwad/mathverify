@@ -1,0 +1,64 @@
+{
+ "id": "ayt-lim-010",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→∞} (2x² + 1)/(x² − 5) limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "2",
+  "D": "5",
+  "E": "∞"
+ },
+ "gold_answer": "2",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(2*x**2 + 1)/(x**2 - 5)",
+    "var": "x",
+    "to": "oo"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "5",
+   "E": "∞"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "infinite",
+   "payload": "oo",
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "pay ve payda sonsuza gider ⇒ limit sonsuz (belirsizlik gözden kaçtı)"
+   }
+  ]
+ },
+ "solution_text": "x → ∞ iken pay ve payda büyür; limit ∞. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of ayt-lim-004",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "ayt-lim-004"
+}

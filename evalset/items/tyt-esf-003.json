@@ -1,0 +1,82 @@
+{
+ "id": "tyt-esf-003",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "eşitsizlik",
+ "question_tr": "|x − 3| < 2 eşitsizliğini sağlayan kaç farklı x tam sayısı vardır?",
+ "options": {
+  "A": "2",
+  "B": "3",
+  "C": "4",
+  "D": "5",
+  "E": "6"
+ },
+ "gold_answer": "3",
+ "problem_ir": {
+  "task": {
+   "kind": "count_integers",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "integer"
+   }
+  ],
+  "givens": [
+   "Abs(x - 3) < 2"
+  ],
+  "answer_shape": "count",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  },
+  "level": "TYT",
+  "topic": "eşitsizlik"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 3,
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "-2 < x - 3",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x - 3 < 2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "1 < x < 5 ⇒ x ∈ {2, 3, 4}"
+   }
+  ]
+ },
+ "solution_text": "−2 < x − 3 < 2 ⇒ 1 < x < 5 ⇒ x ∈ {2, 3, 4}: 3 tam sayı. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

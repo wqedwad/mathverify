@@ -1,0 +1,63 @@
+{
+ "id": "tyt-esf-014",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "polinom",
+ "question_tr": "P(x) = x⁵ − 3x³ + x + 1 polinomunun kaç farklı reel kökü vardır?",
+ "options": {
+  "A": "1",
+  "B": "2",
+  "C": "3",
+  "D": "4",
+  "E": "5"
+ },
+ "gold_answer": "3",
+ "problem_ir": {
+  "task": {
+   "kind": "count_roots",
+   "params": {
+    "expr": "x**5 - 3*x**3 + x + 1",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "count",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  },
+  "level": "TYT",
+  "topic": "polinom"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 5,
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "5. dereceden polinomun 5 kökü vardır (reel/karmaşık ayrımı yapılmadı)"
+   }
+  ]
+ },
+ "solution_text": "Derecesi 5 olduğundan 5 kökü vardır. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of tyt-esf-007",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "tyt-esf-007"
+}

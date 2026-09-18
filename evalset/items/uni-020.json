@@ -1,0 +1,67 @@
+{
+ "id": "uni-020",
+ "cell": "C",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[1, 2], [3, 4]] matrisinin determinantı kaçtır?",
+ "options": {
+  "A": "-2",
+  "B": "-1",
+  "C": "0",
+  "D": "1",
+  "E": "2"
+ },
+ "gold_answer": "-2",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "det(Matrix([[1, 2], [3, 4]]))"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-1",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "1*4 - 2*3 = -2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "-2/2 = -1",
+    "from": [
+     "s1"
+    ],
+    "text": "gereksiz ikiye bölme"
+   }
+  ]
+ },
+ "solution_text": "det = −2/2 = −1. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "wrong_formula mutation of uni-002",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "uni-002"
+}

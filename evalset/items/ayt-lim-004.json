@@ -1,0 +1,73 @@
+{
+ "id": "ayt-lim-004",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→∞} (2x² + 1)/(x² − 5) limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "2",
+  "D": "5",
+  "E": "∞"
+ },
+ "gold_answer": "2",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(2*x**2 + 1)/(x**2 - 5)",
+    "var": "x",
+    "to": "oo"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "5",
+   "E": "∞"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "(2*x**2 + 1)/(x**2 - 5) = (2 + 1/x**2)/(1 - 5/x**2)",
+    "from": [],
+    "text": "x²'ye böl"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Limit((2 + 1/x**2)/(1 - 5/x**2), x, oo) = 2",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Dereceler eşit; başkatsayılar oranı 2/1 = 2. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

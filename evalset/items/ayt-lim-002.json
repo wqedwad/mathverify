@@ -1,0 +1,81 @@
+{
+ "id": "ayt-lim-002",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→0} sin(3x)/x limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "3",
+  "D": "1/3",
+  "E": "limit yoktur"
+ },
+ "gold_answer": "3",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "sin(3*x)/x",
+    "var": "x",
+    "to": "0"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "3",
+   "D": "1/3",
+   "E": "limit yoktur"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "3",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "sin(3*x)/x = 3*sin(3*x)/(3*x)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Limit(sin(3*x)/(3*x), x, 0) = 1",
+    "from": [],
+    "text": "temel limit"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "3*1 = 3",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "sin(3x)/x = 3·sin(3x)/(3x) → 3·1 = 3. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

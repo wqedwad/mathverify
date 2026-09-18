@@ -1,0 +1,77 @@
+{
+ "id": "ayt-int-005",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫ ln x dx integrali aşağıdakilerden hangisine eşittir? (C sabit)",
+ "options": {
+  "A": "x*log(x) - x + C",
+  "B": "x*log(x) + C",
+  "C": "log(x)/x + C",
+  "D": "x*log(x) + x + C",
+  "E": "1/x + C"
+ },
+ "gold_answer": "x*log(x) - x + C",
+ "problem_ir": {
+  "task": {
+   "kind": "antiderivative",
+   "params": {
+    "integrand": "log(x)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "x*log(x) - x + C",
+   "B": "x*log(x) + C",
+   "C": "log(x)/x + C",
+   "D": "x*log(x) + x + C",
+   "E": "1/x + C"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "x*log(x) - x + C",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "Şıkları türevle kontrol edelim"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "diff(x*log(x) - x, x) = log(x)",
+    "from": [],
+    "text": "A şıkkı sağlar"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "diff(x*log(x), x) = log(x) + 1",
+    "from": [],
+    "text": "B sağlamaz"
+   }
+  ]
+ },
+ "solution_text": "A şıkkının türevi ln x + 1 − 1 = ln x. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "şıkları türevleyerek; kanonik değil",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

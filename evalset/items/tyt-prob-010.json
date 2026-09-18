@@ -1,0 +1,68 @@
+{
+ "id": "tyt-prob-010",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir araç 240 km'lik bir yolu saatte 80 km hızla gidip aynı yolu saatte 60 km hızla geri dönmüştür. Gidiş-dönüş toplam kaç saat sürmüştür?",
+ "options": {
+  "A": "6",
+  "B": "7",
+  "C": "8",
+  "D": "9",
+  "E": "10"
+ },
+ "gold_answer": "7",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "240/80 + 240/60"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  },
+  "units": "saat",
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "7",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "2*80*60/(80 + 60) = 480/7",
+    "from": [],
+    "text": "ortalama hız (harmonik)"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "480/(480/7) = 7",
+    "from": [
+     "s1"
+    ],
+    "text": "toplam yol / ortalama hız"
+   }
+  ]
+ },
+ "solution_text": "Ortalama hız = 2·80·60/(80+60) = 480/7 km/sa. Toplam yol 480 km ⇒ 480/(480/7) = 7 saat. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "harmonik ortalama; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

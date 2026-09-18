@@ -1,0 +1,74 @@
+{
+ "id": "uni-003",
+ "cell": "A",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "lim_{n→∞} (1 + 1/n)ⁿ limitinin değeri nedir?",
+ "options": {
+  "A": "1",
+  "B": "2",
+  "C": "E",
+  "D": "E**2",
+  "E": "∞"
+ },
+ "gold_answer": "E",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(1 + 1/n)**n",
+    "var": "n",
+    "to": "oo"
+   }
+  },
+  "vars": [
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "E",
+   "D": "E**2",
+   "E": "∞"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "E",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Limit(n*log(1 + 1/n), n, oo) = 1",
+    "from": [],
+    "text": "ln L"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "exp(1) = E",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "ln L = lim n ln(1 + 1/n) = 1 ⇒ L = e. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

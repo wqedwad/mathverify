@@ -1,0 +1,100 @@
+{
+ "id": "tyt-den-009",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "log(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{0}",
+  "B": "{4}",
+  "C": "{0, 4}",
+  "D": "{1}",
+  "E": "{}"
+ },
+ "gold_answer": "{4}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "log(x - 1) + log(x - 3) = log(3)"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{0}",
+   "B": "{4}",
+   "C": "{0, 4}",
+   "D": "{1}",
+   "E": "{}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{0, 4}",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "log((x - 1)*(x - 3)) = log(3)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "(x - 1)*(x - 3) = 3",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x**2 - 4*x = 0",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "x in {0, 4}",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s4"
+    ],
+    "text": "tanım kümesi kontrol edilmedi"
+   }
+  ]
+ },
+ "solution_text": "x² − 4x = 0 ⇒ x ∈ {0, 4}. Çözüm kümesi: {0, 4}",
+ "solution_is_correct": false,
+ "first_bad_step": 5,
+ "notes": "log_domain mutation of tyt-den-001",
+ "provenance": "sentetik",
+ "mutation": "log_domain",
+ "derived_from": "tyt-den-001"
+}

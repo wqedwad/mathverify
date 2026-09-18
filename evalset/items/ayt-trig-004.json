@@ -1,0 +1,72 @@
+{
+ "id": "ayt-trig-004",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "tan x = √3 denkleminin [0, π) aralığındaki çözümü kaçtır?",
+ "options": {
+  "A": "pi/6",
+  "B": "pi/3",
+  "C": "2*pi/3",
+  "D": "pi/4",
+  "E": "5*pi/6"
+ },
+ "gold_answer": "{pi/3}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x",
+    "interval": "[0, pi)"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "tan(x) = sqrt(3)"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "pi/6",
+   "B": "pi/3",
+   "C": "2*pi/3",
+   "D": "pi/4",
+   "E": "5*pi/6"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "pi/3",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "tan(pi/3) = sqrt(3)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "tan periyodu π; [0, π)'de tek çözüm"
+   }
+  ]
+ },
+ "solution_text": "tan(π/3) = √3 ve periyot π. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

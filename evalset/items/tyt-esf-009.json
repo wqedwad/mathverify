@@ -1,0 +1,83 @@
+{
+ "id": "tyt-esf-009",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = 2x + 3 ve g(x) = x² − 1 olduğuna göre (f∘g)(2) kaçtır?",
+ "options": {
+  "A": "7",
+  "B": "8",
+  "C": "9",
+  "D": "10",
+  "E": "11"
+ },
+ "gold_answer": "9",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "f(g(2))"
+   }
+  },
+  "vars": [],
+  "functions": [
+   {
+    "name": "f",
+    "expr": "2*x + 3",
+    "args": [
+     "x"
+    ]
+   },
+   {
+    "name": "g",
+    "expr": "x**2 - 1",
+    "args": [
+     "x"
+    ]
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "7",
+   "B": "8",
+   "C": "9",
+   "D": "10",
+   "E": "11"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "9",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "f(g(x)) = 2*x**2 + 1",
+    "from": [],
+    "text": "genel bileşke"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "2*2**2 + 1 = 9",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "(f∘g)(x) = 2(x² − 1) + 3 = 2x² + 1 ⇒ (f∘g)(2) = 9. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "önce genel bileşke",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

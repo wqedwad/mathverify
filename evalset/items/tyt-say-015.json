@@ -1,0 +1,107 @@
+{
+ "id": "tyt-say-015",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "x ve y pozitif tam sayılar olmak üzere 3x + 5y = 41 ve x < y ise x + y kaçtır?",
+ "options": {
+  "A": "7",
+  "B": "8",
+  "C": "9",
+  "D": "10",
+  "E": "11"
+ },
+ "gold_answer": "9",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "x + y"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "y",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "3*x + 5*y = 41",
+   "x < y"
+  ],
+  "unknown_of_interest": "x + y",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "7",
+   "B": "8",
+   "C": "9",
+   "D": "10",
+   "E": "11"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "9",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "Mod(y, 3) = 2",
+    "from": [],
+    "text": "41 ≡ 2 (mod 3) ve 5 ≡ 2 ⇒ y ≡ 2 (hatalı çıkarım; doğrusu y ≡ 1)"
+   },
+   {
+    "id": "s2",
+    "kind": "case",
+    "claim": "y = 7",
+    "from": [],
+    "text": "deneme"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "41 - 5*7 = 6",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "x = 2",
+    "from": [
+     "s2",
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "compute",
+    "claim": "2 + 7 = 9",
+    "from": [
+     "s2",
+     "s4"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "y ≡ 2 (mod 3) olmalı; y = 7 alınırsa x = 2, x + y = 9. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_identity mutation of tyt-say-002",
+ "provenance": "sentetik",
+ "mutation": "wrong_identity",
+ "derived_from": "tyt-say-002"
+}

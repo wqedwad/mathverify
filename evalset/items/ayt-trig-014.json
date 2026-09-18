@@ -1,0 +1,74 @@
+{
+ "id": "ayt-trig-014",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "cos 2x = 1/2 denkleminin [0, 2π) aralığındaki çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{pi/6, 5*pi/6}",
+  "B": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+  "C": "{pi/3, 5*pi/3}",
+  "D": "{pi/6, 11*pi/6}",
+  "E": "{pi/3, 2*pi/3, 4*pi/3, 5*pi/3}"
+ },
+ "gold_answer": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x",
+    "interval": "[0, 2*pi)"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "cos(2*x) = 1/2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{pi/6, 5*pi/6}",
+   "B": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+   "C": "{pi/3, 5*pi/3}",
+   "D": "{pi/6, 11*pi/6}",
+   "E": "{pi/3, 2*pi/3, 4*pi/3, 5*pi/3}"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{30, 150, 210, 330}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "2x = 60, 300, 420, 660 (derece)"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x in {30, 150, 210, 330}",
+    "from": [
+     "s1"
+    ],
+    "text": "derece işareti olmadan yazıldı; aralık radyan"
+   }
+  ]
+ },
+ "solution_text": "x ∈ {30, 150, 210, 330}. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "degree_radian mutation of ayt-trig-001",
+ "provenance": "sentetik",
+ "mutation": "degree_radian",
+ "derived_from": "ayt-trig-001"
+}

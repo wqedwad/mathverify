@@ -1,0 +1,83 @@
+{
+ "id": "tyt-say-013",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "x² − 5x − 14 < 0 eşitsizliğini sağlayan kaç farklı x tam sayısı vardır?",
+ "options": {
+  "A": "6",
+  "B": "7",
+  "C": "8",
+  "D": "9",
+  "E": "10"
+ },
+ "gold_answer": "8",
+ "problem_ir": {
+  "task": {
+   "kind": "count_integers",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "integer"
+   }
+  ],
+  "givens": [
+   "x**2 - 5*x - 14 < 0"
+  ],
+  "answer_shape": "count",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 10,
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x**2 - 5*x - 14 = (x - 7)*(x + 2)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "−2 ≤ x ≤ 7 (uç noktalar yanlışlıkla dahil)"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "7 - (-2) + 1 = 10",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "−2 ≤ x ≤ 7 aralığında 10 tam sayı vardır. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "endpoint_error mutation of tyt-say-005",
+ "provenance": "sentetik",
+ "mutation": "endpoint_error",
+ "derived_from": "tyt-say-005"
+}

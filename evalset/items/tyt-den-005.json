@@ -1,0 +1,84 @@
+{
+ "id": "tyt-den-005",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "x² − (m + 1)x + 4 = 0 denkleminin çakışık iki reel kökü olduğuna göre m'nin pozitif değeri kaçtır?",
+ "options": {
+  "A": "1",
+  "B": "3",
+  "C": "5",
+  "D": "7",
+  "E": "15"
+ },
+ "gold_answer": "3",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "m"
+   }
+  },
+  "vars": [
+   {
+    "name": "m"
+   }
+  ],
+  "givens": [
+   "(m + 1)**2 - 4*4 = 0",
+   "m > 0"
+  ],
+  "unknown_of_interest": "m",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "5",
+   "D": "7",
+   "E": "15"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "3",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "(m + 1)**2 - 16 = 0",
+    "from": [],
+    "text": "Δ = 0"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "m + 1 = 4",
+    "from": [
+     "s1"
+    ],
+    "text": "m > 0 için"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "m = 3",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Δ = (m+1)² − 16 = 0 ⇒ m + 1 = ±4 ⇒ m = 3 (pozitif). Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

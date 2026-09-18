@@ -1,0 +1,67 @@
+{
+ "id": "ayt-trig-003",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "sin 75° değeri aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(sqrt(6) + sqrt(2))/4",
+  "B": "(sqrt(6) - sqrt(2))/4",
+  "C": "sqrt(3)/2",
+  "D": "(sqrt(2) + 1)/2",
+  "E": "sqrt(2)/2"
+ },
+ "gold_answer": "(sqrt(6) + sqrt(2))/4",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "sin(75°)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "(sqrt(6) + sqrt(2))/4",
+   "B": "(sqrt(6) - sqrt(2))/4",
+   "C": "sqrt(3)/2",
+   "D": "(sqrt(2) + 1)/2",
+   "E": "sqrt(2)/2"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "(sqrt(6) + sqrt(2))/4",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "sin(75°) = sin(45°)*cos(30°) + cos(45°)*sin(30°)",
+    "from": [],
+    "text": "toplam formülü"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sin(45°)*cos(30°) + cos(45°)*sin(30°) = (sqrt(6) + sqrt(2))/4",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "sin(45° + 30°) = (√2/2)(√3/2) + (√2/2)(1/2) = (√6 + √2)/4. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

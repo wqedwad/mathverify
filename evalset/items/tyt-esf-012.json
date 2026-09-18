@@ -1,0 +1,64 @@
+{
+ "id": "tyt-esf-012",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "eşitsizlik",
+ "question_tr": "(x − 1)/(x + 2) ≥ 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(-oo, -2) U [1, oo)",
+  "B": "(-oo, -2] U [1, oo)",
+  "C": "[-2, 1]",
+  "D": "(-2, 1)",
+  "E": "(-oo, -2) U (1, oo)"
+ },
+ "gold_answer": "(-oo, -2) U [1, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_inequality",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "(x - 1)/(x + 2) >= 0"
+  ],
+  "answer_shape": "interval",
+  "options": {
+   "A": "(-oo, -2) U [1, oo)",
+   "B": "(-oo, -2] U [1, oo)",
+   "C": "[-2, 1]",
+   "D": "(-2, 1)",
+   "E": "(-oo, -2) U (1, oo)"
+  },
+  "level": "TYT",
+  "topic": "eşitsizlik"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "(-oo, -2] U [1, oo)",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "kritik noktalar −2 ve 1, ikisi de dahil (payda unutuldu)"
+   }
+  ]
+ },
+ "solution_text": "(−∞, −2] ∪ [1, ∞). Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "endpoint_error mutation of tyt-esf-002",
+ "provenance": "sentetik",
+ "mutation": "endpoint_error",
+ "derived_from": "tyt-esf-002"
+}

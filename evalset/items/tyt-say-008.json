@@ -1,0 +1,106 @@
+{
+ "id": "tyt-say-008",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "İki basamaklı bir doğal sayının rakamları toplamı 11'dir. Rakamlarının yerleri değiştirildiğinde elde edilen sayı, sayının kendisinden 27 fazla olduğuna göre bu sayı kaçtır?",
+ "options": {
+  "A": "38",
+  "B": "47",
+  "C": "56",
+  "D": "65",
+  "E": "74"
+ },
+ "gold_answer": "47",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "10*a + b"
+   }
+  },
+  "vars": [
+   {
+    "name": "a",
+    "domain": "integer",
+    "constraints": [
+     "a >= 1",
+     "a <= 9"
+    ]
+   },
+   {
+    "name": "b",
+    "domain": "integer",
+    "constraints": [
+     "b >= 0",
+     "b <= 9"
+    ]
+   }
+  ],
+  "givens": [
+   "a + b = 11",
+   "(10*b + a) - (10*a + b) = 27"
+  ],
+  "unknown_of_interest": "10*a + b",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "38",
+   "B": "47",
+   "C": "56",
+   "D": "65",
+   "E": "74"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "47",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "case",
+    "claim": "a = 4",
+    "from": [],
+    "text": "B şıkkı: 47"
+   },
+   {
+    "id": "s2",
+    "kind": "case",
+    "claim": "b = 7",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "4 + 7 = 11",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "rakamlar toplamı ✓"
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "74 - 47 = 27",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "ters çevrilmiş fark ✓"
+   }
+  ]
+ },
+ "solution_text": "Şıkları kontrol edelim: 47 için 4 + 7 = 11 ✓ ve 74 − 47 = 27 ✓. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "şık deneme",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

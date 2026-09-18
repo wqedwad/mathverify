@@ -1,0 +1,112 @@
+{
+ "id": "tyt-esf-016",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "polinom",
+ "question_tr": "P(x) = x³ − 2x² + kx + 6 polinomunun (x − 3) ile bölümünden kalan 0 olduğuna göre k kaçtır?",
+ "options": {
+  "A": "-5",
+  "B": "-3",
+  "C": "3",
+  "D": "5",
+  "E": "7"
+ },
+ "gold_answer": "-5",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "k"
+   }
+  },
+  "vars": [
+   {
+    "name": "k"
+   }
+  ],
+  "functions": [
+   {
+    "name": "P",
+    "expr": "x**3 - 2*x**2 + k*x + 6",
+    "args": [
+     "x"
+    ],
+    "params": [
+     "k"
+    ]
+   }
+  ],
+  "givens": [
+   "P(3) = 0"
+  ],
+  "unknown_of_interest": "k",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-5",
+   "B": "-3",
+   "C": "3",
+   "D": "5",
+   "E": "7"
+  },
+  "level": "TYT",
+  "topic": "polinom"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-5",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "3**3 = 24",
+    "from": [],
+    "text": "yanlış"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "2*3**2 = 15",
+    "from": [],
+    "text": "yanlış"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "24 - 15 + 6 = 15",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "15 + 3*k = 0",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "eq",
+    "claim": "k = -5",
+    "from": [
+     "s4"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "P(3) = 24 − 15 + 3k + 6 = 15 + 3k = 0 ⇒ k = −5. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-esf-006",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-esf-006"
+}

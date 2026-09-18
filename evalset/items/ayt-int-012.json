@@ -1,0 +1,74 @@
+{
+ "id": "ayt-int-012",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₀¹ x·eˣ dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "E - 1",
+  "D": "E/2",
+  "E": "2*E - 1"
+ },
+ "gold_answer": "1",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "x*exp(x)",
+    "var": "x",
+    "a": "0",
+    "b": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "E - 1",
+   "D": "E/2",
+   "E": "2*E - 1"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2*E - 1",
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Integral(x*exp(x), x) = x*exp(x) + exp(x)",
+    "from": [],
+    "text": "kısmi integrasyonda işaret hatası"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at(x*exp(x) + exp(x), x, 1) - at(x*exp(x) + exp(x), x, 0) = 2*E - 1",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "[x eˣ + eˣ]₀¹ = 2e − 1. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "sign_flip mutation of ayt-int-003",
+ "provenance": "sentetik",
+ "mutation": "sign_flip",
+ "derived_from": "ayt-int-003"
+}

@@ -1,0 +1,116 @@
+{
+ "id": "tyt-say-003",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "İki basamaklı bir doğal sayının rakamları toplamı 11'dir. Rakamlarının yerleri değiştirildiğinde elde edilen sayı, sayının kendisinden 27 fazla olduğuna göre bu sayı kaçtır?",
+ "options": {
+  "A": "38",
+  "B": "47",
+  "C": "56",
+  "D": "65",
+  "E": "74"
+ },
+ "gold_answer": "47",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "10*a + b"
+   }
+  },
+  "vars": [
+   {
+    "name": "a",
+    "domain": "integer",
+    "constraints": [
+     "a >= 1",
+     "a <= 9"
+    ]
+   },
+   {
+    "name": "b",
+    "domain": "integer",
+    "constraints": [
+     "b >= 0",
+     "b <= 9"
+    ]
+   }
+  ],
+  "givens": [
+   "a + b = 11",
+   "(10*b + a) - (10*a + b) = 27"
+  ],
+  "unknown_of_interest": "10*a + b",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "38",
+   "B": "47",
+   "C": "56",
+   "D": "65",
+   "E": "74"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "47",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "9*b - 9*a = 27",
+    "from": [],
+    "text": "ikinci koşul"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "b - a = 3",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "b = 7",
+    "from": [
+     "s2"
+    ],
+    "text": "a + b = 11 ile"
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "a = 4",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "compute",
+    "claim": "10*4 + 7 = 47",
+    "from": [
+     "s3",
+     "s4"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Sayı 10a + b. (10b + a) − (10a + b) = 9(b − a) = 27 ⇒ b − a = 3; a + b = 11 ⇒ b = 7, a = 4. Sayı 47. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

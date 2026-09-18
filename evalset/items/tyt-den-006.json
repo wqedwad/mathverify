@@ -1,0 +1,80 @@
+{
+ "id": "tyt-den-006",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "log(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{0}",
+  "B": "{4}",
+  "C": "{0, 4}",
+  "D": "{1}",
+  "E": "{}"
+ },
+ "gold_answer": "{4}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "log(x - 1) + log(x - 3) = log(3)"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{0}",
+   "B": "{4}",
+   "C": "{0, 4}",
+   "D": "{1}",
+   "E": "{}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{4}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "case",
+    "claim": "x = 4",
+    "from": [],
+    "text": "B şıkkını dene"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "log(4 - 1) + log(4 - 3) = log(3)",
+    "from": [
+     "s1"
+    ],
+    "text": "log 3 + 0 ✓"
+   },
+   {
+    "id": "s3",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "x = 0 için log(−1) tanımsız, C elenir"
+   }
+  ]
+ },
+ "solution_text": "x = 4: log 3 + log 1 = log 3 ✓. x = 0: log(−1) tanımsız. Çözüm kümesi: {4}",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "şık deneme",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

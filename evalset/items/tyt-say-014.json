@@ -1,0 +1,79 @@
+{
+ "id": "tyt-say-014",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "5^100 sayısının 7 ile bölümünden kalan kaçtır?",
+ "options": {
+  "A": "1",
+  "B": "2",
+  "C": "3",
+  "D": "4",
+  "E": "5"
+ },
+ "gold_answer": "2",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "Mod(5**100, 7)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans < 7"
+  ],
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Mod(5**6, 7) = 1",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Mod(100, 6) = 2",
+    "from": [],
+    "text": "yanlış kalan"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Mod(5**2, 7) = 2",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "25 mod 7 aslında 4; iki hata birbirini götürdü"
+   }
+  ]
+ },
+ "solution_text": "100 ≡ 2 (mod 6) ⇒ 5² = 25 ≡ 2 (mod 7). Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "arithmetic_slip mutation of tyt-say-006",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-say-006"
+}

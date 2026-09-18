@@ -1,0 +1,90 @@
+{
+ "id": "ayt-tur-011",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "f(x) = x³ − 3x fonksiyonunun [−2, 3] aralığındaki en büyük değeri kaçtır?",
+ "options": {
+  "A": "2",
+  "B": "16",
+  "C": "18",
+  "D": "20",
+  "E": "24"
+ },
+ "gold_answer": "18",
+ "problem_ir": {
+  "task": {
+   "kind": "extremum",
+   "params": {
+    "f": "x**3 - 3*x",
+    "var": "x",
+    "interval": "[-2, 3]",
+    "which": "max"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "2",
+   "B": "16",
+   "C": "18",
+   "D": "20",
+   "E": "24"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x**3 - 3*x, x) = 3*x**2 - 3",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "kritik noktalar ±1"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "at(x**3 - 3*x, x, -1) = 2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s3"
+    ],
+    "text": "uç noktalar kontrol edilmedi"
+   }
+  ]
+ },
+ "solution_text": "Yerel maksimum f(−1) = 2 en büyük değerdir. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 4,
+ "notes": "endpoint_error mutation of ayt-tur-001",
+ "provenance": "sentetik",
+ "mutation": "endpoint_error",
+ "derived_from": "ayt-tur-001"
+}

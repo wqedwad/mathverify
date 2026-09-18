@@ -1,0 +1,75 @@
+{
+ "id": "tyt-say-001",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "OBEB(84, 120) kaçtır?",
+ "options": {
+  "A": "6",
+  "B": "8",
+  "C": "12",
+  "D": "24",
+  "E": "36"
+ },
+ "gold_answer": "12",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "gcd(84, 120)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "8",
+   "C": "12",
+   "D": "24",
+   "E": "36"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "12",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "84 = 2**2 * 3 * 7",
+    "from": [],
+    "text": "asal çarpanlar"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "120 = 2**3 * 3 * 5",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "gcd(84, 120) = 2**2 * 3",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "ortak çarpanların en küçük üsleri"
+   }
+  ]
+ },
+ "solution_text": "84 = 2²·3·7, 120 = 2³·3·5; OBEB = 2²·3 = 12. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

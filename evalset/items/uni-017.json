@@ -1,0 +1,74 @@
+{
+ "id": "uni-017",
+ "cell": "D",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "lim_{n→∞} (1 + 1/n)ⁿ limitinin değeri nedir?",
+ "options": {
+  "A": "1",
+  "B": "2",
+  "C": "E",
+  "D": "E**2",
+  "E": "∞"
+ },
+ "gold_answer": "E",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(1 + 1/n)**n",
+    "var": "n",
+    "to": "oo"
+   }
+  },
+  "vars": [
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "E",
+   "D": "E**2",
+   "E": "∞"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "E",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Limit(n*log(1 + 1/n), n, oo) = 0",
+    "from": [],
+    "text": "yanlış limit"
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "yine de e seçildi"
+   }
+  ]
+ },
+ "solution_text": "n ln(1 + 1/n) → 0 … L = e. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of uni-003",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "uni-003"
+}

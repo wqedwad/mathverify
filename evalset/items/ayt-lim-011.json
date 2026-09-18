@@ -1,0 +1,73 @@
+{
+ "id": "ayt-lim-011",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→1} (√x − 1)/(x − 1) limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1/4",
+  "C": "1/2",
+  "D": "1",
+  "E": "2"
+ },
+ "gold_answer": "1/2",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(sqrt(x) - 1)/(x - 1)",
+    "var": "x",
+    "to": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "1/4",
+   "C": "1/2",
+   "D": "1",
+   "E": "2"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "(sqrt(x) - 1)/(x - 1) = 1/(sqrt(x) + 1)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Limit(1/(sqrt(x) + 1), x, 1) = 1",
+    "from": [
+     "s1"
+    ],
+    "text": "1/(1+1) yanlış hesaplandı"
+   }
+  ]
+ },
+ "solution_text": "1/(√x + 1) → 1. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "arithmetic_slip mutation of ayt-lim-005",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "ayt-lim-005"
+}

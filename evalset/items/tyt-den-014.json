@@ -1,0 +1,106 @@
+{
+ "id": "tyt-den-014",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "|2x − 3| = 5 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{4}",
+  "B": "{-1, 4}",
+  "C": "{-4, 1}",
+  "D": "{1, 4}",
+  "E": "{-1}"
+ },
+ "gold_answer": "{-1, 4}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "Abs(2*x - 3) = 5"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{4}",
+   "B": "{-1, 4}",
+   "C": "{-4, 1}",
+   "D": "{1, 4}",
+   "E": "{-1}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{-1, 4}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Abs(-5) = -5",
+    "from": [],
+    "text": "mutlak değer tanımı yanlış ifade edildi"
+   },
+   {
+    "id": "s2",
+    "kind": "case",
+    "claim": "2*x - 3 = 5",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x = 4",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "case",
+    "claim": "2*x - 3 = -5",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "eq",
+    "claim": "x = -1",
+    "from": [
+     "s4"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s6",
+    "kind": "eq",
+    "claim": "x in {-1, 4}",
+    "from": [
+     "s3",
+     "s5"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "|−5| = −5 olduğundan iki durum: … x = 4 veya x = −1. Çözüm kümesi: {-1, 4}",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_identity mutation of tyt-den-004",
+ "provenance": "sentetik",
+ "mutation": "wrong_identity",
+ "derived_from": "tyt-den-004"
+}

@@ -1,0 +1,72 @@
+{
+ "id": "ayt-trig-017",
+ "cell": "D",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "tan x = √3 denkleminin [0, π) aralığındaki çözümü kaçtır?",
+ "options": {
+  "A": "pi/6",
+  "B": "pi/3",
+  "C": "2*pi/3",
+  "D": "pi/4",
+  "E": "5*pi/6"
+ },
+ "gold_answer": "{pi/3}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x",
+    "interval": "[0, pi)"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "tan(x) = sqrt(3)"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "pi/6",
+   "B": "pi/3",
+   "C": "2*pi/3",
+   "D": "pi/4",
+   "E": "5*pi/6"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "pi/3",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "tan(pi/3) = sqrt(3)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "60° = pi/2",
+    "from": [],
+    "text": "yanlış dönüşüm; şık yine doğru seçildi"
+   }
+  ]
+ },
+ "solution_text": "tan 60° = √3, 60° = π/2 … Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "degree_radian mutation of ayt-trig-004",
+ "provenance": "sentetik",
+ "mutation": "degree_radian",
+ "derived_from": "ayt-trig-004"
+}

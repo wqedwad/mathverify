@@ -1,0 +1,84 @@
+{
+ "id": "tyt-prob-004",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir sayının 3 katının 5 fazlası, aynı sayının 5 katının 7 eksiğine eşittir. Bu sayı kaçtır?",
+ "options": {
+  "A": "1",
+  "B": "3",
+  "C": "6",
+  "D": "9",
+  "E": "12"
+ },
+ "gold_answer": "6",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "real"
+   }
+  ],
+  "givens": [
+   "3*x + 5 = 5*x - 7"
+  ],
+  "unknown_of_interest": "x",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "6",
+   "D": "9",
+   "E": "12"
+  },
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "6",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "3*x + 5 = 5*x - 7",
+    "from": [],
+    "text": "denklem"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "2*x = 12",
+    "from": [
+     "s1"
+    ],
+    "text": "düzenle"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x = 6",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "3x + 5 = 5x − 7 ⇒ 12 = 2x ⇒ x = 6. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

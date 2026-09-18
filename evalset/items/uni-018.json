@@ -1,0 +1,72 @@
+{
+ "id": "uni-018",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "∫₀¹ (ln x)/√x dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "-4",
+  "B": "-2",
+  "C": "-1",
+  "D": "0",
+  "E": "2"
+ },
+ "gold_answer": "-4",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "log(x)/sqrt(x)",
+    "var": "x",
+    "a": "0",
+    "b": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-4",
+   "B": "-2",
+   "C": "-1",
+   "D": "0",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-4",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "Γ-türevi: ∫₀¹ x^{s-1} dx = 1/s, s'ye göre türev: ∫₀¹ x^{s-1} ln x dx = −1/s²"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at(-1/s**2, s, 1/2) = -4",
+    "from": [],
+    "text": "s = 1/2"
+   }
+  ]
+ },
+ "solution_text": "∫₀¹ x^{s−1} ln x dx = −1/s², s = 1/2 için −4. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "parametreye göre türev; s IR'da yok",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

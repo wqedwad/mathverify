@@ -1,0 +1,74 @@
+{
+ "id": "ayt-int-007",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₀¹ x·eˣ dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "E - 1",
+  "D": "E/2",
+  "E": "2*E - 1"
+ },
+ "gold_answer": "1",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "x*exp(x)",
+    "var": "x",
+    "a": "0",
+    "b": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "E - 1",
+   "D": "E/2",
+   "E": "2*E - 1"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff((x - 1)*exp(x), x) = x*exp(x)",
+    "from": [],
+    "text": "tahmin edilen ilkelin türevi"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at((x - 1)*exp(x), x, 1) - at((x - 1)*exp(x), x, 0) = 1",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "(x − 1)eˣ türevi x eˣ olduğundan integral [(x−1)eˣ]₀¹ = 0 − (−1) = 1. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "ilkel tahmini + türevle doğrulama",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

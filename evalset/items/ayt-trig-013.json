@@ -1,0 +1,65 @@
+{
+ "id": "ayt-trig-013",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "tan x = √3 denkleminin [0, π) aralığındaki çözümü kaçtır?",
+ "options": {
+  "A": "pi/6",
+  "B": "pi/3",
+  "C": "2*pi/3",
+  "D": "pi/4",
+  "E": "5*pi/6"
+ },
+ "gold_answer": "{pi/3}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x",
+    "interval": "[0, pi)"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "tan(x) = sqrt(3)"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "pi/6",
+   "B": "pi/3",
+   "C": "2*pi/3",
+   "D": "pi/4",
+   "E": "5*pi/6"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2*pi/3",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "tan(2*pi/3) = sqrt(3)",
+    "from": [],
+    "text": "II. bölgede tan negatif; işaret hatası"
+   }
+  ]
+ },
+ "solution_text": "tan(2π/3) = √3. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of ayt-trig-004",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "ayt-trig-004"
+}

@@ -1,0 +1,82 @@
+{
+ "id": "uni-001",
+ "cell": "A",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "∫₀¹ (ln x)/√x dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "-4",
+  "B": "-2",
+  "C": "-1",
+  "D": "0",
+  "E": "2"
+ },
+ "gold_answer": "-4",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "log(x)/sqrt(x)",
+    "var": "x",
+    "a": "0",
+    "b": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-4",
+   "B": "-2",
+   "C": "-1",
+   "D": "0",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-4",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Integral(log(x)/sqrt(x), x) = 2*sqrt(x)*log(x) - 4*sqrt(x)",
+    "from": [],
+    "text": "kısmi integrasyon"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Limit(2*sqrt(x)*log(x), x, 0, '+') = 0",
+    "from": [],
+    "text": "uç noktada limit"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "(2*1*0 - 4*1) - 0 = -4",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Kısmi integrasyon: [2√x ln x − 4√x]₀¹; x→0⁺ iken 2√x ln x → 0 ⇒ −4. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

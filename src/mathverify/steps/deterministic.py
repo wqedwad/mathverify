@@ -1,0 +1,361 @@
+"""Deterministic step refuter.
+
+For every step of kind `eq` or `compute` with a parseable claim:
+  * `compute`: claim `lhs = rhs` where lhs contains an unevaluated operation (Derivative,
+    Integral, Limit, Sum) or is plain arithmetic -> evaluate lhs with the CAS and compare
+    with rhs (domain-aware). A definite difference => REFUTED.
+  * `eq`: claim is a relation that should follow from the premises. Premises are the
+    IR givens plus ALL earlier parseable step claims (not only the cited ones, so that
+    under-citation is never penalised). We look for a point that satisfies every premise,
+    lies in the problem domain, and violates the claim. Found => REFUTED with that point.
+Outcomes per step: verified | refuted | unknown | skipped. The layer result is `fail`
+(hard) only when at least one step is refuted; otherwise `unknown` (never `pass`).
+"""
+from __future__ import annotations
+
+import re
+from typing import Any
+
+import sympy as sp
+from sympy import S, Eq, Or, And
+
+from ..certify.base import Ctx, Timer, result, unknown
+from ..certify.domain import relation_holds_at, in_domain
+from ..equiv import answers_equivalent
+from ..equiv.random_point import sample_points
+from ..normalize.parse import parse_relation, ParseError
+from ..sandbox import run as sb_run
+
+LAYER = "steps.refute"
+
+_IN_SET = re.compile(r"^\s*([A-Za-z_]\w*)\s+in\s+(\{.*\})\s*$")
+
+
+def _parse_claim(claim: str, ns: dict[str, Any]):
+    m = _IN_SET.match(claim)
+    if m:
+        from ..normalize.parse import parse_set_str
+        var = ns.get(m.group(1))
+        if var is None:
+            raise ParseError(f"unknown symbol {m.group(1)}")
+        s_ = parse_set_str(m.group(2), ns)
+        return Or(*[Eq(var, e) for e in s_.args]) if len(s_.args) > 1 else Eq(var, list(s_.args)[0])
+    return parse_relation(claim, ns)
+
+
+def _is_relation(e) -> bool:
+    return isinstance(e, (sp.core.relational.Relational, And, Or)) or e in (sp.true, sp.false)
+
+
+def _holds(rel, point: dict) -> bool | None:
+    """Tri-state truth of `rel` at `point` ({Symbol: value})."""
+    if rel is sp.true:
+        return True
+    if rel is sp.false:
+        return False
+    if isinstance(rel, And):
+        rs = [_holds(a, point) for a in rel.args]
+        if any(r is False for r in rs):
+            return False
+        return True if all(r is True for r in rs) else None
+    if isinstance(rel, Or):
+        rs = [_holds(a, point) for a in rel.args]
+        if any(r is True for r in rs):
+            return True
+        return False if all(r is False for r in rs) else None
+    if isinstance(rel, sp.core.relational.Relational):
+        # substitute the two sides separately: `Eq(a, b).subs(...)` with Float points
+        # auto-evaluates to False on last-bit rounding differences (measured: the identity
+        # x^2-5x-14 = (x-7)(x+2) was 'refuted'). Compare tolerantly instead.
+        try:
+            lhs = rel.lhs.subs(point, simultaneous=True)
+            rhs = rel.rhs.subs(point, simultaneous=True)
+        except Exception:
+            return None
+        if lhs.free_symbols or rhs.free_symbols:
+            return None
+        d = sp.Symbol("_d")
+        return relation_holds_at(type(rel)(lhs, rhs, evaluate=False), d, 0)
+    try:
+        sub = rel.subs(point, simultaneous=True)
+    except Exception:
+        return None
+    if sub is sp.true:
+        return True
+    if sub is sp.false:
+        return False
+    return None
+
+
+def _in_domains(ctx: Ctx, point: dict) -> bool:
+    for s_, v in point.items():
+        if v.free_symbols:
+            continue
+        if in_domain(ctx.domain_for(s_), v) is False:
+            return False
+    for c in ctx.var_constraints():
+        if _holds(c, point) is False:
+            return False
+    return True
+
+
+def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
+    ev: dict[str, Any] = {}
+    if not isinstance(claim, Eq):
+        return "skipped", {"reason": "compute_claim_not_equation"}
+    lhs, rhs = claim.lhs, claim.rhs
+    if lhs.has(sp.Integral) and any(len(a) == 1 for i in lhs.atoms(sp.Integral) for a in i.limits):
+        # indefinite integral: derivative certificate on rhs
+        from ..certify.calculus import antiderivative_certificate
+        integ = list(lhs.atoms(sp.Integral))[0]
+        if lhs != integ:
+            return "skipped", {"reason": "indefinite_integral_in_compound_expression"}
+        var = integ.limits[0][0]
+        F = rhs.subs(sp.Symbol("C"), 0)
+        ok, cev = antiderivative_certificate(F, integ.function, var, timeout=ctx.timeout)
+        ev["antiderivative"] = cev
+        return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
+    if isinstance(lhs, sp.Limit):
+        # E6 leaks into the step layer otherwise: Limit.doit() is SymPy's one-sided default,
+        # so "Limit(|x|/x, x, 0) = 1" would be *verified*. Classify two-sidedly instead.
+        from ..certify.limits import classify_limit
+        e_, v_, p_, d_ = lhs.args
+        side = None if str(d_) in ("+-", "real") else str(d_)
+        cls = classify_limit(e_, v_, p_, side, timeout=ctx.timeout)
+        ev["limit_classification"] = {k: str(v) for k, v in cls.items()}
+        if cls["kind"] == "UNKNOWN":
+            return "unknown", ev
+        if cls["kind"] == "DNE":
+            return "refuted", {**ev, "reason": "limit_does_not_exist"}
+        val = cls["value"]
+        if cls["kind"] == "INF":
+            return ("verified" if rhs == val else "refuted"), ev
+        ok, cev = answers_equivalent(rhs, val, shape="scalar")
+        ev["compare"] = cev
+        return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
+    if lhs.has(sp.Limit):
+        return "unknown", {"reason": "limit_inside_compound_expression"}
+    r = sb_run("mathverify.steps.deterministic:_doit", lhs, timeout=ctx.timeout)
+    if not r.ok:
+        return "unknown", {"reason": f"doit_failed: {r.error}"}
+    val = r.value
+    ev["lhs_evaluated"] = str(val)
+    if val.has(sp.Integral, sp.Derivative, sp.Limit, sp.Sum):
+        return "unknown", {"reason": "cas_could_not_evaluate", **ev}
+    free = val.free_symbols | rhs.free_symbols
+    if free:
+        dom = {s_: ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals for s_ in free}
+        ok, cev = answers_equivalent(rhs, val, shape="expression", domain=dom, seed=ctx.seed)
+    else:
+        ok, cev = answers_equivalent(rhs, val, shape="scalar")
+    ev["compare"] = cev
+    return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
+
+
+def _doit(e):
+    return sp.simplify(e.doit())
+
+
+def _small_integer_grid(doms: dict) -> list[dict]:
+    """Deterministic small values for integer-domain symbols (TYT solutions are small):
+    guarantees that a diophantine premise like 3x+5y=41 gets hit by an integer point."""
+    int_syms = [q for q, d in doms.items() if d.is_subset(S.Integers)]
+    if not int_syms or len(int_syms) > 2:
+        return []
+    vals = list(range(-12, 41))
+    pts: list[dict] = []
+    if len(int_syms) == 1:
+        q = int_syms[0]
+        for v in vals:
+            if doms[q].contains(v) == True:  # noqa: E712
+                pts.append({q: sp.Integer(v)})
+    else:
+        a, b = int_syms
+        for va in range(-6, 21):
+            for vb in range(-6, 21):
+                if doms[a].contains(va) == True and doms[b].contains(vb) == True:  # noqa: E712
+                    pts.append({a: sp.Integer(va), b: sp.Integer(vb)})
+    # non-integer symbols in the same domain map get a fixed sample so the point is complete
+    for q, d in doms.items():
+        if q in int_syms:
+            continue
+        for pt in pts:
+            pt[q] = sp.Rational(1, 2) if d.contains(sp.Rational(1, 2)) == True else sp.Integer(2)  # noqa: E712
+    return pts
+
+
+def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
+    ev: dict[str, Any] = {"n_premises": len(premises)}
+    syms = set(claim.free_symbols)
+    prem_syms: set = set()
+    for p in premises:
+        syms |= p.free_symbols
+        prem_syms |= p.free_symbols
+    # A claim that introduces symbols the premises do not constrain is *definitional*
+    # ("the tangent line is y = 2x - 1", "let x = 4") and cannot be refuted as a
+    # consequence. The only refutable shape without premise support is an identity
+    # candidate: both sides depend on exactly the same symbols (sin(3x) = 3 sin x).
+    new_syms = set(claim.free_symbols) - prem_syms
+    if new_syms:
+        identity_shaped = (isinstance(claim, Eq) and claim.lhs.free_symbols == claim.rhs.free_symbols
+                           and bool(claim.lhs.free_symbols))
+        if not identity_shaped:
+            ev["reason"] = "definitional_claim_introduces_unconstrained_symbols"
+            return "skipped", ev
+    syms = sorted(syms, key=lambda s_: s_.name)
+    if not syms:
+        h = _holds(claim, {})
+        return ("verified" if h is True else "refuted" if h is False else "unknown"), ev
+    eqs = [p for p in premises if isinstance(p, Eq)]
+    others = [p for p in premises if not isinstance(p, Eq)]
+    points: list[dict] = []
+    # route 1: solve the equational premises
+    if eqs:
+        r = sb_run("mathverify.sandbox.ops:solve_system", eqs, syms, True, timeout=ctx.timeout)
+        if r.ok and isinstance(r.value, list):
+            sols = [s_ for s_ in r.value if isinstance(s_, dict)]
+            ev["solutions"] = len(sols)
+            if not sols:
+                return "unknown", {"reason": "premises_inconsistent_or_unsolved", **ev}
+            for s_ in sols:
+                # parametric solution: sample the remaining free symbols
+                rem = set()
+                for v in s_.values():
+                    rem |= v.free_symbols
+                rem |= set(syms) - set(s_.keys())
+                if rem:
+                    doms = {q: ctx.domain_for(q) for q in rem}
+                    for pt in sample_points(doms, 24, ctx.seed) + _small_integer_grid(doms):
+                        full = {k: sp.simplify(v.subs(pt)) for k, v in s_.items()}
+                        full.update(pt)
+                        points.append(full)
+                else:
+                    points.append(dict(s_))
+        elif r.timed_out:
+            ev["flags"] = ["cas_timeout"]
+    # route 2: rejection sampling over the domain when nothing solvable
+    if not points:
+        doms = {q: ctx.domain_for(q) for q in syms}
+        for pt in sample_points(doms, 60, ctx.seed) + _small_integer_grid(doms):
+            if all(_holds(p, pt) is True for p in premises):
+                points.append(pt)
+        ev["rejection_sampled"] = len(points)
+        if len(points) < 3 and premises:
+            return "unknown", {"reason": "no_premise_satisfying_points", **ev}
+    checked = 0
+    for pt in points:
+        if not _in_domains(ctx, pt):
+            continue
+        if any(_holds(p, pt) is False for p in others):
+            continue
+        h = _holds(claim, pt)
+        if h is False:
+            # confirm robustly: every premise must hold definitively at this point
+            if all(_holds(p, pt) is True for p in premises):
+                ev["counterexample"] = {str(k): str(v) for k, v in pt.items()}
+                return "refuted", ev
+        if h is True:
+            checked += 1
+    ev["points_checked"] = checked
+    if checked and checked == len([p for p in points if _in_domains(ctx, p)]):
+        return "verified", ev
+    return "unknown", ev
+
+
+def check_steps(ir, solution, ctx: Ctx):
+    with Timer() as t:
+        per_step: list[dict[str, Any]] = []
+        parsed: dict[str, Any] = {}
+        parsed_cases: dict[str, frozenset] = {}
+        givens = []
+        try:
+            givens = ctx.givens() + ctx.var_constraints()
+        except Exception:
+            pass
+        first_bad = None
+        n_ref = n_ver = n_unk = n_skip = 0
+        case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
+        from_map: dict[str, list[str]] = {s.id: list(s.from_ids) for s in solution.steps}
+
+        def case_closure(sid: str) -> list:
+            """Case assumptions reachable through the `from` links of step `sid`."""
+            seen, stack, out = set(), list(from_map.get(sid, [])), []
+            while stack:
+                k = stack.pop()
+                if k in seen:
+                    continue
+                seen.add(k)
+                if k in case_claims:
+                    out.append(case_claims[k])
+                stack.extend(from_map.get(k, []))
+            return out
+
+        for idx, st in enumerate(solution.steps, start=1):
+            entry: dict[str, Any] = {"id": st.id, "kind": st.kind, "index": idx}
+            if st.kind == "case" and st.claim.strip():
+                try:
+                    c = _parse_claim(st.claim, ctx.ns)
+                    if _is_relation(c):
+                        case_claims[st.id] = c
+                except Exception:  # noqa: BLE001
+                    pass
+            if st.kind not in ("eq", "compute") or not st.claim.strip():
+                entry["status"] = "skipped"
+                entry["reason"] = "kind_not_checkable" if st.kind not in ("eq", "compute") else "no_claim"
+                n_skip += 1
+                per_step.append(entry)
+                continue
+            try:
+                claim = _parse_claim(st.claim, ctx.ns)
+            except Exception as e:  # noqa: BLE001
+                entry["status"] = "skipped"
+                entry["reason"] = f"unparsed: {type(e).__name__}: {str(e)[:120]}"
+                n_skip += 1
+                per_step.append(entry)
+                continue
+            if not _is_relation(claim):
+                entry["status"] = "skipped"
+                entry["reason"] = "claim_is_not_a_relation"
+                n_skip += 1
+                per_step.append(entry)
+                continue
+            my_cases = case_closure(st.id)
+            my_case_ids = frozenset(k for k in case_claims if case_claims[k] in my_cases)
+            try:
+                if st.kind == "compute":
+                    status, ev = _check_compute(claim, ctx)
+                else:
+                    # premises: givens + unconditional earlier claims + claims from the same
+                    # case branch(es) + the case assumptions themselves
+                    premises = list(givens) + [parsed[k] for k in parsed
+                                               if k != st.id and parsed_cases.get(k, frozenset()) <= my_case_ids]
+                    premises += my_cases
+                    status, ev = _check_eq(claim, premises, ctx)
+            except Exception as e:  # noqa: BLE001
+                status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
+            entry["status"] = status
+            entry["evidence"] = ev
+            per_step.append(entry)
+            if status == "refuted":
+                n_ref += 1
+                if first_bad is None:
+                    first_bad = idx
+                # do not add a refuted claim to the premise pool
+                continue
+            if status == "verified":
+                n_ver += 1
+            elif status == "unknown":
+                n_unk += 1
+            elif status == "skipped":
+                n_skip += 1
+            # only `eq` claims join the premise pool: compute claims (Derivative/Integral
+            # equations) are statements about operations, not constraints on the unknowns
+            if st.kind == "eq" and isinstance(claim, (sp.core.relational.Relational, And, Or)):
+                parsed[st.id] = claim
+                parsed_cases[st.id] = my_case_ids
+        ev_all = {"steps": per_step, "n_refuted": n_ref, "n_verified": n_ver, "n_unknown": n_unk,
+                  "n_skipped": n_skip, "n_total": len(solution.steps)}
+    if n_ref:
+        return result(LAYER, "fail", 0.97, True, ev_all, t.ms, primary=False, first_bad_step=first_bad,
+                      flags=["step_refuted"])
+    return unknown(LAYER, "no_step_refuted", t.ms, ev_all)

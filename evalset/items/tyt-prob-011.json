@@ -1,0 +1,74 @@
+{
+ "id": "tyt-prob-011",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir satıcı bir malı %20 kârla 360 TL'ye satmıştır. Satıcı bu malı kaç TL'ye almıştır?",
+ "options": {
+  "A": "288",
+  "B": "296",
+  "C": "300",
+  "D": "320",
+  "E": "340"
+ },
+ "gold_answer": "300",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_real"
+   }
+  ],
+  "givens": [
+   "x*(1 + 20/100) = 360"
+  ],
+  "unknown_of_interest": "x",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "288",
+   "B": "296",
+   "C": "300",
+   "D": "320",
+   "E": "340"
+  },
+  "units": "TL",
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "300",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "360 TL, alış fiyatının %120'sidir"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "360*5/6 = 300",
+    "from": [],
+    "text": "%100 = 360·(100/120)"
+   }
+  ]
+ },
+ "solution_text": "360 TL alışın %120'si; %100'ü 360·5/6 = 300 TL. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "oran yolu",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

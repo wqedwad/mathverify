@@ -1,0 +1,63 @@
+{
+ "id": "ayt-int-014",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫ ln x dx integrali aşağıdakilerden hangisine eşittir? (C sabit)",
+ "options": {
+  "A": "x*log(x) - x + C",
+  "B": "x*log(x) + C",
+  "C": "log(x)/x + C",
+  "D": "x*log(x) + x + C",
+  "E": "1/x + C"
+ },
+ "gold_answer": "x*log(x) - x + C",
+ "problem_ir": {
+  "task": {
+   "kind": "antiderivative",
+   "params": {
+    "integrand": "log(x)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "x*log(x) - x + C",
+   "B": "x*log(x) + C",
+   "C": "log(x)/x + C",
+   "D": "x*log(x) + x + C",
+   "E": "1/x + C"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "1/x + C",
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Integral(log(x), x) = 1/x",
+    "from": [],
+    "text": "türev ile integral karıştırıldı"
+   }
+  ]
+ },
+ "solution_text": "∫ ln x dx = 1/x + C. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of ayt-int-001",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "ayt-int-001"
+}

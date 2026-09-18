@@ -1,0 +1,95 @@
+{
+ "id": "tyt-esf-006",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "polinom",
+ "question_tr": "P(x) = x³ − 2x² + kx + 6 polinomunun (x − 3) ile bölümünden kalan 0 olduğuna göre k kaçtır?",
+ "options": {
+  "A": "-5",
+  "B": "-3",
+  "C": "3",
+  "D": "5",
+  "E": "7"
+ },
+ "gold_answer": "-5",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "k"
+   }
+  },
+  "vars": [
+   {
+    "name": "k"
+   }
+  ],
+  "functions": [
+   {
+    "name": "P",
+    "expr": "x**3 - 2*x**2 + k*x + 6",
+    "args": [
+     "x"
+    ],
+    "params": [
+     "k"
+    ]
+   }
+  ],
+  "givens": [
+   "P(3) = 0"
+  ],
+  "unknown_of_interest": "k",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-5",
+   "B": "-3",
+   "C": "3",
+   "D": "5",
+   "E": "7"
+  },
+  "level": "TYT",
+  "topic": "polinom"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-5",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "27 - 18 + 3*k + 6 = 0",
+    "from": [],
+    "text": "P(3) = 0"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "3*k = -15",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "k = -5",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "P(3) = 27 − 18 + 3k + 6 = 15 + 3k = 0 ⇒ k = −5. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -1,0 +1,94 @@
+{
+ "id": "tyt-say-016",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "Ardışık üç çift doğal sayının toplamı 78 olduğuna göre bu sayıların en büyüğü kaçtır?",
+ "options": {
+  "A": "24",
+  "B": "26",
+  "C": "28",
+  "D": "30",
+  "E": "32"
+ },
+ "gold_answer": "28",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "n + 4"
+   }
+  },
+  "vars": [
+   {
+    "name": "n",
+    "domain": "nonneg_integer"
+   }
+  ],
+  "givens": [
+   "Mod(n, 2) = 0",
+   "n + (n + 2) + (n + 4) = 78"
+  ],
+  "unknown_of_interest": "n + 4",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "24",
+   "B": "26",
+   "C": "28",
+   "D": "30",
+   "E": "32"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "28",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "3*n + 6 = 78",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "3*n = 74",
+    "from": [
+     "s1"
+    ],
+    "text": "çıkarma hatası"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "n = 24",
+    "from": [
+     "s2"
+    ],
+    "text": "74/3 yanlış bölündü; iki hata birbirini götürdü"
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "n + 4 = 28",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "3n = 74 ⇒ n = 24 ⇒ en büyüğü 28. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "arithmetic_slip mutation of tyt-say-004",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-say-004"
+}

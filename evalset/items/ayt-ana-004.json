@@ -1,0 +1,75 @@
+{
+ "id": "ayt-ana-004",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "P(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?",
+ "options": {
+  "A": "2",
+  "B": "3",
+  "C": "4",
+  "D": "20",
+  "E": "6"
+ },
+ "gold_answer": "4",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "point_line_dist(3, 4, 3, 4, -5)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "20",
+   "E": "6"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "4",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Abs(3*3 + 4*4 - 5) = 20",
+    "from": [],
+    "text": "pay"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sqrt(3**2 + 4**2) = 5",
+    "from": [],
+    "text": "payda"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "20/5 = 4",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "|9 + 16 − 5|/√(9 + 16) = 20/5 = 4. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

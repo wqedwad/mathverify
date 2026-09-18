@@ -1,0 +1,58 @@
+{
+ "id": "ayt-ana-022",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "Köşeleri A(0, 0), B(4, 0) ve C(0, 3) olan üçgenin alanı kaç birimkaredir?",
+ "options": {
+  "A": "5",
+  "B": "6",
+  "C": "7",
+  "D": "12",
+  "E": "24"
+ },
+ "gold_answer": "6",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "tri_area(0, 0, 4, 0, 0, 3)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "5",
+   "B": "6",
+   "C": "7",
+   "D": "12",
+   "E": "24"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "7",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "4*3/2 = 7",
+    "from": [],
+    "text": "aritmetik hata"
+   }
+  ]
+ },
+ "solution_text": "4·3/2 = 7. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of ayt-ana-005",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "ayt-ana-005"
+}

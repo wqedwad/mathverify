@@ -1,0 +1,81 @@
+{
+ "id": "ayt-int-008",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₀^π sin x dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "2",
+  "D": "pi",
+  "E": "-2"
+ },
+ "gold_answer": "2",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "sin(x)",
+    "var": "x",
+    "a": "0",
+    "b": "pi"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "pi",
+   "E": "-2"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "sin x, x = π/2 etrafında simetrik"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Integral(sin(x), (x, 0, pi/2)) = 1",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "2*1 = 2",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Simetriden 2·∫₀^{π/2} sin x dx = 2. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "simetri",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

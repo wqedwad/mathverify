@@ -1,0 +1,111 @@
+{
+ "id": "tyt-prob-012",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?",
+ "options": {
+  "A": "12",
+  "B": "14",
+  "C": "16",
+  "D": "18",
+  "E": "20"
+ },
+ "gold_answer": "16",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "a"
+   }
+  },
+  "vars": [
+   {
+    "name": "a",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "b",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "a + b = 30",
+   "2*a + 4*b = 88"
+  ],
+  "unknown_of_interest": "a",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "12",
+   "B": "14",
+   "C": "16",
+   "D": "18",
+   "E": "20"
+  },
+  "sanity": [
+   "ans > 0",
+   "ans < 30"
+  ],
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "16",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "b = 30 - a",
+    "from": [],
+    "text": "baş sayısından"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "2*a + 4*(30 - a) = 88",
+    "from": [
+     "s1"
+    ],
+    "text": "ayak sayısına yerine koy"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "-2*a + 120 = 88",
+    "from": [
+     "s2"
+    ],
+    "text": "dağıt"
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "a = 16",
+    "from": [
+     "s3"
+    ],
+    "text": "çöz"
+   },
+   {
+    "id": "s5",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s4"
+    ],
+    "text": "D şıkkı"
+   }
+  ]
+ },
+ "solution_text": "… a = 16.\nCevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 5,
+ "notes": "doğru değer, yanlış şık işaretlendi",
+ "provenance": "sentetik",
+ "mutation": "wrong_option",
+ "derived_from": "tyt-prob-001"
+}

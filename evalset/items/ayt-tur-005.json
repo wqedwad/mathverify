@@ -1,0 +1,90 @@
+{
+ "id": "ayt-tur-005",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "x > 0 olmak üzere f(x) = x + 4/x fonksiyonunun en küçük değeri kaçtır?",
+ "options": {
+  "A": "2",
+  "B": "4",
+  "C": "6",
+  "D": "8",
+  "E": "0"
+ },
+ "gold_answer": "4",
+ "problem_ir": {
+  "task": {
+   "kind": "extremum",
+   "params": {
+    "f": "x + 4/x",
+    "var": "x",
+    "interval": "(0, oo)",
+    "which": "min"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_real"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "domain_of_discourse": "x > 0",
+  "options": {
+   "A": "2",
+   "B": "4",
+   "C": "6",
+   "D": "8",
+   "E": "0"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "4",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x + 4/x, x) = 1 - 4/x**2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "1 − 4/x² = 0 ⇒ x = 2 (x > 0)"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "at(x + 4/x, x, 2) = 4",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "x → 0⁺ ve x → ∞ için f → ∞; x = 2 minimum"
+   }
+  ]
+ },
+ "solution_text": "f' = 1 − 4/x² = 0 ⇒ x = 2; f(2) = 4. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

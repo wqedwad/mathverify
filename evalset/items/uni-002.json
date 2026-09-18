@@ -1,0 +1,58 @@
+{
+ "id": "uni-002",
+ "cell": "A",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[1, 2], [3, 4]] matrisinin determinantı kaçtır?",
+ "options": {
+  "A": "-2",
+  "B": "-1",
+  "C": "0",
+  "D": "1",
+  "E": "2"
+ },
+ "gold_answer": "-2",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "det(Matrix([[1, 2], [3, 4]]))"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-2",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "1*4 - 2*3 = -2",
+    "from": [],
+    "text": "ad − bc"
+   }
+  ]
+ },
+ "solution_text": "det = 1·4 − 2·3 = −2. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

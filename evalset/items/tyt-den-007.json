@@ -1,0 +1,89 @@
+{
+ "id": "tyt-den-007",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "√(x + 4) = x − 2 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{0}",
+  "B": "{5}",
+  "C": "{0, 5}",
+  "D": "{-4}",
+  "E": "{}"
+ },
+ "gold_answer": "{5}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "sqrt(x + 4) = x - 2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{0}",
+   "B": "{5}",
+   "C": "{0, 5}",
+   "D": "{-4}",
+   "E": "{}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{5}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "u = √(x+4) ≥ 0 olsun; x = u² − 4"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "u = u**2 - 6",
+    "from": [],
+    "text": "u = x − 2 = u² − 6"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "u = 3",
+    "from": [
+     "s2"
+    ],
+    "text": "u² − u − 6 = (u − 3)(u + 2), u ≥ 0"
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "x = 5",
+    "from": [
+     "s3"
+    ],
+    "text": "x = 9 − 4"
+   }
+  ]
+ },
+ "solution_text": "u = √(x+4) dersek x = u² − 4 ve u = u² − 6 ⇒ u = 3 (u ≥ 0) ⇒ x = 5. Çözüm kümesi: {5}",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "değişken değiştirme; u sembolü IR'da yok → adımlar atlanır",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

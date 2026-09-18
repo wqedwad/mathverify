@@ -1,0 +1,59 @@
+{
+ "id": "ayt-ana-002",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "A(1, 2) ve B(4, 6) noktaları arasındaki uzaklık kaç birimdir?",
+ "options": {
+  "A": "3",
+  "B": "4",
+  "C": "5",
+  "D": "25",
+  "E": "7"
+ },
+ "gold_answer": "5",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "dist(1, 2, 4, 6)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "3",
+   "B": "4",
+   "C": "5",
+   "D": "25",
+   "E": "7"
+  },
+  "units": "birim",
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "5",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "sqrt((4 - 1)**2 + (6 - 2)**2) = 5",
+    "from": [],
+    "text": "uzaklık formülü"
+   }
+  ]
+ },
+ "solution_text": "√(3² + 4²) = 5. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

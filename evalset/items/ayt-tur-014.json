@@ -1,0 +1,63 @@
+{
+ "id": "ayt-tur-014",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "f(x) = ln(x² + 1) fonksiyonunun türevi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "2*x/(x**2 + 1)",
+  "B": "1/(x**2 + 1)",
+  "C": "2*x*log(x**2 + 1)",
+  "D": "x/(x**2 + 1)",
+  "E": "2/(x**2 + 1)"
+ },
+ "gold_answer": "2*x/(x**2 + 1)",
+ "problem_ir": {
+  "task": {
+   "kind": "derivative",
+   "params": {
+    "f": "log(x**2 + 1)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "2*x/(x**2 + 1)",
+   "B": "1/(x**2 + 1)",
+   "C": "2*x*log(x**2 + 1)",
+   "D": "x/(x**2 + 1)",
+   "E": "2/(x**2 + 1)"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "1/(x**2 + 1)",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(log(x**2 + 1), x) = 1/(x**2 + 1)",
+    "from": [],
+    "text": "iç türev unutuldu"
+   }
+  ]
+ },
+ "solution_text": "(ln u)' = 1/u ⇒ 1/(x² + 1). Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "chain_rule mutation of ayt-tur-004",
+ "provenance": "sentetik",
+ "mutation": "chain_rule",
+ "derived_from": "ayt-tur-004"
+}

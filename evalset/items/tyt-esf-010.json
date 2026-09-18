@@ -1,0 +1,119 @@
+{
+ "id": "tyt-esf-010",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "polinom",
+ "question_tr": "P(x) = x³ − 2x² + kx + 6 polinomunun (x − 3) ile bölümünden kalan 0 olduğuna göre k kaçtır?",
+ "options": {
+  "A": "-5",
+  "B": "-3",
+  "C": "3",
+  "D": "5",
+  "E": "7"
+ },
+ "gold_answer": "-5",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "k"
+   }
+  },
+  "vars": [
+   {
+    "name": "k"
+   }
+  ],
+  "functions": [
+   {
+    "name": "P",
+    "expr": "x**3 - 2*x**2 + k*x + 6",
+    "args": [
+     "x"
+    ],
+    "params": [
+     "k"
+    ]
+   }
+  ],
+  "givens": [
+   "P(3) = 0"
+  ],
+  "unknown_of_interest": "k",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-5",
+   "B": "-3",
+   "C": "3",
+   "D": "5",
+   "E": "7"
+  },
+  "level": "TYT",
+  "topic": "polinom"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-5",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "P(x) = (x − 3)(x² + x + c) yazılabilir"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "-3 + 1 = -2",
+    "from": [],
+    "text": "x² katsayısı ✓"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "-3*c = 6",
+    "from": [],
+    "text": "sabit terim"
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "c = -2",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "eq",
+    "claim": "k = c - 3",
+    "from": [
+     "s1"
+    ],
+    "text": "x katsayısı"
+   },
+   {
+    "id": "s6",
+    "kind": "eq",
+    "claim": "k = -5",
+    "from": [
+     "s4",
+     "s5"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "P(x) = (x−3)(x²+x+c): sabit −3c = 6 ⇒ c = −2; x katsayısı k = c − 3 = −5. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "çarpanlara ayırma ile katsayı karşılaştırma; c IR'da yok",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

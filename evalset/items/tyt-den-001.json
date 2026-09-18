@@ -1,0 +1,108 @@
+{
+ "id": "tyt-den-001",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "log(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{0}",
+  "B": "{4}",
+  "C": "{0, 4}",
+  "D": "{1}",
+  "E": "{}"
+ },
+ "gold_answer": "{4}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "log(x - 1) + log(x - 3) = log(3)"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{0}",
+   "B": "{4}",
+   "C": "{0, 4}",
+   "D": "{1}",
+   "E": "{}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{4}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "log((x - 1)*(x - 3)) = log(3)",
+    "from": [],
+    "text": "log toplamı"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "(x - 1)*(x - 3) = 3",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x**2 - 4*x = 0",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "x in {0, 4}",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "assert",
+    "claim": "x > 3",
+    "from": [],
+    "text": "tanım kümesi: x − 1 > 0 ve x − 3 > 0"
+   },
+   {
+    "id": "s6",
+    "kind": "eq",
+    "claim": "x = 4",
+    "from": [
+     "s4",
+     "s5"
+    ],
+    "text": "0 tanım kümesinde değil"
+   }
+  ]
+ },
+ "solution_text": "log((x−1)(x−3)) = log 3 ⇒ x² − 4x = 0 ⇒ x ∈ {0, 4}. Tanım kümesi x > 3 olduğundan x = 4.\nÇözüm kümesi: {4}",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

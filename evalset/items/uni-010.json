@@ -1,0 +1,74 @@
+{
+ "id": "uni-010",
+ "cell": "C",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "∫₀¹ (ln x)/√x dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "-4",
+  "B": "-2",
+  "C": "-1",
+  "D": "0",
+  "E": "2"
+ },
+ "gold_answer": "-4",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "log(x)/sqrt(x)",
+    "var": "x",
+    "a": "0",
+    "b": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-4",
+   "B": "-2",
+   "C": "-1",
+   "D": "0",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-2",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Integral(log(x)/sqrt(x), x) = 2*sqrt(x)*log(x) - 2*sqrt(x)",
+    "from": [],
+    "text": "katsayı hatası"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "(0 - 2) - 0 = -2",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "[2√x ln x − 2√x]₀¹ = −2. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of uni-001",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "uni-001"
+}

@@ -1,0 +1,76 @@
+{
+ "id": "tyt-say-007",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "OBEB(84, 120) kaçtır?",
+ "options": {
+  "A": "6",
+  "B": "8",
+  "C": "12",
+  "D": "24",
+  "E": "36"
+ },
+ "gold_answer": "12",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "gcd(84, 120)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "8",
+   "C": "12",
+   "D": "24",
+   "E": "36"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "12",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Mod(120, 84) = 36",
+    "from": [],
+    "text": "Öklid"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Mod(84, 36) = 12",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Mod(36, 12) = 0",
+    "from": [
+     "s2"
+    ],
+    "text": "son sıfırdan farklı kalan 12"
+   }
+  ]
+ },
+ "solution_text": "Öklid: 120 = 84·1 + 36, 84 = 36·2 + 12, 36 = 12·3. OBEB = 12. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "Öklid algoritması; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

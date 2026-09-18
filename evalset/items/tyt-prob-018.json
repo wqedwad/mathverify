@@ -1,0 +1,93 @@
+{
+ "id": "tyt-prob-018",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?",
+ "options": {
+  "A": "12",
+  "B": "14",
+  "C": "16",
+  "D": "18",
+  "E": "20"
+ },
+ "gold_answer": "16",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "a"
+   }
+  },
+  "vars": [
+   {
+    "name": "a",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "b",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "a + b = 30",
+   "2*a + 4*b = 88"
+  ],
+  "unknown_of_interest": "a",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "12",
+   "B": "14",
+   "C": "16",
+   "D": "18",
+   "E": "20"
+  },
+  "sanity": [
+   "ans > 0",
+   "ans < 30"
+  ],
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "16",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "a - b = 2",
+    "from": [],
+    "text": "iki denklemi taraf tarafa çıkardım (geçersiz çıkarım)"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "2*a = 32",
+    "from": [
+     "s1"
+    ],
+    "text": "a + b = 30 ile topla"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "a = 16",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Denklemleri çıkarınca a − b = 2; toplayınca 2a = 32, a = 16. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "s1 doğru ama gerekçesiz (taraf tarafa çıkarma a − b = 2 vermez); deterministik reddedici için beklenen: kaçırılır",
+ "provenance": "sentetik",
+ "mutation": "wrong_identity",
+ "derived_from": "tyt-prob-001"
+}

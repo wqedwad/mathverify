@@ -1,0 +1,67 @@
+{
+ "id": "ayt-ana-014",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "P(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?",
+ "options": {
+  "A": "2",
+  "B": "3",
+  "C": "4",
+  "D": "20",
+  "E": "6"
+ },
+ "gold_answer": "4",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "point_line_dist(3, 4, 3, 4, -5)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "20",
+   "E": "6"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "20",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Abs(3*3 + 4*4 - 5) = 20",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "paydaya bölünmedi"
+   }
+  ]
+ },
+ "solution_text": "|9 + 16 − 5| = 20. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "wrong_formula mutation of ayt-ana-004",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "ayt-ana-004"
+}

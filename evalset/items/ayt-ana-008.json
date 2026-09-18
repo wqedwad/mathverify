@@ -1,0 +1,76 @@
+{
+ "id": "ayt-ana-008",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "A(1, 2) ve B(4, 6) noktaları arasındaki uzaklık kaç birimdir?",
+ "options": {
+  "A": "3",
+  "B": "4",
+  "C": "5",
+  "D": "25",
+  "E": "7"
+ },
+ "gold_answer": "5",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "dist(1, 2, 4, 6)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "3",
+   "B": "4",
+   "C": "5",
+   "D": "25",
+   "E": "7"
+  },
+  "units": "birim",
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "5",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "4 - 1 = 3",
+    "from": [],
+    "text": "yatay fark"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "6 - 2 = 4",
+    "from": [],
+    "text": "düşey fark"
+   },
+   {
+    "id": "s3",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "3-4-5 özel dik üçgeni ⇒ hipotenüs 5"
+   }
+  ]
+ },
+ "solution_text": "Farklar 3 ve 4: 3-4-5 üçgeni, uzaklık 5. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "özel üçgen; formülsüz",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

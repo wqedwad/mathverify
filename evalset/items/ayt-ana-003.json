@@ -1,0 +1,70 @@
+{
+ "id": "ayt-ana-003",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "Merkezi M(2, −1) ve yarıçapı 3 olan çemberin denklemi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(x - 2)**2 + (y + 1)**2 = 9",
+  "B": "(x + 2)**2 + (y - 1)**2 = 9",
+  "C": "(x - 2)**2 + (y + 1)**2 = 3",
+  "D": "x**2 + y**2 - 4*x + 2*y + 4 = 0",
+  "E": "(x - 2)**2 + (y - 1)**2 = 9"
+ },
+ "gold_answer": "(x - 2)**2 + (y + 1)**2 = 9",
+ "problem_ir": {
+  "task": {
+   "kind": "equation_of",
+   "params": {
+    "object": "circle_center_radius",
+    "center": [
+     "2",
+     "-1"
+    ],
+    "radius": "3"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   },
+   {
+    "name": "y"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "equation",
+  "options": {
+   "A": "(x - 2)**2 + (y + 1)**2 = 9",
+   "B": "(x + 2)**2 + (y - 1)**2 = 9",
+   "C": "(x - 2)**2 + (y + 1)**2 = 3",
+   "D": "x**2 + y**2 - 4*x + 2*y + 4 = 0",
+   "E": "(x - 2)**2 + (y - 1)**2 = 9"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "equation",
+   "payload": "(x - 2)**2 + (y + 1)**2 = 9",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "conclude",
+    "claim": "(x - 2)**2 + (y + 1)**2 = 3**2",
+    "from": [],
+    "text": "standart biçim"
+   }
+  ]
+ },
+ "solution_text": "(x − 2)² + (y + 1)² = 9. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

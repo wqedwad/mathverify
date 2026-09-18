@@ -1,0 +1,101 @@
+{
+ "id": "tyt-prob-002",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?",
+ "options": {
+  "A": "12",
+  "B": "14",
+  "C": "16",
+  "D": "18",
+  "E": "20"
+ },
+ "gold_answer": "16",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "a"
+   }
+  },
+  "vars": [
+   {
+    "name": "a",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "b",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "a + b = 30",
+   "2*a + 4*b = 88"
+  ],
+  "unknown_of_interest": "a",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "12",
+   "B": "14",
+   "C": "16",
+   "D": "18",
+   "E": "20"
+  },
+  "sanity": [
+   "ans > 0",
+   "ans < 30"
+  ],
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "16",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "case",
+    "claim": "a = 16",
+    "from": [],
+    "text": "C şıkkını deneyelim"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "b = 14",
+    "from": [
+     "s1"
+    ],
+    "text": "30 − 16"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "2*16 + 4*14 = 88",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "ayak sayısı tutuyor"
+   },
+   {
+    "id": "s4",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "diğer şıklar 88 vermez"
+   }
+  ]
+ },
+ "solution_text": "Şıkları deneyelim. C) 16 tavuk ise 14 koyun: 2·16 + 4·14 = 32 + 56 = 88 ✓. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "şık deneme; kanonik değil",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

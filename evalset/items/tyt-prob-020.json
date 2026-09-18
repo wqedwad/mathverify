@@ -1,0 +1,76 @@
+{
+ "id": "tyt-prob-020",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir araç 240 km'lik bir yolu saatte 80 km hızla gidip aynı yolu saatte 60 km hızla geri dönmüştür. Gidiş-dönüş toplam kaç saat sürmüştür?",
+ "options": {
+  "A": "6",
+  "B": "7",
+  "C": "8",
+  "D": "9",
+  "E": "10"
+ },
+ "gold_answer": "7",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "240/80 + 240/60"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  },
+  "units": "saat",
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "7",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "240/80 = 4",
+    "from": [],
+    "text": "yanlış bölme"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "240/60 = 3",
+    "from": [],
+    "text": "yanlış bölme"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "4 + 3 = 7",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "240/80 = 4, 240/60 = 3, toplam 7. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-prob-006",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-prob-006"
+}

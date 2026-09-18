@@ -1,0 +1,83 @@
+{
+ "id": "uni-008",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "Σ_{k=1}^{∞} 1/(k(k+1)) serisinin toplamı kaçtır?",
+ "options": {
+  "A": "1/2",
+  "B": "1",
+  "C": "2",
+  "D": "log(2)",
+  "E": "∞"
+ },
+ "gold_answer": "1",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "Sum(1/(k*(k + 1)), (k, 1, oo))"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/2",
+   "B": "1",
+   "C": "2",
+   "D": "log(2)",
+   "E": "∞"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Sum(1/(k*(k + 1)), (k, 1, 4)) = 4/5",
+    "from": [],
+    "text": "kısmi toplamlar 1/2, 2/3, 3/4, 4/5"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "S_n = n/(n+1) deseni; tümevarımla"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Limit(n/(n + 1), n, oo) = 1",
+    "from": [],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Kısmi toplamlar n/(n+1) desenini verir; limit 1. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "desen + tümevarım",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

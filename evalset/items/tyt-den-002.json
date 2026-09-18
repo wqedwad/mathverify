@@ -1,0 +1,99 @@
+{
+ "id": "tyt-den-002",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "√(x + 4) = x − 2 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{0}",
+  "B": "{5}",
+  "C": "{0, 5}",
+  "D": "{-4}",
+  "E": "{}"
+ },
+ "gold_answer": "{5}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "sqrt(x + 4) = x - 2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{0}",
+   "B": "{5}",
+   "C": "{0, 5}",
+   "D": "{-4}",
+   "E": "{}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{5}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x + 4 = (x - 2)**2",
+    "from": [],
+    "text": "kare al"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x**2 - 5*x = 0",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x in {0, 5}",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "assert",
+    "claim": "x - 2 >= 0",
+    "from": [],
+    "text": "sağ taraf negatif olamaz"
+   },
+   {
+    "id": "s5",
+    "kind": "eq",
+    "claim": "x = 5",
+    "from": [
+     "s3",
+     "s4"
+    ],
+    "text": "x = 0 için √4 = 2 ≠ −2"
+   }
+  ]
+ },
+ "solution_text": "Kare alınca x + 4 = x² − 4x + 4 ⇒ x² − 5x = 0 ⇒ x ∈ {0, 5}. x = 0 sağlamaz (2 ≠ −2). Çözüm kümesi: {5}",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

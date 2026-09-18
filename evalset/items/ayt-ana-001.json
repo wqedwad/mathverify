@@ -1,0 +1,91 @@
+{
+ "id": "ayt-ana-001",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "A(1, 2) ve B(4, 8) noktalarından geçen doğrunun denklemi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "y = 2*x",
+  "B": "y = 2*x + 1",
+  "C": "y = x + 1",
+  "D": "y = 3*x - 1",
+  "E": "y = (x + 3)/2"
+ },
+ "gold_answer": "y = 2*x",
+ "problem_ir": {
+  "task": {
+   "kind": "equation_of",
+   "params": {
+    "object": "line_points",
+    "p1": [
+     "1",
+     "2"
+    ],
+    "p2": [
+     "4",
+     "8"
+    ]
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   },
+   {
+    "name": "y"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "equation",
+  "options": {
+   "A": "y = 2*x",
+   "B": "y = 2*x + 1",
+   "C": "y = x + 1",
+   "D": "y = 3*x - 1",
+   "E": "y = (x + 3)/2"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "equation",
+   "payload": "y = 2*x",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "slope(1, 2, 4, 8) = 2",
+    "from": [],
+    "text": "eğim"
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "y - 2 = 2*(x - 1)",
+    "from": [
+     "s1"
+    ],
+    "text": "nokta-eğim"
+   },
+   {
+    "id": "s3",
+    "kind": "conclude",
+    "claim": "y = 2*x",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "m = (8−2)/(4−1) = 2; y − 2 = 2(x − 1) ⇒ y = 2x. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

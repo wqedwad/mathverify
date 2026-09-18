@@ -1,0 +1,85 @@
+{
+ "id": "tyt-say-004",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "Ardışık üç çift doğal sayının toplamı 78 olduğuna göre bu sayıların en büyüğü kaçtır?",
+ "options": {
+  "A": "24",
+  "B": "26",
+  "C": "28",
+  "D": "30",
+  "E": "32"
+ },
+ "gold_answer": "28",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "n + 4"
+   }
+  },
+  "vars": [
+   {
+    "name": "n",
+    "domain": "nonneg_integer"
+   }
+  ],
+  "givens": [
+   "Mod(n, 2) = 0",
+   "n + (n + 2) + (n + 4) = 78"
+  ],
+  "unknown_of_interest": "n + 4",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "24",
+   "B": "26",
+   "C": "28",
+   "D": "30",
+   "E": "32"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "28",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "3*n + 6 = 78",
+    "from": [],
+    "text": "n, n+2, n+4"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "n = 24",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "n + 4 = 28",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "n + (n+2) + (n+4) = 3n + 6 = 78 ⇒ n = 24; en büyüğü 28. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

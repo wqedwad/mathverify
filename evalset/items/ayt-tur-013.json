@@ -1,0 +1,86 @@
+{
+ "id": "ayt-tur-013",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "y = x² eğrisine x = 1 apsisli noktasından çizilen teğetin denklemi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "y = 2*x - 1",
+  "B": "y = 2*x + 1",
+  "C": "y = x",
+  "D": "y = 2*x",
+  "E": "y = x + 1"
+ },
+ "gold_answer": "y = 2*x - 1",
+ "problem_ir": {
+  "task": {
+   "kind": "tangent_line",
+   "params": {
+    "f": "x**2",
+    "var": "x",
+    "at": "1",
+    "dep": "y"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   },
+   {
+    "name": "y"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "equation",
+  "options": {
+   "A": "y = 2*x - 1",
+   "B": "y = 2*x + 1",
+   "C": "y = x",
+   "D": "y = 2*x",
+   "E": "y = x + 1"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "equation",
+   "payload": "y = x",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x**2, x) = x",
+    "from": [],
+    "text": "türev yanlış"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at(x, x, 1) = 1",
+    "from": [
+     "s1"
+    ],
+    "text": "eğim 1"
+   },
+   {
+    "id": "s3",
+    "kind": "conclude",
+    "claim": "y - 1 = 1*(x - 1)",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "(x²)' = x ⇒ m = 1 ⇒ y = x. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of ayt-tur-003",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "ayt-tur-003"
+}

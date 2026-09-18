@@ -1,0 +1,86 @@
+{
+ "id": "ayt-tur-010",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "y = x² eğrisine x = 1 apsisli noktasından çizilen teğetin denklemi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "y = 2*x - 1",
+  "B": "y = 2*x + 1",
+  "C": "y = x",
+  "D": "y = 2*x",
+  "E": "y = x + 1"
+ },
+ "gold_answer": "y = 2*x - 1",
+ "problem_ir": {
+  "task": {
+   "kind": "tangent_line",
+   "params": {
+    "f": "x**2",
+    "var": "x",
+    "at": "1",
+    "dep": "y"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   },
+   {
+    "name": "y"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "equation",
+  "options": {
+   "A": "y = 2*x - 1",
+   "B": "y = 2*x + 1",
+   "C": "y = x",
+   "D": "y = 2*x",
+   "E": "y = x + 1"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "equation",
+   "payload": "2*x - y - 1 = 0",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Limit(((1 + x)**2 - 1)/x, x, 0) = 2",
+    "from": [],
+    "text": "türev tanımı (h yerine x)"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "y - 1 = 2*(x - 1)",
+    "from": [
+     "s1"
+    ],
+    "text": "teğet"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "2*x - y - 1 = 0",
+    "from": [
+     "s2"
+    ],
+    "text": "genel biçim"
+   }
+  ]
+ },
+ "solution_text": "Türev tanımıyla eğim 2; teğet 2x − y − 1 = 0. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "türev tanımı + farklı denklem biçimi; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

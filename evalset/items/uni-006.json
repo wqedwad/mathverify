@@ -1,0 +1,81 @@
+{
+ "id": "uni-006",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "∫₀¹ (ln x)/√x dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "-4",
+  "B": "-2",
+  "C": "-1",
+  "D": "0",
+  "E": "2"
+ },
+ "gold_answer": "-4",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "log(x)/sqrt(x)",
+    "var": "x",
+    "a": "0",
+    "b": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-4",
+   "B": "-2",
+   "C": "-1",
+   "D": "0",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "-4",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "x = t² dönüşümü: dx = 2t dt, ln x = 2 ln t, √x = t"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Integral(log(x), (x, 0, 1)) = -1",
+    "from": [],
+    "text": "∫₀¹ ln t dt = −1"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "4*(-1) = -4",
+    "from": [
+     "s2"
+    ],
+    "text": "2·2·∫ ln t dt"
+   }
+  ]
+ },
+ "solution_text": "x = t²: ∫₀¹ (2 ln t)/t · 2t dt = 4∫₀¹ ln t dt = −4. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "değişken değiştirme",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

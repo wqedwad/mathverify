@@ -1,0 +1,105 @@
+{
+ "id": "tyt-say-011",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "İki basamaklı bir doğal sayının rakamları toplamı 11'dir. Rakamlarının yerleri değiştirildiğinde elde edilen sayı, sayının kendisinden 27 fazla olduğuna göre bu sayı kaçtır?",
+ "options": {
+  "A": "38",
+  "B": "47",
+  "C": "56",
+  "D": "65",
+  "E": "74"
+ },
+ "gold_answer": "47",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "10*a + b"
+   }
+  },
+  "vars": [
+   {
+    "name": "a",
+    "domain": "integer",
+    "constraints": [
+     "a >= 1",
+     "a <= 9"
+    ]
+   },
+   {
+    "name": "b",
+    "domain": "integer",
+    "constraints": [
+     "b >= 0",
+     "b <= 9"
+    ]
+   }
+  ],
+  "givens": [
+   "a + b = 11",
+   "(10*b + a) - (10*a + b) = 27"
+  ],
+  "unknown_of_interest": "10*a + b",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "38",
+   "B": "47",
+   "C": "56",
+   "D": "65",
+   "E": "74"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "74",
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "a + b = 11",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "a - b = 3",
+    "from": [],
+    "text": "fark ters yazıldı"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "a = 7",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "10*a + b = 74",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "a − b = 3, a + b = 11 ⇒ a = 7, b = 4; sayı 74. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "sign_flip mutation of tyt-say-003",
+ "provenance": "sentetik",
+ "mutation": "sign_flip",
+ "derived_from": "tyt-say-003"
+}

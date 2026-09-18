@@ -1,0 +1,73 @@
+{
+ "id": "ayt-tur-012",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "f(x) = x²·eˣ olduğuna göre f'(0) kaçtır?",
+ "options": {
+  "A": "-1",
+  "B": "0",
+  "C": "1",
+  "D": "2",
+  "E": "E"
+ },
+ "gold_answer": "0",
+ "problem_ir": {
+  "task": {
+   "kind": "derivative",
+   "params": {
+    "f": "x**2*exp(x)",
+    "var": "x",
+    "at": "0"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "2",
+   "E": "E"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x**2*exp(x), x) = (2*x + x**2)*exp(x)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at((2*x + x**2)*exp(x), x, 0) = 2",
+    "from": [
+     "s1"
+    ],
+    "text": "e⁰ = 1 ile 2 çarpıldı (x = 0 unutuldu)"
+   }
+  ]
+ },
+ "solution_text": "f'(0) = 2·1 = 2. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "arithmetic_slip mutation of ayt-tur-002",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "ayt-tur-002"
+}

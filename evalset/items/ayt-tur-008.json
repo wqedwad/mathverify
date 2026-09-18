@@ -1,0 +1,89 @@
+{
+ "id": "ayt-tur-008",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "f(x) = x³ − 3x fonksiyonunun [−2, 3] aralığındaki en büyük değeri kaçtır?",
+ "options": {
+  "A": "2",
+  "B": "16",
+  "C": "18",
+  "D": "20",
+  "E": "24"
+ },
+ "gold_answer": "18",
+ "problem_ir": {
+  "task": {
+   "kind": "extremum",
+   "params": {
+    "f": "x**3 - 3*x",
+    "var": "x",
+    "interval": "[-2, 3]",
+    "which": "max"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "2",
+   "B": "16",
+   "C": "18",
+   "D": "20",
+   "E": "24"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "18",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "f, [1, 3] üzerinde artan (f' = 3(x−1)(x+1) > 0)"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at(x**3 - 3*x, x, 3) = 18",
+    "from": [],
+    "text": "sağ uçtaki değer"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "at(x**3 - 3*x, x, -1) = 2",
+    "from": [],
+    "text": "yerel maksimum"
+   },
+   {
+    "id": "s4",
+    "kind": "assert",
+    "claim": "2 < 18",
+    "from": [
+     "s2",
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "[1,3] üzerinde artan; f(3) = 18, yerel maksimum f(−1) = 2 < 18. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "monotonluk argümanı; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

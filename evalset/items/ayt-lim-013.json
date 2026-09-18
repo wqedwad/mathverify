@@ -1,0 +1,88 @@
+{
+ "id": "ayt-lim-013",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→∞} (2x² + 1)/(x² − 5) limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "2",
+  "D": "5",
+  "E": "∞"
+ },
+ "gold_answer": "2",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(2*x**2 + 1)/(x**2 - 5)",
+    "var": "x",
+    "to": "oo"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "5",
+   "E": "∞"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "∞/∞: L'Hôpital iki kez"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "diff(2*x**2 + 1, x) = 4*x",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "diff(x**2 - 5, x) = 2*x",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "Limit(4*x/(2*x), x, oo) = 2",
+    "from": [
+     "s2",
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "L'Hôpital: 4x/2x → 2. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "L'Hôpital; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

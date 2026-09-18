@@ -1,0 +1,91 @@
+{
+ "id": "tyt-den-008",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "|2x − 3| = 5 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{4}",
+  "B": "{-1, 4}",
+  "C": "{-4, 1}",
+  "D": "{1, 4}",
+  "E": "{-1}"
+ },
+ "gold_answer": "{-1, 4}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "Abs(2*x - 3) = 5"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{4}",
+   "B": "{-1, 4}",
+   "C": "{-4, 1}",
+   "D": "{1, 4}",
+   "E": "{-1}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{-1, 4}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "Abs(x - 3/2) = 5/2",
+    "from": [],
+    "text": "2'ye böl"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "3/2'ye uzaklığı 5/2 olan noktalar"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x in {3/2 + 5/2, 3/2 - 5/2}",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "x in {4, -1}",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "|x − 3/2| = 5/2: sayı doğrusunda 3/2'ye uzaklığı 5/2 olan noktalar 4 ve −1. Çözüm kümesi: {-1, 4}",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "geometrik/uzaklık yorumu",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

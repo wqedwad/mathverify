@@ -1,0 +1,89 @@
+{
+ "id": "ayt-int-009",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "6",
+  "B": "21",
+  "C": "23",
+  "D": "25",
+  "E": "27"
+ },
+ "gold_answer": "23",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "Abs(x - 1) + Abs(x + 2)",
+    "var": "x",
+    "a": "-3",
+    "b": "3"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "21",
+   "C": "23",
+   "D": "25",
+   "E": "27"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "23",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "Abs(x - 1) = Abs(1 - x)",
+    "from": [],
+    "text": "simetri"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Integral(Abs(x - 1), (x, -3, 3)) = 10",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Integral(Abs(x + 2), (x, -3, 3)) = 13",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "10 + 13 = 23",
+    "from": [
+     "s2",
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Doğrusallık: ∫|x−1| + ∫|x+2| = 10 + 13 = 23. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "integralleri ayrı ayrı",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

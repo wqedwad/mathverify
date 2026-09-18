@@ -1,0 +1,88 @@
+{
+ "id": "ayt-trig-006",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "sin x = 1/2 denkleminin çözüm kümesi aşağıdakilerden hangisidir? (k ∈ Z)",
+ "options": {
+  "A": "{pi/6 + 2*k*pi}",
+  "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+  "C": "{pi/6 + k*pi}",
+  "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+  "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+ },
+ "gold_answer": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "sin(x) = 1/2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{pi/6 + 2*k*pi}",
+   "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+   "C": "{pi/6 + k*pi}",
+   "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+   "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "birim çemberde y = 1/2 doğrusu çemberi iki noktada keser"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sin(pi/6) = 1/2",
+    "from": [],
+    "text": "I. bölge"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "sin(5*pi/6) = 1/2",
+    "from": [],
+    "text": "II. bölge"
+   },
+   {
+    "id": "s4",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s2",
+     "s3"
+    ],
+    "text": "her tam turda tekrar: +2kπ"
+   }
+  ]
+ },
+ "solution_text": "Birim çemberde iki kesişim: π/6 ve 5π/6, her turda tekrar. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "birim çember argümanı",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -1,0 +1,114 @@
+{
+ "id": "ayt-tur-001",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "f(x) = x³ − 3x fonksiyonunun [−2, 3] aralığındaki en büyük değeri kaçtır?",
+ "options": {
+  "A": "2",
+  "B": "16",
+  "C": "18",
+  "D": "20",
+  "E": "24"
+ },
+ "gold_answer": "18",
+ "problem_ir": {
+  "task": {
+   "kind": "extremum",
+   "params": {
+    "f": "x**3 - 3*x",
+    "var": "x",
+    "interval": "[-2, 3]",
+    "which": "max"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "2",
+   "B": "16",
+   "C": "18",
+   "D": "20",
+   "E": "24"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "18",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x**3 - 3*x, x) = 3*x**2 - 3",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "kritik noktalar x = ±1, uçlar −2 ve 3"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "at(x**3 - 3*x, x, -1) = 2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "at(x**3 - 3*x, x, 1) = -2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "compute",
+    "claim": "at(x**3 - 3*x, x, -2) = -2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s6",
+    "kind": "compute",
+    "claim": "at(x**3 - 3*x, x, 3) = 18",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s7",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s3",
+     "s4",
+     "s5",
+     "s6"
+    ],
+    "text": "en büyüğü 18"
+   }
+  ]
+ },
+ "solution_text": "f' = 3x² − 3 = 0 ⇒ x = ±1. f(−1) = 2, f(1) = −2, f(−2) = −2, f(3) = 18. En büyük 18. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -1,0 +1,58 @@
+{
+ "id": "ayt-ana-010",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "Köşeleri A(0, 0), B(4, 0) ve C(0, 3) olan üçgenin alanı kaç birimkaredir?",
+ "options": {
+  "A": "5",
+  "B": "6",
+  "C": "7",
+  "D": "12",
+  "E": "24"
+ },
+ "gold_answer": "6",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "tri_area(0, 0, 4, 0, 0, 3)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "5",
+   "B": "6",
+   "C": "7",
+   "D": "12",
+   "E": "24"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "6",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Abs(0*(0 - 3) + 4*(3 - 0) + 0*(0 - 0))/2 = 6",
+    "from": [],
+    "text": "determinant (ayakkabı bağı) formülü"
+   }
+  ]
+ },
+ "solution_text": "Determinant formülü: |0 + 12 + 0|/2 = 6. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "determinant formülü",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

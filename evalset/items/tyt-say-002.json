@@ -1,0 +1,106 @@
+{
+ "id": "tyt-say-002",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "x ve y pozitif tam sayılar olmak üzere 3x + 5y = 41 ve x < y ise x + y kaçtır?",
+ "options": {
+  "A": "7",
+  "B": "8",
+  "C": "9",
+  "D": "10",
+  "E": "11"
+ },
+ "gold_answer": "9",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "x + y"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "y",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "3*x + 5*y = 41",
+   "x < y"
+  ],
+  "unknown_of_interest": "x + y",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "7",
+   "B": "8",
+   "C": "9",
+   "D": "10",
+   "E": "11"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "9",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "5y ≤ 41 ⇒ y ≤ 8; 41 − 5y, 3'e bölünmeli"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "y = 1 → x = 12; y = 4 → x = 7; y = 7 → x = 2"
+   },
+   {
+    "id": "s3",
+    "kind": "case",
+    "claim": "y = 7",
+    "from": [
+     "s2"
+    ],
+    "text": "x < y sağlayan tek çift"
+   },
+   {
+    "id": "s4",
+    "kind": "eq",
+    "claim": "x = 2",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s5",
+    "kind": "compute",
+    "claim": "2 + 7 = 9",
+    "from": [
+     "s3",
+     "s4"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "41 − 5y'nin 3'e bölünmesi için y ∈ {1, 4, 7}; x < y yalnız (2, 7) ile sağlanır. x + y = 9. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

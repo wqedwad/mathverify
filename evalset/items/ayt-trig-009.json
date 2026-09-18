@@ -1,0 +1,83 @@
+{
+ "id": "ayt-trig-009",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "cos 2x = 1/2 denkleminin [0, 2π) aralığındaki çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{pi/6, 5*pi/6}",
+  "B": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+  "C": "{pi/3, 5*pi/3}",
+  "D": "{pi/6, 11*pi/6}",
+  "E": "{pi/3, 2*pi/3, 4*pi/3, 5*pi/3}"
+ },
+ "gold_answer": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x",
+    "interval": "[0, 2*pi)"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "cos(2*x) = 1/2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{pi/6, 5*pi/6}",
+   "B": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+   "C": "{pi/3, 5*pi/3}",
+   "D": "{pi/6, 11*pi/6}",
+   "E": "{pi/3, 2*pi/3, 4*pi/3, 5*pi/3}"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "2*cos(x)**2 - 1 = 1/2",
+    "from": [],
+    "text": "cos 2x = 2cos²x − 1"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "cos(x)**2 = 3/4",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x in {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+    "from": [
+     "s2"
+    ],
+    "text": "cos x = ±√3/2"
+   }
+  ]
+ },
+ "solution_text": "2cos²x − 1 = 1/2 ⇒ cos x = ±√3/2 ⇒ x ∈ {π/6, 5π/6, 7π/6, 11π/6}. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "yarım açı özdeşliği üzerinden; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

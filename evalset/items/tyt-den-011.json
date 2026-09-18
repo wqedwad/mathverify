@@ -1,0 +1,82 @@
+{
+ "id": "tyt-den-011",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "x/(x − 3) = 3/(x − 3) + 2 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{3}",
+  "B": "{}",
+  "C": "{0}",
+  "D": "{-3}",
+  "E": "{0, 3}"
+ },
+ "gold_answer": "{}",
+ "problem_ir": {
+  "task": {
+   "kind": "solve_equation",
+   "params": {
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "x/(x - 3) = 3/(x - 3) + 2"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "{3}",
+   "B": "{}",
+   "C": "{0}",
+   "D": "{-3}",
+   "E": "{0, 3}"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{3}",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x = 3 + 2*(x - 3)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x = 3",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s2"
+    ],
+    "text": "payda kontrolü yapılmadı"
+   }
+  ]
+ },
+ "solution_text": "x = 3 + 2x − 6 ⇒ x = 3. Çözüm kümesi: {3}",
+ "solution_is_correct": false,
+ "first_bad_step": 3,
+ "notes": "domain_violation mutation of tyt-den-003",
+ "provenance": "sentetik",
+ "mutation": "domain_violation",
+ "derived_from": "tyt-den-003"
+}

@@ -1,0 +1,94 @@
+{
+ "id": "ayt-tur-015",
+ "cell": "D",
+ "level": "AYT",
+ "topic": "türev",
+ "question_tr": "x > 0 olmak üzere f(x) = x + 4/x fonksiyonunun en küçük değeri kaçtır?",
+ "options": {
+  "A": "2",
+  "B": "4",
+  "C": "6",
+  "D": "8",
+  "E": "0"
+ },
+ "gold_answer": "4",
+ "problem_ir": {
+  "task": {
+   "kind": "extremum",
+   "params": {
+    "f": "x + 4/x",
+    "var": "x",
+    "interval": "(0, oo)",
+    "which": "min"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_real"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "domain_of_discourse": "x > 0",
+  "options": {
+   "A": "2",
+   "B": "4",
+   "C": "6",
+   "D": "8",
+   "E": "0"
+  },
+  "level": "AYT",
+  "topic": "türev"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "4",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "diff(x + 4/x, x) = 1 + 4/x**2",
+    "from": [],
+    "text": "işaret hatası"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x**2 = 4",
+    "from": [
+     "s1"
+    ],
+    "text": "1 + 4/x² = 0 ⇒ x² = 4 (ikinci hata)"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x = 2",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "at(x + 4/x, x, 2) = 4",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "f' = 1 + 4/x² = 0 ⇒ x = 2 ⇒ f(2) = 4. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "sign_flip mutation of ayt-tur-005",
+ "provenance": "sentetik",
+ "mutation": "sign_flip",
+ "derived_from": "ayt-tur-005"
+}

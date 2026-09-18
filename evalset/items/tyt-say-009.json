@@ -1,0 +1,85 @@
+{
+ "id": "tyt-say-009",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "Ardışık üç çift doğal sayının toplamı 78 olduğuna göre bu sayıların en büyüğü kaçtır?",
+ "options": {
+  "A": "24",
+  "B": "26",
+  "C": "28",
+  "D": "30",
+  "E": "32"
+ },
+ "gold_answer": "28",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "n + 4"
+   }
+  },
+  "vars": [
+   {
+    "name": "n",
+    "domain": "nonneg_integer"
+   }
+  ],
+  "givens": [
+   "Mod(n, 2) = 0",
+   "n + (n + 2) + (n + 4) = 78"
+  ],
+  "unknown_of_interest": "n + 4",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "24",
+   "B": "26",
+   "C": "28",
+   "D": "30",
+   "E": "32"
+  },
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "28",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "78/3 = 26",
+    "from": [],
+    "text": "ortadaki sayı = ortalama"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "n + 2 = 26",
+    "from": [
+     "s1"
+    ],
+    "text": "ortadaki sayı"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "n + 4 = 28",
+    "from": [
+     "s2"
+    ],
+    "text": "en büyüğü ortadakinin 2 fazlası"
+   }
+  ]
+ },
+ "solution_text": "Ardışık sayılarda ortadaki sayı ortalamadır: 78/3 = 26; en büyüğü 28. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "ortalama/simetri argümanı; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -1,0 +1,79 @@
+{
+ "id": "ayt-trig-008",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "tan x = √3 denkleminin [0, π) aralığındaki çözümü kaçtır?",
+ "options": {
+  "A": "pi/6",
+  "B": "pi/3",
+  "C": "2*pi/3",
+  "D": "pi/4",
+  "E": "5*pi/6"
+ },
+ "gold_answer": "{pi/3}",
+ "problem_ir": {
+  "task": {
+   "kind": "trig_solve",
+   "params": {
+    "var": "x",
+    "interval": "[0, pi)"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [
+   "tan(x) = sqrt(3)"
+  ],
+  "answer_shape": "set",
+  "options": {
+   "A": "pi/6",
+   "B": "pi/3",
+   "C": "2*pi/3",
+   "D": "pi/4",
+   "E": "5*pi/6"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "60°",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "30-60-90 üçgeni: karşı/komşu = √3 ⇒ açı 60°"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "60° = pi/3",
+    "from": [],
+    "text": "radyana çevir"
+   },
+   {
+    "id": "s3",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "[0, π)'de tan yalnız I. bölgede pozitif"
+   }
+  ]
+ },
+ "solution_text": "Özel üçgenden 60° = π/3; aralıkta tan yalnız I. bölgede pozitif. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "derece cinsinden cevap; eşdeğerlik testi",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

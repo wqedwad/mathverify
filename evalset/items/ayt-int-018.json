@@ -1,0 +1,74 @@
+{
+ "id": "ayt-int-018",
+ "cell": "D",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₀^π sin x dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1",
+  "C": "2",
+  "D": "pi",
+  "E": "-2"
+ },
+ "gold_answer": "2",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "sin(x)",
+    "var": "x",
+    "a": "0",
+    "b": "pi"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "pi",
+   "E": "-2"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Integral(sin(x), x) = cos(x)",
+    "from": [],
+    "text": "işaret hatası"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "at(cos(x), x, pi) - at(cos(x), x, 0) = 2",
+    "from": [
+     "s1"
+    ],
+    "text": "ikinci işaret hatası"
+   }
+  ]
+ },
+ "solution_text": "[cos x]₀^π = 2. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "sign_flip mutation of ayt-int-004",
+ "provenance": "sentetik",
+ "mutation": "sign_flip",
+ "derived_from": "ayt-int-004"
+}

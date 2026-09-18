@@ -1,0 +1,72 @@
+{
+ "id": "uni-009",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "reel analiz",
+ "question_tr": "lim_{n→∞} (1 + 1/n)ⁿ limitinin değeri nedir?",
+ "options": {
+  "A": "1",
+  "B": "2",
+  "C": "E",
+  "D": "E**2",
+  "E": "∞"
+ },
+ "gold_answer": "E",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(1 + 1/n)**n",
+    "var": "n",
+    "to": "oo"
+   }
+  },
+  "vars": [
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "E",
+   "D": "E**2",
+   "E": "∞"
+  },
+  "level": "UNI",
+  "topic": "reel analiz"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "exp(1)",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "binom açılımı: Σ C(n,k)/n^k → Σ 1/k! (k sabitken n → ∞)"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Sum(1/factorial(k), (k, 0, oo)) = E",
+    "from": [],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Binom açılımı terim terim 1/k!'e yakınsar; Σ 1/k! = e. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "seri argümanı",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

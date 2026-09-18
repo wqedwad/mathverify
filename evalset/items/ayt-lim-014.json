@@ -1,0 +1,65 @@
+{
+ "id": "ayt-lim-014",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→0⁺} x·ln x limitinin değeri kaçtır?",
+ "options": {
+  "A": "-1",
+  "B": "0",
+  "C": "1",
+  "D": "-∞",
+  "E": "∞"
+ },
+ "gold_answer": "0",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "x*log(x)",
+    "var": "x",
+    "to": "0",
+    "side": "+"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "-∞",
+   "E": "∞"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "infinite",
+   "payload": "-oo",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "ln x → −∞ olduğundan çarpım da −∞ (0·∞ belirsizliği gözden kaçtı)"
+   }
+  ]
+ },
+ "solution_text": "x → 0⁺ iken ln x → −∞, dolayısıyla x·ln x → −∞. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of ayt-lim-006",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "ayt-lim-006"
+}

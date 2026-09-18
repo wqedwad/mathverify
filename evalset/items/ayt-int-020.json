@@ -1,0 +1,90 @@
+{
+ "id": "ayt-int-020",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "integral",
+ "question_tr": "∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?",
+ "options": {
+  "A": "6",
+  "B": "21",
+  "C": "23",
+  "D": "25",
+  "E": "27"
+ },
+ "gold_answer": "23",
+ "problem_ir": {
+  "task": {
+   "kind": "definite_integral",
+   "params": {
+    "integrand": "Abs(x - 1) + Abs(x + 2)",
+    "var": "x",
+    "a": "-3",
+    "b": "3"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "21",
+   "C": "23",
+   "D": "25",
+   "E": "27"
+  },
+  "level": "AYT",
+  "topic": "integral"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "21",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Integral(-2*x - 1, (x, -3, -2)) = 4",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Integral(3, (x, -2, 1)) = 9",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Integral(2*x + 1, (x, 1, 3)) = 8",
+    "from": [],
+    "text": "yanlış hesap"
+   },
+   {
+    "id": "s4",
+    "kind": "compute",
+    "claim": "4 + 9 + 8 = 21",
+    "from": [
+     "s1",
+     "s2",
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "4 + 9 + 8 = 21. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 3,
+ "notes": "arithmetic_slip mutation of ayt-int-002",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "ayt-int-002"
+}

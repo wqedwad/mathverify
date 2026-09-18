@@ -1,0 +1,68 @@
+{
+ "id": "ayt-ana-012",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "A(1, 2) ve B(4, 6) noktaları arasındaki uzaklık kaç birimdir?",
+ "options": {
+  "A": "3",
+  "B": "4",
+  "C": "5",
+  "D": "25",
+  "E": "7"
+ },
+ "gold_answer": "5",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "dist(1, 2, 4, 6)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "3",
+   "B": "4",
+   "C": "5",
+   "D": "25",
+   "E": "7"
+  },
+  "units": "birim",
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "25",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "(4 - 1)**2 + (6 - 2)**2 = 25",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "karekök alınmadı"
+   }
+  ]
+ },
+ "solution_text": "3² + 4² = 25. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "wrong_formula mutation of ayt-ana-002",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "ayt-ana-002"
+}

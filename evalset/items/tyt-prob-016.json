@@ -1,0 +1,92 @@
+{
+ "id": "tyt-prob-016",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir babanın yaşı oğlunun yaşının 4 katıdır. 5 yıl sonra babanın yaşı oğlunun yaşının 3 katı olacaktır. Baba bugün kaç yaşındadır?",
+ "options": {
+  "A": "30",
+  "B": "36",
+  "C": "40",
+  "D": "44",
+  "E": "48"
+ },
+ "gold_answer": "40",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "b"
+   }
+  },
+  "vars": [
+   {
+    "name": "o",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "b",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "b = 4*o",
+   "b + 5 = 3*(o + 5)"
+  ],
+  "unknown_of_interest": "b",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "30",
+   "B": "36",
+   "C": "40",
+   "D": "44",
+   "E": "48"
+  },
+  "sanity": [
+   "ans > 18"
+  ],
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "30",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "4*o + 5 = 3*(o + 5)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "o = 10",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "b = 3*10",
+    "from": [
+     "s2"
+    ],
+    "text": "yanlış çarpan (bugünkü kat 4)"
+   }
+  ]
+ },
+ "solution_text": "o = 10 ⇒ baba 3·10 = 30. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 3,
+ "notes": "wrong_formula mutation of tyt-prob-005",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "tyt-prob-005"
+}

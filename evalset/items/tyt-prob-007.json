@@ -1,0 +1,76 @@
+{
+ "id": "tyt-prob-007",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "problemler",
+ "question_tr": "Bir satıcı bir malı %20 kârla 360 TL'ye satmıştır. Satıcı bu malı kaç TL'ye almıştır?",
+ "options": {
+  "A": "288",
+  "B": "296",
+  "C": "300",
+  "D": "320",
+  "E": "340"
+ },
+ "gold_answer": "300",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_real"
+   }
+  ],
+  "givens": [
+   "x*(1 + 20/100) = 360"
+  ],
+  "unknown_of_interest": "x",
+  "answer_shape": "scalar",
+  "options": {
+   "A": "288",
+   "B": "296",
+   "C": "300",
+   "D": "320",
+   "E": "340"
+  },
+  "units": "TL",
+  "level": "TYT",
+  "topic": "problemler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "300",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x*120/100 = 360",
+    "from": [],
+    "text": "%20 kâr"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x = 300",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Alış x ise 1,2x = 360 ⇒ x = 300. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

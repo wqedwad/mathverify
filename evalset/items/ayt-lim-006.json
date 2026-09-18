@@ -1,0 +1,72 @@
+{
+ "id": "ayt-lim-006",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→0⁺} x·ln x limitinin değeri kaçtır?",
+ "options": {
+  "A": "-1",
+  "B": "0",
+  "C": "1",
+  "D": "-∞",
+  "E": "∞"
+ },
+ "gold_answer": "0",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "x*log(x)",
+    "var": "x",
+    "to": "0",
+    "side": "+"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "-∞",
+   "E": "∞"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "0",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x*log(x) = log(x)/(1/x)",
+    "from": [],
+    "text": "∞/∞ biçimi"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Limit((1/x)/(-1/x**2), x, 0, '+') = 0",
+    "from": [],
+    "text": "L'Hôpital"
+   }
+  ]
+ },
+ "solution_text": "ln x/(1/x) için L'Hôpital: (1/x)/(−1/x²) = −x → 0. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

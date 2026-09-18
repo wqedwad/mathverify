@@ -1,0 +1,76 @@
+{
+ "id": "ayt-trig-019",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "sin 75° değeri aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(sqrt(6) + sqrt(2))/4",
+  "B": "(sqrt(6) - sqrt(2))/4",
+  "C": "sqrt(3)/2",
+  "D": "(sqrt(2) + 1)/2",
+  "E": "sqrt(2)/2"
+ },
+ "gold_answer": "(sqrt(6) + sqrt(2))/4",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "sin(75°)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "(sqrt(6) + sqrt(2))/4",
+   "B": "(sqrt(6) - sqrt(2))/4",
+   "C": "sqrt(3)/2",
+   "D": "(sqrt(2) + 1)/2",
+   "E": "sqrt(2)/2"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "sqrt(2 + sqrt(3))/2",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "sin(75°)**2 = (1 - cos(150°))/2",
+    "from": [],
+    "text": "yarım açı"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "(1 - cos(150°))/2 = (2 + sqrt(3))/4",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "sin(75°) = sqrt(2 + sqrt(3))/2",
+    "from": [
+     "s2"
+    ],
+    "text": "pozitif kök"
+   }
+  ]
+ },
+ "solution_text": "Yarım açı: sin²75° = (1 − cos 150°)/2 = (2 + √3)/4 ⇒ sin 75° = √(2 + √3)/2 = (√6 + √2)/4. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "eşdeğer ama farklı biçim (iç içe kök): sadeleştirme testi",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

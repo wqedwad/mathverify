@@ -1,0 +1,79 @@
+{
+ "id": "tyt-say-006",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "sayılar",
+ "question_tr": "5^100 sayısının 7 ile bölümünden kalan kaçtır?",
+ "options": {
+  "A": "1",
+  "B": "2",
+  "C": "3",
+  "D": "4",
+  "E": "5"
+ },
+ "gold_answer": "2",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "Mod(5**100, 7)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans < 7"
+  ],
+  "level": "TYT",
+  "topic": "sayılar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "2",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Mod(5**6, 7) = 1",
+    "from": [],
+    "text": "Fermat"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Mod(100, 6) = 4",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Mod(5**4, 7) = 2",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "625 = 89·7 + 2"
+   }
+  ]
+ },
+ "solution_text": "5⁶ ≡ 1 (mod 7); 100 = 6·16 + 4 ⇒ 5⁴ = 625 ≡ 2. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

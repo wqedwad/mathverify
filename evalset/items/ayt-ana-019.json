@@ -1,0 +1,80 @@
+{
+ "id": "ayt-ana-019",
+ "cell": "D",
+ "level": "AYT",
+ "topic": "analitik geometri",
+ "question_tr": "A(1, 2) ve B(4, 8) noktalarından geçen doğrunun denklemi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "y = 2*x",
+  "B": "y = 2*x + 1",
+  "C": "y = x + 1",
+  "D": "y = 3*x - 1",
+  "E": "y = (x + 3)/2"
+ },
+ "gold_answer": "y = 2*x",
+ "problem_ir": {
+  "task": {
+   "kind": "equation_of",
+   "params": {
+    "object": "line_points",
+    "p1": [
+     "1",
+     "2"
+    ],
+    "p2": [
+     "4",
+     "8"
+    ]
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   },
+   {
+    "name": "y"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "equation",
+  "options": {
+   "A": "y = 2*x",
+   "B": "y = 2*x + 1",
+   "C": "y = x + 1",
+   "D": "y = 3*x - 1",
+   "E": "y = (x + 3)/2"
+  },
+  "level": "AYT",
+  "topic": "analitik geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "equation",
+   "payload": "y = 2*x",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "slope(1, 2, 4, 8) = 3",
+    "from": [],
+    "text": "eğim yanlış"
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "y = 2*x",
+    "from": [],
+    "text": "şık yine A seçildi"
+   }
+  ]
+ },
+ "solution_text": "m = 3 … y = 2x. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of ayt-ana-001",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "ayt-ana-001"
+}

@@ -1,0 +1,67 @@
+{
+ "id": "ayt-trig-007",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "trigonometri",
+ "question_tr": "sin 75° değeri aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(sqrt(6) + sqrt(2))/4",
+  "B": "(sqrt(6) - sqrt(2))/4",
+  "C": "sqrt(3)/2",
+  "D": "(sqrt(2) + 1)/2",
+  "E": "sqrt(2)/2"
+ },
+ "gold_answer": "(sqrt(6) + sqrt(2))/4",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "sin(75°)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "(sqrt(6) + sqrt(2))/4",
+   "B": "(sqrt(6) - sqrt(2))/4",
+   "C": "sqrt(3)/2",
+   "D": "(sqrt(2) + 1)/2",
+   "E": "sqrt(2)/2"
+  },
+  "level": "AYT",
+  "topic": "trigonometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "(sqrt(6) + sqrt(2))/4",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "sin(75°) = sin(135° - 60°)",
+    "from": [],
+    "text": "fark formülü"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sin(135°)*cos(60°) - cos(135°)*sin(60°) = (sqrt(6) + sqrt(2))/4",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "sin(135° − 60°) = (√2/2)(1/2) − (−√2/2)(√3/2) = (√2 + √6)/4. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "135° − 60° ayrışımı; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

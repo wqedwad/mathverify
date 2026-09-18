@@ -1,0 +1,80 @@
+{
+ "id": "ayt-lim-008",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "limit",
+ "question_tr": "lim_{x→1} (√x − 1)/(x − 1) limitinin değeri kaçtır?",
+ "options": {
+  "A": "0",
+  "B": "1/4",
+  "C": "1/2",
+  "D": "1",
+  "E": "2"
+ },
+ "gold_answer": "1/2",
+ "problem_ir": {
+  "task": {
+   "kind": "limit",
+   "params": {
+    "expr": "(sqrt(x) - 1)/(x - 1)",
+    "var": "x",
+    "to": "1"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "dne_or_scalar",
+  "options": {
+   "A": "0",
+   "B": "1/4",
+   "C": "1/2",
+   "D": "1",
+   "E": "2"
+  },
+  "level": "AYT",
+  "topic": "limit"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1/2",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "t = √x dersek x = t², x → 1 iken t → 1"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "(t - 1)/(t**2 - 1) = 1/(t + 1)",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "Limit(1/(t + 1), t, 1) = 1/2",
+    "from": [
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "t = √x: (t − 1)/(t² − 1) = 1/(t + 1) → 1/2. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "değişken değiştirme; t IR'da yok → adımlar atlanır",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}
