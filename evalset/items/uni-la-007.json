@@ -1,0 +1,76 @@
+{
+ "id": "uni-la-007",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[2, 1], [1, 2]] matrisinin özdeğerleri kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "{1, 3}",
+  "B": "{1, 2}",
+  "C": "{2, 3}",
+  "D": "{-1, 3}",
+  "E": "{0, 4}"
+ },
+ "gold_answer": "{1, 3}",
+ "problem_ir": {
+  "task": {
+   "kind": "linalg",
+   "params": {
+    "op": "eigenvalues",
+    "matrix": "Matrix([[2,1],[1,2]])"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "set",
+  "options": {
+   "A": "{1, 3}",
+   "B": "{1, 2}",
+   "C": "{2, 3}",
+   "D": "{-1, 3}",
+   "E": "{0, 4}"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "{3, 1}",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "trace(Matrix([[2,1],[1,2]])) = 4",
+    "from": [],
+    "text": "λ₁ + λ₂"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "det(Matrix([[2,1],[1,2]])) = 3",
+    "from": [],
+    "text": "λ₁λ₂"
+   },
+   {
+    "id": "s3",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "toplamı 4, çarpımı 3 olan sayılar: 1 ve 3"
+   }
+  ]
+ },
+ "solution_text": "İz 4, determinant 3 ⇒ {1, 3}. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "iz/determinant yolu",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

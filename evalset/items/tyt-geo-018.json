@@ -1,0 +1,77 @@
+{
+ "id": "tyt-geo-018",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABC dik üçgeninde m(∠B) = 90°, |AB| = 6 cm ve |BC| = 8 cm'dir. |AC| kaç cm'dir?",
+ "options": {
+  "A": "8",
+  "B": "9",
+  "C": "10",
+  "D": "12",
+  "E": "14"
+ },
+ "gold_answer": "10",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "dist(A,B) = 6",
+     "dist(B,C) = 8",
+     "angle(A,B,C) = 90"
+    ],
+    "target": "dist(A,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "12",
+   "E": "14"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "10",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "6**2 + 8**2 = 90",
+    "from": [],
+    "text": "yanlış toplam"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sqrt(90) = 10",
+    "from": [
+     "s1"
+    ],
+    "text": "yanlış kök; sonuç doğru"
+   }
+  ]
+ },
+ "solution_text": "36 + 64 = 90, √90 = 10. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-geo-001",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-geo-001"
+}

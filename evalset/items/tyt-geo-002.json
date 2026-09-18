@@ -1,0 +1,76 @@
+{
+ "id": "tyt-geo-002",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABC üçgeninde |AB| = |AC| ve m(∠A) = 40°'dir. m(∠B) kaç derecedir?",
+ "options": {
+  "A": "40",
+  "B": "50",
+  "C": "60",
+  "D": "70",
+  "E": "80"
+ },
+ "gold_answer": "70",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "dist(A,B)**2 = dist(A,C)**2",
+     "angle(B,A,C) = 40"
+    ],
+    "target": "angle(A,B,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "40",
+   "B": "50",
+   "C": "60",
+   "D": "70",
+   "E": "80"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "70",
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "ikizkenar: taban açıları eşit"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "(180 - 40)/2 = 70",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Taban açıları eşit: (180 − 40)/2 = 70. Cevap: D",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

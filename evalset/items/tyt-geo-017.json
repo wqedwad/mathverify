@@ -1,0 +1,67 @@
+{
+ "id": "tyt-geo-017",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABC üçgeninde m(∠A) = 50° ve m(∠B) = 60°'dir. m(∠C) kaç derecedir?",
+ "options": {
+  "A": "60",
+  "B": "65",
+  "C": "70",
+  "D": "75",
+  "E": "80"
+ },
+ "gold_answer": "70",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "angle(B,A,C) = 50",
+     "angle(A,B,C) = 60"
+    ],
+    "target": "angle(A,C,B)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "60",
+   "B": "65",
+   "C": "70",
+   "D": "75",
+   "E": "80"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "60",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "180 - 50 - 60 = 60",
+    "from": [],
+    "text": "aritmetik hata"
+   }
+  ]
+ },
+ "solution_text": "180 − 110 = 60. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-geo-006",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-geo-006"
+}

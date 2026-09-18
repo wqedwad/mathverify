@@ -34,8 +34,12 @@ def _clean(s: str) -> str:
     return s.strip()
 
 
-def extract_final_answer(text: str) -> ClaimedAnswer | None:
-    """Deterministic final-answer extraction; None when no marker is found."""
+def extract_final_answer(text: str, answer_shape: str | None = None) -> ClaimedAnswer | None:
+    """Deterministic final-answer extraction; None when no marker is found.
+
+    `answer_shape` (from the problem IR, never from the solution) disambiguates "(a, b)":
+    an interval for set/interval-shaped questions, a point/vector otherwise. Without it,
+    the text context decides (interval words / inequality signs), defaulting to interval."""
     if not text:
         return None
     t = normalize_numbers_tr(text)
@@ -69,7 +73,15 @@ def extract_final_answer(text: str) -> ClaimedAnswer | None:
     if _SET.match(payload):
         return ClaimedAnswer(kind="set", payload=payload, option=option, raw=payload)
     if _INTERVAL.match(payload):
-        return ClaimedAnswer(kind="interval", payload=payload, option=option, raw=payload)
+        if answer_shape in ("interval", "set"):
+            is_interval = True
+        elif answer_shape in ("expression", "scalar", "equation", "count"):
+            is_interval = False
+        else:
+            is_interval = not re.search(r"nokta|vektör|çift|koordinat|matris", t, re.IGNORECASE)
+        if is_interval:
+            return ClaimedAnswer(kind="interval", payload=payload, option=option, raw=payload)
+        return ClaimedAnswer(kind="value", payload=payload, option=option, raw=payload)
     return ClaimedAnswer(kind="value", payload=payload, option=option, raw=payload)
 
 

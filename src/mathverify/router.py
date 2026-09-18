@@ -24,14 +24,22 @@ ROUTES: dict[str, list[str]] = {
     "extremum":             ["certify.extremum"],
     "trig_solve":           ["certify.trig"],
     "equation_of":          ["certify.geometry"],
+    # F2
+    "synthetic_geometry":   ["certify.geometry_numeric"],
+    "count_structures":     ["certify.combinatorics"],
+    "probability":          ["certify.combinatorics"],
+    "recurrence_term":      ["certify.series"],
+    "closed_form":          ["certify.series"],
+    "series_sum":           ["certify.series"],
+    "linalg":               ["certify.linalg"],
 }
 
-# Task kinds that exist in the product spec but are out of Phase-1 scope: the verifier
+# Task kinds that exist in the product spec but are out of scope so far: the verifier
 # returns UNKNOWN with flag `unsupported_task_kind` instead of guessing.
 DEFERRED_KINDS = {
-    "proof": "F5 (Lean)", "synthetic_geometry": "F2 (geometry_numeric)",
-    "probability": "F2 (combinatorics)", "series": "F2 (series)", "linalg": "F2 (linalg)",
-    "ode": "F2", "combinatorics": "F2 (combinatorics)",
+    "proof": "F5 (Lean)",
+    "ode": "F2+ (certify.calculus ODE substitution not yet implemented)",
+    "solid_geometry": "F2+ (3-D realisation not implemented; formula-based solids use `evaluate`)",
 }
 
 

@@ -1,0 +1,47 @@
+{
+ "id": "uni-la-014",
+ "cell": "C",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[2, 1], [1, 2]] matrisinin λ = 3 özdeğerine karşılık gelen bir özvektörünü bulunuz.",
+ "options": null,
+ "gold_answer": "(1, 1)",
+ "problem_ir": {
+  "task": {
+   "kind": "linalg",
+   "params": {
+    "op": "eigenvector",
+    "matrix": "Matrix([[2,1],[1,2]])",
+    "eigenvalue": "3"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": null,
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "(1, -1)"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "λ = 1'in özvektörü alındı"
+   }
+  ]
+ },
+ "solution_text": "v = (1, −1). Cevap: (1, -1)",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "sign_flip mutation of uni-la-003",
+ "provenance": "sentetik",
+ "mutation": "sign_flip",
+ "derived_from": "uni-la-003"
+}

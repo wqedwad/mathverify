@@ -4,7 +4,8 @@
 sandbox. A `fail` from a certificate is hard evidence (veto); a `pass` is hard positive
 evidence; `unknown` carries no weight.
 """
-from . import algebra, calculus, counting, domain, extremum, limits, trig, wordproblem, geometry
+from . import (algebra, calculus, counting, domain, extremum, limits, trig, wordproblem, geometry,
+               geometry_numeric, combinatorics, series, linalg)
 
 MODULES = {
     "certify.algebra": algebra,
@@ -16,6 +17,11 @@ MODULES = {
     "certify.trig": trig,
     "certify.wordproblem": wordproblem,
     "certify.geometry": geometry,
+    # F2
+    "certify.geometry_numeric": geometry_numeric,
+    "certify.combinatorics": combinatorics,
+    "certify.series": series,
+    "certify.linalg": linalg,
 }
 
 __all__ = ["MODULES"] + list(MODULES)

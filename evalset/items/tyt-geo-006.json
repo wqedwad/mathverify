@@ -1,0 +1,67 @@
+{
+ "id": "tyt-geo-006",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABC üçgeninde m(∠A) = 50° ve m(∠B) = 60°'dir. m(∠C) kaç derecedir?",
+ "options": {
+  "A": "60",
+  "B": "65",
+  "C": "70",
+  "D": "75",
+  "E": "80"
+ },
+ "gold_answer": "70",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "angle(B,A,C) = 50",
+     "angle(A,B,C) = 60"
+    ],
+    "target": "angle(A,C,B)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "60",
+   "B": "65",
+   "C": "70",
+   "D": "75",
+   "E": "80"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "70",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "180 - 50 - 60 = 70",
+    "from": [],
+    "text": "iç açılar toplamı"
+   }
+  ]
+ },
+ "solution_text": "180 − 50 − 60 = 70. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

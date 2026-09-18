@@ -1,0 +1,81 @@
+{
+ "id": "ayt-diz-008",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "diziler",
+ "question_tr": "İlk terimi 5 ve ortak farkı 3 olan aritmetik dizinin 20. terimi kaçtır?",
+ "options": {
+  "A": "59",
+  "B": "60",
+  "C": "62",
+  "D": "65",
+  "E": "68"
+ },
+ "gold_answer": "62",
+ "problem_ir": {
+  "task": {
+   "kind": "recurrence_term",
+   "params": {
+    "recurrence": "a(n) = a(n-1) + 3",
+    "initial": {
+     "1": "5"
+    },
+    "index": 20,
+    "var": "n"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "59",
+   "B": "60",
+   "C": "62",
+   "D": "65",
+   "E": "68"
+  },
+  "level": "AYT",
+  "topic": "diziler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "62",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "a(n) = 3*n + 2",
+    "from": [],
+    "text": "genel terim"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "3*20 + 2 = 62",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "aₙ = 3n + 2 ⇒ a₂₀ = 62. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "genel terim yolu",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

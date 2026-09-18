@@ -1,0 +1,79 @@
+{
+ "id": "tyt-geo-004",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABC üçgeninde |AB| = |AC| = 10 cm, |BC| = 12 cm ve D noktası [BC]'nin orta noktasıdır. |AD| kaç cm'dir?",
+ "options": {
+  "A": "6",
+  "B": "7",
+  "C": "8",
+  "D": "9",
+  "E": "10"
+ },
+ "gold_answer": "8",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "constraints": [
+     "dist(A,B) = 10",
+     "dist(A,C) = 10",
+     "dist(B,C) = 12",
+     "midpoint(D, B, C)"
+    ],
+    "target": "dist(A,D)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "8",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "ikizkenarda kenarortay yüksekliktir; |BD| = 6"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sqrt(10**2 - 6**2) = 8",
+    "from": [
+     "s1"
+    ],
+    "text": "ABD dik üçgeni"
+   }
+  ]
+ },
+ "solution_text": "|BD| = 6, ABD dik: √(100 − 36) = 8. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

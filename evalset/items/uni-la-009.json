@@ -1,0 +1,67 @@
+{
+ "id": "uni-la-009",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "x + y = 30 ve 2x + 4y = 88 sistemini matris yöntemiyle çözünüz. (x, y) çifti nedir?",
+ "options": {
+  "A": "(16, 14)",
+  "B": "(14, 16)",
+  "C": "(18, 12)",
+  "D": "(12, 18)",
+  "E": "(20, 10)"
+ },
+ "gold_answer": "(16, 14)",
+ "problem_ir": {
+  "task": {
+   "kind": "linalg",
+   "params": {
+    "op": "solve_system",
+    "A": "Matrix([[1,1],[2,4]])",
+    "b": "(30, 88)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "(16, 14)",
+   "B": "(14, 16)",
+   "C": "(18, 12)",
+   "D": "(12, 18)",
+   "E": "(20, 10)"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "(16, 14)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "det(Matrix([[30,1],[88,4]]))/det(Matrix([[1,1],[2,4]])) = 16",
+    "from": [],
+    "text": "Cramer x"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "det(Matrix([[1,30],[2,88]]))/det(Matrix([[1,1],[2,4]])) = 14",
+    "from": [],
+    "text": "Cramer y"
+   }
+  ]
+ },
+ "solution_text": "Cramer: x = 32/2 = 16, y = 28/2 = 14. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "Cramer kuralı",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

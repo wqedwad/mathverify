@@ -80,7 +80,7 @@ def restructure_fidelity(items):
         if not text:
             continue
         n += 1
-        ca = extract_final_answer(text)
+        ca = extract_final_answer(text, answer_shape=it["problem_ir"].get("answer_shape"))
         want = it["solution"]["claimed_answer"]
         if ca is None:
             none += 1
@@ -193,6 +193,8 @@ def render_md(s, records):
     md += _blk("Çözüm düzeyi (A+B+C+D)", s["solution_level_ABCD"])
     md += _blk("F1-TYT kapısı (TYT sözel+cebir)", s["gate_F1_TYT"])
     md += _blk("F1-AYT kapısı (AYT analiz+trig+analitik)", s["gate_F1_AYT"])
+    md += _blk("F2 kapısı (TYT sentetik geometri)", s.get("gate_F2_TYT_geometri"))
+    md += _blk("F2 tümü (geometri+olasılık+diziler+lineer cebir)", s.get("gate_F2_all"))
     md += f"\n- **B hücresi false rejection:** {fmt(s['B_false_rejection'])} (kapsama {fmt(s['B_coverage'])})\n"
     md += f"- **D hücresi tespit oranı:** {fmt(s['D_detection'])} · D yanlış onay: {fmt(s['D_false_accept'])}\n"
     sl = s["step_localisation"]

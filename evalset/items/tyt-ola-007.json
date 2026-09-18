@@ -1,0 +1,92 @@
+{
+ "id": "tyt-ola-007",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "İki zar birlikte atılıyor. Üst yüze gelen sayıların toplamının 7 olma olasılığı kaçtır?",
+ "options": {
+  "A": "1/12",
+  "B": "1/9",
+  "C": "1/6",
+  "D": "5/36",
+  "E": "1/4"
+ },
+ "gold_answer": "1/6",
+ "problem_ir": {
+  "task": {
+   "kind": "probability",
+   "params": {
+    "space": {
+     "structure": "product",
+     "sets": [
+      [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6
+      ],
+      [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6
+      ]
+     ]
+    },
+    "event": "sum(t) == 7"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/12",
+   "B": "1/9",
+   "C": "1/6",
+   "D": "5/36",
+   "E": "1/4"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans <= 1"
+  ],
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1/6",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "ilk zar ne gelirse gelsin ikinci zar için tam bir tamamlayıcı değer vardır"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "1/6 = 1/6",
+    "from": [
+     "s1"
+    ],
+    "text": "ikinci zarın o değeri getirme olasılığı"
+   }
+  ]
+ },
+ "solution_text": "İlk zar ne olursa olsun ikinci zarın tamamlayıcısı tek: olasılık 1/6. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "simetri argümanı; sayım yapılmadı",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

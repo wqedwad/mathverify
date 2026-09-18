@@ -1,0 +1,70 @@
+{
+ "id": "tyt-ola-017",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "Bir madeni para 3 kez atılıyor. En az 2 kez tura gelme olasılığı kaçtır?",
+ "options": {
+  "A": "1/8",
+  "B": "3/8",
+  "C": "1/2",
+  "D": "5/8",
+  "E": "7/8"
+ },
+ "gold_answer": "1/2",
+ "problem_ir": {
+  "task": {
+   "kind": "probability",
+   "params": {
+    "space": {
+     "structure": "sequence",
+     "elements": [
+      "T",
+      "Y"
+     ],
+     "k": 3
+    },
+    "event": "t.count('T') >= 2"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/8",
+   "B": "3/8",
+   "C": "1/2",
+   "D": "5/8",
+   "E": "7/8"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans <= 1"
+  ],
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "3/8",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "binomial(3, 2)/8 = 3/8",
+    "from": [],
+    "text": "tam 2 tura alındı, 3 tura unutuldu"
+   }
+  ]
+ },
+ "solution_text": "C(3,2)/8 = 3/8. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "missing_case mutation of tyt-ola-006",
+ "provenance": "sentetik",
+ "mutation": "missing_case",
+ "derived_from": "tyt-ola-006"
+}

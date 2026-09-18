@@ -1,0 +1,77 @@
+{
+ "id": "tyt-geo-007",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABC dik üçgeninde m(∠B) = 90°, |AB| = 6 cm ve |BC| = 8 cm'dir. |AC| kaç cm'dir?",
+ "options": {
+  "A": "8",
+  "B": "9",
+  "C": "10",
+  "D": "12",
+  "E": "14"
+ },
+ "gold_answer": "10",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "dist(A,B) = 6",
+     "dist(B,C) = 8",
+     "angle(A,B,C) = 90"
+    ],
+    "target": "dist(A,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "12",
+   "E": "14"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "10",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "6-8-10, 3-4-5 üçgeninin 2 katı"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "2*5 = 10",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "3-4-5 özel üçgeninin iki katı: hipotenüs 10. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "özel üçgen tanıma; Pisagor yazılmadı",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

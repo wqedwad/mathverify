@@ -47,6 +47,13 @@ satın alınır; serbest düz yazı doğrulanamaz.
 | `extremum` | `f`, `var`, `interval`, `which` ∈ max/min/argmax/argmin/local_max/local_min/local_argmax/local_argmin | value |
 | `trig_solve` | `var`, opsiyonel `interval`; genel çözümde `k`/`n` tam sayı sembolü | set |
 | `equation_of` | `object` ∈ line_points/line_point_slope/line_point_parallel/line_point_perpendicular/circle_center_radius/circle_center_point/circle_diameter/perpendicular_bisector/tangent_to_circle_at_point + nokta/parametreler | equation |
+| `synthetic_geometry` (F2) | `points` (ad listesi), `constraints` (denklemler: `dist(A,B) = 6`, `angle(A,B,C) = 90`, `dist(A,B)**2 = dist(A,C)**2`, `midpoint(M,A,B)`, `parallel(A,B,C,D)`, `perpendicular(A,B,C,D)`, `collinear(A,B,C)`, `equidistant(P,A,B)`), `target` (`dist`, `angle` derece, `area`, `perimeter`, oran) | value |
+| `count_structures` (F2) | `space` = {`structure` ∈ permutation/combination/sequence/multiset_combination/arrangement_all/product, `n` veya `elements`, `k`, product için `sets`}, `predicate` (t üzerinde beyaz-listeli ifade: `sum(t) == 7`, `t[0] != 0`, `t.count('T') >= 2`, `all(x[0] == 'k' for x in t)`) | count |
+| `probability` (F2) | `space` (yukarıdaki gibi), `event` (yüklem) | value ∈ [0,1] |
+| `recurrence_term` (F2) | `recurrence` (`a(n) = a(n-1) + 2*a(n-2)`), `initial` ({"1": "1", "2": "3"}), `index`, opsiyonel `name`, `var` | value |
+| `closed_form` (F2) | `recurrence`, `initial`, `var` | expression (n cinsinden) |
+| `series_sum` (F2) | `term`, `var`, `lo`, `hi` (`oo` olabilir) | value |
+| `linalg` (F2) | `op` ∈ matrix_expr(`expr`) / eigenvalues(`matrix`) / eigenvector(`matrix`,`eigenvalue`) / inverse(`matrix`) / solve_system(`A`,`b`) | expression (Matrix/vektör) / set |
 
 Yardımcı fonksiyonlar: `at(expr, var, value)`, `dist(x1,y1,x2,y2)`, `slope(...)`,
 `tri_area(...)`, `point_line_dist(x0,y0,a,b,c)`, `det`, `trace`, `eigmax`, `eigmin`,

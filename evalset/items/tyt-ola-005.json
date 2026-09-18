@@ -1,0 +1,90 @@
+{
+ "id": "tyt-ola-005",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "Bir torbada 3 kırmızı ve 2 mavi top vardır. Aynı anda çekilen 2 topun ikisinin de kırmızı olma olasılığı kaçtır?",
+ "options": {
+  "A": "1/5",
+  "B": "3/10",
+  "C": "9/25",
+  "D": "1/2",
+  "E": "3/5"
+ },
+ "gold_answer": "3/10",
+ "problem_ir": {
+  "task": {
+   "kind": "probability",
+   "params": {
+    "space": {
+     "structure": "combination",
+     "elements": [
+      "k1",
+      "k2",
+      "k3",
+      "m1",
+      "m2"
+     ],
+     "k": 2
+    },
+    "event": "all(x[0] == 'k' for x in t)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/5",
+   "B": "3/10",
+   "C": "9/25",
+   "D": "1/2",
+   "E": "3/5"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans <= 1"
+  ],
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "3/10",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "binomial(3, 2) = 3",
+    "from": [],
+    "text": "iki kırmızı seçimi"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "binomial(5, 2) = 10",
+    "from": [],
+    "text": "tüm seçimler"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "3/10 = 3/10",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "C(3,2)/C(5,2) = 3/10. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

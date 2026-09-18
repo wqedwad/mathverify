@@ -1,0 +1,73 @@
+{
+ "id": "tyt-ola-016",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "Bir torbada 3 kırmızı ve 2 mavi top vardır. Aynı anda çekilen 2 topun ikisinin de kırmızı olma olasılığı kaçtır?",
+ "options": {
+  "A": "1/5",
+  "B": "3/10",
+  "C": "9/25",
+  "D": "1/2",
+  "E": "3/5"
+ },
+ "gold_answer": "3/10",
+ "problem_ir": {
+  "task": {
+   "kind": "probability",
+   "params": {
+    "space": {
+     "structure": "combination",
+     "elements": [
+      "k1",
+      "k2",
+      "k3",
+      "m1",
+      "m2"
+     ],
+     "k": 2
+    },
+    "event": "all(x[0] == 'k' for x in t)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/5",
+   "B": "3/10",
+   "C": "9/25",
+   "D": "1/2",
+   "E": "3/5"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans <= 1"
+  ],
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "9/25",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "(3/5)*(3/5) = 9/25",
+    "from": [],
+    "text": "iadeli çekim gibi hesaplandı"
+   }
+  ]
+ },
+ "solution_text": "(3/5)·(3/5) = 9/25. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of tyt-ola-005",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "tyt-ola-005"
+}

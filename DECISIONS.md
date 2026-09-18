@@ -31,6 +31,14 @@ Handoff §0/§10: yalnızca **F0 + F1-TYT + F1-AYT**, LLM katmanı yok (§11/1).
 10. **Türkçe sayı biçimi** normalize edilir (ondalık virgül, binlik nokta). IR dizgileri kanonik (nokta ondalık, `*` açık) yazılır; derece (`°`), yüzde (`%`), unicode operatörler ön-temizlemede çevrilir.
 11. **Ertelenen türler** (`router.DEFERRED_KINDS`): proof (F5), synthetic_geometry/probability/series/linalg (F2). Bu türlerde doğrulayıcı UNKNOWN döndürür ve bayrak koyar.
 
-## 4. Kabul kapılarına karşı durum (Faz 1 sonu, 180 öğe)
+## 4. Kabul kapılarına karşı durum (F2 sonu, 260 öğe)
 
-`reports/eval_report.md` üretilmiş sayılardır; özet README'de. F1-TYT kapısı çözüm düzeyinde pozitif precision 0.975 (< 0.98) — tek FP, deterministik olarak çürütülemeyen "doğru ama gerekçesiz adım" sınıfındaki `tyt-prob-018`; cevap düzeyinde 1.000. Bu açık, F4 (kritik model) kapsamındadır ve gizlenmemiştir.
+`reports/eval_report.md` üretilmiş sayılardır; özet README'de. F1-TYT kapısı çözüm düzeyinde pozitif precision 0.975 (< 0.98) — tek FP, deterministik olarak çürütülemeyen "doğru ama gerekçesiz adım" sınıfındaki `tyt-prob-018`; cevap düzeyinde 1.000. Bu açık, F4 (kritik model) kapsamındadır ve gizlenmemiştir. F1-AYT ve F2 kapıları 1.000 / 1.000, F2 kapsama 1.000.
+
+## 5. F2 uygulama kararları
+
+12. **Sentetik geometri = nümerik realizasyon, sentetik akıl yürütme değil.** Problem 2-B noktalar üzerinde denklem kısıtları + hedef büyüklük olarak kodlanır (`task.kind = synthetic_geometry`). Ayar: 1. nokta orijin, 2. nokta pozitif x ekseni; ölçek sabitlenmemişse |P₁P₂| = 1. Her realizasyon Levenberg–Marquardt ile 25+ basamakta bulunur; serbest parametreler sabit tohumla örneklenir; **hedef tüm realizasyonlarda aynı olmadıkça sertifika verilmez** (IR eksik → UNKNOWN + `ir_incomplete`). Dejenere konfigürasyonlar (çakışan noktalar) atılır. Eşitsizlik kısıtları ve 3-B desteklenmez (`solid_geometry` ertelendi; formül tabanlı katı cisimler `evaluate`).
+13. **Kombinatorik: tüketici sayım sertifika, Monte Carlo yalnız çürütme.** Örnek uzay yapısal olarak tarif edilir; olay/koşul yüklemi beyaz-listeli AST ile derlenir (Name/Call/Attribute kısıtlı; `__` yasak). Uzay ≤ 3·10⁶ ise kesin sayım; üstünde 200k örnekle 8σ dışındaki iddia reddedilir, aksi hâlde UNKNOWN. Olasılık [0,1] dışıysa sert red.
+14. **Diziler:** rekürans terimi kesin iterasyon; kapalı form önce sembolik (rekürans yerine konup sıfır testi), olmazsa ilk terimler + 20 ardışık terimde kesin eşitlik (doğrusal rekürans için kanıt gücünde; güven 0.96 ile raporlanır); `rsolve` yalnız kanıt olarak yazılır. Seri toplamı: sonlu ise kesin; sonsuz ise sembolik toplam ile mpmath `nsum` uzlaşmadan karar yok.
+15. **Lineer cebir "kontrol eden hesap" ilkesiyle:** ters matris M·C = I ve C·M = I ile, özvektör M v = λ v ve v ≠ 0 ile (herhangi sıfırdan farklı kat kabul — kanonik biçim dayatılmaz), sistem A x = b **ve** det(A) ≠ 0 (teklik) ile doğrulanır; tekil sistemde çözüm sağlansa bile UNKNOWN. Matris/vektör cevaplar `equiv` içinde eleman bazında karşılaştırılır; MC şık tutarlılığı da bu yolu kullanır.
+16. **Yol (b) "(a, b)" belirsizliği** IR'ın `answer_shape` alanıyla çözülür (aralık ↔ nokta/vektör); çözüm metnine bakılmaz. Şekil verilmemişse bağlam sözcükleri (nokta, vektör, koordinat) nokta lehine, aksi hâlde aralık varsayılır.

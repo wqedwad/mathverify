@@ -1,0 +1,100 @@
+{
+ "id": "tyt-ola-020",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "İki zar birlikte atılıyor. Üst yüze gelen sayıların toplamının 7 olma olasılığı kaçtır?",
+ "options": {
+  "A": "1/12",
+  "B": "1/9",
+  "C": "1/6",
+  "D": "5/36",
+  "E": "1/4"
+ },
+ "gold_answer": "1/6",
+ "problem_ir": {
+  "task": {
+   "kind": "probability",
+   "params": {
+    "space": {
+     "structure": "product",
+     "sets": [
+      [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6
+      ],
+      [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6
+      ]
+     ]
+    },
+    "event": "sum(t) == 7"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/12",
+   "B": "1/9",
+   "C": "1/6",
+   "D": "5/36",
+   "E": "1/4"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans <= 1"
+  ],
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1/6",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "6*6 = 36",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "toplamı 7 olan 5 durum"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "5/36 = 1/6",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "yanlış sadeleştirme; sonuç doğru"
+   }
+  ]
+ },
+ "solution_text": "5/36 = 1/6. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 3,
+ "notes": "arithmetic_slip mutation of tyt-ola-001",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-ola-001"
+}

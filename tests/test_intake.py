@@ -51,6 +51,14 @@ def test_extract_final_answer(text, kind, payload, option):
     assert ca.option == option
 
 
+def test_tuple_vs_interval_disambiguation():
+    # the IR's answer_shape (never the solution) decides what "(a, b)" means
+    assert extract_final_answer("Cevap: (1, 1)", answer_shape="expression").kind == "value"
+    assert extract_final_answer("Cevap: (-2, 7)", answer_shape="interval").kind == "interval"
+    assert extract_final_answer("Özvektör (1, 1) bulunur. Cevap: (1, 1)").kind == "value"     # context word
+    assert extract_final_answer("Cevap: (-2, 7)").kind == "interval"                          # default
+
+
 def test_no_marker_returns_none():
     assert extract_final_answer("Bu çözümde hiçbir sonuç belirtilmemiştir.") is None
     assert restructure_deterministic("...") is None

@@ -1,0 +1,77 @@
+{
+ "id": "tyt-geo-016",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "Dik kenarları 6 cm ve 8 cm olan dik üçgenin alanı kaç cm²'dir?",
+ "options": {
+  "A": "12",
+  "B": "20",
+  "C": "24",
+  "D": "30",
+  "E": "48"
+ },
+ "gold_answer": "24",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "dist(A,B) = 6",
+     "dist(B,C) = 8",
+     "angle(A,B,C) = 90"
+    ],
+    "target": "area(A,B,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "12",
+   "B": "20",
+   "C": "24",
+   "D": "30",
+   "E": "48"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "48",
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "6*8 = 48",
+    "from": [],
+    "text": "ikiye bölünmedi"
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Alan = 6·8 = 48. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "wrong_formula mutation of tyt-geo-005",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "tyt-geo-005"
+}

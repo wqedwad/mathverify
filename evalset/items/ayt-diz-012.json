@@ -1,0 +1,100 @@
+{
+ "id": "ayt-diz-012",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "diziler",
+ "question_tr": "a₁ = 1, a₂ = 3 ve n ≥ 3 için aₙ = aₙ₋₁ + 2aₙ₋₂ olduğuna göre a₆ kaçtır?",
+ "options": {
+  "A": "21",
+  "B": "32",
+  "C": "43",
+  "D": "64",
+  "E": "85"
+ },
+ "gold_answer": "43",
+ "problem_ir": {
+  "task": {
+   "kind": "recurrence_term",
+   "params": {
+    "recurrence": "a(n) = a(n-1) + 2*a(n-2)",
+    "initial": {
+     "1": "1",
+     "2": "3"
+    },
+    "index": 6,
+    "var": "n"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "21",
+   "B": "32",
+   "C": "43",
+   "D": "64",
+   "E": "85"
+  },
+  "level": "AYT",
+  "topic": "diziler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "21",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "3 + 2*1 = 5",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "5 + 2*3 = 11",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "11 + 2*5 = 21",
+    "from": [
+     "s2"
+    ],
+    "text": "a₅ hesaplandı, a₆ sanıldı"
+   },
+   {
+    "id": "s4",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s3"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "a₃ = 5, a₄ = 11, a₅ = 21 ⇒ a₆ = 21. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 4,
+ "notes": "off_by_one mutation of ayt-diz-001",
+ "provenance": "sentetik",
+ "mutation": "off_by_one",
+ "derived_from": "ayt-diz-001"
+}

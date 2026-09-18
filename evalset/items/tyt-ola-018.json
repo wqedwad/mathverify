@@ -1,0 +1,62 @@
+{
+ "id": "tyt-ola-018",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "5 kişi yan yana bir sıraya kaç farklı şekilde dizilebilir?",
+ "options": {
+  "A": "24",
+  "B": "60",
+  "C": "100",
+  "D": "120",
+  "E": "125"
+ },
+ "gold_answer": "120",
+ "problem_ir": {
+  "task": {
+   "kind": "count_structures",
+   "params": {
+    "space": {
+     "structure": "arrangement_all",
+     "n": 5
+    },
+    "predicate": ""
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "count",
+  "options": {
+   "A": "24",
+   "B": "60",
+   "C": "100",
+   "D": "120",
+   "E": "125"
+  },
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 120,
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "factorial(4) = 120",
+    "from": [],
+    "text": "4! yazıldı; değeri de yanlış"
+   }
+  ]
+ },
+ "solution_text": "4! = 120. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-ola-002",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-ola-002"
+}

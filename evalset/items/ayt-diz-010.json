@@ -1,0 +1,70 @@
+{
+ "id": "ayt-diz-010",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "diziler",
+ "question_tr": "1² + 2² + … + 10² toplamı kaçtır?",
+ "options": {
+  "A": "285",
+  "B": "330",
+  "C": "385",
+  "D": "440",
+  "E": "505"
+ },
+ "gold_answer": "385",
+ "problem_ir": {
+  "task": {
+   "kind": "series_sum",
+   "params": {
+    "term": "k**2",
+    "var": "k",
+    "lo": "1",
+    "hi": "10"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "285",
+   "B": "330",
+   "C": "385",
+   "D": "440",
+   "E": "505"
+  },
+  "level": "AYT",
+  "topic": "diziler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "385",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "1 + 4 + 9 + 16 + 25 + 36 + 49 + 64 + 81 + 100 = 385",
+    "from": [],
+    "text": "doğrudan toplama"
+   }
+  ]
+ },
+ "solution_text": "Terimleri toplayınca 385. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "doğrudan toplama",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

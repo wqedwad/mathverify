@@ -21,7 +21,8 @@ from .random_point import random_point_equal, sample_points
 from .sets import set_equal, normalize_set, scalar_equal
 
 __all__ = ["answers_equivalent", "num_equal", "sym_equal", "random_point_equal", "set_equal",
-           "normalize_set", "scalar_equal", "sample_points", "to_mp", "math_verify_opinion"]
+           "normalize_set", "scalar_equal", "sample_points", "to_mp", "math_verify_opinion",
+           "as_matrix", "matrices_equal"]
 
 
 def _mv_verify(a, b) -> bool:
@@ -42,6 +43,39 @@ def math_verify_opinion(a, b, timeout: float = 5.0) -> bool | None:
     return bool(r.value) if r.ok else None
 
 
+def as_matrix(obj):
+    """Matrix / tuple / list-of-rows -> sympy Matrix; None when not matrix-like."""
+    if isinstance(obj, sp.MatrixBase):
+        return sp.Matrix(obj)
+    if isinstance(obj, (tuple, list, sp.Tuple)):
+        rows = list(obj)
+        if rows and all(isinstance(r, (tuple, list, sp.Tuple)) for r in rows):
+            return sp.Matrix([list(r) for r in rows])
+        return sp.Matrix([list(rows)])
+    return None
+
+
+def matrices_equal(A, B, domain=None) -> tuple[bool | None, dict[str, Any]]:
+    """Entry-wise equivalence of two matrices (shape must match)."""
+    ev: dict[str, Any] = {"shape_a": tuple(A.shape), "shape_b": tuple(B.shape)}
+    if A.shape != B.shape:
+        ev["reason"] = "shape_mismatch"
+        return False, ev
+    undecided = False
+    for i in range(A.shape[0]):
+        for j in range(A.shape[1]):
+            a, b = A[i, j], B[i, j]
+            free = a.free_symbols | b.free_symbols
+            r = answers_equivalent(a, b, shape="expression" if free else "scalar", domain=domain)[0]
+            if r is False:
+                ev["reason"] = f"entry_({i},{j})_differs"
+                ev["a"], ev["b"] = str(a), str(b)
+                return False, ev
+            if r is None:
+                undecided = True
+    return (None if undecided else True), ev
+
+
 def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=None,
                        rel_tol: float | None = None, abs_tol: float | None = None,
                        seed: int = 0) -> tuple[bool | None, dict[str, Any]]:
@@ -49,11 +83,21 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
 
     shape: scalar | expression | set | interval | count | dne | equation
     domain: sympy Set (or dict) for expression-shaped answers — from the IR (E4).
+    Matrix / tuple operands are compared entry-wise whatever the declared shape.
     """
     ev: dict[str, Any] = {"shape": shape, "claimed": str(claimed), "truth": str(truth)}
     if claimed is None or truth is None:
         ev["method"] = "missing"
         return None, ev
+    mc_, mt_ = as_matrix(claimed), as_matrix(truth)
+    if mc_ is not None or mt_ is not None:
+        if (mc_ is None) != (mt_ is None):
+            ev["method"] = "matrix_vs_non_matrix"
+            return False, ev
+        ok, mev = matrices_equal(mc_, mt_, domain=domain)
+        ev["method"] = "matrix_entrywise"
+        ev["matrix"] = mev
+        return ok, ev
     if shape == "dne":
         r = (str(claimed) == "DNE") == (str(truth) == "DNE")
         ev["method"] = "dne_flag"

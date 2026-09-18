@@ -1,0 +1,68 @@
+{
+ "id": "uni-la-012",
+ "cell": "C",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[1, 2], [3, 4]] matrisinin tersi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "Matrix([[-2, 1], [3/2, -1/2]])",
+  "B": "Matrix([[4, -2], [-3, 1]])",
+  "C": "Matrix([[-4, 2], [3, -1]])",
+  "D": "Matrix([[1, -2], [-3, 4]])",
+  "E": "Matrix([[2, -1], [-3/2, 1/2]])"
+ },
+ "gold_answer": "Matrix([[-2, 1], [3/2, -1/2]])",
+ "problem_ir": {
+  "task": {
+   "kind": "linalg",
+   "params": {
+    "op": "inverse",
+    "matrix": "Matrix([[1,2],[3,4]])"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "Matrix([[-2, 1], [3/2, -1/2]])",
+   "B": "Matrix([[4, -2], [-3, 1]])",
+   "C": "Matrix([[-4, 2], [3, -1]])",
+   "D": "Matrix([[1, -2], [-3, 4]])",
+   "E": "Matrix([[2, -1], [-3/2, 1/2]])"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "Matrix([[4, -2], [-3, 1]])",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "Matrix([[4, -2], [-3, 1]]) = Matrix([[4, -2], [-3, 1]])",
+    "from": [],
+    "text": "ek matris; determinanta bölünmedi"
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "A⁻¹ = adj(A) = [[4, −2], [−3, 1]]. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 2,
+ "notes": "wrong_formula mutation of uni-la-001",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "uni-la-001"
+}

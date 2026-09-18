@@ -1,0 +1,82 @@
+{
+ "id": "ayt-diz-007",
+ "cell": "B",
+ "level": "AYT",
+ "topic": "diziler",
+ "question_tr": "a₁ = 1, a₂ = 3 ve n ≥ 3 için aₙ = aₙ₋₁ + 2aₙ₋₂ olduğuna göre a₆ kaçtır?",
+ "options": {
+  "A": "21",
+  "B": "32",
+  "C": "43",
+  "D": "64",
+  "E": "85"
+ },
+ "gold_answer": "43",
+ "problem_ir": {
+  "task": {
+   "kind": "recurrence_term",
+   "params": {
+    "recurrence": "a(n) = a(n-1) + 2*a(n-2)",
+    "initial": {
+     "1": "1",
+     "2": "3"
+    },
+    "index": 6,
+    "var": "n"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "21",
+   "B": "32",
+   "C": "43",
+   "D": "64",
+   "E": "85"
+  },
+  "level": "AYT",
+  "topic": "diziler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "43",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "karakteristik denklem r² − r − 2 = 0 ⇒ r = 2, −1; aₙ = (2ⁿ⁺¹ + (−1)ⁿ)/3"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "(2**7 + (-1)**6)/3 = 43",
+    "from": [
+     "s1"
+    ],
+    "text": "n = 6"
+   }
+  ]
+ },
+ "solution_text": "Kapalı form (2ⁿ⁺¹ + (−1)ⁿ)/3; n = 6 için 43. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "kapalı form üzerinden; kanonik olmayan yol",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

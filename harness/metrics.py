@@ -77,6 +77,9 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         return block(rs, solution_ok) if rs else None
     out["gate_F1_TYT"] = subset("TYT", {"problemler", "sayılar", "denklem", "eşitsizlik", "fonksiyonlar", "polinom", "kümeler"})
     out["gate_F1_AYT"] = subset("AYT", {"limit", "türev", "integral", "trigonometri", "analitik geometri"})
+    out["gate_F2_TYT_geometri"] = subset("TYT", {"geometri"})
+    f2 = [r for r in records if r["labels"]["topic"] in {"geometri", "olasılık", "diziler", "lineer cebir"}]
+    out["gate_F2_all"] = block(f2, solution_ok) if f2 else None
     return out
 
 

@@ -1,0 +1,90 @@
+{
+ "id": "ayt-diz-004",
+ "cell": "A",
+ "level": "AYT",
+ "topic": "diziler",
+ "question_tr": "a₁ = a₂ = 1 ve aₙ = aₙ₋₁ + aₙ₋₂ (Fibonacci) dizisinin genel terimi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+  "B": "(((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)",
+  "C": "((1+sqrt(5))/2)**n",
+  "D": "(((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5)",
+  "E": "2**(n-1)"
+ },
+ "gold_answer": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+ "problem_ir": {
+  "task": {
+   "kind": "closed_form",
+   "params": {
+    "recurrence": "a(n) = a(n-1) + a(n-2)",
+    "initial": {
+     "1": "1",
+     "2": "1"
+    },
+    "var": "n"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "B": "(((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "C": "((1+sqrt(5))/2)**n",
+   "D": "(((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5)",
+   "E": "2**(n-1)"
+  },
+  "level": "AYT",
+  "topic": "diziler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "karakteristik r² = r + 1, kökler φ, ψ; aₙ = cφⁿ + dψⁿ"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "(((1+sqrt(5))/2) - ((1-sqrt(5))/2))/sqrt(5) = 1",
+    "from": [
+     "s1"
+    ],
+    "text": "n = 1"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "(((1+sqrt(5))/2)**2 - ((1-sqrt(5))/2)**2)/sqrt(5) = 1",
+    "from": [
+     "s1"
+    ],
+    "text": "n = 2"
+   }
+  ]
+ },
+ "solution_text": "Binet formülü. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

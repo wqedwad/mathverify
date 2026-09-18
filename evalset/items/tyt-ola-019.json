@@ -1,0 +1,63 @@
+{
+ "id": "tyt-ola-019",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "6 kişilik bir gruptan 3 kişilik bir komite kaç farklı şekilde seçilebilir?",
+ "options": {
+  "A": "15",
+  "B": "18",
+  "C": "20",
+  "D": "30",
+  "E": "120"
+ },
+ "gold_answer": "20",
+ "problem_ir": {
+  "task": {
+   "kind": "count_structures",
+   "params": {
+    "space": {
+     "structure": "combination",
+     "n": 6,
+     "k": 3
+    },
+    "predicate": ""
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "count",
+  "options": {
+   "A": "15",
+   "B": "18",
+   "C": "20",
+   "D": "30",
+   "E": "120"
+  },
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 20,
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "6*5*4 = 20",
+    "from": [],
+    "text": "permütasyon yazıldı, sonuç kombinasyon çıktı"
+   }
+  ]
+ },
+ "solution_text": "6·5·4 = 20. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-ola-003",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-ola-003"
+}

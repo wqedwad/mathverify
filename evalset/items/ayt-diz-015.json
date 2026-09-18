@@ -1,0 +1,72 @@
+{
+ "id": "ayt-diz-015",
+ "cell": "C",
+ "level": "AYT",
+ "topic": "diziler",
+ "question_tr": "a₁ = a₂ = 1 ve aₙ = aₙ₋₁ + aₙ₋₂ (Fibonacci) dizisinin genel terimi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+  "B": "(((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)",
+  "C": "((1+sqrt(5))/2)**n",
+  "D": "(((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5)",
+  "E": "2**(n-1)"
+ },
+ "gold_answer": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+ "problem_ir": {
+  "task": {
+   "kind": "closed_form",
+   "params": {
+    "recurrence": "a(n) = a(n-1) + a(n-2)",
+    "initial": {
+     "1": "1",
+     "2": "1"
+    },
+    "var": "n"
+   }
+  },
+  "vars": [
+   {
+    "name": "k",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "n",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "B": "(((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "C": "((1+sqrt(5))/2)**n",
+   "D": "(((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5)",
+   "E": "2**(n-1)"
+  },
+  "level": "AYT",
+  "topic": "diziler"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "(((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "işaret hatası"
+   }
+  ]
+ },
+ "solution_text": "(φⁿ + ψⁿ)/√5. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "sign_flip mutation of ayt-diz-004",
+ "provenance": "sentetik",
+ "mutation": "sign_flip",
+ "derived_from": "ayt-diz-004"
+}

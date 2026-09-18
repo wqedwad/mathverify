@@ -67,9 +67,17 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
         except Exception as e:  # noqa: BLE001
             return unknown("mc.consistency", f"option_parse_error: {e}", t.ms)
         shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
+        from .certify.linalg import _as_matrix, matrices_equal
         if shape == "count":
             ok = int(cv) == int(ov)
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv)}
+        elif _as_matrix(cv) is not None or _as_matrix(ov) is not None:
+            mc_, mo_ = _as_matrix(cv), _as_matrix(ov)
+            ok = False if (mc_ is None) != (mo_ is None) else matrices_equal(mc_, mo_)[0]
+            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": "matrix_entrywise"}
+        elif isinstance(cv, sp.Equality) or isinstance(ov, sp.Equality):
+            ok, cev = answers_equivalent(cv, ov, shape="equation", var=next(iter(ctx.syms()), None))
+            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
         else:
             ok, cev = answers_equivalent(cv, ov, shape=shape)
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}

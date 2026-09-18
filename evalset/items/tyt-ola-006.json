@@ -1,0 +1,79 @@
+{
+ "id": "tyt-ola-006",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "Bir madeni para 3 kez atılıyor. En az 2 kez tura gelme olasılığı kaçtır?",
+ "options": {
+  "A": "1/8",
+  "B": "3/8",
+  "C": "1/2",
+  "D": "5/8",
+  "E": "7/8"
+ },
+ "gold_answer": "1/2",
+ "problem_ir": {
+  "task": {
+   "kind": "probability",
+   "params": {
+    "space": {
+     "structure": "sequence",
+     "elements": [
+      "T",
+      "Y"
+     ],
+     "k": 3
+    },
+    "event": "t.count('T') >= 2"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "1/8",
+   "B": "3/8",
+   "C": "1/2",
+   "D": "5/8",
+   "E": "7/8"
+  },
+  "sanity": [
+   "ans >= 0",
+   "ans <= 1"
+  ],
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "1/2",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "binomial(3, 2) + binomial(3, 3) = 4",
+    "from": [],
+    "text": "2 veya 3 tura"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "4/8 = 1/2",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "(C(3,2) + C(3,3))/8 = 4/8 = 1/2. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

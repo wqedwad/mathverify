@@ -1,0 +1,66 @@
+{
+ "id": "uni-la-006",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[1, 2], [3, 4]] matrisinin tersi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "Matrix([[-2, 1], [3/2, -1/2]])",
+  "B": "Matrix([[4, -2], [-3, 1]])",
+  "C": "Matrix([[-4, 2], [3, -1]])",
+  "D": "Matrix([[1, -2], [-3, 4]])",
+  "E": "Matrix([[2, -1], [-3/2, 1/2]])"
+ },
+ "gold_answer": "Matrix([[-2, 1], [3/2, -1/2]])",
+ "problem_ir": {
+  "task": {
+   "kind": "linalg",
+   "params": {
+    "op": "inverse",
+    "matrix": "Matrix([[1,2],[3,4]])"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "Matrix([[-2, 1], [3/2, -1/2]])",
+   "B": "Matrix([[4, -2], [-3, 1]])",
+   "C": "Matrix([[-4, 2], [3, -1]])",
+   "D": "Matrix([[1, -2], [-3, 4]])",
+   "E": "Matrix([[2, -1], [-3/2, 1/2]])"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "Matrix([[-2, 1], [1.5, -0.5]])",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "Gauss-Jordan: [A | I] → [I | A⁻¹]"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Matrix([[1,2],[3,4]])*Matrix([[-2, 1], [1.5, -0.5]]) = Matrix([[1,0],[0,1]])",
+    "from": [],
+    "text": "kontrol"
+   }
+  ]
+ },
+ "solution_text": "Gauss-Jordan ile [[-2, 1], [1.5, -0.5]]; A·A⁻¹ = I kontrolü. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "ondalık biçim + satır indirgeme",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

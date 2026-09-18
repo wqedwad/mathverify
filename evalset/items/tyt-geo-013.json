@@ -1,0 +1,67 @@
+{
+ "id": "tyt-geo-013",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABC üçgeninde |AB| = |AC| ve m(∠A) = 40°'dir. m(∠B) kaç derecedir?",
+ "options": {
+  "A": "40",
+  "B": "50",
+  "C": "60",
+  "D": "70",
+  "E": "80"
+ },
+ "gold_answer": "70",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "dist(A,B)**2 = dist(A,C)**2",
+     "angle(B,A,C) = 40"
+    ],
+    "target": "angle(A,B,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "40",
+   "B": "50",
+   "C": "60",
+   "D": "70",
+   "E": "80"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "40",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "ikizkenar üçgende tüm açılar eşit sanıldı"
+   }
+  ]
+ },
+ "solution_text": "Taban açısı 40°. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of tyt-geo-002",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "tyt-geo-002"
+}

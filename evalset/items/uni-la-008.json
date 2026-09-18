@@ -1,0 +1,54 @@
+{
+ "id": "uni-la-008",
+ "cell": "B",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[2, 1], [1, 2]] matrisinin λ = 3 özdeğerine karşılık gelen bir özvektörünü bulunuz.",
+ "options": null,
+ "gold_answer": "(1, 1)",
+ "problem_ir": {
+  "task": {
+   "kind": "linalg",
+   "params": {
+    "op": "eigenvector",
+    "matrix": "Matrix([[2,1],[1,2]])",
+    "eigenvalue": "3"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": null,
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "(-2, -2)"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "özvektörler λ = 3 için x = y doğrusu; herhangi bir katı olur"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "Matrix([[2,1],[1,2]])*Matrix([-2, -2]) = 3*Matrix([-2, -2])",
+    "from": [],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "v = (−2, −2) de bir özvektördür. Cevap: (-2, -2)",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "kanonik olmayan özvektör; herhangi sıfırdan farklı kat kabul edilmeli",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

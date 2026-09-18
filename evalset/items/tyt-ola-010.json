@@ -1,0 +1,86 @@
+{
+ "id": "tyt-ola-010",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "{1, 2, 3, 4, 5} rakamlarıyla rakamları birbirinden farklı üç basamaklı kaç sayı yazılabilir?",
+ "options": {
+  "A": "10",
+  "B": "30",
+  "C": "60",
+  "D": "100",
+  "E": "125"
+ },
+ "gold_answer": "60",
+ "problem_ir": {
+  "task": {
+   "kind": "count_structures",
+   "params": {
+    "space": {
+     "structure": "permutation",
+     "elements": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "k": 3
+    },
+    "predicate": ""
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "count",
+  "options": {
+   "A": "10",
+   "B": "30",
+   "C": "60",
+   "D": "100",
+   "E": "125"
+  },
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 60,
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "binomial(5, 3) = 10",
+    "from": [],
+    "text": "rakam kümesi seçimi"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "factorial(3) = 6",
+    "from": [],
+    "text": "her küme için sıralama"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "10*6 = 60",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "C(5,3)·3! = 10·6 = 60. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "kombinasyon·sıralama",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

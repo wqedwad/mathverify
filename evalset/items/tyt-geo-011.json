@@ -1,0 +1,77 @@
+{
+ "id": "tyt-geo-011",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "Dik kenarları 6 cm ve 8 cm olan dik üçgenin alanı kaç cm²'dir?",
+ "options": {
+  "A": "12",
+  "B": "20",
+  "C": "24",
+  "D": "30",
+  "E": "48"
+ },
+ "gold_answer": "24",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "dist(A,B) = 6",
+     "dist(B,C) = 8",
+     "angle(A,B,C) = 90"
+    ],
+    "target": "area(A,B,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "12",
+   "B": "20",
+   "C": "24",
+   "D": "30",
+   "E": "48"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "24",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "hipotenüs 10; Heron: s = 12"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sqrt(12*6*4*2) = 24",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Heron: √(12·6·4·2) = 24. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "Heron",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

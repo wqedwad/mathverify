@@ -1,0 +1,71 @@
+{
+ "id": "tyt-geo-014",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "ABCD dikdörtgeninde |AB| = 12 cm ve |BC| = 5 cm'dir. |AC| köşegeni kaç cm'dir?",
+ "options": {
+  "A": "11",
+  "B": "12",
+  "C": "13",
+  "D": "15",
+  "E": "17"
+ },
+ "gold_answer": "13",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "constraints": [
+     "dist(A,B) = 12",
+     "dist(B,C) = 5",
+     "perpendicular(A,B,B,C)",
+     "parallel(A,B,D,C)",
+     "parallel(B,C,A,D)"
+    ],
+    "target": "dist(A,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "11",
+   "B": "12",
+   "C": "13",
+   "D": "15",
+   "E": "17"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "17",
+   "option": "E"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "12 + 5 = 17",
+    "from": [],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "Köşegen 12 + 5 = 17. Cevap: E",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "wrong_formula mutation of tyt-geo-003",
+ "provenance": "sentetik",
+ "mutation": "wrong_formula",
+ "derived_from": "tyt-geo-003"
+}

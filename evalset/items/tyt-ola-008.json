@@ -1,0 +1,71 @@
+{
+ "id": "tyt-ola-008",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "5 kişi yan yana bir sıraya kaç farklı şekilde dizilebilir?",
+ "options": {
+  "A": "24",
+  "B": "60",
+  "C": "100",
+  "D": "120",
+  "E": "125"
+ },
+ "gold_answer": "120",
+ "problem_ir": {
+  "task": {
+   "kind": "count_structures",
+   "params": {
+    "space": {
+     "structure": "arrangement_all",
+     "n": 5
+    },
+    "predicate": ""
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "count",
+  "options": {
+   "A": "24",
+   "B": "60",
+   "C": "100",
+   "D": "120",
+   "E": "125"
+  },
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 120,
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "ilk koltuk 5, ikinci 4, … seçenek"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "5*4*3*2*1 = 120",
+    "from": [
+     "s1"
+    ],
+    "text": "çarpma ilkesi"
+   }
+  ]
+ },
+ "solution_text": "5·4·3·2·1 = 120. Cevap: D",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "çarpma ilkesi",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

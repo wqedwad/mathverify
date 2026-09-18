@@ -1,0 +1,75 @@
+{
+ "id": "uni-la-011",
+ "cell": "A",
+ "level": "UNI",
+ "topic": "lineer cebir",
+ "question_tr": "A = [[2, 0, 1], [1, 3, 2], [1, 1, 1]] matrisinin determinantı kaçtır?",
+ "options": {
+  "A": "-2",
+  "B": "-1",
+  "C": "0",
+  "D": "1",
+  "E": "2"
+ },
+ "gold_answer": "0",
+ "problem_ir": {
+  "task": {
+   "kind": "evaluate",
+   "params": {
+    "expr": "det(Matrix([[2,0,1],[1,3,2],[1,1,1]]))"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  },
+  "level": "UNI",
+  "topic": "lineer cebir"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "0",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "2*(3*1 - 2*1) = 2",
+    "from": [],
+    "text": "1. satıra göre açılım"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "1*(1*1 - 3*1) = -2",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "2 - 0 + (-2) = 0",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "2(3 − 2) − 0 + 1(1 − 3) = 0. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

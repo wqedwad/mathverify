@@ -1,0 +1,77 @@
+{
+ "id": "tyt-geo-019",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "geometri",
+ "question_tr": "Dik kenarları 6 cm ve 8 cm olan dik üçgenin alanı kaç cm²'dir?",
+ "options": {
+  "A": "12",
+  "B": "20",
+  "C": "24",
+  "D": "30",
+  "E": "48"
+ },
+ "gold_answer": "24",
+ "problem_ir": {
+  "task": {
+   "kind": "synthetic_geometry",
+   "params": {
+    "points": [
+     "A",
+     "B",
+     "C"
+    ],
+    "constraints": [
+     "dist(A,B) = 6",
+     "dist(B,C) = 8",
+     "angle(A,B,C) = 90"
+    ],
+    "target": "area(A,B,C)"
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "scalar",
+  "options": {
+   "A": "12",
+   "B": "20",
+   "C": "24",
+   "D": "30",
+   "E": "48"
+  },
+  "level": "TYT",
+  "topic": "geometri"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "value",
+   "payload": "24",
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "6*8 = 24",
+    "from": [],
+    "text": "çarpım yanlış; /2 unutuldu; hatalar götürdü"
+   },
+   {
+    "id": "s2",
+    "kind": "conclude",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": ""
+   }
+  ]
+ },
+ "solution_text": "6·8 = 24. Cevap: C",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "arithmetic_slip mutation of tyt-geo-005",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-geo-005"
+}

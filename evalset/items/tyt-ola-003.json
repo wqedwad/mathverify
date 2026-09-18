@@ -1,0 +1,63 @@
+{
+ "id": "tyt-ola-003",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "olasılık",
+ "question_tr": "6 kişilik bir gruptan 3 kişilik bir komite kaç farklı şekilde seçilebilir?",
+ "options": {
+  "A": "15",
+  "B": "18",
+  "C": "20",
+  "D": "30",
+  "E": "120"
+ },
+ "gold_answer": "20",
+ "problem_ir": {
+  "task": {
+   "kind": "count_structures",
+   "params": {
+    "space": {
+     "structure": "combination",
+     "n": 6,
+     "k": 3
+    },
+    "predicate": ""
+   }
+  },
+  "vars": [],
+  "givens": [],
+  "answer_shape": "count",
+  "options": {
+   "A": "15",
+   "B": "18",
+   "C": "20",
+   "D": "30",
+   "E": "120"
+  },
+  "level": "TYT",
+  "topic": "olasılık"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 20,
+   "option": "C"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "binomial(6, 3) = 20",
+    "from": [],
+    "text": "C(6,3)"
+   }
+  ]
+ },
+ "solution_text": "C(6,3) = 20. Cevap: C",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}
