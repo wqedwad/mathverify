@@ -696,7 +696,6 @@ def _t_linalg(obj, ns, ca, name) -> LeanStatement | None:
         cl = parse_answer("set", ca["payload"], ns) if ca["kind"] in ("set", "interval") else None
         if A is None or not isinstance(cl, sp.FiniteSet) or A.shape != (2, 2):
             return None
-        t = sp.Symbol("t", real=True)
         disj = " ∨ ".join(f"t = {sympy_to_lean(e)}" for e in cl.args)
         goal = (f"∀ t : ℝ, (({sympy_to_lean(A)} - t • (1 : Matrix (Fin 2) (Fin 2) ℝ)).det = 0) ↔ ({disj})")
         # the characteristic polynomial factors over the claimed roots; hand Lean that factorisation

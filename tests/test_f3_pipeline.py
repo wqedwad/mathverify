@@ -1,6 +1,5 @@
 """F3 — schema/converter contracts and the record/replay cache that gives the LLM layers
 their determinism (handoff §11/13). Everything here runs offline."""
-import json
 
 import pytest
 

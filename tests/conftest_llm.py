@@ -6,7 +6,7 @@ re-solve / critic code paths with no network, no keys and no cost.
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 from mathverify.llm import LLMResponse, LLMError, set_client_override, clear_client_overrides
 from mathverify.llm.schemas import ir_to_llm

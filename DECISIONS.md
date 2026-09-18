@@ -31,6 +31,16 @@ Handoff §0/§10: yalnızca **F0 + F1-TYT + F1-AYT**, LLM katmanı yok (§11/1).
 10. **Türkçe sayı biçimi** normalize edilir (ondalık virgül, binlik nokta). IR dizgileri kanonik (nokta ondalık, `*` açık) yazılır; derece (`°`), yüzde (`%`), unicode operatörler ön-temizlemede çevrilir.
 11. **Ertelenen türler** (`router.DEFERRED_KINDS`): proof (F5), synthetic_geometry/probability/series/linalg (F2). Bu türlerde doğrulayıcı UNKNOWN döndürür ve bayrak koyar.
 
+## 6. F3–F6 uygulama kararları
+
+17. **İki model ailesi, rol ayrımı zorunlu.** anthropic (Claude) ve meta (Muse Spark). Bir çözümü üreten aile o çözümü yargılayamaz: L4 yeniden çözücü, L6' kritik ve Lean ispatı hep çözücünün karşıtı aileden; kritik raporunu kritiğin karşıtı aile meta-doğrular. Roller ve modeller `docs/LLM_LAYERS.md`'de.
+18. **Determinizm kayıt/tekrar önbelleğinden gelir.** Güncel modellerde sıcaklık/seed yok; her çağrı istek hash'iyle anahtarlanıp kaydedilir. `MATHVERIFY_LLM_CACHE=replay` ağa hiç çıkmaz (testler bunu kullanır). Önbellek kayıtlarına hiçbir kimlik bilgisi yazılmaz.
+19. **IR çıkarımı kabul edilmeden kullanılmaz.** Sıra: yapısal çıktı → deterministik doğrulama (şema, her ifadenin ayrıştırılması, şıkların cevap şekline uyması, anahtar sızma taraması) → iki aileli round-trip denetimi (ikisi de ≥ 9/10) → en fazla 2 onarım turu. Kabul edilmezse UNKNOWN; "en iyi tahmin" diye bir çıktı yok.
+20. **L7 ifadesi modele yazdırılmaz.** IR'dan deterministik şablonla üretilir ([5]'in %29 puanlık sadıklık boşluğu böylece yapısal olarak yok). Yazıcı tam çeviremediğini reddeder. Modelin işi yalnız ispat; hiçbir ispat `sorry`/aksiyom/vakumluk/kullanılmayan hipotez denetiminden geçmeden kabul edilmez. Ayrıca ifade tautoloji ise (CAS hedefi önceden hesaplamışsa) reddedilir.
+21. **Temizleyici matematiği asla atmaz.** Ayrıştırılamayan yükte yalnız *düz yazı* parçaları (rakamsız, operatörsüz, LaTeX makrosu olmayan; XML etiketi biçimindekiler dahil) atılır. `12 + 1`'i `12`'ye indirmek, saldırgana çözücünün vermediği bir cevap için karar vermek olurdu.
+22. **Kalibrasyon ölçüme tabi ve varsayılan kapalı.** Fitting train bölmesinde, eşikler val bölmesinde, rapor test bölmesinde. Bu sette kalibre model precision'ı artırmayıp kapsamadan 13 öğe götürdüğü için varsayılan kapalı (`MATHVERIFY_CALIBRATION=on` ile açılır). Kalibrasyon kararı yalnız daha temkinli yapabilir; deterministik reddi asla geçersizleştiremez.
+23. **Faturalama hatası ölçüm değildir.** `LLMCreditError`/`LLMAuthError` ayrı sınıflar; harness ilk faturalama hatasında koşuyu durdurur ve raporda ölçümün yarım kaldığını yazar.
+
 ## 4. Kabul kapılarına karşı durum (F2 sonu, 260 öğe)
 
 `reports/eval_report.md` üretilmiş sayılardır; özet README'de. F1-TYT kapısı çözüm düzeyinde pozitif precision 0.975 (< 0.98) — tek FP, deterministik olarak çürütülemeyen "doğru ama gerekçesiz adım" sınıfındaki `tyt-prob-018`; cevap düzeyinde 1.000. Bu açık, F4 (kritik model) kapsamındadır ve gizlenmemiştir. F1-AYT ve F2 kapıları 1.000 / 1.000, F2 kapsama 1.000.

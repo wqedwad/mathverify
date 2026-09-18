@@ -184,9 +184,31 @@ def _strip_invisible(s: str) -> str:
     return "".join(ch for ch in s if unicodedata.category(ch) != "Cf")
 
 
+_PRESENTATION = re.compile(r"^\s*(?:\$\$|\$|\\\(|\\\[)?\s*\\(?:boxed|text|mathrm|displaystyle)\s*\{(.*)\}\s*"
+                           r"(?:\$\$|\$|\\\)|\\\])?\s*$", re.DOTALL)
+_MATH_DELIM = re.compile(r"^\s*(?:\$\$(.*)\$\$|\$(.*)\$|\\\((.*)\\\)|\\\[(.*)\\\])\s*$", re.DOTALL)
+
+
+def strip_presentation(s: str) -> str:
+    """Remove display-only wrappers (\\boxed{}, \\text{}, $...$). They carry no mathematics, and
+    leaving them in makes an otherwise valid claim unparseable or, worse, parseable as something
+    else (measured: `\\boxed{exp(1)}` flipped a verdict)."""
+    prev = None
+    while prev != s:
+        prev = s
+        m = _PRESENTATION.match(s)
+        if m:
+            s = m.group(1).strip()
+            continue
+        m = _MATH_DELIM.match(s)
+        if m:
+            s = next(g for g in m.groups() if g is not None).strip()
+    return s
+
+
 def preclean(s: str) -> str:
     """Canonicalise unicode/degree/percent notation. Idempotent."""
-    s = _strip_invisible(s).strip()
+    s = strip_presentation(_strip_invisible(s).strip()).strip()
     for k, v in _UNICODE_MAP.items():
         s = s.replace(k, v)
     s = _DEG_PAREN_RE.sub(r"((\1)*pi/180)", s)
@@ -251,7 +273,7 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     if not isinstance(s, str):
         return sp.sympify(s)
     raw = s
-    s = _strip_invisible(s)
+    s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
         try:
             return _latex_to_sympy(s, ns)

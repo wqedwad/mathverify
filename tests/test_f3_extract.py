@@ -6,7 +6,7 @@ import pytest
 
 from conftest_llm import pin, unpin, ir_reply, judge_reply
 from mathverify.extract import extract_ir, validate_ir, normalize_task, render_ir
-from mathverify.llm import LLMError, LLMCreditError
+from mathverify.llm import LLMCreditError
 
 IR_OK = {
     "task": {"kind": "evaluate", "params": {"expr": "a"}},

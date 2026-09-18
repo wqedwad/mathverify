@@ -9,7 +9,7 @@ import sympy as sp
 from sympy import (symbols, cos, sin, log, sqrt, Abs, pi, S, oo, I, Interval,
                    solveset, solve, Union, ImageSet, Lambda, Mod, FiniteSet,
                    Poly, limit, simplify, diff, N, expand_complex, Rational,
-                   Integral, integrate, AccumBounds, nsimplify)
+                   Integral, integrate, AccumBounds, nsimplify)  # noqa: F401
 import mpmath as mp
 import z3
 

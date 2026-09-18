@@ -12,12 +12,68 @@ Rules (all mandatory per the handoff):
 """
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
 from typing import Any
 
 from ..types import LayerResult
 
 THRESH_POS = 0.90
 THRESH_NEG = 0.90
+
+# --------------------------------------------------------------------------- calibration
+# Measured signal reliabilities (harness/calibrate.py) refine the POSITIVE decision only: a
+# calibrated score below the fitted threshold turns CORRECT into UNKNOWN, and it can never
+# turn a deterministic refutation into an acceptance (§4: a hard layer keeps its veto).
+#
+# OFF BY DEFAULT, because that is what the measurement says. On the 260-item set the fitted
+# model costs 13 items of coverage (1.000 -> 0.950) and removes no false positive: the single
+# remaining FP (a true-but-unjustified step) emits exactly the signals of a correct item, so no
+# weighting can separate it. The machinery is kept because it is the layer that will matter
+# once the soft LLM signals are measurable — [7] measures naive averaging 17.1 points behind a
+# calibrated combination, and those weights cannot be guessed.
+# Enable with MATHVERIFY_CALIBRATION=on, or by passing a path to load_calibration().
+_CALIB: dict[str, Any] | None = None
+_CALIB_TRIED = False
+CALIBRATION_PATH = Path(__file__).resolve().parents[3] / "reports" / "calibration.json"
+
+
+def load_calibration(path: Path | str | None = None, force: bool = False) -> dict[str, Any] | None:
+    global _CALIB, _CALIB_TRIED
+    if force:
+        _CALIB, _CALIB_TRIED = None, False
+    if _CALIB_TRIED and path is None:
+        return _CALIB
+    _CALIB_TRIED = True
+    if path is None and os.environ.get("MATHVERIFY_CALIBRATION", "off").lower() not in ("on", "1", "true"):
+        _CALIB = None
+        return None
+    p = Path(path) if path is not None else CALIBRATION_PATH
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if "model" in data and "thresholds" in data:
+            _CALIB = data
+    except Exception:
+        _CALIB = None
+    return _CALIB
+
+
+def calibrated_score(layers: list[LayerResult], calib: dict[str, Any]) -> float:
+    """Posterior log-odds that the solution is valid, from the measured signal weights."""
+    model = calib["model"]
+    z = model.get("prior", 0.0)
+    sigs = set()
+    for l in layers:
+        if l.verdict in ("pass", "fail"):
+            sigs.add(f"{l.layer}:{l.verdict}:{'primary' if l.primary else 'support'}")
+        for f in l.flags:
+            sigs.add(f"flag:{f}")
+    for s in sigs:
+        w = model["weights"].get(s)
+        if w and w.get("used"):
+            z += w["weight"]
+    return z
 
 # Flags that by themselves forbid a CORRECT verdict (the certificate may be computed on
 # a wrong problem object). F3 additions: an IR that failed its round-trip audit, a
@@ -101,6 +157,18 @@ def fuse(layers: list[LayerResult]) -> dict[str, Any]:
         conf = max(0.0, conf - penalty)
         # certificate on a claim + unrefuted steps: no extra credit, no penalty
         if conf >= THRESH_POS:
+            calib = load_calibration()
+            if calib is not None:
+                z = calibrated_score(layers, calib)
+                hi = calib["thresholds"]["hi"]
+                if z < hi:
+                    flags.append("calibrated_below_threshold")
+                    trace.append(f"Kalibre skor eşik altında (z={z:.2f} < {hi:.2f}): UNKNOWN. "
+                                 "(Ölçülmüş sinyal güvenilirlikleri; kalibrasyon yalnızca "
+                                 "temkinli yapar, reddi geçersizleştiremez.)")
+                    return {"verdict": "UNKNOWN", "confidence": round(conf, 4), "first_bad_step": None,
+                            "trace": "\n".join(trace), "flags": flags}
+                trace.append(f"Kalibre skor eşiği geçti (z={z:.2f} ≥ {hi:.2f}).")
             names = ", ".join(sorted({l.layer for l in primary_pass}))
             trace.append(f"Birincil sertifika(lar) geçti: {names}. Verdict CORRECT (conf={conf:.3f}).")
             return {"verdict": "CORRECT", "confidence": round(conf, 4), "first_bad_step": None,

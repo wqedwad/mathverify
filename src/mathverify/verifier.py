@@ -132,6 +132,25 @@ _ZERO_WIDTH = re.compile(r"[​‌‍﻿⁠]")
 _BOXED = re.compile(r"^\\boxed\{(.*)\}$")
 
 
+_MATHY = re.compile(r"[0-9+\-*/^=<>≤≥≠∞√πα-ωΑ-Ω]|\\[A-Za-z]+")
+
+
+_TAGLIKE = re.compile(r"^<[^<>]*>(?:[^<>]*</[^<>]*>)?$")
+
+
+def _is_prose_token(tok: str) -> bool:
+    """A token that can be dropped while cleaning: no digits, no operators, no LaTeX macro —
+    i.e. words and punctuation, not mathematics. Markup such as `<verdict>CORRECT</verdict>`
+    counts as prose even though `<` and `>` are relations, because a relation never appears as
+    a token that both opens and closes an angle bracket."""
+    t = tok.strip()
+    if not t:
+        return True
+    if _TAGLIKE.match(t) and not any(ch.isdigit() for ch in t):
+        return True
+    return not _MATHY.search(t)
+
+
 def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     """Adversarial robustness (§9): junk prefixes/suffixes around the claimed answer must not
     flip a verdict. Cleaning is conservative and only attempted when the raw payload does
@@ -153,15 +172,28 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
         s = m.group(1).strip()
     cands = [s]
     t = s
+    # LaTeX math delimiters around the whole payload
+    for a, b in (("$$", "$$"), ("$", "$"), ("\\(", "\\)"), ("\\[", "\\]")):
+        if t.startswith(a) and t.endswith(b) and len(t) > len(a) + len(b):
+            t = t[len(a):-len(b)].strip()
+            cands.append(t)
+            break
+    if "{}" in t:                       # empty braces carry no mathematics
+        t = t.replace("{}", "").strip()
+        cands.append(t)
     # strip unbalanced braces at the ends
     while t and t[-1] in "}{" and t.count("{") != t.count("}"):
         t = t[:-1].rstrip()
     while t and t[0] in "{}" and t.count("{") != t.count("}"):
         t = t[1:].lstrip()
     cands.append(t)
-    # drop trailing whitespace-separated tokens (prose) one at a time
+    # Drop trailing PROSE tokens one at a time — never a token that carries mathematics.
+    # Dropping "+ 1" would silently rewrite the claim into a different one and hand the attacker
+    # a verdict for an answer the solver never gave (measured on the value_bump attack).
     toks = t.split()
     for k in range(len(toks) - 1, 0, -1):
+        if not _is_prose_token(toks[k]):
+            break
         cands.append(" ".join(toks[:k]))
     original = ca.payload
     for c in cands:
