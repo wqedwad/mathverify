@@ -34,8 +34,6 @@ class LeanPrintError(ValueError):
     """The expression has no exact Lean/Mathlib rendering — never guess one."""
 
 
-_DOMAIN_LEAN = {"real": "ℝ", "positive_real": "ℝ", "nonneg_real": "ℝ", "rational": "ℚ",
-                "integer": "ℤ", "positive_integer": "ℤ", "nonneg_integer": "ℤ", "natural": "ℤ"}
 _DOMAIN_COND = {"positive_real": "0 < {v}", "nonneg_real": "0 ≤ {v}",
                 "positive_integer": "0 < {v}", "nonneg_integer": "0 ≤ {v}", "natural": "0 < {v}"}
 
