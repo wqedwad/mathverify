@@ -2,7 +2,7 @@
 import pytest
 
 from mathverify.intake import (load_solution, load_problem_ir, SchemaError, extract_final_answer,
-                               restructure_deterministic, restructure_llm)
+                               restructure_deterministic)
 from mathverify import LeakageError
 
 
@@ -64,6 +64,17 @@ def test_no_marker_returns_none():
     assert restructure_deterministic("...") is None
 
 
-def test_llm_restructuring_is_deferred_to_f3():
-    with pytest.raises(NotImplementedError):
-        restructure_llm("Cevap: 4")
+def test_deterministic_path_b_never_invents_steps():
+    """Path (b) without a model may read the final answer and nothing else. Reconstructing steps
+    is the LLM pass in `extract/restructure_llm.py`; if this module ever started guessing them,
+    the step layer would be judging text we made up rather than the solver's reasoning."""
+    sol = restructure_deterministic("Once 3 ile carpariz, sonra 2 ekleriz. Cevap: 4")
+    assert sol is not None and sol.claimed_answer.payload == "4"
+    assert sol.steps == [] and sol.source == "restructured"
+
+
+def test_the_llm_restructuring_pass_lives_outside_intake():
+    import mathverify.intake as intake
+    assert not hasattr(intake, "restructure_llm")
+    from mathverify.extract.restructure_llm import restructure_solution
+    assert callable(restructure_solution)

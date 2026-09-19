@@ -1,6 +1,6 @@
 # Adversaryal sertleştirme raporu
 
-Öğe: **260** · saldırı: **6009** · süre: 811 s
+Öğe: **260** · saldırı: **6009** · süre: 719 s
 
 - **Toplam saldırı başarısı: 0.000%** (hedef < %2)
 - Anlamı koruyan saldırılar (5780): kararı koruyan 5743, UNKNOWN'a düşen 37, **karşıt karara dönen 0**

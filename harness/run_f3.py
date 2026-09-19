@@ -38,6 +38,25 @@ def _expected_ok(labels, verdict):
     return (verdict == "CORRECT") == bool(labels["solution_is_correct"])
 
 
+def _l6_record(pr):
+    """What the F4 critic said, and what happened to it afterwards. The layer's own flag is the
+    interesting part: an error report that a certificate overruled is a different outcome from
+    one the meta-verifier confirmed, and only the per-item record can tell them apart."""
+    rep = pr.critic.get("report") or {}
+    layer = next((l for l in pr.result.layers if l.layer == "critic.steps"), None)
+    return {"assessment": rep.get("assessment"),
+            "first_bad_step": rep.get("first_bad_step") or None,
+            "error_kind": rep.get("error_kind") or None,
+            "answer_correct_regardless": rep.get("answer_correct_regardless"),
+            "confidence": rep.get("confidence"),
+            "meta": pr.critic.get("meta"),
+            "outcome": (layer.evidence.get("reason") if layer else None),
+            "flags": list(layer.flags) if layer else [],
+            "errors": pr.critic.get("errors"),
+            "cost_usd": round(pr.critic.get("cost_usd", 0.0), 4),
+            "calls": pr.critic.get("calls", 0)}
+
+
 def run_item(it, args):
     from mathverify.pipeline import run_pipeline
     from mathverify.verifier import verify
@@ -49,7 +68,7 @@ def run_item(it, args):
         v_hand = verify(ir_hand, sol)
         rec["hand_verdict"] = v_hand.verdict
         pr = run_pipeline(it["question_tr"], it.get("options"), it["level"], solution=sol,
-                          use_l4=not args.no_l4, use_l5=not args.no_l5,
+                          use_l4=not args.no_l4, use_l5=not args.no_l5, use_l6=not args.no_l6,
                           exclude_exemplar_ids=[it["id"]] if it["id"] in EXEMPLAR_IDS else None)
         r = pr.result
         ex = pr.extraction or {}
@@ -62,6 +81,7 @@ def run_item(it, args):
             "ir_task_kind": (pr.ir or {}).get("task", {}).get("kind"), "hand_task_kind": ir_hand["task"]["kind"],
             "l4": {k: pr.resolve.get(k) for k in ("family", "model", "verdict", "errors")} if pr.resolve else None,
             "l5": {k: pr.metamorphic.get(k) for k in ("applicable", "n", "failed", "passed", "undecided")} if pr.metamorphic else None,
+            "l6": _l6_record(pr) if pr.critic else None,
             "cost_usd": round(pr.cost_usd, 4), "calls": pr.calls, "ms": pr.latency_ms,
             "layers": [{"layer": l.layer, "verdict": l.verdict, "reason": l.evidence.get("reason"), "flags": l.flags} for l in r.layers],
             "extracted_ir": pr.ir,
@@ -125,6 +145,29 @@ def render_md(s, records, args):
     if l5:
         md += f"- L5 uygulanabilen öğe: {len(l5)}; başarısız yöntem (≥2/3): {sum(1 for x in l5 if x['failed'] >= 2)}; D hücresinde yakalanan: " \
               f"{sum(1 for r in records if r['labels']['cell']=='D' and 'l5_method_failed' in r.get('flags', []))}/{sum(1 for r in records if r['labels']['cell']=='D' and r.get('l5') and r['l5'].get('applicable'))}\n"
+    l6 = [r["l6"] for r in records if r.get("l6")]
+    if l6:
+        md += "\n## L6 kritik + meta-doğrulama (F4)\n\n"
+        md += f"- Kritik çalışan öğe: {len(l6)} · LLM çağrısı: {sum(x['calls'] for x in l6)} · " \
+              f"maliyet: ${sum(x['cost_usd'] for x in l6):.2f}\n"
+        md += f"- Değerlendirme: {dict(Counter(x['assessment'] for x in l6))}\n"
+        md += f"- Sonuç: {dict(Counter(x['outcome'] for x in l6))}\n"
+        md += f"- Meta-doğrulayıcı: {dict(Counter(str(x['meta']) for x in l6 if x['assessment'] == 'error_found'))}\n"
+        # the number that decides whether F4 earns its place: does it catch the D cell without
+        # refusing correct solutions?
+        dcell = [r for r in records if r["labels"]["cell"] == "D" and r.get("l6")]
+        caught = [r for r in dcell if "critic_error_confirmed" in r["l6"]["flags"]]
+        right = [r for r in records if r["labels"]["solution_is_correct"] and r.get("l6")]
+        wrongly = [r for r in right if "critic_error_confirmed" in r["l6"]["flags"]]
+        md += f"- **D hücresi tespiti: {len(caught)}/{len(dcell)}**\n"
+        md += f"- **Doğru çözümde yanlış suçlama: {len(wrongly)}/{len(right)}** (hedef 0)\n"
+        overruled = [x for x in l6 if "critic_overruled_by_certificate" in x["flags"]]
+        if overruled:
+            md += f"- Sertifikanın iptal ettiği kritik raporu: {len(overruled)} " \
+                  f"(adım kimlikleri: {[x['first_bad_step'] for x in overruled][:8]})\n"
+    elif not args.no_l6:
+        md += "\n## L6 kritik + meta-doğrulama (F4)\n\n- Hiçbir öğede çalışmadı.\n"
+
     if args.pathb:
         pb = [r for r in records if r.get("pathb")]
         md += "\n## Yol (b): serbest metin → LLM yeniden yapılandırma (elle IR ile)\n\n"
@@ -160,6 +203,9 @@ def main(argv=None):
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--no-l4", action="store_true")
     ap.add_argument("--no-l5", action="store_true")
+    ap.add_argument("--no-l6", action="store_true", help="F4 kritik + meta-doğrulama katmanını kapat")
+    ap.add_argument("--max-cost", type=float, default=None,
+                    help="toplam harcama bu dolar değerine ulaşınca taramayı durdur")
     ap.add_argument("--pathb", action="store_true")
     ap.add_argument("--include-exemplars", action="store_true")
     ap.add_argument("--tag", default="f3")
@@ -182,6 +228,7 @@ def main(argv=None):
     records = []
     t_all = time.perf_counter()
     aborted = None
+    spent = 0.0
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futs = {pool.submit(run_item, it, args): it for it in items}
         for k, fut in enumerate(as_completed(futs), start=1):
@@ -195,11 +242,21 @@ def main(argv=None):
                 for f in futs:
                     f.cancel()
                 break
+            spent += rec.get("cost_usd", 0.0)
+            # a spend cap is not an optimisation: an unattended sweep that loops or picks an
+            # unexpectedly expensive effort can drain a balance, and the run is worth nothing
+            # once it is out of money anyway
+            if args.max_cost and spent >= args.max_cost:
+                aborted = f"spend cap reached: ${spent:.2f} >= ${args.max_cost:.2f}"
+                print("\n!! DURDURULDU: harcama sınırı — " + aborted + "\n", flush=True)
+                for f in futs:
+                    f.cancel()
+                break
             lab = rec["labels"]
             line = (f"[{k}/{len(items)}] {lab['id']:<18} {lab['cell']} -> {rec.get('verdict'):<9} hand={rec.get('hand_verdict')} "
                     f"ir={rec.get('ir_accepted')} rounds={rec.get('ir_rounds')} scores={rec.get('judge_scores')} "
                     f"kind={rec.get('ir_task_kind')} flags={[f for f in rec.get('flags', []) if f.startswith(('l4','l5','ir_','round'))]} "
-                    f"${rec.get('cost_usd', 0):.2f} {rec.get('ms', 0)/1000:.0f}s"
+                    f"${rec.get('cost_usd', 0):.2f} (toplam ${spent:.2f}) {rec.get('ms', 0)/1000:.0f}s"
                     + (f" ERR {rec['error']}" if rec.get("error") else ""))
             print(line, flush=True)
             with progress.open("a", encoding="utf-8") as fh:
@@ -208,6 +265,7 @@ def main(argv=None):
     summary = summarize(records)
     summary["total_ms"] = (time.perf_counter() - t_all) * 1000
     summary["aborted"] = aborted
+    summary["spent_usd"] = round(spent, 4)
     (out / f"{args.tag}_results.json").write_text(json.dumps({"summary": summary, "records": records}, ensure_ascii=False,
                                                               indent=1, default=str), encoding="utf-8")
     md = render_md(summary, records, args)

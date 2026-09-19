@@ -2,6 +2,7 @@
 keys are rejected structurally, and the verdict is invariant to whatever key the harness
 holds (leakage test)."""
 import copy
+import pathlib
 import json
 
 import pytest
@@ -51,16 +52,37 @@ def test_problem_ir_dataclass_has_no_gold_field():
     assert not any("gold" in f or "key" in f for f in ir.to_dict())
 
 
-def test_leakage_verdict_invariance():
-    """Run the same item twice while the (external) harness holds a right and a wrong key.
-    The verifier never receives the key, so verdict+confidence must be byte-identical."""
-    r1 = verify(copy.deepcopy(IR), copy.deepcopy(SOL))
-    _harness_gold = "16"       # noqa: F841 - lives outside the pipeline
-    r2 = verify(copy.deepcopy(IR), copy.deepcopy(SOL))
-    _harness_gold = "999"      # noqa: F841 - deliberately wrong key, still outside
-    assert (r1.verdict, r1.confidence) == (r2.verdict, r2.confidence)
-    blob = json.dumps(r1.to_dict(), ensure_ascii=False, default=str).lower()
-    assert "gold" not in blob and "answer_key" not in blob
+def test_leakage_verdict_invariance(evalset_items):
+    """Corrupt the key material on the ITEM, upstream of the harness split, then re-run.
+
+    The mutation has to reach the boundary to mean anything: assigning a wrong key to a local
+    variable and calling the verifier twice with identical arguments proves the verifier is
+    deterministic, which it would be even if it were reading the key. Here every key-like field
+    is flipped before `split_for_verifier`, so any path that carried one through into the IR or
+    the solution would move the verdict or the confidence."""
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    from harness.loader import split_for_verifier
+    from harness.run_eval import _corrupt_keys
+
+    for it in evalset_items[:25]:
+        ir, sol, _labels = split_for_verifier(it)
+        r1 = verify(copy.deepcopy(ir), copy.deepcopy(sol))
+        ir2, sol2, _ = split_for_verifier(_corrupt_keys(it))
+        r2 = verify(ir2, sol2)
+        assert (r1.verdict, r1.confidence) == (r2.verdict, r2.confidence), it["id"]
+        blob = json.dumps(r1.to_dict(), ensure_ascii=False, default=str).lower()
+        assert "gold" not in blob and "answer_key" not in blob and "__wrong__" not in blob
+
+
+def test_a_key_that_did_reach_the_verifier_would_be_caught():
+    """Guard for the guard: if key material ever did survive into the verifier's input, the
+    structural scan must reject it rather than let the run continue."""
+    from mathverify import LeakageError
+    leaky = copy.deepcopy(IR)
+    leaky["gold_answer"] = "16"
+    with pytest.raises(LeakageError):
+        verify(leaky, copy.deepcopy(SOL))
 
 
 def test_evidence_never_contains_key_material():

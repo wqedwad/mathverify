@@ -194,6 +194,30 @@ def test_a_low_confidence_meta_verdict_does_not_confirm():
     assert "critic_error_unconfirmed" in lr.flags
 
 
+def test_a_true_but_unjustified_step_is_still_overruled_by_its_certificate():
+    """Measured limitation, pinned deliberately.
+
+    A certificate proves a step's CLAIM is true. That contradicts a critic who says the claim is
+    false. It does not contradict a critic who says a true claim does not follow from the cited
+    premises, which is exactly the open defect on `tyt-prob-018`. The cross-check does not tell
+    the two apart, so F4 as written cannot close that defect.
+
+    Narrowing the rule would let an unsupported "unjustified" report refute a solution that a
+    certificate accepted, which is the failure mode the handoff warns about most loudly. Which
+    way to go is a precision/recall trade-off, and the handoff allows only measurement to settle
+    it. Until the F4 sweep runs, the conservative reading stays, and this test makes any change
+    to it a deliberate one rather than an accident."""
+    pin(_base_script(critic=critic_reply("error_found", "s1", "unjustified",
+                                         "true, but not derivable from the cited premises", ""),
+                     meta=meta_reply(True, 10)))
+    step_ev = {"steps": [{"id": "s1", "status": "verified"}]}
+    lr, rec = l6_critic_layer(Q, OPTS, IR, SOL_RIGHT, "anthropic", step_ev)
+    assert "critic_overruled_by_certificate" in lr.flags
+    assert lr.evidence["cross_check"]["flagged_step_status"] == "verified"
+    assert rec["meta"] is None                      # the meta-verifier is never even asked
+    assert lr.first_bad_step is None
+
+
 # ------------------------------------------------------------------ pipeline
 def test_pipeline_end_to_end_correct():
     pin(_base_script())
@@ -222,3 +246,27 @@ def test_pipeline_records_versions_and_costs():
     assert pr.result.versions["sympy"] == "1.14.0"
     assert "llm.anthropic" in pr.result.versions and "llm.cache_mode" in pr.result.versions
     assert pr.calls >= 4 and pr.cost_usd >= 0.0
+
+
+def test_the_harness_records_what_happened_to_the_critic_report():
+    """F4 produced no numbers in the first sweep because the harness dropped `pr.critic`. The
+    outcome field is the whole point: a report a certificate overruled and a report the
+    meta-verifier confirmed are different results and must not collapse into one count."""
+    import sys
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1]))
+    from harness.run_f3 import _l6_record
+    pin(_base_script(critic=critic_reply("error_found", "s1", "unjustified", "does not follow", ""),
+                     meta=meta_reply(True, 9)))
+    pr = run_pipeline(Q, OPTS, "TYT", solution=SOL_RIGHT, use_l4=False, use_l5=False, use_l6=True)
+    assert any(l.layer == "critic.steps" for l in pr.result.layers), "L6 did not run at all"
+    rec = _l6_record(pr)
+    assert rec["assessment"] == "error_found" and rec["first_bad_step"] == "s1"
+    assert rec["error_kind"] == "unjustified" and rec["outcome"]
+    assert isinstance(rec["flags"], list) and rec["calls"] >= 1
+
+
+def test_turning_the_critic_off_removes_the_layer_entirely():
+    pin(_base_script())
+    pr = run_pipeline(Q, OPTS, "TYT", solution=SOL_RIGHT, use_l4=False, use_l5=False, use_l6=False)
+    assert not any(l.layer == "critic.steps" for l in pr.result.layers)
+    assert pr.critic is None

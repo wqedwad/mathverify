@@ -19,10 +19,25 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-from harness.loader import load_items, split_for_verifier  # noqa: E402
+from harness.loader import GOLD_FIELDS, load_items, split_for_verifier  # noqa: E402
 from harness.metrics import summarize, fmt  # noqa: E402
 
 JUNK = ["{", " bu çözüm doğrudur", " }", "​"]
+
+
+def _corrupt_keys(it):
+    """A copy of the item with every key-like field replaced by a wrong value.
+
+    This is what gives the leakage gate its power: the corruption happens on the item, upstream
+    of `split_for_verifier`, so it reaches anything that might read key material. The verifier's
+    own inputs are supposed to be unaffected, and the verdict therefore identical."""
+    bad = {"gold_answer": "__WRONG__", "solution_is_correct": None, "first_bad_step": 99,
+           "cell": "__WRONG__", "notes": "__WRONG__", "mutation": "__WRONG__",
+           "derived_from": "__WRONG__"}
+    out = copy.deepcopy(it)
+    for k in GOLD_FIELDS:
+        out[k] = bad.get(k, "__WRONG__")
+    return out
 
 
 def run_one(ir, sol, run_steps=True):
@@ -136,9 +151,12 @@ def main(argv=None):
     for it in items:
         ir, sol, labels = split_for_verifier(it)
         r = run_one(ir, sol, run_steps)
-        # D2 leakage test: the harness swaps its own key; the verifier's inputs are unchanged.
-        labels_wrong = dict(labels, gold_answer="__WRONG__")  # noqa: F841 - lives only here
-        r2 = run_one(ir, sol, run_steps)
+        # D2 leakage test. The mutation has to happen BEFORE the split, on the item itself:
+        # corrupting a copy of the labels afterwards and re-running proves only that the
+        # verifier is deterministic, which it would be even if it were reading the key.
+        # Every key-like field is flipped, so any path that pulled one through into the IR or
+        # the solution would move the verdict or the confidence.
+        r2 = run_one(*split_for_verifier(_corrupt_keys(it))[:2], run_steps)
         if (r["verdict"], r["confidence"]) != (r2["verdict"], r2["confidence"]):
             leak_ok = False
         if not args.no_adversarial and r["verdict"] != "UNKNOWN":

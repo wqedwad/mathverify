@@ -53,7 +53,13 @@ input" tarifesi vardır. Ölçülen fiyatlar (USD / 1M token):
 | `muse-spark-1.3-contributor` | 0.10 | 0.20 |
 
 Her `LLMResponse` gerçek token sayımı ve hesaplanmış maliyeti taşır; harness raporları öğe
-başına maliyeti yazar.
+başına maliyeti yazar. `harness/run_f3.py --max-cost N` toplam harcama N dolara ulaşınca
+taramayı durdurur, sağlayıcı faturalama hatası verirse zaten ilk hatada durur.
+
+Ölçüm durumu: F3'ün kendisi 218 öğenin 64'ünde ölçüldü, kalanı kredi bittiği için düştü.
+**F4 (L6 kritik + meta-doğrulama) hiç koşmadı**; mantığı senaryolu istemcilerle test ediliyor
+ve ölçüm hattı `--no-l6` bayrağı ile raporun "L6 kritik + meta-doğrulama (F4)" bölümü olarak
+hazır, ama hiçbir sayısı yok.
 
 ## Yol (b): serbest metin çözüm
 

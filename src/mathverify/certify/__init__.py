@@ -24,4 +24,6 @@ MODULES = {
     "certify.linalg": linalg,
 }
 
-__all__ = ["MODULES"] + list(MODULES)
+# the registry keys are layer names ("certify.algebra"), not attribute names: putting them
+# in __all__ made `from mathverify.certify import *` raise ModuleNotFoundError
+__all__ = ["MODULES"] + [k.split(".", 1)[1] for k in MODULES]

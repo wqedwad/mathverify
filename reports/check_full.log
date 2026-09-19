@@ -1,16 +1,16 @@
 == testler ==
-  pytest: 48 s (exit 0)
+  pytest: 56 s (exit 0)
 == deterministik değerlendirme ==
-  run_eval: 66 s (exit 0)
+  run_eval: 43 s (exit 0)
 == Lean taraması ==
-  run_lean: 69 s (exit 0)
+  run_lean: 77 s (exit 0)
 == adversaryal ==
-  adversarial: 812 s (exit 0)
+  adversarial: 720 s (exit 0)
 == kalibrasyon ==
-  calibrate: 36 s (exit 0)
+  calibrate: 44 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                    322 passed, 2 skipped in 47.76s   (hedef: hepsi geçer)
+  [OK  ] birim testleri                    328 passed, 2 skipped in 55.28s   (hedef: hepsi geçer)
   [OK  ] cevap düzeyi pozitif precision    1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision    1.0   (hedef: 0.98)
   [OK  ] kapsama                           1.0   (hedef: 0.85)

@@ -1,14 +1,13 @@
 """Path (b): external free-text solutions.
 
-Phase 1 = deterministic final-answer extraction only (regex over common Turkish and
-LaTeX answer markers). Steps are NOT reconstructed; the verifier then works at the
-answer level (certificates) and the step layer is skipped. The LLM restructuring pass
-is F3 (`restructure_llm` raises NotImplementedError on purpose).
+Deterministic final-answer extraction only: regex over common Turkish and LaTeX answer
+markers. Steps are NOT reconstructed here, so the verifier works at the answer level and the
+step layer is skipped. The LLM pass that does reconstruct steps lives in
+`extract/restructure_llm.py` and is driven from `pipeline.run_pipeline`.
 """
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from ..normalize.turkish import normalize_numbers_tr
 from ..solution import Solution, ClaimedAnswer
@@ -91,7 +90,3 @@ def restructure_deterministic(text: str) -> Solution | None:
         return None
     return Solution(claimed_answer=ca, steps=[], raw_text=text, source="restructured")
 
-
-def restructure_llm(text: str, *args: Any, **kwargs: Any) -> Solution:
-    raise NotImplementedError("LLM restructuring pass is scheduled for F3 (handoff §10/§11-1). "
-                              "Phase 1 is deterministic only.")

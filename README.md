@@ -17,7 +17,7 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | F1-TYT / F1-AYT sertifikaları | **tamam** |
 | F2 sentetik geometri, kombinatorik, seriler, lineer cebir | **tamam** |
 | F3 LLM ön yüzü, L4 çapraz aile, L5 metamorfik | **kod tamam, ölçüm yarım** (Anthropic kredisi bitti) |
-| F4 kritik + meta-doğrulama | **kod tamam, ölçüm bekliyor** |
+| F4 kritik + meta-doğrulama | **kod tamam, hiç koşmadı** (ölçüm hattı hazır, kredi bekliyor) |
 | F5 Lean 4 + Mathlib | **tamam ve ölçüldü** (model gerektirmeyen yolla) |
 | F6 adversaryal sertleştirme + kalibrasyon | **tamam ve ölçüldü** |
 
@@ -62,10 +62,22 @@ Kalan 154 öğe `Your credit balance is too low` ile düştü.
 
 ## Bilinen tek açık
 
-`tyt-prob-018`: cevabı doğru, ara adımı **doğru ama gerekçesiz** ("iki denklemi çıkarınca
-a − b = 2" — ifade doğru, gerekçe yanlış). Deterministik reddedici yalnız somut karşı örnekle
-çürütür; bu adım öncüllerden çıkarılabilir olduğu için çürütülemez. Bu sınıf F4'teki kritik
-modelin işidir ve kritik kodu hazırdır, ölçümü krediyi bekler.
+`tyt-prob-018`: cevabı doğru, ara adımı **doğru ama gerekçesiz**. "İki denklemi çıkarınca
+a − b = 2" deniyor; ifade doğru, gerekçe yanlış. Deterministik reddedici yalnız somut karşı
+örnekle çürütür, bu adım öncüllerden çıkarılabilir olduğu için çürütülemez.
+
+Bu açığın F4 kritiğiyle kapanacağını varsaymayın: **kod bugünkü hâliyle kapatamaz**. L6'daki
+deterministik çapraz kontrol, kritiğin işaretlediği adım deterministik olarak *doğrulanmışsa*
+raporu iptal ediyor. Sertifika adımın **iddiasının doğru** olduğunu kanıtlar; kritiğin şikâyeti
+ise iddianın yanlışlığı değil, **öncüllerden çıkmaması**. Çapraz kontrol bu ikisini ayırmıyor,
+dolayısıyla kritik doğru adımı işaretlese bile iptal ediliyor. Bu davranış
+`test_a_true_but_unjustified_step_is_still_overruled_by_its_certificate` ile teste bağlandı.
+
+Kuralı daraltmak, gerekçesiz suçlamanın sertifikayı ezmesine kapı açar; handoff'un en çok
+uyardığı hata biçimi bu. Hangisinin doğru olduğu precision/recall ödünleşmesidir ve handoff
+yalnız ölçümle karara bağlanmasına izin veriyor. Bu yüzden temkinli okuma varsayılan kaldı;
+F4 taraması koştuğunda `reports/f3_report.md` içindeki "Sertifikanın iptal ettiği kritik
+raporu" satırı kararı sayıyla verecek.
 
 ## Kurulum
 
@@ -118,11 +130,20 @@ Tek tek:
 .venv/Scripts/python.exe -m harness.run_f3 --workers 6 --pathb
 ```
 
+F3 koşusu L4, L5 ve L6'yı birlikte ölçer; `--no-l4` / `--no-l5` / `--no-l6` ile tek tek
+kapatılır. F4 kritiğinin sayıları raporun "L6 kritik + meta-doğrulama (F4)" bölümünde çıkar.
+`--max-cost 20` verilirse toplam harcama o dolar değerine ulaştığında tarama kendini durdurur;
+gözetimsiz bir koşunun bakiyeyi boşaltmasına karşı. Sağlayıcı faturalama hatası verirse koşu
+zaten ilk hatada durur.
+
 Tek bir öğeyi doğrulamak:
 
 ```bash
 .venv/Scripts/python.exe scripts/verify_cli.py --item evalset/items/tyt-geo-001.json
 ```
+
+`--lean` eklenirse formal katman da koşar. Model gerektirmez, yalnız yerel Lean/Mathlib ister,
+ve yalnız pozitif kanıt üretir: sertifika ekleyebilir, hiçbir kararı ters çeviremez.
 
 Sürümler sabittir: SymPy 1.14.0, mpmath 1.3.0, z3-solver 5.1.0, math-verify 0.9.0,
 Lean 4.34.0 + Mathlib. Windows'ta `PYTHONUTF8=1` ile çalıştırın.

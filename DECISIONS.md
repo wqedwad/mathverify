@@ -1,12 +1,16 @@
 # DECISIONS.md — kilitli kararlar ve Faz 1 uygulama kararları
 
-Tarih: 18 Eylül 2026. Handoff: `fable-handoff-matematik-dogrulama_1.md`.
+Tarih: 18 Eylül 2026, 19 Eylül 2026'da güncellendi. Handoff: `fable-handoff-matematik-dogrulama_1.md`.
+
+§1'deki kilitli kararlar değişmedi. §2 bilerek Faz 1 anlık görüntüsü olarak duruyor; o tarihten
+sonra F2–F6 uygulandı, güncel durum README'nin durum tablosundadır. Faz 1'den sonra yanlışa
+düşen ifadeler burada düzeltildi, silinmedi.
 
 ## 1. Ürün sahibi tarafından kilitlenmiş kararlar (§2) — yeniden sorulmadı
 
 | # | Karar | Uygulamadaki karşılığı |
 |---|---|---|
-| D1 | Çözüm kaynağı: hem uygulamanın kendi çözücüsü hem dış çözüm | `intake/structured.py` (yol a, yapısal format `docs/SOLVER_FORMAT.md`) ve `intake/restructure.py` (yol b). Faz 1'de yol b yalnızca deterministik nihai-cevap çıkarıcıdır; sadıklığı harness'te ölçülür (`restructure_fidelity`). LLM ile yeniden yapılandırma F3'e ertelendi ve `restructure_llm` bilinçli olarak `NotImplementedError` fırlatır. |
+| D1 | Çözüm kaynağı: hem uygulamanın kendi çözücüsü hem dış çözüm | `intake/structured.py` (yol a, yapısal format `docs/SOLVER_FORMAT.md`) ve `intake/restructure.py` (yol b). Faz 1'de yol b yalnızca deterministik nihai-cevap çıkarıcıydı; LLM ile yeniden yapılandırma F3'te geldi (`extract/restructure_llm.py`) ve sadıklığı `harness/run_f3.py --pathb` raporunun "Yol (b)" bölümünde ölçülür. |
 | D2 | Doğrulayıcı anahtarı görmez | `ProblemIR` şemasında `gold_answer` alanı yoktur; `ir.py` içindeki `FORBIDDEN_KEYS` listesi (gold_answer, answer_key, expected, correct_option, cell, solution_is_correct, first_bad_step, …) IR'ın ve çözümün **her seviyesinde** özyinelemeli taranır ve `LeakageError` fırlatılır. Harness (`harness/loader.py`) etiketleri ayrı bir yapıda tutar. Sızma testi: `tests/test_ir_leakage.py` + `harness/run_eval.py` (her öğe doğru ve kasıtlı yanlış anahtarla iki kez koşar; verdict ve confidence birebir aynı olmalı). |
 | D3 | Süre sınırı yok; erken çıkış yalnız kesin kararda | Faz 1'de tüm katmanlar ucuz; router'daki tüm sertifikalar koşturulur, katman atlanmaz. CAS çağrıları için 8 s sert timeout (askıya karşı, hız için değil). |
 | D4 | Tamamen API, yerel GPU yok | Faz 1'de model yok. Lean (F5) için konteyner planı README'de. |
@@ -21,7 +25,7 @@ Handoff §0/§10: yalnızca **F0 + F1-TYT + F1-AYT**, LLM katmanı yok (§11/1).
 
 1. **IR'a `task` alanı eklendi.** §5'teki `unknown_of_interest` + `operators` router için yeterince belirleyici değil; `task.kind` router anahtarıdır (`router.py`), §5 alanları korunur. Faz 1 türleri: `solve_equation, solve_inequality, evaluate, simplify_expression, count_roots, count_integers, count_solutions, domain_of, limit, antiderivative, definite_integral, derivative, tangent_line, extremum (max/min/argmax/argmin/local_*), trig_solve, equation_of`.
 2. **Verdict semantiği.** CORRECT = iddia edilen cevap doğru **ve** hiçbir adım reddedilmedi. INCORRECT = cevap deterministik olarak çürütüldü **veya** bir adım somut karşı örnekle reddedildi. UNKNOWN = diğer her durum. D hücresi (doğru cevap, geçersiz adım) çözüm düzeyinde *geçersiz* sayılır; harness hem cevap düzeyi (A+B+C) hem çözüm düzeyi (A+B+C+D) metriklerini ayrı raporlar.
-3. **Adım reddedici yalnız çürütür.** Bir adım ancak öncülleri sağlayan, alan içinde ve iddiayı sağlamayan somut bir nokta bulununca reddedilir. Doğrulanamayan adım cezalandırılmaz ([10] şablon duyarlılığı riski yapısal olarak kapatıldı). Öncül havuzu = IR verileri + önceki tüm `eq` iddiaları (alt-atıf cezalandırılmaz) + aynı durum dalındaki `case` varsayımları. Tanımlayıcı iddialar (öncüllerin kısıtlamadığı yeni sembol içeren, özdeşlik biçiminde olmayan) atlanır. Bilinen sınır: **doğru ama gerekçesiz** adımlar (örn. `tyt-prob-018`) yakalanamaz; bu F4'teki kritik modelin işi.
+3. **Adım reddedici yalnız çürütür.** Bir adım ancak öncülleri sağlayan, alan içinde ve iddiayı sağlamayan somut bir nokta bulununca reddedilir. Doğrulanamayan adım cezalandırılmaz ([10] şablon duyarlılığı riski yapısal olarak kapatıldı). Öncül havuzu = IR verileri + önceki tüm `eq` iddiaları (alt-atıf cezalandırılmaz) + aynı durum dalındaki `case` varsayımları. Tanımlayıcı iddialar (öncüllerin kısıtlamadığı yeni sembol içeren, özdeşlik biçiminde olmayan) atlanır. Bilinen sınır: **doğru ama gerekçesiz** adımlar (örn. `tyt-prob-018`) yakalanamaz. Bunun F4 kritiğiyle kapanacağı varsayılmıştı; **kapanmıyor**, gerekçesi README'nin "Bilinen tek açık" bölümünde ve karar ölçüme bırakıldı.
 4. **Füzyon = veto + noisy-OR.** Katman çıktıları ortalanmaz; bağımsız sert sertifikalar noisy-OR ile birleşir (kalibre Naive-Bayes ağırlıkları F6). Yalnız `primary=True` sertifikalar CORRECT'i temellendirebilir; `mc.consistency`, `sanity`, `steps.refute` yalnız veto edebilir.
 5. **Sandbox = süreç izolasyonu, güvenlik sandbox'ı değil.** Faz 1 model üretimi kod çalıştırmaz; ifadeler beyaz-listeli tokenizer ile ayrıştırılıp SymPy ile değerlendirilir. Her CAS/z3 çağrısı kalıcı worker süreçte, sert timeout'la; timeout'ta worker öldürülüp yeniden başlatılır. Bellek sınırı: POSIX'te RLIMIT_AS, Windows'ta Job Object; ikisi de yoksa bekçi iş parçacığı (`watchdog`). gVisor/Firecracker F3'te model kodu geldiğinde şart.
 6. **Determinizm.** Worker süreçlerinde `PYTHONHASHSEED=0` sabitlenir (ölçüm: `is_subset` sonucu hash tohumuna bağlı — `docs/E1-E10-measurement.md`). Rastgele nokta testleri sabit seed ile; sürümler her `VerificationResult.versions`'a yazılır.
@@ -43,7 +47,7 @@ Handoff §0/§10: yalnızca **F0 + F1-TYT + F1-AYT**, LLM katmanı yok (§11/1).
 
 ## 4. Kabul kapılarına karşı durum (F2 sonu, 260 öğe)
 
-`reports/eval_report.md` üretilmiş sayılardır; özet README'de. F1-TYT kapısı çözüm düzeyinde pozitif precision 0.975 (< 0.98) — tek FP, deterministik olarak çürütülemeyen "doğru ama gerekçesiz adım" sınıfındaki `tyt-prob-018`; cevap düzeyinde 1.000. Bu açık, F4 (kritik model) kapsamındadır ve gizlenmemiştir. F1-AYT ve F2 kapıları 1.000 / 1.000, F2 kapsama 1.000.
+`reports/eval_report.md` üretilmiş sayılardır; özet README'de. F1-TYT kapısı çözüm düzeyinde pozitif precision 0.975 (< 0.98) — tek FP, deterministik olarak çürütülemeyen "doğru ama gerekçesiz adım" sınıfındaki `tyt-prob-018`; cevap düzeyinde 1.000. Bu açık F4 kapsamında sanılıyordu; L6 çapraz kontrolü sertifikayla doğrulanmış adımdaki kritik raporunu iptal ettiği için bugünkü kodla kapanmıyor, ayrıntısı README'de. F1-AYT ve F2 kapıları 1.000 / 1.000, F2 kapsama 1.000.
 
 ## 5. F2 uygulama kararları
 

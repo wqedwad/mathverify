@@ -19,6 +19,22 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
 
+def _with_lean(result, ir, sol):
+    """Re-fuse with the formal layer added. L7 is positive-only and model-free here: it can add a
+    certificate, never take one away, so a missing or failing Lean toolchain leaves the verdict
+    exactly as it was."""
+    from mathverify.formal import l7_layer
+    from mathverify.verifier import fuse_layers
+    ir_d = ir if isinstance(ir, dict) else ir.to_dict()
+    sol_d = sol if isinstance(sol, dict) else sol.to_dict()
+    try:
+        lr, _rec = l7_layer(ir_d, sol_d, solver_family=None, use_model=False)
+    except Exception as e:  # noqa: BLE001
+        print(f"(Lean katmanı çalışmadı: {type(e).__name__}: {str(e)[:120]})")
+        return result
+    return fuse_layers(list(result.layers) + [lr])
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ir")
@@ -27,6 +43,8 @@ def main(argv=None) -> int:
     ap.add_argument("--text", help="free-text solution (path b): only the final answer is extracted")
     ap.add_argument("--json", action="store_true", help="print the full VerificationResult as JSON")
     ap.add_argument("--no-steps", action="store_true")
+    ap.add_argument("--lean", action="store_true",
+                    help="L7 formal katmanını da koştur (yerel Lean/Mathlib gerekir, model yok)")
     args = ap.parse_args(argv)
 
     from mathverify.verifier import verify
@@ -55,6 +73,8 @@ def main(argv=None) -> int:
         ap.error("--solution or --text is required")
 
     r = verify(ir, sol, run_steps=not args.no_steps)
+    if args.lean:
+        r = _with_lean(r, ir_d if args.item else ir, sol)
     if args.json:
         print(json.dumps(r.to_dict(), ensure_ascii=False, indent=1, default=str))
     else:

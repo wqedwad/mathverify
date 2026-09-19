@@ -181,3 +181,22 @@ def test_result_carries_versions_and_trace():
     r = verify(_ir("evaluate", {"expr": "2+2"}), _sol("value", "4"))
     assert r.versions["sympy"] == "1.14.0" and r.versions["mpmath"] == "1.3.0"
     assert "CORRECT" in r.decision_trace
+
+
+def test_every_package_exports_only_names_it_actually_has():
+    """`from mathverify.certify import *` used to raise ModuleNotFoundError: `__all__` listed the
+    layer names from the router registry ("certify.algebra") instead of the module attributes.
+    A dotted entry in `__all__` is always a bug, and nothing else in the suite would catch it."""
+    import importlib
+    import pkgutil
+
+    import mathverify
+
+    problems = []
+    for m in pkgutil.walk_packages(mathverify.__path__, "mathverify."):
+        mod = importlib.import_module(m.name)
+        for name in getattr(mod, "__all__", []):
+            if not hasattr(mod, name):
+                problems.append(f"{m.name}.__all__ -> {name}")
+    assert problems == [], problems
+    exec("from mathverify.certify import *", {})
