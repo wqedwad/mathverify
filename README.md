@@ -4,6 +4,9 @@
 ürettiği çözüm verildiğinde, çözümün geçerli olup olmadığına **kanıtla** karar verir, cevabı
 kendisi üretip karşılaştırarak değil. Cevap anahtarı doğrulama hattına hiç girmez.
 
+**Yeni bir oturum devralıyorsa önce [HANDOFF.md](HANDOFF.md) okunmalı:** yapılan işin tamamı,
+ölçülen sonuçlar, bulunan hatalar ve kalan iş orada.
+
 Handoff: `fable-handoff-matematik-dogrulama_1.md` · Kararlar: [DECISIONS.md](DECISIONS.md)
 Mimari: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Çözücü formatı: [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md)
 §6 ölçümleri: [docs/E1-E10-measurement.md](docs/E1-E10-measurement.md) · LLM katmanları: [docs/LLM_LAYERS.md](docs/LLM_LAYERS.md)
