@@ -13,6 +13,7 @@ Two rules keep the statements honest:
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -714,8 +715,176 @@ def _t_linalg(obj, ns, ca, name) -> LeanStatement | None:
     return None
 
 
+def _t_definite_integral(obj, ns, ca, name) -> LeanStatement | None:
+    p = obj.task.params
+    var = ns.get(p.get("var", "x"))
+    if not isinstance(var, sp.Symbol):
+        return None
+    integrand = parse_expr_str(p["integrand"], ns)
+    # piecewise integrands (Abs, floor, sign) need a split Mathlib will not do on its own
+    if integrand.has(sp.Abs, sp.floor, sp.ceiling, sp.sign, sp.Piecewise):
+        return None
+    a = parse_structural(str(p["a"]), ns)
+    b = parse_structural(str(p["b"]), ns)
+    claimed = parse_structural(str(ca["payload"]), ns) if ca["kind"] in ("value", "expression") \
+        else parse_answer(ca["kind"], ca["payload"], ns)
+    if claimed is None or isinstance(claimed, sp.Set):
+        return None
+    body = sympy_to_lean(integrand, "ℝ")
+    goal = (f"∫ {var.name} in ({sympy_to_lean(a, 'ℝ')} : ℝ)..({sympy_to_lean(b, 'ℝ')}), {body} "
+            f"= {sympy_to_lean(claimed, 'ℝ')}")
+    return LeanStatement(name, "", [], goal, "ℝ", "definite_integral",
+                         hints=_ftc_hints(integrand, var, a, b, body))
+
+
+def _finite_at(expr, var, pt) -> bool:
+    try:
+        v = complex(sp.N(expr.subs(var, pt), 20))
+    except (TypeError, ValueError, ZeroDivisionError, AttributeError):
+        return False
+    return all(math.isfinite(c) for c in (v.real, v.imag))
+
+
+def _ftc_hints(integrand, var, a, b, body: str) -> tuple[str, ...]:
+    """Tactics built on the fundamental theorem of calculus: SymPy *proposes* an antiderivative
+    and Lean proves, independently, both that it is one (`HasDerivAt`) and what it evaluates to.
+
+    The antiderivative never enters the theorem statement, so a wrong proposal costs a failed
+    proof, never a false certificate — the same separation of the generating calculation from the
+    checking calculation that the rest of the system runs on.  Returns () when the shape is out
+    of reach, which simply leaves the generic ladder to try."""
+    try:
+        used = set(integrand.free_symbols) | set(a.free_symbols) | set(b.free_symbols)
+        if any(sym.name == "t" for sym in used) or used - {var}:
+            return ()
+        lo, hi = sorted([float(sp.N(a)), float(sp.N(b))])
+        anti = sp.integrate(integrand, var)
+        if anti is None or anti.has(sp.Integral, sp.Piecewise, sp.Abs) or (anti.free_symbols - {var}):
+            return ()
+        if sp.simplify(sp.diff(anti, var) - integrand) != 0:
+            return ()
+        # an improper integral has no FTC proof: both functions must stay finite on the *closed*
+        # interval, endpoints included, or `fun_prop` cannot discharge differentiability there
+        for k in range(21):
+            pt = sp.Float(lo) + sp.Rational(k, 20) * (sp.Float(hi) - sp.Float(lo))
+            if not _finite_at(integrand, var, pt) or not _finite_at(anti, var, pt):
+                return ()
+        anti_lean = sympy_to_lean(anti.subs(var, sp.Symbol("t")), "ℝ")
+        a_lean, b_lean = sympy_to_lean(a, "ℝ"), sympy_to_lean(b, "ℝ")
+    except (TypeError, ValueError, AttributeError, NotImplementedError, sp.SympifyError):
+        return ()
+    vn = var.name
+    built = _hasderiv_proof(anti.subs(var, sp.Symbol("t")), sp.Symbol("t"), sp.Symbol(vn))
+    # (a) `deriv` route: cheap, works whenever `simp` can compute the derivative on its own
+    witnesses = [["    have hd : DifferentiableAt ℝ (fun t : ℝ => " + anti_lean + f") {vn} := by fun_prop",
+                  "    have h := hd.hasDerivAt"]]
+    # (b) constructed route: the derivative proof is assembled term by term from the same tree,
+    #     so Lean re-derives it from first principles instead of trusting SymPy
+    if built is not None:
+        term, value = built
+        witnesses.insert(0, [f"    have h : HasDerivAt (fun t : ℝ => {anti_lean}) ({value}) {vn} :="
+                             f" {term}"])
+    out: list[str] = []
+    for wit in witnesses:
+        head = "\n".join([
+            f"  have key : ∀ {vn} ∈ Set.uIcc ({a_lean} : ℝ) ({b_lean}), "
+            f"HasDerivAt (fun t : ℝ => {anti_lean}) ({body}) {vn} := by",
+            f"    intro {vn} hx",
+            *wit,
+            "    convert h using 1",
+            "    first | ring | (push_cast; ring) | (field_simp; ring) | (simp; ring) | simp"
+            " | norm_num",
+            "  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key "
+            "(by apply Continuous.intervalIntegrable; fun_prop)]",
+            "",
+        ])
+        out += [head + tail for tail in ("  norm_num", "  simp\n  norm_num",
+                                         "  field_simp\n  ring_nf\n  norm_num")]
+    return tuple(out)
+
+
+# `Real.hasDerivAt_f x : HasDerivAt Real.f (<derivative at x>) x`, and the chain-rule version
+# `HasDerivAt.f (hg : HasDerivAt g g' x) : HasDerivAt (fun y => Real.f (g y)) (<d> * g') x`.
+_HD_UNARY: dict[Any, tuple[str, str, Callable[[str], str], Callable[[str], str]]] = {
+    sp.exp: ("Real.hasDerivAt_exp", "HasDerivAt.exp",
+             lambda at: f"Real.exp {at}", lambda at: f"Real.exp {at}"),
+    sp.sin: ("Real.hasDerivAt_sin", "HasDerivAt.sin",
+             lambda at: f"Real.cos {at}", lambda at: f"Real.cos {at}"),
+    sp.cos: ("Real.hasDerivAt_cos", "HasDerivAt.cos",
+             lambda at: f"(-Real.sin {at})", lambda at: f"(-Real.sin {at})"),
+}
+
+
+def _hasderiv_proof(e, t, x) -> tuple[str, str] | None:
+    """Compile `fun t : ℝ => e` into a Lean proof term for `HasDerivAt … at x`, together with the
+    derivative value *exactly as the Mathlib lemma states it*.
+
+    Both halves matter: the value string has to be the lemma's own so the ascription elaborates
+    without unification guesswork, and the term is built bottom-up from the same expression tree,
+    so nothing about the derivative is taken on trust from SymPy — Lean type-checks every step.
+    Returns None for any shape outside this grammar, and the caller then falls back."""
+    def at_x(sub) -> str:
+        return sympy_to_lean(sub.subs(t, x), "ℝ")
+
+    def go(sub) -> tuple[str, str] | None:
+        if sub == t:
+            return f"(hasDerivAt_id {x.name})", "1"
+        if not sub.has(t):
+            return f"(hasDerivAt_const {x.name} ({sympy_to_lean(sub, 'ℝ')}))", "0"
+        if sub.is_Add:
+            acc = go(sub.args[0])
+            for nxt in sub.args[1:]:
+                rhs = go(nxt)
+                if acc is None or rhs is None:
+                    return None
+                acc = (f"({acc[0]}.add {rhs[0]})", f"({acc[1]} + {rhs[1]})")
+            return acc
+        if sub.is_Mul:
+            const = sp.Mul(*[f for f in sub.args if not f.has(t)])
+            rest = sp.Mul(*[f for f in sub.args if f.has(t)])
+            if const != 1 and rest != 1:
+                inner = go(rest)
+                if inner is None:
+                    return None
+                c = sympy_to_lean(const, "ℝ")
+                return (f"(HasDerivAt.const_mul ({c}) {inner[0]})", f"({c} * {inner[1]})")
+            factors = list(sub.args)
+            acc, seen = go(factors[0]), factors[0]
+            for nxt in factors[1:]:
+                rhs = go(nxt)
+                if acc is None or rhs is None:
+                    return None
+                acc = (f"({acc[0]}.mul {rhs[0]})",
+                       f"({acc[1]} * {at_x(nxt)} + {at_x(seen)} * {rhs[1]})")
+                seen = seen * nxt
+            return acc
+        if sub.is_Pow and sub.exp.is_Integer and sub.exp >= 2:
+            base = go(sub.base)
+            if base is None:
+                return None
+            n = int(sub.exp)
+            return (f"({base[0]}.pow {n})",
+                    f"(({n} : ℕ) * {at_x(sub.base)} ^ ({n} - 1) * {base[1]})")
+        spec = _HD_UNARY.get(sub.func)
+        if spec is not None and len(sub.args) == 1:
+            direct, chain, dval, cval = spec
+            if sub.args[0] == t:
+                return f"({direct} {x.name})", dval(x.name)
+            inner = go(sub.args[0])
+            if inner is None:
+                return None
+            return (f"({chain} {inner[0]})", f"({cval(at_x(sub.args[0]))} * {inner[1]})")
+        return None
+
+    try:
+        return go(e)
+    except (LeanPrintError, AttributeError, TypeError, ValueError):
+        return None
+
+
 TEMPLATES: dict[str, Callable] = {
     "evaluate": _t_evaluate,
+    "definite_integral": _t_definite_integral,
     "solve_equation": _t_solve_equation,
     "solve_inequality": _t_solve_inequality,
     "equation_of": _t_equation_of,

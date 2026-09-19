@@ -111,6 +111,18 @@ COUNT_LADDER = [
 
 SUM_LADDER = ["  decide", "  norm_num [Finset.sum_Icc_succ_top]", "  simp [Finset.sum_Icc_succ_top]; norm_num"]
 
+# ∫ x in a..b, f x = v — Mathlib's interval integral, with the closed-form lemmas
+_INT_LEMMAS = ("integral_pow, integral_id, intervalIntegral.integral_const, integral_sin, integral_cos, "
+               "integral_exp, integral_one_div, intervalIntegral.integral_const_mul, "
+               "intervalIntegral.integral_add, intervalIntegral.integral_sub, "
+               "intervalIntegral.integral_smul")
+INTEGRAL_LADDER = [
+    f"  norm_num [{_INT_LEMMAS}]",
+    f"  simp [{_INT_LEMMAS}]\n  norm_num",
+    f"  rw [intervalIntegral.integral_add (by fun_prop) (by fun_prop)]\n  norm_num [{_INT_LEMMAS}]",
+    f"  norm_num [{_INT_LEMMAS}, mul_comm, mul_assoc]",
+]
+
 EXTREMUM_LADDER = [
     "  constructor\n  · norm_num\n  · intro x hx\n    obtain ⟨h1, h2⟩ := hx\n    nlinarith [h1, h2, sq_nonneg x]",
 ]
@@ -127,6 +139,7 @@ _BY_KIND = {
     "linalg_eigenvalues": MATRIX_LADDER,
     "count_integers_finset": COUNT_LADDER,
     "series_sum_finite": SUM_LADDER,
+    "definite_integral": INTEGRAL_LADDER,
     "extremum_max": EXTREMUM_LADDER,
     "extremum_min": EXTREMUM_LADDER,
 }

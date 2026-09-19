@@ -41,10 +41,10 @@ Formal katman, modelsiz ([reports/lean_report.md](reports/lean_report.md)):
 
 | Metrik | Değer | Hedef |
 |---|---|---|
-| Lean ifadesi üretilebilen öğe | 114 / 260 (%43.8) | — |
-| Denetimden geçmiş formal sertifika | **81** (%31.2) | — |
+| Lean ifadesi üretilebilen öğe | 128 / 260 (%49.2) | — |
+| Denetimden geçmiş formal sertifika | **88** (%33.8) | — |
 | Yanlış cevaplı öğede kanıt | **0** | 0 |
-| Süre / öğe | ~0.21 s | — |
+| Süre / öğe | ~0.13 s | — |
 
 Adversaryal sertleştirme ([reports/adversarial_report.md](reports/adversarial_report.md)):
 

@@ -63,6 +63,27 @@ Bu tasarımın kendisi üç sadakat hatası ortaya çıkardı; üçü de düzelt
    -2 tanımsız) korumalı iff ile ayırt edilemiyordu. Artık "iddia edilen her nokta tanım
    kümesindedir" koşulu da ifadenin parçası.
 
+### Belirli integral: üreten hesap ile kontrol eden hesabın ayrımı
+
+Mathlib'in hazır integral lemmaları polinom, `sin`, `cos`, `exp`, `1/x` gibi tekil şekilleri
+kapatıyor; `x·eˣ` gibi çarpımları kapatmıyor. Bunun için analizin temel teoremini kullanıyoruz:
+SymPy bir ilkel fonksiyon **öneriyor**, Lean ise hem onun gerçekten ilkel olduğunu (`HasDerivAt`)
+hem de uç nokta farkının iddiaya eşit olduğunu bağımsız olarak kanıtlıyor.
+
+İki nokta bu katmanı güvenli tutuyor:
+
+- **İlkel fonksiyon teoremin ifadesine girmiyor**, yalnız taktiğe giriyor. Yanlış bir öneri
+  ispatın düşmesine yol açar, asla yanlış bir sertifikaya değil.
+- **Türev ispatı SymPy'den alınmıyor, aynı ifade ağacından terim terim derleniyor**
+  (`_hasderiv_proof`): `hasDerivAt_id`, `hasDerivAt_const`, `HasDerivAt.add/mul/pow/const_mul`
+  ve `Real.hasDerivAt_exp/sin/cos`. Lean her adımı tip denetiminden geçiriyor.
+
+Kapsam dışı iki sınıf bilerek reddediliyor: mutlak değer/tam değer içeren parçalı integrandlar
+(`build_statement` → None) ve `∫₀¹ ln x/√x` gibi **has olmayan** integraller — ilkel fonksiyon
+kapalı aralığın ucunda türevlenebilir olmadığı için temel teorem uygulanamaz. Ölçüm (20 kalem):
+7 kanıt, 0 yanlış pozitif, kapsam içindeki doğru cevapların tamamı; kalan 13 kalemde katman
+çekimser kalıyor.
+
 ## Determinizm
 
 - Tüm CAS/z3 çağrıları kalıcı worker süreçte, sert timeout'lu; worker'da `PYTHONHASHSEED=0`

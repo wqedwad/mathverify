@@ -147,6 +147,59 @@ def test_templates_cover_the_expected_task_kinds(evalset_items):
         assert kinds[expected] > 0, expected
 
 
+# ------------------------------------------------------------------ integrals (offline)
+def _int_item(items, integrand):
+    return next(i for i in items
+                if i["problem_ir"]["task"]["kind"] == "definite_integral"
+                and i["problem_ir"]["task"]["params"]["integrand"] == integrand)
+
+
+def test_piecewise_integrand_is_out_of_scope_rather_than_approximated(evalset_items):
+    it = _int_item(evalset_items, "Abs(x - 1) + Abs(x + 2)")
+    assert build_statement(it["problem_ir"], it["solution"]["claimed_answer"]) is None
+
+
+def test_improper_integral_gets_no_fundamental_theorem_tactic(evalset_items):
+    """∫₀¹ log x/√x is improper at 0: the antiderivative is not differentiable on the closed
+    interval, so the FTC tactic would be unsound to attempt. The statement still exists — the
+    layer simply fails to prove it and abstains."""
+    it = _int_item(evalset_items, "log(x)/sqrt(x)")
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st is not None and st.hints == ()
+
+
+def test_product_integrand_gets_a_constructed_derivative_proof(evalset_items):
+    it = _int_item(evalset_items, "x*exp(x)")
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st.hints, "no FTC tactic generated for a product integrand"
+    first = st.hints[0]
+    assert "intervalIntegral.integral_eq_sub_of_hasDerivAt" in first
+    assert "Real.hasDerivAt_exp" in first and "hasDerivAt_id" in first
+    assert "sorry" not in first and "native_decide" not in first
+
+
+def test_the_tactic_is_a_function_of_the_problem_not_of_the_claim(evalset_items):
+    """A tactic that depended on the claimed answer could steer Lean towards confirming it.
+    The hints for a right and a wrong claim must be byte-identical: only the goal differs."""
+    it = _int_item(evalset_items, "x*exp(x)")
+    right = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    wrong = build_statement(it["problem_ir"], {"kind": "value", "payload": "7", "option": None})
+    assert right.goal != wrong.goal
+    assert right.hints == wrong.hints
+
+
+def test_hasderiv_compiler_covers_its_grammar_and_refuses_the_rest():
+    from mathverify.formal.statement import _hasderiv_proof
+    t, pt = sp.Symbol("t"), sp.Symbol("x")
+    term, value = _hasderiv_proof((t - 1) * sp.exp(t), t, pt)
+    assert ".mul" in term and "Real.hasDerivAt_exp x" in term
+    assert "Real.exp x" in value
+    assert _hasderiv_proof(sp.sin(t ** 2), t, pt)[0].startswith("(HasDerivAt.sin")
+    assert _hasderiv_proof(sp.Integer(5), t, pt) == ("(hasDerivAt_const x (5))", "0")
+    assert _hasderiv_proof(sp.log(t), t, pt) is None          # needs a side condition
+    assert _hasderiv_proof(sp.atan(t), t, pt) is None          # outside the grammar
+
+
 # ------------------------------------------------------------------ real Lean
 def test_lean_proves_true_and_refuses_false(evalset_items):
     lean = _lean()

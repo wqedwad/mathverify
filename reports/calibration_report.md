@@ -16,8 +16,8 @@ Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.
 
 | Sinyal | destek | geçerli | geçersiz | güvenilirlik | log-odds ağırlığı | kullanıldı |
 |---|---|---|---|---|---|---|
-| `flag:step_refuted` | 43 | 0 | 43 | 0.000 | -3.797 | evet |
 | `steps.refute:fail:support` | 43 | 0 | 43 | 0.000 | -3.797 | evet |
+| `flag:step_refuted` | 43 | 0 | 43 | 0.000 | -3.797 | evet |
 | `certify.algebra:fail:primary` | 15 | 0 | 15 | 0.000 | -2.786 | evet |
 | `certify.calculus:fail:primary` | 7 | 0 | 7 | 0.000 | -2.092 | evet |
 | `certify.wordproblem:fail:primary` | 6 | 0 | 6 | 0.000 | -1.959 | evet |
@@ -26,7 +26,6 @@ Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.
 | `mc.consistency:fail:support` | 4 | 0 | 4 | 0.000 | -1.623 | hayır (destek < eşik) |
 | `certify.geometry:fail:primary` | 3 | 0 | 3 | 0.000 | -1.399 | hayır (destek < eşik) |
 | `certify.series:fail:primary` | 3 | 0 | 3 | 0.000 | -1.399 | hayır (destek < eşik) |
-| `flag:payload_cleaned` | 3 | 0 | 3 | 0.000 | -1.399 | hayır (destek < eşik) |
 | `certify.limits:fail:primary` | 3 | 0 | 3 | 0.000 | -1.399 | hayır (destek < eşik) |
 | `certify.trig:fail:primary` | 3 | 0 | 3 | 0.000 | -1.399 | hayır (destek < eşik) |
 | `certify.counting:fail:primary` | 2 | 0 | 2 | 0.000 | -1.112 | hayır (destek < eşik) |
