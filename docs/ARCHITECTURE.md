@@ -63,26 +63,46 @@ Bu tasarımın kendisi üç sadakat hatası ortaya çıkardı; üçü de düzelt
    -2 tanımsız) korumalı iff ile ayırt edilemiyordu. Artık "iddia edilen her nokta tanım
    kümesindedir" koşulu da ifadenin parçası.
 
-### Belirli integral: üreten hesap ile kontrol eden hesabın ayrımı
+### Analiz: üreten hesap ile kontrol eden hesabın ayrımı
 
-Mathlib'in hazır integral lemmaları polinom, `sin`, `cos`, `exp`, `1/x` gibi tekil şekilleri
-kapatıyor; `x·eˣ` gibi çarpımları kapatmıyor. Bunun için analizin temel teoremini kullanıyoruz:
-SymPy bir ilkel fonksiyon **öneriyor**, Lean ise hem onun gerçekten ilkel olduğunu (`HasDerivAt`)
-hem de uç nokta farkının iddiaya eşit olduğunu bağımsız olarak kanıtlıyor.
+Türev, ilkel fonksiyon ve belirli integral iddialarının üçü de tek bir Lean nesnesine indiriliyor:
+`HasDerivAt f v a`. Bu seçim bilinçli — `deriv f a = v` fonksiyon türevlenebilir *değilken* de
+boş yere doğru çıkar ve yanlış gerekçeyle sertifika üretirdi; `HasDerivAt` türevlenebilirliği de
+iddia ediyor.
 
-İki nokta bu katmanı güvenli tutuyor:
+| Görev | Teorem |
+|---|---|
+| `derivative` (noktada) | `HasDerivAt (fun t => f t) (iddia) a` |
+| `derivative` (fonksiyon) | `∀ x, <tekillik koşulları> → HasDerivAt (fun t => f t) (iddia x) x` |
+| `antiderivative` | `∀ x, <tekillik koşulları> → HasDerivAt (fun t => F t) (f x) x` |
+| `definite_integral` | `∫ x in a..b, f x = iddia` (temel teorem taktiğiyle) |
 
-- **İlkel fonksiyon teoremin ifadesine girmiyor**, yalnız taktiğe giriyor. Yanlış bir öneri
-  ispatın düşmesine yol açar, asla yanlış bir sertifikaya değil.
+Belirli integralde Mathlib'in hazır lemmaları polinom, `sin`, `cos`, `exp`, `1/x` gibi tekil
+şekilleri kapatıyor ama `x·eˣ` gibi çarpımları kapatmıyor. Orada analizin temel teoremini
+kullanıyoruz: SymPy bir ilkel fonksiyon **öneriyor**, Lean hem onun gerçekten ilkel olduğunu hem
+de uç nokta farkının iddiaya eşit olduğunu bağımsız kanıtlıyor.
+
+Üç nokta bu katmanı güvenli tutuyor:
+
+- **Önerilen ilkel fonksiyon teoremin ifadesine girmiyor**, yalnız taktiğe giriyor. Yanlış bir
+  öneri ispatın düşmesine yol açar, asla yanlış bir sertifikaya değil.
 - **Türev ispatı SymPy'den alınmıyor, aynı ifade ağacından terim terim derleniyor**
-  (`_hasderiv_proof`): `hasDerivAt_id`, `hasDerivAt_const`, `HasDerivAt.add/mul/pow/const_mul`
-  ve `Real.hasDerivAt_exp/sin/cos`. Lean her adımı tip denetiminden geçiriyor.
+  (`_hasderiv_proof`): `hasDerivAt_id'`, `hasDerivAt_const`, `HasDerivAt.add/mul/pow/const_mul`,
+  `Real.hasDerivAt_exp/sin/cos/log` ve zincir kuralı sürümleri. Türevin **değeri hiç yazılmıyor**:
+  Lean terimden kendisi çıkarıyor, geriye yalnız "iddia edilen değer buna eşit mi" kalıyor. İddia
+  türev ispatının içine hiç girmiyor, yani ispatı kendi lehine yönlendiremiyor.
+- **Yan koşullar varsayılmıyor.** `Real.log`'un türevi için gereken `x ≠ 0` ayrı bir Lean hedefi
+  olarak yazılıyor (`have hs0 : (x) ≠ 0 := by …`) ve Lean onu da kanıtlıyor.
+
+İfadedeki tekillik koşulları (`x ≠ 0`) SymPy'nin `singularities` kümesinden, yani **problemin
+kendi ifadelerinden** geliyor; iddiadan değil. Böylece yanlış bir iddia, sağlaması gereken
+teoremi daraltamıyor. SymPy koşulu kesin belirleyemezse şablon ifade üretmiyor.
 
 Kapsam dışı iki sınıf bilerek reddediliyor: mutlak değer/tam değer içeren parçalı integrandlar
 (`build_statement` → None) ve `∫₀¹ ln x/√x` gibi **has olmayan** integraller — ilkel fonksiyon
-kapalı aralığın ucunda türevlenebilir olmadığı için temel teorem uygulanamaz. Ölçüm (20 kalem):
-7 kanıt, 0 yanlış pozitif, kapsam içindeki doğru cevapların tamamı; kalan 13 kalemde katman
-çekimser kalıyor.
+kapalı aralığın ucunda türevlenebilir olmadığı için temel teorem uygulanamaz. Bu üç görevin
+30 kaleminde ölçüm: **13 kanıt, 0 yanlış pozitif**; kapsam içindeki doğru cevapların tamamı
+kanıtlandı, kalan kalemlerde katman çekimser kalıyor.
 
 ## Determinizm
 

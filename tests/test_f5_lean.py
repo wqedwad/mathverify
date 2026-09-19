@@ -191,13 +191,53 @@ def test_the_tactic_is_a_function_of_the_problem_not_of_the_claim(evalset_items)
 def test_hasderiv_compiler_covers_its_grammar_and_refuses_the_rest():
     from mathverify.formal.statement import _hasderiv_proof
     t, pt = sp.Symbol("t"), sp.Symbol("x")
-    term, value = _hasderiv_proof((t - 1) * sp.exp(t), t, pt)
-    assert ".mul" in term and "Real.hasDerivAt_exp x" in term
-    assert "Real.exp x" in value
+    term, sides = _hasderiv_proof((t - 1) * sp.exp(t), t, pt)
+    assert ".mul" in term and "Real.hasDerivAt_exp (x)" in term and sides == []
     assert _hasderiv_proof(sp.sin(t ** 2), t, pt)[0].startswith("(HasDerivAt.sin")
-    assert _hasderiv_proof(sp.Integer(5), t, pt) == ("(hasDerivAt_const x (5))", "0")
-    assert _hasderiv_proof(sp.log(t), t, pt) is None          # needs a side condition
-    assert _hasderiv_proof(sp.atan(t), t, pt) is None          # outside the grammar
+    assert _hasderiv_proof(sp.Integer(5), t, pt) == ("(hasDerivAt_const (x) (5))", [])
+    assert _hasderiv_proof(sp.atan(t), t, pt) is None           # outside the grammar
+
+
+def test_a_side_condition_is_proved_not_assumed():
+    """`Real.log` is only differentiable away from 0. The compiler records that as its own Lean
+    goal, so Lean proves it — it is never silently taken for granted."""
+    from mathverify.formal.statement import _hasderiv_proof, _hasderiv_block
+    t, pt = sp.Symbol("t"), sp.Symbol("x")
+    built = _hasderiv_proof(t * sp.log(t), t, pt)
+    assert built[1] == ["x"], built
+    block = "\n".join(_hasderiv_block(built, 2, ("hg0",)))
+    assert "have hs0 : (x) ≠ 0 := by" in block
+    assert "sorry" not in block and "assumption; done" in block
+
+
+def test_derivative_becomes_hasderivat_not_a_deriv_equation(evalset_items):
+    """`deriv f a = v` is vacuously true where f is not differentiable; `HasDerivAt` is not.
+    The stronger form is the one that may hand out a certificate."""
+    it = next(i for i in evalset_items if i["id"] == "ayt-tur-002")
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st.goal.startswith("HasDerivAt ") and "deriv " not in st.goal
+    assert "Real.exp" in st.goal and st.kind == "derivative_at"
+    wrong = build_statement(it["problem_ir"], {"kind": "value", "payload": "7", "option": None})
+    assert wrong.goal != st.goal and wrong.hints == st.hints
+
+
+def test_antiderivative_states_the_derivative_claim_with_its_own_guard(evalset_items):
+    """"∫ log x dx = x log x − x + C" is the claim that the derivative of the right-hand side is
+    log x wherever both sides exist. The excluded point comes from SymPy's singularity set of the
+    two expressions, never from the claim."""
+    it = next(i for i in evalset_items
+              if i["problem_ir"]["task"]["kind"] == "antiderivative" and i["id"] == "ayt-int-001")
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st.goal.startswith("∀ x : ℝ, x ≠ 0 → HasDerivAt ")
+    assert "Real.log x" in st.goal and "+ C" not in st.goal and "C" not in st.goal.split("=>")[1]
+    assert st.kind == "antiderivative_hasderiv" and st.hints
+
+
+def test_a_wrong_antiderivative_still_gets_a_statement_to_fail_on(evalset_items):
+    it = next(i for i in evalset_items if i["id"] == "ayt-int-014")      # claims 1/x + C
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st is not None and "1 / t" in st.goal
+    assert st.hints == ()            # 1/t is outside the compiler's grammar: no tactic, no proof
 
 
 # ------------------------------------------------------------------ real Lean
