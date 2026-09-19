@@ -1,16 +1,16 @@
 == testler ==
-  pytest: 45 s (exit 0)
+  pytest: 48 s (exit 0)
 == deterministik değerlendirme ==
-  run_eval: 39 s (exit 0)
+  run_eval: 66 s (exit 0)
 == Lean taraması ==
-  run_lean: 61 s (exit 0)
+  run_lean: 69 s (exit 0)
 == adversaryal ==
-  adversarial: 462 s (exit 0)
+  adversarial: 812 s (exit 0)
 == kalibrasyon ==
-  calibrate: 22 s (exit 0)
+  calibrate: 36 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                    311 passed, 2 skipped in 44.44s   (hedef: hepsi geçer)
+  [OK  ] birim testleri                    322 passed, 2 skipped in 47.76s   (hedef: hepsi geçer)
   [OK  ] cevap düzeyi pozitif precision    1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision    1.0   (hedef: 0.98)
   [OK  ] kapsama                           1.0   (hedef: 0.85)
@@ -19,7 +19,7 @@
   [OK  ] çözüm düzeyi pozitif precision    0.9930555555555556   (hedef: raporlanır)
   [OK  ] D hücresi tespit                  0.9743589743589743   (hedef: raporlanır)
   [OK  ] Lean FP                           0   (hedef: 0)
-  [OK  ] Lean sertifika                    88/260   (hedef: raporlanır)
+  [OK  ] Lean sertifika                    107/260   (hedef: raporlanır)
   [OK  ] saldırı başarısı                  0.000%   (hedef: < %2)
   [OK  ] kalibre test precision (poz/neg)  1.0/1.0   (hedef: raporlanır)
 

@@ -41,10 +41,10 @@ Formal katman, modelsiz ([reports/lean_report.md](reports/lean_report.md)):
 
 | Metrik | Değer | Hedef |
 |---|---|---|
-| Lean ifadesi üretilebilen öğe | 138 / 260 (%53.1) | — |
-| Denetimden geçmiş formal sertifika | **94** (%36.2) | — |
+| Lean ifadesi üretilebilen öğe | 156 / 260 (%60.0) | — |
+| Denetimden geçmiş formal sertifika | **107** (%41.2) | — |
 | Yanlış cevaplı öğede kanıt | **0** | 0 |
-| Süre / öğe | ~0.14 s | — |
+| Süre / öğe | ~0.26 s | — |
 
 Adversaryal sertleştirme ([reports/adversarial_report.md](reports/adversarial_report.md)):
 
@@ -139,7 +139,11 @@ Lean 4.34.0 + Mathlib. Windows'ta `PYTHONUTF8=1` ile çalıştırın.
   ([10]: aksi hâlde kanonik olmayan doğru çözümlerde %75-85 yanlış red).
 * **formal/** Lean ifadesini IR'dan deterministik şablonla üretir, önce taktik merdiveni dener,
   ve hiçbir ispatı `sorry` / aksiyom / vakumluk / kullanılmayan hipotez denetiminden geçmeden
-  kabul etmez.
+  kabul etmez. Analiz kalemlerinde SymPy yalnız **öneriyor** (ilkel fonksiyon, ekstremum tanık
+  noktası); türev ispatı ifade ağacından terim terim derleniyor ve türevin değerini Lean kendisi
+  çıkarıyor. Saymalarda teorem Lean'in kendi tanımları üzerinden kuruluyor (`Equiv.Perm`,
+  `powersetCard`, `↪`), bizim formülümüz üzerinden değil. Çeviremediği ya da sadakat riski
+  taşıyan sınıflarda (olasılık olay yüklemleri, limitler, sentetik geometri) ifade üretmez.
 * **resolve/**, **meta/**, **critic/** çapraz aile LLM sinyalleridir: kararı yalnız daha
   temkinli yapabilirler.
 * **fuse/** sert veto + noisy-OR + abstain; kalibrasyon opsiyoneldir (aşağıya bakın).

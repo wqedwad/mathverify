@@ -1,5 +1,7 @@
 """F5 — deterministic Lean statement generation (always runs) and real proof checking
 (skipped when the Lean/WSL toolchain is not installed)."""
+import copy
+
 import pytest
 import sympy as sp
 
@@ -238,6 +240,78 @@ def test_a_wrong_antiderivative_still_gets_a_statement_to_fail_on(evalset_items)
     st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
     assert st is not None and "1 / t" in st.goal
     assert st.hints == ()            # 1/t is outside the compiler's grammar: no tactic, no proof
+
+
+# ------------------------------------------------------------------ counting (offline)
+def test_counting_statements_use_leans_own_definitions(evalset_items):
+    """`Nat.factorial 5 = 120` would only confirm our choice of formula. The theorem has to be
+    about the objects themselves: permutations, k-subsets, injections."""
+    by_id = {i["id"]: i for i in evalset_items}
+    want = {"tyt-ola-002": "Fintype.card (Equiv.Perm (Fin 5)) = 120",
+            "tyt-ola-003": "((Finset.univ : Finset (Fin 6)).powersetCard 3).card = 20",
+            "tyt-ola-004": "Fintype.card (Fin 3 ↪ Fin 5) = 60"}
+    for item_id, goal in want.items():
+        it = by_id[item_id]
+        st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+        assert st is not None and st.goal == goal, (item_id, st.goal if st else None)
+        assert "factorial" not in st.goal and "choose" not in st.goal
+        assert st.hints
+
+
+def test_a_filtered_count_is_out_of_scope_rather_than_approximated(evalset_items):
+    it = next(i for i in evalset_items if i["problem_ir"]["task"]["kind"] == "count_structures")
+    ir = copy.deepcopy(it["problem_ir"])
+    ir["task"]["params"]["predicate"] = "x % 2 == 0"
+    assert build_statement(ir, it["solution"]["claimed_answer"]) is None
+
+
+def test_probability_items_get_no_lean_statement(evalset_items):
+    """Translating the event predicate is where an unfaithful statement would come from, so the
+    layer declines and abstains instead of guessing."""
+    for it in evalset_items:
+        if it["problem_ir"]["task"]["kind"] == "probability":
+            assert build_statement(it["problem_ir"], it["solution"]["claimed_answer"]) is None
+
+
+def test_a_wrong_count_gets_a_statement_that_is_simply_false(evalset_items):
+    it = next(i for i in evalset_items if i["id"] == "tyt-ola-013")          # claims 25, not 120
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st is not None and st.goal.endswith("= 25")
+
+
+# ------------------------------------------------------------------ recurrences (offline)
+def test_recurrence_states_the_data_as_hypotheses_not_as_a_computation(evalset_items):
+    it = next(i for i in evalset_items if i["id"] == "ayt-diz-001")     # a(6)=43, order 2
+    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+    assert st is not None and st.kind == "recurrence_term"
+    assert st.binders == "(a : ℕ → ℝ)"
+    assert st.hypotheses[:2] == ["a 1 = 1", "a 2 = 3"]
+    assert st.hypotheses[2].startswith("∀ n : ℕ, 3 ≤ n → a n =")
+    assert "a (n - 1)" in st.hypotheses[2] and "a (n - 2)" in st.hypotheses[2]
+    assert st.goal == "a 6 = 43"
+    # no intermediate term is handed to Lean: it has to iterate the recurrence itself
+    for value in ("7", "17", "23"):
+        assert f"= {value}" not in st.goal and all(f"= {value}" not in h for h in st.hypotheses)
+    assert st.vacuity_probe() and st.no_hyp_probe("  linarith")
+
+
+def test_recurrence_claim_only_changes_the_goal(evalset_items):
+    right = next(i for i in evalset_items if i["id"] == "ayt-diz-001")
+    wrong = next(i for i in evalset_items if i["id"] == "ayt-diz-012")   # same problem, claims 21
+    a = build_statement(right["problem_ir"], right["solution"]["claimed_answer"])
+    b = build_statement(wrong["problem_ir"], wrong["solution"]["claimed_answer"])
+    assert a.hypotheses == b.hypotheses and a.hints == b.hints
+    assert a.goal == "a 6 = 43" and b.goal == "a 6 = 21"
+
+
+def test_recurrence_out_of_scope_cases_are_declined(evalset_items):
+    it = next(i for i in evalset_items if i["id"] == "ayt-diz-001")
+    far = copy.deepcopy(it["problem_ir"])
+    far["task"]["params"]["index"] = 500                      # would unroll 498 tactic lines
+    assert build_statement(far, it["solution"]["claimed_answer"]) is None
+    gappy = copy.deepcopy(it["problem_ir"])
+    gappy["task"]["params"]["initial"] = {"1": "1", "3": "3"}  # not contiguous: cannot iterate
+    assert build_statement(gappy, it["solution"]["claimed_answer"]) is None
 
 
 # ------------------------------------------------------------------ real Lean

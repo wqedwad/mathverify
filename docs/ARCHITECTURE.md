@@ -104,6 +104,44 @@ kapalı aralığın ucunda türevlenebilir olmadığı için temel teorem uygula
 30 kaleminde ölçüm: **13 kanıt, 0 yanlış pozitif**; kapsam içindeki doğru cevapların tamamı
 kanıtlandı, kalan kalemlerde katman çekimser kalıyor.
 
+### Sayma: formülü değil, sayılan nesneyi doğrula
+
+Kombinatorik saymalarda kolay ama değersiz yol `Nat.factorial 5 = 120` yazmaktır: bu teorem
+yalnız *bizim formül seçimimizi* onaylar, yani üreten hesabın kendisini tekrar eder. Bunun yerine
+ifade, Lean'in nesneyi kendi tanımı üzerinden kuruluyor:
+
+| Soru | Teorem |
+|---|---|
+| n nesnenin tüm dizilişleri | `Fintype.card (Equiv.Perm (Fin n)) = iddia` |
+| n elemandan k'lı seçim | `((Finset.univ : Finset (Fin n)).powersetCard k).card = iddia` |
+| n elemandan k'lı sıralı seçim | `Fintype.card (Fin k ↪ Fin n) = iddia` |
+
+11 kalemde 8 kanıt, 0 yanlış pozitif — doğru cevapların tamamı kanıtlandı, üç yanlış cevabın
+üçü de reddedildi.
+
+### Tekrarlama bağıntısı: veriyi hipotez yap, hesabı Lean yapsın
+
+`a(n) = a(n-1) + 2a(n-2)`, `a(1)=1`, `a(2)=3` iken `a(6) = 43` iddiası şu teoreme dönüşüyor:
+
+```lean
+theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 1) (h2 : a 2 = 3)
+    (h3 : ∀ n : ℕ, 3 ≤ n → a n = (a (n - 1) + (2 * a (n - 2)))) : a 6 = 43
+```
+
+Ara değerlerin hiçbirini biz vermiyoruz; taktik yalnız `h3`'ü 3'ten 6'ya kadar örnekliyor ve
+aritmetiği Lean yapıyor. Bağıntının sağ tarafı yazıcıdan geçiyor: `a (n-1)` gibi uygulamalar
+geçici sembollere çevrilip kesin yazıcıyla basılıyor, sonra geri konuyor — yani yazıcı yine
+çeviremediği hiçbir şeyi tahmin etmiyor. Hipotezler var olduğu için **vakum denetimi** ve
+**kullanılmayan hipotez denetimi** de bu ifadede çalışıyor.
+
+**Olasılık kalemleri bilerek kapsam dışı.** Onlarda olay yüklemi (`sum(t) == 7` gibi) Lean'e
+çevrilmek zorunda ve sadakat riski tam orada: zar yüzlerini `Fin 6` ile kodlarken bir birim
+kayması teoremi sessizce başka bir soruya dönüştürebilir. Katman ifade üretmeyip çekimser
+kalıyor; bu kalemler zaten deterministik katmanlarca karara bağlanıyor. Aynı gerekçeyle
+`limit` kalemleri de dışarıda: her limit biçimi (kaldırılabilir tekillik, sonsuzda limit, tek
+taraflı limit, `(1+1/n)ⁿ`) ayrı bir Mathlib kalıbı istiyor ve yarısı için sadık bir ifade
+"DNE"nin olumsuzlamasını gerektiriyor; L7 ise yalnız pozitif kanıt üretiyor.
+
 ## Determinizm
 
 - Tüm CAS/z3 çağrıları kalıcı worker süreçte, sert timeout'lu; worker'da `PYTHONHASHSEED=0`

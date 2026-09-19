@@ -1033,11 +1033,131 @@ def _t_antiderivative(obj, ns, ca, name) -> LeanStatement | None:
                                                  intro, guards))
 
 
+def _t_count_structures(obj, ns, ca, name) -> LeanStatement | None:
+    """A counting claim is checked against Lean's *own* definition of the thing being counted —
+    permutations of a finite type, k-element subsets, injections — not against our formula for it.
+    That is the whole point: if we wrote `Nat.factorial 5 = 120` the theorem would only confirm
+    our own choice of formula, which is the generating calculation, not a check of it."""
+    p = obj.task.params
+    if (p.get("predicate") or "").strip():
+        return None                     # a filtered count needs the predicate translated as well
+    if ca["kind"] != "count":
+        return None
+    try:
+        claimed = int(ca["payload"])
+    except (TypeError, ValueError):
+        return None
+    space = p.get("space") or {}
+    structure = space.get("structure")
+    n, k = space.get("n"), space.get("k")
+    if n is None and isinstance(space.get("elements"), list):
+        n = len(space["elements"])
+    if not isinstance(n, int) or claimed < 0 or not (0 < n <= 20):
+        return None
+    if structure == "arrangement_all":
+        return LeanStatement(name, "", [], f"Fintype.card (Equiv.Perm (Fin {n})) = {claimed}", "ℕ",
+                             "count_arrangements",
+                             hints=("  simp only [Fintype.card_perm, Fintype.card_fin]\n  decide",
+                                    "  simp [Fintype.card_perm]\n  decide",
+                                    "  norm_num [Fintype.card_perm, Nat.factorial]"))
+    if not isinstance(k, int) or not (0 <= k <= n):
+        return None
+    if structure == "combination":
+        return LeanStatement(name, "", [],
+                             f"((Finset.univ : Finset (Fin {n})).powersetCard {k}).card = {claimed}",
+                             "ℕ", "count_subsets",
+                             hints=("  simp only [Finset.card_powersetCard, Finset.card_univ,"
+                                    " Fintype.card_fin]\n  decide",
+                                    "  simp [Finset.card_powersetCard, Nat.choose]", "  decide"))
+    if structure == "permutation":
+        return LeanStatement(name, "", [], f"Fintype.card (Fin {k} ↪ Fin {n}) = {claimed}", "ℕ",
+                             "count_injections",
+                             hints=("  simp [Fintype.card_embedding_eq]",
+                                    "  simp only [Fintype.card_embedding_eq, Fintype.card_fin]\n"
+                                    "  decide",
+                                    "  norm_num [Fintype.card_embedding_eq, Nat.descFactorial]"))
+    return None
+
+
+def _rec_to_lean(expr, f, nvar, fname: str) -> str:
+    """Render a recurrence right-hand side, where `f(n-k)` has no direct SymPy->Lean rendering.
+    Each application is swapped for a placeholder symbol, the exact printer does the rest, and the
+    placeholders are put back — so the term still goes through the printer that refuses to guess."""
+    subs, back = {}, {}
+    for app in sorted(expr.atoms(sp.core.function.AppliedUndef), key=str):
+        if app.func is not f or len(app.args) != 1:
+            raise LeanPrintError(f"unsupported application {app}")
+        shift = sp.simplify(app.args[0] - nvar)
+        if not shift.is_Integer or shift > 0:
+            raise LeanPrintError(f"non-constant or forward index {app}")
+        tag = sp.Symbol(f"RECPLACEHOLDER{abs(int(shift))}")
+        subs[app] = tag
+        back[tag.name] = f"{fname} {nvar.name}" if shift == 0 \
+            else f"{fname} ({nvar.name} - {abs(int(shift))})"
+    out = sympy_to_lean(expr.xreplace(subs), "ℝ")
+    for tag_name, rendered in back.items():
+        out = out.replace(tag_name, rendered)
+    return out
+
+
+def _t_recurrence_term(obj, ns, ca, name) -> LeanStatement | None:
+    """"a(6) = 43 for a(n) = a(n-1) + 2a(n-2), a(1)=1, a(2)=3" becomes a theorem whose hypotheses
+    are the recurrence and the initial terms. Lean does the iteration itself; we supply no value
+    along the way, and the unused-hypothesis probe checks the data were actually needed."""
+    p = obj.task.params
+    fname, vname = p.get("name", "a"), p.get("var", "n")
+    if not (fname.isidentifier() and fname.isalpha() and len(fname) <= 2):
+        return None
+    ns2 = dict(ns)
+    f = sp.Function(fname)
+    ns2[fname] = f
+    nvar = ns2.get(vname)
+    if not isinstance(nvar, sp.Symbol):
+        nvar = sp.Symbol(vname, integer=True)
+        ns2[vname] = nvar
+    try:
+        rel = parse_relation(p["recurrence"], ns2)
+        initial = {int(sp.sympify(str(k))): parse_expr_str(str(v), ns2)
+                   for k, v in (p.get("initial") or {}).items()}
+        index = int(p["index"])
+        claimed = parse_structural(str(ca["payload"]), ns2) if ca["kind"] in ("value", "expression") \
+            else None
+    except (ParseError, LeanPrintError, TypeError, ValueError, KeyError, sp.SympifyError):
+        return None
+    if not isinstance(rel, sp.Equality) or rel.lhs != f(nvar) or claimed is None:
+        return None
+    if claimed.free_symbols or not initial or any(v.free_symbols for v in initial.values()):
+        return None
+    start = max(initial) + 1
+    if sorted(initial) != list(range(min(initial), start)) or min(initial) < 0:
+        return None
+    if not (start <= index <= start + 40) or rel.rhs.has(f(nvar)):
+        return None
+    try:
+        rhs = _rec_to_lean(rel.rhs, f, nvar, fname)
+        hyps = [f"{fname} {k} = {sympy_to_lean(v, 'ℝ')}" for k, v in sorted(initial.items())]
+        hyps.append(f"∀ {vname} : ℕ, {start} ≤ {vname} → {fname} {vname} = {rhs}")
+        goal = f"{fname} {index} = {sympy_to_lean(claimed, 'ℝ')}"
+    except LeanPrintError:
+        return None
+    hn = f"h{len(hyps)}"                                   # the recurrence hypothesis
+    steps = [f"  have e{k} := {hn} {k} (by norm_num)" for k in range(start, index + 1)]
+    ev = " ".join(f"e{k}" for k in range(start, index + 1))
+    facts = ", ".join([f"h{i}" for i in range(1, len(hyps))] + [f"e{k}" for k in range(start, index + 1)])
+    hints = ("\n".join(steps + [f"  norm_num at {ev}", f"  linarith [{facts}]"]),
+             "\n".join(steps + [f"  norm_num at {ev} ⊢", f"  linarith [{facts}]"]),
+             "\n".join(steps + [f"  norm_num at {ev}", f"  nlinarith [{facts}]"]))
+    return LeanStatement(name, f"({fname} : ℕ → ℝ)", hyps, goal, "ℝ", "recurrence_term",
+                         hints=hints)
+
+
 TEMPLATES: dict[str, Callable] = {
     "evaluate": _t_evaluate,
     "definite_integral": _t_definite_integral,
     "derivative": _t_derivative,
     "antiderivative": _t_antiderivative,
+    "count_structures": _t_count_structures,
+    "recurrence_term": _t_recurrence_term,
     "solve_equation": _t_solve_equation,
     "solve_inequality": _t_solve_inequality,
     "equation_of": _t_equation_of,
