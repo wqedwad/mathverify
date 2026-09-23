@@ -22,8 +22,8 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | F2 sentetik geometri, kombinatorik, seriler, lineer cebir | **tamam** |
 | F3 LLM ön yüzü, L4 çapraz aile, L5 metamorfik | **kod tamam, ölçüm yarım** (Anthropic kredisi bitti) |
 | F4 kritik + meta-doğrulama | **kod tamam, hiç koşmadı** (ölçüm hattı hazır, kredi bekliyor) |
-| Denetim (20 Eylül): krediyle ilgisi olmayan 11 boşluk | **kapatıldı ve ölçüldü** ([HANDOFF §13](HANDOFF.md)) |
-| İkinci denetim (23 Eylül): literatür + doğrulayıcının metamorfik testi | **4 yanlış-onay sınıfı kapatıldı** ([HANDOFF §14](HANDOFF.md), [docs/QUALITY.md](docs/QUALITY.md)) |
+| Denetim (20 Eylül): krediyle ilgisi olmayan 11 boşluk | **kapatıldı ve ölçüldü** ([HANDOFF §4](HANDOFF.md), DECISIONS §23–25) |
+| İkinci denetim (23 Eylül): literatür + doğrulayıcının metamorfik testi | **4 yanlış-onay sınıfı kapatıldı** ([HANDOFF §3–4](HANDOFF.md), DECISIONS §26–30, [docs/QUALITY.md](docs/QUALITY.md)) |
 | F5 Lean 4 + Mathlib | **tamam ve ölçüldü** (model gerektirmeyen yolla) |
 | F6 adversaryal sertleştirme + kalibrasyon | **tamam ve ölçüldü** |
 
@@ -80,7 +80,7 @@ Adversaryal sertleştirme, **üç yüzeyde** ([reports/adversarial_report.md](re
 Eski tarama 6009 saldırıyı **tek** yüzeye uyguluyordu ve her saldırıda şık harfini siliyordu.
 Genişletildiğinde iki gerçek zafiyet çıktı ve ikisi de kapatıldı: adım iddiasını bozarak reddi
 iptal etmek (INCORRECT → CORRECT) ve küme cevaplarında `{` önekinin doğru cevabı reddettirmesi
-(CORRECT → INCORRECT). Ayrıntı: [HANDOFF §13](HANDOFF.md).
+(CORRECT → INCORRECT). Ayrıntı: [HANDOFF §4](HANDOFF.md).
 
 Metamorfik sağlamlık taraması — doğrulayıcının kendisinin testi ([reports/soundness_report.md](reports/soundness_report.md)). Her problemin altın cevabından
 SymPy ile kesin olarak yanlış ve kesin olarak eşdeğer cevaplar üretilir:
@@ -92,14 +92,18 @@ SymPy ile kesin olarak yanlış ve kesin olarak eşdeğer cevaplar üretilir:
 | Cevap olmayan iddiada (soruyu yazan / CAS'a hesaplatan) CORRECT | **0 / 46** | 0 |
 | Geçerli adım dönüşümünde yanlış red | **0 / 184** | 0 ([10]: LLM doğrulayıcılarında %75–85) |
 | Bir tarafı bozulan adımın yakalanması | 40 / 46 | raporlanır |
+| Nedeni açıklanmayan kaçırılan bozuk adım | **0 / 6** (5 çözücü sembolü, 1 çözümsüz öncül) | 0 |
 
 Bu tarama ilk koşusunda **448 yanlış cevabın 27'sini CORRECT** buldu (`int(7/2) = 3`, `nsimplify` ile 1/6'ya yakalanan bir kesir); ayrıca soruyu cevap olarak geri yazan 7 iddianın 7'si CORRECT alıyordu. İkisi de kapatıldı.
 
-F3 (tam otomatik hat) kısmi ölçümü, kredinin yettiği 64 öğede
-([reports/f3_report.md](reports/f3_report.md)): IR kabul oranı 64/64, görev türü elle yazılanla
-aynı 64/64, çıkarılan IR ile elle yazılan IR'ın kararı aynı 63/64, precision 1.000/1.000.
-Kalan 154 öğe `Your credit balance is too low` ile düştü — ve tarama durması gerekirken
-durmadı; o hata 20 Eylül'de kapatıldı (HANDOFF §13.1).
+F3 (tam otomatik hat) kısmi ölçümü ([reports/f3_report.md](reports/f3_report.md)): 218 öğenin
+151'i `Your credit balance is too low` ile düştü — ve tarama durması gerekirken durmadı; o hata
+20 Eylül'de kapatıldı (HANDOFF §4, DECISIONS §23). Faturalama hatası almayan 67 öğede IR kabulü
+**64/67**; reddedilen 3 öğe (`ayt-diz-008`, `ayt-diz-013`, `ayt-diz-018`) üç turun sonunda
+round-trip'te Meta yargıcının puan döndürmediği öğeler. Kabul edilen 64 öğede görev türü elle
+yazılanla aynı 64/64, çıkarılan IR ile elle yazılan IR'ın kararı aynı 63/64, cevap düzeyi
+precision 1.000/1.000 (çözüm düzeyinde pozitif precision 0.967, 1 FP). Sayılar 18 Eylül koduna
+aittir.
 
 ## Bilinen açıklar
 
@@ -163,8 +167,9 @@ Lean için [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md).
 .venv/Scripts/python.exe scripts/check.py --full
 ```
 
-Tek komutta 21 kapı: testler, deterministik değerlendirme, Lean taraması (junk-value sondası dahil),
+Tek komutta 22 kapı: testler, deterministik değerlendirme, Lean taraması (junk-value sondası dahil),
 adversaryal tarama (3 yüzey), metamorfik sağlamlık taraması, kalibrasyon. Kapı düşerse çıkış kodu 1.
+Çıktı ayrıca `reports/check_full.log`a yazılır (tarih, dal ve commit ile).
 
 Tek tek:
 
@@ -200,14 +205,14 @@ F3 koşusu L4, L5 ve L6'yı birlikte ölçer; `--no-l4` / `--no-l5` / `--no-l6` 
 kapatılır. F4 kritiğinin sayıları raporun "L6 kritik + meta-doğrulama (F4)" bölümünde çıkar.
 `--max-cost 20` verilirse toplam harcama o dolar değerine ulaştığında tarama kendini durdurur;
 gözetimsiz bir koşunun bakiyeyi boşaltmasına karşı. Sağlayıcı faturalama/kimlik hatası verirse
-koşu ilk hatada durur — **bu 20 Eylül'de düzeltildi, öncesinde durmuyordu** (HANDOFF §13.1).
+koşu ilk hatada durur — **bu 20 Eylül'de düzeltildi, öncesinde durmuyordu** (HANDOFF §4, DECISIONS §23).
 
 Gerçek bir AI çözücünün çıktıları ölçülecekse `--solver-family anthropic|meta` **verilmelidir**:
 çapraz aile ayrımı (DECISIONS §17) ancak o zaman uygulanır, yoksa her kayda
 `solver_family_unknown` bayrağı konur.
 
 > `reports/f3_report.md` 18 Eylül'deki yarım koşudan kalmadır ve eski raporlayıcıyla
-> üretilmiştir; "Yol (b)" bölümü HANDOFF §13.8 ile birlikte okunmalıdır.
+> üretilmiştir; "Yol (b)" bölümü HANDOFF §6.6 ile birlikte okunmalıdır.
 
 Tek bir öğeyi doğrulamak:
 

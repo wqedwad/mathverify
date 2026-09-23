@@ -272,7 +272,8 @@ def main(argv=None):
             # Primary signal is structural (`fatal`, set from LLMFatalError in run_item). The
             # substring scan is only a backstop for a provider wording the client has not
             # learned to classify yet, and it now reads the WHOLE reason: truncating it is how
-            # this guard silently failed on the 18 Sep run (151 items burned, aborted=None).
+            # the 18 Sep run burned 151 items without stopping (the substring guard of 828fb95,
+            # replayed on that run's own records, fires on 0 of 218).
             blob = (rec.get("ir_reason") or "") + " " + (rec.get("error") or "")
             fatal = rec.get("fatal") or (blob if any(
                 w in blob.lower() for w in ("credit", "billing", "balance", "quota", "insufficient_quota")) else None)

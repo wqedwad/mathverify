@@ -51,6 +51,9 @@ handoff değeri, bu makinedeki değer ve fark verilmiştir.
 4. **Gauss–Legendre uç tekilliklerde çöküyor.** `∫₀¹ ln x/√x` için dps 80'de −3.9799 (hata
    5e-3); tanh-sinh dps 50'de 1.8e-25. Belirli integral sertifikası yalnız tanh-sinh
    merdiveni + `mp.quad` hata kestirimi kullanır; tolerans sabit değil, kestirimden türetilir.
+   **Düzeltme (23 Eylül 2026):** "hata 5e-3" **göreli** hatadır. Yeniden ölçüldü: Gauss–Legendre
+   dps 80'de −3.979932618, mutlak hata 2.0e-2 (0.0201/4 = 5.0e-3 göreli); tanh-sinh dps 50'de
+   mutlak hata 1.81e-25.
 5. **Float örnekleme özdeşlikleri "çürütüyor".** `x²−5x−14 = (x−7)(x+2)` 20 basamaklı Float
    noktada son bitte farklı çıkıp `Eq` otomatik `False` oluyordu. Rastgele noktalar artık kesin
    rasyonel (6 ondalık) ve bağıntılar `evaluate=False` ile kurulup toleranslı karşılaştırılıyor.

@@ -49,7 +49,7 @@ alt kümede hatayı en aza indirmek için belirsizlikte çekimser kalınır
 | Cevap anahtarı hatta girmez | `FORBIDDEN_KEYS`, yapısal tarama | Sızma testi (öğe üzerinde mutasyon) |
 | Doğrulayıcı cevap üretmez | İddia **değer-yalnız** ad alanında okunur (`COMPUTING_OPERATORS`) | Metamorfik tarama: "cevap olmayan" iddialarda CORRECT = 0 |
 | İddia olduğu gibi sınanır | `exact_integer`; `nsimplify`/`int()` yasak | Metamorfik tarama: yanlış varyantta yanlış onay = 0 |
-| Yalnız somut karşı örnekle reddet | `steps/` yalnız çürütür | Geçerli adım dönüşümünde yanlış red = 0 |
+| Yalnız somut karşı örnekle reddet | `steps/` yalnız çürütür | Geçerli adım dönüşümünde yanlış red = 0; nedeni açıklanmayan kaçırılan bozuk adım = 0 |
 | Bozuk girdi ≠ kanıtlanamayan adım | `malformed_step_claim` / `UndeclaredSymbolError` ayrımı | Adversaryal: adım yüzeyi |
 | Sayısal "eşit" kanıt değildir | Kesin kesirler kesin; eşitlik her hassasiyet basamağında; farkın kendisi değerlendirilir | `tests/test_equiv.py` (10³⁰+1, Ramanujan sabiti, e⁻¹⁰⁰⁰) |
 | Math-Verify ikinci görüştür | Tek başına karar vermez | birim testi |
@@ -65,6 +65,8 @@ alt kümede hatayı en aza indirmek için belirsizlikte çekimser kalınır
 
 * **Çözücünün kendi sembolüyle yazılmış adım** (`u = u² − 6`, `t² = 4t − 3`) denetlenmez: özdeşlik mi
   çözülen denklem mi olduğu belirsizdir ve belirsizken reddetmek geçerli adımları cezalandırır. Adım
-  düzeyi taramada kaçırılan bozuk adımların çoğu bu sınıftandır.
+  düzeyi taramada kaçırılan bozuk adımların çoğu bu sınıftandır (6'nın 5'i; kalan 1'inin öncülleri
+  çözümsüz). Her kaçırmanın nedeni adım katmanının kanıtından raporlanır; bilerek kabul edilen
+  nedenler dışındaki bir kaçırma `check.py --full` kapısını düşürür.
 * **Doğru ama gerekçesiz adım** (`tyt-prob-018`) deterministik olarak yakalanamaz.
 * **Set sentetiktir**; gerçek bir modelin çözüm dağılımında ölçülmedi.

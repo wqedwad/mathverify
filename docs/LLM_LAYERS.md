@@ -94,6 +94,13 @@ katmandan geldiği fark etmez (IR çıkarımı, L4, L5, kritik, Lean).
    önce** kesildi;
 3. durdurucu o kırpılmış dizgiyi arıyordu → hiç ateşlemedi.
 
+**Düzeltme (23 Eylül 2026).** "`aborted: None` yazarken" ifadesi dosyayla desteklenmiyor: o
+koşunun `f3_results.json` dosyasında `aborted` anahtarı hiç yok, çünkü dosya bu alanı yazan
+harness commit'inden (`828fb95`, 01:03) önce, 00:02'de yazılmış. Ölçülen kısım değişmiyor:
+151/218 öğe aynı faturalama hatasıyla düştü, kırpılmış metin `'message': 'Your` ile bitiyor ve
+`828fb95`'teki dizgi durdurucusu bu koşunun kendi kayıtlarında 0/218 ateşliyor
+(`DECISIONS.md` §23).
+
 Testteki hata da öğretici: `test_llm_error_stops_the_loop_and_is_reported` 24 karakterlik
 sahte bir mesaj kullanıyordu, yani kırpmanın altında kalıyordu. Test artık sağlayıcının
 gerçek mesajını kullanıyor; uzunluk fikstürün parçası.
