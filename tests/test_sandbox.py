@@ -53,11 +53,27 @@ def test_seed_is_applied_in_worker(sb):
 
 
 def test_memory_cap_is_enforced_best_effort(sb):
-    if sb.mem_mode in ("none",) or sb.mem_mode.startswith("unavailable"):
+    sb.call("mathverify.sandbox.ops:simplify_diff", 1, 1)          # mem_mode is set on start
+    if os.name == "nt":
+        # Must not skip on Windows: untyped ctypes calls cut the process handle to 32 bits,
+        # the Job Object was never applied, and this test skipped silently from Phase 1 on
+        # while no worker had any memory cap.
+        assert sb.mem_mode == "job_object", sb.mem_mode
+    elif sb.mem_mode in ("none",) or sb.mem_mode.startswith("unavailable"):
         pytest.skip(f"no memory cap available on this platform: {sb.mem_mode}")
-    with pytest.raises((SandboxError, SandboxTimeout)):
+    with pytest.raises((SandboxError, SandboxTimeout)) as exc:
         sb.call("mathverify.sandbox.ops:hog", 1500, timeout=20)
+    if sb.mem_mode == "job_object":
+        assert "MemoryError" in str(exc.value)
     assert sb.call("mathverify.sandbox.ops:simplify_diff", 3, 3) == 0
+
+
+def test_watchdog_fallback_can_read_process_memory():
+    # The fallback cap polls this. On Windows it returned None for the same truncated
+    # handle, so the watchdog never started either.
+    from mathverify.sandbox.pool import _rss_bytes
+    b = _rss_bytes()
+    assert isinstance(b, int) and b > 0
 
 
 def test_inline_mode_for_debugging_only():

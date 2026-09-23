@@ -18,6 +18,7 @@ parses expressions with a whitelist and evaluates them with sympy.
 from __future__ import annotations
 
 import atexit
+import functools
 import importlib
 import multiprocessing as mp
 import os
@@ -77,11 +78,39 @@ def _apply_mem_limit(mem_mb: int) -> str:
     return "none"
 
 
+@functools.cache
+def _win_api():  # pragma: no cover - exercised only on Windows
+    """Private kernel32/psapi handles with explicit prototypes.
+
+    `ctypes.windll` gives every function a C `int` return type and converts Python ints to
+    C `int` arguments, so the 64-bit pseudo-handle of GetCurrentProcess() was cut to 32 bits.
+    Measured on this machine: AssignProcessToJobObject failed with it, GetProcessMemoryInfo
+    failed with it too, so neither the Job Object nor the watchdog fallback ever started and
+    the worker ran with no memory cap at all (the cap test had been skipping). Private
+    `WinDLL` instances also keep these prototypes out of the process-wide `ctypes.windll`."""
+    import ctypes
+    from ctypes import wintypes as wt
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    k32.GetCurrentProcess.argtypes = []
+    k32.GetCurrentProcess.restype = wt.HANDLE
+    k32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wt.LPCWSTR]
+    k32.CreateJobObjectW.restype = wt.HANDLE
+    k32.SetInformationJobObject.argtypes = [wt.HANDLE, ctypes.c_int, ctypes.c_void_p, wt.DWORD]
+    k32.SetInformationJobObject.restype = wt.BOOL
+    k32.AssignProcessToJobObject.argtypes = [wt.HANDLE, wt.HANDLE]
+    k32.AssignProcessToJobObject.restype = wt.BOOL
+    psapi.GetProcessMemoryInfo.argtypes = [wt.HANDLE, ctypes.c_void_p, wt.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wt.BOOL
+    return k32, psapi
+
+
 def _win_job_limit(mem_mb: int) -> str:  # pragma: no cover - exercised only on Windows
     import ctypes
     from ctypes import wintypes as wt
 
-    k32 = ctypes.windll.kernel32
+    k32, _ = _win_api()
 
     class IO_COUNTERS(ctypes.Structure):
         _fields_ = [(n, ctypes.c_uint64) for n in
@@ -109,18 +138,19 @@ def _win_job_limit(mem_mb: int) -> str:  # pragma: no cover - exercised only on 
 
     JOB_OBJECT_LIMIT_PROCESS_MEMORY = 0x00000100
     JobObjectExtendedLimitInformation = 9
+    # the job handle is never closed: the job, and with it the cap, lives as long as the worker
     job = k32.CreateJobObjectW(None, None)
     if not job:
-        return "unavailable:CreateJobObject"
+        return f"unavailable:CreateJobObject:{ctypes.get_last_error()}"
     info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
     info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_PROCESS_MEMORY
     info.ProcessMemoryLimit = mem_mb * 1024 * 1024
     ok = k32.SetInformationJobObject(job, JobObjectExtendedLimitInformation,
                                      ctypes.byref(info), ctypes.sizeof(info))
     if not ok:
-        return "unavailable:SetInformationJobObject"
+        return f"unavailable:SetInformationJobObject:{ctypes.get_last_error()}"
     if not k32.AssignProcessToJobObject(job, k32.GetCurrentProcess()):
-        return "unavailable:AssignProcessToJobObject"
+        return f"unavailable:AssignProcessToJobObject:{ctypes.get_last_error()}"
     return "job_object"
 
 
@@ -138,8 +168,7 @@ def _rss_bytes() -> int | None:
                             ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
             pmc = PMC()
             pmc.cb = ctypes.sizeof(PMC)
-            k32 = ctypes.windll.kernel32
-            psapi = ctypes.windll.psapi
+            k32, psapi = _win_api()
             if psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb):
                 return int(pmc.PagefileUsage)
             return None
