@@ -3,17 +3,17 @@
 > **Son güncelleme: 23 Eylül 2026.** Bu belge, projeyi hiç görmemiş bir oturumun **yalnız bu dosyayı
 > okuyarak** devralabilmesi için yazıldı. Yazılmadan önce `git status`, `git log`, `git diff`
 > çalıştırıldı; adı geçen her dosya, fonksiyon ve komut depoda arandı; sayılar `reports/` altındaki
-> üretilmiş raporlardan okundu; `check.py --full` bu oturumda yeniden koşturuldu (22/22 kapı,
-> 406 test geçti, 1 atlandı; günlük `reports/check_full.log`).
+> üretilmiş raporlardan okundu; `check.py --full` bu oturumda yeniden koşturuldu (son koşu 23/23
+> kapı, 438 test geçti, 1 atlandı; günlük `reports/check_full.log`).
 >
 > **[DOĞRULANMADI]** işareti şu demek: bilgi önceki (özetlenmiş) bir oturumdan geliyor ve bu oturumda
 > yeniden ölçülemedi ya da kontrol edilemedi. İşaretsiz her şey bu oturumda kontrol edildi.
 
-**Durum tek cümlede:** Kodda yarım kalmış bir iş yok. `scripts/check.py --full` 22/22 kapı geçiyor.
-Denetimler `denetim-2026-09-20` dalında commit'li (`0f14380`) ama `master`a birleştirilmedi;
-23 Eylül ikinci oturumunun işi (bellek sınırı, belge düzeltmeleri, yeni kapı) **commit edilmedi**
-(§5.3). İlerlemenin önündeki engeller §12'deki kullanıcı kararları ve Anthropic kredisi; kredili
-ölçümler kullanıcı kararıyla lokal iş bitince yapılacak (§7).
+**Durum tek cümlede:** Kodda yarım kalmış bir iş yok ve commit edilmemiş değişiklik yok.
+`scripts/check.py --full` 23/23 kapı geçiyor. 23 Eylül'deki bütün iş (iki denetim, bellek sınırı,
+tanımlılık açığı, üç Lean şablonu, pyflakes kapısı, temizlik) `master`da; her birleştirmeden önceki
+`master`ın yedeği §5.4'te. Kredili ölçümler (F3/F4) kullanıcı kararıyla lokal iş bitince, kod
+dondurulup anahtarlar yenilendikten sonra yapılacak (§7).
 
 **İlk 10 dakika:**
 
@@ -21,7 +21,7 @@ Denetimler `denetim-2026-09-20` dalında commit'li (`0f14380`) ama `master`a bir
 2. `git status` çalıştır. Bu belgenin yazıldığı andaki commit edilmemiş dosyalar §5.3'te
    listeli. Başka bir değişiklik görürsen, bu belgeden sonra yapılmıştır.
 3. `PYTHONUTF8=1 .venv/Scripts/python.exe -m pytest tests -q` çalıştır (Git Bash; PowerShell için
-   §9). Beklenen: `406 passed, 1 skipped`, yaklaşık 55 saniye.
+   §9). Beklenen: `438 passed, 1 skipped`, yaklaşık 90 saniye.
 4. §7'deki ilk işe geç.
 
 ---
@@ -157,7 +157,7 @@ src/mathverify/   63 modül, ~11 650 satır
   resolve/ meta/ critic/   L4 / L5 / L6'
   formal/         statement.py, prove.py, lean_client.py (L7)
   ir.py solution.py types.py router.py verifier.py pipeline.py versions.py
-tests/            28 test dosyası + conftest.py + conftest_llm.py (ScriptedClient), 407 test
+tests/            30 test dosyası + conftest.py + conftest_llm.py (ScriptedClient), 439 test
 evalset/build/    17 modül: build_all.py, common.py ve 15 konu üreticisi
 evalset/items/    280 JSON öğe (üretilmiş, commit'li)
 harness/          run_eval, run_lean, adversarial, soundness_fuzz, calibrate, run_f3, metrics, loader
@@ -331,7 +331,7 @@ Burada her kararın **neden** alındığı ve **hangi alternatifin neden reddedi
       olumsuzlamasını gerektirir.
     - Sentetik geometri.
     - Parçalı ve has olmayan integraller.
-    - `domain_of`, `simplify_expression`, `count_solutions`.
+    - (`domain_of`, `simplify_expression`, `count_solutions` 23 Eylül'de kapsama alındı, karar 31.)
 
 23. **Sandbox süreç izolasyonudur, güvenlik sandbox'ı değildir** (DECISIONS §3.5). Model kod
     çalıştırmadığı için yeterli. Model kodu gelirse gVisor/Firecracker şart. Bellek sınırı
@@ -363,6 +363,23 @@ Burada her kararın **neden** alındığı ve **hangi alternatifin neden reddedi
 
 29. **`.gitignore` içinde `/build/` ve `/dist/` köke ankrajlı.** *Neden:* ankrajsız `build/`,
     `evalset/build/` klasörünü de yok sayıyordu ve set üreticileri hiç commit edilmemişti.
+
+30. **Tanımlılık, ifadenin yazıldığı biçimden okunur** (DECISIONS §31, 23 Eylül). SymPy'nin
+    otomatik sadeleştirmesi (`x/x` → 1) tanımsız noktayı daha koşul okunmadan siliyordu. Yanlış
+    cevap alıp CORRECT (0.99–0.995) veren ölçülmüş vakalar: `domain_of` (5 ifade), `solve_equation`
+    (2), `solve_inequality`, `evaluate`, türev, ekstremum, seri. İlk dördünde doğru cevaplar da
+    INCORRECT alıyordu. Değer için normal ayrıştırma, tanımlılık için yazıldığı biçim
+    (`parse_as_written`) kullanılır. *Reddedilen:* ayrıştırmayı tümüyle sadeleştirmesiz yapmak;
+    çözücüler kanonik biçim bekliyor. `limit` bilerek dışarıda.
+
+31. **Üç yeni Lean şablonu** (DECISIONS §32): `domain_of` (yalnız koşullar, fonksiyon yok),
+    `simplify_expression` (korumalar ifadeden, iddianın tanımlılığı hedefte), `count_solutions`
+    (kutunun yeterliliği de kanıtlanır; ℤ bölmesi ve `Mod` reddedilir). Her korumanın naif biçimi
+    Lean'de gerçekten ispatlanıyor; bu teste bağlı. *Reddedilen:* bu türleri kapsam dışı bırakmak.
+    Lean katmanı yalnız pozitif kanıttır; ölçülen FP 0, junk 0/17.
+
+32. **pyflakes kapısı** (DECISIONS §33). Nadiren çalışan `except` dallarındaki tanımsız adlar
+    için. Bulgu yalnız kendi satırındaki `# noqa` ile muaf; pyflakes çalışmazsa kapı geçmez.
 
 ---
 
@@ -402,6 +419,7 @@ Bunlar **tekrar denenmemeli.** Her birinin neden başarısız olduğu yanında y
 | Yalnız şık harfi veren çözümü sessizce CORRECT saymak | `"Bilmiyorum ama tahminim. Cevap: B"` → CORRECT 0.990, bayraksız | Kapsam bayrakları |
 | Kalibrasyonu varsayılan olarak açmak | Kapsamadan 13 öğe götürdü, FP'yi kaldırmadı | Kapalı |
 | F4 kritiğinin `tyt-prob-018`'i kapatacağını varsaymak | Çapraz kontrol, sertifikalı adımdaki raporu iptal ediyor | Açık bırakıldı |
+| Tanımlılığı SymPy'nin sadeleştirdiği ifadeden okumak | `x/x` → 1: "tanım kümesi ℝ", "`x²/x = 0`'ın kökü 0", "x = 0'da `x/x` = 1" dahil 11 vaka CORRECT alıyordu (23 Eylül) | `parse_as_written` + `Ctx.written_conditions` (karar 30) |
 
 ### Lean
 
@@ -418,6 +436,10 @@ Bunlar **tekrar denenmemeli.** Her birinin neden başarısız olduğu yanında y
 | Yan koşulları satır içi `by` bloğunda bırakmak | Ertelenen hedef dışarı sızıyordu; ayrı `have hs0 : (...) ≠ 0 := by ...` satırı gerekiyor |
 | CAS'ın hedefi önceden hesaplaması | `gcd(84,120)+lcm(4,6)` → `24 = 24` tautolojisi; artık yapısal ayrıştırma + `is_trivial` |
 | Korumalı iff ile çözüm kümesi ifadesi | Kök tanım kümesi dışındaysa iki taraf da yanlış ve iff doğru çıkıyordu; artık her kökün koşulları ve denklemi sağladığı da iddia ediliyor. Aynı açık eşitsizlik uç noktalarında da vardı. |
+| Sadeleştirme ifadesinde iddianın tanımlılığını hedefe koymamak | `∀ x, x = x²/x` Lean'de ispatlanıyor (0/0 = 0); iddia tanım kümesini daraltabilirdi (23 Eylül ölçümü) |
+| Korumalı `∀`'yı iç nokta kontrolü olmadan kurmak | `∀ x, −x²−1 ≥ 0 → √(−x²−1) = 0` boş yere ispatlanıyor |
+| Sayımda ℤ bölmesini yazdırmak | `#{(x,y) ∈ [0,2]² : x/y = 0} = 6` Lean'de doğru (taban bölmesi, x/0 = 0), gerçekte 2 |
+| `field_simp`'in paydayı korumadaki biçimde bulacağını varsaymak | Yazıcı paydayı `as_numer_denom()` ile `1 + x` basıyor, koruma `x + 1`; `field_simp` sadeleştiremedi. Her payda için `linear_combination` ile türetilen `have` gerekiyor. |
 
 ### Ölçüm ve harness
 
@@ -482,14 +504,16 @@ Bunlar **tekrar denenmemeli.** Her birinin neden başarısız olduğu yanında y
 | F7: integral/türev/ilkel/sayma/tekrarlama Lean şablonları | tamam (107 sertifika) |
 | 20 Eylül denetimi: 11 boşluk | kapatıldı (DECISIONS §23–25) |
 | 23 Eylül denetimi: 4 yanlış-onay sınıfı | kapatıldı (DECISIONS §26–30, `docs/QUALITY.md`) |
-| 23 Eylül ikinci oturum: [DOĞRULANMADI] kontrolü, bellek sınırı, belge düzeltmeleri, yeni kapı | tamam, **commit edilmedi** (§5.3) |
+| 23 Eylül ikinci oturum: [DOĞRULANMADI] kontrolü, bellek sınırı, belge düzeltmeleri, yeni kapı | tamam, `master`a birleştirildi (`e2aa08d`) |
+| 23 Eylül, aynı oturumun devamı: tanımlılık açığı (11 yanlış-onay vakası), üç Lean şablonu, pyflakes kapısı, temizlik | tamam, `master`a birleştirildi (§5.3) |
 
-Son `check.py --full` sonucu (23 Eylül 2026 13:35, `0f14380` + §5.3'teki commit edilmemiş
-değişiklikler; günlük `reports/check_full.log`; toplam ~43 dk, adversaryal 2249 s):
+Son `check.py --full` sonucu (23 Eylül 2026 15:56, `yerel-kalite-2026-09-23` @ `e2aa08d` + §5.3'teki
+commit edilmemiş değişiklikler; günlük `reports/check_full.log`; toplam ~67 dk, adversaryal 3490 s):
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri | 406 geçti, 1 atlandı (`test_f5_lean.py:66`, beklenen) | hepsi geçer |
+| Birim testleri | 438 geçti, 1 atlandı (`test_f5_lean.py:66`, beklenen) | hepsi geçer |
+| pyflakes (yeni) | 0 bulgu (3 satır `# noqa` ile muaf) | 0 |
 | Cevap düzeyi pozitif / negatif precision | 1.000 / 1.000 | ≥ 0.98 |
 | Kapsama | 1.000 | ≥ 0.85 |
 | B hücresi yanlış red | 0.000 | < 0.10 |
@@ -500,8 +524,8 @@ değişiklikler; günlük `reports/check_full.log`; toplam ~43 dk, adversaryal 2
 | L5 uygulanabilirlik tavanı | 21/280 (D'de 3/42) | raporlanır |
 | Ölçülmeyen görev türü | yok | yok |
 | Lean FP | 0 | 0 |
-| Lean sertifika | 107/280 (152 öğede ifade üretiliyor) | raporlanır |
-| Lean junk-value sertifikası | 0/12 | 0 |
+| Lean sertifika | 121/280 (172 öğede ifade üretiliyor; 23 Eylül öncesi 107/152) | raporlanır |
+| Lean junk-value sertifikası | 0/17 (23 Eylül öncesi 0/12) | 0 |
 | Adversaryal saldırı başarısı | %0.000 (21 139 saldırı) | < %2 |
 | Saldırı yüzeyleri | cevap, şık, adım | üçü de |
 | SymPy üretimli yanlış cevapta yanlış onay | 0/448 | 0 |
@@ -515,11 +539,13 @@ Kaynaklar: `reports/eval_report.md`, `lean_report.md`, `adversarial_report.md`,
 `soundness_report.md`, `calibration_report.md`. Kapı çıktısının tamamı `reports/check_full.log`
 içinde (§6.5).
 
-**Süre notu:** Bu koşu öncekinden yavaştı (adversaryal 1245 → 2249 s, değerlendirme 67 → 121 ms/öğe).
-Bellek sınırı düzeltmesinden gelmediği ölçüldü: `run_eval` eski ve yeni `pool.py` ile sırayla
-dört kez (yeni/eski/yeni/eski) koşturuldu, dördü de 64 s ve 113–114 ms/öğe. Yavaşlık makinenin o
-anki durumundan. Hiçbir sonuç dosyasında `MemoryError`, worker ölümü, `cas_error` ya da
-`cas_timeout` yok; raporlarda süre dışında değişen satır yok.
+**Süre notu:** Koşular gün içinde yavaşladı (adversaryal 1245 → 2249 → 3490 s). İki A/B ölçümü:
+(1) bellek sınırı süreyi değiştirmiyor (`run_eval` eski/yeni `pool.py` ile dört kez: hepsi 64 s,
+113–114 ms/öğe); (2) tanımlılık kancası (karar 30) değerlendirmeyi ~%12–15 yavaşlatıyor (kancalı
+158–161, kancasız 137–144 ms/öğe; raporlar süre dışında birebir aynı). Kalan fark makinenin o anki
+durumundan. D3 gereği süre bir kapı değil. Hiçbir sonuç dosyasında `MemoryError` ya da worker
+ölümü yok. Önceki koşuya göre değişen tek sayı: anlamı koruyan saldırılarda UNKNOWN'a düşen 2898 →
+2896 (`homoglyph`, karşıt karara dönen yine 0) ve kalibrasyon doğrulama kapsaması 0.864 → 0.879.
 
 ### 5.2 Yarım kalan iş
 
@@ -546,37 +572,55 @@ ikinci oturumunda kapatıldı. O oturumun sırası:
 6. Bellek sınırı düzeltildi ve atlanamayan teste bağlandı (§6.4).
 7. `soundness_fuzz` kaçırma nedenlerini ölçümden yazıyor; yeni kapı (§6.2).
 8. `check.py --full` günlüğü kendisi yazıyor (§6.5). 22/22 kapı geçti.
+9. Kullanıcı onayıyla: `master`ın yedeği alındı (§5.4), bu iş üç commit olarak işlendi
+   (`1098a6b`, `86197e4`, `e2aa08d`) ve `master` fast-forward ile ileri alındı.
+10. "Geri kalan lokal işlemler" `yerel-kalite-2026-09-23` dalında yapıldı: ölü kod, betikler,
+    zaman aşımı, pyflakes kapısı, üç Lean şablonu. Şablonları yazarken deterministik katmanda
+    tanımlılık açığı bulundu (11 yanlış-onay vakası) ve kapatıldı (karar 30).
+11. `check.py --full` 23/23 (15:56 koşusu).
+12. Kullanıcı onayıyla ("al"): `master`ın (`e2aa08d`) ikinci yedeği alındı (§5.4), iş dört commit
+    olarak işlendi ve `master` fast-forward ile ileri alındı.
 
 ### 5.3 Commit edilmemiş değişiklikler
 
-| Dosya | Durum | Ne işe yarıyor |
-|---|---|---|
-İki oturumun birikimi; hiçbiri commit'li değil.
+**Yok.** 23 Eylül'ün son commit dizisi (`yerel-kalite-2026-09-23`, `master`a fast-forward ile
+birleştirildi; hash'ler `git log` ile görülür) şunları taşır. Ölçüm 23/23 kapı, 15:56 koşusu:
 
-| Dosya | Durum | Ne işe yarıyor |
-|---|---|---|
-| `HANDOFF.md` | değişti | Bu belge: 12 bölümlü yapı; [DOĞRULANMADI] kontrolünün sonuçları, §6.2/§6.4/§6.5/§6.6/§6.8/§6.9 ve §7 güncellendi |
-| `CLAUDE.md` | yeni | Kalıcı proje kuralları (§10'un özü) |
-| `README.md` | değişti | Bölüm göndermeleri; 22 kapı ve günlük; F3 cümlesi düzeltildi; kaçırma nedeni satırı |
-| `DECISIONS.md` | 3 not | §5 bellek sınırı "Düzeltme", §23 `aborted: None` "Düzeltme", §30 kaçırma nedeni "Ek" |
-| `docs/E1-E10-measurement.md`, `docs/LLM_LAYERS.md` | düzeltme notu | Gauss–Legendre göreli hata; `aborted: None` |
-| `docs/QUALITY.md` | 2 satır | Yeni kapı ve kaçırma nedenlerinin raporlanması |
-| `src/mathverify/sandbox/pool.py` | davranış | Tipli ctypes prototipleri (`_win_api`); bellek sınırı artık uygulanıyor |
-| `src/mathverify/formal/statement.py` | 1 yorum satırı | "HANDOFF §6" → "HANDOFF §4" (davranış değişikliği yok) |
-| `tests/test_sandbox.py` | değişti | Bellek testi Windows'ta atlanamaz; bekçi testi |
-| `tests/test_soundness_fuzz.py` | yeni | Kaçırma nedeni sınıflandırıcısının 4 testi |
-| `harness/soundness_fuzz.py` | değişti | `ACCEPTED_MISS_REASONS`, `_missed_step_reason`; rapor nedenleri ölçümden yazıyor |
-| `harness/run_f3.py` | 1 yorum | `aborted=None` ifadesi düzeltildi |
-| `scripts/check.py` | değişti | 22. kapı; `--full` günlüğü kendisi yazıyor |
-| `reports/*.md`, `reports/check_full.log` | üretildi | 23 Eylül 13:35 koşusu (sayılar aynı, yalnız süreler ve soundness raporundaki neden satırları değişti) |
+| Dosya | Ne |
+|---|---|
+| `src/mathverify/normalize/parse.py` | `parse_as_written` (karar 30) |
+| `src/mathverify/certify/base.py` | `Ctx.written_conditions` → `domain_for`, `var_constraints` (karar 30) |
+| `src/mathverify/certify/domain.py` | `written_definedness`, `written_undefined_in` (karar 30) |
+| `src/mathverify/certify/calculus.py`, `extremum.py`, `series.py` | yazıldığı haliyle tanımsız noktada çekimserlik (karar 30) |
+| `src/mathverify/formal/statement.py` | `domain_of`, `simplify_expression`, `count_solutions` şablonları (karar 31) |
+| `harness/run_lean.py` | 5 yeni junk sondası (12 → 17); varsayılan zaman aşımı 45 |
+| `src/mathverify/certify/counting.py` | kesin olmayan katsayı reddediliyor (ölü `nsimplify` dalı yerine) |
+| `src/mathverify/sandbox/ops.py` | hiç çağrılmayan `nroots_scan` silindi |
+| `src/mathverify/steps/deterministic.py`, `scripts/probe_e1_e10.py`, `tests/test_f3_report.py` | kullanılmayan importlar (pyflakes) |
+| `scripts/check.py`, `pyproject.toml` | pyflakes kapısı, `pyflakes>=3` `[dev]`'de (karar 32) |
+| `scripts/dev/` (6 taşıma + `README.md`), `scripts/diag_sandbox.py` (silindi) | geliştirme betikleri ayrıldı |
+| `tests/test_written_definedness.py`, `tests/test_check_gates.py` (yeni), `test_f5_lean.py`, `test_e10_counting_exact.py` | yeni testler |
+| `DECISIONS.md` (§31–33), `HANDOFF.md`, `CLAUDE.md` (ilke 12), `README.md`, `docs/ARCHITECTURE.md`, `docs/QUALITY.md` | belgeler |
+| `reports/*.md`, `reports/check_full.log` | 23 Eylül 15:56 koşusu |
 
-Commit yalnız kullanıcı isterse yapılır.
+İleride de commit ve birleştirme yalnız kullanıcı isterse yapılır; birleştirmeden önce `master`ın
+yedeği alınır (kullanıcının talebi, §5.4).
 
 ### 5.4 Dal durumu
 
-- `master`: `2744677`'de, yani 20 ve 23 Eylül denetimlerinden önce.
-- `denetim-2026-09-20`: `0f14380` (HEAD). İki denetim burada.
-- Uzak depo yok. Birleştirme kullanıcı kararı (§12).
+- `master`: 23 Eylül'de iki kez fast-forward ile ileri alındı, ikisi de kullanıcının isteğiyle:
+  önce `denetim-2026-09-20` (→ `e2aa08d`), sonra `yerel-kalite-2026-09-23`. Şu an ikincisiyle aynı.
+- `yerel-kalite-2026-09-23`: `master` ile aynı. `denetim-2026-09-20`: `e2aa08d`'de kaldı.
+- **Yedekler** (her birleştirmeden hemen önce; kullanıcıya sormadan silinmez):
+
+  | Etiket | `master` | Bundle (`C:\Users\kullanici\mathverify-yedek\`) |
+  |---|---|---|
+  | `yedek/master-2026-09-23` | `2744677` | `mathverify-master-2744677-2026-09-23.bundle` |
+  | `yedek/master-2026-09-23-2` | `e2aa08d` | `mathverify-master-e2aa08d-2026-09-23.bundle` |
+
+  Bundle'lar alındıkları andaki bütün dalları içerir; ikisi de `git bundle verify` ve deneme klonuyla
+  doğrulandı. Geri dönüş talimatı aynı klasörde `OKU.txt`.
+- Uzak depo yok.
 
 Commit geçmişi (eskiden yeniye):
 
@@ -695,22 +739,18 @@ değil. Bu açık kodla kapanmaz.
 
 - `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5 ve madde numaraları bölümler arasında atlıyor.
   §3.9 hâlâ "180 öğe" diyor; bu Faz 1 anlık görüntüsü, güncel sayı 280.
-- `harness/run_lean.py` varsayılan `--timeout 60`; `check.py` ve README `45` kullanıyor.
-- `scripts/clean_imports.py`, `scripts/diag_sandbox.py`, `scripts/lean_try.py` ve `smoke_*.py`
-  tek seferlik geliştirme betikleri. 23 Eylül'de bakıldı: hiçbiri kod, test ya da `check.py`
-  tarafından çağrılmıyor (yalnız README'de `smoke_*` diye anılıyor); importlarının hepsi hâlâ
-  çözülüyor. `clean_imports.py` pyflakes'e dayanıyor ama pyflakes `pyproject.toml`'da beyan
-  edilmemiş. `lean_try.py` §4'te elaborate olmadığı yazılan `Matrix.dotProduct` adaylarını
-  içeriyor (tarihî F5 geliştirme betiği). Tutulup tutulmayacakları kullanıcı kararı (§12).
-- `certify/counting.py::count_real_roots` kesin olmayan (Float) katsayılı polinomu `nsimplify`
-  ile "güzel sayıya" yakalıyor; doğrudan çağrıldığında diskriminantı −4.2e-17 olan
-  `x² − 0.6666666666666666x + 0.1111111111111111` için 0 yerine 1 kök sayıyor. 23 Eylül'de uçtan
-  uca ölçüldü: doğrulayıcı yolundan **ulaşılamıyor**, çünkü ayrıştırıcı her ondalığı (açık
-  `Float(...)` dahil) kesin rasyonele çeviriyor ve iki biçimde de karar doğru (0 kök). Ölü ama
-  §3 karar 15'e aykırı bir dal; kaldırılması kullanıcı onayı bekliyor. `sandbox/ops.py`
-  `nroots_scan` içindeki `nsimplify(...) if False else ...` de ölü kod.
-- Lint ya da biçimlendirici yapılandırılmamış (`pyproject.toml`'da ruff/flake8/black yok).
+- 23 Eylül'de kapatılanlar (DECISIONS §33): `run_lean` zaman aşımı 45'e hizalandı (60 ile aynı
+  107 sertifika); tek seferlik betikler `scripts/dev/` altında (`diag_sandbox.py` silindi);
+  `count_real_roots`'taki ölü `nsimplify` dalı artık kesin olmayan katsayıyı reddediyor, hiç
+  çağrılmayan `nroots_scan` silindi; pyflakes bir kapı (tanımsız ad yakalar).
+- Biçimlendirici (black/ruff format) yapılandırılmamış; pyflakes dışında stil denetimi yok.
 - CI yok. Kapılar yalnız elle `check.py` ile koşuyor.
+- Tanımlılık düzeltmesi (karar 30) türev, ekstremum ve seride yalnız **çekimser kalıyor**: f
+  yazıldığı haliyle bölgede bir yerde tanımsızsa UNKNOWN. Bu yüzden "`x²/x`'in [−1, 1]'deki
+  minimumu −1" doğru olduğu hâlde UNKNOWN. İstenirse ekstremum tanımsız noktaları dışlayarak
+  hesaplanabilir; ölçülmedi.
+- `antiderivative` yazıldığı haliyle tanımlılık için ayrıca sınanmadı (kaldırılabilir nokta ilkel
+  fonksiyonu değiştirmez; ölçülmedi). `tangent_line`'ın noktası sınanıyor.
 
 ### 6.9 Güvenlik
 
@@ -726,7 +766,9 @@ stash yok. İş bitince ikisinin de yenilenmesi önerilir. Anahtarların hâlâ 
 ## 7. Sıradaki adımlar
 
 Eski listenin ilk iki maddesi 23 Eylül'de tamamlandı: sandbox bellek sınırı (§6.4) ve kapı
-günlüğü (§6.5).
+günlüğü (§6.5). Aynı gün, kullanıcının "geri kalan lokal işlemleri yap" talimatıyla, eski 2.
+maddedeki lokal kalite işlerinin hepsi yapıldı (ölü `nsimplify` dalı, betikler, zaman aşımı, üç
+Lean şablonu) ve bu sırada bulunan tanımlılık açığı kapatıldı (karar 30). Bunlar `master`da.
 
 **Kullanıcı kararı (23 Eylül 2026):** krediye bağlı ölçümler (aşağıda 3–5) ancak bütün lokal iş
 bitip program en kaliteli hâline geldikten sonra koşulacak. Bunun iki sonucu var: (a) F3/F4
@@ -737,22 +779,15 @@ bu soruları açık bırakır.
 
 Öncelik sırasıyla:
 
-1. **Kullanıcıya §12'deki soruları sor.** En önemlisi: `denetim-2026-09-20` → `master`
-   birleştirmesi ve commit edilmemiş değişikliklerin (§5.3) commit'i.
+1. **Kullanıcıya §12'deki açık soruları sor** (birleştirme soruları cevaplandı).
 
-2. **Lokal kalite işleri (kredi gerektirmez, her biri kullanıcı onayıyla):**
-   - `certify/counting.py::count_real_roots` içindeki ölü `nsimplify` dalını kaldır ya da
-     kesin olmayan polinomu reddet (§6.8); `ops.py`'deki `if False` ölü kodu.
-   - Tek seferlik betikler: tut / sil / `scripts/dev/` altına taşı; tutulursa pyflakes'i `[dev]`e
-     ekle (§6.8).
-   - `harness/run_lean.py` varsayılan zaman aşımını `check.py` ile hizala (60 → 45) ya da tersini
-     belgele.
-   - İsteğe bağlı: `domain_of`, `simplify_expression`, `count_solutions` için Lean şablonları.
-     Her yeni şablon yanlış cevaplı öğelerde ve junk sondasında da koşturulmalı; FP = 0 ve
-     junk = 0 kalmalı.
-   - İsteğe bağlı: çözücü sembolü adımları (§6.2). Ancak sağlam bir ayrım bulunursa; örneğin
-     yapısal formatta çözücünün sembolü tanımlamasını zorunlu kılmak. Karar verilmedi.
-   - Her iş sonunda `check.py --full` bütün kapılardan geçmeli.
+2. **Kalan lokal işler (ikisi de ürün kararı ister, kod değil):**
+   - Çözücü sembolü adımları (§6.2): yapısal formatta çözücünün kendi sembolünü tanımlamasını
+     zorunlu kılmak `docs/SOLVER_FORMAT.md` sözleşmesini değiştirir. Karar verilmedi.
+   - Tanımlılık düzeltmesinin türev/ekstremum/seride çekimser kalmak yerine hesaplaması (§6.8).
+   Kodda kredi gerektirmeyen başka açık iş bilinmiyor. Yeni bir denetim turu her zaman yeni
+   sınıflar bulabilir (bu oturum 11 yanlış-onay vakası buldu); "en kaliteli" iddiası ancak ölçümle
+   verilir.
 
 3. **Kod dondurulduktan ve anahtarlar yenilendikten sonra F3'ü tamamla.** Önce kalibrasyon
    koşusu: `.venv/Scripts/python.exe -m harness.run_f3 --limit 10 --workers 3 --max-cost 5`.
@@ -784,16 +819,16 @@ bu soruları açık bırakır.
 | `src/mathverify/solution.py` | `Solution`, `ClaimedAnswer`, `Step` |
 | `src/mathverify/types.py` | `LayerResult`, `VerificationResult` |
 | `src/mathverify/router.py` | `ROUTES` (görev türü → modüller), `DEFERRED_KINDS`, `route` |
-| `src/mathverify/normalize/parse.py` | Beyaz listeli ayrıştırıcı; `COMPUTING_OPERATORS`, `claim_namespace`, `check_claim_is_value`, `UndeclaredSymbolError`, `ClaimNotAValue` |
+| `src/mathverify/normalize/parse.py` | Beyaz listeli ayrıştırıcı; `COMPUTING_OPERATORS`, `claim_namespace`, `check_claim_is_value`, `UndeclaredSymbolError`, `ClaimNotAValue`, `parse_as_written` (yalnız tanımlılık için, sadeleştirmesiz) |
 | `src/mathverify/normalize/turkish.py` | Türkçe sayı biçimi ve metin normalizasyonu |
 | `src/mathverify/equiv/__init__.py` | Eşdeğerlik motorunun girişi, `exact_integer` |
 | `src/mathverify/equiv/numeric.py` | Hassasiyet merdiveni (her basamakta eşitlik) |
 | `src/mathverify/equiv/random_point.py` | Rastgele nokta testi, `_definite_nonzero_difference` |
 | `src/mathverify/sandbox/pool.py` | Worker havuzu, zaman aşımı, bellek sınırı (`_win_api`: tipli ctypes prototipleri, §6.4) |
 | `src/mathverify/sandbox/ops.py` | Sandbox içindeki işlemler, `zero_test_battery` |
-| `src/mathverify/certify/base.py` | `Ctx`, `Ctx.claim_ns`, `Ctx.claimed` |
+| `src/mathverify/certify/base.py` | `Ctx`, `Ctx.claim_ns`, `Ctx.claimed`, `Ctx.written_conditions` → `domain_for` / `var_constraints` |
 | `src/mathverify/certify/__init__.py` | `MODULES` kaydı (13 sertifika modülü) |
-| `src/mathverify/certify/domain.py` | `definedness_conditions`; Lean junk korumaları da bunu kullanır |
+| `src/mathverify/certify/domain.py` | `definedness_conditions`, `written_definedness`, `written_undefined_in`; Lean junk korumaları da bunu kullanır |
 | `src/mathverify/steps/deterministic.py` | `check_steps`: yalnız karşı örnekle çürüten adım reddedici |
 | `src/mathverify/fuse/rules.py` | `fuse`, `_BLOCK_POSITIVE_FLAGS`, kalibrasyon, `CalibrationUnavailable` |
 | `src/mathverify/intake/restructure.py` | Yol (b) deterministik cevap çıkarıcı ve küme/aralık kurtarma |
@@ -801,7 +836,7 @@ bu soruları açık bırakır.
 | `src/mathverify/llm/__init__.py` | Aile/rol eşlemesi, istemci seçimi, `set_client_override` |
 | `src/mathverify/llm/base.py` | `LLMError`, `LLMFatalError` (alt sınıfı değil!) |
 | `src/mathverify/llm/cache.py` | Kayıt/tekrar önbelleği |
-| `src/mathverify/formal/statement.py` | Lean ifade şablonları (`build_statement`, `_t_*`), junk-value korumaları, `vacuity_probe`, `is_trivial` |
+| `src/mathverify/formal/statement.py` | Lean ifade şablonları (`build_statement`, `_t_*`; 23 Eylül'de `_t_domain_of` + `_region_iff_hints`, `_t_simplify_expression`, `_t_count_solutions`), junk-value korumaları, `vacuity_probe`, `is_trivial` |
 | `src/mathverify/formal/prove.py` | Taktik merdiveni, ispat denetimleri, `l7_layer` |
 | `src/mathverify/formal/lean_client.py` | WSL içindeki Lean REPL istemcisi |
 | `harness/run_eval.py` | Deterministik ölçüm ve sızma testi → `reports/eval_report.md` |
@@ -812,6 +847,8 @@ bu soruları açık bırakır.
 | `harness/run_f3.py` | LLM'li tam hat ölçümü (F3/F4); `--max-cost`, `--solver-family`, `--pathb` |
 | `scripts/check.py` | Bütün kapılar tek komutta; `--full` günlüğü `reports/check_full.log`a kendisi yazar |
 | `scripts/verify_cli.py` | Tek öğe ya da serbest metin doğrulama; `--lean` |
+| `scripts/dev/` | Kapıların parçası olmayan geliştirme betikleri (`README.md` içinde listeli) |
+| `tests/test_written_definedness.py` | Tanımlılık düzeltmesinin 11 vakası (karar 30) |
 | `evalset/build/build_all.py` | 280 öğeyi yeniden üretir |
 | `tests/conftest_llm.py` | `ScriptedClient`: F3/F4 testleri ağsız koşar |
 | `DECISIONS.md` | Kilitli kararlar ve 30 uygulama kararı |
@@ -852,9 +889,9 @@ Lean bu makinede kurulu: WSL `Ubuntu` mevcut ve 23 Eylül Lean taraması çalı�
 
 | Komut | Ne yapar | Süre |
 |---|---|---|
-| `.venv/Scripts/python.exe -m pytest tests -q` | 407 test (406 geçer, 1 atlanır) | ~55 s |
-| `.venv/Scripts/python.exe scripts/check.py` | Hızlı: testler + deterministik ölçüm (11 kapı) | ~1.5 dk |
-| `.venv/Scripts/python.exe scripts/check.py --full` | + Lean, adversaryal, sağlamlık, kalibrasyon (22 kapı); günlüğü `reports/check_full.log`a yazar | **~25–45 dk** (adversaryal tek başına 21–38 dk, makine yüküne bağlı) |
+| `.venv/Scripts/python.exe -m pytest tests -q` | 439 test (438 geçer, 1 atlanır) | ~90 s |
+| `.venv/Scripts/python.exe scripts/check.py` | Hızlı: testler + pyflakes + deterministik ölçüm (12 kapı) | ~3 dk |
+| `.venv/Scripts/python.exe scripts/check.py --full` | + Lean, adversaryal, sağlamlık, kalibrasyon (23 kapı); günlüğü `reports/check_full.log`a yazar | **~25–70 dk** (adversaryal tek başına 21–58 dk, makine yüküne bağlı) |
 
 ### Tek tek ölçümler
 
@@ -944,7 +981,7 @@ Ayrı bir build adımı yok; paket `-e` ile kurulu. Lint ya da biçimlendirici *
 
 ### Her değişiklikte
 
-- `scripts/check.py --full` 22/22 kalmalı. Hızlı döngüde `scripts/check.py` ve `pytest` yeterli;
+- `scripts/check.py --full` 23/23 kalmalı. Hızlı döngüde `scripts/check.py` ve `pytest` yeterli;
   bitirmeden önce `--full` koşturulur.
 - Lean tarafında her yeni şablon **yanlış cevaplı öğelerde de** koşturulur. Lean FP = 0 ve
   junk-value sertifikası = 0 kalmalı.
@@ -987,6 +1024,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   `Add/Mul/Pow` eklendi.
 - `is_subset` sonucu hash tohumuna bağlı değişebiliyor; sandbox dışında `PYTHONHASHSEED`
   sabitlenmemişse sonuçlar koşudan koşuya değişebilir.
+- **Otomatik sadeleştirme tanımsız noktayı siler:** `x/x` → 1, `sqrt(x)**2` → x, `x**2/x` → x.
+  Tanımlılık için daima `parse_as_written` / `Ctx.written_conditions` (karar 30).
+- Değerlendirilmiş bir `Add`'in `args` sırası kanoniktir (`1 + x`), sadeleştirmesiz ayrıştırılmış
+  olanınki yazıldığı gibidir (`x + 1`). Lean yazıcısı paydayı `as_numer_denom()` ile bastığı için
+  aynı payda iki biçimde görünebilir; `field_simp` tam biçimi arar.
 
 ### Ayrıştırıcı
 
@@ -998,7 +1040,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 ### Lean ve Mathlib
 
-- **Junk değerler** ve `first`/`done` tuzağı: §3 karar 12 ve §4.
+- **Junk değerler** ve `first`/`done` tuzağı: §3 karar 12 ve §4. Kural 9 artık bütün şablonların
+  ipuçları için genel bir testle korunuyor
+  (`test_every_first_chain_in_every_template_hint_closes_with_done`).
+- Lean `r.clean` yalnız hata ve `sorry` yokluğudur; uyarılar (kullanılmayan `have`) temizliği
+  bozmaz.
 - Mathlib türev kombinatörleri noktasal işlem kullanır (`f * g`); kapanışta `Pi.*_apply` ile
   köprülenir.
 - `tests/test_f5_lean.py` içindeki Lean gerektiren testler (`_lean()` yardımcısını çağıranlar)
@@ -1034,8 +1080,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   tekrar oynatır. **Testler buna bağlı değil:** `ScriptedClient` ve `tmp_path` kullanıyorlar.
   DECISIONS §18'deki "testler bunu kullanır" ifadesi yalnız önbellek anlamlarının testine
   (`tests/test_f3_pipeline.py`) karşılık geliyor.
-- `check.py --full` ~25–45 dk sürer. Adversaryal tarama tek başına 21–38 dk (23 Eylül'de iki
-  koşu: 1245 s ve 2249 s, aynı kodla aynı hız ölçüldüğü için fark makineden); arka planda
+- `check.py --full` ~25–70 dk sürer. Adversaryal tarama tek başına 21–58 dk (23 Eylül'de üç
+  koşu: 1245, 2249, 3490 s; farkın çoğu makineden, ~%12–15'i tanımlılık kancasından); arka planda
   koşturun.
 - `soundness_fuzz`'a yeni bir "eşdeğer" varyant eklerken kâhinin kendisinin kesin olduğundan emin
   olun (§4: 30 basamaklı ondalık hatası).
@@ -1056,9 +1102,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 Kullanıcıdan onay ya da girdi bekleyen noktalar:
 
-1. **`denetim-2026-09-20` dalı `master`a birleştirilsin mi?** İçinde iki denetimin tamamı var;
-   `master` hâlâ denetim öncesinde.
-2. **Commit edilmemiş değişiklikler (§5.3) commit edilsin mi?** Commit yalnız istenirse yapılır.
+1. ~~`yerel-kalite-2026-09-23` birleştirilsin mi?~~ Yapıldı (23 Eylül, yedeği §5.4'te).
+2. **Yedekler (iki etiket, iki bundle) ne zaman silinebilir?** Sormadan silinmez.
 3. **Anthropic bakiyesi ne zaman ve ne kadar yüklenecek?** F3'ün kalanı için ~10 $, F4 için
    ~15–25 $ tahmini var. *Kısmen cevaplandı (23 Eylül):* F3/F4 bütün lokal iş bitince koşulacak
    (§7).
@@ -1070,11 +1115,12 @@ Kullanıcıdan onay ya da girdi bekleyen noktalar:
 7. **API anahtarları yenilensin mi?**
 8. **Çözücü sembolü adımları (§6.2):** bu sınır kabul mü, yoksa yapısal formata sembol tanımı
    eklensin mi?
-9. **İsteğe bağlı Lean şablonları** (`domain_of`, `simplify_expression`, `count_solutions`)
-   istenir mi?
+9. ~~İsteğe bağlı Lean şablonları~~: 23 Eylül'de kullanıcının talimatıyla yapıldı (karar 31).
 10. **Başka sağlayıcıyla ölçüm** (GPT/Gemini, `set_client_override` ile) istenir mi? Ölçüm
     sonuçları o konfigürasyona özgü kalır.
 11. **Uygulamanın adı ve ayrıntıları** (§1): ne depoda ne şartnamede geçiyor.
-12. **Tek seferlik betikler** (§6.8): tutulsun mu, silinsin mi, `scripts/dev/` altına mı taşınsın?
-13. **`count_real_roots` içindeki ölü `nsimplify` dalı** (§6.8): kaldırılsın mı (ulaşılamıyor ama
-    §3 karar 15'e aykırı)?
+12. ~~Tek seferlik betikler~~ ve 13. ~~ölü `nsimplify` dalı~~: 23 Eylül'de, "geri kalan lokal
+    işlemleri yap" talimatıyla yapıldı (DECISIONS §33). Betikler silinmedi, `scripts/dev/`e
+    taşındı; yalnız `diag_sandbox.py` silindi (testler onu tamamen kapsıyor).
+14. **Ekstremum/türev/seride tanımsız nokta:** çekimser kalmak yeterli mi, yoksa ekstremum
+    tanımsız noktalar dışlanarak mı hesaplansın (§6.8)?

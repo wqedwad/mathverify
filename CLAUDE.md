@@ -34,6 +34,9 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 9. `first | …` zincirinde her alternatif `done` ile kapanır.
 10. Faturalama/kimlik hatası (`LLMFatalError`) bir ölçüm değildir; yutulmaz, taramayı durdurur.
 11. Ölçülmemiş iyileştirme, iyileştirme sayılmaz.
+12. Tanımlılık, ifadenin yazıldığı biçimden okunur (`parse_as_written`, `Ctx.written_conditions`).
+    SymPy'nin otomatik sadeleştirmesi (`x/x` → 1) tanımsız noktayı siler; değer için normal ayrıştırma,
+    tanımlılık için yazıldığı biçim.
 
 ## Her değişiklikte
 

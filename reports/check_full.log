@@ -1,20 +1,23 @@
-check.py --full · 2026-09-23 13:35:09 · denetim-2026-09-20 @ 0f14380 · commit edilmemiş değişiklik: 11 dosya
+check.py --full · 2026-09-23 15:56:33 · yerel-kalite-2026-09-23 @ e2aa08d · commit edilmemiş değişiklik: 29 dosya
 
 == testler ==
-  pytest: 56 s (exit 0)
+  pytest: 91 s (exit 0)
+== pyflakes ==
+  pyflakes: 1 s (exit 1)
 == deterministik değerlendirme ==
-  run_eval: 69 s (exit 0)
+  run_eval: 104 s (exit 0)
 == Lean taraması ==
-  run_lean: 74 s (exit 0)
+  run_lean: 131 s (exit 0)
 == adversaryal ==
-  adversarial: 2249 s (exit 0)
+  adversarial: 3490 s (exit 0)
 == metamorfik sağlamlık ==
-  soundness_fuzz: 90 s (exit 0)
+  soundness_fuzz: 119 s (exit 0)
 == kalibrasyon ==
-  calibrate: 33 s (exit 0)
+  calibrate: 47 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  406 passed, 1 skipped in 55.52s   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  438 passed, 1 skipped in 89.59s (0:01:29)   (hedef: hepsi geçer)
+  [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
   [OK  ] kapsama                                         1.0   (hedef: 0.85)
@@ -26,8 +29,8 @@ check.py --full · 2026-09-23 13:35:09 · denetim-2026-09-20 @ 0f14380 · commit
   [OK  ] L5 uygulanabilirlik tavanı                      21/280   (hedef: raporlanır)
   [OK  ] ölçülmeyen görev türü                           yok   (hedef: yok)
   [OK  ] Lean FP                                         0   (hedef: 0)
-  [OK  ] Lean sertifika                                  107/280   (hedef: raporlanır)
-  [OK  ] Lean junk-value sertifikası                     0/12   (hedef: 0)
+  [OK  ] Lean sertifika                                  121/280   (hedef: raporlanır)
+  [OK  ] Lean junk-value sertifikası                     0/17   (hedef: 0)
   [OK  ] saldırı başarısı                                0.000%   (hedef: < %2)
   [OK  ] saldırı yüzeyleri                               cevap,şık,adım   (hedef: cevap+şık+adım)
   [OK  ] SymPy üretimli yanlış cevapta yanlış onay       0/448   (hedef: 0)
@@ -37,4 +40,4 @@ check.py --full · 2026-09-23 13:35:09 · denetim-2026-09-20 @ 0f14380 · commit
   [OK  ] nedeni açıklanmayan kaçırılan bozuk adım        0/6   (hedef: 0)
   [OK  ] kalibre test precision (poz/neg)                1.0/1.0   (hedef: raporlanır)
 
-22/22 kapı geçti
+23/23 kapı geçti

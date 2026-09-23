@@ -42,7 +42,7 @@ Deterministik hat, 280 öğelik değerlendirme seti ([reports/eval_report.md](re
 | Adım lokalizasyonu (tam eşleşme) | 1.000 (73/120 lokalize) | — |
 | Anahtar sızma testi | geçti | zorunlu |
 | Ölçülmeyen görev türü | **yok** | yok |
-| Ortalama süre / öğe | ~0.15 s | — |
+| Ortalama süre / öğe | ~0.15–0.2 s (makine yüküne bağlı) | — |
 
 Yol (b) sadakati **iki** sayıdır, çünkü tek sayı yanıltıcıydı: 280 öğenin 260'ı yalnız şık
 harfi eşleştiği için sadık sayılıyor, cevabın kendisi yalnız **20** öğede karşılaştırılıyor
@@ -53,15 +53,15 @@ Formal katman, modelsiz ([reports/lean_report.md](reports/lean_report.md)):
 
 | Metrik | Değer | Hedef |
 |---|---|---|
-| Lean ifadesi üretilebilen öğe | 152 / 280 (%54.3) | — |
-| Denetimden geçmiş formal sertifika | **107** (%38.2) | — |
+| Lean ifadesi üretilebilen öğe | 172 / 280 (%61.4) | — |
+| Denetimden geçmiş formal sertifika | **121** (%43.2) | — |
 | Yanlış cevaplı öğede kanıt | **0** | 0 |
-| Junk-value sondası (gerçekte yanlış, Lean'de doğru 12 iddia) | **0** sertifika | 0 |
-| Süre / öğe | ~0.27 s | — |
+| Junk-value sondası (gerçekte yanlış, Lean'de doğru 17 iddia) | **0** sertifika | 0 |
+| Süre / öğe | ~0.3–0.5 s | — |
 
-> 107 sertifika korunuyor; ifade sayısı 156'dan 152'ye indi çünkü has olmayan ∫₀¹ ln x/√x artık
-> ifade almıyor (hiçbiri ispatlanmamıştı). Yüzdeler ayrıca sete L7'nin bilerek çevirmediği üç
-> sınıftan (`domain_of`, `simplify_expression`, `count_solutions`) 20 öğe eklendiği için düştü.
+> 23 Eylül'de `domain_of`, `simplify_expression` ve `count_solutions` şablonları eklendi: bu 20
+> öğenin 14 A/B/D öğesi sertifika aldı, 6 C öğesinin hiçbiri kanıtlanmadı. Her şablonun korumasının
+> naif biçimi Lean'de gerçekten ispatlanıyor (`∀ x, x = x²/x` gibi); bu teste bağlı.
 >
 > **Junk value:** Lean `x/0 = 0`, `Real.sqrt (−3) = 0`, `Real.log 0 = 0`, `Real.tan (π/2) = 0`
 > tanımlar. Tanımlılık korumalarından önce "tan(π/2) = 0" `--lean` ile bütün doğrulayıcıdan
@@ -95,6 +95,13 @@ SymPy ile kesin olarak yanlış ve kesin olarak eşdeğer cevaplar üretilir:
 | Nedeni açıklanmayan kaçırılan bozuk adım | **0 / 6** (5 çözücü sembolü, 1 çözümsüz öncül) | 0 |
 
 Bu tarama ilk koşusunda **448 yanlış cevabın 27'sini CORRECT** buldu (`int(7/2) = 3`, `nsimplify` ile 1/6'ya yakalanan bir kesir); ayrıca soruyu cevap olarak geri yazan 7 iddianın 7'si CORRECT alıyordu. İkisi de kapatıldı.
+
+23 Eylül'de bir yanlış-onay sınıfı daha bulundu ve kapatıldı: SymPy ayrıştırırken `x/x`'i 1'e, `(√x)²`'yi
+x'e sadeleştirdiği için tanımsız noktalar kayboluyordu. "`x/x`'in tanım kümesi ℝ", "`x²/x = 0`'ın kökü
+0", "x = 0'da `x/x` = 1" gibi 11 vaka CORRECT (0.99–0.995) alıyordu; tanım kümesi, denklem ve
+eşitsizlikte doğru cevaplar da INCORRECT alıyordu. Tanımlılık artık ifadenin yazıldığı biçimden
+okunuyor ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tanımlılık-ifadenin-yazıldığı-biçimden-okunur),
+`tests/test_written_definedness.py`); değerlendirme setinin sayıları değişmedi.
 
 F3 (tam otomatik hat) kısmi ölçümü ([reports/f3_report.md](reports/f3_report.md)): 218 öğenin
 151'i `Your credit balance is too low` ile düştü — ve tarama durması gerekirken durmadı; o hata
@@ -167,7 +174,7 @@ Lean için [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md).
 .venv/Scripts/python.exe scripts/check.py --full
 ```
 
-Tek komutta 22 kapı: testler, deterministik değerlendirme, Lean taraması (junk-value sondası dahil),
+Tek komutta 23 kapı: testler, pyflakes, deterministik değerlendirme, Lean taraması (junk-value sondası dahil),
 adversaryal tarama (3 yüzey), metamorfik sağlamlık taraması, kalibrasyon. Kapı düşerse çıkış kodu 1.
 Çıktı ayrıca `reports/check_full.log`a yazılır (tarih, dal ve commit ile).
 
@@ -278,6 +285,7 @@ evalset/build/    konu başına öğe üreticileri (A/B elle, C adlandırılmı�
 evalset/items/    280 JSON öğe (üretilir)
 harness/          run_eval · run_lean · run_f3 · adversarial · calibrate · metrics · loader
 docs/             ARCHITECTURE · SOLVER_FORMAT · LLM_LAYERS · LEAN_SETUP · E1-E10-measurement
-scripts/          check · verify_cli · probe_e1_e10 · smoke_* · lean_* · setup_lean*
+scripts/          check · verify_cli · probe_e1_e10 · lean_* · setup_lean*
+scripts/dev/      kapıların parçası olmayan geliştirme betikleri (smoke_*, lean_try, clean_imports)
 reports/          üretilmiş raporlar
 ```

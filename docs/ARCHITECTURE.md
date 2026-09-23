@@ -129,12 +129,42 @@ Kural (`formal/statement.py`, bölüm "junk values"):
   olduğu kanıtlanır; noktada türevde nokta tanım kümesinin *içinde* olmalıdır (√x'in −1'de türevi
   Lean'de 0'dır); fonksiyonel türevde gerçek tanım kümesi boş olmamalıdır; tekrarlama bağıntısında ve
   eğri denklemlerinde kısmi işlem kapsam dışıdır.
+* 23 Eylül'de eklenen üç şablon aynı kurala uyar, her biri ölçülmüş bir tehlikeye karşı:
+  * `domain_of` ifadesi fonksiyonu hiç içermez, yalnız tanımlılık koşullarını: `∀ x, (koşullar) ↔
+    x ∈ S`. İçinde kısmi işlem olan bir koşul (`log(√x − 1)`) kapsam dışıdır.
+  * `simplify_expression`'da korumalar yalnız problemin ifadesinden gelir; iddianın kendi
+    tanımlılığı **hedefte** kanıtlanır. Aksi hâlde `∀ x, x = x²/x` Lean'de doğrudur (0/0 = 0).
+    Tanım kümesi hiçbir yerde iç noktası olmayan ifade (`√(−x²−1)`) reddedilir; aksi hâlde
+    `∀ x, −x²−1 ≥ 0 → √(−x²−1) = 0` boş yere ispatlanır.
+  * `count_solutions`'da ℤ bölmesi ve `Mod` reddedilir (Lean'in ℤ `/`'ı taban bölmesi,
+    `x / 0 = 0`; `%` Öklidçi). Kutunun bütün çözümleri içerdiği de Lean'de kanıtlanır, yani IR'daki
+    sınırlara güvenilmez.
+  Parantez içindeki naif ifadelerin üçü de Lean'de gerçekten ispatlanıyor
+  (`test_the_naive_statements_these_templates_avoid_are_provable`).
 * Tanımlılık `certify.domain.definedness_conditions`'tan gelir — deterministik katmanla aynı tanım.
 * Vakum sondası ispat aramasından zayıf olamaz: ispat merdiveninin kombinasyonlarını ve her `≠`
   hipotezi için yasakladığı eşitliği kanıtlama denemesini içerir, ve her alternatif `done` ile kapanır.
 
-`harness/run_lean.py` her koşuda 12 junk-value sondasını yeniden dener; bir tanesinin sertifika alması
-kapıyı düşürür.
+`harness/run_lean.py` her koşuda 17 junk-value sondasını yeniden dener (23 Eylül'e kadar 12); bir
+tanesinin sertifika alması kapıyı düşürür.
+
+## Tanımlılık, ifadenin yazıldığı biçimden okunur
+
+SymPy ayrıştırırken ifadeyi kendiliğinden sadeleştirir: `x/x` → 1, `√x²` (`sqrt(x)**2`) → x,
+`x²/x` → x, `log x − log x` → 0. Tanımsız noktalar böylece daha hiçbir koşul okunmadan kaybolur.
+23 Eylül'de ölçüldü: "`x/x`'in tanım kümesi ℝ", "`x²/x = 0`'ın kökü 0", "`(√x)² = −1`'in kökü −1",
+"`x/x > 0` bütün ℝ'de" ve "x = 0'da `x/x` = 1" CORRECT (0.99–0.995) alıyordu; ilk dördünün doğru
+cevabı da INCORRECT alıyordu. Aynı tuzak türevde ("`(x²/x)'` 0'da 1"), ekstremumda ("[−1, 1]'de
+`x/x − x²`'nin maksimumu 1", hiç ulaşılmıyor) ve seride ("Σ_{k=−1}^{1} k/k = 3") de vardı.
+
+Kural: problemin ifadeleri, yalnız tanımlılık için, sadeleştirme kapalıyken bir kez daha okunur
+(`normalize.parse.parse_as_written`, `certify.domain.written_definedness`). Koşullar iki yere girer:
+`Ctx.domain_for` (tek değişkenli) ve `Ctx.var_constraints` (her sayıda değişken). Böylece denklem,
+eşitsizlik, tanım kümesi, `evaluate`, sayım ve adım reddedici aynı tanımı kullanır. Türev, ekstremum
+ve seri kendi bölgesini (nokta, aralık, indis aralığı) `written_undefined_in` ile sınar; tanımsız bir
+nokta varsa karar vermez. `limit` bilerek dışarıdadır: lim x→0 x/x = 1 doğrudur, yaklaşılan nokta
+çoğu zaman tam da tanımsız noktadır. Kaldırılabilir nokta integrali değiştirmez, integral de
+dışarıdadır. Teste bağlı: `tests/test_written_definedness.py`.
 
 ## Neden IR'dan deterministik Lean ifadesi
 

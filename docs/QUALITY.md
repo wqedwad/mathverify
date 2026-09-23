@@ -51,6 +51,7 @@ alt kümede hatayı en aza indirmek için belirsizlikte çekimser kalınır
 | İddia olduğu gibi sınanır | `exact_integer`; `nsimplify`/`int()` yasak | Metamorfik tarama: yanlış varyantta yanlış onay = 0 |
 | Yalnız somut karşı örnekle reddet | `steps/` yalnız çürütür | Geçerli adım dönüşümünde yanlış red = 0; nedeni açıklanmayan kaçırılan bozuk adım = 0 |
 | Bozuk girdi ≠ kanıtlanamayan adım | `malformed_step_claim` / `UndeclaredSymbolError` ayrımı | Adversaryal: adım yüzeyi |
+| Tanımlılık yazıldığı gibi okunur | `parse_as_written` → `Ctx.domain_for` / `var_constraints`; SymPy'nin sadeleştirmesi tanımsız noktayı silmez | `tests/test_written_definedness.py` (11 yanlış onay vakası; doğru cevaplı karşılıkları da) |
 | Sayısal "eşit" kanıt değildir | Kesin kesirler kesin; eşitlik her hassasiyet basamağında; farkın kendisi değerlendirilir | `tests/test_equiv.py` (10³⁰+1, Ramanujan sabiti, e⁻¹⁰⁰⁰) |
 | Math-Verify ikinci görüştür | Tek başına karar vermez | birim testi |
 | Formal ifade sadık olmalı | Şablonla, modelsiz; tanımlılık (junk-value) korumaları | Lean FP = 0; junk-value sondası = 0 |
