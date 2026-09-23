@@ -21,7 +21,7 @@ from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, co
 
 __all__ = ["ParseError", "UndeclaredSymbolError", "ClaimNotAValue", "COMPUTING_OPERATORS",
            "claim_namespace", "check_claim_is_value", "build_namespace", "parse_expr_str", "parse_relation", "parse_answer",
-           "parse_domain", "parse_set_str", "is_latex", "preclean"]
+           "parse_domain", "parse_set_str", "is_latex", "preclean", "parse_as_written"]
 
 
 class ParseError(ValueError):
@@ -426,6 +426,36 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
 
 _REL_OPS = ["<=", ">=", "!=", "==", "=", "<", ">"]
 _REL_CLASS = {"<=": Le, ">=": Ge, "!=": Ne, "==": Eq, "=": Eq, "<": Lt, ">": Gt}
+
+
+def parse_as_written(s: str, ns: dict[str, Any] | None = None):
+    """The sides of `s` EXACTLY AS WRITTEN, with SymPy's automatic simplification switched off,
+    as a Tuple — for reading DEFINEDNESS only, never values. With evaluation on, `x/x` becomes 1,
+    `sqrt(x)**2` becomes x and `x**2/x` becomes x before any condition can be read, so the points
+    where the problem's own expression is undefined disappear (measured 23 Sep 2026: wrong answers
+    to domain_of, solve_equation, solve_inequality and evaluate were certified CORRECT, and the
+    right ones refuted). Returns None for anything this cannot read faithfully (LaTeX, undeclared
+    or forbidden names); the caller then adds no condition, which is the old behaviour."""
+    if ns is None:
+        ns = dict(_SAFE_NAMES)
+    if not isinstance(s, str):
+        return None
+    s = strip_presentation(_strip_invisible(s))
+    if is_latex(s):
+        return None
+    s = preclean(s)
+    local = dict(ns, Add=sp.Add, Mul=sp.Mul, Pow=sp.Pow)
+    out = []
+    for _, chunk in _split_top_level(s):
+        try:
+            if _check_safe(chunk, ns):
+                return None
+            with sp.evaluate(False):
+                out.append(parse_expr(chunk, local_dict=local, global_dict={},
+                                      transformations=_TRANSFORMS, evaluate=False))
+        except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
+            return None
+    return sp.Tuple(*out)
 
 
 def _split_top_level(s: str) -> list[tuple[str, str]]:

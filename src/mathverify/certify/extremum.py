@@ -228,6 +228,12 @@ def verify(ir, solution, ctx: Ctx):
         if err:
             return err
         which = p.get("which", "max")
+        # f as written must be defined on the whole interval: x/x − x² parses to 1 − x², whose
+        # maximum 1 sits exactly at the point x/x excludes (measured: certified CORRECT)
+        from .domain import written_undefined_in
+        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv) is True:
+            return unknown(LAYER, "f_undefined_on_interval_as_written", t.ms, {"f": p["f"]},
+                           flags=["written_domain"])
         if which.startswith("local_"):
             ok, ev = certify_local_extremum(f, var, iv, which, claimed, timeout=ctx.timeout)
         else:

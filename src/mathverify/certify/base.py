@@ -67,8 +67,57 @@ class Ctx:
                         dom = sp.Intersection(dom, sp.solveset(rel, var, S.Reals))
                 except Exception:
                     pass
+        # the problem's own expressions must be defined, as written (see written_conditions)
+        conds, nowhere = self.written_conditions()
+        if var in nowhere:
+            dom = S.EmptySet
+        for c in conds:
+            if c.free_symbols != {var}:
+                continue                               # several variables: var_constraints only
+            try:
+                sol = sp.solveset(c, var, S.Reals)
+            except Exception:  # noqa: BLE001
+                continue
+            if not isinstance(sol, sp.ConditionSet):
+                dom = sp.Intersection(dom, sol)
         self.cache[key] = dom
         return dom
+
+    # Params that hold the problem's own expression, per task kind. `limit` is absent on purpose,
+    # and its givens are skipped too: the point a limit approaches is typically exactly where the
+    # expression is undefined (lim x→0 of x/x is 1). The calculus kinds keep their own handling.
+    _WRITTEN_PARAMS = {"evaluate": ("expr",), "simplify_expression": ("expr",), "domain_of": ("expr",),
+                       "solve_equation": ("equation",), "solve_inequality": ("inequality",),
+                       "count_roots": ("expr",)}
+
+    def written_conditions(self) -> tuple[list[Any], set]:
+        """Definedness of the problem's expressions AS WRITTEN (open conditions, and symbols of an
+        expression defined nowhere). SymPy's automatic simplification removes undefined points
+        before any condition is read: `x/x` → 1, `sqrt(x)**2` → x, `x**2/x` → x, `log(x) − log(x)`
+        → 0. Measured 23 Sep 2026: "the domain of x/x is ℝ", "x²/x = 0 has the root 0",
+        "(√x)² = −1 has the root −1", "x/x > 0 on all of ℝ" and "x/x at x = 0 is 1" were all
+        certified CORRECT, and the right answers to the first four were refuted. The conditions
+        restrict `domain_for` (one variable) and join `var_constraints` (any number)."""
+        key = "written_conditions"
+        if key in self.cache:
+            return self.cache[key]
+        from .domain import written_definedness
+        kind = self.ir.task.kind
+        srcs = [] if kind == "limit" else list(self.ir.givens)
+        params = self.ir.task.params or {}
+        for k in self._WRITTEN_PARAMS.get(kind, ()):
+            if isinstance(params.get(k), str):
+                srcs.append(params[k])
+        if kind == "evaluate" and not params.get("expr") and self.ir.unknown_of_interest:
+            srcs.append(self.ir.unknown_of_interest)
+        conds: list[Any] = []
+        nowhere: set = set()
+        for s_ in srcs:
+            cs, nw = written_definedness(s_, self.ns)
+            nowhere |= nw
+            conds += [c for c in cs if c not in conds]
+        self.cache[key] = (conds, nowhere)
+        return conds, nowhere
 
     def _dod_mentions(self, var: sp.Symbol) -> bool:
         d = self.ir.domain_of_discourse
@@ -102,6 +151,7 @@ class Ctx:
                 out.append(sp.Ge(s_, 0, evaluate=False))
             for c in v.constraints:
                 out.append(self.rel(c))
+        out += [c for c in self.written_conditions()[0] if c not in out]
         return out
 
     def claim_ns(self, solution: Solution | None = None, **extra) -> dict[str, Any]:

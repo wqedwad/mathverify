@@ -253,6 +253,13 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
+            # every term as written must exist: k/k parses to 1, so Σ_{k=-1}^{1} k/k was "3"
+            from .domain import written_undefined_in
+            if lo.is_Integer and (hi.is_Integer or hi == oo):
+                idx = sp.Range(int(lo), int(hi) + 1) if hi.is_Integer else sp.Range(int(lo), oo)
+                if written_undefined_in(p["term"], ctx.ns, var, idx) is True:
+                    return unknown(LAYER, "term_undefined_in_range_as_written", t.ms, {"term": p["term"]},
+                                   flags=["written_domain"])
             ok, cev = certify_series_sum(term, var, lo, hi, claimed, timeout=ctx.timeout)
             ev.update(cev)
             conf = 0.99 if ev.get("method") in ("exact_finite", "symbolic+numeric") else 0.95

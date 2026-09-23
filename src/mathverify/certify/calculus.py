@@ -14,7 +14,7 @@ from ..equiv.numeric import num_equal
 from ..equiv.random_point import random_point_equal
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import definedness_conditions
+from .domain import definedness_conditions, written_definedness, written_undefined_in
 
 LAYER = "certify.calculus"
 
@@ -195,12 +195,17 @@ def verify(ir, solution, ctx: Ctx):
                 at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
                 if err:
                     return err
+                # x²/x is x after parsing, but it has no value (so no derivative) at 0
+                if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at)) is True:
+                    return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
+                                   {"f": p["f"], "at": str(at)}, flags=["written_domain"])
                 truth_at = sp.simplify(truth.subs(var, at))
                 ev["value_at"] = str(truth_at)
                 ok, cev = answers_equivalent(claimed, truth_at, shape="scalar")
             else:
                 dom = ctx.domain_for(var)
-                for c in definedness_conditions(f, var):
+                for c in definedness_conditions(f, var) + [c for c in written_definedness(p["f"], ctx.ns)[0]
+                                                           if c.free_symbols == {var}]:
                     rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, S.Reals, timeout=ctx.timeout)
                     if rr.ok and not isinstance(rr.value, sp.ConditionSet):
                         dom = sp.Intersection(dom, rr.value)
@@ -214,6 +219,9 @@ def verify(ir, solution, ctx: Ctx):
             at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
             if err:
                 return err
+            if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at)) is True:
+                return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
+                               {"f": p["f"], "at": str(at)}, flags=["written_domain"])
             y = ctx.sym(p.get("dep", "y"))
             r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, 1, timeout=ctx.timeout)
             if not r.ok:

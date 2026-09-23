@@ -199,6 +199,50 @@ def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, l
     return kept, rejected
 
 
+def written_definedness(src: str, ns: dict[str, Any]) -> tuple[list[Any], set]:
+    """Definedness of an IR expression or relation AS WRITTEN (see `parse_as_written`): the open
+    conditions, and the symbols of an expression that is defined NOWHERE (a closed condition
+    that fails, e.g. `1/(x - x)`). Empty when the text cannot be read that way."""
+    from ..normalize.parse import parse_as_written
+    e = parse_as_written(src, ns)
+    if e is None:
+        return [], set()
+    conds, nowhere = [], set()
+    try:
+        found = definedness_conditions(e, None)
+    except Exception:  # noqa: BLE001
+        return [], set()
+    for c in found:
+        if c is sp.false:
+            nowhere |= e.free_symbols
+        elif getattr(c, "free_symbols", None) and c not in conds:
+            conds.append(c)
+    return conds, nowhere
+
+
+def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> bool | None:
+    """Is the expression, AS WRITTEN, undefined somewhere in `region` (a point set, an interval, an
+    index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
+    own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
+    and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT."""
+    conds, nowhere = written_definedness(src, ns)
+    if var in nowhere:
+        return True
+    for c in conds:
+        if c.free_symbols - {var}:
+            return None
+        bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
+        try:
+            s = sp.solveset(bad, var, region)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(s, sp.ConditionSet):
+            return None
+        if s != S.EmptySet:
+            return True
+    return False
+
+
 def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0) -> tuple[sp.Set | None, dict]:
     """Domain where `expr` is real-valued: conditions -> solveset intersection; fallback continuous_domain."""
     ev: dict[str, Any] = {"conditions": [str(c) for c in definedness_conditions(expr, var)]}
