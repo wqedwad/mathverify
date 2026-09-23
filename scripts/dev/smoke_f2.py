@@ -1,4 +1,4 @@
-import sympy as sp, time
+import time
 from mathverify.verifier import verify
 
 def show(tag, ir, sol):

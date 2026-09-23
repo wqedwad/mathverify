@@ -23,7 +23,7 @@ from ..certify.base import Ctx, Timer, result, unknown
 from ..certify.domain import relation_holds_at, in_domain
 from ..equiv import answers_equivalent
 from ..equiv.random_point import sample_points
-from ..normalize.parse import parse_relation, ParseError, UndeclaredSymbolError
+from ..normalize.parse import parse_relation, UndeclaredSymbolError
 from ..sandbox import run as sb_run
 
 LAYER = "steps.refute"

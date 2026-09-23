@@ -16,7 +16,9 @@ dependencies = [
 # (beta.messages.stream, output_config, thinking=adaptive, server-side-fallback betas), so an
 # unpinned upgrade can break the LLM layers with no test able to catch it offline.
 llm = ["anthropic==1.7.0", "python-dotenv==1.2.3"]
-dev = ["pytest>=9", "pytest-timeout", "hypothesis"]
+# pyflakes backs the "pyflakes temiz" gate in scripts/check.py (undefined names in rarely-run
+# branches are the bugs it exists for) and scripts/dev/clean_imports.py.
+dev = ["pytest>=9", "pytest-timeout", "hypothesis", "pyflakes>=3"]
 
 [build-system]
 requires = ["setuptools>=68"]

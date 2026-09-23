@@ -8,8 +8,6 @@ deterministic answer-only extractor.
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from harness.run_f3 import render_md  # noqa: E402
 from harness.metrics import summarize  # noqa: E402

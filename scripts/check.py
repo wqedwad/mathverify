@@ -39,6 +39,25 @@ def gate(name: str, value, target, ok: bool, unit: str = "") -> dict:
     return {"name": name, "value": value, "target": target, "ok": bool(ok), "unit": unit}
 
 
+def pyflakes_findings(out: str, rc: int, root: Path) -> tuple[list[str], bool]:
+    """(findings not waived by a `# noqa` on their own source line, pyflakes-did-not-run)."""
+    findings, parsed = [], 0
+    for line in out.splitlines():
+        path, _, rest = line.partition(":")
+        lineno = rest.split(":", 1)[0]
+        if not lineno.isdigit():
+            continue
+        parsed += 1
+        try:
+            src_line = (root / path).read_text(encoding="utf-8").splitlines()[int(lineno) - 1]
+        except (OSError, IndexError):
+            src_line = ""
+        if "noqa" not in src_line:
+            findings.append(line.strip())
+    # a non-zero exit with nothing parseable is pyflakes failing (e.g. not installed), not a pass
+    return findings, rc != 0 and parsed == 0
+
+
 class _Tee:
     def __init__(self, *streams):
         self.streams = streams
@@ -90,6 +109,17 @@ def _main(args) -> int:
     rc, out = run([PY, "-m", "pytest", "tests", "-q", "-o", "addopts=-p no:cacheprovider"], "pytest")
     last = [l for l in out.splitlines() if "passed" in l or "failed" in l]
     gates.append(gate("birim testleri", last[-1].strip() if last else "?", "hepsi geçer", rc == 0))
+
+    print("== pyflakes ==")
+    # Tests never reach many `except` branches; an undefined name there is a NameError waiting
+    # for the one input that triggers it. pyflakes ignores `# noqa`, so a finding is waived only
+    # when its own source line carries one (the sandbox's deliberate warm import).
+    rc, out = run([PY, "-m", "pyflakes", "src", "harness", "scripts", "tests", "evalset/build"], "pyflakes")
+    findings, unparsed = pyflakes_findings(out, rc, ROOT)
+    gates.append(gate("pyflakes temiz", f"{len(findings)} bulgu" + (" (pyflakes çalışmadı)" if unparsed else ""),
+                      0, not findings and not unparsed))
+    for f in findings[:10]:
+        print(f"    {f}")
 
     print("== deterministik değerlendirme ==")
     rc, out = run([PY, "-m", "harness.run_eval", "--no-adversarial"], "run_eval")

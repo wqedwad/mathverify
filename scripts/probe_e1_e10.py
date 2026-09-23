@@ -6,10 +6,9 @@ write the test-suite. Differences from the handoff are reported, not hidden.
 """
 import time, sys
 import sympy as sp
-from sympy import (symbols, cos, sin, log, sqrt, Abs, pi, S, oo, I, Interval,
+from sympy import (symbols, cos, sin, log, sqrt, Abs, pi, S, I, Interval,
                    solveset, solve, Union, ImageSet, Lambda, Mod, FiniteSet,
-                   Poly, limit, simplify, diff, N, expand_complex, Rational,
-                   Integral, integrate, AccumBounds, nsimplify)  # noqa: F401
+                   Poly, limit, simplify, diff, N, expand_complex, integrate)
 import mpmath as mp
 import z3
 

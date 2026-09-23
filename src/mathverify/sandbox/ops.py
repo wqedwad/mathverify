@@ -95,35 +95,6 @@ def poly_count_roots(expr, var, lo=-oo, hi=oo):
     return int(p.count_roots(lo, hi))
 
 
-def nroots_scan(expr, var, lo, hi, n=2000):
-    """Sign-change scan on [lo,hi] for a real-valued expr; returns approximate roots."""
-    f = sp.lambdify(var, expr, "mpmath")
-    mp.mp.dps = 30
-    xs = [mp.mpf(lo) + (mp.mpf(hi) - mp.mpf(lo)) * k / n for k in range(n + 1)]
-    roots = []
-    prev = None
-    for xk in xs:
-        try:
-            v = f(xk)
-            if isinstance(v, mp.mpc):
-                if abs(v.imag) > mp.mpf("1e-20"):
-                    prev = None
-                    continue
-                v = v.real
-        except Exception:
-            prev = None
-            continue
-        if prev is not None and (v == 0 or (prev[1] < 0) != (v < 0)):
-            try:
-                r = mp.findroot(f, (prev[0], xk), solver="bisect", tol=mp.mpf("1e-25"))
-                roots.append(sp.nsimplify(sp.Float(str(r), 25), rational=False, tolerance=1e-20)
-                             if False else sp.Float(str(r), 25))
-            except Exception:
-                roots.append(sp.Float(str((prev[0] + xk) / 2), 25))
-        prev = (xk, v)
-    return roots
-
-
 # ----------------------------------------------------------------------------
 # calculus
 # ----------------------------------------------------------------------------

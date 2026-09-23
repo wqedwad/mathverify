@@ -21,11 +21,14 @@ def count_real_roots(expr, var, lo=-oo, hi=oo, distinct: bool = True) -> int:
         p = sp.Poly(expr, var)
     except sp.PolynomialError as e:
         raise ValueError(f"not a polynomial in {var}: {e}") from e
-    if not p.domain.is_Exact and p.domain != sp.QQ and not p.domain.is_ZZ:
-        try:
-            p = sp.Poly(sp.nsimplify(expr), var)
-        except Exception:
-            pass
+    if not p.domain.is_Exact:
+        # A root count of a polynomial with Float coefficients is not well defined near a
+        # multiple root, and snapping the coefficients to "nice" numbers is a rounding (§3
+        # rule 15). Measured: the old nsimplify branch counted 1 root for
+        # x² − 0.6666666666666666x + 0.1111111111111111, whose discriminant is −4.2e-17 (no real
+        # root as written). The parser turns every decimal into an exact rational, so the
+        # verifier never gets here; any other caller gets a refusal, not a guess.
+        raise ValueError(f"polynomial has inexact coefficients (domain {p.domain})")
     if p.free_symbols_in_domain:
         raise ValueError("polynomial has symbolic coefficients")
     if distinct:

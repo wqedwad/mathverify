@@ -1,4 +1,4 @@
-import json, time, sys
+import time
 from mathverify.llm import get_client, available_families
 from mathverify.llm.schemas import IR_SCHEMA, JUDGE_SCHEMA, ir_from_llm
 

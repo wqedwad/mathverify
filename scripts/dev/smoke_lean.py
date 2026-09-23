@@ -1,7 +1,7 @@
 import json, sys, time
 sys.path.insert(0, "src"); sys.path.insert(0, ".")
 from harness.loader import load_items, split_for_verifier
-from mathverify.formal import get_lean, build_statement, prove_statement, lean_available, sympy_to_lean
+from mathverify.formal import build_statement, prove_statement, lean_available, sympy_to_lean
 import sympy as sp
 
 if __name__ == "__main__":
