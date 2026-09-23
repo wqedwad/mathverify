@@ -1,26 +1,40 @@
+check.py --full · 2026-09-23 13:35:09 · denetim-2026-09-20 @ 0f14380 · commit edilmemiş değişiklik: 11 dosya
+
 == testler ==
   pytest: 56 s (exit 0)
 == deterministik değerlendirme ==
-  run_eval: 43 s (exit 0)
+  run_eval: 69 s (exit 0)
 == Lean taraması ==
-  run_lean: 77 s (exit 0)
+  run_lean: 74 s (exit 0)
 == adversaryal ==
-  adversarial: 720 s (exit 0)
+  adversarial: 2249 s (exit 0)
+== metamorfik sağlamlık ==
+  soundness_fuzz: 90 s (exit 0)
 == kalibrasyon ==
-  calibrate: 44 s (exit 0)
+  calibrate: 33 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                    328 passed, 2 skipped in 55.28s   (hedef: hepsi geçer)
-  [OK  ] cevap düzeyi pozitif precision    1.0   (hedef: 0.98)
-  [OK  ] cevap düzeyi negatif precision    1.0   (hedef: 0.98)
-  [OK  ] kapsama                           1.0   (hedef: 0.85)
-  [OK  ] B hücresi yanlış red              0.0   (hedef: 0.1)
-  [OK  ] anahtar sızma testi               True   (hedef: True)
-  [OK  ] çözüm düzeyi pozitif precision    0.9930555555555556   (hedef: raporlanır)
-  [OK  ] D hücresi tespit                  0.9743589743589743   (hedef: raporlanır)
-  [OK  ] Lean FP                           0   (hedef: 0)
-  [OK  ] Lean sertifika                    107/260   (hedef: raporlanır)
-  [OK  ] saldırı başarısı                  0.000%   (hedef: < %2)
-  [OK  ] kalibre test precision (poz/neg)  1.0/1.0   (hedef: raporlanır)
+  [OK  ] birim testleri                                  406 passed, 1 skipped in 55.52s   (hedef: hepsi geçer)
+  [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
+  [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
+  [OK  ] kapsama                                         1.0   (hedef: 0.85)
+  [OK  ] B hücresi yanlış red                            0.0   (hedef: 0.1)
+  [OK  ] anahtar sızma testi                             True   (hedef: True)
+  [OK  ] çözüm düzeyi pozitif precision                  0.9935483870967742   (hedef: raporlanır)
+  [OK  ] D hücresi tespit                                0.9761904761904762   (hedef: raporlanır)
+  [OK  ] yol (b) cevabın kendisi karşılaştırılan öğe     20/20   (hedef: raporlanır)
+  [OK  ] L5 uygulanabilirlik tavanı                      21/280   (hedef: raporlanır)
+  [OK  ] ölçülmeyen görev türü                           yok   (hedef: yok)
+  [OK  ] Lean FP                                         0   (hedef: 0)
+  [OK  ] Lean sertifika                                  107/280   (hedef: raporlanır)
+  [OK  ] Lean junk-value sertifikası                     0/12   (hedef: 0)
+  [OK  ] saldırı başarısı                                0.000%   (hedef: < %2)
+  [OK  ] saldırı yüzeyleri                               cevap,şık,adım   (hedef: cevap+şık+adım)
+  [OK  ] SymPy üretimli yanlış cevapta yanlış onay       0/448   (hedef: 0)
+  [OK  ] SymPy üretimli eşdeğer cevapta yanlış red       0/214   (hedef: 0)
+  [OK  ] cevap olmayan iddiada (soru/hesaplama) CORRECT  0/46   (hedef: 0)
+  [OK  ] geçerli adım dönüşümünde yanlış red             0/184   (hedef: 0)
+  [OK  ] nedeni açıklanmayan kaçırılan bozuk adım        0/6   (hedef: 0)
+  [OK  ] kalibre test precision (poz/neg)                1.0/1.0   (hedef: raporlanır)
 
-12/12 kapı geçti
+22/22 kapı geçti

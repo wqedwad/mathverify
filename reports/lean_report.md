@@ -5,7 +5,7 @@
 - **Yanlış cevaplı öğelerde kanıt (FP): 0** ✓ hedef 0
 - Kapsama (tüm sette formal sertifika): 38.2% · ifadesi olanlar içinde: 70.4%
 - Şablon türleri: {'equation_of_iff': 10, 'closed_arithmetic': 28, 'recurrence_term': 7, 'series_sum_finite': 4, 'antiderivative_hasderiv': 5, 'definite_integral': 10, 'extremum_max': 3, 'derivative_at': 3, 'derivative_fun': 2, 'solve_equation_set': 12, 'evaluate_system': 32, 'solve_inequality_iff': 5, 'count_integers_finset': 3, 'count_arrangements': 4, 'count_subsets': 4, 'count_injections': 3, 'linalg_inverse': 3, 'linalg_eigenvalues': 3, 'linalg_eigenvector': 3, 'linalg_solve_system': 4, 'linalg_matrix_expr': 4}
-- Süre: 77 s (ortalama 274 ms/öğe)
+- Süre: 74 s (ortalama 263 ms/öğe)
 
 - **Junk-value sondası:** 12 gerçekte yanlış iddia (Lean'in x/0 = 0, √(−1) = 0, log 0 = 0 gibi tamamlamalarında doğru) · ifade üretilen: 1 · **sertifika alan: 0** (hedef 0) ✓
 

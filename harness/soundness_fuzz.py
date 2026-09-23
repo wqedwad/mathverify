@@ -253,12 +253,58 @@ _STEP_EQUIV = {
 }
 
 
+# Why the step refuter may stay silent on a broken step, by design. A miss for any other
+# reason is unexplained and fails a gate in scripts/check.py. The report used to print one
+# fixed sentence ("the solver's own symbols `t`, `u`, or premises with no solution") whatever
+# the sweep measured; checked one by one on 23 Sep it held, but the symbols were n, a, t, u, t
+# and nothing would have noticed a new kind of miss.
+ACCEPTED_MISS_REASONS = {
+    "undeclared_symbol": "çözücünün kendi sembolü: özdeşlik mi çözülen denklem mi olduğu belirsiz, "
+                         "bilerek atlanır (DECISIONS §3.3)",
+    "premises_have_no_solution": "öncüllerin hiç çözümü yok (altın cevap boş küme): karşı örnek "
+                                 "olabilecek nokta yok",
+}
+
+
+def _missed_step_reason(res, step_id: str, gold_is_empty) -> dict[str, str]:
+    """Why a broken step did not stop a CORRECT verdict, read from the step layer's evidence.
+    `gold_is_empty` is a thunk so the gold answer is only parsed when the reason needs it."""
+    import re
+    for layer in res.layers:
+        if layer.layer != "steps.refute":
+            continue
+        for e in (layer.evidence or {}).get("steps", []):
+            if e.get("id") != step_id:
+                continue
+            raw = e.get("reason") or (e.get("evidence") or {}).get("reason") or ""
+            reason = raw.split(":", 1)[0] or str(e.get("status"))
+            detail = ""
+            if reason == "undeclared_symbol":
+                m = re.search(r"\[([^\]]*)\]", raw)
+                detail = m.group(1).replace("'", "") if m else ""
+            elif reason == "premises_inconsistent_or_unsolved" and gold_is_empty():
+                # "or_unsolved" alone could hide a solver failure; only a problem whose answer
+                # is the empty set proves the premises are inconsistent
+                reason = "premises_have_no_solution"
+            return {"status": str(e.get("status")), "reason": reason, "detail": detail}
+        return {"status": "absent", "reason": "step_not_in_evidence", "detail": ""}
+    return {"status": "absent", "reason": "steps_layer_absent", "detail": ""}
+
+
 def step_perturbations(items) -> dict[str, Any]:
     """Rewrite one `eq` step of a correct solution. A valid rewrite must never make the verdict
     INCORRECT (the refuter only refutes with a counterexample); a rewrite that makes the step
     false while leaving the final answer right is a D cell and should be caught."""
+    import sympy as sp
     from mathverify.verifier import verify
-    from mathverify.normalize.parse import _split_top_level, preclean
+    from mathverify.intake.structured import load_problem_ir
+    from mathverify.normalize.parse import _split_top_level, build_namespace, parse_answer, preclean
+
+    def _empty_gold(ir, gold) -> bool:
+        try:
+            return parse_answer("set", str(gold), build_namespace(load_problem_ir(ir))) == sp.S.EmptySet
+        except Exception:  # noqa: BLE001
+            return False
     out = {"equiv": Counter(), "broken": Counter(), "false_rejects": [], "missed_breaks": []}
     for it in items:
         if it["cell"] not in ("A", "B"):
@@ -289,12 +335,15 @@ def step_perturbations(items) -> dict[str, Any]:
                                                  "claim": s2["steps"][idx]["claim"]})
             s3 = json.loads(json.dumps(sol))
             s3["steps"][idx]["claim"] = f"{lhs} = ({rhs}) + 1"
-            v = verify(ir, s3).verdict
+            res = verify(ir, s3)
+            v = res.verdict
             out["broken"]["n"] += 1
             out["broken"][v] += 1
             if v == "CORRECT":
+                why = _missed_step_reason(res, st["id"], lambda: _empty_gold(ir, labels["gold_answer"]))
                 out["missed_breaks"].append({"id": labels["id"], "step": st["id"],
-                                             "claim": s3["steps"][idx]["claim"]})
+                                             "claim": s3["steps"][idx]["claim"], **why,
+                                             "accepted": why["reason"] in ACCEPTED_MISS_REASONS})
             break                                         # one step per item keeps it tractable
     return {"equiv": dict(out["equiv"]), "broken": dict(out["broken"]),
             "false_rejects": out["false_rejects"], "missed_breaks": out["missed_breaks"]}
@@ -408,15 +457,23 @@ def render_md(s: dict[str, Any]) -> str:
         md += (f"- **Geçerli adım dönüşümü: {eq_.get('n', 0)}** (iki tarafa ekle, 2 ile çarp, taraf "
                f"değiştir, bir tarafa topla) — yanlış red (INCORRECT): **{len(st['false_rejects'])}** "
                f"(hedef 0; [10] LLM adım doğrulayıcılarında %75–85 ölçüyor) · UNKNOWN: {eq_.get('UNKNOWN', 0)}\n")
+        missed = st["missed_breaks"]
+        unexplained = [r for r in missed if not r.get("accepted")]
         md += (f"- **Bir tarafı +1 bozulan adım: {br.get('n', 0)}** — yakalanan (INCORRECT): "
-               f"{br.get('INCORRECT', 0)} · kaçırılan (CORRECT): {len(st['missed_breaks'])} · "
-               f"UNKNOWN: {br.get('UNKNOWN', 0)}. Kaçırılanlar çözücünün kendi sembolüyle (`t`, `u`) "
-               f"yazılmış adımlardır — özdeşlik mi çözülen denklem mi olduğu belirsiz olduğundan bilerek "
-               f"atlanır — ya da öncülleri hiç çözümü olmayan öğelerdir.\n")
+               f"{br.get('INCORRECT', 0)} · kaçırılan (CORRECT): {len(missed)} · "
+               f"UNKNOWN: {br.get('UNKNOWN', 0)} · **nedeni açıklanmayan kaçırma: {len(unexplained)}** "
+               f"(hedef 0)\n")
+        by_reason = Counter(r.get("reason", "?") for r in missed)
+        for reason, k in sorted(by_reason.items(), key=lambda kv: (-kv[1], kv[0])):
+            why = ACCEPTED_MISS_REASONS.get(reason, "**AÇIKLANMAMIŞ** — adım reddedicinin bu nedenle "
+                                                    "susması beklenmiyor, incelenmeli")
+            md += f"  - `{reason}`: {k} — {why}\n"
         for r in st["false_rejects"][:20]:
             md += f"  - yanlış red: {r['id']} {r['step']} `{r['family']}`: `{r['claim']}`\n"
-        for r in st["missed_breaks"][:20]:
-            md += f"  - kaçırılan: {r['id']} {r['step']}: `{r['claim']}`\n"
+        for r in missed[:20]:
+            sym = f", sembol `{r['detail']}`" if r.get("detail") else ""
+            md += (f"  - kaçırılan: {r['id']} {r['step']}: `{r['claim']}` — adım {r.get('status', '?')}, "
+                   f"`{r.get('reason', '?')}`{sym}\n")
         md += "\n"
     md += "## Varyant türüne göre\n\n| Varyant | n | CORRECT | INCORRECT | UNKNOWN |\n|---|---|---|---|---|\n"
     for k, v in s["per_variant"].items():

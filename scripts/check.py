@@ -4,6 +4,8 @@
     .venv/Scripts/python.exe scripts/check.py --full     # + Lean taraması + adversaryal + kalibrasyon
 
 Her kapı için ölçülen sayıyı ve hedefi yazar, herhangi biri düşerse çıkış kodu 1 olur.
+`--full` çıktısını ayrıca `reports/check_full.log`a yazar (tarih, dal, commit ve kirli dosya
+sayısıyla birlikte).
 Hiçbir kapı tahmine dayanmaz: hepsi üretilmiş raporlardan okunur.
 """
 from __future__ import annotations
@@ -37,10 +39,51 @@ def gate(name: str, value, target, ok: bool, unit: str = "") -> dict:
     return {"name": name, "value": value, "target": target, "ok": bool(ok), "unit": unit}
 
 
+class _Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, s: str) -> int:
+        for st in self.streams:          # flushed per write: a 25-minute run is watched live
+            st.write(s)
+            st.flush()
+        return len(s)
+
+    def flush(self) -> None:
+        for st in self.streams:
+            st.flush()
+
+
+def _git(*a: str) -> str:
+    p = subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+                       errors="replace")
+    return p.stdout.strip() if p.returncode == 0 else "?"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--full", action="store_true", help="Lean, adversaryal ve kalibrasyonu da koştur")
     args = ap.parse_args(argv)
+    if not args.full:
+        return _main(args)
+    # The full run writes its own log. The 21/21 run of 23 Sep lived only in a session's temp
+    # file while reports/check_full.log still said 12/12 from 19 Sep; the header ties the log
+    # to the code it measured.
+    log = ROOT / "reports" / "check_full.log"
+    with log.open("w", encoding="utf-8") as fh:
+        out = sys.stdout
+        sys.stdout = _Tee(out, fh)
+        try:
+            dirty = [l for l in _git("status", "--porcelain").splitlines() if l.strip()]
+            print(f"check.py --full · {time.strftime('%Y-%m-%d %H:%M:%S')} · "
+                  f"{_git('rev-parse', '--abbrev-ref', 'HEAD')} @ {_git('rev-parse', '--short', 'HEAD')} · "
+                  f"commit edilmemiş değişiklik: {len(dirty)} dosya\n")
+            return _main(args)
+        finally:
+            sys.stdout = out
+
+
+def _main(args) -> int:
     gates: list[dict] = []
 
     print("== testler ==")
@@ -113,6 +156,13 @@ def main(argv=None) -> int:
         gates.append(gate("geçerli adım dönüşümünde yanlış red",
                           f"{len(stp.get('false_rejects', []))}/{(stp.get('equiv') or {}).get('n', 0)}", 0,
                           not stp.get("false_rejects")))
+        # A broken step may be missed only for a reason the refuter is designed to abstain on
+        # (harness.soundness_fuzz.ACCEPTED_MISS_REASONS); a record without a measured reason
+        # counts as unexplained.
+        missed = stp.get("missed_breaks") or []
+        unexplained = [m for m in missed if not m.get("accepted")]
+        gates.append(gate("nedeni açıklanmayan kaçırılan bozuk adım",
+                          f"{len(unexplained)}/{len(missed)}", 0, bool(stp) and not unexplained))
 
         print("== kalibrasyon ==")
         rc, out = run([PY, "-m", "harness.calibrate"], "calibrate")

@@ -1,6 +1,6 @@
 # Metamorfik sağlamlık taraması (SymPy üretimli yanlış ve eşdeğer cevaplar)
 
-Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 21 s
+Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 38 s
 
 - **Yanlış cevap varyantı: 448** — yanlış onay (CORRECT): **0** (hedef 0) · UNKNOWN: 0
 - **Eşdeğer cevap varyantı: 214** — yanlış red (INCORRECT): **0** (hedef 0) · UNKNOWN (kaybedilen kapsama): 0
@@ -8,13 +8,15 @@ Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 21 s
 ## Adım düzeyi: geçerli dönüşüm hata değildir, bozulan adım yakalanmalıdır
 
 - **Geçerli adım dönüşümü: 184** (iki tarafa ekle, 2 ile çarp, taraf değiştir, bir tarafa topla) — yanlış red (INCORRECT): **0** (hedef 0; [10] LLM adım doğrulayıcılarında %75–85 ölçüyor) · UNKNOWN: 0
-- **Bir tarafı +1 bozulan adım: 46** — yakalanan (INCORRECT): 40 · kaçırılan (CORRECT): 6 · UNKNOWN: 0. Kaçırılanlar çözücünün kendi sembolüyle (`t`, `u`) yazılmış adımlardır — özdeşlik mi çözülen denklem mi olduğu belirsiz olduğundan bilerek atlanır — ya da öncülleri hiç çözümü olmayan öğelerdir.
-  - kaçırılan: ayt-ana-006 s2: `2 = (2*1 + n) + 1`
-  - kaçırılan: ayt-diz-008 s1: `a(n) = (3*n + 2) + 1`
-  - kaçırılan: ayt-lim-008 s2: `(t - 1)/(t**2 - 1) = (1/(t + 1)) + 1`
-  - kaçırılan: tyt-den-003 s2: `x = (3 + 2*(x - 3)) + 1`
-  - kaçırılan: tyt-den-007 s2: `u = (u**2 - 6) + 1`
-  - kaçırılan: uni-la-002 s1: `(2 - t)**2 - 1 = ((t - 1)*(t - 3)) + 1`
+- **Bir tarafı +1 bozulan adım: 46** — yakalanan (INCORRECT): 40 · kaçırılan (CORRECT): 6 · UNKNOWN: 0 · **nedeni açıklanmayan kaçırma: 0** (hedef 0)
+  - `undeclared_symbol`: 5 — çözücünün kendi sembolü: özdeşlik mi çözülen denklem mi olduğu belirsiz, bilerek atlanır (DECISIONS §3.3)
+  - `premises_have_no_solution`: 1 — öncüllerin hiç çözümü yok (altın cevap boş küme): karşı örnek olabilecek nokta yok
+  - kaçırılan: ayt-ana-006 s2: `2 = (2*1 + n) + 1` — adım skipped, `undeclared_symbol`, sembol `n`
+  - kaçırılan: ayt-diz-008 s1: `a(n) = (3*n + 2) + 1` — adım skipped, `undeclared_symbol`, sembol `a`
+  - kaçırılan: ayt-lim-008 s2: `(t - 1)/(t**2 - 1) = (1/(t + 1)) + 1` — adım skipped, `undeclared_symbol`, sembol `t`
+  - kaçırılan: tyt-den-003 s2: `x = (3 + 2*(x - 3)) + 1` — adım unknown, `premises_have_no_solution`
+  - kaçırılan: tyt-den-007 s2: `u = (u**2 - 6) + 1` — adım skipped, `undeclared_symbol`, sembol `u`
+  - kaçırılan: uni-la-002 s1: `(2 - t)**2 - 1 = ((t - 1)*(t - 3)) + 1` — adım skipped, `undeclared_symbol`, sembol `t`
 
 ## Varyant türüne göre
 
