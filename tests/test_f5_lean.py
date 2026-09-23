@@ -145,8 +145,47 @@ def test_templates_cover_the_expected_task_kinds(evalset_items):
             kinds[st.kind] += 1
     assert sum(kinds.values()) >= 110
     for expected in ("evaluate_system", "closed_arithmetic", "solve_equation_set", "equation_of_iff",
-                     "linalg_inverse", "series_sum_finite", "count_integers_finset"):
+                     "linalg_inverse", "series_sum_finite", "count_integers_finset",
+                     "domain_of_iff", "simplify_identity", "count_solutions_finset"):
         assert kinds[expected] > 0, expected
+
+
+def _hint_first_chains(text: str) -> list[str]:
+    """Every `first | …` chain in a tactic text, cut at the end of its enclosing group."""
+    out, start = [], 0
+    while (i := text.find("first | ", start)) >= 0:
+        j, depth = i + len("first | "), 0
+        while j < len(text) and text[j] != "\n":
+            depth += (text[j] in "(⟨[") - (text[j] in ")⟩]")
+            if depth < 0:
+                break
+            j += 1
+        out.append(text[i + len("first | "):j])
+        start = j
+    return out
+
+
+def test_every_first_chain_in_every_template_hint_closes_with_done(evalset_items):
+    """CLAUDE.md rule 9, for all templates at once: `first` commits to the first alternative that
+    RUNS, so an alternative that can run without closing the goal shadows every one after it."""
+    checked = 0
+    for it in evalset_items:
+        st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+        for hint in (st.hints if st else ()):
+            for chain in _hint_first_chains(hint):
+                alts, depth, cur = [], 0, ""
+                for ch in chain:
+                    depth += (ch in "(⟨[") - (ch in ")⟩]")
+                    if ch == "|" and depth == 0:
+                        alts.append(cur.strip())
+                        cur = ""
+                    else:
+                        cur += ch
+                alts.append(cur.strip())
+                bad = [a for a in alts if not (a.startswith("(") and a.endswith("done)"))]
+                assert not bad, (it["id"], bad)
+                checked += 1
+    assert checked > 20
 
 
 # ------------------------------------------------------------------ integrals (offline)
@@ -500,3 +539,103 @@ def test_lean_sees_the_contradiction_the_guard_creates():
                          {"kind": "value", "payload": "2"})
     r = prove_statement(st, use_model=False, lean=lean, tactic_timeout=45)
     assert not (r["proved"] and r["audit"].get("clean")), "a system with no solution was certified"
+
+
+# ------------------------------------------------------------------ domain_of / simplify / count_solutions
+# Added 23 Sep 2026. Each guard below was measured necessary: without it Lean PROVES the naive
+# statement (`test_the_naive_statements_these_templates_avoid_are_provable`).
+NEW_KIND_REFUSALS = [
+    ("simplify sqrt(-x^2-1) to 0 (defined nowhere)",
+     _ir("simplify_expression", {"expr": "sqrt(-x**2 - 1)"}, [{"name": "x"}], shape="expression"),
+     {"kind": "expression", "payload": "0"}),
+    ("simplify 1/(x-x) to 0", _ir("simplify_expression", {"expr": "1/(x - x)"}, [{"name": "x"}], shape="expression"),
+     {"kind": "expression", "payload": "0"}),
+    ("count with Z division", _ir("count_solutions", {"bounds": {"x": ["0", "2"], "y": ["0", "2"]}},
+                                  [{"name": "x", "domain": "nonneg_integer"}, {"name": "y", "domain": "nonneg_integer"}],
+                                  ["x/y = 0"], shape="count"), {"kind": "count", "payload": 6}),
+    ("count with Mod (floored vs Euclidean)", _ir("count_solutions", {"bounds": {"x": ["-3", "3"]}},
+                                                  [{"name": "x", "domain": "integer"}], ["Mod(x, -2) = 1"],
+                                                  shape="count"), {"kind": "count", "payload": 3}),
+    ("domain with a partial operation inside a condition",
+     _ir("domain_of", {"expr": "log(sqrt(x) - 1)", "var": "x"}, [{"name": "x"}], shape="interval"),
+     {"kind": "interval", "payload": "(1, oo)"}),
+    ("count over a real variable", _ir("count_solutions", {"bounds": {"x": ["0", "3"]}}, [{"name": "x"}],
+                                       ["x**2 = 4"], shape="count"), {"kind": "count", "payload": 1}),
+]
+
+
+@pytest.mark.parametrize("label,ir,claim", NEW_KIND_REFUSALS, ids=[c[0] for c in NEW_KIND_REFUSALS])
+def test_new_templates_refuse_what_lean_would_totalise(label, ir, claim):
+    st = build_statement(ir, claim)
+    assert st is None, f"{label}: {st and st.goal}"
+
+
+def _kap(items, n):
+    it = next(i for i in items if i["id"] == f"tyt-kap-{n:03d}")
+    return build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
+
+
+def test_simplify_guards_come_from_the_expression_not_from_the_claim(evalset_items):
+    st = _kap(evalset_items, 11)                  # claim \frac{2x+1}{x^2+x}
+    assert st.kind == "simplify_identity"
+    guards, _, conclusion = st.goal.rpartition(" → ")
+    assert guards == "∀ x : ℝ, (x ≠ 0) → ((x + 1) ≠ 0)", guards
+    assert "(x + (x ^ 2)) ≠ 0" in conclusion      # the claim's own definedness is a GOAL
+
+
+def test_a_claim_that_loses_domain_points_must_prove_its_own_definedness():
+    """`x ↦ x²/x` holds at 0 in Lean (0/0 = 0); the claim's `x ≠ 0` must be proved for every x."""
+    st = build_statement(_ir("simplify_expression", {"expr": "x"}, [{"name": "x"}], shape="expression"),
+                         {"kind": "expression", "payload": "x**2/x"})
+    assert st is not None and "→" not in st.goal and "(x ≠ 0) ∧" in st.goal, st and st.goal
+
+
+def test_a_simplification_that_is_the_expression_itself_gets_no_statement():
+    st = build_statement(_ir("simplify_expression", {"expr": "1/x + 1"}, [{"name": "x"}], shape="expression"),
+                         {"kind": "expression", "payload": "1/x + 1"})
+    assert st is None
+
+
+def test_count_solutions_proves_that_the_box_holds_every_solution(evalset_items):
+    """The deterministic layer trusts the IR's bounds; the formal statement proves them."""
+    st = _kap(evalset_items, 16)
+    assert st.kind == "count_solutions_finset"
+    assert st.goal.startswith("(∀ x y : ℤ, ") and "→ ((1 ≤ x ∧ x ≤ 10) ∧ (1 ≤ y ∧ y ≤ 10))" in st.goal
+    assert st.goal.endswith(".card = 9")
+    small = copy.deepcopy(next(i for i in evalset_items if i["id"] == "tyt-kap-016")["problem_ir"])
+    small["task"]["params"]["bounds"] = {"x": ["1", "4"], "y": ["1", "4"]}      # misses solutions
+    st2 = build_statement(small, {"kind": "count", "payload": 0})
+    assert "(1 ≤ x ∧ x ≤ 4)" in st2.goal         # a claim Lean must refute, not a count to trust
+
+
+def test_domain_of_states_the_conditions_never_the_function(evalset_items):
+    for n in (1, 4, 7):
+        st = _kap(evalset_items, n)
+        assert st.kind == "domain_of_iff"
+        assert not any(f in st.goal for f in ("Real.log", "Real.sqrt", " / ")), st.goal
+
+
+def test_new_templates_prove_the_right_claim_and_not_the_wrong_one(evalset_items):
+    lean = _lean()
+    from mathverify.formal import prove_statement
+    for right, wrong in ((4, 5), (10, 12), (16, 18)):
+        r = prove_statement(_kap(evalset_items, right), use_model=False, lean=lean, tactic_timeout=45)
+        assert r["proved"] and r["audit"]["clean"], right
+        w = prove_statement(_kap(evalset_items, wrong), use_model=False, lean=lean, tactic_timeout=45)
+        assert not w["proved"], wrong
+
+
+def test_the_naive_statements_these_templates_avoid_are_provable():
+    """Why the guards exist, measured: each naive form below is a genuine Lean theorem."""
+    lean = _lean()
+    naive = [
+        "theorem n1 : ∀ x : ℝ, x = x ^ 2 / x := by\n  intro x\n  rcases eq_or_ne x 0 with h | h\n"
+        "  · simp [h]\n  · first | (field_simp; done) | (field_simp; ring; done)",
+        "theorem n2 : ∀ x : ℝ, -x ^ 2 - 1 ≥ 0 → Real.sqrt (-x ^ 2 - 1) = 0 := by\n"
+        "  intro x h\n  nlinarith [sq_nonneg x]",
+        "theorem n3 : ((Finset.Icc (0 : ℤ) 2 ×ˢ Finset.Icc (0 : ℤ) 2).filter "
+        "(fun sol : ℤ × ℤ => sol.1 / sol.2 = 0)).card = 6 := by\n  decide",
+    ]
+    for code in naive:
+        r = lean.run(code, timeout=60)
+        assert r.clean, (code.split(":", 1)[0], r.errors[:1])

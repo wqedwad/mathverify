@@ -1379,6 +1379,391 @@ def _t_recurrence_term(obj, ns, ca, name) -> LeanStatement | None:
                          hints=hints)
 
 
+# ---------------------------------------------------------------------------- domain_of
+def _real_only(obj, ns, names) -> bool:
+    """The variables are plain reals: no declared domain, no constraints, and no domain of
+    discourse. A narrower domain would have to enter the statement, and a symbol carrying a
+    positivity assumption lets SymPy fold conditions such as `x > 0` to True before printing."""
+    if obj.domain_of_discourse:
+        return False
+    for v in obj.vars:
+        if v.name in names and (v.domain not in (None, "real") or v.constraints):
+            return False
+    return True
+
+
+def _set_pieces(s: sp.Set) -> list[sp.Set]:
+    """The pieces `_interval_to_lean` prints, in the same order (one per ∨-disjunct)."""
+    return list(s.args) if isinstance(s, sp.Union) else [s]
+
+
+def _piece_parts(piece: sp.Set) -> int:
+    """How many conjuncts `_interval_to_lean` prints for one Interval piece (0 = `True`)."""
+    return int(piece.inf != -sp.oo) + int(piece.sup != sp.oo)
+
+
+def _truth(rel, var, pt) -> bool | None:
+    try:
+        v = rel.subs(var, pt)
+    except (TypeError, ValueError):
+        return None
+    return True if v is sp.true else False if v is sp.false else None
+
+
+def _region_iff_hints(var, conds, claimed) -> tuple[str, ...]:
+    """A proof of `∀ x, (conds) ↔ (x ∈ claimed)` that splits ℝ at every critical point (the real
+    roots of the conditions and the endpoints of the claim), then closes each open region and each
+    point on its own. SymPy decides the split points and which side holds where, but only to write
+    TACTICS: Lean re-proves every region, and a wrong claim (the two sides differ somewhere) gets
+    no hint at all (decision 9: the generating calculation never enters the statement)."""
+    pts: set = set()
+    for c in conds:
+        try:
+            poly = sp.Poly(c.lhs - c.rhs, var)
+        except sp.PolynomialError:
+            return ()
+        for r in poly.real_roots():
+            if not r.is_Rational:
+                return ()
+            pts.add(r)
+    for piece in _set_pieces(claimed):
+        if isinstance(piece, sp.Interval):
+            ends = [e for e in (piece.inf, piece.sup) if e not in (-sp.oo, sp.oo)]
+        elif isinstance(piece, sp.FiniteSet):
+            ends = list(piece.args)
+        else:
+            return ()
+        if not all(e.is_Rational for e in ends):
+            return ()
+        pts.update(ends)
+    pts_l = sorted(pts)
+    if len(pts_l) > 8:
+        return ()
+    vn = var.name
+    pieces = _set_pieces(claimed)
+
+    def side_truth(pt) -> tuple[bool, bool] | None:
+        lt = [_truth(c, var, pt) for c in conds]
+        if any(t is None for t in lt):
+            return None
+        rt = claimed.contains(pt)
+        if rt not in (sp.true, sp.false):
+            return None
+        return all(lt), rt is sp.true
+
+    def closers(hyps: list[str]) -> str:
+        nl = f"nlinarith [{', '.join(hyps)}]" if hyps else "nlinarith"
+        nl_hc = f"nlinarith [{', '.join(hyps + ['hc'])}]"
+        return f"first | (linarith; done) | ({nl}; done) | (intro hc; {nl_hc}; done)"
+
+    def prove_conds(hyps: list[str]) -> str:
+        one = f"({closers(hyps)})"
+        if not conds:
+            return "trivial"
+        if len(conds) == 1:
+            return one
+        return "exact ⟨" + ", ".join(f"by {one}" for _ in conds) + "⟩"
+
+    def refute_conds(hyps: list[str], pt) -> str | None:
+        n = len(conds)
+        for k, c in enumerate(conds):
+            if _truth(c, var, pt) is False:
+                acc = "h" if n == 1 else ("h" + ".2" * k + (".1" if k < n - 1 else ""))
+                hs = ", ".join(hyps + ["hk"])
+                return f"have hk := {acc}\n{{i}}first | (linarith; done) | (nlinarith [{hs}]; done)"
+        return None
+
+    def prove_claim(pt) -> str | None:
+        n = len(pieces)
+        for j, piece in enumerate(pieces):
+            if piece.contains(pt) is not sp.true:
+                continue
+            nav = [] if n == 1 else (["right"] * j + (["left"] if j < n - 1 else []))
+            if isinstance(piece, sp.Interval):
+                k = _piece_parts(piece)
+                close = "trivial" if k == 0 else "linarith" if k == 1 else "exact ⟨by linarith, by linarith⟩"
+            else:
+                return None
+            return "; ".join(nav + [close])
+        return None
+
+    def piece_pattern(piece, idx: int) -> str:
+        if isinstance(piece, sp.Interval):
+            return f"⟨ra{idx}, rb{idx}⟩" if _piece_parts(piece) == 2 else f"ra{idx}"
+        names = [f"re{idx}_{t}" for t in range(len(piece.args))]
+        return names[0] if len(names) == 1 else "(" + " | ".join(names) + ")"
+
+    refute_claim = ("rcases h with " + " | ".join(piece_pattern(p_, i) for i, p_ in enumerate(pieces))
+                    + " <;> first | (linarith; done) | (nlinarith; done)")
+
+    def region(lo, hi, hyps: list[str], ind: int) -> list[str] | None:
+        if lo is None and hi is None:
+            pt = sp.Integer(0)
+        elif lo is None:
+            pt = hi - 1
+        elif hi is None:
+            pt = lo + 1
+        else:
+            pt = (lo + hi) / 2
+        st = side_truth(pt)
+        if st is None or st[0] != st[1]:
+            return None                  # the claim is wrong here: no hint, the proof will fail
+        i1, i2 = " " * ind, " " * (ind + 2)       # a bullet's block continues at the column of
+        if st[0]:                                  # its first tactic, i.e. two past the `·`
+            pc = prove_claim(pt)
+            if pc is None:
+                return None
+            return [f"{i1}constructor", f"{i1}· intro _", f"{i2}{pc}",
+                    f"{i1}· intro _", f"{i2}{prove_conds(hyps)}"]
+        rc = refute_conds(hyps, pt)
+        if rc is None:
+            return None
+        return [f"{i1}constructor", f"{i1}· intro h", f"{i2}exfalso", f"{i2}" + rc.format(i=i2),
+                f"{i1}· intro h", f"{i2}exfalso", f"{i2}{refute_claim}"]
+
+    def point(c, ind: int, name: str) -> list[str] | None:
+        st = side_truth(c)
+        if st is None or st[0] != st[1]:
+            return None
+        i1 = " " * ind
+        return [f"{i1}subst {name}",
+                f"{i1}first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)"]
+
+    def split(i: int, lower, lower_hyp: str | None, ind: int) -> list[str] | None:
+        hyps = [lower_hyp] if lower_hyp else []
+        if i == len(pts_l):
+            return region(lower, None, hyps, ind)
+        c = pts_l[i]
+        i1 = " " * ind
+        left = region(lower, c, hyps + [f"hlt{i}"], ind + 2)
+        mid = point(c, ind + 2, f"heq{i}")
+        right = split(i + 1, c, f"hgt{i}", ind + 2)
+        if left is None or mid is None or right is None:
+            return None
+        head = f"{i1}rcases lt_trichotomy {vn} {_paren(sympy_to_lean(c, 'ℝ'))} with hlt{i} | heq{i} | hgt{i}"
+
+        def bullet(block):
+            return [f"{i1}· {block[0].lstrip()}"] + block[1:]
+        return [head] + bullet(left) + bullet(mid) + bullet(right)
+
+    body = split(0, None, None, 2)
+    if body is None:
+        return ()
+    return ("\n".join([f"  intro {vn}"] + body),)
+
+
+def _t_domain_of(obj, ns, ca, name) -> LeanStatement | None:
+    """"The domain of f is S" becomes `∀ x, (definedness conditions of f) ↔ x ∈ S`. The conditions
+    are the definition the deterministic layer uses (`definedness_conditions`); Lean checks that S
+    is exactly where they hold. The statement never contains f itself, so no junk value can enter
+    it, and a condition that itself holds a partial operation (`log(√x − 1)` needs `√x − 1 > 0`)
+    is out of scope rather than printed."""
+    from ..certify.domain import definedness_conditions
+    p = obj.task.params
+    var = ns.get(p.get("var", "x"))
+    if not isinstance(var, sp.Symbol) or ca["kind"] not in ("set", "interval"):
+        return None
+    if not _real_only(obj, ns, {var.name}):
+        return None
+    expr = parse_structural(p["expr"], ns)
+    if expr.free_symbols - {var}:
+        return None
+    claimed = parse_answer(ca["kind"], ca["payload"], ns)
+    if not isinstance(claimed, sp.Set):
+        return None
+    conds = []
+    for c in definedness_conditions(expr, var):
+        if not getattr(c, "free_symbols", None):
+            if _closed_truth(c) is not True:
+                return None
+            continue
+        if not isinstance(c, sp.core.relational.Relational) or (c.free_symbols - {var}):
+            return None
+        if open_guards([c.lhs, c.rhs]):
+            return None                           # a partial operation inside the condition
+        conds.append(c)
+    for node in sp.preorder_traversal(expr):       # `Mod` has no definedness_conditions entry
+        if isinstance(node, sp.Mod):
+            return None
+    lhs = " ∧ ".join(f"({relation_to_lean(c, 'ℝ')})" for c in conds) if conds else "True"
+    rhs = _interval_to_lean(claimed, var.name, "ℝ")
+    goal = f"∀ {var.name} : ℝ, (({lhs}) ↔ ({rhs}))"
+    return LeanStatement(name, "", [], goal, "ℝ", "domain_of_iff",
+                         hints=_region_iff_hints(var, conds, claimed))
+
+
+# ---------------------------------------------------------------------------- simplify_expression
+def _ne_from_guards(q, guards: list[tuple[str, Any]]) -> str | None:
+    """Proof term of `q ≠ 0` from guard hypotheses `name : g ≠ 0` when q is a constant multiple of
+    a product of some of the g — e.g. `x ^ 2 + x ≠ 0` from `x ≠ 0` and `x + 1 ≠ 0`."""
+    from itertools import combinations
+    for r in range(1, min(len(guards), 4) + 1):
+        for sub in combinations(guards, r):
+            prod = sp.Mul(*[g for _, g in sub])
+            ratio = sp.cancel(sp.sympify(q) / prod)
+            if ratio.is_Rational and ratio != 0:
+                term = sub[0][0]
+                for nm, _ in sub[1:]:
+                    term = f"(mul_ne_zero {term} {nm})"
+                return f"fun hc => {term} (by linear_combination ({sympy_to_lean(1 / ratio, 'ℝ')}) * hc)"
+    return None
+
+
+def _t_simplify_expression(obj, ns, ca, name) -> LeanStatement | None:
+    """"expr simplifies to e" becomes: wherever expr is defined, e is defined as well and equal to
+    it. The guards come from the problem's expression alone, so a wrong claim cannot shrink the
+    region it must hold on; the claim's own definedness is part of the GOAL. A claim that loses
+    points of expr's domain (`x` → `x²/x`) is therefore not provable, and the layer abstains."""
+    p = obj.task.params
+    if ca["kind"] not in ("expression", "value") or not p.get("expr"):
+        return None
+    target = parse_structural(p["expr"], ns)
+    try:
+        claimed = parse_structural(str(ca["payload"]), ns)
+    except (ParseError, sp.SympifyError, TypeError, ValueError):
+        claimed = parse_answer(ca["kind"], ca["payload"], ns)       # LaTeX and other forms
+    if claimed is None or isinstance(claimed, (sp.Set, sp.MatrixBase)) or isinstance(target, sp.MatrixBase):
+        return None
+    syms = sorted(target.free_symbols, key=lambda s_: s_.name)
+    if not syms or (claimed.free_symbols - target.free_symbols):
+        return None
+    if not _real_only(obj, ns, {s_.name for s_ in syms}) or any(s_.name == "hc" for s_ in syms):
+        return None
+    t_conds = [c for c in _definedness(target) if getattr(c, "free_symbols", None)]
+    c_conds = [c for c in _definedness(claimed) if getattr(c, "free_symbols", None)]
+    if (t_conds or c_conds) and len(syms) != 1:
+        return None                     # a guarded identity in several variables: out of scope
+    if t_conds and not has_interior_point([target], syms[0]):
+        return None                     # defined nowhere: the ∀ would be about junk values only
+    tgt_txt, cl_txt = sympy_to_lean(target, "ℝ"), sympy_to_lean(claimed, "ℝ")
+    if tgt_txt == cl_txt:
+        return None                     # the "simplification" is the expression itself
+    guards = [relation_to_lean(c, "ℝ") for c in t_conds]
+    goal_conds = []
+    for c in c_conds:
+        txt = relation_to_lean(c, "ℝ")
+        if txt not in guards and txt not in goal_conds:
+            goal_conds.append(txt)
+    body = " ∧ ".join([f"({g})" for g in goal_conds] + [f"({tgt_txt} = {cl_txt})"])
+    names = " ".join(s_.name for s_ in syms)
+    goal = f"∀ {names} : ℝ, " + "".join(f"({g}) → " for g in guards) + f"({body})"
+    # hints: intro the guards, prove each goal condition from them, then clear denominators
+    hnames = [f"h{i}" for i in range(1, len(guards) + 1)]
+    ne_guards = [(hn, c.lhs - c.rhs) for hn, c in zip(hnames, t_conds) if isinstance(c, sp.Unequality)]
+    intro = f"  intro {' '.join([names] + hnames)}"
+    haves: list[str] = []
+    for k, txt in enumerate(goal_conds, start=1):
+        c = next(c for c in c_conds if relation_to_lean(c, "ℝ") == txt)
+        pf = _ne_from_guards(c.lhs - c.rhs, ne_guards) if isinstance(c, sp.Unequality) else None
+        if pf is None:
+            nl = f"nlinarith [{', '.join(hnames)}]" if hnames else "nlinarith"
+            pf = (f"by first | (assumption; done) | (positivity; done) | (linarith; done) "
+                  f"| ({nl}; done)")
+        haves.append(f"  have c{k} : {txt} := {pf}")
+    cnames = [f"c{k}" for k in range(1, len(goal_conds) + 1)]
+    # field_simp looks for `d ≠ 0` in the exact printed form of each denominator (`1 + x`, not the
+    # guard's `x + 1`), so every denominator of the goal gets its own fact, derived from the guards
+    # (the printer writes a Mul's denominator from `as_numer_denom()`, in SymPy's canonical order,
+    # and a bare Pow's base as parsed — so both are collected)
+    dens: dict[str, Any] = {}
+    for e in (target, claimed):
+        for node in sp.preorder_traversal(e):
+            bases = []
+            if isinstance(node, sp.Mul):
+                den = node.as_numer_denom()[1]
+                if den != 1:
+                    bases.append(den)
+            elif isinstance(node, sp.Pow) and node.args[1].is_Integer and node.args[1] < 0:
+                bases.append(node.args[0])
+            for b in list(bases):
+                if isinstance(b, sp.Mul):
+                    bases.extend(b.args)
+            for b in bases:
+                if b.free_symbols:
+                    dens.setdefault(_print_lean(b, "ℝ"), b)
+    for k, (txt, b) in enumerate(dens.items(), start=1):
+        pf = _ne_from_guards(b, ne_guards)
+        if pf is not None:
+            haves.append(f"  have d{k} : {txt} ≠ 0 := {pf}")
+    head = [intro] + haves + ([f"  refine ⟨{', '.join(cnames)}, ?_⟩"] if cnames else [])
+    hints = tuple("\n".join(head + tail)
+                  for tail in (["  field_simp", "  ring"], ["  field_simp"], ["  ring"], ["  ring_nf"]))
+    return LeanStatement(name, "", [], goal, "ℝ", "simplify_identity", hints=hints)
+
+
+# ---------------------------------------------------------------------------- count_solutions
+def _t_count_solutions(obj, ns, ca, name) -> LeanStatement | None:
+    """"How many integer solutions" becomes two facts Lean proves itself: every solution lies in
+    the box, and the box holds exactly n of them. The box comes from the IR's bounds, but since the
+    first half is proved, a box that is too small cannot certify a count (the deterministic layer,
+    by contrast, trusts the bounds)."""
+    from ..equiv import exact_integer
+    p = obj.task.params
+    bounds = p.get("bounds") or {}
+    vars_ = list(obj.vars)
+    if not (1 <= len(vars_) <= 3) or not obj.givens or obj.domain_of_discourse:
+        return None
+    if any(v.domain not in ("integer", "positive_integer", "nonneg_integer", "natural") for v in vars_):
+        return None
+    if any(v.name in ("sol", "h") for v in vars_):
+        return None
+    n = exact_integer(ca["payload"])          # never int(): a claimed 3.5 would become 3
+    if n is None or n < 0:
+        return None
+    box, size = [], 1
+    for v in vars_:
+        b = bounds.get(v.name)
+        if not isinstance(b, (list, tuple)) or len(b) != 2:
+            return None
+        lo, hi = exact_integer(b[0]), exact_integer(b[1])
+        if lo is None or hi is None or hi < lo:
+            return None
+        size *= hi - lo + 1
+        box.append((v, lo, hi))
+    if size > 2000:
+        return None
+    rels = [parse_relation(g, ns) for g in obj.givens]
+    rels += [parse_relation(c, ns) for v in vars_ for c in v.constraints]
+    if open_guards(rels, "ℤ"):
+        return None                           # a partial operation in the predicate: junk-prone
+    for r in rels:
+        for node in sp.preorder_traversal(r):
+            if isinstance(node, sp.Mod):
+                return None                   # ℤ `%` in Lean is Euclidean, SymPy's is floored
+    syms = [ns.get(v.name) for v in vars_]
+    if not all(isinstance(s_, sp.Symbol) for s_ in syms):
+        return None
+    paths = ["sol"] if len(vars_) == 1 else (["sol.1", "sol.2"] if len(vars_) == 2
+                                              else ["sol.1", "sol.2.1", "sol.2.2"])
+
+    def pred(names: list[str]) -> str:
+        sub = {s_: sp.Symbol(nm) for s_, nm in zip(syms, names)}
+        parts = [relation_to_lean(r.xreplace(sub), "ℤ") for r in rels]
+        # the domain condition is written as text: parsed, `0 < x` folds to True on a positive symbol
+        parts += [_DOMAIN_COND[v.domain].format(v=nm) for v, nm in zip(vars_, names)
+                  if _DOMAIN_COND.get(v.domain)]
+        return " ∧ ".join(f"({t})" for t in parts)
+
+    icc = [f"Finset.Icc ({sympy_to_lean(sp.Integer(lo), 'ℤ')} : ℤ) {sympy_to_lean(sp.Integer(hi), 'ℤ')}"
+           for _, lo, hi in box]
+    finset = icc[0] if len(icc) == 1 else (f"({icc[0]} ×ˢ {icc[1]})" if len(icc) == 2
+                                          else f"({icc[0]} ×ˢ ({icc[1]} ×ˢ {icc[2]}))")
+    typ = " × ".join(["ℤ"] * len(vars_))
+    names = [v.name for v in vars_]
+    inside = " ∧ ".join(f"({sympy_to_lean(sp.Integer(lo), 'ℤ')} ≤ {v.name} ∧ {v.name} ≤ "
+                        f"{sympy_to_lean(sp.Integer(hi), 'ℤ')})" for v, lo, hi in box)
+    goal = (f"(∀ {' '.join(names)} : ℤ, ({pred(names)}) → ({inside})) ∧ "
+            f"(({finset}).filter (fun sol : {typ} => {pred(paths)})).card = {n}")
+    k = len(rels) + sum(1 for v in vars_ if _DOMAIN_COND.get(v.domain))
+    hyp_pat = "h" if k == 1 else "⟨" + ", ".join(f"h{i}" for i in range(1, k + 1)) + "⟩"
+    intro = f"  refine ⟨fun {' '.join(names)} h => ?_, by decide⟩"
+    split_goal = "⟨?_, ?_⟩" if len(vars_) == 1 else "⟨" + ", ".join(["⟨?_, ?_⟩"] * len(vars_)) + "⟩"
+    hints = (f"{intro}\n  omega",
+             f"{intro}\n  obtain {hyp_pat} := h\n  omega",
+             f"{intro}\n  obtain {hyp_pat} := h\n  refine {split_goal} <;> nlinarith")
+    return LeanStatement(name, "", [], goal, "ℤ", "count_solutions_finset", hints=hints)
+
+
 TEMPLATES: dict[str, Callable] = {
     "evaluate": _t_evaluate,
     "definite_integral": _t_definite_integral,
@@ -1393,6 +1778,9 @@ TEMPLATES: dict[str, Callable] = {
     "extremum": _t_extremum,
     "count_integers": _t_count_integers,
     "linalg": _t_linalg,
+    "domain_of": _t_domain_of,
+    "simplify_expression": _t_simplify_expression,
+    "count_solutions": _t_count_solutions,
 }
 
 

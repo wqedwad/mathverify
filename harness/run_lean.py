@@ -1,6 +1,6 @@
 """F5 sweep with NO model calls: deterministic statement + Mathlib tactic ladder + audits.
 
-    python -m harness.run_lean [--limit N] [--timeout 60]
+    python -m harness.run_lean [--limit N] [--timeout 45]
 
 Measures the F5 gate directly: how many items get a formal certificate, and whether any
 item whose claimed answer is WRONG is ever proved (must be zero: a false statement is
@@ -75,6 +75,19 @@ JUNK_PROBES = [
      {"kind": "value", "payload": "2"}),
     ("(sqrt(-x^2-1))' = 0", _ir("derivative", {"f": "sqrt(-x**2 - 1)", "var": "x"}, [{"name": "x"}], shape="expression"),
      {"kind": "expression", "payload": "0"}),
+    # templates added 23 Sep (domain_of, simplify_expression, count_solutions)
+    ("sqrt(-x^2-1) simplifies to 0", _ir("simplify_expression", {"expr": "sqrt(-x**2 - 1)"}, [{"name": "x"}],
+                                        shape="expression"), {"kind": "expression", "payload": "0"}),
+    ("1/(x-x) simplifies to 0", _ir("simplify_expression", {"expr": "1/(x - x)"}, [{"name": "x"}], shape="expression"),
+     {"kind": "expression", "payload": "0"}),
+    ("x simplifies to x^2/x", _ir("simplify_expression", {"expr": "x"}, [{"name": "x"}], shape="expression"),
+     {"kind": "expression", "payload": "x**2/x"}),
+    ("domain of 1/(x-2) is R", _ir("domain_of", {"expr": "1/(x - 2)", "var": "x"}, [{"name": "x"}], shape="set"),
+     {"kind": "set", "payload": "(-oo, oo)"}),
+    ("#{x/y = 0 in [0,2]^2} = 6 (Z division)",
+     _ir("count_solutions", {"bounds": {"x": ["0", "2"], "y": ["0", "2"]}},
+         [{"name": "x", "domain": "nonneg_integer"}, {"name": "y", "domain": "nonneg_integer"}], ["x/y = 0"],
+         shape="count"), {"kind": "count", "payload": 6}),
 ]
 
 
@@ -95,7 +108,9 @@ def junk_probe(timeout: float) -> list[dict]:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--timeout", type=float, default=60.0)
+    # 45 s is what scripts/check.py and every report use; measured on 23 Sep, 60 s certifies the
+    # same 107 items, so the standalone default now matches the gate
+    ap.add_argument("--timeout", type=float, default=45.0)
     ap.add_argument("--out", default=str(ROOT / "reports"))
     args = ap.parse_args(argv)
     from mathverify.formal import build_statement, prove_statement, get_lean
