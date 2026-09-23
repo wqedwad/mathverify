@@ -7,6 +7,7 @@ from typing import Any
 import sympy as sp
 from sympy import S, Interval, FiniteSet, Union, oo, And
 
+from ..equiv import exact_integer
 from ..equiv.sets import normalize_set
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
@@ -104,9 +105,15 @@ def verify(ir, solution, ctx: Ctx):
         p = ir.task.params
         ca = solution.claimed_answer
         try:
-            claimed = int(ca.payload) if ca.kind == "count" else int(sp.sympify(ctx.claimed(solution)))
+            raw = ca.payload if ca.kind == "count" else ctx.claimed(solution)
         except Exception as e:
-            return unknown(LAYER, f"claimed_not_integer: {e}", flags=["parse_error"])
+            return unknown(LAYER, f"claimed_not_parsed: {e}", flags=["parse_error"])
+        # A count is an integer. `int()` truncated a claimed 7/2 to 3 and certified it (measured
+        # by harness/soundness_fuzz.py); a non-integer claim is simply a wrong count.
+        claimed = exact_integer(raw)
+        if claimed is None:
+            return result(LAYER, "fail", 0.99, True, {"claimed": str(raw),
+                          "reason": "claimed_count_is_not_an_integer"}, t.ms, primary=True)
         ev: dict[str, Any] = {"claimed": claimed}
         if kind == "count_roots":
             var = ctx.sym(p.get("var", "x"))

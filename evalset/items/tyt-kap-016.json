@@ -1,0 +1,87 @@
+{
+ "id": "tyt-kap-016",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "x + y = 10 denklemini sağlayan kaç farklı (x, y) pozitif tam sayı ikilisi vardır?",
+ "options": {
+  "A": "8",
+  "B": "9",
+  "C": "10",
+  "D": "11",
+  "E": "12"
+ },
+ "gold_answer": "9",
+ "problem_ir": {
+  "task": {
+   "kind": "count_solutions",
+   "params": {
+    "bounds": {
+     "x": [
+      "1",
+      "10"
+     ],
+     "y": [
+      "1",
+      "10"
+     ]
+    }
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "y",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "x + y = 10"
+  ],
+  "answer_shape": "count",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "11",
+   "E": "12"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 9,
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "y = 10 - x",
+    "from": [],
+    "text": "y'yi çektim"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "x = 1..9 için y = 9..1 pozitif: 9 ikili"
+   }
+  ]
+ },
+ "solution_text": "$y = 10 - x$; $x$ 1'den 9'a kadar pozitif değerler alır, 9 ikili. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

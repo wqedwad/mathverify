@@ -1,0 +1,70 @@
+{
+ "id": "tyt-kap-004",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = 1/(x² − 4) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+  "B": "(-oo, -2) U (2, oo)",
+  "C": "(-2, 2)",
+  "D": "(-oo, 2) U (2, oo)",
+  "E": "(-oo, -2) U (-2, oo)"
+ },
+ "gold_answer": "(-oo, -2) U (-2, 2) U (2, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "1/(x**2 - 4)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "set",
+  "options": {
+   "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+   "B": "(-oo, -2) U (2, oo)",
+   "C": "(-2, 2)",
+   "D": "(-oo, 2) U (2, oo)",
+   "E": "(-oo, -2) U (-2, oo)"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "(-oo, -2) U (-2, 2) U (2, oo)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x != -2",
+    "from": [],
+    "text": "payda sıfır olamaz"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x != 2",
+    "from": [],
+    "text": "payda sıfır olamaz"
+   }
+  ]
+ },
+ "solution_text": "Payda sıfır olmamalı: $x^2 - 4 \\ne 0 \\Rightarrow x \\ne \\pm 2$. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

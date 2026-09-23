@@ -19,7 +19,7 @@ from typing import Any
 
 from ..intake.structured import load_problem_ir, SchemaError
 from ..ir import LeakageError
-from ..llm import get_client, LLMError
+from ..llm import LLMError, client_for_role, judge_families as default_judge_families
 from ..llm.schemas import IR_SCHEMA, ir_from_llm
 from ..normalize.parse import build_namespace, parse_relation, parse_expr_str, parse_answer
 from .prompts import exemplar_block, extraction_user_prompt, extraction_system_blocks
@@ -139,10 +139,11 @@ def validate_ir(ir: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------- extraction
 def extract_ir(question_tr: str, options: dict[str, str] | None = None, level_hint: str | None = None, *,
                client=None, exemplar_ids: list[str] | None = None, exclude_ids: list[str] | None = None,
-               max_repairs: int = 2, effort: str = "max", judge_families: tuple[str, ...] = ("anthropic", "meta"),
+               max_repairs: int = 2, effort: str = "max", judge_families: tuple[str, ...] | None = None,
                roundtrip: bool = True) -> ExtractResult:
     t0 = time.perf_counter()
-    client = client or get_client("anthropic")
+    client = client or client_for_role("extractor")
+    judge_families = judge_families or default_judge_families()
     ids = list(exemplar_ids) if exemplar_ids else None
     if exclude_ids:
         from .prompts import EXEMPLAR_IDS
@@ -159,9 +160,14 @@ def extract_ir(question_tr: str, options: dict[str, str] | None = None, level_hi
             r = client.complete(system, user, schema=IR_SCHEMA, effort=effort, max_tokens=20000,
                                 tag="ir_extract")
         except LLMError as e:
+            # A fatal (credit/auth) failure is NOT caught here: LLMFatalError is not an
+            # LLMError, so it propagates to the harness, which stops the sweep. What is left
+            # is a recoverable failure, and its message is kept WHOLE: truncating it here is
+            # exactly how a billing message got cut one character before the word the harness
+            # was grepping for, and 151 items were burned after the balance was empty.
             round_rec["error"] = f"llm: {e}"
             res.rounds.append(round_rec)
-            res.reason = f"llm_error: {str(e)[:120]}"
+            res.reason = f"llm_error: {e}"
             break
         res.calls += 1
         res.cost_usd += r.cost_usd

@@ -2,8 +2,11 @@
 __pycache__/
 *.pyc
 *.egg-info/
-build/
-dist/
+# Anchored to the repo root on purpose. An unanchored `build/` also matched
+# `evalset/build/` — the generators the whole evaluation set is built from — so none of
+# them had ever been committed and the set could not be rebuilt from a clone.
+/build/
+/dist/
 .pytest_cache/
 .hypothesis/
 reports/*.json

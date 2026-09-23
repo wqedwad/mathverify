@@ -1,0 +1,87 @@
+{
+ "id": "tyt-kap-019",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "2x + 3y = 12 denklemini sağlayan kaç farklı (x, y) negatif olmayan tam sayı ikilisi vardır?",
+ "options": {
+  "A": "2",
+  "B": "3",
+  "C": "4",
+  "D": "5",
+  "E": "6"
+ },
+ "gold_answer": "3",
+ "problem_ir": {
+  "task": {
+   "kind": "count_solutions",
+   "params": {
+    "bounds": {
+     "x": [
+      "0",
+      "12"
+     ],
+     "y": [
+      "0",
+      "12"
+     ]
+    }
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "nonneg_integer"
+   },
+   {
+    "name": "y",
+    "domain": "nonneg_integer"
+   }
+  ],
+  "givens": [
+   "2*x + 3*y = 12"
+  ],
+  "answer_shape": "count",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 3,
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "2x = 12 − 3y çift olmalı, yani y çift"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "y ∈ {0, 2, 4} ⇒ x ∈ {6, 3, 0}"
+   }
+  ]
+ },
+ "solution_text": "$2x = 12-3y$ çift olmalı, dolayısıyla $y$ çift: $y\\in\\{0,2,4\\}$, 3 ikili. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "parite argümanı (kanonik olmayan)",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

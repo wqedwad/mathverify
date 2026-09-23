@@ -200,3 +200,40 @@ def test_every_package_exports_only_names_it_actually_has():
                 problems.append(f"{m.name}.__all__ -> {name}")
     assert problems == [], problems
     exec("from mathverify.certify import *", {})
+
+
+# ------------------------------------------------------------------ claims are values
+_RESTATE = [
+    ("f(g(2))", {"task": {"kind": "evaluate", "params": {"expr": "f(g(2))"}}, "vars": [],
+                 "functions": [{"name": "f", "expr": "2*x + 3", "args": ["x"]},
+                               {"name": "g", "expr": "x**2 - 1", "args": ["x"]}],
+                 "givens": [], "answer_shape": "scalar"}),
+    ("integrate(log(x), x)", {"task": {"kind": "antiderivative", "params": {"integrand": "log(x)", "var": "x"}},
+                              "vars": [{"name": "x", "domain": "positive_real"}], "givens": [],
+                              "answer_shape": "expression"}),
+    ("limit(sin(x)/x, x, 0)", {"task": {"kind": "limit", "params": {"expr": "sin(x)/x", "var": "x", "to": "0"}},
+                               "vars": [{"name": "x"}], "givens": [], "answer_shape": "dne_or_scalar"}),
+    ("diff(x**3, x)", {"task": {"kind": "derivative", "params": {"f": "x**3", "var": "x"}},
+                       "vars": [{"name": "x"}], "givens": [], "answer_shape": "expression"}),
+    ("gcd(84, 120)", {"task": {"kind": "evaluate", "params": {"expr": "gcd(84, 120)"}}, "vars": [],
+                      "givens": [], "answer_shape": "scalar"}),
+]
+
+
+@pytest.mark.parametrize("payload,ir", _RESTATE, ids=[p for p, _ in _RESTATE])
+def test_a_claim_that_restates_or_computes_the_question_is_not_an_answer(payload, ir):
+    """Before the value-only claim namespace, every one of these was certified CORRECT: the
+    verifier computed the answer itself and then "confirmed" it — the one thing it must not do."""
+    kind = "expression" if ir["answer_shape"] == "expression" else "value"
+    r = verify(ir, {"claimed_answer": {"kind": kind, "payload": payload, "option": None}, "steps": []})
+    assert r.verdict != "CORRECT"
+    assert "claim_is_not_a_value" in r.flags or "parse_error" in r.flags
+
+
+def test_closed_forms_remain_valid_answers():
+    ir = {"task": {"kind": "count_structures",
+                   "params": {"space": {"structure": "combination", "n": 6, "k": 3}}},
+          "vars": [], "givens": [], "answer_shape": "count"}
+    r = verify(ir, {"claimed_answer": {"kind": "value", "payload": "binomial(6, 3)", "option": None},
+                    "steps": []})
+    assert r.verdict == "CORRECT"

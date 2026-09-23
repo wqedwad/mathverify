@@ -84,11 +84,21 @@ def adversarial(ir, sol, base_verdict, run_steps, item_id=""):
 
 
 def restructure_fidelity(items):
+    """How faithfully path (b) recovers what the solver claimed.
+
+    Two numbers, not one. The old single "faithful" rate was close to vacuous: it short-circuited
+    on the option letter, and measured on this set 245 of 260 items were scored faithful on the
+    letter alone — 244 of them without the extractor recovering any payload at all. That measures
+    "did we find the same letter", not "did we recover the mathematics", so the MATHEMATICAL
+    comparison is now counted and reported on its own.
+    """
     from mathverify.intake.restructure import extract_final_answer
     from mathverify.normalize.parse import parse_answer, build_namespace
     from mathverify.equiv import answers_equivalent
     from mathverify.ir import ProblemIR
     n = ok = none = 0
+    letter_only = 0                 # scored on the option letter; no payload was recovered
+    payload_n = payload_ok = 0      # the answer itself was compared
     misses = []
     for it in items:
         text = it.get("solution_text") or ""
@@ -103,8 +113,9 @@ def restructure_fidelity(items):
             continue
         try:
             ns = build_namespace(ProblemIR.from_dict(it["problem_ir"]))
-            if want.get("option") and ca.option and ca.option == want["option"]:
+            if want.get("option") and ca.option and ca.option == want["option"] and ca.payload is None:
                 ok += 1
+                letter_only += 1
                 continue
             if want.get("kind") == "dne" or ca.kind == "dne":
                 if want.get("kind") == ca.kind:
@@ -120,15 +131,39 @@ def restructure_fidelity(items):
             import sympy as sp
             if isinstance(a, sp.Set) != isinstance(b, sp.Set):
                 misses.append((it["id"], f"shape mismatch {ca.kind} vs {want['kind']}"))
+                payload_n += 1
                 continue
             eq, _ = answers_equivalent(a, b, shape=shape if not isinstance(a, sp.Set) else "set")
+            payload_n += 1
             if eq is True:
                 ok += 1
+                payload_ok += 1
             else:
                 misses.append((it["id"], f"{ca.payload!r} vs {want['payload']!r}"))
         except Exception as e:  # noqa: BLE001
             misses.append((it["id"], f"error {type(e).__name__}: {str(e)[:60]}"))
-    return {"n": n, "faithful": ok, "no_answer": none, "rate": (ok / n) if n else None, "misses": misses}
+    return {"n": n, "faithful": ok, "no_answer": none, "rate": (ok / n) if n else None,
+            "letter_only": letter_only, "payload_n": payload_n, "payload_faithful": payload_ok,
+            "payload_rate": (payload_ok / payload_n) if payload_n else None, "misses": misses}
+
+
+def l5_applicability(items):
+    """Ceiling of the metamorphic layer, measured WITHOUT any model call.
+
+    L5 exists to catch the D cell (right answer, wrong method). `perturb_ir` only applies to
+    `evaluate` tasks with equational givens, so most of the set is out of its reach no matter
+    how much budget a sweep is given. Reporting the ceiling next to the F3 numbers keeps a
+    half-finished measurement from being read as a budget problem when it is a scope problem."""
+    from mathverify.meta import perturb_ir
+    n = d = 0
+    d_total = sum(1 for it in items if it["cell"] == "D")
+    for it in items:
+        if perturb_ir(it["problem_ir"], seed=0, k=3):
+            n += 1
+            if it["cell"] == "D":
+                d += 1
+    return {"n": n, "total": len(items), "rate": (n / len(items)) if items else None,
+            "D": d, "D_total": d_total}
 
 
 def main(argv=None):
@@ -178,6 +213,7 @@ def main(argv=None):
                               "success_rate": (adv_success / adv_n) if adv_n else None,
                               "details": adv_details}
     summary["restructure_fidelity"] = restructure_fidelity(items)
+    summary["l5_applicability"] = l5_applicability(items)
     summary["total_ms"] = total_ms
     summary["mean_ms_per_item"] = total_ms / (2 * len(items)) if items else None
     out = Path(args.out)
@@ -225,6 +261,15 @@ def render_md(s, records):
                + "; ".join(f"{l[0]}:{l[1]}:{l[2]}" for l in d["layers"] if l[1] != "unknown" or l[2]) + "\n")
     rf = s["restructure_fidelity"]
     md += f"- **Restructuring (yol b) sadıklığı:** {rf['faithful']}/{rf['n']} = {fmt(rf['rate'])} (cevap bulunamayan: {rf['no_answer']})\n"
+    md += (f"  - bunun {rf['letter_only']}'i yalnız **şık harfi** eşleştiği için sayıldı; matematik hiç "
+           f"karşılaştırılmadı\n"
+           f"  - **cevabın kendisi karşılaştırılan öğe: {rf['payload_n']}**, sadık: {rf['payload_faithful']} "
+           f"= {fmt(rf['payload_rate'])}\n")
+    l5 = s.get("l5_applicability")
+    if l5:
+        md += (f"- **L5 (metamorfik) uygulanabilirlik tavanı:** {l5['n']}/{l5['total']} = {fmt(l5['rate'])} "
+               f"· D hücresinde {l5['D']}/{l5['D_total']}. L5 D hücresini yakalamak için var; bu tavan "
+               f"model çağrısı gerektirmeden ölçülür ve bütçeyle değişmez.\n")
     md += "\n## Hücre bazında\n\n| Hücre | n | Pos. prec. | Neg. prec. | Kapsama | Sayımlar |\n|---|---|---|---|---|---|\n"
     for c, b in s["by_cell"].items():
         md += _blk(c, b)

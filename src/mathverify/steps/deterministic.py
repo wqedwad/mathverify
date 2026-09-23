@@ -23,7 +23,7 @@ from ..certify.base import Ctx, Timer, result, unknown
 from ..certify.domain import relation_holds_at, in_domain
 from ..equiv import answers_equivalent
 from ..equiv.random_point import sample_points
-from ..normalize.parse import parse_relation, ParseError
+from ..normalize.parse import parse_relation, ParseError, UndeclaredSymbolError
 from ..sandbox import run as sb_run
 
 LAYER = "steps.refute"
@@ -37,7 +37,7 @@ def _parse_claim(claim: str, ns: dict[str, Any]):
         from ..normalize.parse import parse_set_str
         var = ns.get(m.group(1))
         if var is None:
-            raise ParseError(f"unknown symbol {m.group(1)}")
+            raise UndeclaredSymbolError(f"unknown symbol {m.group(1)}")
         s_ = parse_set_str(m.group(2), ns)
         return Or(*[Eq(var, e) for e in s_.args]) if len(s_.args) > 1 else Eq(var, list(s_.args)[0])
     return parse_relation(claim, ns)
@@ -273,7 +273,7 @@ def check_steps(ir, solution, ctx: Ctx):
         except Exception:
             pass
         first_bad = None
-        n_ref = n_ver = n_unk = n_skip = 0
+        n_ref = n_ver = n_unk = n_skip = n_malformed = 0
         case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
         from_map: dict[str, list[str]] = {s.id: list(s.from_ids) for s in solution.steps}
 
@@ -307,15 +307,34 @@ def check_steps(ir, solution, ctx: Ctx):
                 continue
             try:
                 claim = _parse_claim(st.claim, ctx.ns)
-            except Exception as e:  # noqa: BLE001
+            except UndeclaredSymbolError as e:
+                # The solver named something of its own (`u = sqrt(x+4)`). Well-formed
+                # mathematics we simply cannot check: skipped, no penalty (§3 rule 3).
                 entry["status"] = "skipped"
-                entry["reason"] = f"unparsed: {type(e).__name__}: {str(e)[:120]}"
+                entry["reason"] = f"undeclared_symbol: {str(e)[:120]}"
+                n_skip += 1
+                per_step.append(entry)
+                continue
+            except Exception as e:  # noqa: BLE001
+                # Not well-formed at all. This is NOT "an unproven step", it is a solution that
+                # does not meet the structured contract, and silently skipping it let an
+                # attacker cancel a refutation by corrupting the claim: measured, appending `}`
+                # to a refuted step turned INCORRECT into CORRECT. Abstain instead of accepting.
+                entry["status"] = "skipped"
+                entry["reason"] = f"malformed_claim: {type(e).__name__}: {str(e)[:120]}"
+                n_malformed += 1
                 n_skip += 1
                 per_step.append(entry)
                 continue
             if not _is_relation(claim):
+                # SOLVER_FORMAT: every `eq`/`compute` claim IS a relation. Something that
+                # parses into an expression is as much a contract violation as something that
+                # does not parse, and skipping it silently is the same hole: measured, a
+                # refuted step wrapped in \boxed{} came back as a non-relation and its
+                # refutation disappeared.
                 entry["status"] = "skipped"
                 entry["reason"] = "claim_is_not_a_relation"
+                n_malformed += 1
                 n_skip += 1
                 per_step.append(entry)
                 continue
@@ -354,8 +373,10 @@ def check_steps(ir, solution, ctx: Ctx):
                 parsed[st.id] = claim
                 parsed_cases[st.id] = my_case_ids
         ev_all = {"steps": per_step, "n_refuted": n_ref, "n_verified": n_ver, "n_unknown": n_unk,
-                  "n_skipped": n_skip, "n_total": len(solution.steps)}
+                  "n_skipped": n_skip, "n_malformed": n_malformed, "n_total": len(solution.steps)}
     if n_ref:
         return result(LAYER, "fail", 0.97, True, ev_all, t.ms, primary=False, first_bad_step=first_bad,
                       flags=["step_refuted"])
+    if n_malformed:
+        return unknown(LAYER, "malformed_step_claim", t.ms, ev_all, flags=["malformed_step_claim"])
     return unknown(LAYER, "no_step_refuted", t.ms, ev_all)

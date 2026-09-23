@@ -1,0 +1,77 @@
+{
+ "id": "tyt-kap-002",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = √(x − 3) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "[3, oo)",
+  "B": "(3, oo)",
+  "C": "(-oo, 3]",
+  "D": "[-3, oo)",
+  "E": "(-oo, -3]"
+ },
+ "gold_answer": "[3, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "sqrt(x - 3)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "interval",
+  "options": {
+   "A": "[3, oo)",
+   "B": "(3, oo)",
+   "C": "(-oo, 3]",
+   "D": "[-3, oo)",
+   "E": "(-oo, -3]"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "Interval(3, oo)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "tanımsızlık yalnız kökün içinden gelir"
+   },
+   {
+    "id": "s2",
+    "kind": "compute",
+    "claim": "sqrt(3 - 3) = 0",
+    "from": [],
+    "text": "uç nokta tanımlı"
+   },
+   {
+    "id": "s3",
+    "kind": "eq",
+    "claim": "x >= 3",
+    "from": [],
+    "text": "kalan koşul"
+   }
+  ]
+ },
+ "solution_text": "Uç noktada $\\sqrt{0}=0$ tanımlı, dolayısıyla 3 dahildir: $[3,\\infty)$. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "kanonik olmayan gösterim (Interval(...)) + uç nokta ayrı gerekçelendirildi",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

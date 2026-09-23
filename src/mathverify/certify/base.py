@@ -10,7 +10,8 @@ from sympy import S
 
 from ..ir import ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
-                               parse_answer, ParseError)
+                               parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
+                               claim_namespace)
 from ..solution import Solution
 from ..types import LayerResult
 
@@ -103,9 +104,26 @@ class Ctx:
                 out.append(self.rel(c))
         return out
 
+    def claim_ns(self, solution: Solution | None = None, **extra) -> dict[str, Any]:
+        """Namespace for parsing a CLAIM: the problem's, minus the operators that would compute
+        the answer and minus the problem's own functions (see COMPUTING_OPERATORS). Every
+        certificate that reads the payload itself must use this — four of them used the full
+        namespace, so `integrate(log(x), x)` still passed inside `certify.calculus`."""
+        fnames = [f.name for f in self.ir.functions]
+        if solution is not None:
+            check_claim_is_value(solution.claimed_answer.payload, fnames)
+        ns = claim_namespace(self.ns, fnames)
+        ns.update(extra)
+        return ns
+
     def claimed(self, solution: Solution):
+        """The claimed answer, parsed as a VALUE (see `claim_ns`)."""
         ca = solution.claimed_answer
-        return parse_answer(ca.kind, ca.payload, self.ns)
+        v = parse_answer(ca.kind, ca.payload, self.claim_ns(solution))
+        calc = (sp.Integral, sp.Derivative, sp.Limit, sp.Sum, sp.Product)
+        if getattr(v, "has", None) and v.has(*calc):
+            raise ClaimNotAValue(f"claimed answer {ca.payload!r} is an unevaluated computation")
+        return v
 
     def option_value(self, letter: str):
         if not self.ir.options or letter not in self.ir.options:

@@ -16,7 +16,7 @@ import sympy as sp
 
 from .certify import MODULES
 from .certify.base import make_ctx, result, unknown, Timer
-from .equiv import answers_equivalent
+from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
 from .ir import ProblemIR, LeakageError
 from .router import route, DEFERRED_KINDS
@@ -25,7 +25,7 @@ from .steps import check_steps
 from .types import LayerResult, VerificationResult
 from .versions import collect_versions
 
-__all__ = ["verify", "VerificationResult"]
+__all__ = ["verify", "VerificationResult", "SCOPE_FLAGS", "scope_note"]
 
 _VERSIONS: dict[str, str] | None = None
 
@@ -68,7 +68,8 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
         shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
         from .certify.linalg import _as_matrix, matrices_equal
         if shape == "count":
-            ok = int(cv) == int(ov)
+            ci, oi = exact_integer(cv), exact_integer(ov)   # never int(): it truncates 3.5 to 3
+            ok = None if oi is None else (ci is not None and ci == oi)
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv)}
         elif _as_matrix(cv) is not None or _as_matrix(ov) is not None:
             mc_, mo_ = _as_matrix(cv), _as_matrix(ov)
@@ -83,6 +84,14 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
     if ok is True:
         return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
     if ok is False:
+        # A payload the deterministic extractor reconstructed from prose is advisory: the
+        # solver may never have written it that way. A reconstruction mistake must therefore
+        # be able to abstain but never to refute, or path (b) would start manufacturing
+        # INCORRECT verdicts out of its own parsing.
+        if ca.payload_source == "recovered_text":
+            ev["reason"] = "recovered_claim_does_not_match_chosen_option"
+            return unknown("mc.consistency", ev["reason"], t.ms, ev,
+                           flags=["recovered_answer_mismatch"])
         ev["reason"] = "claimed_value_does_not_match_chosen_option"
         return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
     return unknown("mc.consistency", "undecided", t.ms, ev)
@@ -181,7 +190,18 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     if "{}" in t:                       # empty braces carry no mathematics
         t = t.replace("{}", "").strip()
         cands.append(t)
-    # strip unbalanced braces at the ends
+    # Balance braces by removing them from whichever side carries the EXCESS, and offer that
+    # first. Stripping blindly from the end turned the set "{{pi/6, 5*pi/6}" into
+    # "pi/6, 5*pi/6" — both braces gone, so the claim stopped being a set at all and a correct
+    # answer was rejected (measured: 7 items on the junk_prefix attack).
+    bal = t
+    while bal.count("{") > bal.count("}") and bal.startswith("{"):
+        bal = bal[1:].lstrip()
+        cands.append(bal)
+    while bal.count("}") > bal.count("{") and bal.endswith("}"):
+        bal = bal[:-1].rstrip()
+        cands.append(bal)
+    # then the blind strip, as a fallback for junk on the side that is not in excess
     while t and t[-1] in "}{" and t.count("{") != t.count("}"):
         t = t[:-1].rstrip()
     while t and t[0] in "{}" and t.count("{") != t.count("}"):
@@ -210,6 +230,59 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     return flags
 
 
+def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
+    from .normalize.parse import ClaimNotAValue, check_claim_is_value
+    ca = solution.claimed_answer
+    if ca.payload_source == "option_letter" or not isinstance(ca.payload, str):
+        return None                         # the option's own text is the problem's, not a claim
+    try:
+        check_claim_is_value(ca.payload, [f.name for f in ir.functions])
+    except ClaimNotAValue as e:
+        return unknown("intake.claim", str(e)[:200], flags=["claim_is_not_a_value"])
+    if ir.task.kind == "evaluate":
+        target = (ir.task.params or {}).get("expr") or ir.unknown_of_interest
+        if target and _same_structure(str(ca.payload), str(target), ctx):
+            return unknown("intake.claim", f"claimed answer {ca.payload!r} restates the question",
+                           flags=["claim_is_not_a_value"])
+    return None
+
+
+def _same_structure(a: str, b: str, ctx) -> bool:
+    """Same UNEVALUATED expression tree — `gcd(84, 120)` vs `gcd(84,120)`, but not `12`."""
+    try:
+        from .formal.statement import parse_structural
+        ta, tb = parse_structural(a, ctx.ns), parse_structural(b, ctx.ns)
+    except Exception:  # noqa: BLE001
+        return False
+    if not getattr(tb, "args", None):
+        return False                        # a bare number or symbol target cannot be restated
+    return sp.srepr(ta) == sp.srepr(tb)
+
+
+SCOPE_FLAGS = ("answer_level_only", "steps_not_checked", "answer_from_option_letter")
+
+
+def scope_note(flags: list[str], verdict: str) -> str:
+    """One line saying what a positive verdict actually covers.
+
+    A CORRECT verdict on a solution with no checkable step is an ANSWER-level statement, not a
+    solution-level one. The flag alone is machine-readable; this is the human half, so nobody
+    reads 'CORRECT' off a trace and believes the reasoning was verified."""
+    if verdict != "CORRECT":
+        return ""
+    parts = []
+    if "steps_not_checked" in flags:
+        parts.append("adım denetimi kapalıydı (run_steps=False)")
+    elif "answer_level_only" in flags:
+        parts.append("çözümde denetlenebilir adım yok")
+    if "answer_from_option_letter" in flags:
+        parts.append("iddia yalnız şık harfinden okundu")
+    if not parts:
+        return ""
+    return ("\nKAPSAM: bu CORRECT yalnız CEVAP düzeyindedir, çözümün geçerliliği hakkında değil — "
+            + "; ".join(parts) + ".")
+
+
 def verify(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
            timeout: float = 8.0, run_steps: bool = True) -> VerificationResult:
     """Deterministic verification: certificates + step refuter + fusion."""
@@ -223,8 +296,8 @@ def fuse_layers(layers: list[LayerResult], extra_flags: list[str] | None = None,
     """Fuse any list of layers (deterministic ones plus, in F3+, LLM-derived soft layers)."""
     fused = fuse(layers)
     total_ms = (time.perf_counter() - started) * 1000 if started else 0.0
-    trace = fused["trace"] + f"\nToplam süre: {total_ms:.0f} ms"
     all_flags = list(fused["flags"]) + [f for f in (extra_flags or []) if f not in fused["flags"]]
+    trace = fused["trace"] + scope_note(all_flags, fused["verdict"]) + f"\nToplam süre: {total_ms:.0f} ms"
     versions = _versions()
     if versions_extra:
         versions.update(versions_extra)
@@ -250,18 +323,43 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
 
     # fill payload from option letter if the solver only gave a letter
     ca = solution.claimed_answer
+    scope_flags: list[str] = []
     if ca.option and ca.payload in (None, "") and problem_ir.options and ca.option in problem_ir.options:
         ca.payload = problem_ir.options[ca.option]
+        # The certificate is now about to verify the OPTION's own value, so the only thing
+        # being checked is the letter the solver picked — a 1-in-5 guess carries as much
+        # evidence as a worked solution. That is legitimate answer-level verification, but it
+        # is not what CORRECT means at solution level (DECISIONS §2), so it is disclosed.
+        scope_flags.append("answer_from_option_letter")
+        ca.payload_source = "option_letter"
         if problem_ir.answer_shape in ("set", "interval"):
             ca.kind = problem_ir.answer_shape
         elif problem_ir.answer_shape == "count":
-            ca.kind = "count"
-            try:
-                ca.payload = int(sp.sympify(ca.payload))
-            except Exception:
+            n_opt = exact_integer(ca.payload)
+            if n_opt is not None:
+                ca.kind, ca.payload = "count", n_opt
+            else:
                 ca.kind = "value"
 
-    clean_flags = _sanitize_payload(solution, ctx)
+    # DECISIONS §2 defines CORRECT as "the claimed answer is right AND no step was refuted".
+    # With no checkable step the second conjunct is vacuously true, so a CORRECT verdict here
+    # says nothing about the reasoning. The verdict is kept (abstaining would destroy path
+    # (b), whose answer-level coverage is a product feature) but the scope is made explicit,
+    # in a machine-readable flag, so a caller can demand solution-level evidence.
+    if not run_steps:
+        scope_flags.append("steps_not_checked")
+    elif not any(st.kind in ("eq", "compute") and st.claim for st in solution.steps):
+        scope_flags.append("answer_level_only")
+
+    clean_flags = _sanitize_payload(solution, ctx) + scope_flags
+
+    # A claimed answer must be a VALUE. A computation (`integrate(…)`, `limit(…)`) or the
+    # question written back (`f(g(2))`, `gcd(84, 120)` for "evaluate gcd(84, 120)") would make
+    # the certificates compute the answer themselves — every one of those was certified CORRECT
+    # before this check. It abstains, it does not refute: no answer was given, not a wrong one.
+    not_a_value = _claim_not_a_value(problem_ir, solution, ctx)
+    if not_a_value is not None:
+        layers.append(not_a_value)
 
     mc = _mc_consistency(problem_ir, solution, ctx)
     if mc is not None:

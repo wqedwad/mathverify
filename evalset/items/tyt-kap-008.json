@@ -1,0 +1,70 @@
+{
+ "id": "tyt-kap-008",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = ln(x − 1) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(1, oo)",
+  "B": "[1, oo)",
+  "C": "(-oo, 1)",
+  "D": "(0, oo)",
+  "E": "(-1, oo)"
+ },
+ "gold_answer": "(1, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "log(x - 1)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "interval",
+  "options": {
+   "A": "(1, oo)",
+   "B": "[1, oo)",
+   "C": "(-oo, 1)",
+   "D": "(0, oo)",
+   "E": "(-1, oo)"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "Interval.open(1, oo)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "note",
+    "claim": "",
+    "from": [],
+    "text": "ln t yalnız t > 0 için tanımlı"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x > 1",
+    "from": [],
+    "text": "t = x − 1 yerine konursa"
+   }
+  ]
+ },
+ "solution_text": "$t = x-1$ diyelim; $\\ln t$ için $t>0$ gerekir, yani $x>1$. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "değişken değiştirme ile; kanonik olmayan Interval.open gösterimi",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

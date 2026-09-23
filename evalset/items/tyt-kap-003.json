@@ -1,0 +1,72 @@
+{
+ "id": "tyt-kap-003",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = √(x − 3) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "[3, oo)",
+  "B": "(3, oo)",
+  "C": "(-oo, 3]",
+  "D": "[-3, oo)",
+  "E": "(-oo, -3]"
+ },
+ "gold_answer": "[3, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "sqrt(x - 3)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "interval",
+  "options": {
+   "A": "[3, oo)",
+   "B": "(3, oo)",
+   "C": "(-oo, 3]",
+   "D": "[-3, oo)",
+   "E": "(-oo, -3]"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "(3, oo)",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x - 3 > 0",
+    "from": [],
+    "text": "kökün içi pozitif olmalı (yanlış: sıfır da olur)"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "x > 3"
+   }
+  ]
+ },
+ "solution_text": "Kökün içi pozitif olmalı: $x > 3$. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": null,
+ "notes": "endpoint_error mutation of tyt-kap-001",
+ "provenance": "sentetik",
+ "mutation": "endpoint_error",
+ "derived_from": "tyt-kap-001"
+}

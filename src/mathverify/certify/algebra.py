@@ -102,10 +102,10 @@ def _claimed_as_set(ctx: Ctx, solution) -> sp.Set | None:
     ca = solution.claimed_answer
     from ..normalize.parse import parse_answer
     if ca.kind in ("set", "interval"):
-        return parse_answer(ca.kind, ca.payload, ctx.ns)
+        return parse_answer(ca.kind, ca.payload, ctx.claim_ns(solution))
     if ca.kind == "none":
         return S.EmptySet
-    v = parse_answer("value", ca.payload, ctx.ns)
+    v = parse_answer("value", ca.payload, ctx.claim_ns(solution))
     return v if isinstance(v, sp.Set) else FiniteSet(v)
 
 

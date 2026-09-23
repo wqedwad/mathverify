@@ -78,3 +78,45 @@ def test_the_llm_restructuring_pass_lives_outside_intake():
     assert not hasattr(intake, "restructure_llm")
     from mathverify.extract.restructure_llm import restructure_solution
     assert callable(restructure_solution)
+
+
+# ------------------------------------------------------------------ B2: what the letter hides
+def test_a_set_claim_is_recovered_when_only_the_option_letter_was_marked():
+    """Measured hole: for "x ∈ {30, 150, 210, 330}. Cevap: B" the extractor kept only the
+    letter, the verifier then filled the payload from that same letter and checked the option
+    against itself — a wrong solution was called CORRECT."""
+    ca = extract_final_answer("x ∈ {30, 150, 210, 330}. Cevap: B", answer_shape="set")
+    assert ca.option == "B"
+    assert ca.kind == "set" and ca.payload == "{30, 150, 210, 330}"
+    assert ca.payload_source == "recovered_text"
+
+
+def test_recovery_stays_out_of_scalar_answers():
+    """The first version of this recovery read any `<sym> = <token>` and was wrong on 59 of 94
+    items: it picked up intermediate steps and truncated `y = 2x + 1` to `2x`. Only set and
+    interval literals are unambiguous enough."""
+    ca = extract_final_answer("2a = 32, a = 16. Cevap: C", answer_shape="scalar")
+    assert ca.option == "C" and ca.payload is None
+
+
+def test_a_recovered_claim_can_abstain_but_never_refute():
+    from mathverify.verifier import verify
+    ir = {"task": {"kind": "solve_equation", "params": {"var": "x"}},
+          "vars": [{"name": "x"}], "givens": ["x**2 = 4"], "answer_shape": "set",
+          "options": {"A": "{-2, 2}", "B": "{2}"}}
+    sol = restructure_deterministic("x ∈ {7, 9}. Cevap: A", answer_shape="set")
+    assert sol.claimed_answer.payload_source == "recovered_text"
+    r = verify(ir, sol)
+    assert "recovered_answer_mismatch" in r.flags
+    assert r.verdict != "CORRECT"          # the disagreement blocks a positive verdict
+    assert any(l.layer == "mc.consistency" and l.verdict == "unknown" for l in r.layers), \
+        "a reconstruction mistake must not be able to produce a hard refutation"
+
+
+def test_unicode_pi_next_to_a_number_is_a_product():
+    """`5π/6` is how free text writes 5*pi/6; the unicode map alone made it `5pi/6`, a syntax
+    error. 4 of 5 recovered trig answer sets were unparseable for exactly this reason."""
+    from mathverify.normalize.parse import parse_set_str, build_namespace
+    ns = build_namespace()
+    s = parse_set_str("{π/6, 5π/6, 7π/6, 11π/6}", ns)
+    assert len(s.args) == 4

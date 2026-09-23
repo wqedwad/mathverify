@@ -1,0 +1,72 @@
+{
+ "id": "tyt-kap-009",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = ln(x − 1) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(1, oo)",
+  "B": "[1, oo)",
+  "C": "(-oo, 1)",
+  "D": "(0, oo)",
+  "E": "(-1, oo)"
+ },
+ "gold_answer": "(1, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "log(x - 1)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "interval",
+  "options": {
+   "A": "(1, oo)",
+   "B": "[1, oo)",
+   "C": "(-oo, 1)",
+   "D": "(0, oo)",
+   "E": "(-1, oo)"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "[1, oo)",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x - 1 >= 0",
+    "from": [],
+    "text": "yanlış: ln 0 tanımsızdır"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "x ≥ 1"
+   }
+  ]
+ },
+ "solution_text": "$x - 1 \\ge 0$ olmalı: $x \\ge 1$. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": null,
+ "notes": "log_domain mutation of tyt-kap-007",
+ "provenance": "sentetik",
+ "mutation": "log_domain",
+ "derived_from": "tyt-kap-007"
+}

@@ -22,7 +22,35 @@ from .sets import set_equal, normalize_set, scalar_equal
 
 __all__ = ["answers_equivalent", "num_equal", "sym_equal", "random_point_equal", "set_equal",
            "normalize_set", "scalar_equal", "sample_points", "to_mp", "math_verify_opinion",
-           "as_matrix", "matrices_equal"]
+           "as_matrix", "matrices_equal", "exact_integer"]
+
+
+def exact_integer(v) -> int | None:
+    """The integer a claimed count denotes, or None when it is not an integer.
+
+    NEVER `int(v)`: it truncates, so a claimed count of 7/2 became 3 and was certified CORRECT
+    (measured by harness/soundness_fuzz.py on 13 counting items). A count is an integer by
+    definition, so a non-integer claim is a wrong claim, not a claim to be rounded. `3.0` is
+    the integer 3 written as a decimal and is accepted as such."""
+    try:
+        e = sp.sympify(v)
+    except (sp.SympifyError, TypeError, ValueError):
+        return None
+    if isinstance(e, sp.Integer):
+        return int(e)
+    if not getattr(e, "is_number", False) or e.is_real is False:
+        return None
+    if isinstance(e, sp.Rational):
+        return int(e) if e.q == 1 else None
+    if isinstance(e, sp.Float):
+        # exact binary value of the Float (SymPy ≥ 1.13 makes Float(3.0) == 3 False, so no ==)
+        r = sp.Rational(e)
+        return int(r) if r.q == 1 else None
+    try:
+        s = sp.simplify(e)
+    except Exception:  # noqa: BLE001
+        return None
+    return int(s) if isinstance(s, sp.Integer) else None
 
 
 def _mv_verify(a, b) -> bool:
@@ -103,12 +131,15 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         ev["method"] = "dne_flag"
         return bool(r), ev
     if shape == "count":
-        try:
-            r = int(claimed) == int(truth)
-        except Exception:
+        c, t = exact_integer(claimed), exact_integer(truth)
+        if t is None:
+            ev["method"] = "truth_not_an_integer"
             return None, ev
         ev["method"] = "int_compare"
-        return r, ev
+        if c is None:
+            ev["reason"] = "claimed_count_is_not_an_integer"
+            return False, ev
+        return c == t, ev
     if shape in ("set", "interval"):
         if not isinstance(claimed, sp.Set) or not isinstance(truth, sp.Set):
             ev["method"] = "not_a_set"
@@ -134,10 +165,13 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         if okN is not None:
             ev["method"] = "numeric"
             return okN, ev
-        if ev["math_verify"] is True:
-            ev["method"] = "math_verify_only"
-            return True, ev
+        # Math-Verify is an independent SECOND opinion (module docstring): it is recorded, it
+        # never decides alone. It is a lenient answer matcher built for grading, and this is
+        # exactly the branch where neither exact algebra nor the precision ladder could say
+        # anything — letting it ground a primary certificate here contradicted the design.
         ev["method"] = "undecided"
+        if ev["math_verify"] is True:
+            ev["math_verify_note"] = "second opinion says equal; not used as evidence on its own"
         return None, ev
 
     # expression-shaped: symbolic proof, else domain-aware random points

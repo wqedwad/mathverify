@@ -1,7 +1,7 @@
 [project]
 name = "mathverify"
 version = "0.1.0"
-description = "Three-valued deterministic verifier for AI-generated math solutions (TYT/AYT/UNI). Phase 1: no LLM layers."
+description = "Three-valued verifier for AI-generated math solutions (TYT/AYT/UNI): deterministic certificates, a step refuter, cross-family LLM signals and a Lean 4 formal layer."
 requires-python = ">=3.12"
 dependencies = [
   "sympy==1.14.0",
@@ -12,6 +12,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The F3+ layers. Pinned like everything else: `anthropic` drives a beta API surface
+# (beta.messages.stream, output_config, thinking=adaptive, server-side-fallback betas), so an
+# unpinned upgrade can break the LLM layers with no test able to catch it offline.
+llm = ["anthropic==1.7.0", "python-dotenv==1.2.3"]
 dev = ["pytest>=9", "pytest-timeout", "hypothesis"]
 
 [build-system]

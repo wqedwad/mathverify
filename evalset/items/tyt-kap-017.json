@@ -1,0 +1,95 @@
+{
+ "id": "tyt-kap-017",
+ "cell": "B",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "x + y = 10 denklemini sağlayan kaç farklı (x, y) pozitif tam sayı ikilisi vardır?",
+ "options": {
+  "A": "8",
+  "B": "9",
+  "C": "10",
+  "D": "11",
+  "E": "12"
+ },
+ "gold_answer": "9",
+ "problem_ir": {
+  "task": {
+   "kind": "count_solutions",
+   "params": {
+    "bounds": {
+     "x": [
+      "1",
+      "10"
+     ],
+     "y": [
+      "1",
+      "10"
+     ]
+    }
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "y",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "x + y = 10"
+  ],
+  "answer_shape": "count",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "11",
+   "E": "12"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 9,
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x >= 1",
+    "from": [],
+    "text": "pozitiflik"
+   },
+   {
+    "id": "s2",
+    "kind": "eq",
+    "claim": "x <= 9",
+    "from": [],
+    "text": "y ≥ 1 olmasından"
+   },
+   {
+    "id": "s3",
+    "kind": "compute",
+    "claim": "9 - 1 + 1 = 9",
+    "from": [
+     "s1",
+     "s2"
+    ],
+    "text": "tam sayı sayımı"
+   }
+  ]
+ },
+ "solution_text": "$1 \\le x \\le 9$ aralığında $9-1+1 = 9$ tam sayı var. Cevap: B",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "aralık sayımı yöntemi (kanonik olmayan)",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

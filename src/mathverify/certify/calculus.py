@@ -135,10 +135,11 @@ def verify(ir, solution, ctx: Ctx):
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:
                 return err
-            ns2 = dict(ctx.ns)
-            ns2["C"] = sp.Symbol("C")
             from ..normalize.parse import parse_expr_str
             payload = _TRAILING_C.sub("", str(solution.claimed_answer.payload))
+            ns2, err = parse_or_unknown(LAYER, ctx.claim_ns, solution, C=sp.Symbol("C"))
+            if err:
+                return err
             F, err = parse_or_unknown(LAYER, parse_expr_str, payload, ns2)
             if err:
                 return err

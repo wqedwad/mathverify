@@ -45,6 +45,53 @@ def _answer_is_right(it, ir, sol, labels) -> bool:
         return False
 
 
+# Claims that are FALSE in real mathematics but TRUE about Lean's totalised operations
+# (x/0 = 0, sqrt of a negative = 0, log 0 = 0, tan(pi/2) = 0, the integral of a non-integrable
+# function = 0). Before the definedness guards in formal/statement.py, five of these received
+# clean, audited certificates. Every run re-checks them: a single certificate here is a false
+# positive of the formal layer, whatever the evaluation set says.
+def _ir(kind, params, vars_=(), givens=(), shape="scalar"):
+    return {"task": {"kind": kind, "params": params}, "vars": [dict(v) for v in vars_],
+            "givens": list(givens), "answer_shape": shape}
+
+
+JUNK_PROBES = [
+    ("tan(pi/2) = 0", _ir("evaluate", {"expr": "tan(pi/2)"}), {"kind": "value", "payload": "0"}),
+    ("sqrt(2-5) = 0", _ir("evaluate", {"expr": "sqrt(2 - 5)"}), {"kind": "value", "payload": "0"}),
+    ("0/0 = 0", _ir("evaluate", {"expr": "(2**2 - 4)/(2 - 2)"}), {"kind": "value", "payload": "0"}),
+    ("log 0 = 0", _ir("evaluate", {"expr": "log(0)"}), {"kind": "value", "payload": "0"}),
+    ("sin 0 = sqrt(-4)", _ir("evaluate", {"expr": "sin(0)"}), {"kind": "value", "payload": "sqrt(-4)"}),
+    ("int_{-1}^{1} dx/x = 0", _ir("definite_integral", {"integrand": "1/x", "var": "x", "a": "-1", "b": "1"},
+                                  [{"name": "x"}]), {"kind": "value", "payload": "0"}),
+    ("sqrt'(-1) = 0", _ir("derivative", {"f": "sqrt(x)", "var": "x", "at": "-1"}, [{"name": "x"}]),
+     {"kind": "value", "payload": "0"}),
+    ("log'(-1) = -1", _ir("derivative", {"f": "log(x)", "var": "x", "at": "-1"}, [{"name": "x"}]),
+     {"kind": "value", "payload": "-1"}),
+    ("max -1/x^2 on [-1,1] = 0", _ir("extremum", {"f": "-1/x**2", "var": "x", "interval": "[-1, 1]", "which": "max"},
+                                     [{"name": "x"}]), {"kind": "value", "payload": "0"}),
+    ("sum_{k=-1}^{1} 1/k = 0", _ir("series_sum", {"term": "1/k", "var": "k", "lo": "-1", "hi": "1"},
+                                   [{"name": "k", "domain": "integer"}]), {"kind": "value", "payload": "0"}),
+    ("x = 2 from 1/(x-2) = 0", _ir("evaluate", {"expr": "x"}, [{"name": "x"}], ["1/(x - 2) = 0"]),
+     {"kind": "value", "payload": "2"}),
+    ("(sqrt(-x^2-1))' = 0", _ir("derivative", {"f": "sqrt(-x**2 - 1)", "var": "x"}, [{"name": "x"}], shape="expression"),
+     {"kind": "expression", "payload": "0"}),
+]
+
+
+def junk_probe(timeout: float) -> list[dict]:
+    from mathverify.formal import build_statement, prove_statement
+    out = []
+    for label, ir, ca in JUNK_PROBES:
+        st = build_statement(ir, ca)
+        rec = {"label": label, "statement": bool(st), "certified": False}
+        if st is not None:
+            r = prove_statement(st, use_model=False, tactic_timeout=timeout)
+            rec["certified"] = bool(r["proved"] and (r.get("audit") or {}).get("clean"))
+            rec["proved"] = r["proved"]
+        out.append(rec)
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
@@ -81,7 +128,9 @@ def main(argv=None):
     certified = [r for r in proved if r["clean"]]
     fp = [r for r in certified if not r["answer_right"]]
     out = Path(args.out); out.mkdir(exist_ok=True)
-    (out / "lean_results.json").write_text(json.dumps({"records": recs}, ensure_ascii=False, indent=1), encoding="utf-8")
+    junk = junk_probe(args.timeout)
+    (out / "lean_results.json").write_text(json.dumps({"records": recs, "junk_probe": junk}, ensure_ascii=False,
+                                                      indent=1), encoding="utf-8")
     md = "# F5 (Lean) taraması — modelsiz, deterministik ifade + Mathlib taktik merdiveni\n\n"
     md += f"- Öğe: **{n}** · Lean ifadesi üretilebilen: **{len(with_stmt)}** ({len(with_stmt)/n:.1%})\n"
     md += f"- Kanıtlanan: **{len(proved)}** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **{len(certified)}**\n"
@@ -89,6 +138,10 @@ def main(argv=None):
     md += f"- Kapsama (tüm sette formal sertifika): {len(certified)/n:.1%} · ifadesi olanlar içinde: {len(certified)/max(1,len(with_stmt)):.1%}\n"
     md += f"- Şablon türleri: {dict(kinds)}\n"
     md += f"- Süre: {time.time()-t0:.0f} s (ortalama {(time.time()-t0)/n*1000:.0f} ms/öğe)\n\n"
+    bad_junk = [j["label"] for j in junk if j["certified"]]
+    md += (f"- **Junk-value sondası:** {len(junk)} gerçekte yanlış iddia (Lean'in x/0 = 0, √(−1) = 0, "
+           f"log 0 = 0 gibi tamamlamalarında doğru) · ifade üretilen: {sum(j['statement'] for j in junk)} · "
+           f"**sertifika alan: {len(bad_junk)}** (hedef 0){' ✗ ' + str(bad_junk) if bad_junk else ' ✓'}\n\n")
     byc = Counter(r["cell"] for r in certified)
     md += f"- Sertifikalı öğelerin hücre dağılımı: {dict(byc)} (D hücresi = cevabı doğru, adımı bozuk: formal katman cevabı onaylar, adımı değil)\n"
     used = Counter(r["proof"] for r in certified)

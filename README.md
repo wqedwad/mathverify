@@ -11,8 +11,9 @@ Handoff: `fable-handoff-matematik-dogrulama_1.md` · Kararlar: [DECISIONS.md](DE
 Mimari: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Çözücü formatı: [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md)
 §6 ölçümleri: [docs/E1-E10-measurement.md](docs/E1-E10-measurement.md) · LLM katmanları: [docs/LLM_LAYERS.md](docs/LLM_LAYERS.md)
 Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](reports/)
+**Kalite ilkeleri (literatür → mekanizma → kapı):** [docs/QUALITY.md](docs/QUALITY.md)
 
-## Durum (19 Eylül 2026)
+## Durum (23 Eylül 2026)
 
 | Faz | Durum |
 |---|---|
@@ -21,49 +22,90 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | F2 sentetik geometri, kombinatorik, seriler, lineer cebir | **tamam** |
 | F3 LLM ön yüzü, L4 çapraz aile, L5 metamorfik | **kod tamam, ölçüm yarım** (Anthropic kredisi bitti) |
 | F4 kritik + meta-doğrulama | **kod tamam, hiç koşmadı** (ölçüm hattı hazır, kredi bekliyor) |
+| Denetim (20 Eylül): krediyle ilgisi olmayan 11 boşluk | **kapatıldı ve ölçüldü** ([HANDOFF §13](HANDOFF.md)) |
+| İkinci denetim (23 Eylül): literatür + doğrulayıcının metamorfik testi | **4 yanlış-onay sınıfı kapatıldı** ([HANDOFF §14](HANDOFF.md), [docs/QUALITY.md](docs/QUALITY.md)) |
 | F5 Lean 4 + Mathlib | **tamam ve ölçüldü** (model gerektirmeyen yolla) |
 | F6 adversaryal sertleştirme + kalibrasyon | **tamam ve ölçüldü** |
 
 ## Ölçülen sonuçlar
 
-Deterministik hat, 260 öğelik değerlendirme seti ([reports/eval_report.md](reports/eval_report.md)):
+Deterministik hat, 280 öğelik değerlendirme seti ([reports/eval_report.md](reports/eval_report.md)):
 
 | Metrik | Değer | Hedef |
 |---|---|---|
 | Pozitif precision (cevap düzeyi) | **1.000** | ≥ 0.98 |
 | Negatif precision (cevap düzeyi) | **1.000** | ≥ 0.98 |
 | Kapsama | **1.000** | ≥ 0.85 |
-| Pozitif precision (çözüm düzeyi) | 0.993 (1 FP) | — |
+| Pozitif precision (çözüm düzeyi) | 0.994 (1 FP) | — |
 | B hücresi yanlış red | **0.000** | < 0.10 |
-| D hücresi tespit | 0.974 (38/39) | ayrı raporlanır |
-| Adım lokalizasyonu (tam eşleşme) | 1.000 | — |
+| D hücresi tespit | 0.976 (41/42) | ayrı raporlanır |
+| Adım lokalizasyonu (tam eşleşme) | 1.000 (73/120 lokalize) | — |
 | Anahtar sızma testi | geçti | zorunlu |
-| Ortalama süre / öğe | ~0.14 s | — |
+| Ölçülmeyen görev türü | **yok** | yok |
+| Ortalama süre / öğe | ~0.15 s | — |
+
+Yol (b) sadakati **iki** sayıdır, çünkü tek sayı yanıltıcıydı: 280 öğenin 260'ı yalnız şık
+harfi eşleştiği için sadık sayılıyor, cevabın kendisi yalnız **20** öğede karşılaştırılıyor
+(20/20 sadık). L5'in uygulanabilirlik tavanı modelsiz ölçüldü: **21/280** öğe, D hücresinde
+**3/42** — bu bir bütçe değil kapsam sınırı.
 
 Formal katman, modelsiz ([reports/lean_report.md](reports/lean_report.md)):
 
 | Metrik | Değer | Hedef |
 |---|---|---|
-| Lean ifadesi üretilebilen öğe | 156 / 260 (%60.0) | — |
-| Denetimden geçmiş formal sertifika | **107** (%41.2) | — |
+| Lean ifadesi üretilebilen öğe | 152 / 280 (%54.3) | — |
+| Denetimden geçmiş formal sertifika | **107** (%38.2) | — |
 | Yanlış cevaplı öğede kanıt | **0** | 0 |
-| Süre / öğe | ~0.26 s | — |
+| Junk-value sondası (gerçekte yanlış, Lean'de doğru 12 iddia) | **0** sertifika | 0 |
+| Süre / öğe | ~0.27 s | — |
 
-Adversaryal sertleştirme ([reports/adversarial_report.md](reports/adversarial_report.md)):
+> 107 sertifika korunuyor; ifade sayısı 156'dan 152'ye indi çünkü has olmayan ∫₀¹ ln x/√x artık
+> ifade almıyor (hiçbiri ispatlanmamıştı). Yüzdeler ayrıca sete L7'nin bilerek çevirmediği üç
+> sınıftan (`domain_of`, `simplify_expression`, `count_solutions`) 20 öğe eklendiği için düştü.
+>
+> **Junk value:** Lean `x/0 = 0`, `Real.sqrt (−3) = 0`, `Real.log 0 = 0`, `Real.tan (π/2) = 0`
+> tanımlar. Tanımlılık korumalarından önce "tan(π/2) = 0" `--lean` ile bütün doğrulayıcıdan
+> CORRECT (0.995) çıkıyordu. Ayrıntı: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#leanin-junk-değerleri).
+
+Adversaryal sertleştirme, **üç yüzeyde** ([reports/adversarial_report.md](reports/adversarial_report.md)):
 
 | Metrik | Değer | Hedef |
 |---|---|---|
-| Saldırı sayısı | 6009 | — |
+| Saldırı sayısı | 21 139 | — |
 | **Saldırı başarısı** | **%0.000** | < %2 |
+| Cevap yükü / şık harfi korunarak / adım iddiaları | 7354 / 7279 / 6506 saldırı, hepsinde 0 başarı | üç yüzey de koşmalı |
 | Anlamı koruyan saldırıda karar değişimi | 0 | 0 |
 | Anlamı değiştiren saldırıda yanlış onay | 0 | 0 |
+
+Eski tarama 6009 saldırıyı **tek** yüzeye uyguluyordu ve her saldırıda şık harfini siliyordu.
+Genişletildiğinde iki gerçek zafiyet çıktı ve ikisi de kapatıldı: adım iddiasını bozarak reddi
+iptal etmek (INCORRECT → CORRECT) ve küme cevaplarında `{` önekinin doğru cevabı reddettirmesi
+(CORRECT → INCORRECT). Ayrıntı: [HANDOFF §13](HANDOFF.md).
+
+Metamorfik sağlamlık taraması — doğrulayıcının kendisinin testi ([reports/soundness_report.md](reports/soundness_report.md)). Her problemin altın cevabından
+SymPy ile kesin olarak yanlış ve kesin olarak eşdeğer cevaplar üretilir:
+
+| Metrik | Değer | Hedef |
+|---|---|---|
+| Yanlış cevapta yanlış onay | **0 / 448** | 0 |
+| Eşdeğer cevapta yanlış red | **0 / 214** | 0 |
+| Cevap olmayan iddiada (soruyu yazan / CAS'a hesaplatan) CORRECT | **0 / 46** | 0 |
+| Geçerli adım dönüşümünde yanlış red | **0 / 184** | 0 ([10]: LLM doğrulayıcılarında %75–85) |
+| Bir tarafı bozulan adımın yakalanması | 40 / 46 | raporlanır |
+
+Bu tarama ilk koşusunda **448 yanlış cevabın 27'sini CORRECT** buldu (`int(7/2) = 3`, `nsimplify` ile 1/6'ya yakalanan bir kesir); ayrıca soruyu cevap olarak geri yazan 7 iddianın 7'si CORRECT alıyordu. İkisi de kapatıldı.
 
 F3 (tam otomatik hat) kısmi ölçümü, kredinin yettiği 64 öğede
 ([reports/f3_report.md](reports/f3_report.md)): IR kabul oranı 64/64, görev türü elle yazılanla
 aynı 64/64, çıkarılan IR ile elle yazılan IR'ın kararı aynı 63/64, precision 1.000/1.000.
-Kalan 154 öğe `Your credit balance is too low` ile düştü.
+Kalan 154 öğe `Your credit balance is too low` ile düştü — ve tarama durması gerekirken
+durmadı; o hata 20 Eylül'de kapatıldı (HANDOFF §13.1).
 
-## Bilinen tek açık
+## Bilinen açıklar
+
+Üçü var. Birincisi deterministik hattın tek yanlış onayı, ikisi ölçümün kapsamı hakkında.
+
+### 1. Deterministik hattın tek yanlış onayı
 
 `tyt-prob-018`: cevabı doğru, ara adımı **doğru ama gerekçesiz**. "İki denklemi çıkarınca
 a − b = 2" deniyor; ifade doğru, gerekçe yanlış. Deterministik reddedici yalnız somut karşı
@@ -82,12 +124,29 @@ yalnız ölçümle karara bağlanmasına izin veriyor. Bu yüzden temkinli okuma
 F4 taraması koştuğunda `reports/f3_report.md` içindeki "Sertifikanın iptal ettiği kritik
 raporu" satırı kararı sayıyla verecek.
 
+### 2. Adımsız bir çözümde CORRECT yalnız cevap düzeyindedir
+
+Serbest metin yolunda (yol b) çoğu zaman denetlenebilir adım üretilmez; o hâlde CORRECT
+"cevap doğru" demektir, "çözüm geçerli" demez. Karar artık `answer_level_only` /
+`answer_from_option_letter` bayraklarını ve karar izinde bir `KAPSAM:` satırını taşıyor, ama
+bayrağa bakmayan bir tüketici için ayrım hâlâ görünmez. Çözüm düzeyinde kanıt isteniyorsa bu
+bayraklar üzerinden kapı konmalıdır.
+
+### 3. Ölçüm hâlâ sentetik
+
+Değerlendirme setinin tamamını biz ürettik. Aşağıdaki precision sayıları gerçek bir modelin
+çözümlerine karşı değil, kendi yazdığımız çözümlere karşıdır. Bu, krediyle ilgisi olmayan ve
+kod değişikliğiyle kapanmayan tek açık.
+
 ## Kurulum
 
 ```bash
 uv venv --python 3.14 .venv
-uv pip install --python .venv/Scripts/python.exe -e . pytest pytest-timeout hypothesis anthropic python-dotenv
+uv pip install --python .venv/Scripts/python.exe -e ".[llm,dev]"
 ```
+
+`llm` ekstrası F3+ katmanlarını çalıştırır (`anthropic`, `python-dotenv`); ikisi de diğer
+bağımlılıklar gibi sabitlenmiştir, çünkü `anthropic` bir beta API yüzeyini sürüyor.
 
 LLM katmanları için `.env` (git tarafından yok sayılır):
 
@@ -104,8 +163,8 @@ Lean için [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md).
 .venv/Scripts/python.exe scripts/check.py --full
 ```
 
-Tek komutta bütün kapılar: testler, deterministik değerlendirme, Lean taraması, adversaryal
-tarama, kalibrasyon. Kapı düşerse çıkış kodu 1.
+Tek komutta 21 kapı: testler, deterministik değerlendirme, Lean taraması (junk-value sondası dahil),
+adversaryal tarama (3 yüzey), metamorfik sağlamlık taraması, kalibrasyon. Kapı düşerse çıkış kodu 1.
 
 Tek tek:
 
@@ -130,14 +189,25 @@ Tek tek:
 ```
 
 ```bash
+.venv/Scripts/python.exe -m harness.soundness_fuzz
+```
+
+```bash
 .venv/Scripts/python.exe -m harness.run_f3 --workers 6 --pathb
 ```
 
 F3 koşusu L4, L5 ve L6'yı birlikte ölçer; `--no-l4` / `--no-l5` / `--no-l6` ile tek tek
 kapatılır. F4 kritiğinin sayıları raporun "L6 kritik + meta-doğrulama (F4)" bölümünde çıkar.
 `--max-cost 20` verilirse toplam harcama o dolar değerine ulaştığında tarama kendini durdurur;
-gözetimsiz bir koşunun bakiyeyi boşaltmasına karşı. Sağlayıcı faturalama hatası verirse koşu
-zaten ilk hatada durur.
+gözetimsiz bir koşunun bakiyeyi boşaltmasına karşı. Sağlayıcı faturalama/kimlik hatası verirse
+koşu ilk hatada durur — **bu 20 Eylül'de düzeltildi, öncesinde durmuyordu** (HANDOFF §13.1).
+
+Gerçek bir AI çözücünün çıktıları ölçülecekse `--solver-family anthropic|meta` **verilmelidir**:
+çapraz aile ayrımı (DECISIONS §17) ancak o zaman uygulanır, yoksa her kayda
+`solver_family_unknown` bayrağı konur.
+
+> `reports/f3_report.md` 18 Eylül'deki yarım koşudan kalmadır ve eski raporlayıcıyla
+> üretilmiştir; "Yol (b)" bölümü HANDOFF §13.8 ile birlikte okunmalıdır.
 
 Tek bir öğeyi doğrulamak:
 
@@ -172,6 +242,13 @@ Lean 4.34.0 + Mathlib. Windows'ta `PYTHONUTF8=1` ile çalıştırın.
   temkinli yapabilirler.
 * **fuse/** sert veto + noisy-OR + abstain; kalibrasyon opsiyoneldir (aşağıya bakın).
 
+Kararın **kapsamı** çıktıda yazar: denetlenebilir adım yoksa `answer_level_only`, iddia yalnız
+şık harfinden okunduysa `answer_from_option_letter` bayrağı konur ve karar izine bir `KAPSAM:`
+satırı eklenir — o CORRECT cevap düzeyindedir, çözümün geçerliliği hakkında değil. Bir
+`eq`/`compute` iddiası hiç ayrıştırılamıyorsa iki durum ayrılır: çözücünün kendi sembolü
+(`u = sqrt(x+4)`) cezasız atlanır, bozuk iddia (`a = 20}`) `malformed_step_claim` ile CORRECT'i
+engeller — aksi hâlde iddiayı bozmak reddi iptal ediyordu.
+
 ## Kalibrasyon: ölçüm neden kapalı tutmayı söyledi
 
 `harness/calibrate.py` her sinyalin (katman + verdict + bayrak) güvenilirliğini eğitim
@@ -192,7 +269,8 @@ src/mathverify/   types · ir · solution · versions · normalize/ · sandbox/ 
 tests/            §6 sözleşmeleri (E1–E10) · F2 · F3 (çevrimdışı, senaryolu istemci) · F5 · F6 ·
                   sandbox · sızma · equiv · intake · füzyon · uçtan uca · set bütünlüğü
 evalset/build/    konu başına öğe üreticileri (A/B elle, C adlandırılmış mutasyon, D elle)
-evalset/items/    260 JSON öğe (üretilir)
+                  tyt_kapsam.py: domain_of / simplify_expression / count_solutions + LaTeX kapsamı
+evalset/items/    280 JSON öğe (üretilir)
 harness/          run_eval · run_lean · run_f3 · adversarial · calibrate · metrics · loader
 docs/             ARCHITECTURE · SOLVER_FORMAT · LLM_LAYERS · LEAN_SETUP · E1-E10-measurement
 scripts/          check · verify_cli · probe_e1_e10 · smoke_* · lean_* · setup_lean*

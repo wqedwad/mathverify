@@ -17,6 +17,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
 PY = str(ROOT / ".venv" / "Scripts" / "python.exe")
 if not Path(PY).exists():                       # non-Windows checkout
     PY = sys.executable
@@ -58,6 +60,17 @@ def main(argv=None) -> int:
     gates.append(gate("anahtar sızma testi", s["leakage_test_passed"], True, bool(s["leakage_test_passed"])))
     gates.append(gate("çözüm düzeyi pozitif precision", so["pos_precision"], "raporlanır", True))
     gates.append(gate("D hücresi tespit", s["D_detection"], "raporlanır", True))
+    rf = s["restructure_fidelity"]
+    gates.append(gate("yol (b) cevabın kendisi karşılaştırılan öğe", f"{rf['payload_faithful']}/{rf['payload_n']}",
+                      "raporlanır", True))
+    l5 = s.get("l5_applicability") or {}
+    gates.append(gate("L5 uygulanabilirlik tavanı", f"{l5.get('n')}/{l5.get('total')}", "raporlanır", True))
+    # Every routed task kind must have items, or the precision above says nothing about it.
+    from harness.loader import load_items
+    from mathverify.router import ROUTES
+    kinds = {it["problem_ir"]["task"]["kind"] for it in load_items(ROOT / "evalset" / "items")}
+    missing = sorted(set(ROUTES) - kinds)
+    gates.append(gate("ölçülmeyen görev türü", missing or "yok", "yok", not missing))
 
     if args.full:
         print("== Lean taraması ==")
@@ -67,6 +80,9 @@ def main(argv=None) -> int:
         fp = [r for r in cert if not r["answer_right"]]
         gates.append(gate("Lean FP", len(fp), 0, not fp))
         gates.append(gate("Lean sertifika", f"{len(cert)}/{len(lean)}", "raporlanır", True))
+        junk = json.loads((ROOT / "reports" / "lean_results.json").read_text(encoding="utf-8")).get("junk_probe") or []
+        bad = [j["label"] for j in junk if j.get("certified")]
+        gates.append(gate("Lean junk-value sertifikası", f"{len(bad)}/{len(junk)}", 0, bool(junk) and not bad))
 
         print("== adversaryal ==")
         rc, out = run([PY, "-m", "harness.adversarial"], "adversarial")
@@ -74,6 +90,29 @@ def main(argv=None) -> int:
         succ = adv["preserving"]["flipped"] + adv["changing"]["accepted_wrong"]
         rate = succ / max(1, adv["n_attacks"])
         gates.append(gate("saldırı başarısı", f"{rate:.3%}", "< %2", rate < 0.02))
+        # The sweep used to attack ONE surface (the claimed payload, option letter stripped).
+        # Narrowing it again would keep the rate at 0% while measuring almost nothing, so the
+        # surfaces themselves are a gate.
+        names = adv["per_attack"].keys()
+        surfaces = {"cevap": any(not k.startswith(("mc:", "step:")) for k in names),
+                    "şık": any(k.startswith("mc:") for k in names),
+                    "adım": any(k.startswith("step:") for k in names)}
+        gates.append(gate("saldırı yüzeyleri", ",".join(k for k, v in surfaces.items() if v),
+                          "cevap+şık+adım", all(surfaces.values())))
+
+        print("== metamorfik sağlamlık ==")
+        rc, out = run([PY, "-m", "harness.soundness_fuzz"], "soundness_fuzz")
+        sf = json.loads((ROOT / "reports" / "soundness_results.json").read_text(encoding="utf-8"))
+        gates.append(gate("SymPy üretimli yanlış cevapta yanlış onay",
+                          f"{sf['wrong']['false_accepts']}/{sf['wrong']['n']}", 0, sf["wrong"]["false_accepts"] == 0))
+        gates.append(gate("SymPy üretimli eşdeğer cevapta yanlış red",
+                          f"{sf['equiv']['false_rejects']}/{sf['equiv']['n']}", 0, sf["equiv"]["false_rejects"] == 0))
+        gates.append(gate("cevap olmayan iddiada (soru/hesaplama) CORRECT",
+                          f"{sf['non_answer']['accepted']}/{sf['non_answer']['n']}", 0, sf["non_answer"]["accepted"] == 0))
+        stp = sf.get("steps") or {}
+        gates.append(gate("geçerli adım dönüşümünde yanlış red",
+                          f"{len(stp.get('false_rejects', []))}/{(stp.get('equiv') or {}).get('n', 0)}", 0,
+                          not stp.get("false_rejects")))
 
         print("== kalibrasyon ==")
         rc, out = run([PY, "-m", "harness.calibrate"], "calibrate")

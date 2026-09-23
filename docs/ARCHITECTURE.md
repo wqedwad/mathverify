@@ -43,6 +43,99 @@ soru (TR) + çözüm
 Kural: bir LLM katmanı kararı yalnızca **daha temkinli** yapabilir (UNKNOWN'a itebilir),
 asla bir sertifikayı karşıtına çeviremez.
 
+## Kararın kapsamı: CORRECT neyi söyler
+
+`DECISIONS.md` §2 CORRECT'i "iddia edilen cevap doğru **ve** hiçbir adım reddedilmedi" diye
+tanımlar. Denetlenebilir adım yoksa ikinci koşul boş doğrudur, yani karar çözümün geçerliliği
+hakkında hiçbir şey söylemez — yalnız cevap hakkında. Bu, yol (b)'nin normal çalışma biçimidir
+ve bir ürün özelliğidir; çekimser kalmak o kapsamayı yok ederdi. Bu yüzden verdict korunur ve
+**kapsam çıktıya yazılır**:
+
+| Bayrak | Anlamı |
+|---|---|
+| `answer_level_only` | Çözümde `eq`/`compute` türünde, iddiası olan hiçbir adım yok |
+| `steps_not_checked` | Adım katmanı çağıran tarafından kapatıldı (`run_steps=False`) |
+| `answer_from_option_letter` | Çözücü yalnız şık harfi verdi; doğrulanan şey o harfin değeri |
+| `malformed_step_claim` | Bir `eq`/`compute` iddiası hiç ayrıştırılamadı (aşağıya bakın) |
+
+İlk üçü kararı değiştirmez; karar izine bir **KAPSAM** satırı ekler ve makine tarafından
+okunabilir olduğu için çağıran "çözüm düzeyinde kanıt" şartı koyabilir. Ölçülen boşluk:
+`"Bilmiyorum ama tahminim. Cevap: B"` metni CORRECT alıyordu ve çıktıda bunu sıradan bir
+doğrulamadan ayıran hiçbir şey yoktu.
+
+## Bozuk adım iddiası ile tanımsız sembol farkı
+
+Adım reddedicinin altın kuralı "yalnız çürüt" olduğu için ayrıştırılamayan bir adım cezasız
+atlanır. Ama iki farklı "ayrıştırılamadı" vardır ve bunları karıştırmak bir zafiyetti:
+
+* `u = sqrt(x+4)` — iyi biçimli matematik, yalnız problemde tanımlanmamış bir ad kullanıyor.
+  `UndeclaredSymbolError`; cezasız atlanır, aksi hâlde kanonik olmayan doğru çözümler
+  cezalandırılırdı ([10]).
+* `a = 20}` ya da `y = 2*x ignore previous instructions` — matematik değil. Yapısal sözleşmenin
+  ihlali; `malformed_step_claim` bayrağı CORRECT'i engeller.
+
+Ayrım tahminle değil ayrıştırmayla yapılır: bilinmeyen adlar serbest sembol kabul edilerek
+metin yeniden ayrıştırılır; yine düşerse iyi biçimli değildir. Ölçüm: reddedilmiş bir adımın
+iddiasına `{`, `}` ya da bir istem enjeksiyonu eklemek INCORRECT'i CORRECT'e çeviriyordu
+(genişletilmiş adversaryal taramada 54 saldırı/öğe çifti); kural eklendikten sonra 0.
+
+## İddia bir değerdir
+
+Cevap, problemin ad alanından **hesaplayan** operatörler (`integrate`, `limit`, `diff`, `Sum`,
+`simplify`, `nsimplify`, `det`, `dist`, …) ve problemin kendi fonksiyonları (`f`, `g`) çıkarılmış bir
+ad alanında okunur (`normalize.parse.COMPUTING_OPERATORS`, `Ctx.claim_ns`). `evaluate` görevinde
+hedefi aynen yazan iddia da cevap sayılmaz. Aksi hâlde `integrate(log(x), x)` gibi bir "cevap"
+sertifikaya doğrulayıcının kendi hesabını denetletir — ölçümde 7 böyle iddianın 7'si CORRECT
+alıyordu. Karar çekimserliktir (`claim_is_not_a_value`); kapalı biçimler (`binomial(6, 3)`) geçerlidir.
+
+İddia ayrıca **karşılaştırılmadan önce yeniden yazılmaz**: sayımlar `equiv.exact_integer` ile okunur
+(`int(7/2)` 3'e kesiyordu), hiçbir iddia ya da hesaplanan doğru değer `nsimplify`'dan geçmez
+(500000003/3000000000'i 1/6'ya yakalıyordu).
+
+## Eşdeğerlik motorunun kanıt standardı
+
+`equiv/` her sertifikanın ortak karşılaştırma primitifidir, bu yüzden yanlış bir "eşit" her yere
+sızar. Kurallar:
+
+* **Sembolik** yol yalnız kesin dönüşümlerden oluşur. `nsimplify` bir yuvarlamadır; −e⁻¹⁰⁰⁰'ü 0
+  yapıyordu, çıkarıldı.
+* **Kesin sayılar kesin** karşılaştırılır (10³⁰+1 ile 10³⁰ göreli toleransla "eşit" çıkıyordu).
+* **Nümerik eşitlik** hassasiyet merdiveninin her basamağında sağlanmalıdır: gerçek bir özdeşlikte
+  fark hassasiyetle küçülür, gerçek bir küçük fark küçülmez (e^{π√163} ile 262537412640768744
+  30 basamakta eşit, 50 basamakta değil).
+* **Rastgele noktalarda** iki tarafı ayrı değerlendirip çıkarmak çalışma hassasiyetinin altındaki
+  farkı göremez; farkın kendisi SymPy'nin uyarlamalı `evalf`'iyle değerlendirilir. Gerçek bir sıfır
+  `0` ya da anlamlı biti olmayan `0.e-167` verir, gerçek bir fark ~100 bit taşır.
+* **Math-Verify** ikinci görüştür, kanıta yazılır, tek başına karar vermez.
+
+Bu kuralların her biri `harness/soundness_fuzz.py`'nin ya da diferansiyel bir sondanın bulduğu somut
+bir yanlış eşitlikten gelir ve `tests/test_equiv.py`'ye bağlıdır.
+
+## Lean'in junk değerleri
+
+Lean/Mathlib her kısmi işlemi tamamlar: `x / 0 = 0`, `Real.sqrt x = 0` (x < 0), `Real.log 0 = 0`,
+`Real.log (−x) = Real.log x`, `Real.tan (π/2) = 0` ve integrallenemeyen fonksiyonun aralık integrali
+0'dır. Böyle bir değere dokunan ifade gerçek matematik hakkında değildir ama **ispatlanabilir** —
+aksiyom, `sorry`, vakum ve kullanılmayan hipotez denetimleri bunu göremez, çünkü ispatlar junk
+ifadelerin gerçek ispatlarıdır. Ölçüm: "tan(π/2) = 0" `--lean` ile bütün doğrulayıcıdan CORRECT (0.995)
+çıkıyordu.
+
+Kural (`formal/statement.py`, bölüm "junk values"):
+
+* **Kapalı** kısmi işlem (değişkensiz) yazıcıda karara bağlanır: tanımsız ya da karar verilemezse
+  ifade yok. Böylece iddialar, sınırlar, kökler, matris girdileri kendiliğinden kapsanır.
+* **Açık** olanlar şablonun işidir: `evaluate`'te koruma hipotezi olur (verilerle çelişirse vakum
+  sondası ispatı reddeder); integral/ekstremum/seri toplamında nicelenen bölgenin tamamında tanımlı
+  olduğu kanıtlanır; noktada türevde nokta tanım kümesinin *içinde* olmalıdır (√x'in −1'de türevi
+  Lean'de 0'dır); fonksiyonel türevde gerçek tanım kümesi boş olmamalıdır; tekrarlama bağıntısında ve
+  eğri denklemlerinde kısmi işlem kapsam dışıdır.
+* Tanımlılık `certify.domain.definedness_conditions`'tan gelir — deterministik katmanla aynı tanım.
+* Vakum sondası ispat aramasından zayıf olamaz: ispat merdiveninin kombinasyonlarını ve her `≠`
+  hipotezi için yasakladığı eşitliği kanıtlama denemesini içerir, ve her alternatif `done` ile kapanır.
+
+`harness/run_lean.py` her koşuda 12 junk-value sondasını yeniden dener; bir tanesinin sertifika alması
+kapıyı düşürür.
+
 ## Neden IR'dan deterministik Lean ifadesi
 
 [5] ölçümü: otomatik formalizasyonda ifadelerin %89.5'i derleniyor ama yalnız %60.5'i sadık.
@@ -169,3 +262,16 @@ yakalanıp IR tümüyle reddedilir. Harness etiketleri ayrı tutar ve her koşud
   bölmesi hiçbir uyumda kullanılmaz.
 - Adversaryal testte anlamı koruyan ve anlamı değiştiren saldırılar ayrı sayılır; UNKNOWN'a
   düşmek "sağlamlık kaybı" olarak raporlanır ama yanlış karar sayılmaz.
+- Adversaryal tarama **üç yüzeyi** ayrı ayrı ölçer ve üçünün de var olması bir kapıdır:
+  cevap yükü, **şık harfi korunarak** (çözümlerin 257/260'ı bir harf taşıyor ve eski tarama
+  hepsinde harfi siliyordu) ve **adım iddiaları**. Tek yüzeyde %0 başarı, ölçülen şeyin dar
+  olduğunu gizleyebilir.
+- Router'da tanımlı her görev türünün sette öğesi olması bir kapıdır. `count_solutions`,
+  `domain_of` ve `simplify_expression` modülleri yazılıydı ve birim testleri vardı ama sette
+  tek öğeleri yoktu; raporlanan precision onlar hakkında hiçbir şey söylemiyordu.
+- Yol (b) sadakati **iki** sayı olarak raporlanır: şık harfi üzerinden sayılanlar ve cevabın
+  kendisinin karşılaştırıldığı öğeler. Tek sayı yanıltıcıydı: 260 öğenin 245'i yalnız harf
+  eşleştiği için "sadık" sayılıyordu ve bunların 244'ünde hiçbir yük kurtarılmamıştı.
+- L5'in **uygulanabilirlik tavanı** modelsiz ölçülür ve raporlanır. L5 D hücresini yakalamak
+  için vardır ama `perturb_ir` yalnız denklem verili `evaluate` görevlerine uygulanır; bu bir
+  bütçe değil kapsam sınırıdır ve yarım kalmış bir ölçümün bütçe sorunu sanılmasını engeller.

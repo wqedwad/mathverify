@@ -68,3 +68,23 @@ def test_every_level_and_topic_has_positives_and_negatives(evalset_items):
         by.setdefault(it["level"], set()).add(it["cell"])
     for level, cells in by.items():
         assert {"A", "C"} <= cells, level
+
+
+def test_every_routed_task_kind_is_measured(evalset_items):
+    """A certificate module with no item in the set is untested by every number the project
+    reports. `count_solutions`, `domain_of` and `simplify_expression` were in the router and in
+    SOLVER_FORMAT.md but had zero items, so `1.000 precision` said nothing about them."""
+    from mathverify.router import ROUTES
+    present = {it["problem_ir"]["task"]["kind"] for it in evalset_items}
+    missing = sorted(set(ROUTES) - present)
+    assert not missing, f"routed task kinds with no evaluation item: {missing}"
+
+
+def test_the_latex_parse_branch_is_exercised_by_the_set(evalset_items):
+    """Measured gap: not one of the first 260 items reached the LaTeX branch, which tokenises
+    separately from the canonical parser (implicit multiplication included). A real model's
+    solution is written in LaTeX, so at least one item must go through it."""
+    from mathverify.normalize.parse import is_latex
+    latex_claims = [it["id"] for it in evalset_items
+                    if is_latex(str(it["solution"]["claimed_answer"].get("payload")))]
+    assert latex_claims, "no item claims its answer in LaTeX"

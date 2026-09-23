@@ -1,0 +1,72 @@
+{
+ "id": "tyt-kap-005",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = 1/(x² − 4) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+  "B": "(-oo, -2) U (2, oo)",
+  "C": "(-2, 2)",
+  "D": "(-oo, 2) U (2, oo)",
+  "E": "(-oo, -2) U (-2, oo)"
+ },
+ "gold_answer": "(-oo, -2) U (-2, 2) U (2, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "1/(x**2 - 4)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "set",
+  "options": {
+   "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+   "B": "(-oo, -2) U (2, oo)",
+   "C": "(-2, 2)",
+   "D": "(-oo, 2) U (2, oo)",
+   "E": "(-oo, -2) U (-2, oo)"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "(-oo, -2) U (2, oo)",
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x**2 - 4 > 0",
+    "from": [],
+    "text": "yanlış: payda sıfırdan farklı olmalı, pozitif değil"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "x < −2 veya x > 2"
+   }
+  ]
+ },
+ "solution_text": "$x^2 - 4 > 0$ olmalı, yani $x < -2$ ya da $x > 2$. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": null,
+ "notes": "missing_case mutation of tyt-kap-004",
+ "provenance": "sentetik",
+ "mutation": "missing_case",
+ "derived_from": "tyt-kap-004"
+}

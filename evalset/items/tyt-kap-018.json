@@ -1,0 +1,87 @@
+{
+ "id": "tyt-kap-018",
+ "cell": "C",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "x + y = 10 denklemini sağlayan kaç farklı (x, y) pozitif tam sayı ikilisi vardır?",
+ "options": {
+  "A": "8",
+  "B": "9",
+  "C": "10",
+  "D": "11",
+  "E": "12"
+ },
+ "gold_answer": "9",
+ "problem_ir": {
+  "task": {
+   "kind": "count_solutions",
+   "params": {
+    "bounds": {
+     "x": [
+      "1",
+      "10"
+     ],
+     "y": [
+      "1",
+      "10"
+     ]
+    }
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "positive_integer"
+   },
+   {
+    "name": "y",
+    "domain": "positive_integer"
+   }
+  ],
+  "givens": [
+   "x + y = 10"
+  ],
+  "answer_shape": "count",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "11",
+   "E": "12"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 11,
+   "option": "D"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "y = 10 - x",
+    "from": [],
+    "text": ""
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "x = 0..10 dedim (yanlış: pozitif olmalı)"
+   }
+  ]
+ },
+ "solution_text": "$x$ 0'dan 10'a kadar 11 değer alır. Cevap: D",
+ "solution_is_correct": false,
+ "first_bad_step": null,
+ "notes": "off_by_one mutation of tyt-kap-016",
+ "provenance": "sentetik",
+ "mutation": "off_by_one",
+ "derived_from": "tyt-kap-016"
+}

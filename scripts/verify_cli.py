@@ -65,7 +65,8 @@ def main(argv=None) -> int:
         else:
             sol = None
     if args.text:
-        sol = restructure_deterministic(args.text)
+        shape = ir.answer_shape if hasattr(ir, "answer_shape") else None
+        sol = restructure_deterministic(args.text, answer_shape=shape)
         if sol is None:
             print("Serbest metinden nihai cevap çıkarılamadı (yol b).")
             return 2

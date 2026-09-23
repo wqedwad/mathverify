@@ -270,3 +270,91 @@ def test_turning_the_critic_off_removes_the_layer_entirely():
     pr = run_pipeline(Q, OPTS, "TYT", solution=SOL_RIGHT, use_l4=False, use_l5=False, use_l6=False)
     assert not any(l.layer == "critic.steps" for l in pr.result.layers)
     assert pr.critic is None
+
+
+# ------------------------------------------------------------------ fatal provider failures
+# DECISIONS §23: a billing/auth failure is not a measurement. It must reach the harness from
+# EVERY layer, not only from IR extraction — the 18 Sep sweep spent its remaining items
+# because the guard looked at one truncated string from one layer.
+REAL_CREDIT_MESSAGE = (
+    "anthropic API error 400: Error code: 400 - {'type': 'error', 'error': "
+    "{'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access "
+    "the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}}")
+
+
+@pytest.mark.parametrize("tag,kw", [
+    ("resolve", dict(use_l4=True, use_l5=False, use_l6=False)),
+    ("metamorphic", dict(use_l4=False, use_l5=True, use_l6=False)),
+    ("critic", dict(use_l4=False, use_l5=False, use_l6=True)),
+])
+def test_a_credit_failure_in_any_layer_reaches_the_caller(tag, kw):
+    from mathverify.llm import LLMCreditError
+    script = _base_script()
+    script[tag] = LLMCreditError(REAL_CREDIT_MESSAGE)
+    pin(script)
+    with pytest.raises(LLMCreditError):
+        run_pipeline(Q, OPTS, "TYT", ir=IR, solution=SOL_RIGHT, **kw)
+
+
+def test_a_credit_failure_in_the_meta_verifier_also_reaches_the_caller():
+    from mathverify.llm import LLMCreditError
+    # flag a step the deterministic layer has no verdict on, so the cross-check does not
+    # overrule the report before the meta-verifier is reached
+    script = _base_script(critic=critic_reply("error_found", "s9", "bad", "does not follow", ""))
+    script["meta_verify"] = LLMCreditError(REAL_CREDIT_MESSAGE)
+    pin(script)
+    with pytest.raises(LLMCreditError):
+        run_pipeline(Q, OPTS, "TYT", ir=IR, solution=SOL_RIGHT, use_l4=False, use_l5=False, use_l6=True)
+
+
+def test_the_sweep_stops_on_the_first_fatal_instead_of_burning_the_rest():
+    """The regression this exists for: `aborted` was None in f3_results.json while 151 items
+    had failed on billing, because the abort grepped a message truncated one character before
+    the word 'credit'. The signal is now structural."""
+    import sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    from harness.run_f3 import run_item
+    from mathverify.llm import LLMCreditError
+
+    class _Args:
+        no_l4 = no_l5 = no_l6 = True
+        pathb = False
+
+    item = {"id": "tyt-x-001", "level": "TYT", "topic": "problemler", "cell": "A",
+            "question_tr": Q, "options": OPTS, "problem_ir": copy.deepcopy(IR),
+            "solution": copy.deepcopy(SOL_RIGHT), "solution_is_correct": True,
+            "first_bad_step": None, "gold_answer": "16"}
+    pin({"ir_extract": LLMCreditError(REAL_CREDIT_MESSAGE)})
+    rec = run_item(item, _Args())
+    assert rec["fatal"], "a fatal failure must be marked structurally, not by substring luck"
+    assert "llm_fatal" in rec["flags"]
+
+
+# ------------------------------------------------------------------ cross-family separation (B6)
+def test_the_record_says_so_when_the_solver_family_is_unknown():
+    """DECISIONS §17: the family that wrote a solution may not judge it. Every judging layer
+    derives its family from `solver_family`, and with None they all fall back to one family.
+    That is harmless for the synthetic set and wrong the moment a real Claude solver is
+    plugged in, so the absence of the rule is recorded rather than assumed away."""
+    pin(_base_script())
+    pr = run_pipeline(Q, OPTS, "TYT", ir=IR, solution=SOL_RIGHT, use_l4=True, use_l5=False, use_l6=False)
+    assert "solver_family_unknown" in pr.result.flags
+
+
+def test_naming_the_solver_family_removes_the_flag_and_flips_the_judges():
+    from mathverify.llm import other_family
+    a, m = pin(_base_script())
+    pr = run_pipeline(Q, OPTS, "TYT", ir=IR, solution=SOL_RIGHT, solver_family="anthropic",
+                      use_l4=True, use_l5=False, use_l6=False)
+    assert "solver_family_unknown" not in pr.result.flags
+    assert pr.resolve["family"] == other_family("anthropic") == "meta"
+
+
+def test_fixed_roles_come_from_one_table_not_from_string_literals():
+    from mathverify.llm import ROLE_FAMILY, client_for_role, judge_families
+    a, m = pin(_base_script())
+    assert client_for_role("extractor") is (a if ROLE_FAMILY["extractor"] == "anthropic" else m)
+    assert set(judge_families()) == {ROLE_FAMILY["judge_a"], ROLE_FAMILY["judge_b"]}
+    assert len(judge_families()) == 2, "the round-trip must not collapse to a single family"
+    with pytest.raises(ValueError):
+        client_for_role("no_such_role")

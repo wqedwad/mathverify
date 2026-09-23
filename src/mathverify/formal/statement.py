@@ -90,11 +90,172 @@ def parse_relation_structural(src: str, ns: dict[str, Any]):
     return rels[0] if len(rels) == 1 else sp.And(*rels)
 
 
+# ---------------------------------------------------------------------------- junk values
+# Lean and Mathlib make every partial operation TOTAL by assigning a "junk" value outside the
+# domain: `x / 0 = 0`, `Real.sqrt x = 0` for `x < 0`, `Real.log 0 = 0`, `Real.log (-x) =
+# Real.log x`, `Real.tan (π/2) = 0`, and an interval integral of a non-integrable function is 0.
+# A statement that reaches such a point is a statement about the junk value, not about the
+# mathematics — and it can be PROVED. Measured before this section existed: "tan(π/2) = 0",
+# "√(2−5) = 0", "(2²−4)/(2−2) = 0", "log 0 = 0" and "sin 0 = √(−4)" all received clean, audited
+# certificates (no sorry, safe axioms, non-vacuous), and with `--lean` the first one came out
+# of the whole verifier as CORRECT, confidence 0.995. The axiom/vacuity/unused-hypothesis audits
+# cannot see this: the proofs are genuine proofs of the junk statements.
+# (The hazard classes follow "Faults in Our Formal Benchmarking", arXiv:2606.29493: division by
+# zero, analytic-domain totalisation, and their checkers.)
+#
+# The rule, applied uniformly:
+#   * a CLOSED partial operation (no free symbols) is decided here — undefined or undecidable
+#     means no statement at all (`LeanPrintError`); this is enforced inside `sympy_to_lean`, so
+#     every printed value (claims, bounds, roots, matrix entries) is covered automatically;
+#   * an OPEN one (depends on a variable) is each template's job: it becomes a guard hypothesis,
+#     or it must provably hold on the region the statement quantifies over, or the template
+#     declines. Never a silent junk value.
+# Definedness comes from `certify.domain.definedness_conditions` — the same definition the
+# deterministic layer uses, so the two layers cannot disagree about what "defined" means.
+
+def _definedness(expr, var=None) -> list:
+    from ..certify.domain import definedness_conditions
+    conds = list(definedness_conditions(expr, var))
+    for node in sp.preorder_traversal(expr):              # `a % 0 = a` in Lean
+        if isinstance(node, sp.Mod):
+            conds.append(sp.Ne(node.args[1], 0))
+    return conds
+
+
+def _closed_truth(c) -> bool | None:
+    """Truth of a variable-free definedness condition; None when it cannot be decided."""
+    if c is sp.true or c is True:
+        return True
+    if c is sp.false or c is False:
+        return False
+    if not isinstance(c, sp.core.relational.Relational) or c.free_symbols:
+        return None
+    d = c.lhs - c.rhs
+    try:
+        if sp.simplify(d) == 0:
+            return isinstance(c, (sp.GreaterThan, sp.LessThan))     # ≥ / ≤ hold at equality
+        v = complex(sp.N(d, 50))
+    except (TypeError, ValueError, ZeroDivisionError, AttributeError):
+        return None
+    if not (math.isfinite(v.real) and math.isfinite(v.imag)):
+        return False
+    if abs(v.imag) > 1e-30:
+        return False                            # a non-real argument is outside the real domain
+    x = v.real
+    if abs(x) < 1e-40:
+        return None                             # numerically zero but not provably so
+    if isinstance(c, sp.Unequality):
+        return True
+    if isinstance(c, (sp.StrictGreaterThan, sp.GreaterThan)):
+        return x > 0
+    if isinstance(c, (sp.StrictLessThan, sp.LessThan)):
+        return x < 0
+    return None
+
+
+def _check_closed_definedness(e) -> None:
+    items = list(e) if isinstance(e, sp.MatrixBase) else [e]
+    for it in items:
+        for c in _definedness(it):
+            if getattr(c, "free_symbols", None):
+                continue                        # open: the template's responsibility
+            ok = _closed_truth(c)
+            if ok is not True:
+                raise LeanPrintError(f"junk value: {c} {'fails' if ok is False else 'is undecidable'} "
+                                     f"in {e} (Lean would totalise it)")
+
+
 def sympy_to_lean(e, field: str = "ℝ") -> str:
+    """Exact printer. Raises LeanPrintError on anything not covered, and on any closed partial
+    operation whose argument is outside its real domain (see the junk-value section above)."""
+    e = sp.sympify(e)
+    _check_closed_definedness(e)
+    return _print_lean(e, field)
+
+
+def open_guards(exprs, field: str = "ℝ", var=None) -> list[str]:
+    """Lean propositions that make every partial operation in `exprs` well defined, for the
+    conditions that depend on a variable. Closed conditions are decided by the printer."""
+    out: list[str] = []
+    for e in exprs:
+        for c in _definedness(e, var):
+            if not getattr(c, "free_symbols", None):
+                continue
+            txt = relation_to_lean(c, field)
+            if txt not in out:
+                out.append(txt)
+    return out
+
+
+def _violation_set(c, var, region):
+    """Points of `region` where the definedness condition `c` fails, or None if undecidable."""
+    if isinstance(c, sp.Unequality):
+        bad = sp.Eq(c.lhs, c.rhs)
+    elif isinstance(c, (sp.StrictGreaterThan, sp.GreaterThan, sp.StrictLessThan, sp.LessThan)):
+        bad = sp.Not(c)
+    else:
+        return None
+    try:
+        s = sp.solveset(bad, var, region)
+    except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError):
+        return None
+    if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):
+        return None
+    return s
+
+
+def defined_on(expr, var, region) -> bool:
+    """Every partial operation in `expr` is defined at every point of `region` (a SymPy set).
+    Anything SymPy cannot decide counts as NOT defined — the template then declines."""
+    for c in _definedness(expr, var):
+        if not getattr(c, "free_symbols", None):
+            if _closed_truth(c) is not True:
+                return False
+            continue
+        if c.free_symbols - {var}:
+            return False
+        bad = _violation_set(c, var, region)
+        if bad is None or bad != sp.S.EmptySet:
+            return False
+    return True
+
+
+def interior_defined_at(expr, var, point) -> bool:
+    """`expr` is defined on a neighbourhood of `point` — what a derivative there needs. For a
+    `≥ 0` condition that means strictly positive: `Real.sqrt` is constant 0 on (−∞, 0], so
+    `HasDerivAt Real.sqrt 0 (-1)` is TRUE in Lean although √x has no derivative at −1."""
+    for c in _definedness(expr, var):
+        if not getattr(c, "free_symbols", None):
+            if _closed_truth(c) is not True:
+                return False
+            continue
+        cc = c.subs(var, point)
+        if isinstance(c, sp.GreaterThan):
+            cc = sp.StrictGreaterThan(c.lhs.subs(var, point), c.rhs.subs(var, point))
+        elif isinstance(c, sp.LessThan):
+            cc = sp.StrictLessThan(c.lhs.subs(var, point), c.rhs.subs(var, point))
+        if _closed_truth(cc) is not True:
+            return False
+    return True
+
+
+_PROBE_POINTS = (sp.Integer(1), sp.Integer(2), sp.Rational(1, 2), sp.Integer(3), sp.Integer(10),
+                 sp.Integer(0), sp.Integer(-1), sp.Rational(-1, 2), sp.Integer(-2), sp.Integer(-10),
+                 sp.pi / 7)
+
+
+def has_interior_point(exprs, var) -> bool:
+    """Some real point where every expression is defined on a neighbourhood. A `∀ x, … →
+    HasDerivAt …` statement about a function defined NOWHERE on the reals would be proved
+    entirely about junk values (e.g. `√(−x² − 1)` is constantly 0 in Lean)."""
+    return any(all(interior_defined_at(e, var, p) for e in exprs) for p in _PROBE_POINTS)
+
+
+def _print_lean(e, field: str = "ℝ") -> str:
     """Exact printer. Raises LeanPrintError on anything not covered."""
     e = sp.sympify(e)
     if isinstance(e, sp.MatrixBase):
-        rows = "; ".join(", ".join(sympy_to_lean(e[i, j], field) for j in range(e.shape[1]))
+        rows = "; ".join(", ".join(_print_lean(e[i, j], field) for j in range(e.shape[1]))
                          for i in range(e.shape[0]))
         # always ascribe the element type: bare numeric literals otherwise elaborate as ℕ and
         # the goal fails with "failed to synthesize CommRing ℕ"
@@ -110,7 +271,7 @@ def sympy_to_lean(e, field: str = "ℝ") -> str:
     if isinstance(e, sp.Float):
         r = sp.nsimplify(e, rational=True)
         if isinstance(r, sp.Rational):
-            return sympy_to_lean(r, field)
+            return _print_lean(r, field)
         raise LeanPrintError(f"float {e}")
     if e is sp.pi:
         return "Real.pi"
@@ -119,7 +280,7 @@ def sympy_to_lean(e, field: str = "ℝ") -> str:
     if isinstance(e, sp.Symbol):
         return e.name
     if isinstance(e, sp.Add):
-        args = [sympy_to_lean(a, field) for a in e.args]
+        args = [_print_lean(a, field) for a in e.args]
         out = args[0]
         for a in args[1:]:
             out = f"{out} - {a[1:]}" if a.startswith("-") else f"{out} + {a}"
@@ -127,55 +288,55 @@ def sympy_to_lean(e, field: str = "ℝ") -> str:
     if isinstance(e, sp.Mul):
         coeff, rest = e.as_coeff_Mul()
         if coeff == -1:
-            return f"(-{sympy_to_lean(rest, field)})"
+            return f"(-{_print_lean(rest, field)})"
         num, den = e.as_numer_denom()
         if den != 1:
             if field == "ℤ":
                 raise LeanPrintError("division over ℤ")
-            return f"({sympy_to_lean(num, field)} / {sympy_to_lean(den, field)})"
-        args = [sympy_to_lean(a, field) for a in e.args]
+            return f"({_print_lean(num, field)} / {_print_lean(den, field)})"
+        args = [_print_lean(a, field) for a in e.args]
         return "(" + " * ".join(args) + ")"
     if isinstance(e, (sp.MatPow, sp.MatMul, sp.MatAdd)):
         if isinstance(e, sp.MatPow):
-            return f"({sympy_to_lean(e.args[0], field)} ^ {sympy_to_lean(e.args[1], field)})"
+            return f"({_print_lean(e.args[0], field)} ^ {_print_lean(e.args[1], field)})"
         op = " * " if isinstance(e, sp.MatMul) else " + "
-        return "(" + op.join(sympy_to_lean(a, field) for a in e.args) + ")"
+        return "(" + op.join(_print_lean(a, field) for a in e.args) + ")"
     if isinstance(e, sp.Pow):
         b, x = e.args
         if isinstance(b, sp.MatrixBase) and isinstance(x, sp.Integer):
-            return f"({sympy_to_lean(b, field)} ^ {int(x)})"
+            return f"({_print_lean(b, field)} ^ {int(x)})"
         if isinstance(x, sp.Integer):
             n = int(x)
             if n >= 0:
-                return f"({sympy_to_lean(b, field)} ^ {n})"
+                return f"({_print_lean(b, field)} ^ {n})"
             if field == "ℤ":
                 raise LeanPrintError("negative integer power over ℤ")
-            inner = sympy_to_lean(b, field)
+            inner = _print_lean(b, field)
             return f"(1 / {inner})" if n == -1 else f"(1 / ({inner} ^ {-n}))"
         if x == sp.Rational(1, 2):
-            return f"Real.sqrt {_paren(sympy_to_lean(b, field))}"
+            return f"Real.sqrt {_paren(_print_lean(b, field))}"
         raise LeanPrintError(f"power {e}")
     if isinstance(e, sp.Abs):
-        return f"|{sympy_to_lean(e.args[0], field)}|"
+        return f"|{_print_lean(e.args[0], field)}|"
     for cls, nm in _FUNC.items():
         if isinstance(e, cls):
-            return f"{nm} {_paren(sympy_to_lean(e.args[0], field))}"
+            return f"{nm} {_paren(_print_lean(e.args[0], field))}"
     if isinstance(e, sp.log):
         if len(e.args) == 1:
-            return f"Real.log {_paren(sympy_to_lean(e.args[0], field))}"
+            return f"Real.log {_paren(_print_lean(e.args[0], field))}"
         raise LeanPrintError("log with explicit base")
     if isinstance(e, sp.Mod):
-        return f"({sympy_to_lean(e.args[0], field)} % {sympy_to_lean(e.args[1], field)})"
+        return f"({_print_lean(e.args[0], field)} % {_print_lean(e.args[1], field)})"
     # inert or evaluated forms of the integer helpers print the same way
     cname = e.__class__.__name__
     if cname == "gcd" and len(e.args) == 2:
-        return f"(Int.gcd {_paren(sympy_to_lean(e.args[0], 'ℤ'))} {_paren(sympy_to_lean(e.args[1], 'ℤ'))} : {field})"
+        return f"(Int.gcd {_paren(_print_lean(e.args[0], 'ℤ'))} {_paren(_print_lean(e.args[1], 'ℤ'))} : {field})"
     if cname == "lcm" and len(e.args) == 2:
-        return f"(Int.lcm {_paren(sympy_to_lean(e.args[0], 'ℤ'))} {_paren(sympy_to_lean(e.args[1], 'ℤ'))} : {field})"
+        return f"(Int.lcm {_paren(_print_lean(e.args[0], 'ℤ'))} {_paren(_print_lean(e.args[1], 'ℤ'))} : {field})"
     if cname == "factorial":
-        return f"(Nat.factorial {_paren(sympy_to_lean(e.args[0], 'ℤ'))} : {field})"
+        return f"(Nat.factorial {_paren(_print_lean(e.args[0], 'ℤ'))} : {field})"
     if cname == "binomial":
-        return f"(Nat.choose {_paren(sympy_to_lean(e.args[0], 'ℤ'))} {_paren(sympy_to_lean(e.args[1], 'ℤ'))} : {field})"
+        return f"(Nat.choose {_paren(_print_lean(e.args[0], 'ℤ'))} {_paren(_print_lean(e.args[1], 'ℤ'))} : {field})"
     raise LeanPrintError(f"cannot print {type(e).__name__}: {e}")
 
 
@@ -251,8 +412,27 @@ class LeanStatement:
             return None
         hs = " ".join(f"(h{i} : {h})" for i, h in enumerate(self.hypotheses, start=1))
         head = " ".join(x for x in [f"theorem {self.name}_vacuity", self.binders, hs] if x)
-        return (f"{head} : False := by\n"
-                "  first | omega | linarith | nlinarith | norm_num at * | simp_all")
+        # The probe must be at least as strong as the proof search, or a proof can use a
+        # contradiction the probe cannot see. Measured: with the guard `x - 2 ≠ 0` next to
+        # `1/(x-2) = 0` the hypotheses ARE contradictory, the ladder proved `x = 2` with
+        # `simp_all; linarith`, and the old single-tactic probe failed to derive False — so the
+        # certificate passed its audit. Hence the ladder's own combinations, plus, for every
+        # `≠` hypothesis, an attempt to prove the equality it forbids.
+        #
+        # Every alternative is wrapped in `(…; done)`. `first` commits to the first alternative
+        # that RUNS, not the first that CLOSES the goal, and `norm_num at *` runs happily while
+        # leaving the goal open — so in the original probe `norm_num at *` silently shadowed
+        # `simp_all` behind it. HANDOFF §6 records the same trap for the proof ladders; the
+        # probe had been left in the old form since F5.
+        closers = ["linarith", "nlinarith", "simp at *; linarith", "norm_num at *; linarith",
+                   "field_simp at *; linarith", "simp at *; nlinarith"]
+        inner = "first | " + " | ".join(f"({c}; done)" for c in closers)
+        alts = ["omega", "linarith", "nlinarith", "norm_num at *", "simp_all",
+                "simp_all; linarith", "simp_all; nlinarith", "norm_num at *; linarith",
+                "simp at *; linarith", "field_simp at *; linarith"]
+        alts += [f"exact h{i} (by {inner})" for i, h in enumerate(self.hypotheses, start=1)
+                 if " ≠ " in h and "∀" not in h and "∃" not in h]
+        return f"{head} : False := by\n  first | " + " | ".join(f"({a}; done)" for a in alts)
 
     def no_hyp_probe(self, proof: str) -> str | None:
         """Same goal without the hypotheses: if it still proves, the data were never used."""
@@ -296,8 +476,18 @@ def _t_evaluate(obj, ns, ca, name) -> LeanStatement | None:
         return None
     if isinstance(target, sp.MatrixBase) or isinstance(claimed, sp.MatrixBase):
         field = "ℝ"
-    hyps = [relation_to_lean(parse_relation_structural(g, ns), field) for g in obj.givens]
+    given_rels = [parse_relation_structural(g, ns) for g in obj.givens]
+    hyps = [relation_to_lean(r, field) for r in given_rels]
     hyps += _domain_hyps(obj, ns, field)
+    # Junk values (see the section at the top): a claim whose value depends on where a variable
+    # sits is out of scope, and every open partial operation in the givens or the target becomes
+    # a guard hypothesis. Without the guard, `1/(x-2) = 0` is satisfied by x = 2 in Lean, so
+    # "evaluate x" would be proved = 2 for a system that has no solution at all; with it, the
+    # hypotheses are contradictory and the vacuity probe rejects the proof.
+    if not isinstance(claimed, sp.MatrixBase) and open_guards([claimed], field):
+        return None
+    if not isinstance(target, sp.MatrixBase):
+        hyps += [g for g in open_guards(given_rels + [target], field) if g not in hyps]
     tgt_txt, cl_txt = sympy_to_lean(target, field), sympy_to_lean(claimed, field)
     goal = f"{tgt_txt} = {cl_txt}"
     binders = f"({' '.join(v.name for v in obj.vars)} : {field})" if obj.vars else ""
@@ -530,6 +720,10 @@ def _t_equation_of(obj, ns, ca, name) -> LeanStatement | None:
             claimed = sp.Eq(claimed, 0, evaluate=False)
         else:
             return None
+    # A curve written with a partial operation in x or y (`y = 1/x`) takes junk values off its
+    # domain, so the iff would be about points that are not on either curve. Out of scope.
+    if open_guards([claimed, truth], "ℝ"):
+        return None
     goal = (f"∀ {x.name} {y.name} : ℝ, (({relation_to_lean(claimed, 'ℝ')}) ↔ "
             f"({relation_to_lean(truth, 'ℝ')}))")
     return LeanStatement(name, "", [], goal, "ℝ", "equation_of_iff")
@@ -550,6 +744,11 @@ def _t_series_sum(obj, ns, ca, name) -> LeanStatement | None:
     claimed = parse_answer(ca["kind"], ca["payload"], ns)
     if isinstance(claimed, sp.Set) or claimed is None:
         return None
+    # every summand must be defined: ∑_{k=-1}^{1} 1/k is undefined, but Lean adds −1 + 0 + 1 = 0
+    for k in range(int(lo), int(hi) + 1):
+        for c in _definedness(term, var):
+            if getattr(c, "free_symbols", None) and _closed_truth(c.subs(var, k)) is not True:
+                return None
     field = "ℤ" if (term.is_polynomial(var) and all(c.is_Integer for c in sp.Poly(term, var).coeffs())
                     and claimed.is_Integer) else "ℝ"
     body = sympy_to_lean(term.subs(var, sp.Symbol(var.name)), field)
@@ -572,6 +771,10 @@ def _t_extremum(obj, ns, ca, name) -> LeanStatement | None:
     f = parse_expr_str(p["f"], ns)
     claimed = parse_answer(ca["kind"], ca["payload"], ns)
     if isinstance(claimed, sp.Set) or claimed is None:
+        return None
+    # f must be defined on the whole interval: at a pole Lean's f is 0, so e.g. −1/x² on [−1, 1]
+    # would have a provable "maximum 0" attained at the junk point x = 0
+    if not defined_on(f, var, iv):
         return None
     memb = _interval_to_lean(iv, var.name, "ℝ")
     fx = sympy_to_lean(f, "ℝ")
@@ -620,9 +823,11 @@ def _t_count_integers(obj, ns, ca, name) -> LeanStatement | None:
     if not isinstance(var, sp.Symbol) or not obj.givens:
         return None
     rels = [parse_relation(g, ns) for g in obj.givens]
-    try:
-        n = int(sp.sympify(ca["payload"]))
-    except Exception:
+    if open_guards(rels, "ℤ"):
+        return None                         # a partial operation in the predicate: junk-prone
+    from ..equiv import exact_integer
+    n = exact_integer(ca["payload"])     # never int(): a claimed 3.5 would become a proof of 3
+    if n is None:
         return None
     sol = sp.solveset(rels[0] if len(rels) == 1 else sp.And(*rels), var, S.Reals)
     if not isinstance(sol, sp.Interval) or sol.inf == -sp.oo or sol.sup == sp.oo:
@@ -729,6 +934,15 @@ def _t_definite_integral(obj, ns, ca, name) -> LeanStatement | None:
     claimed = parse_structural(str(ca["payload"]), ns) if ca["kind"] in ("value", "expression") \
         else parse_answer(ca["kind"], ca["payload"], ns)
     if claimed is None or isinstance(claimed, sp.Set):
+        return None
+    # Mathlib's interval integral of a function that is not integrable is 0 BY DEFINITION, so
+    # "∫_{-1}^{1} dx/x = 0" — the classic principal-value mistake — is a true Lean statement.
+    # The integrand must be defined on the whole closed interval; then it is continuous there
+    # (every function the printer accepts is), and Lean's integral is the real one.
+    if a.free_symbols or b.free_symbols:
+        return None
+    lo, hi = (a, b) if bool(sp.N(a - b, 30) <= 0) else (b, a)
+    if not defined_on(integrand, var, sp.Interval(lo, hi)):
         return None
     body = sympy_to_lean(integrand, "ℝ")
     goal = (f"∫ {var.name} in ({sympy_to_lean(a, 'ℝ')} : ℝ)..({sympy_to_lean(b, 'ℝ')}), {body} "
@@ -977,12 +1191,22 @@ def _t_derivative(obj, ns, ca, name) -> LeanStatement | None:
             return None
         if any(sp.simplify(s - pt) == 0 for s in sing):
             return None                                   # not differentiable there: out of scope
+        # a singularity check is not a domain check: √x and log x have no singularity at −1,
+        # yet in Lean `HasDerivAt Real.sqrt 0 (-1)` and `HasDerivAt Real.log (-1) (-1)` are TRUE
+        # (both functions are totalised there). The point must be interior to the real domain.
+        if not interior_defined_at(f, var, pt):
+            return None
         pt_lean = f"({sympy_to_lean(pt, 'ℝ')})"
         goal = f"HasDerivAt (fun t : ℝ => {f_lean}) ({sympy_to_lean(claimed, 'ℝ')}) {pt_lean}"
         return LeanStatement(name, "", [], goal, "ℝ", "derivative_at",
                              hints=_hasderiv_tactics(_hasderiv_proof(f_t, t, pt, pt_lean),
                                                      [], []))
     vn = var.name
+    # The ∀ below covers junk regions too (for √x, all of x < 0). That keeps the statement SOUND
+    # for the real domain — Lean agrees with the reals at every interior point of it — as long
+    # as the real domain is not empty; √(−x² − 1) is 0 everywhere in Lean and has derivative 0.
+    if not has_interior_point([f], var):
+        return None
     guards = [f"{vn} ≠ {sympy_to_lean(s, 'ℝ')}" for s in sing]
     head, intro = _forall_head(vn, guards)
     goal = head + f"HasDerivAt (fun t : ℝ => {f_lean}) ({sympy_to_lean(claimed, 'ℝ')}) {vn}"
@@ -1019,8 +1243,10 @@ def _t_antiderivative(obj, ns, ca, name) -> LeanStatement | None:
     sing_f, sing_F = _real_singularities(integrand, var), _real_singularities(anti, var)
     if sing_f is None or sing_F is None:
         return None
+    if not has_interior_point([integrand, anti], var):
+        return None                          # defined nowhere on ℝ: the ∀ would be all junk
     vn = var.name
-    pts = sorted({sp.nsimplify(s) for s in sing_f + sing_F}, key=str)
+    pts = sorted(set(sing_f + sing_F), key=str)       # exact points; no nsimplify snapping
     guards = [f"{vn} ≠ {sympy_to_lean(s, 'ℝ')}" for s in pts]
     head, intro = _forall_head(vn, guards)
     anti_lean = sympy_to_lean(anti.subs(var, t), "ℝ")
@@ -1131,6 +1357,10 @@ def _t_recurrence_term(obj, ns, ca, name) -> LeanStatement | None:
         return None
     if not (start <= index <= start + 40) or rel.rhs.has(f(nvar)):
         return None
+    # `a(n) = 1/a(n-1)` with a term that reaches 0: Lean iterates through 1/0 = 0 and proves a
+    # value for a sequence that does not exist. A partial operation in the recurrence is out.
+    if open_guards([rel.rhs], "ℝ"):
+        return None
     try:
         rhs = _rec_to_lean(rel.rhs, f, nvar, fname)
         hyps = [f"{fname} {k} = {sympy_to_lean(v, 'ℝ')}" for k, v in sorted(initial.items())]
@@ -1193,6 +1423,13 @@ def build_statement(ir: dict[str, Any], claimed_answer: dict[str, Any], name: st
         obj = load_problem_ir(ir)
         ns = build_namespace(obj)
     except Exception:
+        return None
+    # A claim that is a computation (`integrate(…)`) or the problem's own function applied
+    # (`f(g(2))`) is not an answer; a proof about it would certify the question, not a claim.
+    from ..normalize.parse import ClaimNotAValue, check_claim_is_value
+    try:
+        check_claim_is_value(claimed_answer.get("payload"), [f.name for f in obj.functions])
+    except ClaimNotAValue:
         return None
     fn = TEMPLATES.get(obj.task.kind)
     if fn is None:

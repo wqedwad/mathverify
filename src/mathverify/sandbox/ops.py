@@ -50,10 +50,16 @@ def equals(a, b):
 
 
 def zero_test_battery(d):
-    """Try several cheap canonicalisers on `d`; return True if any proves d == 0."""
+    """Try several cheap canonicalisers on `d`; return True if any proves d == 0.
+
+    Only EXACT rewrites belong here. `nsimplify` used to be one of them, and it is not a
+    rewrite but a numerical snap to the nearest "nice" number: it turned −e^(−1000) into 0, so
+    `1/(x−1)` and `1/(x−1) + e^(−1000)` were certified equal by the path documented as
+    symbolic proof (measured). A difference this battery cannot prove zero goes on to the
+    numeric ladder, which is where tolerances belong."""
     for fn in (lambda e: sp.simplify(e), lambda e: sp.cancel(sp.together(e)),
                lambda e: sp.expand(e), lambda e: sp.trigsimp(e), lambda e: sp.radsimp(e),
-               lambda e: sp.nsimplify(sp.simplify(e)), lambda e: sp.powsimp(sp.expand_log(e, force=False)),
+               lambda e: sp.powsimp(sp.expand_log(e, force=False)),
                lambda e: sp.logcombine(e), lambda e: sp.expand_trig(e)):
         try:
             r = fn(d)

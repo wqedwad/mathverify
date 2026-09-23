@@ -214,4 +214,37 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     if ev["evaluated"] < max(3, n // 3):
         ev["error"] = "too few evaluable points"
         return None, ev
+    # Agreement within tolerance is not yet equality. Evaluating each side and subtracting can
+    # only see differences above the working precision; the DIFFERENCE itself, evaluated by
+    # SymPy's adaptive evalf, is computed to relative precision and reveals any difference at
+    # all. Measured: 1/(x−1) and 1/(x−1) + e^(−1000) agreed at every point (the gap is
+    # 1e-435) and were declared equal. A true identity evaluates to 0, or to a zero with no
+    # significant bits ("0.e-167", _prec ≈ 1); a real difference carries ~100 bits.
+    witness = _definite_nonzero_difference(a - b, syms, pts[:8])
+    if witness is not None:
+        ev["counterexample"] = witness
+        ev["reason"] = "difference_below_working_precision_but_nonzero"
+        return False, ev
     return True, ev
+
+
+def _definite_nonzero_difference(d, syms, pts) -> dict[str, Any] | None:
+    try:
+        d = sp.sympify(d)
+    except (sp.SympifyError, TypeError):
+        return None
+    for pt in pts:
+        try:
+            v = sp.N(d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True), 30)
+        except Exception:  # noqa: BLE001
+            continue
+        if v == 0 or not getattr(v, "is_number", False):
+            continue
+        prec = getattr(v, "_prec", None)
+        if prec is None:
+            re_, im_ = v.as_real_imag()
+            prec = min(getattr(re_, "_prec", 0) or 0, getattr(im_, "_prec", 0) or 0) \
+                if re_ != 0 and im_ != 0 else getattr(re_ if re_ != 0 else im_, "_prec", 0)
+        if prec and prec >= 50:
+            return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "difference": str(v)}
+    return None

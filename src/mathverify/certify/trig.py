@@ -57,7 +57,8 @@ def _progressions(cand) -> list[tuple[Any, Any]] | None:
 
 
 def _rational_multiple(a, P):
-    q = sp.nsimplify(sp.simplify(a / P), rational=True)
+    # exact: an irrational ratio must not be rounded into a rational one (nsimplify would)
+    q = sp.simplify(a / P)
     return q if isinstance(q, sp.Rational) else None
 
 
@@ -80,7 +81,7 @@ def _enumerate_on_window(progs, W) -> FiniteSet | None:
             v = sp.simplify(c + a * k)
             if v == W or (v.is_number and (v < 0 or v >= W)):
                 continue
-            elems.append(sp.nsimplify(v))
+            elems.append(v)               # exact; nsimplify would snap it
     return FiniteSet(*elems)
 
 
@@ -164,7 +165,7 @@ def _enumerate_window_of_interval(progs, window: Interval):
         klo = sp.ceiling((lo - c) / a) if a > 0 else sp.ceiling((hi - c) / a)
         khi = sp.floor((hi - c) / a) if a > 0 else sp.floor((lo - c) / a)
         for k in range(int(klo), int(khi) + 1):
-            v = sp.nsimplify(sp.simplify(c + a * k))
+            v = sp.simplify(c + a * k)         # exact; nsimplify would snap it
             if window.contains(v) == True:  # noqa: E712
                 elems.append(v)
     return FiniteSet(*elems)
@@ -199,12 +200,12 @@ def verify(ir, solution, ctx: Ctx):
         rel, err = parse_or_unknown(LAYER, ctx.rel, eq_src)
         if err:
             return err
-        ns2 = dict(ctx.ns)
-        for nm in ("n", "k"):
-            ns2.setdefault(nm, sp.Symbol(nm, integer=True))
         from ..normalize.parse import parse_answer, parse_set_str
         ca = solution.claimed_answer
         try:
+            ns2 = ctx.claim_ns(solution)
+            for nm in ("n", "k"):
+                ns2.setdefault(nm, sp.Symbol(nm, integer=True))
             if ca.kind in ("set", "interval"):
                 claimed = parse_answer(ca.kind, ca.payload, ns2)
             else:

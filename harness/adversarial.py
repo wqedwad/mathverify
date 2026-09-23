@@ -90,6 +90,49 @@ def _digit_swap(s: str) -> str:
     return s
 
 
+def _latex(s: str) -> str:
+    """Rewrite the claim in LaTeX. Measured coverage gap: not one of the 260 items exercises
+    the LaTeX branch of the parser, which is the notation a real model writes in — and that
+    branch tokenises separately from the canonical one."""
+    t = s.strip()
+    m = re.fullmatch(r"(-?)(\d+)\s*/\s*(\d+)", t)
+    if m:
+        return f"{m.group(1)}\\frac{{{m.group(2)}}}{{{m.group(3)}}}"
+    m = re.fullmatch(r"sqrt\(\s*([^()]+?)\s*\)", t)
+    if m:
+        return f"\\sqrt{{{m.group(1)}}}"
+    m = re.fullmatch(r"(-?\w+)\s*\*\*\s*(\d+)", t)
+    if m:
+        return f"{m.group(1)}^{{{m.group(2)}}}"
+    return s
+
+
+def _drop_element(s: str) -> str:
+    """Remove one member of a set literal — the answer really is different afterwards."""
+    t = s.strip()
+    if not (t.startswith("{") and t.endswith("}")):
+        return s
+    parts = [p for p in t[1:-1].split(",") if p.strip()]
+    return "{" + ",".join(parts[:-1]) + "}" if len(parts) > 1 else s
+
+
+def _widen_interval(s: str) -> str:
+    """Turn an open endpoint into a closed one: a different set, and the classic off-by-one.
+
+    An INFINITE endpoint is skipped, because closing it changes nothing — SymPy normalises
+    `[3, oo]` back to `[3, oo)`. The first version of this attack did not check, so three
+    items were scored as false accepts when the verifier was simply right."""
+    t = s.strip()
+    if "," not in t:
+        return s
+    head, _, tail = t.partition(",")
+    if t.startswith("(") and not re.search(r"-\s*oo|-\s*inf|-\s*\\infty", head):
+        return "[" + t[1:]
+    if t.endswith(")") and not re.search(r"\boo\b|\binf\b|\\infty", tail):
+        return t[:-1] + "]"
+    return s
+
+
 ATTACKS: list[Attack] = (
     [(f"junk_suffix:{j!r}", "preserving", (lambda j: lambda s: s + j)(j)) for j in _JUNK[:5]]
     + [(f"junk_prefix:{j!r}", "preserving", (lambda j: lambda s: j + s)(j)) for j in _JUNK[:3]]
@@ -105,14 +148,33 @@ ATTACKS: list[Attack] = (
        ("scientific_form", "preserving", _sci),
        ("homoglyph", "preserving", _confuse),
        ("rtl_mark", "preserving", lambda s: "‫" + s + "‬"),
+       ("latex_form", "preserving", _latex),
        ("value_bump", "changing", _bump),
-       ("digit_swap", "changing", _digit_swap)]
+       ("digit_swap", "changing", _digit_swap),
+       ("drop_set_element", "changing", _drop_element),
+       ("close_interval_endpoint", "changing", _widen_interval)]
 )
 
+# Which claim shapes each attack is meaningful on. Previously every attack ran only on
+# value/expression/count, leaving 48 of 260 items (sets, intervals, equations, DNE) untouched.
+_SET_SHAPES = ("set", "interval")
+_ALL_SHAPES = ("value", "expression", "count") + _SET_SHAPES
+_SHAPES_FOR = {"value_bump": ("value", "expression", "count"),
+               "digit_swap": ("value", "expression", "count"),
+               "decimal_form": ("value", "expression", "count"),
+               "scientific_form": ("value", "expression", "count"),
+               "plus_sign": ("value", "expression", "count"),
+               "parens": ("value", "expression", "count"),
+               "latex_form": ("value", "expression", "count"),
+               "drop_set_element": ("set",),
+               "close_interval_endpoint": _SET_SHAPES}
 
-def _mutate_solution(sol: dict[str, Any], fn: Callable[[str], str]) -> dict[str, Any] | None:
+
+def _mutate_solution(sol: dict[str, Any], name: str, fn: Callable[[str], str],
+                     keep_option: bool = False) -> dict[str, Any] | None:
     ca = sol["claimed_answer"]
-    if ca.get("payload") is None or ca.get("kind") not in ("value", "expression", "count"):
+    shapes = _SHAPES_FOR.get(name, _ALL_SHAPES)
+    if ca.get("payload") is None or ca.get("kind") not in shapes:
         return None
     out = copy.deepcopy(sol)
     new = fn(str(ca["payload"]))
@@ -121,8 +183,24 @@ def _mutate_solution(sol: dict[str, Any], fn: Callable[[str], str]) -> dict[str,
     out["claimed_answer"]["payload"] = new
     if out["claimed_answer"].get("kind") == "count":
         out["claimed_answer"]["kind"] = "value"        # the attacked payload is no longer an int
-    out["claimed_answer"]["option"] = None             # the letter would otherwise decide it alone
+    if not keep_option:
+        out["claimed_answer"]["option"] = None         # the letter would otherwise decide it alone
     return out
+
+
+def _mutate_steps(sol: dict[str, Any], fn: Callable[[str], str]) -> dict[str, Any] | None:
+    """Same junk, applied to the step claims instead of the answer. The step refuter only
+    refutes with a concrete counterexample, so garbling a claim must at worst make it
+    unverifiable — never turn it into a refutation."""
+    out = copy.deepcopy(sol)
+    touched = False
+    for st in out.get("steps", []):
+        if st.get("kind") in ("eq", "compute") and st.get("claim"):
+            new = fn(str(st["claim"]))
+            if new != st["claim"]:
+                st["claim"] = new
+                touched = True
+    return out if touched else None
 
 
 def run(items, verbose: bool = False) -> dict[str, Any]:
@@ -131,44 +209,71 @@ def run(items, verbose: bool = False) -> dict[str, Any]:
     successes: list[dict[str, Any]] = []
     n_pairs = 0
     t0 = time.perf_counter()
+    kind_of: dict[str, str] = {}
+
+    def score(name, kind, base_verdict, verdict, item_id):
+        nonlocal n_pairs
+        n_pairs += 1
+        kind_of[name] = kind
+        c = per_attack.setdefault(name, Counter())
+        c["n"] += 1
+        if kind == "preserving":
+            if verdict == base_verdict:
+                c["held"] += 1
+            elif verdict == "UNKNOWN":
+                c["abstained"] += 1
+            else:
+                c["flipped"] += 1
+                successes.append({"id": item_id, "attack": name, "kind": kind,
+                                  "from": base_verdict, "to": verdict})
+        else:
+            if verdict == "CORRECT" and base_verdict == "CORRECT":
+                c["accepted_wrong"] += 1
+                successes.append({"id": item_id, "attack": name, "kind": kind,
+                                  "from": base_verdict, "to": verdict})
+            elif verdict == "UNKNOWN":
+                c["abstained"] += 1
+            else:
+                c["rejected"] += 1
+
     for it in items:
         ir, sol, labels = split_for_verifier(it)
         base_sol = copy.deepcopy(sol)
         base_sol["claimed_answer"]["option"] = None     # compare like with like
         base = verify(ir, base_sol)
-        if base.verdict == "UNKNOWN":
-            continue
-        for name, kind, fn in ATTACKS:
-            mutated = _mutate_solution(base_sol, fn)
-            if mutated is None:
-                continue
-            r = verify(ir, mutated)
-            n_pairs += 1
-            c = per_attack.setdefault(name, Counter())
-            c["n"] += 1
-            if kind == "preserving":
-                if r.verdict == base.verdict:
-                    c["held"] += 1
-                elif r.verdict == "UNKNOWN":
-                    c["abstained"] += 1
-                else:
-                    c["flipped"] += 1
-                    successes.append({"id": labels["id"], "attack": name, "kind": kind,
-                                      "from": base.verdict, "to": r.verdict})
-            else:
-                if r.verdict == "CORRECT" and base.verdict == "CORRECT":
-                    c["accepted_wrong"] += 1
-                    successes.append({"id": labels["id"], "attack": name, "kind": kind,
-                                      "from": base.verdict, "to": r.verdict})
-                elif r.verdict == "UNKNOWN":
-                    c["abstained"] += 1
-                else:
-                    c["rejected"] += 1
+        if base.verdict != "UNKNOWN":
+            for name, kind, fn in ATTACKS:
+                mutated = _mutate_solution(base_sol, name, fn)
+                if mutated is None:
+                    continue
+                score(name, kind, base.verdict, verify(ir, mutated).verdict, labels["id"])
+
+            # Junk in the STEPS, not in the answer. The refuter only refutes with a concrete
+            # counterexample, so a garbled claim must at worst become unverifiable.
+            for name, kind, fn in ATTACKS:
+                if kind != "preserving" or name in _SHAPES_FOR:
+                    continue                            # shape-specific rewrites make no sense here
+                mutated = _mutate_steps(base_sol, fn)
+                if mutated is None:
+                    continue
+                score(f"step:{name}", kind, base.verdict, verify(ir, mutated).verdict, labels["id"])
+
+        # The multiple-choice path with the letter LEFT IN. 257 of 260 solutions carry one and
+        # every attack above strips it, so the branch where the letter decides — the one that
+        # was measured calling a wrong solution CORRECT — was never attacked at all.
+        if sol["claimed_answer"].get("option"):
+            mc_base = verify(ir, sol)
+            if mc_base.verdict != "UNKNOWN":
+                for name, kind, fn in ATTACKS:
+                    mutated = _mutate_solution(sol, name, fn, keep_option=True)
+                    if mutated is None:
+                        continue
+                    score(f"mc:{name}", kind, mc_base.verdict, verify(ir, mutated).verdict, labels["id"])
         if verbose:
             print(f"  {labels['id']}: base={base.verdict}", flush=True)
     dur = time.perf_counter() - t0
-    pres = {k: v for k, v in per_attack.items() if dict(ATTACKS_BY_NAME)[k] == "preserving"}
-    chg = {k: v for k, v in per_attack.items() if dict(ATTACKS_BY_NAME)[k] == "changing"}
+    pres = {k: v for k, v in per_attack.items() if kind_of[k] == "preserving"}
+    chg = {k: v for k, v in per_attack.items() if kind_of[k] == "changing"}
     n_pres = sum(c["n"] for c in pres.values())
     n_chg = sum(c["n"] for c in chg.values())
     return {
@@ -196,7 +301,22 @@ def render_md(s: dict[str, Any]) -> str:
     md += (f"- Anlamı koruyan saldırılar ({p['n']}): kararı koruyan {p['held']}, "
            f"UNKNOWN'a düşen {p['abstained']}, **karşıt karara dönen {p['flipped']}**\n")
     md += (f"- Anlamı değiştiren saldırılar ({c['n']}): reddedilen {c['rejected']}, "
-           f"UNKNOWN {c['abstained']}, **yanlışlıkla onaylanan {c['accepted_wrong']}**\n\n")
+           f"UNKNOWN {c['abstained']}, **yanlışlıkla onaylanan {c['accepted_wrong']}**\n")
+    # Three separate attack surfaces. They used to be one: every attack stripped the option
+    # letter and only touched the claimed answer, so the multiple-choice branch (257 of 260
+    # solutions carry a letter) and the step claims were never attacked at all.
+    surf = {"cevap yükü": lambda k: not k.startswith(("mc:", "step:")),
+            "şık harfi korunarak": lambda k: k.startswith("mc:"),
+            "adım iddiaları": lambda k: k.startswith("step:")}
+    md += "\n### Saldırı yüzeyi\n\n| Yüzey | saldırı | korudu/reddetti | UNKNOWN | başarılı |\n|---|---|---|---|---|\n"
+    for label, pred in surf.items():
+        rows = [v for k, v in s["per_attack"].items() if pred(k)]
+        n = sum(v["n"] for v in rows)
+        held = sum(v.get("held", 0) + v.get("rejected", 0) for v in rows)
+        unk = sum(v.get("abstained", 0) for v in rows)
+        bad = sum(v.get("flipped", 0) + v.get("accepted_wrong", 0) for v in rows)
+        md += f"| {label} | {n} | {held} | {unk} | **{bad}** |\n"
+    md += "\n"
     md += "## Saldırı türüne göre\n\n| Saldırı | n | korudu | UNKNOWN | döndü/onayladı |\n|---|---|---|---|---|\n"
     for k, v in sorted(s["per_attack"].items()):
         held = v.get("held", v.get("rejected", 0))
@@ -214,10 +334,14 @@ def render_md(s: dict[str, Any]) -> str:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--ids", default=None, help="virgülle ayrılmış öğe kimlikleri (hedefli tekrar için)")
     ap.add_argument("--out", default=str(ROOT / "reports"))
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args(argv)
     items = load_items(ROOT / "evalset" / "items")
+    if args.ids:
+        want = set(args.ids.split(","))
+        items = [it for it in items if it["id"] in want]
     if args.limit:
         items = items[:args.limit]
     s = run(items, verbose=args.verbose)

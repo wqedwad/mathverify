@@ -1,0 +1,62 @@
+{
+ "id": "tyt-kap-010",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "polinom",
+ "question_tr": "1/x + 1/(x + 1) ifadesinin tek kesir hâlindeki eşiti aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(2*x + 1)/(x*(x + 1))",
+  "B": "(2*x + 1)/(x + 1)",
+  "C": "2/(2*x + 1)",
+  "D": "(x + 1)/(x*(x + 1))",
+  "E": "1/(x*(x + 1))"
+ },
+ "gold_answer": "(2*x + 1)/(x*(x + 1))",
+ "problem_ir": {
+  "task": {
+   "kind": "simplify_expression",
+   "params": {
+    "expr": "1/x + 1/(x + 1)"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "(2*x + 1)/(x*(x + 1))",
+   "B": "(2*x + 1)/(x + 1)",
+   "C": "2/(2*x + 1)",
+   "D": "(x + 1)/(x*(x + 1))",
+   "E": "1/(x*(x + 1))"
+  },
+  "level": "TYT",
+  "topic": "polinom"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "(2*x + 1)/(x*(x + 1))",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "1/x + 1/(x + 1) = (2*x + 1)/(x*(x + 1))",
+    "from": [],
+    "text": "ortak payda"
+   }
+  ]
+ },
+ "solution_text": "Ortak paydada: $\\frac{1}{x}+\\frac{1}{x+1}=\\frac{2x+1}{x(x+1)}$. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

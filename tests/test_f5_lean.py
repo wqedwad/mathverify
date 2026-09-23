@@ -161,13 +161,14 @@ def test_piecewise_integrand_is_out_of_scope_rather_than_approximated(evalset_it
     assert build_statement(it["problem_ir"], it["solution"]["claimed_answer"]) is None
 
 
-def test_improper_integral_gets_no_fundamental_theorem_tactic(evalset_items):
-    """∫₀¹ log x/√x is improper at 0: the antiderivative is not differentiable on the closed
-    interval, so the FTC tactic would be unsound to attempt. The statement still exists — the
-    layer simply fails to prove it and abstains."""
+def test_improper_integral_gets_no_statement(evalset_items):
+    """∫₀¹ log x/√x is improper at 0. It used to get a statement without FTC hints and simply
+    fail to prove; now the integrand must be defined on the whole closed interval, because
+    Mathlib's interval integral of a non-integrable function is 0 by definition and an
+    improper integral is exactly where a junk value can enter. Nothing was ever certified
+    here, so no coverage is lost (measured: 4 statements dropped, 0 certificates)."""
     it = _int_item(evalset_items, "log(x)/sqrt(x)")
-    st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
-    assert st is not None and st.hints == ()
+    assert build_statement(it["problem_ir"], it["solution"]["claimed_answer"]) is None
 
 
 def test_product_integrand_gets_a_constructed_derivative_proof(evalset_items):
@@ -343,3 +344,159 @@ def test_lean_client_survives_a_timeout():
     assert (r.timed_out or not r.clean)
     r2 = lean.run("example : (1 : ℝ) + 1 = 2 := by norm_num", timeout=60)
     assert r2.clean                                     # client recovered
+
+
+# ------------------------------------------------------------------ L7 inside the fusion (B9)
+# `l7_layer` was reachable only from verify_cli and run_pipeline(use_l7=True); no harness set
+# that flag and no test imported it, so the mapping from a Lean record to a LayerResult — the
+# part that decides whether a proof may ground CORRECT — was never exercised. These tests pin
+# it without needing the toolchain.
+_IR_EVAL = {"task": {"kind": "evaluate", "params": {"expr": "gcd(84, 120)"}}, "vars": [],
+            "givens": [], "answer_shape": "scalar"}
+_CLAIM_OK = {"kind": "value", "payload": "12", "option": None}
+
+
+def _fake_prove(monkeypatch, *, proved, clean):
+    import mathverify.formal.prove as P
+
+    def fake(stmt, **kw):
+        return {"statement": "theorem mv_claim : True", "kind": stmt.kind, "proved": proved,
+                "proof": "  norm_num" if proved else None, "source": "tactic_ladder",
+                "attempts": [], "audit": ({"clean": clean, "axioms": [], "axioms_ok": True,
+                                           "sorry_free": True} if proved else {}),
+                "calls": 0, "cost_usd": 0.0, "errors": [], "ms": 1.0}
+    monkeypatch.setattr(P, "prove_statement", fake)
+
+
+def test_a_clean_lean_proof_is_a_primary_certificate(monkeypatch):
+    from mathverify.formal import l7_layer
+    from mathverify.fuse import fuse
+    _fake_prove(monkeypatch, proved=True, clean=True)
+    lr, _ = l7_layer(_IR_EVAL, {"claimed_answer": _CLAIM_OK, "steps": []}, use_model=False)
+    assert (lr.verdict, lr.hard, lr.primary) == ("pass", True, True)
+    assert fuse([lr])["verdict"] == "CORRECT"
+
+
+def test_a_proof_that_fails_its_audit_grounds_nothing(monkeypatch):
+    from mathverify.formal import l7_layer
+    from mathverify.fuse import fuse
+    _fake_prove(monkeypatch, proved=True, clean=False)
+    lr, _ = l7_layer(_IR_EVAL, {"claimed_answer": _CLAIM_OK, "steps": []}, use_model=False)
+    assert lr.verdict == "unknown" and not lr.primary and "lean_audit_failed" in lr.flags
+    assert fuse([lr])["verdict"] == "UNKNOWN"
+
+
+def test_failing_to_prove_is_never_evidence_against_the_claim(monkeypatch):
+    from mathverify.formal import l7_layer
+    from mathverify.fuse import fuse
+    _fake_prove(monkeypatch, proved=False, clean=False)
+    lr, _ = l7_layer(_IR_EVAL, {"claimed_answer": _CLAIM_OK, "steps": []}, use_model=False)
+    assert lr.verdict == "unknown" and "lean_unproved" in lr.flags
+    assert fuse([lr])["verdict"] == "UNKNOWN"
+
+
+def test_a_lean_certificate_does_not_rescue_a_refuted_step(monkeypatch):
+    """The D cell, measured: 24 items with a broken step still get a Lean certificate, because
+    the formal layer certifies the ANSWER. The step refuter's veto must win, or the formal
+    layer would quietly turn every D item into CORRECT."""
+    from mathverify.formal import l7_layer
+    from mathverify.fuse import fuse
+    from mathverify.types import LayerResult
+    _fake_prove(monkeypatch, proved=True, clean=True)
+    lr, _ = l7_layer(_IR_EVAL, {"claimed_answer": _CLAIM_OK, "steps": []}, use_model=False)
+    refuted = LayerResult("steps.refute", "fail", 0.99, True, {"reason": "counterexample"}, 1.0,
+                          primary=False, first_bad_step=1, flags=["step_refuted"])
+    out = fuse([lr, refuted])
+    assert out["verdict"] == "INCORRECT" and out["first_bad_step"] == 1
+
+
+def test_out_of_scope_items_abstain_without_touching_lean():
+    from mathverify.formal import l7_layer
+    ir = {"task": {"kind": "probability", "params": {"space": {}, "event": "x"}}, "vars": [],
+          "givens": [], "answer_shape": "scalar"}
+    lr, rec = l7_layer(ir, {"claimed_answer": _CLAIM_OK, "steps": []}, use_model=False)
+    assert lr.verdict == "unknown" and rec["calls"] == 0
+
+
+# ------------------------------------------------------------------ junk values (Lean totality)
+# Lean totalises every partial operation: x/0 = 0, Real.sqrt of a negative = 0, Real.log 0 = 0,
+# Real.tan (π/2) = 0, and the interval integral of a non-integrable function is 0. Before these
+# guards, five of the claims below received CLEAN, audited certificates, and with --lean the
+# first came out of the whole verifier as CORRECT (0.995). See the section in statement.py.
+def _ir(kind, params, vars_=(), givens=(), shape="scalar"):
+    return {"task": {"kind": kind, "params": params}, "vars": [dict(v) for v in vars_],
+            "givens": list(givens), "answer_shape": shape}
+
+
+JUNK_CLAIMS = [
+    ("tan(pi/2) = 0", _ir("evaluate", {"expr": "tan(pi/2)"}), "0"),
+    ("sqrt(2-5) = 0", _ir("evaluate", {"expr": "sqrt(2 - 5)"}), "0"),
+    ("0/0 = 0", _ir("evaluate", {"expr": "(2**2 - 4)/(2 - 2)"}), "0"),
+    ("log 0 = 0", _ir("evaluate", {"expr": "log(0)"}), "0"),
+    ("claim-side sqrt(-4)", _ir("evaluate", {"expr": "sin(0)"}), "sqrt(-4)"),
+    ("int 1/x over [-1,1]", _ir("definite_integral", {"integrand": "1/x", "var": "x", "a": "-1", "b": "1"},
+                                [{"name": "x"}]), "0"),
+    ("sqrt'(-1)", _ir("derivative", {"f": "sqrt(x)", "var": "x", "at": "-1"}, [{"name": "x"}]), "0"),
+    ("log'(-1)", _ir("derivative", {"f": "log(x)", "var": "x", "at": "-1"}, [{"name": "x"}]), "-1"),
+    ("max -1/x^2 on [-1,1]", _ir("extremum", {"f": "-1/x**2", "var": "x", "interval": "[-1, 1]",
+                                              "which": "max"}, [{"name": "x"}]), "0"),
+    ("sum 1/k, k=-1..1", _ir("series_sum", {"term": "1/k", "var": "k", "lo": "-1", "hi": "1"},
+                             [{"name": "k", "domain": "integer"}]), "0"),
+    ("f nowhere defined", _ir("derivative", {"f": "sqrt(-x**2 - 1)", "var": "x"}, [{"name": "x"}],
+                              shape="expression"), "0"),
+]
+
+
+@pytest.mark.parametrize("label,ir,claim", JUNK_CLAIMS, ids=[c[0] for c in JUNK_CLAIMS])
+def test_no_statement_is_built_on_a_junk_value(label, ir, claim):
+    st = build_statement(ir, {"kind": "value" if ir["answer_shape"] == "scalar" else "expression",
+                              "payload": claim})
+    assert st is None, f"{label}: a Lean statement would be about a junk value: {st and st.goal}"
+
+
+def test_an_open_partial_operation_in_the_givens_becomes_a_guard_hypothesis():
+    """`1/(x-2) = 0` holds at x = 2 in Lean. With the guard the hypotheses contradict each other,
+    which is exactly what the vacuity probe is there to notice."""
+    st = build_statement(_ir("evaluate", {"expr": "x"}, [{"name": "x"}], ["1/(x - 2) = 0"]),
+                         {"kind": "value", "payload": "2"})
+    assert st is not None
+    assert any("≠ 0" in h for h in st.hypotheses), st.hypotheses
+
+
+def test_the_printer_refuses_a_closed_value_outside_its_domain():
+    for bad in (sp.sqrt(sp.Integer(-3), evaluate=False), sp.log(sp.Integer(0), evaluate=False),
+                sp.tan(sp.pi / 2, evaluate=False), sp.Mul(1, sp.Pow(0, -1, evaluate=False), evaluate=False)):
+        with pytest.raises(LeanPrintError):
+            sympy_to_lean(bad)
+    assert sympy_to_lean(sp.sqrt(sp.Integer(4), evaluate=False)) == "Real.sqrt 4"
+    assert sympy_to_lean(sp.log(sp.Integer(2), evaluate=False)) == "Real.log 2"
+
+
+def test_every_vacuity_probe_alternative_must_close_the_goal():
+    """`first` commits to the first alternative that RUNS; `norm_num at *` runs without closing
+    and used to shadow everything after it. Every alternative now ends in `done`."""
+    st = build_statement(_ir("evaluate", {"expr": "x"}, [{"name": "x"}], ["1/(x - 2) = 0"]),
+                         {"kind": "value", "payload": "2"})
+    body = st.vacuity_probe().split(":= by", 1)[1].strip()
+    assert body.startswith("first | ")
+    alts, depth, cur = [], 0, ""
+    for ch in body[len("first | "):]:                  # split on top-level `|`
+        depth += (ch == "(") - (ch == ")")
+        if ch == "|" and depth == 0:
+            alts.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    alts.append(cur.strip())
+    assert len(alts) > 5
+    bad = [a for a in alts if not (a.startswith("(") and a.endswith("done)"))]
+    assert not bad, bad
+
+
+def test_lean_sees_the_contradiction_the_guard_creates():
+    from mathverify.formal.prove import prove_statement
+    lean = _lean()
+    st = build_statement(_ir("evaluate", {"expr": "x"}, [{"name": "x"}], ["1/(x - 2) = 0"]),
+                         {"kind": "value", "payload": "2"})
+    r = prove_statement(st, use_model=False, lean=lean, tactic_timeout=45)
+    assert not (r["proved"] and r["audit"].get("clean")), "a system with no solution was certified"

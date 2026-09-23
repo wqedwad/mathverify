@@ -101,7 +101,7 @@ def perturb_ir(ir: dict[str, Any], seed: int = 0, k: int = 3, tries: int = 40) -
                 if not side.free_symbols:
                     new_givens.append(f"{sp.sstr(side)} = {sp.sstr(num)}")
                     continue
-                val = sp.nsimplify(sp.simplify(side.subs(point)))
+                val = sp.simplify(side.subs(point))
                 new_givens.append(f"{sp.sstr(side)} = {sp.sstr(val)}")
                 changed.append((sp.sstr(num), sp.sstr(val)))
             else:
@@ -125,7 +125,7 @@ def perturb_ir(ir: dict[str, Any], seed: int = 0, k: int = 3, tries: int = 40) -
                 good.append(s_)
         if good is None or len(good) != 1:
             continue
-        expected = sp.nsimplify(sp.simplify(target.subs(point)))
+        expected = sp.simplify(target.subs(point))
         ir2 = json.loads(json.dumps(ir))
         ir2["givens"] = new_givens
         ir2["options"] = None

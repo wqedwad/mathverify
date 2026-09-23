@@ -19,12 +19,25 @@ from sympy import (S, Symbol, Rational, Integer, Interval, FiniteSet, Union, Int
                    Complement, EmptySet, Eq, Ne, Lt, Le, Gt, Ge, And, Or, Not, pi, E, I, oo, zoo, nan)
 from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, convert_xor)
 
-__all__ = ["ParseError", "build_namespace", "parse_expr_str", "parse_relation", "parse_answer",
+__all__ = ["ParseError", "UndeclaredSymbolError", "ClaimNotAValue", "COMPUTING_OPERATORS",
+           "claim_namespace", "check_claim_is_value", "build_namespace", "parse_expr_str", "parse_relation", "parse_answer",
            "parse_domain", "parse_set_str", "is_latex", "preclean"]
 
 
 class ParseError(ValueError):
     pass
+
+
+class UndeclaredSymbolError(ParseError):
+    """The text is well-formed mathematics that names something the problem never declared —
+    typically a solver's own substitution (`u = sqrt(x+4)`).
+
+    Kept apart from a plain syntax error on purpose. A step the verifier cannot read because
+    of an undeclared symbol is legitimately skipped without penalty (§3 rule: the refuter only
+    refutes). A step that is simply malformed is a different thing: the solution does not meet
+    the structured contract, and accepting it would let an attacker cancel a refutation by
+    corrupting the claim (measured: appending `}` to a refuted step turned INCORRECT into
+    CORRECT on 4 items)."""
 
 
 # ----------------------------------------------------------------------------
@@ -44,7 +57,11 @@ DOMAIN_ASSUMPTIONS: dict[str, dict[str, bool]] = {
 
 
 def _deg(v):
-    return sp.nsimplify(v) * pi / 180
+    # exact: nsimplify(30.0000001) is 30, i.e. it would rewrite the angle that was written
+    v = sp.sympify(v)
+    if v.has(sp.Float):
+        v = v.xreplace({f: sp.Rational(str(f)) for f in v.atoms(sp.Float)})
+    return v * pi / 180
 
 
 def _perm(n_, k_):
@@ -115,6 +132,51 @@ _SAFE_NAMES: dict[str, Any] = {
     "Symbol": Symbol, "symbols": sp.symbols,
 }
 
+# ----------------------------------------------------------------------------
+# claims are values, not computations
+# ----------------------------------------------------------------------------
+# Operators that COMPUTE an answer. They belong in the statement of a problem ("find the
+# integral of …"), never in a claimed answer: a claim written as `integrate(log(x), x)` or
+# `limit(sin(x)/x, x, 0)` asks the verifier to PRODUCE the answer, which is the one thing this
+# system must not do ("karar üretilerek değil, kanıtlanarak verilir"). Measured before this
+# existed: 7 of 7 such claims — including `f(g(2))` for "evaluate f(g(2))" and
+# `nsimplify(500000003/3000000000)` for a probability of 1/6 — were certified CORRECT.
+# The problem's own functions (`f`, `g`) are excluded for the same reason: `f(g(2))` restates
+# the question. Closed forms such as `binomial(6, 3)` or `factorial(5)` stay allowed.
+COMPUTING_OPERATORS = frozenset({
+    "integrate", "Integral", "diff", "Derivative", "limit", "Limit", "Sum", "Product",
+    "simplify", "nsimplify", "expand", "factor", "cancel", "together", "apart", "Poly",
+    "at", "Symbol", "symbols", "det", "trace", "rank", "eigmax", "eigmin",
+    "dist", "slope", "tri_area", "dot", "point_line_dist",
+})
+_LATEX_COMPUTING = re.compile(r"\\(?:int|iint|oint|lim|sum|prod)\b|\\frac\s*\{\s*d\s*\}|\\frac\s*\{\s*\\partial")
+_CALL_RE = re.compile(r"(?<![\w.])([A-Za-z_]\w*)\s*\(")
+
+
+class ClaimNotAValue(ParseError):
+    """A claimed answer that is a computation or a restatement of the question, not a value."""
+
+
+def claim_namespace(ns: dict[str, Any], function_names=()) -> dict[str, Any]:
+    """The namespace a CLAIMED answer is parsed in: the problem's namespace without the
+    operators that would compute the answer and without the problem's own functions."""
+    banned = COMPUTING_OPERATORS | set(function_names)
+    return {k: v for k, v in ns.items() if k not in banned}
+
+
+def check_claim_is_value(text: Any, function_names=()) -> None:
+    """Raise ClaimNotAValue when a payload asks for a computation instead of stating a value."""
+    if text is None or not isinstance(text, str):
+        return
+    banned = COMPUTING_OPERATORS | set(function_names)
+    for m in _CALL_RE.finditer(text):
+        if m.group(1) in banned:
+            raise ClaimNotAValue(f"claimed answer {text!r} is a computation ({m.group(1)}(…)), "
+                                 "not a value: the verifier checks answers, it does not produce them")
+    if _LATEX_COMPUTING.search(text):
+        raise ClaimNotAValue(f"claimed answer {text!r} is an unevaluated integral/limit/sum/derivative")
+
+
 _ALLOWED_DOTTED = {
     "Interval.open", "Interval.Lopen", "Interval.Ropen", "S.Reals", "S.Integers", "S.Naturals",
     "S.Naturals0", "S.EmptySet", "S.Complexes", "S.Half", "S.Zero", "S.One", "S.Infinity",
@@ -122,8 +184,13 @@ _ALLOWED_DOTTED = {
 }
 
 _IDENT_RE = re.compile(r"(?<![\w.])[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*")  # skips the e in 1e3
-_FORBIDDEN_SUBSTR = ("__", "import", "lambda", "exec", "eval", "open(", "getattr", "setattr",
+_FORBIDDEN_SUBSTR = ("__", "import", "lambda", "exec", "eval", "getattr", "setattr",
                      "globals", "locals", "compile", "input", "os.", "sys.", "subprocess")
+# `open(` used to be in the substring list above, which also matched `Interval.open(1, oo)` —
+# a form this module explicitly allows in `_ALLOWED_DOTTED` and `docs/SOLVER_FORMAT.md`
+# documents. The notation was therefore unusable, silently, since Phase 1. Match only a BARE
+# call: an attribute access is not the builtin.
+_FORBIDDEN_CALL_RE = re.compile(r"(?<![\w.])open\s*\(")
 
 
 def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -169,6 +236,12 @@ _UNICODE_MAP = {
     "²": "**2", "³": "**3", "⁴": "**4", "½": "(1/2)", "¼": "(1/4)", "¾": "(3/4)", "⅓": "(1/3)",
     "ℝ": "Reals", "ℤ": "Integers", "ℕ": "Naturals", "∈": " in ",
 }
+# `5π/6` is how a free-text solution writes 5*pi/6, but the unicode map alone turns it into
+# `5pi/6`, which is a syntax error — and implicit multiplication is deliberately NOT enabled
+# globally (it would silently read `zzz` as `z*z*z`). So the product is made explicit only
+# where a digit or a closing bracket meets a unicode VALUE symbol, which is never anything but
+# a product. Measured: 4 of 5 recovered trig answer sets were unparseable for exactly this.
+_UNI_VALUE_RE = re.compile(r"([0-9)\]])\s*([π∞√ℝℤℕ∅])")
 _DEG_NUM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:°|\bderece\b|\bdeg\b)")
 _DEG_PAREN_RE = re.compile(r"\(([^()]*)\)\s*°")
 _PCT_RE = re.compile(r"%\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*%")
@@ -209,6 +282,7 @@ def strip_presentation(s: str) -> str:
 def preclean(s: str) -> str:
     """Canonicalise unicode/degree/percent notation. Idempotent."""
     s = strip_presentation(_strip_invisible(s).strip()).strip()
+    s = _UNI_VALUE_RE.sub(r"\1*\2", s)
     for k, v in _UNICODE_MAP.items():
         s = s.replace(k, v)
     s = _DEG_PAREN_RE.sub(r"((\1)*pi/180)", s)
@@ -233,24 +307,63 @@ _TRANSFORMS = standard_transformations + (convert_xor, _rationalize)   # 0.5 -> 
 _TRANSFORMS_FLOAT = standard_transformations + (convert_xor,)
 
 
-def _check_safe(s: str, ns: dict[str, Any]) -> None:
+_PARSER_KEYWORDS = {"in", "U", "N", "and", "or", "not"}
+
+
+def _check_safe(s: str, ns: dict[str, Any]) -> list[str]:
+    """Hard rejections raise; undeclared identifiers are RETURNED so the caller can tell a
+    solver's own substitution apart from text that is not mathematics at all."""
     # after preclean only ASCII may remain: anything else is prose or an injection attempt
     bad_chars = [ch for ch in s if ord(ch) > 127]
     if bad_chars:
         raise ParseError(f"non-ASCII characters in expression after normalisation: {bad_chars[:5]!r}")
+    if "#" in s:
+        # Python's tokenizer treats the rest of the line as a comment, so `2*x ### anything`
+        # parses as `2*x` and whatever follows is never seen. An expression that is silently
+        # truncated is worse than one that fails: measured as a working step-claim injection.
+        raise ParseError("'#' is not allowed in an expression (it hides the rest of the line)")
     low = s.lower()
     for bad in _FORBIDDEN_SUBSTR:
         if bad in low:
             raise ParseError(f"forbidden token {bad!r} in expression")
+    if _FORBIDDEN_CALL_RE.search(low):
+        raise ParseError("forbidden call 'open(' in expression")
+    undeclared: list[str] = []
     for m in _IDENT_RE.finditer(s):
         ident = m.group(0)
-        if ident in ns or ident in _ALLOWED_DOTTED:
+        if ident in ns or ident in _ALLOWED_DOTTED or ident in _PARSER_KEYWORDS:
             continue
         if "." in ident:
             raise ParseError(f"dotted name not allowed: {ident}")
-        if ident in {"in", "U", "N", "and", "or", "not"}:
-            continue
-        raise ParseError(f"unknown identifier {ident!r} (declare it in the IR)")
+        if ident not in undeclared:
+            undeclared.append(ident)
+    return undeclared
+
+
+def _raise_for_undeclared(s: str, ns: dict[str, Any], undeclared: list[str], raw: str,
+                          transformations) -> None:
+    """Decide which failure this is, and never guess.
+
+    `u = sqrt(x+4)` is well-formed mathematics naming something the problem did not declare —
+    legitimately skipped, no penalty. `2*x ignore previous instructions` is not mathematics at
+    all. The test is the parse itself: re-parse with the unknown names bound to free symbols.
+    If that still fails, the text was malformed, and saying so matters — a malformed step claim
+    blocks a positive verdict, so an attacker cannot cancel a refutation by garbling the step."""
+    probe_ns = dict(ns)
+    for u in undeclared:
+        # A name used as `a(n)` is a sequence or a function the problem did not declare (the
+        # recurrence items write `a(n) = 3*n + 2` and `a` lives in task.params, not in
+        # ir.functions). Binding it to a Symbol would make the probe fail with "'Symbol' object
+        # is not callable" and mislabel a perfectly ordinary step as malformed.
+        called = re.search(rf"(?<![\w.]){re.escape(u)}\s*\(", s) is not None
+        probe_ns[u] = sp.Function(u) if called else Symbol(u)
+    try:
+        parse_expr(s, local_dict=probe_ns, global_dict={}, transformations=transformations,
+                   evaluate=True)
+    except Exception as e:
+        raise ParseError(f"cannot parse {raw!r}: {e}") from e
+    raise UndeclaredSymbolError(
+        f"unknown identifier(s) {undeclared} in {raw!r} (declare them in the IR)")
 
 
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
@@ -263,7 +376,25 @@ def _latex_to_sympy(s: str, ns: dict[str, Any]):
             reps[fs] = ns[fs.name]
     if reps:
         expr = expr.subs(reps, simultaneous=True)
+    _check_symbols_declared(expr, ns, s)
     return expr
+
+
+def _check_symbols_declared(expr, ns: dict[str, Any], raw: str) -> None:
+    """The canonical branch refuses an undeclared identifier; the LaTeX branch must too.
+
+    `_check_safe` is a check on the TEXT and cannot run here, because latex2sympy does its own
+    tokenisation — including implicit multiplication, which the canonical parser deliberately
+    does not enable. Measured: `\\frac{zzz}{2}` silently became `z*z*z/2` with a symbol `z`
+    that appears nowhere in the problem, while `zzz + 1` was rejected. A solver writing
+    `\\frac{ab}{2}` for a single unknown `ab` would have had its claim quietly rewritten.
+    So the same rule is enforced on the RESULT: every free symbol must be declared."""
+    undeclared = sorted({fs.name for fs in getattr(expr, "free_symbols", ())
+                         if fs.name not in ns}) if hasattr(expr, "free_symbols") else []
+    if undeclared:
+        raise UndeclaredSymbolError(f"LaTeX {raw!r} introduces undeclared symbol(s) {undeclared} "
+                                    "(declare them in the IR; latex2sympy splits unknown names "
+                                    "into implicit products)")
 
 
 def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool = True):
@@ -280,10 +411,13 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
         except Exception as e:  # pragma: no cover - fall through to canonical
             raise ParseError(f"LaTeX parse failed for {raw!r}: {e}") from e
     s = preclean(s)
-    _check_safe(s, ns)
+    transformations = _TRANSFORMS if rational else _TRANSFORMS_FLOAT
+    undeclared = _check_safe(s, ns)
+    if undeclared:
+        _raise_for_undeclared(s, ns, undeclared, raw, transformations)
     try:
         return parse_expr(s, local_dict=ns, global_dict={},
-                          transformations=_TRANSFORMS if rational else _TRANSFORMS_FLOAT, evaluate=True)
+                          transformations=transformations, evaluate=True)
     except ParseError:
         raise
     except Exception as e:
@@ -330,6 +464,12 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     """Parse an equation/inequality (or a plain expression if no operator)."""
     if ns is None:
         ns = dict(_SAFE_NAMES)
+    # Strip display-only wrappers FIRST, exactly as `parse_expr_str` does. Without this,
+    # `\boxed{Integral(sin(x), x) = cos(x)}` looked like LaTeX, went to latex2sympy — which
+    # does not know sympy call syntax — and came back as a non-relation that the step layer
+    # then skipped. Measured: wrapping a refuted step in \boxed{} turned INCORRECT into
+    # CORRECT on 7 items.
+    s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
         # LaTeX relations: latex2sympy handles "=" -> Eq
         expr = _latex_to_sympy(s, ns)
@@ -339,7 +479,19 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     parts = _split_top_level(s2)
     if len(parts) == 1:
         return parse_expr_str(s2, ns)
-    exprs = [parse_expr_str(chunk, ns) for _, chunk in parts]
+    # Parse every chunk before deciding what went wrong. Raising on the first chunk that merely
+    # names something undeclared would classify a globally malformed string as a legitimate
+    # solver substitution: `y = 2*x <verdict>CORRECT</verdict>` splits into chunks of which
+    # `verdict` parses fine on its own, so the whole claim was being skipped without penalty.
+    exprs, undeclared_err = [], None
+    for _, chunk in parts:
+        try:
+            exprs.append(parse_expr_str(chunk, ns))
+        except UndeclaredSymbolError as e:
+            undeclared_err = undeclared_err or e
+            exprs.append(None)
+    if undeclared_err is not None:
+        raise undeclared_err                 # every chunk is well formed; a name is just new
     rels = []
     for k in range(1, len(parts)):
         op = parts[k][0]

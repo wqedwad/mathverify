@@ -70,7 +70,9 @@ def iterate_recurrence(rel, f, n, initial: dict[int, Any], index: int) -> tuple[
             ev["error"] = f"missing_initial_term_for_{k}"
             return None, ev
         val = expr.subs(n, k).subs(sub)
-        known[k] = sp.nsimplify(sp.simplify(val))
+        # exact simplification only: `nsimplify` snaps to the nearest "nice" number (measured:
+        # 500000003/3000000000 -> 1/6), which would silently change the TRUTH it computes
+        known[k] = sp.simplify(val)
     if index not in known:
         ev["error"] = "index_before_initial_terms"
         return None, ev
@@ -147,7 +149,9 @@ def certify_series_sum(term, var, lo, hi, claimed, timeout: float = 10.0) -> tup
             return None, ev
         total = sp.Add(*[term.subs(var, k) for k in range(lo_i, hi_i + 1)]) if hi_i - lo_i < 2000 else \
             sp.summation(term, (var, lo_i, hi_i))
-        total = sp.nsimplify(sp.simplify(total)) if hi_i - lo_i < 2000 else total
+        # exact simplification only: `nsimplify` snaps to the nearest "nice" number (measured:
+        # 500000003/3000000000 -> 1/6), which would silently change the TRUTH it computes
+        total = sp.simplify(total) if hi_i - lo_i < 2000 else total
         ev["sum"] = str(total)
         ev["method"] = "exact_finite"
         ok, cev = answers_equivalent(claimed, total, shape="scalar")
@@ -224,7 +228,10 @@ def verify(ir, solution, ctx: Ctx):
             else:
                 from ..normalize.parse import parse_expr_str as _pe
                 try:
-                    closed = _pe(str(solution.claimed_answer.payload), ns)
+                    # the index variable only — the sequence symbol itself would let a claim
+                    # restate the recurrence (`a(n-1) + 3`) instead of giving a closed form
+                    closed = _pe(str(solution.claimed_answer.payload),
+                                 dict(ctx.claim_ns(solution), **{n.name: n}))
                 except Exception as e:  # noqa: BLE001
                     return unknown(LAYER, f"parse_error: {e}", flags=["parse_error"])
                 ok, cev = check_closed_form(rel, f, n, initial, closed, timeout=ctx.timeout)

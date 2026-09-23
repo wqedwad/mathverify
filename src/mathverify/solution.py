@@ -22,6 +22,13 @@ class ClaimedAnswer:
     payload: str | list[str] | int | None = None   # sympy/LaTeX text, list of texts, or count
     option: str | None = None       # "A".."E" for multiple choice
     raw: str | None = None          # untouched text from the solver (never parsed for logic)
+    # How confident we are that `payload` is what the solver actually claimed:
+    #   None / "solver"  - the solver stated it (path a, or an explicit answer marker)
+    #   "option_letter"  - copied from the chosen option; it is the LETTER that was verified
+    #   "recovered_text" - reconstructed from free text by the deterministic extractor. Advisory
+    #                      only: a mismatch with the option abstains, it never refutes, because
+    #                      a recovery mistake must not be able to produce a wrong INCORRECT.
+    payload_source: str | None = None
 
     def __post_init__(self):
         if self.kind not in ANSWER_KINDS:

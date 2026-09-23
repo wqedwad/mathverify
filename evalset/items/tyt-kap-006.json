@@ -1,0 +1,72 @@
+{
+ "id": "tyt-kap-006",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = 1/(x² − 4) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+  "B": "(-oo, -2) U (2, oo)",
+  "C": "(-2, 2)",
+  "D": "(-oo, 2) U (2, oo)",
+  "E": "(-oo, -2) U (-2, oo)"
+ },
+ "gold_answer": "(-oo, -2) U (-2, 2) U (2, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "1/(x**2 - 4)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "set",
+  "options": {
+   "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+   "B": "(-oo, -2) U (2, oo)",
+   "C": "(-2, 2)",
+   "D": "(-oo, 2) U (2, oo)",
+   "E": "(-oo, -2) U (-2, oo)"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "set",
+   "payload": "(-oo, -2) U (-2, 2) U (2, oo)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "(-2)**2 - 4 = -8",
+    "from": [],
+    "text": "paydayı x = −2'de hesapladım"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "her iki kök de tanım kümesinden çıkarılır"
+   }
+  ]
+ },
+ "solution_text": "$x=-2$ için payda $-8$ çıkıyor; $\\pm 2$ dışlanır. Cevap: A",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "cevap doğru; s1 aritmetiği yanlış (gerçek değer 0), somut hesapla çürütülür",
+ "provenance": "sentetik",
+ "mutation": "arithmetic_slip",
+ "derived_from": "tyt-kap-004"
+}

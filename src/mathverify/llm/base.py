@@ -8,20 +8,32 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-__all__ = ["LLMResponse", "LLMClient", "LLMError", "LLMCreditError", "LLMAuthError", "extract_json",
-           "PRICING", "cost_usd"]
+__all__ = ["LLMResponse", "LLMClient", "LLMError", "LLMFatalError", "LLMCreditError", "LLMAuthError",
+           "extract_json", "PRICING", "cost_usd"]
 
 
 class LLMError(RuntimeError):
-    pass
+    """A call failed for a reason that is still a *measurement*: the item is recorded as
+    unavailable and the sweep continues. Every layer catches this and degrades gracefully."""
 
 
-class LLMCreditError(LLMError):
+class LLMFatalError(RuntimeError):
+    """A failure that is NOT a measurement (DECISIONS §23): the run must stop.
+
+    Deliberately **not** a subclass of `LLMError`. Every layer wraps its single call in
+    `except LLMError` and turns the failure into a recorded, unavailable item; if these were
+    LLMErrors, an empty balance would be silently recorded 218 times instead of stopping the
+    sweep once. Measured: the F3 run of 18 Sep 2026 burned 151 items this way, because the
+    swallowed message was then truncated below the word the harness was grepping for.
+    Whoever genuinely wants to continue must catch this class by name."""
+
+
+class LLMCreditError(LLMFatalError):
     """The account cannot pay for the call (empty balance / quota). Retrying is pointless:
     the harness aborts the run instead of burning the remaining items."""
 
 
-class LLMAuthError(LLMError):
+class LLMAuthError(LLMFatalError):
     """Bad or missing credentials."""
 
 

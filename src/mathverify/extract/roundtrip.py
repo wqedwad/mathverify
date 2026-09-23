@@ -31,6 +31,14 @@ def _task_sentence(kind: str, p: dict[str, Any], ir: dict[str, Any]) -> str:
         return f"Count the {'distinct ' if p.get('distinct', True) else ''}real roots of {p.get('expr')} in {p.get('var', 'x')}"
     if kind == "domain_of":
         return f"Find the (real) domain of {p.get('expr')} as a function of {p.get('var', 'x')}"
+    if kind == "simplify_expression":
+        return (f"Rewrite {p.get('expr')} in its simplest equivalent form (same value wherever "
+                f"both sides are defined)")
+    if kind == "count_solutions":
+        b = p.get("bounds") or {}
+        rng = "; ".join(f"{v} in [{lohi[0]}, {lohi[1]}]" for v, lohi in b.items())
+        return (f"Count the integer tuples satisfying: {' and '.join(ir.get('givens') or [])}"
+                + (f", searching {rng}" if rng else ""))
     if kind == "limit":
         side = {"+": " from the right", "-": " from the left"}.get(p.get("side") or "", " (two-sided)")
         return f"Find the limit of {p.get('expr')} as {p.get('var', 'x')} -> {p.get('to')}{side}"

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any
 
 from .certify.base import unknown
-from .llm import llm_versions
+from .llm import llm_versions, LLMFatalError
 from .types import VerificationResult, LayerResult
 from .verifier import verify_layers, fuse_layers
 
@@ -107,7 +107,7 @@ def run_pipeline(question_tr: str, options: dict[str, str] | None = None, level:
             extra_flags += rs.get("flags", [])
         if solution is None:
             from .intake.restructure import restructure_deterministic
-            det = restructure_deterministic(solution_text)
+            det = restructure_deterministic(solution_text, answer_shape=(ir or {}).get("answer_shape"))
             if det is None:
                 pr.stage = "restructure_failed"
                 pr.result = _unknown_result("intake", "solution_unparseable", ["solution_unavailable"], t0)
@@ -128,6 +128,15 @@ def run_pipeline(question_tr: str, options: dict[str, str] | None = None, level:
     # deterministic verdict before any LLM signal (used to interpret L4 disagreement)
     base = fuse_layers(list(layers), extra_flags=list(extra_flags), started=t0)
     pr.base_verdict = base.verdict
+
+    # DECISIONS §17: the family that produced a solution may not judge it. Every judging layer
+    # derives its family from `solver_family`, and with None they all fall back to "anthropic".
+    # For the synthetic evaluation set that is harmless — nothing produced those solutions —
+    # but against a real Claude solver it would silently mean Claude critiquing Claude. The
+    # rule cannot be enforced from here (we do not know who wrote the solution), so the record
+    # says it was not enforced instead of pretending it was.
+    if solver_family is None and (use_l4 or use_l5 or use_l6 or use_l7):
+        extra_flags.append("solver_family_unknown")
 
     # ---- L4 ------------------------------------------------------------------------------
     if use_l4:
@@ -156,6 +165,8 @@ def run_pipeline(question_tr: str, options: dict[str, str] | None = None, level:
             pr.cost_usd += (rec7 or {}).get("cost_usd", 0.0)
             pr.calls += (rec7 or {}).get("calls", 0)
             layers.append(lr7)
+        except LLMFatalError:
+            raise                       # credit/auth: not a measurement, must reach the harness
         except Exception as e:  # noqa: BLE001
             layers.append(unknown("formal.lean", f"layer_exception: {type(e).__name__}: {str(e)[:120]}",
                                   flags=["lean_unavailable"]))

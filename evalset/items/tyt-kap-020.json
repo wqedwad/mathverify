@@ -1,0 +1,87 @@
+{
+ "id": "tyt-kap-020",
+ "cell": "D",
+ "level": "TYT",
+ "topic": "denklem",
+ "question_tr": "2x + 3y = 12 denklemini sağlayan kaç farklı (x, y) negatif olmayan tam sayı ikilisi vardır?",
+ "options": {
+  "A": "2",
+  "B": "3",
+  "C": "4",
+  "D": "5",
+  "E": "6"
+ },
+ "gold_answer": "3",
+ "problem_ir": {
+  "task": {
+   "kind": "count_solutions",
+   "params": {
+    "bounds": {
+     "x": [
+      "0",
+      "12"
+     ],
+     "y": [
+      "0",
+      "12"
+     ]
+    }
+   }
+  },
+  "vars": [
+   {
+    "name": "x",
+    "domain": "nonneg_integer"
+   },
+   {
+    "name": "y",
+    "domain": "nonneg_integer"
+   }
+  ],
+  "givens": [
+   "2*x + 3*y = 12"
+  ],
+  "answer_shape": "count",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  },
+  "level": "TYT",
+  "topic": "denklem"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "count",
+   "payload": 3,
+   "option": "B"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "y = 4",
+    "from": [],
+    "text": "y'yi tek bir değere sabitledim (geçersiz)"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "yine de y = 0, 2, 4 sayıldı: 3 ikili"
+   }
+  ]
+ },
+ "solution_text": "$y = 4$ alıp sonra $y=0,2,4$ saydım: 3 ikili. Cevap: B",
+ "solution_is_correct": false,
+ "first_bad_step": 1,
+ "notes": "cevap doğru; s1 öncüllerden çıkmayan ve karşı örnekle çürütülebilen bir iddia",
+ "provenance": "sentetik",
+ "mutation": "missing_case",
+ "derived_from": "tyt-kap-019"
+}

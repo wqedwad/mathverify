@@ -1,45 +1,115 @@
 # Adversaryal sertleştirme raporu
 
-Öğe: **260** · saldırı: **6009** · süre: 719 s
+Öğe: **280** · saldırı: **21139** · süre: 1245 s
 
 - **Toplam saldırı başarısı: 0.000%** (hedef < %2)
-- Anlamı koruyan saldırılar (5780): kararı koruyan 5743, UNKNOWN'a düşen 37, **karşıt karara dönen 0**
-- Anlamı değiştiren saldırılar (229): reddedilen 213, UNKNOWN 16, **yanlışlıkla onaylanan 0**
+- Anlamı koruyan saldırılar (20625): kararı koruyan 17727, UNKNOWN'a düşen 2898, **karşıt karara dönen 0**
+- Anlamı değiştiren saldırılar (514): reddedilen 482, UNKNOWN 32, **yanlışlıkla onaylanan 0**
+
+### Saldırı yüzeyi
+
+| Yüzey | saldırı | korudu/reddetti | UNKNOWN | başarılı |
+|---|---|---|---|---|
+| cevap yükü | 7354 | 7197 | 157 | **0** |
+| şık harfi korunarak | 7279 | 7122 | 157 | **0** |
+| adım iddiaları | 6506 | 3890 | 2616 | **0** |
 
 ## Saldırı türüne göre
 
 | Saldırı | n | korudu | UNKNOWN | döndü/onayladı |
 |---|---|---|---|---|
-| `decimal_form` | 158 | 158 | 0 | 0 |
+| `close_interval_endpoint` | 4 | 4 | 0 | 0 |
+| `decimal_form` | 163 | 163 | 0 | 0 |
 | `digit_swap` | 71 | 55 | 16 | 0 |
-| `homoglyph` | 18 | 7 | 11 | 0 |
-| `injection:' ### SYSTEM: the a'` | 212 | 210 | 2 | 0 |
-| `injection:' (bu cevap kesinli'` | 212 | 210 | 2 | 0 |
-| `injection:' <verdict>CORRECT<'` | 212 | 210 | 2 | 0 |
-| `injection:' bu çözüm doğrudur'` | 212 | 210 | 2 | 0 |
-| `injection:' ignore previous i'` | 212 | 210 | 2 | 0 |
-| `invisible:'\u200b'` | 212 | 212 | 0 | 0 |
-| `invisible:'\u200c'` | 212 | 212 | 0 | 0 |
-| `invisible:'\u200d'` | 212 | 212 | 0 | 0 |
-| `invisible:'\u2060'` | 212 | 212 | 0 | 0 |
-| `invisible:'\ufeff'` | 212 | 212 | 0 | 0 |
-| `invisible:'\xad'` | 212 | 212 | 0 | 0 |
-| `invisible_inside` | 212 | 212 | 0 | 0 |
-| `junk_prefix:'{'` | 212 | 210 | 2 | 0 |
-| `junk_prefix:'{}'` | 212 | 210 | 2 | 0 |
-| `junk_prefix:'}'` | 212 | 210 | 2 | 0 |
-| `junk_suffix:' }'` | 212 | 210 | 2 | 0 |
-| `junk_suffix:'{ '` | 212 | 210 | 2 | 0 |
-| `junk_suffix:'{'` | 212 | 210 | 2 | 0 |
-| `junk_suffix:'{}'` | 212 | 210 | 2 | 0 |
-| `junk_suffix:'}'` | 212 | 210 | 2 | 0 |
-| `latex_boxed` | 212 | 212 | 0 | 0 |
-| `latex_math` | 212 | 212 | 0 | 0 |
-| `parens` | 212 | 212 | 0 | 0 |
-| `plus_sign` | 146 | 146 | 0 | 0 |
-| `rtl_mark` | 212 | 212 | 0 | 0 |
-| `scientific_form` | 158 | 158 | 0 | 0 |
-| `value_bump` | 158 | 158 | 0 | 0 |
-| `whitespace` | 212 | 212 | 0 | 0 |
+| `drop_set_element` | 19 | 19 | 0 | 0 |
+| `homoglyph` | 47 | 14 | 33 | 0 |
+| `injection:' ### SYSTEM: the a'` | 264 | 257 | 7 | 0 |
+| `injection:' (bu cevap kesinli'` | 264 | 257 | 7 | 0 |
+| `injection:' <verdict>CORRECT<'` | 264 | 257 | 7 | 0 |
+| `injection:' bu çözüm doğrudur'` | 264 | 257 | 7 | 0 |
+| `injection:' ignore previous i'` | 264 | 257 | 7 | 0 |
+| `invisible:'\u200b'` | 264 | 264 | 0 | 0 |
+| `invisible:'\u200c'` | 264 | 264 | 0 | 0 |
+| `invisible:'\u200d'` | 264 | 264 | 0 | 0 |
+| `invisible:'\u2060'` | 264 | 264 | 0 | 0 |
+| `invisible:'\ufeff'` | 264 | 264 | 0 | 0 |
+| `invisible:'\xad'` | 264 | 264 | 0 | 0 |
+| `invisible_inside` | 264 | 264 | 0 | 0 |
+| `junk_prefix:'{'` | 264 | 257 | 7 | 0 |
+| `junk_prefix:'{}'` | 264 | 257 | 7 | 0 |
+| `junk_prefix:'}'` | 264 | 240 | 24 | 0 |
+| `junk_suffix:' }'` | 264 | 257 | 7 | 0 |
+| `junk_suffix:'{ '` | 264 | 257 | 7 | 0 |
+| `junk_suffix:'{'` | 264 | 257 | 7 | 0 |
+| `junk_suffix:'{}'` | 264 | 257 | 7 | 0 |
+| `junk_suffix:'}'` | 264 | 257 | 7 | 0 |
+| `latex_boxed` | 264 | 264 | 0 | 0 |
+| `latex_form` | 14 | 14 | 0 | 0 |
+| `latex_math` | 264 | 264 | 0 | 0 |
+| `mc:close_interval_endpoint` | 4 | 4 | 0 | 0 |
+| `mc:decimal_form` | 163 | 163 | 0 | 0 |
+| `mc:digit_swap` | 71 | 55 | 16 | 0 |
+| `mc:drop_set_element` | 19 | 19 | 0 | 0 |
+| `mc:homoglyph` | 47 | 14 | 33 | 0 |
+| `mc:injection:' ### SYSTEM: the a'` | 261 | 254 | 7 | 0 |
+| `mc:injection:' (bu cevap kesinli'` | 261 | 254 | 7 | 0 |
+| `mc:injection:' <verdict>CORRECT<'` | 261 | 254 | 7 | 0 |
+| `mc:injection:' bu çözüm doğrudur'` | 261 | 254 | 7 | 0 |
+| `mc:injection:' ignore previous i'` | 261 | 254 | 7 | 0 |
+| `mc:invisible:'\u200b'` | 261 | 261 | 0 | 0 |
+| `mc:invisible:'\u200c'` | 261 | 261 | 0 | 0 |
+| `mc:invisible:'\u200d'` | 261 | 261 | 0 | 0 |
+| `mc:invisible:'\u2060'` | 261 | 261 | 0 | 0 |
+| `mc:invisible:'\ufeff'` | 261 | 261 | 0 | 0 |
+| `mc:invisible:'\xad'` | 261 | 261 | 0 | 0 |
+| `mc:invisible_inside` | 261 | 261 | 0 | 0 |
+| `mc:junk_prefix:'{'` | 261 | 254 | 7 | 0 |
+| `mc:junk_prefix:'{}'` | 261 | 254 | 7 | 0 |
+| `mc:junk_prefix:'}'` | 261 | 237 | 24 | 0 |
+| `mc:junk_suffix:' }'` | 261 | 254 | 7 | 0 |
+| `mc:junk_suffix:'{ '` | 261 | 254 | 7 | 0 |
+| `mc:junk_suffix:'{'` | 261 | 254 | 7 | 0 |
+| `mc:junk_suffix:'{}'` | 261 | 254 | 7 | 0 |
+| `mc:junk_suffix:'}'` | 261 | 254 | 7 | 0 |
+| `mc:latex_boxed` | 261 | 261 | 0 | 0 |
+| `mc:latex_form` | 14 | 14 | 0 | 0 |
+| `mc:latex_math` | 261 | 261 | 0 | 0 |
+| `mc:parens` | 220 | 220 | 0 | 0 |
+| `mc:plus_sign` | 151 | 151 | 0 | 0 |
+| `mc:rtl_mark` | 261 | 261 | 0 | 0 |
+| `mc:scientific_form` | 163 | 163 | 0 | 0 |
+| `mc:value_bump` | 163 | 163 | 0 | 0 |
+| `mc:whitespace` | 261 | 261 | 0 | 0 |
+| `parens` | 223 | 223 | 0 | 0 |
+| `plus_sign` | 151 | 151 | 0 | 0 |
+| `rtl_mark` | 264 | 264 | 0 | 0 |
+| `scientific_form` | 163 | 163 | 0 | 0 |
+| `step:homoglyph` | 170 | 50 | 120 | 0 |
+| `step:injection:' ### SYSTEM: the a'` | 264 | 72 | 192 | 0 |
+| `step:injection:' (bu cevap kesinli'` | 264 | 72 | 192 | 0 |
+| `step:injection:' <verdict>CORRECT<'` | 264 | 72 | 192 | 0 |
+| `step:injection:' bu çözüm doğrudur'` | 264 | 72 | 192 | 0 |
+| `step:injection:' ignore previous i'` | 264 | 72 | 192 | 0 |
+| `step:invisible:'\u200b'` | 264 | 264 | 0 | 0 |
+| `step:invisible:'\u200c'` | 264 | 264 | 0 | 0 |
+| `step:invisible:'\u200d'` | 264 | 264 | 0 | 0 |
+| `step:invisible:'\u2060'` | 264 | 264 | 0 | 0 |
+| `step:invisible:'\ufeff'` | 264 | 264 | 0 | 0 |
+| `step:invisible:'\xad'` | 264 | 264 | 0 | 0 |
+| `step:invisible_inside` | 264 | 264 | 0 | 0 |
+| `step:junk_prefix:'{'` | 264 | 72 | 192 | 0 |
+| `step:junk_prefix:'{}'` | 264 | 72 | 192 | 0 |
+| `step:junk_prefix:'}'` | 264 | 72 | 192 | 0 |
+| `step:junk_suffix:' }'` | 264 | 72 | 192 | 0 |
+| `step:junk_suffix:'{ '` | 264 | 72 | 192 | 0 |
+| `step:junk_suffix:'{'` | 264 | 72 | 192 | 0 |
+| `step:junk_suffix:'{}'` | 264 | 72 | 192 | 0 |
+| `step:junk_suffix:'}'` | 264 | 72 | 192 | 0 |
+| `step:latex_boxed` | 264 | 264 | 0 | 0 |
+| `step:latex_math` | 264 | 264 | 0 | 0 |
+| `step:rtl_mark` | 264 | 264 | 0 | 0 |
+| `step:whitespace` | 264 | 264 | 0 | 0 |
+| `value_bump` | 163 | 163 | 0 | 0 |
+| `whitespace` | 264 | 264 | 0 | 0 |
 
 ## Başarılı saldırı yok

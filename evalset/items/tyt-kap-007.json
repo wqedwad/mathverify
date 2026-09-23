@@ -1,0 +1,72 @@
+{
+ "id": "tyt-kap-007",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "fonksiyonlar",
+ "question_tr": "f(x) = ln(x − 1) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "(1, oo)",
+  "B": "[1, oo)",
+  "C": "(-oo, 1)",
+  "D": "(0, oo)",
+  "E": "(-1, oo)"
+ },
+ "gold_answer": "(1, oo)",
+ "problem_ir": {
+  "task": {
+   "kind": "domain_of",
+   "params": {
+    "expr": "log(x - 1)",
+    "var": "x"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "interval",
+  "options": {
+   "A": "(1, oo)",
+   "B": "[1, oo)",
+   "C": "(-oo, 1)",
+   "D": "(0, oo)",
+   "E": "(-1, oo)"
+  },
+  "level": "TYT",
+  "topic": "fonksiyonlar"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "interval",
+   "payload": "(1, oo)",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "eq",
+    "claim": "x - 1 > 0",
+    "from": [],
+    "text": "logaritmanın içi pozitif olmalı"
+   },
+   {
+    "id": "s2",
+    "kind": "note",
+    "claim": "",
+    "from": [
+     "s1"
+    ],
+    "text": "x > 1"
+   }
+  ]
+ },
+ "solution_text": "$\\ln$ içi pozitif olmalı: $x - 1 > 0 \\Rightarrow x > 1$. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

@@ -54,7 +54,11 @@ input" tarifesi vardır. Ölçülen fiyatlar (USD / 1M token):
 
 Her `LLMResponse` gerçek token sayımı ve hesaplanmış maliyeti taşır; harness raporları öğe
 başına maliyeti yazar. `harness/run_f3.py --max-cost N` toplam harcama N dolara ulaşınca
-taramayı durdurur, sağlayıcı faturalama hatası verirse zaten ilk hatada durur.
+taramayı durdurur. Sağlayıcı faturalama/kimlik hatası verirse tarama ilk hatada durur —
+**20 Eylül 2026'da düzeltildi**, öncesinde durmuyordu (aşağıya bakın).
+
+> Ölçülen maliyet: F3'ün ilk (yarım) koşusunda öğe başına **0,066 $**. Handoff'un 0,23 $
+> kestirimi prompt caching eklenmeden önceydi.
 
 Ölçüm durumu: F3'ün kendisi 218 öğenin 64'ünde ölçüldü, kalanı kredi bittiği için düştü.
 **F4 (L6 kritik + meta-doğrulama) hiç koşmadı**; mantığı senaryolu istemcilerle test ediliyor
@@ -73,8 +77,26 @@ hazır, ama hiçbir sayısı yok.
 
 ## Hata sınıflandırması
 
-`LLMCreditError` ve `LLMAuthError` ayrı sınıflardır: harness ilk faturalama hatasında koşuyu
-durdurur, kalan öğeleri boşa harcamaz ve raporda "ölçüm yarım kaldı" der.
+`LLMCreditError` ve `LLMAuthError` **`LLMFatalError`** altındadır ve bilerek `LLMError`'ın alt
+sınıfı **değildir**. Her katman tek LLM çağrısını `except LLMError` ile sarıp başarısızlığı
+kaydedilmiş bir "kullanılamadı" öğesine çevirir; bunlar da `LLMError` olsaydı boşalmış bir
+bakiye 218 kez sessizce kaydedilirdi. Devam etmek isteyen, sınıfı adıyla yakalamak zorundadır.
+Harness `fatal` alanını yapısal olarak işaretler ve ilk tanesinde taramayı durdurur; hangi
+katmandan geldiği fark etmez (IR çıkarımı, L4, L5, kritik, Lean).
+
+### Neden bu madde yeniden yazıldı
+
+18 Eylül koşusu tam olarak bu güvenceyi ihlal etti: `reports/f3_results.json` içinde
+`aborted: None` yazarken 151 öğe `Your credit balance is too low` ile düşmüştü. Zinciri:
+
+1. `LLMCreditError` bir `LLMError`'dı → `extract_ir`'ın `except LLMError`'ı yuttu;
+2. mesaj `str(e)[:120]` ile kırpıldı ve harness'in aradığı `credit` kelimesi **bir karakter
+   önce** kesildi;
+3. durdurucu o kırpılmış dizgiyi arıyordu → hiç ateşlemedi.
+
+Testteki hata da öğretici: `test_llm_error_stops_the_loop_and_is_reported` 24 karakterlik
+sahte bir mesaj kullanıyordu, yani kırpmanın altında kalıyordu. Test artık sağlayıcının
+gerçek mesajını kullanıyor; uzunluk fikstürün parçası.
 
 ## Çevrimdışı testler
 

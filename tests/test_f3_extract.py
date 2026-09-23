@@ -6,7 +6,15 @@ import pytest
 
 from conftest_llm import pin, unpin, ir_reply, judge_reply
 from mathverify.extract import extract_ir, validate_ir, normalize_task, render_ir
-from mathverify.llm import LLMCreditError
+from mathverify.llm import LLMError, LLMCreditError
+
+# The message the provider actually sends when the balance is empty. The old test used a
+# 24-character stand-in, which is why it kept passing while the real thing was silently
+# truncated below the word the harness greps for. Length is part of the fixture.
+REAL_CREDIT_MESSAGE = (
+    "anthropic API error 400: Error code: 400 - {'type': 'error', 'error': "
+    "{'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access "
+    "the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}}")
 
 IR_OK = {
     "task": {"kind": "evaluate", "params": {"expr": "a"}},
@@ -124,10 +132,22 @@ def test_model_returning_no_json_is_not_a_crash():
     assert res.accepted and res.rounds[0]["error"] == "no_json"
 
 
-def test_llm_error_stops_the_loop_and_is_reported():
-    pin({"ir_extract": LLMCreditError("credit balance too low")})
+def test_a_recoverable_llm_error_stops_the_loop_and_is_reported_whole():
+    """A non-fatal failure is a measurement: the item is recorded, the sweep continues, and
+    the reason is kept ENTIRE. Truncating it here is how a billing message lost the word the
+    harness was grepping for."""
+    pin({"ir_extract": LLMError(REAL_CREDIT_MESSAGE)})
     res = extract_ir(Q, OPTS, "TYT")
-    assert not res.accepted and "credit" in res.reason
+    assert not res.accepted
+    assert res.reason.endswith(REAL_CREDIT_MESSAGE), "the reason must not be truncated"
+
+
+def test_a_credit_failure_is_not_swallowed_as_a_measurement():
+    """DECISIONS §23. LLMCreditError is deliberately NOT an LLMError, so the per-call handler
+    cannot turn an empty balance into 218 quietly recorded 'unavailable' items."""
+    pin({"ir_extract": LLMCreditError(REAL_CREDIT_MESSAGE)})
+    with pytest.raises(LLMCreditError):
+        extract_ir(Q, OPTS, "TYT")
 
 
 def test_an_unknown_top_level_field_from_the_model_is_dropped():

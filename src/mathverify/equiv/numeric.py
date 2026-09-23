@@ -67,7 +67,23 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
     comparison is 'exact up to working precision'.
     """
     ev: dict[str, Any] = {"ladder": [], "rel_tol": rel_tol, "abs_tol": abs_tol}
+    # Exact numbers are compared exactly. Measured: 10^30 + 1 and 10^30 were declared equal,
+    # because their relative difference (1e-30) sits below the first rung's tolerance.
+    try:
+        sa, sb = sp.sympify(a), sp.sympify(b)
+        if isinstance(sa, sp.Rational) and isinstance(sb, sp.Rational):
+            ev["decided_by"] = "exact_rational"
+            return bool(sa == sb), ev
+    except (sp.SympifyError, TypeError):
+        pass
     prev_rel = None
+    # Without a declared tolerance, EQUALITY must survive every rung: a true identity's
+    # computed difference is rounding noise that shrinks as precision grows, a genuine small
+    # difference does not. Stopping at the first rung that looked equal is how
+    # e^(π√163) (= 262537412640768743.99999999999925…) was certified equal to the integer
+    # 262537412640768744: relative gap 3e-30, under the 30-digit tolerance of 1e-20.
+    strict = rel_tol is None and abs_tol is None
+    passed_rungs = 0
     # inputs that are already finite-precision Floats cannot be compared tighter than
     # their own precision (a 15-digit Float vs pi: at most ~1e-15 agreement is possible)
     float_digits = [int(f._prec * 0.30103) for e in (a, b) if hasattr(e, "atoms")
@@ -98,8 +114,19 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
                 ev["decided_by"] = "abs_tol"
                 return True, ev
             if rel <= eff:
-                ev["decided_by"] = f"rel<=tol@dps{dps}"
-                return True, ev
+                if not strict:
+                    ev["decided_by"] = f"rel<=tol@dps{dps}"
+                    return True, ev
+                passed_rungs += 1
+                if passed_rungs == len(dps_ladder):
+                    ev["decided_by"] = f"rel<=tol at every rung (dps {dps_ladder})"
+                    return True, ev
+                prev_rel = rel
+                continue
+            if passed_rungs:
+                # equal at a lower precision, different at this one: a genuine tiny difference
+                ev["decided_by"] = f"difference_emerged@dps{dps}"
+                return False, ev
             if rel > mp.mpf("1e-6"):
                 ev["decided_by"] = f"clearly_different@dps{dps}"
                 return False, ev

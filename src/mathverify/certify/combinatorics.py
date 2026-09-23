@@ -17,7 +17,7 @@ from typing import Any, Iterable
 import sympy as sp
 from sympy import Rational
 
-from ..equiv import answers_equivalent
+from ..equiv import answers_equivalent, exact_integer
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
 
@@ -205,10 +205,11 @@ def certify_count(space: dict[str, Any], predicate: str, claimed: int, seed: int
 def certify_probability(space: dict[str, Any], event: str, claimed, seed: int = 0, timeout: float = 60.0
                         ) -> tuple[bool | None, dict[str, Any]]:
     ev: dict[str, Any] = {"space": space, "event": event, "claimed": str(claimed)}
-    try:
-        c = sp.nsimplify(claimed)
-    except Exception:
-        c = claimed
+    # The claim is compared AS STATED. `nsimplify` used to run here and it snaps to the nearest
+    # "nice" number: 500000003/3000000000 became 1/6 and was certified against an exact
+    # enumeration of 1/6 (measured). Decimal claims keep their own precision through
+    # answers_equivalent's float floor; exact claims are compared exactly.
+    c = sp.sympify(claimed)
     try:
         cf = float(c)
     except Exception:
@@ -260,9 +261,15 @@ def verify(ir, solution, ctx: Ctx):
         if kind == "count_structures":
             ca = solution.claimed_answer
             try:
-                claimed = int(ca.payload) if ca.kind == "count" else int(sp.sympify(ctx.claimed(solution)))
+                raw = ca.payload if ca.kind == "count" else ctx.claimed(solution)
             except Exception as e:  # noqa: BLE001
-                return unknown(LAYER, f"claimed_not_integer: {e}", flags=["parse_error"])
+                return unknown(LAYER, f"claimed_not_parsed: {e}", flags=["parse_error"])
+            # `int()` truncated a claimed 241/2 to 120 and certified it (measured); a count that
+            # is not an integer is a wrong count
+            claimed = exact_integer(raw)
+            if claimed is None:
+                return result(LAYER, "fail", 0.99, True, {"claimed": str(raw),
+                              "reason": "claimed_count_is_not_an_integer"}, t.ms, primary=True)
             ok, ev = certify_count(space, p.get("predicate", ""), claimed, seed=ctx.seed)
         else:
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)

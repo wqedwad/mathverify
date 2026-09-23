@@ -61,6 +61,7 @@ def run_item(it, args):
     from mathverify.pipeline import run_pipeline
     from mathverify.verifier import verify
     from mathverify.extract import EXEMPLAR_IDS
+    from mathverify.llm import LLMFatalError
     ir_hand, sol, labels = split_for_verifier(it)
     rec = {"labels": labels, "exemplar": it["id"] in EXEMPLAR_IDS}
     t0 = time.perf_counter()
@@ -68,6 +69,7 @@ def run_item(it, args):
         v_hand = verify(ir_hand, sol)
         rec["hand_verdict"] = v_hand.verdict
         pr = run_pipeline(it["question_tr"], it.get("options"), it["level"], solution=sol,
+                          solver_family=getattr(args, "solver_family", None),
                           use_l4=not args.no_l4, use_l5=not args.no_l5, use_l6=not args.no_l6,
                           exclude_exemplar_ids=[it["id"]] if it["id"] in EXEMPLAR_IDS else None)
         r = pr.result
@@ -88,6 +90,7 @@ def run_item(it, args):
         })
         if args.pathb and it.get("solution_text"):
             pb = run_pipeline(it["question_tr"], it.get("options"), it["level"], ir=ir_hand,
+                              solver_family=getattr(args, "solver_family", None),
                               solution_text=it["solution_text"], use_l4=False, use_l5=False)
             rec["pathb"] = {"verdict": pb.result.verdict, "confidence": pb.result.confidence,
                             "first_bad_step": pb.result.first_bad_step, "flags": pb.result.flags,
@@ -95,6 +98,14 @@ def run_item(it, args):
                             "downgraded": (pb.restructure or {}).get("downgraded_steps"),
                             "n_steps": len((pb.solution or {}).get("steps") or []),
                             "cost_usd": round(pb.cost_usd, 4), "calls": pb.calls}
+    except LLMFatalError as e:
+        # Credit or auth: not a measurement. Marked structurally (not by grepping a message
+        # that truncation can mangle) so `main` stops the sweep on the FIRST one, from any
+        # layer — IR extraction, L4, L5, the critic or the Lean prover.
+        rec.update({"verdict": "UNKNOWN", "confidence": 0.0, "first_bad_step": None,
+                    "flags": ["llm_fatal"], "fatal": f"{type(e).__name__}: {e}",
+                    "error": f"{type(e).__name__}: {e}", "cost_usd": 0.0, "calls": 0,
+                    "ms": (time.perf_counter() - t0) * 1000})
     except Exception as e:  # noqa: BLE001
         rec.update({"verdict": "UNKNOWN", "confidence": 0.0, "first_bad_step": None, "flags": ["harness_exception"],
                     "error": f"{type(e).__name__}: {e}", "tb": traceback.format_exc()[-800:], "cost_usd": 0.0,
@@ -171,14 +182,33 @@ def render_md(s, records, args):
     if args.pathb:
         pb = [r for r in records if r.get("pathb")]
         md += "\n## Yol (b): serbest metin → LLM yeniden yapılandırma (elle IR ile)\n\n"
-        okb = sum(1 for r in pb if _expected_ok(r["labels"], r["pathb"]["verdict"]) is True)
-        unkb = sum(1 for r in pb if r["pathb"]["verdict"] == "UNKNOWN")
-        badb = sum(1 for r in pb if _expected_ok(r["labels"], r["pathb"]["verdict"]) is False)
-        dd = [r for r in pb if r["labels"]["cell"] == "D"]
-        md += f"- Öğe: {len(pb)} · doğru karar: {okb} · UNKNOWN: {unkb} · yanlış karar: {badb}\n"
-        md += f"- D hücresi tespiti (yeniden yapılandırılmış adımlarla): {sum(1 for r in dd if r['pathb']['verdict']=='INCORRECT')}/{len(dd)}\n"
+
+        def _block(rows, title):
+            okb = sum(1 for r in rows if _expected_ok(r["labels"], r["pathb"]["verdict"]) is True)
+            unkb = sum(1 for r in rows if r["pathb"]["verdict"] == "UNKNOWN")
+            badb = sum(1 for r in rows if _expected_ok(r["labels"], r["pathb"]["verdict"]) is False)
+            dd = [r for r in rows if r["labels"]["cell"] == "D"]
+            det = sum(1 for r in dd if r["pathb"]["verdict"] == "INCORRECT")
+            out = (f"- **{title}:** öğe {len(rows)} · doğru karar {okb} · UNKNOWN {unkb} · "
+                   f"yanlış karar {badb} · D tespiti {det}/{len(dd)}\n")
+            return out
+
+        # An item whose LLM restructuring did not run fell back to the deterministic
+        # answer-only extractor, which produces NO steps — so it cannot detect a D cell by
+        # construction. Mixing those into one rate is how the first sweep reported "218 items,
+        # 37 wrong decisions, D detection 3/39" for a path that had actually run on 34 items.
+        real = [r for r in pb if r["pathb"]["n_steps"] > 0]
+        fell_back = [r for r in pb if r["pathb"]["n_steps"] == 0]
+        md += _block(pb, "Tümü (karışık)")
+        md += _block(real, "Gerçekten yeniden yapılandırılan (adım üretildi)")
+        if fell_back:
+            md += (f"- Deterministik cevap-çıkarıcıya düşen: **{len(fell_back)}/{len(pb)}** — bunlarda adım "
+                   f"yoktur, dolayısıyla D hücresi yapısal olarak yakalanamaz; yukarıdaki 'karışık' satır "
+                   f"yol (b)'nin değil bu geri-düşmenin ölçümüdür.\n")
         md += f"- Cevap çapraz kontrolü uyuşmazlığı: {sum(1 for r in pb if r['pathb'].get('answers_agree') is False)}\n"
         md += f"- Nota indirgenen adımı olan öğe: {sum(1 for r in pb if r['pathb'].get('downgraded'))}\n"
+        scope = sum(1 for r in pb if "answer_level_only" in (r["pathb"].get("flags") or []))
+        md += (f"- Yalnız cevap düzeyinde doğrulanan (adım yok, `answer_level_only`): {scope}/{len(pb)}\n")
     cost = sum(r.get("cost_usd", 0) for r in records) + sum((r.get("pathb") or {}).get("cost_usd", 0) for r in records)
     ms = [r.get("ms", 0) for r in records]
     md += f"\n## Maliyet / süre\n\n- Toplam maliyet: **${cost:.2f}** · öğe başına ${cost/n:.3f}\n" if n else ""
@@ -204,6 +234,10 @@ def main(argv=None):
     ap.add_argument("--no-l4", action="store_true")
     ap.add_argument("--no-l5", action="store_true")
     ap.add_argument("--no-l6", action="store_true", help="F4 kritik + meta-doğrulama katmanını kapat")
+    ap.add_argument("--solver-family", choices=["anthropic", "meta"], default=None,
+                    help="çözümleri üreten aile (DECISIONS §17). Verilmezse yargılayan katmanlar "
+                         "varsayılana düşer ve her kayda `solver_family_unknown` bayrağı konur; "
+                         "gerçek bir AI çözücünün çıktıları ölçülürken BU BAYRAK VERİLMELİDİR.")
     ap.add_argument("--max-cost", type=float, default=None,
                     help="toplam harcama bu dolar değerine ulaşınca taramayı durdur")
     ap.add_argument("--pathb", action="store_true")
@@ -234,11 +268,17 @@ def main(argv=None):
         for k, fut in enumerate(as_completed(futs), start=1):
             rec = fut.result()
             records.append(rec)
-            # a billing failure is not a measurement: stop instead of burning the rest
-            blob = (rec.get("ir_reason") or "") + (rec.get("error") or "")
-            if "credit" in blob.lower() or "billing" in blob.lower() or "balance" in blob.lower():
-                aborted = blob[:300]
-                print(f"\n!! ABORTING: provider billing failure — {aborted}\n", flush=True)
+            # A billing/auth failure is not a measurement: stop instead of burning the rest.
+            # Primary signal is structural (`fatal`, set from LLMFatalError in run_item). The
+            # substring scan is only a backstop for a provider wording the client has not
+            # learned to classify yet, and it now reads the WHOLE reason: truncating it is how
+            # this guard silently failed on the 18 Sep run (151 items burned, aborted=None).
+            blob = (rec.get("ir_reason") or "") + " " + (rec.get("error") or "")
+            fatal = rec.get("fatal") or (blob if any(
+                w in blob.lower() for w in ("credit", "billing", "balance", "quota", "insufficient_quota")) else None)
+            if fatal:
+                aborted = str(fatal)[:300]
+                print(f"\n!! DURDURULDU: sağlayıcı faturalama/kimlik hatası — {aborted}\n", flush=True)
                 for f in futs:
                     f.cancel()
                 break

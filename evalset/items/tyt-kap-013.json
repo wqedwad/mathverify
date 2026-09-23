@@ -1,0 +1,62 @@
+{
+ "id": "tyt-kap-013",
+ "cell": "A",
+ "level": "TYT",
+ "topic": "polinom",
+ "question_tr": "(x + 1)² − (x − 1)² ifadesinin en sade hâli aşağıdakilerden hangisidir?",
+ "options": {
+  "A": "4*x",
+  "B": "2*x",
+  "C": "2",
+  "D": "4",
+  "E": "x**2 + 1"
+ },
+ "gold_answer": "4*x",
+ "problem_ir": {
+  "task": {
+   "kind": "simplify_expression",
+   "params": {
+    "expr": "(x + 1)**2 - (x - 1)**2"
+   }
+  },
+  "vars": [
+   {
+    "name": "x"
+   }
+  ],
+  "givens": [],
+  "answer_shape": "expression",
+  "options": {
+   "A": "4*x",
+   "B": "2*x",
+   "C": "2",
+   "D": "4",
+   "E": "x**2 + 1"
+  },
+  "level": "TYT",
+  "topic": "polinom"
+ },
+ "solution": {
+  "claimed_answer": {
+   "kind": "expression",
+   "payload": "4*x",
+   "option": "A"
+  },
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "compute",
+    "claim": "(x + 1)**2 - (x - 1)**2 = 4*x",
+    "from": [],
+    "text": "kare farkı"
+   }
+  ]
+ },
+ "solution_text": "$a^2-b^2=(a-b)(a+b)$ ile $((x+1)-(x-1))((x+1)+(x-1)) = 2\\cdot 2x = 4x$. Cevap: A",
+ "solution_is_correct": true,
+ "first_bad_step": null,
+ "notes": "",
+ "provenance": "sentetik",
+ "mutation": null,
+ "derived_from": null
+}

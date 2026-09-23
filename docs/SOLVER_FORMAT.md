@@ -76,6 +76,22 @@ Yardımcı fonksiyonlar: `at(expr, var, value)`, `dist(x1,y1,x2,y2)`, `slope(...
 Çoktan seçmelide `option` harfi verilir; harf ile `payload` tutarsızsa çözüm **yanlış**
 sayılır (`mc.consistency`).
 
+**`payload` verilmeyip yalnız `option` verilirse** doğrulayıcı yükü o şıkkın değerinden
+doldurur ve sonuca `answer_from_option_letter` bayrağını koyar: o durumda doğrulanan şey
+harftir, çözüm değil. Mümkünse ikisini de yazın — `mc.consistency` ancak o zaman çalışır.
+
+`payload_source` alanı yükün nereden geldiğini söyler: `solver` (çözücü yazdı),
+`option_letter` (şıktan dolduruldu), `recovered_text` (yol b'de serbest metinden kurtarıldı).
+Kurtarılmış bir yük **tavsiye niteliğindedir**: şıkla çelişirse karar UNKNOWN'a iter, asla
+INCORRECT üretmez.
+
+### Kararın kapsamı
+
+Çözümde iddiası olan `eq`/`compute` adımı yoksa `answer_level_only` bayrağı konur ve karar
+izine bir `KAPSAM:` satırı eklenir. Verdict yine üretilir — ama CORRECT o durumda **yalnız
+cevabın doğru olduğunu** söyler, çözümün geçerliliğini değil. Çözüm düzeyinde kanıt isteyen
+çağıran bu bayrağa bakmalıdır.
+
 ### Adım türleri ve deterministik denetim
 
 | kind | Anlamı | Denetim |
@@ -97,6 +113,11 @@ Kurallar:
    bağımsız iddia iki adımdır.
 3. **Yeni semboller IR'da yoksa** (u, t, n …) adım ayrıştırılamaz ve atlanır; bu ceza
    değildir ama denetim gücünü düşürür. Mümkünse IR sembolleriyle yazın.
+   Buna karşılık iddia **hiç iyi biçimli değilse** (bozuk sözdizimi, düz yazı, `#` işareti)
+   adım sessizce atlanmaz: `malformed_step_claim` bayrağı konur ve CORRECT engellenir. Ayrım
+   ayrıştırmayla yapılır — bilinmeyen adlar serbest sembol sayılıp metin yeniden ayrıştırılır,
+   yine düşerse matematik değildir. Bu kural olmadan, reddedilmiş bir adımın iddiasını bozmak
+   reddi iptal ediyordu (ölçüldü).
 4. `from` alt-atıf cezalandırılmaz (öncül havuzu tüm önceki `eq` iddialarını içerir) ama
    `case` dallarının doğru bağlanması şarttır: bir dalın sonucu o dalın `case` adımına
    `from` ile bağlanmalıdır.

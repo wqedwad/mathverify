@@ -100,3 +100,58 @@ def test_parse_answer_kinds():
     assert parse_answer("set", ["1", "2"]) == FiniteSet(1, 2)
     assert parse_answer("interval", "(-2, 7)") == Interval.open(-2, 7)
     assert str(parse_answer("dne", None)) == "DNE"
+
+
+# ------------------------------------------------------------------ false equalities (found by
+# harness/soundness_fuzz.py and a differential probe; each was declared EQUAL before the fix)
+def test_exact_integers_are_compared_exactly():
+    """Relative tolerance on exact numbers: 10^30 + 1 and 10^30 differ by 1e-30 relatively,
+    under the first rung's 1e-20, and were declared equal."""
+    import sympy as sp
+    ok, ev = answers_equivalent(sp.Integer(10) ** 30 + 1, sp.Integer(10) ** 30)
+    assert ok is False
+
+
+def test_equality_must_survive_every_precision_rung():
+    """e^(π√163) = 262537412640768743.99999999999925…: equal to 30 digits, not to 50."""
+    import sympy as sp
+    ok, _ = answers_equivalent(sp.exp(sp.pi * sp.sqrt(163)), sp.Integer(262537412640768744))
+    assert ok is False
+    ok, _ = answers_equivalent(sp.sqrt(2) + sp.sqrt(3), sp.sqrt(5 + 2 * sp.sqrt(6)))
+    assert ok is True
+
+
+def test_the_symbolic_battery_contains_no_numerical_snapping():
+    """`nsimplify` in the "symbolic" zero test turned −e^(−1000) into 0."""
+    import sympy as sp
+    from mathverify.sandbox.ops import zero_test_battery
+    assert zero_test_battery(-sp.exp(-1000)) is False
+    x = sp.Symbol("x", real=True)
+    ok, _ = answers_equivalent(1 / (x - 1), 1 / (x - 1) + sp.exp(-1000), shape="expression")
+    assert ok is False
+
+
+def test_a_sub_precision_difference_is_still_a_difference_at_random_points():
+    import sympy as sp
+    x = sp.Symbol("x", real=True)
+    ok, ev = answers_equivalent(x * sp.exp(-1000) + x, x, shape="expression")
+    assert ok is False
+
+
+def test_math_verify_is_a_second_opinion_never_the_only_evidence():
+    import inspect
+    from mathverify import equiv
+    src = inspect.getsource(equiv.answers_equivalent)
+    assert '"math_verify_only"' not in src
+
+
+def test_a_count_is_never_rounded():
+    """`int()` truncated a claimed count of 7/2 to 3 (13 counting items certified)."""
+    import sympy as sp
+    from mathverify.equiv import exact_integer
+    assert exact_integer(sp.Rational(7, 2)) is None
+    assert exact_integer(sp.Rational(3000000001, 1000000000)) is None
+    assert exact_integer(sp.Float("3.0")) == 3 and exact_integer(6) == 6
+    assert exact_integer(sp.Rational(6, 2)) == 3
+    ok, _ = answers_equivalent(sp.Rational(7, 2), sp.Integer(3), shape="count")
+    assert ok is False

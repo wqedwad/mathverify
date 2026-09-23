@@ -39,6 +39,12 @@ _CALIB_TRIED = False
 CALIBRATION_PATH = Path(__file__).resolve().parents[3] / "reports" / "calibration.json"
 
 
+class CalibrationUnavailable(RuntimeError):
+    """Calibration was asked for and could not be loaded. Raised rather than ignored: a silent
+    fallback would run the default thresholds while the caller believes the fitted ones are in
+    force, and `reports/*.json` is git-ignored, so a fresh clone hits this by default."""
+
+
 def load_calibration(path: Path | str | None = None, force: bool = False) -> dict[str, Any] | None:
     global _CALIB, _CALIB_TRIED
     if force:
@@ -54,8 +60,17 @@ def load_calibration(path: Path | str | None = None, force: bool = False) -> dic
         data = json.loads(p.read_text(encoding="utf-8"))
         if "model" in data and "thresholds" in data:
             _CALIB = data
-    except Exception:
+        else:
+            raise ValueError(f"{p} has no 'model'/'thresholds'")
+    except Exception as e:
         _CALIB = None
+        # Asking for calibration and silently getting none is the worst outcome: the caller
+        # believes the fitted thresholds are in force. `reports/*.json` is git-ignored, so a
+        # fresh clone has no calibration.json at all and this is the normal way to hit it.
+        raise CalibrationUnavailable(
+            f"MATHVERIFY_CALIBRATION is on but the fitted model could not be loaded from {p}: {e}. "
+            "Run `python -m harness.calibrate` to produce it, or unset MATHVERIFY_CALIBRATION."
+        ) from e
     return _CALIB
 
 
@@ -82,6 +97,17 @@ def calibrated_score(layers: list[LayerResult], calib: dict[str, Any]) -> float:
 # one IR means the IR does not pin the problem).
 _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "parse_error",
                          "ir_unfaithful", "restructure_answer_mismatch", "l4_disagree_certified",
+                         # path (b): the answer reconstructed from the prose disagrees with the
+                         # option letter. One of the two is not what the solver meant, so the
+                         # certificate is about the wrong claim — abstain, never refute.
+                         "recovered_answer_mismatch",
+                         # a step claim that is not well-formed at all: the solution does not meet
+                         # the structured contract, so skipping it silently would let an attacker
+                         # cancel a refutation by corrupting the claim (measured on 4 items)
+                         "malformed_step_claim",
+                         # the claimed answer is a computation or restates the question: the
+                         # certificates would be checking an answer the verifier itself produced
+                         "claim_is_not_a_value",
                          # F4: a critic error that survived the deterministic cross-check AND the
                          # other family's meta-verification. It abstains, never flips to INCORRECT:
                          # an LLM signal may not veto a hard certificate (§4), and [10] measures
