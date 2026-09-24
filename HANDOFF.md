@@ -334,7 +334,7 @@ Kullanıcının açtığı normal (routine olmayan) bir bulut oturumu, `master` 
   **sonra** onunla bir kez daha denenir; yalnız `https://github.com/` altındaki adrese, komut satırına,
   günlüğe ya da diske yazılmadan. Oturum içinde düz deneme vekil sayesinde başarılı olduğu için
   belirteç hiç gönderilmez. 7 yeni test (gerçek `git http-backend`, 401 döndüren yerel sunucu);
-  8 mutasyonun hepsi en az bir testi düşürdü. Takım 845 test. Gerçek belirteçle kurulum betiği
+  8 mutasyonun hepsi en az bir testi düşürdü. Takım 845 test. `check.py --full` **24/24** (`b042729`, 22:15–22:55 UTC, aşamaların toplamı 2344 s ≈ 39 dk: pytest 98, `run_eval` 58, `run_lean` 92, adversaryal 1985, sağlamlık 79, kalibrasyon 31 s); birim testleri 840 passed / 5 skipped; kapı değerleri önceki koşularla aynı (121 sertifika, FP 0, junk 0/17, 21 139 saldırıda %0, 0/448, 0/214, 0/46, 0/184, 0/6); raporlarda yalnız süre satırları değişti. Gerçek belirteçle kurulum betiği
   alanından koşu henüz ölçülmedi **[DOĞRULANMADI]**: kullanıcı adımları `docs/BULUT.md` "Senin yapman
   gerekenler" 3. madde, ölçülecekler §12.
 

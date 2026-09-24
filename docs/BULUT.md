@@ -702,6 +702,7 @@ oturumda ölçülür):
       (kimliksiz; GitHub vekili betikten sonra bağlanıyor). Kanca devraldı: Lean 167 s'de hazır.
 - [x] Aynı sohbete dönüş → ~50 dk sonra makine yeniden başlatılmıştı, disk korunmuştu; kanca 15 s,
       Lean HAZIR, kurulum betiği yeniden koşmadı.
+- [x] Değişikliğin kendisi bulutta: `check.py --full` **24/24** (`b042729`, 22:15–22:55 UTC, aşamaların toplamı 2344 s ≈ 39 dk: pytest 98, `run_eval` 58, `run_lean` 92, adversaryal 1985, sağlamlık 79, kalibrasyon 31 s); birim testleri 840 passed / 5 skipped; kapı değerleri önceki koşularla aynı (121 sertifika, FP 0, junk 0/17, 21 139 saldırıda %0, 0/448, 0/214, 0/46, 0/184, 0/6); raporlarda yalnız süre satırları değişti.
 - [ ] **Belirteçle kurulum** (`MATHVERIFY_GITHUB_TOKEN`, "Senin yapman gerekenler" 3. madde,
       değişiklik `master`a birleştikten sonra): yeni sohbette `setup_env.status` `OK mode=all`,
       `fetch_artifacts.log`'da "retrying the fetch with MATHVERIFY_GITHUB_TOKEN" ve "the token fetch
