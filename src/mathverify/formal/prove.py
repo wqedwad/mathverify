@@ -30,16 +30,17 @@ LAYER = "formal.lean"
 SAFE_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
 # LeanClient._send_raw's own errors: Lean gave no verdict on the code because the call timed out
-# (REPL killed), the REPL died, the pipe broke, or the reply was not JSON. harness/run_lean.py
-# classifies ladder attempts with the same prefixes (its NO_VERDICT; a test keeps them equal).
+# (REPL killed), the REPL died, the pipe broke, or the reply was not JSON. harness/run_lean.py keeps
+# no copy: it imports NO_VERDICT and lean_judged from here (a test checks they are these objects).
 NO_VERDICT = ("lean timeout after", "empty reply (REPL died)", "write failed", "bad JSON from REPL")
 
 
 def lean_judged(r: LeanResult) -> bool:
     """Did Lean itself judge this code? It did when the code compiled clean, or when it failed
     with at least one Lean error that is not a transport failure (NO_VERDICT). A timeout, a dead
-    REPL, or a failure with no error at all is no verdict: fail closed. Mirrors
-    harness.run_lean.attempt_answered for a raw LeanResult."""
+    REPL, or a failure with no error at all is no verdict: fail closed. harness.run_lean's
+    attempt_answered applies this function to a ladder attempt as prove_statement stored it
+    (`ok` = the result's `clean`, its first two errors)."""
     if r.timed_out:
         return False
     if r.clean:

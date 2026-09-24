@@ -153,14 +153,21 @@ def was_proved(r: dict) -> bool:
     return r.get("proved") is not False or bool(r.get("clean")) or bool(r.get("certified"))
 
 
+# prove._axioms_of's placeholder when `#print axioms` gave no verdict (harness.run_lean.AXIOMS_UNKNOWN;
+# a test keeps them equal). Kept as a literal so this script does not import the formal layer.
+AXIOMS_UNKNOWN = "<unknown>"
+
+
 def unanswered_audit(r: dict) -> list[str] | None:
     """The audit probes of a proved statement that Lean did not answer (`audit_unanswered`, written
     by harness.run_lean: "vacuity", "no_hyp", "axioms"), [] for an unproved statement (never
     audited), or None when a proved statement carries no usable record (missing, or not a list of
     probe names): fail closed. A report written before run_lean recorded the field gives None for
-    every proved statement. When the row also carries the raw audit (prove._audit's record), its own
-    `unanswered` list counts too, so the derived field can add probes but never hide one; a raw
-    audit without that list is no usable record either."""
+    every proved statement. When the row also carries the raw audit (prove._audit's record), it is
+    read with run_lean.audit_unanswered's own rule, so the derived field can add probes but never
+    hide one: its `unanswered` list counts, and "axioms" is added when its `axioms` is not a list or
+    holds AXIOMS_UNKNOWN (`#print axioms` unanswered; a row whose derived field said [] next to
+    that passed before). A raw audit without its `unanswered` list is no usable record either."""
     if not was_proved(r):
         return []
     u = r.get("audit_unanswered")
@@ -168,10 +175,26 @@ def unanswered_audit(r: dict) -> list[str] | None:
         return None
     if "audit" not in r:
         return u
-    raw = r["audit"].get("unanswered") if isinstance(r["audit"], dict) else None
+    audit = r["audit"]
+    raw = audit.get("unanswered") if isinstance(audit, dict) else None
     if not isinstance(raw, list):
         return None
-    return u + [str(p) for p in raw if str(p) not in u]
+    out = u + [str(p) for p in raw if str(p) not in u]
+    axioms = audit.get("axioms")
+    if (not isinstance(axioms, list) or AXIOMS_UNKNOWN in axioms) and "axioms" not in out:
+        out.append("axioms")
+    return out
+
+
+def elaboration(r: dict) -> bool | None | str:
+    """A statement's elaboration check as harness.run_lean recorded it (`elaborates`: the statement
+    once with the body `sorry`, autoImplicit off): True (elaborates), False (Lean rejected the
+    statement itself), None (Lean gave no verdict), or "missing" when the field is absent or not
+    one of those (a report from before the check): fail closed."""
+    if "elaborates" not in r:
+        return "missing"
+    e = r["elaborates"]
+    return e if e is None or isinstance(e, bool) else "missing"
 
 
 def lean_silence(rows) -> str | None:
@@ -185,7 +208,12 @@ def lean_silence(rows) -> str | None:
     - "denetim cevapsız a/P kanıtlanan ifade": of the P proved statements, a have an audit probe
       Lean did not answer (`audit_unanswered`), so their missing certificate is silence, not a
       verdict (a vacuous junk statement whose vacuity probe timed out);
-    - "denetim kaydı yok d/P kanıtlanan ifade": d proved statements carry no usable audit record.
+    - "denetim kaydı yok d/P kanıtlanan ifade": d proved statements carry no usable audit record;
+    - "derleme sondası cevapsız e/N ifade", "derleme kaydı yok e/N ifade": Lean gave no verdict on
+      the elaboration check of e statements (`elaborates` None), or e carry no usable record of it;
+    - "ifade Lean'de derlenmedi e/N" (not under "Lean ..."): Lean rejected e statements themselves
+      (`elaborates` False), so every attempt on them failed on the statement, never on the claimed
+      value, and each still counted as answered (reviewer's unelaborated_probe.py).
     """
     stmt = [r for r in rows if r.get("statement", True)]
     silent = lean_unanswered(stmt)
@@ -208,7 +236,16 @@ def lean_silence(rows) -> str | None:
         parts.append(f"denetim cevapsız {audit_silent}/{len(proved)} kanıtlanan ifade")
     if audit_missing:
         parts.append(f"denetim kaydı yok {audit_missing}/{len(proved)} kanıtlanan ifade")
-    return "Lean " + ", ".join(parts) if parts else None
+    elab = [elaboration(r) for r in stmt]
+    if elab.count(None):
+        parts.append(f"derleme sondası cevapsız {elab.count(None)}/{len(stmt)} ifade")
+    if elab.count("missing"):
+        parts.append(f"derleme kaydı yok {elab.count('missing')}/{len(stmt)} ifade")
+    why = ["Lean " + ", ".join(parts)] if parts else []
+    rejected = sum(1 for e in elab if e is False)
+    if rejected:
+        why.append(f"ifade Lean'de derlenmedi {rejected}/{len(stmt)}")
+    return ", ".join(why) or None
 
 
 def lean_gates(data: dict) -> list[dict]:
@@ -257,6 +294,16 @@ def lean_gates(data: dict) -> list[dict]:
     # (hypotheses contradictory), all four gates OK with 121 certificates. So the rule does not
     # fail a healthy run; a report from before `audit_unanswered` fails the junk gate ("denetim
     # kaydı yok 1/1": its junk rows carry no audit) and keeps FP 0 (no wrong-answer item proved).
+    # An answer is not yet a verdict on the claimed VALUE: an attempt that fails because the
+    # statement itself does not elaborate (a broken template's unknown identifier) carries a real
+    # Lean error, so it counts as answered, and a wrong-answer item or junk statement made only of
+    # such attempts read "FP 0" / "0/17". Each of those statements must also have `elaborates`
+    # True (harness.run_lean: sent once with the body `sorry`, autoImplicit off; see lean_silence).
+    # Measured 24 Sep on two new full Windows sweeps (45 s): all 175 statements elaborate (122
+    # right-answer items, 50 wrong-answer items, 3 junk), sweep 79.6 / 79.8 s wall against 74 s
+    # before (the 175 checks alone took 2.2-2.5 s in a separate probe), all four gates OK with 121
+    # certificates, FP 0, junk 0/17; the previous full sweep's report (no
+    # `elaborates`) fails FP ("derleme kaydı yok 50/50 ifade") and junk ("... 3/3 ifade").
     wrong = [r for r in lean if r.get("statement", True) and not r.get("answer_right")]
     silence = lean_silence(wrong)
     fp_value = len(fp)

@@ -13,8 +13,12 @@ re-probes Lean after the junk probe. A reached REPL can still leave a statement 
 or all tactic attempts timed out, or the audit probes of a proof did. So every such record also
 carries `lean_answered` (at least one attempt judged), the attempt counts `n_attempts` /
 `n_unanswered`, and `audit_unanswered`: the audit probes of a proved statement Lean did not
-answer. scripts/check.py fails the FP and junk gates unless every attempt and every audit probe
-on each wrong-answer item and each junk statement got a Lean verdict.
+answer. A Lean error on every attempt is still an answer, but when the error is about the
+statement itself (a template that does not elaborate) Lean never judged the claimed value; so
+every statement is also sent once with the body `sorry` and carries `elaborates` (see
+elaboration_fields). scripts/check.py fails the FP and junk gates unless every attempt and every
+audit probe on each wrong-answer item and each junk statement got a Lean verdict and each of
+those statements elaborates.
 """
 from __future__ import annotations
 import argparse, json, sys, time
@@ -25,7 +29,7 @@ sys.path.insert(0, str(ROOT / "src")); sys.path.insert(0, str(ROOT))
 from harness.loader import load_items, split_for_verifier  # noqa: E402
 # one classification of "Lean gave no verdict" for the ladder, the audit and this sweep: prove's own
 from mathverify.formal import prove as _prove  # noqa: E402
-from mathverify.formal.lean_client import LeanResult  # noqa: E402
+from mathverify.formal.lean_client import LeanResult, LeanUnavailable  # noqa: E402
 NO_VERDICT, lean_judged = _prove.NO_VERDICT, _prove.lean_judged
 
 
@@ -187,6 +191,79 @@ def statement_silent(rec: dict) -> bool:
     return (not rec["lean_answered"]) or rec["n_unanswered"] > 0 or bool(rec["audit_unanswered"])
 
 
+# The elaboration check: the statement once with the body `sorry`, autoImplicit off. An attempt
+# that fails because the STATEMENT does not elaborate (unknown identifier from a broken template,
+# a type error) carries a real Lean error, so it counts as answered, and a wrong-answer item or a
+# junk statement made only of such attempts passed "Lean FP 0" / junk "0/17" although Lean never
+# judged the claimed value (reviewer's unelaborated_probe.py). autoImplicit is off because with
+# Lean's default an unknown ATOMIC name (`x = brokenc`) is silently bound as an implicit variable
+# and elaborates; off, it is an error. Measured on 24 Sep (live Lean, r6 sorry_shape_probe*.py):
+# all 175 sweep statements (122 right-answer items, 50 wrong-answer items, 3 junk) come back with no
+# error, exactly one sorry and no REPL `message`, with autoImplicit on and off alike, 2.2-2.5 s for
+# all 175 (slowest 42 ms); an unknown dotted name, an unknown atomic name (off only), a type error
+# and a parse error each give a Lean error. The verifier's own path (prove_statement) is unchanged:
+# this call belongs to the measurement only.
+ELAB_PREFIX = "set_option autoImplicit false in\n"
+
+
+def elaboration_code(st) -> str:
+    return ELAB_PREFIX + st.theorem("  sorry")
+
+
+def elaboration_verdict(r: LeanResult) -> bool | None:
+    """Does Lean's reply show that the statement elaborates? True: Lean answered with no
+    error-severity message (the `sorry` warning is expected), no REPL `message`, and the `sorry` of
+    the body reported (the statement was read up to its proof). False: Lean answered with an error,
+    or without reaching the body. None: no verdict (timeout, dead REPL, broken pipe, bad JSON, a
+    REPL-level `message` such as an unknown environment): fail closed in scripts/check.py."""
+    if r.timed_out or not isinstance(r.raw, dict) or "message" in r.raw:
+        return None
+    if r.errors:
+        return False
+    return bool(r.ok and r.sorries)
+
+
+def elaboration_fields(st, timeout: float) -> dict:
+    """`elaborates` (elaboration_verdict) and `elab_errors` (the first Lean errors, or the REPL
+    message) of one elaboration check. It runs on prove's client (`prove.get_lean`, the thread-local
+    REPL prove_statement uses). Lean gone for good gives None plus a `lean_unavailable` error, which
+    add_elaboration also records as the statement not having reached Lean."""
+    try:
+        r = _prove.get_lean().run(elaboration_code(st), timeout=timeout)
+    except LeanUnavailable as e:
+        return {"elaborates": None, "elab_errors": [f"{LEAN_UNAVAILABLE}: {e}"]}
+    errs = [str(e)[:300] for e in r.errors[:2]]
+    if not errs and isinstance(r.raw, dict) and "message" in r.raw:
+        errs = [f"REPL message: {str(r.raw['message'])[:300]}"]
+    return {"elaborates": elaboration_verdict(r), "elab_errors": errs}
+
+
+ELAB_NOT_SENT = "not sent: Lean unavailable for this statement"
+
+
+def add_elaboration(rec: dict, st, timeout: float) -> dict:
+    """Store the elaboration check on a statement's record (after lean_fields). A check that found
+    Lean gone makes the statement unreached, like a lost ladder or audit call. A statement that is
+    already unreached gets no check (None): every Lean gate fails on it anyway, and a second
+    respawn attempt can cost up to the REPL's boot timeout (300 s) per statement."""
+    if rec.get("lean_reached") is False:
+        rec.update({"elaborates": None, "elab_errors": [ELAB_NOT_SENT]})
+        return rec
+    fields = elaboration_fields(st, timeout)
+    rec.update(fields)
+    lost = [e for e in fields["elab_errors"] if e.startswith(LEAN_UNAVAILABLE)]
+    if lost:
+        rec["lean_reached"] = False
+        rec["errors"] = list(rec.get("errors") or []) + lost
+    return rec
+
+
+def statement_unelaborated(rec: dict) -> bool:
+    """Is this stored statement not shown to elaborate? For a junk statement or a wrong-answer item
+    this fails its gate in scripts/check.py; a right-answer item fails no gate."""
+    return rec.get("elaborates") is not True
+
+
 def junk_probe(timeout: float) -> list[dict]:
     from mathverify.formal import build_statement, prove_statement
     out = []
@@ -199,6 +276,7 @@ def junk_probe(timeout: float) -> list[dict]:
             rec["proved"] = r["proved"]
             rec["audit"] = r.get("audit")
             rec.update(lean_fields(r))
+            add_elaboration(rec, st, timeout)
         out.append(rec)
     return out
 
@@ -241,6 +319,8 @@ def main(argv=None):
             rec.update({"proved": r["proved"], "clean": (r.get("audit") or {}).get("clean"),
                         "proof": r.get("proof"), "audit": r.get("audit"), "ms": round(r["ms"]),
                         "stmt_text": r.get("statement"), **lean_fields(r)})
+            # every item, right-answer ones too (they fail no gate on it; 2.5 s for all 175)
+            add_elaboration(rec, st, args.timeout)
         recs.append(rec)
         if i % 20 == 0 or rec["proved"]:
             print(f"[{i}/{len(items)}] {rec['id']:<16} stmt={rec['statement']} proved={rec['proved']} clean={rec['clean']}", flush=True)
@@ -267,11 +347,20 @@ def main(argv=None):
     silent_items = [r for r in recs if r["statement"] and statement_silent(r)]
     silent_wrong = [r["id"] for r in silent_items if not r["answer_right"]]
     silent_junk = [j["label"] for j in junk if j["statement"] and statement_silent(j)]
+    # the elaboration check, per group: (elaborates, statements, the ones that do not)
+    groups = {"right": [r for r in recs if r["statement"] and r["answer_right"]],
+              "wrong": [r for r in recs if r["statement"] and not r["answer_right"]],
+              "junk": [j for j in junk if j["statement"]]}
+    elab = {g: (sum(1 for r in rows if not statement_unelaborated(r)), len(rows),
+                [r.get("id") or r.get("label") for r in rows if statement_unelaborated(r)])
+            for g, rows in groups.items()}
+    elab_txt = " ".join(f"{g}={a}/{n}{' ' + str(bad[:10]) if bad else ''}" for g, (a, n, bad) in elab.items())
     print(f"lean_available_end={lean_end} lean_unreached={len(unreached)} "
           f"lean_unanswered_attempts={n_un}/{n_att} lean_audit_unanswered={len(audit_silent)}/{len(proved_stmts)} "
           f"lean_silent_items={len(silent_items)} "
           f"(wrong answer: {len(silent_wrong)}{' ' + str(silent_wrong) if silent_wrong else ''}) "
-          f"lean_silent_junk={len(silent_junk)}{' ' + str(silent_junk) if silent_junk else ''}", flush=True)
+          f"lean_silent_junk={len(silent_junk)}{' ' + str(silent_junk) if silent_junk else ''} "
+          f"elaborates: {elab_txt}", flush=True)
     (out / "lean_results.json").write_text(json.dumps({"lean_available": lean_ok, "lean_available_end": lean_end,
                                                        "records": recs, "junk_probe": junk},
                                                       ensure_ascii=False, indent=1), encoding="utf-8")
@@ -287,6 +376,12 @@ def main(argv=None):
            f" · bunlardan cevabı yanlış (FP kapısı düşer): **{len(silent_wrong)}**"
            f"{' ✗ ' + str(silent_wrong) if silent_wrong else ''}"
            f" · junk sondası (junk kapısı düşer): **{len(silent_junk)}**{' ✗ ' + str(silent_junk) if silent_junk else ''}\n")
+    a_r, n_r, _ = elab["right"]
+    a_w, n_w, bad_w = elab["wrong"]
+    a_j, n_j, bad_j = elab["junk"]
+    md += (f"- Lean'de derlenen ifade (`sorry` gövdesiyle, autoImplicit kapalı): cevabı doğru öğe **{a_r}/{n_r}**"
+           f" · cevabı yanlış öğe (FP kapısı) **{a_w}/{n_w}**{' ✗ ' + str(bad_w[:10]) if bad_w else ''}"
+           f" · junk sondası (junk kapısı) **{a_j}/{n_j}**{' ✗ ' + str(bad_j) if bad_j else ''}\n")
     md += f"- Öğe: **{n}** · Lean ifadesi üretilebilen: **{len(with_stmt)}** ({len(with_stmt)/n:.1%})\n"
     md += f"- Kanıtlanan: **{len(proved)}** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **{len(certified)}**\n"
     md += f"- **Yanlış cevaplı öğelerde kanıt (FP): {len(fp)}** {'✓ hedef 0' if not fp else '✗ ' + str([r['id'] for r in fp])}\n"
