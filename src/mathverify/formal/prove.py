@@ -6,7 +6,8 @@ Order (positive evidence only — handoff §3 rule 4):
   3. if that fails, a cross-family model writes a proof, with a bounded repair loop fed the
      real Lean error messages
   4. audits before any `pass`: no `sorry`, axioms ⊆ {propext, Classical.choice, Quot.sound},
-     hypotheses not contradictory (vacuity probe), hypotheses actually used (no-hyp probe)
+     hypotheses not contradictory (vacuity probe), hypotheses actually used (no-hyp probe);
+     a probe Lean never answered (timeout, dead REPL) fails the audit
 A failed proof is NEVER evidence against the claim ("kanıtlayamadım" ≠ "yanlış").
 """
 from __future__ import annotations
@@ -18,15 +19,33 @@ from typing import Any
 from ..certify.base import Timer, result, unknown
 from ..llm import get_client, other_family, LLMError
 from ..llm.schemas import _obj, _s
-from .lean_client import LeanClient, get_lean, LeanUnavailable
+from .lean_client import LeanClient, LeanResult, get_lean, LeanUnavailable
 from .statement import LeanStatement, build_statement
 
 __all__ = ["prove_statement", "l7_layer", "TACTIC_LADDER", "IFF_LADDER", "ladder_for", "PROOF_SCHEMA",
-           "SAFE_AXIOMS"]
+           "SAFE_AXIOMS", "NO_VERDICT", "lean_judged"]
 
 LAYER = "formal.lean"
 
 SAFE_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+
+# LeanClient._send_raw's own errors: Lean gave no verdict on the code because the call timed out
+# (REPL killed), the REPL died, the pipe broke, or the reply was not JSON. harness/run_lean.py
+# classifies ladder attempts with the same prefixes (its NO_VERDICT; a test keeps them equal).
+NO_VERDICT = ("lean timeout after", "empty reply (REPL died)", "write failed", "bad JSON from REPL")
+
+
+def lean_judged(r: LeanResult) -> bool:
+    """Did Lean itself judge this code? It did when the code compiled clean, or when it failed
+    with at least one Lean error that is not a transport failure (NO_VERDICT). A timeout, a dead
+    REPL, or a failure with no error at all is no verdict: fail closed. Mirrors
+    harness.run_lean.attempt_answered for a raw LeanResult."""
+    if r.timed_out:
+        return False
+    if r.clean:
+        return True
+    return any(not str(e).startswith(NO_VERDICT) for e in r.errors)
+
 
 TACTIC_LADDER = [
     "  norm_num",
@@ -241,31 +260,68 @@ def prove_statement(stmt: LeanStatement, *, solver_family: str | None = None, le
             prev, errs = proof, r.errors or ["unknown failure"]
     # 4 audits
     if out["proved"]:
-        audit: dict[str, Any] = {}
-        ax, ax_txt = _axioms_of(lean, stmt.name, out.get("env"), tactic_timeout)
-        audit["axioms"] = sorted(ax)
-        audit["axioms_raw"] = ax_txt[:300]
-        audit["axioms_ok"] = bool(ax <= SAFE_AXIOMS)
-        audit["sorry_free"] = "sorryAx" not in ax
-        vp = stmt.vacuity_probe()
-        if vp:
-            rv = lean.run(vp, timeout=tactic_timeout)
+        out["audit"] = _audit(stmt, out, lean, tactic_timeout)
+    out["ms"] = (time.perf_counter() - t0) * 1000
+    return out
+
+
+def _audit(stmt: LeanStatement, out: dict[str, Any], lean: LeanClient, timeout: float) -> dict[str, Any]:
+    """Axiom, vacuity and no-hypothesis audits of a compiled proof. Each probe needs a real Lean
+    verdict: a probe Lean never judged (timeout, dead REPL, broken pipe, bad JSON, Lean gone for
+    good) is listed in `unanswered` and the audit is not clean. Reading a timed-out probe as
+    "did not compile" once gave the vacuous junk statement `x = 2 from 1/(x-2) = 0` a clean
+    certificate: both probes timed out, so its hypotheses counted as consistent and used."""
+    audit: dict[str, Any] = {}
+    unanswered: list[str] = []
+
+    def probe(code: str) -> tuple[bool, LeanResult]:
+        """(did Lean judge it?, result). Lean gone for good (LeanUnavailable) is no verdict, and
+        is recorded in out["errors"] so that run_lean's lean_reached sees it."""
+        try:
+            r = lean.run(code, timeout=timeout)
+        except LeanUnavailable as e:
+            msg = f"lean_unavailable: {e}"
+            out["errors"].append(msg)
+            return False, LeanResult(ok=False, errors=[msg])
+        return lean_judged(r), r
+
+    try:
+        ax, ax_txt = _axioms_of(lean, stmt.name, out.get("env"), timeout)
+    except LeanUnavailable as e:
+        ax_txt = f"lean_unavailable: {e}"
+        out["errors"].append(ax_txt)
+        ax = {"<unknown>"}
+    audit["axioms"] = sorted(ax)
+    audit["axioms_raw"] = ax_txt[:300]
+    audit["axioms_ok"] = bool(ax <= SAFE_AXIOMS)       # "<unknown>" (no verdict) is never safe
+    audit["sorry_free"] = "sorryAx" not in ax
+    vp = stmt.vacuity_probe()
+    if vp:
+        judged, rv = probe(vp)
+        if judged:
             audit["hypotheses_contradictory"] = bool(rv.clean)
-            audit["vacuity_probe_errors"] = rv.errors[:1]
         else:
-            audit["hypotheses_contradictory"] = False
-        nh = stmt.no_hyp_probe(out["proof"])
-        if nh:
-            rn = lean.run(nh, timeout=tactic_timeout)
+            audit["hypotheses_contradictory"] = None
+            unanswered.append("vacuity")
+        audit["vacuity_probe_errors"] = rv.errors[:1]
+    else:
+        audit["hypotheses_contradictory"] = False
+    nh = stmt.no_hyp_probe(out["proof"])
+    if nh:
+        judged, rn = probe(nh)
+        if judged:
             audit["provable_without_hypotheses"] = bool(rn.clean)
         else:
             audit["provable_without_hypotheses"] = None
-        audit["clean"] = bool(audit["axioms_ok"] and audit["sorry_free"]
-                              and not audit["hypotheses_contradictory"]
-                              and audit.get("provable_without_hypotheses") is not True)
-        out["audit"] = audit
-    out["ms"] = (time.perf_counter() - t0) * 1000
-    return out
+            unanswered.append("no_hyp")
+        audit["no_hyp_probe_errors"] = rn.errors[:1]
+    else:
+        audit["provable_without_hypotheses"] = None
+    audit["unanswered"] = unanswered
+    audit["clean"] = bool(audit["axioms_ok"] and audit["sorry_free"] and not unanswered
+                          and not audit["hypotheses_contradictory"]
+                          and audit.get("provable_without_hypotheses") is not True)
+    return audit
 
 
 def l7_layer(ir: dict[str, Any], solution: dict[str, Any], solver_family: str | None = None, *,
