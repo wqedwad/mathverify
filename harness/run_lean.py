@@ -9,9 +9,12 @@ unprovable, so a proof here would mean the statement does not say what the claim
 so "zero certificates" never reads as a clean result when Lean was simply absent. Because Lean
 can also be lost DURING the run (REPL OOM-killed and not respawnable), every record with a
 statement carries `lean_reached` (plus prove_statement's `errors`), and `lean_available_end`
-re-probes Lean after the junk probe. A reached REPL can still give no verdict at all (every
-tactic attempt timed out), so every such record also carries `lean_answered` and the attempt
-counts `n_attempts` / `n_unanswered`.
+re-probes Lean after the junk probe. A reached REPL can still leave a statement unjudged: some
+or all tactic attempts timed out, or the audit probes of a proof did. So every such record also
+carries `lean_answered` (at least one attempt judged), the attempt counts `n_attempts` /
+`n_unanswered`, and `audit_unanswered`: the audit probes of a proved statement Lean did not
+answer. scripts/check.py fails the FP and junk gates unless every attempt and every audit probe
+on each wrong-answer item and each junk statement got a Lean verdict.
 """
 from __future__ import annotations
 import argparse, json, sys, time
@@ -20,6 +23,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src")); sys.path.insert(0, str(ROOT))
 from harness.loader import load_items, split_for_verifier  # noqa: E402
+# one classification of "Lean gave no verdict" for the ladder, the audit and this sweep: prove's own
+from mathverify.formal import prove as _prove  # noqa: E402
+from mathverify.formal.lean_client import LeanResult  # noqa: E402
+NO_VERDICT, lean_judged = _prove.NO_VERDICT, _prove.lean_judged
 
 
 def _answer_is_right(it, ir, sol, labels) -> bool:
@@ -114,19 +121,13 @@ def lean_reached(r: dict) -> bool:
     return not any(str(e).startswith(LEAN_UNAVAILABLE) for e in r.get("errors") or [])
 
 
-# LeanClient._send_raw's own errors: the REPL gave no verdict on the code because the call timed
-# out (REPL killed), the REPL died, the pipe broke, or the reply was not JSON.
-NO_VERDICT = ("lean timeout after", "empty reply (REPL died)", "write failed", "bad JSON from REPL")
-
-
 def attempt_answered(a: dict) -> bool:
-    """Did Lean itself judge this attempt? A compiled proof did; a failed one only when it carries
-    at least one Lean error that is not a transport failure (NO_VERDICT). A failure with no error
-    at all (e.g. a REPL-level `message`; none among the 869 attempts of the 24 Sep full sweep)
-    counts as unanswered: fail closed."""
-    if a.get("ok"):
-        return True
-    return any(not str(e).startswith(NO_VERDICT) for e in a.get("errors") or [])
+    """Did Lean itself judge this attempt? prove.lean_judged on the attempt as prove_statement
+    recorded it (`ok` is the result's `clean`): a compiled proof did; a failed one only when it
+    carries at least one Lean error that is not a transport failure (prove.NO_VERDICT: timeout,
+    dead REPL, broken pipe, bad JSON). A failure with no error at all (e.g. a REPL-level `message`;
+    none among the 869 attempts of the 24 Sep full sweep) counts as unanswered: fail closed."""
+    return lean_judged(LeanResult(ok=bool(a.get("ok")), errors=list(a.get("errors") or [])))
 
 
 def lean_answered(r: dict) -> bool:
@@ -135,11 +136,40 @@ def lean_answered(r: dict) -> bool:
     lean_reached only says the REPL was there. When every tactic of the ladder hits the timeout,
     the REPL is killed and respawned each time, prove_statement records no `lean_unavailable`
     error and the statement counts as reached, although Lean never judged it: a junk probe made
-    only of such statements reported "0/17 certified" with no junk statement evaluated. The same
-    holds for an item whose claimed value is wrong ("Lean FP 0" says nothing about it); for an
-    item with a right value it only costs the certificate. scripts/check.py gates on the first two.
+    only of such statements reported "0/17 certified" with no junk statement evaluated. This flag
+    alone is not what scripts/check.py gates on: one cheap tactic answered and every heavy one
+    timed out still makes it True, so the gate also needs `n_unanswered` == 0 and an empty
+    `audit_unanswered` (see statement_silent).
     """
     return any(attempt_answered(a) for a in r.get("attempts") or [])
+
+
+# prove._axioms_of's placeholder when `#print axioms` gave no parseable verdict (timeout, dead REPL)
+AXIOMS_UNKNOWN = "<unknown>"
+
+
+def audit_unanswered(r: dict) -> list[str]:
+    """The audit probes of a PROVED statement that Lean did not answer: prove._audit's own
+    `unanswered` list ("vacuity", "no_hyp") plus "axioms" when `#print axioms` gave no verdict
+    (AXIOMS_UNKNOWN). An unproved statement is never audited: []. A proved one whose audit is
+    missing or malformed gives ["audit"]: fail closed.
+
+    Every probe that times out makes the audit unclean, so the proof gets no certificate; but that
+    refusal is silence, not Lean's verdict. The junk statement `x = 2 from 1/(x-2) = 0` compiles
+    in the real sweep and only the answered vacuity probe (its hypotheses contradict each other)
+    keeps it from a certificate; with both probes timed out the junk gate still read "0/17"
+    (reviewer's junk_audit_silence_probe.py), and so would a wrong-answer item for "Lean FP 0".
+    """
+    if not r.get("proved"):
+        return []
+    audit = r.get("audit")
+    if not isinstance(audit, dict) or not isinstance(audit.get("unanswered"), list):
+        return ["audit"]
+    out = [str(p) for p in audit["unanswered"]]
+    axioms = audit.get("axioms")
+    if not isinstance(axioms, list) or AXIOMS_UNKNOWN in axioms:
+        out.append("axioms")
+    return out
 
 
 def lean_fields(r: dict) -> dict:
@@ -147,7 +177,14 @@ def lean_fields(r: dict) -> dict:
     attempts = r.get("attempts") or []
     return {"lean_reached": lean_reached(r), "lean_answered": lean_answered(r), "n_attempts": len(attempts),
             "n_unanswered": sum(1 for a in attempts if not attempt_answered(a)),
-            "errors": list(r.get("errors") or [])}
+            "audit_unanswered": audit_unanswered(r), "errors": list(r.get("errors") or [])}
+
+
+def statement_silent(rec: dict) -> bool:
+    """Did Lean leave anything on this stored statement unjudged: an attempt or an audit probe?
+    For a junk statement or a wrong-answer item this fails its gate in scripts/check.py; a
+    right-answer item only loses its certificate."""
+    return (not rec["lean_answered"]) or rec["n_unanswered"] > 0 or bool(rec["audit_unanswered"])
 
 
 def junk_probe(timeout: float) -> list[dict]:
@@ -160,6 +197,7 @@ def junk_probe(timeout: float) -> list[dict]:
             r = prove_statement(st, use_model=False, tactic_timeout=timeout)
             rec["certified"] = bool(r["proved"] and (r.get("audit") or {}).get("clean"))
             rec["proved"] = r["proved"]
+            rec["audit"] = r.get("audit")
             rec.update(lean_fields(r))
         out.append(rec)
     return out
@@ -218,15 +256,22 @@ def main(argv=None):
     # Lean lost before it shows as records with lean_reached False.
     lean_end = lean_available()
     unreached = [r.get("id") or r.get("label") for r in recs + junk if r["statement"] and not r["lean_reached"]]
-    # reached but never judged: every attempt timed out (or the REPL died on it). check.py fails
-    # the junk gate on a junk one and the FP gate on a wrong-answer item; a right-answer item only
-    # loses its certificate
-    unanswered_items = [r for r in recs if r["statement"] and not r["lean_answered"]]
-    unanswered_wrong = [r["id"] for r in unanswered_items if not r["answer_right"]]
-    unanswered_junk = [j["label"] for j in junk if j["statement"] and not j["lean_answered"]]
+    # Lean left an attempt or an audit probe unjudged (timeout, dead REPL). check.py fails the junk
+    # gate on any such junk statement and the FP gate on any such wrong-answer item; a right-answer
+    # item only loses its certificate
+    stmts = [r for r in recs + junk if r["statement"]]
+    n_att = sum(r["n_attempts"] for r in stmts)
+    n_un = sum(r["n_unanswered"] for r in stmts)
+    proved_stmts = [r for r in stmts if r.get("proved")]
+    audit_silent = [r for r in proved_stmts if r["audit_unanswered"]]
+    silent_items = [r for r in recs if r["statement"] and statement_silent(r)]
+    silent_wrong = [r["id"] for r in silent_items if not r["answer_right"]]
+    silent_junk = [j["label"] for j in junk if j["statement"] and statement_silent(j)]
     print(f"lean_available_end={lean_end} lean_unreached={len(unreached)} "
-          f"lean_unanswered_items={len(unanswered_items)} (wrong answer: {len(unanswered_wrong)}) "
-          f"lean_unanswered_junk={len(unanswered_junk)}", flush=True)
+          f"lean_unanswered_attempts={n_un}/{n_att} lean_audit_unanswered={len(audit_silent)}/{len(proved_stmts)} "
+          f"lean_silent_items={len(silent_items)} "
+          f"(wrong answer: {len(silent_wrong)}{' ' + str(silent_wrong) if silent_wrong else ''}) "
+          f"lean_silent_junk={len(silent_junk)}{' ' + str(silent_junk) if silent_junk else ''}", flush=True)
     (out / "lean_results.json").write_text(json.dumps({"lean_available": lean_ok, "lean_available_end": lean_end,
                                                        "records": recs, "junk_probe": junk},
                                                       ensure_ascii=False, indent=1), encoding="utf-8")
@@ -234,11 +279,14 @@ def main(argv=None):
     md += f"- Lean REPL (Mathlib) bu koşuda açıldı: **{'evet' if lean_ok else 'hayır'}**"
     md += f" · taramanın sonunda erişilebilir: **{'evet' if lean_end else 'hayır'}**"
     md += f" · Lean'e ulaşamayan ifade: **{len(unreached)}**{' ✗ ' + str(unreached[:10]) if unreached else ''}\n"
-    md += (f"- Lean'in hiçbir denemeye cevap vermediği ifade (zaman aşımı ya da REPL çökmesi): öğe **{len(unanswered_items)}**"
-           f"{' ' + str([r['id'] for r in unanswered_items[:10]]) if unanswered_items else ''}"
-           f" · bunlardan cevabı yanlış: **{len(unanswered_wrong)}**"
-           f"{' ✗ ' + str(unanswered_wrong[:10]) if unanswered_wrong else ''}"
-           f" · junk sondası **{len(unanswered_junk)}**{' ✗ ' + str(unanswered_junk) if unanswered_junk else ''}\n")
+    md += (f"- Lean'in cevap vermediği taktik denemesi (zaman aşımı ya da REPL çökmesi): **{n_un}/{n_att}**"
+           f" · denetim sondası (aksiyom/vakum/hipotezsiz) cevapsız kalan kanıt: **{len(audit_silent)}/{len(proved_stmts)}**"
+           f"{' ' + str([r.get('id') or r.get('label') for r in audit_silent[:10]]) if audit_silent else ''}\n")
+    md += (f"- En az bir denemesi ya da denetim sondası cevapsız kalan ifade: öğe **{len(silent_items)}**"
+           f"{' ' + str([r['id'] for r in silent_items[:10]]) if silent_items else ''}"
+           f" · bunlardan cevabı yanlış (FP kapısı düşer): **{len(silent_wrong)}**"
+           f"{' ✗ ' + str(silent_wrong) if silent_wrong else ''}"
+           f" · junk sondası (junk kapısı düşer): **{len(silent_junk)}**{' ✗ ' + str(silent_junk) if silent_junk else ''}\n")
     md += f"- Öğe: **{n}** · Lean ifadesi üretilebilen: **{len(with_stmt)}** ({len(with_stmt)/n:.1%})\n"
     md += f"- Kanıtlanan: **{len(proved)}** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **{len(certified)}**\n"
     md += f"- **Yanlış cevaplı öğelerde kanıt (FP): {len(fp)}** {'✓ hedef 0' if not fp else '✗ ' + str([r['id'] for r in fp])}\n"

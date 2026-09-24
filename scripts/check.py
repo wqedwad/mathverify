@@ -146,13 +146,46 @@ def attempt_counts(r: dict) -> tuple[int, int] | None:
     return n_un, n_att
 
 
+def was_proved(r: dict) -> bool:
+    """Did a proof of this statement compile, so that its audit decided the certificate? Only an
+    explicit `proved` False with no certificate says no; a row without the field counts as proved
+    (fail closed: it must then carry its audit record)."""
+    return r.get("proved") is not False or bool(r.get("clean")) or bool(r.get("certified"))
+
+
+def unanswered_audit(r: dict) -> list[str] | None:
+    """The audit probes of a proved statement that Lean did not answer (`audit_unanswered`, written
+    by harness.run_lean: "vacuity", "no_hyp", "axioms"), [] for an unproved statement (never
+    audited), or None when a proved statement carries no usable record (missing, or not a list of
+    probe names): fail closed. A report written before run_lean recorded the field gives None for
+    every proved statement. When the row also carries the raw audit (prove._audit's record), its own
+    `unanswered` list counts too, so the derived field can add probes but never hide one; a raw
+    audit without that list is no usable record either."""
+    if not was_proved(r):
+        return []
+    u = r.get("audit_unanswered")
+    if not isinstance(u, list) or not all(isinstance(p, str) for p in u):
+        return None
+    if "audit" not in r:
+        return u
+    raw = r["audit"].get("unanswered") if isinstance(r["audit"], dict) else None
+    if not isinstance(raw, list):
+        return None
+    return u + [str(p) for p in raw if str(p) not in u]
+
+
 def lean_silence(rows) -> str | None:
     """Why a "0" from the FP or junk gate would not be a claim about every statement in `rows`, or
-    None when it is. Lean must have answered every tactic attempt on every statement:
+    None when it is. Lean must have answered every tactic attempt on every statement, and every
+    audit probe of every proof among them:
     - "Lean cevap vermedi s/N": s of the N statements got no answer at all (`lean_answered`);
     - "kısmen cevap vermedi k/M deneme": of the M attempts on the statements Lean did answer, k got
       no answer (`n_unanswered`), e.g. one cheap tactic answered and every heavy one timed out;
-    - "deneme sayımı yok u/N ifade": u answered statements carry no usable attempt count.
+    - "deneme sayımı yok u/N ifade": u answered statements carry no usable attempt count;
+    - "denetim cevapsız a/P kanıtlanan ifade": of the P proved statements, a have an audit probe
+      Lean did not answer (`audit_unanswered`), so their missing certificate is silence, not a
+      verdict (a vacuous junk statement whose vacuity probe timed out);
+    - "denetim kaydı yok d/P kanıtlanan ifade": d proved statements carry no usable audit record.
     """
     stmt = [r for r in rows if r.get("statement", True)]
     silent = lean_unanswered(stmt)
@@ -160,6 +193,10 @@ def lean_silence(rows) -> str | None:
     k = sum(c[0] for c in counts if c)
     m = sum(c[1] for c in counts if c)
     uncounted = sum(1 for c in counts if c is None)
+    proved = [r for r in stmt if was_proved(r)]
+    audits = [unanswered_audit(r) for r in proved]
+    audit_silent = sum(1 for a in audits if a)
+    audit_missing = sum(1 for a in audits if a is None)
     parts = []
     if silent:
         parts.append(f"cevap vermedi {len(silent)}/{len(stmt)}")
@@ -167,6 +204,10 @@ def lean_silence(rows) -> str | None:
         parts.append(f"kısmen cevap vermedi {k}/{m} deneme")
     if uncounted:
         parts.append(f"deneme sayımı yok {uncounted}/{len(stmt)} ifade")
+    if audit_silent:
+        parts.append(f"denetim cevapsız {audit_silent}/{len(proved)} kanıtlanan ifade")
+    if audit_missing:
+        parts.append(f"denetim kaydı yok {audit_missing}/{len(proved)} kanıtlanan ifade")
     return "Lean " + ", ".join(parts) if parts else None
 
 
@@ -202,10 +243,20 @@ def lean_gates(data: dict) -> list[dict]:
     # every statement it is about: each junk statement, and each item whose claimed value is
     # wrong. "Answered at least once" was not enough: one cheap tactic answered and all heavy ones
     # timed out still passed, although the heavy tactics are the ones that could have proved it.
+    # A statement that IS proved gets its certificate from the audit (axioms, vacuity,
+    # no-hypothesis probes), so every audit probe of such a proof needs a Lean verdict too
+    # (`audit_unanswered` == [], written by harness.run_lean; a proved row without it fails): the
+    # junk statement `x = 2 from 1/(x-2) = 0` compiles in the real sweep and only the vacuity
+    # probe keeps it uncertified, so with that probe timed out "0/17" said nothing about it.
     # An item with a right value is exempt: timing out only costs it its certificate. Measured on
     # 24 Sep (two full Windows sweeps, 45 s timeout; both reports fed to this function): 0 of 869
     # attempts unanswered, 0/645 on the 50 wrong-answer items and 0/33 on the 3 junk statements,
-    # slowest attempt 3.0 s, so the rule does not fail a healthy run.
+    # slowest attempt 3.0 s. Audit rule, measured the same day: a new full Windows sweep (45 s)
+    # has 0 of 122 proved statements (121 items + that junk statement) with an unanswered audit
+    # probe, no wrong-answer item proved, the junk statement refused by an answered vacuity probe
+    # (hypotheses contradictory), all four gates OK with 121 certificates. So the rule does not
+    # fail a healthy run; a report from before `audit_unanswered` fails the junk gate ("denetim
+    # kaydı yok 1/1": its junk rows carry no audit) and keeps FP 0 (no wrong-answer item proved).
     wrong = [r for r in lean if r.get("statement", True) and not r.get("answer_right")]
     silence = lean_silence(wrong)
     fp_value = len(fp)

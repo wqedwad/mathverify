@@ -1,11 +1,12 @@
 """scripts/check.py: a harness that crashes, writes no report or leaves a stale one must fail its
 gates under the same names and count, and no Lean gate may pass when Lean did not run or was lost
 during the run, nor the FP and junk gates on a statement where Lean left any tactic attempt
-unanswered (all of them timed out, or only some).
+unanswered (all of them timed out, or only some) or, for a proved statement, any audit probe.
 
 No real harness runs here: `check.run` is replaced by a fake that writes fixture reports into a
 temporary REPORTS directory (or does not, and returns the exit code under test). The run_lean
-tests at the end drive harness.run_lean itself with Lean faked.
+tests drive harness.run_lean itself (and, for the junk probe's audit, the real prove_statement)
+with Lean faked.
 """
 import argparse
 import importlib.util
@@ -14,6 +15,8 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from mathverify.formal.lean_client import LeanResult
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("check_script_harness", ROOT / "scripts" / "check.py")
@@ -33,10 +36,12 @@ GOOD = {
                              "l5_applicability": {"n": 1, "total": 2}}},
     "run_lean": {"lean_available": True, "lean_available_end": True,
                  "records": [{"id": "x-001", "statement": True, "lean_reached": True, "lean_answered": True,
-                              "n_attempts": 1, "n_unanswered": 0, "errors": [], "clean": True, "answer_right": True},
-                             {"id": "x-002", "statement": False, "clean": None, "answer_right": False}],
+                              "n_attempts": 1, "n_unanswered": 0, "audit_unanswered": [], "errors": [],
+                              "proved": True, "clean": True, "answer_right": True},
+                             {"id": "x-002", "statement": False, "proved": False, "clean": None, "answer_right": False}],
                  "junk_probe": [{"label": "0/0 = 0", "statement": True, "lean_reached": True, "lean_answered": True,
-                                 "n_attempts": 11, "n_unanswered": 0, "errors": [], "certified": False}]},
+                                 "n_attempts": 11, "n_unanswered": 0, "audit_unanswered": [], "errors": [],
+                                 "proved": False, "certified": False}]},
     "adversarial": {"preserving": {"flipped": 0}, "changing": {"accepted_wrong": 0}, "n_attacks": 100,
                     "per_attack": {"neg": 1, "mc:swap": 1, "step:drop": 1}},
     "soundness_fuzz": {"wrong": {"false_accepts": 0, "n": 5}, "equiv": {"false_rejects": 0, "n": 5},
@@ -251,7 +256,8 @@ def test_no_statement_needs_no_lean(monkeypatch, tmp_path):
 # time: no lean_unavailable error, lean_reached True, and the junk probe read "0/17" although Lean
 # had judged no junk statement (reviewer's timeout_vacuity.py). Each attempt now counts as answered
 # only when Lean itself replied, and every junk statement and every wrong-answer item statement needs
-# at least one such attempt (a right-answer item that only timed out just has no certificate).
+# such answers (a right-answer item that only timed out just has no certificate): here at least one;
+# the later sections tighten it to every attempt, and every audit probe of a proof.
 TIMEOUT = "lean timeout after 45s"
 
 
@@ -323,10 +329,112 @@ def test_lean_fields_of_an_all_timeouts_statement():
     r = {"proved": False, "errors": [], "attempts": [dict(_attempt(False, TIMEOUT), proof=t, ms=45000)
                                                      for t in ("simp", "norm_num", "positivity")]}
     assert run_lean.lean_fields(r) == {"lean_reached": True, "lean_answered": False, "n_attempts": 3,
-                                       "n_unanswered": 3, "errors": []}
+                                       "n_unanswered": 3, "audit_unanswered": [], "errors": []}
     r["attempts"][1] = _attempt(False, "linarith failed")
     assert run_lean.lean_fields(r)["lean_answered"] is True and run_lean.lean_fields(r)["n_unanswered"] == 2
     assert run_lean.lean_fields({"proved": False, "errors": [], "attempts": []})["lean_answered"] is False
+
+
+def test_no_verdict_is_proves_own():
+    """One classification of "Lean gave no verdict" for the ladder, the audit and the sweep: run_lean
+    uses prove.NO_VERDICT / prove.lean_judged instead of a copy (behaviour pinned by test_attempt_answered)."""
+    from harness import run_lean
+    from mathverify.formal import prove as P
+    assert run_lean.NO_VERDICT is P.NO_VERDICT and run_lean.lean_judged is P.lean_judged
+
+
+SAFE = ["Classical.choice", "Quot.sound", "propext"]
+
+
+@pytest.mark.parametrize("r, expected", [
+    ({"proved": False, "audit": {}}, []),                                   # never audited
+    ({"proved": False}, []),
+    ({"proved": True, "audit": {"unanswered": [], "axioms": SAFE}}, []),
+    ({"proved": True, "audit": {"unanswered": [], "axioms": []}}, []),      # "does not depend on any axioms"
+    ({"proved": True, "audit": {"unanswered": ["vacuity", "no_hyp"], "axioms": SAFE}}, ["vacuity", "no_hyp"]),
+    ({"proved": True, "audit": {"unanswered": [], "axioms": ["<unknown>"]}}, ["axioms"]),
+    ({"proved": True, "audit": {"unanswered": ["vacuity"], "axioms": ["<unknown>"]}}, ["vacuity", "axioms"]),
+    ({"proved": True, "audit": {"unanswered": []}}, ["axioms"]),            # axioms not recorded: fail closed
+    ({"proved": True, "audit": {"clean": True}}, ["audit"]),                # an audit without `unanswered`
+    ({"proved": True, "audit": {}}, ["audit"]),
+    ({"proved": True, "audit": None}, ["audit"]),
+    ({"proved": True}, ["audit"]),
+], ids=["unproved", "unproved_no_audit", "answered", "no_axioms", "probes_timed_out", "axioms_timed_out",
+        "both", "axioms_missing", "old_audit", "empty_audit", "audit_none", "audit_missing"])
+def test_audit_unanswered(r, expected):
+    from harness import run_lean
+    assert run_lean.audit_unanswered(r) == expected
+    assert run_lean.lean_fields(dict(r, errors=[], attempts=[_attempt(True)]))["audit_unanswered"] == expected
+
+
+# --- the reviewer's probe: real junk_probe + real prove_statement + real lean_gates, Lean faked ------
+JUNK_TARGET = "x = 2 from 1/(x-2) = 0"
+TIMED_OUT = LeanResult(ok=False, errors=[TIMEOUT], timed_out=True)
+SAFE_AXIOMS_REPLY = LeanResult(ok=True, infos=["'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]"])
+
+
+class _JunkLean:
+    """Only the vacuous junk statement `x = 2 from 1/(x-2) = 0` compiles (it does in the real sweep);
+    every other ladder attempt gets a Lean error. `#print axioms` and the two audit probes of its
+    proof answer as the scenario says."""
+
+    def __init__(self, target_head, *, vacuity, nohyp, axioms=SAFE_AXIOMS_REPLY):
+        self.target_head, self.vacuity, self.nohyp, self.axioms = target_head, vacuity, nohyp, axioms
+
+    def run(self, code, timeout=120.0, env=-1):
+        if code.startswith("#print axioms"):
+            return self.axioms
+        head = code.split("\n", 1)[0]
+        if "_vacuity" in head:
+            return self.vacuity
+        if "_nohyp" in head:
+            return self.nohyp
+        if code.startswith(self.target_head):
+            return LeanResult(ok=True, env=7)
+        return LeanResult(ok=False, errors=["linarith failed"])
+
+
+JUNK_AUDIT_SCENARIOS = {  # name -> (vacuity, nohyp, axioms, audit_unanswered, junk gate value, gate ok)
+    "A_both_probes_timed_out": (TIMED_OUT, TIMED_OUT, SAFE_AXIOMS_REPLY, ["vacuity", "no_hyp"],
+                                "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
+    "B_vacuity_answered_contradictory": (LeanResult(ok=True), LeanResult(ok=False, errors=["linarith failed"]),
+                                         SAFE_AXIOMS_REPLY, [], "0/17", True),
+    "C_axiom_print_timed_out": (LeanResult(ok=False, errors=["linarith failed"]),
+                                LeanResult(ok=False, errors=["unsolved goals"]), TIMED_OUT, ["axioms"],
+                                "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
+    "D_vacuity_repl_died": (LeanResult(ok=False, errors=["empty reply (REPL died)"]),
+                            LeanResult(ok=False, errors=["unsolved goals"]), SAFE_AXIOMS_REPLY, ["vacuity"],
+                            "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
+    # every probe answered and none objects: a real certificate, which the gate still counts
+    "E_answered_and_clean": (LeanResult(ok=False, errors=["linarith failed"]),
+                             LeanResult(ok=False, errors=["unsolved goals"]), SAFE_AXIOMS_REPLY, [], "1/17", False),
+}
+
+
+@pytest.mark.parametrize("scenario", sorted(JUNK_AUDIT_SCENARIOS))
+def test_junk_probe_with_an_unanswered_audit_fails_the_junk_gate(monkeypatch, scenario):
+    """Reviewer's junk_audit_silence_probe.py: before the fix A read "0/17" OK exactly like B."""
+    from harness import run_lean
+    from mathverify.formal import build_statement
+    from mathverify.formal import prove as P
+    vacuity, nohyp, axioms, unanswered, value, ok = JUNK_AUDIT_SCENARIOS[scenario]
+    _, ir, ca = next(p for p in run_lean.JUNK_PROBES if p[0] == JUNK_TARGET)
+    target_head = build_statement(ir, ca).theorem("").split(":= by")[0]
+    fake = _JunkLean(target_head, vacuity=vacuity, nohyp=nohyp, axioms=axioms)
+    monkeypatch.setattr(P, "get_lean", lambda: fake)
+    junk = run_lean.junk_probe(45)
+    target = next(j for j in junk if j["label"] == JUNK_TARGET)
+    assert target["proved"] is True and target["lean_answered"] is True and target["n_unanswered"] == 0
+    assert target["certified"] is (scenario.startswith("E_"))
+    assert target["audit_unanswered"] == unanswered and target["audit"]["unanswered"] == [
+        p for p in unanswered if p != "axioms"]
+    assert [j["label"] for j in junk if j.get("proved")] == [JUNK_TARGET]
+    data = {"lean_available": True, "lean_available_end": True,
+            "records": json.loads(json.dumps(GOOD["run_lean"]["records"])), "junk_probe": junk}
+    gates = {g["name"]: g for g in check.lean_gates(data)}
+    junk_gate = gates.pop("Lean junk-value sertifikası")
+    assert junk_gate["value"] == value and junk_gate["ok"] is ok
+    assert all(g["ok"] for g in gates.values())
 
 
 def _junk_timed_out(d):
@@ -380,7 +488,7 @@ def test_an_unanswered_junk_statement_fails_the_junk_gate(monkeypatch, tmp_path,
 
 def _timed_out_item(answer_right, **extra):
     return dict({"id": "x-003", "statement": True, "lean_reached": True, "lean_answered": False, "errors": [],
-                 "clean": None, "answer_right": answer_right}, **extra)
+                 "proved": False, "audit_unanswered": [], "clean": None, "answer_right": answer_right}, **extra)
 
 
 ANSWERED = {"lean_answered": True, "n_attempts": 1, "n_unanswered": 0}
@@ -393,7 +501,8 @@ def _partly_answered_fields():
     r = {"proved": False, "errors": [], "attempts": [_attempt(False, "linarith failed")]
          + [dict(_attempt(False, TIMEOUT), ms=45000) for _ in range(8)]}
     fields = run_lean.lean_fields(r)
-    assert fields == {"lean_reached": True, "lean_answered": True, "n_attempts": 9, "n_unanswered": 8, "errors": []}
+    assert fields == {"lean_reached": True, "lean_answered": True, "n_attempts": 9, "n_unanswered": 8,
+                      "audit_unanswered": [], "errors": []}
     return fields
 
 
@@ -467,20 +576,25 @@ PARTIAL_CASES = {  # fields of each junk statement / wrong-answer item -> expect
 PARTIAL_GATE = {"junk": "Lean junk-value sertifikası", "wrong": "Lean FP"}
 
 
+DROP = object()                        # spec value: leave this field out of the row
+
+
 def _with_statements(target, specs):
     """GOOD["run_lean"] whose junk probe (target "junk") is, or whose wrong-answer items (target
-    "wrong") are, one statement per spec; `hit` marks a certified junk statement / a clean proof."""
+    "wrong") are, one statement per spec; `hit` marks a certified junk statement / a clean proof.
+    A spec's fields override the row's (an unproved statement with no audit gap by default)."""
     lean = json.loads(json.dumps(GOOD["run_lean"]))
     rows = []
     for i, spec in enumerate(specs):
         spec = dict(_partly_answered_fields() if spec == PARTLY else spec)
         hit = spec.pop("hit", False)
-        base = {"statement": True, "lean_reached": True, "errors": []}
+        row = {"statement": True, "lean_reached": True, "errors": [], "proved": hit, "audit_unanswered": []}
         if target == "junk":
-            rows.append(dict(base, label=f"j{i}", certified=hit, proved=hit, **spec))
+            row.update(label=f"j{i}", certified=hit)
         else:
-            rows.append(dict(base, id=f"x-1{i:02d}", clean=True if hit else None, proved=hit, answer_right=False,
-                             **spec))
+            row.update(id=f"x-1{i:02d}", clean=True if hit else None, answer_right=False)
+        row.update(spec)
+        rows.append({k: v for k, v in row.items() if v is not DROP})
     if target == "junk":
         lean["junk_probe"] = rows
     else:
@@ -505,15 +619,113 @@ def test_a_partly_unanswered_statement_fails_its_gate(monkeypatch, tmp_path, cas
 
 @pytest.mark.parametrize("target", sorted(PARTIAL_GATE))
 def test_every_attempt_answered_passes(monkeypatch, tmp_path, target):
-    """What the two measured Windows full sweeps of 24 Sep recorded: every attempt answered
-    (0/645 on the 50 wrong-answer items, 0/33 on the 3 junk statements)."""
-    lean = _with_statements(target, [_counted(9, 0), _counted(1, 0), _counted(23, 0)])
+    """What the measured Windows full sweeps of 24 Sep recorded: every attempt answered (0/645 on
+    the 50 wrong-answer items, 0/33 on the 3 junk statements), and the one proved junk statement
+    (`x = 2 from 1/(x-2) = 0`) kept from a certificate by an audit Lean answered."""
+    answered_proof = dict(_counted(1, 0), proved=True, audit_unanswered=[])
+    lean = _with_statements(target, [_counted(9, 0), _counted(1, 0), _counted(23, 0), answered_proof])
     rc, by_name, names = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
     assert rc == 0 and names == FULL and all(g["ok"] for g in by_name.values())
     assert by_name["Lean FP"]["value"] == 0
-    assert by_name["Lean junk-value sertifikası"]["value"] == ("0/3" if target == "junk" else "0/1")
+    assert by_name["Lean junk-value sertifikası"]["value"] == ("0/4" if target == "junk" else "0/1")
     assert check.lean_silence(lean["junk_probe"]) is None
     assert check.lean_silence([r for r in lean["records"] if r.get("statement") and not r["answer_right"]]) is None
+
+
+# --- a proved statement whose audit Lean did not answer -------------------------------------------
+# A compiled proof gets its certificate from the audit (axioms, vacuity, no-hypothesis probes). When
+# those probes time out the audit is not clean, so the proof gets no certificate, and the junk gate
+# read "0/17" although Lean never judged the probe that matters: the junk statement
+# `x = 2 from 1/(x-2) = 0` is proved in the real sweep and only its answered vacuity probe keeps it
+# uncertified (reviewer's junk_audit_silence_probe.py, scenario A). The same holds for a proved
+# wrong-answer item and "Lean FP 0". run_lean now stores `audit_unanswered`; a proved row without
+# it (every report before this field, whose junk rows carried no audit at all) fails closed.
+def _proof(unanswered=(), **extra):
+    """A statement whose first tactic compiled; `unanswered` are the audit probes Lean left silent.
+    `extra` overrides any field (DROP leaves it out)."""
+    row = dict(_counted(1, 0), proved=True, audit_unanswered=list(unanswered))
+    row.update(extra)
+    return row
+
+
+AUDIT_CASES = {  # fields of each junk statement / wrong-answer item -> expected gate value
+    "both_probes_timed_out": ([_proof(["vacuity", "no_hyp"])], "Lean denetim cevapsız 1/1 kanıtlanan ifade"),
+    "vacuity_timed_out": ([_proof(["vacuity"])], "Lean denetim cevapsız 1/1 kanıtlanan ifade"),
+    "axioms_timed_out": ([_proof(["axioms"])], "Lean denetim cevapsız 1/1 kanıtlanan ifade"),
+    "audit_itself_missing": ([_proof(["audit"])], "Lean denetim cevapsız 1/1 kanıtlanan ifade"),
+    "next_to_an_answered_proof_and_an_unproved_one": ([_proof(["no_hyp"]), _proof(), _counted(9, 0)],
+                                                       "Lean denetim cevapsız 1/2 kanıtlanan ifade"),
+    "next_to_a_certificate": ([_proof(["vacuity"]), _proof(hit=True)],
+                              "Lean denetim cevapsız 1/2 kanıtlanan ifade"),
+    "with_partly_answered_attempts": ([PARTLY, _proof(["vacuity"])],
+                                      "Lean kısmen cevap vermedi 8/10 deneme, denetim cevapsız 1/1 kanıtlanan ifade"),
+    "round4_report": ([_proof(audit_unanswered=DROP)], "Lean denetim kaydı yok 1/1 kanıtlanan ifade"),
+    "record_is_a_string": ([_proof(audit_unanswered="vacuity")], "Lean denetim kaydı yok 1/1 kanıtlanan ifade"),
+    "record_is_none": ([_proof(audit_unanswered=None)], "Lean denetim kaydı yok 1/1 kanıtlanan ifade"),
+    "record_holds_no_names": ([_proof(audit_unanswered=[1])], "Lean denetim kaydı yok 1/1 kanıtlanan ifade"),
+    "proved_field_missing": ([dict(_counted(1, 0), proved=DROP, audit_unanswered=DROP)],
+                             "Lean denetim kaydı yok 1/1 kanıtlanan ifade"),
+    "silent_and_missing": ([_proof(["vacuity"]), _proof(audit_unanswered=DROP), _counted(3, 0)],
+                           "Lean denetim cevapsız 1/2 kanıtlanan ifade, denetim kaydı yok 1/2 kanıtlanan ifade"),
+    # the derived field says "all answered" but the raw audit stored next to it does not
+    "raw_audit_unanswered": ([_proof(audit={"unanswered": ["vacuity"]})], "Lean denetim cevapsız 1/1 kanıtlanan ifade"),
+    "raw_audit_without_its_list": ([_proof(audit={"clean": False})], "Lean denetim kaydı yok 1/1 kanıtlanan ifade"),
+}
+
+
+@pytest.mark.parametrize("target", sorted(PARTIAL_GATE))
+@pytest.mark.parametrize("case", sorted(AUDIT_CASES))
+def test_a_proof_with_an_unanswered_audit_fails_its_gate(monkeypatch, tmp_path, case, target):
+    specs, value = AUDIT_CASES[case]
+    if any(isinstance(s, dict) and s.get("hit") for s in specs):
+        value += ", sertifika 1/2" if target == "junk" else ", FP 1"
+    lean = _with_statements(target, specs)
+    assert check.lean_unreached(lean) == []          # Lean was there the whole time
+    rc, by_name, names = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
+    assert rc == 1 and names == FULL and len(names) == 24
+    failed = by_name[PARTIAL_GATE[target]]
+    assert failed["value"] == value and not failed["ok"] and failed["target"] == 0
+    assert all(g["ok"] for n, g in by_name.items() if n != PARTIAL_GATE[target])
+
+
+def test_a_right_answer_proof_with_an_unanswered_audit_fails_no_gate(monkeypatch, tmp_path):
+    """It only loses its certificate, as when its ladder timed out."""
+    lean = json.loads(json.dumps(GOOD["run_lean"]))
+    lean["records"].append(dict(_timed_out_item(True), **_proof(["vacuity", "no_hyp", "axioms"])))
+    no_record = dict(_timed_out_item(True), id="x-004", **_proof())
+    del no_record["audit_unanswered"]                # and one from a report without the field
+    lean["records"].append(no_record)
+    rc, by_name, names = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
+    assert rc == 0 and names == FULL and all(g["ok"] for g in by_name.values())
+    assert by_name["Lean sertifika"]["value"] == "1/4" and by_name["Lean FP"]["value"] == 0
+
+
+@pytest.mark.parametrize("row, expected", [
+    ({"proved": False}, []),
+    ({"proved": False, "audit_unanswered": "junk"}, []),             # never audited: the field is not read
+    ({"proved": True, "audit_unanswered": []}, []),
+    ({"proved": True, "audit_unanswered": ["vacuity"]}, ["vacuity"]),
+    ({"proved": True}, None),
+    ({"proved": True, "audit_unanswered": ("vacuity",)}, None),       # JSON never gives a tuple: not a list
+    ({"audit_unanswered": []}, []),                                   # `proved` missing: counts as proved
+    ({}, None),
+    ({"proved": False, "clean": True}, None),                         # inconsistent: a certificate is a proof
+    ({"proved": False, "certified": True, "audit_unanswered": []}, []),
+    # the raw audit (prove._audit) is read too: the derived field can add probes, never hide one
+    ({"proved": True, "audit_unanswered": [], "audit": {"unanswered": []}}, []),
+    ({"proved": True, "audit_unanswered": [], "audit": {"unanswered": ["no_hyp"]}}, ["no_hyp"]),
+    ({"proved": True, "audit_unanswered": ["vacuity", "axioms"], "audit": {"unanswered": ["vacuity"]}},
+     ["vacuity", "axioms"]),
+    ({"proved": True, "audit_unanswered": [], "audit": {}}, None),    # a raw audit without its list
+    ({"proved": True, "audit_unanswered": ["audit"], "audit": {"clean": False}}, None),
+    ({"proved": True, "audit_unanswered": [], "audit": None}, None),
+    ({"proved": True, "audit_unanswered": [], "audit": {"unanswered": "vacuity"}}, None),
+    ({"proved": True, "audit": {"unanswered": []}}, None),            # the derived field is still required
+    ({"proved": False, "audit_unanswered": [], "audit": {"unanswered": ["vacuity"]}}, []),
+    ({"proved": False, "audit": {}}, []),                             # an unproved statement is never audited
+])
+def test_unanswered_audit(row, expected):
+    assert check.unanswered_audit(row) == expected
 
 
 def test_attempt_counts():
@@ -530,9 +742,10 @@ def _simulated_sweep(monkeypatch, tmp_path, scenario):
     start probe and proves the first statement; then, per scenario, it is lost for every later
     statement ("midrun"), lost only when re-probed after the junk probe ("end"), there but timing
     out on every attempt of every later statement ("timeouts"), answering one of the two attempts
-    on every later statement and timing out on the other ("partial"), or healthy ("healthy": two
-    Lean errors per later statement). "timeouts_wrong" and "partial_wrong" also mark every item
-    after the first as having a wrong answer."""
+    on every later statement and timing out on the other ("partial"), proving every later statement
+    with both audit probes of each proof timed out ("audit_timeouts") or answered and objecting
+    ("audit_answered": hypotheses contradictory), or healthy ("healthy": two Lean errors per later
+    statement). A "_wrong" suffix also marks every item after the first as having a wrong answer."""
     import mathverify.formal as formal
     from harness import run_lean
     calls = {"prove": 0, "avail": 0, "right": 0}
@@ -546,13 +759,21 @@ def _simulated_sweep(monkeypatch, tmp_path, scenario):
         r = {"statement": "stmt", "kind": stmt.kind, "proved": False, "proof": None, "source": None,
              "attempts": [], "audit": {}, "calls": 0, "cost_usd": 0.0, "errors": [], "ms": 1.0}
         if calls["prove"] == 1:
-            r.update(proved=True, proof="norm_num", audit={"clean": True}, attempts=[_attempt(True)])
+            r.update(proved=True, proof="norm_num", attempts=[_attempt(True)],
+                     audit={"clean": True, "unanswered": [], "axioms": SAFE, "hypotheses_contradictory": False})
         elif scenario == "midrun":
             r["errors"].append(UNAVAILABLE)
         elif scenario.startswith("timeouts"):
             r["attempts"] = [_attempt(False, TIMEOUT), _attempt(False, TIMEOUT)]
         elif scenario.startswith("partial"):
             r["attempts"] = [_attempt(False, "linarith failed"), _attempt(False, TIMEOUT)]
+        elif scenario.startswith("audit_timeouts"):
+            r.update(proved=True, proof="norm_num", attempts=[_attempt(True)],
+                     audit={"clean": False, "unanswered": ["vacuity", "no_hyp"], "axioms": SAFE,
+                            "hypotheses_contradictory": None})
+        elif scenario.startswith("audit_answered"):
+            r.update(proved=True, proof="norm_num", attempts=[_attempt(True)],
+                     audit={"clean": False, "unanswered": [], "axioms": SAFE, "hypotheses_contradictory": True})
         else:
             r["attempts"] = [_attempt(False, "linarith failed"), _attempt(False, "unsolved goals")]
         return r
@@ -571,7 +792,7 @@ def _simulated_sweep(monkeypatch, tmp_path, scenario):
 
 
 @pytest.mark.parametrize("scenario", ["midrun", "end", "timeouts", "timeouts_wrong", "partial", "partial_wrong",
-                                      "healthy"])
+                                      "audit_timeouts", "audit_timeouts_wrong", "audit_answered_wrong", "healthy"])
 def test_run_lean_records_whether_each_statement_reached_lean(monkeypatch, tmp_path, scenario):
     data = _simulated_sweep(monkeypatch, tmp_path, scenario)
     assert data["lean_available"] is True and data["lean_available_end"] is (scenario != "end")
@@ -596,21 +817,47 @@ def test_run_lean_records_whether_each_statement_reached_lean(monkeypatch, tmp_p
         assert all(answered)
     counts = [(r["n_attempts"], r["n_unanswered"]) for r in stmt[1:]]
     expected = {"midrun": (0, 0), "healthy": (2, 0), "end": (2, 0), "partial": (2, 1), "partial_wrong": (2, 1)}
-    assert counts == [expected.get(scenario, (2, 2))] * len(counts)
-    values = {g["name"]: g for g in check.lean_gates(data)}
+    audited = scenario.startswith("audit")
+    assert counts == [(1, 0) if audited else expected.get(scenario, (2, 2))] * len(counts)
+    assert all(isinstance(r["audit_unanswered"], list) and "audit" in r for r in junk_stmt)
+    audit_silent = scenario.startswith("audit_timeouts")
+    assert [r["audit_unanswered"] for r in stmt] == [[]] + [["vacuity", "no_hyp"] if audit_silent else []] * (
+        len(stmt) - 1)
+    later = len(stmt) - 1
     wrong = [r for r in data["records"] if r["statement"] and not r["answer_right"]]
+    # what the sweep reports: unanswered attempts, proofs with a silent audit, silent junk / wrong items
+    md = (tmp_path / "lean_report.md").read_text(encoding="utf-8")
+    n_att = sum(r["n_attempts"] for r in stmt)
+    n_un = {"timeouts": 2 * later, "timeouts_wrong": 2 * later, "partial": later, "partial_wrong": later}.get(scenario, 0)
+    assert f"taktik denemesi (zaman aşımı ya da REPL çökmesi): **{n_un}/{n_att}**" in md
+    assert f"cevapsız kalan kanıt: **{later if audit_silent else 0}/{1 + (later if audited else 0)}**" in md
+    silent = scenario in ("midrun", "timeouts", "timeouts_wrong", "partial", "partial_wrong", "audit_timeouts",
+                          "audit_timeouts_wrong")
+    silent_junk = [j["label"] for j in junk_stmt] if silent else []
+    assert f"junk sondası (junk kapısı düşer): **{len(silent_junk)}**" in md
+    assert (f" ✗ {silent_junk}" in md) is bool(silent_junk)
+    if scenario.endswith("_wrong"):
+        silent_wrong = [r["id"] for r in wrong] if silent else []
+        assert f"bunlardan cevabı yanlış (FP kapısı düşer): **{len(silent_wrong)}**" in md
+        assert (f" ✗ {silent_wrong}" in md) is bool(silent_wrong)
+    values = {g["name"]: g for g in check.lean_gates(data)}
     if scenario.endswith("_wrong"):
         assert wrong and all(r is not data["records"][0] for r in wrong)
     if scenario == "timeouts_wrong":
         assert not any(r["lean_answered"] for r in wrong)
-    if scenario == "healthy":
+    if scenario in ("healthy", "audit_answered_wrong"):     # proved but refused by an answered audit: no FP
+        if audited:
+            assert all(r["proved"] and not r["clean"] for r in wrong)
+            assert values["Lean sertifika"]["value"] == f"1/{len(data['records'])}"
         assert all(g["ok"] for g in values.values())
         assert values["Lean erişilebilir"]["value"] == "evet (1 sertifika)"
         assert values["Lean junk-value sertifikası"]["value"] == f"0/{len(data['junk_probe'])}"
-    elif scenario.startswith(("timeouts", "partial")):  # right-answer items may time out; junk and wrong ones may not
+    elif scenario.startswith(("timeouts", "partial", "audit")):  # right-answer items may; junk and wrong may not
         def silence(n):                             # "partial": one of each statement's two attempts unanswered
             if scenario.startswith("timeouts"):
                 return f"Lean cevap vermedi {n}/{n}"
+            if audit_silent:
+                return f"Lean denetim cevapsız {n}/{n} kanıtlanan ifade"
             return f"Lean kısmen cevap vermedi {n}/{2 * n} deneme"
         junk = values.pop("Lean junk-value sertifikası")
         assert not junk["ok"] and junk["value"] == silence(len(junk_stmt))
