@@ -77,8 +77,9 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
   push edebilir. Birleştirme PR ile ya da yerel checkout'ta, yedek de yerelde alınır.
 - **Düzeltme (24 Eylül 2026):** oturumun kendi dalı başladığı daldır; routine oturumu varsayılan
   dal `master`da başlar ve "kendi dalına push" `master`a push olur (24 Eylül'de böyle oldu,
-  DECISIONS §45). Bir bulut routine istemi push hedefini açıkça **yeni bir dal** olarak verir ya da
-  hiç push istemez; "kendi dalına" gibi göreli hedef yazılmaz.
+  DECISIONS §45; ikinci routine ise `master`dan ayrılmış HEAD ile başladı). Bir bulut routine istemi
+  push hedefini açıkça **yeni bir dal** olarak verir ya da hiç push istemez; "kendi dalına" gibi
+  göreli hedef yazılmaz.
 
 ## Commit biçimi
 

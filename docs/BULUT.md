@@ -419,8 +419,8 @@ Beklenen: `lean_available()` → `True`; `pytest -rs` çıktısında Lean yüzü
 kaybolursa Lean kapıları bilerek **düşer** (DECISIONS §39); 24/24 görmeden Lean ölçüldü denmez.
 
 Bulut dışında ölçülen karşılaştırma sayıları (24 Eylül): yerel Linux (WSL, Lean kurulu) testler
-«SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped; yerel `check.py --full`
-«SAYI-GÜNCELLENECEK»/24 (ayrıntı HANDOFF §0.6). Bulutta ölçülenler §12'ye yazılır.
+836 passed / 2 skipped; yerel `check.py --full`
+**24/24** hem Windows'ta (~68 dk (4107 s; adversaryal 3563 s)) hem yerel Linux'ta (~36 dk (2186 s; adversaryal 1870 s)) (ayrıntı HANDOFF §0.6). Bulutta ölçülenler §12'ye yazılır.
 
 **Bulutta ölçülen (24 Eylül, routine oturumu, `4d01ba2`):** `lean_available()` baştan sona `True`;
 `pytest tests -q -rs` 517 test: **515 passed / 2 skipped / 0 failed**, 50 s (atlananlar: opt-in bulut
@@ -455,7 +455,7 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   Lean taraması (ya da Lean'li iki `check.py --full`) koşturulmaz. Bulutta iki taramanın birlikte
   denenmesi ölçülmedi.
 - **Boşta kalan VM geri alınır ve arka plandaki kabuk işi kaybolur.** `check.py --full`
-  (Windows'ta ~25–70 dk; bulutta «SAYI-GÜNCELLENECEK») ya da Lean kurulumu sürerken oturum etkin
+  (Windows'ta ~25–70 dk; bulutta ~63 dk (3793 s; adversaryal 3220 s; 4 vCPU), ölçüldü) ya da Lean kurulumu sürerken oturum etkin
   tutulur. `check.py --full` günlüğü `reports/check_full.log`a koşu sırasında yazar; yarıda kalan
   koşu yarım günlük bırakır.
 - **Git:** bulut oturumu yalnız **kendi dalına** push edebilir. Etiket, `master` ve başka dallar
@@ -612,9 +612,8 @@ Açık maddeler, bu dalın kalan commit'leri `master`a alındıktan sonra açıl
       (`load_dotenv(override=False)`), F3'ten önce çözülür. `api.anthropic.com` erişilebilir mi?
       → İkisi de **tanımlı değil**; `ANTHROPIC_BASE_URL` **tanımlı** (düzeltildi, `4002898`, §10).
       `api.anthropic.com` erişilebilir (kökte 404, TLS ve vekil geçti).
-- [ ] `check.py` (hızlı), sonra `check.py --full` (arka planda, oturum etkin): sonuç ve süre
-      «SAYI-GÜNCELLENECEK».
-      → Hızlı `check.py` **12/12**, 115 s (ölçüldü). `--full` bulutta **açık**.
+- [x] `check.py` (hızlı), sonra `check.py --full` (arka planda, oturum etkin): sonuç ve süre.
+      → Hızlı `check.py` **12/12**, 115 s (ölçüldü). `--full` bulutta **24/24**, ~63 dk (3793 s; adversaryal 3220 s; 4 vCPU) (ikinci routine oturumu, `74d9da1`); birim testleri 833 passed / 5 skipped.
 - [ ] `git push` yalnız oturumun kendi dalına gidiyor mu, etiket push'u gerçekten reddediliyor mu?
       → Kısmen: push oturumun kendi dalına gidiyor, ama routine oturumu `master`da başladığı için o
       dal `master`dı ve `origin/master`a push kabul edildi (§13). Etiket push'u **açık**.
@@ -622,14 +621,31 @@ Açık maddeler, bu dalın kalan commit'leri `master`a alındıktan sonra açıl
 Listeye eklenen açık maddeler (24 Eylül; yukarıdaki açık maddelerle birlikte sıradaki normal
 oturumda ölçülür):
 
-- [ ] Kurulum betiği alanından gerçek koşu: `setup_env.status` (`mode=all`), toplam süre, günlükteki
+- [~] Kurulum betiği alanından gerçek koşu: `setup_env.status` (`mode=all`), toplam süre, günlükteki
       `repository:` satırı, uv önbellek ısıtmasının süresi.
-- [ ] Platformun kendisinin tetiklediği kanca: süre ve durum bloğu.
-- [ ] `CLAUDE_ENV_FILE` ile dışa aktarılan değişkenler (`MATHVERIFY_LEAN_REPL`, `ELAN_HOME`, …)
-      oturumun sonraki `Bash` komutlarına ulaşıyor mu? Routine oturumunda dosya elle verilip elle
-      `source` edildi, platform yolu ölçülmedi.
-- [ ] Tam Lean taraması bulutta (`harness.run_lean --timeout 45`, `check.py --full`'un parçası) ve
-      bir Lean istemcisinin bulutta bellek tüketimi.
+      → Alanın yapacağı koşu oturum içinden temiz önekte ölçüldü: `mode=all` **234 s** (çekim 58,
+      Python 1, uv ön ısıtma 11, `setup_lean` 144, REPL 26; 11 GB), `repository: /home/user/asd`.
+      Alanın kendisinden (Claude'dan önce) koşu ve anlık görüntünün `/opt`'u koruması **açık**:
+      kullanıcı betiği yapıştırınca ilk oturumda `/opt/mathverify-logs/setup_env.status` okunur.
+- [x] Platformun kendisinin tetiklediği kanca: süre ve durum bloğu.
+      → İkinci routine oturumunda kanca açılışta **kendiliğinden** çalıştı: 10 s, 3.14 henüz yokken
+      yedek 3.12.3, `.venv` 9 s, Lean arka planda başlatıldı; Lean 239 s'de hazır.
+- [x] `CLAUDE_ENV_FILE` ile dışa aktarılan değişkenler (`MATHVERIFY_LEAN_REPL`, `ELAN_HOME`, …)
+      oturumun sonraki `Bash` komutlarına ulaşıyor mu?
+      → **Evet**: dört değişken ve `PATH` sonraki her komutta görünüyor; `$CLAUDE_ENV_FILE`
+      komutun içinde boş (platform kabuk anlık görüntüsüyle enjekte ediyor), elle `source` gerekmez.
+- [x] Tam Lean taraması bulutta (`harness.run_lean --timeout 45`, `check.py --full`'un parçası).
+      → `run_lean` 150 s, 121 sertifika, FP 0, junk 0/17. Bir Lean istemcisinin bulutta bellek
+      tüketimi ayrıca ölçülmedi (WSL'de ~7.2 GB PSS).
+- [x] Yedek yorumlayıcı 3.12.3 (Ubuntu 24.04) ile takım: Lean kurulurken 824 passed / 14 skipped
+      (9'u Lean henüz yok, 3'ü root altında salt okunur dizin taklit edilemediği için, 1 isteğe
+      bağlı indirme, 1 kapsam dışı ifade).
+- [x] Uzun `--full` sırasında makine geri alınıyor mu? → Hayır: ajan arka plan işini boşta
+      beklerken koşu bitti ve ajan bildirimle uyandı (63 dk). Kural yine de geçerli: gerekirse
+      kısa durum komutlarıyla oturum etkin tutulur.
+- [x] Ortamın stop hook'u: `~/.claude/stop-hook-git-check.sh` commit edilmemiş değişiklik görünce
+      commit + push ister (`check.py` `reports/`'u yeniden yazar). Normal oturumda raporlar
+      commit edilir; teşhis oturumunda yok sayılır.
 
 ## 13. Bulut routine istemleri
 

@@ -23,7 +23,7 @@ on the web (bulut oturumları) üzerinden sürecek; bulut el kitabı `docs/BULUT
 (Linux/bulut desteği, sabit Lean sürümleri, çevrimdışı kurulum, sertleştirilmiş kapılar,
 `check.py --full` artık 24 kapı) `bulut-2026-09-24` dalında; doğrulandıktan sonra kullanıcı onayıyla
 ("dal, doğrula, birleştir") ve önce yedek alınarak `master`a fast-forward edilir (§5.4). Özet §0'da.
-Son `check.py --full`: «SAYI-GÜNCELLENECEK»/24. Kredili ölçüm kuralı değişmedi (§7).
+Son `check.py --full`: **24/24** (Windows, `f0e950c`, ~68 dk; yerel Linux/WSL, `74d9da1`, ~36 dk). Kredili ölçüm kuralı değişmedi (§7).
 
 **Düzeltme (24 Eylül 2026, akşam):** "doğrulandıktan sonra ve önce yedek alınarak" olmadı. Bir
 bulut routine oturumu dalın `4d01ba2` hâlini ve tanı raporunu **doğrulamadan ve yedekten önce**
@@ -45,8 +45,8 @@ dondurulup anahtarlar yenilendikten sonra yapılacak (§7).
 3. `PYTHONUTF8=1 .venv/Scripts/python.exe -m pytest tests -q` çalıştır (Git Bash; PowerShell için
    §9). Beklenen: `438 passed, 1 skipped`, yaklaşık 90 saniye.
    **Düzeltme (24 Eylül 2026):** Linux'ta ve bulutta yorumlayıcı `.venv/bin/python`. Test sayısı
-   değişti: Windows'ta «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped; Linux'ta Lean
-   kuruluyken «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped. Atlananlar `-rs` ile
+   değişti (838 test): Windows'ta 776 passed / 62 skipped; Linux'ta Lean
+   kuruluyken 836 passed / 2 skipped. Atlananlar `-rs` ile
    görülür; Lean kurulu bir makinede "Lean/Mathlib toolchain not available" nedeniyle atlama olmamalı.
 4. §7'deki ilk işe geç.
 
@@ -169,10 +169,10 @@ turun değişiklikleri bu belge yazılırken sürüyordu, tabloda "beşinci turd
 | Tam takım, Python 3.12.11 (yedek yorumlayıcı) | 438 passed / 1 skipped (o günkü takım) | Linux |
 | `check.py` ilk tur: hızlı takım | 469 passed / 2 skipped; 27 yeni kapı testi; altı mutasyonun her biri testleri düşürdü | commit `9ad931b` |
 | Normal `git clone` (araç ref'i inmez) | 3 s, 1.2 MB | — |
-| İkinci tur sonrası tam takım, Windows | «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped | Windows |
-| İkinci tur sonrası tam takım, Linux (Lean kurulu) | «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped | WSL |
-| `check.py --full` | «SAYI-GÜNCELLENECEK»/24, süre «SAYI-GÜNCELLENECEK» | yerel |
-| Bulut: kurulum betiği süresi, kanca süresi, `check.py --full` | kurulum (kancanın başlattığı `setup_env.sh --lean-only`) **195 s**: çekim 55 s, Python 1 s, `setup_lean` 119 s, REPL 19 s; kanca **7 s** / **7 s** (elle iki koşu); `check.py --full` bulutta «SAYI-GÜNCELLENECEK» (henüz koşmadı) | bulut, routine oturumu, `4d01ba2` (§0.8, `docs/BULUT.md` §12) |
+| İkinci tur sonrası tam takım, Windows | 776 passed / 62 skipped (62 atlamanın 60'ı yalnız POSIX'te koşan bulut betiği testleri) | Windows, `f0e950c` |
+| İkinci tur sonrası tam takım, Linux (Lean kurulu) | 836 passed / 2 skipped (isteğe bağlı indirme testi + kapsam dışı ifade) | WSL, yerel bash, CPython 3.14.6, `74d9da1` |
+| `check.py --full` | **24/24** Windows'ta (~68 dk (4107 s; adversaryal 3563 s)) ve yerel Linux'ta (~36 dk (2186 s; adversaryal 1870 s)); kapı değerleri iki platformda aynı | Windows `f0e950c`; WSL `74d9da1` |
+| Bulut: kurulum betiği süresi, kanca süresi, `check.py --full` | kurulum (kancanın başlattığı `setup_env.sh --lean-only`) **195 s**: çekim 55 s, Python 1 s, `setup_lean` 119 s, REPL 19 s; kanca **7 s** / **7 s** (elle iki koşu); `check.py --full` bulutta **24/24**, ~63 dk (3793 s; adversaryal 3220 s; 4 vCPU) (ikinci routine oturumu, `master` `74d9da1`) | bulut, routine oturumu, `4d01ba2` (§0.8, `docs/BULUT.md` §12) |
 | Bulut: tam takım, `run_lean --limit 5`, hızlı `check.py` | 517 test: 515 passed / 2 skipped / 0 failed (50 s; Lean yüzünden atlama yok); 4 sertifika, FP 0, junk 0, REPL geride kalmadı; 12/12 (115 s) | bulut, routine oturumu, `4d01ba2` |
 | Bulut: araç ref'i çekimi | `fetch_artifacts.sh` 50 s, 1.1G git nesnesi, 5/5 SHA256 OK | bulut, routine oturumu |
 
@@ -242,6 +242,7 @@ hâlini ölçtü. Rapor `docs/bulut_tani_2026-09-24.md`, karar DECISIONS §44; b
 - **Ölçülmeyenler** (ilk normal oturumda, `docs/BULUT.md` §12): kurulum betiği alanından gerçek
   koşu, anlık görüntünün `/opt`'u koruması, platformun tetiklediği kanca, `CLAUDE_ENV_FILE`'ın
   sonraki komutlara ulaşması, bulutta `check.py --full` ve tam Lean taraması, etiket push'u.
+- **Düzeltme (24 Eylül 2026, akşam) — İkinci routine oturumu (24 Eylül 16:49–18:04 UTC, `master` = `74d9da1`, kurulum betiği tanımlı değil, push yok):** yukarıdaki açıkların çoğu ölçüldü. Platform kancayı oturum açılışında **kendiliğinden** çalıştırdı (10 s; 3.14 henüz yokken 3.12.3 seçildi, `.venv` 9 s, Lean arka planda başlatıldı). Kancanın dışa aktardığı `ELAN_HOME` ve `MATHVERIFY_*` sonraki her `Bash` komutunda görünüyor (`$CLAUDE_ENV_FILE` komutta boş; platform değişkenleri kabuk anlık görüntüsüyle enjekte ediyor). Lean 239 s'de hazır (çekim 54, Python 1, `setup_lean` 152, REPL 27). Kurulum betiğinin tamamı temiz önekte 234 s (çekim 58, Python 1, uv ön ısıtma 11, `setup_lean` 144, REPL 26; 11 GB). 3.12.3 yedek `.venv`'le Lean kurulurken takım 824 passed / 14 skipped. `check.py --full` **24/24**, ~63 dk (3793 s; adversaryal 3220 s; 4 vCPU); birim testleri 833 passed / 5 skipped; kapı değerleri Windows ve yerel Linux ile aynı (121 sertifika, FP 0, junk 0/17, saldırı %0). Arka planda süren `--full` sırasında ajan boşta beklediği hâlde makine geri alınmadı. Yeni gözlemler: oturum `HEAD detached from refs/heads/master` ile başladı (ilk routine `master` dalındaydı); ortamın kendi stop hook'u (`~/.claude/stop-hook-git-check.sh`) commit edilmemiş değişiklik (ör. `check.py`'nin yeniden yazdığı `reports/`) görünce commit + push ister. Hâlâ açık: kurulum betiğinin claude.ai alanından gerçek koşusu ve anlık görüntünün `/opt`'u koruması, etiket push'u.
 
 ### 0.9 Olay: `master` doğrulamadan ve yedekten önce ileri alındı (24 Eylül)
 
@@ -436,7 +437,8 @@ reports/          üretilmiş .md raporlar (commit'li); *.json raporlar git-igno
 ```
 
 **Düzeltme (24 Eylül 2026):** `tests/` artık 32 test dosyası (`test_lean_client_posix.py`,
-`test_check_gates_harness.py` eklendi); test sayısı «SAYI-GÜNCELLENECEK». Yeni klasörler ve dosyalar:
+`test_check_gates_harness.py` eklendi); 24 Eylül sonunda 36 test dosyası, 838 test (`test_cloud_scripts.py`, `test_llm_base_url.py`,
+`test_prove_audit_timeout.py`, `test_lean_elaboration.py` de eklendi). Yeni klasörler ve dosyalar:
 
 ```
 lean/             sabitlenmiş Lean projesi dosyaları + PINS (§0.5)
@@ -826,8 +828,8 @@ içinde (§6.5).
 
 **Düzeltme (24 Eylül 2026):** yukarıdaki tablo 23 Eylül koşusudur ve artık "son" değil. Kapı sayısı
 24 oldu ("Lean erişilebilir", DECISIONS §39) ve `check.py` artık her harness'i yeniden koşturup
-yalnız o koşunun raporunu okur. 24 Eylül koşusu: «SAYI-GÜNCELLENECEK»/24, birim testleri
-«SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped, süre «SAYI-GÜNCELLENECEK»;
+yalnız o koşunun raporunu okur. 24 Eylül koşusu: **24/24**, birim testleri
+776 passed / 62 skipped, süre ~68 dk (4107 s; adversaryal 3563 s) (Windows, `f0e950c`); yerel Linux'ta da 24/24, 836 passed / 2 skipped, ~36 dk (2186 s; adversaryal 1870 s);
 günlük `reports/check_full.log`.
 
 **Süre notu:** Koşular gün içinde yavaşladı (adversaryal 1245 → 2249 → 3490 s). İki A/B ölçümü:
@@ -1339,11 +1341,11 @@ DECISIONS §38.
 | `.venv/Scripts/python.exe scripts/check.py` | Hızlı: testler + pyflakes + deterministik ölçüm (12 kapı) | ~3 dk |
 | `.venv/Scripts/python.exe scripts/check.py --full` | + Lean, adversaryal, sağlamlık, kalibrasyon (23 kapı); günlüğü `reports/check_full.log`a yazar | **~25–70 dk** (adversaryal tek başına 21–58 dk, makine yüküne bağlı) |
 
-**Düzeltme (24 Eylül 2026):** `pytest` artık «SAYI-GÜNCELLENECEK» test (Windows'ta
-«SAYI-GÜNCELLENECEK» geçer, «SAYI-GÜNCELLENECEK» atlanır); `--full` **24 kapı** ("Lean
+**Düzeltme (24 Eylül 2026):** `pytest` artık 838 test (Windows'ta
+776 geçer, 62 atlanır; yerel Linux'ta 836 / 2); `--full` **24 kapı** ("Lean
 erişilebilir"). Bir harness çökerse, raporunu yazmazsa, Lean yoksa ya da tarama sırasında
 kaybolursa ilgili kapılar FAIL olur (DECISIONS §39). Bulutta `--full` süresi
-«SAYI-GÜNCELLENECEK».
+~63 dk (3793 s; adversaryal 3220 s; 4 vCPU); 24/24 (ikinci routine oturumu, `74d9da1`).
 
 ### Tek tek ölçümler
 
@@ -1555,8 +1557,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   Lean yoksa **sessizce atlanır**; yazıcı testleri çevrimdışı koşar. Lean'e dokunan bir
   değişiklikten sonra `pytest -rs` ile atlanan sayısına bakın (bugün 1: `test_f5_lean.py:66`,
   "statement out of scope", beklenen) ve `harness.run_lean`'i ayrıca koşturun.
-  **Düzeltme (24 Eylül 2026):** atlanan sayısı değişti: Windows'ta «SAYI-GÜNCELLENECEK», Linux'ta
-  (Lean kurulu) «SAYI-GÜNCELLENECEK»; nedenleri `-rs` çıktısında. Lean yoksa `check.py --full`
+  **Düzeltme (24 Eylül 2026):** atlanan sayısı değişti: Windows'ta 62 (60'ı yalnız POSIX'te koşan bulut betiği
+  testleri), Linux'ta (Lean kurulu) 2; nedenleri `-rs` çıktısında. Lean yoksa `check.py --full`
   artık bunu gizlemez: "Lean erişilebilir" kapısı düşer.
 
 ### Windows ve araçlar
