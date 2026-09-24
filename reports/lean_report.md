@@ -1,11 +1,15 @@
 # F5 (Lean) taraması — modelsiz, deterministik ifade + Mathlib taktik merdiveni
 
+- Lean REPL (Mathlib) bu koşuda açıldı: **evet** · taramanın sonunda erişilebilir: **evet** · Lean'e ulaşamayan ifade: **0**
+- Lean'in cevap vermediği taktik denemesi (zaman aşımı ya da REPL çökmesi): **0/869** · denetim sondası (aksiyom/vakum/hipotezsiz) cevapsız kalan kanıt: **0/122**
+- En az bir denemesi ya da denetim sondası cevapsız kalan ifade: öğe **0** · bunlardan cevabı yanlış (FP kapısı düşer): **0** · junk sondası (junk kapısı düşer): **0**
+- Lean'de derlenen ifade (`sorry` gövdesiyle, autoImplicit kapalı): cevabı doğru öğe **122/122** · cevabı yanlış öğe (FP kapısı) **50/50** · junk sondası (junk kapısı) **3/3**
 - Öğe: **280** · Lean ifadesi üretilebilen: **172** (61.4%)
 - Kanıtlanan: **121** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **121**
 - **Yanlış cevaplı öğelerde kanıt (FP): 0** ✓ hedef 0
 - Kapsama (tüm sette formal sertifika): 43.2% · ifadesi olanlar içinde: 70.3%
 - Şablon türleri: {'equation_of_iff': 10, 'closed_arithmetic': 28, 'recurrence_term': 7, 'series_sum_finite': 4, 'antiderivative_hasderiv': 5, 'definite_integral': 10, 'extremum_max': 3, 'derivative_at': 3, 'derivative_fun': 2, 'solve_equation_set': 12, 'evaluate_system': 32, 'solve_inequality_iff': 5, 'count_integers_finset': 3, 'domain_of_iff': 9, 'simplify_identity': 6, 'count_solutions_finset': 5, 'count_arrangements': 4, 'count_subsets': 4, 'count_injections': 3, 'linalg_inverse': 3, 'linalg_eigenvalues': 3, 'linalg_eigenvector': 3, 'linalg_solve_system': 4, 'linalg_matrix_expr': 4}
-- Süre: 130 s (ortalama 465 ms/öğe)
+- Süre: 132 s (ortalama 472 ms/öğe)
 
 - **Junk-value sondası:** 17 gerçekte yanlış iddia (Lean'in x/0 = 0, √(−1) = 0, log 0 = 0 gibi tamamlamalarında doğru) · ifade üretilen: 3 · **sertifika alan: 0** (hedef 0) ✓
 

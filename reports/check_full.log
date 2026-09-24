@@ -1,22 +1,22 @@
-check.py --full · 2026-09-23 15:56:33 · yerel-kalite-2026-09-23 @ e2aa08d · commit edilmemiş değişiklik: 29 dosya
+check.py --full · 2026-09-24 18:36:17 · bulut-2026-09-24 @ f0e950c · commit edilmemiş değişiklik: 1 dosya
 
 == testler ==
-  pytest: 91 s (exit 0)
+  pytest: 125 s (exit 0)
 == pyflakes ==
-  pyflakes: 1 s (exit 1)
+  pyflakes: 2 s (exit 1)
 == deterministik değerlendirme ==
   run_eval: 104 s (exit 0)
 == Lean taraması ==
-  run_lean: 131 s (exit 0)
+  run_lean: 133 s (exit 0)
 == adversaryal ==
-  adversarial: 3490 s (exit 0)
+  adversarial: 3563 s (exit 0)
 == metamorfik sağlamlık ==
-  soundness_fuzz: 119 s (exit 0)
+  soundness_fuzz: 129 s (exit 0)
 == kalibrasyon ==
-  calibrate: 47 s (exit 0)
+  calibrate: 51 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  438 passed, 1 skipped in 89.59s (0:01:29)   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  776 passed, 62 skipped in 123.66s (0:02:03)   (hedef: hepsi geçer)
   [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
@@ -28,6 +28,7 @@ check.py --full · 2026-09-23 15:56:33 · yerel-kalite-2026-09-23 @ e2aa08d · c
   [OK  ] yol (b) cevabın kendisi karşılaştırılan öğe     20/20   (hedef: raporlanır)
   [OK  ] L5 uygulanabilirlik tavanı                      21/280   (hedef: raporlanır)
   [OK  ] ölçülmeyen görev türü                           yok   (hedef: yok)
+  [OK  ] Lean erişilebilir                               evet (121 sertifika)   (hedef: evet, ≥1 sertifika)
   [OK  ] Lean FP                                         0   (hedef: 0)
   [OK  ] Lean sertifika                                  121/280   (hedef: raporlanır)
   [OK  ] Lean junk-value sertifikası                     0/17   (hedef: 0)
@@ -40,4 +41,4 @@ check.py --full · 2026-09-23 15:56:33 · yerel-kalite-2026-09-23 @ e2aa08d · c
   [OK  ] nedeni açıklanmayan kaçırılan bozuk adım        0/6   (hedef: 0)
   [OK  ] kalibre test precision (poz/neg)                1.0/1.0   (hedef: raporlanır)
 
-23/23 kapı geçti
+24/24 kapı geçti
