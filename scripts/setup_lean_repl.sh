@@ -7,7 +7,8 @@
 #   ELAN_HOME                 elan home (default $HOME/.elan)
 #   MATHVERIFY_LEAN_PROJECT   Mathlib project directory (default $HOME/mathverify-lean)
 #   MATHVERIFY_LEAN_REPL      REPL binary (default $HOME/repl/.lake/build/bin/repl); the REPL
-#                             checkout is the part before /.lake/build/bin/repl
+#                             checkout is the part before /.lake/build/bin/repl, with links
+#                             resolved (a linked checkout is updated at its target)
 #   MATHVERIFY_ARTIFACT_DIR   directory filled by scripts/fetch_artifacts.sh; a missing REPL
 #                             checkout, or one at another revision, is taken from its
 #                             lean-sources archive instead of cloned or fetched
@@ -84,12 +85,20 @@ have_artifact() {
 }
 REPL_BIN="$(expand_home "${MATHVERIFY_LEAN_REPL:-$HOME/repl/.lake/build/bin/repl}")"
 case "$REPL_BIN" in
-  */.lake/build/bin/repl) REPL_DIR="${REPL_BIN%/.lake/build/bin/repl}" ;;
+  */.lake/build/bin/repl) REPL_DIR_GIVEN="${REPL_BIN%/.lake/build/bin/repl}" ;;
   *) die "MATHVERIFY_LEAN_REPL must end in /.lake/build/bin/repl (got $REPL_BIN)" ;;
 esac
+# Resolved once, links included, as setup_lean.sh resolves its project directory
+# (session_start.sh links ~/repl to <prefix>/repl): a staging checkout next to the link and a swap
+# of the link would replace the link with a new directory while the install it points to stays
+# at its old revision. `readlink -m` also resolves a path that does not exist yet (a dangling
+# link: the checkout is created at its target). The smoke test still launches $REPL_BIN as given,
+# the path the verifier uses.
+REPL_DIR="$(readlink -m -- "$REPL_DIR_GIVEN" 2>/dev/null)" || REPL_DIR="$REPL_DIR_GIVEN"
+[ -n "$REPL_DIR" ] || REPL_DIR="$REPL_DIR_GIVEN"
 
 LOG "setup_lean_repl: $(uname -srm), $(nproc) CPU(s), user $(id -un 2>/dev/null || id -u)"
-LOG "ELAN_HOME=$ELAN_HOME PROJECT=$PROJ REPL=$REPL_DIR ARTIFACTS=${ART:-(none)} OFFLINE=$OFFLINE"
+LOG "ELAN_HOME=$ELAN_HOME PROJECT=$PROJ REPL=$REPL_DIR$([ "$REPL_DIR" = "$REPL_DIR_GIVEN" ] || echo " (given as $REPL_DIR_GIVEN)") ARTIFACTS=${ART:-(none)} OFFLINE=$OFFLINE"
 command -v elan >/dev/null 2>&1 || die "elan not found in $ELAN_HOME/bin; run scripts/setup_lean.sh first"
 [ -f "$PROJ/lean-toolchain" ] || die "$PROJ has no lean-toolchain; run scripts/setup_lean.sh first"
 [ "$(cat "$PROJ/lean-toolchain")" = "$LEAN_TOOLCHAIN" ] \

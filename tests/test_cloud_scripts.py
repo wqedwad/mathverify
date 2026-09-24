@@ -1693,3 +1693,48 @@ def test_setup_lean_repl_swaps_a_new_checkout_in_only_after_its_smoke_test(insta
     assert (repl / "lean-toolchain").read_text().strip() == TOOLCHAIN
     assert (repl / ".lake" / "build" / "bin" / "repl").is_file()
     assert _dot_entries(bed.opt) == []
+
+
+@posix_only
+@pytest.mark.parametrize("case", ["other-revision", "dangling"])
+def test_setup_lean_repl_updates_a_linked_checkout_at_its_target(installed, case):
+    # session_start.sh links ~/repl to <prefix>/repl. Round-6 finding: setup_lean_repl.sh never
+    # resolved that link, so it staged the new checkout next to the link and swapped the link
+    # itself: the link became a new directory and the checkout it pointed to stayed old.
+    bed = installed
+    repl = bed.opt / "repl"
+    target = Path(os.path.realpath(repl))  # what `readlink -m` logs, were the bed under a link
+    link = bed.home / "repl"
+    link.symlink_to(repl)
+    extra = {"MATHVERIFY_LEAN_REPL": str(link / ".lake" / "build" / "bin" / "repl")}
+    if case == "other-revision":
+        (repl / "Extra.lean").write_text("-- another revision\n", encoding="utf-8")
+        _git(repl, "add", "Extra.lean")
+        _git(repl, "commit", "-q", "-m", "another revision")
+        other = _git(repl, "rev-parse", "HEAD")
+        before = _tree(repl)
+        # a failed smoke test puts the previous checkout back at the target, the link untouched
+        r, _ = bed.script("setup_lean_repl.sh", STUB_REPL_SMOKE="fail", **extra)
+        assert r.returncode == 1 and "REPL reported an error" in r.stderr, r.stdout + r.stderr
+        assert f"the previous checkout was put back in {target}" in r.stdout, r.stdout
+        assert link.is_symlink() and os.readlink(link) == str(repl)
+        assert _git(repl, "rev-parse", "HEAD") == other and _tree(repl) == before
+        assert _dot_entries(bed.home) == [] and _dot_entries(bed.opt) == []
+        bed.calls.unlink()
+    else:
+        shutil.rmtree(repl)  # the link dangles: the checkout is created at its target
+    r, _ = bed.script("setup_lean_repl.sh", **extra)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f"REPL={target} (given as {link})" in r.stdout, r.stdout
+    assert f"swap the new checkout into {target}" in r.stdout and "REPL SMOKE OK" in r.stdout
+    # built in a staging checkout next to the target, not next to the link ...
+    (build,) = [c for c in bed.lake_calls() if c[1] == "build"]
+    assert re.fullmatch(rf"{re.escape(str(target.parent))}/\.repl\.stage\.\d+/repl", build[0]), build
+    # ... and smoke-tested through the link, the path the verifier launches
+    (smoke,) = [c for c in bed.lake_calls() if c[1].startswith("env ")]
+    assert smoke[1] == f"env {link}/.lake/build/bin/repl", smoke
+    assert link.is_symlink() and os.readlink(link) == str(repl)
+    assert _git(repl, "rev-parse", "HEAD") == bed.repl_rev
+    assert (repl / "lean-toolchain").read_text().strip() == TOOLCHAIN
+    assert (repl / ".lake" / "build" / "bin" / "repl").is_file()
+    assert _dot_entries(bed.home) == [] and _dot_entries(bed.opt) == []
