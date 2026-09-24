@@ -1,6 +1,7 @@
 """scripts/check.py: a harness that crashes, writes no report or leaves a stale one must fail its
 gates under the same names and count, and no Lean gate may pass when Lean did not run or was lost
-during the run, nor the FP and junk gates on a statement Lean never answered (all attempts timed out).
+during the run, nor the FP and junk gates on a statement where Lean left any tactic attempt
+unanswered (all of them timed out, or only some).
 
 No real harness runs here: `check.run` is replaced by a fake that writes fixture reports into a
 temporary REPORTS directory (or does not, and returns the exit code under test). The run_lean
@@ -32,10 +33,10 @@ GOOD = {
                              "l5_applicability": {"n": 1, "total": 2}}},
     "run_lean": {"lean_available": True, "lean_available_end": True,
                  "records": [{"id": "x-001", "statement": True, "lean_reached": True, "lean_answered": True,
-                              "errors": [], "clean": True, "answer_right": True},
+                              "n_attempts": 1, "n_unanswered": 0, "errors": [], "clean": True, "answer_right": True},
                              {"id": "x-002", "statement": False, "clean": None, "answer_right": False}],
                  "junk_probe": [{"label": "0/0 = 0", "statement": True, "lean_reached": True, "lean_answered": True,
-                                 "errors": [], "certified": False}]},
+                                 "n_attempts": 11, "n_unanswered": 0, "errors": [], "certified": False}]},
     "adversarial": {"preserving": {"flipped": 0}, "changing": {"accepted_wrong": 0}, "n_attacks": 100,
                     "per_attack": {"neg": 1, "mc:swap": 1, "step:drop": 1}},
     "soundness_fuzz": {"wrong": {"false_accepts": 0, "n": 5}, "equiv": {"false_rejects": 0, "n": 5},
@@ -382,10 +383,26 @@ def _timed_out_item(answer_right, **extra):
                  "clean": None, "answer_right": answer_right}, **extra)
 
 
-def test_a_right_answer_item_that_only_timed_out_fails_no_gate(monkeypatch, tmp_path):
-    """Its whole ladder timed out: it only lost its certificate, and no gate is about it."""
+ANSWERED = {"lean_answered": True, "n_attempts": 1, "n_unanswered": 0}
+
+
+def _partly_answered_fields():
+    """The reviewer's case, as run_lean records it: one cheap tactic got a Lean verdict, the eight
+    heavy ones all timed out."""
+    from harness import run_lean
+    r = {"proved": False, "errors": [], "attempts": [_attempt(False, "linarith failed")]
+         + [dict(_attempt(False, TIMEOUT), ms=45000) for _ in range(8)]}
+    fields = run_lean.lean_fields(r)
+    assert fields == {"lean_reached": True, "lean_answered": True, "n_attempts": 9, "n_unanswered": 8, "errors": []}
+    return fields
+
+
+@pytest.mark.parametrize("partly", [False, True])
+def test_a_right_answer_item_that_timed_out_fails_no_gate(monkeypatch, tmp_path, partly):
+    """Its whole ladder (or all but one tactic) timed out: it only lost its certificate, and no gate
+    is about it."""
     lean = json.loads(json.dumps(GOOD["run_lean"]))
-    lean["records"].append(_timed_out_item(True))
+    lean["records"].append(_timed_out_item(True, **(_partly_answered_fields() if partly else {})))
     rc, by_name, names = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
     assert rc == 0 and names == FULL and all(g["ok"] for g in by_name.values())
     assert by_name["Lean sertifika"]["value"] == "1/3" and by_name["Lean FP"]["value"] == 0
@@ -396,9 +413,9 @@ WRONG_ITEM_CASES = {  # records appended to GOOD["run_lean"] -> expected "Lean F
     "timed_out": ([_timed_out_item(False)], "Lean cevap vermedi 1/1"),
     "field_missing": ([{k: v for k, v in _timed_out_item(False).items() if k != "lean_answered"}],
                       "Lean cevap vermedi 1/1"),
-    "one_of_two": ([_timed_out_item(False), _timed_out_item(False, id="x-004", lean_answered=True)],
+    "one_of_two": ([_timed_out_item(False), _timed_out_item(False, id="x-004", **ANSWERED)],
                    "Lean cevap vermedi 1/2"),
-    "with_an_fp": ([_timed_out_item(False), _timed_out_item(False, id="x-004", lean_answered=True, clean=True)],
+    "with_an_fp": ([_timed_out_item(False), _timed_out_item(False, id="x-004", clean=True, **ANSWERED)],
                    "Lean cevap vermedi 1/2, FP 1"),
 }
 
@@ -416,13 +433,106 @@ def test_an_unanswered_wrong_answer_item_fails_the_fp_gate(monkeypatch, tmp_path
     assert all(g["ok"] for n, g in by_name.items() if n != "Lean FP")
 
 
+# --- Lean answered some attempts on a statement but not all ---------------------------------------
+# `lean_answered` means "at least one attempt got a Lean verdict", so a junk statement or a wrong-answer
+# item on which one cheap tactic was answered and all eight heavy ones timed out still let the junk and
+# FP gates read 0 (reviewer's finding): the heavy tactics are the ones that could have proved it. Every
+# attempt must now be answered (`n_unanswered` == 0); a missing or inconsistent count fails closed.
+PARTLY = "partly"                      # stands for _partly_answered_fields() (needs harness.run_lean)
+SILENT = {"lean_answered": False, "n_attempts": 3, "n_unanswered": 3}
+NO_COUNT = {"lean_answered": True}
+
+
+def _counted(n_attempts, n_unanswered):
+    return {"lean_answered": True, "n_attempts": n_attempts, "n_unanswered": n_unanswered}
+
+
+PARTIAL_CASES = {  # fields of each junk statement / wrong-answer item -> expected gate value
+    "reviewer": ([PARTLY], "Lean kısmen cevap vermedi 8/9 deneme"),
+    "next_to_a_healthy_one": ([PARTLY, _counted(1, 0)], "Lean kısmen cevap vermedi 8/10 deneme"),
+    "next_to_a_silent_one": ([PARTLY, SILENT], "Lean cevap vermedi 1/2, kısmen cevap vermedi 8/9 deneme"),
+    "next_to_a_certificate": ([PARTLY, dict(_counted(1, 0), hit=True)], "Lean kısmen cevap vermedi 8/10 deneme"),
+    "next_to_an_uncounted_one": ([PARTLY, NO_COUNT],
+                                 "Lean kısmen cevap vermedi 8/9 deneme, deneme sayımı yok 1/2 ifade"),
+    "count_missing": ([{"lean_answered": True, "n_attempts": 9}], "Lean deneme sayımı yok 1/1 ifade"),
+    "attempts_missing": ([{"lean_answered": True, "n_unanswered": 0}], "Lean deneme sayımı yok 1/1 ifade"),
+    "both_missing": ([NO_COUNT], "Lean deneme sayımı yok 1/1 ifade"),
+    "count_is_a_bool": ([{"lean_answered": True, "n_attempts": 9, "n_unanswered": False}],
+                        "Lean deneme sayımı yok 1/1 ifade"),
+    "count_is_a_string": ([_counted(9, "0")], "Lean deneme sayımı yok 1/1 ifade"),
+    "negative_count": ([_counted(9, -1)], "Lean deneme sayımı yok 1/1 ifade"),
+    "more_unanswered_than_attempts": ([_counted(2, 3)], "Lean deneme sayımı yok 1/1 ifade"),
+    "no_attempt": ([_counted(0, 0)], "Lean deneme sayımı yok 1/1 ifade"),
+}
+PARTIAL_GATE = {"junk": "Lean junk-value sertifikası", "wrong": "Lean FP"}
+
+
+def _with_statements(target, specs):
+    """GOOD["run_lean"] whose junk probe (target "junk") is, or whose wrong-answer items (target
+    "wrong") are, one statement per spec; `hit` marks a certified junk statement / a clean proof."""
+    lean = json.loads(json.dumps(GOOD["run_lean"]))
+    rows = []
+    for i, spec in enumerate(specs):
+        spec = dict(_partly_answered_fields() if spec == PARTLY else spec)
+        hit = spec.pop("hit", False)
+        base = {"statement": True, "lean_reached": True, "errors": []}
+        if target == "junk":
+            rows.append(dict(base, label=f"j{i}", certified=hit, proved=hit, **spec))
+        else:
+            rows.append(dict(base, id=f"x-1{i:02d}", clean=True if hit else None, proved=hit, answer_right=False,
+                             **spec))
+    if target == "junk":
+        lean["junk_probe"] = rows
+    else:
+        lean["records"] += rows
+    return lean
+
+
+@pytest.mark.parametrize("target", sorted(PARTIAL_GATE))
+@pytest.mark.parametrize("case", sorted(PARTIAL_CASES))
+def test_a_partly_unanswered_statement_fails_its_gate(monkeypatch, tmp_path, case, target):
+    specs, value = PARTIAL_CASES[case]
+    if any(isinstance(s, dict) and s.get("hit") for s in specs):
+        value += ", sertifika 1/2" if target == "junk" else ", FP 1"
+    lean = _with_statements(target, specs)
+    assert check.lean_unreached(lean) == []          # Lean was there the whole time
+    rc, by_name, names = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
+    assert rc == 1 and names == FULL and len(names) == 24
+    failed = by_name[PARTIAL_GATE[target]]
+    assert failed["value"] == value and not failed["ok"] and failed["target"] == 0
+    assert all(g["ok"] for n, g in by_name.items() if n != PARTIAL_GATE[target])
+
+
+@pytest.mark.parametrize("target", sorted(PARTIAL_GATE))
+def test_every_attempt_answered_passes(monkeypatch, tmp_path, target):
+    """What the two measured Windows full sweeps of 24 Sep recorded: every attempt answered
+    (0/645 on the 50 wrong-answer items, 0/33 on the 3 junk statements)."""
+    lean = _with_statements(target, [_counted(9, 0), _counted(1, 0), _counted(23, 0)])
+    rc, by_name, names = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
+    assert rc == 0 and names == FULL and all(g["ok"] for g in by_name.values())
+    assert by_name["Lean FP"]["value"] == 0
+    assert by_name["Lean junk-value sertifikası"]["value"] == ("0/3" if target == "junk" else "0/1")
+    assert check.lean_silence(lean["junk_probe"]) is None
+    assert check.lean_silence([r for r in lean["records"] if r.get("statement") and not r["answer_right"]]) is None
+
+
+def test_attempt_counts():
+    assert check.attempt_counts(_counted(9, 8)) == (8, 9)
+    assert check.attempt_counts(_counted(1, 0)) == (0, 1)
+    assert check.attempt_counts(_counted(3, 3)) == (3, 3)
+    for bad in (NO_COUNT, {"n_attempts": 9}, {"n_unanswered": 0}, _counted(9, False), _counted(True, 0),
+                _counted(9, 1.0), _counted(9, None), _counted(9, -1), _counted(2, 3), _counted(0, 0)):
+        assert check.attempt_counts(bad) is None, bad
+
+
 def _simulated_sweep(monkeypatch, tmp_path, scenario):
     """harness.run_lean end to end with Lean faked (the reviewer's simulations): Lean answers the
     start probe and proves the first statement; then, per scenario, it is lost for every later
     statement ("midrun"), lost only when re-probed after the junk probe ("end"), there but timing
-    out on every attempt of every later statement ("timeouts"; "timeouts_wrong" also marks every
-    item after the first as having a wrong answer), or healthy ("healthy": one Lean error and one
-    timeout per later statement)."""
+    out on every attempt of every later statement ("timeouts"), answering one of the two attempts
+    on every later statement and timing out on the other ("partial"), or healthy ("healthy": two
+    Lean errors per later statement). "timeouts_wrong" and "partial_wrong" also mark every item
+    after the first as having a wrong answer."""
     import mathverify.formal as formal
     from harness import run_lean
     calls = {"prove": 0, "avail": 0, "right": 0}
@@ -441,8 +551,10 @@ def _simulated_sweep(monkeypatch, tmp_path, scenario):
             r["errors"].append(UNAVAILABLE)
         elif scenario.startswith("timeouts"):
             r["attempts"] = [_attempt(False, TIMEOUT), _attempt(False, TIMEOUT)]
-        else:
+        elif scenario.startswith("partial"):
             r["attempts"] = [_attempt(False, "linarith failed"), _attempt(False, TIMEOUT)]
+        else:
+            r["attempts"] = [_attempt(False, "linarith failed"), _attempt(False, "unsolved goals")]
         return r
 
     def fake_available(timeout=300.0):
@@ -451,14 +563,15 @@ def _simulated_sweep(monkeypatch, tmp_path, scenario):
 
     monkeypatch.setattr(formal, "prove_statement", fake_prove)
     monkeypatch.setattr(formal, "lean_available", fake_available)
-    if scenario == "timeouts_wrong":
+    if scenario.endswith("_wrong"):
         monkeypatch.setattr(run_lean, "_answer_is_right", fake_right)
     run_lean.main(["--limit", "5", "--out", str(tmp_path)])
     assert calls["avail"] == 2                      # once before the sweep, once after the junk probe
     return json.loads((tmp_path / "lean_results.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("scenario", ["midrun", "end", "timeouts", "timeouts_wrong", "healthy"])
+@pytest.mark.parametrize("scenario", ["midrun", "end", "timeouts", "timeouts_wrong", "partial", "partial_wrong",
+                                      "healthy"])
 def test_run_lean_records_whether_each_statement_reached_lean(monkeypatch, tmp_path, scenario):
     data = _simulated_sweep(monkeypatch, tmp_path, scenario)
     assert data["lean_available"] is True and data["lean_available_end"] is (scenario != "end")
@@ -482,21 +595,28 @@ def test_run_lean_records_whether_each_statement_reached_lean(monkeypatch, tmp_p
     else:
         assert all(answered)
     counts = [(r["n_attempts"], r["n_unanswered"]) for r in stmt[1:]]
-    assert counts == [{"midrun": (0, 0), "healthy": (2, 1), "end": (2, 1)}.get(scenario, (2, 2))] * len(counts)
+    expected = {"midrun": (0, 0), "healthy": (2, 0), "end": (2, 0), "partial": (2, 1), "partial_wrong": (2, 1)}
+    assert counts == [expected.get(scenario, (2, 2))] * len(counts)
     values = {g["name"]: g for g in check.lean_gates(data)}
     wrong = [r for r in data["records"] if r["statement"] and not r["answer_right"]]
+    if scenario.endswith("_wrong"):
+        assert wrong and all(r is not data["records"][0] for r in wrong)
     if scenario == "timeouts_wrong":
-        assert wrong and not any(r["lean_answered"] for r in wrong)
+        assert not any(r["lean_answered"] for r in wrong)
     if scenario == "healthy":
         assert all(g["ok"] for g in values.values())
         assert values["Lean erişilebilir"]["value"] == "evet (1 sertifika)"
         assert values["Lean junk-value sertifikası"]["value"] == f"0/{len(data['junk_probe'])}"
-    elif scenario.startswith("timeouts"):           # right-answer items may time out; junk and wrong ones may not
+    elif scenario.startswith(("timeouts", "partial")):  # right-answer items may time out; junk and wrong ones may not
+        def silence(n):                             # "partial": one of each statement's two attempts unanswered
+            if scenario.startswith("timeouts"):
+                return f"Lean cevap vermedi {n}/{n}"
+            return f"Lean kısmen cevap vermedi {n}/{2 * n} deneme"
         junk = values.pop("Lean junk-value sertifikası")
-        assert not junk["ok"] and junk["value"] == f"Lean cevap vermedi {len(junk_stmt)}/{len(junk_stmt)}"
+        assert not junk["ok"] and junk["value"] == silence(len(junk_stmt))
         if wrong:
             fp = values.pop("Lean FP")
-            assert not fp["ok"] and fp["value"] == f"Lean cevap vermedi {len(wrong)}/{len(wrong)}"
+            assert not fp["ok"] and fp["value"] == silence(len(wrong))
         assert all(g["ok"] for g in values.values())
         assert values["Lean erişilebilir"]["value"] == "evet (1 sertifika)"
     else:

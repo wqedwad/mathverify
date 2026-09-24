@@ -136,6 +136,40 @@ def lean_unanswered(rows) -> list[str]:
             if r.get("statement", True) and r.get("lean_answered") is not True]
 
 
+def attempt_counts(r: dict) -> tuple[int, int] | None:
+    """(n_unanswered, n_attempts) as harness.run_lean wrote them for a statement Lean answered, or
+    None when either is missing or they are not a consistent count (a bool, a negative number, more
+    unanswered attempts than attempts, or no attempt at all): fail closed."""
+    n_un, n_att = r.get("n_unanswered"), r.get("n_attempts")
+    if type(n_un) is not int or type(n_att) is not int or n_att < 1 or not 0 <= n_un <= n_att:
+        return None
+    return n_un, n_att
+
+
+def lean_silence(rows) -> str | None:
+    """Why a "0" from the FP or junk gate would not be a claim about every statement in `rows`, or
+    None when it is. Lean must have answered every tactic attempt on every statement:
+    - "Lean cevap vermedi s/N": s of the N statements got no answer at all (`lean_answered`);
+    - "kısmen cevap vermedi k/M deneme": of the M attempts on the statements Lean did answer, k got
+      no answer (`n_unanswered`), e.g. one cheap tactic answered and every heavy one timed out;
+    - "deneme sayımı yok u/N ifade": u answered statements carry no usable attempt count.
+    """
+    stmt = [r for r in rows if r.get("statement", True)]
+    silent = lean_unanswered(stmt)
+    counts = [attempt_counts(r) for r in stmt if r.get("lean_answered") is True]
+    k = sum(c[0] for c in counts if c)
+    m = sum(c[1] for c in counts if c)
+    uncounted = sum(1 for c in counts if c is None)
+    parts = []
+    if silent:
+        parts.append(f"cevap vermedi {len(silent)}/{len(stmt)}")
+    if k:
+        parts.append(f"kısmen cevap vermedi {k}/{m} deneme")
+    if uncounted:
+        parts.append(f"deneme sayımı yok {uncounted}/{len(stmt)} ifade")
+    return "Lean " + ", ".join(parts) if parts else None
+
+
 def lean_gates(data: dict) -> list[dict]:
     # Without Lean the sweep still exits 0 with zero certificates, so "Lean FP = 0" and "no junk
     # probe certified" held vacuously and a box with no Lean showed 23/23. `lean_available` is
@@ -163,28 +197,30 @@ def lean_gates(data: dict) -> list[dict]:
     fp = [r for r in cert if not r["answer_right"]]
     # A reached REPL can still judge nothing: when every tactic attempt on a statement timed out,
     # the junk probe read "0/17" without Lean having evaluated that junk statement. A "0" from
-    # the FP and junk gates needs a real Lean answer (`lean_answered`, written by harness.run_lean;
-    # missing = no answer) on every statement it is about: each junk statement, and each item
-    # whose claimed value is wrong. An item with a right value is exempt: timing out only costs
-    # it its certificate. Measured on 24 Sep (two full sweeps, 45 s timeout): 0/172 item (50 of
-    # them wrong-answer) and 0/3 junk statements unanswered, 0 of 869 attempts timed out, slowest
-    # attempt 3.0 s, so the rule does not fail a healthy run.
+    # the FP and junk gates needs a real Lean answer on EVERY tactic attempt (`lean_answered` and
+    # `n_unanswered` == 0, written by harness.run_lean; a missing field counts as unanswered) on
+    # every statement it is about: each junk statement, and each item whose claimed value is
+    # wrong. "Answered at least once" was not enough: one cheap tactic answered and all heavy ones
+    # timed out still passed, although the heavy tactics are the ones that could have proved it.
+    # An item with a right value is exempt: timing out only costs it its certificate. Measured on
+    # 24 Sep (two full Windows sweeps, 45 s timeout; both reports fed to this function): 0 of 869
+    # attempts unanswered, 0/645 on the 50 wrong-answer items and 0/33 on the 3 junk statements,
+    # slowest attempt 3.0 s, so the rule does not fail a healthy run.
     wrong = [r for r in lean if r.get("statement", True) and not r.get("answer_right")]
-    silent = lean_unanswered(wrong)
+    silence = lean_silence(wrong)
     fp_value = len(fp)
-    if silent:
-        fp_value = f"Lean cevap vermedi {len(silent)}/{len(wrong)}" + (f", FP {len(fp)}" if fp else "")
+    if silence:
+        fp_value = silence + (f", FP {len(fp)}" if fp else "")
     gates.append(gate("Lean erişilebilir", f"evet ({len(cert)} sertifika)", "evet, ≥1 sertifika", bool(cert)))
-    gates.append(gate("Lean FP", fp_value, 0, not fp and not silent))
+    gates.append(gate("Lean FP", fp_value, 0, not fp and not silence))
     gates.append(gate("Lean sertifika", f"{len(cert)}/{len(lean)}", "raporlanır", True))
     junk = data.get("junk_probe") or []
     bad = [j["label"] for j in junk if j.get("certified")]
     value = f"{len(bad)}/{len(junk)}"
-    unanswered = lean_unanswered(junk)
-    if unanswered:
-        n_stmt = sum(1 for j in junk if j.get("statement", True))
-        value = f"Lean cevap vermedi {len(unanswered)}/{n_stmt}" + (f", sertifika {value}" if bad else "")
-    gates.append(gate("Lean junk-value sertifikası", value, 0, bool(junk) and not bad and not unanswered))
+    silence = lean_silence(junk)
+    if silence:
+        value = silence + (f", sertifika {value}" if bad else "")
+    gates.append(gate("Lean junk-value sertifikası", value, 0, bool(junk) and not bad and not silence))
     return gates
 
 
