@@ -17,9 +17,26 @@ from typing import Any
 from .base import LLMResponse, LLMError, LLMCreditError, LLMAuthError, extract_json, cost_usd
 from .cache import LLMCache, default_cache
 
-__all__ = ["AnthropicClient"]
+__all__ = ["AnthropicClient", "DEFAULT_BASE_URL", "resolve_base_url"]
 
 _FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+# The SDK's own default endpoint (anthropic==1.7.0, `Anthropic.__init__`); a test pins the two
+# together so an SDK upgrade that moves the default cannot change this project's endpoint silently.
+DEFAULT_BASE_URL = "https://api.anthropic.com"
+BASE_URL_ENV = "MATHVERIFY_ANTHROPIC_BASE_URL"
+
+
+def resolve_base_url() -> str:
+    """Endpoint for this project's Anthropic calls.
+
+    The SDK falls back to ANTHROPIC_BASE_URL when `base_url` is omitted. Hosts that run Claude
+    Code (the Claude Code cloud sessions, the desktop app) set that variable for Claude Code's
+    own traffic, and every child process inherits it; this project must never route its own
+    calls, or send its own key, there by accident. The endpoint is therefore always passed
+    explicitly: MATHVERIFY_ANTHROPIC_BASE_URL when set and non-empty, else the SDK default.
+    """
+    return (os.environ.get(BASE_URL_ENV) or "").strip() or DEFAULT_BASE_URL
 
 
 class AnthropicClient:
@@ -33,8 +50,13 @@ class AnthropicClient:
         self.cache = cache or default_cache()
         self._anthropic = anthropic
         api_key = os.environ.get("ANTHROPIC_API_KEY")
-        self._client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=max_retries) if api_key \
-            else anthropic.Anthropic(timeout=timeout, max_retries=max_retries)
+        # base_url is explicit in both branches (see resolve_base_url). Without a key the SDK still
+        # resolves its own credentials (ANTHROPIC_AUTH_TOKEN, then a profile); an explicit base_url
+        # only stops a profile's stored endpoint from replacing it.
+        base_url = resolve_base_url()
+        self._client = anthropic.Anthropic(api_key=api_key, base_url=base_url, timeout=timeout,
+                                           max_retries=max_retries) if api_key \
+            else anthropic.Anthropic(base_url=base_url, timeout=timeout, max_retries=max_retries)
 
     def _request(self, system: str | list[str], user: str, schema: dict | None, effort: str,
                  max_tokens: int) -> dict[str, Any]:
