@@ -15,7 +15,7 @@ Mimari: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Çözücü formatı: [do
 Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](reports/)
 **Kalite ilkeleri (literatür → mekanizma → kapı):** [docs/QUALITY.md](docs/QUALITY.md)
 
-## Durum (23 Eylül 2026; 24 Eylül eki son satırda)
+## Durum (23 Eylül 2026; 24 Eylül ekleri son iki satırda)
 
 | Faz | Durum |
 |---|---|
@@ -29,6 +29,7 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | F5 Lean 4 + Mathlib | **tamam ve ölçüldü** (model gerektirmeyen yolla) |
 | F6 adversaryal sertleştirme + kalibrasyon | **tamam ve ölçüldü** |
 | 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean sürümleri, kapı sertleştirmesi (`check.py --full` 24 kapı) | **tamam** (`bulut-2026-09-24`; [HANDOFF §0](HANDOFF.md), DECISIONS §34–43, [docs/BULUT.md](docs/BULUT.md)) |
+| 24 Eylül: gerçek bulut ölçümü (tek seferlik routine oturumu, `4d01ba2`) | **ölçüldü**: Lean kurulumu 195 s, testler 515 passed / 2 skipped / 0 failed, hızlı `check.py` 12/12; bulunan iki sorun (Python yedeği, `ANTHROPIC_BASE_URL`) düzeltildi; `check.py --full` bulutta henüz koşmadı ([docs/bulut_tani_2026-09-24.md](docs/bulut_tani_2026-09-24.md), DECISIONS §44–48) |
 
 ## Ölçülen sonuçlar
 

@@ -4,6 +4,10 @@
 > yanında "Düzeltme (24 Eylül 2026)" notu). §1–§12'nin geri kalanı ve aşağıdaki paragraf 23 Eylül
 > oturumunundur.
 >
+> **24 Eylül akşamı eklendi:** gerçek bulut ölçümü (§0.8), `master`ın erken birleşmesi olayı (§0.9),
+> WSL diskinin C:'yi doldurması olayı (§0.10), ölçümden sonraki kod değişiklikleri (§0.5 eki) ve
+> yeni sıradaki adımlar (§7 başı). Kararları DECISIONS §44–49.
+>
 > **23 Eylül 2026.** Bu belge, projeyi hiç görmemiş bir oturumun **yalnız bu dosyayı
 > okuyarak** devralabilmesi için yazıldı. Yazılmadan önce `git status`, `git log`, `git diff`
 > çalıştırıldı; adı geçen her dosya, fonksiyon ve komut depoda arandı; sayılar `reports/` altındaki
@@ -20,6 +24,12 @@ on the web (bulut oturumları) üzerinden sürecek; bulut el kitabı `docs/BULUT
 `check.py --full` artık 24 kapı) `bulut-2026-09-24` dalında; doğrulandıktan sonra kullanıcı onayıyla
 ("dal, doğrula, birleştir") ve önce yedek alınarak `master`a fast-forward edilir (§5.4). Özet §0'da.
 Son `check.py --full`: «SAYI-GÜNCELLENECEK»/24. Kredili ölçüm kuralı değişmedi (§7).
+
+**Düzeltme (24 Eylül 2026, akşam):** "doğrulandıktan sonra ve önce yedek alınarak" olmadı. Bir
+bulut routine oturumu dalın `4d01ba2` hâlini ve tanı raporunu **doğrulamadan ve yedekten önce**
+GitHub'daki `master`a push etti (`origin/master` = `572ef57`; §0.9). Kod kaybı yok; yedek sonradan
+alındı. Dalın sonraki commit'leri (`7993055`…`4002898`) `572ef57`'nin üstünde, `bulut-2026-09-24`
+dalında; `master`a birleştirilmeleri yine kullanıcı onayı ve yedekle olur.
 
 **Durum tek cümlede (23 Eylül):** Kodda yarım kalmış bir iş yok ve commit edilmemiş değişiklik yok.
 `scripts/check.py --full` 23/23 kapı geçiyor. 23 Eylül'deki bütün iş (iki denetim, bellek sınırı,
@@ -48,7 +58,8 @@ Bulut oturumundaysan önce oturum başındaki `[mathverify bulut oturumu …]` d
 ## 0. GitHub ve bulut (24 Eylül 2026)
 
 Bu bölüm 24 Eylül'de eklendi. Kararların gerekçesi ve reddedilen seçenekler DECISIONS §34–43'te,
-bulutun işletimi `docs/BULUT.md`'de.
+bulutun işletimi `docs/BULUT.md`'de. *Ek (24 Eylül akşamı):* bulut ölçümü, iki olay ve sonraki
+düzeltmeler §0.5 eki ve §0.8–0.10'da, kararları DECISIONS §44–49'da.
 
 ### 0.1 Uzak depo
 
@@ -60,6 +71,9 @@ bulutun işletimi `docs/BULUT.md`'de.
 - `bulut-2026-09-24` doğrulandıktan sonra `master`a fast-forward edilir. Kullanıcı onayı var
   ("dal, doğrula, birleştir"); önceki birleştirmeler gibi önce etiket + bundle yedeği alınır (§5.4).
 - CI ve LICENSE hâlâ yok (§12).
+- **Düzeltme (24 Eylül 2026, akşam):** GitHub'daki `master` artık `572ef57` (`4d01ba2` + tanı
+  raporu), routine oturumunun push'uyla, doğrulamadan ve yedekten önce (§0.9). Yeni etiket
+  `yedek/master-2026-09-24` → `23d7c6b` (birleştirme öncesi `master`) GitHub'a push edildi.
 
 ### 0.2 Bulut ortamı (resmî belgelerden, 24 Eylül'de okundu)
 
@@ -82,6 +96,14 @@ oturum açılmadı; aşağıdakiler belgeden, ölçüm değil.
 - Boşta kalan VM geri alınınca arka plandaki kabuk işi kaybolur.
 - `claude --teleport <id>` bir bulut oturumunu yerel checkout'a çeker.
 
+**Düzeltme (24 Eylül 2026, akşam, ölçüm §0.8):** bulutta artık bir oturum açıldı ve üç ifade
+ölçümle düzeltildi. (1) Makine 4 CPU, **15 GB** RAM (belge 16 GB diyordu), ~30 GB boş disk.
+(2) GitHub release dosyaları 403 dönmedi: `github.com/leanprover/elan` release indirmesi 200.
+Kapalı olanlar `releases.lean-lang.org`, `cache.mathlib.org`, `releases.astral.sh` ve `api.meta.ai`
+(hepsi vekilde `CONNECT` 403); açık olanlar `github.com`, `pypi.org`, `raw.githubusercontent.com`,
+`api.anthropic.com`. (3) "`master` buluttan push edilemez" koşulsuz doğru değil: oturumun kendi dalı
+başladığı daldır ve routine oturumu `master`da başlayıp `origin/master`a push etti (§0.9).
+
 ### 0.3 Gizli bilgiler
 
 Kullanıcı kararı (24 Eylül). `.env` bu özel depoda **izlenir** (commit `6323de7`;
@@ -91,6 +113,12 @@ kuralının yerini aldı (§10, `CLAUDE.md`, DECISIONS §35). Değişmeyen: anah
 sonra `.env` güncellenip commit edilir. Depo herkese açılacak ya da paylaşılacaksa önce anahtarlar
 yenilenir ve `.env` geçmişten temizlenir. `python-dotenv` `.env`'i `override=False` ile ve yalnız
 projenin Python süreçlerinde yükler, yani Claude Code'un kendi `ANTHROPIC_API_KEY`'i olmaz.
+
+**Ek (24 Eylül 2026, ölçüm):** bulut kabuğunda `ANTHROPIC_API_KEY` ve `ANTHROPIC_AUTH_TOKEN`
+tanımlı değil (yalnız adlar okundu), `.env`'deki anahtar gölgelenmez. `ANTHROPIC_BASE_URL` ise
+tanımlı (Claude Code'un kendisi için); istemci artık onu miras almaz, uç noktayı
+`MATHVERIFY_ANTHROPIC_BASE_URL` ya da `https://api.anthropic.com` olarak açıkça verir (`4002898`,
+DECISIONS §48, `docs/LLM_LAYERS.md`).
 
 ### 0.4 Depoya alınanlar
 
@@ -115,6 +143,20 @@ projenin Python süreçlerinde yükler, yani Claude Code'un kendi `ANTHROPIC_API
 | `requirements.lock` | yerel `.venv`'deki 32 paketin evrensel kilidi | DECISIONS §43 |
 | `.gitattributes` | `* text=auto`, `*.sh eol=lf`; `lean/` bayt bayt (`lean/.gitattributes`) | DECISIONS §41 |
 
+**Ek (24 Eylül 2026, akşam): bulut ölçümünden sonraki commit'ler** (`7993055`…`4002898`; beşinci
+turun değişiklikleri bu belge yazılırken sürüyordu, tabloda "beşinci turda" diye işaretli):
+
+| Değişiklik | Davranış | Karar |
+|---|---|---|
+| `harness/run_lean.py`, `scripts/check.py` | her ifadeli kayıt `lean_answered`, `n_attempts`, `n_unanswered` taşır; junk ifadelerinde ve yanlış cevaplı öğelerde her deneme cevaplanmış olmalı (`n_unanswered == 0`), beşinci turda ayrıca cevapsız denetim sondası olmamalı; yoksa junk ve FP kapıları düşer. Zaman aşımı, ölü REPL, yazma hatası, bozuk JSON, hatasız başarısızlık cevap sayılmaz | DECISIONS §46 |
+| `src/mathverify/formal/prove.py` | vakum ya da hipotezsiz denetim sondası gerçek bir Lean hükmü almazsa denetim temiz sayılmaz (`audit["unanswered"]`, ilke 7); denetimde Lean kaybolursa `lean_unavailable` hatası yazılır | DECISIONS §47 |
+| `scripts/cloud/setup_env.sh`, `scripts/setup_lean.sh`, `scripts/setup_lean_repl.sh` | çekim başarısızsa ya da doğrulanmazsa Python ve Lean aşamaları koşmaz (`reason=fetch`, `(skipped)`, `lean=stale`); Lean betikleri `MATHVERIFY_LEAN_OFFLINE=1` ile her çevrimiçi yedeği reddeder; artefaktlar projeye dokunmadan doğrulanır; sabitlere uymayan proje yanında kurulur ve duman testi yeniden adlandırmadan sonra da geçerse yerine konur, yoksa eskisi geri konur; `.ltar` `$OPT/.mathlib-ltar`'da, kurulumdan sonra silinir; pip `--no-cache-dir`; boş alan denetimi ölçülen boyutla (7.7 GB, araç zinciri yoksa +3.0 GB, +1 GB pay), beşinci turda WSL altında `ext4.vhdx`'i tutan Windows sürücüsüne de bakar (kayıt defteri `BasePath`, yoksa `%LOCALAPPDATA%`, yoksa `/mnt/c`; `MATHVERIFY_WSL_DRIVE_DIR`) | DECISIONS §41, §49; `docs/BULUT.md` §3.2, `docs/LEAN_SETUP.md` |
+| `scripts/cloud/session_start.sh` | 3.12'den eski yorumlayıcıyla `.venv` kurmaz; sıra öneğin `python3.14`'ü > `PATH`'teki `python3.14` > `uv python find 3.14` > `python3.12` > `python3.13` > (≥ 3.12 ise) `python3` (beşinci turda; `a02e65c`'de 3.13, 3.12'den önceydi, ama yalnız 3.12.11 ölçüldü); arka plan kurulumundan sonra kendini yeniden çalıştırma komutunu basar; salt okunur `/opt` ve eski sabitlerde ikinci kurulumu başlatmaz, kullanıcı öneki komutunu ~12 GB disk notuyla basar | DECISIONS §42 düzeltmesi |
+| `src/mathverify/llm/anthropic_client.py` | `base_url` her zaman açık: `MATHVERIFY_ANTHROPIC_BASE_URL` ya da `https://api.anthropic.com`; platformun `ANTHROPIC_BASE_URL`'i okunmaz | DECISIONS §48 |
+
+Ölçüm (Windows, gerçek tam Lean taraması, 45 s zaman aşımı): 121 sertifika (değişmedi), FP 0, junk
+0/17; 869/869 deneme ve 58/58 denetim sondası cevaplı, en yavaş deneme 3.0 s.
+
 ### 0.6 Ölçümler (24 Eylül)
 
 | Ne | Sonuç | Nerede |
@@ -130,7 +172,9 @@ projenin Python süreçlerinde yükler, yani Claude Code'un kendi `ANTHROPIC_API
 | İkinci tur sonrası tam takım, Windows | «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped | Windows |
 | İkinci tur sonrası tam takım, Linux (Lean kurulu) | «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped | WSL |
 | `check.py --full` | «SAYI-GÜNCELLENECEK»/24, süre «SAYI-GÜNCELLENECEK» | yerel |
-| Bulut: kurulum betiği süresi, kanca süresi, `check.py --full` | «SAYI-GÜNCELLENECEK» | bulut, ilk oturum (`docs/BULUT.md` §12) |
+| Bulut: kurulum betiği süresi, kanca süresi, `check.py --full` | kurulum (kancanın başlattığı `setup_env.sh --lean-only`) **195 s**: çekim 55 s, Python 1 s, `setup_lean` 119 s, REPL 19 s; kanca **7 s** / **7 s** (elle iki koşu); `check.py --full` bulutta «SAYI-GÜNCELLENECEK» (henüz koşmadı) | bulut, routine oturumu, `4d01ba2` (§0.8, `docs/BULUT.md` §12) |
+| Bulut: tam takım, `run_lean --limit 5`, hızlı `check.py` | 517 test: 515 passed / 2 skipped / 0 failed (50 s; Lean yüzünden atlama yok); 4 sertifika, FP 0, junk 0, REPL geride kalmadı; 12/12 (115 s) | bulut, routine oturumu, `4d01ba2` |
+| Bulut: araç ref'i çekimi | `fetch_artifacts.sh` 50 s, 1.1G git nesnesi, 5/5 SHA256 OK | bulut, routine oturumu |
 
 ### 0.7 Dal commit'leri (`git log master..bulut-2026-09-24`, eskiden yeniye)
 
@@ -146,6 +190,95 @@ projenin Python süreçlerinde yükler, yani Claude Code'un kendi `ANTHROPIC_API
 Bu belge yazılırken ikinci tur düzeltmeleri (Lean'in tarama ortasında kaybolması, REPL ikilisi
 yokken `lake env`, bulut betiklerinin sertleştirilmesi) henüz commit edilmemişti; `git log` ile
 kontrol edin.
+
+**Düzeltme (24 Eylül 2026, akşam):** tablo `6323de7`'de kalmıştı. Sonrası (`git log --oneline
+23d7c6b..bulut-2026-09-24`, eskiden yeniye):
+
+| Commit | Ne |
+|---|---|
+| `96a8e63` | eksik REPL ikilisi Lake'e dokunmadan reddedilir; zaman aşımı testi gerçekten zaman aşımına uğrar |
+| `65ff280` | Lean tarama ortasında kaybolursa dört Lean kapısı da düşer |
+| `27e5a16` | Lean kurulumu tamamen çevrimdışı (`refs/arac/bulut-v2` kaynakları) |
+| `cbe01a7` | kanca durumları, root ön ısıtması repoya yazmaz, kanca kabuğu bash |
+| `4d01ba2` | belgeler: GitHub ve bulut, `docs/BULUT.md` (routine oturumunun ölçtüğü hâl) |
+| `572ef57` | tanı: bulut ortamı ölçümü (`bulut_tani.md`, şimdi `docs/bulut_tani_2026-09-24.md`); **GitHub'daki `master` burada** (§0.9) |
+| `7993055` | Lean'in cevap vermediği junk ya da yanlış cevaplı ifade Lean kapılarını geçemez |
+| `eba49b5` | çekim başarısızsa Lean aşaması koşmaz; kurulum sıkı çevrimdışı ve aşamalı |
+| `911aca5` | cevapsız vakum ya da hipotezsiz sonda denetimi geçemez (ilke 7) |
+| `5e16a31` | Lean kısmen cevap vermediyse junk ve FP kapıları düşer |
+| `a02e65c` | kanca 3.12 altı Python'la `.venv` kurmaz; aşamalı güncelleme yeniden adlandırmadan sonra sınanır |
+| `4002898` | Anthropic istemcisi platformun `ANTHROPIC_BASE_URL`'ini miras almaz |
+
+`7993055`'ten sonrası `572ef57`'nin üstüne yeniden kuruldu (geçmiş doğrusal); `git log` ile kontrol
+edin, beşinci turun commit'leri bunlardan sonra gelir.
+
+### 0.8 Gerçek bulut ölçümü (24 Eylül, routine oturumu)
+
+`claude --cloud` etkileşimli terminal istediği için tek seferlik bir routine açıldı (Sonnet 5,
+"Default" ortam, kurulum betiği tanımlı değildi, 11:51–12:01 UTC); `bulut-2026-09-24`'ün `4d01ba2`
+hâlini ölçtü. Rapor `docs/bulut_tani_2026-09-24.md`, karar DECISIONS §44; belgeye işlenmiş hâli
+`docs/BULUT.md` (§3.1 ağ tablosu, §12 kontrol listesi).
+
+- **Makine:** oturum kullanıcısı root, `HOME=/root`, checkout `/home/user/asd`; Ubuntu 24.04.4,
+  4 CPU, 15 GB RAM, ~30 GB boş disk; `/opt` yazılabilir, `sudo` var; git 2.43.0, uv 0.8.17. Sistem
+  `python3` **3.11.15** (`/usr/local/bin/python3`), `/usr/bin/python3.12` ve `python3.13` ayrıca var,
+  `python3.14` yok.
+- **Ortam değişkenleri (yalnız adlar):** `ANTHROPIC_BASE_URL` var; `ANTHROPIC_API_KEY` ve
+  `ANTHROPIC_AUTH_TOKEN` yok; normal `Bash` komutlarında `CLAUDE_PROJECT_DIR` boş.
+- **Ağ:** açık `github.com` (release dosyaları dahil; elan release'i 200), `pypi.org`,
+  `raw.githubusercontent.com`, `api.anthropic.com`, bağlı olmayan açık depolara `git ls-remote`.
+  Vekilde `CONNECT` 403: `releases.lean-lang.org`, `cache.mathlib.org`, `releases.astral.sh`,
+  `api.meta.ai`. Yani Trusted ağ F3/F4 dışında her şeye yeter; F3/F4 için `api.meta.ai` eklenir.
+- **Kurulum:** oturum `master`da başladı ve kanca orada yoktu; dal `master`a ileri sarıldıktan sonra
+  kanca elle çalıştırıldı ve kurulumu arka planda başlattı: çekim 55 s, Python 1 s, `setup_lean`
+  119 s, REPL 19 s, toplam **195 s** (kurulum betiği yönergesi ~5 dk). Bağımsız çekim denemesi 50 s,
+  5/5 SHA256 OK.
+- **Sonrası:** tam takım 515 passed / 2 skipped / 0 failed (50 s), `run_lean --limit 5` 4 sertifika /
+  FP 0 / junk 0, hızlı `check.py` 12/12 (115 s), REPL geride kalmadı.
+- **Bulunan iki sorun, ikisi de düzeltildi:** (1) kurulum betiği yokken kanca çıplak `python3`'ü
+  (3.11.15) seçti ve `.venv` kurulamadı → 3.12 altı reddedilir, sıra §0.5 ekinde (`a02e65c` +
+  beşinci tur; DECISIONS §42 düzeltmesi); (2) `ANTHROPIC_BASE_URL` SDK'ya miras kalacaktı →
+  `4002898` (DECISIONS §48).
+- **Ölçülmeyenler** (ilk normal oturumda, `docs/BULUT.md` §12): kurulum betiği alanından gerçek
+  koşu, anlık görüntünün `/opt`'u koruması, platformun tetiklediği kanca, `CLAUDE_ENV_FILE`'ın
+  sonraki komutlara ulaşması, bulutta `check.py --full` ve tam Lean taraması, etiket push'u.
+
+### 0.9 Olay: `master` doğrulamadan ve yedekten önce ileri alındı (24 Eylül)
+
+Routine istemini yazan oturumun (Claude'un) hatası (DECISIONS §45). İstem "oturumun kendi dalına
+push et" diyordu. Routine oturumu varsayılan dal `master`da başladığı için oturumun dalı
+`master`dı: oturum `master`ı
+`bulut-2026-09-24`'e (`4d01ba2`) ileri sardı, üstüne `bulut_tani.md`'yi ekledi ve
+`origin/master` = `572ef57` olarak push etti. Yani `master` birleştirmesi son doğrulamadan
+(`check.py --full`) ve yedekten önce oldu.
+
+- **Kod kaybı yok:** `4d01ba2..572ef57` farkı yalnız rapor dosyası.
+- **Yedek sonradan alındı:** birleştirme öncesi `master` `23d7c6b` → etiket
+  `yedek/master-2026-09-24` (GitHub'a da push edildi) ve
+  `C:\Users\kullanici\mathverify-yedek\mathverify-master-23d7c6b-2026-09-24.bundle` (`git bundle verify`
+  geçti). Tablo §5.4'te.
+- Dalın sonraki commit'leri `572ef57`'nin üstüne taşındı; geçmiş doğrusal.
+- **Kural** (`CLAUDE.md` "Asla", `docs/BULUT.md` §13): bir bulut routine istemi push hedefini
+  açıkça **yeni bir dal** olarak verir ya da hiç push istemez; "kendi dalına" gibi göreli hedef
+  yazılmaz.
+
+### 0.10 Olay: WSL diski C:'yi doldurdu (24 Eylül)
+
+Bir ajanın gerçek Lean testleri WSL içinde `/var/tmp` altına ~60 GB kurulum yazdı. WSL'nin disk
+imajı `ext4.vhdx` 103.8 GB'a büyüdü, C: 0 bayta düştü ve WSL açılamadı. WSL içinde `df` sanal diski
+gösterdiği (942 GB boş) için hiçbir şey uyarmadı (DECISIONS §49).
+
+- **Temizlik:** Windows'taki çalışma kopyaları ve WSL içindeki ajan test ağaçları silindi;
+  kullanıcının kendi `~/mathverify-lean`, `~/repl` ve `~/.elan`'ına dokunulmadı; WSL yine 15 GB
+  kullanıyor; `fstrim` çalıştırıldı.
+- **Açık:** `.vhdx` kendiliğinden küçülmez. Bu belge yazılırken
+  `C:\Users\kullanici\AppData\Local\wsl\{WSL-GUID}\ext4.vhdx` hâlâ 103.8 GB
+  ve C:'de 6.1 GB boş. Sıkıştırma yönetici ister ve kullanıcıya bırakıldı (§7, adım 1).
+  **Düzeltme (24 Eylül 2026, 16:54):** kullanıcının yetkisiyle sıkıştırıldı. UAC onayıyla yönetici PowerShell'de `wsl --shutdown` + `diskpart` (`attach vdisk readonly`, `compact vdisk`, `detach vdisk`) çalıştı, 20 s sürdü: `.vhdx` 103.79 → 15.98 GB, C: boş alanı 6.10 → 93.95 GB. Ardından WSL açıldı; Lean 4.34.0, Mathlib `5ed2965` ve REPL duman testi (`{"env": 0}`) sağlam.
+- **Önlem:** `setup_lean.sh`'in boş alan denetimi WSL altında `.vhdx`'i tutan Windows sürücüsüne de
+  bakar (bulunamazsa `/mnt/c`; `docs/LEAN_SETUP.md`) ve yeni kurulumu ölçülen boyutla hesaplar (7.7 GB, araç zinciri yoksa +3.0 GB, +1 GB pay;
+  beşinci tur). Kural (`CLAUDE.md` "Ortam tuzakları / Windows"): WSL'de büyük bir kurulumdan önce
+  C:'nin boş alanına Windows tarafından bakılır.
 
 ---
 
@@ -657,6 +790,7 @@ Bunlar **tekrar denenmemeli.** Her birinin neden başarısız olduğu yanında y
 | 23 Eylül ikinci oturum: [DOĞRULANMADI] kontrolü, bellek sınırı, belge düzeltmeleri, yeni kapı | tamam, `master`a birleştirildi (`e2aa08d`) |
 | 23 Eylül, aynı oturumun devamı: tanımlılık açığı (11 yanlış-onay vakası), üç Lean şablonu, pyflakes kapısı, temizlik | tamam, `master`a birleştirildi (§5.3) |
 | 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean + çevrimdışı kurulum, kapı sertleştirmesi (24 kapı) | tamam, `bulut-2026-09-24` dalında (§0) |
+| 24 Eylül akşamı: gerçek bulut ölçümü, Lean kapılarının "cevap verdi" koşulu, denetim sondası (ilke 7), çevrimdışı ve aşamalı kurulum, Python yedeği, `ANTHROPIC_BASE_URL` | ölçüldü ve düzeltildi (§0.5 eki, §0.8); `bulut-2026-09-24` dalında. **Düzeltme:** dalın `4d01ba2` hâli GitHub'daki `master`da (`572ef57`, §0.9) |
 
 Son `check.py --full` sonucu (23 Eylül 2026 15:56, `yerel-kalite-2026-09-23` @ `e2aa08d` + §5.3'teki
 commit edilmemiş değişiklikler; günlük `reports/check_full.log`; toplam ~67 dk, adversaryal 3490 s):
@@ -747,6 +881,17 @@ ikinci oturumunda kapatıldı. O oturumun sırası:
 15. İkinci bir düzeltme turu (Lean'in tarama ortasında kaybolması, REPL ikilisi yokken
     `lake env`, bulut betiklerinin sertleştirilmesi) ve belgeler; ardından `check.py --full` ve
     yedekle birlikte `master`a fast-forward (kullanıcı onayı: "dal, doğrula, birleştir").
+    **Düzeltme (24 Eylül 2026, akşam):** sıra böyle olmadı. İkinci tur ve belgeler `4d01ba2`'de
+    bitti; sonra:
+16. Tek seferlik bir bulut routine oturumu `4d01ba2`'yi ölçtü (§0.8) ve istemdeki "kendi dalına push"
+    yüzünden `master`ı doğrulama ve yedekten önce `572ef57`'ye ileri aldı (§0.9); yedek sonradan
+    alındı.
+17. Ölçümde bulunan iki sorun (Python yedeği, `ANTHROPIC_BASE_URL`) ve gözden geçirmede bulunan
+    Lean kapısı ve kurulum açıkları düzeltildi (`7993055`…`4002898`, §0.5 eki).
+18. Bir ajanın WSL'deki test kurulumları C:'yi doldurdu (§0.10); temizlendi, `.vhdx` sıkıştırması
+    kullanıcıda. **Düzeltme (24 Eylül, 16:54):** sıkıştırıldı, `.vhdx` 15.98 GB, C:'de 93.95 GB boş.
+19. Beşinci tur (Python sırası, WSL'de Windows sürücüsünün disk denetimi, denetim sondası kapısı) ve bu
+    belgeler bu satır yazılırken sürüyordu; son `check.py --full` sonucu §0.6'da.
 
 ### 5.3 Commit edilmemiş değişiklikler
 
@@ -813,6 +958,19 @@ edilmemişti; güncel durum `git status` ile görülür.
   bundle'lar kullanıcıya sormadan silinmez.
 - Bulutta birleştirme doğrudan yapılamaz (`master` push edilemez): PR ile ya da yerel checkout'ta,
   yedek de yerelde alınır.
+
+**Düzeltme (24 Eylül 2026, akşam):**
+
+- "Buluttan `master` push edilemez" koşulsuz doğru değil: `master`da başlayan bir bulut oturumunun
+  kendi dalı `master`dır. 24 Eylül'de routine oturumu `origin/master`ı `572ef57`'ye ileri aldı
+  (§0.9). GitHub'daki `master` artık `572ef57` (`4d01ba2` + tanı raporu).
+- Üçüncü yedek, birleştirmeden **sonra** alındı:
+
+  | Etiket | `master` | Bundle (`C:\Users\kullanici\mathverify-yedek\`) |
+  |---|---|---|
+  | `yedek/master-2026-09-24` | `23d7c6b` (routine push'undan önceki `master`) | `mathverify-master-23d7c6b-2026-09-24.bundle` (`git bundle verify` geçti) |
+
+  Etiket GitHub'a da push edildi. Geri dönüş talimatı yine `OKU.txt`'te.
 
 Commit geçmişi (eskiden yeniye):
 
@@ -970,10 +1128,39 @@ koşularından **önce** yenilenir (karar sürüyor) ve `.env` güncellenip comm
 da paylaşılırsa önce anahtarlar yenilenir ve `.env` geçmişten temizlenir. Bulut kabuğunda aynı adla
 bir ortam değişkeni tanımlıysa `override=False` yüzünden `.env`'deki değil o kullanılır
 **[DOĞRULANMADI: bulutta kontrol edilmedi, `docs/BULUT.md` §10]**.
+**Düzeltme (24 Eylül 2026, akşam, ölçüm):** bulut kabuğunda `ANTHROPIC_API_KEY` ve
+`ANTHROPIC_AUTH_TOKEN` tanımlı değil; `.env`'deki anahtar kullanılır. Tanımlı olan
+`ANTHROPIC_BASE_URL` artık istemciye ulaşmaz (§0.3 eki, `4002898`).
 
 ---
 
 ## 7. Sıradaki adımlar
+
+**Güncel sıra (24 Eylül 2026, akşam).** Aşağıdaki eski liste geçerli kalır; bunlar önce gelir:
+
+1. **Kullanıcı WSL disk imajını sıkıştırır** (§0.10). Bu belge yazılırken `.vhdx` 103.8 GB, C:'de
+   6.1 GB boş. Yönetici PowerShell ya da komut isteminde:
+   ```
+   wsl --shutdown
+   diskpart
+   select vdisk file="C:\Users\kullanici\AppData\Local\wsl\{WSL-GUID}\ext4.vhdx"
+   attach vdisk readonly
+   compact vdisk
+   detach vdisk
+   exit
+   ```
+   WSL içinde kullanılan ~15 GB'ın yakınına inmesi beklenir [DOĞRULANMADI: sıkıştırma henüz
+   yapılmadı].
+   **Yapıldı** — **Düzeltme (24 Eylül 2026, 16:54):** kullanıcının yetkisiyle sıkıştırıldı. UAC onayıyla yönetici PowerShell'de `wsl --shutdown` + `diskpart` (`attach vdisk readonly`, `compact vdisk`, `detach vdisk`) çalıştı, 20 s sürdü: `.vhdx` 103.79 → 15.98 GB, C: boş alanı 6.10 → 93.95 GB. Ardından WSL açıldı; Lean 4.34.0, Mathlib `5ed2965` ve REPL duman testi (`{"env": 0}`) sağlam.
+2. **Kullanıcı kurulum betiğini yapıştırır:** `docs/BULUT.md` "Senin yapman gerekenler": ağ Trusted
+   kalır, "Setup script" alanına önyükleyici, ortam değişkeni gerekmez.
+3. **İlk normal bulut oturumu `master`da `docs/BULUT.md` §12'nin açık maddelerini ölçer** (kurulum
+   betiğinin gerçek koşusu, anlık görüntü, platformun tetiklediği kanca, `CLAUDE_ENV_FILE`, bulutta
+   `check.py --full`). Önce bu dalın kalan commit'leri kullanıcı onayı ve yedekle `master`a alınır
+   (§5.4); yoksa `master`daki betikler `4d01ba2` hâlindedir. Oturum bir routine ise istem push
+   hedefini yeni bir dal olarak verir (§0.9).
+4. **F3/F4** anahtarlar yenilendikten sonra, kararı değişmeden (aşağıda 3–4; bulutta `api.meta.ai`
+   için Custom ağ).
 
 Eski listenin ilk iki maddesi 23 Eylül'de tamamlandı: sandbox bellek sınırı (§6.4) ve kapı
 günlüğü (§6.5). Aynı gün, kullanıcının "geri kalan lokal işlemleri yap" talimatıyla, eski 2.
@@ -1010,6 +1197,10 @@ bu soruları açık bırakır.
    varsayılan Trusted listesinde ("Anthropic services", resmi belge 24 Eylül'de okundu; bulutta
    erişim henüz ölçülmedi, `docs/BULUT.md` §3.1). Uzun koşu sürerken
    bulut oturumu etkin tutulur.
+   **Düzeltme (24 Eylül 2026, akşam, ölçüm):** bulutta `api.anthropic.com` erişilebilir,
+   `api.meta.ai` vekilde 403 ile kapalı (§0.8); Custom ağ yalnız `api.meta.ai` için gerekir.
+   İstemci platformun `ANTHROPIC_BASE_URL`'ini okumaz; farklı bir uç nokta gerekirse
+   `MATHVERIFY_ANTHROPIC_BASE_URL` (§9).
 
 4. **F4'ü ilk kez koştur** (aynı koşuda L6 açık). Kaba tahmin 15–25 $. Raporun "L6 kritik +
    meta-doğrulama (F4)" bölümündeki iki sayı belirleyici: D tespiti ve doğru çözümde yanlış
@@ -1027,6 +1218,8 @@ bu soruları açık bırakır.
 
 7. **İlk bulut oturumu** (24 Eylül'de eklendi): `docs/BULUT.md` §12'deki ölçüm listesi. Sonuçlar
    §0.6'ya ve `docs/BULUT.md`'ye yazılır.
+   **Düzeltme (24 Eylül 2026, akşam):** listenin çoğu routine oturumunda ölçüldü (§0.8); kalanı
+   yukarıdaki güncel sıranın 3. adımı.
 
 ---
 
@@ -1089,6 +1282,9 @@ bu soruları açık bırakır.
 | `requirements.lock` | Paket kilidi (32 paket) |
 | `reports/arsiv/2026-09-24/` | Rapor JSON'larının anlık görüntüsü; iki F3 dosyası yeniden üretilemez |
 | `tests/test_lean_client_posix.py`, `tests/test_check_gates_harness.py` | Linux Lean istemcisi ve kapı sertleştirmesinin testleri |
+| `docs/bulut_tani_2026-09-24.md` | (24 Eylül akşamı) gerçek bulut ölçümünün ham raporu, `4d01ba2` (§0.8) |
+| `tests/test_cloud_scripts.py` | bulut betiklerinin testleri (`cbe01a7`'den beri; 24 Eylül akşamı çevrimdışı, aşamalı kurulum ve Python seçimi testleriyle genişledi) |
+| `tests/test_prove_audit_timeout.py`, `tests/test_llm_base_url.py` | (24 Eylül akşamı, yeni) cevapsız denetim sondası (ilke 7), Anthropic uç noktası |
 
 ---
 
@@ -1182,6 +1378,7 @@ Ayrı bir build adımı yok; paket `-e` ile kurulu. Lint ya da biçimlendirici *
 | `ANTHROPIC_AUTH_TOKEN` | Anthropic için alternatif kimlik bilgisi (kodda okunuyor, `.env`'de yok) |
 | `META_MODEL_API_KEY` | Meta Muse Spark ailesi (`.env` içinde) |
 | `MATHVERIFY_ANTHROPIC_MODEL` | Varsayılan `claude-opus-5` |
+| `MATHVERIFY_ANTHROPIC_BASE_URL` | (24 Eylül'de eklendi) Anthropic uç noktası, varsayılan `https://api.anthropic.com` (SDK varsayılanı). İstemci `base_url`'i hep açıkça verir, çünkü Claude Code'un tanımladığı `ANTHROPIC_BASE_URL` (bulutta ve masaüstünde ölçüldü) yoksa SDK'ya miras kalırdı (`4002898`, DECISIONS §48) |
 | `MATHVERIFY_META_MODEL` | Varsayılan `muse-spark-1.3` |
 | `MATHVERIFY_LLM_CACHE` | `auto` (varsayılan) / `replay` (ağa çıkmaz) / `off` |
 | `MATHVERIFY_LLM_CACHE_DIR` | Varsayılan `llm_cache/` |
@@ -1210,6 +1407,14 @@ Windows'ta okunur. `.env` artık depoda izleniyor (§0.3). Yeni değişkenler (a
 | `MATHVERIFY_HOOK_PREFIXES` | Kancanın önek listesi; yalnız testler için |
 | `MATHLIB_CACHE_DIR`, `XDG_CACHE_HOME` | Mathlib `.ltar` önbelleği, varsayılan `$HOME/.cache/mathlib` |
 | `CLAUDE_CODE_REMOTE`, `CLAUDE_PROJECT_DIR`, `CLAUDE_ENV_FILE` | Platformun verdiği değişkenler; kanca yalnız `CLAUDE_CODE_REMOTE=true` iken iş yapar |
+| `MATHVERIFY_LEAN_OFFLINE` | (24 Eylül akşamı eklendi) `1`: `setup_lean.sh` ve `setup_lean_repl.sh` sıkı çevrimdışı; her çevrimiçi yedek (araç zinciri indirmesi, `lake exe cache get`, klon, `apt-get`) reddedilir, eksik artefakt betiği bir şey yazmadan durdurur. `setup_env.sh` her zaman `1` verir; varsayılan `0` |
+
+**Düzeltme (24 Eylül 2026, akşam, `eba49b5`):** `MATHLIB_CACHE_DIR` satırındaki
+`$HOME/.cache/mathlib` yalnız araç dizini olmadan yapılan kurulumda geçerli. Bulut kurulumu
+`.ltar`'ları `$OPT/.mathlib-ltar`'a, araç diziniyle tek başına koşan `setup_lean.sh` projenin
+yanındaki geçici `.<proje>.ltar.<pid>`'e açar; ikisi de kurulumdan sonra silinir. Routine oturumunun
+ölçtüğü `/root/.cache/mathlib` (448 MB) bu değişiklikten önceki `4d01ba2`'dendi; anlık görüntüde
+artık `.ltar` kalmaz (`docs/LEAN_SETUP.md`, `docs/BULUT.md` §5).
 
 ### Harici servisler ve bağımlılıklar
 
@@ -1223,6 +1428,11 @@ Windows'ta okunur. `.env` artık depoda izleniyor (§0.3). Yeni değişkenler (a
 - GitHub, özel depo `wqedwad/asd`: kaynak, bulut oturumları ve araç ref'i (`refs/arac/bulut-vN`).
 - Lean, Linux/bulutta WSL'siz; bulutta kurulumun tamamı ~12–13 GB (WSL ölçümü ~12 GB).
 - Claude Code on the web: bulut oturumları (`docs/BULUT.md`).
+
+**Ek (24 Eylül 2026, akşam, bulut ölçümü):** bulutta `/opt/elan` 3.0G + `/opt/mathverify-lean` 7.2G +
+`/opt/python3.14` 107M (+ o sürümde kalan 448M `.ltar`, artık silinir). Bulutun ağından açık:
+GitHub, PyPI, `api.anthropic.com`; kapalı: `releases.lean-lang.org`, `cache.mathlib.org`,
+`releases.astral.sh`, `api.meta.ai` (§0.8).
 
 ---
 
@@ -1267,6 +1477,9 @@ Windows'ta okunur. `.env` artık depoda izleniyor (§0.3). Yeni değişkenler (a
 (§5.4), etiket ve bundle'lar sormadan silinmez; (b) krediye bağlı F3/F4 ancak bütün lokal kalite
 işi bitip kod dondurulduktan ve anahtarlar yenilendikten sonra (§7). Bulut oturumundan etiket ya
 da `master` push edilemez; birleştirme PR ile ya da yerelde yapılır.
+**Düzeltme (24 Eylül 2026, akşam):** `master`da başlayan bir bulut oturumu `master`a push edebilir
+(§0.9). Üçüncü kural (`CLAUDE.md` "Asla"): bir bulut routine istemi push hedefini açıkça yeni bir
+dal olarak verir ya da hiç push istemez.
 
 ### Her değişiklikte
 
@@ -1361,6 +1574,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   satır sonlarını korur.
 - `PYTHONPATH` Windows Python'unda `;` ile ayrılır (`PYTHONPATH=".;src"`), `:` ile değil.
 - Bu makinede git kimliği ayarlı değil; commit komut başına kimlikle yapılır (§10).
+- (24 Eylül akşamı eklendi) **WSL içinde `df` C:'yi görmez**; sanal diskin (`ext4.vhdx`) kendi
+  boyutunu gösterir. WSL'deki büyük kurulumlar `.vhdx` üzerinden C:'yi doldurabilir ve `.vhdx`
+  kendiliğinden küçülmez (§0.10). WSL'de büyük bir kurulumdan önce C:'nin boş alanına Windows
+  tarafından bakılır.
 
 ### Linux ve bulut (24 Eylül 2026'da eklendi)
 
@@ -1377,6 +1594,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   `safe.directory` kaydeder.
 - Bulutta GitHub release dosyaları 403 döner, uv Python indiremez: Lean ve Python araç ref'inden
   gelir (`docs/BULUT.md` §11). `stable` ya da `lake update` ile kurulum yapılmaz.
+  **Düzeltme (24 Eylül 2026, ölçüm):** GitHub release dosyası (elan) bulutta 200 döndü; kapalı olan
+  `releases.lean-lang.org`, `cache.mathlib.org` ve `releases.astral.sh` (403). Sonuç aynı: Lean,
+  Mathlib önbelleği ve Python araç ref'inden gelir.
+- (24 Eylül akşamı eklendi) Bulut imajında `python3` 3.11.15; `mathverify` ≥ 3.12 ister. Kanca 3.12
+  altını reddeder ve sabit 3.14.6'yı, yoksa `python3.12`/`python3.13`'ü kullanır (§0.5 eki).
+- (24 Eylül akşamı eklendi) Claude Code alt süreçlere `ANTHROPIC_BASE_URL` verir (bulutta ve
+  masaüstünde); Anthropic SDK'sını kullanan her kod `base_url`'i açıkça vermeli (§0.3 eki).
 - Bulutta boşta kalan VM geri alınınca arka plan işi kaybolur; `check.py --full` sürerken oturum
   etkin tutulur.
 - Kullanıcının `~/.claude` belleği buluta taşınmaz; kalıcı her bilgi depoya yazılır.
@@ -1426,6 +1650,9 @@ Kullanıcıdan onay ya da girdi bekleyen noktalar:
 2. **Yedekler (iki etiket, iki bundle) ne zaman silinebilir?** Sormadan silinmez.
    *Ek (24 Eylül 2026):* etiketler GitHub'da da var; bundle'lar yalnız yerel makinede
    (`C:\Users\kullanici\mathverify-yedek\`). `bulut-2026-09-24` birleştirmesinin yedeği de eklenecek.
+   *Düzeltme (24 Eylül 2026, akşam):* eklendi, ama birleştirmeden sonra: `yedek/master-2026-09-24`
+   → `23d7c6b` ve `mathverify-master-23d7c6b-2026-09-24.bundle` (§0.9, §5.4). Artık üç etiket, üç
+   bundle; soru aynı.
 3. **Anthropic bakiyesi ne zaman ve ne kadar yüklenecek?** F3'ün kalanı için ~10 $, F4 için
    ~15–25 $ tahmini var. *Kısmen cevaplandı (23 Eylül):* F3/F4 bütün lokal iş bitince koşulacak
    (§7).
@@ -1452,5 +1679,8 @@ Kullanıcıdan onay ya da girdi bekleyen noktalar:
     tanımsız noktalar dışlanarak mı hesaplansın (§6.8)?
 15. **Eski araç ref'i** (24 Eylül'de eklendi): `refs/arac/bulut-v2` doğrulandıktan sonra
     `refs/arac/bulut-v1` silinsin mi? Sormadan silinmez.
+    *Ek (24 Eylül 2026, akşam):* v2 bulutta doğrulandı (5/5 SHA256 OK, §0.8) ve v1'in bütün
+    içeriğini taşıyor. **Soru hâlâ açık:** v1 geçmiş için duruyor; kullanıcı karar verene dek
+    silinmez.
 16. **Depo ileride herkese açılacak ya da paylaşılacak mı?** Açılacaksa önce anahtarlar yenilenir
     ve `.env` geçmişten temizlenir (§0.3).

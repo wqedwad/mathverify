@@ -75,6 +75,10 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
   kullanıcıya sormadan silinmez (`HANDOFF.md` §5.4).
 - Bulut oturumundan etiket ya da `master` push etmeye çalışma: bulut yalnız oturumun kendi dalını
   push edebilir. Birleştirme PR ile ya da yerel checkout'ta, yedek de yerelde alınır.
+- **Düzeltme (24 Eylül 2026):** oturumun kendi dalı başladığı daldır; routine oturumu varsayılan
+  dal `master`da başlar ve "kendi dalına push" `master`a push olur (24 Eylül'de böyle oldu,
+  DECISIONS §45). Bir bulut routine istemi push hedefini açıkça **yeni bir dal** olarak verir ya da
+  hiç push istemez; "kendi dalına" gibi göreli hedef yazılmaz.
 
 ## Commit biçimi
 
@@ -99,6 +103,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   dosyaya yaz.
 - `ctypes.windll` çağrılarında `restype`/`argtypes` verilmezse tutamaçlar 32 bit'e kırpılır.
 - Lean, WSL `Ubuntu` içinde çalışır (`docs/LEAN_SETUP.md`).
+- WSL içinde `df` C:'yi görmez, sanal diski gösterir. WSL'deki büyük kurulumlar `ext4.vhdx`'i
+  büyütüp C:'yi doldurabilir (24 Eylül: 103.8 GB, C: 0 bayt, WSL açılamadı; `.vhdx` kendiliğinden
+  küçülmez). WSL'de büyük bir kurulumdan önce C:'nin boş alanına Windows tarafından bak
+  (`HANDOFF.md` §0.10).
 
 ### Linux / bulut
 

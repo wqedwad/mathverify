@@ -16,9 +16,32 @@
 | L6' meta-doğrulayıcı | kritiğin karşıtı | — | Kritik çıktısı ham kabul edilmez [4] |
 | Lean ispatı | çözücünün karşıtı | — | İspatı Lean denetler, aile yine de ayrık |
 
-Ortam değişkenleri: `MATHVERIFY_ANTHROPIC_MODEL`, `MATHVERIFY_META_MODEL`.
+Ortam değişkenleri: `MATHVERIFY_ANTHROPIC_MODEL`, `MATHVERIFY_META_MODEL`,
+`MATHVERIFY_ANTHROPIC_BASE_URL` (24 Eylül 2026'da eklendi, aşağıda).
 Anahtarlar `.env` dosyasından okunur (`ANTHROPIC_API_KEY`, `META_MODEL_API_KEY`); `.env`
 git tarafından yok sayılır ve önbellek kayıtlarına hiçbir kimlik bilgisi yazılmaz.
+
+**Düzeltme (24 Eylül 2026):** `.env` artık git tarafından yok sayılmıyor; kullanıcının açık
+kararıyla bu özel depoda izlenir (`DECISIONS.md` §35). Önbellek kayıtlarına kimlik bilgisi yazılmaması
+değişmedi; anahtar değerleri hiçbir çıktıya yazılmaz.
+
+**Ek (24 Eylül 2026): Anthropic uç noktası, `MATHVERIFY_ANTHROPIC_BASE_URL`.** Anthropic SDK'sı
+`base_url` verilmezse `ANTHROPIC_BASE_URL`'i ortamdan okur. Claude Code'u çalıştıran ortamlar (bulut
+oturumu, masaüstü uygulaması) bu değişkeni Claude Code'un kendi trafiği için tanımlar ve her alt
+süreç onu miras alır: gerçek bulut oturumunda tanımlı ölçüldü, `ANTHROPIC_API_KEY` ise tanımlı değil
+(`docs/bulut_tani_2026-09-24.md`). Düzeltmeden önce projenin F3 çağrıları `.env`'deki anahtarla
+platformun uç noktasına gidecekti. Artık `AnthropicClient` `base_url`'i her zaman açıkça verir
+(`llm/anthropic_client.py::resolve_base_url`, commit `4002898`, DECISIONS §48):
+`MATHVERIFY_ANTHROPIC_BASE_URL` tanımlı ve boş değilse o, değilse SDK'nın varsayılanı
+`https://api.anthropic.com` (anthropic 1.7.0'dan okundu; bir test ikisini birbirine bağlar, SDK
+yükseltmesi varsayılanı sessizce değiştiremez). Yerel davranış aynı kaldı: masaüstü oturumunda da
+değişken tanımlı ve değeri varsayılana eşit ölçüldü. Testler: `tests/test_llm_base_url.py`
+(10 çevrimdışı test, hiç istek gönderilmez).
+
+Meta istemcisinin adresi sabittir (`https://api.meta.ai/v1/chat/completions`) ve ortamdan
+etkilenmez. Ama `api.meta.ai` bulutun varsayılan (Trusted) ağında **kapalı** (vekil 403,
+24 Eylül'de ölçüldü): F3/F4 bulutta koşulacaksa ağ ayarı Custom yapılır, varsayılan liste korunur ve
+`api.meta.ai` eklenir. `api.anthropic.com` Trusted ağda açık ölçüldü (`docs/BULUT.md` §3.1).
 
 Kod içinden model sabitlemek veya test için sahte istemci takmak:
 

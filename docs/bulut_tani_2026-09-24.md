@@ -1,5 +1,9 @@
 # Bulut ortamı tanısı — mathverify
 
+> **Not (24 Eylül 2026):** 24 Eylül'deki tek seferlik bulut routine oturumunun ürettiği rapor (depo kökünden `docs/`a taşındı).
+> `bulut-2026-09-24`'ün `4d01ba2` hâlini ölçer; sonraki düzeltmeler (Python yedeği, `ANTHROPIC_BASE_URL`) burada yok.
+> Değerlendirme ve düzeltmeler: `DECISIONS.md` §7 madde 44–45; 10.3'teki `.env` bulgusu kullanıcı kararıdır (madde 35).
+
 Tarih: 2026-09-24, ~11:52–11:59 UTC · Dal: teşhis `ORIG=master`, ölçülen kod `bulut-2026-09-24` (ff-merge ile `master`'a alındı, commit `4d01ba2`).
 Bu oturum yalnız ölçüm yapar; kod/test/betik/belge değiştirmez. Tek yazılan dosya bu rapordur.
 
