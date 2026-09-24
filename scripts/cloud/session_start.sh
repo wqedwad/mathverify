@@ -2,10 +2,13 @@
 # SessionStart hook (.claude/settings.json, matcher startup|resume). Outside a Claude Code cloud
 # session (CLAUDE_CODE_REMOTE != true) it exits at once without output, on Windows too.
 #
-# In a cloud session it (1) picks a Python: ${MATHVERIFY_OPT:-/opt}/python3.14 installed by
-# scripts/cloud/setup_env.sh, else python3.14, else python3 (3.12 fallback); (2) creates or
+# In a cloud session it (1) picks a Python >= 3.12 (pyproject.toml): the CPython 3.14.6 that
+# scripts/cloud/setup_env.sh installs as ${MATHVERIFY_OPT:-/opt}/python3.14, else python3.14 on
+# PATH (or found by uv), python3.13, python3.12, and python3 only when it is >= 3.12; a fallback
+# is named in the status block; (2) creates or
 # refreshes ./.venv from requirements.lock plus `--no-deps -e .`, skipped while the stamp
-# (sha256 of requirements.lock + pyproject.toml, interpreter path and version) is unchanged;
+# (sha256 of requirements.lock + pyproject.toml, interpreter path and version) is unchanged, so a
+# .venv built by a fallback is rebuilt by the first run that finds the pinned 3.14.6;
 # (3) copies missing reports/*.json from reports/arsiv/2026-09-24/ (never overwrites);
 # (4) exports the Lean install through $CLAUDE_ENV_FILE and links it under $HOME, or starts
 # `setup_env.sh --lean-only` in the background when it is missing; (5) prints a short Turkish
@@ -60,10 +63,31 @@ log() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$SLOG" 2>/de
 log "==== session_start user=$(id -un 2>/dev/null || id -u) HOME=$HOME repo=$REPO"
 
 # ---- Python -----------------------------------------------------------------------------------
+# mathverify needs Python >= 3.12. Measured in the cloud (2026-09-24): python3 is 3.11.15 there
+# (/usr/local/bin/python3) while /usr/bin/python3.13 and /usr/bin/python3.12 exist, and before
+# setup_env.sh has run there is no python3.14 at all; the hook used python3 and the .venv install
+# failed. Order: the pinned 3.14.6 under a prefix, python3.14 on PATH, a python3.14 uv knows,
+# python3.13, python3.12, python3 when it is >= 3.12. Nothing older ever builds the .venv.
 export UV_PYTHON_DOWNLOADS=never       # releases.astral.sh is not reachable from the cloud
-PY=""; PYNOTE=""; PYPREFIX=""
+VENV="$REPO/.venv"
+py_version() { "$1" -c 'import platform; print(platform.python_version())' 2>/dev/null; }
+# py_usable EXE: print EXE's version when it runs, is >= 3.12 and is not inside ./.venv (which
+# build_venv deletes first; a PATH with the .venv activated names its interpreters).
+py_usable() {
+  local v maj min
+  [ -n "$1" ] && [ -x "$1" ] || return 1
+  case "$1" in "$VENV"/*) return 1 ;; esac
+  v="$(py_version "$1")"
+  IFS=. read -r maj min _ <<<"$v"
+  case "$maj.$min" in .*|*.|*[!0-9.]*) return 1 ;; esac
+  { [ "$maj" -gt 3 ] || { [ "$maj" -eq 3 ] && [ "$min" -ge 12 ]; }; } || return 1
+  printf '%s\n' "$v"
+}
+PY=""; PYVER=""; PYNOTE=""; PYPREFIX=""; PYHOW=""; PYREJECTED=""
 for p in "${PREFIXES[@]}"; do
-  if [ -x "$p/python3.14/bin/python3.14" ]; then PY="$p/python3.14/bin/python3.14"; PYPREFIX="$p"; break; fi
+  if PYVER="$(py_usable "$p/python3.14/bin/python3.14")"; then
+    PY="$p/python3.14/bin/python3.14"; PYPREFIX="$p"; break
+  fi
 done
 UV="$(command -v uv 2>/dev/null)"
 if [ -z "$UV" ]; then
@@ -72,18 +96,28 @@ if [ -z "$UV" ]; then
   done
 fi
 if [ -z "$PY" ]; then
-  PY="$(command -v python3.14 2>/dev/null)"
-  if [ -z "$PY" ] && [ -n "$UV" ]; then PY="$("$UV" python find 3.14 2>/dev/null)"; fi
-  if [ -z "$PY" ]; then
-    PY="$(command -v python3 2>/dev/null)"
-    PYNOTE="YEDEK: Python 3.14.6 bulunamadı (kurulum betiği çalışmamış olabilir); sistem python3 kullanıldı (Ubuntu 24.04: 3.12), Windows ile aynı yorumlayıcı değil"
+  for how in python3.14 "uv python find 3.14" python3.13 python3.12 python3; do
+    case "$how" in
+      uv*)
+        [ -n "$UV" ] || continue
+        # From / and without VIRTUAL_ENV: uv would otherwise report the repository's own .venv.
+        exe="$(cd / && env -u VIRTUAL_ENV "$UV" python find 3.14 2>/dev/null)" ;;
+      *) exe="$(command -v "$how" 2>/dev/null)" ;;
+    esac
+    [ -n "$exe" ] || continue
+    if PYVER="$(py_usable "$exe")"; then PY="$exe"; PYHOW="$how"; break; fi
+    PYREJECTED="${PYREJECTED:+$PYREJECTED, }$how = $exe ($(py_version "$exe" || echo 'çalışmadı'))"
+  done
+  if [ -n "$PY" ]; then
+    PYNOTE="YEDEK ($PYHOW): kurulum betiğinin CPython 3.14.6'sı (${PREFIXES[0]:-/opt}/python3.14) yok ya da çalışmıyor; bu yorumlayıcı Windows'takiyle (3.14.7) aynı değil. Tam takım yedek yorumlayıcılardan yalnız 3.12.11'de ölçüldü ve Windows ile aynı sonucu verdi (DECISIONS §42)"
+  else
+    PYNOTE="HATA: Python >= 3.12 bulunamadı (sırayla: ${PREFIXES[0]:-/opt}/python3.14, python3.14, uv python find 3.14, python3.13, python3.12, python3)"
+    [ -z "$PYREJECTED" ] || PYNOTE="$PYNOTE; 3.12'den eski ya da çalışmayan: $PYREJECTED"
   fi
 fi
-PYVER="$("$PY" -c 'import platform; print(platform.python_version())' 2>/dev/null)"
-log "python: $PY ($PYVER) uv: ${UV:-none}"
+log "python: ${PY:-none} (${PYVER:-?}) via ${PYHOW:-${PYPREFIX:+prefix $PYPREFIX}} uv: ${UV:-none}${PYREJECTED:+ rejected: $PYREJECTED}"
 
 # ---- .venv ----------------------------------------------------------------------------------
-VENV="$REPO/.venv"
 STAMPF="$VENV/.mathverify-stamp"
 VLOG="$LOGDIR/venv.log"
 if [ -z "${UV_CACHE_DIR:-}" ]; then
@@ -118,7 +152,7 @@ build_venv() {
 }
 VSTATE=""
 if [ -z "$PY" ] || [ -z "$PYVER" ]; then
-  VSTATE="HATA: Python bulunamadı"
+  VSTATE="HATA: Python >= 3.12 yok; .venv kurulmadı (var olan .venv'e dokunulmadı)"
 else
   ST="$(stamp)"
   if [ -x "$VENV/bin/python" ] && [ "$(cat "$STAMPF" 2>/dev/null)" = "$ST" ]; then
@@ -285,7 +319,11 @@ case "$LSTATE" in
   *) LTXT="YOK (kurulum başlatılamadı: yazılabilir önek yok)" ;;
 esac
 echo "[mathverify bulut oturumu — session_start.sh, $(( $(date +%s) - T0 )) s]"
-echo "- Python: ${PYVER:-?} (${PY:-yok})${PYNOTE:+ — $PYNOTE}"
+if [ -n "$PY" ]; then
+  echo "- Python: $PYVER ($PY)${PYNOTE:+ — $PYNOTE}"
+else
+  echo "- Python: yok — $PYNOTE"
+fi
 echo "- .venv: $VSTATE; komutlar .venv/bin/python ile (PYTHONUTF8=1) çalışır, Windows'taki .venv/Scripts/python.exe yerine"
 echo "- Lean: $LTXT"
 if [ "$LSTATE" = stale ]; then
@@ -298,6 +336,17 @@ if [ "$LSTATE" = stale ]; then
   else
     echo "  Elle güncelleme: MATHVERIFY_OPT=\"$LP\" bash scripts/cloud/setup_env.sh --lean-only"
   fi
+fi
+if [ "$LSTATE" = started ] || [ "$LSTATE" = installing ]; then
+  # Nothing runs this hook again when the background install finishes: a .venv built by a
+  # fallback interpreter (or not built) and the ~/.elan, ~/mathverify-lean, ~/repl links wait for
+  # a re-run in this session, which rebuilds the .venv with the pinned 3.14.6 (the stamp holds the
+  # interpreter path). The exported variables are already in $CLAUDE_ENV_FILE.
+  if [ -z "$PY" ]; then WHAT=".venv'i CPython 3.14.6 ile kurmak ve ~/.elan, ~/mathverify-lean, ~/repl bağlantıları"
+  elif [ -z "$PYPREFIX" ]; then WHAT=".venv'i CPython 3.14.6 ile yeniden kurmak ve ~/.elan, ~/mathverify-lean, ~/repl bağlantıları"
+  else WHAT="~/.elan, ~/mathverify-lean, ~/repl bağlantıları"
+  fi
+  echo "  Kurulum bitince ($LP/mathverify-logs/setup_env.status \"OK\" ile başlar) kanca bu oturumda kendiliğinden yeniden çalışmaz; $WHAT için: CLAUDE_CODE_REMOTE=true${CLAUDE_ENV_FILE:+ CLAUDE_ENV_FILE=\"$CLAUDE_ENV_FILE\"} bash \"$REPO/scripts/cloud/session_start.sh\""
 fi
 # Every prefix, whatever the Lean state: the line names the failed stages (Python ones included),
 # and a retry started above rewrites the file only when it finishes.

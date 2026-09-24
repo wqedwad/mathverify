@@ -7,12 +7,14 @@ Behaviour checks run the real scripts, never against the real install:
 - Windows: only through Git Bash (C:\\Program Files\\Git\\bin\\bash.exe). `bash` from a Windows PATH
   can be the WSL launcher, which is exactly the failure .claude/settings.json's "shell": "bash" avoids.
 - POSIX: the hook's Lean state machine on stub install prefixes (MATHVERIFY_HOOK_PREFIXES keeps a
-  real /opt install out), fetch_artifacts.sh on a tiny generated artifact set, and setup_env.sh's uv
+  real /opt install out), its choice of interpreter on a PATH whose only pythons are stubs,
+  fetch_artifacts.sh on a tiny generated artifact set, and setup_env.sh's uv
   prewarm with a stub uv and interpreter. The same prewarm with the real uv and CPython 3.14.6 is
   opt-in (MATHVERIFY_CLOUD_INTEGRATION=1, network), since it downloads the locked packages.
 - POSIX: setup_env.sh, setup_lean.sh and setup_lean_repl.sh themselves, on pins that point at tiny
   local git repositories, an artifact set built from them and a stub elan/Lean/Lake (LeanBed): the
-  offline install, a failed fetch over an installed prefix, a staged update and its rollback.
+  offline install, a failed fetch over an installed prefix, a staged update and its rollback, and
+  the free-disk checks (a stub df, so no test depends on the host's free disk).
 """
 from __future__ import annotations
 
@@ -285,17 +287,37 @@ def test_fetch_artifacts_rejects_damaged_parts_and_leaves_dest_empty(artifacts, 
 
 # ---- session_start.sh: the Lean state machine on stub prefixes ---------------------------------
 
-# A stand-in interpreter: version queries, `-m venv DIR` (copies itself), anything else succeeds.
-STUB_PYTHON = """
+def _stub_python(version: str = "3.14.6") -> str:
+    """A stand-in interpreter: version queries, `-m venv DIR` (copies itself and names itself in
+    DIR/pyvenv.cfg, as the real venv does), anything else succeeds."""
+    return f"""
     #!/bin/sh
     case "$1" in
       -c) case "$2" in
-            *platform*) echo 3.14.6 ;;
-            *sys.version*) echo "3.14.6 (stub)" ;;
+            *platform*) echo {version} ;;
+            *sys.version*) echo "{version} (stub)" ;;
           esac ;;
-      -m) if [ "$2" = venv ]; then mkdir -p "$3/bin" && cp "$0" "$3/bin/python"; fi ;;
+      -m) if [ "$2" = venv ]; then
+            mkdir -p "$3/bin" && cp "$0" "$3/bin/python" && echo "executable = $0" > "$3/pyvenv.cfg"
+          fi ;;
     esac
     exit 0
+"""
+
+
+STUB_PYTHON = _stub_python()
+# A stand-in uv for the hook: `python find` answers STUB_UV_FIND (else "not found"), `venv -q
+# --python PY DIR` makes a venv like the stub interpreter's, `pip install` succeeds. Each call is
+# recorded as "cwd TAB VIRTUAL_ENV TAB argv".
+STUB_UV = r"""
+    #!/bin/sh
+    printf '%s\t%s\t%s\n' "$PWD" "${VIRTUAL_ENV:-}" "$*" >> "@CALLS@"
+    case "$1 $2" in
+      "python find") [ -n "${STUB_UV_FIND:-}" ] || exit 2; echo "$STUB_UV_FIND" ;;
+      "venv -q") mkdir -p "$5/bin" && cp "$4" "$5/bin/python" && echo "executable = $4" > "$5/pyvenv.cfg" ;;
+      "pip install") ;;
+      *) echo "stub uv: unexpected $*" >&2; exit 2 ;;
+    esac
 """
 
 
@@ -328,9 +350,10 @@ class HookBed:
         return fp
 
     def prefix(self, name: str = "opt", *, repl: bool = False, done: str | None = None,
-               status: str | None = None, lock_file: bool = False) -> Path:
+               status: str | None = None, lock_file: bool = False, python: bool = True) -> Path:
         p = self.tmp / name
-        _write_exec(p / "python3.14" / "bin" / "python3.14", STUB_PYTHON)
+        if python:
+            _write_exec(p / "python3.14" / "bin" / "python3.14", STUB_PYTHON)
         logs = p / "mathverify-logs"
         logs.mkdir(parents=True, exist_ok=True)
         if repl:
@@ -357,16 +380,41 @@ class HookBed:
         self.session_log = (prefixes[0] / "mathverify-logs" / "session_start.log").read_text()
         return r.stdout
 
-    def lean_line(self, out: str) -> str:
-        (line,) = [ln for ln in out.splitlines() if ln.startswith("- Lean: ")]
+    def line(self, out: str, start: str) -> str:
+        (line,) = [ln for ln in out.splitlines() if ln.startswith(start)]
         return line
+
+    def lean_line(self, out: str) -> str:
+        return self.line(out, "- Lean: ")
 
     def started(self) -> bool:
         return "started setup_env.sh --lean-only" in self.session_log
 
+    def interpreters(self, versions: dict[str, str]) -> Path:
+        """A PATH directory with stub interpreters (name -> version) and the stub uv."""
+        b = self.tmp / "pybin"
+        for name, version in versions.items():
+            _write_exec(b / name, _stub_python(version))
+        _write_exec(b / "uv", STUB_UV.replace("@CALLS@", str(self.uv_calls)))
+        return b
+
+    @property
+    def uv_calls(self) -> Path:
+        return self.tmp / "uv_calls"
+
+    def rerun_command(self) -> str:
+        """The command the status block gives for running the hook again in the same session."""
+        return (f'CLAUDE_CODE_REMOTE=true CLAUDE_ENV_FILE="{self.env_file}" '
+                f'bash "{self.repo}/scripts/cloud/session_start.sh"')
+
+    def venv_python(self) -> str:
+        """The interpreter the hook built ./.venv with (pyvenv.cfg as the stubs write it)."""
+        return (self.repo / ".venv" / "pyvenv.cfg").read_text().removeprefix("executable = ").strip()
+
 
 FAILED_REPL = ("FAILED mode=all failed=[setup_lean_repl] stages=[fetch_artifacts(6s) "
                "setup_lean(126s) setup_lean_repl(9s)] python=3.14.6 lean=missing total=150s")
+RERUN_HINT = "kanca bu oturumda kendiliğinden yeniden çalışmaz"
 
 
 @pytest.fixture
@@ -382,7 +430,8 @@ def test_hook_ready_needs_lean_done_with_the_current_fingerprint(bed):
                      status="OK mode=all failed=[] python=3.14.6 lean=ready total=150s")
     out = bed.run(opt)
     assert bed.lean_line(out) == f"- Lean: HAZIR ({opt}/repl/.lake/build/bin/repl)"
-    assert "BAŞARISIZ" not in out
+    assert bed.line(out, "- Python: ") == f"- Python: 3.14.6 ({opt}/python3.14/bin/python3.14)"
+    assert "BAŞARISIZ" not in out and RERUN_HINT not in out
     assert not bed.started()
     env = bed.env_file.read_text()
     assert f'export MATHVERIFY_LEAN_REPL="{opt}/repl/.lake/build/bin/repl"' in env
@@ -414,6 +463,11 @@ def test_hook_starts_an_install_when_nothing_is_there(bed):
     assert bed.lean_line(out).startswith("- Lean: KURULUYOR (arka planda başlatıldı")
     assert "BAŞARISIZ" not in out
     assert _wait_for(bed.marker) and bed.marker.read_text() == f"--lean-only OPT={opt}\n"
+    # Nothing runs the hook again when that install finishes: the status block says how.
+    hint = bed.line(out, "  Kurulum bitince ")
+    assert hint == (f'  Kurulum bitince ({opt}/mathverify-logs/setup_env.status "OK" ile başlar) '
+                    f"{RERUN_HINT}; ~/.elan, ~/mathverify-lean, ~/repl bağlantıları için: "
+                    f"{bed.rerun_command()}")
 
 
 @posix_only
@@ -607,6 +661,129 @@ def test_hook_restores_missing_reports_and_never_overwrites(bed):
     assert _tree(reports) == before
 
 
+# ---- session_start.sh: which interpreter builds the .venv --------------------------------------
+
+@pytest.fixture(scope="session")
+def sysbin(tmp_path_factory) -> str:
+    """/usr/bin and /bin as symlinks, minus every python* and uv*: the hook's interpreter search
+    then sees only the stubs a test puts in front of it (WSL Ubuntu has /usr/bin/python3.14, the
+    cloud /usr/bin/python3.12 and python3.13)."""
+    d = tmp_path_factory.mktemp("sysbin")
+    for src in ("/usr/bin", "/bin"):
+        if not os.path.isdir(src):
+            continue
+        for name in os.listdir(src):
+            if name.startswith(("python", "uv")) or os.path.lexists(d / name):
+                continue
+            (d / name).symlink_to(os.path.join(src, name))
+    return str(d)
+
+
+FALLBACK_NOTE = ("Windows'takiyle (3.14.7) aynı değil. Tam takım yedek yorumlayıcılardan yalnız "
+                 "3.12.11'de ölçüldü ve Windows ile aynı sonucu verdi (DECISIONS §42)")
+
+
+@posix_only
+@pytest.mark.parametrize("have, chosen", [
+    ({"python3.14": "3.14.2", "python3.13": "3.13.5", "python3": "3.11.15"}, "python3.14"),
+    ({"uv-managed": "3.14.3", "python3.13": "3.13.5"}, "uv python find 3.14"),
+    # the cloud as measured: python3 is 3.11.15, python3.13 and python3.12 exist
+    ({"python3.13": "3.13.5", "python3.12": "3.12.3", "python3": "3.11.15"}, "python3.13"),
+    ({"python3.12": "3.12.3", "python3": "3.11.15"}, "python3.12"),
+    ({"python3": "3.12.11"}, "python3"),
+])
+def test_hook_fallback_interpreter_order(bed, sysbin, have, chosen):
+    opt = bed.prefix(python=False)  # no setup script ran: the pinned 3.14.6 is not there yet
+    pybin = bed.interpreters({k: v for k, v in have.items() if k != "uv-managed"})
+    extra = {}
+    exe, version = pybin / chosen, have.get(chosen)
+    if "uv-managed" in have:  # a python3.14 only uv knows of (a uv-managed install, say)
+        exe = _write_exec(bed.tmp / "uv-python" / "bin" / "python3.14", _stub_python(have["uv-managed"]))
+        version = have["uv-managed"]
+        extra["STUB_UV_FIND"] = str(exe)
+    out = bed.run(opt, PATH=f"{pybin}:{sysbin}", VIRTUAL_ENV=str(bed.repo / ".venv"),
+                  MATHVERIFY_SKIP_LEAN="1", **extra)
+    assert bed.line(out, "- Python: ") == (
+        f"- Python: {version} ({exe}) — YEDEK ({chosen}): kurulum betiğinin CPython 3.14.6'sı "
+        f"({opt}/python3.14) yok ya da çalışmıyor; bu yorumlayıcı {FALLBACK_NOTE}")
+    assert bed.line(out, "- .venv: ").startswith("- .venv: KURULDU (")
+    assert bed.venv_python() == str(exe)
+    calls = [ln.split("\t") for ln in bed.uv_calls.read_text().splitlines()]
+    assert [c[2] for c in calls][-3:] == [
+        f"venv -q --python {exe} {bed.repo}/.venv",
+        f"pip install --python {bed.repo}/.venv/bin/python --offline -r {bed.repo}/requirements.lock",
+        f"pip install --python {bed.repo}/.venv/bin/python --offline --no-deps -e {bed.repo}"]
+    # uv is asked for a 3.14 from / and without VIRTUAL_ENV, so it cannot answer with ./.venv
+    finds = [c for c in calls if c[2].startswith("python find")]
+    if chosen == "python3.14":
+        assert finds == []
+    else:
+        assert finds == [["/", "", "python find 3.14"]]
+
+
+@posix_only
+def test_hook_never_builds_the_venv_with_a_python_older_than_3_12(bed, sysbin):
+    opt = bed.prefix(python=False)
+    pybin = bed.interpreters({"python3": "3.11.15"})
+    keep = bed.repo / ".venv" / "keep"
+    keep.parent.mkdir()
+    keep.write_text("an earlier .venv\n")
+    out = bed.run(opt, PATH=f"{pybin}:{sysbin}", MATHVERIFY_SKIP_LEAN="1")
+    assert bed.line(out, "- Python: ") == (
+        f"- Python: yok — HATA: Python >= 3.12 bulunamadı (sırayla: {opt}/python3.14, python3.14, "
+        f"uv python find 3.14, python3.13, python3.12, python3); 3.12'den eski ya da çalışmayan: "
+        f"python3 = {pybin}/python3 (3.11.15)")
+    assert bed.line(out, "- .venv: ").startswith(
+        "- .venv: HATA: Python >= 3.12 yok; .venv kurulmadı (var olan .venv'e dokunulmadı)")
+    assert sorted(os.listdir(bed.repo / ".venv")) == ["keep"]
+    assert [ln.split("\t")[2] for ln in bed.uv_calls.read_text().splitlines()] == ["python find 3.14"]
+
+
+@posix_only
+def test_hook_never_picks_an_interpreter_inside_the_venv(bed, sysbin):
+    # A PATH with ./.venv activated names .venv/bin/python3.14; build_venv deletes .venv first.
+    opt = bed.prefix(python=False)
+    venv_bin = bed.repo / ".venv" / "bin"
+    _write_exec(venv_bin / "python3.14", STUB_PYTHON)
+    pybin = bed.interpreters({"python3.12": "3.12.3"})
+    out = bed.run(opt, PATH=f"{venv_bin}:{pybin}:{sysbin}", MATHVERIFY_SKIP_LEAN="1")
+    assert bed.line(out, "- Python: ").startswith(f"- Python: 3.12.3 ({pybin}/python3.12) — YEDEK (python3.12): ")
+    assert bed.venv_python() == str(pybin / "python3.12")
+
+
+@posix_only
+def test_hook_rebuilds_a_fallback_venv_once_the_pinned_python_exists(bed, sysbin):
+    # Measured in the cloud (2026-09-24, no setup script): the first session start has no
+    # /opt/python3.14; the hook's own background install brings it, and only a re-run of the
+    # hook in that session rebuilds the .venv with it.
+    opt = bed.prefix(python=False)
+    pybin = bed.interpreters({"python3.13": "3.13.5", "python3": "3.11.15"})
+    path = f"{pybin}:{sysbin}"
+    out = bed.run(opt, PATH=path)
+    assert bed.line(out, "- Python: ").startswith(f"- Python: 3.13.5 ({pybin}/python3.13) — YEDEK (python3.13): ")
+    assert bed.lean_line(out).startswith("- Lean: KURULUYOR (arka planda başlatıldı")
+    assert bed.line(out, "  Kurulum bitince ").endswith(
+        f"{RERUN_HINT}; .venv'i CPython 3.14.6 ile yeniden kurmak ve ~/.elan, ~/mathverify-lean, "
+        f"~/repl bağlantıları için: {bed.rerun_command()}")
+    assert bed.venv_python() == str(pybin / "python3.13")
+    assert _wait_for(bed.marker)
+    # The install has put the pinned interpreter in place; the printed command is run as a later
+    # Bash command of the session would run it (the hook's CLAUDE_* variables are not set there).
+    _write_exec(opt / "python3.14" / "bin" / "python3.14", STUB_PYTHON)
+    env = {"PATH": path, "HOME": str(bed.home), "TMPDIR": str(bed.tmp), "MATHVERIFY_OPT": str(opt),
+           "MATHVERIFY_HOOK_PREFIXES": str(opt)}
+    r = subprocess.run([BASH, "-c", bed.rerun_command()], env=env, stdin=subprocess.DEVNULL,
+                       capture_output=True, text=True, timeout=120, cwd=bed.tmp)
+    assert r.returncode == 0 and r.stderr == "", r
+    assert bed.line(r.stdout, "- Python: ") == f"- Python: 3.14.6 ({opt}/python3.14/bin/python3.14)"
+    assert bed.line(r.stdout, "- .venv: ").startswith("- .venv: KURULDU (")
+    assert bed.venv_python() == str(opt / "python3.14" / "bin" / "python3.14")
+    # the next session finds the stamp current
+    out = bed.run(opt, PATH=path, MATHVERIFY_SKIP_LEAN="1")
+    assert bed.line(out, "- .venv: ").startswith("- .venv: HAZIR (değişiklik yok)")
+    assert bed.venv_python() == str(opt / "python3.14" / "bin" / "python3.14")
+
+
 # ---- setup_env.sh: the uv prewarm writes nothing under the repository --------------------------
 
 def _prewarm_repo(tmp_path: Path) -> Path:
@@ -741,7 +918,8 @@ STUB_LEAN = """
 """
 # Records "cwd TAB argv TAB HTTPS_PROXY TAB GIT_ALLOW_PROTOCOL TAB MATHLIB_CACHE_DIR" and does
 # what the scripts expect of the real Lake. STUB_LEAN_SMOKE=fail / STUB_REPL_SMOKE=fail make the
-# `import Mathlib` smoke test and the REPL smoke test fail, STUB_ENV_TRUE=fail `lake env true`.
+# `import Mathlib` smoke test and the REPL smoke test fail; STUB_LEAN_SMOKE_FAIL_IN=DIR makes the
+# `import Mathlib` smoke test fail only when it runs in DIR (a project that breaks when renamed).
 STUB_LAKE = r"""
     #!/usr/bin/env bash
     printf '%s\t%s\t%s\t%s\t%s\n' "$PWD" "$*" "${HTTPS_PROXY:-}" "${GIT_ALLOW_PROTOCOL:-}" \
@@ -760,8 +938,8 @@ STUB_LAKE = r"""
         chmod +x .lake/build/bin/repl ;;
       "env lean")
         [ "${STUB_LEAN_SMOKE:-ok}" = ok ] || { echo "error: stub smoke failure"; exit 1; }
+        [ "$PWD" != "${STUB_LEAN_SMOKE_FAIL_IN:-}" ] || { echo "error: stub smoke failure in $PWD"; exit 1; }
         echo "'smoke' depends on axioms: [propext, Classical.choice, Quot.sound]" ;;
-      "env true") [ "${STUB_ENV_TRUE:-ok}" = ok ] || { echo "error: stub lake env failure"; exit 1; } ;;
       "env "*/repl)
         cat > /dev/null
         [ "${STUB_REPL_SMOKE:-ok}" = ok ] || { echo '{"severity": "error"}'; exit 0; }
@@ -769,6 +947,24 @@ STUB_LAKE = r"""
       *) echo "stub lake: unexpected $*" >&2; exit 2 ;;
     esac
 """
+
+# df answers for a filesystem with STUB_DF_AVAIL_KB free (default 100 GB, so no test depends on
+# the host's free disk) and records the directory it was asked about.
+STUB_DF = r"""
+    #!/bin/sh
+    for d; do :; done
+    echo "$d" >> "@CALLS@"
+    echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
+    echo "stub 209715200 0 ${STUB_DF_AVAIL_KB:-104857600} 0% /"
+"""
+# STUB_DU_KB replaces the size `du -sk` reports (the old project before a staged rebuild).
+STUB_DU = r"""
+    #!/bin/sh
+    if [ "$1" = -sk ] && [ -n "${STUB_DU_KB:-}" ]; then printf '%s\t%s\n' "$STUB_DU_KB" "$2"; exit 0; fi
+    for d in /usr/bin /bin; do [ -x "$d/du" ] && exec "$d/du" "$@"; done
+    exit 127
+"""
+GB = 1048576  # KiB
 
 _GIT_ENV = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_AUTHOR_NAME": "stub", "GIT_AUTHOR_EMAIL": "stub@example.invalid",
@@ -880,6 +1076,12 @@ class LeanBed:
         _write_exec(elan / "toolchains" / TC_DIR_NAME / "bin" / "lean", "#!/bin/sh\nexit 0\n")
         _write_exec(self.bin / "lake", lake)
         _write_exec(self.bin / "curl", f'#!/bin/sh\necho "curl $*" >> "{self.calls}"\nexit 7\n')
+        _write_exec(self.bin / "df", STUB_DF.replace("@CALLS@", str(self.df_calls)))
+        _write_exec(self.bin / "du", STUB_DU)
+
+    @property
+    def df_calls(self) -> Path:
+        return self.tmp / "df_calls"
 
     def env(self, **extra: str | None) -> dict[str, str]:
         env = {"PATH": f"{self.bin}:/usr/bin:/bin", "HOME": str(self.home), "TMPDIR": str(self.tmp),
@@ -1038,28 +1240,35 @@ def test_setup_env_offline_mode_refuses_what_a_verified_set_lacks(lean_bed):
 
 
 @posix_only
-@pytest.mark.parametrize("failure", ["smoke", "lake-env-after-swap"])
+@pytest.mark.parametrize("failure", ["smoke", "smoke-after-swap"])
 def test_setup_env_update_is_staged_and_a_failed_one_keeps_the_old_project(installed, failure):
     bed = installed
     proj = bed.opt / "mathverify-lean"
     basic = bed.change_pins()
     before = _tree(proj)
     done = (bed.opt / "mathverify-logs" / "lean.done").read_text()
-    fail = {"STUB_LEAN_SMOKE": "fail"} if failure == "smoke" else {"STUB_ENV_TRUE": "fail"}
+    # "smoke-after-swap": the staged project passes its smoke test and fails the same test once it
+    # is renamed to its final place.
+    fail = ({"STUB_LEAN_SMOKE": "fail"} if failure == "smoke"
+            else {"STUB_LEAN_SMOKE_FAIL_IN": str(proj)})
     r, _ = bed.setup_env("--lean-only", **fail)
     assert bed.status().startswith("FAILED mode=lean failed=[setup_lean] "), bed.status() + r.stdout
     # The new project was built next to the live one and discarded; the live one is as it was.
     assert _tree(proj) == before
     assert (bed.opt / "mathverify-logs" / "lean.done").read_text() == done
-    cwds = [Path(c[0]) for c in bed.lake_calls()]
+    calls = bed.lake_calls()
+    cwds = [Path(c[0]) for c in calls]
     log = (bed.opt / "mathverify-logs" / "setup_lean.log").read_text()
     assert f"{proj} differs from the pins: building the new project in" in log
     if failure == "smoke":
         assert cwds and all(c.name.startswith(".mathverify-lean.stage.") for c in cwds), cwds
     else:
-        # swapped in, Lake failed there, swapped back
-        assert cwds[-1] == proj and all(c.name.startswith(".mathverify-lean.stage.") for c in cwds[:-1])
-        assert "the previous project was put back" in log
+        # smoke passed in the staging directory, swapped in, the same smoke failed there, swapped back
+        smokes = [c for c in calls if c[1].startswith("env lean ")]
+        assert [Path(c[0]).name.startswith(".mathverify-lean.stage.") for c in smokes] == [True, False]
+        assert smokes[1][1] == smokes[0][1] and Path(smokes[1][0]) == proj and calls[-1] == smokes[1]
+        assert all(c.name.startswith(".mathverify-lean.stage.") for c in cwds[:-1])
+        assert f"smoke test failed in {proj} after the swap; the previous project was put back" in log
     assert _dot_entries(bed.opt) == []
     # The same update without the failure swaps the new project in, then deletes the old one.
     bed.calls.unlink()
@@ -1067,9 +1276,66 @@ def test_setup_env_update_is_staged_and_a_failed_one_keeps_the_old_project(insta
     assert bed.status().startswith("OK mode=lean failed=[]"), bed.status() + r.stdout
     assert (proj / "MathverifyLean" / "Basic.lean").read_bytes() == basic.read_bytes()
     assert (bed.opt / "mathverify-logs" / "lean.done").read_text().strip() == bed.fingerprint()
+    smokes = [c for c in bed.lake_calls() if c[1].startswith("env lean ")]
+    assert [Path(c[0]) == proj for c in smokes] == [False, True], smokes  # staged, then in place
     in_proj = [c[1] for c in bed.lake_calls() if Path(c[0]) == proj]
-    assert in_proj[0] == "env true", in_proj  # Lake opens the swapped-in project (then the REPL smoke)
+    assert in_proj[0].startswith("env lean "), in_proj  # the smoke test first (then the REPL smoke)
+    log = (bed.opt / "mathverify-logs" / "setup_lean.log").read_text()
+    assert f"SMOKE OK in {proj}" in log
     assert _dot_entries(bed.opt) == [] and not list((proj / ".lake").glob(".mathverify-setup.*"))
+
+
+@posix_only
+@pytest.mark.parametrize("case", ["fresh", "fresh-without-toolchain", "staged", "staged-large-old",
+                                  "in-place"])
+def test_setup_lean_checks_the_disk_before_writing(lean_bed, case):
+    bed = lean_bed
+    extra: dict[str, str] = {}
+    if case.startswith("staged") or case == "in-place":
+        r, _ = bed.setup_env("--lean-only")
+        assert bed.status().startswith("OK mode=lean failed=[]"), r.stdout
+        bed.calls.unlink()
+        if case != "in-place":
+            bed.change_pins()
+    staged = f"{bed.opt}/mathverify-lean differs from the pins and is left untouched"
+    # (GB this run must write next to the project, GB free given to it, what the refusal names)
+    if case == "fresh":
+        # a measured new build (7.2 GB project + 0.45 GB .ltar)
+        size, avail, left = 7.7, 8.5, "nothing was installed"
+    elif case == "fresh-without-toolchain":
+        # plus the toolchain (3.0 GB measured), not installed yet and on the same filesystem;
+        # checked before elan is even downloaded (online mode here: curl would run next)
+        extra = {"ELAN_HOME": str(bed.tmp / "no-elan"), "MATHVERIFY_LEAN_OFFLINE": "0"}
+        size, avail, left = 10.7, 11.5, "nothing was installed"
+    elif case == "staged":
+        # the old project is small: a new build's measured size counts
+        size, avail, left = 7.7, 8.5, staged
+    elif case == "staged-large-old":
+        extra = {"STUB_DU_KB": str(20 * GB)}
+        size, avail, left = 20.0, 20.5, staged
+    else:
+        # the pinned project is there: only what a new build would add to it counts
+        extra = {"STUB_DU_KB": str(int(7.5 * GB))}
+        size, avail, left = 0.2, 1.1, "nothing was installed"
+    need = size + 1.0  # the margin
+    before = _tree(bed.opt)
+    r, secs = bed.script("setup_lean.sh", STUB_DF_AVAIL_KB=str(int(avail * GB)), **extra)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert (f"ERROR: not enough disk on {bed.opt}: ~{need:.1f} GB needed ({size:.1f} GB + 1.0 GB margin), "
+            f"{avail:.1f} GB free; {left}") in r.stderr, r.stderr
+    assert _tree(bed.opt) == before
+    assert not bed.calls.exists() and not (bed.tmp / "no-elan").exists()
+    assert bed.df_calls.read_text().splitlines()[-1] == str(bed.opt)
+    assert secs < 30, secs
+    # 0.2 GB more than needed is enough
+    r, _ = bed.script("setup_lean.sh", STUB_DF_AVAIL_KB=str(int((need + 0.2) * GB)), **extra)
+    if case == "fresh-without-toolchain":
+        # past the check, the online elan download is the next step (the stub curl exits 7)
+        assert r.returncode == 7 and "not enough disk" not in r.stderr, r.stdout + r.stderr
+        assert bed.calls.read_text().startswith("curl ")
+    else:
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "SMOKE OK" in r.stdout and _dot_entries(bed.opt) == []
 
 
 @posix_only

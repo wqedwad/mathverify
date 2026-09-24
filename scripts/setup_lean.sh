@@ -25,11 +25,12 @@
 #   MATHVERIFY_OPT            cloud install prefix (default /opt); only used to find
 #                             $MATHVERIFY_OPT/python3.14 as a zstd decompressor
 #
-# Every artifact this run needs is verified (SHA256SUMS.full) before anything is written. An
-# existing project directory is then completed in place only when it already holds the pinned
-# project files and package revisions (the remaining work only adds oleans); otherwise the new
-# project is built in a staging directory next to it and replaces it only after its smoke test
-# passed, so a failed run never leaves a working install half rewritten.
+# Every artifact this run needs is verified (SHA256SUMS.full) before anything is written, and the
+# free disk is checked before the toolchain and the project are (choose_workdir). An existing
+# project directory is then completed in place only when it already holds the pinned project
+# files and package revisions (the remaining work only adds oleans); otherwise the new project is
+# built in a staging directory next to it and replaces it only after its smoke test passed, both
+# there and again after the rename, so a failed run never leaves a working install half rewritten.
 # Sourcing this file only defines the helpers; running it performs the setup.
 set -euo pipefail
 
@@ -515,20 +516,30 @@ trust_package_repos() {
   step_done
 }
 
+SMOKE_FILE=""
+SMOKE_WHY=""
+# smoke_passes DIR: run the smoke file with Lake in project directory DIR and print its output.
+# On failure it returns 1 with the reason in SMOKE_WHY (the caller decides what to undo).
+smoke_passes() {
+  local out
+  out="$(cd "$1" && "${LAKE_RUN[@]}" lake env lean "$SMOKE_FILE" 2>&1)" \
+    || { printf '%s\n' "$out"; SMOKE_WHY="smoke test failed in $1"; return 1; }
+  printf '%s\n' "$out"
+  case "$out" in *sorryAx*) SMOKE_WHY="smoke proof depends on sorryAx"; return 1 ;; esac
+  case "$out" in *"depends on axioms"*) ;; *) SMOKE_WHY="smoke test printed no axiom list"; return 1 ;; esac
+}
+
 smoke_test() {
   step "smoke test: import Mathlib + norm_num"
-  cd "$WORK"
-  local d out
+  local d
   mktmp d
   cat > "$d/Smoke.lean" <<'LEAN'
 import Mathlib
 theorem smoke (x : ℝ) (h : x = 2) : x + 2 = 4 := by subst h; norm_num
 #print axioms smoke
 LEAN
-  out="$("${LAKE_RUN[@]}" lake env lean "$d/Smoke.lean" 2>&1)" || { printf '%s\n' "$out"; die "smoke test failed"; }
-  printf '%s\n' "$out"
-  case "$out" in *sorryAx*) die "smoke proof depends on sorryAx" ;; esac
-  case "$out" in *"depends on axioms"*) ;; *) die "smoke test printed no axiom list" ;; esac
+  SMOKE_FILE="$d/Smoke.lean"
+  smoke_passes "$WORK" || die "$SMOKE_WHY"
   LOG "SMOKE OK"
   step_done
 }
@@ -597,26 +608,73 @@ project_matches_pins() {
   done <<< "$PKGS"
 }
 
+# Disk sizes in KiB, measured 2026-09-24 (du -sh) in the WSL end-to-end run and in the cloud: a
+# finished project is 7.2 GB and the Mathlib .ltar cache it is unpacked from 448 MB, ~7.7 GB
+# together (the .ltar land next to the project too: setup_env.sh uses $OPT/.mathlib-ltar, a run
+# alone .<name>.ltar.<pid>); the toolchain under $ELAN_HOME is 3.0 GB (cloud). A margin of 1 GB
+# comes on top of each check. Inside WSL, df sees the ext4 virtual disk (~1 TB), not the Windows
+# drive that holds its .vhdx: these checks cannot notice that drive filling up.
+NEW_PROJECT_KB=$(( 77 * 1048576 / 10 ))
+TOOLCHAIN_KB=$(( 3 * 1048576 ))
+MARGIN_KB=1048576
+kb_gb() { awk -v k="$1" 'BEGIN {printf "%.1f", k / 1048576}'; }
+# The nearest existing directory at or above $1 (a fresh $PROJ_PARENT or $ELAN_HOME may not exist
+# yet; the install creates it).
+existing_dir() {
+  local d="$1"
+  while [ ! -e "$d" ] && [ "$d" != / ] && [ "$d" != . ]; do d="$(dirname "$d")"; done
+  printf '%s\n' "$d"
+}
+# need_space KB DIR WHAT: die unless KB plus the margin is free on DIR's filesystem (WHAT says
+# what was left alone).
+need_space() {
+  local need=$(( $1 + MARGIN_KB )) d avail
+  d="$(existing_dir "$2")"
+  avail="$(df -Pk "$d" 2>/dev/null | awk 'NR == 2 {print $4}')" || true
+  case "$avail" in ''|*[!0-9]*) die "cannot read the free disk space of $d (df -Pk); $3" ;; esac
+  LOG "disk: $(kb_gb "$avail") GB free on $d, $(kb_gb "$need") GB needed ($(kb_gb "$1") GB + $(kb_gb "$MARGIN_KB") GB margin)"
+  [ "$avail" -ge "$need" ] \
+    || die "not enough disk on $d: ~$(kb_gb "$need") GB needed ($(kb_gb "$1") GB + $(kb_gb "$MARGIN_KB") GB margin), $(kb_gb "$avail") GB free; $3"
+}
+# check_disk PROJECT_KB WHAT: the project (PROJECT_KB next to $PROJ) and, when it is not installed
+# yet, the toolchain; summed when both are on one filesystem.
+check_disk() {
+  local proj_kb="$1" tc_kb=0
+  [ -x "$TC_DIR/bin/lean" ] || tc_kb="$TOOLCHAIN_KB"
+  if [ "$tc_kb" -gt 0 ] && [ "$(stat -c %d "$(existing_dir "$ELAN_HOME")")" != "$(stat -c %d "$(existing_dir "$PROJ_PARENT")")" ]; then
+    need_space "$tc_kb" "$ELAN_HOME" "$2"
+    tc_kb=0
+  fi
+  [ $(( proj_kb + tc_kb )) -eq 0 ] || need_space $(( proj_kb + tc_kb )) "$PROJ_PARENT" "$2"
+}
+
 # Choose WORK: $PROJ for a fresh install (or an empty directory) and for a project that already
 # matches the pins; otherwise a staging directory, swapped in by swap_in after the smoke test.
+# It runs before the toolchain is installed, so the disk check precedes every large write.
 choose_workdir() {
   step "project directory"
   clean_leftovers
+  local used=0
   if [ ! -e "$PROJ" ] || { [ -d "$PROJ" ] && [ -z "$(ls -A "$PROJ")" ]; }; then
+    check_disk "$NEW_PROJECT_KB" "nothing was installed"
     WORK="$PROJ"
     LOG "fresh install in $PROJ"
-  elif [ ! -d "$PROJ" ]; then
-    die "$PROJ exists and is not a directory"
-  elif project_matches_pins "$PROJ"; then
+    step_done
+    return 0
+  fi
+  [ -d "$PROJ" ] || die "$PROJ exists and is not a directory"
+  used="$(du -sk "$PROJ" 2>/dev/null | cut -f1)" || true
+  case "$used" in ''|*[!0-9]*) used=0 ;; esac
+  if project_matches_pins "$PROJ"; then
+    # What is left to add: an interrupted run may have unpacked no oleans yet.
+    check_disk $(( used < NEW_PROJECT_KB ? NEW_PROJECT_KB - used : 0 )) "nothing was installed"
     WORK="$PROJ"
     LOG "$PROJ already has the pinned project files and package revisions; completing it in place"
   else
-    local used need avail
-    used="$(du -sk "$PROJ" 2>/dev/null | cut -f1)" || true
-    need=$(( ${used:-0} + 1048576 ))
-    avail="$(df -Pk "$PROJ_PARENT" | awk 'NR == 2 {print $4}')" || true
-    [ "${avail:-0}" -ge "$need" ] \
-      || die "$PROJ differs from the pins and a staged rebuild needs ~$((need / 1048576)) GB free next to it ($((avail / 1048576)) GB free); $PROJ is left untouched"
+    # The new project sits next to the old one until the swap: the larger of a measured new build
+    # and the old project's own size (it may hold more build output than a fresh one).
+    [ "$used" -ge "$NEW_PROJECT_KB" ] || used="$NEW_PROJECT_KB"
+    check_disk "$used" "$PROJ differs from the pins and is left untouched"
     WORK="$PROJ_PARENT/.$PROJ_BASE.stage.$$"
     rm -rf "$WORK"
     TMPS+=("$WORK")
@@ -639,9 +697,10 @@ setup_cache_dir() {
   CACHE_DIR="$(mathlib_cache_dir)"
 }
 
-# Put a staged project in place: move $PROJ aside, rename the staging directory to $PROJ, check
-# that Lake opens it there, and only then delete the old one (put back on any failure; if even
-# that fails, the old one stays in .<name>.old.<pid>, which the next run restores or removes).
+# Put a staged project in place: move $PROJ aside, rename the staging directory to $PROJ, run the
+# `import Mathlib` smoke test again there (the one before the rename ran under the staging path),
+# and only then delete the old one (put back on any failure; if even that fails, the old one stays
+# in .<name>.old.<pid>, which the next run restores or removes).
 swap_in() {
   [ "$WORK" != "$PROJ" ] || return 0
   step "swap the staged project into $PROJ"
@@ -652,11 +711,13 @@ swap_in() {
     mv -T "$old" "$PROJ" || die "cannot rename $WORK to $PROJ, nor put the previous project back from $old"
     die "cannot rename $WORK to $PROJ; the previous project was put back"
   fi
-  if ! (cd "$PROJ" && "${LAKE_RUN[@]}" lake env true); then
+  LOG "smoke test again in $PROJ, before the previous project is deleted"
+  if ! smoke_passes "$PROJ"; then
     { mv -T "$PROJ" "$WORK" && mv -T "$old" "$PROJ"; } \
-      || die "lake env fails in the swapped-in project, and putting the previous one back failed: it is in $old"
-    die "lake env fails in the swapped-in project; the previous project was put back"
+      || die "$SMOKE_WHY after the swap, and putting the previous project back failed: it is in $old"
+    die "$SMOKE_WHY after the swap; the previous project was put back"
   fi
+  LOG "SMOKE OK in $PROJ"
   WORK="$PROJ"
   rm -rf "$old"
   step_done
@@ -672,9 +733,9 @@ main() {
   done
   PKGS="$(manifest_packages "$ROOT/lean/lake-manifest.json")"
   preflight
+  choose_workdir
   install_elan
   install_toolchain
-  choose_workdir
   setup_cache_dir
   install_project_files
   install_sources
