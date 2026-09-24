@@ -1,8 +1,10 @@
 """scripts/check.py: a harness that crashes, writes no report or leaves a stale one must fail its
-gates under the same names and count, and no Lean gate may pass when Lean did not run.
+gates under the same names and count, and no Lean gate may pass when Lean did not run or was lost
+during the run.
 
 No real harness runs here: `check.run` is replaced by a fake that writes fixture reports into a
-temporary REPORTS directory (or does not, and returns the exit code under test).
+temporary REPORTS directory (or does not, and returns the exit code under test). The run_lean
+tests at the end drive harness.run_lean itself with Lean faked.
 """
 import argparse
 import importlib.util
@@ -28,9 +30,12 @@ GOOD = {
                              "leakage_test_passed": True, "D_detection": 0.5,
                              "restructure_fidelity": {"payload_faithful": 3, "payload_n": 3},
                              "l5_applicability": {"n": 1, "total": 2}}},
-    "run_lean": {"lean_available": True,
-                 "records": [{"clean": True, "answer_right": True}, {"clean": None, "answer_right": False}],
-                 "junk_probe": [{"label": "0/0 = 0", "certified": False}]},
+    "run_lean": {"lean_available": True, "lean_available_end": True,
+                 "records": [{"id": "x-001", "statement": True, "lean_reached": True, "errors": [],
+                              "clean": True, "answer_right": True},
+                             {"id": "x-002", "statement": False, "clean": None, "answer_right": False}],
+                 "junk_probe": [{"label": "0/0 = 0", "statement": True, "lean_reached": True, "errors": [],
+                                 "certified": False}]},
     "adversarial": {"preserving": {"flipped": 0}, "changing": {"accepted_wrong": 0}, "n_attacks": 100,
                     "per_attack": {"neg": 1, "mc:swap": 1, "step:drop": 1}},
     "soundness_fuzz": {"wrong": {"false_accepts": 0, "n": 5}, "equiv": {"false_rejects": 0, "n": 5},
@@ -159,11 +164,139 @@ def test_lean_not_available_fails_all_four_lean_gates(monkeypatch, tmp_path, fla
 
 
 def test_lean_available_without_a_certificate_fails_only_the_access_gate(monkeypatch, tmp_path):
-    lean = dict(GOOD["run_lean"], records=[{"clean": False, "answer_right": True}])
+    lean = dict(GOOD["run_lean"], records=[{"statement": True, "lean_reached": True, "errors": [],
+                                            "clean": False, "answer_right": True}])
     rc, by_name, _ = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
     assert rc == 1
     assert by_name["Lean erişilebilir"]["value"] == "evet (0 sertifika)" and not by_name["Lean erişilebilir"]["ok"]
     assert by_name["Lean FP"]["ok"] and by_name["Lean junk-value sertifikası"]["ok"]
+
+
+# --- Lean lost DURING the run -------------------------------------------------------------------
+# lean_available is probed once, before the sweep. When the REPL was OOM-killed afterwards and could
+# not respawn, prove_statement returned proved=False with a `lean_unavailable` error for every later
+# statement, run_lean did not save that error, and all four Lean gates passed: the reviewer's
+# simulation showed "evet (1 sertifika)" and junk "0/17" although no junk statement reached Lean.
+UNAVAILABLE = "lean_unavailable: REPL did not start: ['lean timeout after 300s']"
+LOST = {"statement": True, "lean_reached": False, "errors": [UNAVAILABLE]}
+
+
+def _lost_item(d):
+    d["records"].append(dict(LOST, id="x-003", clean=None, answer_right=False))
+
+
+def _lost_junk(d):
+    d["junk_probe"][0].update(LOST)
+
+
+def _end_lost(d):
+    d["lean_available_end"] = False
+
+
+def _end_missing(d):
+    del d["lean_available_end"]            # a report from before the re-probe existed
+
+
+def _reached_missing(d):
+    del d["records"][0]["lean_reached"]
+
+
+def _statement_field_missing(d):
+    d["records"][1] = {"id": "x-002", "clean": None, "answer_right": False}   # counts as having one
+
+
+def _error_only(d):
+    d["records"][0]["errors"] = [UNAVAILABLE]      # lean_reached claims True: the error still counts
+
+
+LOSS_CASES = {  # mutation of GOOD["run_lean"] -> expected "Lean erişilebilir" value
+    "item_lost": (_lost_item, "yarıda kesildi (Lean'e ulaşmayan ifade 1/3, sonda erişilebilir: evet)"),
+    "junk_lost": (_lost_junk, "yarıda kesildi (Lean'e ulaşmayan ifade 1/2, sonda erişilebilir: evet)"),
+    "end_lost": (_end_lost, "yarıda kesildi (Lean'e ulaşmayan ifade 0/2, sonda erişilebilir: hayır)"),
+    "end_missing": (_end_missing, "yarıda kesildi (Lean'e ulaşmayan ifade 0/2, sonda erişilebilir: hayır)"),
+    "reached_missing": (_reached_missing, "yarıda kesildi (Lean'e ulaşmayan ifade 1/2, sonda erişilebilir: evet)"),
+    "statement_field_missing": (_statement_field_missing,
+                                "yarıda kesildi (Lean'e ulaşmayan ifade 1/3, sonda erişilebilir: evet)"),
+    "error_only": (_error_only, "yarıda kesildi (Lean'e ulaşmayan ifade 1/2, sonda erişilebilir: evet)"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(LOSS_CASES))
+def test_lean_lost_mid_run_fails_all_four_lean_gates(monkeypatch, tmp_path, case):
+    mutate, first = LOSS_CASES[case]
+    lean = json.loads(json.dumps(GOOD["run_lean"]))
+    mutate(lean)
+    rc, by_name, names = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
+    assert rc == 1 and names == FULL and len(names) == 24
+    values = [by_name[n]["value"] for n, _ in check.LEAN_GATES]
+    assert values == [first, "Lean yarıda kesildi", "Lean yarıda kesildi", "Lean yarıda kesildi"]
+    assert not any(by_name[n]["ok"] for n, _ in check.LEAN_GATES)
+    assert all(g["ok"] for n, g in by_name.items() if n not in dict(check.LEAN_GATES))
+
+
+def test_no_statement_needs_no_lean(monkeypatch, tmp_path):
+    """A record without a statement never went to Lean, so it neither needs nor has lean_reached."""
+    lean = GOOD["run_lean"]
+    assert lean["records"][1]["statement"] is False and "lean_reached" not in lean["records"][1]
+    assert check.lean_unreached(lean) == []
+    lean = json.loads(json.dumps(lean))
+    lean["junk_probe"].append({"label": "log 0 = 0", "statement": False, "certified": False})
+    rc, by_name, _ = _gates(monkeypatch, tmp_path, content={"run_lean": lean})
+    assert rc == 0 and by_name["Lean junk-value sertifikası"]["value"] == "0/2"
+
+
+def _simulated_sweep(monkeypatch, tmp_path, scenario):
+    """harness.run_lean end to end with Lean faked (the reviewer's simulation): Lean answers the
+    start probe and proves the first statement; then, per scenario, it is lost for every later
+    statement ("midrun"), lost only when re-probed after the junk probe ("end"), or never ("healthy")."""
+    import mathverify.formal as formal
+    from harness import run_lean
+    calls = {"prove": 0, "avail": 0}
+
+    def fake_prove(stmt, **kw):
+        calls["prove"] += 1
+        r = {"statement": "stmt", "kind": stmt.kind, "proved": False, "proof": None, "source": None,
+             "attempts": [], "audit": {}, "calls": 0, "cost_usd": 0.0, "errors": [], "ms": 1.0}
+        if calls["prove"] == 1:
+            r.update(proved=True, proof="norm_num", audit={"clean": True})
+        elif scenario == "midrun":
+            r["errors"].append(UNAVAILABLE)
+        return r
+
+    def fake_available(timeout=300.0):
+        calls["avail"] += 1
+        return not (scenario == "end" and calls["avail"] > 1)
+
+    monkeypatch.setattr(formal, "prove_statement", fake_prove)
+    monkeypatch.setattr(formal, "lean_available", fake_available)
+    run_lean.main(["--limit", "5", "--out", str(tmp_path)])
+    assert calls["avail"] == 2                      # once before the sweep, once after the junk probe
+    return json.loads((tmp_path / "lean_results.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("scenario", ["midrun", "end", "healthy"])
+def test_run_lean_records_whether_each_statement_reached_lean(monkeypatch, tmp_path, scenario):
+    data = _simulated_sweep(monkeypatch, tmp_path, scenario)
+    assert data["lean_available"] is True and data["lean_available_end"] is (scenario != "end")
+    stmt = [r for r in data["records"] + data["junk_probe"] if r["statement"]]
+    no_stmt = [r for r in data["records"] + data["junk_probe"] if not r["statement"]]
+    assert data["records"][0]["statement"] and data["records"][0]["clean"]        # the one certificate
+    assert [j for j in data["junk_probe"] if j["statement"]]                       # some junk went to Lean
+    assert all(isinstance(r["lean_reached"], bool) and isinstance(r["errors"], list) for r in stmt)
+    assert not any("lean_reached" in r for r in no_stmt)
+    reached = [r["lean_reached"] for r in stmt]
+    if scenario == "midrun":                        # only the first statement reached Lean
+        assert reached == [True] + [False] * (len(stmt) - 1)
+        assert all(r["errors"] == [UNAVAILABLE] for r in stmt[1:])
+    else:
+        assert all(reached)
+    values = {g["name"]: g for g in check.lean_gates(data)}
+    if scenario == "healthy":
+        assert all(g["ok"] for g in values.values())
+        assert values["Lean erişilebilir"]["value"] == "evet (1 sertifika)"
+    else:
+        assert not any(g["ok"] for g in values.values())
+        assert values["Lean erişilebilir"]["value"].startswith("yarıda kesildi")
 
 
 def test_venv_python_per_platform(tmp_path):

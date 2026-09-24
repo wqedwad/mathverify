@@ -6,7 +6,10 @@ Measures the F5 gate directly: how many items get a formal certificate, and whet
 item whose claimed answer is WRONG is ever proved (must be zero: a false statement is
 unprovable, so a proof here would mean the statement does not say what the claim says).
 `lean_results.json` also records `lean_available`: whether the Mathlib REPL booted in this run,
-so "zero certificates" never reads as a clean result when Lean was simply absent.
+so "zero certificates" never reads as a clean result when Lean was simply absent. Because Lean
+can also be lost DURING the run (REPL OOM-killed and not respawnable), every record with a
+statement carries `lean_reached` (plus prove_statement's `errors`), and `lean_available_end`
+re-probes Lean after the junk probe.
 """
 from __future__ import annotations
 import argparse, json, sys, time
@@ -93,6 +96,22 @@ JUNK_PROBES = [
 ]
 
 
+LEAN_UNAVAILABLE = "lean_unavailable"
+
+
+def lean_reached(r: dict) -> bool:
+    """Did every Lean call this statement needed get through to a running REPL?
+
+    When the REPL is gone and cannot be respawned (e.g. OOM-killed), prove_statement stops with
+    an error starting `lean_unavailable` and returns proved=False. Without this flag such a
+    record reads exactly like "Lean could not prove it": a sweep that lost Lean after its first
+    item still passed all four Lean gates, junk probe included, although no junk statement had
+    reached Lean. A statement Lean did answer (even with a timeout or a crash it recovered from)
+    counts as reached.
+    """
+    return not any(str(e).startswith(LEAN_UNAVAILABLE) for e in r.get("errors") or [])
+
+
 def junk_probe(timeout: float) -> list[dict]:
     from mathverify.formal import build_statement, prove_statement
     out = []
@@ -103,6 +122,8 @@ def junk_probe(timeout: float) -> list[dict]:
             r = prove_statement(st, use_model=False, tactic_timeout=timeout)
             rec["certified"] = bool(r["proved"] and (r.get("audit") or {}).get("clean"))
             rec["proved"] = r["proved"]
+            rec["lean_reached"] = lean_reached(r)
+            rec["errors"] = list(r.get("errors") or [])
         out.append(rec)
     return out
 
@@ -144,7 +165,8 @@ def main(argv=None):
             r = prove_statement(st, use_model=False, tactic_timeout=args.timeout)
             rec.update({"proved": r["proved"], "clean": (r.get("audit") or {}).get("clean"),
                         "proof": r.get("proof"), "audit": r.get("audit"), "ms": round(r["ms"]),
-                        "stmt_text": r.get("statement")})
+                        "stmt_text": r.get("statement"), "lean_reached": lean_reached(r),
+                        "errors": list(r.get("errors") or [])})
         recs.append(rec)
         if i % 20 == 0 or rec["proved"]:
             print(f"[{i}/{len(items)}] {rec['id']:<16} stmt={rec['statement']} proved={rec['proved']} clean={rec['clean']}", flush=True)
@@ -155,10 +177,19 @@ def main(argv=None):
     fp = [r for r in certified if not r["answer_right"]]
     out = Path(args.out); out.mkdir(exist_ok=True)
     junk = junk_probe(args.timeout)
-    (out / "lean_results.json").write_text(json.dumps({"lean_available": lean_ok, "records": recs, "junk_probe": junk},
+    # The probe above only says Lean was there when the sweep STARTED. Re-probe once the junk
+    # probe is done (same thread-local client): Lean lost after the last statement shows here,
+    # Lean lost before it shows as records with lean_reached False.
+    lean_end = lean_available()
+    unreached = [r.get("id") or r.get("label") for r in recs + junk if r["statement"] and not r["lean_reached"]]
+    print(f"lean_available_end={lean_end} lean_unreached={len(unreached)}", flush=True)
+    (out / "lean_results.json").write_text(json.dumps({"lean_available": lean_ok, "lean_available_end": lean_end,
+                                                       "records": recs, "junk_probe": junk},
                                                       ensure_ascii=False, indent=1), encoding="utf-8")
     md = "# F5 (Lean) taraması — modelsiz, deterministik ifade + Mathlib taktik merdiveni\n\n"
-    md += f"- Lean REPL (Mathlib) bu koşuda açıldı: **{'evet' if lean_ok else 'hayır'}**\n"
+    md += f"- Lean REPL (Mathlib) bu koşuda açıldı: **{'evet' if lean_ok else 'hayır'}**"
+    md += f" · taramanın sonunda erişilebilir: **{'evet' if lean_end else 'hayır'}**"
+    md += f" · Lean'e ulaşamayan ifade: **{len(unreached)}**{' ✗ ' + str(unreached[:10]) if unreached else ''}\n"
     md += f"- Öğe: **{n}** · Lean ifadesi üretilebilen: **{len(with_stmt)}** ({len(with_stmt)/n:.1%})\n"
     md += f"- Kanıtlanan: **{len(proved)}** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **{len(certified)}**\n"
     md += f"- **Yanlış cevaplı öğelerde kanıt (FP): {len(fp)}** {'✓ hedef 0' if not fp else '✗ ' + str([r['id'] for r in fp])}\n"

@@ -115,6 +115,20 @@ def eval_gates(res: dict) -> list[dict]:
     return gates
 
 
+def lean_unreached(data: dict) -> list[str]:
+    """Records whose statement did not (fully) reach Lean: `lean_reached` not True, or an error
+    from prove_statement that starts with `lean_unavailable`. A record without a `statement`
+    field counts as having one, so a report that drops these fields fails closed."""
+    bad = []
+    for r in list(data["records"]) + list(data.get("junk_probe") or []):
+        if not r.get("statement", True):
+            continue
+        errors = r.get("errors") or []
+        if r.get("lean_reached") is not True or any(str(e).startswith("lean_unavailable") for e in errors):
+            bad.append(str(r.get("id") or r.get("label")))
+    return bad
+
+
 def lean_gates(data: dict) -> list[dict]:
     # Without Lean the sweep still exits 0 with zero certificates, so "Lean FP = 0" and "no junk
     # probe certified" held vacuously and a box with no Lean showed 23/23. `lean_available` is
@@ -123,6 +137,19 @@ def lean_gates(data: dict) -> list[dict]:
     lean = data["records"]
     if data.get("lean_available") is not True:
         return [gate(name, "hayır" if i == 0 else "Lean çalışmadı", target, False)
+                for i, (name, target) in enumerate(LEAN_GATES)]
+    # Lean can also be lost MID-RUN (REPL OOM-killed, respawn fails): the records after that
+    # point are proved=False with a lean_unavailable error, and the gates passed on them
+    # vacuously (simulated: "evet (1 sertifika)" and junk "0/17" with no junk statement
+    # reaching Lean). Lean must still answer after the junk probe (`lean_available_end`) and
+    # every statement must have reached it; a report without these fields fails too.
+    unreached = lean_unreached(data)
+    end_ok = data.get("lean_available_end") is True
+    if unreached or not end_ok:
+        n_stmt = sum(1 for r in list(lean) + list(data.get("junk_probe") or []) if r.get("statement", True))
+        why = (f"yarıda kesildi (Lean'e ulaşmayan ifade {len(unreached)}/{n_stmt}, "
+               f"sonda erişilebilir: {'evet' if end_ok else 'hayır'})")
+        return [gate(name, why if i == 0 else "Lean yarıda kesildi", target, False)
                 for i, (name, target) in enumerate(LEAN_GATES)]
     gates: list[dict] = []
     cert = [r for r in lean if r.get("clean")]
