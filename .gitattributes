@@ -1,0 +1,6 @@
+# Line endings. Text files are stored with LF; checkout follows core.autocrlf / core.eol, so a
+# Windows working tree keeps CRLF exactly as before. Shell scripts and the pinned Lean project
+# files (lean/) are LF on every OS: bash needs it, and the Lean files must stay byte-identical.
+* text=auto
+*.sh text eol=lf
+lean/** text eol=lf
