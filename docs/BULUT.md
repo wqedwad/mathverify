@@ -41,6 +41,26 @@ exit 0
    kurulumu arka planda başlatır (routine oturumunda böyle oldu), ama o zaman kurulum oturumun
    içinde koşar ve bitene dek Lean kullanılamaz.
 3. **Ortam değişkeni gerekmez** (§3.3). Anahtarlar depodaki `.env`'den gelir (§10).
+   **Düzeltme (24 Eylül 2026, gece, ölçüm):** kurulum betiği alanından ilk gerçek koşu araç ref'ini
+   çekemedi: betik, Claude Code'un GitHub vekili bağlanmadan önce koştuğu için özel depo 401 döndü
+   (§3.2, HANDOFF §0.11). Değişken yine zorunlu değil (kanca Lean'i her yeni sohbette ~3 dk'da
+   kurar), ama anlık görüntünün Lean'i taşıması için **önerilir**. Kullanıcının bir kez yapacakları:
+   1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** →
+      Generate new token. Token name: ör. `mathverify-bulut-kurulum`; Resource owner: `wqedwad`;
+      Expiration: kullanıcının seçimi (kişisel depoda süresiz de olur; 90 gün ya da 1 yıl önerilir);
+      Repository access: **Only select repositories** → `wqedwad/asd`; Permissions → Repository
+      permissions → yalnız **Contents: Read-only** (Metadata: Read-only kendiliğinden gelir).
+      Belirteç bir kez gösterilir; sohbete yapıştırılmaz.
+   2. claude.ai → oturumun başlık çubuğundaki bulut ortamı menüsü → Edit → **Environment
+      variables** alanına `MATHVERIFY_GITHUB_TOKEN=<belirteç>` satırı. Ad `GITHUB_TOKEN` ya da
+      `GH_TOKEN` **olmaz**: belgeye göre o adlar vekilin yer tutucusu yerine oturumlara olduğu gibi
+      geçer (§3.3).
+   3. Aynı pencerede **Setup script** alanının sonuna bir yorum satırı eklenir (ör. `# belirtec v1`):
+      belgeye göre görüntü yalnız betiğin metni ya da ağ ayarı değişince (ya da ~7 günde) yeniden
+      kurulur; değişken eklemek tek başına yetmeyebilir. Bu adım, `fetch_artifacts.sh`'in belirteçli
+      hâli `master`a birleştikten **sonra** yapılır: betik checkout'taki `master` kopyasını çalıştırır.
+   4. Yeni bir sohbet açılır; oturum §12'deki "belirteçle kurulum" maddesini ölçer.
+   Belirtecin süresi dolarsa hiçbir şey bozulmaz: çekim yine 401 alır, kanca kurulumu devralır.
 4. **Routine istemleri:** bir bulut routine'inin (zamanlanmış ya da tek seferlik ajan) istemi push
    hedefini açıkça **yeni bir dal** olarak verir ya da hiç push istemez. "Oturumun kendi dalına push
    et" yazılmaz: 24 Eylül'deki routine oturumu varsayılan dal `master`da başladı ve `master`a push
@@ -204,6 +224,17 @@ Bir şey zaten kuruluysa (parmak izleri tutuyorsa) atlanır: Python sürümü, `
 bu yolu kapsar. Kurulum betiği alanından çalıştığında checkout'un orada hazır olup olmadığı henüz
 ölçülmedi (§12).
 
+**Ölçüm (24 Eylül, gece, ilk normal oturum; HANDOFF §0.11, DECISIONS §53):** alan gerçekten koştu
+(`mode=all`, kancadan 2 s önce) ve checkout hazırdı (`repository: /home/user/asd (18fd298)`). Ama araç
+ref'inin çekimi 0 s'de düştü: `fatal: could not read Username for 'https://github.com'` (özel depo
+401), yedek yol da aynı; durum satırı
+`FAILED mode=all failed=[fetch_artifacts python uv_prewarm setup_lean setup_lean_repl] ... reason=fetch python=missing lean=missing total=0s`.
+Resmî belgeye göre Claude Code ajan vekiline kurulum betiğinden sonra bağlanır ve GitHub kimliğini
+oturumdaki GitHub vekili ekler; oturum içinde vekil atlanınca aynı 401 yeniden üretildi. Anlık
+görüntü bu başarısız koşudan sonra alındığı için Lean taşımaz; kanca her yeni sohbette kurar (bu
+oturumda 167 s). Çözüm: `MATHVERIFY_GITHUB_TOKEN` (§3.3, "Senin yapman gerekenler" 3. madde);
+`fetch_artifacts.sh` düz çekim düşünce onunla bir kez daha dener.
+
 ### 3.3 Ortam değişkenleri
 
 **Gerekli değişken yok.** Anahtarlar `.env`'den okunur (§10). İsteğe bağlı olanlar:
@@ -214,9 +245,13 @@ bu yolu kapsar. Kurulum betiği alanından çalıştığında checkout'un orada 
 | `MATHVERIFY_SKIP_LEAN=1` | Kanca Lean kurulumunu arka planda **başlatmasın** (var olanı yine bildirir) |
 | `MATHVERIFY_ARTIFACT_REF` | Varsayılan araç ref'i dışında bir sürüm (`refs/arac/bulut-vN`) |
 | `MATHVERIFY_ANTHROPIC_BASE_URL` | (24 Eylül'de eklendi) projenin Anthropic çağrıları varsayılan `https://api.anthropic.com` dışında bir uç noktaya gitsin; platformun `ANTHROPIC_BASE_URL`'i bilerek okunmaz (§10) |
+| `MATHVERIFY_GITHUB_TOKEN` | (24 Eylül gecesi eklendi, önerilir) yalnız `wqedwad/asd`'yi okuyabilen fine-grained GitHub belirteci (Contents: read-only). Kurulum betiği GitHub vekilinden önce koştuğu için araç ref'ini ancak bununla çekebilir (§3.2). `fetch_artifacts.sh` belirteci yalnız düz çekim düştükten sonra ve yalnız `https://github.com/` altına gönderir; oturum içinde vekil kimliği eklediği için orada hiç gönderilmez; değer hiçbir çıktıya yazılmaz (DECISIONS §53). Belgeye göre ortam değişkenlerini ortamı kullanan herkes ve oturumdaki her komut okuyabilir. `GITHUB_TOKEN`/`GH_TOKEN` adı kullanılmaz: belgeye göre o adlarla girilen değer vekilin yer tutucusu yerine oturumlara olduğu gibi geçer |
 
 **Düzeltme (24 Eylül 2026):** `MATHVERIFY_REPO_REF` satırındaki örnek artık gerekmiyor:
 `scripts/cloud/` GitHub'daki `master`da (`572ef57`) var (§2).
+
+**Düzeltme (24 Eylül 2026, gece):** "Gerekli değişken yok" işlev için hâlâ doğru, ama kurulum
+betiğinin anlık görüntüye Lean koyabilmesi için `MATHVERIFY_GITHUB_TOKEN` gerekiyor (tablo, §3.2).
 
 ## 4. Oturum başında ne olur
 
@@ -335,6 +370,8 @@ verilince kullanılır. Routine oturumunda (`4d01ba2`, bu değişiklikten önce)
 | `MATHVERIFY_ARTIFACT_URL` | `origin` uzak adresi | araç ref'inin çekileceği depo |
 | `MATHVERIFY_ARTIFACT_REF` | `refs/arac/bulut-v2` | araç ref'i |
 | `MATHVERIFY_ARTIFACT_SRC` | — | `parts/` + `SHA256SUMS.full` içeren yerel dizin (tamamen çevrimdışı kurulum ve test için) |
+| `MATHVERIFY_GITHUB_TOKEN` | — | (24 Eylül gecesi eklendi) araç ref'inin düz çekimi düşerse bir kez daha bununla denenir (kurulum betiği aşaması; §3.3, DECISIONS §53) |
+| `MATHVERIFY_GITHUB_TOKEN_URL` | `https://github.com/` | belirtecin gönderilebileceği adres öneki; dışındaki adrese gönderilmez (testler yerel sunucu için değiştirir) |
 | `MATHVERIFY_SKIP_LEAN` | — | `1`: kanca Lean kurulumu başlatmaz |
 | `MATHVERIFY_REPO_URL` / `MATHVERIFY_REPO_REF` | `https://github.com/wqedwad/asd` / uzak varsayılan dal | kurulum betiğinin klon yedeği |
 | `MATHVERIFY_PROFILE_D` | `/etc/profile.d` | `mathverify.sh`'in yazıldığı yer |
@@ -467,6 +504,15 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   reddedilip reddedilmediği ölçülmedi.
 - **Ağ:** §3.1. uv Python indiremez; Python yalnız araç ref'inden gelir.
 - **Anlık görüntü** ~7 gün sonra eskir; kurulum betiği o zaman baştan koşar.
+- **Devam ettirilen sohbet** (24 Eylül gecesi ölçüldü, HANDOFF §0.11): boşta kalan sohbete dönülünce
+  makine yeniden başlatılmış olabilir; disk (Lean, `.venv`) korunur, kanca kurulum yapmaz. Ama Lean'in
+  ilk açılışı çok yavaş olabilir: ölçülen bir durumda ilk canlı Lean testi 300 s'de zaman aşımına
+  uğradı; sonra sıcak açılış 5.8 s, önbellek boşaltılmış açılış 26.9 s. `check.py --full` ya da Lean
+  testlerinden önce Lean dosyaları bir kez okunur, sonra Lean denenir (`lean_available(900)` tek
+  başına yetmez: istemcinin `import Mathlib` sınırı ayrıca 300 s, `LeanClient.boot_timeout`; ısıtmanın
+  bu durumu çözdüğü ölçülmedi):
+  `find "$MATHVERIFY_LEAN_PROJECT/.lake" "$ELAN_HOME/toolchains" -name '*.olean' -print0 | xargs -0 cat > /dev/null`
+  ve ardından `PYTHONUTF8=1 .venv/bin/python -c "from mathverify.formal.lean_client import lean_available; print(lean_available())"`.
 - **Bellek dosyaları:** `~/.claude` taşınmaz; kalıcı her bilgi depoya yazılır.
 
 ## 9. Buluttan yerele ve birleştirme
@@ -646,6 +692,23 @@ oturumda ölçülür):
 - [x] Ortamın stop hook'u: `~/.claude/stop-hook-git-check.sh` commit edilmemiş değişiklik görünce
       commit + push ister (`check.py` `reports/`'u yeniden yazar). Normal oturumda raporlar
       commit edilir; teşhis oturumunda yok sayılır.
+
+**Düzeltme (24 Eylül 2026, gece, ilk normal oturum; HANDOFF §0.11):**
+
+- [x] Kurulum betiği çalışırken checkout nerede? → `/home/user/asd` (`18fd298`), betik koşarken
+      hazırdı (`setup_env.log`: `repository:` satırı). `CLAUDE_PROJECT_DIR`'in o anda tanımlı olup
+      olmadığı hâlâ bilinmiyor (önyükleyici checkout'u `/home/*/*` aramasıyla bulur).
+- [x] Kurulum betiği alanından gerçek koşu → **başarısız**: `mode=all`, `total=0s`, araç ref'i 401
+      (kimliksiz; GitHub vekili betikten sonra bağlanıyor). Kanca devraldı: Lean 167 s'de hazır.
+- [x] Aynı sohbete dönüş → ~50 dk sonra makine yeniden başlatılmıştı, disk korunmuştu; kanca 15 s,
+      Lean HAZIR, kurulum betiği yeniden koşmadı.
+- [ ] **Belirteçle kurulum** (`MATHVERIFY_GITHUB_TOKEN`, "Senin yapman gerekenler" 3. madde,
+      değişiklik `master`a birleştikten sonra): yeni sohbette `setup_env.status` `OK mode=all`,
+      `fetch_artifacts.log`'da "retrying the fetch with MATHVERIFY_GITHUB_TOKEN" ve "the token fetch
+      succeeded", uv ön ısıtma süresi, kanca "Lean: HAZIR" ile açılıyor mu; değişkenin kurulum
+      betiğine ulaştığı (belge bunu açıkça söylemiyor).
+- [ ] Anlık görüntü `/opt`'u koruyor mu: belirteçli koşudan sonraki **ikinci** yeni sohbette kanca
+      Lean'i ilk anda "HAZIR" buluyor ve `setup_env.log`'a yeni bir `mode=all` satırı eklenmiyor mu.
 
 ## 13. Bulut routine istemleri
 

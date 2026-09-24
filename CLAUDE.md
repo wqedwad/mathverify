@@ -116,5 +116,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - Lean WSL'siz, yerel `bash -lc` ile çalışır; yeri `ELAN_HOME`, `MATHVERIFY_LEAN_PROJECT`,
   `MATHVERIFY_LEAN_REPL` ile verilir (bulutta `/opt` altında). Sürümler `lean/PINS`'te sabit.
 - Bulut ayrıntıları (kurulum betiği, kanca, `/opt`, günlükler, sınırlar): `docs/BULUT.md`.
+- Ortamın kurulum betiği Claude Code'un GitHub vekilinden önce koşar ve özel depoya kimliksiz gider
+  (401). Araç ref'ini orada yalnız ortam değişkenindeki `MATHVERIFY_GITHUB_TOKEN` ile çekebilir
+  (DECISIONS §53). Belirteç değeri hiçbir çıktıya yazılmaz; değişken adı `GITHUB_TOKEN`/`GH_TOKEN`
+  olmaz.
 - Bulutta boşta kalan VM geri alınınca arka plandaki iş kaybolur: `check.py --full` ya da Lean
   kurulumu sürerken oturum etkin tutulur.

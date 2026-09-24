@@ -18,7 +18,9 @@ Behaviour checks run the real scripts, never against the real install:
 """
 from __future__ import annotations
 
+import base64
 import hashlib
+import http.server
 import importlib.metadata as md
 import json
 import os
@@ -28,6 +30,7 @@ import signal
 import subprocess
 import tarfile
 import textwrap
+import threading
 import time
 import tomllib
 from pathlib import Path
@@ -1738,3 +1741,274 @@ def test_setup_lean_repl_updates_a_linked_checkout_at_its_target(installed, case
     assert (repl / "lean-toolchain").read_text().strip() == TOOLCHAIN
     assert (repl / ".lake" / "build" / "bin" / "repl").is_file()
     assert _dot_entries(bed.home) == [] and _dot_entries(bed.opt) == []
+
+
+# ---- fetch_artifacts.sh over git smart HTTP: the MATHVERIFY_GITHUB_TOKEN retry ------------------
+# The claude.ai setup script runs before Claude Code connects to the session's GitHub proxy; the
+# private repository answered it 401 ("could not read Username"; 24 Sep 2026). These tests serve
+# the artifact ref with `git http-backend` behind the same 401 and check that the token is sent
+# only after the plain fetch failed, only to its own URL prefix, and is never printed, written or
+# put on a command line.
+
+TOKEN = "github_pat_TEST_0123456789_abcdefghij_TOKEN"
+OWNER = "sahip"
+
+
+class _GitServer(http.server.ThreadingHTTPServer):
+    """git smart HTTP on 127.0.0.1. With `auth` set, a request without exactly that Authorization
+    header gets 401. `seen` records every request's Authorization and marker headers."""
+    daemon_threads = True
+
+    def __init__(self, root: Path, auth: str | None):
+        super().__init__(("127.0.0.1", 0), _GitHandler)
+        self.root, self.auth, self.seen = root, auth, []
+
+
+class _GitHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def _body(self) -> bytes:
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            out = b""
+            while (size := int(self.rfile.readline().split(b";")[0], 16)) > 0:
+                out += self.rfile.read(size)
+                self.rfile.readline()
+            self.rfile.readline()
+            return out
+        return self.rfile.read(int(self.headers.get("Content-Length") or 0))
+
+    def _serve(self):
+        body = self._body() if self.command == "POST" else b""
+        self.server.seen.append({"path": self.path,
+                                 "auth": self.headers.get_all("Authorization") or [],
+                                 "marker": self.headers.get_all("X-Mathverify-Test") or []})
+        if self.server.auth is not None and self.headers.get("Authorization") != self.server.auth:
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="test"')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        path, _, query = self.path.partition("?")
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(self.server.root),
+               "GIT_CONFIG_NOSYSTEM": "1", "GIT_PROJECT_ROOT": str(self.server.root),
+               "GIT_HTTP_EXPORT_ALL": "1", "PATH_INFO": path, "QUERY_STRING": query,
+               "REQUEST_METHOD": self.command, "REMOTE_ADDR": "127.0.0.1",
+               "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+               "CONTENT_LENGTH": str(len(body)),
+               "HTTP_CONTENT_ENCODING": self.headers.get("Content-Encoding", ""),
+               "GIT_PROTOCOL": self.headers.get("Git-Protocol", "")}
+        out = subprocess.run(["git", "http-backend"], input=body, env=env, capture_output=True,
+                             timeout=60).stdout
+        sep = b"\r\n\r\n" if b"\r\n\r\n" in out else b"\n\n"
+        head, _, payload = out.partition(sep)
+        status, headers = 200, []
+        for line in head.decode("latin-1").splitlines():
+            name, _, value = line.partition(":")
+            if name.lower() == "status":
+                status = int(value.split()[0])
+            elif name and name.lower() != "content-length":
+                headers.append((name, value.strip()))
+        self.send_response(status)
+        for name, value in headers:
+            self.send_header(name, value)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    do_GET = do_POST = _serve
+
+
+def _basic(user: str, secret: str) -> str:
+    return "Basic " + base64.b64encode(f"{user}:{secret}".encode()).decode()
+
+
+class TokenBed:
+    """The artifact set of the `artifacts` fixture on ref refs/arac/test of a bare repository
+    served over HTTP, a checkout whose origin points at it, and a `git` wrapper on PATH that
+    records every git command line."""
+
+    REF = "refs/arac/test"
+
+    def __init__(self, tmp_path: Path, src: Path):
+        self.tmp = tmp_path
+        srv = tmp_path / "srv"
+        bare = srv / OWNER / "asd"
+        bare.mkdir(parents=True)
+        _git(bare, "init", "-q", "--bare")
+        work = tmp_path / "artifact-tree"
+        shutil.copytree(src, work)
+        _git(work, "init", "-q")
+        _git(work, "add", "-A")
+        _git(work, "commit", "-q", "-m", "artifacts")
+        _git(work, "push", "-q", str(bare), f"HEAD:{self.REF}")
+        self.srv = srv
+        self.checkout = tmp_path / "checkout"
+        (self.checkout / "scripts").mkdir(parents=True)
+        shutil.copy2(FETCH, self.checkout / "scripts" / "fetch_artifacts.sh")
+        _git(self.checkout, "init", "-q")
+        self.home = tmp_path / "home"
+        self.home.mkdir()
+        self.argv_log = tmp_path / "git-argv.log"
+        self.bin = tmp_path / "bin"
+        _write_exec(self.bin / "git", f"""
+            #!/bin/bash
+            printf '%s\\n' "$*" >> '{self.argv_log}'
+            exec '{shutil.which("git")}' "$@"
+            """)
+
+    def run(self, auth: str | None, token: str | None, token_url: str | None = "server",
+            extra_env: dict[str, str] | None = None, origin_userinfo: str = ""):
+        server = _GitServer(self.srv, auth)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_address[1]}/"
+            if "origin" in _git(self.checkout, "remote").split():
+                _git(self.checkout, "remote", "remove", "origin")
+            origin = f"{base}{OWNER}/asd"
+            if origin_userinfo:
+                origin = origin.replace("http://", f"http://{origin_userinfo}@", 1)
+            _git(self.checkout, "remote", "add", "origin", origin)
+            env = {"PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+                   "HOME": str(self.home), "LC_ALL": "C", "GIT_CONFIG_NOSYSTEM": "1",
+                   "MATHVERIFY_ARTIFACT_REF": self.REF, **(extra_env or {})}
+            if token is not None:
+                env["MATHVERIFY_GITHUB_TOKEN"] = token
+            if token_url == "server":
+                env["MATHVERIFY_GITHUB_TOKEN_URL"] = base
+            elif token_url is not None:
+                env["MATHVERIFY_GITHUB_TOKEN_URL"] = token_url
+            dest = self.tmp / "dest"
+            r = subprocess.run([BASH, str(self.checkout / "scripts" / "fetch_artifacts.sh"),
+                                str(dest)], env=env, capture_output=True, text=True, timeout=120,
+                               cwd=self.tmp)
+            return r, dest, list(server.seen), base
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def leaks(self, *secrets: str) -> list[str]:
+        """Files under the test directory that contain any of the secrets (the server records
+        headers in memory only)."""
+        found = []
+        for p in self.tmp.rglob("*"):
+            if p.is_file() and not p.is_symlink():
+                data = p.read_bytes()
+                found += [f"{p}: {s[:12]}..." for s in secrets if s.encode() in data]
+        return found
+
+
+@pytest.fixture
+def token_bed(artifacts, tmp_path):
+    if shutil.which("git") is None:
+        pytest.skip("git not found")
+    return TokenBed(tmp_path, artifacts[0]), artifacts[1]
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_retries_a_401_with_the_github_token(token_bed):
+    bed, files = token_bed
+    expected = _basic(OWNER, TOKEN)
+    # a GIT_CONFIG_* entry the session already carries must survive the appended header
+    marker = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "http.extraHeader",
+              "GIT_CONFIG_VALUE_0": "X-Mathverify-Test: kept"}
+    r, dest, seen, _ = bed.run(auth=expected, token=TOKEN, extra_env=marker)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    for name, data in files.items():
+        assert (dest / name).read_bytes() == data
+    assert (dest / ".source").read_text().splitlines()[0] == f"ref {TokenBed.REF}"
+    # first the plain fetch, refused; then the token, on every request of the retry
+    assert seen[0]["auth"] == [], seen
+    authed = [s for s in seen if s["auth"]]
+    assert authed and all(s["auth"] == [expected] for s in authed), seen
+    assert all(s["marker"] == ["kept"] for s in seen), seen
+    assert "retrying the fetch with MATHVERIFY_GITHUB_TOKEN (value not printed)" in r.stdout, out
+    assert "the token fetch succeeded" in r.stdout, out
+    b64 = expected.split()[1]
+    assert TOKEN not in out and b64 not in out
+    argv = bed.argv_log.read_text()
+    assert "fetch" in argv and TOKEN not in argv and b64 not in argv
+    assert bed.leaks(TOKEN, b64) == []
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_without_a_token_fails_like_the_setup_script(token_bed):
+    bed, _ = token_bed
+    r, dest, seen, _ = bed.run(auth=_basic(OWNER, TOKEN), token=None)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert "MATHVERIFY_GITHUB_TOKEN is not set: no token retry" in r.stdout, out
+    assert "could not read Username" in r.stderr, out
+    assert seen and all(s["auth"] == [] for s in seen), seen
+    assert sorted(os.listdir(dest)) == []
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_never_sends_the_token_outside_its_url_prefix(token_bed):
+    bed, _ = token_bed
+    # default prefix https://github.com/: the local server is not under it
+    r, dest, seen, base = bed.run(auth=_basic(OWNER, TOKEN), token=TOKEN, token_url=None)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert f"MATHVERIFY_GITHUB_TOKEN is set but {base}{OWNER}/asd is not under " \
+           "https://github.com/: token not sent" in r.stdout, out
+    assert seen and all(s["auth"] == [] for s in seen), seen
+    assert TOKEN not in out and bed.leaks(TOKEN) == []
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_does_not_send_the_token_when_the_plain_fetch_works(token_bed):
+    # inside a session the GitHub proxy authenticates: the token must never be sent there
+    bed, files = token_bed
+    r, dest, seen, _ = bed.run(auth=None, token=TOKEN)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    for name, data in files.items():
+        assert (dest / name).read_bytes() == data
+    assert seen and all(s["auth"] == [] for s in seen), seen
+    assert "MATHVERIFY_GITHUB_TOKEN" not in r.stdout, out
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_token_tolerates_pasted_whitespace(token_bed):
+    bed, files = token_bed
+    r, dest, seen, _ = bed.run(auth=_basic(OWNER, TOKEN), token=f"  {TOKEN}\r\n")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert [s for s in seen if s["auth"] == [_basic(OWNER, TOKEN)]], seen
+    for name, data in files.items():
+        assert (dest / name).read_bytes() == data
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_never_logs_credentials_embedded_in_the_url(token_bed):
+    bed, _ = token_bed
+    # the origin URL carries its own user:password; it is not under the default token prefix
+    r, _, seen, base = bed.run(auth=_basic(OWNER, TOKEN), token=TOKEN, token_url=None,
+                               origin_userinfo="kisi:gizli-parola")
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert "is not under https://github.com/: token not sent" in r.stdout, out
+    assert "gizli-parola" not in r.stdout, out
+    assert all(s["auth"] != [_basic(OWNER, TOKEN)] for s in seen), seen
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_wrong_token_fails_fast_without_printing_it(token_bed):
+    bed, _ = token_bed
+    wrong = TOKEN.replace("TEST", "WRONG")
+    r, dest, seen, _ = bed.run(auth=_basic(OWNER, TOKEN), token=wrong)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert [s for s in seen if s["auth"]] and all(
+        s["auth"] in ([], [_basic(OWNER, wrong)]) for s in seen), seen
+    assert wrong not in out and bed.leaks(wrong, _basic(OWNER, wrong).split()[1]) == []
+    assert sorted(os.listdir(dest)) == []
