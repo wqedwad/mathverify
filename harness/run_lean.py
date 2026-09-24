@@ -1,10 +1,12 @@
 """F5 sweep with NO model calls: deterministic statement + Mathlib tactic ladder + audits.
 
-    python -m harness.run_lean [--limit N] [--timeout 45]
+    python -m harness.run_lean [--limit N] [--timeout 45] [--out reports]
 
 Measures the F5 gate directly: how many items get a formal certificate, and whether any
 item whose claimed answer is WRONG is ever proved (must be zero: a false statement is
 unprovable, so a proof here would mean the statement does not say what the claim says).
+`lean_results.json` also records `lean_available`: whether the Mathlib REPL booted in this run,
+so "zero certificates" never reads as a clean result when Lean was simply absent.
 """
 from __future__ import annotations
 import argparse, json, sys, time
@@ -113,12 +115,21 @@ def main(argv=None):
     ap.add_argument("--timeout", type=float, default=45.0)
     ap.add_argument("--out", default=str(ROOT / "reports"))
     args = ap.parse_args(argv)
-    from mathverify.formal import build_statement, prove_statement, get_lean
+    from mathverify.formal import build_statement, prove_statement, lean_available
     items = load_items(ROOT / "evalset" / "items")
     if args.limit:
         items = items[:args.limit]
     t0 = time.time()
-    get_lean()
+    # "Lean was available in this run" = this probe, before the sweep, came back clean. It goes
+    # through the same thread-local client the sweep uses (get_lean), so the REPL it boots is the
+    # one that proves the items, never a second one. Clean requires all of: the REPL process
+    # started, `import Mathlib` returned an environment, LeanClient._spawn's Mathlib probe
+    # ((2 : ℝ) + 2 = 4 by norm_num) compiled, and a first check on that environment compiled with
+    # no error and no sorry. Without this flag a machine with no Lean at all wrote 0 certificates
+    # with exit 0, and check.py's Lean gates passed vacuously on it. The sweep itself is not
+    # changed: when the probe fails, every item is still attempted, exactly as before.
+    lean_ok = lean_available()
+    print(f"lean_available={lean_ok}", flush=True)
     recs, kinds = [], Counter()
     for i, it in enumerate(items, 1):
         ir, sol, labels = split_for_verifier(it)
@@ -144,9 +155,10 @@ def main(argv=None):
     fp = [r for r in certified if not r["answer_right"]]
     out = Path(args.out); out.mkdir(exist_ok=True)
     junk = junk_probe(args.timeout)
-    (out / "lean_results.json").write_text(json.dumps({"records": recs, "junk_probe": junk}, ensure_ascii=False,
-                                                      indent=1), encoding="utf-8")
+    (out / "lean_results.json").write_text(json.dumps({"lean_available": lean_ok, "records": recs, "junk_probe": junk},
+                                                      ensure_ascii=False, indent=1), encoding="utf-8")
     md = "# F5 (Lean) taraması — modelsiz, deterministik ifade + Mathlib taktik merdiveni\n\n"
+    md += f"- Lean REPL (Mathlib) bu koşuda açıldı: **{'evet' if lean_ok else 'hayır'}**\n"
     md += f"- Öğe: **{n}** · Lean ifadesi üretilebilen: **{len(with_stmt)}** ({len(with_stmt)/n:.1%})\n"
     md += f"- Kanıtlanan: **{len(proved)}** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **{len(certified)}**\n"
     md += f"- **Yanlış cevaplı öğelerde kanıt (FP): {len(fp)}** {'✓ hedef 0' if not fp else '✗ ' + str([r['id'] for r in fp])}\n"
