@@ -8,6 +8,8 @@
 #   MATHVERIFY_LEAN_PROJECT   Mathlib project directory (default $HOME/mathverify-lean)
 #   MATHVERIFY_LEAN_REPL      REPL binary (default $HOME/repl/.lake/build/bin/repl); the REPL
 #                             checkout is the part before /.lake/build/bin/repl
+#   MATHVERIFY_ARTIFACT_DIR   directory filled by scripts/fetch_artifacts.sh; a missing REPL
+#                             checkout is taken from its lean-sources archive instead of cloned
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,19 +32,42 @@ expand_home() {
   esac
 }
 
-# Run a command with every proxy variable pointing at a closed local port, so a toolchain
-# download attempt fails instead of silently fetching (the toolchain is installed by setup_lean.sh
-# and the REPL has no dependencies).
+# Run a command with every proxy variable pointing at a closed local port and git limited to the
+# file transport, so a toolchain download or a git fetch fails instead of silently fetching (the
+# toolchain is installed by setup_lean.sh and the REPL has no dependencies).
 offline() {
   local p=http://127.0.0.1:9
   env HTTPS_PROXY=$p https_proxy=$p HTTP_PROXY=$p http_proxy=$p ALL_PROXY=$p all_proxy=$p \
-    NO_PROXY= no_proxy= "$@"
+    NO_PROXY= no_proxy= GIT_ALLOW_PROTOCOL=file "$@"
 }
+
+# git for this script's own checks (the checkout may belong to another user when root re-runs).
+gitq() { git -c safe.directory='*' "$@"; }
+
+TMPS=()
+cleanup() { [ "${#TMPS[@]}" -eq 0 ] || rm -rf "${TMPS[@]}"; }
+trap cleanup EXIT
 
 export ELAN_HOME
 ELAN_HOME="$(expand_home "${ELAN_HOME:-$HOME/.elan}")"
 export PATH="$ELAN_HOME/bin:$PATH"
 PROJ="$(expand_home "${MATHVERIFY_LEAN_PROJECT:-$HOME/mathverify-lean}")"
+ART=""
+[ -z "${MATHVERIFY_ARTIFACT_DIR:-}" ] || ART="$(expand_home "$MATHVERIFY_ARTIFACT_DIR")"
+# Same archive as in setup_lean.sh; its repl/ is a shallow checkout at REPL_REV, origin REPL_URL.
+SOURCES_ARCHIVE="lean-sources-${MATHLIB_REV:0:7}.tar.gz"
+
+# As in setup_lean.sh: succeed when the artifact directory holds file $1 and it matches its
+# SHA256SUMS.full entry (hard failure on a mismatch or a missing entry). Never call it in $(...).
+have_artifact() {
+  local name="$1" line
+  [ -n "$ART" ] && [ -f "$ART/$name" ] || return 1
+  [ -f "$ART/SHA256SUMS.full" ] || die "$ART has $name but no SHA256SUMS.full"
+  line="$(awk -v n="$name" '{f = $2; sub(/^\*/, "", f); if (f == n) print}' "$ART/SHA256SUMS.full")"
+  [ -n "$line" ] || die "$name is not listed in $ART/SHA256SUMS.full"
+  (cd "$ART" && printf '%s\n' "$line" | sha256sum -c --strict --quiet -) \
+    || die "SHA256 mismatch for $ART/$name"
+}
 REPL_BIN="$(expand_home "${MATHVERIFY_LEAN_REPL:-$HOME/repl/.lake/build/bin/repl}")"
 case "$REPL_BIN" in
   */.lake/build/bin/repl) REPL_DIR="${REPL_BIN%/.lake/build/bin/repl}" ;;
@@ -59,7 +84,26 @@ command -v elan >/dev/null 2>&1 || die "elan not found in $ELAN_HOME/bin; run sc
 step "REPL checkout $REPL_URL @ $REPL_REV"
 if [ ! -d "$REPL_DIR/.git" ]; then
   mkdir -p "$(dirname "$REPL_DIR")"
-  git clone -q "$REPL_URL" "$REPL_DIR"
+  if have_artifact "$SOURCES_ARCHIVE"; then
+    LOG "source: artifact $ART/$SOURCES_ARCHIVE"
+    # Extract next to the final location (one filesystem), check, then rename into place.
+    tmp="$(mktemp -d "$(dirname "$REPL_DIR")/.mathverify-repl.XXXXXX")"
+    TMPS+=("$tmp")
+    tar -xzf "$ART/$SOURCES_ARCHIVE" -C "$tmp" --no-same-owner repl
+    [ "$(gitq -C "$tmp/repl" rev-parse -q --verify HEAD)" = "$REPL_REV" ] \
+      || die "$SOURCES_ARCHIVE: repl/ is not at $REPL_REV"
+    [ "$(gitq -C "$tmp/repl" remote get-url origin)" = "$REPL_URL" ] \
+      || die "$SOURCES_ARCHIVE: repl/ origin is not $REPL_URL"
+    gitq -C "$tmp/repl" update-index -q --refresh >/dev/null 2>&1 || true
+    gitq -C "$tmp/repl" diff-index --quiet HEAD -- || die "$SOURCES_ARCHIVE: repl/ worktree differs from $REPL_REV"
+    # An empty directory (a mount point, say) is replaced; anything else is left to the user.
+    [ ! -d "$REPL_DIR" ] || rmdir "$REPL_DIR" 2>/dev/null \
+      || die "$REPL_DIR exists without a .git directory; move it away first"
+    mv "$tmp/repl" "$REPL_DIR"
+  else
+    LOG "source: online (git clone $REPL_URL)"
+    git clone -q "$REPL_URL" "$REPL_DIR"
+  fi
 fi
 cd "$REPL_DIR"
 if ! git cat-file -e "$REPL_REV^{commit}" 2>/dev/null; then

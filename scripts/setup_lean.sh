@@ -8,8 +8,10 @@
 #   ELAN_HOME                 elan home (default $HOME/.elan)
 #   MATHVERIFY_LEAN_PROJECT   project directory (default $HOME/mathverify-lean)
 #   MATHVERIFY_ARTIFACT_DIR   directory filled by scripts/fetch_artifacts.sh; each component found
-#                             there (elan, Lean toolchain, Mathlib .ltar cache) is installed
-#                             offline, anything missing is fetched online
+#                             there (elan, Lean toolchain, the Lake package sources, Mathlib .ltar
+#                             cache) is installed offline, anything missing is fetched online.
+#                             With the package sources and the .ltar cache both present, every
+#                             lake command runs with the network cut off (no git clone at all)
 #   MATHLIB_CACHE_DIR, XDG_CACHE_HOME
 #                             Mathlib .ltar cache location, resolved exactly as Mathlib's
 #                             Cache/IO.lean does (default $HOME/.cache/mathlib)
@@ -57,6 +59,9 @@ LEAN_ARCHIVE="lean-$LEAN_VERSION-linux.tar.zst"
 [ "$ARCH" = x86_64 ] || LEAN_ARCHIVE="lean-$LEAN_VERSION-linux_$ARCH.tar.zst"
 LEAN_TOPDIR="${LEAN_ARCHIVE%.tar.zst}"
 MATHLIB_ARCHIVE="mathlib-cache-${MATHLIB_REV:0:7}.tar"
+# Shallow git checkouts of the lake-manifest.json packages (packages/<name>/) and of the REPL
+# (repl/, used by setup_lean_repl.sh), each at its pinned revision with origin = the pinned URL.
+SOURCES_ARCHIVE="lean-sources-${MATHLIB_REV:0:7}.tar.gz"
 # Standalone CPython shipped with the artifacts; only a fallback zstd decompressor here.
 PY_ARCHIVE="cpython-3.14.6-$ARCH-unknown-linux-gnu-install_only_stripped.tar.gz"
 PROJECT_FILES=(lakefile.toml lean-toolchain lake-manifest.json MathverifyLean.lean MathverifyLean/Basic.lean)
@@ -72,12 +77,45 @@ mktmp() {
   printf -v "$1" '%s' "$_d"
 }
 
-# Run a command with every proxy variable pointing at a closed local port: any download attempt
-# (elan, curl) fails at once. Used to prove that an artifact install needs no network.
+# Run a command with every proxy variable pointing at a closed local port and git limited to the
+# file transport: any download attempt (elan, curl, a git clone or fetch by lake) fails at once.
+# Used to prove that an artifact install needs no network.
 offline() {
   local p=http://127.0.0.1:9
   env HTTPS_PROXY=$p https_proxy=$p HTTP_PROXY=$p http_proxy=$p ALL_PROXY=$p all_proxy=$p \
-    NO_PROXY= no_proxy= "$@"
+    NO_PROXY= no_proxy= GIT_ALLOW_PROTOCOL=file "$@"
+}
+
+# git for this script's own checks: it reads package checkouts that may belong to another user
+# (a root re-run over a user install), where plain git refuses with "dubious ownership".
+gitq() { git -c safe.directory='*' "$@"; }
+
+# The packages pinned in lake-manifest.json ($1), one "name url rev" line each. Only git
+# packages without a subDir are supported (all nine are); anything else is a hard failure.
+manifest_packages() {
+  local n_type n_git out
+  n_type="$(grep -c '"type":' "$1" || true)"
+  n_git="$(grep -c '"type": "git"' "$1" || true)"
+  [ "$n_type" = "$n_git" ] || die "$1: only git packages are supported ($n_git of $n_type)"
+  if grep '"subDir":' "$1" | grep -qv '"subDir": null'; then
+    die "$1: packages with a subDir are not supported"
+  fi
+  out="$(awk -F'"' '/"url":/ {url = $4} /"rev":/ {rev = $4}
+    /"name":/ && rev != "" {print $4, url, rev; rev = ""; url = ""}' "$1")"
+  [ "$(printf '%s\n' "$out" | grep -c .)" = "$n_type" ] || die "$1: could not read $n_type packages"
+  printf '%s\n' "$out"
+}
+
+# Hard failure unless the git checkout $1 has HEAD = $3, origin = $2 and a worktree equal to HEAD
+# (the index is refreshed first, so extracted files are compared by content).
+verify_checkout() {
+  local d="$1" url="$2" rev="$3" head origin
+  head="$(gitq -C "$d" rev-parse -q --verify HEAD)" || die "$d: no HEAD"
+  [ "$head" = "$rev" ] || die "$d: HEAD $head, pinned $rev"
+  origin="$(gitq -C "$d" remote get-url origin)" || die "$d: no origin remote"
+  [ "$origin" = "$url" ] || die "$d: origin $origin, pinned $url"
+  gitq -C "$d" update-index -q --refresh >/dev/null 2>&1 || true
+  gitq -C "$d" diff-index --quiet HEAD -- || die "$d: worktree differs from $rev"
 }
 
 # Succeed when MATHVERIFY_ARTIFACT_DIR holds file $1, after checking it against the directory's
@@ -240,6 +278,47 @@ install_project_files() {
   step_done
 }
 
+# Lake clones every package of lake-manifest.json that is missing from .lake/packages (from
+# github.com; mathlib4 alone brings ~500 MB of history). A checkout whose HEAD already is the
+# manifest revision is used as it is, with no git network access (Lake's
+# PackageEntry.materialize), so the sources artifact provides one shallow checkout per package,
+# origin set to the manifest URL. Checkouts already at their revision are kept; any other content
+# of a package directory is replaced. SOURCES=1: every package came from, or already matched, it.
+SOURCES=0
+install_sources() {
+  step "Lake package sources -> $PROJ/.lake/packages"
+  if ! have_artifact "$SOURCES_ARCHIVE"; then
+    LOG "source: online (lake clones the packages from their manifest URLs)"
+    step_done
+    return 0
+  fi
+  LOG "source: artifact $ART/$SOURCES_ARCHIVE"
+  local d pkgs name url rev pkg kept=0 added=0
+  pkgs="$(manifest_packages "$ROOT/lean/lake-manifest.json")"
+  mkdir -p "$PROJ/.lake/packages"
+  # Extract next to the final location (one filesystem), then rename each package into place.
+  mktmp d "$PROJ/.lake"
+  tar -xzf "$ART/$SOURCES_ARCHIVE" -C "$d" --no-same-owner packages
+  while read -r name url rev; do
+    pkg="$PROJ/.lake/packages/$name"
+    if [ -d "$pkg/.git" ] && [ "$(gitq -C "$pkg" rev-parse -q --verify HEAD 2>/dev/null)" = "$rev" ]; then
+      kept=$((kept + 1))
+      continue
+    fi
+    [ -d "$d/packages/$name/.git" ] || die "$SOURCES_ARCHIVE has no packages/$name"
+    verify_checkout "$d/packages/$name" "$url" "$rev"
+    if [ -e "$pkg" ]; then
+      LOG "$name: replacing $pkg (HEAD $(gitq -C "$pkg" rev-parse -q --verify HEAD 2>/dev/null || echo none))"
+      rm -rf "$pkg"
+    fi
+    mv "$d/packages/$name" "$pkg"
+    added=$((added + 1))
+  done <<< "$pkgs"
+  SOURCES=1
+  LOG "$added package(s) installed from the artifact, $kept already at their revision"
+  step_done
+}
+
 # With the .ltar archive from the artifacts the cache is complete for MATHLIB_REV (only what the
 # server lacks too is missing), so `cache unpack` is used: it never contacts the cache server.
 # Without it, `cache get` downloads from the Mathlib cache server.
@@ -261,17 +340,30 @@ install_mathlib_ltar() {
   step_done
 }
 
+# With the package sources and the .ltar cache both from the artifacts, every lake command below
+# runs offline: a clone or a download attempt fails loudly instead of silently using the network.
+LAKE_RUN=()
 cache_fetch() {
-  step "lake exe cache $CACHE_CMD (clones the pinned dependencies, unpacks .ltar into oleans)"
-  local before after rc
+  local before after rc d
+  if [ "$SOURCES" = 1 ] && [ "$CACHE_CMD" = unpack ]; then
+    LAKE_RUN=(offline)
+    step "lake exe cache unpack (offline: packages and .ltar from the artifacts; unpacks .ltar into oleans)"
+  else
+    step "lake exe cache $CACHE_CMD (clones missing packages, fetches missing .ltar, unpacks .ltar into oleans)"
+  fi
+  mktmp d
   before="$(count_ltar "$CACHE_DIR")"
   cd "$PROJ"
   set +e
-  lake exe cache "$CACHE_CMD" 2>&1 | tr '\r' '\n' | grep --line-buffered -v -E '^[[:space:]]*$'
+  "${LAKE_RUN[@]}" lake exe cache "$CACHE_CMD" 2>&1 | tr '\r' '\n' \
+    | grep --line-buffered -v -E '^[[:space:]]*$' | tee "$d/cache.log"
   rc=${PIPESTATUS[0]}
   set -e
   after="$(count_ltar "$CACHE_DIR")"
-  LOG "cache $CACHE_CMD exit code $rc; .ltar downloaded: $((after - before))"
+  LOG "cache $CACHE_CMD exit code $rc; .ltar downloaded: $((after - before)); lake clones: $(grep -c ': cloning ' "$d/cache.log" || true)"
+  if [ "$SOURCES" = 1 ] && grep -q ': cloning ' "$d/cache.log"; then
+    die "lake cloned a package although $SOURCES_ARCHIVE provided all of them"
+  fi
   # A failed download is not fatal by itself: the olean check and the smoke test below decide.
   [ "$rc" -eq 0 ] || LOG "WARNING: lake exe cache $CACHE_CMD failed (exit $rc); checking the build state"
   step_done
@@ -282,16 +374,22 @@ check_pins() {
   cd "$PROJ"
   cmp -s "$ROOT/lean/lake-manifest.json" lake-manifest.json \
     || die "lake-manifest.json differs from the pinned lean/lake-manifest.json (changed by lake?)"
-  local name rev head n=0
-  while read -r name rev; do
-    head="$(git -C ".lake/packages/$name" rev-parse HEAD 2>/dev/null)" || die "package $name is missing"
+  local pkgs name url rev head origin n=0 shallow=0
+  pkgs="$(manifest_packages lake-manifest.json)"
+  while read -r name url rev; do
+    [ -d ".lake/packages/$name/.git" ] || die "package $name is missing"
+    head="$(gitq -C ".lake/packages/$name" rev-parse HEAD 2>/dev/null)" || die "package $name has no HEAD"
     [ "$head" = "$rev" ] || die "package $name is at $head, manifest pins $rev"
+    # Lake deletes and clones again a package whose origin differs from the manifest URL.
+    origin="$(gitq -C ".lake/packages/$name" remote get-url origin 2>/dev/null)" || die "package $name has no origin"
+    [ "$origin" = "$url" ] || die "package $name has origin $origin, manifest URL $url"
+    [ "$(gitq -C ".lake/packages/$name" rev-parse --is-shallow-repository)" = false ] || shallow=$((shallow + 1))
     n=$((n + 1))
-  done < <(awk -F'"' '/"rev":/ {rev = $4} /"name":/ && rev != "" {print $4, rev; rev = ""}' lake-manifest.json)
+  done <<< "$pkgs"
   [ "$n" -gt 0 ] || die "no packages read from lake-manifest.json"
-  head="$(git -C .lake/packages/mathlib rev-parse HEAD)"
+  head="$(gitq -C .lake/packages/mathlib rev-parse HEAD)"
   [ "$head" = "$MATHLIB_REV" ] || die "mathlib HEAD $head != MATHLIB_REV $MATHLIB_REV"
-  LOG "$n package(s) at their manifest revisions; mathlib HEAD = MATHLIB_REV = $MATHLIB_REV"
+  LOG "$n package(s) at their manifest revisions with origin = manifest URL ($shallow shallow); mathlib HEAD = MATHLIB_REV = $MATHLIB_REV"
   step_done
 }
 
@@ -322,7 +420,7 @@ build_root_if_missing() {
   if [ "${#missing[@]}" -gt 0 ] || [ ! -f "$MATHLIB_LIB/Mathlib.olean" ]; then
     LOG "building the missing modules (lake build Mathlib)"
     set +e
-    lake build Mathlib 2>&1 | tr '\r' '\n' | grep --line-buffered -v -E '^[[:space:]]*$' | tail -n 8
+    "${LAKE_RUN[@]}" lake build Mathlib 2>&1 | tr '\r' '\n' | grep --line-buffered -v -E '^[[:space:]]*$' | tail -n 8
     rc=${PIPESTATUS[0]}
     set -e
     [ "$rc" -eq 0 ] || die "lake build Mathlib failed (exit $rc)"
@@ -379,7 +477,7 @@ import Mathlib
 theorem smoke (x : ℝ) (h : x = 2) : x + 2 = 4 := by subst h; norm_num
 #print axioms smoke
 LEAN
-  out="$(lake env lean "$d/Smoke.lean" 2>&1)" || { printf '%s\n' "$out"; die "smoke test failed"; }
+  out="$("${LAKE_RUN[@]}" lake env lean "$d/Smoke.lean" 2>&1)" || { printf '%s\n' "$out"; die "smoke test failed"; }
   printf '%s\n' "$out"
   case "$out" in *sorryAx*) die "smoke proof depends on sorryAx" ;; esac
   case "$out" in *"depends on axioms"*) ;; *) die "smoke test printed no axiom list" ;; esac
@@ -398,6 +496,7 @@ main() {
   install_elan
   install_toolchain
   install_project_files
+  install_sources
   install_mathlib_ltar
   cache_fetch
   check_pins
@@ -410,7 +509,7 @@ main() {
   fi
   smoke_test
   LOG "disk: $(du -sh "$ELAN_HOME" | cut -f1) $ELAN_HOME; $(du -sh "$PROJ" | cut -f1) $PROJ; $(du -sh "$CACHE_DIR" | cut -f1) $CACHE_DIR"
-  LOG "DONE in $(( $(date +%s) - T0 ))s"
+  LOG "DONE in $(( $(date +%s) - T0 ))s (lake ran offline: $([ "${#LAKE_RUN[@]}" -gt 0 ] && echo yes || echo no))"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

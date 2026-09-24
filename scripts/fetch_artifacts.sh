@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 # Fetch the offline tool artifacts used by cloud sessions (Lean toolchain, elan, the Mathlib .ltar
-# cache and a standalone CPython), reassemble the split parts and verify every file against
-# SHA256SUMS.full. The cloud GitHub proxy blocks release assets of repositories that are not
-# attached to the session, so these files live in this repository under a non-branch git ref.
+# cache, the Lake package and REPL sources, a standalone CPython), reassemble the split parts and
+# verify every file against SHA256SUMS.full. The cloud GitHub proxy blocks release assets of
+# repositories that are not attached to the session, so these files live in this repository under
+# a non-branch git ref.
 #
 # Usage: scripts/fetch_artifacts.sh [DEST]
 #   DEST   defaults to ${MATHVERIFY_ARTIFACT_DIR:-$HOME/.cache/mathverify/arac}
 # Source (first match wins):
 #   MATHVERIFY_ARTIFACT_SRC   local directory holding parts/ and SHA256SUMS.full (offline use)
-#   otherwise a shallow fetch of ${MATHVERIFY_ARTIFACT_REF:-refs/arac/bulut-v1} from
-#   ${MATHVERIFY_ARTIFACT_URL:-<origin remote of this repository>}
+#   otherwise ${MATHVERIFY_ARTIFACT_REF:-refs/arac/bulut-v2} from
+#   ${MATHVERIFY_ARTIFACT_URL:-<origin remote of this repository>}, fetched
+#     1. shallow into a fresh temporary repository that carries this checkout's repo-local
+#        http.*, credential.* and url.* settings; if that fails,
+#     2. by `git fetch` run inside this checkout (its remotes, full config and credentials), with
+#        the received objects written to the temporary object store instead of the checkout's,
+#        which serves only as an alternate: no ref, FETCH_HEAD or object is added to the checkout.
 # Idempotent: when DEST already verifies against its SHA256SUMS.full and was produced from the
 # same source (same ref name, or a byte-identical SHA256SUMS.full for a local source), nothing is
-# fetched. A ref is never rewritten in place; new content gets a new ref name (bulut-v2, ...).
+# fetched. A ref is never rewritten in place; new content gets a new ref name (bulut-v3, ...).
 set -euo pipefail
 export LC_ALL=C
 
@@ -22,7 +28,7 @@ die() { LOG "ERROR: $*" >&2; exit 1; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="${1:-${MATHVERIFY_ARTIFACT_DIR:-$HOME/.cache/mathverify/arac}}"
-REF="${MATHVERIFY_ARTIFACT_REF:-refs/arac/bulut-v1}"
+REF="${MATHVERIFY_ARTIFACT_REF:-refs/arac/bulut-v2}"
 SRC="${MATHVERIFY_ARTIFACT_SRC:-}"
 
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum not found"
@@ -51,10 +57,30 @@ if dest_verifies; then
   exit 0
 fi
 
-# Work inside DEST so the final moves stay on one filesystem.
+# Work inside DEST so the final moves stay on one filesystem. mktemp -d makes it private (0700):
+# the temporary repository may hold copied credential settings.
 WORK="$(mktemp -d "$DEST/.fetch.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/out"
+
+# git on this checkout. safe.directory (these commands only): the setup script may run as root on
+# a checkout owned by another user, where git refuses to read the repository otherwise.
+rgit() { git -c safe.directory='*' -C "$ROOT" "$@"; }
+
+# Copy this checkout's repo-local http.*, credential.* and url.* settings (including files that
+# its .git/config includes) into the git directory $1: a proxy, an extra header or a URL rewrite
+# configured for this clone only. Global and system settings apply to $1 anyway. Values are never
+# printed: they may hold tokens.
+copy_git_config() {
+  local rec key val n=0
+  while IFS= read -r -d '' rec; do
+    key="${rec%%$'\n'*}"
+    if [ "$key" = "$rec" ]; then val=true; else val="${rec#*$'\n'}"; fi
+    git --git-dir="$1" config --add "$key" "$val"
+    n=$((n + 1))
+  done < <(rgit config --local --includes --null --get-regexp '^(http|credential|url)\.' 2>/dev/null || true)
+  LOG "copied $n repo-local http/credential/url setting(s) from $ROOT"
+}
 
 if [ -n "$SRC" ]; then
   cp "$SRC/SHA256SUMS.full" "$WORK/out/SHA256SUMS.full"
@@ -63,23 +89,40 @@ if [ -n "$SRC" ]; then
   COMMIT=""
 else
   URL="${MATHVERIFY_ARTIFACT_URL:-}"
+  REMOTE="$URL"
   if [ -z "$URL" ]; then
-    # safe.directory (this one command only): the setup script may run as root on a checkout
-    # owned by another user, where git refuses to read the repository otherwise.
-    URL="$(git -c safe.directory='*' -C "$ROOT" remote get-url origin)" \
-      || die "no MATHVERIFY_ARTIFACT_URL and no origin remote in $ROOT"
+    URL="$(rgit remote get-url origin)" || die "no MATHVERIFY_ARTIFACT_URL and no origin remote in $ROOT"
+    REMOTE=origin
   fi
   G="$WORK/git"
-  git init -q "$G"
+  git init -q --bare "$G"
+  # Keep the received pack as it is: below fetch.unpackLimit (default 100 objects; the ref has
+  # fewer) git would inflate every part into a loose object and compress it again.
+  FETCH=(-c fetch.unpackLimit=1 -c transfer.unpackLimit=1 -c gc.auto=0 -c maintenance.auto=false fetch -q --no-tags)
   t=$(date +%s)
-  LOG "git fetch --depth 1 $REF"
-  git -C "$G" fetch -q --depth 1 --no-tags "$URL" "$REF" \
-    || die "git fetch of $REF failed (is the ref pushed and readable with these credentials?)"
-  COMMIT="$(git -C "$G" rev-parse FETCH_HEAD)"
+  COMMIT=""
+  if rgit rev-parse --git-dir >/dev/null 2>&1; then copy_git_config "$G"; fi
+  LOG "git fetch --depth 1 $REF into a fresh repository"
+  if GIT_TERMINAL_PROMPT=0 git --git-dir="$G" "${FETCH[@]}" --depth 1 "$URL" "$REF"; then
+    COMMIT="$(git --git-dir="$G" rev-parse FETCH_HEAD)"
+  else
+    LOG "fresh-repository fetch failed; fetching $REF from $REMOTE inside $ROOT"
+    rgit rev-parse --git-dir >/dev/null 2>&1 || die "git fetch of $REF failed and $ROOT is not a git checkout"
+    COMMIT="$(rgit ls-remote "$REMOTE" "$REF" | awk -v r="$REF" '$2 == r {print $1}')" \
+      || die "git ls-remote $REMOTE $REF failed"
+    [ -n "$COMMIT" ] || die "$REF not found on $REMOTE (is the ref pushed and readable with these credentials?)"
+    # Objects go to $G; the checkout's own store is only read (alternate, for negotiation).
+    # --refmap= and --no-write-fetch-head: no ref or FETCH_HEAD of the checkout is touched.
+    GOBJ="$(git --git-dir="$G" rev-parse --path-format=absolute --git-path objects)"
+    rgit rev-parse --path-format=absolute --git-path objects > "$GOBJ/info/alternates"
+    GIT_OBJECT_DIRECTORY="$GOBJ" rgit "${FETCH[@]}" --refmap= --no-write-fetch-head "$REMOTE" "$REF" \
+      || die "git fetch of $REF failed both ways (is the ref pushed and readable with these credentials?)"
+    git --git-dir="$G" cat-file -e "$COMMIT^{commit}" || die "fetched objects lack commit $COMMIT"
+  fi
   LOG "fetched commit $COMMIT in $(( $(date +%s) - t ))s ($(du -sh "$G" | cut -f1) of git objects)"
-  git -C "$G" show "$COMMIT:SHA256SUMS.full" > "$WORK/out/SHA256SUMS.full"
-  list_parts() { git -C "$G" ls-tree --name-only "$COMMIT" parts/ | sed 's|^parts/||' | grep -F -- "$1.part-" | sort; }
-  cat_part() { git -C "$G" cat-file blob "$COMMIT:parts/$1"; }
+  git --git-dir="$G" show "$COMMIT:SHA256SUMS.full" > "$WORK/out/SHA256SUMS.full"
+  list_parts() { git --git-dir="$G" ls-tree --name-only "$COMMIT" parts/ | sed 's|^parts/||' | grep -F -- "$1.part-" | sort; }
+  cat_part() { git --git-dir="$G" cat-file blob "$COMMIT:parts/$1"; }
 fi
 
 t=$(date +%s)

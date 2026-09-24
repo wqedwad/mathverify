@@ -21,5 +21,18 @@ Sabitler:
   bu revizyonun kendi `lean-toolchain`'i `v4.35.0-rc2` der, `scripts/setup_lean_repl.sh` onu
   `LEAN_TOOLCHAIN` ile değiştirir (WSL kurulumunda da yerel değişiklik olarak böyledir).
 
+Bulut araç ref'i (`scripts/fetch_artifacts.sh`, varsayılan `refs/arac/bulut-v2`) bu sabitlere
+göre üretilmiş dosyaları taşır: Lean araç zinciri, elan, CPython, Mathlib `.ltar` önbelleği
+(`mathlib-cache-5ed2965.tar`) ve `lean-sources-5ed2965.tar.gz`. Sonuncusu `lake-manifest.json`'daki
+9 paketin (`packages/<ad>/`) ve REPL'in (`repl/`) sığ git checkout'larıdır: her birinde HEAD sabit
+revizyon, `origin` manifest URL'sidir (URL'si farklı görünen ya da git'i hata veren paketi Lake
+silip yeniden klonlar). `setup_lean.sh` paketleri `lake exe cache unpack`'ten önce
+`.lake/packages/` altına, `setup_lean_repl.sh` REPL'i klonlamak yerine açar. Kaynaklar ve `.ltar`
+önbelleği birlikte varken bütün lake komutları ağ kesik (`offline`: vekiller kapalı porta,
+`GIT_ALLOW_PROTOCOL=file`) çalışır ve Lake'in bir paketi klonlaması kurulumu düşürür; kaynak
+arşivi yoksa paketler eskisi gibi GitHub'dan klonlanır. `check_pins` her paketin HEAD'ini ve
+`origin`'ini manifestle karşılaştırır.
+
 Bu dosyalar elle düzenlenmez. Sürüm yükseltmesi yeni bir WSL kurulumundan yeniden kopyalanarak,
-`PINS` ve bulut araç ref'i (`refs/arac/bulut-v*`) birlikte güncellenerek yapılır.
+`PINS` ve bulut araç ref'i (`refs/arac/bulut-v*`) birlikte güncellenerek yapılır. Bir ref yerinde
+yeniden yazılmaz; yeni içerik yeni bir ad alır ve `fetch_artifacts.sh`'teki varsayılan ref değişir.
