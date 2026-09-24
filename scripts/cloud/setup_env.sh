@@ -18,6 +18,15 @@
 # and, as root, /etc/profile.d/mathverify.sh (ELAN_HOME, MATHVERIFY_LEAN_PROJECT,
 # MATHVERIFY_LEAN_REPL, MATHVERIFY_OPT, PATH).
 #
+# Everything is installed from the artifacts (scripts/fetch_artifacts.sh); only the uv prewarm
+# uses the network (PyPI). The Python and Lean stages run only when the fetch succeeded and the
+# artifact directory verifies against its SHA256SUMS.full; otherwise they are skipped
+# (setup_env.status: FAILED ... reason=fetch|artifacts) and an existing install is not touched.
+# The Lean scripts run in strict offline mode (MATHVERIFY_LEAN_OFFLINE=1): they refuse every
+# online fallback (toolchain download, `lake exe cache get`, clones) instead of trying it. The
+# Mathlib .ltar go to $OPT/.mathlib-ltar, removed after the Lean stages (the oleans are unpacked
+# by then), and pip keeps no cache, so the snapshot holds no leftover download cache.
+#
 # Usage: setup_env.sh [--lean-only | --python-only]
 # Environment: MATHVERIFY_OPT, MATHVERIFY_ARTIFACT_SRC / _URL / _REF (see fetch_artifacts.sh),
 #   MATHVERIFY_REPO_URL (clone fallback, default https://github.com/wqedwad/asd),
@@ -165,6 +174,7 @@ PROJ="$OPT/mathverify-lean"
 REPL_BIN="$OPT/repl/.lake/build/bin/repl"
 LEAN_MARK="$LOGDIR/lean.done"
 PREWARM_MARK="$LOGDIR/uv-prewarm.done"
+LTAR_DIR="$OPT/.mathlib-ltar"
 
 sha_of() { sha256sum "$@" 2>/dev/null | awk '{print $1}' | sha256sum | awk '{print $1}'; }
 # The Lean install is defined by the pinned files in lean/ (README.md excluded).
@@ -182,6 +192,19 @@ prewarm_fingerprint() {
 lean_ok() {
   [ -x "$REPL_BIN" ] && [ -d "$PROJ" ] && [ -f "$LEAN_MARK" ] \
     && [ "$(cat "$LEAN_MARK" 2>/dev/null)" = "$(lean_fingerprint)" ]
+}
+# ready | stale (a finished install made from other lean/ pins) | missing
+lean_state() {
+  if lean_ok; then echo ready
+  elif [ -x "$REPL_BIN" ] && [ -d "$PROJ" ] && [ -f "$LEAN_MARK" ]; then echo stale
+  else echo missing
+  fi
+}
+# The fetched artifact directory is complete: every file of its SHA256SUMS.full is present and
+# matches (fetch_artifacts.sh checked it too; this guards the stages against anything else).
+art_verifies() {
+  [ -f "$ART/SHA256SUMS.full" ] && [ -s "$ART/SHA256SUMS.full" ] \
+    && (cd "$ART" && sha256sum -c --strict --quiet SHA256SUMS.full)
 }
 
 STAGES_FILE="$LOGDIR/stages.$$"
@@ -203,6 +226,12 @@ run_stage() {
   echo "$name $rc $(( $(date +%s) - t ))" >>"$STAGES_FILE"
   return "$rc"
 }
+# skip_stage NAME WHY: record NAME as failed without running it (its log says why).
+skip_stage() {
+  loud "stage $1: SKIPPED, $2"
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] skipped: $2" >"$LOGDIR/$1.log"
+  echo "$1 1 skipped" >>"$STAGES_FILE"
+}
 
 find_uv() {
   local c
@@ -211,7 +240,8 @@ find_uv() {
     if [ -n "$c" ] && [ -x "$c" ]; then printf '%s\n' "$c"; return 0; fi
   done
   # Last resort: uv from PyPI (allowed by the cloud network policy) with the artifact Python.
-  if [ -x "$PY" ] && "$PY" -m venv "$OPT/uv-tool" >&2 && "$OPT/uv-tool/bin/python" -m pip install -q uv >&2; then
+  if [ -x "$PY" ] && "$PY" -m venv "$OPT/uv-tool" >&2 \
+     && "$OPT/uv-tool/bin/python" -m pip install -q --no-cache-dir uv >&2; then
     printf '%s\n' "$OPT/uv-tool/bin/uv"; return 0
   fi
   return 1
@@ -264,9 +294,13 @@ stage_prewarm() {
   return "$rc"
 }
 
+# Strict offline mode: a missing artifact stops the Lean scripts at once instead of sending them
+# to the network (a `lake exe cache get` against cache.mathlib.org hung for >24 min, holding the
+# setup lock). The .ltar cache goes to $LTAR_DIR, removed after the Lean stages.
 stage_lean_env() {
   env ELAN_HOME="$ELAN" MATHVERIFY_LEAN_PROJECT="$PROJ" MATHVERIFY_LEAN_REPL="$REPL_BIN" \
-      MATHVERIFY_ARTIFACT_DIR="$ART" MATHVERIFY_OPT="$OPT" "$@"
+      MATHVERIFY_ARTIFACT_DIR="$ART" MATHVERIFY_OPT="$OPT" MATHVERIFY_LEAN_OFFLINE=1 \
+      MATHLIB_CACHE_DIR="$LTAR_DIR" "$@"
 }
 stage_lean() { stage_lean_env bash "$REPO/scripts/setup_lean.sh"; }
 stage_lean_repl() { stage_lean_env bash "$REPO/scripts/setup_lean_repl.sh"; }
@@ -287,12 +321,31 @@ if [ "$MODE" != python ]; then
 fi
 log "plan: python=$NEED_PY uv-prewarm=$NEED_PREWARM lean=$NEED_LEAN (1 = to do)"
 
-FETCHED=""
+# The Python and Lean stages install only from a fetched, verified artifact directory. Without
+# one they are skipped: an existing install stays exactly as it is, and nothing falls back to the
+# network (REASON goes into setup_env.status).
+FETCHED=""; ART_OK=""; REASON=""
 if [ "$NEED_PY" = 1 ] || [ "$NEED_LEAN" = 1 ]; then
-  if run_stage fetch_artifacts stage_fetch; then FETCHED=1; fi
+  if run_stage fetch_artifacts stage_fetch; then
+    FETCHED=1
+    t=$(date +%s)
+    if art_verifies >/dev/null 2>&1; then
+      ART_OK=1
+      log "artifacts in $ART verified against SHA256SUMS.full in $(( $(date +%s) - t ))s"
+    else
+      REASON=artifacts
+      loud "$ART does not verify against its SHA256SUMS.full"
+    fi
+  else
+    REASON=fetch
+  fi
 fi
 if [ "$NEED_PY" = 1 ]; then
-  run_stage python stage_python
+  if [ -n "$ART_OK" ]; then
+    run_stage python stage_python
+  else
+    skip_stage python "no verified artifacts (reason=$REASON)"
+  fi
 fi
 
 pids=()
@@ -301,18 +354,26 @@ if [ "$NEED_PREWARM" = 1 ]; then
     run_stage uv_prewarm stage_prewarm &
     pids+=("$!")
   else
-    loud "stage uv_prewarm: skipped, Python $PY_VERSION is not installed"
-    echo "uv_prewarm 1 0" >>"$STAGES_FILE"
+    skip_stage uv_prewarm "Python $PY_VERSION is not installed"
   fi
 fi
 if [ "$NEED_LEAN" = 1 ]; then
-  (
-    run_stage setup_lean stage_lean && run_stage setup_lean_repl stage_lean_repl \
-      && lean_fingerprint >"$LEAN_MARK"
-  ) &
-  pids+=("$!")
+  if [ -n "$ART_OK" ]; then
+    (
+      run_stage setup_lean stage_lean && run_stage setup_lean_repl stage_lean_repl \
+        && lean_fingerprint >"$LEAN_MARK"
+    ) &
+    pids+=("$!")
+  else
+    skip_stage setup_lean "no verified artifacts (reason=$REASON); the Lean install in $OPT is left as it is"
+    skip_stage setup_lean_repl "no verified artifacts (reason=$REASON)"
+  fi
 fi
 for p in "${pids[@]}"; do wait "$p"; done
+if [ -d "$LTAR_DIR" ]; then
+  log "removing $LTAR_DIR ($(find "$LTAR_DIR" -name '*.ltar' | wc -l) .ltar, $(du -sh "$LTAR_DIR" | cut -f1)): only the input of \`lake exe cache unpack\`; lean.done $([ -f "$LEAN_MARK" ] && echo written || echo 'not written')"
+  rm -rf "$LTAR_DIR"
+fi
 
 # Make everything usable by a non-root session user (the session user is not known here).
 for d in "$OPT/python3.14" "$UV_CACHE" "$OPT/uv-tool" "$ELAN" "$PROJ" "$OPT/repl" "$LOGDIR"; do
@@ -337,7 +398,7 @@ EOF
 fi
 
 FAILED="$(awk '$2 != 0 {printf "%s ", $1}' "$STAGES_FILE")"
-DONE_STAGES="$(awk '{printf "%s(%ss) ", $1, $3}' "$STAGES_FILE")"
+DONE_STAGES="$(awk '{printf "%s(%s) ", $1, ($3 ~ /^[0-9]+$/ ? $3 "s" : $3)}' "$STAGES_FILE")"
 rm -f "$STAGES_FILE"
 if [ -z "$FAILED" ]; then
   if [ -n "$FETCHED" ] && [ "$ART" = "$OPT/arac" ]; then
@@ -351,8 +412,8 @@ fi
 [ -z "$CLONED" ] || rm -rf "$CLONED"
 TOTAL=$(( $(date +%s) - T0 ))
 python_ok && PYS="$PY_VERSION" || PYS=missing
-lean_ok && LEANS=ready || LEANS=missing
-LINE="$STATUS mode=$MODE failed=[${FAILED% }] stages=[${DONE_STAGES% }] python=$PYS lean=$LEANS total=${TOTAL}s"
+LEANS="$(lean_state)"
+LINE="$STATUS mode=$MODE failed=[${FAILED% }] stages=[${DONE_STAGES% }]${REASON:+ reason=$REASON} python=$PYS lean=$LEANS total=${TOTAL}s"
 echo "$LINE" >"$STATUS_FILE"
 chmod a+rw "$STATUS_FILE" 2>/dev/null
 if [ "$STATUS" = OK ]; then log "FINAL: $LINE"; else loud "FINAL: $LINE (see $LOGDIR)"; fi

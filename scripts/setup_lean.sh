@@ -12,11 +12,24 @@
 #                             cache) is installed offline, anything missing is fetched online.
 #                             With the package sources and the .ltar cache both present, every
 #                             lake command runs with the network cut off (no git clone at all)
+#   MATHVERIFY_LEAN_OFFLINE=1 strict offline mode (scripts/cloud/setup_env.sh always sets it):
+#                             every online fallback is refused (elan or toolchain download,
+#                             `lake exe cache get`, a Lake clone, apt-get), so a missing artifact
+#                             stops the script before it writes anything, within seconds
 #   MATHLIB_CACHE_DIR, XDG_CACHE_HOME
 #                             Mathlib .ltar cache location, resolved exactly as Mathlib's
-#                             Cache/IO.lean does (default $HOME/.cache/mathlib)
+#                             Cache/IO.lean does (default $HOME/.cache/mathlib). When the .ltar
+#                             come from the artifacts and MATHLIB_CACHE_DIR is unset, they are
+#                             extracted into a temporary cache directory next to the project,
+#                             removed on exit (the oleans are unpacked by then; ~450 MB saved)
 #   MATHVERIFY_OPT            cloud install prefix (default /opt); only used to find
 #                             $MATHVERIFY_OPT/python3.14 as a zstd decompressor
+#
+# Every artifact this run needs is verified (SHA256SUMS.full) before anything is written. An
+# existing project directory is then completed in place only when it already holds the pinned
+# project files and package revisions (the remaining work only adds oleans); otherwise the new
+# project is built in a staging directory next to it and replaces it only after its smoke test
+# passed, so a failed run never leaves a working install half rewritten.
 # Sourcing this file only defines the helpers; running it performs the setup.
 set -euo pipefail
 
@@ -46,7 +59,11 @@ PROJ="$(expand_home "${MATHVERIFY_LEAN_PROJECT:-$HOME/mathverify-lean}")"
 ART=""
 [ -z "${MATHVERIFY_ARTIFACT_DIR:-}" ] || ART="$(expand_home "$MATHVERIFY_ARTIFACT_DIR")"
 OPT="${MATHVERIFY_OPT:-/opt}"
+OFFLINE="${MATHVERIFY_LEAN_OFFLINE:-0}"
+case "$OFFLINE" in 0|1) ;; *) die "MATHVERIFY_LEAN_OFFLINE must be 0 or 1 (got $OFFLINE)" ;; esac
 export PATH="$ELAN_HOME/bin:$PATH"
+# The directory this run builds the project in: $PROJ, or a staging directory (choose_workdir).
+WORK="$PROJ"
 
 ARCH="$(uname -m)"
 LEAN_VERSION="${LEAN_TOOLCHAIN##*:v}"
@@ -86,6 +103,11 @@ offline() {
     NO_PROXY= no_proxy= GIT_ALLOW_PROTOCOL=file "$@"
 }
 
+# Strict offline mode: an online fallback was about to run. Never call it inside $(...).
+refuse_online() {
+  die "offline mode (MATHVERIFY_LEAN_OFFLINE=1): $*; refusing the online fallback. Fetch the artifacts first (scripts/fetch_artifacts.sh) or run without MATHVERIFY_LEAN_OFFLINE=1"
+}
+
 # git for this script's own checks: it reads package checkouts that may belong to another user
 # (a root re-run over a user install), where plain git refuses with "dubious ownership".
 gitq() { git -c safe.directory='*' "$@"; }
@@ -119,16 +141,31 @@ verify_checkout() {
 }
 
 # Succeed when MATHVERIFY_ARTIFACT_DIR holds file $1, after checking it against the directory's
-# SHA256SUMS.full (hard failure on a mismatch or a missing entry). Never call it inside $(...):
-# die must end the script, not a subshell.
+# SHA256SUMS.full (hard failure on a mismatch or a missing entry); each file is hashed once per
+# run. Never call it inside $(...): die must end the script, not a subshell.
+declare -gA VERIFIED=()
 have_artifact() {
   local name="$1" line
   [ -n "$ART" ] && [ -f "$ART/$name" ] || return 1
+  [ -z "${VERIFIED[$name]:-}" ] || return 0
   [ -f "$ART/SHA256SUMS.full" ] || die "$ART has $name but no SHA256SUMS.full"
   line="$(awk -v n="$name" '{f = $2; sub(/^\*/, "", f); if (f == n) print}' "$ART/SHA256SUMS.full")"
   [ -n "$line" ] || die "$name is not listed in $ART/SHA256SUMS.full"
   (cd "$ART" && printf '%s\n' "$line" | sha256sum -c --strict --quiet -) \
     || die "SHA256 mismatch for $ART/$name"
+  VERIFIED[$name]=1
+}
+
+# want NAME WHAT: verify artifact NAME now if present. A missing one means an online fallback
+# later, which offline mode refuses here, before anything is written.
+want() {
+  if have_artifact "$1"; then
+    LOG "verified $1 ($2)"
+  elif [ "$OFFLINE" = 1 ]; then
+    refuse_online "${ART:-MATHVERIFY_ARTIFACT_DIR}/$1 ($2) is missing"
+  else
+    LOG "$1 is not among the artifacts: $2 will be fetched online"
+  fi
 }
 
 # Pick a zstd decompressor once (global UNZSTD): the zstd CLI, else a python3 >= 3.14 with
@@ -155,7 +192,9 @@ choose_unzstd() {
       fi
     fi
     if [ -z "$UNZSTD" ]; then
-      if [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1; then
+      if [ "$OFFLINE" = 1 ]; then
+        refuse_online "no zstd decompressor (zstd CLI, python3 >= 3.14 with compression.zstd, or $PY_ARCHIVE among the artifacts) and apt-get needs the network"
+      elif [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1; then
         LOG "no zstd decompressor found; installing zstd with apt-get"
         export DEBIAN_FRONTEND=noninteractive
         apt-get install -y -q zstd || { apt-get update -q && apt-get install -y -q zstd; } \
@@ -196,7 +235,7 @@ mathlib_cache_dir() {
   else
     d="$HOME/.cache/mathlib"
   fi
-  case "$d" in /*) ;; *) d="$PROJ/$d" ;; esac
+  case "$d" in /*) ;; *) d="$WORK/$d" ;; esac
   printf '%s\n' "$d"
 }
 
@@ -217,6 +256,7 @@ install_elan() {
       LOG "source: artifact $a"
       run=(offline)
     else
+      [ "$OFFLINE" = 0 ] || refuse_online "elan is not installed and $ELAN_ARCHIVE is missing"
       LOG "source: online (github.com/leanprover/elan release v$ELAN_VERSION)"
       a="$d/$ELAN_ARCHIVE"
       curl -fsSL --retry 3 -o "$a" \
@@ -245,6 +285,7 @@ install_toolchain() {
     [ -x "$d/$LEAN_TOPDIR/bin/lean" ] || die "$LEAN_ARCHIVE has no $LEAN_TOPDIR/bin/lean"
     mv "$d/$LEAN_TOPDIR" "$TC_DIR"
   else
+    [ "$OFFLINE" = 0 ] || refuse_online "the toolchain is not installed and $LEAN_ARCHIVE is missing"
     LOG "source: online (elan toolchain install)"
     elan toolchain install "$LEAN_TOOLCHAIN"
   fi
@@ -254,12 +295,12 @@ install_toolchain() {
 }
 
 install_project_files() {
-  step "project files -> $PROJ"
-  mkdir -p "$PROJ/MathverifyLean"
+  step "project files -> $WORK"
+  mkdir -p "$WORK/MathverifyLean"
   local f changed=0
   for f in "${PROJECT_FILES[@]}"; do
-    if ! cmp -s "$ROOT/lean/$f" "$PROJ/$f"; then
-      cp "$ROOT/lean/$f" "$PROJ/$f"
+    if ! cmp -s "$ROOT/lean/$f" "$WORK/$f"; then
+      cp "$ROOT/lean/$f" "$WORK/$f"
       LOG "wrote $f"
       changed=$((changed + 1))
     fi
@@ -269,7 +310,7 @@ install_project_files() {
   # install this runs with the network cut off, so a download attempt fails here.
   local run=() prefix
   [ -z "$ART" ] || run=(offline)
-  cd "$PROJ"
+  cd "$WORK"
   prefix="$("${run[@]}" lean --print-prefix)" || die "elan could not resolve $LEAN_TOOLCHAIN without a download"
   [ "$(cd "$prefix" && pwd -P)" = "$(cd "$TC_DIR" && pwd -P)" ] || die "project resolves to $prefix, expected $TC_DIR"
   LOG "resolved offline=$([ -n "$ART" ] && echo yes || echo no): $prefix"
@@ -286,21 +327,21 @@ install_project_files() {
 # of a package directory is replaced. SOURCES=1: every package came from, or already matched, it.
 SOURCES=0
 install_sources() {
-  step "Lake package sources -> $PROJ/.lake/packages"
+  step "Lake package sources -> $WORK/.lake/packages"
   if ! have_artifact "$SOURCES_ARCHIVE"; then
+    [ "$OFFLINE" = 0 ] || refuse_online "$SOURCES_ARCHIVE is missing (Lake would clone the packages)"
     LOG "source: online (lake clones the packages from their manifest URLs)"
     step_done
     return 0
   fi
   LOG "source: artifact $ART/$SOURCES_ARCHIVE"
-  local d pkgs name url rev pkg kept=0 added=0
-  pkgs="$(manifest_packages "$ROOT/lean/lake-manifest.json")"
-  mkdir -p "$PROJ/.lake/packages"
+  local d name url rev pkg kept=0 added=0
+  mkdir -p "$WORK/.lake/packages"
   # Extract next to the final location (one filesystem), then rename each package into place.
-  mktmp d "$PROJ/.lake"
+  mktmp d "$WORK/.lake"
   tar -xzf "$ART/$SOURCES_ARCHIVE" -C "$d" --no-same-owner packages
   while read -r name url rev; do
-    pkg="$PROJ/.lake/packages/$name"
+    pkg="$WORK/.lake/packages/$name"
     if [ -d "$pkg/.git" ] && [ "$(gitq -C "$pkg" rev-parse -q --verify HEAD 2>/dev/null)" = "$rev" ]; then
       kept=$((kept + 1))
       continue
@@ -313,7 +354,9 @@ install_sources() {
     fi
     mv "$d/packages/$name" "$pkg"
     added=$((added + 1))
-  done <<< "$pkgs"
+  done <<< "$PKGS"
+  # Now, not on exit: a staged project is renamed before then and would carry it along.
+  rm -rf "$d"
   SOURCES=1
   LOG "$added package(s) installed from the artifact, $kept already at their revision"
   step_done
@@ -334,17 +377,22 @@ install_mathlib_ltar() {
     tar -xf "$ART/$MATHLIB_ARCHIVE" -C "$CACHE_DIR" --strip-components=1 --skip-old-files
     CACHE_CMD=unpack
   else
+    [ "$OFFLINE" = 0 ] || refuse_online "$MATHLIB_ARCHIVE is missing (lake exe cache get would download it)"
     LOG "source: online (lake exe cache get downloads from the Mathlib cache server)"
   fi
   LOG "$(count_ltar "$CACHE_DIR") .ltar in $CACHE_DIR"
   step_done
 }
 
-# With the package sources and the .ltar cache both from the artifacts, every lake command below
-# runs offline: a clone or a download attempt fails loudly instead of silently using the network.
+# With the package sources and the .ltar cache both from the artifacts (always so in offline
+# mode), every lake command below runs offline: a clone or a download attempt fails loudly
+# instead of silently using the network.
 LAKE_RUN=()
 cache_fetch() {
   local before after rc d
+  if [ "$OFFLINE" = 1 ] && { [ "$SOURCES" != 1 ] || [ "$CACHE_CMD" != unpack ]; }; then
+    refuse_online "lake exe cache $CACHE_CMD without the artifact sources and .ltar"
+  fi
   if [ "$SOURCES" = 1 ] && [ "$CACHE_CMD" = unpack ]; then
     LAKE_RUN=(offline)
     step "lake exe cache unpack (offline: packages and .ltar from the artifacts; unpacks .ltar into oleans)"
@@ -353,7 +401,7 @@ cache_fetch() {
   fi
   mktmp d
   before="$(count_ltar "$CACHE_DIR")"
-  cd "$PROJ"
+  cd "$WORK"
   set +e
   "${LAKE_RUN[@]}" lake exe cache "$CACHE_CMD" 2>&1 | tr '\r' '\n' \
     | grep --line-buffered -v -E '^[[:space:]]*$' | tee "$d/cache.log"
@@ -371,7 +419,7 @@ cache_fetch() {
 
 check_pins() {
   step "pinned revisions"
-  cd "$PROJ"
+  cd "$WORK"
   cmp -s "$ROOT/lean/lake-manifest.json" lake-manifest.json \
     || die "lake-manifest.json differs from the pinned lean/lake-manifest.json (changed by lake?)"
   local pkgs name url rev head origin n=0 shallow=0
@@ -409,7 +457,7 @@ missing_oleans() {
 MAX_MISSING_OLEANS=20
 build_root_if_missing() {
   step "Mathlib oleans"
-  cd "$PROJ"
+  cd "$WORK"
   local rc missing=()
   mapfile -t missing < <(missing_oleans)
   LOG "$(find "$MATHLIB_LIB/Mathlib" -name '*.olean' | wc -l) module oleans under Mathlib/, ${#missing[@]} missing; root Mathlib.olean $([ -f "$MATHLIB_LIB/Mathlib.olean" ] && echo present || echo missing)"
@@ -438,7 +486,7 @@ build_root_if_missing() {
 make_world_readable() {
   step "permissions"
   local d n
-  for d in "$PROJ" "$ELAN_HOME"; do
+  for d in "$WORK" "$ELAN_HOME"; do
     n="$(find "$d" ! -perm -o+r | wc -l)"
     chmod -R a+rX "$d"
     LOG "$d: $n entries were not world-readable; now $(find "$d" ! -perm -o+r | wc -l)"
@@ -469,7 +517,7 @@ trust_package_repos() {
 
 smoke_test() {
   step "smoke test: import Mathlib + norm_num"
-  cd "$PROJ"
+  cd "$WORK"
   local d out
   mktmp d
   cat > "$d/Smoke.lean" <<'LEAN'
@@ -485,16 +533,149 @@ LEAN
   step_done
 }
 
+# Every artifact this run will use is verified before anything is written. In offline mode a
+# missing one stops the run here; otherwise it is fetched online later.
+preflight() {
+  step "artifacts (verified before anything is written)"
+  [ "$OFFLINE" = 0 ] || [ -n "$ART" ] || refuse_online "MATHVERIFY_ARTIFACT_DIR is not set"
+  if [ -x "$ELAN_HOME/bin/elan" ]; then
+    LOG "elan already installed; $ELAN_ARCHIVE not needed"
+  else
+    want "$ELAN_ARCHIVE" "elan $ELAN_VERSION"
+  fi
+  if [ -x "$TC_DIR/bin/lean" ]; then
+    LOG "toolchain already installed; $LEAN_ARCHIVE not needed"
+  else
+    want "$LEAN_ARCHIVE" "Lean toolchain $LEAN_TOOLCHAIN"
+    # The decompressor may itself come from an artifact (or apt-get, refused offline).
+    if have_artifact "$LEAN_ARCHIVE"; then choose_unzstd; fi
+  fi
+  want "$SOURCES_ARCHIVE" "Lake package sources"
+  want "$MATHLIB_ARCHIVE" "Mathlib .ltar cache"
+  step_done
+}
+
+# Staging and swap directories live next to $PROJ (one filesystem, so a rename moves them):
+# .<name>.stage.<pid> while a run builds, .<name>.old.<pid> during a swap.
+PROJ_PARENT="$(dirname "$PROJ")"
+PROJ_BASE="$(basename "$PROJ")"
+
+# Leftovers of runs that died (their pid is gone): a staging or temporary .ltar directory is
+# removed; an old project moved aside by an interrupted swap is put back when $PROJ is missing,
+# else removed.
+clean_leftovers() {
+  local d pid
+  local stale=("$PROJ_PARENT/.$PROJ_BASE".stage.* "$PROJ_PARENT/.$PROJ_BASE".ltar.*
+               "$PROJ_PARENT/.$PROJ_BASE".old.*)
+  for d in "${stale[@]}"; do
+    [ -d "$d" ] || continue
+    pid="${d##*.}"
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+    ! kill -0 "$pid" 2>/dev/null || continue
+    case "$d" in
+      *.old.*)
+        if [ ! -e "$PROJ" ]; then
+          LOG "restoring $PROJ from $d (an interrupted swap)"
+          mv -T "$d" "$PROJ"
+          continue
+        fi ;;
+    esac
+    LOG "removing $d (left by a run that died)"
+    rm -rf "$d"
+  done
+}
+
+# True when directory $1 already holds the pinned project files and every manifest package at its
+# revision with origin = manifest URL: what is left to do there only adds files.
+project_matches_pins() {
+  local d="$1" f name url rev
+  for f in "${PROJECT_FILES[@]}"; do cmp -s "$ROOT/lean/$f" "$d/$f" || return 1; done
+  while read -r name url rev; do
+    [ -d "$d/.lake/packages/$name/.git" ] || return 1
+    [ "$(gitq -C "$d/.lake/packages/$name" rev-parse -q --verify HEAD 2>/dev/null)" = "$rev" ] || return 1
+    [ "$(gitq -C "$d/.lake/packages/$name" remote get-url origin 2>/dev/null)" = "$url" ] || return 1
+  done <<< "$PKGS"
+}
+
+# Choose WORK: $PROJ for a fresh install (or an empty directory) and for a project that already
+# matches the pins; otherwise a staging directory, swapped in by swap_in after the smoke test.
+choose_workdir() {
+  step "project directory"
+  clean_leftovers
+  if [ ! -e "$PROJ" ] || { [ -d "$PROJ" ] && [ -z "$(ls -A "$PROJ")" ]; }; then
+    WORK="$PROJ"
+    LOG "fresh install in $PROJ"
+  elif [ ! -d "$PROJ" ]; then
+    die "$PROJ exists and is not a directory"
+  elif project_matches_pins "$PROJ"; then
+    WORK="$PROJ"
+    LOG "$PROJ already has the pinned project files and package revisions; completing it in place"
+  else
+    local used need avail
+    used="$(du -sk "$PROJ" 2>/dev/null | cut -f1)" || true
+    need=$(( ${used:-0} + 1048576 ))
+    avail="$(df -Pk "$PROJ_PARENT" | awk 'NR == 2 {print $4}')" || true
+    [ "${avail:-0}" -ge "$need" ] \
+      || die "$PROJ differs from the pins and a staged rebuild needs ~$((need / 1048576)) GB free next to it ($((avail / 1048576)) GB free); $PROJ is left untouched"
+    WORK="$PROJ_PARENT/.$PROJ_BASE.stage.$$"
+    rm -rf "$WORK"
+    TMPS+=("$WORK")
+    mkdir "$WORK" || die "cannot create $WORK (is $PROJ_PARENT writable?); $PROJ is left untouched"
+    LOG "$PROJ differs from the pins: building the new project in $WORK; it replaces $PROJ only after its smoke test"
+  fi
+  step_done
+}
+
+# The Mathlib .ltar cache. With the archive from the artifacts and no MATHLIB_CACHE_DIR chosen by
+# the caller, a private directory next to the project, removed on exit: the .ltar are only the
+# input of `cache unpack` (setup_env.sh passes its own directory and removes it itself).
+setup_cache_dir() {
+  if [ -z "${MATHLIB_CACHE_DIR+x}" ] && have_artifact "$MATHLIB_ARCHIVE"; then
+    export MATHLIB_CACHE_DIR="$PROJ_PARENT/.$PROJ_BASE.ltar.$$"
+    TMPS+=("$MATHLIB_CACHE_DIR")
+    rm -rf "$MATHLIB_CACHE_DIR"
+    LOG "temporary MATHLIB_CACHE_DIR=$MATHLIB_CACHE_DIR (removed on exit)"
+  fi
+  CACHE_DIR="$(mathlib_cache_dir)"
+}
+
+# Put a staged project in place: move $PROJ aside, rename the staging directory to $PROJ, check
+# that Lake opens it there, and only then delete the old one (put back on any failure; if even
+# that fails, the old one stays in .<name>.old.<pid>, which the next run restores or removes).
+swap_in() {
+  [ "$WORK" != "$PROJ" ] || return 0
+  step "swap the staged project into $PROJ"
+  local old="$PROJ_PARENT/.$PROJ_BASE.old.$$"
+  rm -rf "$old"
+  mv -T "$PROJ" "$old" || die "cannot move $PROJ aside; it is left untouched"
+  if ! mv -T "$WORK" "$PROJ"; then
+    mv -T "$old" "$PROJ" || die "cannot rename $WORK to $PROJ, nor put the previous project back from $old"
+    die "cannot rename $WORK to $PROJ; the previous project was put back"
+  fi
+  if ! (cd "$PROJ" && "${LAKE_RUN[@]}" lake env true); then
+    { mv -T "$PROJ" "$WORK" && mv -T "$old" "$PROJ"; } \
+      || die "lake env fails in the swapped-in project, and putting the previous one back failed: it is in $old"
+    die "lake env fails in the swapped-in project; the previous project was put back"
+  fi
+  WORK="$PROJ"
+  rm -rf "$old"
+  step_done
+}
+
 main() {
   LOG "setup_lean: $(uname -srm), $(nproc) CPU(s), user $(id -un 2>/dev/null || id -u), HOME=$HOME"
-  LOG "ELAN_HOME=$ELAN_HOME PROJECT=$PROJ ARTIFACTS=${ART:-(none)}"
-  local t
-  for t in curl git tar sha256sum; do
+  LOG "ELAN_HOME=$ELAN_HOME PROJECT=$PROJ ARTIFACTS=${ART:-(none)} OFFLINE=$OFFLINE"
+  local t tools=(git tar sha256sum)
+  [ "$OFFLINE" = 1 ] || tools+=(curl)
+  for t in "${tools[@]}"; do
     command -v "$t" >/dev/null 2>&1 || die "$t not found"
   done
-  CACHE_DIR="$(mathlib_cache_dir)"
+  PKGS="$(manifest_packages "$ROOT/lean/lake-manifest.json")"
+  preflight
   install_elan
   install_toolchain
+  choose_workdir
+  setup_cache_dir
   install_project_files
   install_sources
   install_mathlib_ltar
@@ -502,13 +683,14 @@ main() {
   check_pins
   build_root_if_missing
   make_world_readable
+  smoke_test
+  swap_in
   if [ "$(id -u)" = 0 ]; then
     trust_package_repos
   else
     LOG "not root: the install belongs to $(id -un 2>/dev/null || id -u); no system git safe.directory entries"
   fi
-  smoke_test
-  LOG "disk: $(du -sh "$ELAN_HOME" | cut -f1) $ELAN_HOME; $(du -sh "$PROJ" | cut -f1) $PROJ; $(du -sh "$CACHE_DIR" | cut -f1) $CACHE_DIR"
+  LOG "disk: $(du -sh "$ELAN_HOME" | cut -f1) $ELAN_HOME; $(du -sh "$PROJ" | cut -f1) $PROJ; $(du -sh "$CACHE_DIR" | cut -f1) $CACHE_DIR ($(count_ltar "$CACHE_DIR") .ltar$(case " ${TMPS[*]} " in *" $CACHE_DIR "*) echo ', temporary: removed on exit' ;; esac))"
   LOG "DONE in $(( $(date +%s) - T0 ))s (lake ran offline: $([ "${#LAKE_RUN[@]}" -gt 0 ] && echo yes || echo no))"
 }
 

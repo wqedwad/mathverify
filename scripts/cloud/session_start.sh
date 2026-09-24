@@ -13,6 +13,10 @@
 # Lean counts as installed only when mathverify-logs/lean.done exists: setup_env.sh writes it
 # after the REPL smoke test passed. A REPL binary without it is what a failed run leaves (the REPL
 # is built before its smoke test), so that case is retried in the background, never reported ready.
+# An install made from other lean/ pins stays in use and is updated in the background when this
+# user can write its prefix; otherwise (a root-made /opt, a non-root session) the hook prints the
+# per-user command instead and never starts a second full install itself (~12 GB; the cloud disk
+# is 30 GB).
 # A FAILED setup_env.status in any prefix is always printed.
 # MATHVERIFY_SKIP_LEAN=1 reports an existing Lean install but never starts one.
 # MATHVERIFY_HOOK_PREFIXES (colon-separated) replaces the install prefix list below; the tests
@@ -169,7 +173,12 @@ installed() {  # $1 = prefix; a finished install: REPL, project and lean.done (s
   [ -x "$1/repl/.lake/build/bin/repl" ] && [ -d "$1/mathverify-lean" ] \
     && [ -f "$1/mathverify-logs/lean.done" ]
 }
-LP=""; LSTATE=""
+# A second, per-user install needs this much disk (measured peak of setup_env.sh --lean-only
+# into a fresh prefix, artifacts included); the cloud disk is 30 GB, so it is never started
+# automatically next to an existing install.
+USER_INSTALL_GB=12
+free_gb() { df -Pk "$1" 2>/dev/null | awk 'NR == 2 {printf "%.1f", $4 / 1048576}'; }
+LP=""; LSTATE=""; ULP=""; STALE_WHY=""
 FP="$(lean_fingerprint)"
 # An install made from the current lean/ pins wins, whichever prefix holds it.
 for p in "${PREFIXES[@]}"; do
@@ -181,10 +190,18 @@ if [ -z "$LP" ]; then
   for p in "${PREFIXES[@]}"; do
     installed "$p" || continue
     # The snapshot predates a change of lean/ (pins): keep using it, update it in the background.
-    LP="$p"
+    LP="$p"; ULP="$p"
     if setup_running "$LP"; then LSTATE=updating
-    elif [ "${MATHVERIFY_SKIP_LEAN:-}" != 1 ] && can_install "$LP" && start_install "$LP"; then LSTATE=updating
-    else LSTATE=stale
+    elif [ "${MATHVERIFY_SKIP_LEAN:-}" = 1 ]; then LSTATE=stale; STALE_WHY=skip
+    elif can_install "$LP"; then
+      if start_install "$LP"; then LSTATE=updating; else LSTATE=stale; STALE_WHY=nostart; fi
+    else
+      # Not writable for this user (a root-made /opt, say): only a separate install can bring the
+      # current pins. One the user already started in another prefix counts as the update.
+      LSTATE=stale; STALE_WHY=readonly
+      for q in "${PREFIXES[@]}"; do
+        if [ "$q" != "$LP" ] && setup_running "$q"; then LSTATE=updating; ULP="$q"; break; fi
+      done
     fi
     break
   done
@@ -214,8 +231,11 @@ log "lean: ${LSTATE} ${LP}"
 if [ -n "$LP" ]; then
   # Later Bash commands of this session see these (the values are fixed, so they are exported
   # while the install is still running too; lean_client treats a missing REPL as unavailable).
+  # The last block wins when the file is sourced: a resumed session whose install moved to another
+  # prefix (a per-user install of the current pins, say) gets a new block.
   if [ -n "${CLAUDE_ENV_FILE:-}" ] \
-     && ! grep -qsxF "export MATHVERIFY_LEAN_REPL=\"$LP/repl/.lake/build/bin/repl\"" "$CLAUDE_ENV_FILE"; then
+     && [ "$(grep -s '^export MATHVERIFY_LEAN_REPL=' "$CLAUDE_ENV_FILE" | tail -n 1)" \
+          != "export MATHVERIFY_LEAN_REPL=\"$LP/repl/.lake/build/bin/repl\"" ]; then
     {
       echo "export MATHVERIFY_OPT=\"$LP\""
       echo "export ELAN_HOME=\"$LP/elan\""
@@ -224,11 +244,22 @@ if [ -n "$LP" ]; then
       echo "export PATH=\"$LP/elan/bin:\$PATH\""
     } >>"$CLAUDE_ENV_FILE" 2>/dev/null
   fi
-  # The default locations (~/.elan, ~/mathverify-lean, ~/repl) for tools that ignore the env.
+  # The default locations (~/.elan, ~/mathverify-lean, ~/repl) for tools that ignore the env. A
+  # link to the same part of another prefix (made earlier by this hook) follows an install from
+  # the current pins, or any install once its target is gone; anything else is left alone.
   if [ "$LSTATE" = ready ] || [ "$LSTATE" = updating ] || [ "$LSTATE" = stale ]; then
     for pair in .elan:elan mathverify-lean:mathverify-lean repl:repl; do
       l="$HOME/${pair%%:*}"
-      [ -e "$l" ] || [ -L "$l" ] || ln -s "$LP/${pair#*:}" "$l" 2>/dev/null
+      want="$LP/${pair#*:}"
+      if [ -L "$l" ]; then
+        cur="$(readlink "$l")"
+        { [ "$cur" != "$want" ] && { [ "$LSTATE" = ready ] || [ ! -e "$cur" ]; }; } || continue
+        for p in "${PREFIXES[@]}"; do
+          if [ "$cur" = "$p/${pair#*:}" ]; then ln -sfn "$want" "$l" 2>/dev/null; break; fi
+        done
+      elif [ ! -e "$l" ]; then
+        ln -s "$want" "$l" 2>/dev/null
+      fi
     done
   fi
 fi
@@ -238,8 +269,18 @@ case "$LSTATE" in
   ready) LTXT="HAZIR ($LP/repl/.lake/build/bin/repl)" ;;
   installing) LTXT="KURULUYOR (başka bir setup_env.sh çalışıyor; günlük: $LP/mathverify-logs/setup_env.log)" ;;
   started) LTXT="KURULUYOR (arka planda başlatıldı; günlük: $LP/mathverify-logs/setup_env.log). Bitene dek Lean testleri atlanır." ;;
-  updating) LTXT="HAZIR ama lean/ sabitleri kurulumdan farklı; arka planda güncelleniyor (günlük: $LP/mathverify-logs/setup_env.log). Güncelleme bitene dek Lean sonuçları eski sabitlerle." ;;
-  stale) LTXT="ESKİ: lean/ sabitleri kurulumdan farklı ve güncelleme başlatılamadı ($LP; elle: scripts/cloud/setup_env.sh --lean-only)" ;;
+  updating)
+    if [ "$ULP" = "$LP" ]; then
+      LTXT="HAZIR ama lean/ sabitleri kurulumdan farklı; arka planda güncelleniyor (günlük: $ULP/mathverify-logs/setup_env.log). Güncelleme bitene dek Lean sonuçları eski sabitlerle."
+    else
+      LTXT="HAZIR ama lean/ sabitleri kurulumdan farklı; güncel sabitlerle yeni kurulum $ULP içinde sürüyor (günlük: $ULP/mathverify-logs/setup_env.log). Bitene dek Lean sonuçları eski sabitlerle ($LP)."
+    fi ;;
+  stale)
+    case "$STALE_WHY" in
+      skip) LTXT="ESKİ: lean/ sabitleri kurulumdan farklı; MATHVERIFY_SKIP_LEAN=1 olduğu için güncelleme başlatılmadı ($LP). Lean sonuçları eski sabitlerle." ;;
+      readonly) LTXT="ESKİ: lean/ sabitleri kurulumdan farklı ve $LP bu kullanıcıya ($(id -un 2>/dev/null || id -u)) yazılabilir değil; Lean sonuçları eski sabitlerle. Disk sınırlı olduğu için ikinci bir tam kurulum kendiliğinden başlatılmadı." ;;
+      *) LTXT="ESKİ: lean/ sabitleri kurulumdan farklı ve güncelleme başlatılamadı ($LP; scripts/cloud/setup_env.sh bulunamadı)" ;;
+    esac ;;
   skipped) LTXT="YOK (MATHVERIFY_SKIP_LEAN=1: arka plan kurulumu başlatılmadı)" ;;
   *) LTXT="YOK (kurulum başlatılamadı: yazılabilir önek yok)" ;;
 esac
@@ -247,6 +288,17 @@ echo "[mathverify bulut oturumu — session_start.sh, $(( $(date +%s) - T0 )) s]
 echo "- Python: ${PYVER:-?} (${PY:-yok})${PYNOTE:+ — $PYNOTE}"
 echo "- .venv: $VSTATE; komutlar .venv/bin/python ile (PYTHONUTF8=1) çalışır, Windows'taki .venv/Scripts/python.exe yerine"
 echo "- Lean: $LTXT"
+if [ "$LSTATE" = stale ]; then
+  # The command that brings the current pins. Where this user cannot write, only a per-user
+  # prefix works (setup_env.sh --lean-only alone would try the read-only one and fail).
+  if [ "$STALE_WHY" = readonly ]; then
+    FREE="$(free_gb "$HOME")"
+    LOW="$(awk -v f="${FREE:-0}" -v n="$USER_INSTALL_GB" 'BEGIN {if (f < n) print " — YETERSİZ"}')"
+    echo "  Güncel sabitlerle kullanıcı kurulumu (yaklaşık $USER_INSTALL_GB GB disk ister; \$HOME altında boş: ${FREE:-?} GB$LOW): MATHVERIFY_OPT=\"\$HOME/.mathverify-opt\" bash scripts/cloud/setup_env.sh --lean-only"
+  else
+    echo "  Elle güncelleme: MATHVERIFY_OPT=\"$LP\" bash scripts/cloud/setup_env.sh --lean-only"
+  fi
+fi
 # Every prefix, whatever the Lean state: the line names the failed stages (Python ones included),
 # and a retry started above rewrites the file only when it finishes.
 for p in "${PREFIXES[@]}"; do
