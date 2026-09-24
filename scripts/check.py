@@ -129,6 +129,13 @@ def lean_unreached(data: dict) -> list[str]:
     return bad
 
 
+def lean_unanswered(rows) -> list[str]:
+    """Statements Lean never judged: `lean_answered` not True (every attempt timed out, or a report
+    without the field). A row without a statement never went to Lean and is skipped."""
+    return [str(r.get("id") or r.get("label")) for r in rows
+            if r.get("statement", True) and r.get("lean_answered") is not True]
+
+
 def lean_gates(data: dict) -> list[dict]:
     # Without Lean the sweep still exits 0 with zero certificates, so "Lean FP = 0" and "no junk
     # probe certified" held vacuously and a box with no Lean showed 23/23. `lean_available` is
@@ -154,12 +161,30 @@ def lean_gates(data: dict) -> list[dict]:
     gates: list[dict] = []
     cert = [r for r in lean if r.get("clean")]
     fp = [r for r in cert if not r["answer_right"]]
+    # A reached REPL can still judge nothing: when every tactic attempt on a statement timed out,
+    # the junk probe read "0/17" without Lean having evaluated that junk statement. A "0" from
+    # the FP and junk gates needs a real Lean answer (`lean_answered`, written by harness.run_lean;
+    # missing = no answer) on every statement it is about: each junk statement, and each item
+    # whose claimed value is wrong. An item with a right value is exempt: timing out only costs
+    # it its certificate. Measured on 24 Sep (two full sweeps, 45 s timeout): 0/172 item (50 of
+    # them wrong-answer) and 0/3 junk statements unanswered, 0 of 869 attempts timed out, slowest
+    # attempt 3.0 s, so the rule does not fail a healthy run.
+    wrong = [r for r in lean if r.get("statement", True) and not r.get("answer_right")]
+    silent = lean_unanswered(wrong)
+    fp_value = len(fp)
+    if silent:
+        fp_value = f"Lean cevap vermedi {len(silent)}/{len(wrong)}" + (f", FP {len(fp)}" if fp else "")
     gates.append(gate("Lean erişilebilir", f"evet ({len(cert)} sertifika)", "evet, ≥1 sertifika", bool(cert)))
-    gates.append(gate("Lean FP", len(fp), 0, not fp))
+    gates.append(gate("Lean FP", fp_value, 0, not fp and not silent))
     gates.append(gate("Lean sertifika", f"{len(cert)}/{len(lean)}", "raporlanır", True))
     junk = data.get("junk_probe") or []
     bad = [j["label"] for j in junk if j.get("certified")]
-    gates.append(gate("Lean junk-value sertifikası", f"{len(bad)}/{len(junk)}", 0, bool(junk) and not bad))
+    value = f"{len(bad)}/{len(junk)}"
+    unanswered = lean_unanswered(junk)
+    if unanswered:
+        n_stmt = sum(1 for j in junk if j.get("statement", True))
+        value = f"Lean cevap vermedi {len(unanswered)}/{n_stmt}" + (f", sertifika {value}" if bad else "")
+    gates.append(gate("Lean junk-value sertifikası", value, 0, bool(junk) and not bad and not unanswered))
     return gates
 
 

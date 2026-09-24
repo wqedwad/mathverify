@@ -9,7 +9,9 @@ unprovable, so a proof here would mean the statement does not say what the claim
 so "zero certificates" never reads as a clean result when Lean was simply absent. Because Lean
 can also be lost DURING the run (REPL OOM-killed and not respawnable), every record with a
 statement carries `lean_reached` (plus prove_statement's `errors`), and `lean_available_end`
-re-probes Lean after the junk probe.
+re-probes Lean after the junk probe. A reached REPL can still give no verdict at all (every
+tactic attempt timed out), so every such record also carries `lean_answered` and the attempt
+counts `n_attempts` / `n_unanswered`.
 """
 from __future__ import annotations
 import argparse, json, sys, time
@@ -112,6 +114,42 @@ def lean_reached(r: dict) -> bool:
     return not any(str(e).startswith(LEAN_UNAVAILABLE) for e in r.get("errors") or [])
 
 
+# LeanClient._send_raw's own errors: the REPL gave no verdict on the code because the call timed
+# out (REPL killed), the REPL died, the pipe broke, or the reply was not JSON.
+NO_VERDICT = ("lean timeout after", "empty reply (REPL died)", "write failed", "bad JSON from REPL")
+
+
+def attempt_answered(a: dict) -> bool:
+    """Did Lean itself judge this attempt? A compiled proof did; a failed one only when it carries
+    at least one Lean error that is not a transport failure (NO_VERDICT). A failure with no error
+    at all (e.g. a REPL-level `message`; none among the 869 attempts of the 24 Sep full sweep)
+    counts as unanswered: fail closed."""
+    if a.get("ok"):
+        return True
+    return any(not str(e).startswith(NO_VERDICT) for e in a.get("errors") or [])
+
+
+def lean_answered(r: dict) -> bool:
+    """Did at least one attempt on this statement get a real answer from Lean?
+
+    lean_reached only says the REPL was there. When every tactic of the ladder hits the timeout,
+    the REPL is killed and respawned each time, prove_statement records no `lean_unavailable`
+    error and the statement counts as reached, although Lean never judged it: a junk probe made
+    only of such statements reported "0/17 certified" with no junk statement evaluated. The same
+    holds for an item whose claimed value is wrong ("Lean FP 0" says nothing about it); for an
+    item with a right value it only costs the certificate. scripts/check.py gates on the first two.
+    """
+    return any(attempt_answered(a) for a in r.get("attempts") or [])
+
+
+def lean_fields(r: dict) -> dict:
+    """What run_lean stores per statement about how far Lean got with it."""
+    attempts = r.get("attempts") or []
+    return {"lean_reached": lean_reached(r), "lean_answered": lean_answered(r), "n_attempts": len(attempts),
+            "n_unanswered": sum(1 for a in attempts if not attempt_answered(a)),
+            "errors": list(r.get("errors") or [])}
+
+
 def junk_probe(timeout: float) -> list[dict]:
     from mathverify.formal import build_statement, prove_statement
     out = []
@@ -122,8 +160,7 @@ def junk_probe(timeout: float) -> list[dict]:
             r = prove_statement(st, use_model=False, tactic_timeout=timeout)
             rec["certified"] = bool(r["proved"] and (r.get("audit") or {}).get("clean"))
             rec["proved"] = r["proved"]
-            rec["lean_reached"] = lean_reached(r)
-            rec["errors"] = list(r.get("errors") or [])
+            rec.update(lean_fields(r))
         out.append(rec)
     return out
 
@@ -165,8 +202,7 @@ def main(argv=None):
             r = prove_statement(st, use_model=False, tactic_timeout=args.timeout)
             rec.update({"proved": r["proved"], "clean": (r.get("audit") or {}).get("clean"),
                         "proof": r.get("proof"), "audit": r.get("audit"), "ms": round(r["ms"]),
-                        "stmt_text": r.get("statement"), "lean_reached": lean_reached(r),
-                        "errors": list(r.get("errors") or [])})
+                        "stmt_text": r.get("statement"), **lean_fields(r)})
         recs.append(rec)
         if i % 20 == 0 or rec["proved"]:
             print(f"[{i}/{len(items)}] {rec['id']:<16} stmt={rec['statement']} proved={rec['proved']} clean={rec['clean']}", flush=True)
@@ -182,7 +218,15 @@ def main(argv=None):
     # Lean lost before it shows as records with lean_reached False.
     lean_end = lean_available()
     unreached = [r.get("id") or r.get("label") for r in recs + junk if r["statement"] and not r["lean_reached"]]
-    print(f"lean_available_end={lean_end} lean_unreached={len(unreached)}", flush=True)
+    # reached but never judged: every attempt timed out (or the REPL died on it). check.py fails
+    # the junk gate on a junk one and the FP gate on a wrong-answer item; a right-answer item only
+    # loses its certificate
+    unanswered_items = [r for r in recs if r["statement"] and not r["lean_answered"]]
+    unanswered_wrong = [r["id"] for r in unanswered_items if not r["answer_right"]]
+    unanswered_junk = [j["label"] for j in junk if j["statement"] and not j["lean_answered"]]
+    print(f"lean_available_end={lean_end} lean_unreached={len(unreached)} "
+          f"lean_unanswered_items={len(unanswered_items)} (wrong answer: {len(unanswered_wrong)}) "
+          f"lean_unanswered_junk={len(unanswered_junk)}", flush=True)
     (out / "lean_results.json").write_text(json.dumps({"lean_available": lean_ok, "lean_available_end": lean_end,
                                                        "records": recs, "junk_probe": junk},
                                                       ensure_ascii=False, indent=1), encoding="utf-8")
@@ -190,6 +234,11 @@ def main(argv=None):
     md += f"- Lean REPL (Mathlib) bu koşuda açıldı: **{'evet' if lean_ok else 'hayır'}**"
     md += f" · taramanın sonunda erişilebilir: **{'evet' if lean_end else 'hayır'}**"
     md += f" · Lean'e ulaşamayan ifade: **{len(unreached)}**{' ✗ ' + str(unreached[:10]) if unreached else ''}\n"
+    md += (f"- Lean'in hiçbir denemeye cevap vermediği ifade (zaman aşımı ya da REPL çökmesi): öğe **{len(unanswered_items)}**"
+           f"{' ' + str([r['id'] for r in unanswered_items[:10]]) if unanswered_items else ''}"
+           f" · bunlardan cevabı yanlış: **{len(unanswered_wrong)}**"
+           f"{' ✗ ' + str(unanswered_wrong[:10]) if unanswered_wrong else ''}"
+           f" · junk sondası **{len(unanswered_junk)}**{' ✗ ' + str(unanswered_junk) if unanswered_junk else ''}\n")
     md += f"- Öğe: **{n}** · Lean ifadesi üretilebilen: **{len(with_stmt)}** ({len(with_stmt)/n:.1%})\n"
     md += f"- Kanıtlanan: **{len(proved)}** · denetimden geçen (sorry/aksiyom/vakum/kullanılmayan hipotez): **{len(certified)}**\n"
     md += f"- **Yanlış cevaplı öğelerde kanıt (FP): {len(fp)}** {'✓ hedef 0' if not fp else '✗ ' + str([r['id'] for r in fp])}\n"
