@@ -24,9 +24,17 @@
 #                             removed on exit (the oleans are unpacked by then; ~450 MB saved)
 #   MATHVERIFY_OPT            cloud install prefix (default /opt); only used to find
 #                             $MATHVERIFY_OPT/python3.14 as a zstd decompressor
+#   MATHVERIFY_WSL_DRIVE_DIR  WSL only: a directory on the Windows drive that holds this
+#                             distribution's virtual disk (ext4.vhdx), when find_wsl_drive cannot
+#                             find it (default: from the registry, else %LOCALAPPDATA%, else /mnt/c)
+#   MATHVERIFY_WSL_MARKER_DIR where is_wsl looks for WSLInterop (default /proc/sys/fs/binfmt_misc;
+#                             the tests point it elsewhere)
 #
-# Every artifact this run needs is verified (SHA256SUMS.full) before anything is written, and the
-# free disk is checked before the toolchain and the project are (choose_workdir). An existing
+# The project directory is resolved once (a link to it is followed), so it is sized, staged next
+# to and swapped as the directory itself. Every artifact this run needs is verified
+# (SHA256SUMS.full) before anything is written, and the free disk is checked before the toolchain
+# and the project are (choose_workdir); inside WSL also on the Windows drive that holds the
+# distribution's virtual disk (check_wsl_drive). An existing
 # project directory is then completed in place only when it already holds the pinned project
 # files and package revisions (the remaining work only adds oleans); otherwise the new project is
 # built in a staging directory next to it and replaces it only after its smoke test passed, both
@@ -56,7 +64,13 @@ expand_home() {
 
 export ELAN_HOME
 ELAN_HOME="$(expand_home "${ELAN_HOME:-$HOME/.elan}")"
-PROJ="$(expand_home "${MATHVERIFY_LEAN_PROJECT:-$HOME/mathverify-lean}")"
+PROJ_GIVEN="$(expand_home "${MATHVERIFY_LEAN_PROJECT:-$HOME/mathverify-lean}")"
+# Resolved once, links included (session_start.sh links ~/mathverify-lean to
+# <prefix>/mathverify-lean): `du -sk` of a link measures the link (0 KiB), and a staging directory
+# next to the link and a swap of the link would replace the link with a new directory while the
+# install it points to stays as it was. `readlink -m` also resolves a path that does not exist yet.
+PROJ="$(readlink -m -- "$PROJ_GIVEN" 2>/dev/null)" || PROJ="$PROJ_GIVEN"
+[ -n "$PROJ" ] || PROJ="$PROJ_GIVEN"
 ART=""
 [ -z "${MATHVERIFY_ARTIFACT_DIR:-}" ] || ART="$(expand_home "$MATHVERIFY_ARTIFACT_DIR")"
 OPT="${MATHVERIFY_OPT:-/opt}"
@@ -612,8 +626,10 @@ project_matches_pins() {
 # finished project is 7.2 GB and the Mathlib .ltar cache it is unpacked from 448 MB, ~7.7 GB
 # together (the .ltar land next to the project too: setup_env.sh uses $OPT/.mathlib-ltar, a run
 # alone .<name>.ltar.<pid>); the toolchain under $ELAN_HOME is 3.0 GB (cloud). A margin of 1 GB
-# comes on top of each check. Inside WSL, df sees the ext4 virtual disk (~1 TB), not the Windows
-# drive that holds its .vhdx: these checks cannot notice that drive filling up.
+# comes on top of each check. Inside WSL, df sees the ext4 virtual disk (measured 2026-09-24:
+# 941 GB free on /), not the Windows drive that holds its ext4.vhdx (6.2 GB free on C: at that
+# time); the disk image grows with what is written into it and once filled C:, so check_wsl_drive
+# checks that drive as well.
 NEW_PROJECT_KB=$(( 77 * 1048576 / 10 ))
 TOOLCHAIN_KB=$(( 3 * 1048576 ))
 MARGIN_KB=1048576
@@ -625,27 +641,136 @@ existing_dir() {
   while [ ! -e "$d" ] && [ "$d" != / ] && [ "$d" != . ]; do d="$(dirname "$d")"; done
   printf '%s\n' "$d"
 }
-# need_space KB DIR WHAT: die unless KB plus the margin is free on DIR's filesystem (WHAT says
-# what was left alone).
+# The first column of `df -P DIR`: a block device (/dev/sdd: in WSL 2 a virtual disk), a Windows
+# drive mounted by WSL ("C:\"), tmpfs, ...; empty when df fails (not a failure: under pipefail a
+# failed df would end the script in `x="$(df_source ...)"` without a message).
+df_source() { df -Pk "$1" 2>/dev/null | awk 'NR == 2 {print $1}' || true; }
+# need_space KB DIR WHAT [PLACE]: die unless KB plus the margin is free on the filesystem of the
+# existing directory DIR (WHAT says what was left alone; PLACE names DIR in the messages).
 need_space() {
-  local need=$(( $1 + MARGIN_KB )) d avail
-  d="$(existing_dir "$2")"
+  local need=$(( $1 + MARGIN_KB )) d="$2" place="${4:-$2}" avail
   avail="$(df -Pk "$d" 2>/dev/null | awk 'NR == 2 {print $4}')" || true
-  case "$avail" in ''|*[!0-9]*) die "cannot read the free disk space of $d (df -Pk); $3" ;; esac
-  LOG "disk: $(kb_gb "$avail") GB free on $d, $(kb_gb "$need") GB needed ($(kb_gb "$1") GB + $(kb_gb "$MARGIN_KB") GB margin)"
+  case "$avail" in ''|*[!0-9]*) die "cannot read the free disk space of $place (df -Pk $d); $3" ;; esac
+  LOG "disk: $(kb_gb "$avail") GB free on $place, $(kb_gb "$need") GB needed ($(kb_gb "$1") GB + $(kb_gb "$MARGIN_KB") GB margin)"
   [ "$avail" -ge "$need" ] \
-    || die "not enough disk on $d: ~$(kb_gb "$need") GB needed ($(kb_gb "$1") GB + $(kb_gb "$MARGIN_KB") GB margin), $(kb_gb "$avail") GB free; $3"
+    || die "not enough disk on $place: ~$(kb_gb "$need") GB needed ($(kb_gb "$1") GB + $(kb_gb "$MARGIN_KB") GB margin), $(kb_gb "$avail") GB free; $3"
+}
+
+# ---- WSL: the Windows drive under the distribution's virtual disk ----------------------------
+WSL_MARKER_DIR="${MATHVERIFY_WSL_MARKER_DIR:-/proc/sys/fs/binfmt_misc}"
+# WSL's interop registration (WSLInterop; WSLInterop-late on newer releases) or its kernel
+# (measured 2026-09-24: WSLInterop present, uname -r 6.18.33.2-microsoft-standard-WSL2).
+is_wsl() {
+  if [ -e "$WSL_MARKER_DIR/WSLInterop" ] || [ -e "$WSL_MARKER_DIR/WSLInterop-late" ]; then
+    return 0
+  fi
+  case "$(uname -r 2>/dev/null)" in *[Mm]icrosoft*) return 0 ;; esac
+  return 1
+}
+# A Windows program through WSL interop, bounded in time (a broken interop can hang).
+win_run() {
+  if command -v timeout >/dev/null 2>&1; then timeout 20 "$@"; else "$@"; fi
+}
+# The BasePath (the directory of the ext4.vhdx) that WSL registers for the distribution named
+# $WSL_DISTRO_NAME under HKCU\...\Lxss\{GUID}; empty when it cannot be read.
+wsl_base_path() {
+  { [ -n "${WSL_DISTRO_NAME:-}" ] && command -v reg.exe >/dev/null 2>&1; } || return 0
+  { win_run reg.exe query 'HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss' /s 2>/dev/null || true; } \
+    | tr -d '\r' | awk -v n="$WSL_DISTRO_NAME" '
+        function flush() { if (name == n && base != "" && !done) { print base; done = 1 }; name = ""; base = "" }
+        /^HKEY_/ { flush(); next }
+        /^[ \t]+DistributionName[ \t]+REG_SZ[ \t]/ {
+          name = $0; sub(/^[ \t]+DistributionName[ \t]+REG_SZ[ \t]+/, "", name) }
+        /^[ \t]+BasePath[ \t]+REG_(EXPAND_)?SZ[ \t]/ {
+          base = $0; sub(/^[ \t]+BasePath[ \t]+REG_(EXPAND_)?SZ[ \t]+/, "", base) }
+        END { flush() }'
+}
+# Find the Windows drive that holds this distribution's virtual disk, once: WSL_DRIVE ("C:"; empty
+# when only a directory was given), WSL_DRIVE_DIR (its WSL path) and WSL_DRIVE_FROM (how).
+WSL_DRIVE=""
+WSL_DRIVE_DIR=""
+WSL_DRIVE_FROM=""
+find_wsl_drive() {
+  [ -z "$WSL_DRIVE_DIR" ] || return 0
+  local win="" letter
+  if [ -n "${MATHVERIFY_WSL_DRIVE_DIR:-}" ]; then
+    WSL_DRIVE_DIR="$MATHVERIFY_WSL_DRIVE_DIR"
+    WSL_DRIVE_FROM="MATHVERIFY_WSL_DRIVE_DIR"
+    return 0
+  fi
+  win="$(wsl_base_path)"
+  if [ -n "$win" ]; then
+    WSL_DRIVE_FROM="registry: BasePath of distribution $WSL_DISTRO_NAME = $win"
+  elif command -v cmd.exe >/dev/null 2>&1; then
+    # cmd.exe refuses a Linux working directory with a warning on stderr, then runs in its own.
+    win="$(cd / && { win_run cmd.exe /d /c 'echo %LOCALAPPDATA%' 2>/dev/null || true; } | tr -d '\r')"
+    WSL_DRIVE_FROM="no registry BasePath for distribution ${WSL_DISTRO_NAME:-(WSL_DISTRO_NAME unset)}; %LOCALAPPDATA% = $win (a distribution's default location)"
+  fi
+  win="${win#'\\?\'}"
+  case "$win" in
+    [A-Za-z]:*)
+      letter="${win:0:1}"
+      WSL_DRIVE="${letter^^}:"
+      # wslpath follows wsl.conf's automount root (measured 2026-09-24: `wslpath -u 'C:\'` printed
+      # /mnt/c/, with the trailing slash dropped here).
+      WSL_DRIVE_DIR="$(wslpath -u "$WSL_DRIVE\\" 2>/dev/null)" || WSL_DRIVE_DIR=""
+      [ "$WSL_DRIVE_DIR" = / ] || WSL_DRIVE_DIR="${WSL_DRIVE_DIR%/}"
+      [ -n "$WSL_DRIVE_DIR" ] || WSL_DRIVE_DIR="/mnt/${letter,,}" ;;
+    *)
+      WSL_DRIVE="C:"
+      WSL_DRIVE_DIR="/mnt/c"
+      WSL_DRIVE_FROM="fallback: neither the registry nor %LOCALAPPDATA% named a drive${win:+ (got $win)}" ;;
+  esac
+}
+# check_wsl_drive PROJ_KB PROJ_DIR TC_KB ELAN_DIR WHAT: inside WSL, what goes to a block device
+# (the distribution's virtual disk) or to that Windows drive itself must fit on the drive too.
+# What goes to another Windows drive (a drvfs mount) or to tmpfs does not count. Measured
+# 2026-09-24 in WSL 2: `df -Pk` names / "/dev/sdd" (ext4) and /mnt/c "C:\" (9p, the drive's free
+# space, as Windows reports it).
+check_wsl_drive() {
+  local kb=0 i src drive_src place
+  local kbs=("$1" "$3") dirs=("$2" "$4")
+  local hint="set MATHVERIFY_WSL_DRIVE_DIR to a directory on the Windows drive that holds the virtual disk (ext4.vhdx)"
+  find_wsl_drive
+  place="the Windows drive ${WSL_DRIVE:+$WSL_DRIVE }($WSL_DRIVE_DIR), which holds this WSL distribution's virtual disk"
+  LOG "WSL: $place ($WSL_DRIVE_FROM)"
+  drive_src="$(df_source "$WSL_DRIVE_DIR")"
+  [ -n "$drive_src" ] || die "cannot read the free disk space of $place (df -Pk $WSL_DRIVE_DIR); $hint; $5"
+  # An unmounted drive leaves /mnt/<letter> a plain directory of the virtual disk itself, whose
+  # free space is the ~1 TB the check exists to look past.
+  case "$drive_src" in
+    /dev/*) die "cannot read the free disk space of $place: df names $drive_src for $WSL_DRIVE_DIR, a disk inside WSL, not a Windows drive (is the drive mounted?); $hint; $5" ;;
+  esac
+  for i in 0 1; do
+    [ "${kbs[i]}" -gt 0 ] || continue
+    src="$(df_source "${dirs[i]}")"
+    case "$src" in
+      /dev/*) kb=$(( kb + kbs[i] )) ;;
+      *) [ "$src" != "$drive_src" ] || kb=$(( kb + kbs[i] )) ;;
+    esac
+  done
+  if [ "$kb" -eq 0 ]; then
+    LOG "WSL: nothing this run writes lands on a virtual disk or on ${WSL_DRIVE:-$WSL_DRIVE_DIR}"
+    return 0
+  fi
+  need_space "$kb" "$WSL_DRIVE_DIR" "$5" "$place"
 }
 # check_disk PROJECT_KB WHAT: the project (PROJECT_KB next to $PROJ) and, when it is not installed
-# yet, the toolchain; summed when both are on one filesystem.
+# yet, the toolchain; summed when both are on one filesystem. Inside WSL, the Windows drive too.
 check_disk() {
-  local proj_kb="$1" tc_kb=0
+  local proj_kb="$1" tc_kb=0 proj_dir elan_dir
   [ -x "$TC_DIR/bin/lean" ] || tc_kb="$TOOLCHAIN_KB"
-  if [ "$tc_kb" -gt 0 ] && [ "$(stat -c %d "$(existing_dir "$ELAN_HOME")")" != "$(stat -c %d "$(existing_dir "$PROJ_PARENT")")" ]; then
-    need_space "$tc_kb" "$ELAN_HOME" "$2"
-    tc_kb=0
+  proj_dir="$(existing_dir "$PROJ_PARENT")"
+  elan_dir="$(existing_dir "$ELAN_HOME")"
+  if [ "$tc_kb" -gt 0 ] && [ "$(stat -c %d "$elan_dir")" != "$(stat -c %d "$proj_dir")" ]; then
+    need_space "$tc_kb" "$elan_dir" "$2"
+    [ "$proj_kb" -eq 0 ] || need_space "$proj_kb" "$proj_dir" "$2"
+  elif [ $(( proj_kb + tc_kb )) -gt 0 ]; then
+    need_space $(( proj_kb + tc_kb )) "$proj_dir" "$2"
   fi
-  [ $(( proj_kb + tc_kb )) -eq 0 ] || need_space $(( proj_kb + tc_kb )) "$PROJ_PARENT" "$2"
+  if [ $(( proj_kb + tc_kb )) -gt 0 ] && is_wsl; then
+    check_wsl_drive "$proj_kb" "$proj_dir" "$tc_kb" "$elan_dir" "$2"
+  fi
 }
 
 # Choose WORK: $PROJ for a fresh install (or an empty directory) and for a project that already
@@ -725,7 +850,7 @@ swap_in() {
 
 main() {
   LOG "setup_lean: $(uname -srm), $(nproc) CPU(s), user $(id -un 2>/dev/null || id -u), HOME=$HOME"
-  LOG "ELAN_HOME=$ELAN_HOME PROJECT=$PROJ ARTIFACTS=${ART:-(none)} OFFLINE=$OFFLINE"
+  LOG "ELAN_HOME=$ELAN_HOME PROJECT=$PROJ$([ "$PROJ" = "$PROJ_GIVEN" ] || echo " (given as $PROJ_GIVEN)") ARTIFACTS=${ART:-(none)} OFFLINE=$OFFLINE"
   local t tools=(git tar sha256sum)
   [ "$OFFLINE" = 1 ] || tools+=(curl)
   for t in "${tools[@]}"; do

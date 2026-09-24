@@ -4,8 +4,9 @@
 #
 # In a cloud session it (1) picks a Python >= 3.12 (pyproject.toml): the CPython 3.14.6 that
 # scripts/cloud/setup_env.sh installs as ${MATHVERIFY_OPT:-/opt}/python3.14, else python3.14 on
-# PATH (or found by uv), python3.13, python3.12, and python3 only when it is >= 3.12; a fallback
-# is named in the status block; (2) creates or
+# PATH (or found by uv), python3.12 (among the fallbacks the full suite was measured only on
+# 3.12.11), python3.13, and python3 only when it is >= 3.12; a fallback is named in the status
+# block; (2) creates or
 # refreshes ./.venv from requirements.lock plus `--no-deps -e .`, skipped while the stamp
 # (sha256 of requirements.lock + pyproject.toml, interpreter path and version) is unchanged, so a
 # .venv built by a fallback is rebuilt by the first run that finds the pinned 3.14.6;
@@ -67,7 +68,9 @@ log "==== session_start user=$(id -un 2>/dev/null || id -u) HOME=$HOME repo=$REP
 # (/usr/local/bin/python3) while /usr/bin/python3.13 and /usr/bin/python3.12 exist, and before
 # setup_env.sh has run there is no python3.14 at all; the hook used python3 and the .venv install
 # failed. Order: the pinned 3.14.6 under a prefix, python3.14 on PATH, a python3.14 uv knows,
-# python3.13, python3.12, python3 when it is >= 3.12. Nothing older ever builds the .venv.
+# python3.12, python3.13, python3 when it is >= 3.12. Among the fallbacks the full suite was
+# measured only on 3.12.11 (DECISIONS §42), so python3.12 comes before python3.13. Nothing older
+# than 3.12 ever builds the .venv.
 export UV_PYTHON_DOWNLOADS=never       # releases.astral.sh is not reachable from the cloud
 VENV="$REPO/.venv"
 py_version() { "$1" -c 'import platform; print(platform.python_version())' 2>/dev/null; }
@@ -96,7 +99,7 @@ if [ -z "$UV" ]; then
   done
 fi
 if [ -z "$PY" ]; then
-  for how in python3.14 "uv python find 3.14" python3.13 python3.12 python3; do
+  for how in python3.14 "uv python find 3.14" python3.12 python3.13 python3; do
     case "$how" in
       uv*)
         [ -n "$UV" ] || continue
@@ -111,7 +114,7 @@ if [ -z "$PY" ]; then
   if [ -n "$PY" ]; then
     PYNOTE="YEDEK ($PYHOW): kurulum betiğinin CPython 3.14.6'sı (${PREFIXES[0]:-/opt}/python3.14) yok ya da çalışmıyor; bu yorumlayıcı Windows'takiyle (3.14.7) aynı değil. Tam takım yedek yorumlayıcılardan yalnız 3.12.11'de ölçüldü ve Windows ile aynı sonucu verdi (DECISIONS §42)"
   else
-    PYNOTE="HATA: Python >= 3.12 bulunamadı (sırayla: ${PREFIXES[0]:-/opt}/python3.14, python3.14, uv python find 3.14, python3.13, python3.12, python3)"
+    PYNOTE="HATA: Python >= 3.12 bulunamadı (sırayla: ${PREFIXES[0]:-/opt}/python3.14, python3.14, uv python find 3.14, python3.12, python3.13, python3)"
     [ -z "$PYREJECTED" ] || PYNOTE="$PYNOTE; 3.12'den eski ya da çalışmayan: $PYREJECTED"
   fi
 fi

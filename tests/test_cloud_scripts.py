@@ -687,9 +687,11 @@ FALLBACK_NOTE = ("Windows'takiyle (3.14.7) aynı değil. Tam takım yedek yoruml
 @pytest.mark.parametrize("have, chosen", [
     ({"python3.14": "3.14.2", "python3.13": "3.13.5", "python3": "3.11.15"}, "python3.14"),
     ({"uv-managed": "3.14.3", "python3.13": "3.13.5"}, "uv python find 3.14"),
-    # the cloud as measured: python3 is 3.11.15, python3.13 and python3.12 exist
-    ({"python3.13": "3.13.5", "python3.12": "3.12.3", "python3": "3.11.15"}, "python3.13"),
+    # the cloud as measured: python3 is 3.11.15, python3.13 and python3.12 exist. The full suite
+    # was measured only on 3.12.11 among the fallbacks, so python3.12 wins over python3.13.
+    ({"python3.13": "3.13.5", "python3.12": "3.12.3", "python3": "3.11.15"}, "python3.12"),
     ({"python3.12": "3.12.3", "python3": "3.11.15"}, "python3.12"),
+    ({"python3.13": "3.13.5", "python3": "3.11.15"}, "python3.13"),
     ({"python3": "3.12.11"}, "python3"),
 ])
 def test_hook_fallback_interpreter_order(bed, sysbin, have, chosen):
@@ -731,7 +733,7 @@ def test_hook_never_builds_the_venv_with_a_python_older_than_3_12(bed, sysbin):
     out = bed.run(opt, PATH=f"{pybin}:{sysbin}", MATHVERIFY_SKIP_LEAN="1")
     assert bed.line(out, "- Python: ") == (
         f"- Python: yok — HATA: Python >= 3.12 bulunamadı (sırayla: {opt}/python3.14, python3.14, "
-        f"uv python find 3.14, python3.13, python3.12, python3); 3.12'den eski ya da çalışmayan: "
+        f"uv python find 3.14, python3.12, python3.13, python3); 3.12'den eski ya da çalışmayan: "
         f"python3 = {pybin}/python3 (3.11.15)")
     assert bed.line(out, "- .venv: ").startswith(
         "- .venv: HATA: Python >= 3.12 yok; .venv kurulmadı (var olan .venv'e dokunulmadı)")
@@ -948,20 +950,45 @@ STUB_LAKE = r"""
     esac
 """
 
-# df answers for a filesystem with STUB_DF_AVAIL_KB free (default 100 GB, so no test depends on
-# the host's free disk) and records the directory it was asked about.
+# df records the directory it was asked about and answers from STUB_DF_MAP, a file of
+# "PREFIX TAB FILESYSTEM TAB AVAIL_KB" lines (the first PREFIX that is the directory or one of its
+# parents wins; FILESYSTEM "-" makes df fail), else for a virtual-disk-like /dev/sdd with
+# STUB_DF_AVAIL_KB free (default 100 GB, so no test depends on the host's free disk). Measured in
+# WSL 2 (2026-09-24): `df -Pk` names the distribution's disk /dev/sdd and a Windows drive "C:\".
 STUB_DF = r"""
     #!/bin/sh
     for d; do :; done
     echo "$d" >> "@CALLS@"
+    fs=/dev/sdd
+    avail=${STUB_DF_AVAIL_KB:-104857600}
+    if [ -n "${STUB_DF_MAP:-}" ]; then
+      tab=$(printf '\t')
+      while IFS="$tab" read -r prefix f a; do
+        case "$d" in "$prefix"|"$prefix"/*) fs=$f; avail=$a; break ;; esac
+      done < "$STUB_DF_MAP"
+    fi
+    [ "$fs" != - ] || { echo "df: $d: No such file or directory" >&2; exit 1; }
     echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
-    echo "stub 209715200 0 ${STUB_DF_AVAIL_KB:-104857600} 0% /"
+    printf '%s 209715200 0 %s 0%% /\n' "$fs" "$avail"
 """
-# STUB_DU_KB replaces the size `du -sk` reports (the old project before a staged rebuild).
+# STUB_DU_KB replaces the size `du -sk` reports for a directory (the old project before a staged
+# rebuild). A symbolic link is left to the real du, which (without -L) measures the link: 0 KiB.
 STUB_DU = r"""
     #!/bin/sh
-    if [ "$1" = -sk ] && [ -n "${STUB_DU_KB:-}" ]; then printf '%s\t%s\n' "$STUB_DU_KB" "$2"; exit 0; fi
+    if [ "$1" = -sk ] && [ -n "${STUB_DU_KB:-}" ] && [ ! -L "$2" ]; then
+      printf '%s\t%s\n' "$STUB_DU_KB" "$2"; exit 0
+    fi
     for d in /usr/bin /bin; do [ -x "$d/du" ] && exec "$d/du" "$@"; done
+    exit 127
+"""
+# `uname -r` answers STUB_UNAME_R (default: no WSL kernel), anything else the real uname: with
+# MATHVERIFY_WSL_MARKER_DIR pointing at a directory without WSLInterop, no test sees the host's
+# WSL (measured 2026-09-24 in WSL Ubuntu: WSLInterop present, uname -r
+# 6.18.33.2-microsoft-standard-WSL2).
+STUB_UNAME = r"""
+    #!/bin/sh
+    if [ "$1" = -r ]; then echo "${STUB_UNAME_R:-6.1.0-stub}"; exit 0; fi
+    for d in /usr/bin /bin; do [ -x "$d/uname" ] && exec "$d/uname" "$@"; done
     exit 127
 """
 GB = 1048576  # KiB
@@ -1078,6 +1105,9 @@ class LeanBed:
         _write_exec(self.bin / "curl", f'#!/bin/sh\necho "curl $*" >> "{self.calls}"\nexit 7\n')
         _write_exec(self.bin / "df", STUB_DF.replace("@CALLS@", str(self.df_calls)))
         _write_exec(self.bin / "du", STUB_DU)
+        _write_exec(self.bin / "uname", STUB_UNAME)
+        self.markers = tmp / "binfmt_misc"  # WSL's interop marker goes here (none by default)
+        self.markers.mkdir()
 
     @property
     def df_calls(self) -> Path:
@@ -1089,7 +1119,8 @@ class LeanBed:
                "GIT_CONFIG_SYSTEM": str(self.tmp / "gitconfig-system"),
                "MATHVERIFY_OPT": str(self.opt), "CLAUDE_PROJECT_DIR": str(self.repo),
                "MATHVERIFY_PROFILE_D": str(self.tmp / "profile.d"),
-               "MATHVERIFY_ARTIFACT_SRC": str(self.src), **extra}
+               "MATHVERIFY_ARTIFACT_SRC": str(self.src),
+               "MATHVERIFY_WSL_MARKER_DIR": str(self.markers), **extra}
         return {k: v for k, v in env.items() if v is not None}
 
     def _run(self, script: Path, args: tuple[str, ...], env: dict[str, str]):
@@ -1336,6 +1367,256 @@ def test_setup_lean_checks_the_disk_before_writing(lean_bed, case):
     else:
         assert r.returncode == 0, r.stdout + r.stderr
         assert "SMOKE OK" in r.stdout and _dot_entries(bed.opt) == []
+
+
+@posix_only
+@pytest.mark.parametrize("case", ["in-place", "staged"])
+def test_setup_lean_sizes_stages_and_swaps_a_linked_project_at_its_target(installed, case):
+    # session_start.sh links ~/mathverify-lean to <prefix>/mathverify-lean. Round-4 finding:
+    # `du -sk` of the link measured 0 KiB; the staging directory would sit next to the link and
+    # the swap would replace the link with a new directory, leaving the install it points to old.
+    bed = installed
+    proj = bed.opt / "mathverify-lean"
+    link = bed.home / "mathverify-lean"
+    link.symlink_to(proj)
+    if case == "in-place":
+        # 7.5 GB already there: 0.2 GB left to add (the link measured 0 KiB: 7.7 GB)
+        extra = {"STUB_DU_KB": str(int(7.5 * GB))}
+        size, avail = 0.2, 1.1
+    else:
+        basic = bed.change_pins()
+        # the old project holds 20 GB, so the staged copy may need as much (the link: 7.7 GB)
+        extra = {"STUB_DU_KB": str(20 * GB)}
+        size, avail = 20.0, 20.5
+    extra["MATHVERIFY_LEAN_PROJECT"] = str(link)
+    need = size + 1.0
+    before = _tree(bed.opt)
+    r, _ = bed.script("setup_lean.sh", STUB_DF_AVAIL_KB=str(int(avail * GB)), **extra)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert f"PROJECT={proj} (given as {link})" in r.stdout
+    assert (f"ERROR: not enough disk on {bed.opt}: ~{need:.1f} GB needed ({size:.1f} GB + 1.0 GB "
+            f"margin), {avail:.1f} GB free; ") in r.stderr, r.stderr
+    assert _tree(bed.opt) == before and not bed.calls.exists()
+    r, _ = bed.script("setup_lean.sh", STUB_DF_AVAIL_KB=str(int((need + 0.2) * GB)), **extra)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f"disk: {need + 0.2:.1f} GB free on {bed.opt}, {need:.1f} GB needed" in r.stdout
+    assert bed.df_calls.read_text().splitlines()[-1] == str(bed.opt)
+    assert "SMOKE OK" in r.stdout
+    # the link is still the link, and the install it points to is the one that was completed
+    assert os.readlink(link) == str(proj)
+    assert _dot_entries(bed.home) == [] and _dot_entries(bed.opt) == []
+    if case == "in-place":
+        assert f"{proj} already has the pinned project files" in r.stdout
+    else:
+        assert f"building the new project in {bed.opt}/.mathverify-lean.stage." in r.stdout
+        assert (proj / "MathverifyLean" / "Basic.lean").read_bytes() == basic.read_bytes()
+        assert f"SMOKE OK in {proj}" in r.stdout
+
+
+# ---- setup_lean.sh inside WSL: the Windows drive under the distribution's virtual disk ----------
+
+# `reg.exe query HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss /s` in the shape measured in
+# WSL Ubuntu on 2026-09-24 (CRLF line ends, four-space separators), with two distributions: Debian
+# on E:, and Ubuntu on D: with its BasePath before its name and in the \\?\ form.
+REG_LXSS = "\r\n".join([
+    "",
+    r"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Lxss",
+    "    DefaultDistribution    REG_SZ    {1111}",
+    "    DefaultVersion    REG_DWORD    0x2",
+    "",
+    r"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Lxss\{1111}",
+    "    State    REG_DWORD    0x1",
+    "    DistributionName    REG_SZ    Debian",
+    r"    BasePath    REG_SZ    E:\WSL\Debian",
+    "",
+    r"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Lxss\{2222}",
+    r"    BasePath    REG_SZ    \\?\D:\WSL images\Ubuntu",
+    "    DistributionName    REG_SZ    Ubuntu",
+    "    VhdFileName    REG_SZ    ext4.vhdx",
+    "",
+])
+REG_QUERY = r"reg.exe query HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss /s"
+# Stand-ins for WSL interop, each recording its argv: reg.exe prints $STUB_REG_OUT, cmd.exe echoes
+# $STUB_LOCALAPPDATA (CRLF, as the real one), wslpath -u 'X:\' answers <tmp>/mnt/x/.
+STUB_REG = r"""
+    #!/bin/sh
+    printf '%s\n' "reg.exe $*" >> "@CALLS@"
+    [ -n "${STUB_REG_OUT:-}" ] || exit 1
+    cat "$STUB_REG_OUT"
+"""
+STUB_CMD = r"""
+    #!/bin/sh
+    printf '%s\n' "cmd.exe $*" >> "@CALLS@"
+    [ -n "${STUB_LOCALAPPDATA:-}" ] || exit 1
+    printf '%s\r\n' "$STUB_LOCALAPPDATA"
+"""
+STUB_WSLPATH = r"""
+    #!/bin/sh
+    printf '%s\n' "wslpath $*" >> "@CALLS@"
+    [ "$1" = -u ] || exit 1
+    echo "@MNT@/$(printf '%s' "$2" | cut -c1 | tr 'A-Z' 'a-z')/"
+"""
+
+
+class WinTools:
+    """reg.exe, cmd.exe and wslpath stubs in their own PATH directory, and a df map file."""
+
+    def __init__(self, bed: LeanBed):
+        self.bed = bed
+        self.bin = bed.tmp / "winbin"
+        self.calls_file = bed.tmp / "win_calls"
+        self.mnt = bed.tmp / "mnt"
+        self.reg_out = bed.tmp / "reg_out"
+        self.reg_out.write_bytes(REG_LXSS.encode())
+        for name, text in (("reg.exe", STUB_REG), ("cmd.exe", STUB_CMD), ("wslpath", STUB_WSLPATH)):
+            _write_exec(self.bin / name, text.replace("@CALLS@", str(self.calls_file))
+                        .replace("@MNT@", str(self.mnt)))
+
+    def path(self) -> str:
+        return f"{self.bin}:{self.bed.bin}:/usr/bin:/bin"
+
+    def calls(self) -> list[str]:
+        return self.calls_file.read_text().splitlines() if self.calls_file.exists() else []
+
+    def df_map(self, rows: list[tuple[str, str, float]]) -> str:
+        """STUB_DF_MAP for (directory, filesystem, GB free) rows."""
+        f = self.bed.tmp / "df_map"
+        f.write_text("".join(f"{d.rstrip('/')}\t{fs}\t{int(gb * GB)}\n" for d, fs, gb in rows))
+        return str(f)
+
+
+@posix_only
+@pytest.mark.parametrize("found", ["registry", "localappdata", "fallback", "override"])
+def test_setup_lean_under_wsl_checks_the_windows_drive(lean_bed, found):
+    # Round-4 finding: inside WSL df sees the ext4 virtual disk (941 GB free) while the Windows
+    # drive holding its ext4.vhdx had 6.2 GB (measured 2026-09-24); that drive filled up.
+    bed = lean_bed
+    win = WinTools(bed)
+    extra = {"PATH": win.path(), "WSL_DISTRO_NAME": "Ubuntu", "STUB_REG_OUT": str(win.reg_out)}
+    if found == "registry":
+        (bed.markers / "WSLInterop").touch()
+        # wslpath's answer "<mnt>/d/" (with the slash, as the real one) is used without it
+        drive, drive_dir = "D:", f"{win.mnt}/d"
+        how = r"registry: BasePath of distribution Ubuntu = \\?\D:\WSL images\Ubuntu"
+        calls = [REG_QUERY, "wslpath -u D:\\"]
+    elif found == "localappdata":
+        # only the kernel says WSL; the registry has no distribution of this name
+        extra.update(STUB_UNAME_R="5.15.167.4-microsoft-standard-WSL2", WSL_DISTRO_NAME="Ubuntu-24.04",
+                     STUB_LOCALAPPDATA=r"E:\Users\u\AppData\Local")
+        drive, drive_dir = "E:", f"{win.mnt}/e"
+        how = (r"no registry BasePath for distribution Ubuntu-24.04; %LOCALAPPDATA% = "
+               r"E:\Users\u\AppData\Local (a distribution's default location)")
+        calls = [REG_QUERY, "cmd.exe /d /c echo %LOCALAPPDATA%", "wslpath -u E:\\"]
+    elif found == "fallback":
+        # no interop (none of reg.exe, cmd.exe, wslpath on PATH); newer WSL's marker name
+        (bed.markers / "WSLInterop-late").touch()
+        extra["PATH"] = f"{bed.bin}:/usr/bin:/bin"
+        drive, drive_dir = "C:", "/mnt/c"
+        how = "fallback: neither the registry nor %LOCALAPPDATA% named a drive"
+        calls = []
+    else:
+        (bed.markers / "WSLInterop").touch()
+        drive, drive_dir = "", str(bed.tmp / "windrive")
+        extra["MATHVERIFY_WSL_DRIVE_DIR"] = drive_dir
+        how = "MATHVERIFY_WSL_DRIVE_DIR"
+        calls = []
+    place = (f"the Windows drive {drive + ' ' if drive else ''}({drive_dir}), which holds this WSL "
+             f"distribution's virtual disk")
+    before = _tree(bed.opt)
+    r, secs = bed.script("setup_lean.sh", STUB_DF_MAP=win.df_map([(drive_dir, f"{drive or 'X:'}\\", 6.2)]),
+                         **extra)
+    assert r.returncode == 1, r.stdout + r.stderr
+    # the virtual disk has room (100 GB); the drive under it has not
+    assert f"disk: 100.0 GB free on {bed.opt}, 8.7 GB needed" in r.stdout, r.stdout
+    assert f"WSL: {place} ({how})" in r.stdout, r.stdout
+    assert (f"ERROR: not enough disk on {place}: ~8.7 GB needed (7.7 GB + 1.0 GB margin), "
+            f"6.2 GB free; nothing was installed") in r.stderr, r.stderr
+    assert _tree(bed.opt) == before and not bed.calls.exists()
+    assert bed.df_calls.read_text().splitlines()[-1] == drive_dir
+    assert win.calls() == calls
+    assert secs < 30, secs
+    r, _ = bed.script("setup_lean.sh", STUB_DF_MAP=win.df_map([(drive_dir, f"{drive or 'X:'}\\", 8.9)]),
+                      **extra)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f"disk: 8.9 GB free on {place}, 8.7 GB needed" in r.stdout
+    assert "SMOKE OK" in r.stdout and _dot_entries(bed.opt) == []
+
+
+@posix_only
+@pytest.mark.parametrize("layout", ["all-on-the-virtual-disk", "project-on-that-drive",
+                                    "project-on-another-drive"])
+def test_setup_lean_under_wsl_counts_what_lands_on_the_windows_drive(lean_bed, layout):
+    bed = lean_bed
+    win = WinTools(bed)
+    (bed.markers / "WSLInterop").touch()
+    drive_dir = str(win.mnt / "c")
+    rows = [(drive_dir, "C:\\", 6.2)]
+    extra = {"MATHVERIFY_WSL_DRIVE_DIR": drive_dir}
+    place = f"the Windows drive ({drive_dir}), which holds this WSL distribution's virtual disk"
+    if layout == "all-on-the-virtual-disk":
+        # the toolchain is not installed either: both go into the disk image, summed
+        extra.update(ELAN_HOME=str(bed.tmp / "no-elan"), MATHVERIFY_LEAN_OFFLINE="0")
+        size = 10.7
+    elif layout == "project-on-that-drive":
+        # the project directory is on the drive itself (df names it "C:\" like the drive)
+        rows.insert(0, (str(bed.opt), "C:\\", 100.0))
+        size = 7.7
+    else:
+        # on another Windows drive: what is written there does not grow the disk image
+        rows.insert(0, (str(bed.opt), "F:\\", 100.0))
+        size = 0.0
+    r, _ = bed.script("setup_lean.sh", STUB_DF_MAP=win.df_map(rows), **extra)
+    if size == 0.0:
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert f"WSL: nothing this run writes lands on a virtual disk or on {drive_dir}" in r.stdout
+        assert drive_dir in bed.df_calls.read_text().splitlines()  # its filesystem was compared
+        assert "SMOKE OK" in r.stdout
+        return
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert (f"ERROR: not enough disk on {place}: ~{size + 1:.1f} GB needed ({size:.1f} GB + 1.0 GB "
+            f"margin), 6.2 GB free; nothing was installed") in r.stderr, r.stderr
+    assert not bed.calls.exists() and not (bed.tmp / "no-elan").exists()
+
+
+@posix_only
+@pytest.mark.parametrize("drive", ["unmounted", "unreadable"])
+def test_setup_lean_under_wsl_refuses_a_windows_drive_it_cannot_read(lean_bed, drive):
+    # No interop, so the fallback /mnt/c. Unmounted, /mnt/c is a plain directory of the virtual disk
+    # (df names /dev/sdd there, with its ~1 TB free: the number the check exists to look past);
+    # unreadable, df fails. Either way the run stops before writing, even with 900 GB "free".
+    bed = lean_bed
+    win = WinTools(bed)
+    (bed.markers / "WSLInterop").touch()
+    fs = "/dev/sdd" if drive == "unmounted" else "-"
+    before = _tree(bed.opt)
+    r, secs = bed.script("setup_lean.sh", PATH=f"{bed.bin}:/usr/bin:/bin", WSL_DISTRO_NAME="Ubuntu",
+                         STUB_DF_MAP=win.df_map([("/mnt/c", fs, 900.0)]))
+    assert r.returncode == 1, r.stdout + r.stderr
+    place = "the Windows drive C: (/mnt/c), which holds this WSL distribution's virtual disk"
+    why = (": df names /dev/sdd for /mnt/c, a disk inside WSL, not a Windows drive (is the drive "
+           "mounted?)" if drive == "unmounted" else " (df -Pk /mnt/c)")
+    assert (f"ERROR: cannot read the free disk space of {place}{why}; set MATHVERIFY_WSL_DRIVE_DIR to "
+            f"a directory on the Windows drive that holds the virtual disk (ext4.vhdx); nothing was "
+            f"installed") in r.stderr, r.stderr
+    assert "not enough disk" not in r.stderr
+    assert _tree(bed.opt) == before and not bed.calls.exists()
+    assert bed.df_calls.read_text().splitlines()[-1] == "/mnt/c"
+    assert secs < 30, secs
+
+
+@posix_only
+def test_setup_lean_outside_wsl_never_asks_windows(lean_bed):
+    # Interop stand-ins on PATH and WSL_DISTRO_NAME set, but neither WSL marker (no WSLInterop,
+    # a kernel without "microsoft"): the Windows drive is never looked up or checked.
+    bed = lean_bed
+    win = WinTools(bed)
+    r, _ = bed.script("setup_lean.sh", PATH=win.path(), WSL_DISTRO_NAME="Ubuntu",
+                      STUB_REG_OUT=str(win.reg_out), STUB_LOCALAPPDATA=r"C:\Users\u\AppData\Local",
+                      STUB_DF_MAP=win.df_map([(f"{win.mnt}/d", "D:\\", 0.1), (f"{win.mnt}/c", "C:\\", 0.1)]))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "WSL: " not in r.stdout and "SMOKE OK" in r.stdout
+    assert win.calls() == []
+    assert bed.df_calls.read_text().splitlines() == [str(bed.opt)]
 
 
 @posix_only
