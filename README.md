@@ -7,13 +7,15 @@ kendisi üretip karşılaştırarak değil. Cevap anahtarı doğrulama hattına 
 **Yeni bir oturum devralıyorsa önce [HANDOFF.md](HANDOFF.md) okunmalı:** yapılan işin tamamı,
 ölçülen sonuçlar, bulunan hatalar ve kalan iş orada.
 
-Handoff: `fable-handoff-matematik-dogrulama_1.md` · Kararlar: [DECISIONS.md](DECISIONS.md)
+Şartname (handoff): [docs/sartname/fable-handoff-matematik-dogrulama_1.md](docs/sartname/fable-handoff-matematik-dogrulama_1.md)
+(24 Eylül 2026'dan beri depoda; önce yalnız yerel `Downloads` klasöründeydi) · Kararlar: [DECISIONS.md](DECISIONS.md)
+Bulutta çalışma: [docs/BULUT.md](docs/BULUT.md)
 Mimari: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Çözücü formatı: [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md)
 §6 ölçümleri: [docs/E1-E10-measurement.md](docs/E1-E10-measurement.md) · LLM katmanları: [docs/LLM_LAYERS.md](docs/LLM_LAYERS.md)
 Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](reports/)
 **Kalite ilkeleri (literatür → mekanizma → kapı):** [docs/QUALITY.md](docs/QUALITY.md)
 
-## Durum (23 Eylül 2026)
+## Durum (23 Eylül 2026; 24 Eylül eki son satırda)
 
 | Faz | Durum |
 |---|---|
@@ -26,6 +28,7 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | İkinci denetim (23 Eylül): literatür + doğrulayıcının metamorfik testi | **4 yanlış-onay sınıfı kapatıldı** ([HANDOFF §3–4](HANDOFF.md), DECISIONS §26–30, [docs/QUALITY.md](docs/QUALITY.md)) |
 | F5 Lean 4 + Mathlib | **tamam ve ölçüldü** (model gerektirmeyen yolla) |
 | F6 adversaryal sertleştirme + kalibrasyon | **tamam ve ölçüldü** |
+| 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean sürümleri, kapı sertleştirmesi (`check.py --full` 24 kapı) | **tamam** (`bulut-2026-09-24`; [HANDOFF §0](HANDOFF.md), DECISIONS §34–43, [docs/BULUT.md](docs/BULUT.md)) |
 
 ## Ölçülen sonuçlar
 
@@ -151,10 +154,23 @@ kod değişikliğiyle kapanmayan tek açık.
 
 ## Kurulum
 
+Windows (Git Bash):
+
 ```bash
 uv venv --python 3.14 .venv
 uv pip install --python .venv/Scripts/python.exe -e ".[llm,dev]"
 ```
+
+Linux (bulutta bunu oturum kancası kendisi yapar, bkz. [docs/BULUT.md](docs/BULUT.md)):
+
+```bash
+uv venv --python 3.14 .venv
+uv pip install --python .venv/bin/python -r requirements.lock
+uv pip install --python .venv/bin/python --no-deps -e .
+```
+
+`requirements.lock`, başvuru Windows `.venv`'inde yüklü 32 paketin sürümlerine eşit, evrensel bir
+kilittir (DECISIONS §43); Linux ortamı böylece aynı paket sürümleriyle kurulur.
 
 `llm` ekstrası F3+ katmanlarını çalıştırır (`anthropic`, `python-dotenv`); ikisi de diğer
 bağımlılıklar gibi sabitlenmiştir, çünkü `anthropic` bir beta API yüzeyini sürüyor.
@@ -166,46 +182,81 @@ ANTHROPIC_API_KEY=...
 META_MODEL_API_KEY=...
 ```
 
-Lean için [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md).
+> **Düzeltme (24 Eylül 2026):** `.env` artık yok sayılmıyor. Kullanıcının açık kararıyla bu özel
+> depoda izlenir, bulut oturumları anahtarları oradan okur (DECISIONS §35). Değerler hiçbir
+> çıktıya yazılmaz; depo açılacak ya da paylaşılacaksa önce anahtarlar yenilenir ve `.env`
+> geçmişten temizlenir.
+
+Lean için [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md). Kısaca (sürümler `lean/PINS`'te sabit):
+
+```bash
+# Windows: WSL içinde
+wsl -d Ubuntu -- bash /mnt/c/Users/kullanici/mathverify/scripts/setup_lean.sh
+wsl -d Ubuntu -- bash /mnt/c/Users/kullanici/mathverify/scripts/setup_lean_repl.sh
+# Linux (bulutta ortamın kurulum betiği yapar)
+bash scripts/setup_lean.sh
+bash scripts/setup_lean_repl.sh
+```
+
+## Bulutta çalışma
+
+Proje özel GitHub deposunda (`github.com/wqedwad/asd`) ve Claude Code on the web oturumlarında
+çalışacak biçimde hazırlandı: ortamın kurulum betiği (`scripts/cloud/setup_env.sh`) Python 3.14.6'yı
+ve Lean'i `/opt` altına kurar, SessionStart kancası (`scripts/cloud/session_start.sh`) her oturumda
+`.venv`'i ve Lean ortam değişkenlerini hazırlar. Ön koşullar, ağ ayarı, günlükler, sınırlar ve
+ilk oturumda ölçülecekler: [docs/BULUT.md](docs/BULUT.md).
 
 ## Çalıştırma
 
+Komutlar proje kökünden; yorumlayıcı platforma göre:
+
 ```bash
-.venv/Scripts/python.exe scripts/check.py --full
+PY=.venv/Scripts/python.exe     # Windows (Git Bash; PowerShell için HANDOFF §9)
+PY=.venv/bin/python             # Linux / bulut
+export PYTHONUTF8=1
+```
+
+```bash
+$PY scripts/check.py --full
 ```
 
 Tek komutta 23 kapı: testler, pyflakes, deterministik değerlendirme, Lean taraması (junk-value sondası dahil),
 adversaryal tarama (3 yüzey), metamorfik sağlamlık taraması, kalibrasyon. Kapı düşerse çıkış kodu 1.
 Çıktı ayrıca `reports/check_full.log`a yazılır (tarih, dal ve commit ile).
 
+> **Düzeltme (24 Eylül 2026):** artık **24 kapı** ("Lean erişilebilir" eklendi; hızlı mod 12).
+> Bir koşu çökerse, raporunu yazmazsa, Lean yoksa ya da tarama sırasında kaybolursa o koşunun
+> kapıları düşer; önceden eski bir JSON ya da Lean'siz bir makine 23/23 gösterebiliyordu
+> (DECISIONS §39).
+
 Tek tek:
 
 ```bash
-.venv/Scripts/python.exe -m pytest tests -q
+$PY -m pytest tests -q
 ```
 
 ```bash
-.venv/Scripts/python.exe evalset/build/build_all.py
+$PY evalset/build/build_all.py
 ```
 
 ```bash
-.venv/Scripts/python.exe -m harness.run_eval
+$PY -m harness.run_eval
 ```
 
 ```bash
-.venv/Scripts/python.exe -m harness.run_lean --timeout 45
+$PY -m harness.run_lean --timeout 45
 ```
 
 ```bash
-.venv/Scripts/python.exe -m harness.adversarial
+$PY -m harness.adversarial
 ```
 
 ```bash
-.venv/Scripts/python.exe -m harness.soundness_fuzz
+$PY -m harness.soundness_fuzz
 ```
 
 ```bash
-.venv/Scripts/python.exe -m harness.run_f3 --workers 6 --pathb
+$PY -m harness.run_f3 --workers 6 --pathb
 ```
 
 F3 koşusu L4, L5 ve L6'yı birlikte ölçer; `--no-l4` / `--no-l5` / `--no-l6` ile tek tek
@@ -224,7 +275,7 @@ Gerçek bir AI çözücünün çıktıları ölçülecekse `--solver-family anth
 Tek bir öğeyi doğrulamak:
 
 ```bash
-.venv/Scripts/python.exe scripts/verify_cli.py --item evalset/items/tyt-geo-001.json
+$PY scripts/verify_cli.py --item evalset/items/tyt-geo-001.json
 ```
 
 `--lean` eklenirse formal katman da koşar. Model gerektirmez, yalnız yerel Lean/Mathlib ister,
@@ -232,6 +283,8 @@ ve yalnız pozitif kanıt üretir: sertifika ekleyebilir, hiçbir kararı ters �
 
 Sürümler sabittir: SymPy 1.14.0, mpmath 1.3.0, z3-solver 5.1.0, math-verify 0.9.0,
 Lean 4.34.0 + Mathlib. Windows'ta `PYTHONUTF8=1` ile çalıştırın.
+Ek (24 Eylül 2026): bütün Python paketleri `requirements.lock`'ta; Mathlib `5ed2965`, REPL
+`646a773` ve elan 4.2.4 `lean/PINS`'te. Python yerelde 3.14.7, bulutta 3.14.6 (DECISIONS §42).
 
 ## Katmanlar
 
@@ -284,8 +337,14 @@ evalset/build/    konu başına öğe üreticileri (A/B elle, C adlandırılmı�
                   tyt_kapsam.py: domain_of / simplify_expression / count_solutions + LaTeX kapsamı
 evalset/items/    280 JSON öğe (üretilir)
 harness/          run_eval · run_lean · run_f3 · adversarial · calibrate · metrics · loader
-docs/             ARCHITECTURE · SOLVER_FORMAT · LLM_LAYERS · LEAN_SETUP · E1-E10-measurement
-scripts/          check · verify_cli · probe_e1_e10 · lean_* · setup_lean*
+docs/             ARCHITECTURE · SOLVER_FORMAT · LLM_LAYERS · LEAN_SETUP · BULUT · E1-E10-measurement
+docs/sartname/    özgün şartname (kanonik `_1.md` ve daha eski `_eski.md`)
+lean/             sabitlenmiş Lean projesi dosyaları ve PINS (sürümler)
+scripts/          check · verify_cli · probe_e1_e10 · lean_* · setup_lean* · fetch_artifacts
+scripts/cloud/    setup_env.sh (bulut ortam kurulum betiği) · session_start.sh (oturum kancası)
 scripts/dev/      kapıların parçası olmayan geliştirme betikleri (smoke_*, lean_try, clean_imports)
 reports/          üretilmiş raporlar
+reports/arsiv/    git'e girmeyen rapor JSON'larının tarihli anlık görüntüsü
+requirements.lock sabit paket sürümleri (Linux/bulut kurulumu)
+.claude/          settings.json: SessionStart kancası
 ```

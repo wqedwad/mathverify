@@ -1,6 +1,8 @@
 # CLAUDE.md — mathverify kalıcı kuralları
 
-Güncel durum, ölçülen sayılar ve sıradaki iş için önce `HANDOFF.md`, sonra `DECISIONS.md` okunur.
+Güncel durum, ölçülen sayılar ve sıradaki iş için önce `HANDOFF.md`, sonra `DECISIONS.md` okunur;
+bulut oturumunda ayrıca `docs/BULUT.md`. Kullanıcının `~/.claude` belleği buluta taşınmaz: oturumun
+bilmesi gereken her şey depoya yazılır.
 Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz.
 
 ## Kullanıcıyla çalışma
@@ -12,7 +14,10 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
   olmayan bir açık bulunursa aynı turda düzelt.
 - Ölçülmüş sayı ver; "testler geçiyor" kanıt değildir. Doğrulanmamış bilgiyi işaretle. Önceki bir
   iddia yanlış çıktıysa bunu açıkça söyle.
-- Şartnamenin kilitli kararları (D1–D6, `DECISIONS.md` §1) yeniden sorulmaz.
+- Şartnamenin kilitli kararları (D1–D6, `DECISIONS.md` §1) yeniden sorulmaz. Şartname:
+  `docs/sartname/fable-handoff-matematik-dogrulama_1.md`.
+- Krediye bağlı ölçümler (F3/F4) ancak bütün lokal kalite işi bitip kod dondurulduktan ve API
+  anahtarları yenilendikten sonra koşulur (kullanıcı kararı, 23 Eylül 2026).
 
 ## Doğrulayıcının değişmez ilkeleri
 
@@ -42,7 +47,8 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 
 - Bitirmeden önce `scripts/check.py --full` bütün kapılardan geçmeli (~25–45 dk, arka planda;
   günlüğü `reports/check_full.log`a kendisi yazar). Hızlı döngüde `pytest` ve `scripts/check.py`
-  yeterli.
+  yeterli. Lean'siz ya da Lean'i yarıda kaybeden bir koşuda Lean kapıları bilerek düşer; o koşu
+  "geçti" sayılmaz.
 - Her yeni Lean şablonu yanlış cevaplı öğelerde ve junk-value sondasında da koşturulur. Lean FP
   ve junk sertifikası 0 kalmalı.
 - Her bulgu ölçümle bulunur, ölçümle doğrulanır, bir teste ya da kalıcı bir kapıya bağlanır.
@@ -54,10 +60,21 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 
 - `.env`'i, `reports/*.json`'ı ya da herhangi bir anahtarı commit etme. Anahtar değerlerini ekrana,
   belgeye ya da günlüğe yazma.
+  **Düzeltme (24 Eylül 2026):** `.env` kısmı geçersiz. Kullanıcının açık kararıyla `.env` bu özel
+  depoda (`github.com/wqedwad/asd`) izlenir (`DECISIONS.md` §35). Geçerli kalanlar: `.env.*` ve
+  `reports/*.json` commit edilmez (anlık görüntüsü `reports/arsiv/` altında); anahtar değeri hiçbir
+  çıktıya yazılmaz. Anahtarlar yenilenince `.env` güncellenip commit edilir. Depo herkese açılacak
+  ya da paylaşılacaksa önce anahtarlar yenilenir ve `.env` geçmişten temizlenir.
 - Global git ayarını değiştirme. Kimlik gerekirse komut başına `git -c user.name=… -c user.email=…`
   ver; önceki commit'lerin kimliği `git log -1 --format='%an <%ae>'` ile görülür.
 - Kullanıcı istemeden commit etme ya da dal birleştirme. Ana dal `master`; doğrudan onun üzerinde
   commit etme, önce dal aç.
+- Yedeksiz birleştirme. Her `master` birleştirmesinden önce `yedek/master-YYYY-MM-DD[-N]` etiketi ve
+  yerel makinede `C:\Users\kullanici\mathverify-yedek\` altına bir bundle alınır; geri dönüş
+  `git reset --hard <etiket>` ya da `git clone --branch master <bundle>`. Etiket ve bundle'lar
+  kullanıcıya sormadan silinmez (`HANDOFF.md` §5.4).
+- Bulut oturumundan etiket ya da `master` push etmeye çalışma: bulut yalnız oturumun kendi dalını
+  push edebilir. Birleştirme PR ile ya da yerel checkout'ta, yedek de yerelde alınır.
 
 ## Commit biçimi
 
@@ -68,14 +85,27 @@ Başlık `alan: özet` biçiminde ve Türkçe (`denetim:`, `F7:`, `raporlar:`, `
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
 
-## Ortam tuzakları (Windows)
+## Ortam tuzakları
+
+- SymPy ≥ 1.13'te `Float(3.0) == 3` False döner; tam sayılığı `sp.Rational(...)` ile kontrol et.
+- Lean yoksa Lean testleri sessizce atlanır; `pytest -rs` ile kontrol et.
+- Sandbox kullanan probe'lar gerçek bir dosyada ve `if __name__ == "__main__":` içinde olmalı
+  (sandbox her işletim sisteminde multiprocessing `spawn` kullanır).
+
+### Windows
 
 - Python her zaman `.venv/Scripts/python.exe` ile ve `PYTHONUTF8=1` ile çalıştırılır.
 - Git Bash heredoc'u `\\` karakterini çökertir. Ters eğik çizgi içeren Python'u Write aracıyla
   dosyaya yaz.
-- Sandbox kullanan probe'lar gerçek bir dosyada ve `if __name__ == "__main__":` içinde olmalı
-  (multiprocessing spawn).
-- SymPy ≥ 1.13'te `Float(3.0) == 3` False döner; tam sayılığı `sp.Rational(...)` ile kontrol et.
 - `ctypes.windll` çağrılarında `restype`/`argtypes` verilmezse tutamaçlar 32 bit'e kırpılır.
-- Lean, WSL `Ubuntu` içinde çalışır (`docs/LEAN_SETUP.md`). Lean yoksa Lean testleri sessizce
-  atlanır; `pytest -rs` ile kontrol et.
+- Lean, WSL `Ubuntu` içinde çalışır (`docs/LEAN_SETUP.md`).
+
+### Linux / bulut
+
+- Python `.venv/bin/python` ile (`PYTHONUTF8=1` yine verilir). Bulutta `.venv`'i oturum kancası
+  `requirements.lock`'tan kurar; bağımlılık değişince kilit de yeniden üretilir.
+- Lean WSL'siz, yerel `bash -lc` ile çalışır; yeri `ELAN_HOME`, `MATHVERIFY_LEAN_PROJECT`,
+  `MATHVERIFY_LEAN_REPL` ile verilir (bulutta `/opt` altında). Sürümler `lean/PINS`'te sabit.
+- Bulut ayrıntıları (kurulum betiği, kanca, `/opt`, günlükler, sınırlar): `docs/BULUT.md`.
+- Bulutta boşta kalan VM geri alınınca arka plandaki iş kaybolur: `check.py --full` ya da Lean
+  kurulumu sürerken oturum etkin tutulur.

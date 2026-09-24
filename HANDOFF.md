@@ -1,6 +1,10 @@
 # HANDOFF — mathverify
 
-> **Son güncelleme: 23 Eylül 2026.** Bu belge, projeyi hiç görmemiş bir oturumun **yalnız bu dosyayı
+> **Son güncelleme: 24 Eylül 2026** (GitHub ve bulut hazırlığı: yeni §0 ve eskiyen her ifadenin
+> yanında "Düzeltme (24 Eylül 2026)" notu). §1–§12'nin geri kalanı ve aşağıdaki paragraf 23 Eylül
+> oturumunundur.
+>
+> **23 Eylül 2026.** Bu belge, projeyi hiç görmemiş bir oturumun **yalnız bu dosyayı
 > okuyarak** devralabilmesi için yazıldı. Yazılmadan önce `git status`, `git log`, `git diff`
 > çalıştırıldı; adı geçen her dosya, fonksiyon ve komut depoda arandı; sayılar `reports/` altındaki
 > üretilmiş raporlardan okundu; `check.py --full` bu oturumda yeniden koşturuldu (son koşu 23/23
@@ -9,7 +13,15 @@
 > **[DOĞRULANMADI]** işareti şu demek: bilgi önceki (özetlenmiş) bir oturumdan geliyor ve bu oturumda
 > yeniden ölçülemedi ya da kontrol edilemedi. İşaretsiz her şey bu oturumda kontrol edildi.
 
-**Durum tek cümlede:** Kodda yarım kalmış bir iş yok ve commit edilmemiş değişiklik yok.
+**Durum (24 Eylül 2026):** Proje kullanıcının **özel** GitHub deposunda
+(`origin` = `https://github.com/wqedwad/asd`, varsayılan dal `master`). İş bundan sonra Claude Code
+on the web (bulut oturumları) üzerinden sürecek; bulut el kitabı `docs/BULUT.md`. 24 Eylül işi
+(Linux/bulut desteği, sabit Lean sürümleri, çevrimdışı kurulum, sertleştirilmiş kapılar,
+`check.py --full` artık 24 kapı) `bulut-2026-09-24` dalında; doğrulandıktan sonra kullanıcı onayıyla
+("dal, doğrula, birleştir") ve önce yedek alınarak `master`a fast-forward edilir (§5.4). Özet §0'da.
+Son `check.py --full`: «SAYI-GÜNCELLENECEK»/24. Kredili ölçüm kuralı değişmedi (§7).
+
+**Durum tek cümlede (23 Eylül):** Kodda yarım kalmış bir iş yok ve commit edilmemiş değişiklik yok.
 `scripts/check.py --full` 23/23 kapı geçiyor. 23 Eylül'deki bütün iş (iki denetim, bellek sınırı,
 tanımlılık açığı, üç Lean şablonu, pyflakes kapısı, temizlik) `master`da; her birleştirmeden önceki
 `master`ın yedeği §5.4'te. Kredili ölçümler (F3/F4) kullanıcı kararıyla lokal iş bitince, kod
@@ -22,7 +34,118 @@ dondurulup anahtarlar yenilendikten sonra yapılacak (§7).
    listeli. Başka bir değişiklik görürsen, bu belgeden sonra yapılmıştır.
 3. `PYTHONUTF8=1 .venv/Scripts/python.exe -m pytest tests -q` çalıştır (Git Bash; PowerShell için
    §9). Beklenen: `438 passed, 1 skipped`, yaklaşık 90 saniye.
+   **Düzeltme (24 Eylül 2026):** Linux'ta ve bulutta yorumlayıcı `.venv/bin/python`. Test sayısı
+   değişti: Windows'ta «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped; Linux'ta Lean
+   kuruluyken «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped. Atlananlar `-rs` ile
+   görülür; Lean kurulu bir makinede "Lean/Mathlib toolchain not available" nedeniyle atlama olmamalı.
 4. §7'deki ilk işe geç.
+
+Bulut oturumundaysan önce oturum başındaki `[mathverify bulut oturumu …]` durum bloğuna, sonra
+`docs/BULUT.md`'ye bak: Python, `.venv` ve Lean'in hazır olup olmadığı orada yazar.
+
+---
+
+## 0. GitHub ve bulut (24 Eylül 2026)
+
+Bu bölüm 24 Eylül'de eklendi. Kararların gerekçesi ve reddedilen seçenekler DECISIONS §34–43'te,
+bulutun işletimi `docs/BULUT.md`'de.
+
+### 0.1 Uzak depo
+
+- `origin` = `https://github.com/wqedwad/asd`, **özel**, kullanıcının hesabı. Push edilenler ve
+  hash'leri (`git ls-remote origin`, yerel hash'lerle aynı): `master` `23d7c6b` (varsayılan dal),
+  `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b`, `bulut-2026-09-24`,
+  etiketler `yedek/master-2026-09-23` `2744677` ve `yedek/master-2026-09-23-2` `e2aa08d`, ve dal
+  olmayan araç ref'i `refs/arac/bulut-v1` (§0.5).
+- `bulut-2026-09-24` doğrulandıktan sonra `master`a fast-forward edilir. Kullanıcı onayı var
+  ("dal, doğrula, birleştir"); önceki birleştirmeler gibi önce etiket + bundle yedeği alınır (§5.4).
+- CI ve LICENSE hâlâ yok (§12).
+
+### 0.2 Bulut ortamı (resmî belgelerden, 24 Eylül'de okundu)
+
+Kaynak: `code.claude.com/docs/en/cloud-environments` ve `claude-code-on-the-web`. Bulutta henüz
+oturum açılmadı; aşağıdakiler belgeden, ölçüm değil.
+
+- Ubuntu 24.04 x86_64, ~4 vCPU / 16 GB RAM / 30 GB disk.
+- Ortamın "Setup script"i root olarak Claude başlamadan önce koşar, 0 ile çıkmalı, ~5 dakikada
+  bitmesi önerilir; sonucu anlık görüntüye alınır ve ~7 gün yeniden kullanılır.
+- Depodaki `.claude/settings.json` SessionStart kancaları her oturumda (yerelde de) koşar.
+- Kullanıcının `~/.claude` belleği buluta **taşınmaz**. O bellekte olup depoda olmayan kurallar
+  (birleştirme öncesi yedek, F3/F4 zamanı) 24 Eylül'de `CLAUDE.md`'ye ve buraya yazıldı.
+- Özel depo için Claude GitHub App kurulu olmalı (`https://github.com/apps/claude/installations/new`).
+- Bütün GitHub trafiği bir vekilden geçer; oturuma bağlı olmayan depoların release dosyalarına 403
+  döner. Bu yüzden `github.com/leanprover/...` indirmeleri orada çalışmaz.
+- Varsayılan "Trusted" ağ PyPI ve GitHub'ı (vekil üzerinden) kapsar; `releases.lean-lang.org`,
+  `cache.mathlib.org`, `releases.astral.sh` ve `api.meta.ai`'yi kapsamaz.
+- Bulut oturumundan `git push` yalnız oturumun **kendi dalına** çalışır: etiketler ve `master`
+  buluttan push edilemez; birleştirme PR ile ya da yerel checkout'ta yapılır.
+- Boşta kalan VM geri alınınca arka plandaki kabuk işi kaybolur.
+- `claude --teleport <id>` bir bulut oturumunu yerel checkout'a çeker.
+
+### 0.3 Gizli bilgiler
+
+Kullanıcı kararı (24 Eylül). `.env` bu özel depoda **izlenir** (commit `6323de7`;
+`.gitignore` artık `.env`'i yok saymıyor, `.env.*`'i yok sayıyor). Bu, eski "`.env`'i commit etme"
+kuralının yerini aldı (§10, `CLAUDE.md`, DECISIONS §35). Değişmeyen: anahtar değerleri hiçbir
+çıktıya yazılmaz. Önceki karar sürüyor: anahtarlar kredili F3/F4 koşularından önce yenilenir,
+sonra `.env` güncellenip commit edilir. Depo herkese açılacak ya da paylaşılacaksa önce anahtarlar
+yenilenir ve `.env` geçmişten temizlenir. `python-dotenv` `.env`'i `override=False` ile ve yalnız
+projenin Python süreçlerinde yükler, yani Claude Code'un kendi `ANTHROPIC_API_KEY`'i olmaz.
+
+### 0.4 Depoya alınanlar
+
+- **Şartname:** `docs/sartname/fable-handoff-matematik-dogrulama_1.md` (kanonik, SHA256
+  `079d9355…`) ve `docs/sartname/fable-handoff-matematik-dogrulama_eski.md` (aynı günün 20:52
+  sürümü, `b6fc530b…`). Belgeler önceden `C:\Users\kullanici\Downloads`'a işaret ediyordu.
+- **Rapor JSON arşivi:** `reports/*.json` kuralı değişmedi (git-ignore'lu, üretilir), ama yedi
+  dosyanın 24 Eylül hâli `reports/arsiv/2026-09-24/` altında. İkisi (`f3_results.json`,
+  `f3_smoke_results.json`) 18 Eylül'deki ücretli koşudan ve **yeniden üretilemez**. Bulut kancası
+  eksik olanları `reports/`a kopyalar, var olanın üstüne yazmaz.
+
+### 0.5 Kod ve betik değişiklikleri (`bulut-2026-09-24`)
+
+| Değişiklik | Davranış | Karar |
+|---|---|---|
+| `src/mathverify/formal/lean_client.py` | POSIX'te REPL yerel `bash -lc` ile (Windows'ta yine `wsl -d Ubuntu`); `PATH` `${ELAN_HOME:-$HOME/.elan}/bin`; REPL kendi süreç grubunda, `killpg` ile öldürülür (yerel Linux'ta `lake env` ~6.9 GB'lık REPL'i yetim bırakıyordu); başlatıcı yoksa ve (POSIX'te) REPL ikilisi yoksa `LeanUnavailable`, `lake env` hiç başlatılmaz | DECISIONS §40 |
+| `scripts/check.py`, `harness/run_lean.py` | her harness'ten önce JSON'u silinir; çıkış kodu sıfır değilse ya da rapor yok/okunamıyorsa o harness'in bütün kapıları aynı adla FAIL; yeni kapı "Lean erişilebilir" (`--full` 23 → 24, hızlı 12); Lean taramanın ortasında kaybolursa (`lean_reached`, `lean_available_end`) dört Lean kapısı da düşer. Linux'ta yorumlayıcı `.venv/bin/python` | DECISIONS §39 |
+| `lean/` (`lakefile.toml`, `lean-toolchain`, `lake-manifest.json`, `MathverifyLean.lean`, `MathverifyLean/Basic.lean`, `PINS`) | WSL kurulumunun bayt bayt kopyası; araç zinciri `v4.34.0`, Mathlib `5ed2965`, REPL `646a773`, elan 4.2.4 | DECISIONS §38 |
+| `scripts/setup_lean.sh`, `setup_lean_repl.sh` | sabit sürümleri kurar (`stable`/`lake new`/`lake update` yok), ortam değişkenlerine uyar, araç dizininden çevrimdışı kurar, eksik kök modülleri kendisi derler (`lean_fix.sh` artık gereksiz), duman testi geçmezse düşer | DECISIONS §38 |
+| `scripts/fetch_artifacts.sh`, `refs/arac/bulut-v1` / `-v2` | Lean araç zinciri, elan, CPython 3.14.6, Mathlib `.ltar` önbelleği (v2'de ayrıca Lake paket ve REPL kaynakları) dal olmayan bir ref'te, 49 MiB parçalar + `SHA256SUMS.full`; normal klon indirmez | DECISIONS §37, `docs/BULUT.md` §11 |
+| `scripts/cloud/setup_env.sh`, `scripts/cloud/session_start.sh`, `.claude/settings.json` | ortam kurulum betiği (root, `/opt`, her zaman 0) ve oturum kancası (`.venv`, rapor JSON'ları, Lean ortam değişkenleri, arka planda yeniden deneme, Türkçe durum bloğu) | DECISIONS §41 |
+| `requirements.lock` | yerel `.venv`'deki 32 paketin evrensel kilidi | DECISIONS §43 |
+| `.gitattributes` | `* text=auto`, `*.sh eol=lf`; `lean/` bayt bayt (`lean/.gitattributes`) | DECISIONS §41 |
+
+### 0.6 Ölçümler (24 Eylül)
+
+| Ne | Sonuç | Nerede |
+|---|---|---|
+| Lean istemcisi, WSL içinde `wsl.exe`'siz yerel Linux (`test_lean_client_posix` + `test_f5_lean`, ilk tur) | 70 passed / 1 skipped; 6 canlı Lean testi koştu; koşu sonrası yetim REPL 0 | WSL |
+| Aynı iki dosya, Windows (ilk tur) | 69 passed / 2 skipped | Windows |
+| Lean uçtan uca kurulum (temiz `HOME`, bulut düzeni, 4 CPU, araç ref'inden) | 141 s; araç zinciri/`.ltar` indirmesi 0; manifest aynı; mathlib HEAD `5ed2965`; `bin/lean` SHA256'sı ve 17 738 dosyalık araç zinciri ağacı WSL kurulumuyla aynı; disk ~12 GB | WSL |
+| Oturum kancası | ilk koşu 2.5 s, ikinci 85 ms (WSL, root değil); Windows'ta 0 bayt çıktı, ~0.3 s | WSL, Windows |
+| Tam takım, yerel Linux (ilk tur, Lean kurulmamış test yatağı) | 464 passed / 7 skipped / 0 failed (6 atlama Lean yokluğundan) | WSL |
+| Tam takım, Python 3.12.11 (yedek yorumlayıcı) | 438 passed / 1 skipped (o günkü takım) | Linux |
+| `check.py` ilk tur: hızlı takım | 469 passed / 2 skipped; 27 yeni kapı testi; altı mutasyonun her biri testleri düşürdü | commit `9ad931b` |
+| Normal `git clone` (araç ref'i inmez) | 3 s, 1.2 MB | — |
+| İkinci tur sonrası tam takım, Windows | «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped | Windows |
+| İkinci tur sonrası tam takım, Linux (Lean kurulu) | «SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped | WSL |
+| `check.py --full` | «SAYI-GÜNCELLENECEK»/24, süre «SAYI-GÜNCELLENECEK» | yerel |
+| Bulut: kurulum betiği süresi, kanca süresi, `check.py --full` | «SAYI-GÜNCELLENECEK» | bulut, ilk oturum (`docs/BULUT.md` §12) |
+
+### 0.7 Dal commit'leri (`git log master..bulut-2026-09-24`, eskiden yeniye)
+
+| Commit | Ne |
+|---|---|
+| `eff4a7b` | Lean istemcisi Linux'ta yerel bash ile, süreç grubu öldürülür |
+| `9ad931b` | `check.py` çöken ya da rapor yazmayan koşuda kapıyı düşürür; "Lean erişilebilir" kapısı |
+| `83dd418` | Lean v4.34.0, Mathlib `5ed2965`, REPL `646a773` depoda sabit |
+| `7d94a81` | oturum kancası, ortam kurulum betiği, `requirements.lock` |
+| `4cce784` | şartname ve rapor JSON arşivi depoda |
+| `6323de7` | `.env` özel depoda izlenir (kullanıcı kararı) |
+
+Bu belge yazılırken ikinci tur düzeltmeleri (Lean'in tarama ortasında kaybolması, REPL ikilisi
+yokken `lake env`, bulut betiklerinin sertleştirilmesi) henüz commit edilmemişti; `git log` ile
+kontrol edin.
 
 ---
 
@@ -57,6 +180,11 @@ değil. Adı ne depoda ne şartnamede geçiyor (23 Eylül'de ikisi de tarandı; 
 47 KB; dosya yerinde). Numaralı literatür kaynakları (`[5]`, `[10]` gibi) oradaki §13'e aittir.
 Kilitli kararlar (D1–D6) oradan gelir ve **yeniden sorulmaz**.
 
+**Düzeltme (24 Eylül 2026):** şartname artık depoda:
+`docs/sartname/fable-handoff-matematik-dogrulama_1.md` (46 971 B, SHA256 `079d9355…`, kanonik).
+Aynı günün daha eski 20:52 sürümü `docs/sartname/fable-handoff-matematik-dogrulama_eski.md`
+(`b6fc530b…`). `Downloads` yolu yalnız kullanıcının makinesinde geçerliydi; bulut onu göremez.
+
 ### Temel amaç ve başarı ölçütü
 
 Yanlış onay, yanlış redden daha pahalıdır (D6). "Çalışıyor" demenin tek geçerli kanıtı, §9
@@ -79,6 +207,12 @@ makul görünmesi kanıt sayılmaz.
 | LLM aileleri | `claude-opus-5` (anthropic), `muse-spark-1.3` (meta) | ortam değişkeniyle değiştirilebilir |
 
 Depo yereldir: git uzak deposu, CI ve LICENSE yok. Proje tek makinede duruyor.
+
+**Düzeltme (24 Eylül 2026):** uzak depo var: özel `https://github.com/wqedwad/asd` (`origin`, §0.1).
+CI ve LICENSE hâlâ yok. Tabloya ek: Linux/bulutta Lean WSL'siz, yerel olarak çalışır (Mathlib
+`5ed2965`, REPL `646a773`, elan 4.2.4; `lean/PINS`); bulutta Python 3.14.6 (python-build-standalone;
+yerel `.venv` 3.14.7, DECISIONS §42); paket sürümleri `requirements.lock`'ta. `reports/lean_setup.log`
+eski `stable` kurulumunun günlüğüdür; sabit kurulumun günlüğü bulutta `/opt/mathverify-logs/setup_lean.log`.
 
 ---
 
@@ -140,6 +274,8 @@ Kural: bir LLM katmanı kararı yalnız **daha temkinli** yapabilir. `fuse/rules
 - **Lean**, WSL içinde kalıcı bir REPL'dir: `formal/lean_client.py` → `lake env <repl>`.
   `formal/statement.py` IR'dan deterministik şablonla teorem üretir. `formal/prove.py` taktik
   merdivenini dener ve ispatı denetler (sorry, aksiyom, vakum, kullanılmayan hipotez).
+  **Düzeltme (24 Eylül 2026):** WSL yalnız Windows'ta; Linux'ta aynı satır yerel `bash -lc` ile
+  koşar, REPL kendi süreç grubunda açılır ve `killpg` ile kapatılır (DECISIONS §40).
 
 ### Klasör yapısı (önemli kısımlar)
 
@@ -164,6 +300,20 @@ harness/          run_eval, run_lean, adversarial, soundness_fuzz, calibrate, ru
 scripts/          check.py (kapı koşucusu), verify_cli.py, Lean kurulum betikleri, smoke/probe betikleri
 docs/             ARCHITECTURE, QUALITY, SOLVER_FORMAT, LLM_LAYERS, LEAN_SETUP, E1-E10-measurement
 reports/          üretilmiş .md raporlar (commit'li); *.json raporlar git-ignore'lu
+```
+
+**Düzeltme (24 Eylül 2026):** `tests/` artık 32 test dosyası (`test_lean_client_posix.py`,
+`test_check_gates_harness.py` eklendi); test sayısı «SAYI-GÜNCELLENECEK». Yeni klasörler ve dosyalar:
+
+```
+lean/             sabitlenmiş Lean projesi dosyaları + PINS (§0.5)
+scripts/cloud/    setup_env.sh (bulut ortam kurulum betiği), session_start.sh (oturum kancası)
+scripts/          + fetch_artifacts.sh (araç ref'ini çeker ve doğrular)
+docs/             + BULUT.md (bulut el kitabı); docs/sartname/ (özgün şartname)
+reports/arsiv/    git-ignore'lu rapor JSON'larının 2026-09-24 anlık görüntüsü
+requirements.lock sabit paket sürümleri
+.claude/          settings.json (SessionStart kancası)
+.env              API anahtarları, izleniyor (§0.3)
 ```
 
 ### Değerlendirme seti
@@ -506,6 +656,7 @@ Bunlar **tekrar denenmemeli.** Her birinin neden başarısız olduğu yanında y
 | 23 Eylül denetimi: 4 yanlış-onay sınıfı | kapatıldı (DECISIONS §26–30, `docs/QUALITY.md`) |
 | 23 Eylül ikinci oturum: [DOĞRULANMADI] kontrolü, bellek sınırı, belge düzeltmeleri, yeni kapı | tamam, `master`a birleştirildi (`e2aa08d`) |
 | 23 Eylül, aynı oturumun devamı: tanımlılık açığı (11 yanlış-onay vakası), üç Lean şablonu, pyflakes kapısı, temizlik | tamam, `master`a birleştirildi (§5.3) |
+| 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean + çevrimdışı kurulum, kapı sertleştirmesi (24 kapı) | tamam, `bulut-2026-09-24` dalında (§0) |
 
 Son `check.py --full` sonucu (23 Eylül 2026 15:56, `yerel-kalite-2026-09-23` @ `e2aa08d` + §5.3'teki
 commit edilmemiş değişiklikler; günlük `reports/check_full.log`; toplam ~67 dk, adversaryal 3490 s):
@@ -538,6 +689,12 @@ commit edilmemiş değişiklikler; günlük `reports/check_full.log`; toplam ~67
 Kaynaklar: `reports/eval_report.md`, `lean_report.md`, `adversarial_report.md`,
 `soundness_report.md`, `calibration_report.md`. Kapı çıktısının tamamı `reports/check_full.log`
 içinde (§6.5).
+
+**Düzeltme (24 Eylül 2026):** yukarıdaki tablo 23 Eylül koşusudur ve artık "son" değil. Kapı sayısı
+24 oldu ("Lean erişilebilir", DECISIONS §39) ve `check.py` artık her harness'i yeniden koşturup
+yalnız o koşunun raporunu okur. 24 Eylül koşusu: «SAYI-GÜNCELLENECEK»/24, birim testleri
+«SAYI-GÜNCELLENECEK» passed / «SAYI-GÜNCELLENECEK» skipped, süre «SAYI-GÜNCELLENECEK»;
+günlük `reports/check_full.log`.
 
 **Süre notu:** Koşular gün içinde yavaşladı (adversaryal 1245 → 2249 → 3490 s). İki A/B ölçümü:
 (1) bellek sınırı süreyi değiştirmiyor (`run_eval` eski/yeni `pool.py` ile dört kez: hepsi 64 s,
@@ -581,6 +738,16 @@ ikinci oturumunda kapatıldı. O oturumun sırası:
 12. Kullanıcı onayıyla ("al"): `master`ın (`e2aa08d`) ikinci yedeği alındı (§5.4), iş dört commit
     olarak işlendi ve `master` fast-forward ile ileri alındı.
 
+24 Eylül oturumu (kullanıcı çalışmayı buluta taşımak istedi; ayrıntı §0):
+
+13. Özel GitHub deposu açıldı; bütün dallar, iki yedek etiketi ve `master` push edildi.
+14. `bulut-2026-09-24` dalında Lean istemcisi Linux'a taşındı, kapılar sertleştirildi, Lean
+    sürümleri sabitlendi, bulut kurulum betiği ve oturum kancası yazıldı, şartname ve rapor
+    arşivi depoya alındı, `.env` kullanıcı kararıyla izlenmeye başladı (6 commit, §0.7).
+15. İkinci bir düzeltme turu (Lean'in tarama ortasında kaybolması, REPL ikilisi yokken
+    `lake env`, bulut betiklerinin sertleştirilmesi) ve belgeler; ardından `check.py --full` ve
+    yedekle birlikte `master`a fast-forward (kullanıcı onayı: "dal, doğrula, birleştir").
+
 ### 5.3 Commit edilmemiş değişiklikler
 
 **Yok.** 23 Eylül'ün son commit dizisi (`yerel-kalite-2026-09-23`, `master`a fast-forward ile
@@ -606,6 +773,12 @@ birleştirildi; hash'ler `git log` ile görülür) şunları taşır. Ölçüm 2
 İleride de commit ve birleştirme yalnız kullanıcı isterse yapılır; birleştirmeden önce `master`ın
 yedeği alınır (kullanıcının talebi, §5.4).
 
+**Düzeltme (24 Eylül 2026):** bu bölüm 23 Eylül'ündür. 24 Eylül işi `bulut-2026-09-24` dalında
+(§0.5, §0.7). Bu belge yazılırken ikinci turun kod değişiklikleri (`harness/run_lean.py`,
+`scripts/check.py`, `src/mathverify/formal/lean_client.py`, `tests/test_check_gates_harness.py`,
+`tests/test_f5_lean.py`, `tests/test_lean_client_posix.py`) ve belgeler henüz commit
+edilmemişti; güncel durum `git status` ile görülür.
+
 ### 5.4 Dal durumu
 
 - `master`: 23 Eylül'de iki kez fast-forward ile ileri alındı, ikisi de kullanıcının isteğiyle:
@@ -622,6 +795,25 @@ yedeği alınır (kullanıcının talebi, §5.4).
   doğrulandı. Geri dönüş talimatı aynı klasörde `OKU.txt`.
 - Uzak depo yok.
 
+**Düzeltme (24 Eylül 2026):**
+
+- Uzak depo var: `origin` = `https://github.com/wqedwad/asd` (özel). Dallar ve iki yedek etiketi
+  (hafif etiketler) push edildi; hash'ler yukarıdakilerle ve yerel ref'lerle aynı (§0.1).
+  `bulut-2026-09-24` dalı eklendi; doğrulamadan sonra `master`a fast-forward edilecek.
+- **Bundle'lar yalnız yerel makinededir** (`C:\Users\kullanici\mathverify-yedek\`, kullanıcının
+  Windows makinesi). Depoda ve GitHub'da yoktur, bulut oturumu onları göremez. Etiketler ise
+  GitHub'da da var.
+- Yedek yöntemi (her `master` birleştirmesinden hemen önce, yerel checkout'ta):
+  1. `git tag yedek/master-YYYY-MM-DD[-N] master` (aynı gün ikinciyse `-2`, `-3`, …);
+  2. `git bundle create C:/Users/kullanici/mathverify-yedek/mathverify-master-<kısa-hash>-YYYY-MM-DD.bundle --all`,
+     sonra `git bundle verify` ve bir deneme klonu;
+  3. etiketi `git push origin <etiket>` ile gönder (buluttan olmaz: bulut yalnız kendi dalını
+     push edebilir).
+- Geri dönüş: `git reset --hard <etiket>` ya da `git clone --branch master <bundle>`. Etiket ve
+  bundle'lar kullanıcıya sormadan silinmez.
+- Bulutta birleştirme doğrudan yapılamaz (`master` push edilemez): PR ile ya da yerel checkout'ta,
+  yedek de yerelde alınır.
+
 Commit geçmişi (eskiden yeniye):
 
 | Commit | Ne |
@@ -637,6 +829,15 @@ Commit geçmişi (eskiden yeniye):
 | `53ab97b` | 19 Eylül denetimi: beş boşluk, iki yanlış iddia |
 | `2744677` | Önceki HANDOFF.md (`master` burada) |
 | `0f14380` | 20 ve 23 Eylül denetimleri (`denetim-2026-09-20`, HEAD) |
+
+**Düzeltme (24 Eylül 2026):** tablo `0f14380`'de kalmıştı ("HEAD" artık doğru değil). Sonrası
+(`git log --oneline master`):
+
+| Commit | Ne |
+|---|---|
+| `1098a6b` `86197e4` `e2aa08d` | 23 Eylül ikinci oturum: bellek sınırı, 22. kapı + kendini yazan kapı günlüğü, [DOĞRULANMADI] kontrolü (`denetim-2026-09-20` burada) |
+| `5a6b1ad` `934bb14` `347f810` `23d7c6b` | pyflakes kapısı ve temizlik, tanımlılık açığı, üç Lean şablonu, belgeler ve 23/23 raporları (`master` ve `yerel-kalite-2026-09-23` burada) |
+| `eff4a7b` … `6323de7` | 24 Eylül, `bulut-2026-09-24` dalı (§0.7) |
 
 Literatür kaynaklarının bağlantıları (ProcessBench, Hard2Verify, Beyond the Answer Key,
 Pessimistic Verification, TinyV, Faults in Our Formal Benchmarking, Right Is Not Enough, Robustness
@@ -761,6 +962,15 @@ dosyalarda (`llm_cache/` dahil) ve 20 erişilemez blob'da **0** kez geçiyor; `s
 stash yok. İş bitince ikisinin de yenilenmesi önerilir. Anahtarların hâlâ geçerli olduğu en son
 19 Eylül'de görüldü **[DOĞRULANMADI: ağ isteği gerektirir, kontrol edilmedi]**.
 
+**Düzeltme (24 Eylül 2026):** "yalnız git'in yok saydığı `.env`" ve "hiçbir commit'te 0 kez"
+artık doğru değil. Kullanıcının açık kararıyla `.env` commit `6323de7`'de depoya girdi ve özel
+GitHub deposuna push edildi (§0.3, DECISIONS §35); anahtar değerleri artık git geçmişinde ve
+GitHub'ın sunucularında. Kural: değerler yine hiçbir çıktıya yazılmaz; anahtarlar kredili F3/F4
+koşularından **önce** yenilenir (karar sürüyor) ve `.env` güncellenip commit edilir; depo açılır ya
+da paylaşılırsa önce anahtarlar yenilenir ve `.env` geçmişten temizlenir. Bulut kabuğunda aynı adla
+bir ortam değişkeni tanımlıysa `override=False` yüzünden `.env`'deki değil o kullanılır
+**[DOĞRULANMADI: bulutta kontrol edilmedi, `docs/BULUT.md` §10]**.
+
 ---
 
 ## 7. Sıradaki adımlar
@@ -795,6 +1005,11 @@ bu soruları açık bırakır.
    Sonra tam koşu: `.venv/Scripts/python.exe -m harness.run_f3 --workers 6 --pathb --max-cost 40`.
    Kalan 154 öğe için kaba tahmin ~10 $. `llm_cache/` istek hash'iyle anahtarlıdır; istem ya da IR
    metni değiştiyse eski kayıtlar tekrar oynatılmaz ve yeniden ücretlendirilir.
+   **Ek (24 Eylül 2026):** Linux/bulutta yorumlayıcı `.venv/bin/python`. Bulutta koşulacaksa ağ
+   ayarı Custom + "also include default list" + `api.meta.ai` yapılır; `api.anthropic.com`
+   varsayılan Trusted listesinde ("Anthropic services", resmi belge 24 Eylül'de okundu; bulutta
+   erişim henüz ölçülmedi, `docs/BULUT.md` §3.1). Uzun koşu sürerken
+   bulut oturumu etkin tutulur.
 
 4. **F4'ü ilk kez koştur** (aynı koşuda L6 açık). Kaba tahmin 15–25 $. Raporun "L6 kritik +
    meta-doğrulama (F4)" bölümündeki iki sayı belirleyici: D tespiti ve doğru çözümde yanlış
@@ -806,6 +1021,12 @@ bu soruları açık bırakır.
 
 6. **Uzak depo + CI + LICENSE.** Bunlar sahiplik kararları. Açılırsa CI hızlı modda
    `scripts/check.py` çalıştırmalı; Lean ve `--full` WSL ister.
+   **Düzeltme (24 Eylül 2026):** uzak depo açıldı (özel GitHub, §0.1). Lean ve `--full` artık WSL
+   istemiyor, Linux'ta da çalışıyor (bulutta kurulumla birlikte, `docs/BULUT.md`). CI ve LICENSE
+   hâlâ açık (§12).
+
+7. **İlk bulut oturumu** (24 Eylül'de eklendi): `docs/BULUT.md` §12'deki ölçüm listesi. Sonuçlar
+   §0.6'ya ve `docs/BULUT.md`'ye yazılır.
 
 ---
 
@@ -838,9 +1059,9 @@ bu soruları açık bırakır.
 | `src/mathverify/llm/cache.py` | Kayıt/tekrar önbelleği |
 | `src/mathverify/formal/statement.py` | Lean ifade şablonları (`build_statement`, `_t_*`; 23 Eylül'de `_t_domain_of` + `_region_iff_hints`, `_t_simplify_expression`, `_t_count_solutions`), junk-value korumaları, `vacuity_probe`, `is_trivial` |
 | `src/mathverify/formal/prove.py` | Taktik merdiveni, ispat denetimleri, `l7_layer` |
-| `src/mathverify/formal/lean_client.py` | WSL içindeki Lean REPL istemcisi |
+| `src/mathverify/formal/lean_client.py` | WSL içindeki Lean REPL istemcisi. *Düzeltme (24 Eylül 2026):* Linux'ta yerel `bash -lc`; `repl_command`, `native_repl_path`, süreç grubu + `killpg` (DECISIONS §40) |
 | `harness/run_eval.py` | Deterministik ölçüm ve sızma testi → `reports/eval_report.md` |
-| `harness/run_lean.py` | Lean taraması + 12 `JUNK_PROBES` → `reports/lean_report.md` |
+| `harness/run_lean.py` | Lean taraması + 12 `JUNK_PROBES` → `reports/lean_report.md`. *Düzeltme (24 Eylül 2026):* sonda sayısı 23 Eylül'den beri 17; rapor `lean_available`, `lean_available_end` ve kayıt başına `lean_reached` yazar (DECISIONS §39) |
 | `harness/adversarial.py` | 3 yüzeyli adversaryal tarama → `reports/adversarial_report.md` |
 | `harness/soundness_fuzz.py` | Metamorfik/diferansiyel sağlamlık taraması → `reports/soundness_report.md`; `ACCEPTED_MISS_REASONS`, `_missed_step_reason` |
 | `harness/calibrate.py` | Kalibrasyon (train/val/test) |
@@ -851,13 +1072,23 @@ bu soruları açık bırakır.
 | `tests/test_written_definedness.py` | Tanımlılık düzeltmesinin 11 vakası (karar 30) |
 | `evalset/build/build_all.py` | 280 öğeyi yeniden üretir |
 | `tests/conftest_llm.py` | `ScriptedClient`: F3/F4 testleri ağsız koşar |
-| `DECISIONS.md` | Kilitli kararlar ve 30 uygulama kararı |
+| `DECISIONS.md` | Kilitli kararlar ve 30 uygulama kararı. *Düzeltme (24 Eylül 2026):* madde numaraları 43'e kadar; 24 Eylül kararları §7 (34–43) |
 | `docs/ARCHITECTURE.md` | Yetki tablosu ve tasarım gerekçeleri |
 | `docs/QUALITY.md` | Literatür → mekanizma → kapı tablosu |
 | `docs/SOLVER_FORMAT.md` | Yol (a) yapısal çözüm formatı ve görev türleri |
 | `docs/LLM_LAYERS.md` | Roller, modeller, önbellek, maliyet, hata sınıfları |
-| `docs/LEAN_SETUP.md` | WSL + Lean + Mathlib kurulumu |
+| `docs/LEAN_SETUP.md` | WSL + Lean + Mathlib kurulumu. *Düzeltme (24 Eylül 2026):* Linux/bulut kurulumu ve sabit sürümler de orada |
 | `docs/E1-E10-measurement.md` | Şartname §6 davranış sözleşmelerinin ölçümü |
+| `docs/BULUT.md` | Bulut el kitabı: ön koşullar, ortam ayarı, kurulum betiği + kanca, `/opt` düzeni, günlükler, sınırlar, ilk oturumda ölçülecekler (24 Eylül) |
+| `docs/sartname/` | Özgün şartname (kanonik `_1.md`, eski `_eski.md`) |
+| `lean/` (`PINS` + proje dosyaları) | Sabit Lean/Mathlib/REPL/elan sürümleri; elle düzenlenmez (`lean/README.md`) |
+| `scripts/setup_lean.sh`, `scripts/setup_lean_repl.sh` | Sabit, çevrimdışı yapılabilen Lean kurulumu (WSL ve Linux) |
+| `scripts/fetch_artifacts.sh` | Araç ref'ini (`refs/arac/bulut-vN`) çeker, parçaları birleştirir, SHA256 ile doğrular |
+| `scripts/cloud/setup_env.sh` | Bulut ortam kurulum betiği (root, `/opt`, her zaman 0); başlığında yapıştırılacak önyükleyici |
+| `scripts/cloud/session_start.sh`, `.claude/settings.json` | SessionStart kancası; yalnız `CLAUDE_CODE_REMOTE=true` iken iş yapar |
+| `requirements.lock` | Paket kilidi (32 paket) |
+| `reports/arsiv/2026-09-24/` | Rapor JSON'larının anlık görüntüsü; iki F3 dosyası yeniden üretilemez |
+| `tests/test_lean_client_posix.py`, `tests/test_check_gates_harness.py` | Linux Lean istemcisi ve kapı sertleştirmesinin testleri |
 
 ---
 
@@ -867,11 +1098,23 @@ Bütün komutlar proje kökünden. Windows'ta **`PYTHONUTF8=1`** gerekir; `check
 kendisi verir. Bu belgedeki `PYTHONUTF8=1 komut` biçimi **Git Bash** içindir. PowerShell'de önce
 `$env:PYTHONUTF8 = "1"` çalıştırılır, sonra komut öneksiz yazılır.
 
+**Ek (24 Eylül 2026):** aşağıdaki tablolardaki `.venv/Scripts/python.exe` Windows yoludur; Linux'ta
+ve bulutta yerine `.venv/bin/python` yazılır (`PYTHONUTF8=1` yine verilir). `check.py` hangi
+platformda olduğunu kendisi bulur.
+
 ### Kurulum
 
 ```bash
 uv venv --python 3.14 .venv
 uv pip install --python .venv/Scripts/python.exe -e ".[llm,dev]"
+```
+
+Linux (bulutta bunu oturum kancası yapar, `docs/BULUT.md` §4):
+
+```bash
+uv venv --python 3.14 .venv
+uv pip install --python .venv/bin/python -r requirements.lock
+uv pip install --python .venv/bin/python --no-deps -e .
 ```
 
 Lean, tek seferlik kurulum (ayrıntı: `docs/LEAN_SETUP.md`):
@@ -885,6 +1128,13 @@ wsl -d Ubuntu -- bash /mnt/c/Users/kullanici/mathverify/scripts/lean_status.sh
 `setup_lean.sh` sonrasında üst düzey `Mathlib.olean` eksikse `scripts/lean_fix.sh` çalıştırılır.
 Lean bu makinede kurulu: WSL `Ubuntu` mevcut ve 23 Eylül Lean taraması çalıştı.
 
+**Düzeltme (24 Eylül 2026):** yukarıdaki komutlar yalnız Windows (WSL) içindir. Linux'ta aynı
+betikler WSL'siz koşar: `bash scripts/setup_lean.sh`, `bash scripts/setup_lean_repl.sh`,
+`bash scripts/lean_status.sh`; bulutta hepsini ortamın kurulum betiği yapar. Betikler artık
+`lean/PINS`'teki sabit sürümleri kurar ve eksik kök modülleri kendileri derler, `lean_fix.sh`
+adımı gereksiz (yalnız eski kurulumları onarmak için duruyor). Ayrıntı `docs/LEAN_SETUP.md`,
+DECISIONS §38.
+
 ### Test ve kapılar
 
 | Komut | Ne yapar | Süre |
@@ -892,6 +1142,12 @@ Lean bu makinede kurulu: WSL `Ubuntu` mevcut ve 23 Eylül Lean taraması çalı�
 | `.venv/Scripts/python.exe -m pytest tests -q` | 439 test (438 geçer, 1 atlanır) | ~90 s |
 | `.venv/Scripts/python.exe scripts/check.py` | Hızlı: testler + pyflakes + deterministik ölçüm (12 kapı) | ~3 dk |
 | `.venv/Scripts/python.exe scripts/check.py --full` | + Lean, adversaryal, sağlamlık, kalibrasyon (23 kapı); günlüğü `reports/check_full.log`a yazar | **~25–70 dk** (adversaryal tek başına 21–58 dk, makine yüküne bağlı) |
+
+**Düzeltme (24 Eylül 2026):** `pytest` artık «SAYI-GÜNCELLENECEK» test (Windows'ta
+«SAYI-GÜNCELLENECEK» geçer, «SAYI-GÜNCELLENECEK» atlanır); `--full` **24 kapı** ("Lean
+erişilebilir"). Bir harness çökerse, raporunu yazmazsa, Lean yoksa ya da tarama sırasında
+kaybolursa ilgili kapılar FAIL olur (DECISIONS §39). Bulutta `--full` süresi
+«SAYI-GÜNCELLENECEK».
 
 ### Tek tek ölçümler
 
@@ -937,12 +1193,36 @@ Ayrı bir build adımı yok; paket `-e` ile kurulu. Lint ya da biçimlendirici *
 | `PYTHONUTF8` | Windows'ta `1` olmalı |
 | `PYTHONHASHSEED` | Sandbox worker'larında `0`'a sabitlenir (kod yapar) |
 
+**Düzeltme ve ek (24 Eylül 2026):** `MATHVERIFY_LEAN_PROJECT` yalnız Windows'ta "WSL içinde" bir
+yoldur; Linux'ta yerel yoldur (bulutta `/opt/mathverify-lean`). `MATHVERIFY_WSL_DISTRO` yalnız
+Windows'ta okunur. `.env` artık depoda izleniyor (§0.3). Yeni değişkenler (ayrıntı
+`docs/BULUT.md` §5):
+
+| Değişken | Anlamı |
+|---|---|
+| `ELAN_HOME` | elan evi, varsayılan `$HOME/.elan` (bulutta `/opt/elan`); istemci `PATH`'e `${ELAN_HOME:-$HOME/.elan}/bin` ekler |
+| `MATHVERIFY_OPT` | Bulut kurulum öneki, varsayılan `/opt` |
+| `MATHVERIFY_ARTIFACT_DIR` | Araçların açıldığı dizin; `setup_lean.sh` burada bulduğunu çevrimdışı kurar |
+| `MATHVERIFY_ARTIFACT_URL` / `MATHVERIFY_ARTIFACT_REF` / `MATHVERIFY_ARTIFACT_SRC` | Araç ref'inin kaynağı: depo adresi (varsayılan `origin`), ref (varsayılan `refs/arac/bulut-v2`), ya da yerel `parts/` dizini |
+| `MATHVERIFY_SKIP_LEAN` | `1`: bulut kancası Lean kurulumunu başlatmaz |
+| `MATHVERIFY_REPO_URL` / `MATHVERIFY_REPO_REF` | Kurulum betiğinin klon yedeği (varsayılan `https://github.com/wqedwad/asd` / uzak varsayılan dal) |
+| `MATHVERIFY_PROFILE_D` | `mathverify.sh`'in yazıldığı yer, varsayılan `/etc/profile.d` |
+| `MATHVERIFY_HOOK_PREFIXES` | Kancanın önek listesi; yalnız testler için |
+| `MATHLIB_CACHE_DIR`, `XDG_CACHE_HOME` | Mathlib `.ltar` önbelleği, varsayılan `$HOME/.cache/mathlib` |
+| `CLAUDE_CODE_REMOTE`, `CLAUDE_PROJECT_DIR`, `CLAUDE_ENV_FILE` | Platformun verdiği değişkenler; kanca yalnız `CLAUDE_CODE_REMOTE=true` iken iş yapar |
+
 ### Harici servisler ve bağımlılıklar
 
 - Anthropic API: F3+ katmanları. **Bakiye bitti.**
 - Meta Muse Spark API: ikinci aile.
 - WSL Ubuntu + Lean 4 v4.34.0 + Mathlib: L7. Olean cache ~6.7 GB.
 - Başka ağ bağımlılığı yok. Deterministik hat tamamen çevrimdışı çalışır.
+
+**Ek (24 Eylül 2026):**
+
+- GitHub, özel depo `wqedwad/asd`: kaynak, bulut oturumları ve araç ref'i (`refs/arac/bulut-vN`).
+- Lean, Linux/bulutta WSL'siz; bulutta kurulumun tamamı ~12–13 GB (WSL ölçümü ~12 GB).
+- Claude Code on the web: bulut oturumları (`docs/BULUT.md`).
 
 ---
 
@@ -973,16 +1253,27 @@ Ayrı bir build adımı yok; paket `-e` ile kurulu. Lint ya da biçimlendirici *
 8. İddiayı hesaplayan operatörlerin açık olduğu bir ad alanında okumak.
 9. `.env`'i, `reports/*.json`'ı ya da herhangi bir anahtarı commit etmek. Anahtar değerlerini
    ekrana, belgeye ya da günlüğe yazmak.
+   **Düzeltme (24 Eylül 2026):** `.env` kısmı kullanıcının açık kararıyla kalktı; `.env` bu özel
+   depoda izlenir (§0.3, DECISIONS §35). `.env.*` ve `reports/*.json` yine commit edilmez; anahtar
+   değerleri yine hiçbir çıktıya yazılmaz.
 10. Global git ayarını değiştirmek. Kimlik gerekirse komut başına `git -c user.name=… -c user.email=…`
     verilir; önceki commit'lerle aynı kimlik `git log -1 --format='%an <%ae>'` ile görülür.
 11. Kullanıcı istemeden commit ya da birleştirme yapmak. Doğrudan `master` üzerinde commit etmek:
     önce dal açılır.
 12. Ölçmeden "iyileştirme" iddia etmek.
 
+**Ek (24 Eylül 2026):** kullanıcının yerel Claude belleğinde olup buluta taşınmayan iki kural
+(ikisi de `CLAUDE.md`'de): (a) her `master` birleştirmesinden önce yedek etiketi + yerel bundle
+(§5.4), etiket ve bundle'lar sormadan silinmez; (b) krediye bağlı F3/F4 ancak bütün lokal kalite
+işi bitip kod dondurulduktan ve anahtarlar yenilendikten sonra (§7). Bulut oturumundan etiket ya
+da `master` push edilemez; birleştirme PR ile ya da yerelde yapılır.
+
 ### Her değişiklikte
 
 - `scripts/check.py --full` 23/23 kalmalı. Hızlı döngüde `scripts/check.py` ve `pytest` yeterli;
   bitirmeden önce `--full` koşturulur.
+  **Düzeltme (24 Eylül 2026):** 24/24 ("Lean erişilebilir" eklendi). Lean'siz ya da Lean'i yarıda
+  kaybeden bir koşu bilerek geçmez.
 - Lean tarafında her yeni şablon **yanlış cevaplı öğelerde de** koşturulur. Lean FP = 0 ve
   junk-value sertifikası = 0 kalmalı.
 - Her bulgu önce ölçümle bulunur, sonra ölçümle doğrulanır, sonra bir teste ya da kalıcı bir kapıya
@@ -1051,6 +1342,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   Lean yoksa **sessizce atlanır**; yazıcı testleri çevrimdışı koşar. Lean'e dokunan bir
   değişiklikten sonra `pytest -rs` ile atlanan sayısına bakın (bugün 1: `test_f5_lean.py:66`,
   "statement out of scope", beklenen) ve `harness.run_lean`'i ayrıca koşturun.
+  **Düzeltme (24 Eylül 2026):** atlanan sayısı değişti: Windows'ta «SAYI-GÜNCELLENECEK», Linux'ta
+  (Lean kurulu) «SAYI-GÜNCELLENECEK»; nedenleri `-rs` çıktısında. Lean yoksa `check.py --full`
+  artık bunu gizlemez: "Lean erişilebilir" kapısı düşer.
 
 ### Windows ve araçlar
 
@@ -1068,11 +1362,37 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - `PYTHONPATH` Windows Python'unda `;` ile ayrılır (`PYTHONPATH=".;src"`), `:` ile değil.
 - Bu makinede git kimliği ayarlı değil; commit komut başına kimlikle yapılır (§10).
 
+### Linux ve bulut (24 Eylül 2026'da eklendi)
+
+- Yorumlayıcı `.venv/bin/python`; `PYTHONPATH` `:` ile ayrılır.
+- Git Bash'teki heredoc sorunu Linux'ta yok, ama ters eğik çizgili Python yine dosyaya yazılır
+  (aynı betik Windows'ta da koşabilsin).
+- Yerel Linux'ta `lake env` REPL'i çocuk süreç olarak başlatır; yalnız başlatıcıyı öldürmek
+  ~6.9 GB'lık REPL'i yetim bırakır. İstemci süreç grubunu öldürür; elle `lake env` başlatan bir
+  probe da aynısını yapmalı.
+- REPL ikilisi yokken `lake env` önce projenin eksik bağımlılıklarını klonlar (Mathlib: GB'larca);
+  istemci bu yüzden ikiliyi önce kendisi arar.
+- Root'un kurduğu Lean'i root olmayan bir kullanıcı çalıştırınca git "dubious ownership" ile
+  reddeder ve `lake` paketi silip yeniden klonlar; `setup_lean.sh` root kurulumunda izinleri açar ve
+  `safe.directory` kaydeder.
+- Bulutta GitHub release dosyaları 403 döner, uv Python indiremez: Lean ve Python araç ref'inden
+  gelir (`docs/BULUT.md` §11). `stable` ya da `lake update` ile kurulum yapılmaz.
+- Bulutta boşta kalan VM geri alınınca arka plan işi kaybolur; `check.py --full` sürerken oturum
+  etkin tutulur.
+- Kullanıcının `~/.claude` belleği buluta taşınmaz; kalıcı her bilgi depoya yazılır.
+- `.gitattributes`: `*.sh` her yerde LF, `lean/` bayt bayt; Windows checkout'u CRLF kalır.
+
 ### Depo ve ölçüm
 
 - **Ana dal `master`, `main` değil.** Bazı araçlar varsayılan olarak `main` varsayar.
 - `reports/*.json` git-ignore'lu. `check.py` kapıları bu yerel JSON'lardan okur; temiz bir
   klonda önce harness koşmalıdır.
+  **Düzeltme (24 Eylül 2026):** `check.py` her harness'i zaten kendisi koşturuyordu ama çıkış
+  kodunu okumuyordu: harness çökünce temiz klonda `check.py` de çöküyor, eski bir JSON varsa eski
+  sayılarla geçiyordu. Artık her harness'ten önce onun JSON'u silinir ve çöken ya da rapor yazmayan
+  koşunun kapıları FAIL olur (DECISIONS §39); temiz klonda ayrıca bir şey gerekmez. 24 Eylül'deki yedi JSON'un anlık görüntüsü `reports/arsiv/2026-09-24/`
+  altında (iki F3 dosyası yeniden üretilemez); bulut kancası eksikleri oradan kopyalar.
+- Ana dal GitHub'da da `master` ve depo varsayılanı o (24 Eylül).
 - `reports/check_full.log`'u `check.py --full` kendisi yazar; elle yönlendirme gerekmez. Koşu
   başında dosya sıfırlanır, yarıda kalan koşu yarım günlük bırakır.
 - `llm_cache/` git'te izleniyor (145 dosya, `828fb95`'ten beri). İçinde 18–19 Eylül F3
@@ -1104,15 +1424,21 @@ Kullanıcıdan onay ya da girdi bekleyen noktalar:
 
 1. ~~`yerel-kalite-2026-09-23` birleştirilsin mi?~~ Yapıldı (23 Eylül, yedeği §5.4'te).
 2. **Yedekler (iki etiket, iki bundle) ne zaman silinebilir?** Sormadan silinmez.
+   *Ek (24 Eylül 2026):* etiketler GitHub'da da var; bundle'lar yalnız yerel makinede
+   (`C:\Users\kullanici\mathverify-yedek\`). `bulut-2026-09-24` birleştirmesinin yedeği de eklenecek.
 3. **Anthropic bakiyesi ne zaman ve ne kadar yüklenecek?** F3'ün kalanı için ~10 $, F4 için
    ~15–25 $ tahmini var. *Kısmen cevaplandı (23 Eylül):* F3/F4 bütün lokal iş bitince koşulacak
    (§7).
 4. **Gerçek AI çözücü çıktıları nereden gelecek?** Hangi model ya da uygulama, kaç çözüm? Bu adım
    ertelendi.
 5. **Uzak depo, CI ve LICENSE:** nerede (GitHub mı), hangi lisansla, kimin hesabında?
+   *Kısmen cevaplandı (24 Eylül 2026):* uzak depo kullanıcının hesabında özel GitHub deposu
+   `wqedwad/asd` (§0.1). **Lisans ve CI hâlâ açık.**
 6. **`tyt-prob-018` kuralı:** F4 ölçüldükten sonra "sertifika kritiği ezer" kuralı daraltılsın mı?
    Karar ölçüme bağlı.
 7. **API anahtarları yenilensin mi?**
+   *Ek (24 Eylül 2026):* anahtarlar artık özel depoda da (`.env`, kullanıcı kararı, §0.3). Karar:
+   kredili F3/F4 koşularından önce yenilenir; ne zaman yapılacağı kullanıcıya bağlı.
 8. **Çözücü sembolü adımları (§6.2):** bu sınır kabul mü, yoksa yapısal formata sembol tanımı
    eklensin mi?
 9. ~~İsteğe bağlı Lean şablonları~~: 23 Eylül'de kullanıcının talimatıyla yapıldı (karar 31).
@@ -1124,3 +1450,7 @@ Kullanıcıdan onay ya da girdi bekleyen noktalar:
     taşındı; yalnız `diag_sandbox.py` silindi (testler onu tamamen kapsıyor).
 14. **Ekstremum/türev/seride tanımsız nokta:** çekimser kalmak yeterli mi, yoksa ekstremum
     tanımsız noktalar dışlanarak mı hesaplansın (§6.8)?
+15. **Eski araç ref'i** (24 Eylül'de eklendi): `refs/arac/bulut-v2` doğrulandıktan sonra
+    `refs/arac/bulut-v1` silinsin mi? Sormadan silinmez.
+16. **Depo ileride herkese açılacak ya da paylaşılacak mı?** Açılacaksa önce anahtarlar yenilenir
+    ve `.env` geçmişten temizlenir (§0.3).
