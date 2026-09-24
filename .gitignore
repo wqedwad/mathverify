@@ -10,6 +10,8 @@ __pycache__/
 .pytest_cache/
 .hypothesis/
 reports/*.json
-.env
+# `.env` itself is tracked: on 2026-09-24 the user decided that this private repository
+# (github.com/wqedwad/asd) carries the API keys so cloud sessions work as-is. Other env files
+# stay ignored.
 .env.*
 llm_cache/*.tmp
