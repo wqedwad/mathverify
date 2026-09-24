@@ -1,0 +1,412 @@
+{
+ "model": {
+  "prior": 0.0,
+  "weights": {
+   "certify.geometry:pass:primary": {
+    "support": 4,
+    "valid": 3,
+    "invalid": 1,
+    "weight": 0.6931,
+    "used": false,
+    "reliability": 0.75
+   },
+   "mc.consistency:pass:support": {
+    "support": 138,
+    "valid": 71,
+    "invalid": 67,
+    "weight": 0.0572,
+    "used": true,
+    "reliability": 0.5145
+   },
+   "certify.algebra:pass:primary": {
+    "support": 41,
+    "valid": 31,
+    "invalid": 10,
+    "weight": 1.0678,
+    "used": true,
+    "reliability": 0.7561
+   },
+   "flag:answer_level_only": {
+    "support": 8,
+    "valid": 3,
+    "invalid": 5,
+    "weight": -0.4055,
+    "used": true,
+    "reliability": 0.375
+   },
+   "certify.algebra:fail:primary": {
+    "support": 17,
+    "valid": 0,
+    "invalid": 17,
+    "weight": -2.8904,
+    "used": true,
+    "reliability": 0.0
+   },
+   "certify.geometry:fail:primary": {
+    "support": 3,
+    "valid": 0,
+    "invalid": 3,
+    "weight": -1.3863,
+    "used": false,
+    "reliability": 0.0
+   },
+   "steps.refute:fail:support": {
+    "support": 46,
+    "valid": 0,
+    "invalid": 46,
+    "weight": -3.8501,
+    "used": true,
+    "reliability": 0.0
+   },
+   "flag:step_refuted": {
+    "support": 46,
+    "valid": 0,
+    "invalid": 46,
+    "weight": -3.8501,
+    "used": true,
+    "reliability": 0.0
+   },
+   "certify.series:pass:primary": {
+    "support": 7,
+    "valid": 5,
+    "invalid": 2,
+    "weight": 0.6931,
+    "used": true,
+    "reliability": 0.7143
+   },
+   "certify.series:fail:primary": {
+    "support": 3,
+    "valid": 0,
+    "invalid": 3,
+    "weight": -1.3863,
+    "used": false,
+    "reliability": 0.0
+   },
+   "certify.calculus:pass:primary": {
+    "support": 11,
+    "valid": 8,
+    "invalid": 3,
+    "weight": 0.8109,
+    "used": true,
+    "reliability": 0.7273
+   },
+   "certify.calculus:fail:primary": {
+    "support": 7,
+    "valid": 0,
+    "invalid": 7,
+    "weight": -2.0794,
+    "used": true,
+    "reliability": 0.0
+   },
+   "certify.limits:pass:primary": {
+    "support": 5,
+    "valid": 4,
+    "invalid": 1,
+    "weight": 0.9163,
+    "used": true,
+    "reliability": 0.8
+   },
+   "flag:answer_from_option_letter": {
+    "support": 1,
+    "valid": 1,
+    "invalid": 0,
+    "weight": 0.6931,
+    "used": false,
+    "reliability": 1.0
+   },
+   "certify.limits:fail:primary": {
+    "support": 3,
+    "valid": 0,
+    "invalid": 3,
+    "weight": -1.3863,
+    "used": false,
+    "reliability": 0.0
+   },
+   "certify.trig:pass:primary": {
+    "support": 5,
+    "valid": 4,
+    "invalid": 1,
+    "weight": 0.9163,
+    "used": true,
+    "reliability": 0.8
+   },
+   "certify.trig:fail:primary": {
+    "support": 3,
+    "valid": 0,
+    "invalid": 3,
+    "weight": -1.3863,
+    "used": false,
+    "reliability": 0.0
+   },
+   "mc.consistency:fail:support": {
+    "support": 4,
+    "valid": 0,
+    "invalid": 4,
+    "weight": -1.6094,
+    "used": false,
+    "reliability": 0.0
+   },
+   "certify.extremum:pass:primary": {
+    "support": 4,
+    "valid": 3,
+    "invalid": 1,
+    "weight": 0.6931,
+    "used": false,
+    "reliability": 0.75
+   },
+   "certify.wordproblem:pass:primary": {
+    "support": 20,
+    "valid": 15,
+    "invalid": 5,
+    "weight": 0.9808,
+    "used": true,
+    "reliability": 0.75
+   },
+   "certify.extremum:fail:primary": {
+    "support": 1,
+    "valid": 0,
+    "invalid": 1,
+    "weight": -0.6931,
+    "used": false,
+    "reliability": 0.0
+   },
+   "flag:z3_unsupported": {
+    "support": 2,
+    "valid": 1,
+    "invalid": 1,
+    "weight": 0.0,
+    "used": false,
+    "reliability": 0.5
+   },
+   "certify.wordproblem:fail:primary": {
+    "support": 6,
+    "valid": 0,
+    "invalid": 6,
+    "weight": -1.9459,
+    "used": true,
+    "reliability": 0.0
+   },
+   "certify.counting:pass:primary": {
+    "support": 4,
+    "valid": 3,
+    "invalid": 1,
+    "weight": 0.6931,
+    "used": false,
+    "reliability": 0.75
+   },
+   "certify.counting:fail:primary": {
+    "support": 3,
+    "valid": 0,
+    "invalid": 3,
+    "weight": -1.3863,
+    "used": false,
+    "reliability": 0.0
+   },
+   "certify.geometry_numeric:pass:primary": {
+    "support": 7,
+    "valid": 4,
+    "invalid": 3,
+    "weight": 0.2231,
+    "used": true,
+    "reliability": 0.5714
+   },
+   "certify.geometry_numeric:fail:primary": {
+    "support": 5,
+    "valid": 0,
+    "invalid": 5,
+    "weight": -1.7918,
+    "used": true,
+    "reliability": 0.0
+   },
+   "certify.domain:pass:primary": {
+    "support": 3,
+    "valid": 3,
+    "invalid": 0,
+    "weight": 1.3863,
+    "used": false,
+    "reliability": 1.0
+   },
+   "certify.domain:fail:primary": {
+    "support": 2,
+    "valid": 0,
+    "invalid": 2,
+    "weight": -1.0986,
+    "used": false,
+    "reliability": 0.0
+   },
+   "certify.combinatorics:pass:primary": {
+    "support": 7,
+    "valid": 4,
+    "invalid": 3,
+    "weight": 0.2231,
+    "used": true,
+    "reliability": 0.5714
+   },
+   "certify.combinatorics:fail:primary": {
+    "support": 5,
+    "valid": 0,
+    "invalid": 5,
+    "weight": -1.7918,
+    "used": true,
+    "reliability": 0.0
+   },
+   "sanity:fail:support": {
+    "support": 1,
+    "valid": 0,
+    "invalid": 1,
+    "weight": -0.6931,
+    "used": false,
+    "reliability": 0.0
+   },
+   "certify.linalg:pass:primary": {
+    "support": 10,
+    "valid": 8,
+    "invalid": 2,
+    "weight": 1.0986,
+    "used": true,
+    "reliability": 0.8
+   }
+  },
+  "min_support": 5,
+  "n_train": 160,
+  "n_valid": 80,
+  "n_invalid": 80
+ },
+ "thresholds": {
+  "hi": 0.067,
+  "lo": -0.348,
+  "target_precision": 0.98
+ },
+ "results": {
+  "train": {
+   "n": 160,
+   "tp": 67,
+   "fp": 2,
+   "tn": 67,
+   "fn": 2,
+   "unknown": 22,
+   "pos_precision": 0.9710144927536232,
+   "neg_precision": 0.9710144927536232,
+   "coverage": 0.8625
+  },
+  "val": {
+   "n": 66,
+   "tp": 39,
+   "fp": 0,
+   "tn": 19,
+   "fn": 0,
+   "unknown": 8,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "coverage": 0.8787878787878788
+  },
+  "test": {
+   "n": 54,
+   "tp": 26,
+   "fp": 0,
+   "tn": 21,
+   "fn": 0,
+   "unknown": 7,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "coverage": 0.8703703703703703
+  }
+ },
+ "curve": [
+  {
+   "threshold": 0.0,
+   "coverage": 1.0,
+   "pos_precision": 0.9393939393939394,
+   "neg_precision": 1.0,
+   "fp": 2,
+   "fn": 0,
+   "unknown": 0
+  },
+  {
+   "threshold": 0.5,
+   "coverage": 0.7222222222222222,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 15
+  },
+  {
+   "threshold": 1.0,
+   "coverage": 0.46296296296296297,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 29
+  },
+  {
+   "threshold": 1.5,
+   "coverage": 0.4074074074074074,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 32
+  },
+  {
+   "threshold": 2.0,
+   "coverage": 0.4074074074074074,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 32
+  },
+  {
+   "threshold": 3.0,
+   "coverage": 0.3333333333333333,
+   "pos_precision": null,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 36
+  },
+  {
+   "threshold": 4.0,
+   "coverage": 0.3333333333333333,
+   "pos_precision": null,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 36
+  },
+  {
+   "threshold": 6.0,
+   "coverage": 0.3333333333333333,
+   "pos_precision": null,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 36
+  },
+  {
+   "threshold": 8.0,
+   "coverage": 0.1111111111111111,
+   "pos_precision": null,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 48
+  },
+  {
+   "threshold": 12.0,
+   "coverage": 0.05555555555555555,
+   "pos_precision": null,
+   "neg_precision": 1.0,
+   "fp": 0,
+   "fn": 0,
+   "unknown": 51
+  }
+ ],
+ "split_sizes": {
+  "train": 160,
+  "val": 66,
+  "test": 54
+ }
+}

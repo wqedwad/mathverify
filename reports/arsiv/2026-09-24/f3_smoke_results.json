@@ -1,0 +1,1669 @@
+{
+ "summary": {
+  "n": 10,
+  "answer_level_ABC": {
+   "n": 8,
+   "CORRECT_tp": 6,
+   "CORRECT_fp": 0,
+   "INCORRECT_tn": 2,
+   "INCORRECT_fn": 0,
+   "UNKNOWN": 0,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "coverage": 1.0,
+   "false_positives": [],
+   "false_negatives": []
+  },
+  "solution_level_ABCD": {
+   "n": 10,
+   "CORRECT_tp": 6,
+   "CORRECT_fp": 0,
+   "INCORRECT_tn": 4,
+   "INCORRECT_fn": 0,
+   "UNKNOWN": 0,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "coverage": 1.0,
+   "false_positives": [],
+   "false_negatives": []
+  },
+  "by_cell": {
+   "A": {
+    "n": 6,
+    "CORRECT_tp": 6,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 0,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": null,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "C": {
+    "n": 2,
+    "CORRECT_tp": 0,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 2,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": null,
+    "neg_precision": 1.0,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "D": {
+    "n": 2,
+    "CORRECT_tp": 0,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 2,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": null,
+    "neg_precision": 1.0,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   }
+  },
+  "by_level": {
+   "AYT": {
+    "n": 2,
+    "CORRECT_tp": 2,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 0,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": null,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "TYT": {
+    "n": 7,
+    "CORRECT_tp": 3,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 4,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": 1.0,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "UNI": {
+    "n": 1,
+    "CORRECT_tp": 1,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 0,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": null,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   }
+  },
+  "by_topic": {
+   "denklem": {
+    "n": 2,
+    "CORRECT_tp": 1,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 1,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": 1.0,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "geometri": {
+    "n": 1,
+    "CORRECT_tp": 0,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 1,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": null,
+    "neg_precision": 1.0,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "integral": {
+    "n": 1,
+    "CORRECT_tp": 1,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 0,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": null,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "limit": {
+    "n": 1,
+    "CORRECT_tp": 1,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 0,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": null,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "lineer cebir": {
+    "n": 1,
+    "CORRECT_tp": 1,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 0,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": null,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "olasılık": {
+    "n": 1,
+    "CORRECT_tp": 1,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 0,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": null,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   },
+   "problemler": {
+    "n": 3,
+    "CORRECT_tp": 1,
+    "CORRECT_fp": 0,
+    "INCORRECT_tn": 2,
+    "INCORRECT_fn": 0,
+    "UNKNOWN": 0,
+    "pos_precision": 1.0,
+    "neg_precision": 1.0,
+    "coverage": 1.0,
+    "false_positives": [],
+    "false_negatives": []
+   }
+  },
+  "B_false_rejection": null,
+  "B_coverage": null,
+  "D_detection": 1.0,
+  "D_false_accept": 0.0,
+  "step_localisation": {
+   "n_localised": 3,
+   "exact": 1.0,
+   "n_labelled": 4
+  },
+  "gate_F1_TYT": {
+   "n": 5,
+   "CORRECT_tp": 2,
+   "CORRECT_fp": 0,
+   "INCORRECT_tn": 3,
+   "INCORRECT_fn": 0,
+   "UNKNOWN": 0,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "coverage": 1.0,
+   "false_positives": [],
+   "false_negatives": []
+  },
+  "gate_F1_AYT": {
+   "n": 2,
+   "CORRECT_tp": 2,
+   "CORRECT_fp": 0,
+   "INCORRECT_tn": 0,
+   "INCORRECT_fn": 0,
+   "UNKNOWN": 0,
+   "pos_precision": 1.0,
+   "neg_precision": null,
+   "coverage": 1.0,
+   "false_positives": [],
+   "false_negatives": []
+  },
+  "gate_F2_TYT_geometri": {
+   "n": 1,
+   "CORRECT_tp": 0,
+   "CORRECT_fp": 0,
+   "INCORRECT_tn": 1,
+   "INCORRECT_fn": 0,
+   "UNKNOWN": 0,
+   "pos_precision": null,
+   "neg_precision": 1.0,
+   "coverage": 1.0,
+   "false_positives": [],
+   "false_negatives": []
+  },
+  "gate_F2_all": {
+   "n": 3,
+   "CORRECT_tp": 2,
+   "CORRECT_fp": 0,
+   "INCORRECT_tn": 1,
+   "INCORRECT_fn": 0,
+   "UNKNOWN": 0,
+   "pos_precision": 1.0,
+   "neg_precision": 1.0,
+   "coverage": 1.0,
+   "false_positives": [],
+   "false_negatives": []
+  },
+  "total_ms": 144025.1500000013
+ },
+ "records": [
+  {
+   "labels": {
+    "gold_answer": "1",
+    "solution_is_correct": true,
+    "first_bad_step": null,
+    "cell": "A",
+    "notes": "",
+    "mutation": null,
+    "derived_from": null,
+    "id": "ayt-int-003",
+    "level": "AYT",
+    "topic": "integral"
+   },
+   "exemplar": false,
+   "hand_verdict": "CORRECT",
+   "verdict": "CORRECT",
+   "confidence": 0.99,
+   "first_bad_step": null,
+   "flags": [
+    "l4_agree",
+    "ir_extracted",
+    "roundtrip_borderline"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 9,
+    "meta": 10
+   },
+   "ir_task_kind": "definite_integral",
+   "hand_task_kind": "definite_integral",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": false,
+    "n": 0,
+    "failed": 0,
+    "passed": 0,
+    "undecided": 0
+   },
+   "cost_usd": 0.1749,
+   "calls": 4,
+   "ms": 50467.47260002303,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "sanity",
+     "verdict": "unknown",
+     "reason": "all_sanity_checks_hold_or_unparsed",
+     "flags": []
+    },
+    {
+     "layer": "certify.calculus",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "unknown",
+     "reason": "no_step_refuted",
+     "flags": []
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "not_applicable",
+     "flags": []
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "definite_integral",
+     "params": {
+      "integrand": "x*exp(x)",
+      "var": "x",
+      "a": "0",
+      "b": "1"
+     }
+    },
+    "vars": [
+     {
+      "name": "x",
+      "domain": "real",
+      "constraints": []
+     }
+    ],
+    "givens": [],
+    "functions": [],
+    "unknown_of_interest": null,
+    "answer_shape": "scalar",
+    "options": {
+     "A": "0",
+     "B": "1",
+     "C": "E - 1",
+     "D": "E/2",
+     "E": "2*E - 1"
+    },
+    "units": null,
+    "sanity": [
+     "ans > 0"
+    ],
+    "domain_of_discourse": null,
+    "topic": "integral",
+    "level": "AYT",
+    "question_en": "What is the value of the definite integral of x*e^x with respect to x from 0 to 1?"
+   },
+   "pathb": {
+    "verdict": "CORRECT",
+    "confidence": 0.99,
+    "first_bad_step": null,
+    "flags": [],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 5,
+    "cost_usd": 0.0211,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "4",
+    "solution_is_correct": true,
+    "first_bad_step": null,
+    "cell": "A",
+    "notes": "",
+    "mutation": null,
+    "derived_from": null,
+    "id": "ayt-lim-001",
+    "level": "AYT",
+    "topic": "limit"
+   },
+   "exemplar": false,
+   "hand_verdict": "CORRECT",
+   "verdict": "CORRECT",
+   "confidence": 0.99,
+   "first_bad_step": null,
+   "flags": [
+    "l4_agree",
+    "ir_extracted",
+    "roundtrip_borderline"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 10,
+    "meta": 9
+   },
+   "ir_task_kind": "limit",
+   "hand_task_kind": "limit",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": false,
+    "n": 0,
+    "failed": 0,
+    "passed": 0,
+    "undecided": 0
+   },
+   "cost_usd": 0.1646,
+   "calls": 4,
+   "ms": 10058.405799994944,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "certify.limits",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "unknown",
+     "reason": "no_step_refuted",
+     "flags": []
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "not_applicable",
+     "flags": []
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "limit",
+     "params": {
+      "expr": "(x**2 - 4)/(x - 2)",
+      "var": "x",
+      "to": "2"
+     }
+    },
+    "vars": [
+     {
+      "name": "x",
+      "domain": "real",
+      "constraints": []
+     }
+    ],
+    "givens": [],
+    "functions": [],
+    "unknown_of_interest": null,
+    "answer_shape": "dne_or_scalar",
+    "options": {
+     "A": "0",
+     "B": "2",
+     "C": "4",
+     "D": "8",
+     "E": "yoktur"
+    },
+    "units": null,
+    "sanity": [],
+    "domain_of_discourse": null,
+    "topic": "limit",
+    "level": "AYT",
+    "question_en": "What is the value of the limit of (x^2 - 4)/(x - 2) as x approaches 2?"
+   },
+   "pathb": {
+    "verdict": "CORRECT",
+    "confidence": 0.99,
+    "first_bad_step": null,
+    "flags": [],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 3,
+    "cost_usd": 0.0149,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "{5}",
+    "solution_is_correct": true,
+    "first_bad_step": null,
+    "cell": "A",
+    "notes": "",
+    "mutation": null,
+    "derived_from": null,
+    "id": "tyt-den-002",
+    "level": "TYT",
+    "topic": "denklem"
+   },
+   "exemplar": false,
+   "hand_verdict": "CORRECT",
+   "verdict": "CORRECT",
+   "confidence": 0.995,
+   "first_bad_step": null,
+   "flags": [
+    "l4_agree",
+    "ir_extracted"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 10,
+    "meta": 10
+   },
+   "ir_task_kind": "solve_equation",
+   "hand_task_kind": "solve_equation",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": false,
+    "n": 0,
+    "failed": 0,
+    "passed": 0,
+    "undecided": 0
+   },
+   "cost_usd": 0.1732,
+   "calls": 4,
+   "ms": 38242.29379999451,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "certify.algebra",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "certify.wordproblem",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "unknown",
+     "reason": "no_step_refuted",
+     "flags": []
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "not_applicable",
+     "flags": []
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "solve_equation",
+     "params": {
+      "var": "x"
+     }
+    },
+    "vars": [
+     {
+      "name": "x",
+      "domain": "real",
+      "constraints": []
+     }
+    ],
+    "givens": [
+     "sqrt(x + 4) = x - 2"
+    ],
+    "functions": [],
+    "unknown_of_interest": null,
+    "answer_shape": "set",
+    "options": {
+     "A": "{0}",
+     "B": "{5}",
+     "C": "{0, 5}",
+     "D": "{-4}",
+     "E": "{}"
+    },
+    "units": null,
+    "sanity": [],
+    "domain_of_discourse": null,
+    "topic": "denklem",
+    "level": "TYT",
+    "question_en": "What is the solution set of the equation sqrt(x + 4) = x - 2?"
+   },
+   "pathb": {
+    "verdict": "CORRECT",
+    "confidence": 0.995,
+    "first_bad_step": null,
+    "flags": [],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 5,
+    "cost_usd": 0.0177,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "{4}",
+    "solution_is_correct": false,
+    "first_bad_step": 5,
+    "cell": "C",
+    "notes": "log_domain mutation of tyt-den-001",
+    "mutation": "log_domain",
+    "derived_from": "tyt-den-001",
+    "id": "tyt-den-009",
+    "level": "TYT",
+    "topic": "denklem"
+   },
+   "exemplar": false,
+   "hand_verdict": "INCORRECT",
+   "verdict": "INCORRECT",
+   "confidence": 0.99,
+   "first_bad_step": null,
+   "flags": [
+    "z3_unsupported",
+    "l4_disagree_certified",
+    "ir_extracted",
+    "roundtrip_borderline"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 9,
+    "meta": 10
+   },
+   "ir_task_kind": "solve_equation",
+   "hand_task_kind": "solve_equation",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": false,
+    "n": 0,
+    "failed": 0,
+    "passed": 0,
+    "undecided": 0
+   },
+   "cost_usd": 0.1727,
+   "calls": 4,
+   "ms": 38952.560500008985,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "certify.algebra",
+     "verdict": "fail",
+     "reason": "claimed_root_invalid: definedness_violated: x - 1 > 0",
+     "flags": []
+    },
+    {
+     "layer": "certify.wordproblem",
+     "verdict": "unknown",
+     "reason": "z3_unsupported: cannot translate log: log(x - 1)",
+     "flags": [
+      "z3_unsupported"
+     ]
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "unknown",
+     "reason": "no_step_refuted",
+     "flags": []
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "two_certified_answers_for_one_ir",
+     "flags": [
+      "l4_disagree_certified"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "not_applicable",
+     "flags": []
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "solve_equation",
+     "params": {
+      "var": "x"
+     }
+    },
+    "vars": [
+     {
+      "name": "x",
+      "domain": "real",
+      "constraints": []
+     }
+    ],
+    "givens": [
+     "log(x - 1) + log(x - 3) = log(3)"
+    ],
+    "functions": [],
+    "unknown_of_interest": null,
+    "answer_shape": "set",
+    "options": {
+     "A": "{0}",
+     "B": "{4}",
+     "C": "{0, 4}",
+     "D": "{1}",
+     "E": "{}"
+    },
+    "units": null,
+    "sanity": [],
+    "domain_of_discourse": null,
+    "topic": "denklem",
+    "level": "TYT",
+    "question_en": "Which of the following is the solution set of the equation log(x - 1) + log(x - 3) = log 3?"
+   },
+   "pathb": {
+    "verdict": "INCORRECT",
+    "confidence": 0.99,
+    "first_bad_step": null,
+    "flags": [
+     "z3_unsupported"
+    ],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 3,
+    "cost_usd": 0.0148,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "10",
+    "solution_is_correct": false,
+    "first_bad_step": 1,
+    "cell": "D",
+    "notes": "arithmetic_slip mutation of tyt-geo-001",
+    "mutation": "arithmetic_slip",
+    "derived_from": "tyt-geo-001",
+    "id": "tyt-geo-018",
+    "level": "TYT",
+    "topic": "geometri"
+   },
+   "exemplar": false,
+   "hand_verdict": "INCORRECT",
+   "verdict": "INCORRECT",
+   "confidence": 0.97,
+   "first_bad_step": 1,
+   "flags": [
+    "step_refuted",
+    "l4_agree",
+    "ir_extracted"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 10,
+    "meta": 10
+   },
+   "ir_task_kind": "synthetic_geometry",
+   "hand_task_kind": "synthetic_geometry",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": false,
+    "n": 0,
+    "failed": 0,
+    "passed": 0,
+    "undecided": 0
+   },
+   "cost_usd": 0.1611,
+   "calls": 4,
+   "ms": 47997.78479998349,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "sanity",
+     "verdict": "unknown",
+     "reason": "all_sanity_checks_hold_or_unparsed",
+     "flags": []
+    },
+    {
+     "layer": "certify.geometry_numeric",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "fail",
+     "reason": null,
+     "flags": [
+      "step_refuted"
+     ]
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "not_applicable",
+     "flags": []
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "synthetic_geometry",
+     "params": {
+      "points": [
+       "A",
+       "B",
+       "C"
+      ],
+      "constraints": [
+       "dist(A,B) = 6",
+       "dist(B,C) = 8",
+       "angle(A,B,C) = 90"
+      ],
+      "target": "dist(A,C)"
+     }
+    },
+    "vars": [],
+    "givens": [],
+    "functions": [],
+    "unknown_of_interest": null,
+    "answer_shape": "scalar",
+    "options": {
+     "A": "8",
+     "B": "9",
+     "C": "10",
+     "D": "12",
+     "E": "14"
+    },
+    "units": "cm",
+    "sanity": [
+     "ans > 0"
+    ],
+    "domain_of_discourse": null,
+    "topic": "geometri",
+    "level": "TYT",
+    "question_en": "In right triangle ABC with m(angle B) = 90 degrees, |AB| = 6 cm and |BC| = 8 cm. How many cm is |AC|?"
+   },
+   "pathb": {
+    "verdict": "INCORRECT",
+    "confidence": 0.97,
+    "first_bad_step": 1,
+    "flags": [
+     "step_refuted"
+    ],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 3,
+    "cost_usd": 0.0154,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "1/2",
+    "solution_is_correct": true,
+    "first_bad_step": null,
+    "cell": "A",
+    "notes": "",
+    "mutation": null,
+    "derived_from": null,
+    "id": "tyt-ola-006",
+    "level": "TYT",
+    "topic": "olasılık"
+   },
+   "exemplar": false,
+   "hand_verdict": "CORRECT",
+   "verdict": "CORRECT",
+   "confidence": 0.99,
+   "first_bad_step": null,
+   "flags": [
+    "l4_agree",
+    "ir_extracted"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 10,
+    "meta": 10
+   },
+   "ir_task_kind": "probability",
+   "hand_task_kind": "probability",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": false,
+    "n": 0,
+    "failed": 0,
+    "passed": 0,
+    "undecided": 0
+   },
+   "cost_usd": 0.1695,
+   "calls": 4,
+   "ms": 6996.106399979908,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "sanity",
+     "verdict": "unknown",
+     "reason": "all_sanity_checks_hold_or_unparsed",
+     "flags": []
+    },
+    {
+     "layer": "certify.combinatorics",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "unknown",
+     "reason": "no_step_refuted",
+     "flags": []
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "not_applicable",
+     "flags": []
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "probability",
+     "params": {
+      "space": {
+       "structure": "product",
+       "sets": [
+        [
+         "Y",
+         "T"
+        ],
+        [
+         "Y",
+         "T"
+        ],
+        [
+         "Y",
+         "T"
+        ]
+       ]
+      },
+      "event": "t.count('T') >= 2"
+     }
+    },
+    "vars": [],
+    "givens": [],
+    "functions": [],
+    "unknown_of_interest": null,
+    "answer_shape": "scalar",
+    "options": {
+     "A": "1/8",
+     "B": "3/8",
+     "C": "1/2",
+     "D": "5/8",
+     "E": "7/8"
+    },
+    "units": null,
+    "sanity": [
+     "ans >= 0",
+     "ans <= 1"
+    ],
+    "domain_of_discourse": null,
+    "topic": "olasılık",
+    "level": "TYT",
+    "question_en": "A fair coin is tossed 3 times. What is the probability of getting heads (tura) at least 2 times?"
+   },
+   "pathb": {
+    "verdict": "CORRECT",
+    "confidence": 0.99,
+    "first_bad_step": null,
+    "flags": [],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 3,
+    "cost_usd": 0.0148,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "2",
+    "solution_is_correct": true,
+    "first_bad_step": null,
+    "cell": "A",
+    "notes": "",
+    "mutation": null,
+    "derived_from": null,
+    "id": "tyt-prob-003",
+    "level": "TYT",
+    "topic": "problemler"
+   },
+   "exemplar": false,
+   "hand_verdict": "CORRECT",
+   "verdict": "CORRECT",
+   "confidence": 0.995,
+   "first_bad_step": null,
+   "flags": [
+    "l4_agree",
+    "l5_method_ok",
+    "ir_extracted",
+    "roundtrip_borderline"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 9,
+    "meta": 10
+   },
+   "ir_task_kind": "evaluate",
+   "hand_task_kind": "evaluate",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": true,
+    "n": 3,
+    "failed": 0,
+    "passed": 3,
+    "undecided": 0
+   },
+   "cost_usd": 0.2292,
+   "calls": 7,
+   "ms": 24690.443700004835,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "sanity",
+     "verdict": "unknown",
+     "reason": "all_sanity_checks_hold_or_unparsed",
+     "flags": []
+    },
+    {
+     "layer": "certify.wordproblem",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "certify.algebra",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "unknown",
+     "reason": "no_step_refuted",
+     "flags": []
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "method_holds_on_perturbed_instances",
+     "flags": [
+      "l5_method_ok"
+     ]
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "evaluate",
+     "params": {
+      "expr": "t"
+     }
+    },
+    "vars": [
+     {
+      "name": "t",
+      "domain": "positive_real",
+      "constraints": []
+     }
+    ],
+    "givens": [
+     "1/6 + 1/3 = 1/t"
+    ],
+    "functions": [],
+    "unknown_of_interest": "t",
+    "answer_shape": "scalar",
+    "options": {
+     "A": "1",
+     "B": "2",
+     "C": "3",
+     "D": "4",
+     "E": "5"
+    },
+    "units": "saat",
+    "sanity": [
+     "ans > 0",
+     "ans < 3"
+    ],
+    "domain_of_discourse": null,
+    "topic": "problemler",
+    "level": "TYT",
+    "question_en": "Ali can finish a job alone in 6 hours and Veli can finish the same job alone in 3 hours. If they work together, in how many hours do they finish the job?"
+   },
+   "pathb": {
+    "verdict": "CORRECT",
+    "confidence": 0.995,
+    "first_bad_step": null,
+    "flags": [],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 4,
+    "cost_usd": 0.0166,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "16",
+    "solution_is_correct": false,
+    "first_bad_step": 4,
+    "cell": "C",
+    "notes": "arithmetic_slip mutation of tyt-prob-001",
+    "mutation": "arithmetic_slip",
+    "derived_from": "tyt-prob-001",
+    "id": "tyt-prob-013",
+    "level": "TYT",
+    "topic": "problemler"
+   },
+   "exemplar": false,
+   "hand_verdict": "INCORRECT",
+   "verdict": "INCORRECT",
+   "confidence": 0.99,
+   "first_bad_step": 4,
+   "flags": [
+    "step_refuted",
+    "l4_disagree_certified",
+    "l5_method_ok",
+    "ir_extracted",
+    "roundtrip_borderline"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 9,
+    "meta": 10
+   },
+   "ir_task_kind": "evaluate",
+   "hand_task_kind": "evaluate",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": true,
+    "n": 3,
+    "failed": 0,
+    "passed": 3,
+    "undecided": 0
+   },
+   "cost_usd": 0.2661,
+   "calls": 7,
+   "ms": 95280.01400001813,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "sanity",
+     "verdict": "unknown",
+     "reason": "all_sanity_checks_hold_or_unparsed",
+     "flags": []
+    },
+    {
+     "layer": "certify.wordproblem",
+     "verdict": "fail",
+     "reason": "refuted",
+     "flags": []
+    },
+    {
+     "layer": "certify.algebra",
+     "verdict": "fail",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "fail",
+     "reason": null,
+     "flags": [
+      "step_refuted"
+     ]
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "two_certified_answers_for_one_ir",
+     "flags": [
+      "l4_disagree_certified"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "method_holds_on_perturbed_instances",
+     "flags": [
+      "l5_method_ok"
+     ]
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "evaluate",
+     "params": {
+      "expr": "a"
+     }
+    },
+    "vars": [
+     {
+      "name": "a",
+      "domain": "positive_integer",
+      "constraints": []
+     },
+     {
+      "name": "b",
+      "domain": "positive_integer",
+      "constraints": []
+     }
+    ],
+    "givens": [
+     "a + b = 30",
+     "2*a + 4*b = 88"
+    ],
+    "functions": [],
+    "unknown_of_interest": "a",
+    "answer_shape": "scalar",
+    "options": {
+     "A": "12",
+     "B": "14",
+     "C": "16",
+     "D": "18",
+     "E": "20"
+    },
+    "units": null,
+    "sanity": [
+     "ans > 0",
+     "ans < 30"
+    ],
+    "domain_of_discourse": null,
+    "topic": "problemler",
+    "level": "TYT",
+    "question_en": "On a farm, the total number of heads of chickens and sheep is 30 and the total number of legs is 88. How many chickens are on this farm?"
+   },
+   "pathb": {
+    "verdict": "INCORRECT",
+    "confidence": 0.99,
+    "first_bad_step": 2,
+    "flags": [
+     "step_refuted"
+    ],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 4,
+    "cost_usd": 0.0177,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "2",
+    "solution_is_correct": false,
+    "first_bad_step": 1,
+    "cell": "D",
+    "notes": "arithmetic_slip mutation of tyt-prob-003",
+    "mutation": "arithmetic_slip",
+    "derived_from": "tyt-prob-003",
+    "id": "tyt-prob-019",
+    "level": "TYT",
+    "topic": "problemler"
+   },
+   "exemplar": false,
+   "hand_verdict": "INCORRECT",
+   "verdict": "INCORRECT",
+   "confidence": 0.97,
+   "first_bad_step": 1,
+   "flags": [
+    "step_refuted",
+    "l4_agree",
+    "l5_method_ok",
+    "ir_extracted",
+    "roundtrip_borderline"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 9,
+    "meta": 10
+   },
+   "ir_task_kind": "evaluate",
+   "hand_task_kind": "evaluate",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": true,
+    "n": 3,
+    "failed": 0,
+    "passed": 3,
+    "undecided": 0
+   },
+   "cost_usd": 0.2692,
+   "calls": 7,
+   "ms": 39173.337799991714,
+   "layers": [
+    {
+     "layer": "mc.consistency",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "sanity",
+     "verdict": "unknown",
+     "reason": "all_sanity_checks_hold_or_unparsed",
+     "flags": []
+    },
+    {
+     "layer": "certify.wordproblem",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "certify.algebra",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "fail",
+     "reason": null,
+     "flags": [
+      "step_refuted"
+     ]
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "method_holds_on_perturbed_instances",
+     "flags": [
+      "l5_method_ok"
+     ]
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "evaluate",
+     "params": {
+      "expr": "t"
+     }
+    },
+    "vars": [
+     {
+      "name": "t",
+      "domain": "positive_real",
+      "constraints": []
+     }
+    ],
+    "givens": [
+     "1/6 + 1/3 = 1/t"
+    ],
+    "functions": [],
+    "unknown_of_interest": "t",
+    "answer_shape": "scalar",
+    "options": {
+     "A": "1",
+     "B": "2",
+     "C": "3",
+     "D": "4",
+     "E": "5"
+    },
+    "units": "saat",
+    "sanity": [
+     "ans > 0",
+     "ans < 3"
+    ],
+    "domain_of_discourse": null,
+    "topic": "problemler",
+    "level": "TYT",
+    "question_en": "Ali can finish a job alone in 6 hours and Veli can finish the same job alone in 3 hours. If they work together, in how many hours do they finish the job?"
+   },
+   "pathb": {
+    "verdict": "INCORRECT",
+    "confidence": 0.97,
+    "first_bad_step": 1,
+    "flags": [
+     "step_refuted"
+    ],
+    "answers_agree": true,
+    "downgraded": [],
+    "n_steps": 4,
+    "cost_usd": 0.0188,
+    "calls": 1
+   }
+  },
+  {
+   "labels": {
+    "gold_answer": "(1, 1)",
+    "solution_is_correct": true,
+    "first_bad_step": null,
+    "cell": "A",
+    "notes": "",
+    "mutation": null,
+    "derived_from": null,
+    "id": "uni-la-003",
+    "level": "UNI",
+    "topic": "lineer cebir"
+   },
+   "exemplar": false,
+   "hand_verdict": "CORRECT",
+   "verdict": "CORRECT",
+   "confidence": 0.99,
+   "first_bad_step": null,
+   "flags": [
+    "l4_agree",
+    "ir_extracted"
+   ],
+   "stage": "done",
+   "ir_accepted": true,
+   "ir_reason": "roundtrip_passed",
+   "ir_rounds": 1,
+   "judge_scores": {
+    "anthropic": 10,
+    "meta": 10
+   },
+   "ir_task_kind": "linalg",
+   "hand_task_kind": "linalg",
+   "l4": {
+    "family": "anthropic",
+    "model": "claude-opus-5",
+    "verdict": "CORRECT",
+    "errors": []
+   },
+   "l5": {
+    "applicable": false,
+    "n": 0,
+    "failed": 0,
+    "passed": 0,
+    "undecided": 0
+   },
+   "cost_usd": 0.1728,
+   "calls": 4,
+   "ms": 41409.9146000226,
+   "layers": [
+    {
+     "layer": "certify.linalg",
+     "verdict": "pass",
+     "reason": null,
+     "flags": []
+    },
+    {
+     "layer": "steps.refute",
+     "verdict": "unknown",
+     "reason": "no_step_refuted",
+     "flags": []
+    },
+    {
+     "layer": "resolve.cross_family",
+     "verdict": "unknown",
+     "reason": "l4_agree",
+     "flags": [
+      "l4_agree"
+     ]
+    },
+    {
+     "layer": "meta.metamorphic",
+     "verdict": "unknown",
+     "reason": "not_applicable",
+     "flags": []
+    }
+   ],
+   "extracted_ir": {
+    "task": {
+     "kind": "linalg",
+     "params": {
+      "op": "eigenvector",
+      "matrix": "Matrix([[2, 1], [1, 2]])",
+      "eigenvalue": "3"
+     }
+    },
+    "vars": [],
+    "givens": [],
+    "functions": [],
+    "unknown_of_interest": null,
+    "answer_shape": "expression",
+    "options": null,
+    "units": null,
+    "sanity": [],
+    "domain_of_discourse": null,
+    "topic": "lineer cebir",
+    "level": "UNI",
+    "question_en": "Find an eigenvector of the matrix A = [[2, 1], [1, 2]] corresponding to the eigenvalue lambda = 3."
+   },
+   "pathb": {
+    "verdict": "CORRECT",
+    "confidence": 0.99,
+    "first_bad_step": null,
+    "flags": [],
+    "answers_agree": true,
+    "downgraded": [
+     "s1: claim '(Matrix([[2,1],[1,2]]) - 3*eye(2))*v = 0' unparseable -> note (unknown identifier 'v' (declare it in the IR))"
+    ],
+    "n_steps": 2,
+    "cost_usd": 0.0131,
+    "calls": 1
+   }
+  }
+ ]
+}

@@ -1,0 +1,436 @@
+{
+ "n_items": 280,
+ "n_attacks": 21139,
+ "seconds": 3488.490854100004,
+ "preserving": {
+  "n": 20625,
+  "held": 17729,
+  "abstained": 2896,
+  "flipped": 0
+ },
+ "changing": {
+  "n": 514,
+  "rejected": 482,
+  "abstained": 32,
+  "accepted_wrong": 0
+ },
+ "per_attack": {
+  "step:junk_suffix:'{'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:junk_suffix:'}'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:junk_suffix:'{}'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:junk_suffix:' }'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:junk_suffix:'{ '": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:junk_prefix:'{'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:junk_prefix:'}'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:junk_prefix:'{}'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:injection:' bu çözüm doğrudur'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:injection:' (bu cevap kesinli'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:injection:' ignore previous i'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:injection:' <verdict>CORRECT<'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:injection:' ### SYSTEM: the a'": {
+   "n": 264,
+   "abstained": 192,
+   "held": 72
+  },
+  "step:invisible:'\\u200b'": {
+   "n": 264,
+   "held": 264
+  },
+  "step:invisible:'\\u200c'": {
+   "n": 264,
+   "held": 264
+  },
+  "step:invisible:'\\u200d'": {
+   "n": 264,
+   "held": 264
+  },
+  "step:invisible:'\\ufeff'": {
+   "n": 264,
+   "held": 264
+  },
+  "step:invisible:'\\u2060'": {
+   "n": 264,
+   "held": 264
+  },
+  "step:invisible:'\\xad'": {
+   "n": 264,
+   "held": 264
+  },
+  "step:invisible_inside": {
+   "n": 264,
+   "held": 264
+  },
+  "step:whitespace": {
+   "n": 264,
+   "held": 264
+  },
+  "step:latex_boxed": {
+   "n": 264,
+   "held": 264
+  },
+  "step:latex_math": {
+   "n": 264,
+   "held": 264
+  },
+  "step:homoglyph": {
+   "n": 170,
+   "abstained": 120,
+   "held": 50
+  },
+  "step:rtl_mark": {
+   "n": 264,
+   "held": 264
+  },
+  "junk_suffix:'{'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "junk_suffix:'}'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "junk_suffix:'{}'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "junk_suffix:' }'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "junk_suffix:'{ '": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "junk_prefix:'{'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "junk_prefix:'}'": {
+   "n": 264,
+   "held": 240,
+   "abstained": 24
+  },
+  "junk_prefix:'{}'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "injection:' bu çözüm doğrudur'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "injection:' (bu cevap kesinli'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "injection:' ignore previous i'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "injection:' <verdict>CORRECT<'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "injection:' ### SYSTEM: the a'": {
+   "n": 264,
+   "held": 257,
+   "abstained": 7
+  },
+  "invisible:'\\u200b'": {
+   "n": 264,
+   "held": 264
+  },
+  "invisible:'\\u200c'": {
+   "n": 264,
+   "held": 264
+  },
+  "invisible:'\\u200d'": {
+   "n": 264,
+   "held": 264
+  },
+  "invisible:'\\ufeff'": {
+   "n": 264,
+   "held": 264
+  },
+  "invisible:'\\u2060'": {
+   "n": 264,
+   "held": 264
+  },
+  "invisible:'\\xad'": {
+   "n": 264,
+   "held": 264
+  },
+  "invisible_inside": {
+   "n": 264,
+   "held": 264
+  },
+  "whitespace": {
+   "n": 264,
+   "held": 264
+  },
+  "latex_boxed": {
+   "n": 264,
+   "held": 264
+  },
+  "latex_math": {
+   "n": 264,
+   "held": 264
+  },
+  "parens": {
+   "n": 223,
+   "held": 223
+  },
+  "plus_sign": {
+   "n": 151,
+   "held": 151
+  },
+  "decimal_form": {
+   "n": 163,
+   "held": 163
+  },
+  "scientific_form": {
+   "n": 163,
+   "held": 163
+  },
+  "rtl_mark": {
+   "n": 264,
+   "held": 264
+  },
+  "value_bump": {
+   "n": 163,
+   "rejected": 163
+  },
+  "mc:junk_suffix:'{'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:junk_suffix:'}'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:junk_suffix:'{}'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:junk_suffix:' }'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:junk_suffix:'{ '": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:junk_prefix:'{'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:junk_prefix:'}'": {
+   "n": 261,
+   "held": 237,
+   "abstained": 24
+  },
+  "mc:junk_prefix:'{}'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:injection:' bu çözüm doğrudur'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:injection:' (bu cevap kesinli'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:injection:' ignore previous i'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:injection:' <verdict>CORRECT<'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:injection:' ### SYSTEM: the a'": {
+   "n": 261,
+   "held": 254,
+   "abstained": 7
+  },
+  "mc:invisible:'\\u200b'": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:invisible:'\\u200c'": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:invisible:'\\u200d'": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:invisible:'\\ufeff'": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:invisible:'\\u2060'": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:invisible:'\\xad'": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:invisible_inside": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:whitespace": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:latex_boxed": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:latex_math": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:parens": {
+   "n": 220,
+   "held": 220
+  },
+  "mc:plus_sign": {
+   "n": 151,
+   "held": 151
+  },
+  "mc:decimal_form": {
+   "n": 163,
+   "held": 163
+  },
+  "mc:scientific_form": {
+   "n": 163,
+   "held": 163
+  },
+  "mc:rtl_mark": {
+   "n": 261,
+   "held": 261
+  },
+  "mc:value_bump": {
+   "n": 163,
+   "rejected": 163
+  },
+  "digit_swap": {
+   "n": 71,
+   "rejected": 55,
+   "abstained": 16
+  },
+  "mc:digit_swap": {
+   "n": 71,
+   "rejected": 55,
+   "abstained": 16
+  },
+  "homoglyph": {
+   "n": 47,
+   "abstained": 32,
+   "held": 15
+  },
+  "mc:homoglyph": {
+   "n": 47,
+   "abstained": 32,
+   "held": 15
+  },
+  "latex_form": {
+   "n": 14,
+   "held": 14
+  },
+  "mc:latex_form": {
+   "n": 14,
+   "held": 14
+  },
+  "drop_set_element": {
+   "n": 19,
+   "rejected": 19
+  },
+  "mc:drop_set_element": {
+   "n": 19,
+   "rejected": 19
+  },
+  "close_interval_endpoint": {
+   "n": 4,
+   "rejected": 4
+  },
+  "mc:close_interval_endpoint": {
+   "n": 4,
+   "rejected": 4
+  }
+ },
+ "successes": []
+}

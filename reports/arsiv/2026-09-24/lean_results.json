@@ -1,0 +1,5378 @@
+{
+ "records": [
+  {
+   "id": "ayt-ana-001",
+   "cell": "A",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x y\n  constructor <;> intro h <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 46742,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((y = (2 * x)) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))"
+  },
+  {
+   "id": "ayt-ana-002",
+   "cell": "A",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  rw [show (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 5 ^ 2 by norm_num,\n     Real.sqrt_sq (by norm_num : (0:ℝ) ≤ 5)]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 52,
+   "stmt_text": "theorem mv_claim : Real.sqrt (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 5"
+  },
+  {
+   "id": "ayt-ana-003",
+   "cell": "A",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x y\n  constructor <;> intro h <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 138,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, (((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 9) ↔ ((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 9))"
+  },
+  {
+   "id": "ayt-ana-004",
+   "cell": "A",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 30,
+   "stmt_text": "theorem mv_claim : (|(((3 * 3) + (4 * 4)) + (-5 : ℝ))| / 5) = 4"
+  },
+  {
+   "id": "ayt-ana-005",
+   "cell": "A",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-ana-006",
+   "cell": "B",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x y\n  constructor <;> intro h <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 113,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((y = (2 * x)) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))"
+  },
+  {
+   "id": "ayt-ana-007",
+   "cell": "B",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x y\n  constructor <;> intro h <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 115,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((((-y) + (2 * x)) = 0) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))"
+  },
+  {
+   "id": "ayt-ana-008",
+   "cell": "B",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  rw [show (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 5 ^ 2 by norm_num,\n     Real.sqrt_sq (by norm_num : (0:ℝ) ≤ 5)]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 53,
+   "stmt_text": "theorem mv_claim : Real.sqrt (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 5"
+  },
+  {
+   "id": "ayt-ana-009",
+   "cell": "B",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x y\n  constructor <;> intro h <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 143,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((((-4 : ℝ) + (x ^ 2) + (y ^ 2) + ((-4 : ℝ) * x) + (2 * y)) = 0) ↔ ((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 9))"
+  },
+  {
+   "id": "ayt-ana-010",
+   "cell": "B",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-ana-011",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1297,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((y = ((3 / 2 : ℝ) + (x / 2))) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))"
+  },
+  {
+   "id": "ayt-ana-012",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 414,
+   "stmt_text": "theorem mv_claim : Real.sqrt (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 25"
+  },
+  {
+   "id": "ayt-ana-013",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1219,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((((((-1 : ℝ) + y) ^ 2) + ((2 + x) ^ 2)) = 9) ↔ ((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 9))"
+  },
+  {
+   "id": "ayt-ana-014",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 340,
+   "stmt_text": "theorem mv_claim : (|(((3 * 3) + (4 * 4)) + (-5 : ℝ))| / 5) = 20"
+  },
+  {
+   "id": "ayt-ana-015",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-ana-016",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1271,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, (((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 3) ↔ ((((1 + y) ^ 2) + (((-2 : ℝ) + x) ^ 2)) = 9))"
+  },
+  {
+   "id": "ayt-ana-017",
+   "cell": "D",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  rw [show (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 5 ^ 2 by norm_num,\n     Real.sqrt_sq (by norm_num : (0:ℝ) ≤ 5)]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 52,
+   "stmt_text": "theorem mv_claim : Real.sqrt (((4 + (-1 : ℝ)) ^ 2) + ((6 + (-2 : ℝ)) ^ 2)) = 5"
+  },
+  {
+   "id": "ayt-ana-018",
+   "cell": "D",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 31,
+   "stmt_text": "theorem mv_claim : (|(((3 * 3) + (4 * 4)) + (-5 : ℝ))| / 5) = 4"
+  },
+  {
+   "id": "ayt-ana-019",
+   "cell": "D",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x y\n  constructor <;> intro h <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 108,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((y = (2 * x)) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))"
+  },
+  {
+   "id": "ayt-ana-020",
+   "cell": "B",
+   "topic": "analitik geometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 27,
+   "stmt_text": "theorem mv_claim : (|(((3 * 3) + (4 * 4)) + (-5 : ℝ))| / 5) = 4"
+  },
+  {
+   "id": "ayt-ana-021",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "equation_of",
+   "statement": true,
+   "kind": "equation_of_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 861,
+   "stmt_text": "theorem mv_claim : ∀ x y : ℝ, ((y = (1 + (2 * x))) ↔ (((-6 : ℝ) + (3 * y)) = ((-6 : ℝ) + (6 * x))))"
+  },
+  {
+   "id": "ayt-ana-022",
+   "cell": "C",
+   "topic": "analitik geometri",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-001",
+   "cell": "A",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "recurrence_term",
+   "statement": true,
+   "kind": "recurrence_term",
+   "proved": true,
+   "clean": true,
+   "proof": "  have e3 := h3 3 (by norm_num)\n  have e4 := h3 4 (by norm_num)\n  have e5 := h3 5 (by norm_num)\n  have e6 := h3 6 (by norm_num)\n  norm_num at e3 e4 e5 e6\n  linarith [h1, h2, e3, e4, e5, e6]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\na : ℕ → ℝ\nh1 : a 1 = 1\nh2 : a 2 = 3\nh3 : ∀ (n : ℕ), 3 ≤ n → a n = a (n - 1) + 2 * a (n - 2)\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 372,
+   "stmt_text": "theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 1) (h2 : a 2 = 3) (h3 : ∀ n : ℕ, 3 ≤ n → a n = (a (n - 1) + (2 * a (n - 2)))) : a 6 = 43"
+  },
+  {
+   "id": "ayt-diz-002",
+   "cell": "A",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "recurrence_term",
+   "statement": true,
+   "kind": "recurrence_term",
+   "proved": true,
+   "clean": true,
+   "proof": "  have e2 := h2 2 (by norm_num)\n  have e3 := h2 3 (by norm_num)\n  have e4 := h2 4 (by norm_num)\n  have e5 := h2 5 (by norm_num)\n  have e6 := h2 6 (by norm_num)\n  have e7 := h2 7 (by norm_num)\n  have e8 := h2 8 (by norm_num)\n  have e9 := h2 9 (by norm_num)\n  have e10 := h2 10 (by norm_num)\n  have e11 := h2 11 (by norm_num)\n  have e12 := h2 12 (by norm_num)\n  have e13 := h2 13 (by norm_num)\n  have e14 := h2 14 (by norm_num)\n  have e15 := h2 15 (by norm_num)\n  have e16 := h2 16 (by norm_num)\n  have e17 := h2 17 (by norm_num)\n  have e18 := h2 18 (by norm_num)\n  have e19 := h2 19 (by norm_num)\n  have e20 := h2 20 (by norm_num)\n  norm_num at e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15 e16 e17 e18 e19 e20\n  linarith [h1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 603,
+   "stmt_text": "theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 5) (h2 : ∀ n : ℕ, 2 ≤ n → a n = (3 + a (n - 1))) : a 20 = 62"
+  },
+  {
+   "id": "ayt-diz-003",
+   "cell": "A",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "closed_form",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-004",
+   "cell": "A",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "closed_form",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-005",
+   "cell": "A",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "series_sum",
+   "statement": true,
+   "kind": "series_sum_finite",
+   "proved": true,
+   "clean": true,
+   "proof": "  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 23,
+   "stmt_text": "theorem mv_claim : (∑ k ∈ Finset.Icc (1 : ℤ) 10, ((k ^ 2) : ℤ)) = 385"
+  },
+  {
+   "id": "ayt-diz-006",
+   "cell": "A",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "series_sum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-007",
+   "cell": "B",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "recurrence_term",
+   "statement": true,
+   "kind": "recurrence_term",
+   "proved": true,
+   "clean": true,
+   "proof": "  have e3 := h3 3 (by norm_num)\n  have e4 := h3 4 (by norm_num)\n  have e5 := h3 5 (by norm_num)\n  have e6 := h3 6 (by norm_num)\n  norm_num at e3 e4 e5 e6\n  linarith [h1, h2, e3, e4, e5, e6]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\na : ℕ → ℝ\nh1 : a 1 = 1\nh2 : a 2 = 3\nh3 : ∀ (n : ℕ), 3 ≤ n → a n = a (n - 1) + 2 * a (n - 2)\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 389,
+   "stmt_text": "theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 1) (h2 : a 2 = 3) (h3 : ∀ n : ℕ, 3 ≤ n → a n = (a (n - 1) + (2 * a (n - 2)))) : a 6 = 43"
+  },
+  {
+   "id": "ayt-diz-008",
+   "cell": "B",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "recurrence_term",
+   "statement": true,
+   "kind": "recurrence_term",
+   "proved": true,
+   "clean": true,
+   "proof": "  have e2 := h2 2 (by norm_num)\n  have e3 := h2 3 (by norm_num)\n  have e4 := h2 4 (by norm_num)\n  have e5 := h2 5 (by norm_num)\n  have e6 := h2 6 (by norm_num)\n  have e7 := h2 7 (by norm_num)\n  have e8 := h2 8 (by norm_num)\n  have e9 := h2 9 (by norm_num)\n  have e10 := h2 10 (by norm_num)\n  have e11 := h2 11 (by norm_num)\n  have e12 := h2 12 (by norm_num)\n  have e13 := h2 13 (by norm_num)\n  have e14 := h2 14 (by norm_num)\n  have e15 := h2 15 (by norm_num)\n  have e16 := h2 16 (by norm_num)\n  have e17 := h2 17 (by norm_num)\n  have e18 := h2 18 (by norm_num)\n  have e19 := h2 19 (by norm_num)\n  have e20 := h2 20 (by norm_num)\n  norm_num at e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15 e16 e17 e18 e19 e20\n  linarith [h1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 585,
+   "stmt_text": "theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 5) (h2 : ∀ n : ℕ, 2 ≤ n → a n = (3 + a (n - 1))) : a 20 = 62"
+  },
+  {
+   "id": "ayt-diz-009",
+   "cell": "B",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "closed_form",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-010",
+   "cell": "B",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "series_sum",
+   "statement": true,
+   "kind": "series_sum_finite",
+   "proved": true,
+   "clean": true,
+   "proof": "  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 22,
+   "stmt_text": "theorem mv_claim : (∑ k ∈ Finset.Icc (1 : ℤ) 10, ((k ^ 2) : ℤ)) = 385"
+  },
+  {
+   "id": "ayt-diz-011",
+   "cell": "B",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "series_sum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-012",
+   "cell": "C",
+   "topic": "diziler",
+   "answer_right": false,
+   "task": "recurrence_term",
+   "statement": true,
+   "kind": "recurrence_term",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1132,
+   "stmt_text": "theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 1) (h2 : a 2 = 3) (h3 : ∀ n : ℕ, 3 ≤ n → a n = (a (n - 1) + (2 * a (n - 2)))) : a 6 = 21"
+  },
+  {
+   "id": "ayt-diz-013",
+   "cell": "C",
+   "topic": "diziler",
+   "answer_right": false,
+   "task": "recurrence_term",
+   "statement": true,
+   "kind": "recurrence_term",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 5905,
+   "stmt_text": "theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 5) (h2 : ∀ n : ℕ, 2 ≤ n → a n = (3 + a (n - 1))) : a 20 = 65"
+  },
+  {
+   "id": "ayt-diz-014",
+   "cell": "C",
+   "topic": "diziler",
+   "answer_right": false,
+   "task": "closed_form",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-015",
+   "cell": "C",
+   "topic": "diziler",
+   "answer_right": false,
+   "task": "closed_form",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-016",
+   "cell": "C",
+   "topic": "diziler",
+   "answer_right": false,
+   "task": "series_sum",
+   "statement": true,
+   "kind": "series_sum_finite",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 236,
+   "stmt_text": "theorem mv_claim : (∑ k ∈ Finset.Icc (1 : ℤ) 10, ((k ^ 2) : ℤ)) = 330"
+  },
+  {
+   "id": "ayt-diz-017",
+   "cell": "C",
+   "topic": "diziler",
+   "answer_right": false,
+   "task": "series_sum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-diz-018",
+   "cell": "D",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "recurrence_term",
+   "statement": true,
+   "kind": "recurrence_term",
+   "proved": true,
+   "clean": true,
+   "proof": "  have e2 := h2 2 (by norm_num)\n  have e3 := h2 3 (by norm_num)\n  have e4 := h2 4 (by norm_num)\n  have e5 := h2 5 (by norm_num)\n  have e6 := h2 6 (by norm_num)\n  have e7 := h2 7 (by norm_num)\n  have e8 := h2 8 (by norm_num)\n  have e9 := h2 9 (by norm_num)\n  have e10 := h2 10 (by norm_num)\n  have e11 := h2 11 (by norm_num)\n  have e12 := h2 12 (by norm_num)\n  have e13 := h2 13 (by norm_num)\n  have e14 := h2 14 (by norm_num)\n  have e15 := h2 15 (by norm_num)\n  have e16 := h2 16 (by norm_num)\n  have e17 := h2 17 (by norm_num)\n  have e18 := h2 18 (by norm_num)\n  have e19 := h2 19 (by norm_num)\n  have e20 := h2 20 (by norm_num)\n  norm_num at e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15 e16 e17 e18 e19 e20\n  linarith [h1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 592,
+   "stmt_text": "theorem mv_claim (a : ℕ → ℝ) (h1 : a 1 = 5) (h2 : ∀ n : ℕ, 2 ≤ n → a n = (3 + a (n - 1))) : a 20 = 62"
+  },
+  {
+   "id": "ayt-diz-019",
+   "cell": "D",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "series_sum",
+   "statement": true,
+   "kind": "series_sum_finite",
+   "proved": true,
+   "clean": true,
+   "proof": "  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 23,
+   "stmt_text": "theorem mv_claim : (∑ k ∈ Finset.Icc (1 : ℤ) 10, ((k ^ 2) : ℤ)) = 385"
+  },
+  {
+   "id": "ayt-diz-020",
+   "cell": "D",
+   "topic": "diziler",
+   "answer_right": true,
+   "task": "series_sum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-int-001",
+   "cell": "A",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "antiderivative",
+   "statement": true,
+   "kind": "antiderivative_hasderiv",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x hg0\n  have hs0 : (x) ≠ 0 := by first | (assumption; done) | (positivity; done) | (simp only []; positivity; done) | (intro hc; nlinarith; done) | (nlinarith; done) | (norm_num; done) | (field_simp; done)\n  have h := ((HasDerivAt.const_mul ((-1 : ℝ)) (hasDerivAt_id' (x))).add ((hasDerivAt_id' (x)).mul (Real.hasDerivAt_log (x := (x)) hs0)))\n  convert h using 1\n  all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; done) | (field_simp [hg0]; ring; done) | (field_simp [hg0]; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 245,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, x ≠ 0 → HasDerivAt (fun t : ℝ => ((-t) + (t * Real.log t))) (Real.log x) x"
+  },
+  {
+   "id": "ayt-int-002",
+   "cell": "A",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-int-003",
+   "cell": "A",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": true,
+   "clean": true,
+   "proof": "  have key : ∀ x ∈ Set.uIcc (0 : ℝ) (1), HasDerivAt (fun t : ℝ => (((-1 : ℝ) + t) * Real.exp t)) ((x * Real.exp x)) x := by\n    intro x hx\n    have h := (((hasDerivAt_const (x) ((-1 : ℝ))).add (hasDerivAt_id' (x))).mul (Real.hasDerivAt_exp (x)))\n    convert h using 1\n    all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)\n  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key (by apply Continuous.intervalIntegrable; fun_prop)]\n  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 232,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(1), (x * Real.exp x) = 1"
+  },
+  {
+   "id": "ayt-int-004",
+   "cell": "A",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": true,
+   "clean": true,
+   "proof": "  have key : ∀ x ∈ Set.uIcc (0 : ℝ) (Real.pi), HasDerivAt (fun t : ℝ => (-Real.cos t)) (Real.sin x) x := by\n    intro x hx\n    have h := (HasDerivAt.const_mul ((-1 : ℝ)) (Real.hasDerivAt_cos (x)))\n    convert h using 1\n    all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)\n  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key (by apply Continuous.intervalIntegrable; fun_prop)]\n  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 230,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(Real.pi), Real.sin x = 2"
+  },
+  {
+   "id": "ayt-int-005",
+   "cell": "B",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "antiderivative",
+   "statement": true,
+   "kind": "antiderivative_hasderiv",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x hg0\n  have hs0 : (x) ≠ 0 := by first | (assumption; done) | (positivity; done) | (simp only []; positivity; done) | (intro hc; nlinarith; done) | (nlinarith; done) | (norm_num; done) | (field_simp; done)\n  have h := ((HasDerivAt.const_mul ((-1 : ℝ)) (hasDerivAt_id' (x))).add ((hasDerivAt_id' (x)).mul (Real.hasDerivAt_log (x := (x)) hs0)))\n  convert h using 1\n  all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; done) | (field_simp [hg0]; ring; done) | (field_simp [hg0]; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 229,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, x ≠ 0 → HasDerivAt (fun t : ℝ => ((-t) + (t * Real.log t))) (Real.log x) x"
+  },
+  {
+   "id": "ayt-int-006",
+   "cell": "B",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-int-007",
+   "cell": "B",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": true,
+   "clean": true,
+   "proof": "  have key : ∀ x ∈ Set.uIcc (0 : ℝ) (1), HasDerivAt (fun t : ℝ => (((-1 : ℝ) + t) * Real.exp t)) ((x * Real.exp x)) x := by\n    intro x hx\n    have h := (((hasDerivAt_const (x) ((-1 : ℝ))).add (hasDerivAt_id' (x))).mul (Real.hasDerivAt_exp (x)))\n    convert h using 1\n    all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)\n  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key (by apply Continuous.intervalIntegrable; fun_prop)]\n  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 236,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(1), (x * Real.exp x) = 1"
+  },
+  {
+   "id": "ayt-int-008",
+   "cell": "B",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": true,
+   "clean": true,
+   "proof": "  have key : ∀ x ∈ Set.uIcc (0 : ℝ) (Real.pi), HasDerivAt (fun t : ℝ => (-Real.cos t)) (Real.sin x) x := by\n    intro x hx\n    have h := (HasDerivAt.const_mul ((-1 : ℝ)) (Real.hasDerivAt_cos (x)))\n    convert h using 1\n    all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)\n  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key (by apply Continuous.intervalIntegrable; fun_prop)]\n  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 247,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(Real.pi), Real.sin x = 2"
+  },
+  {
+   "id": "ayt-int-009",
+   "cell": "B",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-int-010",
+   "cell": "C",
+   "topic": "integral",
+   "answer_right": false,
+   "task": "antiderivative",
+   "statement": true,
+   "kind": "antiderivative_hasderiv",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 906,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, x ≠ 0 → HasDerivAt (fun t : ℝ => (t * Real.log t)) (Real.log x) x"
+  },
+  {
+   "id": "ayt-int-011",
+   "cell": "C",
+   "topic": "integral",
+   "answer_right": false,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-int-012",
+   "cell": "C",
+   "topic": "integral",
+   "answer_right": false,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 2713,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(1), (x * Real.exp x) = ((2 * Real.exp 1) + (-1))"
+  },
+  {
+   "id": "ayt-int-013",
+   "cell": "C",
+   "topic": "integral",
+   "answer_right": false,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1654,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(Real.pi), Real.sin x = 0"
+  },
+  {
+   "id": "ayt-int-014",
+   "cell": "C",
+   "topic": "integral",
+   "answer_right": false,
+   "task": "antiderivative",
+   "statement": true,
+   "kind": "antiderivative_hasderiv",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 536,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, x ≠ 0 → HasDerivAt (fun t : ℝ => (1 / t)) (Real.log x) x"
+  },
+  {
+   "id": "ayt-int-015",
+   "cell": "C",
+   "topic": "integral",
+   "answer_right": false,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 2685,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(1), (x * Real.exp x) = (Real.exp 1 / 2)"
+  },
+  {
+   "id": "ayt-int-016",
+   "cell": "D",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": true,
+   "clean": true,
+   "proof": "  have key : ∀ x ∈ Set.uIcc (0 : ℝ) (1), HasDerivAt (fun t : ℝ => (((-1 : ℝ) + t) * Real.exp t)) ((x * Real.exp x)) x := by\n    intro x hx\n    have h := (((hasDerivAt_const (x) ((-1 : ℝ))).add (hasDerivAt_id' (x))).mul (Real.hasDerivAt_exp (x)))\n    convert h using 1\n    all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)\n  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key (by apply Continuous.intervalIntegrable; fun_prop)]\n  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 247,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(1), (x * Real.exp x) = 1"
+  },
+  {
+   "id": "ayt-int-017",
+   "cell": "D",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-int-018",
+   "cell": "D",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": true,
+   "clean": true,
+   "proof": "  have key : ∀ x ∈ Set.uIcc (0 : ℝ) (Real.pi), HasDerivAt (fun t : ℝ => (-Real.cos t)) (Real.sin x) x := by\n    intro x hx\n    have h := (HasDerivAt.const_mul ((-1 : ℝ)) (Real.hasDerivAt_cos (x)))\n    convert h using 1\n    all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)\n  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key (by apply Continuous.intervalIntegrable; fun_prop)]\n  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 235,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(Real.pi), Real.sin x = 2"
+  },
+  {
+   "id": "ayt-int-019",
+   "cell": "B",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": true,
+   "kind": "definite_integral",
+   "proved": true,
+   "clean": true,
+   "proof": "  have key : ∀ x ∈ Set.uIcc (0 : ℝ) (1), HasDerivAt (fun t : ℝ => (((-1 : ℝ) + t) * Real.exp t)) ((x * Real.exp x)) x := by\n    intro x hx\n    have h := (((hasDerivAt_const (x) ((-1 : ℝ))).add (hasDerivAt_id' (x))).mul (Real.hasDerivAt_exp (x)))\n    convert h using 1\n    all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)\n  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt key (by apply Continuous.intervalIntegrable; fun_prop)]\n  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 245,
+   "stmt_text": "theorem mv_claim : ∫ x in (0 : ℝ)..(1), (x * Real.exp x) = 1"
+  },
+  {
+   "id": "ayt-int-020",
+   "cell": "C",
+   "topic": "integral",
+   "answer_right": false,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-int-021",
+   "cell": "D",
+   "topic": "integral",
+   "answer_right": true,
+   "task": "antiderivative",
+   "statement": true,
+   "kind": "antiderivative_hasderiv",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x hg0\n  have hs0 : (x) ≠ 0 := by first | (assumption; done) | (positivity; done) | (simp only []; positivity; done) | (intro hc; nlinarith; done) | (nlinarith; done) | (norm_num; done) | (field_simp; done)\n  have h := ((HasDerivAt.const_mul ((-1 : ℝ)) (hasDerivAt_id' (x))).add ((hasDerivAt_id' (x)).mul (Real.hasDerivAt_log (x := (x)) hs0)))\n  convert h using 1\n  all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; done) | (field_simp [hg0]; ring; done) | (field_simp [hg0]; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply, hg0]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 237,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, x ≠ 0 → HasDerivAt (fun t : ℝ => ((-t) + (t * Real.log t))) (Real.log x) x"
+  },
+  {
+   "id": "ayt-lim-001",
+   "cell": "A",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-002",
+   "cell": "A",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-003",
+   "cell": "A",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-004",
+   "cell": "A",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-005",
+   "cell": "A",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-006",
+   "cell": "A",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-007",
+   "cell": "B",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-008",
+   "cell": "B",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-009",
+   "cell": "C",
+   "topic": "limit",
+   "answer_right": false,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-010",
+   "cell": "C",
+   "topic": "limit",
+   "answer_right": false,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-011",
+   "cell": "C",
+   "topic": "limit",
+   "answer_right": false,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-012",
+   "cell": "D",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-013",
+   "cell": "B",
+   "topic": "limit",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-lim-014",
+   "cell": "C",
+   "topic": "limit",
+   "answer_right": false,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-001",
+   "cell": "A",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-002",
+   "cell": "A",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-003",
+   "cell": "A",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  rw [show ((75 * Real.pi) / 180) = Real.pi / 6 + Real.pi / 4 by ring, Real.sin_add]\n  simp only [Real.sin_pi_div_four, Real.cos_pi_div_four, Real.sin_pi_div_six, Real.cos_pi_div_six, Real.sin_pi_div_three, Real.cos_pi_div_three, Real.sin_pi_div_two, Real.cos_pi_div_two]\n  rw [show Real.sqrt 6 = Real.sqrt 2 * Real.sqrt 3 from by\n        rw [← Real.sqrt_mul (by norm_num : (0:ℝ) ≤ 2)]; norm_num]\n  ring",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 81,
+   "stmt_text": "theorem mv_claim : Real.sin ((75 * Real.pi) / 180) = ((Real.sqrt 2 + Real.sqrt 6) / 4)"
+  },
+  {
+   "id": "ayt-trig-004",
+   "cell": "A",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-005",
+   "cell": "B",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-006",
+   "cell": "B",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-007",
+   "cell": "B",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  rw [show ((75 * Real.pi) / 180) = Real.pi / 6 + Real.pi / 4 by ring, Real.sin_add]\n  simp only [Real.sin_pi_div_four, Real.cos_pi_div_four, Real.sin_pi_div_six, Real.cos_pi_div_six, Real.sin_pi_div_three, Real.cos_pi_div_three, Real.sin_pi_div_two, Real.cos_pi_div_two]\n  rw [show Real.sqrt 6 = Real.sqrt 2 * Real.sqrt 3 from by\n        rw [← Real.sqrt_mul (by norm_num : (0:ℝ) ≤ 2)]; norm_num]\n  ring",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 81,
+   "stmt_text": "theorem mv_claim : Real.sin ((75 * Real.pi) / 180) = ((Real.sqrt 2 + Real.sqrt 6) / 4)"
+  },
+  {
+   "id": "ayt-trig-008",
+   "cell": "B",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-009",
+   "cell": "B",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-010",
+   "cell": "C",
+   "topic": "trigonometri",
+   "answer_right": false,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-011",
+   "cell": "C",
+   "topic": "trigonometri",
+   "answer_right": false,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-012",
+   "cell": "C",
+   "topic": "trigonometri",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 907,
+   "stmt_text": "theorem mv_claim : Real.sin ((75 * Real.pi) / 180) = ((Real.sqrt 6 + (-Real.sqrt 2)) / 4)"
+  },
+  {
+   "id": "ayt-trig-013",
+   "cell": "C",
+   "topic": "trigonometri",
+   "answer_right": false,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-014",
+   "cell": "C",
+   "topic": "trigonometri",
+   "answer_right": false,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-015",
+   "cell": "C",
+   "topic": "trigonometri",
+   "answer_right": false,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-016",
+   "cell": "D",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  rw [show ((75 * Real.pi) / 180) = Real.pi / 6 + Real.pi / 4 by ring, Real.sin_add]\n  simp only [Real.sin_pi_div_four, Real.cos_pi_div_four, Real.sin_pi_div_six, Real.cos_pi_div_six, Real.sin_pi_div_three, Real.cos_pi_div_three, Real.sin_pi_div_two, Real.cos_pi_div_two]\n  rw [show Real.sqrt 6 = Real.sqrt 2 * Real.sqrt 3 from by\n        rw [← Real.sqrt_mul (by norm_num : (0:ℝ) ≤ 2)]; norm_num]\n  ring",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 82,
+   "stmt_text": "theorem mv_claim : Real.sin ((75 * Real.pi) / 180) = ((Real.sqrt 2 + Real.sqrt 6) / 4)"
+  },
+  {
+   "id": "ayt-trig-017",
+   "cell": "D",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-018",
+   "cell": "D",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-019",
+   "cell": "B",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 675,
+   "stmt_text": "theorem mv_claim : Real.sin ((75 * Real.pi) / 180) = (Real.sqrt (2 + Real.sqrt 3) / 2)"
+  },
+  {
+   "id": "ayt-trig-020",
+   "cell": "C",
+   "topic": "trigonometri",
+   "answer_right": false,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-trig-021",
+   "cell": "D",
+   "topic": "trigonometri",
+   "answer_right": true,
+   "task": "trig_solve",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-001",
+   "cell": "A",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "extremum",
+   "statement": true,
+   "kind": "extremum_max",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨⟨3, by norm_num, by norm_num⟩, fun x hx => ?_⟩\n  obtain ⟨h1, h2⟩ := hx\n  nlinarith [h1, h2, sq_nonneg (x - 3), sq_nonneg (x + (3 / 2 : ℝ)), mul_nonneg (by linarith : (0:ℝ) ≤ 3 - x) (sq_nonneg (x - 3)), mul_nonneg (by linarith : (0:ℝ) ≤ 3 - x) (sq_nonneg (x + (3 / 2 : ℝ))), mul_nonneg (by linarith : (0:ℝ) ≤ x - (-2 : ℝ)) (sq_nonneg (x - 3)), mul_nonneg (by linarith : (0:ℝ) ≤ x - (-2 : ℝ)) (sq_nonneg (x + (3 / 2 : ℝ)))]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 391,
+   "stmt_text": "theorem mv_claim : (∃ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) ∧ ((x ^ 3) + ((-3 : ℝ) * x)) = 18) ∧ (∀ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) → ((x ^ 3) + ((-3 : ℝ) * x)) ≤ 18)"
+  },
+  {
+   "id": "ayt-tur-002",
+   "cell": "A",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "derivative",
+   "statement": true,
+   "kind": "derivative_at",
+   "proved": true,
+   "clean": true,
+   "proof": "  have h := (((hasDerivAt_id' ((0))).pow 2).mul (Real.hasDerivAt_exp ((0))))\n  convert h using 1\n  all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 1028,
+   "stmt_text": "theorem mv_claim : HasDerivAt (fun t : ℝ => ((t ^ 2) * Real.exp t)) (0) (0)"
+  },
+  {
+   "id": "ayt-tur-003",
+   "cell": "A",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "tangent_line",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-004",
+   "cell": "A",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "derivative",
+   "statement": true,
+   "kind": "derivative_fun",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  have hs0 : ((1 + (x ^ 2))) ≠ 0 := by first | (assumption; done) | (positivity; done) | (simp only []; positivity; done) | (intro hc; nlinarith; done) | (nlinarith; done) | (norm_num; done) | (field_simp; done)\n  have h := (HasDerivAt.log ((hasDerivAt_const (x) (1)).add ((hasDerivAt_id' (x)).pow 2)) hs0)\n  convert h using 1\n  all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 269,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, HasDerivAt (fun t : ℝ => Real.log (1 + (t ^ 2))) (((2 * x) / (1 + (x ^ 2)))) x"
+  },
+  {
+   "id": "ayt-tur-005",
+   "cell": "A",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "extremum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-006",
+   "cell": "A",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "extremum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-007",
+   "cell": "A",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-008",
+   "cell": "B",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "extremum",
+   "statement": true,
+   "kind": "extremum_max",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨⟨3, by norm_num, by norm_num⟩, fun x hx => ?_⟩\n  obtain ⟨h1, h2⟩ := hx\n  nlinarith [h1, h2, sq_nonneg (x - 3), sq_nonneg (x + (3 / 2 : ℝ)), mul_nonneg (by linarith : (0:ℝ) ≤ 3 - x) (sq_nonneg (x - 3)), mul_nonneg (by linarith : (0:ℝ) ≤ 3 - x) (sq_nonneg (x + (3 / 2 : ℝ))), mul_nonneg (by linarith : (0:ℝ) ≤ x - (-2 : ℝ)) (sq_nonneg (x - 3)), mul_nonneg (by linarith : (0:ℝ) ≤ x - (-2 : ℝ)) (sq_nonneg (x + (3 / 2 : ℝ)))]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 413,
+   "stmt_text": "theorem mv_claim : (∃ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) ∧ ((x ^ 3) + ((-3 : ℝ) * x)) = 18) ∧ (∀ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) → ((x ^ 3) + ((-3 : ℝ) * x)) ≤ 18)"
+  },
+  {
+   "id": "ayt-tur-009",
+   "cell": "B",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "extremum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-010",
+   "cell": "B",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "tangent_line",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-011",
+   "cell": "C",
+   "topic": "türev",
+   "answer_right": false,
+   "task": "extremum",
+   "statement": true,
+   "kind": "extremum_max",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1044,
+   "stmt_text": "theorem mv_claim : (∃ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) ∧ ((x ^ 3) + ((-3 : ℝ) * x)) = 2) ∧ (∀ x : ℝ, ((-2 : ℝ) ≤ x ∧ x ≤ 3) → ((x ^ 3) + ((-3 : ℝ) * x)) ≤ 2)"
+  },
+  {
+   "id": "ayt-tur-012",
+   "cell": "C",
+   "topic": "türev",
+   "answer_right": false,
+   "task": "derivative",
+   "statement": true,
+   "kind": "derivative_at",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1717,
+   "stmt_text": "theorem mv_claim : HasDerivAt (fun t : ℝ => ((t ^ 2) * Real.exp t)) (2) (0)"
+  },
+  {
+   "id": "ayt-tur-013",
+   "cell": "C",
+   "topic": "türev",
+   "answer_right": false,
+   "task": "tangent_line",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-014",
+   "cell": "C",
+   "topic": "türev",
+   "answer_right": false,
+   "task": "derivative",
+   "statement": true,
+   "kind": "derivative_fun",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1335,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, HasDerivAt (fun t : ℝ => Real.log (1 + (t ^ 2))) ((1 / (1 + (x ^ 2)))) x"
+  },
+  {
+   "id": "ayt-tur-015",
+   "cell": "D",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "extremum",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "ayt-tur-016",
+   "cell": "D",
+   "topic": "türev",
+   "answer_right": true,
+   "task": "derivative",
+   "statement": true,
+   "kind": "derivative_at",
+   "proved": true,
+   "clean": true,
+   "proof": "  have h := (((hasDerivAt_id' ((0))).pow 2).mul (Real.hasDerivAt_exp ((0))))\n  convert h using 1\n  all_goals first | (rfl; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (funext y; simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (funext y; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (simp [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (field_simp; ring; done) | (field_simp; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; ring; done) | (norm_num [Pi.add_apply, Pi.sub_apply, Pi.mul_apply, Pi.pow_apply, Pi.neg_apply]; done) | (ring; done) | (push_cast; ring; done) | (nlinarith; done)",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 968,
+   "stmt_text": "theorem mv_claim : HasDerivAt (fun t : ℝ => ((t ^ 2) * Real.exp t)) (0) (0)"
+  },
+  {
+   "id": "tyt-den-001",
+   "cell": "A",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x h1 h2 => ?_, by norm_num, by norm_num, by norm_num⟩\n  rw [← Real.log_mul (by linarith) (by linarith)]\n  constructor\n  · intro h\n    have hinj := Real.log_injOn_pos (Set.mem_Ioi.mpr (by nlinarith)) (Set.mem_Ioi.mpr (by norm_num : (0:ℝ) < 3)) h\n    nlinarith [hinj]\n  · rintro rfl\n    norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 269,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, (((-1 : ℝ) + x) > 0) → (((-3 : ℝ) + x) > 0) → (((Real.log ((-1 : ℝ) + x) + Real.log ((-3 : ℝ) + x)) = Real.log 3) ↔ (x = 4))) ∧ (3 > 0) ∧ (1 > 0) ∧ (Real.log 3 = Real.log 3)"
+  },
+  {
+   "id": "tyt-den-002",
+   "cell": "A",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x h1 => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    have hnn : (0:ℝ) ≤ Real.sqrt (4 + x) := Real.sqrt_nonneg _\n    have hsq := Real.sq_sqrt (show (0:ℝ) ≤ (4 + x) by linarith)\n    nlinarith [h, hsq, hnn]\n  · rintro rfl\n    norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 327,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((4 + x) ≥ 0) → ((Real.sqrt (4 + x) = ((-2 : ℝ) + x)) ↔ (x = 5))) ∧ (9 ≥ 0) ∧ (3 = 3)"
+  },
+  {
+   "id": "tyt-den-003",
+   "cell": "A",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine fun x h1 => ?_\n  intro h\n  field_simp at h\n  exact h1 (by linarith)",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 77,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, (((-3 : ℝ) + x) ≠ 0) → ¬((x / ((-3 : ℝ) + x)) = (2 + (3 / ((-3 : ℝ) + x)))))"
+  },
+  {
+   "id": "tyt-den-004",
+   "cell": "A",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    rcases (abs_eq (by norm_num : (0:ℝ) ≤ 5)).mp h with h' | h'\n    · right; linarith\n    · left; linarith\n  · rintro (rfl | rfl) <;> rw [abs_eq (by norm_num : (0:ℝ) ≤ 5)] <;> norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 160,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((|((-3 : ℝ) + (2 * x))| = 5) ↔ (x = (-1 : ℝ) ∨ x = 4))) ∧ (5 = 5) ∧ (5 = 5)"
+  },
+  {
+   "id": "tyt-den-005",
+   "cell": "A",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  nlinarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nm : ℝ\nh2 : 0 < m\nh1 : (m + 1) ^ 2 + -4 ^ 2 = 0\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 565,
+   "stmt_text": "theorem mv_claim (m : ℝ) (h1 : (((m + 1) ^ 2) + (-(4 * 4))) = 0) (h2 : m > 0) : m = 3"
+  },
+  {
+   "id": "tyt-den-006",
+   "cell": "B",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x h1 h2 => ?_, by norm_num, by norm_num, by norm_num⟩\n  rw [← Real.log_mul (by linarith) (by linarith)]\n  constructor\n  · intro h\n    have hinj := Real.log_injOn_pos (Set.mem_Ioi.mpr (by nlinarith)) (Set.mem_Ioi.mpr (by norm_num : (0:ℝ) < 3)) h\n    nlinarith [hinj]\n  · rintro rfl\n    norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 266,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, (((-1 : ℝ) + x) > 0) → (((-3 : ℝ) + x) > 0) → (((Real.log ((-1 : ℝ) + x) + Real.log ((-3 : ℝ) + x)) = Real.log 3) ↔ (x = 4))) ∧ (3 > 0) ∧ (1 > 0) ∧ (Real.log 3 = Real.log 3)"
+  },
+  {
+   "id": "tyt-den-007",
+   "cell": "B",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x h1 => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    have hnn : (0:ℝ) ≤ Real.sqrt (4 + x) := Real.sqrt_nonneg _\n    have hsq := Real.sq_sqrt (show (0:ℝ) ≤ (4 + x) by linarith)\n    nlinarith [h, hsq, hnn]\n  · rintro rfl\n    norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 330,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((4 + x) ≥ 0) → ((Real.sqrt (4 + x) = ((-2 : ℝ) + x)) ↔ (x = 5))) ∧ (9 ≥ 0) ∧ (3 = 3)"
+  },
+  {
+   "id": "tyt-den-008",
+   "cell": "B",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    rcases (abs_eq (by norm_num : (0:ℝ) ≤ 5)).mp h with h' | h'\n    · right; linarith\n    · left; linarith\n  · rintro (rfl | rfl) <;> rw [abs_eq (by norm_num : (0:ℝ) ≤ 5)] <;> norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 163,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((|((-3 : ℝ) + (2 * x))| = 5) ↔ (x = (-1 : ℝ) ∨ x = 4))) ∧ (5 = 5) ∧ (5 = 5)"
+  },
+  {
+   "id": "tyt-den-009",
+   "cell": "C",
+   "topic": "denklem",
+   "answer_right": false,
+   "task": "solve_equation",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-den-010",
+   "cell": "C",
+   "topic": "denklem",
+   "answer_right": false,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1143,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((4 + x) ≥ 0) → ((Real.sqrt (4 + x) = ((-2 : ℝ) + x)) ↔ (x = 0 ∨ x = 5))) ∧ (4 ≥ 0) ∧ (2 = (-2 : ℝ)) ∧ (9 ≥ 0) ∧ (3 = 3)"
+  },
+  {
+   "id": "tyt-den-011",
+   "cell": "C",
+   "topic": "denklem",
+   "answer_right": false,
+   "task": "solve_equation",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-den-012",
+   "cell": "C",
+   "topic": "denklem",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 402,
+   "stmt_text": "theorem mv_claim (m : ℝ) (h1 : (((m + 1) ^ 2) + (-(4 * 4))) = 0) (h2 : m > 0) : m = 15"
+  },
+  {
+   "id": "tyt-den-013",
+   "cell": "D",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x h1 => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    have hnn : (0:ℝ) ≤ Real.sqrt (4 + x) := Real.sqrt_nonneg _\n    have hsq := Real.sq_sqrt (show (0:ℝ) ≤ (4 + x) by linarith)\n    nlinarith [h, hsq, hnn]\n  · rintro rfl\n    norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 371,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((4 + x) ≥ 0) → ((Real.sqrt (4 + x) = ((-2 : ℝ) + x)) ↔ (x = 5))) ∧ (9 ≥ 0) ∧ (3 = 3)"
+  },
+  {
+   "id": "tyt-den-014",
+   "cell": "D",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x => ?_, by norm_num, by norm_num⟩\n  constructor\n  · intro h\n    rcases (abs_eq (by norm_num : (0:ℝ) ≤ 5)).mp h with h' | h'\n    · right; linarith\n    · left; linarith\n  · rintro (rfl | rfl) <;> rw [abs_eq (by norm_num : (0:ℝ) ≤ 5)] <;> norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 177,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((|((-3 : ℝ) + (2 * x))| = 5) ↔ (x = (-1 : ℝ) ∨ x = 4))) ∧ (5 = 5) ∧ (5 = 5)"
+  },
+  {
+   "id": "tyt-esf-001",
+   "cell": "A",
+   "topic": "eşitsizlik",
+   "answer_right": true,
+   "task": "solve_inequality",
+   "statement": true,
+   "kind": "solve_inequality_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  constructor\n  · intro h\n    constructor <;> nlinarith\n  · rintro ⟨h1, h2⟩\n    nlinarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 246,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((((-14 : ℝ) + (x ^ 2) + ((-5 : ℝ) * x)) < 0) ↔ ((-2 : ℝ) < x ∧ x < 7)))"
+  },
+  {
+   "id": "tyt-esf-002",
+   "cell": "A",
+   "topic": "eşitsizlik",
+   "answer_right": true,
+   "task": "solve_inequality",
+   "statement": true,
+   "kind": "solve_inequality_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x hx => ?_, fun x hm => ?_⟩\n  · rw [ge_iff_le, div_nonneg_iff]\n    constructor\n    · rintro (⟨h1, h2⟩ | ⟨h1, h2⟩)\n      · right; linarith\n      · left\n        rcases lt_or_eq_of_le h2 with h3 | h3\n        · linarith\n        · exact absurd h3 hx\n    · rintro (h | h)\n      · right; constructor <;> linarith\n      · left; constructor <;> linarith\n  · rcases hm with h | h <;> intro hc <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 197,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((2 + x) ≠ 0) → (((((-1 : ℝ) + x) / (2 + x)) ≥ 0) ↔ ((x < (-2 : ℝ)) ∨ (1 ≤ x)))) ∧ (∀ x : ℝ, ((x < (-2 : ℝ)) ∨ (1 ≤ x)) → (((2 + x) ≠ 0)))"
+  },
+  {
+   "id": "tyt-esf-003",
+   "cell": "A",
+   "topic": "eşitsizlik",
+   "answer_right": true,
+   "task": "count_integers",
+   "statement": true,
+   "kind": "count_integers_finset",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x hx => ?_, by decide⟩\n  simp only [Finset.mem_Icc, abs_lt] at *\n  omega",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 57,
+   "stmt_text": "theorem mv_claim : (∀ x : ℤ, ((|((-3 : ℤ) + x)| < 2)) → x ∈ Finset.Icc (1 : ℤ) 5) ∧ ((Finset.Icc (1 : ℤ) 5).filter (fun x => (|((-3 : ℤ) + x)| < 2))).card = 3"
+  },
+  {
+   "id": "tyt-esf-004",
+   "cell": "A",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 26,
+   "stmt_text": "theorem mv_claim : (3 + (2 * (((-1 : ℝ) + ((2 * 1) ^ 2)) * 1))) = 9"
+  },
+  {
+   "id": "tyt-esf-005",
+   "cell": "A",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x h1 => ?_, by norm_num, by norm_num⟩\n  rw [div_eq_iff h1]\n  constructor <;> intro h <;> linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 425,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, (((-1 : ℝ) + x) ≠ 0) → ((((3 + (2 * x)) / ((-1 : ℝ) + x)) = 5) ↔ (x = (8 / 3 : ℝ)))) ∧ ((5 / 3 : ℝ) ≠ 0) ∧ (5 = 5)"
+  },
+  {
+   "id": "tyt-esf-006",
+   "cell": "A",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nk : ℝ\nh1 : 6 + 3 ^ 3 + -(3 ^ 2 * 2) + 3 * k = 0\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 484,
+   "stmt_text": "theorem mv_claim (k : ℝ) (h1 : (6 + ((3 * 1) ^ 3) + ((-2 : ℝ) * ((3 * 1) ^ 2)) + (k * (3 * 1))) = 0) : k = (-5 : ℝ)"
+  },
+  {
+   "id": "tyt-esf-007",
+   "cell": "A",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "count_roots",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-esf-008",
+   "cell": "B",
+   "topic": "eşitsizlik",
+   "answer_right": true,
+   "task": "solve_inequality",
+   "statement": true,
+   "kind": "solve_inequality_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  constructor\n  · intro h\n    constructor <;> nlinarith\n  · rintro ⟨h1, h2⟩\n    nlinarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 238,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((((-14 : ℝ) + (x ^ 2) + ((-5 : ℝ) * x)) < 0) ↔ ((-2 : ℝ) < x ∧ x < 7)))"
+  },
+  {
+   "id": "tyt-esf-009",
+   "cell": "B",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 26,
+   "stmt_text": "theorem mv_claim : (3 + (2 * (((-1 : ℝ) + ((2 * 1) ^ 2)) * 1))) = 9"
+  },
+  {
+   "id": "tyt-esf-010",
+   "cell": "B",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nk : ℝ\nh1 : 6 + 3 ^ 3 + -(3 ^ 2 * 2) + 3 * k = 0\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 506,
+   "stmt_text": "theorem mv_claim (k : ℝ) (h1 : (6 + ((3 * 1) ^ 3) + ((-2 : ℝ) * ((3 * 1) ^ 2)) + (k * (3 * 1))) = 0) : k = (-5 : ℝ)"
+  },
+  {
+   "id": "tyt-esf-011",
+   "cell": "C",
+   "topic": "eşitsizlik",
+   "answer_right": false,
+   "task": "solve_inequality",
+   "statement": true,
+   "kind": "solve_inequality_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 696,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((((-14 : ℝ) + (x ^ 2) + ((-5 : ℝ) * x)) < 0) ↔ ((x < (-2 : ℝ)) ∨ (7 < x))))"
+  },
+  {
+   "id": "tyt-esf-012",
+   "cell": "C",
+   "topic": "eşitsizlik",
+   "answer_right": false,
+   "task": "solve_inequality",
+   "statement": true,
+   "kind": "solve_inequality_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1098,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, ((2 + x) ≠ 0) → (((((-1 : ℝ) + x) / (2 + x)) ≥ 0) ↔ ((x ≤ (-2 : ℝ)) ∨ (1 ≤ x)))) ∧ (∀ x : ℝ, ((x ≤ (-2 : ℝ)) ∨ (1 ≤ x)) → (((2 + x) ≠ 0)))"
+  },
+  {
+   "id": "tyt-esf-013",
+   "cell": "C",
+   "topic": "fonksiyonlar",
+   "answer_right": false,
+   "task": "solve_equation",
+   "statement": true,
+   "kind": "solve_equation_set",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1664,
+   "stmt_text": "theorem mv_claim : (∀ x : ℝ, (((-1 : ℝ) + x) ≠ 0) → ((((3 + (2 * x)) / ((-1 : ℝ) + x)) = 5) ↔ (x = (2 / 3 : ℝ)))) ∧ ((-1 / 3 : ℝ) ≠ 0) ∧ ((-13 : ℝ) = 5)"
+  },
+  {
+   "id": "tyt-esf-014",
+   "cell": "C",
+   "topic": "polinom",
+   "answer_right": false,
+   "task": "count_roots",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-esf-015",
+   "cell": "D",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 27,
+   "stmt_text": "theorem mv_claim : (3 + (2 * (((-1 : ℝ) + ((2 * 1) ^ 2)) * 1))) = 9"
+  },
+  {
+   "id": "tyt-esf-016",
+   "cell": "D",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nk : ℝ\nh1 : 6 + 3 ^ 3 + -(3 ^ 2 * 2) + 3 * k = 0\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 492,
+   "stmt_text": "theorem mv_claim (k : ℝ) (h1 : (6 + ((3 * 1) ^ 3) + ((-2 : ℝ) * ((3 * 1) ^ 2)) + (k * (3 * 1))) = 0) : k = (-5 : ℝ)"
+  },
+  {
+   "id": "tyt-geo-001",
+   "cell": "A",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-002",
+   "cell": "A",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-003",
+   "cell": "A",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-004",
+   "cell": "A",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-005",
+   "cell": "A",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-006",
+   "cell": "A",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-007",
+   "cell": "B",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-008",
+   "cell": "B",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-009",
+   "cell": "B",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-010",
+   "cell": "B",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-011",
+   "cell": "B",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-012",
+   "cell": "C",
+   "topic": "geometri",
+   "answer_right": false,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-013",
+   "cell": "C",
+   "topic": "geometri",
+   "answer_right": false,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-014",
+   "cell": "C",
+   "topic": "geometri",
+   "answer_right": false,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-015",
+   "cell": "C",
+   "topic": "geometri",
+   "answer_right": false,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-016",
+   "cell": "C",
+   "topic": "geometri",
+   "answer_right": false,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-017",
+   "cell": "C",
+   "topic": "geometri",
+   "answer_right": false,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-018",
+   "cell": "D",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-019",
+   "cell": "D",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-geo-020",
+   "cell": "D",
+   "topic": "geometri",
+   "answer_right": true,
+   "task": "synthetic_geometry",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-kap-001",
+   "cell": "A",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  rcases lt_trichotomy x 3 with hlt0 | heq0 | hgt0\n  · constructor\n    · intro h\n      exfalso\n      have hk := h\n      first | (linarith; done) | (nlinarith [hlt0, hk]; done)\n    · intro h\n      exfalso\n      rcases h with ra0 <;> first | (linarith; done) | (nlinarith; done)\n  · subst heq0\n    first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n  · constructor\n    · intro _\n      linarith\n    · intro _\n      (first | (linarith; done) | (nlinarith [hgt0]; done) | (intro hc; nlinarith [hgt0, hc]; done))",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 121,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, ((((x + (-3)) ≥ 0)) ↔ (3 ≤ x))"
+  },
+  {
+   "id": "tyt-kap-002",
+   "cell": "B",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  rcases lt_trichotomy x 3 with hlt0 | heq0 | hgt0\n  · constructor\n    · intro h\n      exfalso\n      have hk := h\n      first | (linarith; done) | (nlinarith [hlt0, hk]; done)\n    · intro h\n      exfalso\n      rcases h with ra0 <;> first | (linarith; done) | (nlinarith; done)\n  · subst heq0\n    first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n  · constructor\n    · intro _\n      linarith\n    · intro _\n      (first | (linarith; done) | (nlinarith [hgt0]; done) | (intro hc; nlinarith [hgt0, hc]; done))",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 113,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, ((((x + (-3)) ≥ 0)) ↔ (3 ≤ x))"
+  },
+  {
+   "id": "tyt-kap-003",
+   "cell": "C",
+   "topic": "fonksiyonlar",
+   "answer_right": false,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 216,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, ((((x + (-3)) ≥ 0)) ↔ (3 < x))"
+  },
+  {
+   "id": "tyt-kap-004",
+   "cell": "A",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  rcases lt_trichotomy x (-2 : ℝ) with hlt0 | heq0 | hgt0\n  · constructor\n    · intro _\n      left; linarith\n    · intro _\n      (first | (linarith; done) | (nlinarith [hlt0]; done) | (intro hc; nlinarith [hlt0, hc]; done))\n  · subst heq0\n    first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n  · rcases lt_trichotomy x 2 with hlt1 | heq1 | hgt1\n    · constructor\n      · intro _\n        right; left; exact ⟨by linarith, by linarith⟩\n      · intro _\n        (first | (linarith; done) | (nlinarith [hgt0, hlt1]; done) | (intro hc; nlinarith [hgt0, hlt1, hc]; done))\n    · subst heq1\n      first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n    · constructor\n      · intro _\n        right; right; linarith\n      · intro _\n        (first | (linarith; done) | (nlinarith [hgt1]; done) | (intro hc; nlinarith [hgt1, hc]; done))",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 373,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (((((x ^ 2) + (-4)) ≠ 0)) ↔ ((x < (-2 : ℝ)) ∨ ((-2 : ℝ) < x ∧ x < 2) ∨ (2 < x)))"
+  },
+  {
+   "id": "tyt-kap-005",
+   "cell": "C",
+   "topic": "fonksiyonlar",
+   "answer_right": false,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 296,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (((((x ^ 2) + (-4)) ≠ 0)) ↔ ((x < (-2 : ℝ)) ∨ (2 < x)))"
+  },
+  {
+   "id": "tyt-kap-006",
+   "cell": "D",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  rcases lt_trichotomy x (-2 : ℝ) with hlt0 | heq0 | hgt0\n  · constructor\n    · intro _\n      left; linarith\n    · intro _\n      (first | (linarith; done) | (nlinarith [hlt0]; done) | (intro hc; nlinarith [hlt0, hc]; done))\n  · subst heq0\n    first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n  · rcases lt_trichotomy x 2 with hlt1 | heq1 | hgt1\n    · constructor\n      · intro _\n        right; left; exact ⟨by linarith, by linarith⟩\n      · intro _\n        (first | (linarith; done) | (nlinarith [hgt0, hlt1]; done) | (intro hc; nlinarith [hgt0, hlt1, hc]; done))\n    · subst heq1\n      first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n    · constructor\n      · intro _\n        right; right; linarith\n      · intro _\n        (first | (linarith; done) | (nlinarith [hgt1]; done) | (intro hc; nlinarith [hgt1, hc]; done))",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 361,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (((((x ^ 2) + (-4)) ≠ 0)) ↔ ((x < (-2 : ℝ)) ∨ ((-2 : ℝ) < x ∧ x < 2) ∨ (2 < x)))"
+  },
+  {
+   "id": "tyt-kap-007",
+   "cell": "A",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  rcases lt_trichotomy x 1 with hlt0 | heq0 | hgt0\n  · constructor\n    · intro h\n      exfalso\n      have hk := h\n      first | (linarith; done) | (nlinarith [hlt0, hk]; done)\n    · intro h\n      exfalso\n      rcases h with ra0 <;> first | (linarith; done) | (nlinarith; done)\n  · subst heq0\n    first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n  · constructor\n    · intro _\n      linarith\n    · intro _\n      (first | (linarith; done) | (nlinarith [hgt0]; done) | (intro hc; nlinarith [hgt0, hc]; done))",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 123,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, ((((x + (-1)) > 0)) ↔ (1 < x))"
+  },
+  {
+   "id": "tyt-kap-008",
+   "cell": "B",
+   "topic": "fonksiyonlar",
+   "answer_right": true,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  rcases lt_trichotomy x 1 with hlt0 | heq0 | hgt0\n  · constructor\n    · intro h\n      exfalso\n      have hk := h\n      first | (linarith; done) | (nlinarith [hlt0, hk]; done)\n    · intro h\n      exfalso\n      rcases h with ra0 <;> first | (linarith; done) | (nlinarith; done)\n  · subst heq0\n    first | (norm_num; done) | (constructor <;> intro h <;> norm_num at h ⊢; done)\n  · constructor\n    · intro _\n      linarith\n    · intro _\n      (first | (linarith; done) | (nlinarith [hgt0]; done) | (intro hc; nlinarith [hgt0, hc]; done))",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 112,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, ((((x + (-1)) > 0)) ↔ (1 < x))"
+  },
+  {
+   "id": "tyt-kap-009",
+   "cell": "C",
+   "topic": "fonksiyonlar",
+   "answer_right": false,
+   "task": "domain_of",
+   "statement": true,
+   "kind": "domain_of_iff",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 257,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, ((((x + (-1)) > 0)) ↔ (1 ≤ x))"
+  },
+  {
+   "id": "tyt-kap-010",
+   "cell": "A",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "simplify_expression",
+   "statement": true,
+   "kind": "simplify_identity",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x h1 h2\n  have c1 : (x * (x + 1)) ≠ 0 := fun hc => (mul_ne_zero h1 h2) (by linear_combination (1) * hc)\n  have d1 : x ≠ 0 := fun hc => h1 (by linear_combination (1) * hc)\n  have d2 : (1 + x) ≠ 0 := fun hc => h2 (by linear_combination (1) * hc)\n  have d3 : (x + 1) ≠ 0 := fun hc => h2 (by linear_combination (1) * hc)\n  have d4 : (x * (1 + x)) ≠ 0 := fun hc => (mul_ne_zero h1 h2) (by linear_combination (1) * hc)\n  have d5 : (x * (x + 1)) ≠ 0 := fun hc => (mul_ne_zero h1 h2) (by linear_combination (1) * hc)\n  refine ⟨c1, ?_⟩\n  field_simp\n  ring",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 191,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (x ≠ 0) → ((x + 1) ≠ 0) → (((x * (x + 1)) ≠ 0) ∧ (((1 / x) + (1 / (1 + x))) = ((1 + (2 * x)) / (x * (1 + x)))))"
+  },
+  {
+   "id": "tyt-kap-011",
+   "cell": "B",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "simplify_expression",
+   "statement": true,
+   "kind": "simplify_identity",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x h1 h2\n  have c1 : (x + (x ^ 2)) ≠ 0 := fun hc => (mul_ne_zero h1 h2) (by linear_combination (1) * hc)\n  have d1 : x ≠ 0 := fun hc => h1 (by linear_combination (1) * hc)\n  have d2 : (1 + x) ≠ 0 := fun hc => h2 (by linear_combination (1) * hc)\n  have d3 : (x + 1) ≠ 0 := fun hc => h2 (by linear_combination (1) * hc)\n  have d4 : (x + (x ^ 2)) ≠ 0 := fun hc => (mul_ne_zero h1 h2) (by linear_combination (1) * hc)\n  refine ⟨c1, ?_⟩\n  field_simp\n  ring",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 192,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (x ≠ 0) → ((x + 1) ≠ 0) → (((x + (x ^ 2)) ≠ 0) ∧ (((1 / x) + (1 / (1 + x))) = ((1 + (2 * x)) / (x + (x ^ 2)))))"
+  },
+  {
+   "id": "tyt-kap-012",
+   "cell": "C",
+   "topic": "polinom",
+   "answer_right": false,
+   "task": "simplify_expression",
+   "statement": true,
+   "kind": "simplify_identity",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1533,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (x ≠ 0) → ((x + 1) ≠ 0) → ((((2 * x) + 1) ≠ 0) ∧ (((1 / x) + (1 / (1 + x))) = (2 / (1 + (2 * x)))))"
+  },
+  {
+   "id": "tyt-kap-013",
+   "cell": "A",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "simplify_expression",
+   "statement": true,
+   "kind": "simplify_identity",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  field_simp\n  ring",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 65,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (((((x + 1) ^ 2) + (-((x + (-1)) ^ 2))) = (4 * x)))"
+  },
+  {
+   "id": "tyt-kap-014",
+   "cell": "C",
+   "topic": "polinom",
+   "answer_right": false,
+   "task": "simplify_expression",
+   "statement": true,
+   "kind": "simplify_identity",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 541,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (((((x + 1) ^ 2) + (-((x + (-1)) ^ 2))) = (2 * x)))"
+  },
+  {
+   "id": "tyt-kap-015",
+   "cell": "D",
+   "topic": "polinom",
+   "answer_right": true,
+   "task": "simplify_expression",
+   "statement": true,
+   "kind": "simplify_identity",
+   "proved": true,
+   "clean": true,
+   "proof": "  intro x\n  field_simp\n  ring",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 64,
+   "stmt_text": "theorem mv_claim : ∀ x : ℝ, (((((x + 1) ^ 2) + (-((x + (-1)) ^ 2))) = (4 * x)))"
+  },
+  {
+   "id": "tyt-kap-016",
+   "cell": "A",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "count_solutions",
+   "statement": true,
+   "kind": "count_solutions_finset",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x y h => ?_, by decide⟩\n  omega",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 122,
+   "stmt_text": "theorem mv_claim : (∀ x y : ℤ, (((x + y) = 10) ∧ (0 < x) ∧ (0 < y)) → ((1 ≤ x ∧ x ≤ 10) ∧ (1 ≤ y ∧ y ≤ 10))) ∧ (((Finset.Icc (1 : ℤ) 10 ×ˢ Finset.Icc (1 : ℤ) 10)).filter (fun sol : ℤ × ℤ => ((sol.1 + sol.2) = 10) ∧ (0 < sol.1) ∧ (0 < sol.2))).card = 9"
+  },
+  {
+   "id": "tyt-kap-017",
+   "cell": "B",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "count_solutions",
+   "statement": true,
+   "kind": "count_solutions_finset",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x y h => ?_, by decide⟩\n  omega",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 118,
+   "stmt_text": "theorem mv_claim : (∀ x y : ℤ, (((x + y) = 10) ∧ (0 < x) ∧ (0 < y)) → ((1 ≤ x ∧ x ≤ 10) ∧ (1 ≤ y ∧ y ≤ 10))) ∧ (((Finset.Icc (1 : ℤ) 10 ×ˢ Finset.Icc (1 : ℤ) 10)).filter (fun sol : ℤ × ℤ => ((sol.1 + sol.2) = 10) ∧ (0 < sol.1) ∧ (0 < sol.2))).card = 9"
+  },
+  {
+   "id": "tyt-kap-018",
+   "cell": "C",
+   "topic": "denklem",
+   "answer_right": false,
+   "task": "count_solutions",
+   "statement": true,
+   "kind": "count_solutions_finset",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1312,
+   "stmt_text": "theorem mv_claim : (∀ x y : ℤ, (((x + y) = 10) ∧ (0 < x) ∧ (0 < y)) → ((1 ≤ x ∧ x ≤ 10) ∧ (1 ≤ y ∧ y ≤ 10))) ∧ (((Finset.Icc (1 : ℤ) 10 ×ˢ Finset.Icc (1 : ℤ) 10)).filter (fun sol : ℤ × ℤ => ((sol.1 + sol.2) = 10) ∧ (0 < sol.1) ∧ (0 < sol.2))).card = 11"
+  },
+  {
+   "id": "tyt-kap-019",
+   "cell": "B",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "count_solutions",
+   "statement": true,
+   "kind": "count_solutions_finset",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x y h => ?_, by decide⟩\n  omega",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 220,
+   "stmt_text": "theorem mv_claim : (∀ x y : ℤ, ((((2 * x) + (3 * y)) = 12) ∧ (0 ≤ x) ∧ (0 ≤ y)) → ((0 ≤ x ∧ x ≤ 12) ∧ (0 ≤ y ∧ y ≤ 12))) ∧ (((Finset.Icc (0 : ℤ) 12 ×ˢ Finset.Icc (0 : ℤ) 12)).filter (fun sol : ℤ × ℤ => (((2 * sol.1) + (3 * sol.2)) = 12) ∧ (0 ≤ sol.1) ∧ (0 ≤ sol.2))).card = 3"
+  },
+  {
+   "id": "tyt-kap-020",
+   "cell": "D",
+   "topic": "denklem",
+   "answer_right": true,
+   "task": "count_solutions",
+   "statement": true,
+   "kind": "count_solutions_finset",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x y h => ?_, by decide⟩\n  omega",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 232,
+   "stmt_text": "theorem mv_claim : (∀ x y : ℤ, ((((2 * x) + (3 * y)) = 12) ∧ (0 ≤ x) ∧ (0 ≤ y)) → ((0 ≤ x ∧ x ≤ 12) ∧ (0 ≤ y ∧ y ≤ 12))) ∧ (((Finset.Icc (0 : ℤ) 12 ×ˢ Finset.Icc (0 : ℤ) 12)).filter (fun sol : ℤ × ℤ => (((2 * sol.1) + (3 * sol.2)) = 12) ∧ (0 ≤ sol.1) ∧ (0 ≤ sol.2))).card = 3"
+  },
+  {
+   "id": "tyt-ola-001",
+   "cell": "A",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-002",
+   "cell": "A",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_arrangements",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp only [Fintype.card_perm, Fintype.card_fin]\n  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 17,
+   "stmt_text": "theorem mv_claim : Fintype.card (Equiv.Perm (Fin 5)) = 120"
+  },
+  {
+   "id": "tyt-ola-003",
+   "cell": "A",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_subsets",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp only [Finset.card_powersetCard, Finset.card_univ, Fintype.card_fin]\n  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 20,
+   "stmt_text": "theorem mv_claim : ((Finset.univ : Finset (Fin 6)).powersetCard 3).card = 20"
+  },
+  {
+   "id": "tyt-ola-004",
+   "cell": "A",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_injections",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp [Fintype.card_embedding_eq]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 120,
+   "stmt_text": "theorem mv_claim : Fintype.card (Fin 3 ↪ Fin 5) = 60"
+  },
+  {
+   "id": "tyt-ola-005",
+   "cell": "A",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-006",
+   "cell": "A",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-007",
+   "cell": "B",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-008",
+   "cell": "B",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_arrangements",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp only [Fintype.card_perm, Fintype.card_fin]\n  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 15,
+   "stmt_text": "theorem mv_claim : Fintype.card (Equiv.Perm (Fin 5)) = 120"
+  },
+  {
+   "id": "tyt-ola-009",
+   "cell": "B",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_subsets",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp only [Finset.card_powersetCard, Finset.card_univ, Fintype.card_fin]\n  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 19,
+   "stmt_text": "theorem mv_claim : ((Finset.univ : Finset (Fin 6)).powersetCard 3).card = 20"
+  },
+  {
+   "id": "tyt-ola-010",
+   "cell": "B",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_injections",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp [Fintype.card_embedding_eq]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 111,
+   "stmt_text": "theorem mv_claim : Fintype.card (Fin 3 ↪ Fin 5) = 60"
+  },
+  {
+   "id": "tyt-ola-011",
+   "cell": "B",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-012",
+   "cell": "C",
+   "topic": "olasılık",
+   "answer_right": false,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-013",
+   "cell": "C",
+   "topic": "olasılık",
+   "answer_right": false,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_arrangements",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 356,
+   "stmt_text": "theorem mv_claim : Fintype.card (Equiv.Perm (Fin 5)) = 25"
+  },
+  {
+   "id": "tyt-ola-014",
+   "cell": "C",
+   "topic": "olasılık",
+   "answer_right": false,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_subsets",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 232,
+   "stmt_text": "theorem mv_claim : ((Finset.univ : Finset (Fin 6)).powersetCard 3).card = 120"
+  },
+  {
+   "id": "tyt-ola-015",
+   "cell": "C",
+   "topic": "olasılık",
+   "answer_right": false,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_injections",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 627,
+   "stmt_text": "theorem mv_claim : Fintype.card (Fin 3 ↪ Fin 5) = 125"
+  },
+  {
+   "id": "tyt-ola-016",
+   "cell": "C",
+   "topic": "olasılık",
+   "answer_right": false,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-017",
+   "cell": "C",
+   "topic": "olasılık",
+   "answer_right": false,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-ola-018",
+   "cell": "D",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_arrangements",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp only [Fintype.card_perm, Fintype.card_fin]\n  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 15,
+   "stmt_text": "theorem mv_claim : Fintype.card (Equiv.Perm (Fin 5)) = 120"
+  },
+  {
+   "id": "tyt-ola-019",
+   "cell": "D",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "count_structures",
+   "statement": true,
+   "kind": "count_subsets",
+   "proved": true,
+   "clean": true,
+   "proof": "  simp only [Finset.card_powersetCard, Finset.card_univ, Fintype.card_fin]\n  decide",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 18,
+   "stmt_text": "theorem mv_claim : ((Finset.univ : Finset (Fin 6)).powersetCard 3).card = 20"
+  },
+  {
+   "id": "tyt-ola-020",
+   "cell": "D",
+   "topic": "olasılık",
+   "answer_right": true,
+   "task": "probability",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "tyt-prob-001",
+   "cell": "A",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 247,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 30) (h2 : ((2 * a) + (4 * b)) = 88) (h3 : 0 < a) (h4 : 0 < b) : a = 16"
+  },
+  {
+   "id": "tyt-prob-002",
+   "cell": "B",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 242,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 30) (h2 : ((2 * a) + (4 * b)) = 88) (h3 : 0 < a) (h4 : 0 < b) : a = 16"
+  },
+  {
+   "id": "tyt-prob-003",
+   "cell": "A",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nt : ℝ\nh2 : 0 < t\nh1 : t * 9 = 18\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 375,
+   "stmt_text": "theorem mv_claim (t : ℝ) (h1 : ((9 * t) / 18) = 1) (h2 : 0 < t) : t = 2"
+  },
+  {
+   "id": "tyt-prob-004",
+   "cell": "A",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nx : ℝ\nh1 : 3 * x + 5 = x * 5 + -7\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 221,
+   "stmt_text": "theorem mv_claim (x : ℝ) (h1 : ((3 * x) + 5) = ((5 * x) + (-7))) : x = 6"
+  },
+  {
+   "id": "tyt-prob-005",
+   "cell": "A",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 309,
+   "stmt_text": "theorem mv_claim (o b : ℤ) (h1 : b = (4 * o)) (h2 : (b + 5) = (3 * (o + 5))) (h3 : 0 < o) (h4 : 0 < b) : b = 40"
+  },
+  {
+   "id": "tyt-prob-006",
+   "cell": "A",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 27,
+   "stmt_text": "theorem mv_claim : ((240 / 80) + (240 / 60)) = 7"
+  },
+  {
+   "id": "tyt-prob-007",
+   "cell": "A",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nx : ℝ\nh2 : 0 < x\nh1 : x * 120 = 100 * 360\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 392,
+   "stmt_text": "theorem mv_claim (x : ℝ) (h1 : ((120 * x) / 100) = 360) (h2 : 0 < x) : x = 300"
+  },
+  {
+   "id": "tyt-prob-008",
+   "cell": "B",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nt : ℝ\nh2 : 0 < t\nh1 : t * 9 = 18\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 390,
+   "stmt_text": "theorem mv_claim (t : ℝ) (h1 : ((9 * t) / 18) = 1) (h2 : 0 < t) : t = 2"
+  },
+  {
+   "id": "tyt-prob-009",
+   "cell": "B",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 315,
+   "stmt_text": "theorem mv_claim (o b : ℤ) (h1 : b = (4 * o)) (h2 : (b + 5) = (3 * (o + 5))) (h3 : 0 < o) (h4 : 0 < b) : b = 40"
+  },
+  {
+   "id": "tyt-prob-010",
+   "cell": "B",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 20,
+   "stmt_text": "theorem mv_claim : ((240 / 80) + (240 / 60)) = 7"
+  },
+  {
+   "id": "tyt-prob-011",
+   "cell": "B",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nx : ℝ\nh2 : 0 < x\nh1 : x * 120 = 100 * 360\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 395,
+   "stmt_text": "theorem mv_claim (x : ℝ) (h1 : ((120 * x) / 100) = 360) (h2 : 0 < x) : x = 300"
+  },
+  {
+   "id": "tyt-prob-012",
+   "cell": "C",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 244,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 30) (h2 : ((2 * a) + (4 * b)) = 88) (h3 : 0 < a) (h4 : 0 < b) : a = 16"
+  },
+  {
+   "id": "tyt-prob-013",
+   "cell": "C",
+   "topic": "problemler",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 591,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 30) (h2 : ((2 * a) + (4 * b)) = 88) (h3 : 0 < a) (h4 : 0 < b) : a = 14"
+  },
+  {
+   "id": "tyt-prob-014",
+   "cell": "C",
+   "topic": "problemler",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 354,
+   "stmt_text": "theorem mv_claim (t : ℝ) (h1 : ((9 * t) / 18) = 1) (h2 : 0 < t) : t = 3"
+  },
+  {
+   "id": "tyt-prob-015",
+   "cell": "C",
+   "topic": "problemler",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 443,
+   "stmt_text": "theorem mv_claim (x : ℝ) (h1 : ((3 * x) + 5) = ((5 * x) + (-7))) : x = 1"
+  },
+  {
+   "id": "tyt-prob-016",
+   "cell": "C",
+   "topic": "problemler",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 425,
+   "stmt_text": "theorem mv_claim (o b : ℤ) (h1 : b = (4 * o)) (h2 : (b + 5) = (3 * (o + 5))) (h3 : 0 < o) (h4 : 0 < b) : b = 30"
+  },
+  {
+   "id": "tyt-prob-017",
+   "cell": "C",
+   "topic": "problemler",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 593,
+   "stmt_text": "theorem mv_claim (x : ℝ) (h1 : ((120 * x) / 100) = 360) (h2 : 0 < x) : x = 288"
+  },
+  {
+   "id": "tyt-prob-018",
+   "cell": "D",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 247,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 30) (h2 : ((2 * a) + (4 * b)) = 88) (h3 : 0 < a) (h4 : 0 < b) : a = 16"
+  },
+  {
+   "id": "tyt-prob-019",
+   "cell": "D",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nt : ℝ\nh2 : 0 < t\nh1 : t * 9 = 18\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 401,
+   "stmt_text": "theorem mv_claim (t : ℝ) (h1 : ((9 * t) / 18) = 1) (h2 : 0 < t) : t = 2"
+  },
+  {
+   "id": "tyt-prob-020",
+   "cell": "D",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 21,
+   "stmt_text": "theorem mv_claim : ((240 / 80) + (240 / 60)) = 7"
+  },
+  {
+   "id": "tyt-prob-021",
+   "cell": "B",
+   "topic": "problemler",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  linarith",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "linarith failed to find a contradiction\nx : ℝ\nh1 : 3 * x + 5 = x * 5 + -7\n⊢ False\nfailed"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 221,
+   "stmt_text": "theorem mv_claim (x : ℝ) (h1 : ((3 * x) + 5) = ((5 * x) + (-7))) : x = 6"
+  },
+  {
+   "id": "tyt-say-001",
+   "cell": "A",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 18,
+   "stmt_text": "theorem mv_claim : (Int.gcd 84 120 : ℝ) = 12"
+  },
+  {
+   "id": "tyt-say-002",
+   "cell": "A",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 267,
+   "stmt_text": "theorem mv_claim (x y : ℤ) (h1 : ((3 * x) + (5 * y)) = 41) (h2 : x < y) (h3 : 0 < x) (h4 : 0 < y) : (x + y) = 9"
+  },
+  {
+   "id": "tyt-say-003",
+   "cell": "A",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 605,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 11) (h2 : ((10 * b) + a + (-((10 * a) + b))) = 27) (h3 : a ≥ 1) (h4 : a ≤ 9) (h5 : b ≥ 0) (h6 : b ≤ 9) : ((10 * a) + b) = 47"
+  },
+  {
+   "id": "tyt-say-004",
+   "cell": "A",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 401,
+   "stmt_text": "theorem mv_claim (n : ℤ) (h1 : (n % 2) = 0) (h2 : (n + n + 2 + n + 4) = 78) (h3 : 0 ≤ n) : (n + 4) = 28"
+  },
+  {
+   "id": "tyt-say-005",
+   "cell": "A",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "count_integers",
+   "statement": true,
+   "kind": "count_integers_finset",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨fun x hx => ?_, by decide⟩\n  simp only [Finset.mem_Icc]\n  constructor <;> nlinarith [hx]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 371,
+   "stmt_text": "theorem mv_claim : (∀ x : ℤ, ((((-14 : ℤ) + (x ^ 2) + ((-5 : ℤ) * x)) < 0)) → x ∈ Finset.Icc (-2 : ℤ) 7) ∧ ((Finset.Icc (-2 : ℤ) 7).filter (fun x => (((-14 : ℤ) + (x ^ 2) + ((-5 : ℤ) * x)) < 0))).card = 8"
+  },
+  {
+   "id": "tyt-say-006",
+   "cell": "A",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 19,
+   "stmt_text": "theorem mv_claim : ((5 ^ 100) % 7) = 2"
+  },
+  {
+   "id": "tyt-say-007",
+   "cell": "B",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 16,
+   "stmt_text": "theorem mv_claim : (Int.gcd 84 120 : ℝ) = 12"
+  },
+  {
+   "id": "tyt-say-008",
+   "cell": "B",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 609,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 11) (h2 : ((10 * b) + a + (-((10 * a) + b))) = 27) (h3 : a ≥ 1) (h4 : a ≤ 9) (h5 : b ≥ 0) (h6 : b ≤ 9) : ((10 * a) + b) = 47"
+  },
+  {
+   "id": "tyt-say-009",
+   "cell": "B",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 409,
+   "stmt_text": "theorem mv_claim (n : ℤ) (h1 : (n % 2) = 0) (h2 : (n + n + 2 + n + 4) = 78) (h3 : 0 ≤ n) : (n + 4) = 28"
+  },
+  {
+   "id": "tyt-say-010",
+   "cell": "C",
+   "topic": "sayılar",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 144,
+   "stmt_text": "theorem mv_claim : (Int.gcd 84 120 : ℝ) = 24"
+  },
+  {
+   "id": "tyt-say-011",
+   "cell": "C",
+   "topic": "sayılar",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 452,
+   "stmt_text": "theorem mv_claim (a b : ℤ) (h1 : (a + b) = 11) (h2 : ((10 * b) + a + (-((10 * a) + b))) = 27) (h3 : a ≥ 1) (h4 : a ≤ 9) (h5 : b ≥ 0) (h6 : b ≤ 9) : ((10 * a) + b) = 74"
+  },
+  {
+   "id": "tyt-say-012",
+   "cell": "C",
+   "topic": "sayılar",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 253,
+   "stmt_text": "theorem mv_claim (n : ℤ) (h1 : (n % 2) = 0) (h2 : (n + n + 2 + n + 4) = 78) (h3 : 0 ≤ n) : (n + 4) = 30"
+  },
+  {
+   "id": "tyt-say-013",
+   "cell": "C",
+   "topic": "sayılar",
+   "answer_right": false,
+   "task": "count_integers",
+   "statement": true,
+   "kind": "count_integers_finset",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 1079,
+   "stmt_text": "theorem mv_claim : (∀ x : ℤ, ((((-14 : ℤ) + (x ^ 2) + ((-5 : ℤ) * x)) < 0)) → x ∈ Finset.Icc (-2 : ℤ) 7) ∧ ((Finset.Icc (-2 : ℤ) 7).filter (fun x => (((-14 : ℤ) + (x ^ 2) + ((-5 : ℤ) * x)) < 0))).card = 10"
+  },
+  {
+   "id": "tyt-say-014",
+   "cell": "D",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num",
+   "audit": {
+    "axioms": [
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 18,
+   "stmt_text": "theorem mv_claim : ((5 ^ 100) % 7) = 2"
+  },
+  {
+   "id": "tyt-say-015",
+   "cell": "D",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 260,
+   "stmt_text": "theorem mv_claim (x y : ℤ) (h1 : ((3 * x) + (5 * y)) = 41) (h2 : x < y) (h3 : 0 < x) (h4 : 0 < y) : (x + y) = 9"
+  },
+  {
+   "id": "tyt-say-016",
+   "cell": "D",
+   "topic": "sayılar",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "evaluate_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  omega",
+   "audit": {
+    "axioms": [
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "vacuity_probe_errors": [
+     "`field_simp` made no progress anywhere"
+    ],
+    "provable_without_hypotheses": false,
+    "clean": true
+   },
+   "ms": 398,
+   "stmt_text": "theorem mv_claim (n : ℤ) (h1 : (n % 2) = 0) (h2 : (n + n + 2 + n + 4) = 78) (h3 : 0 ≤ n) : (n + 4) = 28"
+  },
+  {
+   "id": "uni-001",
+   "cell": "A",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-002",
+   "cell": "A",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-003",
+   "cell": "A",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-004",
+   "cell": "A",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-006",
+   "cell": "B",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-007",
+   "cell": "B",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-008",
+   "cell": "B",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-009",
+   "cell": "B",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-010",
+   "cell": "C",
+   "topic": "reel analiz",
+   "answer_right": false,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-011",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 171,
+   "stmt_text": "theorem mv_claim : (-2 : ℝ) = 2"
+  },
+  {
+   "id": "uni-012",
+   "cell": "C",
+   "topic": "reel analiz",
+   "answer_right": false,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-013",
+   "cell": "C",
+   "topic": "reel analiz",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-014",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 191,
+   "stmt_text": "theorem mv_claim : 3 = 1"
+  },
+  {
+   "id": "uni-015",
+   "cell": "D",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-016",
+   "cell": "D",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-017",
+   "cell": "D",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "limit",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-018",
+   "cell": "B",
+   "topic": "reel analiz",
+   "answer_right": true,
+   "task": "definite_integral",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-019",
+   "cell": "B",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-020",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 167,
+   "stmt_text": "theorem mv_claim : (-2 : ℝ) = (-1 : ℝ)"
+  },
+  {
+   "id": "uni-la-001",
+   "cell": "A",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_inverse",
+   "proved": true,
+   "clean": true,
+   "proof": "  constructor <;>\n    (ext i j; fin_cases i <;> fin_cases j <;>\n      norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ])",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 636,
+   "stmt_text": "theorem mv_claim : ((!![1, 2; 3, 4] : Matrix (Fin 2) (Fin 2) ℝ) * (!![(-2 : ℝ), 1; (3 / 2 : ℝ), (-1 / 2 : ℝ)] : Matrix (Fin 2) (Fin 2) ℝ) = 1) ∧ ((!![(-2 : ℝ), 1; (3 / 2 : ℝ), (-1 / 2 : ℝ)] : Matrix (Fin 2) (Fin 2) ℝ) * (!![1, 2; 3, 4] : Matrix (Fin 2) (Fin 2) ℝ) = 1)"
+  },
+  {
+   "id": "uni-la-002",
+   "cell": "A",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_eigenvalues",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num [Matrix.det_fin_two, Matrix.one_fin_two]\n  intro t\n  constructor\n  · intro h\n    have hf : (t - 1) * (t - 3) = 0 := by nlinarith\n    rcases mul_eq_zero.mp hf with h1 | h1\n    · left; linarith\n    · right; linarith\n  · rintro (h | h) <;> subst h <;> norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 368,
+   "stmt_text": "theorem mv_claim : ∀ t : ℝ, (((!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) - t • (1 : Matrix (Fin 2) (Fin 2) ℝ)).det = 0) ↔ (t = 1 ∨ t = 3)"
+  },
+  {
+   "id": "uni-la-003",
+   "cell": "A",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_eigenvector",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨?_, ?_⟩\n  · funext i\n    fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]\n  · intro h\n    have h0 := congrFun h 0\n    norm_num at h0",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 210,
+   "stmt_text": "theorem mv_claim : (Matrix.mulVec (!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) ![1, 1] = 3 • ![1, 1]) ∧ ((![1, 1] : Fin 2 → ℝ) ≠ 0)"
+  },
+  {
+   "id": "uni-la-004",
+   "cell": "A",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_solve_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨?_, by norm_num [Matrix.det_fin_two]⟩\n  funext i\n  fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 368,
+   "stmt_text": "theorem mv_claim : (Matrix.mulVec (!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ) ![16, 14] = ![30, 88]) ∧ ((!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ).det ≠ 0)"
+  },
+  {
+   "id": "uni-la-005",
+   "cell": "A",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_matrix_expr",
+   "proved": true,
+   "clean": true,
+   "proof": "  ext i j\n  fin_cases i <;> fin_cases j <;>\n    norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ, pow_succ]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 428,
+   "stmt_text": "theorem mv_claim : ((!![1, 1; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ) ^ 3) = (!![1, 3; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ)"
+  },
+  {
+   "id": "uni-la-006",
+   "cell": "B",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_inverse",
+   "proved": true,
+   "clean": true,
+   "proof": "  constructor <;>\n    (ext i j; fin_cases i <;> fin_cases j <;>\n      norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ])",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 643,
+   "stmt_text": "theorem mv_claim : ((!![1, 2; 3, 4] : Matrix (Fin 2) (Fin 2) ℝ) * (!![(-2 : ℝ), 1; (3 / 2 : ℝ), (-1 / 2 : ℝ)] : Matrix (Fin 2) (Fin 2) ℝ) = 1) ∧ ((!![(-2 : ℝ), 1; (3 / 2 : ℝ), (-1 / 2 : ℝ)] : Matrix (Fin 2) (Fin 2) ℝ) * (!![1, 2; 3, 4] : Matrix (Fin 2) (Fin 2) ℝ) = 1)"
+  },
+  {
+   "id": "uni-la-007",
+   "cell": "B",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_eigenvalues",
+   "proved": true,
+   "clean": true,
+   "proof": "  norm_num [Matrix.det_fin_two, Matrix.one_fin_two]\n  intro t\n  constructor\n  · intro h\n    have hf : (t - 1) * (t - 3) = 0 := by nlinarith\n    rcases mul_eq_zero.mp hf with h1 | h1\n    · left; linarith\n    · right; linarith\n  · rintro (h | h) <;> subst h <;> norm_num",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 335,
+   "stmt_text": "theorem mv_claim : ∀ t : ℝ, (((!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) - t • (1 : Matrix (Fin 2) (Fin 2) ℝ)).det = 0) ↔ (t = 1 ∨ t = 3)"
+  },
+  {
+   "id": "uni-la-008",
+   "cell": "B",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_eigenvector",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨?_, ?_⟩\n  · funext i\n    fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]\n  · intro h\n    have h0 := congrFun h 0\n    norm_num at h0",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 228,
+   "stmt_text": "theorem mv_claim : (Matrix.mulVec (!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) ![(-2 : ℝ), (-2 : ℝ)] = 3 • ![(-2 : ℝ), (-2 : ℝ)]) ∧ ((![(-2 : ℝ), (-2 : ℝ)] : Fin 2 → ℝ) ≠ 0)"
+  },
+  {
+   "id": "uni-la-009",
+   "cell": "B",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_solve_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨?_, by norm_num [Matrix.det_fin_two]⟩\n  funext i\n  fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 351,
+   "stmt_text": "theorem mv_claim : (Matrix.mulVec (!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ) ![16, 14] = ![30, 88]) ∧ ((!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ).det ≠ 0)"
+  },
+  {
+   "id": "uni-la-010",
+   "cell": "B",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_matrix_expr",
+   "proved": true,
+   "clean": true,
+   "proof": "  ext i j\n  fin_cases i <;> fin_cases j <;>\n    norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ, pow_succ]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 409,
+   "stmt_text": "theorem mv_claim : ((!![1, 1; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ) ^ 3) = (!![1, 3; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ)"
+  },
+  {
+   "id": "uni-la-011",
+   "cell": "A",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-la-012",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_inverse",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 2432,
+   "stmt_text": "theorem mv_claim : ((!![1, 2; 3, 4] : Matrix (Fin 2) (Fin 2) ℝ) * (!![4, (-2 : ℝ); (-3 : ℝ), 1] : Matrix (Fin 2) (Fin 2) ℝ) = 1) ∧ ((!![4, (-2 : ℝ); (-3 : ℝ), 1] : Matrix (Fin 2) (Fin 2) ℝ) * (!![1, 2; 3, 4] : Matrix (Fin 2) (Fin 2) ℝ) = 1)"
+  },
+  {
+   "id": "uni-la-013",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_eigenvalues",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 925,
+   "stmt_text": "theorem mv_claim : ∀ t : ℝ, (((!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) - t • (1 : Matrix (Fin 2) (Fin 2) ℝ)).det = 0) ↔ (t = 1 ∨ t = 2)"
+  },
+  {
+   "id": "uni-la-014",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_eigenvector",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 941,
+   "stmt_text": "theorem mv_claim : (Matrix.mulVec (!![2, 1; 1, 2] : Matrix (Fin 2) (Fin 2) ℝ) ![1, (-1 : ℝ)] = 3 • ![1, (-1 : ℝ)]) ∧ ((![1, (-1 : ℝ)] : Fin 2 → ℝ) ≠ 0)"
+  },
+  {
+   "id": "uni-la-015",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_solve_system",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 816,
+   "stmt_text": "theorem mv_claim : (Matrix.mulVec (!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ) ![14, 16] = ![30, 88]) ∧ ((!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ).det ≠ 0)"
+  },
+  {
+   "id": "uni-la-016",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_matrix_expr",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 759,
+   "stmt_text": "theorem mv_claim : ((!![1, 1; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ) ^ 3) = (!![1, 2; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ)"
+  },
+  {
+   "id": "uni-la-017",
+   "cell": "C",
+   "topic": "lineer cebir",
+   "answer_right": false,
+   "task": "evaluate",
+   "statement": true,
+   "kind": "closed_arithmetic",
+   "proved": false,
+   "clean": null,
+   "proof": null,
+   "audit": {},
+   "ms": 110,
+   "stmt_text": "theorem mv_claim : 0 = 4"
+  },
+  {
+   "id": "uni-la-018",
+   "cell": "D",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_solve_system",
+   "proved": true,
+   "clean": true,
+   "proof": "  refine ⟨?_, by norm_num [Matrix.det_fin_two]⟩\n  funext i\n  fin_cases i <;> norm_num [Matrix.mulVec, dotProduct, Fin.sum_univ_succ]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 318,
+   "stmt_text": "theorem mv_claim : (Matrix.mulVec (!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ) ![16, 14] = ![30, 88]) ∧ ((!![1, 1; 2, 4] : Matrix (Fin 2) (Fin 2) ℝ).det ≠ 0)"
+  },
+  {
+   "id": "uni-la-019",
+   "cell": "D",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "evaluate",
+   "statement": false,
+   "kind": null,
+   "proved": false,
+   "clean": null
+  },
+  {
+   "id": "uni-la-020",
+   "cell": "D",
+   "topic": "lineer cebir",
+   "answer_right": true,
+   "task": "linalg",
+   "statement": true,
+   "kind": "linalg_matrix_expr",
+   "proved": true,
+   "clean": true,
+   "proof": "  ext i j\n  fin_cases i <;> fin_cases j <;>\n    norm_num [Matrix.mul_apply, Matrix.one_apply, Fin.sum_univ_succ, pow_succ]",
+   "audit": {
+    "axioms": [
+     "Classical.choice",
+     "Quot.sound",
+     "propext"
+    ],
+    "axioms_raw": "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]",
+    "axioms_ok": true,
+    "sorry_free": true,
+    "hypotheses_contradictory": false,
+    "provable_without_hypotheses": null,
+    "clean": true
+   },
+   "ms": 400,
+   "stmt_text": "theorem mv_claim : ((!![1, 1; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ) ^ 3) = (!![1, 3; 0, 1] : Matrix (Fin 2) (Fin 2) ℝ)"
+  }
+ ],
+ "junk_probe": [
+  {
+   "label": "tan(pi/2) = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "sqrt(2-5) = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "0/0 = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "log 0 = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "sin 0 = sqrt(-4)",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "int_{-1}^{1} dx/x = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "sqrt'(-1) = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "log'(-1) = -1",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "max -1/x^2 on [-1,1] = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "sum_{k=-1}^{1} 1/k = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "x = 2 from 1/(x-2) = 0",
+   "statement": true,
+   "certified": false,
+   "proved": true
+  },
+  {
+   "label": "(sqrt(-x^2-1))' = 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "sqrt(-x^2-1) simplifies to 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "1/(x-x) simplifies to 0",
+   "statement": false,
+   "certified": false
+  },
+  {
+   "label": "x simplifies to x^2/x",
+   "statement": true,
+   "certified": false,
+   "proved": false
+  },
+  {
+   "label": "domain of 1/(x-2) is R",
+   "statement": true,
+   "certified": false,
+   "proved": false
+  },
+  {
+   "label": "#{x/y = 0 in [0,2]^2} = 6 (Z division)",
+   "statement": false,
+   "certified": false
+  }
+ ]
+}

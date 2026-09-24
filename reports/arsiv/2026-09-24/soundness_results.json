@@ -1,0 +1,251 @@
+{
+ "n_problems": 86,
+ "seconds": 49.04882349999389,
+ "wrong": {
+  "n": 448,
+  "false_accepts": 0,
+  "unknown": 0
+ },
+ "equiv": {
+  "n": 214,
+  "false_rejects": 0,
+  "unknown": 0
+ },
+ "non_answer": {
+  "n": 46,
+  "accepted": 0
+ },
+ "per_variant": {
+  "equiv:decimal": {
+   "n": 3,
+   "CORRECT": 3
+  },
+  "equiv:expanded": {
+   "n": 5,
+   "CORRECT": 5
+  },
+  "equiv:factored": {
+   "n": 5,
+   "CORRECT": 5
+  },
+  "equiv:moved_to_one_side": {
+   "n": 3,
+   "CORRECT": 3
+  },
+  "equiv:nsimplified": {
+   "n": 59,
+   "CORRECT": 59
+  },
+  "equiv:permuted": {
+   "n": 3,
+   "CORRECT": 3
+  },
+  "equiv:radsimp": {
+   "n": 59,
+   "CORRECT": 59
+  },
+  "equiv:same_matrix_rebuilt": {
+   "n": 2,
+   "CORRECT": 2
+  },
+  "equiv:same_set_rebuilt": {
+   "n": 5,
+   "CORRECT": 5
+  },
+  "equiv:scaled_by_2": {
+   "n": 3,
+   "CORRECT": 3
+  },
+  "equiv:sides_swapped": {
+   "n": 3,
+   "CORRECT": 3
+  },
+  "equiv:times_one_unevaluated": {
+   "n": 59,
+   "CORRECT": 59
+  },
+  "equiv:together": {
+   "n": 5,
+   "CORRECT": 5
+  },
+  "non_answer:diff_call": {
+   "n": 2,
+   "UNKNOWN": 2
+  },
+  "non_answer:integrate_call": {
+   "n": 4,
+   "UNKNOWN": 4
+  },
+  "non_answer:latex_integral": {
+   "n": 4,
+   "UNKNOWN": 4
+  },
+  "non_answer:limit_call": {
+   "n": 6,
+   "UNKNOWN": 6
+  },
+  "non_answer:own_function": {
+   "n": 5,
+   "UNKNOWN": 5
+  },
+  "non_answer:restates_target": {
+   "n": 23,
+   "UNKNOWN": 13,
+   "INCORRECT": 10
+  },
+  "non_answer:sum_object": {
+   "n": 2,
+   "UNKNOWN": 2
+  },
+  "wrong:doubled": {
+   "n": 57,
+   "INCORRECT": 57
+  },
+  "wrong:dropped_member": {
+   "n": 3,
+   "INCORRECT": 3
+  },
+  "wrong:entry_plus_one": {
+   "n": 2,
+   "INCORRECT": 2
+  },
+  "wrong:extra_member": {
+   "n": 5,
+   "INCORRECT": 5
+  },
+  "wrong:left_endpoint_flipped": {
+   "n": 3,
+   "INCORRECT": 3
+  },
+  "wrong:left_endpoint_shifted": {
+   "n": 3,
+   "INCORRECT": 3
+  },
+  "wrong:minus_one": {
+   "n": 59,
+   "INCORRECT": 59
+  },
+  "wrong:negated": {
+   "n": 58,
+   "INCORRECT": 58
+  },
+  "wrong:perturbed_1e-9": {
+   "n": 59,
+   "INCORRECT": 59
+  },
+  "wrong:plus_half": {
+   "n": 59,
+   "INCORRECT": 59
+  },
+  "wrong:plus_one": {
+   "n": 64,
+   "INCORRECT": 64
+  },
+  "wrong:plus_x": {
+   "n": 2,
+   "INCORRECT": 2
+  },
+  "wrong:relative_1e-6": {
+   "n": 59,
+   "INCORRECT": 59
+  },
+  "wrong:rhs_doubled": {
+   "n": 3,
+   "INCORRECT": 3
+  },
+  "wrong:rhs_plus_one": {
+   "n": 3,
+   "INCORRECT": 3
+  },
+  "wrong:right_endpoint_flipped": {
+   "n": 1,
+   "INCORRECT": 1
+  },
+  "wrong:shifted": {
+   "n": 5,
+   "INCORRECT": 5
+  },
+  "wrong:shifted_argument": {
+   "n": 3,
+   "INCORRECT": 3
+  }
+ },
+ "false_accepts": [],
+ "false_rejects": [],
+ "skipped": {
+  "wrong:doubled:not_proved": 4,
+  "wrong:shifted_argument:not_proved": 2,
+  "gold_unparsed:ParseError": 1,
+  "answer_kind_dne": 1,
+  "gold_unparsed:UndeclaredSymbolError": 1,
+  "wrong:plus_x:not_proved": 3
+ },
+ "steps": {
+  "equiv": {
+   "n": 184,
+   "CORRECT": 184
+  },
+  "broken": {
+   "n": 46,
+   "CORRECT": 6,
+   "INCORRECT": 40
+  },
+  "false_rejects": [],
+  "missed_breaks": [
+   {
+    "id": "ayt-ana-006",
+    "step": "s2",
+    "claim": "2 = (2*1 + n) + 1",
+    "status": "skipped",
+    "reason": "undeclared_symbol",
+    "detail": "n",
+    "accepted": true
+   },
+   {
+    "id": "ayt-diz-008",
+    "step": "s1",
+    "claim": "a(n) = (3*n + 2) + 1",
+    "status": "skipped",
+    "reason": "undeclared_symbol",
+    "detail": "a",
+    "accepted": true
+   },
+   {
+    "id": "ayt-lim-008",
+    "step": "s2",
+    "claim": "(t - 1)/(t**2 - 1) = (1/(t + 1)) + 1",
+    "status": "skipped",
+    "reason": "undeclared_symbol",
+    "detail": "t",
+    "accepted": true
+   },
+   {
+    "id": "tyt-den-003",
+    "step": "s2",
+    "claim": "x = (3 + 2*(x - 3)) + 1",
+    "status": "unknown",
+    "reason": "premises_have_no_solution",
+    "detail": "",
+    "accepted": true
+   },
+   {
+    "id": "tyt-den-007",
+    "step": "s2",
+    "claim": "u = (u**2 - 6) + 1",
+    "status": "skipped",
+    "reason": "undeclared_symbol",
+    "detail": "u",
+    "accepted": true
+   },
+   {
+    "id": "uni-la-002",
+    "step": "s1",
+    "claim": "(2 - t)**2 - 1 = ((t - 1)*(t - 3)) + 1",
+    "status": "skipped",
+    "reason": "undeclared_symbol",
+    "detail": "t",
+    "accepted": true
+   }
+  ]
+ }
+}
