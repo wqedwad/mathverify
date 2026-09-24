@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-export PATH="$HOME/.elan/bin:$PATH"
+# Honours ELAN_HOME and MATHVERIFY_LEAN_PROJECT (defaults $HOME/.elan, $HOME/mathverify-lean).
+ELAN_HOME="${ELAN_HOME:-$HOME/.elan}"
+ELAN_HOME="${ELAN_HOME/#\~/$HOME}"
+export ELAN_HOME
+export PATH="$ELAN_HOME/bin:$PATH"
 echo "elan: $(command -v elan || echo MISSING)"
-P="$HOME/mathverify-lean"
+P="${MATHVERIFY_LEAN_PROJECT:-$HOME/mathverify-lean}"
+P="${P/#\~/$HOME}"
 echo "project: $P exists=$([ -d "$P" ] && echo yes || echo no)"
 [ -d "$P" ] || exit 0
 cd "$P"

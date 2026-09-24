@@ -1,0 +1,9 @@
+# Pinned Lean environment for mathverify. Bash-sourceable: `. lean/PINS`.
+# Values measured from the working WSL install (2026-09-24):
+#   ~/.elan/toolchains/leanprover--lean4---v4.34.0, `elan --version` = 4.2.4,
+#   ~/mathverify-lean/.lake/packages/mathlib HEAD, ~/repl HEAD.
+LEAN_TOOLCHAIN="leanprover/lean4:v4.34.0"
+MATHLIB_REV="5ed2965256430c3649e86755f9576b54eca72435"
+REPL_URL="https://github.com/leanprover-community/repl"
+REPL_REV="646a77338cfee0d09219688efffe122650cee73a"
+ELAN_VERSION="4.2.4"
