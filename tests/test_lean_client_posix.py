@@ -1,11 +1,13 @@
 """Lean REPL launcher across platforms (offline, fast; no Lean toolchain needed).
 
 Windows reaches Lean through `wsl ... bash -lc`; Linux/macOS (the cloud container) run the same
-shell line in a local bash. Two failure modes this file pins:
+shell line in a local bash. Three failure modes this file pins:
 - a missing launcher (no wsl.exe / no bash) used to surface as FileNotFoundError, which callers
   that handle LeanUnavailable (formal.prove) did not catch;
 - on POSIX `lake env <repl>` runs the REPL as a child of lake, so killing only the launcher pid
-  orphaned the REPL (~1 GB) on every timeout/respawn.
+  orphaned the REPL (~6.7 GB RSS with Mathlib loaded) on every timeout/respawn;
+- on POSIX a missing REPL binary still started `lake env`, which clones the project's missing
+  dependencies before it fails on the binary.
 """
 import os
 import signal
@@ -37,21 +39,106 @@ def test_repl_command_defaults_to_the_host_platform():
     assert lc.repl_command(*args)[0] == ("wsl" if os.name == "nt" else "bash")
 
 
-def test_a_missing_launcher_is_lean_unavailable_not_a_crash(monkeypatch):
+def test_a_missing_launcher_is_lean_unavailable_not_a_crash(monkeypatch, tmp_path):
     seen: dict = {}
 
     def no_such_program(cmd, **kw):
         seen.update(cmd=cmd, kw=kw)
         raise FileNotFoundError(2, "No such file or directory", cmd[0])
 
+    repl = tmp_path / "repl"
+    repl.write_bytes(b"")                  # the binary exists; only the launcher is missing
     monkeypatch.setattr(lc.subprocess, "Popen", no_such_program)
-    client = lc.LeanClient(project="/p", repl="/r", distro="D")
+    client = lc.LeanClient(project=str(tmp_path), repl=str(repl), distro="D")
     with pytest.raises(lc.LeanUnavailable, match="cannot launch the Lean REPL"):
         client.run("example : True := trivial", timeout=5)
     assert client._proc is None
-    assert seen["cmd"] == lc.repl_command("/p", "/r", "D")
+    assert seen["cmd"] == lc.repl_command(str(tmp_path), str(repl), "D")
     # POSIX launches in a new session so _kill can reach the REPL child; Windows is unchanged
     assert seen["kw"].get("start_new_session", False) is (os.name != "nt")
+
+
+# ---------------------------------------------------------------- missing REPL binary
+# `lake env <repl>` materialises the project's missing dependencies BEFORE it discovers that
+# <repl> does not exist (measured on a toy project with a git dependency: the dependency was
+# cloned into .lake/packages and a lake-manifest.json written, then exit 255). On a
+# half-installed cloud project that is a Mathlib clone per call, so on POSIX a missing binary
+# must stop the launch before any process starts.
+class _Launched(Exception):
+    pass
+
+
+def _record_popen(monkeypatch) -> list:
+    calls: list = []
+
+    def fake(cmd, **kw):
+        calls.append(cmd)
+        raise _Launched(cmd)
+
+    monkeypatch.setattr(lc.subprocess, "Popen", fake)
+    return calls
+
+
+def test_a_missing_repl_binary_never_starts_lake_on_posix(monkeypatch, tmp_path):
+    monkeypatch.setattr(lc, "_POSIX", True)
+    calls = _record_popen(monkeypatch)
+    missing = tmp_path / "repl" / ".lake" / "build" / "bin" / "repl"
+    client = lc.LeanClient(project=str(tmp_path), repl=str(missing), distro="D")
+    with pytest.raises(lc.LeanUnavailable, match="REPL binary missing") as ei:
+        client.run("example : True := trivial", timeout=5)
+    assert str(missing) in str(ei.value)
+    assert calls == [], "a process was launched for a REPL binary that does not exist"
+    assert client._proc is None
+
+
+def test_an_existing_repl_binary_is_launched_on_posix(monkeypatch, tmp_path):
+    monkeypatch.setattr(lc, "_POSIX", True)
+    calls = _record_popen(monkeypatch)
+    repl = tmp_path / "repl"
+    repl.write_bytes(b"")
+    with pytest.raises(_Launched):
+        lc.LeanClient(project=str(tmp_path), repl=str(repl), distro="D").run("x", timeout=5)
+    assert len(calls) == 1
+
+
+def test_windows_does_not_check_the_wsl_side_path(monkeypatch, tmp_path):
+    """On Windows the REPL path is a path inside WSL: it cannot be checked from here, so the
+    launch goes ahead exactly as before and WSL reports the failure."""
+    monkeypatch.setattr(lc, "_POSIX", False)
+    calls = _record_popen(monkeypatch)
+    missing = str(tmp_path / "no-such-repl")
+    with pytest.raises(_Launched):
+        lc.LeanClient(project=str(tmp_path), repl=missing, distro="D").run("x", timeout=5)
+    assert calls == [lc.repl_command(str(tmp_path), missing, "D", native=False)]
+
+
+def test_native_repl_path_resolves_like_the_shell_line(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))          # what expanduser reads on Windows
+    monkeypatch.setenv("MV_TEST_OPT", str(tmp_path / "opt"))
+    proj = str(tmp_path / "proj")
+    # `~` and `$VAR` are expanded by bash, so they are expanded here too
+    got = lc.native_repl_path(proj, "~/repl/.lake/build/bin/repl")
+    assert os.path.normpath(got) == os.path.normpath(str(home / "repl/.lake/build/bin/repl"))
+    got = lc.native_repl_path(proj, "$MV_TEST_OPT/repl/.lake/build/bin/repl")
+    assert os.path.normpath(got) == os.path.normpath(str(tmp_path / "opt/repl/.lake/build/bin/repl"))
+    # the line `cd`s into the project first, so a relative path is taken from there
+    got = lc.native_repl_path(proj, "sub/repl")
+    assert os.path.normpath(got) == os.path.normpath(os.path.join(proj, "sub/repl"))
+    # a bare name is a PATH lookup in the login shell and an unknown variable is the shell's
+    # business: neither can be decided here, so neither is refused
+    assert lc.native_repl_path(proj, "repl") is None
+    monkeypatch.delenv("MV_TEST_UNSET_VAR", raising=False)
+    assert lc.native_repl_path(proj, "$MV_TEST_UNSET_VAR/repl") is None
+
+
+def test_a_bare_repl_name_is_left_to_the_shell(monkeypatch, tmp_path):
+    monkeypatch.setattr(lc, "_POSIX", True)
+    calls = _record_popen(monkeypatch)
+    with pytest.raises(_Launched):
+        lc.LeanClient(project=str(tmp_path), repl="repl", distro="D").run("x", timeout=5)
+    assert len(calls) == 1
 
 
 @pytest.mark.skipif(os.name == "nt", reason="process groups are POSIX-only; Windows kills wsl.exe")

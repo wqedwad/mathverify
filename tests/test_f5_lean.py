@@ -1,6 +1,8 @@
 """F5 — deterministic Lean statement generation (always runs) and real proof checking
 (skipped when the Lean/WSL toolchain is not installed)."""
 import copy
+import os
+import time
 
 import pytest
 import sympy as sp
@@ -378,9 +380,27 @@ def test_lean_audit_catches_sorry_and_vacuity():
 
 
 def test_lean_client_survives_a_timeout():
+    """A query that outlives its timeout must kill the REPL and bring up a fresh one. The
+    `decide` statement this test used to send was rejected in ~0.01 s (timed_out False), so it
+    passed on `not r.clean` and the kill/respawn path never ran. `IO.sleep` really blocks the
+    REPL; 30 s against a 3 s timeout leaves no doubt which side wins."""
     lean = _lean()
-    r = lean.run("theorem slow : ∀ n : ℕ, n < 10 ^ 10 → n = n := by decide", timeout=5)
-    assert (r.timed_out or not r.clean)
+    old = lean._proc
+    assert old is not None and lean._alive()
+    restarts = lean.restarts
+    r = lean.run("#eval IO.sleep 30000", timeout=3)
+    assert r.timed_out, (r.errors, r.raw)
+    assert lean.restarts == restarts + 1
+    assert lean._alive() and lean._proc is not old      # respawned for the next caller
+    assert old.poll() is not None                       # the launcher itself is gone
+    if os.name != "nt":
+        # `lake env` starts the REPL as its child: the whole old process group must be gone,
+        # not just the launcher pid (zombies waiting for a non-reaping PID 1 count as gone)
+        from test_lean_client_posix import _live_members
+        deadline = time.monotonic() + 10.0
+        while _live_members(old.pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not _live_members(old.pid), f"orphans left in group {old.pid}"
     r2 = lean.run("example : (1 : ℝ) + 1 = 2 := by norm_num", timeout=60)
     assert r2.clean                                     # client recovered
 

@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 __all__ = ["LeanClient", "LeanResult", "LeanUnavailable", "get_lean", "lean_available",
-           "repl_command"]
+           "native_repl_path", "repl_command"]
 
 DEFAULT_PROJECT = os.environ.get("MATHVERIFY_LEAN_PROJECT", "~/mathverify-lean")
 DEFAULT_REPL = os.environ.get("MATHVERIFY_LEAN_REPL", "~/repl/.lake/build/bin/repl")
@@ -48,6 +48,19 @@ def repl_command(project: str, repl: str, distro: str, native: bool | None = Non
     if native:
         return ["bash", "-lc", line]
     return ["wsl", "-d", distro, "--", "bash", "-lc", line]
+
+
+def native_repl_path(project: str, repl: str) -> str | None:
+    """The file the local bash of `repl_command` will exec, resolved the way that shell line
+    resolves it (`~` and `$VAR` expanded, a relative path taken from the project directory it
+    `cd`s into). None when Python cannot know it: a bare command name (a PATH lookup in the
+    login shell) or a variable this process does not have."""
+    path = os.path.expanduser(os.path.expandvars(repl))
+    if not os.path.dirname(path) or "$" in path:
+        return None
+    if not os.path.isabs(path):
+        path = os.path.join(os.path.expanduser(os.path.expandvars(project)), path)
+    return path
 
 
 @dataclass
@@ -88,11 +101,22 @@ class LeanClient:
         # parse. Measured: import Mathlib then returns in 3 s instead of ~13 s — that speed
         # is itself the symptom.
         cmd = repl_command(self.project, self.repl, self.distro)
+        if _POSIX:
+            # `lake env <repl>` first materialises every dependency the project is missing and
+            # only then finds out that <repl> does not exist, so a half-installed project gets
+            # its packages cloned (Mathlib: GBs) on every call. Measured on a toy project with
+            # a git dependency: .lake/packages/dep and a new lake-manifest.json were left
+            # behind, exit 255. On Windows the path lives in WSL and cannot be checked here.
+            path = native_repl_path(self.project, self.repl)
+            if path is not None and not os.path.isfile(path):
+                raise LeanUnavailable(f"REPL binary missing: {path} (build it with "
+                                      "scripts/setup_lean_repl.sh; `lake env` was not started)")
         env = dict(os.environ, MSYS_NO_PATHCONV="1")
         # POSIX: `lake env` runs the REPL as its CHILD, so killing the Popen pid alone would
-        # orphan the REPL (~1 GB) on every timeout. A new session makes the launcher a process
-        # group leader, and _kill takes down the whole group. On Windows killing wsl.exe
-        # already tears down the Linux side, so nothing changes there.
+        # orphan the REPL (~6.7 GB RSS with Mathlib loaded) on every timeout. A new session
+        # makes the launcher a process group leader, and _kill takes down the whole group.
+        # On Windows killing wsl.exe already tears down the Linux side (measured: lake and
+        # the REPL are gone within 1 s of a timeout), so nothing changes there.
         extra: dict[str, Any] = {"start_new_session": True} if _POSIX else {}
         try:
             self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
