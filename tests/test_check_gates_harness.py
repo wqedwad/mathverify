@@ -445,7 +445,8 @@ class _JunkLean:
             return ELABORATED
         if code.startswith("#print axioms"):
             return self.axioms
-        head = code.split("\n", 1)[0]
+        from harness.run_lean import ELAB_PREFIX
+        head = code.removeprefix(ELAB_PREFIX).split("\n", 1)[0]       # every statement command opens with it
         if "_vacuity" in head:
             return self.vacuity
         if "_nohyp" in head:
@@ -896,8 +897,11 @@ def test_add_elaboration(monkeypatch, case):
     st = _junk_statement()
     rec = {"label": JUNK_TARGET, "statement": True, "lean_reached": True, "errors": ["kept"]}
     assert run_lean.add_elaboration(rec, st, 45) is rec
-    # the statement the ladder ran, with the body `sorry` and autoImplicit off: nothing else
-    assert fake.codes == ["set_option autoImplicit false in\n" + st.theorem("  sorry")]
+    # the statement the ladder ran, with the body `sorry` and autoImplicit off (st.theorem already
+    # opens with the option since the verifier compiles with it too): nothing else, option once
+    assert fake.codes == [st.theorem("  sorry")]
+    assert fake.codes[0].startswith("set_option autoImplicit false in\n")
+    assert fake.codes[0].count("autoImplicit") == 1
     assert run_lean.elaboration_code(st) == fake.codes[0]
     expected = {"elaborates": (True, []), "rejected": (False, [_UNKNOWN]), "timed_out": (None, [TIMEOUT]),
                 "repl_message": (None, ["REPL message: Unknown environment."]),

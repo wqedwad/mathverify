@@ -17,6 +17,7 @@ import pytest
 from mathverify.formal import build_statement
 from mathverify.formal import prove as P
 from mathverify.formal.lean_client import LeanClient, LeanResult, LeanUnavailable
+from mathverify.formal.statement import AUTOIMPLICIT_OFF
 
 TIMEOUT = "lean timeout after 45s"
 SAFE_AXIOMS_INFO = "'mv_claim' depends on axioms: [propext, Classical.choice, Quot.sound]"
@@ -69,6 +70,7 @@ class FakeLean:
     def _kind(self, code: str) -> str:
         if code.startswith("#print axioms"):
             return "axioms"
+        code = code.removeprefix(AUTOIMPLICIT_OFF)          # every statement command opens with it
         if code.startswith(f"theorem {self.name}_vacuity"):
             return "vacuity"
         if code.startswith(f"theorem {self.name}_nohyp"):

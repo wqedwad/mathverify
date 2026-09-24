@@ -201,13 +201,16 @@ def statement_silent(rec: dict) -> bool:
 # all 175 sweep statements (122 right-answer items, 50 wrong-answer items, 3 junk) come back with no
 # error, exactly one sorry and no REPL `message`, with autoImplicit on and off alike, 2.2-2.5 s for
 # all 175 (slowest 42 ms); an unknown dotted name, an unknown atomic name (off only), a type error
-# and a parse error each give a Lean error. The verifier's own path (prove_statement) is unchanged:
-# this call belongs to the measurement only.
-ELAB_PREFIX = "set_option autoImplicit false in\n"
+# and a parse error each give a Lean error. The check itself is measurement-only (no verifier call
+# makes it), but since 24 Sep the verifier compiles with the same option: LeanStatement.theorem and
+# both audit probes start with statement.AUTOIMPLICIT_OFF, so st.theorem() already carries it.
+from mathverify.formal.statement import AUTOIMPLICIT_OFF as ELAB_PREFIX  # noqa: E402
 
 
 def elaboration_code(st) -> str:
-    return ELAB_PREFIX + st.theorem("  sorry")
+    code = st.theorem("  sorry")          # opens with ELAB_PREFIX (statement.AUTOIMPLICIT_OFF)
+    # the check must not depend on that: should theorem() ever drop the option, add it here
+    return code if code.startswith(ELAB_PREFIX) else ELAB_PREFIX + code
 
 
 def elaboration_verdict(r: LeanResult) -> bool | None:

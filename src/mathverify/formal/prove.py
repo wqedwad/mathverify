@@ -2,6 +2,7 @@
 
 Order (positive evidence only — handoff §3 rule 4):
   1. statement from the IR (deterministic; no model involved)          formal/statement.py
+     every command sent for it (proof attempts, both probes) has autoImplicit off
   2. tactic ladder: cheap Mathlib automation first, no model at all
   3. if that fails, a cross-family model writes a proof, with a bounded repair loop fed the
      real Lean error messages
@@ -20,7 +21,7 @@ from ..certify.base import Timer, result, unknown
 from ..llm import get_client, other_family, LLMError
 from ..llm.schemas import _obj, _s
 from .lean_client import LeanClient, LeanResult, get_lean, LeanUnavailable
-from .statement import LeanStatement, build_statement
+from .statement import AUTOIMPLICIT_OFF, LeanStatement, build_statement
 
 __all__ = ["prove_statement", "l7_layer", "TACTIC_LADDER", "IFF_LADDER", "ladder_for", "PROOF_SCHEMA",
            "SAFE_AXIOMS", "NO_VERDICT", "lean_judged"]
@@ -189,6 +190,12 @@ def _mk_proof_user(stmt_text: str, previous: str | None, errors: list[str] | Non
     return "\n\n".join(parts)
 
 
+def _shown(code: str) -> str:
+    """A rendered command as the record (`statement`) and the proof model show it: without the
+    compile option every command carries (AUTOIMPLICIT_OFF). What Lean compiles keeps it."""
+    return code.removeprefix(AUTOIMPLICIT_OFF)
+
+
 def _axioms_of(lean: LeanClient, name: str, env: int | None, timeout: float) -> tuple[set[str], str]:
     r = lean.run(f"#print axioms {name}", timeout=timeout, env=env)
     txt = " ".join(r.infos) or " ".join(r.errors)
@@ -216,7 +223,7 @@ def prove_statement(stmt: LeanStatement, *, solver_family: str | None = None, le
     # 1/2 deterministic tactic ladder
     for tac in ladder_for(stmt.kind, getattr(stmt, "hints", ())):
         code = stmt.theorem(tac)
-        out["statement"] = code.split(":= by")[0].strip()
+        out["statement"] = _shown(code).split(":= by")[0].strip()
         try:
             r = lean.run(code, timeout=tactic_timeout)
         except LeanUnavailable as e:
@@ -235,7 +242,7 @@ def prove_statement(stmt: LeanStatement, *, solver_family: str | None = None, le
         prev, errs = None, None
         for attempt in range(model_attempts):
             try:
-                resp = client.complete(PROOF_SYSTEM, _mk_proof_user(stmt.theorem("  sorry").replace("  sorry", "  <your proof here>"), prev, errs),
+                resp = client.complete(PROOF_SYSTEM, _mk_proof_user(_shown(stmt.theorem("  sorry")).replace("  sorry", "  <your proof here>"), prev, errs),
                                        schema=PROOF_SCHEMA, effort=effort, max_tokens=6000, tag="lean_proof")
             except LLMError as e:
                 out["errors"].append(f"llm: {str(e)[:150]}")

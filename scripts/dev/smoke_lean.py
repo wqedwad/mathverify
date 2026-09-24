@@ -2,6 +2,7 @@ import json, sys, time
 sys.path.insert(0, "src"); sys.path.insert(0, ".")
 from harness.loader import load_items, split_for_verifier
 from mathverify.formal import build_statement, prove_statement, lean_available, sympy_to_lean
+from mathverify.formal.statement import AUTOIMPLICIT_OFF
 import sympy as sp
 
 if __name__ == "__main__":
@@ -19,7 +20,7 @@ if __name__ == "__main__":
         if st is None:
             print(f"\n{iid}: no statement (kind={ir['task']['kind']})"); continue
         print(f"\n{iid} [{st.kind}] label_correct={labels['solution_is_correct']}")
-        print("  stmt:", st.theorem("  <proof>").split(":= by")[0].strip()[:220])
+        print("  stmt:", st.theorem("  <proof>").removeprefix(AUTOIMPLICIT_OFF).split(":= by")[0].strip()[:220])
         rec = prove_statement(st, use_model=False, tactic_timeout=60)
         print(f"  proved={rec['proved']} source={rec.get('source')} attempts={len(rec['attempts'])} {rec['ms']/1000:.1f}s")
         if rec["proved"]:

@@ -27,7 +27,16 @@ from ..normalize.parse import (ParseError, build_namespace, parse_relation, pars
                                _TRANSFORMS)
 
 __all__ = ["LeanStatement", "build_statement", "sympy_to_lean", "relation_to_lean", "LeanPrintError",
-           "TEMPLATES", "structural_ns", "parse_structural"]
+           "TEMPLATES", "structural_ns", "parse_structural", "AUTOIMPLICIT_OFF"]
+
+# Every Lean command rendered for a statement (the theorem, the vacuity probe, the no-hypothesis
+# probe) opens with this. Lean's default is autoImplicit ON: an unknown single-word identifier in a
+# declaration header is silently bound as an implicit variable instead of being an error. Measured
+# on 24 Sep (live Lean, reviewer's autoimplicit_verifier_probe.py): `(x : ℝ) (h1 : x - brokenk = 0)
+# : x = brokenk` was proved by `linarith` and passed every audit (clean certificate), because
+# `brokenk` became a universally quantified real. With the option off it is "Unknown identifier".
+# harness/run_lean.py's elaboration check reuses this constant (ELAB_PREFIX).
+AUTOIMPLICIT_OFF = "set_option autoImplicit false in\n"
 
 
 class LeanPrintError(ValueError):
@@ -401,9 +410,11 @@ class LeanStatement:
     hints: tuple[str, ...] = ()  # goal-specific tactics the template can supply (tried first)
 
     def theorem(self, proof: str) -> str:
+        """The Lean command that proves the statement with `proof`, autoImplicit off
+        (AUTOIMPLICIT_OFF), as are both audit probes below."""
         hs = " ".join(f"(h{i} : {h})" for i, h in enumerate(self.hypotheses, start=1))
         head = " ".join(x for x in [f"theorem {self.name}", self.binders, hs] if x)
-        return f"{head} : {self.goal} := by\n{proof}"
+        return f"{AUTOIMPLICIT_OFF}{head} : {self.goal} := by\n{proof}"
 
     def vacuity_probe(self) -> str | None:
         """Theorem asking for False from the same hypotheses: if it compiles, the hypotheses
@@ -432,14 +443,14 @@ class LeanStatement:
                 "simp at *; linarith", "field_simp at *; linarith"]
         alts += [f"exact h{i} (by {inner})" for i, h in enumerate(self.hypotheses, start=1)
                  if " ≠ " in h and "∀" not in h and "∃" not in h]
-        return f"{head} : False := by\n  first | " + " | ".join(f"({a}; done)" for a in alts)
+        return f"{AUTOIMPLICIT_OFF}{head} : False := by\n  first | " + " | ".join(f"({a}; done)" for a in alts)
 
     def no_hyp_probe(self, proof: str) -> str | None:
         """Same goal without the hypotheses: if it still proves, the data were never used."""
         if not self.hypotheses:
             return None
         head = " ".join(x for x in [f"theorem {self.name}_nohyp", self.binders] if x)
-        return f"{head} : {self.goal} := by\n{proof}"
+        return f"{AUTOIMPLICIT_OFF}{head} : {self.goal} := by\n{proof}"
 
 
 def _field_for(ir_obj) -> str:
