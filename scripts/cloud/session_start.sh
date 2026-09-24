@@ -10,7 +10,13 @@
 # (4) exports the Lean install through $CLAUDE_ENV_FILE and links it under $HOME, or starts
 # `setup_env.sh --lean-only` in the background when it is missing; (5) prints a short Turkish
 # status block, which Claude Code adds to the session context. It always exits 0.
+# Lean counts as installed only when mathverify-logs/lean.done exists: setup_env.sh writes it
+# after the REPL smoke test passed. A REPL binary without it is what a failed run leaves (the REPL
+# is built before its smoke test), so that case is retried in the background, never reported ready.
+# A FAILED setup_env.status in any prefix is always printed.
 # MATHVERIFY_SKIP_LEAN=1 reports an existing Lean install but never starts one.
+# MATHVERIFY_HOOK_PREFIXES (colon-separated) replaces the install prefix list below; the tests
+# use it so that a real /opt install cannot leak into them.
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 
 trap 'exit 0' EXIT
@@ -25,8 +31,13 @@ cd "$REPO" 2>/dev/null || { echo "mathverify: depo bulunamadı ($REPO); kurulum 
 
 # Install prefixes, in order: MATHVERIFY_OPT, the setup script's /opt, and the per-user prefix
 # used when /opt is not writable for this session's user.
+if [ -n "${MATHVERIFY_HOOK_PREFIXES:-}" ]; then
+  IFS=: read -r -a CANDIDATES <<<"$MATHVERIFY_HOOK_PREFIXES"
+else
+  CANDIDATES=("${MATHVERIFY_OPT:-}" /opt "$HOME/.mathverify-opt")
+fi
 PREFIXES=()
-for p in "${MATHVERIFY_OPT:-}" /opt "$HOME/.mathverify-opt"; do
+for p in "${CANDIDATES[@]}"; do
   [ -n "$p" ] || continue
   case " ${PREFIXES[*]} " in *" $p "*) ;; *) PREFIXES+=("$p") ;; esac
 done
@@ -154,22 +165,32 @@ start_install() {  # $1 = prefix; detached from this hook (own session, no inher
   log "started setup_env.sh --lean-only in the background (pid $!, prefix $1)"
 }
 can_install() { writable_logdir "$1" >/dev/null && [ -w "$1" ]; }
+installed() {  # $1 = prefix; a finished install: REPL, project and lean.done (smoke test passed)
+  [ -x "$1/repl/.lake/build/bin/repl" ] && [ -d "$1/mathverify-lean" ] \
+    && [ -f "$1/mathverify-logs/lean.done" ]
+}
 LP=""; LSTATE=""
+FP="$(lean_fingerprint)"
+# An install made from the current lean/ pins wins, whichever prefix holds it.
 for p in "${PREFIXES[@]}"; do
-  if [ -x "$p/repl/.lake/build/bin/repl" ] && [ -d "$p/mathverify-lean" ]; then
-    if [ -f "$p/mathverify-logs/lean.done" ] || ! setup_running "$p"; then
-      LP="$p"; LSTATE=ready; break
-    fi
+  if installed "$p" && [ "$(cat "$p/mathverify-logs/lean.done" 2>/dev/null)" = "$FP" ]; then
+    LP="$p"; LSTATE=ready; break
   fi
 done
-if [ "$LSTATE" = ready ] && [ -f "$LP/mathverify-logs/lean.done" ] \
-   && [ "$(cat "$LP/mathverify-logs/lean.done" 2>/dev/null)" != "$(lean_fingerprint)" ]; then
-  # The snapshot predates a change of lean/ (pins): keep using it, update it in the background.
-  if setup_running "$LP"; then LSTATE=updating
-  elif [ "${MATHVERIFY_SKIP_LEAN:-}" != 1 ] && can_install "$LP" && start_install "$LP"; then LSTATE=updating
-  else LSTATE=stale
-  fi
+if [ -z "$LP" ]; then
+  for p in "${PREFIXES[@]}"; do
+    installed "$p" || continue
+    # The snapshot predates a change of lean/ (pins): keep using it, update it in the background.
+    LP="$p"
+    if setup_running "$LP"; then LSTATE=updating
+    elif [ "${MATHVERIFY_SKIP_LEAN:-}" != 1 ] && can_install "$LP" && start_install "$LP"; then LSTATE=updating
+    else LSTATE=stale
+    fi
+    break
+  done
 fi
+# No finished install. A REPL binary without lean.done (a failed or interrupted run) falls through
+# to here: it is reported as installing while a setup_env.sh run holds the lock, else retried.
 if [ -z "$LP" ]; then
   for p in "${PREFIXES[@]}"; do
     if setup_running "$p"; then LP="$p"; LSTATE=installing; break; fi
@@ -226,10 +247,13 @@ echo "[mathverify bulut oturumu — session_start.sh, $(( $(date +%s) - T0 )) s]
 echo "- Python: ${PYVER:-?} (${PY:-yok})${PYNOTE:+ — $PYNOTE}"
 echo "- .venv: $VSTATE; komutlar .venv/bin/python ile (PYTHONUTF8=1) çalışır, Windows'taki .venv/Scripts/python.exe yerine"
 echo "- Lean: $LTXT"
-if [ -n "$LP" ] && [ "$LSTATE" != ready ] \
-   && grep -qs '^FAILED' "$LP/mathverify-logs/setup_env.status"; then
-  echo "  Önceki kurulum BAŞARISIZ: $(head -c 400 "$LP/mathverify-logs/setup_env.status")"
-fi
+# Every prefix, whatever the Lean state: the line names the failed stages (Python ones included),
+# and a retry started above rewrites the file only when it finishes.
+for p in "${PREFIXES[@]}"; do
+  if grep -qs '^FAILED' "$p/mathverify-logs/setup_env.status"; then
+    echo "  Önceki kurulum BAŞARISIZ ($p/mathverify-logs/setup_env.status): $(head -c 400 "$p/mathverify-logs/setup_env.status")"
+  fi
+done
 [ "$NREP" -eq 0 ] || echo "- Raporlar: reports/arsiv/2026-09-24/ içinden $NREP eksik JSON kopyalandı"
 echo "- Günlükler: $SLOG, $VLOG, $LOGDIR/setup_env.log"
 echo "- Önce HANDOFF.md, sonra docs/BULUT.md okunur."

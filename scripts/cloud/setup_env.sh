@@ -9,7 +9,8 @@
 # Installs under ${MATHVERIFY_OPT:-/opt}:
 #   python3.14/        CPython 3.14.6 from the pinned artifact (uv cannot download Python there)
 #   uv-cache/          uv cache prewarmed with requirements.lock, so each session's .venv
-#                      install is fast and offline
+#                      install is fast and offline (built from a throwaway copy of pyproject.toml
+#                      + src/: nothing is written under the repository checkout)
 #   elan/ mathverify-lean/ repl/
 #                      Lean toolchain, pinned Mathlib project and REPL
 #                      (scripts/setup_lean.sh, scripts/setup_lean_repl.sh)
@@ -240,11 +241,23 @@ stage_prewarm() {
   uvb="$(find_uv)" || { echo "uv not found and could not be installed"; return 1; }
   echo "uv: $uvb ($("$uvb" --version))"
   v="$(mktemp -d "$OPT/.uv-prewarm.XXXXXX")" || return 1
+  # Nothing may be written under $REPO: this runs as root, and a root-owned
+  # src/mathverify.egg-info (or __pycache__) there makes the session user's own
+  # `uv pip install -e .` fail with EACCES. The editable build therefore runs on a throwaway copy
+  # of pyproject.toml + src/ (it still caches the build backend the session's install needs),
+  # uv runs from inside the copy, and the import check writes no bytecode.
+  mkdir -p "$v/pkg" && cp "$REPO/pyproject.toml" "$v/pkg/" && cp -R "$REPO/src" "$v/pkg/" \
+    || { rm -rf "$v"; return 1; }
+  find "$v/pkg/src" \( -name __pycache__ -o -name '*.egg-info' \) -prune -exec rm -rf {} + 2>/dev/null
   export UV_CACHE_DIR="$UV_CACHE" UV_PYTHON_DOWNLOADS=never
-  "$uvb" venv -q --python "$PY" "$v/venv" \
-    && "$uvb" pip install --python "$v/venv/bin/python" -r "$REPO/requirements.lock" \
-    && "$uvb" pip install --python "$v/venv/bin/python" --no-deps -e "$REPO" \
-    && "$v/venv/bin/python" -c 'import mathverify, sympy, z3, math_verify, anthropic, pytest; print("imports OK")'
+  (
+    cd "$v" || exit 1
+    "$uvb" venv -q --python "$PY" "$v/venv" \
+      && "$uvb" pip install --python "$v/venv/bin/python" -r "$REPO/requirements.lock" \
+      && "$uvb" pip install --python "$v/venv/bin/python" --no-deps -e "$v/pkg" \
+      && PYTHONDONTWRITEBYTECODE=1 "$v/venv/bin/python" -c \
+        'import mathverify, sympy, z3, math_verify, anthropic, pytest; print("imports OK:", mathverify.__file__)'
+  )
   rc=$?
   rm -rf "$v"
   [ "$rc" -eq 0 ] && prewarm_fingerprint >"$PREWARM_MARK"
