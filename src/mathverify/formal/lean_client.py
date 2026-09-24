@@ -1,9 +1,10 @@
 """Persistent Lean 4 + Mathlib REPL (handoff §10 / [2]).
 
-The REPL process runs inside WSL with Mathlib imported once (~13 s); every later check is a
-JSON round-trip on the cached environment, so a proof attempt costs ~0.1-3 s instead of a
-fresh `import Mathlib`. Protocol (leanprover-community/repl): one JSON object per request
-followed by a blank line; the reply is one JSON object.
+The REPL process runs with Mathlib imported once (~13 s): on Windows inside WSL, on
+Linux/macOS (e.g. a cloud container) in a local bash. Every later check is a JSON round-trip
+on the cached environment, so a proof attempt costs ~0.1-3 s instead of a fresh
+`import Mathlib`. Protocol (leanprover-community/repl): one JSON object per request followed
+by a blank line; the reply is one JSON object.
 
 Hard rules: every call has a wall-clock timeout, a timed-out or crashed REPL is killed and
 respawned, and nothing here ever decides a verdict — it reports what Lean said.
@@ -12,21 +13,41 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["LeanClient", "LeanResult", "LeanUnavailable", "get_lean", "lean_available"]
+__all__ = ["LeanClient", "LeanResult", "LeanUnavailable", "get_lean", "lean_available",
+           "repl_command"]
 
 DEFAULT_PROJECT = os.environ.get("MATHVERIFY_LEAN_PROJECT", "~/mathverify-lean")
 DEFAULT_REPL = os.environ.get("MATHVERIFY_LEAN_REPL", "~/repl/.lake/build/bin/repl")
 DEFAULT_DISTRO = os.environ.get("MATHVERIFY_WSL_DISTRO", "Ubuntu")
 
+_POSIX = os.name != "nt"
+
 
 class LeanUnavailable(RuntimeError):
     pass
+
+
+def repl_command(project: str, repl: str, distro: str, native: bool | None = None) -> list[str]:
+    """The argv that starts the REPL. Windows reaches the toolchain through WSL; on
+    Linux/macOS the same shell line runs in a local bash (`native` defaults to "not Windows").
+
+    `ELAN_HOME` is honoured when the login shell has it (cloud layout: /opt/elan) and falls
+    back to `$HOME/.elan`; the WSL login shell does not set it, so Windows runs the exact
+    toolchain it always did."""
+    if native is None:
+        native = _POSIX
+    line = (f'cd {project} && export PATH="${{ELAN_HOME:-$HOME/.elan}}/bin:$PATH" '
+            f'&& exec lake env {repl}')
+    if native:
+        return ["bash", "-lc", line]
+    return ["wsl", "-d", distro, "--", "bash", "-lc", line]
 
 
 @dataclass
@@ -66,12 +87,20 @@ class LeanClient:
         # builtin), which silently gives an import-less environment where even `+` fails to
         # parse. Measured: import Mathlib then returns in 3 s instead of ~13 s — that speed
         # is itself the symptom.
-        cmd = ["wsl", "-d", self.distro, "--", "bash", "-lc",
-               f'cd {self.project} && export PATH="$HOME/.elan/bin:$PATH" && exec lake env {self.repl}']
+        cmd = repl_command(self.project, self.repl, self.distro)
         env = dict(os.environ, MSYS_NO_PATHCONV="1")
-        self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE, text=True, encoding="utf-8",
-                                      errors="replace", bufsize=1, env=env)
+        # POSIX: `lake env` runs the REPL as its CHILD, so killing the Popen pid alone would
+        # orphan the REPL (~1 GB) on every timeout. A new session makes the launcher a process
+        # group leader, and _kill takes down the whole group. On Windows killing wsl.exe
+        # already tears down the Linux side, so nothing changes there.
+        extra: dict[str, Any] = {"start_new_session": True} if _POSIX else {}
+        try:
+            self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                                          errors="replace", bufsize=1, env=env, **extra)
+        except OSError as e:           # no wsl.exe / no bash: the toolchain is absent, not a crash
+            self._proc = None
+            raise LeanUnavailable(f"cannot launch the Lean REPL ({cmd[0]}): {e}") from e
         r = self._send_raw({"cmd": "import Mathlib", "env": None}, timeout=self.boot_timeout)
         if r.raw is None or "env" not in (r.raw or {}):
             self._kill()
@@ -86,6 +115,13 @@ class LeanClient:
 
     def _kill(self) -> None:
         if self._proc is not None:
+            if _POSIX:
+                # the launcher leads its own process group (start_new_session): kill the REPL
+                # child too, not just the launcher
+                try:
+                    os.killpg(self._proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
             try:
                 self._proc.kill()
                 self._proc.wait(timeout=10)
