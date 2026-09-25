@@ -32,7 +32,11 @@ _IN_SET = re.compile(r"^\s*([A-Za-z_]\w*)\s+in\s+(\{.*\})\s*$")
 
 
 def _parse_claim(claim: str, ns: dict[str, Any]):
-    m = _IN_SET.match(claim)
+    from ..normalize.parse import _strip_invisible, strip_presentation
+    # invisible characters and display wrappers (\boxed{}, $…$) are removed before the `x in {…}`
+    # form is recognised: otherwise the form fell through to the general parser, whose guard
+    # refuses Python's `in`, and 7 correct solutions became UNKNOWN (adversarial run, 25 Sep 2026)
+    m = _IN_SET.match(strip_presentation(_strip_invisible(claim)))
     if m:
         from ..normalize.parse import parse_set_str
         var = ns.get(m.group(1))

@@ -564,3 +564,16 @@ def test_set_notation_is_read_when_answer_shape_is_left_at_its_default(ir, kind,
     """The IR's answer_shape is often absent (scalar); the claim's kind says it is a set."""
     assert verify(ir, {"claimed_answer": {"kind": kind, "payload": right}, "steps": []}).verdict == "CORRECT"
     assert verify(ir, {"claimed_answer": {"kind": kind, "payload": wrong}, "steps": []}).verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("wrap", [lambda s: s + "​", lambda s: "\\boxed{" + s + "}", lambda s: "$" + s + "$",
+                                  lambda s: "‫" + s + "‬"])
+def test_the_in_set_step_form_survives_invisible_and_display_wrappers(wrap):
+    """`x in {2, 3}` with a trailing zero-width space or inside \\boxed{} fell through to the
+    general parser, whose guard refuses Python's `in`: 7 correct solutions became UNKNOWN."""
+    steps = [{"id": "s1", "kind": "eq", "claim": wrap("x**2 - 5*x + 6 = 0")},
+             {"id": "s2", "kind": "eq", "claim": wrap("x in {2, 3}")}]
+    r = verify(SOLVE, {"claimed_answer": {"kind": "set", "payload": "{2, 3}"}, "steps": steps})
+    assert r.verdict == "CORRECT", r.flags
+    steps[1]["claim"] = wrap("x in {2, 4}")
+    assert verify(SOLVE, {"claimed_answer": {"kind": "set", "payload": "{2, 3}"}, "steps": steps}).verdict == "INCORRECT"
