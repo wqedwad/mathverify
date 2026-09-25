@@ -343,8 +343,10 @@ def certify_probability(space: dict[str, Any], event: str, claimed, seed: int = 
     ev: dict[str, Any] = {"space": space, "event": event, "claimed": str(claimed)}
     # The claim is compared AS STATED. `nsimplify` used to run here and it snaps to the nearest
     # "nice" number: 500000003/3000000000 became 1/6 and was certified against an exact
-    # enumeration of 1/6 (measured). Decimal claims keep their own precision through
-    # answers_equivalent's float floor; exact claims are compared exactly.
+    # enumeration of 1/6 (measured). Exact claims are compared exactly. A decimal written in the
+    # payload reaches this point as the exact rational it spells (the claim parser rationalises
+    # `0.1666666666666667` to 1666666666666667/10^16), so a rounded decimal is a different number
+    # and is refuted; only a sympy Float passed in directly keeps answers_equivalent's float floor.
     if isinstance(claimed, str):
         # never sympify raw text (it is Python eval with builtins): the caller parses the claim
         ev["error"] = "claimed_probability_must_be_parsed"

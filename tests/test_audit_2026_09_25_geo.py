@@ -351,3 +351,11 @@ def test_single_eigenvalue_and_tuple_vectors():
     assert _v(me, "(3, 8)") == "INCORRECT"
     assert _v(me, "Matrix([[3, 7]])") == "INCORRECT"         # an explicit ROW is a different matrix
     assert _v(_la("matrix_expr", expr="Matrix([[1,2]])*Matrix([3,4])"), "11") == "CORRECT"
+
+
+def test_decimal_probability_claims_are_the_numbers_they_spell():
+    dice = _prob({"structure": "product", "sets": [[1, 2, 3, 4, 5, 6]] * 2}, "sum(t) == 7")     # 1/6
+    assert _v(dice, "1/6") == "CORRECT"
+    assert _v(dice, "0.1666666666666667") == "INCORRECT"    # 1666666666666667/10^16 != 1/6
+    coin = _prob({"structure": "sequence", "elements": ["T", "Y"], "k": 1}, "t[0] == 'T'")
+    assert _v(coin, "0.5") == "CORRECT"
