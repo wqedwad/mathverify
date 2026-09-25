@@ -662,6 +662,15 @@ def _parse_single_set(s: str, ns):
     if m and not s.startswith(("Interval", "FiniteSet", "Union")):
         lo = parse_expr_str(m.group(2), ns)
         hi = parse_expr_str(m.group(3), ns)
+        # A reversed interval "(5, 1)" is not notation for the empty set: SymPy's Interval(5, 1)
+        # is EmptySet, so the right answer to "x² + 1 < 0" was certified from a claim that
+        # names no interval at all (audit of 25 Sep 2026). A degenerate "(a, a)" is refused too.
+        try:
+            order = sp.sympify(hi - lo).is_positive if lo.is_real is not False and hi.is_real is not False else None
+        except Exception:  # noqa: BLE001
+            order = None
+        if order is False and not (lo == hi and m.group(1) == "[" and m.group(4) == "]"):
+            raise ParseError(f"interval {s!r} has its end before its start: not an interval")
         return Interval(lo, hi, left_open=(m.group(1) == "("), right_open=(m.group(4) == ")"))
     val = parse_expr_str(s, ns)
     if isinstance(val, sp.Set):

@@ -480,3 +480,13 @@ def test_answer_key_leakage_still_stops_the_pipeline():
     ir = dict(EVAL, givens=[["x"]], answer_key="7/2")
     with pytest.raises(LeakageError):
         verify(ir, {"claimed_answer": {"kind": "value", "payload": "7/2"}, "steps": []})
+
+
+@pytest.mark.parametrize("payload", ["(5, 1)", "(1, 1)", "(2, -2)"])
+def test_a_reversed_interval_is_not_read_as_the_empty_set(payload):
+    """SymPy's Interval(5, 1) is EmptySet: "(5, 1)" was certified as the answer to x² + 1 < 0."""
+    ir = _ir("solve_inequality", {"inequality": "x**2 + 1 < 0", "var": "x"}, shape="interval")
+    assert _run(ir, "interval", payload).verdict == "UNKNOWN"
+    assert _run(ir, "interval", "EmptySet").verdict == "CORRECT"
+    ir2 = _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, shape="interval")
+    assert _run(ir2, "interval", "(-2, 2)").verdict == "CORRECT"
