@@ -159,3 +159,72 @@ def test_scale_is_never_fixed_by_the_gauge():
               "dist(A,B)")                                             # legs 4 -> 4*sqrt(2)
     assert _v(ri, "4*sqrt(2)") == "CORRECT"
     assert _v(ri, "8") == "INCORRECT"
+
+
+# ------------------------------------------------------------------------------------------------
+# count_structures / probability: exact predicates, faithful Monte Carlo, no raw-text eval (C10, H1)
+# ------------------------------------------------------------------------------------------------
+def _cnt(space, predicate=""):
+    return _ir("count_structures", {"space": space, "predicate": predicate}, answer_shape="count")
+
+
+def _prob(space, event):
+    return _ir("probability", {"space": space, "event": event})
+
+
+def test_predicates_use_exact_rationals():
+    import itertools
+    from fractions import Fraction
+    space = {"structure": "sequence", "elements": [0.1, 0.2, 0.5], "k": 2}
+    truth = sum(1 for t in itertools.product([Fraction(1, 10), Fraction(1, 5), Fraction(1, 2)], repeat=2)
+                if sum(t) == Fraction(3, 10))
+    assert truth == 2
+    assert _v(_cnt(space, "sum(t) == 0.3"), "2", "count") == "CORRECT"
+    assert _v(_cnt(space, "sum(t) == 0.3"), "0", "count") == "INCORRECT"
+    assert _v(_prob(space, "sum(t) == 0.3"), "2/9") == "CORRECT"
+    dice = {"structure": "product", "sets": [[1, 2, 3, 4, 5, 6]] * 2}
+    assert _v(_prob(dice, "sum(t)/len(t) == 3.5"), "1/6") == "CORRECT"      # (1,6),(2,5)... = 6/36
+    assert _v(_prob(dice, "t[0]/t[1] == 1/3"), "1/18") == "CORRECT"          # (1,3), (2,6)
+
+
+def test_monte_carlo_samples_the_counted_space():
+    import math
+    from mathverify.certify.combinatorics import sample_space, iterate_space
+    import random
+    # small spaces: the sampler hits exactly the enumerated tuples, uniformly
+    for space in ({"structure": "multiset_combination", "n": 4, "k": 2},
+                  {"structure": "combination", "elements": [1, 1, 2, 3], "k": 2},
+                  {"structure": "arrangement_all", "n": 3, "k": 2}):
+        allowed = list(iterate_space(space))
+        rng = random.Random(1)
+        draws = [sample_space(space, rng) for _ in range(20000)]
+        assert set(draws) <= set(allowed)
+        freq = {t: draws.count(t) / len(draws) for t in set(draws)}
+        expected = {t: allowed.count(t) / len(allowed) for t in set(allowed)}
+        assert all(abs(freq.get(t, 0) - p) < 0.02 for t, p in expected.items()), space
+    # C(100, 5) all-distinct 5-multisets of 100: correct, space > cap -> never refuted
+    ms = {"structure": "multiset_combination", "n": 100, "k": 5}
+    assert _v(_cnt(ms, "len(set(t)) == 5"), str(math.comb(100, 5)), "count") == "UNKNOWN"
+    assert _v(_cnt(ms, "len(set(t)) == 5"), "1", "count") == "INCORRECT"
+    arr = {"structure": "arrangement_all", "n": 12, "k": 3}
+    assert _v(_cnt(arr, "len(t) == 12"), str(math.factorial(12)), "count") == "UNKNOWN"
+
+
+def test_repeated_elements_positions_vs_values():
+    word = {"structure": "arrangement_all", "elements": list("ANKARA")}
+    assert _v(_cnt(word), "720", "count") == "UNKNOWN"      # positions
+    assert _v(_cnt(word), "120", "count") == "UNKNOWN"      # different words: 6!/3!
+    assert _v(_cnt(word), "100", "count") == "INCORRECT"    # neither reading
+    balls = {"structure": "combination", "elements": ["k1", "k2", "k3", "m1", "m2"], "k": 2}
+    assert _v(_prob(balls, "all(x[0] == 'k' for x in t)"), "3/10") == "CORRECT"
+
+
+def test_count_payload_text_is_parsed_not_evaluated():
+    space = {"structure": "combination", "n": 3, "k": 1}                # 3 structures
+    # `sympify` would have run these as Python and produced 3 and 6
+    assert _v(_cnt(space), "len('abc')", "count") == "UNKNOWN"
+    assert _v(_cnt({"structure": "combination", "n": 4, "k": 2}), "sum([1, 2, 3])", "count") == "UNKNOWN"
+    assert _v(_cnt(space), "3", "count") == "CORRECT"
+    assert _v(_cnt(space), "binomial(3, 1)", "count") == "CORRECT"
+    assert _v(_cnt(space), "7/2", "count") == "INCORRECT"
+    assert _v(_cnt(space), 3, "count") == "CORRECT"
