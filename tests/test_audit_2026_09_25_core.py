@@ -304,7 +304,7 @@ def test_a_problem_undefined_at_a_constant_point_abstains(expr):
 
 
 def test_complex_problems_are_not_held_to_real_definedness():
-    ir = _ir("evaluate", {"expr": "sqrt(-4)**2"}, domain_of_discourse="complex")
+    ir = dict(_ir("evaluate", {"expr": "sqrt(-4)**2"}, domain_of_discourse="complex"), vars=[])
     assert _run(ir, "value", "-4").verdict == "CORRECT"
 
 
@@ -373,3 +373,37 @@ def test_a_new_abstention_flag_blocks_correct(flag):
                        latency_ms=1.0, flags=[flag])
     assert fuse([ok, note])["verdict"] == "UNKNOWN"
     assert fuse([ok])["verdict"] == "CORRECT"
+
+
+# --- the certificates reason over the reals -------------------------------------------------------
+
+@pytest.mark.parametrize("ir,claim", [
+    ({"task": {"kind": "solve_equation", "params": {"equation": "x**2 = -1", "var": "x"}},
+      "vars": [{"name": "x", "domain": "complex"}], "givens": [], "answer_shape": "set"},
+     {"kind": "set", "payload": "EmptySet"}),
+    ({"task": {"kind": "evaluate", "params": {"expr": "x**2 + 1"}},
+      "vars": [{"name": "x", "domain": "complex"}], "givens": ["x**4 = 1"], "answer_shape": "scalar"},
+     {"kind": "value", "payload": "2"}),
+    ({"task": {"kind": "solve_equation", "params": {"equation": "x**2 = 2", "var": "x"}},
+      "vars": [{"name": "x", "domain": "rational"}], "givens": [], "answer_shape": "set"},
+     {"kind": "set", "payload": "{-sqrt(2), sqrt(2)}"}),
+    ({"task": {"kind": "solve_equation", "params": {"equation": "x**2 = -1", "var": "x"}},
+      "vars": [{"name": "x"}], "givens": [], "answer_shape": "set", "domain_of_discourse": "complex"},
+     {"kind": "set", "payload": "EmptySet"}),
+])
+def test_a_complex_or_rational_variable_is_not_read_as_real(ir, claim):
+    """Each wrong claim was certified over ℝ (audit of 25 Sep 2026); there is no sound verdict."""
+    r = verify(ir, {"claimed_answer": claim, "steps": []})
+    assert r.verdict == "UNKNOWN" and "var_domain_unsupported" in r.flags
+
+
+@pytest.mark.parametrize("givens,wrong", [(["x**2 = 4", "x > 0"], "{-2, 2}"), (["2*x = 4", "x > 5"], "{2}")])
+def test_a_given_inequality_restricts_the_solutions(givens, wrong):
+    ir = _ir("solve_equation", {"var": "x"}, givens, shape="set")
+    assert _run(ir, "set", wrong).verdict != "CORRECT"
+
+
+def test_a_given_inequality_on_an_inequality_restricts_it():
+    ir = _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, ["x > 0"], shape="interval")
+    assert _run(ir, "interval", "(-2, 2)").verdict == "INCORRECT"
+    assert _run(ir, "interval", "(0, 2)").verdict == "CORRECT"

@@ -67,6 +67,25 @@ class Ctx:
                         dom = sp.Intersection(dom, sp.solveset(rel, var, S.Reals))
                 except Exception:
                     pass
+        # A given inequality on this variable alone restricts it like a declared constraint:
+        # "x² = 4, x > 0" has the one root 2, and "2x = 4, x > 5" has none, but only the equation
+        # was solved and {−2, 2} and {2} were certified (audit of 25 Sep 2026). Equations are left to
+        # the certificates. `limit` skips its givens (the point approached may lie outside).
+        if self.ir.task.kind != "limit":
+            for g in self.ir.givens:
+                try:
+                    rel = parse_relation(g, self.ns)
+                except Exception:  # noqa: BLE001 - not a relation: nothing to restrict
+                    continue
+                if isinstance(rel, sp.Eq) or not isinstance(rel, sp.core.relational.Relational) \
+                        or rel.free_symbols != {var}:
+                    continue
+                try:
+                    sol = sp.solveset(rel, var, S.Reals)
+                except Exception:  # noqa: BLE001
+                    continue
+                if not isinstance(sol, sp.ConditionSet):
+                    dom = sp.Intersection(dom, sol)
         # the problem's own expressions must be defined, as written (see written_conditions)
         conds, nowhere = self.written_conditions()
         if var in nowhere:
