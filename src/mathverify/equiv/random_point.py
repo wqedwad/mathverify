@@ -110,7 +110,12 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
     return None
 
 
-def sample_points(domains: dict, n: int, seed: int) -> list[dict]:
+def sample_points(domains: dict, n: int, seed: int, special: bool = False) -> list[dict]:
+    """`n` random points of the domains. With special=True, deterministic probe points are
+    appended: for each symbol in turn, small integers, half-integers and far points of its
+    domain (the others held at the first random point). Random 6-decimal samples essentially
+    never land on an integer or a boundary, which is where a wrong strict/non-strict step
+    (`-2 < x` for x² − 5x − 14 ≤ 0) differs from the truth (audit of 25 Sep 2026, D2)."""
     rng = random.Random(seed)
     pts = []
     for _ in range(n):
@@ -124,6 +129,13 @@ def sample_points(domains: dict, n: int, seed: int) -> list[dict]:
             pt[sym] = v
         if ok:
             pts.append(pt)
+    if special and pts:
+        base = pts[0]
+        for sym, dom in domains.items():
+            for v in _special_values(dom):
+                pt = dict(base)
+                pt[sym] = v
+                pts.append(pt)
     return pts
 
 
@@ -183,16 +195,30 @@ def _in(dom, v) -> bool:
         return False
 
 
-def _special_values(dom) -> list:
-    """Deterministic probe values: small integers and half-integers, and far points on a
-    log-spread scale (with an irrational-free rational offset), filtered by the domain."""
+def _special_values(dom, far: bool = False) -> list:
+    """Deterministic probe values: small integers and half-integers and, with far=True, far points
+    (10³ … 10⁶ and their negatives, also with a rational offset), filtered by the domain."""
     vals = [sp.Integer(k) for k in range(-12, 13)]
     vals += [sp.Rational(k, 2) for k in (-5, -3, -1, 1, 3, 5)]
-    for e in range(3, 10):
-        for m in (1, 3, 7):
-            v = sp.Integer(m) * sp.Integer(10) ** e
+    if far:
+        for v in (10 ** 3, 3 * 10 ** 3, 7 * 10 ** 3, 10 ** 4, 10 ** 5, 10 ** 6):
+            v = sp.Integer(v)
             vals += [v, -v, v + sp.Rational(1, 3), -v - sp.Rational(1, 3)]
     return [v for v in vals if _in(dom, v)]
+
+
+def _far_safe(e) -> bool:
+    """Can `e` be substituted EXACTLY at |x| ~ 10⁶? Not with the variable in an exponent
+    (2**x would become a 300 000-digit integer) or inside factorial/binomial/gamma."""
+    if not getattr(e, "free_symbols", None):
+        return True
+    for p in e.atoms(sp.Pow):
+        if p.exp.free_symbols:
+            return False
+    if e.has(sp.exp) and any(f.args[0].free_symbols for f in e.atoms(sp.exp)):
+        return False
+    bad = (sp.factorial, sp.binomial, sp.gamma, sp.RisingFactorial, sp.FallingFactorial, sp.factorial2)
+    return not any(f.args and f.args[0].free_symbols for f in e.atoms(*bad))
 
 
 def _breakpoints(exprs, sym, dom, timeout: float = 5.0) -> list | None:
@@ -528,8 +554,9 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     # probed at a time, the others held at the first random sample); confirmed exactly
     probes: list[dict] = []
     base = pts[0]
+    far = _far_safe(a) and _far_safe(b)
     for s_ in syms:
-        vals = _special_values(domains[s_])
+        vals = _special_values(domains[s_], far=far)
         if nonsmooth and len(syms) == 1:
             bps = _breakpoints([a, b], s_, domains[s_]) or []
             for bp in bps:

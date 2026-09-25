@@ -17,6 +17,21 @@ __all__ = ["set_equal", "normalize_set", "scalar_equal"]
 
 
 def scalar_equal(a, b) -> bool | None:
+    """Equality of two scalars. Two exact constants are decided exactly first (a certified
+    evaluation separates different values at once, a proof of zero confirms equal ones) — the
+    symbolic battery, tried first before, spent up to its full timeout on every pair of
+    different algebraic numbers (measured: 64 s for one cubic with trig-form roots)."""
+    from .numeric import exact_equal, has_float
+    try:
+        sa, sb = sp.sympify(a), sp.sympify(b)
+        exact = not (sa.free_symbols or sb.free_symbols) and not has_float(sa, sb) and not any(
+            x_.has(oo, -oo, sp.zoo, sp.nan) for x_ in (sa, sb))
+    except (sp.SympifyError, TypeError, AttributeError):
+        exact = False
+    if exact:
+        r = exact_equal(sa, sb)
+        if r is not None:
+            return r
     ok, _ = sym_equal(a, b)
     if ok:
         return True

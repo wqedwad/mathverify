@@ -169,11 +169,16 @@ class _Tr:
         if isinstance(e, sp.binomial) and all(a.is_Integer for a in e.args):
             return z3.IntVal(int(e))
         if e.is_number:
-            # exact rational?
+            # an exact rational written another way. `nsimplify(rational=True)` alone is a
+            # rounding: it turned π into 314159265358979/100000000000000, so z3 reasoned about a
+            # different number (audit of 25 Sep 2026). The snap is kept only when it is PROVED
+            # equal to the constant.
             try:
                 r = sp.nsimplify(e, rational=True)
                 if isinstance(r, sp.Rational):
-                    return z3.RealVal(f"{r.p}/{r.q}")
+                    from ..equiv.numeric import exact_equal
+                    if exact_equal(r, e) is True:
+                        return z3.RealVal(f"{r.p}/{r.q}")
             except Exception:
                 pass
         raise Unsupported(f"cannot translate {type(e).__name__}: {e}")

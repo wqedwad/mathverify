@@ -267,3 +267,122 @@ def test_c9_primitive():
     assert random_point_equal(sp.Mod(n ** 2, 4), sp.Mod(n, 4), n, sp.S.Integers)[0] is False
     # no proof method for a real floor identity: abstain, never True
     assert random_point_equal(sp.floor(x + 1), sp.floor(x) + 1, x, sp.S.Reals)[0] is None
+
+
+# ---------------------------------------------------------------------------------------------
+# C2 — an identity was "complete with no root": ∅ certified for (x+1)² = x² + 2x + 1,
+# 2(x+3) = 2x + 6, (x²−1)/(x−1) = x + 1 and x/x = 1 (before: all CORRECT; ℝ was UNKNOWN).
+# ---------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("eq", ["(x + 1)**2 = x**2 + 2*x + 1", "2*(x + 3) = 2*x + 6",
+                                "(x**2 - 1)/(x - 1) = x + 1", "x/x = 1"])
+def test_c2_identity_is_not_empty(eq):
+    assert _solve(eq, "{}") == "INCORRECT"
+    assert _solve(eq, "{0}") != "CORRECT"
+
+
+def test_c2_identity_solution_set_is_the_domain():
+    assert _solve("2*(x + 3) = 2*x + 6", "Reals") == "CORRECT"
+    assert _v("solve_equation", {"var": "x"}, "interval", "(-oo, 1) U (1, oo)",
+              givens=["(x**2 - 1)/(x - 1) = x + 1"]) == "CORRECT"
+    assert _v("solve_equation", {"var": "x"}, "interval", "(-oo, oo)",
+              givens=["(x**2 - 1)/(x - 1) = x + 1"]) == "INCORRECT"
+
+
+# ---------------------------------------------------------------------------------------------
+# H1 — the domain of discourse: z3 ignored it (reported x = 0 "missing" from {1} for x³ = x on
+# x > 0) and the Sturm count over the closed hull never certified completeness.
+# Before: {1} INCORRECT, {2} for x² = 4 on x > 0 UNKNOWN, {0, 1} on x ≥ 0 UNKNOWN.
+# ---------------------------------------------------------------------------------------------
+def test_h1_domain_of_discourse_right_answers():
+    assert _solve("x**3 = x", "{1}", dod="x > 0") == "CORRECT"
+    assert _solve("x**2 = 4", "{2}", dod="x > 0") == "CORRECT"
+    assert _solve("x**3 = x", "{0, 1}", dod="x >= 0") == "CORRECT"
+
+
+def test_h1_domain_of_discourse_wrong_answers():
+    assert _solve("x**3 = x", "{0, 1}", dod="x > 0") == "INCORRECT"
+    assert _solve("x**2 = 4", "{-2, 2}", dod="x > 0") == "INCORRECT"
+    assert _solve("x**3 = x", "{1}", dod="x >= 0") == "INCORRECT"
+
+
+# ---------------------------------------------------------------------------------------------
+# C11 — "exactly one option satisfiable" is not uniqueness. Before: a + b = 9 (option A) for
+# 3a + 5b = 41 over positive integers (a + b ∈ {9, 11, 13}) was CORRECT.
+# ---------------------------------------------------------------------------------------------
+def test_c11_option_uniqueness_requires_the_givens_to_pin_the_value():
+    V = [{"name": "a", "domain": "positive_integer"}, {"name": "b", "domain": "positive_integer"}]
+    assert _v("evaluate", {"expr": "a + b"}, "value", "9", givens=["3*a + 5*b = 41"], vars_=V,
+              options={"A": "9", "B": "10", "C": "12"}, option="A") != "CORRECT"
+    # a determined problem still certifies through the options
+    assert _v("evaluate", {"expr": "a"}, "value", "16", givens=["a + b = 30", "2*a + 4*b = 88"],
+              vars_=V, options={"A": "12", "B": "14", "C": "16"}, option="C") == "CORRECT"
+
+
+def test_z3_does_not_snap_irrational_constants():
+    from mathverify.sandbox import run as sb_run
+    x = sp.Symbol("x", real=True)
+    r = sb_run("mathverify.sandbox.ops:z3_check", [sp.Eq(x, sp.pi)], {"x": "real"},
+               [sp.Eq(x, sp.Rational(314159265358979, 10 ** 14))], 4000, timeout=10)
+    assert r.ok and r.value[0] == "unsupported"
+
+
+# ---------------------------------------------------------------------------------------------
+# M1/M2 and LOW coverage: latency, caught exceptions, systems of inequalities.
+# ---------------------------------------------------------------------------------------------
+def test_m1_casus_irreducibilis_is_fast_and_correct():
+    import time
+    t0 = time.perf_counter()
+    assert _solve("x**3 - 3*x + 1 = 0", "{2*cos(2*pi/9), 2*cos(4*pi/9), 2*cos(8*pi/9)}") == "CORRECT"
+    assert time.perf_counter() - t0 < 30          # was 64 s with timeout = 8
+    assert _solve("x**3 - 3*x + 1 = 0", "{2*cos(2*pi/9), 2*cos(4*pi/9)}") == "INCORRECT"
+
+
+def test_m2_multivariate_definedness_no_exception():
+    V = [{"name": "a"}, {"name": "b"}]
+    assert _v("simplify_expression", {"expr": "(a**2 - b**2)/(a - b)"}, "expression", "a - b",
+              vars_=V) == "INCORRECT"
+    assert _v("simplify_expression", {"expr": "(a**2 - b**2)/(a - b)"}, "expression", "a + b",
+              vars_=V) == "CORRECT"
+
+
+def test_inequality_systems_and_exact_rational_sets():
+    assert _v("solve_inequality", {"var": "x"}, "interval", "(1, 5)", givens=["x > 1", "x < 5"]) == "CORRECT"
+    assert _v("solve_inequality", {"var": "x"}, "interval", "[1, 5)", givens=["x > 1", "x < 5"]) == "INCORRECT"
+    assert _v("solve_inequality", {"var": "x"}, "interval", "(1, 5)", givens=["1 < x < 5"]) == "CORRECT"
+    cubic = "(2*cos(8*pi/9), 2*cos(4*pi/9)) U (2*cos(2*pi/9), oo)"
+    assert _ineq("x**3 - 3*x + 1 > 0", cubic) == "CORRECT"
+    assert _ineq("x**3 - 3*x + 1 > 0", "(2*cos(8*pi/9), 2*cos(4*pi/9)) U [2*cos(2*pi/9), oo)") == "INCORRECT"
+
+
+# ---------------------------------------------------------------------------------------------
+# Coordinator follow-ups (merged-tree measurements, 25 Sep 2026)
+# ---------------------------------------------------------------------------------------------
+def test_z3_and_algebra_agree_on_domain_and_given_inequalities():
+    ir = {"task": {"kind": "solve_equation", "params": {"equation": "x**2 = 4", "var": "x"}},
+          "vars": [{"name": "x"}], "givens": [], "answer_shape": "set", "domain_of_discourse": "x > 0"}
+    assert verify(ir, {"claimed_answer": {"kind": "set", "payload": "{2}"}, "steps": []}).verdict == "CORRECT"
+    # 2x = 4 with x > 5: {2} is wrong (was CORRECT through z3), ∅ is right
+    assert _v("solve_equation", {"var": "x"}, "set", "{2}", givens=["2*x = 4", "x > 5"]) == "INCORRECT"
+    assert _v("solve_equation", {"var": "x"}, "set", "{}", givens=["2*x = 4", "x > 5"]) == "CORRECT"
+    assert _v("solve_equation", {"var": "x"}, "set", "{2}", givens=["x**2 = 4", "x > 0"]) == "CORRECT"
+
+
+def test_identity_x_plus_1_and_open_domain_cubic():
+    assert _v("solve_equation", {"equation": "x + 1 = x + 1", "var": "x"}, "set", "{}") == "INCORRECT"
+    assert _solve("x**3 = x", "{1}", dod="x > 0") == "CORRECT"
+
+
+@pytest.mark.parametrize("expr,claim,vars_,expected", [
+    ("x", "sqrt(x)**2", None, "INCORRECT"),                      # Lean audit E10: was CORRECT
+    ("x", "sqrt(x)**2", [{"name": "x", "domain": "positive_real"}], "CORRECT"),
+    ("sqrt(x)**2", "x", None, "CORRECT"),
+    ("1/x + 1/(x + 1)", "(2*x + 1)/(x*(x + 1))", None, "CORRECT"),
+    ("x + 1", "x**2/x + 1", None, "INCORRECT"),
+])
+def test_claim_is_read_as_written(expr, claim, vars_, expected):
+    assert _v("simplify_expression", {"expr": expr}, "expression", claim, vars_=vars_) == expected
+
+
+def test_claim_as_written_in_evaluate_expression():
+    assert _v("evaluate", {"expr": "x + 1"}, "value", "x**2/x + 1", vars_=[{"name": "x"}]) == "INCORRECT"
+    assert _v("evaluate", {"expr": "(x**2 - 1)/(x - 1)"}, "value", "x + 1", vars_=[{"name": "x"}]) == "CORRECT"
