@@ -466,7 +466,8 @@ def certify_geometry(points, constraints, target, claimed, seed: int = 0, extra_
     ev: dict[str, Any] = {"points": list(points), "constraints": list(constraints), "target": target,
                           "claimed": str(claimed)}
     try:
-        gp = GeoProblem(points, constraints, target, seed=seed, extra_ns=extra_ns)
+        # parsed here first so that a malformed IR is reported without starting the sandbox
+        GeoProblem(points, constraints, target, seed=seed, extra_ns=extra_ns)
     except ParseError as e:
         ev["error"] = f"parse_error: {e}"
         return None, ev

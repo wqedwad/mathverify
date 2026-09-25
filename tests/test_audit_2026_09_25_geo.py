@@ -316,3 +316,46 @@ def test_series_sum_definedness_and_integer_bounds():
     two = _ir("series_sum", {"term": "1/(k**2 + 1)", "var": "k", "lo": "-oo", "hi": "oo"},
               vars=[{"name": "k", "domain": "integer"}])
     assert _v(two, "pi/tanh(pi)") == "CORRECT"
+
+
+# ------------------------------------------------------------------------------------------------
+# linalg: claims are values (C8); scalar eigenvalue (H2); tuple vectors (H3)
+# ------------------------------------------------------------------------------------------------
+def _la(op, **params):
+    return _ir("linalg", dict(op=op, **params), answer_shape="expression")
+
+
+def test_matrix_claims_that_compute_are_not_values():
+    inv = _la("inverse", matrix="Matrix([[1,2],[3,4]])")
+    assert _v(inv, "Matrix([[1,2],[3,4]])**-1") == "UNKNOWN"
+    assert _v(inv, "Matrix([[-2, 1], [3/2, -1/2]])") == "CORRECT"
+    assert _v(inv, "Matrix([[4, -2], [-3, 1]])/(-2)") == "CORRECT"      # literal / scalar is a value
+    assert _v(inv, "-1/2*Matrix([[4, -2], [-3, 1]])") == "CORRECT"
+    me = _la("matrix_expr", expr="Matrix([[1,1],[0,1]])**5")
+    assert _v(me, "Matrix([[1,1],[0,1]])**5") == "UNKNOWN"                 # the question restated
+    assert _v(me, "Matrix([[1,5],[0,1]])") == "CORRECT"
+    sy = _la("solve_system", A="Matrix([[1,1],[1,-1]])", b="Matrix([3,1])")
+    assert _v(sy, "Matrix([[1,1],[1,-1]])**-1*Matrix([3,1])") == "UNKNOWN"
+    assert _v(sy, "(2, 1)") == "CORRECT"
+    ev = _la("eigenvector", matrix="Matrix([[2,1],[1,2]])", eigenvalue=3)
+    assert _v(ev, "Matrix([[2,1],[1,2]])*Matrix([1,1])") == "UNKNOWN"
+
+
+def test_single_eigenvalue_and_tuple_vectors():
+    assert _v(_la("eigenvalues", matrix="Matrix([[2,0],[0,2]])"), "2") == "CORRECT"
+    assert _v(_la("eigenvalues", matrix="Matrix([[3,1],[0,3]])"), "3") == "CORRECT"
+    assert _v(_la("eigenvalues", matrix="Matrix([[2,1],[1,2]])"), "3") == "INCORRECT"   # {1, 3}
+    assert _v(_la("eigenvalues", matrix="Matrix([[2,0],[0,2]])"), "(2, 2)") == "CORRECT"
+    me = _la("matrix_expr", expr="Matrix([[1,2],[3,4]])*Matrix([1,1])")
+    assert _v(me, "(3, 7)") == "CORRECT"
+    assert _v(me, "(3, 8)") == "INCORRECT"
+    assert _v(me, "Matrix([[3, 7]])") == "INCORRECT"         # an explicit ROW is a different matrix
+    assert _v(_la("matrix_expr", expr="Matrix([[1,2]])*Matrix([3,4])"), "11") == "CORRECT"
+
+
+def test_decimal_probability_claims_are_the_numbers_they_spell():
+    dice = _prob({"structure": "product", "sets": [[1, 2, 3, 4, 5, 6]] * 2}, "sum(t) == 7")     # 1/6
+    assert _v(dice, "1/6") == "CORRECT"
+    assert _v(dice, "0.1666666666666667") == "INCORRECT"    # 1666666666666667/10^16 != 1/6
+    coin = _prob({"structure": "sequence", "elements": ["T", "Y"], "k": 1}, "t[0] == 'T'")
+    assert _v(coin, "0.5") == "CORRECT"
