@@ -469,6 +469,19 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
 
     clean_flags = _sanitize_payload(solution, ctx) + scope_flags
 
+    # Every certificate reasons over the real numbers (symbols are real, z3 sorts are Real/Int, the
+    # domain starts at ℝ). A variable declared complex or rational was silently read as real:
+    # "x² = −1 over ℂ has no solution" and "x⁴ = 1 over ℂ gives x² + 1 = 2" were certified, and the
+    # right answers would have been refuted (audit of 25 Sep 2026). There is no sound verdict here.
+    unsupported = sorted(v.name for v in problem_ir.vars if v.domain in ("complex", "rational"))
+    if problem_ir.vars and str(problem_ir.domain_of_discourse or "").strip().lower() in (
+            "complex", "complexes", "c", "ℂ"):
+        unsupported = unsupported or ["domain_of_discourse"]
+    if unsupported:
+        layers.append(unknown("intake.domain", f"var_domain_unsupported: {unsupported} (the certificates "
+                              "reason over the reals)", flags=["var_domain_unsupported"]))
+        return layers, clean_flags
+
     # The problem's own expression is undefined as written at a point with nothing left to choose
     # (`f(-1)` for f(x) = log(x) − log(x) + x). SymPy simplified it to a value, and that value was
     # certified. There is no answer to check against.
