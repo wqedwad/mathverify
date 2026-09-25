@@ -8,7 +8,7 @@ Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.
 
 | Bölme | n | Pozitif precision | Negatif precision | Kapsama | fp | fn | UNKNOWN |
 |---|---|---|---|---|---|---|---|
-| train | 160 | 0.971 | 0.971 | 0.863 | 2 | 2 | 22 |
+| train | 160 | 0.971 | 0.972 | 0.875 | 2 | 2 | 20 |
 | val | 66 | 1.000 | 1.000 | 0.879 | 0 | 0 | 8 |
 | test | 54 | 1.000 | 1.000 | 0.870 | 0 | 0 | 7 |
 
@@ -16,8 +16,8 @@ Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.
 
 | Sinyal | destek | geçerli | geçersiz | güvenilirlik | log-odds ağırlığı | kullanıldı |
 |---|---|---|---|---|---|---|
-| `steps.refute:fail:support` | 46 | 0 | 46 | 0.000 | -3.850 | evet |
-| `flag:step_refuted` | 46 | 0 | 46 | 0.000 | -3.850 | evet |
+| `flag:step_refuted` | 48 | 0 | 48 | 0.000 | -3.892 | evet |
+| `steps.refute:fail:support` | 48 | 0 | 48 | 0.000 | -3.892 | evet |
 | `certify.algebra:fail:primary` | 17 | 0 | 17 | 0.000 | -2.890 | evet |
 | `certify.calculus:fail:primary` | 7 | 0 | 7 | 0.000 | -2.079 | evet |
 | `certify.wordproblem:fail:primary` | 6 | 0 | 6 | 0.000 | -1.946 | evet |

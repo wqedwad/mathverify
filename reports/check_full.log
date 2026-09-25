@@ -1,22 +1,22 @@
-check.py --full · 2026-09-25 09:16:42 · claude/compassionate-shannon-759r85 @ b4e91f0 · commit edilmemiş değişiklik: 2 dosya
+check.py --full · 2026-09-25 16:30:27 · claude/compassionate-shannon-759r85 @ c1d4c3e · commit edilmemiş değişiklik: 11 dosya
 
 == testler ==
-  pytest: 131 s (exit 0)
+  pytest: 276 s (exit 0)
 == pyflakes ==
-  pyflakes: 1 s (exit 1)
+  pyflakes: 2 s (exit 1)
 == deterministik değerlendirme ==
-  run_eval: 72 s (exit 0)
+  run_eval: 87 s (exit 0)
 == Lean taraması ==
-  run_lean: 117 s (exit 0)
+  run_lean: 131 s (exit 0)
 == adversaryal ==
-  adversarial: 2478 s (exit 0)
+  adversarial: 2936 s (exit 0)
 == metamorfik sağlamlık ==
-  soundness_fuzz: 98 s (exit 0)
+  soundness_fuzz: 119 s (exit 0)
 == kalibrasyon ==
-  calibrate: 39 s (exit 0)
+  calibrate: 44 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  870 passed, 5 skipped in 129.70s (0:02:09)   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  1314 passed, 5 skipped in 274.91s (0:04:34)   (hedef: hepsi geçer)
   [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
@@ -31,7 +31,7 @@ check.py --full · 2026-09-25 09:16:42 · claude/compassionate-shannon-759r85 @ 
   [OK  ] Lean erişilebilir                               evet (121 sertifika)   (hedef: evet, ≥1 sertifika)
   [OK  ] Lean FP                                         0   (hedef: 0)
   [OK  ] Lean sertifika                                  121/280   (hedef: raporlanır)
-  [OK  ] Lean junk-value sertifikası                     0/17   (hedef: 0)
+  [OK  ] Lean junk-value sertifikası                     0/33   (hedef: 0)
   [OK  ] saldırı başarısı                                0.000%   (hedef: < %2)
   [OK  ] saldırı yüzeyleri                               cevap,şık,adım   (hedef: cevap+şık+adım)
   [OK  ] SymPy üretimli yanlış cevapta yanlış onay       0/448   (hedef: 0)

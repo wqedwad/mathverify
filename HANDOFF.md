@@ -8,6 +8,10 @@
 > ortam değişkenleri kurulum betiğine ulaşmıyor; belirteç artık önyükleyicinin metninde, araç
 > dosyaları gerekirse `raw.githubusercontent.com`'dan. Kararı DECISIONS §54, yeni sıra §7 başında.
 >
+> **25 Eylül, aynı oturumun devamı:** sistematik denetim (§0.13). Cevap metni kod olarak çalışıyordu;
+> yanlış onay sınıfları ve formal katmandaki 53 yanlış sertifika kapatıldı. "Lean FP 0" yalnız
+> değerlendirme setinde ölçülmüştü (Düzeltme §5.1). Kararlar DECISIONS §55, yeni sıra §7 başında.
+>
 > **24 Eylül akşamı eklendi:** gerçek bulut ölçümü (§0.8), `master`ın erken birleşmesi olayı (§0.9),
 > WSL diskinin C:'yi doldurması olayı (§0.10), ölçümden sonraki kod değişiklikleri (§0.5 eki) ve
 > yeni sıradaki adımlar (§7 başı). Kararları DECISIONS §44–49.
@@ -407,6 +411,56 @@ maddeyi yapmıştı. Oturumun isteği "kurulum betiğini ölç". Karar DECISIONS
 - **Açık [DOĞRULANMADI]:** kurulum betiği aşamasında `raw.githubusercontent.com`'a (ya da belirteçle
   git'e) erişim. Bu değişiklik `master`a birleşip kullanıcı önyükleyiciyi belirteçle güncelleyince ilk
   yeni sohbette ölçülür (`docs/BULUT.md` §12).
+
+### 0.13 25 Eylül sistematik denetimi: kod çalıştırma, yanlış onay sınıfları, formal katman
+
+Aynı oturumun devamı (dal `claude/compassionate-shannon-759r85`). Kullanıcı sordu: "localdeki bütün
+sorunlar çözülmüş mü, tek kalan API anahtarı ekleyip test etmek mi?" **Cevap: hayır.** Yeni bir
+denetim, yerelde krediye bağlı olmayan ciddi açıklar buldu. Hepsi aynı oturumda düzeltildi ve
+ölçüldü. Karar ve ayrıntı DECISIONS §55.
+
+- **Yöntem.** Beş bağımsız denetçi (A cebir/sayma, B kalkülüs/trig, C geometri/kombinatorik/seri/
+  lineer cebir, D ayrıştırıcı/girdi/birleştirme, E Lean), her bulgu kendi doğruluk denetimiyle
+  (kesin SymPy, kaba kuvvet, el ispatı). Düzeltmeler dosya sahipliğine göre beş dalda yapıldı
+  (`claude/denetim-wt|geo|alg|lean|calc`; çakışma yalnız `certify/domain.py`'de ve çekirdek test
+  dosyasında, ikisi de ekleme) ve `claude/denetim-int`'te birleştirilip oturum dalına ileri sarıldı.
+  Lean'i yalnız bir ajan kullandı (tek REPL).
+- **En ciddi bulgu: kod çalıştırma.** Cevap metni `sympify` ile okunduğunda Python kodu doğrulayıcının
+  kendi sürecinde çalışıyordu (`__import__('os')...`). Birleştirmeden sonra ikinci kapı bulundu:
+  `sympify(..., strict=True)` sözlük/demet içindeki metni yine değerlendirir. Artık: AST beyaz
+  listesi (`guarded_parse_expr`), metin dışı değer yalnız sayı/SymPy nesnesi (`sympify_nontext`),
+  girdi biçimi denetimi (`MalformedSolution`, `MalformedIR`).
+- **Ölçüm (eski kod `da963b2` → yeni kod, aynı betikler, Lean'siz):**
+
+  | Ölçüm | Eski kod | Yeni kod |
+  |---|---|---|
+  | Enjeksiyon taraması (doğru 141 cevap × 2 sarmal): kod çalıştırıp CORRECT | 113/282 | 0/282 |
+  | Alan taraması (23 görev türü, her alan × 7 tür, 4753 durum): kod çalıştırma / sızan istisna | ilk öğelerde 18 kod çalıştırma, sonra asıldı | 0 / 0 |
+  | Denetçi A tekrar betikleri (17 dosya): hatalı karar | 78 | 0 |
+  | Denetçi A sonda derlemi (25 betik): yanlış onay / yanlış ret | 85 / 38 | 2 / 3 (4'ü etiket hatası, 1'i bilinen sınır) |
+  | Denetçi B tekrar betikleri (23 dosya): hatalı karar | 94 | 0 |
+  | Denetçi E vakaları, deterministik katman: yanlış karar | 17 | 0 |
+  | Lean: yanlış iddiaya sertifika (denetçinin 98'lik kümesi; el ispatı 14) | 53/98 (12/14) | 0/99 (0/14) |
+  | `run_lean`: sertifika / FP / junk | 121 / 0 / 0 of 17 | 121 / 0 / 0 of 33 |
+
+- **Değerlendirme seti** (280 kayıt): hiçbir karar değişmedi; cevap düzeyi 154 / 0 / 84 / 0 / 0
+  (TP / FP / TN / FN / UNKNOWN), çözüm düzeyinde bilinen tek FP `tyt-prob-018`.
+- **Düzeltme (25 Eylül 2026): "Lean FP 0" yalnız değerlendirme setindeki sorularda ölçülmüştü.**
+  Denetçinin set dışında yazdığı 98 yanlış iddianın 53'ü Lean'de temiz sertifika alıyordu (model
+  yazımı 14 ispatın 12'si de). Önceki oturum raporlarında bu sayı genel bir güvence gibi sunuldu;
+  yanlıştı. Düzeltmeden sonra 0/99 ve 0/14; yeni sınıflar `run_lean`'in junk kapısında kalıcı (17 → 33).
+- **Hatalarım (bu oturum).** (1) İlk geniş "verilen eşitsizlik tanım kümesini daraltır" kuralı
+  birleştirmede iki doğru cevabı bozdu (sayma TypeError, küp kökü); ölçümle bulundu ve daraltıldı.
+  (2) Arka plan komutunda `a && (b) & (c)` yazdım: `cd` ve değişken yalnız ilk alt kabuğa uygulandı,
+  bir koşu hiç başlamadı ve ana checkout'a boş bir dosya düştü (taşındı). (3) `pkill -f <desen>`
+  komut satırında deseni taşıyan kendi kabuğumu iki kez öldürdü (çıkış 144; §11). (4) "Önce" tür
+  taraması ileri sardığım dalın kaynağını okuyordu; `da963b2`'nin ayrı bir kopyasında yeniden koşuldu.
+- **Açık kalanlar** (hiçbiri doğru cevabı reddetmez; UNKNOWN kapsama kaybı ya da bilinen sınır):
+  kanıtsız eşdeğer doğru biçimleri, sembolik kanıtı olmayan kapalı biçimler, periyodik tanım kümeli
+  ilkeller, sonsuz sınırlı integraller, gelenek farkı olan tek taraflı durumlar, `asec`/`acsc`
+  ayrıştırıcıda yok. Yanlış çarpanlara ayırma adımı (`x² − 5x + 6 = 2(x − 2)(x − 3)`, öncül
+  x² − 5x + 6 = 0) öncüllerin çözümlerinde doğru olduğundan reddedilmez (DECISIONS §55).
+- **Doğrulama:** `check.py --full` **24/24** (`c1d4c3e`, 16:30–17:30 UTC, aşamaların toplamı 3595 s ≈ 60 dk: pytest 276, `run_eval` 87, `run_lean` 131, adversaryal 2936, sağlamlık 119, kalibrasyon 44 s); birim testleri **1314 passed / 5 skipped** (denetim öncesi 871 / 5); Lean 121 sertifika (24 Eylül kümesiyle aynı), FP 0, junk **0/33**; 21 139 saldırıda %0; 0/448, 0/214, 0/46, 0/184, 0/6. İlk birleşik koşu (`0eb99b6`) de 24/24 geçmişti, ama adversaryal raporda anlamı koruyan saldırılarda UNKNOWN'a düşen 2896 → 2964 çıktı: `x in {…}` adım biçimi görünmez karakter ya da `\boxed{}` ile 7 doğru çözümde UNKNOWN oluyordu. Düzeltildi (`c1d4c3e`); son koşuda 2894, karşıt karara dönen yine 0. Değerlendirme setinde karar değişmedi. Denetimin 29 düzeltme commit'i (beş dal ve birleşik dal) ve 10 birleştirme commit'i bu dalda (`da963b2..`); geçici dallar ve worktree'ler silindi (içerikleri bu dalda). Push: yalnız bu oturumun dalı.
 
 
 ---
@@ -921,6 +975,7 @@ Bunlar **tekrar denenmemeli.** Her birinin neden başarısız olduğu yanında y
 | 23 Eylül, aynı oturumun devamı: tanımlılık açığı (11 yanlış-onay vakası), üç Lean şablonu, pyflakes kapısı, temizlik | tamam, `master`a birleştirildi (§5.3) |
 | 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean + çevrimdışı kurulum, kapı sertleştirmesi (24 kapı) | tamam, `bulut-2026-09-24` dalında (§0) |
 | 24 Eylül akşamı: gerçek bulut ölçümü, Lean kapılarının "cevap verdi" koşulu, denetim sondası (ilke 7), çevrimdışı ve aşamalı kurulum, Python yedeği, `ANTHROPIC_BASE_URL` | ölçüldü ve düzeltildi (§0.5 eki, §0.8); `bulut-2026-09-24` dalında. **Düzeltme:** dalın `4d01ba2` hâli GitHub'daki `master`da (`572ef57`, §0.9) |
+| 25 Eylül sistematik denetimi: kod çalıştırma, yanlış onay sınıfları (cebir, kalkülüs, geometri, girdi), formal katman | kapatıldı ve ölçüldü (§0.13, DECISIONS §55); `claude/compassionate-shannon-759r85` dalında |
 
 Son `check.py --full` sonucu (23 Eylül 2026 15:56, `yerel-kalite-2026-09-23` @ `e2aa08d` + §5.3'teki
 commit edilmemiş değişiklikler; günlük `reports/check_full.log`; toplam ~67 dk, adversaryal 3490 s):
@@ -967,6 +1022,15 @@ günlük `reports/check_full.log`.
 durumundan. D3 gereği süre bir kapı değil. Hiçbir sonuç dosyasında `MemoryError` ya da worker
 ölümü yok. Önceki koşuya göre değişen tek sayı: anlamı koruyan saldırılarda UNKNOWN'a düşen 2898 →
 2896 (`homoglyph`, karşıt karara dönen yine 0) ve kalibrasyon doğrulama kapsaması 0.864 → 0.879.
+
+**Düzeltme (25 Eylül 2026): "Lean FP 0" genel bir güvence değildi.** Tablodaki ve bu belgenin
+başka yerlerindeki "Lean FP 0" yalnız değerlendirme setinin cevabı yanlış öğelerinde ölçülmüştü.
+25 Eylül denetiminde set dışında yazılan 98 yanlış iddianın 53'ü Lean'de temiz sertifika aldı
+(kısıtların düşürülmesi, sadeleştiren ayrıştırma, ℕ'de okunan kapalı hedefler, Mod, zayıf boşluk
+sondası; §0.13, DECISIONS §55). Düzeltildi (0/99) ve bu aileler artık junk kapısında kalıcı sonda
+(17 → 33). Aynı denetim, deterministik katmanda da set dışı yanlış onay sınıfları ve cevap
+metninin kod olarak çalıştığı bir açık buldu. Değerlendirme setindeki precision 1.000'ın o sete
+özgü olduğu, genelleme olmadığı bir kez daha görüldü. Son `check.py --full`: §0.13.
 
 ### 5.2 Yarım kalan iş
 
@@ -1271,6 +1335,19 @@ bir ortam değişkeni tanımlıysa `override=False` yüzünden `.env`'deki deği
 ---
 
 ## 7. Sıradaki adımlar
+
+**Güncel sıra (25 Eylül 2026, denetimden sonra; §0.13).** Bunlar önce gelir:
+
+1. Bu dal (`claude/compassionate-shannon-759r85`: kurulum betiği işi, §0.12, ve 25 Eylül denetimi,
+   §0.13) kullanıcı onayı ve yedekle (etiket + bundle, §5.4) `master`a birleştirilir.
+2. Aşağıdaki §0.12 sırasının 2.–4. adımları (Setup script metni, belirteç, sonraki sohbette ölçüm).
+3. Krediye bağlı ölçümler (F3/F4) kod dondurulup anahtarlar yenilendikten sonra (kullanıcı kararı,
+   23 Eylül). Bu denetimden sonra F3 ölçümü baştan koşulmalı: iddia okuma ve birleştirme kuralları
+   değişti; eski F3 sayıları eski koda aittir.
+4. Gerçek veri: hangi modelin çözümleri, hangi sorular, etiketleri kim koyacak (kullanıcı kararı).
+   Denetçilerin sonda derlemlerinde 4 etiket yanlış çıktı; etiketler kaba kuvvetle ya da ikinci bir
+   kişiyle denetlenmeli.
+5. Açık kapsama işleri (hiçbiri doğru cevabı reddetmiyor): §0.13 "Açık kalanlar".
 
 **Güncel sıra (25 Eylül 2026; §0.12).** Aşağıdaki listeler geçerli kalır; bunlar önce gelir. 24 Eylül
 gecesi sırasının 2. adımı (belirteç ortam değişkeninde) yapıldı ama işe yaramadı:

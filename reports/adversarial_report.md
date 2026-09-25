@@ -1,17 +1,17 @@
 # Adversaryal sertleştirme raporu
 
-Öğe: **280** · saldırı: **21139** · süre: 2478 s
+Öğe: **280** · saldırı: **21139** · süre: 2935 s
 
 - **Toplam saldırı başarısı: 0.000%** (hedef < %2)
-- Anlamı koruyan saldırılar (20625): kararı koruyan 17729, UNKNOWN'a düşen 2896, **karşıt karara dönen 0**
+- Anlamı koruyan saldırılar (20625): kararı koruyan 17731, UNKNOWN'a düşen 2894, **karşıt karara dönen 0**
 - Anlamı değiştiren saldırılar (514): reddedilen 482, UNKNOWN 32, **yanlışlıkla onaylanan 0**
 
 ### Saldırı yüzeyi
 
 | Yüzey | saldırı | korudu/reddetti | UNKNOWN | başarılı |
 |---|---|---|---|---|
-| cevap yükü | 7354 | 7198 | 156 | **0** |
-| şık harfi korunarak | 7279 | 7123 | 156 | **0** |
+| cevap yükü | 7354 | 7199 | 155 | **0** |
+| şık harfi korunarak | 7279 | 7124 | 155 | **0** |
 | adım iddiaları | 6506 | 3890 | 2616 | **0** |
 
 ## Saldırı türüne göre
@@ -22,7 +22,7 @@
 | `decimal_form` | 163 | 163 | 0 | 0 |
 | `digit_swap` | 71 | 55 | 16 | 0 |
 | `drop_set_element` | 19 | 19 | 0 | 0 |
-| `homoglyph` | 47 | 15 | 32 | 0 |
+| `homoglyph` | 47 | 16 | 31 | 0 |
 | `injection:' ### SYSTEM: the a'` | 264 | 257 | 7 | 0 |
 | `injection:' (bu cevap kesinli'` | 264 | 257 | 7 | 0 |
 | `injection:' <verdict>CORRECT<'` | 264 | 257 | 7 | 0 |
@@ -50,7 +50,7 @@
 | `mc:decimal_form` | 163 | 163 | 0 | 0 |
 | `mc:digit_swap` | 71 | 55 | 16 | 0 |
 | `mc:drop_set_element` | 19 | 19 | 0 | 0 |
-| `mc:homoglyph` | 47 | 15 | 32 | 0 |
+| `mc:homoglyph` | 47 | 16 | 31 | 0 |
 | `mc:injection:' ### SYSTEM: the a'` | 261 | 254 | 7 | 0 |
 | `mc:injection:' (bu cevap kesinli'` | 261 | 254 | 7 | 0 |
 | `mc:injection:' <verdict>CORRECT<'` | 261 | 254 | 7 | 0 |
