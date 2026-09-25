@@ -480,3 +480,19 @@ def test_answer_key_leakage_still_stops_the_pipeline():
     ir = dict(EVAL, givens=[["x"]], answer_key="7/2")
     with pytest.raises(LeakageError):
         verify(ir, {"claimed_answer": {"kind": "value", "payload": "7/2"}, "steps": []})
+
+
+def test_a_degree_option_is_read_in_degrees_for_an_angle_target():
+    """Options "70°" were read as 70·π/180 by the option check while the geometry certificate
+    measures angles in degrees: the right payload "70" with option D was INCORRECT."""
+    ir = {"task": {"kind": "synthetic_geometry", "params": {
+              "points": ["A", "B", "C"], "constraints": ["dist(A,B)**2 = dist(A,C)**2", "angle(B,A,C) = 40"],
+              "target": "angle(A,B,C)"}},
+          "vars": [], "givens": [], "answer_shape": "scalar",
+          "options": {"A": "40°", "B": "50°", "C": "60°", "D": "70°", "E": "80°"}}
+    for payload in ("70", "70°", None):
+        ca = {"kind": "value", "payload": payload, "option": "D"}
+        assert verify(ir, {"claimed_answer": ca, "steps": []}).verdict == "CORRECT", payload
+    for payload, opt in (("60", "C"), ("70", "C"), ("60°", "D")):
+        ca = {"kind": "value", "payload": payload, "option": opt}
+        assert verify(ir, {"claimed_answer": ca, "steps": []}).verdict == "INCORRECT", (payload, opt)

@@ -41,6 +41,27 @@ _NO_SOLUTION = re.compile(r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s
                           re.IGNORECASE)
 
 
+def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
+    """The chosen option's value and the claim, in the same units. For an angle target of
+    synthetic_geometry the certificate measures in degrees, so a degree mark is the unit of the
+    number (`70°` is 70), not a conversion to radians: payload "70" with option "70°" was refuted
+    while the certificate proved 70 (audit of 25 Sep 2026)."""
+    ca = solution.claimed_answer
+    target = str((ir.task.params or {}).get("target", ""))
+    if ir.task.kind == "synthetic_geometry" and "angle(" in target:
+        from .certify.geometry_numeric import has_degree_mark, strip_degree_marks
+        from .normalize.parse import parse_expr_str
+        opt = str(ir.options[ca.option])
+        ov = parse_expr_str(strip_degree_marks(opt), ctx.ns) if has_degree_mark(opt) else ctx.option_value(ca.option)
+        pay = ca.payload
+        if isinstance(pay, str) and has_degree_mark(pay):
+            cv = parse_expr_str(strip_degree_marks(pay), ctx.claim_ns(solution))
+        else:
+            cv = ctx.claimed(solution)
+        return ov, cv
+    return ctx.option_value(ca.option), ctx.claimed(solution)
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
@@ -82,8 +103,7 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
         if ca.payload in (None, ""):
             return unknown("mc.consistency", "no_payload_to_compare", t.ms)
         try:
-            ov = ctx.option_value(ca.option)
-            cv = ctx.claimed(solution)
+            ov, cv = _option_and_claim(ir, solution, ctx)
         except Exception as e:  # noqa: BLE001
             return unknown("mc.consistency", f"option_parse_error: {e}", t.ms)
         shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
