@@ -96,3 +96,66 @@ def test_vertical_line_with_infinite_slope_and_bad_radius():
     # a value where an equation is asked for: no crash, no verdict
     c = _eq({"object": "circle_center_radius", "center": [0, 0], "radius": 1})
     assert _v(c, "1") == "UNKNOWN"
+
+
+# ------------------------------------------------------------------------------------------------
+# synthetic_geometry: degrees, exact comparison, no scale gauge (C3, C4, C5)
+# ------------------------------------------------------------------------------------------------
+def _geo(points, constraints, target, **kw):
+    return _ir("synthetic_geometry", {"points": points, "constraints": constraints, "target": target}, **kw)
+
+
+def test_degree_mark_means_degrees_in_constraints_and_claims():
+    # tyt-geo-002 as printed: |AB| = |AC|, angle A = 40° -> angle B = (180 - 40)/2 = 70
+    ir = _geo(["A", "B", "C"], ["dist(A,B)**2 = dist(A,C)**2", "angle(B,A,C) = 40°"], "angle(A,B,C)")
+    assert _v(ir, "70") == "CORRECT"
+    assert _v(ir, "70°") == "CORRECT"
+    assert _v(ir, "90 - pi/9") == "INCORRECT"          # the value of a 2*pi/9-DEGREE apex
+    rt = _geo(["A", "B", "C"], ["dist(A,B) = 6", "dist(B,C) = 8", "angle(A,B,C) = 90°"], "dist(A,C)")
+    assert _v(rt, "10") == "CORRECT"
+    assert _v(rt, "sqrt(100 - 96*cos(pi**2/360))") == "INCORRECT"
+    assert _v(rt, "10°") == "UNKNOWN"                   # a degree mark on a length
+    opts = {"A": "40°", "B": "50°", "C": "60°", "D": "70°", "E": "80°"}
+    plain = _geo(["A", "B", "C"], ["dist(A,B)**2 = dist(A,C)**2", "angle(B,A,C) = 40"], "angle(A,B,C)",
+                 options=opts)
+    assert _v(plain, None, option="D") == "CORRECT"
+    right = _geo(["A", "B", "C"], ["dist(A,B) = 1", "dist(A,C) = 2", "angle(B,A,C) = 60"], "angle(A,B,C)")
+    assert _v(right, "90°") == "CORRECT"
+    assert _v(right, "pi/2") == "UNKNOWN"               # right in radians; the unit is the question
+
+
+def test_no_tolerance_shortcut_in_geometry():
+    rt = _geo(["A", "B", "C"], ["dist(A,B) = 6", "dist(B,C) = 8", "angle(A,B,C) = 90"], "dist(A,C)")
+    assert _v(rt, "10") == "CORRECT"
+    assert _v(rt, "10.0") == "CORRECT"
+    assert _v(rt, "10 + 10**(-19)") == "INCORRECT"
+    assert _v(rt, "10000000000000000001/1000000000000000000") == "INCORRECT"
+    assert _v(rt, "10 + 10**(-25)*I") == "INCORRECT"
+    N = 262537412640768744                              # e^(pi*sqrt(163)) = N - 7.5e-13
+    seg = _geo(["A", "B"], [f"dist(A,B) = {N}"], "dist(A,B)")
+    assert _v(seg, "exp(pi*sqrt(163))") == "INCORRECT"
+    assert _v(seg, str(N)) == "CORRECT"
+
+
+def test_scale_is_never_fixed_by_the_gauge():
+    # CA = CB = 1 alone: apex 60 for AB = 1 but 97.18 for AB = 1.5 -> not determined
+    iso = _geo(["A", "B", "C"], ["dist(A,C) = 1", "dist(B,C) = 1"], "angle(A,C,B)")
+    assert _v(iso, "60") == "UNKNOWN"
+    iso2 = _geo(["A", "B", "C"], ["dist(A,C) = sqrt(2)", "dist(B,C) = sqrt(2)"], "angle(A,C,B)")
+    assert _v(iso2, "360*asin(sqrt(2)/4)/pi") == "UNKNOWN"
+    area = _geo(["A", "B", "C"], ["area(A,B,C) = 12", "dist(A,C)**2 = dist(B,C)**2"], "angle(A,C,B)")
+    assert _v(area, "360*atan(1/48)/pi") == "UNKNOWN"
+    equi = _geo(["A", "B", "C"], ["dist(A,C)**2 = dist(A,B)**2", "dist(B,C)**2 = dist(A,B)**2"],
+                "dist(A,B)*dist(A,C)/dist(B,C)")                       # = the side, arbitrary
+    assert _v(equi, "1") == "UNKNOWN"
+    assert _v(_geo(["A", "B", "C"], ["dist(A,C)**2 = dist(A,B)**2", "dist(B,C)**2 = dist(A,B)**2"],
+                   "angle(A,B,C)"), "60") == "CORRECT"                 # scale-free, determined
+    # determined problems whose constants the old heuristic ignored were UNKNOWN (overdetermined)
+    e2 = _geo(["A", "B", "C"], ["dist(A,B) = 2", "dist(A,C) = 2", "dist(B,C) = 2"], "area(A,B,C)")
+    assert _v(e2, "sqrt(3)") == "CORRECT"
+    r12 = _geo(["A", "B", "C"], ["dist(A,B) = 1", "dist(A,C) = 2", "perpendicular(A,B,A,C)"], "dist(B,C)")
+    assert _v(r12, "sqrt(5)") == "CORRECT"
+    ri = _geo(["A", "B", "C"], ["perpendicular(C,A,C,B)", "dist(C,A)**2 = dist(C,B)**2", "area(A,B,C) = 8"],
+              "dist(A,B)")                                             # legs 4 -> 4*sqrt(2)
+    assert _v(ri, "4*sqrt(2)") == "CORRECT"
+    assert _v(ri, "8") == "INCORRECT"
