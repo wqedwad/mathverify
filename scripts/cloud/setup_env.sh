@@ -45,10 +45,14 @@
 # T=''. It is not exported: only setup_env.sh gets it, and passes it to the artifact fetch alone.
 # Left empty, a value the platform might pass one day is used; without one the fetch is not
 # retried with a token and the SessionStart hook installs instead. The first line keeps a traced
-# shell (-x/-v) from printing the token:
+# shell (-x/-v) from printing the token. timeout(1) caps the run at 250 s (+10 s to KILL): past ~5
+# min the platform fails new sessions (web-quickstart, "New sessions hang or time out during
+# setup"); a stopped run is FAILED reason=terminated and the SessionStart hook installs the rest.
+# Measured full runs: 192 s and 234 s.
 #
 #   #!/bin/bash
 #   { set +vx; } 2>/dev/null
+#   unset T
 #   T=''
 #   S=
 #   for d in "${CLAUDE_PROJECT_DIR:-}" /home/*/* /root/* /workspace /workspace/* /tmp/*; do
@@ -58,11 +62,11 @@
 #   done
 #   if [ -z "$S" ]; then
 #     rm -rf /tmp/mv-boot
-#     GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
+#     GIT_TERMINAL_PROMPT=0 timeout 30 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
 #       https://github.com/wqedwad/asd /tmp/mv-boot && S=/tmp/mv-boot/scripts/cloud/setup_env.sh
 #   fi
 #   if [ -n "$S" ]; then
-#     MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" bash "$S" || true
+#     MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" timeout -k 10 250 bash "$S" || true
 #   else
 #     echo "mathverify: setup_env.sh not found"
 #   fi
@@ -86,6 +90,10 @@ done
 
 # The artifact token is for fetch_artifacts.sh only: it stays in a shell variable, out of the
 # environment of everything else this script runs (uv, pip and the packages' code, Lean, Lake).
+# (unset first: a FETCH_TOKEN the caller exported would keep its export attribute.) The value
+# still sits in this process's own initial environment (/proc/<pid>/environ), which a process
+# running as root can read: this guards against accidental exposure, not against such a reader.
+unset FETCH_TOKEN
 FETCH_TOKEN="${MATHVERIFY_GITHUB_TOKEN:-}"
 unset MATHVERIFY_GITHUB_TOKEN
 
@@ -127,6 +135,23 @@ fi
 echo "$$" >"$LOGDIR/setup_env.pid" 2>/dev/null
 chmod a+rw "$LOGDIR/setup_env.pid" 2>/dev/null
 trap 'rm -f "$LOGDIR/setup_env.pid"; exit 0' EXIT
+# The claude.ai platform fails new sessions when the setup script passes ~5 min (web-quickstart,
+# "New sessions hang or time out during setup"), so the bootstrap stops this run with SIGTERM at
+# its time cap (timeout(1) signals the whole process group: every stage dies with it). Record why;
+# the SessionStart hook sees FAILED, finds the lock free and installs what is missing. setup_lean.sh
+# cleans up what an interrupted run leaves behind.
+on_term() {
+  trap - TERM INT
+  local stages=""
+  [ -f "${STAGES_FILE:-}" ] \
+    && stages="$(awk '{printf "%s(%s) ", $1, ($3 ~ /^[0-9]+$/ ? $3 "s" : $3)}' "$STAGES_FILE")"
+  loud "stopped by a signal after $(( $(date +%s) - T0 ))s (the setup script's time cap, or a shutdown); the SessionStart hook installs what is missing"
+  echo "FAILED mode=$MODE stages=[${stages% }] reason=terminated total=$(( $(date +%s) - T0 ))s" >"$STATUS_FILE"
+  chmod a+rw "$STATUS_FILE" 2>/dev/null
+  rm -f "${STAGES_FILE:-}"
+  exit 0
+}
+trap on_term TERM INT
 
 log "==== setup_env.sh mode=$MODE user=$(id -un 2>/dev/null || id -u) HOME=$HOME OPT=$OPT"
 log "host: $(uname -srm), $(nproc 2>/dev/null) CPU(s), $(awk '/MemTotal/ {printf "%.1f GB", $2/1048576}' /proc/meminfo 2>/dev/null) RAM, $(df -h "$OPT" 2>/dev/null | awk 'NR==2 {print $4}') free on $OPT"

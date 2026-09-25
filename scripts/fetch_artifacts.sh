@@ -14,8 +14,9 @@
 #     1. shallow into a fresh temporary repository that carries this checkout's repo-local
 #        http.*, credential.* and url.* settings; if that fails and MATHVERIFY_GITHUB_TOKEN is set,
 #        the same fetch again with that token (below); if that fails too,
-#     2. with the same token, file by file from ${MATHVERIFY_GITHUB_RAW_URL-https://raw.githubusercontent.com/}
-#        <owner>/<repo>/$REF/: SHA256SUMS.full, SHA256SUMS.parts and every part it lists, each
+#     2. with the same token, file by file from $MATHVERIFY_GITHUB_RAW_URL<owner>/<repo>/$REF/
+#        (default https://raw.githubusercontent.com/, only while the token prefix is the default
+#        https://github.com/): SHA256SUMS.full, SHA256SUMS.parts and every part it lists, each
 #        part checked against it (the raw host sits behind the session's security proxy, not its
 #        GitHub proxy; measured 25 Sep 2026 in a session: without the header 404, with a bogus
 #        token 404, with the real token 200, i.e. the header reaches GitHub unchanged, while the
@@ -34,7 +35,8 @@
 #   repository owner) in an extra header passed through GIT_CONFIG_* in the environment of that
 #   one git command: never on a command line, in a log or on disk. Step 2 sends it only for a
 #   remote under that prefix, as "Authorization: token ..." read by curl from a config on stdin
-#   (never an argv), with no redirect followed, so it never goes to a third host.
+#   (never an argv; -q: no ~/.curlrc), with no redirect followed, so it never goes to a third
+#   host; owner, repo and ref must be plain path segments.
 #   The claude.ai environment's variables do NOT reach the setup script (measured 25 Sep 2026:
 #   the session had the variable, the setup-script run logged it unset), so it is pasted into the
 #   setup script's own text, which hands it to scripts/cloud/setup_env.sh (docs/BULUT.md).
@@ -56,6 +58,8 @@ VIA="${MATHVERIFY_ARTIFACT_VIA:-auto}"
 case "$VIA" in auto|raw) ;; *) die "MATHVERIFY_ARTIFACT_VIA must be auto or raw, not $VIA" ;; esac
 # The token stays in this shell (whitespace a paste may leave around it would only turn it into a
 # 401): git, curl and every other child of this script get no copy of it in their environment.
+# (unset first: a TOKEN the caller exported would keep its export attribute and hand the value on)
+unset TOKEN
 TOKEN="${MATHVERIFY_GITHUB_TOKEN:-}"
 TOKEN="${TOKEN//[[:space:]]/}"
 unset MATHVERIFY_GITHUB_TOKEN
@@ -143,14 +147,32 @@ with_token() (
   "$@"
 )
 
-RAW_URL="${MATHVERIFY_GITHUB_RAW_URL-https://raw.githubusercontent.com/}"
+# The raw host belongs to github.com: with another token prefix it must be given explicitly.
+if [ -n "${MATHVERIFY_GITHUB_RAW_URL+x}" ]; then
+  RAW_URL="$MATHVERIFY_GITHUB_RAW_URL"
+elif [ "$TOKEN_URL" = https://github.com/ ]; then
+  RAW_URL=https://raw.githubusercontent.com/
+else
+  RAW_URL=""
+fi
 RAWDIR=""
 
-# <owner>/<repo> of $URL under $TOKEN_URL (a trailing .git or / is dropped); 1 when it is not one.
+# <owner>/<repo> of $URL under $TOKEN_URL (a trailing / or .git is dropped); 1 when it is not
+# exactly two plain path segments (no "." or ".." segment: they would move the raw URL elsewhere).
 repo_path() {
-  local p="${URL#"$TOKEN_URL"}"
+  local p="${URL#"$TOKEN_URL"}" owner repo
   p="${p%/}"; p="${p%.git}"
-  case "$p" in ''|/*|*/|*/*/*|*[!A-Za-z0-9._/-]*) return 1 ;; */*) printf '%s\n' "$p" ;; *) return 1 ;; esac
+  case "$p" in */*/*|*[!A-Za-z0-9._/-]*) return 1 ;; */*) ;; *) return 1 ;; esac
+  owner="${p%%/*}"; repo="${p#*/}"
+  case "$owner" in ''|.|..) return 1 ;; esac
+  case "$repo" in ''|.|..) return 1 ;; esac
+  printf '%s\n' "$p"
+}
+# The ref goes into the raw URL too: refs/<plain segments> only.
+ref_is_plain() {
+  case "$REF" in refs/*) ;; *) return 1 ;; esac
+  case "/$REF/" in *//*|*/./*|*/../*) return 1 ;; esac
+  case "$REF" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
 }
 
 # 0 when the raw download may be tried. Silent when there is no token or the remote is not under
@@ -158,9 +180,10 @@ repo_path() {
 raw_applies() {
   [ -n "$TOKEN" ] || return 1
   case "$URL" in "$TOKEN_URL"*) ;; *) return 1 ;; esac
-  [ -n "$RAW_URL" ] || { LOG "MATHVERIFY_GITHUB_RAW_URL is empty: no raw download"; return 1; }
+  [ -n "$RAW_URL" ] || { LOG "no raw download URL for $TOKEN_URL (MATHVERIFY_GITHUB_RAW_URL): no raw download"; return 1; }
   command -v curl >/dev/null 2>&1 || { LOG "curl not found: no raw download"; return 1; }
   repo_path >/dev/null || { LOG "the remote is not <owner>/<repo> under $TOKEN_URL: no raw download"; return 1; }
+  ref_is_plain || { LOG "$REF is not refs/<plain segments>: no raw download"; return 1; }
   # the value goes into a curl config line: only the characters GitHub tokens are made of
   case "$TOKEN" in
     *[!A-Za-z0-9_]*) LOG "MATHVERIFY_GITHUB_TOKEN has characters no GitHub token has: no raw download"; return 1 ;;
@@ -168,15 +191,17 @@ raw_applies() {
 }
 
 # raw_get PATH OUT: $RAW_URL<owner>/<repo>/$REF/PATH into OUT, the token in a header that curl
-# reads from a config on stdin (printf is a builtin: the value is in no argv). Redirects are not
-# followed, so the header never goes to another host.
+# reads from a config on stdin (printf is a builtin: the value is in no argv). -q first: no
+# ~/.curlrc (a "verbose" there would print the header, a "location-trusted" forward it). Redirects
+# are not followed, so the header never goes to another host. Success needs curl's exit status 0
+# too: a transfer cut off after a 200 is not a download.
 raw_get() {
-  local code
+  local code rc=0
   code="$(printf 'header = "Authorization: token %s"\n' "$TOKEN" \
-          | curl -sS -K - --connect-timeout 20 --max-time 900 --retry 3 --retry-delay 2 \
-              -o "$2" -w '%{http_code}' "$RAW_URL$(repo_path)/$REF/$1")" || true
-  [ "$code" = 200 ] && return 0
-  LOG "raw download of $1 failed (HTTP ${code:-none})"
+          | curl -q -sS -K - --connect-timeout 20 --max-time 900 --retry 3 --retry-delay 2 \
+              -o "$2" -w '%{http_code}' "$RAW_URL$(repo_path)/$REF/$1")" || rc=$?
+  [ "$rc" = 0 ] && [ "$code" = 200 ] && return 0
+  LOG "raw download of $1 failed (HTTP ${code:-none}, curl exit $rc)"
   return 1
 }
 

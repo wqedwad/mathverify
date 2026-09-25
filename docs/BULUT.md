@@ -19,6 +19,7 @@ Sayılar 24 Eylül'deki tek seferlik routine oturumunun ölçümüdür (§12,
 ```bash
 #!/bin/bash
 { set +vx; } 2>/dev/null
+unset T
 T=''
 S=
 for d in "${CLAUDE_PROJECT_DIR:-}" /home/*/* /root/* /workspace /workspace/* /tmp/*; do
@@ -28,11 +29,11 @@ for d in "${CLAUDE_PROJECT_DIR:-}" /home/*/* /root/* /workspace /workspace/* /tm
 done
 if [ -z "$S" ]; then
   rm -rf /tmp/mv-boot
-  GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
+  GIT_TERMINAL_PROMPT=0 timeout 30 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
     https://github.com/wqedwad/asd /tmp/mv-boot && S=/tmp/mv-boot/scripts/cloud/setup_env.sh
 fi
 if [ -n "$S" ]; then
-  MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" bash "$S" || true
+  MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" timeout -k 10 250 bash "$S" || true
 else
   echo "mathverify: setup_env.sh not found"
 fi
@@ -47,10 +48,19 @@ exit 0
    koşmadı. Sonuç `/opt/mathverify-logs/setup_env.status`'ta (§6). Betik tanımlanmasa da kanca aynı
    kurulumu arka planda başlatır (routine oturumunda böyle oldu), ama o zaman kurulum oturumun
    içinde koşar ve bitene dek Lean kullanılamaz.
-   **Düzeltme (25 Eylül 2026, ölçüm; HANDOFF §0.12):** önyükleyici değişti. Belirteç üçüncü
-   satırda `T=''` tırnaklarının arasına yapıştırılır (3. madde); dışa aktarılmaz, yalnız
+   **Düzeltme (25 Eylül 2026, ölçüm; HANDOFF §0.12):** önyükleyici değişti. Belirteç
+   `T=''` satırında tırnakların arasına yapıştırılır (3. madde); dışa aktarılmaz, yalnız
    `setup_env.sh`'e verilir, o da yalnız araç çekimine geçirir. İlk satır (`{ set +vx; }`) izlenen
-   bir kabuğun (`-x`/`-v`) belirteci basmasını önler. `T` boş kalırsa davranış eskisiyle aynıdır. Alanın kendisinden iki
+   bir kabuğun (`-x`/`-v`) belirteci basmasını önler; `unset T` dışarıdan dışa aktarılmış bir `T`'nin
+   belirteci çocuklara taşımasını önler. `T` boş kalırsa davranış eskisiyle aynıdır.
+   **Süre sınırı:** `setup_env.sh` `timeout -k 10 250` ile koşar. Resmî belgeye göre
+   (`code.claude.com/docs/en/web-quickstart`, "New sessions hang or time out during setup") ~5
+   dakikayı aşan kurulum betiği yeni oturumları kilitler ya da genel bir konteyner hatasıyla düşürür;
+   ölçülen tam koşular 192 s ve 234 s, yani pay ince. Sınıra takılan koşu durum dosyasına
+   `FAILED mode=all stages=[...] reason=terminated total=...` yazar (`timeout` bütün süreç grubunu
+   durdurur, geride iş kalmaz) ve kanca eksik kalanı oturum içinde kurar. Belirteç satırında tırnak
+   silinirse betik sözdizimi hatasıyla düşer ve oturum açılmaz ("Setup script failed"): o zaman
+   `T='...'` satırı düzeltilir. Alanın kendisinden iki
    gerçek koşu oldu (24 Eylül gecesi; 25 Eylül 08:02:50 UTC) ve ikisi de araç ref'ini çekemedi
    (`FAILED mode=all ... reason=fetch`, 0–1 s). Alanın yapacağı tam koşu oturum içinden temiz
    önekte yeniden ölçüldü: `OK mode=all` **192 s** (çekim 47, Python 1, uv ön ısıtma 8,
@@ -89,7 +99,7 @@ exit 0
       `setup_env.sh`'in değişken adları satırı, yeni önyükleyici) kullanıcı onayı ve yedekle
       `master`a birleştirilir: kurulum betiği checkout'taki `master` kopyasını çalıştırır.
    2. **Setup script** alanının metni yukarıdaki yeni önyükleyiciyle değiştirilir ve belirteç
-      üçüncü satırda tırnakların arasına yapıştırılır: `T='github_pat_...'`.
+      `T=''` satırında tırnakların arasına yapıştırılır: `T='github_pat_...'`.
       Metin değiştiği için anlık görüntü yeniden kurulur; ayrı yorum satırı gerekmez. Belgeye göre
       betik metnini de ortamı kullanan herkes okuyabilir (ortam değişkenleriyle aynı görünürlük);
       bu kişisel ortamda o kişi yalnız kullanıcıdır. Belirteç sohbete yine yapıştırılmaz.
@@ -211,6 +221,7 @@ birebir alıntı:
 ```bash
 #!/bin/bash
 { set +vx; } 2>/dev/null
+unset T
 T=''
 S=
 for d in "${CLAUDE_PROJECT_DIR:-}" /home/*/* /root/* /workspace /workspace/* /tmp/*; do
@@ -220,11 +231,11 @@ for d in "${CLAUDE_PROJECT_DIR:-}" /home/*/* /root/* /workspace /workspace/* /tm
 done
 if [ -z "$S" ]; then
   rm -rf /tmp/mv-boot
-  GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
+  GIT_TERMINAL_PROMPT=0 timeout 30 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
     https://github.com/wqedwad/asd /tmp/mv-boot && S=/tmp/mv-boot/scripts/cloud/setup_env.sh
 fi
 if [ -n "$S" ]; then
-  MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" bash "$S" || true
+  MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" timeout -k 10 250 bash "$S" || true
 else
   echo "mathverify: setup_env.sh not found"
 fi
@@ -290,7 +301,10 @@ belirteç claude.ai ortam değişkeni olarak tanımlıyken alan yine koştu (mak
 betik 08:02:50'de `mode=all`, checkout `/home/user/asd` `d66bf2d`) ve yine düştü:
 `MATHVERIFY_GITHUB_TOKEN is not set: no token retry`,
 `FAILED mode=all ... reason=fetch python=missing lean=missing total=1s`. Oturumda aynı değişken
-tanımlıydı. Kendi betiklerimiz değişkeni düşürmüyor (dışa aktarılmış bir değişken önyükleyiciden
+tanımlıydı. Platform günlüğü (`/tmp/env-manager.log`) alandaki betiğin uzunluğunu 618 bayt yazıyor;
+belgelenen önyükleyici 605 bayt, yani alanda kısa bir ek satır vardı (yorum satırıyla tutarlı),
+belirteç yoktu. Aynı günlükte betikten önce `Git proxy sidecar skipped: boot-clone mount is on`:
+kurulum betiği aşamasında GitHub git vekili çalışmıyor. Kendi betiklerimiz değişkeni düşürmüyor (dışa aktarılmış bir değişken önyükleyiciden
 `token_applies`'a ulaşıyor; oturum içinde denendi) ve zamanlama da açıklamıyor (platformun kendi
 günlüğünde kurulum betiğinin bitişiyle Claude Code'un başlatılması arası 16 ms). Düzeltme: belirteç
 Setup script metninde verilir (önyükleyicinin `T=''` satırı) ve `fetch_artifacts.sh` git
@@ -453,7 +467,7 @@ verilince kullanılır. Routine oturumunda (`4d01ba2`, bu değişiklikten önce)
 | `MATHVERIFY_ARTIFACT_SRC` | — | `parts/` + `SHA256SUMS.full` içeren yerel dizin (tamamen çevrimdışı kurulum ve test için) |
 | `MATHVERIFY_GITHUB_TOKEN` | — | (24 Eylül gecesi eklendi) araç ref'inin düz çekimi düşerse bir kez daha bununla denenir (kurulum betiği aşaması; §3.3, DECISIONS §53) |
 | `MATHVERIFY_GITHUB_TOKEN_URL` | `https://github.com/` | belirtecin gönderilebileceği adres öneki; dışındaki adrese gönderilmez (testler yerel sunucu için değiştirir) |
-| `MATHVERIFY_GITHUB_RAW_URL` | `https://raw.githubusercontent.com/` | (25 Eylül'de eklendi) git denemeleri düşünce araç dosyalarının belirteçle indirildiği adres; boşsa bu adım atlanır; testler yerel sunucuya çevirir (§11) |
+| `MATHVERIFY_GITHUB_RAW_URL` | belirteç öneki `https://github.com/` iken `https://raw.githubusercontent.com/`, değilse boş | (25 Eylül'de eklendi) git denemeleri düşünce araç dosyalarının belirteçle indirildiği adres; boşsa bu adım atlanır; testler yerel sunucuya çevirir (§11) |
 | `MATHVERIFY_ARTIFACT_VIA` | `auto` | (25 Eylül'de eklendi) `raw`: git adımları atlanır, yalnız belirteçli dosya indirme (ölçüm için) |
 | `MATHVERIFY_SETUP_CANARY` | — | (25 Eylül'de eklendi) zararsız işaret; `setup_env.sh` yalnız adının görülüp görülmediğini yazar (§6) |
 | `MATHVERIFY_SKIP_LEAN` | — | `1`: kanca Lean kurulumu başlatmaz |
@@ -511,6 +525,9 @@ OK|FAILED mode=all|lean|python failed=[<aşamalar>] stages=[<ad>(<süre>s|skippe
 `CLAUDE_CODE_REMOTE`, `HTTPS_PROXY`/`https_proxy`, `HTTP_PROXY`/`http_proxy`, `NO_PROXY`/`no_proxy`,
 `GIT_CONFIG_COUNT`. Kurulum betiği koşusunda (Claude Code'dan önce) bunların hangisinin var olduğu
 henüz hiç ölçülmedi; kancanın başlattığı koşuda `CLAUDE_CODE_REMOTE` ve vekil değişkenleri beklenir.
+Ayrıca yeni bir `reason`: `terminated`: koşu bir sinyalle durduruldu (önyükleyicinin 250 s süre
+sınırı ya da kapanış); satır `FAILED mode=... stages=[<o ana dek bitenler>] reason=terminated
+total=<N>s` biçimindedir.
 
 Routine oturumunda ölçülen satır (kancanın başlattığı `--lean-only`, `4d01ba2`):
 `OK mode=lean failed=[] stages=[fetch_artifacts(55s) python(1s) setup_lean(119s) setup_lean_repl(19s)] python=3.14.6 lean=ready total=195s`.
@@ -692,12 +709,18 @@ ref'ler kullanıcıya sormadan silinmez.
 `fetch_artifacts.sh` ref'in dosyalarını tek tek indirir:
 `<MATHVERIFY_GITHUB_RAW_URL><sahip>/<depo>/<ref>/SHA256SUMS.full`, `SHA256SUMS.parts` ve orada
 listelenen her parça. Her parça `SHA256SUMS.parts`'a, birleştirilen dosyalar `SHA256SUMS.full`'a
-karşı doğrulanır; biri tutmazsa hiçbir şey yerine konmaz ve sıradaki yola (checkout'un kendi uzak
-ayarı) geçilir. Belirteç `Authorization: token ...` başlığı olarak, curl'e stdin'deki bir
-yapılandırmadan verilir (komut satırında yok), yalnız uzak adres `MATHVERIFY_GITHUB_TOKEN_URL`
-altındaysa gönderilir ve yönlendirme izlenmez. `fetch_artifacts.sh` belirteci kendi kabuğunda
-tutar (git ve curl ortamında görmez); `setup_env.sh` onu yalnız çekim aşamasına verir (uv, pip,
-Lean, Lake görmez). Gerekçe (oturum içinde ölçüldü, 25 Eylül): GitHub
+karşı doğrulanır. Bir indirme (HTTP 200 ve curl çıkışı 0 birlikte istenir: 200'den sonra kesilen
+aktarım indirme sayılmaz) ya da parça denetimi düşerse hiçbir şey yerine konmaz ve sıradaki yola
+(checkout'un kendi uzak ayarı) geçilir; indirme tamamlanıp `SHA256SUMS.full` tutmazsa, git yolunda
+olduğu gibi betik durur ve hedef dizin değişmez. Belirteç `Authorization: token ...` başlığı
+olarak, curl'e stdin'deki bir yapılandırmadan verilir (komut satırında yok; `-q` ile
+`~/.curlrc` okunmaz), yalnız uzak adres `MATHVERIFY_GITHUB_TOKEN_URL` altındaysa gönderilir ve
+yönlendirme izlenmez. Adrese giren sahip/depo iki düz parçadır (`.`/`..` yok), ref
+`refs/<düz parçalar>`dır; varsayılan `raw.githubusercontent.com` yalnız belirteç öneki
+`https://github.com/` iken kullanılır. `fetch_artifacts.sh` belirteci kendi kabuğunda tutar (git
+ve curl ortamında görmez); `setup_env.sh` onu yalnız çekim aşamasına verir (uv, pip, Lean, Lake
+ortamında görmez). Bu, kaza sonucu sızmaya karşı bir önlemdir: değer `setup_env.sh`'in kendi
+başlangıç ortam kaydında durur ve root olarak koşan bir süreç onu `/proc`'tan okuyabilir. Gerekçe (oturum içinde ölçüldü, 25 Eylül): GitHub
 vekili `api.github.com`'a giden başlığı kendi kimliğiyle değiştiriyor (uydurma belirteç de 200
 aldı); `raw.githubusercontent.com` ise vekilin değil güvenlik vekilinin arkasında ve başlık GitHub'a
 değişmeden ulaşıyor (başlıksız 404, uydurma belirteçle 404, gerçek belirteçle 200). Ref adıyla

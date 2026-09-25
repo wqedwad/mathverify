@@ -368,7 +368,10 @@ maddeyi yapmıştı. Oturumun isteği "kurulum betiğini ölç". Karar DECISIONS
   etkilemez.
 - **Anlık görüntü yeniden kuruldu:** `/opt/mathverify-logs`'ta 24 Eylül'den kayıt yok ve betik bu
   makinede açılıştan 6 s sonra koştu. Belgeye göre betik ancak metni ya da ağ ayarı değişince (ya da
-  ~7 günde) yeniden koşar; kullanıcının betiğe yorum satırı eklemesiyle tutarlı (onayı alınmadı).
+  ~7 günde) yeniden koşar. Platform günlüğü (`/tmp/env-manager.log`) alandaki betiği 618 bayt
+  yazıyor, belgelenen önyükleyici 605 bayt: kısa bir ek satır (kullanıcının yorum satırıyla
+  tutarlı), belirteç yok. Aynı günlükte betikten önce `Git proxy sidecar skipped: boot-clone mount
+  is on`: kurulum betiği aşamasında GitHub git vekili çalışmıyor.
 - **Belirteç geçerli, ama hangi yoldan?** Oturum içinde GitHub vekili `api.github.com`'a giden
   `Authorization` başlığını kendi kimliğiyle değiştiriyor: uydurma belirteç de 200 aldı, aynı
   `Github-Authentication-Token-Expiration` ile; kimliksiz git isteğine de özel depo için 200. Yani
@@ -395,7 +398,11 @@ maddeyi yapmıştı. Oturumun isteği "kurulum betiğini ölç". Karar DECISIONS
   belirteç): **32 s**, 5/5 SHA256 OK, günlükte belirteç 0 kez. (4) `setup_env.sh` gördüğü
   değişkenlerin yalnız adlarını yazar (`environment (names only): set=[...] unset=[...]`); sonraki
   alan koşusu, kurulum betiği aşamasında belirteç, vekil değişkenleri ve `CLAUDE_PROJECT_DIR` olup
-  olmadığını gösterir. Testler ve `check.py --full` sonucu DECISIONS §54'te.
+  olmadığını gösterir. (5) **Süre sınırı:** resmî belgeye göre ~5 dakikayı aşan kurulum betiği yeni
+  oturumları kilitler; çekim başarılı olunca tam koşu 192–234 s sürüyor. Önyükleyici `setup_env.sh`'i
+  `timeout -k 10 250` ile koşturur; sınıra takılan koşu `reason=terminated` yazar, kanca kalanını
+  kurar. (6) Bağımsız inceleme bulguları (curl çıkış durumu, `curl -q`, adres ve ref denetimi,
+  `unset` sırası) düzeltildi. Testler ve `check.py --full` sonucu DECISIONS §54'te.
 - **Açık [DOĞRULANMADI]:** kurulum betiği aşamasında `raw.githubusercontent.com`'a (ya da belirteçle
   git'e) erişim. Bu değişiklik `master`a birleşip kullanıcı önyükleyiciyi belirteçle güncelleyince ilk
   yeni sohbette ölçülür (`docs/BULUT.md` §12).
