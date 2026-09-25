@@ -1,5 +1,17 @@
 """Calculus certificates (E3, E8): derivative certificate for antiderivatives, breakpoint-aware
-tanh-sinh numeric definite integrals with a precision ladder, derivatives, tangent lines."""
+tanh-sinh numeric definite integrals with a precision ladder, derivatives, tangent lines.
+
+Audit of 25 Sep 2026 (each item was measured as a false verdict before the change):
+  * a derivative at a point is certified only when f is differentiable there: SymPy's sign(0) = 0
+    and Heaviside(0) = 1/2 made "d/dx |x| at 0 = 0" and "the tangent to |x| at 0 is y = 0" CORRECT;
+  * an antiderivative must be real and continuous wherever the integrand is defined: "∫ 1/x = log x",
+    "∫ 1/(1+x²) = -atan(1/x)" and the tan(x/2) form of ∫ 1/(2+cos x) passed on a zero residual;
+  * the constant C must enter additively: "∫ cos = sin(x + C)" passed with C replaced by 0;
+  * a tangent line is compared as a LINE: "(y - 2x + 1)(y - 5) = 0" passed as the tangent to x² at 1;
+  * a definite integral with an exact value is compared exactly (a 1e-25 tolerance accepted
+    e^(π√163) - 1 ≈ 262537412640768743), and a numeric value that did not converge never refutes;
+  * SymPy's distributional derivative (DiracDelta, Heaviside) is read classically.
+"""
 from __future__ import annotations
 
 import re
@@ -7,16 +19,45 @@ from typing import Any
 
 import mpmath as mp
 import sympy as sp
-from sympy import S
+from sympy import S, Eq, Ne
+from sympy.functions.elementary.hyperbolic import HyperbolicFunction
+from sympy.functions.elementary.trigonometric import TrigonometricFunction
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import num_equal
+from ..equiv.numeric import num_equal, to_mp
 from ..equiv.random_point import random_point_equal
+from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import definedness_conditions, written_definedness, written_undefined_in
+from .domain import definedness_conditions, written_definedness, written_undefined_in, relation_holds_at
 
 LAYER = "certify.calculus"
+
+
+# ---------------------------------------------------------------------------
+def classical(expr):
+    """SymPy differentiates Abs/Max/sign as distributions: DiracDelta terms and Heaviside steps.
+    Classically the DiracDelta terms vanish off their (isolated) support, where the classical
+    derivative does not exist anyway, and Heaviside(u) is (1 + sign(u))/2 off u = 0. Neither can
+    be evaluated numerically, and random-point equality read that as "undefined on one side" and
+    refuted right answers (measured: (x|x|)'' = 2 sign(x), ∫ 1/x² = -1/x + sign(x))."""
+    expr = sp.sympify(expr)
+    if expr.has(sp.DiracDelta):
+        expr = expr.replace(lambda e: isinstance(e, sp.DiracDelta), lambda e: S.Zero)
+    if expr.has(sp.Heaviside):
+        expr = expr.replace(lambda e: isinstance(e, sp.Heaviside), lambda e: (1 + sp.sign(e.args[0])) / 2)
+    return expr
+
+
+def _real_finite(v) -> bool | None:
+    try:
+        v = sp.sympify(v)
+        if v.has(sp.zoo, sp.nan, sp.oo, -sp.oo) or v.free_symbols:
+            return False
+        m = to_mp(v, 30)
+    except Exception:  # noqa: BLE001
+        return None
+    return not isinstance(m, mp.mpc) and mp.isfinite(m)
 
 
 # ---------------------------------------------------------------------------
@@ -31,11 +72,11 @@ def find_breakpoints(expr, var, a, b, timeout: float = 8.0) -> list:
 def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tuple[sp.Float | None, dict[str, Any]]:
     """tanh-sinh with breakpoints on a precision ladder (30 -> 50 -> 80 digits).
 
-    Converged when two successive levels agree within 10x the larger error estimate and
-    that estimate is below 1e-18 relative. The returned evidence carries `rel_err`, the
-    relative tolerance the caller must use when comparing a claim with the value —
-    never a fixed 1e-12 (E3). Gauss–Legendre is deliberately NOT used: measured to be
-    off by 5e-3 on the endpoint-singular ln x/sqrt x.
+    Converged when two successive levels agree within 10x the larger error estimate (plus the
+    rounding of the LOWER level's printed value) and that estimate is below 1e-18 relative. The
+    returned evidence carries `rel_err`, the relative tolerance the caller must use when comparing
+    a claim with the value — never a fixed 1e-12 (E3). Gauss–Legendre is deliberately NOT used:
+    measured to be off by 5e-3 on the endpoint-singular ln x/sqrt x.
     """
     ev: dict[str, Any] = {"integrand": str(integrand), "a": str(a), "b": str(b)}
     a, b = sp.sympify(a), sp.sympify(b)
@@ -63,14 +104,17 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
             err = abs(mp.mpf(err_s)) if err_s not in (None, "None") else mp.mpf(1)
             scale = max(abs(v), mp.mpf(1))
             if prev is not None:
-                pv, perr = prev
-                agree = abs(v - pv) / scale <= 10 * max(err, perr) / scale + mp.mpf(10) ** (-(dps - 5))
+                pv, perr, pdps = prev
+                # the previous value was printed with only `pdps` digits: its rounding is part of
+                # the comparison. With 10^-(dps-5) instead, ∫_0^1 x^2 never "converged" (its
+                # 30-digit value differs from the 50-digit one by 3e-31, measured 25 Sep 2026)
+                agree = abs(v - pv) / scale <= 10 * max(err, perr) / scale + mp.mpf(10) ** (-(pdps - 5))
                 if agree and err / scale < mp.mpf("1e-18"):
                     converged = True
-                    prev = (v, err)
+                    prev = (v, err, dps)
                     break
-            prev = (v, err)
-    v, err = prev
+            prev = (v, err, dps)
+    v, err, _ = prev
     with mp.workdps(90):
         scale = max(abs(v), mp.mpf(1))
         rel_err = max(10 * err / scale, mp.mpf("1e-25"))
@@ -80,43 +124,322 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
     return sp.Float(mp.nstr(v, 60), 60), ev
 
 
-def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 8.0
-                               ) -> tuple[bool | None, dict[str, Any]]:
-    """d/dx F - integrand == 0 ? Constant shifts are automatically accepted (E8)."""
+def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0) -> bool | None:
+    """Is the integrand, as written or as parsed, undefined on a piece of (a, b) of positive
+    length? Isolated points are fine (improper integrals). exp(log(x)) parses to x, and
+    "∫_{-2}^{-1} exp(log x) dx = -3/2" was certified (audit of 25 Sep 2026)."""
+    ineq = (sp.StrictLessThan, sp.LessThan, sp.StrictGreaterThan, sp.GreaterThan)
+    conds = [c for c in list(written_definedness(src, ns)[0]) + list(definedness_conditions(expr, var))
+             if isinstance(c, ineq) and c.free_symbols == {var}]
+    if not conds:
+        return False
+    lo, hi = sp.Min(a, b), sp.Max(a, b)
+    region = sp.Interval.open(lo, hi)
+    for c in conds:
+        r = sb_run("mathverify.sandbox.ops:solveset_in", c.negated, var, region, timeout=timeout)
+        if not r.ok or r.value.has(sp.ConditionSet):
+            return None
+        bad = r.value
+        if bad is S.EmptySet or isinstance(bad, sp.FiniteSet):
+            continue
+        try:
+            m = bad.measure
+        except Exception:  # noqa: BLE001
+            return None
+        if m.is_positive:
+            return True
+        if not m.is_zero:
+            return None
+    return False
+
+
+# ---------------------------------------------------------------------------
+_JUMPY = (sp.floor, sp.ceiling, sp.frac, sp.Piecewise, sp.Heaviside, sp.DiracDelta, sp.Mod)
+
+
+def _normal_condition(c):
+    """`|u| > 0` and `u**2 > 0` say `u != 0`; spell them that way so they match the integrand's."""
+    if isinstance(c, sp.StrictGreaterThan) and c.rhs == 0:
+        u = c.lhs
+        if isinstance(u, sp.Abs):
+            return Ne(u.args[0], 0)
+        if isinstance(u, sp.Pow) and u.exp.is_Integer and u.exp.is_even and u.exp > 0:
+            return Ne(u.base, 0)
+    if isinstance(c, Ne) and c.rhs == 0 and isinstance(c.lhs, sp.Abs):
+        return Ne(c.lhs.args[0], 0)
+    return c
+
+
+def _conditions(expr, var, extra=()) -> list[Any] | None:
+    out: list[Any] = []
+    for c in list(definedness_conditions(expr, var)) + list(extra):
+        fs = getattr(c, "free_symbols", set())
+        if not fs:
+            continue
+        if fs != {var}:
+            return None                       # a parameter: the check below cannot decide it
+        c = _normal_condition(c)
+        if c not in out:
+            out.append(c)
+    return out
+
+
+def _points_of(s_, k: int = 4) -> list:
+    """A few concrete points of a solveset result (witness candidates)."""
+    out: list = []
+    try:
+        if isinstance(s_, sp.FiniteSet):
+            out = [e for e in s_.args if e.is_number][:k]
+        elif isinstance(s_, sp.Interval):
+            lo, hi = s_.inf, s_.sup
+            if lo == -sp.oo and hi == sp.oo:
+                out = [S.Zero, S.One, -S.One]
+            elif lo == -sp.oo:
+                out = [hi - 1, hi - sp.Rational(1, 7)]
+            elif hi == sp.oo:
+                out = [lo + 1, lo + sp.Rational(1, 7)]
+            else:
+                out = [(lo + hi) / 2, lo + (hi - lo) / 7]
+        elif isinstance(s_, sp.Union):
+            for part in s_.args:
+                out += _points_of(part, 2)
+        elif isinstance(s_, (sp.ImageSet, sp.Intersection, sp.Complement)):
+            it = iter(s_)
+            for _ in range(k):
+                out.append(next(it))
+    except Exception:  # noqa: BLE001
+        pass
+    return [p for p in out if getattr(p, "is_number", False)][:8]
+
+
+def _defined_at(expr, conds, var, p) -> bool | None:
+    for c in conds:
+        h = relation_holds_at(c, var, p)
+        if h is not True:
+            return h
+    return _real_finite(sp.sympify(expr).subs(var, p))
+
+
+def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extra=(),
+                                timeout: float = 8.0) -> tuple[bool | None, dict[str, Any]]:
+    """F' = f is not enough: F must be real and continuous at every point where f is defined.
+    False comes with a witness point (f defined there, F not / F jumps there); True needs a proof
+    (the offending set is empty, or it misses the domain of f); otherwise None. Periodic domains
+    are not solved as sets: solveset returns ONE period for `1 + cos(x) != 0` (measured)."""
+    ev: dict[str, Any] = {}
+    F, f = sp.sympify(F), sp.sympify(f)
+    if F.has(*_JUMPY):
+        ev["reason"] = "discontinuous_primitive_in_antiderivative"
+        return None, ev
+    cf = _conditions(f, var, f_extra)
+    cF = _conditions(F, var, F_extra)
+    if cf is None or cF is None:
+        ev["reason"] = "conditions_involve_parameters"
+        return None, ev
+    for s_ in F.atoms(sp.sign):                   # sign(u) jumps where u changes sign
+        if s_.args[0].has(var):
+            c = Ne(s_.args[0], 0)
+            if c not in cF:
+                cF.append(c)
+    todo = [c for c in cF if c not in cf]
+    ev["checked_conditions"] = [str(c) for c in todo]
+    df = None
+    for c in todo:
+        neg = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else c.negated
+        r = sb_run("mathverify.sandbox.ops:solveset_in", neg, var, discourse, timeout=timeout)
+        if not r.ok or isinstance(r.value, sp.ConditionSet):
+            ev["reason"] = f"undecided: {c}"
+            return None, ev
+        bad = r.value
+        if bad is S.EmptySet:
+            continue
+        for p_ in _points_of(bad):
+            if _defined_at(f, cf, var, p_) is True and relation_holds_at(c, var, p_) is False:
+                ev["reason"] = "antiderivative_not_defined_or_continuous_where_integrand_is"
+                ev["witness"] = {"x": str(p_), "condition": str(c)}
+                return False, ev
+        if df is None:
+            if any(cc.has(TrigonometricFunction, HyperbolicFunction) for cc in cf):
+                ev["reason"] = f"undecided (periodic domain): {c}"
+                return None, ev
+            df = discourse
+            for cc in cf:
+                rr = sb_run("mathverify.sandbox.ops:solveset_in", cc, var, S.Reals, timeout=timeout)
+                if not rr.ok or rr.value.has(sp.ConditionSet):
+                    ev["reason"] = f"undecided domain: {cc}"
+                    return None, ev
+                df = sp.Intersection(df, rr.value)
+        inter = sp.Intersection(bad, df)
+        if inter is S.EmptySet:
+            continue
+        for p_ in _points_of(inter):
+            if _defined_at(f, cf, var, p_) is True and relation_holds_at(c, var, p_) is False:
+                ev["reason"] = "antiderivative_not_defined_or_continuous_where_integrand_is"
+                ev["witness"] = {"x": str(p_), "condition": str(c)}
+                return False, ev
+        ev["reason"] = f"undecided: {c} on {inter}"
+        return None, ev
+    return True, ev
+
+
+def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 8.0,
+                               discourse=S.Reals, f_extra=(), F_extra=()) -> tuple[bool | None, dict[str, Any]]:
+    """d/dx F - integrand == 0 ? Constant shifts are automatically accepted (E8). A zero residual
+    is then checked against the integrand's domain (`antiderivative_domain_check`)."""
     ev: dict[str, Any] = {"F": str(F), "integrand": str(integrand)}
     F, integrand = sp.sympify(F), sp.sympify(integrand)
     r = sb_run("mathverify.sandbox.ops:diff_expr", F, var, 1, timeout=timeout)
     if not r.ok:
         ev["error"] = r.error
         return None, ev
-    dF = r.value
+    dF = classical(r.value)
     ev["dF"] = str(dF)
+    ok = None
     rs = sb_run("mathverify.sandbox.ops:simplify_diff", dF, integrand, timeout=timeout)
     if rs.ok:
         res = rs.value
         ev["residual"] = res
         if res == 0:
             ev["method"] = "symbolic"
-            return True, ev
-        if res.is_number and res.is_zero is False:
+            ok = True
+        elif res.is_number and res.is_zero is False:
             ev["method"] = "nonzero_constant_residual"
             return False, ev
     else:
         ev["residual"] = None
         ev["flags"] = rs.flags
-    # domain-aware numeric equality of dF and integrand
-    if domain is None:
-        dom = S.Reals
-        for c in definedness_conditions(integrand, var) + definedness_conditions(F, var):
-            rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, S.Reals, timeout=timeout)
-            if rr.ok and not isinstance(rr.value, sp.ConditionSet):
-                dom = sp.Intersection(dom, rr.value)
-        domain = dom
-    ev["domain"] = str(domain)
-    ok, rev = random_point_equal(dF, integrand, var, domain, seed=0, n=40)
-    ev["random_point"] = rev
-    ev["method"] = "random_point"
+    if ok is None:
+        # domain-aware numeric equality of dF and integrand
+        if domain is None:
+            dom = S.Reals
+            for c in definedness_conditions(integrand, var) + definedness_conditions(F, var):
+                rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, S.Reals, timeout=timeout)
+                if rr.ok and not isinstance(rr.value, sp.ConditionSet):
+                    dom = sp.Intersection(dom, rr.value)
+            domain = dom
+        ev["domain"] = str(domain)
+        ok, rev = random_point_equal(dF, integrand, var, domain, seed=0, n=40)
+        ev["random_point"] = rev
+        ev["method"] = "random_point"
+    if ok is True:
+        okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
+        ev["domain_check"] = dev
+        if okd is not True:
+            if okd is False:
+                ev["reason"] = dev.get("reason")
+            return okd, ev
     return ok, ev
+
+
+def _constant_not_additive(F_full, var, C, timeout) -> tuple[bool | None, dict[str, Any]]:
+    """True when d/dx F depends on C, i.e. the claimed family is not F + constant. Measured before:
+    "sin(x) + C*x", "sin(x + C)" and "(1 + C)*sin(x)" were all certified as ∫ cos(x) dx."""
+    ev: dict[str, Any] = {}
+    d_full = sp.diff(F_full, var)
+    d_zero = sp.diff(F_full.subs(C, 0), var)
+    r = sb_run("mathverify.sandbox.ops:simplify_diff", d_full, d_zero, timeout=timeout)
+    if r.ok and r.value == 0:
+        return False, ev
+    gap = (d_full - d_zero).subs(C, 1)
+    for p_ in (sp.Rational(1, 3), sp.Rational(7, 5), -sp.Rational(3, 2), sp.Rational(1, 10)):
+        v = gap.subs(var, p_)
+        try:
+            ok, _ = num_equal(v, 0)
+        except Exception:  # noqa: BLE001
+            ok = None
+        if ok is False and _real_finite(v) is True:
+            ev["witness"] = {"C": "1", str(var): str(p_), "d/dx difference": str(sp.N(v, 15))}
+            return True, ev
+    return None, ev
+
+
+# ---------------------------------------------------------------------------
+def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[str, Any]:
+    """Is f^(order) defined at `at`, and what is it? Certificate (mean value theorem): with
+    g = f^(order-1) continuous at a and differentiable around it, the one-sided derivatives of g
+    at a are the one-sided limits of g'. Returns {"status": value | infinite | cusp | corner |
+    discontinuous | unknown, "value": ...}. Substituting a into SymPy's derivative is NOT a
+    certificate: sign(0) = 0 made "d/dx |x| at 0 = 0" CORRECT (audit of 25 Sep 2026)."""
+    from .limits import classify_limit
+    ev: dict[str, Any] = {"status": "unknown"}
+    f = sp.sympify(f)
+    if order > 1:
+        r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order - 1, timeout=timeout)
+        if not r.ok:
+            return ev
+        g = classical(r.value)
+    else:
+        g = f
+    r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order, timeout=timeout)
+    if not r.ok:
+        return ev
+    gp = classical(r.value)
+    ev["derivative"] = str(gp)
+    rg = sb_run("mathverify.sandbox.ops:simplify_diff", g.subs(var, at), 0, timeout=timeout)
+    if not rg.ok or _real_finite(rg.value) is not True:
+        ev["reason"] = "lower_derivative_not_a_real_number_at_point"
+        return ev
+    ga = rg.value
+    cg = classify_limit(g, var, at, None, timeout=timeout)
+    ev["continuity"] = {"kind": cg["kind"], "limit": str(cg["value"]), "value": str(ga)}
+    if cg["kind"] in ("DNE", "INF"):
+        ev["status"] = "discontinuous"
+        return ev
+    if cg["kind"] != "VAR":
+        return ev
+    same = scalar_equal(cg["value"], ga)
+    if same is False:
+        ev["status"] = "discontinuous"
+        return ev
+    if same is not True:
+        return ev
+    lp = classify_limit(gp, var, at, "+", timeout=timeout)
+    lm = classify_limit(gp, var, at, "-", timeout=timeout)
+    ev["one_sided"] = {"+": (lp["kind"], str(lp["value"])), "-": (lm["kind"], str(lm["value"]))}
+    kp, km = lp["kind"], lm["kind"]
+    if kp == "VAR" and km == "VAR":
+        s_ = scalar_equal(lp["value"], lm["value"])
+        if s_ is True:
+            ev["status"], ev["value"] = "value", lp["value"]
+        elif s_ is False:
+            ev["status"] = "corner"
+    elif kp == "INF" and km == "INF":
+        if lp["value"] == lm["value"]:
+            ev["status"], ev["value"] = "infinite", lp["value"]
+        else:
+            ev["status"] = "cusp"
+    elif {kp, km} == {"VAR", "INF"}:
+        ev["status"] = "corner"
+    return ev
+
+
+# ---------------------------------------------------------------------------
+def _line_equal(claimed, truth, var, dep) -> tuple[bool | None, dict[str, Any]]:
+    """Same line? A linear claim is compared by proportionality (exact); a non-linear claim can
+    only be refuted: solving for x alone dropped factors in y, so "(y - 2x + 1)(y - 5) = 0" was
+    certified as the tangent y = 2x - 1 (audit of 25 Sep 2026)."""
+    ev: dict[str, Any] = {"claimed": str(claimed), "truth": str(truth)}
+    d1 = sp.expand(claimed.lhs - claimed.rhs)
+    d2 = sp.expand(truth.lhs - truth.rhs)
+    if d1.free_symbols - {var, dep}:
+        ev["method"] = "unbound_symbols"
+        return None, ev
+    try:
+        deg = sp.Poly(d1, var, dep).total_degree()
+    except sp.PolynomialError:
+        deg = None
+    if deg is not None and deg <= 1:
+        if deg == 0:
+            ev["method"] = "not_a_line"
+            return False, ev
+        q = sp.cancel(sp.together(d1 / d2))
+        ev["method"] = "linear_proportionality"
+        ev["ratio"] = str(q)
+        return bool(q.is_number and q != 0), ev
+    ok, cev = answers_equivalent(claimed, truth, shape="equation", var=var)
+    ev["method"] = "nonlinear_claim_refutation_only"
+    ev["compare"] = cev
+    return (False if ok is False else None), ev
 
 
 _TRAILING_C = re.compile(r"\s*\+\s*[Cc]\s*$")
@@ -137,14 +460,26 @@ def verify(ir, solution, ctx: Ctx):
                 return err
             from ..normalize.parse import parse_expr_str
             payload = _TRAILING_C.sub("", str(solution.claimed_answer.payload))
-            ns2, err = parse_or_unknown(LAYER, ctx.claim_ns, solution, C=sp.Symbol("C"))
+            C = sp.Symbol("C")
+            ns2, err = parse_or_unknown(LAYER, ctx.claim_ns, solution, C=C)
             if err:
                 return err
-            F, err = parse_or_unknown(LAYER, parse_expr_str, payload, ns2)
+            F_full, err = parse_or_unknown(LAYER, parse_expr_str, payload, ns2)
             if err:
                 return err
-            F = F.subs(sp.Symbol("C"), 0)
-            ok, ev = antiderivative_certificate(F, integrand, var, timeout=ctx.timeout)
+            if F_full.has(C):
+                bad_c, cev = _constant_not_additive(F_full, var, C, ctx.timeout)
+                if bad_c is not False:
+                    ev = {"constant_check": cev, "reason": "constant_C_not_additive"}
+                    if bad_c is True:
+                        return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
+                    return unknown(LAYER, "constant_C_undecided", t.ms, ev)
+            F = F_full.subs(C, 0)
+            f_extra = written_definedness(p["integrand"], ctx.ns)[0]
+            F_extra = [c for c in written_definedness(payload, ns2)[0] if not c.has(C)]
+            ok, ev = antiderivative_certificate(F, integrand, var, timeout=ctx.timeout,
+                                                discourse=ctx.domain_for(var), f_extra=f_extra,
+                                                F_extra=F_extra)
             conf = 0.99 if ev.get("method") == "symbolic" else 0.97
         elif kind == "definite_integral":
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
@@ -159,38 +494,66 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
+            undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ctx.ns,
+                                                             timeout=ctx.timeout)
+            if undefined is not False:
+                return unknown(LAYER, "integrand_undefined_on_the_interval_as_written" if undefined
+                               else "integrand_domain_undecided", t.ms, {"integrand": p["integrand"]},
+                               flags=["written_domain"] if undefined else [])
             val, ev = definite_integral_numeric(integrand, var, a, b, timeout=ctx.timeout * 1.5)
             if val is None:
                 return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
-            # symbolic support (timeout-guarded, evidence only)
-            rs = sb_run("mathverify.sandbox.ops:integrate_symbolic", integrand, var, a, b, timeout=ctx.timeout)
-            if rs.ok and not rs.value.has(sp.Integral) and not rs.value.free_symbols:
-                ev["symbolic"] = str(rs.value)
-                okS, _ = num_equal(rs.value, val)
-                ev["symbolic_agrees_numeric"] = okS
-            tol = max(float(p.get("rel_tol") or 0.0), float(ev.get("rel_err", "1e-25")))
-            ok, cev = num_equal(claimed, val, rel_tol=tol)
-            ev["compare"] = cev
             ev["claimed"] = str(claimed)
+            declared = float(p.get("rel_tol") or 0.0)
+            tol = max(declared, float(ev.get("rel_err", "1e-25")))
             ev["rel_tol_used"] = tol
-            if not ev.get("converged", False) and ok is True:
-                # accepted only within a loose tolerance: not a certificate
-                if tol > 1e-12:
-                    return unknown(LAYER, "numeric_not_converged", t.ms, ev, flags=["numeric_not_converged"])
-            conf = 0.99 if ev.get("converged") else 0.95
+            converged = bool(ev.get("converged", False))
+            okN, cev = num_equal(claimed, val, rel_tol=tol)
+            ev["compare"] = cev
+            # an exact value, when SymPy has one, is what the claim is compared with: a numeric
+            # tolerance of 1e-25 accepted 262537412640768743 for ∫_0^{π√163} e^x dx, whose value
+            # is e^(π√163) - 1 = 262537412640768742.99999999999925… (audit of 25 Sep 2026)
+            exact = None
+            rs = sb_run("mathverify.sandbox.ops:integrate_symbolic", integrand, var, a, b, timeout=ctx.timeout)
+            if rs.ok and not rs.value.has(sp.Integral) and not rs.value.free_symbols \
+                    and not rs.value.has(sp.AccumBounds, sp.zoo, sp.nan):
+                exact = rs.value
+                ev["symbolic"] = str(exact)
+            if exact is not None:
+                agree, _ = num_equal(exact, val, rel_tol=tol)
+                ev["symbolic_agrees_numeric"] = agree
+                if declared:
+                    # a declared tolerance means an approximate answer: compare with the exact value's
+                    # decimal expansion (two Rationals would be compared exactly, ignoring rel_tol)
+                    okS, sev = num_equal(claimed, sp.N(exact, 60), rel_tol=declared)
+                else:
+                    okS, sev = answers_equivalent(claimed, exact, shape="scalar")
+                ev["compare_exact"] = sev
+                if converged and agree is True:
+                    ok = okS if okS is not None else (False if okN is False else None)
+                elif okS is False and okN is False:
+                    ok = False                     # two independent computations reject the claim
+                else:
+                    # a numeric value that did not converge (x^(-999/1000) on [0,1]: 176.5 instead
+                    # of 1000) or that contradicts SymPy never decides alone
+                    reason = "numeric_not_converged" if not converged else "symbolic_numeric_disagreement"
+                    return unknown(LAYER, reason, t.ms, ev, flags=[reason])
+            elif converged:
+                ok = okN
+            else:
+                return unknown(LAYER, "numeric_not_converged", t.ms, ev, flags=["numeric_not_converged"])
+            conf = 0.99
         elif kind == "derivative":
             f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
             if err:
                 return err
-            order = int(p.get("order", 1))
-            r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order, timeout=ctx.timeout)
-            if not r.ok:
-                return unknown(LAYER, "diff_failed", 0, flags=r.flags)
-            truth = r.value
-            ev["derivative"] = str(truth)
-            claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
-            if err:
-                return err
+            try:
+                order = int(p.get("order", 1))
+            except (TypeError, ValueError):
+                return unknown(LAYER, "bad_order")
+            if order < 1:
+                return unknown(LAYER, "bad_order")
+            ca = solution.claimed_answer
             if "at" in p:
                 at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
                 if err:
@@ -199,10 +562,35 @@ def verify(ir, solution, ctx: Ctx):
                 if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at)) is True:
                     return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
                                    {"f": p["f"], "at": str(at)}, flags=["written_domain"])
-                truth_at = sp.simplify(truth.subs(var, at))
-                ev["value_at"] = str(truth_at)
-                ok, cev = answers_equivalent(claimed, truth_at, shape="scalar")
+                dap = derivative_at_point(f, var, order, at, timeout=ctx.timeout)
+                ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
+                st = dap["status"]
+                if ca.kind == "dne":
+                    ok = True if st in ("corner", "discontinuous", "cusp") else \
+                        False if st == "value" else None
+                    cev = {"method": "differentiability", "status": st}
+                else:
+                    claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+                    if err:
+                        return err
+                    if st == "value":
+                        if claimed in (sp.oo, -sp.oo):
+                            ok, cev = False, {"method": "finite_derivative"}
+                        else:
+                            ok, cev = answers_equivalent(claimed, dap["value"], shape="scalar")
+                    elif st in ("corner", "discontinuous", "cusp") or (st == "infinite" and claimed not in (sp.oo, -sp.oo)):
+                        ok, cev = False, {"method": "not_differentiable", "status": st}
+                    else:
+                        ok, cev = None, {"method": "undecided", "status": st}
             else:
+                r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order, timeout=ctx.timeout)
+                if not r.ok:
+                    return unknown(LAYER, "diff_failed", 0, flags=r.flags)
+                truth = classical(r.value)
+                ev["derivative"] = str(truth)
+                claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+                if err:
+                    return err
                 dom = ctx.domain_for(var)
                 for c in definedness_conditions(f, var) + [c for c in written_definedness(p["f"], ctx.ns)[0]
                                                            if c.free_symbols == {var}]:
@@ -211,7 +599,8 @@ def verify(ir, solution, ctx: Ctx):
                         dom = sp.Intersection(dom, rr.value)
                 ok, cev = answers_equivalent(claimed, truth, shape="expression", domain=dom, var=var)
             ev["compare"] = cev
-            conf = 0.99 if cev.get("method") in ("symbolic", "numeric") else 0.97
+            conf = 0.99 if cev.get("method") in ("symbolic", "numeric", "differentiability",
+                                                 "not_differentiable", "finite_derivative") else 0.97
         else:  # tangent_line
             f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
             if err:
@@ -223,24 +612,37 @@ def verify(ir, solution, ctx: Ctx):
                 return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
                                {"f": p["f"], "at": str(at)}, flags=["written_domain"])
             y = ctx.sym(p.get("dep", "y"))
-            r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, 1, timeout=ctx.timeout)
-            if not r.ok:
-                return unknown(LAYER, "diff_failed", 0, flags=r.flags)
-            m = sp.simplify(r.value.subs(var, at))
-            y0 = sp.simplify(f.subs(var, at))
-            truth = sp.Eq(y, m * (var - at) + y0)
-            ev["truth"] = str(truth)
-            claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
-            if err:
-                return err
-            if not isinstance(claimed, sp.Equality):
-                # allow "m*x + c" expression form meaning y = ...
-                claimed = sp.Eq(y, claimed)
-            ok, cev = answers_equivalent(claimed, truth, shape="equation", var=var)
-            ev["compare"] = cev
+            dap = derivative_at_point(f, var, 1, at, timeout=ctx.timeout)
+            ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
+            st = dap["status"]
+            ca = solution.claimed_answer
+            if ca.kind == "dne":
+                ok = True if st in ("corner", "discontinuous") else False if st in ("value", "infinite") else None
+            else:
+                claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+                if err:
+                    return err
+                if not isinstance(claimed, sp.Equality):
+                    # allow "m*x + c" expression form meaning y = ...
+                    claimed = sp.Eq(y, claimed)
+                if st == "value":
+                    y0 = sp.simplify(f.subs(var, at))
+                    truth = sp.Eq(y, sp.simplify(dap["value"]) * (var - at) + y0)
+                elif st == "infinite":
+                    truth = sp.Eq(var, at)            # vertical tangent: f continuous, |f'| -> oo
+                else:
+                    truth = None
+                ev["truth"] = str(truth)
+                if truth is not None:
+                    ok, cev = _line_equal(claimed, truth, var, y)
+                    ev["compare"] = cev
+                elif st in ("corner", "discontinuous"):
+                    ok = False                         # no tangent line exists at a corner
+                else:
+                    ok = None
             conf = 0.99
     if ok is True:
         return result(LAYER, "pass", conf, True, ev, t.ms, primary=True)
     if ok is False:
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
-    return unknown(LAYER, "undecided", t.ms, ev)
+    return unknown(LAYER, ev.get("reason") or "undecided", t.ms, ev)
