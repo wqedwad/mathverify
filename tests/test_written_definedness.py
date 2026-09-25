@@ -75,5 +75,8 @@ def test_the_written_form_is_used_only_for_definedness():
     ns["x"] = x
     e = parse_as_written("x/x = 1", ns)
     assert e is not None and len(e) == 2 and e[0] != 1        # the fraction survives
-    assert parse_as_written(r"\frac{x}{x}", ns) is None        # LaTeX: not read this way
+    # Düzeltme (25 Sep 2026): LaTeX used to return None here, and every undefined point of a
+    # LaTeX-written problem was lost; it is now read with evaluation off (test_audit_2026_09_25_core)
+    le = parse_as_written(r"\frac{x}{x}", ns)
+    assert le is not None and len(le) == 1 and le[0] != 1      # LaTeX: the fraction survives too
     assert parse_as_written("x/zz", ns) is None                # undeclared name: left to the parser

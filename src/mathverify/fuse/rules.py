@@ -105,6 +105,13 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
                          # the structured contract, so skipping it silently would let an attacker
                          # cancel a refutation by corrupting the claim (measured on 4 items)
                          "malformed_step_claim",
+                         # a layer that crashed decided nothing, so its silence is not agreement:
+                         # a crash in the step layer used to let the certificate alone ground
+                         # CORRECT and every refutation in the solution vanished (audit 25 Sep)
+                         "layer_exception", "malformed_solution", "option_unreadable",
+                         "decimal_comma_ambiguous", "recovered_answer_refuted",
+                         # the prose around the value negates or doubts it ("5 değil")
+                         "payload_negated", "problem_undefined_as_written",
                          # the claimed answer is a computation or restates the question: the
                          # certificates would be checking an answer the verifier itself produced
                          "claim_is_not_a_value",

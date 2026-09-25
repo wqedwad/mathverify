@@ -330,6 +330,8 @@ _ALLOWED_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Call, ast.Name, as
 # evaluates it with Python's builtins in reach.
 _STR_ARG_CALLS = frozenset({"Symbol", "Function", "Rational", "Float", "Integer"})
 _STR_LITERAL_RE = re.compile(r"^(?:[A-Za-z_][A-Za-z_0-9]*|[0-9.]+(?:[eE][-+]?[0-9]+)?)$")
+# the side of a one-sided limit, `Limit(f, x, 0, '+')`: a sign, never text a callee could run
+_DIRECTION_LITERALS = frozenset({"+", "-", "+-", "-+"})
 
 
 def _check_code(code: str, raw: str, names) -> None:
@@ -348,7 +350,8 @@ def _check_code(code: str, raw: str, names) -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and node.id not in names:
             raise ParseError(f"{raw!r} names {node.id!r}, which is not in the namespace: not read")
-        if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes)) and not (
+        if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes)) \
+                and node.value not in _DIRECTION_LITERALS and not (
                 id(node) in str_ok and isinstance(node.value, str) and _STR_LITERAL_RE.match(node.value)):
             raise ParseError(f"{raw!r} contains a string literal: not read")
         if not isinstance(node, _ALLOWED_NODES):
@@ -359,6 +362,9 @@ def _check_code(code: str, raw: str, names) -> None:
         if isinstance(node, ast.Attribute) and not (
                 isinstance(node.value, ast.Name) and f"{node.value.id}.{node.attr}" in _ALLOWED_DOTTED):
             raise ParseError(f"{raw!r} accesses an attribute: not read")
+        if isinstance(node, ast.Subscript) and not isinstance(node.value, ast.Name):
+            # `a[n]` names a term; `[3][0]` or `(1, 2)[1]` computes the value the claim should state
+            raise ParseError(f"{raw!r} indexes a computed value: not read")
 
 
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
@@ -426,9 +432,21 @@ def _raise_for_undeclared(s: str, ns: dict[str, Any], undeclared: list[str], raw
         f"unknown identifier(s) {undeclared} in {raw!r} (declare them in the IR)")
 
 
+# A decimal in LaTeX becomes a 53-bit Float in latex2sympy, and a Float is compared at its own
+# precision (~1e-12): `0.3333333333333 \cdot 1` was certified as 1/3 while the same decimal in the
+# canonical syntax, read exactly, was refused (audit of 25 Sep 2026). The digits are the number the
+# solver wrote, so reading them as the exact fraction is not a rewrite (principle 3).
+_LATEX_DECIMAL = re.compile(r"(?<![\d.])(\d+)\.(\d+)(?![\d.])")
+
+
+def _exact_latex_decimals(s: str) -> str:
+    return _LATEX_DECIMAL.sub(
+        lambda m: r"\left(\frac{%d}{%d}\right)" % (int(m.group(1) + m.group(2)), 10 ** len(m.group(2))), s)
+
+
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     from latex2sympy2_extended import latex2sympy
-    expr = latex2sympy(s)
+    expr = latex2sympy(_exact_latex_decimals(s))
     # rebind free symbols to the IR symbols (assumptions)
     reps = {}
     for fs in expr.free_symbols:
@@ -494,14 +512,27 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None):
     `sqrt(x)**2` becomes x and `x**2/x` becomes x before any condition can be read, so the points
     where the problem's own expression is undefined disappear (measured 23 Sep 2026: wrong answers
     to domain_of, solve_equation, solve_inequality and evaluate were certified CORRECT, and the
-    right ones refuted). Returns None for anything this cannot read faithfully (LaTeX, undeclared
-    or forbidden names); the caller then adds no condition, which is the old behaviour."""
+    right ones refuted). LaTeX is read by latex2sympy with evaluation off. Returns None for
+    anything this cannot read faithfully (undeclared or forbidden names); the caller then adds no
+    condition, which is the old behaviour."""
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
         return None
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
+        # LaTeX used to return None here, so `\frac{x}{x}` carried no condition at all and every
+        # undefined point of a LaTeX-written problem was lost (audit of 25 Sep 2026). latex2sympy
+        # keeps the written structure when SymPy's evaluation is off.
+        try:
+            with sp.evaluate(False):
+                e = _latex_to_sympy(s, ns)
+        except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
+            return None
+        if isinstance(e, sp.core.relational.Relational):
+            return sp.Tuple(e.lhs, e.rhs)
+        if isinstance(e, sp.Basic) and not isinstance(e, sp.logic.boolalg.Boolean):
+            return sp.Tuple(e)
         return None
     s = preclean(s)
     local = dict(ns, Add=sp.Add, Mul=sp.Mul, Pow=sp.Pow)

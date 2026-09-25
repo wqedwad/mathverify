@@ -112,12 +112,96 @@ class Ctx:
             srcs.append(self.ir.unknown_of_interest)
         conds: list[Any] = []
         nowhere: set = set()
+        undefined: list[str] = []
         for s_ in srcs:
             cs, nw = written_definedness(s_, self.ns)
             nowhere |= nw
             conds += [c for c in cs if c not in conds]
+            if self._undefined_constant(s_):
+                undefined.append(s_)
+        cs, nw, calls = self._function_call_conditions(srcs)
+        nowhere |= nw
+        conds += [c for c in cs if c not in conds]
+        undefined += calls
         self.cache[key] = (conds, nowhere)
+        self.cache["written_undefined"] = undefined
         return conds, nowhere
+
+    def written_undefined(self) -> list[str]:
+        """The problem's expressions that are undefined AS WRITTEN with no variable left to choose:
+        `log(-1) - log(-1) - 1`, or `f(-1)` for f(x) = log(x) − log(x) + x. The closed condition
+        fails, but `nowhere` only records free symbols, so the value SymPy simplified to (−1) was
+        certified (audit of 25 Sep 2026). Empty over the complex numbers, where the conditions are
+        the real ones."""
+        self.written_conditions()
+        if (self.ir.domain_of_discourse or "").lower() in ("complex", "c", "ℂ"):
+            return []
+        return list(self.cache.get("written_undefined", []))
+
+    def _undefined_constant(self, src: str) -> bool:
+        from ..normalize.parse import parse_as_written
+        from .domain import definedness_conditions
+        e = parse_as_written(src, self.ns)
+        if e is None or e.free_symbols:
+            return False
+        try:
+            return any(c is sp.false for c in definedness_conditions(e, None))
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _function_call_conditions(self, srcs: list[str]) -> tuple[list[Any], set, list[str]]:
+        """The written definedness of the problem's FUNCTIONS at each point they are called. A body
+        is parsed once, with simplification, into the callable the namespace holds, so `f(x) = 0`
+        with f = x²/x read as x = 0 and the root 0 was certified (audit of 25 Sep 2026: every task
+        kind that calls a problem function). Each call f(a) gets the body's own written conditions
+        with the arguments substituted. The third item names the calls undefined at a constant
+        point."""
+        from sympy.core.function import AppliedUndef
+        from ..normalize.parse import parse_as_written
+        from .domain import written_definedness
+        fdefs = {f.name: f for f in self.ir.functions}
+        if not fdefs:
+            return [], set(), []
+        wns = dict(self.ns)
+        wns.update({n: sp.Function(n) for n in fdefs})
+
+        def real_calls(e):
+            return e.replace(lambda z: isinstance(z, AppliedUndef) and z.func.__name__ in fdefs,
+                             lambda z: self.ns[z.func.__name__](*z.args))
+
+        conds: list[Any] = []
+        nowhere: set = set()
+        undefined: list[str] = []
+        for s_ in srcs:
+            tree = parse_as_written(s_, wns)
+            if tree is None:
+                continue
+            for call in tree.atoms(AppliedUndef):
+                fd = fdefs.get(call.func.__name__)
+                if fd is None or len(call.args) != len(fd.args):
+                    continue
+                body_ns = dict(self.ns)
+                arg_syms = []
+                for a in fd.args:
+                    body_ns[a] = self.ns.get(a) if isinstance(self.ns.get(a), sp.Symbol) else sp.Symbol(a)
+                    arg_syms.append(body_ns[a])
+                cs, nw = written_definedness(fd.expr, body_ns)
+                args = [real_calls(a) for a in call.args]
+                sub = dict(zip(arg_syms, args))
+                free = set().union(*(getattr(a, "free_symbols", set()) for a in args))
+                if nw:
+                    nowhere |= free
+                for c in cs:
+                    c2 = c.subs(sub, simultaneous=True)
+                    if c2 is sp.false:
+                        nowhere |= free
+                        if not free:
+                            undefined.append(str(call))
+                    elif getattr(c2, "free_symbols", None) and c2 not in conds:
+                        conds.append(c2)
+                if nw and not free:
+                    undefined.append(str(call))
+        return conds, nowhere, undefined
 
     def _dod_mentions(self, var: sp.Symbol) -> bool:
         d = self.ir.domain_of_discourse
