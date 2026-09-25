@@ -68,9 +68,12 @@ def _answer_is_right(it, ir, sol, labels) -> bool:
 # function = 0). Before the definedness guards in formal/statement.py, five of these received
 # clean, audited certificates. Every run re-checks them: a single certificate here is a false
 # positive of the formal layer, whatever the evaluation set says.
-def _ir(kind, params, vars_=(), givens=(), shape="scalar"):
-    return {"task": {"kind": kind, "params": params}, "vars": [dict(v) for v in vars_],
-            "givens": list(givens), "answer_shape": shape}
+def _ir(kind, params, vars_=(), givens=(), shape="scalar", dod=None):
+    d = {"task": {"kind": kind, "params": params}, "vars": [dict(v) for v in vars_],
+         "givens": list(givens), "answer_shape": shape}
+    if dod is not None:
+        d["domain_of_discourse"] = dod
+    return d
 
 
 JUNK_PROBES = [
@@ -106,6 +109,55 @@ JUNK_PROBES = [
      _ir("count_solutions", {"bounds": {"x": ["0", "2"], "y": ["0", "2"]}},
          [{"name": "x", "domain": "nonneg_integer"}, {"name": "y", "domain": "nonneg_integer"}], ["x/y = 0"],
          shape="count"), {"kind": "count", "payload": 6}),
+    # families found by the formal-layer audit of 25 Sep 2026: 53 of 98 wrong claims were certified
+    # (tests/test_lean_audit_2026_09_25.py has them all). One or more of each, so the junk gate
+    # fails if any family ever certifies again.
+    # closed goals elaborated in ℕ, where 7 / 2 = 3 and 1 / 2 = 0
+    ("7/2 = 3 (ℕ division in a closed goal)", _ir("evaluate", {"expr": "7/2"}), {"kind": "value", "payload": "3"}),
+    ("2^(-1) = 0 (ℕ division in a closed goal)", _ir("evaluate", {"expr": "2**(-1)"}),
+     {"kind": "value", "payload": "0"}),
+    # Mod beyond "integer mod a positive literal": Lean's ℤ % is Euclidean, x % 0 = x, ℝ % is 0
+    ("7 mod -2 = 1 (negative divisor)", _ir("evaluate", {"expr": "Mod(7, -2)"}), {"kind": "value", "payload": "1"}),
+    ("7 mod 0 = 7 (zero divisor)", _ir("evaluate", {"expr": "Mod(7, 0)"}), {"kind": "value", "payload": "7"}),
+    ("x mod n = 1 (symbolic divisor)", _ir("evaluate", {"expr": "Mod(x, n)"},
+                                           [{"name": "x", "domain": "integer"}, {"name": "n", "domain": "integer"}],
+                                           ["x = 7", "n = 2"]), {"kind": "value", "payload": "1"}),
+    ("x mod 2 simplifies to 0 (real x)", _ir("simplify_expression", {"expr": "Mod(x, 2)"}, [{"name": "x"}],
+                                             shape="expression"), {"kind": "expression", "payload": "0"}),
+    # ℕ subtraction in a recurrence: a(1 - 2) is a(0) in Lean, undefined in the problem
+    ("a(3) = 5 from a(n) = a(n-1) + a(n-2), a(0) = 1 only (ℕ subtraction)",
+     _ir("recurrence_term", {"name": "a", "var": "n", "recurrence": "a(n) = a(n-1) + a(n-2)", "initial": {"0": "1"},
+                             "index": 3}, [{"name": "n", "domain": "integer"}]), {"kind": "value", "payload": "5"}),
+    # a dropped restriction: the answer to a different question
+    ("root 2 of 2x = 4 over x > 5 (domain_of_discourse dropped)",
+     _ir("solve_equation", {"equation": "2*x = 4", "var": "x"}, [{"name": "x"}], shape="set", dod="x > 5"),
+     {"kind": "set", "payload": "{2}"}),
+    ("root 2 of 2x = 4 with constraint x > 5 (var constraint dropped)",
+     _ir("solve_equation", {"equation": "2*x = 4", "var": "x"}, [{"name": "x", "constraints": ["x > 5"]}], shape="set"),
+     {"kind": "set", "payload": "{2}"}),
+    ("root 2 of 2x = 4, x > 5 (second given dropped)",
+     _ir("solve_equation", {"var": "x"}, [{"name": "x"}], ["2*x = 4", "x > 5"], shape="set"),
+     {"kind": "set", "payload": "{2}"}),
+    ("x^2 < 4 with x > 0 is (-2, 2) (given dropped)",
+     _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, [{"name": "x"}], ["x > 0"], shape="interval"),
+     {"kind": "interval", "payload": "(-2, 2)"}),
+    ("x^2 = -1 over C has no root (complex read as R)",
+     _ir("solve_equation", {"equation": "x**2 = -1", "var": "x"}, [{"name": "x", "domain": "complex"}], shape="set"),
+     {"kind": "set", "payload": "EmptySet"}),
+    # contradictory givens the vacuity probe could not see (no satisfiability witness either)
+    ("a + b = 42 from a^2 + b^2 < 2ab (contradictory givens)",
+     _ir("evaluate", {"expr": "a + b"}, [{"name": "a"}, {"name": "b"}], ["a**2 + b**2 < 2*a*b"]),
+     {"kind": "value", "payload": "42"}),
+    # the simplifying parse: undefined points of the problem's text disappear
+    ("root 0 of x^2/x = 0 (x/x folded)", _ir("solve_equation", {"equation": "x**2/x = 0", "var": "x"}, [{"name": "x"}],
+                                             shape="set"), {"kind": "set", "payload": "{0}"}),
+    ("int_{-2}^{-1} exp(log x) dx = -3/2 (exp(log x) folded)",
+     _ir("definite_integral", {"integrand": "exp(log(x))", "var": "x", "a": "-2", "b": "-1"}, [{"name": "x"}]),
+     {"kind": "value", "payload": "-3/2"}),
+    # the claim's junk region: Real.log x = log|x|
+    ("int dx/x = log x + C (log of a negative)",
+     _ir("antiderivative", {"integrand": "1/x", "var": "x"}, [{"name": "x"}], shape="expression"),
+     {"kind": "expression", "payload": "log(x) + C"}),
 ]
 
 
