@@ -435,7 +435,8 @@ def _is_elaboration_check(code):
 class _JunkLean:
     """Only the vacuous junk statement `x = 2 from 1/(x-2) = 0` compiles (it does in the real sweep);
     every other ladder attempt gets a Lean error. `#print axioms` and the two audit probes of its
-    proof answer as the scenario says; every statement elaborates."""
+    proof answer as the scenario says; every statement elaborates. The satisfiability probe (since
+    25 Sep 2026 part of every audit of a statement with hypotheses) compiles when it is sent."""
 
     def __init__(self, target_head, *, vacuity, nohyp, axioms=SAFE_AXIOMS_REPLY):
         self.target_head, self.vacuity, self.nohyp, self.axioms = target_head, vacuity, nohyp, axioms
@@ -451,6 +452,8 @@ class _JunkLean:
             return self.vacuity
         if "_nohyp" in head:
             return self.nohyp
+        if "_sat" in head:
+            return LeanResult(ok=True)
         if code.startswith(self.target_head):
             return LeanResult(ok=True, env=7)
         return LeanResult(ok=False, errors=["linarith failed"])
@@ -484,6 +487,14 @@ def test_junk_probe_with_an_unanswered_audit_fails_the_junk_gate(monkeypatch, sc
     target_head = build_statement(ir, ca).theorem("").split(":= by")[0]
     fake = _JunkLean(target_head, vacuity=vacuity, nohyp=nohyp, axioms=axioms)
     monkeypatch.setattr(P, "get_lean", lambda: fake)
+    if scenario.startswith("E_"):
+        # Since 25 Sep 2026 an audit is clean only when Lean also proves the hypotheses satisfiable
+        # at the template's witness, and this junk statement has none (its hypotheses contradict
+        # each other). To keep testing the GATE on a clean certificate, scenario E hands the
+        # template a witness and the fake Lean accepts it.
+        import sympy as sp
+        from mathverify.formal import statement as S
+        monkeypatch.setattr(S, "_find_witness", lambda *a, **k: [sp.Integer(2)])
     junk = run_lean.junk_probe(45)
     target = next(j for j in junk if j["label"] == JUNK_TARGET)
     assert target["proved"] is True and target["lean_answered"] is True and target["n_unanswered"] == 0

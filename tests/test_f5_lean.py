@@ -267,12 +267,13 @@ def test_derivative_becomes_hasderivat_not_a_deriv_equation(evalset_items):
 
 def test_antiderivative_states_the_derivative_claim_with_its_own_guard(evalset_items):
     """"∫ log x dx = x log x − x + C" is the claim that the derivative of the right-hand side is
-    log x wherever both sides exist. The excluded point comes from SymPy's singularity set of the
-    two expressions, never from the claim."""
+    log x wherever the INTEGRAND is defined. The region comes from the integrand (its poles and,
+    since 25 Sep 2026, the interior of its written domain: `x > 0` for log x), never from the
+    claim, and the claim must be defined on all of it (tests/test_lean_audit_2026_09_25.py)."""
     it = next(i for i in evalset_items
               if i["problem_ir"]["task"]["kind"] == "antiderivative" and i["id"] == "ayt-int-001")
     st = build_statement(it["problem_ir"], it["solution"]["claimed_answer"])
-    assert st.goal.startswith("∀ x : ℝ, x ≠ 0 → HasDerivAt ")
+    assert st.goal.startswith("∀ x : ℝ, x ≠ 0 → x > 0 → HasDerivAt ")
     assert "Real.log x" in st.goal and "+ C" not in st.goal and "C" not in st.goal.split("=>")[1]
     assert st.kind == "antiderivative_hasderiv" and st.hints
 
@@ -600,7 +601,9 @@ def test_simplify_guards_come_from_the_expression_not_from_the_claim(evalset_ite
     assert st.kind == "simplify_identity"
     guards, _, conclusion = st.goal.rpartition(" → ")
     assert guards == "∀ x : ℝ, (x ≠ 0) → ((x + 1) ≠ 0)", guards
-    assert "(x + (x ^ 2)) ≠ 0" in conclusion      # the claim's own definedness is a GOAL
+    # the claim's own definedness is a GOAL; since 25 Sep 2026 the LaTeX claim is read as written
+    # (latex2sympy with evaluation off), so its denominator keeps the written order x^2 + x
+    assert "((x ^ 2) + x) ≠ 0" in conclusion
 
 
 def test_a_claim_that_loses_domain_points_must_prove_its_own_definedness():

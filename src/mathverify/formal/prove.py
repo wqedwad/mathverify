@@ -7,7 +7,8 @@ Order (positive evidence only — handoff §3 rule 4):
   3. if that fails, a cross-family model writes a proof, with a bounded repair loop fed the
      real Lean error messages
   4. audits before any `pass`: no `sorry`, axioms ⊆ {propext, Classical.choice, Quot.sound},
-     hypotheses not contradictory (vacuity probe), hypotheses actually used (no-hyp probe);
+     hypotheses not contradictory (vacuity probe), hypotheses actually used (no-hyp probe),
+     hypotheses SATISFIABLE (sat probe: Lean proves `∃ …, hyps` at the template's witness);
      a probe Lean never answered (timeout, dead REPL) fails the audit
 A failed proof is NEVER evidence against the claim ("kanıtlayamadım" ≠ "yanlış").
 """
@@ -325,10 +326,37 @@ def _audit(stmt: LeanStatement, out: dict[str, Any], lean: LeanClient, timeout: 
         audit["no_hyp_probe_errors"] = rn.errors[:1]
     else:
         audit["provable_without_hypotheses"] = None
+    # Satisfiability (audit 25 Sep 2026, C6). The vacuity probe can only show hypotheses ARE
+    # contradictory; any proof search stronger than it — the ladder's nlinarith hints, a
+    # model-written proof — could use a contradiction it misses ("a + b = 42 from a² + b² < 2ab",
+    # and "x = 5 from √x = −1" with a model proof, were certified). So hypotheses must be shown
+    # to HOLD somewhere: Lean proves `∃ binders, h1 ∧ … ∧ hn` at the template's witness. No
+    # witness, a failed or an unanswered proof: no certificate. Same gate for every proof source.
+    if stmt.hypotheses:
+        if getattr(stmt, "sat_by_construction", False):
+            audit["satisfiable"] = True
+            audit["satisfiable_how"] = "construction"
+        else:
+            sp_code = stmt.sat_probe() if hasattr(stmt, "sat_probe") else None
+            if sp_code is None:
+                audit["satisfiable"] = False
+                audit["satisfiable_how"] = "no witness"
+            else:
+                judged, rs = probe(sp_code)
+                audit["sat_probe_errors"] = rs.errors[:1]
+                if judged:
+                    audit["satisfiable"] = bool(rs.clean)
+                    audit["satisfiable_how"] = "witness"
+                else:
+                    audit["satisfiable"] = None
+                    unanswered.append("sat")
+    else:
+        audit["satisfiable"] = None                   # no hypotheses: nothing to satisfy
     audit["unanswered"] = unanswered
     audit["clean"] = bool(audit["axioms_ok"] and audit["sorry_free"] and not unanswered
                           and not audit["hypotheses_contradictory"]
-                          and audit.get("provable_without_hypotheses") is not True)
+                          and audit.get("provable_without_hypotheses") is not True
+                          and (not stmt.hypotheses or audit["satisfiable"] is True))
     return audit
 
 
