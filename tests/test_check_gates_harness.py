@@ -459,11 +459,16 @@ class _JunkLean:
         return LeanResult(ok=False, errors=["linarith failed"])
 
 
+def _n_junk() -> int:
+    from harness.run_lean import JUNK_PROBES
+    return len(JUNK_PROBES)          # 17 until 25 Sep 2026, then the formal-audit families
+
+
 JUNK_AUDIT_SCENARIOS = {  # name -> (vacuity, nohyp, axioms, audit_unanswered, junk gate value, gate ok)
     "A_both_probes_timed_out": (TIMED_OUT, TIMED_OUT, SAFE_AXIOMS_REPLY, ["vacuity", "no_hyp"],
                                 "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
     "B_vacuity_answered_contradictory": (LeanResult(ok=True), LeanResult(ok=False, errors=["linarith failed"]),
-                                         SAFE_AXIOMS_REPLY, [], "0/17", True),
+                                         SAFE_AXIOMS_REPLY, [], f"0/{_n_junk()}", True),
     "C_axiom_print_timed_out": (LeanResult(ok=False, errors=["linarith failed"]),
                                 LeanResult(ok=False, errors=["unsolved goals"]), TIMED_OUT, ["axioms"],
                                 "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
@@ -472,7 +477,7 @@ JUNK_AUDIT_SCENARIOS = {  # name -> (vacuity, nohyp, axioms, audit_unanswered, j
                             "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
     # every probe answered and none objects: a real certificate, which the gate still counts
     "E_answered_and_clean": (LeanResult(ok=False, errors=["linarith failed"]),
-                             LeanResult(ok=False, errors=["unsolved goals"]), SAFE_AXIOMS_REPLY, [], "1/17", False),
+                             LeanResult(ok=False, errors=["unsolved goals"]), SAFE_AXIOMS_REPLY, [], f"1/{_n_junk()}", False),
 }
 
 
