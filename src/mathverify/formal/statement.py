@@ -78,12 +78,12 @@ def parse_structural(src: str, ns: dict[str, Any]):
     """Parse without letting SymPy evaluate the arithmetic. Falls back to the normal parse when
     the unevaluated form cannot be built (the caller then gets a possibly-trivial statement,
     which the triviality guard rejects)."""
-    from sympy.parsing.sympy_parser import parse_expr
+    from ..normalize.parse import guarded_parse_expr
     s = preclean(src)
     try:
         with sp.evaluate(False):
-            return parse_expr(s, local_dict=structural_ns(ns), global_dict={},
-                              transformations=_TRANSFORMS, evaluate=False)
+            return guarded_parse_expr(s, local_dict=structural_ns(ns), global_dict={},
+                                      transformations=_TRANSFORMS, evaluate=False)
     except Exception:
         return parse_expr_str(src, ns)
 

@@ -11,13 +11,15 @@ the caller is expected to run parsing inside the sandbox worker for untrusted te
 """
 from __future__ import annotations
 
+import ast
 import re
 from typing import Any
 
 import sympy as sp
 from sympy import (S, Symbol, Rational, Integer, Interval, FiniteSet, Union, Intersection,
                    Complement, EmptySet, Eq, Ne, Lt, Le, Gt, Ge, And, Or, Not, pi, E, I, oo, zoo, nan)
-from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, convert_xor)
+from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, convert_xor,
+                                        stringify_expr)
 
 __all__ = ["ParseError", "UndeclaredSymbolError", "ClaimNotAValue", "COMPUTING_OPERATORS",
            "claim_namespace", "check_claim_is_value", "build_namespace", "parse_expr_str", "parse_relation", "parse_answer",
@@ -309,6 +311,64 @@ _TRANSFORMS_FLOAT = standard_transformations + (convert_xor,)
 
 _PARSER_KEYWORDS = {"in", "U", "N", "and", "or", "not"}
 
+# What the text becomes after SymPy's token transformations is plain Python that `eval` runs. Only
+# arithmetic, calls, literals and containers mean mathematics there; everything else has PYTHON
+# semantics that silently replace the mathematics (audit of 25 Sep 2026): `and`/`or` return one of
+# their operands by truthiness, so the step claim `a = 20 and a = 16` became `a = 16` and the false
+# `a = 20` was never checked, and the payload `0 or 7/2` was certified as 7/2 (113 of 141 correct
+# evalset answers wrapped that way were CORRECT). `==`, `in` and `is` give Python booleans, a
+# conditional picks a branch, a comprehension or walrus runs code. They are rejected, not guessed.
+_ALLOWED_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Call, ast.Name, ast.Load,
+                  ast.Constant, ast.Tuple, ast.List, ast.Set, ast.Dict, ast.Attribute,
+                  ast.keyword, ast.Subscript, ast.Slice, ast.Compare,
+                  ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.FloorDiv,
+                  ast.UAdd, ast.USub, ast.Lt, ast.LtE, ast.Gt, ast.GtE)
+
+
+# SymPy's own transformations write these calls with a string argument (Symbol('x'),
+# Rational('3.5')); any other string literal is text that some callee may hand to `sympify`, which
+# evaluates it with Python's builtins in reach.
+_STR_ARG_CALLS = frozenset({"Symbol", "Function", "Rational", "Float", "Integer"})
+_STR_LITERAL_RE = re.compile(r"^(?:[A-Za-z_][A-Za-z_0-9]*|[0-9.]+(?:[eE][-+]?[0-9]+)?)$")
+
+
+def _check_code(code: str, raw: str, names) -> None:
+    """Raise ParseError unless the transformed code is plain arithmetic (see _ALLOWED_NODES) over
+    the given names only: `eval` adds Python's builtins (`__import__`, `getattr`, `exit`...) to
+    any namespace that lacks them, so a name outside `names` is never evaluated."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except SyntaxError:
+        return                                   # parse_expr reports the syntax error itself
+    str_ok: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in _STR_ARG_CALLS and len(node.args) == 1:
+            str_ok.add(id(node.args[0]))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id not in names:
+            raise ParseError(f"{raw!r} names {node.id!r}, which is not in the namespace: not read")
+        if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes)) and not (
+                id(node) in str_ok and isinstance(node.value, str) and _STR_LITERAL_RE.match(node.value)):
+            raise ParseError(f"{raw!r} contains a string literal: not read")
+        if not isinstance(node, _ALLOWED_NODES):
+            raise ParseError(f"{raw!r} uses Python syntax that is not mathematics here "
+                             f"({type(node).__name__}): not read")
+        if isinstance(node, ast.Compare) and len(node.ops) != 1:
+            raise ParseError(f"{raw!r} chains comparisons inside an expression: not read")
+        if isinstance(node, ast.Attribute) and not (
+                isinstance(node.value, ast.Name) and f"{node.value.id}.{node.attr}" in _ALLOWED_DOTTED):
+            raise ParseError(f"{raw!r} accesses an attribute: not read")
+
+
+def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
+                       transformations, evaluate: bool = True):
+    """parse_expr, after checking that the code it is about to evaluate is plain arithmetic."""
+    _check_code(stringify_expr(s, local_dict, global_dict, transformations), s,
+                set(local_dict) | set(global_dict))
+    return parse_expr(s, local_dict=local_dict, global_dict=global_dict,
+                      transformations=transformations, evaluate=evaluate)
+
 
 def _check_safe(s: str, ns: dict[str, Any]) -> list[str]:
     """Hard rejections raise; undeclared identifiers are RETURNED so the caller can tell a
@@ -358,8 +418,8 @@ def _raise_for_undeclared(s: str, ns: dict[str, Any], undeclared: list[str], raw
         called = re.search(rf"(?<![\w.]){re.escape(u)}\s*\(", s) is not None
         probe_ns[u] = sp.Function(u) if called else Symbol(u)
     try:
-        parse_expr(s, local_dict=probe_ns, global_dict={}, transformations=transformations,
-                   evaluate=True)
+        guarded_parse_expr(s, local_dict=probe_ns, global_dict={}, transformations=transformations,
+                           evaluate=True)
     except Exception as e:
         raise ParseError(f"cannot parse {raw!r}: {e}") from e
     raise UndeclaredSymbolError(
@@ -416,8 +476,8 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     if undeclared:
         _raise_for_undeclared(s, ns, undeclared, raw, transformations)
     try:
-        return parse_expr(s, local_dict=ns, global_dict={},
-                          transformations=transformations, evaluate=True)
+        return guarded_parse_expr(s, local_dict=ns, global_dict={},
+                                  transformations=transformations, evaluate=True)
     except ParseError:
         raise
     except Exception as e:
@@ -451,8 +511,8 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None):
             if _check_safe(chunk, ns):
                 return None
             with sp.evaluate(False):
-                out.append(parse_expr(chunk, local_dict=local, global_dict={},
-                                      transformations=_TRANSFORMS, evaluate=False))
+                out.append(guarded_parse_expr(chunk, local_dict=local, global_dict={},
+                                              transformations=_TRANSFORMS, evaluate=False))
         except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
             return None
     return sp.Tuple(*out)
