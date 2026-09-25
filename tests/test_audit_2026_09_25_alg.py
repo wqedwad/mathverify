@@ -216,3 +216,54 @@ def _ints(givens, n, dom="integer"):
 def test_c5_count_integers_exact(givens, truth, wrong, dom):
     assert _ints(givens, truth, dom) == "CORRECT"
     assert _ints(givens, wrong, dom) == "INCORRECT"
+
+
+# ---------------------------------------------------------------------------------------------
+# C9 — random-point equivalence took agreement on |x| ≤ 1000 (integers in [−60, 60]) as proof
+# for non-smooth functions. Before: all of these were CORRECT (0.97). Calculus audit C07: the
+# antiderivative x²/2 + Max(x − 5000, 0) of x and the derivative 2x + Max(x − 1500, 0) of x².
+# ---------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("expr,claim,vars_", [
+    ("floor(x) + floor(-x)", "-1", None), ("ceiling(x) - floor(x)", "1", None),
+    ("sign(x)**2", "1", None), ("Abs(x - 2025) + Abs(x + 2025)", "4050", None),
+    ("Max(x, 1001)", "1001", None), ("Min(n, 100)", "n", [{"name": "n", "domain": "integer"}]),
+    ("Abs(n - 61) + n", "61", [{"name": "n", "domain": "integer"}]),
+])
+def test_c9_nonsmooth_wrong_simplification_is_not_certified(expr, claim, vars_):
+    assert _v("simplify_expression", {"expr": expr}, "expression", claim, vars_=vars_) != "CORRECT"
+
+
+@pytest.mark.parametrize("expr,claim,vars_", [
+    ("sqrt(x**2)", "Abs(x)", None), ("x/Abs(x)", "sign(x)", None),
+    ("log(x**2)", "2*log(Abs(x))", None), ("sqrt(x**2 - 2*x + 1)", "Abs(x - 1)", None),
+    ("floor(n/2) + floor((n+1)/2)", "n", [{"name": "n", "domain": "integer"}]),
+    ("Mod(n**2, 4)", "Mod(n, 2)", [{"name": "n", "domain": "integer"}]),
+])
+def test_c9_nonsmooth_right_simplification_is_proved(expr, claim, vars_):
+    assert _v("simplify_expression", {"expr": expr}, "expression", claim, vars_=vars_) == "CORRECT"
+
+
+def test_c9_far_difference_in_calculus_claims():
+    assert _v("antiderivative", {"integrand": "x", "var": "x"}, "expression",
+              "x**2/2 + Max(x - 5000, 0)") != "CORRECT"
+    assert _v("derivative", {"f": "x**2", "var": "x"}, "expression",
+              "2*x + Max(x - 1500, 0)") != "CORRECT"
+    assert _v("antiderivative", {"integrand": "x", "var": "x"}, "expression", "x**2/2") == "CORRECT"
+
+
+def test_c9_compute_step_with_far_difference_is_refuted():
+    st = [_step(1, "compute", "Abs(x - 2025) + Abs(x + 2025) = 4050")]
+    assert _solve("x**2 - 5*x + 6 = 0", "{2, 3}", steps=st) != "CORRECT"
+    st = [_step(1, "compute", "floor(x) + floor(-x) = -1")]
+    assert _solve("x**2 - 5*x + 6 = 0", "{2, 3}", steps=st) != "CORRECT"
+
+
+def test_c9_primitive():
+    from mathverify.equiv.random_point import random_point_equal
+    x = sp.Symbol("x", real=True)
+    n = sp.Symbol("n", integer=True)
+    assert random_point_equal(sp.Abs(x) + sp.Abs(x - 2), 2 * sp.Max(sp.Abs(x - 1), 1), x, sp.S.Reals)[0] is True
+    assert random_point_equal(x ** 2 / 2 + sp.Max(x - 5000, 0), x ** 2 / 2, x, sp.S.Reals)[0] is False
+    assert random_point_equal(sp.Mod(n ** 2, 4), sp.Mod(n, 4), n, sp.S.Integers)[0] is False
+    # no proof method for a real floor identity: abstain, never True
+    assert random_point_equal(sp.floor(x + 1), sp.floor(x) + 1, x, sp.S.Reals)[0] is None
