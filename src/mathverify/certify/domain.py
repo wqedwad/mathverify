@@ -12,7 +12,8 @@ from typing import Any
 import sympy as sp
 from sympy import S, Eq, Ne, Interval, oo
 
-from ..equiv.numeric import num_equal, to_mp
+from ..equiv.numeric import (num_equal, to_mp, certified_sign, certified_integer, has_float,
+                             real_odd_roots, NONREAL)
 from ..equiv.symbolic import sym_equal
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run
@@ -72,16 +73,31 @@ def definedness_conditions(expr, var) -> list[Any]:
     return conds
 
 
+def _certified_compare(lhs, rhs) -> int | str | None:
+    """Certified sign of lhs − rhs for two real constants (see equiv.numeric.certified_sign);
+    NONREAL when either side is certainly not real, None when undecided."""
+    for side in (lhs, rhs):
+        s = certified_sign(side)
+        if s == NONREAL:
+            return NONREAL
+        if s is None:
+            return None
+    return certified_sign(sp.sympify(lhs) - sp.sympify(rhs))
+
+
 def _num_relation_holds(rel, var, c) -> bool | None:
-    """Evaluate a relational at var=c numerically (exact-ish, ladder)."""
+    """Evaluate a relational at var=c. Exact values are decided exactly: a sign is certified
+    (strict adaptive evalf) and a zero proved (CAS rewrite / minimal polynomial), never read off
+    rounding noise — at x = 1 + √2 the exact zero x² − 2x − 1 evaluated to −3.5e-192 and decided
+    `≥ 0` False (audit of 25 Sep 2026). Undecidable -> None. Odd roots are real roots."""
     if rel is sp.true:
         return True
     if rel is sp.false:
         return False
     if not isinstance(rel, sp.core.relational.Relational):
         return None
-    lhs = rel.lhs.subs(var, c)
-    rhs = rel.rhs.subs(var, c)
+    lhs = real_odd_roots(rel.lhs.subs(var, c))
+    rhs = real_odd_roots(rel.rhs.subs(var, c))
     if isinstance(rel, Eq):
         # exact structural first, then numeric
         okS, _ = sym_equal(lhs, rhs)
@@ -95,6 +111,22 @@ def _num_relation_holds(rel, var, c) -> bool | None:
             return False
         okN, _ = num_equal(lhs, rhs)
         return None if okN is None else (not okN)
+    if not has_float(lhs, rhs):
+        s = _certified_compare(lhs, rhs)
+        if s == NONREAL:
+            return False                  # non-real value: relation is not satisfied in R
+        if s is None:
+            return None
+        if isinstance(rel, sp.StrictLessThan):
+            return s < 0
+        if isinstance(rel, sp.LessThan):
+            return s <= 0
+        if isinstance(rel, sp.StrictGreaterThan):
+            return s > 0
+        if isinstance(rel, sp.GreaterThan):
+            return s >= 0
+        return None
+    # inexact (Float) operands: tolerant comparison at their own precision
     try:
         a, b = to_mp(lhs, 40), to_mp(rhs, 40)
     except Exception:
@@ -136,31 +168,78 @@ def relation_holds_at(rel, var, c) -> bool | None:
     return _num_relation_holds(rel, var, c)
 
 
+def _cmp_le(a, b, strict: bool) -> bool | None:
+    """a < b (strict) or a <= b, certified; None when undecided."""
+    if a == -oo or b == oo:
+        return True
+    if a == oo or b == -oo:
+        return False
+    s = _certified_compare(a, b)
+    if s is None or s == NONREAL:
+        return None
+    return s < 0 if strict else s <= 0
+
+
+def _in_set_certified(dom, c) -> bool | None:
+    if dom == S.Reals:
+        return True
+    if dom is S.EmptySet:
+        return False
+    if isinstance(dom, Interval):
+        lo = _cmp_le(dom.inf, c, dom.left_open)
+        hi = _cmp_le(c, dom.sup, dom.right_open)
+        if lo is False or hi is False:
+            return False
+        return True if (lo and hi) else None
+    if isinstance(dom, sp.FiniteSet):
+        hits = [_certified_compare(c, p) for p in dom.args]
+        if any(h == 0 for h in hits):
+            return True
+        return False if all(h in (-1, 1, NONREAL) for h in hits) else None
+    if isinstance(dom, sp.Union):
+        parts = [_in_set_certified(p, c) for p in dom.args]
+        if any(p is True for p in parts):
+            return True
+        return False if all(p is False for p in parts) else None
+    if isinstance(dom, sp.Intersection):
+        parts = [_in_set_certified(p, c) for p in dom.args]
+        if any(p is False for p in parts):
+            return False
+        return True if all(p is True for p in parts) else None
+    if isinstance(dom, sp.Complement):
+        a_, b_ = (_in_set_certified(dom.args[0], c), _in_set_certified(dom.args[1], c))
+        if a_ is False or b_ is True:
+            return False
+        return True if (a_ is True and b_ is False) else None
+    if dom in (S.Integers, S.Naturals, S.Naturals0):
+        is_int, k = certified_integer(c)
+        if is_int is None:
+            return None
+        return bool(dom.contains(k)) if is_int else False
+    return None
+
+
 def in_domain(dom: sp.Set, c) -> bool | None:
+    """Membership of a constant in a domain set. SymPy's own `contains` first; where it cannot
+    decide, every comparison is certified (see _certified_compare) — the old fallback compared
+    40-digit values, and returned False for any part that was not an Interval."""
     try:
         r = dom.contains(c)
     except Exception:
-        return None
+        r = None
     if r is sp.true:
         return True
     if r is sp.false:
         return False
-    # numeric fallback for intervals
     try:
-        cv = to_mp(c, 40)
-        import mpmath as mp
-        if isinstance(cv, mp.mpc):
-            return False
-        for part in (dom.args if isinstance(dom, sp.Union) else [dom]):
-            if isinstance(part, Interval):
-                lo = -mp.inf if part.inf == -oo else to_mp(part.inf, 40)
-                hi = mp.inf if part.sup == oo else to_mp(part.sup, 40)
-                ok_lo = cv > lo if part.left_open else cv >= lo
-                ok_hi = cv < hi if part.right_open else cv <= hi
-                if ok_lo and ok_hi:
-                    return True
+        cs = certified_sign(c)
+    except Exception:  # noqa: BLE001
+        return None
+    if cs == NONREAL:
         return False
-    except Exception:
+    try:
+        return _in_set_certified(dom, c)
+    except Exception:  # noqa: BLE001
         return None
 
 
