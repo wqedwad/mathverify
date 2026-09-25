@@ -12,7 +12,7 @@ import mpmath as mp
 import sympy as sp
 
 __all__ = ["num_equal", "to_mp", "certified_sign", "exact_equal", "exact_zero_test", "has_float",
-           "real_odd_roots", "NONREAL", "certified_integer"]
+           "real_odd_roots", "NONREAL", "certified_integer", "certified_floor"]
 
 DPS_LADDER = (30, 50, 80)
 
@@ -177,6 +177,35 @@ def certified_integer(c, timeout: float = 5.0):
         far = certified_sign(sp.Abs(c - k) - 1, timeout=timeout)
         return (False, None) if far == -1 else (None, None)
     return None, None
+
+
+def certified_floor(v, timeout: float = 5.0):
+    """floor(v) for a real constant, certified (an exact integer value gives itself, never the
+    integer below it through rounding); None when undecided or not a finite real."""
+    try:
+        v = sp.sympify(v)
+    except (sp.SympifyError, TypeError):
+        return None
+    if isinstance(v, sp.Rational):
+        return sp.floor(v)
+    if getattr(v, "free_symbols", None) or v.has(sp.oo, sp.S.NegativeInfinity, sp.zoo, sp.nan):
+        return None
+    parts = _evalf_strict(real_odd_roots(v))
+    if parts is None:
+        is_int, k = certified_integer(v, timeout=timeout)
+        return k if is_int else None
+    re_, im_ = parts
+    if im_ != 0:
+        return None
+    k = sp.Integer(int(sp.floor(re_ + sp.Rational(1, 2))))
+    s = certified_sign(v - k, timeout=timeout)
+    if s == 0:
+        return k
+    if s == 1 and certified_sign(v - k - 1, timeout=timeout) == -1:
+        return k
+    if s == -1 and certified_sign(v - k + 1, timeout=timeout) == 1:
+        return k - 1
+    return None
 
 
 def real_odd_roots(e):

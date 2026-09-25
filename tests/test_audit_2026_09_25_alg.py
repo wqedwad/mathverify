@@ -131,3 +131,88 @@ def test_c10_real_cube_root():
     assert _ineq("x**(1/3) < 1", "(-oo, 1)") == "CORRECT"
     assert _ineq("x**(1/3) < 1", "[0, 1)") != "CORRECT"
     assert _ineq("cbrt(x) < -1", "(-oo, -1)") != "INCORRECT"
+
+
+# ---------------------------------------------------------------------------------------------
+# C1 — count_roots ignored the written definedness and counted 0 roots of the zero polynomial.
+# Before: x³/x "has 1 root" CORRECT (and 0 INCORRECT); (x+2)²/(x+2) → 1, √x² + 1 → 1 CORRECT;
+# (x+1)² − x² − 2x − 1 "has 0 roots" CORRECT.
+# ---------------------------------------------------------------------------------------------
+def _roots(expr, n, **params):
+    return _v("count_roots", dict({"expr": expr, "var": "x"}, **params), "count", n)
+
+
+@pytest.mark.parametrize("expr,wrong,right", [
+    ("x**3/x", 1, 0), ("(x + 2)**2/(x + 2)", 1, 0), ("sqrt(x)**2 + 1", 1, 0),
+    ("x**2*(x - 1)/x", 2, 1), ("(x**2 - 1)/(x - 1)", 2, 1),
+])
+def test_c1_roots_where_the_written_expression_is_undefined_do_not_count(expr, wrong, right):
+    assert _roots(expr, wrong) == "INCORRECT"
+    assert _roots(expr, right) == "CORRECT"
+
+
+def test_c1_identically_zero_expression_is_not_zero_roots():
+    assert _roots("(x + 1)**2 - x**2 - 2*x - 1", 0) != "CORRECT"
+    assert _roots("x/x - 1", 0) != "CORRECT"
+
+
+def test_c1_multiplicity_and_interval_still_exact():
+    assert _roots("(x - 1)**2*(x + 1)", 2) == "CORRECT"
+    assert _roots("(x - 1)**2*(x + 1)", 3, distinct=False) == "CORRECT"
+    assert _roots("x**2 - 1", 1, lo="0", hi="oo") == "CORRECT"
+    assert _roots("x**5 - 3*x**3 + x + 1", 3) == "CORRECT"
+
+
+def test_c1_count_real_roots_refuses_zero_polynomial():
+    from mathverify.certify.counting import count_real_roots
+    x = sp.Symbol("x", real=True)
+    with pytest.raises(ValueError, match="identically zero"):
+        count_real_roots(sp.expand((x + 1) ** 2 - x ** 2 - 2 * x - 1), x)
+
+
+# ---------------------------------------------------------------------------------------------
+# C4 — count_solutions evaluated the givens in floating point. Before: 1/x + 1/y = 1/6 on 1..50
+# counted 7 (truth 9), x/10 + y/10 = 3/10 counted 0 (truth 4), √x + √y = √18 counted 2 (truth 4).
+# ---------------------------------------------------------------------------------------------
+def _sols(givens, bounds, n, dom="nonneg_integer"):
+    return _v("count_solutions", {"bounds": bounds}, "count", n, givens=givens,
+              vars_=[{"name": k, "domain": dom} for k in bounds])
+
+
+@pytest.mark.parametrize("givens,bounds,truth,wrong", [
+    (["1/x + 1/y = 1/6"], {"x": ["1", "50"], "y": ["1", "50"]}, 9, 7),
+    (["x/10 + y/10 = 3/10"], {"x": ["0", "3"], "y": ["0", "3"]}, 4, 0),
+    (["0.1*x + 0.2*y = 0.3"], {"x": ["0", "5"], "y": ["0", "5"]}, 2, 1),
+    (["sqrt(x) + sqrt(y) = sqrt(18)"], {"x": ["0", "18"], "y": ["0", "18"]}, 4, 2),
+    (["1/x + 1/y + 1/z = 1"], {"x": ["1", "10"], "y": ["1", "10"], "z": ["1", "10"]}, 10, 8),
+])
+def test_c4_count_solutions_is_exact(givens, bounds, truth, wrong):
+    assert _sols(givens, bounds, truth) == "CORRECT"
+    assert _sols(givens, bounds, wrong) == "INCORRECT"
+
+
+def test_c4_real_cube_root_in_count_solutions():
+    # was a caught TypeError (complex <= int); ∛x ≤ 1 on −5..5 holds for x ≤ 1: 7 integers
+    assert _sols(["cbrt(x) <= 1"], {"x": ["-5", "5"]}, 7, dom="integer") == "CORRECT"
+
+
+# ---------------------------------------------------------------------------------------------
+# C5 — count_integers: integrality and open endpoints decided exactly. Before: x·log 2 = log 8
+# → 0 CORRECT (truth 1), |x| < log 8/log 2 → 7 CORRECT (truth 5).
+# ---------------------------------------------------------------------------------------------
+def _ints(givens, n, dom="integer"):
+    return _v("count_integers", {"var": "x"}, "count", n, givens=givens,
+              vars_=[{"name": "x", "domain": dom}])
+
+
+@pytest.mark.parametrize("givens,truth,wrong,dom", [
+    (["x*log(2) = log(8)"], 1, 0, "integer"),
+    (["Abs(x) < log(8)/log(2)"], 5, 7, "integer"),
+    (["x*log(2) < log(8)"], 3, 4, "nonneg_integer"),
+    (["x/x + x**2 <= 5"], 4, 5, "integer"),
+    (["(x - 2)*(x - 5) > 0", "x < 9", "x > -4"], 8, 10, "integer"),
+    (["Abs(x - 3) > 1", "x < 10"], 6, 7, "positive_integer"),
+])
+def test_c5_count_integers_exact(givens, truth, wrong, dom):
+    assert _ints(givens, truth, dom) == "CORRECT"
+    assert _ints(givens, wrong, dom) == "INCORRECT"
