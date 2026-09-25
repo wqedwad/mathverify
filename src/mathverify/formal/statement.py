@@ -74,27 +74,33 @@ def structural_ns(ns: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def parse_structural(src: str, ns: dict[str, Any]):
+def parse_structural(src: str, ns: dict[str, Any], strict: bool = False):
     """Parse without letting SymPy evaluate the arithmetic. Falls back to the normal parse when
     the unevaluated form cannot be built (the caller then gets a possibly-trivial statement,
-    which the triviality guard rejects)."""
+    which the triviality guard rejects).
+
+    strict=True: no fallback. The normal parse simplifies (`x/x` → 1, `sqrt(x)**2` → x) and so
+    loses the points where the text is undefined (CLAUDE.md principle 12); a template that must
+    read the expression AS WRITTEN gets a LeanPrintError instead and abstains."""
     from ..normalize.parse import guarded_parse_expr
     s = preclean(src)
     try:
         with sp.evaluate(False):
             return guarded_parse_expr(s, local_dict=structural_ns(ns), global_dict={},
                                       transformations=_TRANSFORMS, evaluate=False)
-    except Exception:
+    except Exception as e:
+        if strict:
+            raise LeanPrintError(f"{src!r} cannot be read as written: {type(e).__name__}") from e
         return parse_expr_str(src, ns)
 
 
-def parse_relation_structural(src: str, ns: dict[str, Any]):
+def parse_relation_structural(src: str, ns: dict[str, Any], strict: bool = False):
     from ..normalize.parse import _split_top_level, _REL_CLASS
     s = preclean(src)
     parts = _split_top_level(s)
     if len(parts) == 1:
-        return parse_structural(src, ns)
-    exprs = [parse_structural(chunk, ns) for _, chunk in parts]
+        return parse_structural(src, ns, strict)
+    exprs = [parse_structural(chunk, ns, strict) for _, chunk in parts]
     rels = [_REL_CLASS[parts[k][0]](exprs[k - 1], exprs[k], evaluate=False) for k in range(1, len(parts))]
     return rels[0] if len(rels) == 1 else sp.And(*rels)
 
@@ -123,12 +129,32 @@ def parse_relation_structural(src: str, ns: dict[str, Any]):
 # deterministic layer uses, so the two layers cannot disagree about what "defined" means.
 
 def _definedness(expr, var=None) -> list:
-    from ..certify.domain import definedness_conditions
-    conds = list(definedness_conditions(expr, var))
-    for node in sp.preorder_traversal(expr):              # `a % 0 = a` in Lean
+    """Definedness conditions of `expr`, EXACT or a LeanPrintError (the template abstains).
+
+    * `Mod`/`%` is refused outright (audit 25 Sep 2026, C4): Lean's ℤ `%` is Euclidean where
+      SymPy's is floored (7 % -2: 1 vs -1), and ℝ `%` is Mathlib's EuclideanDomain remainder of a
+      field, i.e. identically 0 — "Σ_{k=1}^{4} k mod 2 = 0" and "x mod 2 simplifies to 0" were
+      certified.
+    * any operation whose real domain the rules do not describe (0**x, (-2)**x, factorial(x), …)
+      is refused (`certify.domain.definedness_conditions_strict`, C9).
+    * a matrix contributes the conditions of its entries."""
+    from ..certify.domain import definedness_conditions_strict
+    if isinstance(expr, (sp.MatrixBase, sp.MatrixExpr)) or any(
+            isinstance(n, sp.MatrixBase) for n in sp.preorder_traversal(expr)):
+        # matrix sums, products and natural powers are total: the entries decide
+        out: list = []
+        for node in sp.preorder_traversal(expr):
+            if isinstance(node, sp.MatrixBase):
+                for it in node:
+                    out += [c for c in _definedness(it, var) if c not in out]
+        return out
+    for node in sp.preorder_traversal(expr):
         if isinstance(node, sp.Mod):
-            conds.append(sp.Ne(node.args[1], 0))
-    return conds
+            raise LeanPrintError(f"Mod in {expr}: Lean's % is Euclidean on ℤ and 0 on ℝ")
+    conds = definedness_conditions_strict(expr, var)
+    if conds is None:
+        raise LeanPrintError(f"the real domain of {expr} is not known exactly")
+    return list(conds)
 
 
 def _closed_truth(c) -> bool | None:
@@ -335,7 +361,8 @@ def _print_lean(e, field: str = "ℝ") -> str:
             return f"Real.log {_paren(_print_lean(e.args[0], field))}"
         raise LeanPrintError("log with explicit base")
     if isinstance(e, sp.Mod):
-        return f"({_print_lean(e.args[0], field)} % {_print_lean(e.args[1], field)})"
+        # never: ℤ `%` is Euclidean in Lean (SymPy floors), ℝ `%` is identically 0 (C4, 25 Sep)
+        raise LeanPrintError("Mod has no faithful Lean rendering")
     # inert or evaluated forms of the integer helpers print the same way
     cname = e.__class__.__name__
     if cname == "gcd" and len(e.args) == 2:
@@ -360,7 +387,12 @@ def relation_to_lean(rel, field: str = "ℝ") -> str:
         return "False"
     for cls, op in _REL_OP.items():
         if isinstance(rel, cls):
-            return f"{sympy_to_lean(rel.lhs, field)} {op} {sympy_to_lean(rel.rhs, field)}"
+            lhs = sympy_to_lean(rel.lhs, field)
+            if _closed_scalar(rel.lhs) and _closed_scalar(rel.rhs):
+                # a relation between closed numbers has no variable to fix its type: Lean then
+                # reads the literals in ℕ, where 7 / 2 = 3 and 1 / 2 = 0 (C3, 25 Sep 2026)
+                lhs = f"({lhs} : {field})"
+            return f"{lhs} {op} {sympy_to_lean(rel.rhs, field)}"
     if isinstance(rel, sp.And):
         return " ∧ ".join(f"({relation_to_lean(a, field)})" for a in rel.args)
     if isinstance(rel, sp.Or):
@@ -368,6 +400,11 @@ def relation_to_lean(rel, field: str = "ℝ") -> str:
     if isinstance(rel, sp.Not):
         return f"¬({relation_to_lean(rel.args[0], field)})"
     raise LeanPrintError(f"cannot print relation {rel}")
+
+
+def _closed_scalar(e) -> bool:
+    e = sp.sympify(e)
+    return not isinstance(e, (sp.MatrixBase, sp.MatrixExpr)) and not e.free_symbols
 
 
 def _subs_rel(rel, var, val):
@@ -408,6 +445,16 @@ class LeanStatement:
     kind: str                    # which template produced it
     note: str = ""
     hints: tuple[str, ...] = ()  # goal-specific tactics the template can supply (tried first)
+    # Satisfiability of the hypotheses (audit 25 Sep 2026, C6): a vacuity probe can only show that
+    # hypotheses ARE contradictory, and a stronger proof search (the ladder's nlinarith hints, a
+    # model-written proof) found contradictions it did not — "a + b = 42 from a² + b² < 2ab" was
+    # certified. So a statement with hypotheses needs a POSITIVE proof that they can hold: a point
+    # (`witness`, one value per `sat_vars` binder) that the template found and checked exactly,
+    # which Lean checks again in the audit (`sat_probe`). `sat_by_construction`: the hypotheses
+    # define the object (a recurrence with its initial terms), so they hold for the one it defines.
+    sat_vars: tuple[str, ...] = ()
+    witness: tuple[str, ...] | None = None
+    sat_by_construction: bool = False
 
     def theorem(self, proof: str) -> str:
         """The Lean command that proves the statement with `proof`, autoImplicit off
@@ -438,12 +485,33 @@ class LeanStatement:
         closers = ["linarith", "nlinarith", "simp at *; linarith", "norm_num at *; linarith",
                    "field_simp at *; linarith", "simp at *; nlinarith"]
         inner = "first | " + " | ".join(f"({c}; done)" for c in closers)
+        # the generic proof ladder (prove.TACTIC_LADDER) is in here too, hint sets included: the
+        # probe must not be weaker than the search (25 Sep 2026: `nlinarith [sq_nonneg (a - b), …]`
+        # proved a goal from a² + b² < 2ab and the probe missed the contradiction). The positive
+        # satisfiability proof (sat_probe) is what closes the gap for stronger searches.
         alts = ["omega", "linarith", "nlinarith", "norm_num at *", "simp_all",
                 "simp_all; linarith", "simp_all; nlinarith", "norm_num at *; linarith",
-                "simp at *; linarith", "field_simp at *; linarith"]
+                "simp at *; linarith", "field_simp at *; linarith", "field_simp at *; nlinarith",
+                "nlinarith [sq_nonneg (a - b), sq_nonneg (a + b)]", "norm_num", "decide"]
         alts += [f"exact h{i} (by {inner})" for i, h in enumerate(self.hypotheses, start=1)
                  if " ≠ " in h and "∀" not in h and "∃" not in h]
         return f"{AUTOIMPLICIT_OFF}{head} : False := by\n  first | " + " | ".join(f"({a}; done)" for a in alts)
+
+    def sat_probe(self) -> str | None:
+        """`∃ binders, h1 ∧ … ∧ hn`, proved at the template's witness. None when there is nothing
+        to prove it with (no witness): the audit then refuses the certificate."""
+        if not self.hypotheses or self.witness is None or len(self.witness) != len(self.sat_vars):
+            return None
+        body = " ∧ ".join(f"({h})" for h in self.hypotheses)
+        n = len(self.hypotheses)
+        each = "first | " + " | ".join(f"({c}; done)" for c in (
+            "norm_num", "simp", "positivity", "norm_num [Real.sqrt_eq_iff_mul_self_eq]", "nlinarith"))
+        split = "" if n == 1 else "refine ⟨" + ", ".join(["?_"] * n) + "⟩ <;> "
+        close = f"first | (norm_num; done) | ({split}({each}); done)"
+        if not self.sat_vars:
+            return f"{AUTOIMPLICIT_OFF}theorem {self.name}_sat : {body} := by\n  {close}"
+        head = f"theorem {self.name}_sat : ∃ {' '.join(self.sat_vars)} : {self.field}, {body} := by"
+        return (f"{AUTOIMPLICIT_OFF}{head}\n  refine ⟨{', '.join(self.witness)}, ?_⟩\n  {close}")
 
     def no_hyp_probe(self, proof: str) -> str | None:
         """Same goal without the hypotheses: if it still proves, the data were never used."""
@@ -473,36 +541,374 @@ def _domain_hyps(obj, ns, field: str, only: str | None = None) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------------------- faithfulness
+# The formal-layer audit of 25 Sep 2026 had 53 of 98 wrong claims certified. Apart from the junk
+# values above, three causes, each closed here by stating what the problem SAYS or refusing:
+#   * restrictions dropped (C2): var constraints, domain_of_discourse, every given but the first,
+#     and complex/rational domains never reached the statement — "2x = 4 with x > 5 has the
+#     root 2" and "x² = −1 over ℂ has no root" were certified;
+#   * the simplifying parse (C1, CLAUDE.md principle 12): `x**2/x = 0` reached Lean as `x = 0`,
+#     `exp(log x)` as `x`, `k/k` as `1`, so the points where the problem is undefined vanished;
+#   * the claim rewritten before comparison (principle 3): `y = x**2/x` became `y = x`.
+_INT_DOMAINS = frozenset({"integer", "positive_integer", "nonneg_integer", "natural"})
+_UNSUPPORTED_DOMAINS = frozenset({"complex", "rational"})
+# the same conditions as _DOMAIN_COND, as unevaluated relations (a positive symbol would fold
+# `0 < x` to True if it were parsed)
+_DOMAIN_REL = {
+    "positive_real": lambda s: sp.StrictLessThan(0, s, evaluate=False),
+    "nonneg_real": lambda s: sp.LessThan(0, s, evaluate=False),
+    "positive_integer": lambda s: sp.StrictLessThan(0, s, evaluate=False),
+    "nonneg_integer": lambda s: sp.LessThan(0, s, evaluate=False),
+    "natural": lambda s: sp.StrictLessThan(0, s, evaluate=False),
+}
+
+
+def _as_written(src, ns) -> list:
+    """The sides of an IR text exactly as written (no automatic simplification), or a refusal."""
+    from ..normalize.parse import parse_as_written
+    if not isinstance(src, str):
+        raise LeanPrintError("a problem expression that is not text cannot be read as written")
+    w = parse_as_written(src, ns)
+    if w is None:
+        raise LeanPrintError(f"{src!r} cannot be read as written")
+    return list(w)
+
+
+def _latex_written(s: str, ns) -> Any:
+    """A LaTeX text AS WRITTEN (latex2sympy with evaluation off), its symbols rebound to the
+    problem's; a refusal for anything undeclared or unreadable."""
+    from latex2sympy2_extended import latex2sympy
+    from ..normalize.parse import is_latex
+    if not is_latex(s):
+        raise LeanPrintError(f"{s!r} is not LaTeX")
+    try:
+        with sp.evaluate(False):
+            e = latex2sympy(s)
+    except Exception as ex:  # noqa: BLE001
+        raise LeanPrintError(f"LaTeX {s!r} cannot be read as written") from ex
+    if not isinstance(e, sp.Basic):
+        raise LeanPrintError(f"LaTeX {s!r} is not an expression")
+    reps = {}
+    for fs in e.free_symbols:
+        tgt = ns.get(fs.name)
+        if not isinstance(tgt, sp.Symbol):
+            raise LeanPrintError(f"LaTeX {s!r} uses the undeclared symbol {fs}")
+        reps[fs] = tgt
+    with sp.evaluate(False):
+        return e.xreplace(reps)
+
+
+def _parse_written(src, ns) -> Any:
+    """A claim or problem value AS WRITTEN: the structural parse, or the LaTeX reader."""
+    try:
+        return parse_structural(str(src), ns, strict=True)
+    except LeanPrintError:
+        return _latex_written(strip_presentation(str(src)), ns)
+
+
+def _written_conds(srcs, ns, var=None) -> list:
+    """Open definedness conditions of IR texts AS WRITTEN. A closed one that fails refuses."""
+    out: list = []
+    for s in srcs:
+        for side in _as_written(s, ns):
+            for c in _definedness(side, var):
+                if not getattr(c, "free_symbols", None):
+                    if _closed_truth(c) is not True:
+                        raise LeanPrintError(f"{s!r} is undefined as written ({c})")
+                    continue
+                if c not in out:
+                    out.append(c)
+    return out
+
+
+def _open(conds) -> list:
+    return [c for c in conds if getattr(c, "free_symbols", None)]
+
+
+def _solve_region(conds, var) -> sp.Set:
+    """Where all the conditions hold (one variable), or a refusal when SymPy cannot say."""
+    region: sp.Set = S.Reals
+    for c in conds:
+        if c is sp.true:
+            continue
+        if c is sp.false:
+            return S.EmptySet
+        if c.free_symbols - {var}:
+            raise LeanPrintError(f"condition {c} is not in {var} alone")
+        try:
+            s = sp.solveset(c, var, S.Reals)
+        except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError) as e:
+            raise LeanPrintError(f"cannot solve {c}") from e
+        if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):
+            raise LeanPrintError(f"cannot solve {c}")
+        region = sp.Intersection(region, s)
+    return region
+
+
+def _merge_written(parsed, written, var) -> list:
+    """Guards for a one-variable statement whose relation went through the simplifying parse: the
+    parsed form's own conditions plus every as-written condition they do not already imply.
+    Refuses when the simplified form is undefined somewhere the written one is defined (its Lean
+    junk values would then be inside the region the statement is about), or when undecidable."""
+    parsed, written = _open(parsed), _open(written)
+    dw = _solve_region(written, var)
+    for c in parsed:
+        bad = _violation_set(c, var, dw)
+        if bad is None or bad != S.EmptySet:
+            raise LeanPrintError(f"the simplified form needs {c} where the written one is defined")
+    out = list(parsed)
+    dp = _solve_region(parsed, var)
+    for c in written:
+        if c in out:
+            continue
+        if dp.is_subset(_solve_region([c], var)) is True:
+            continue                                  # already implied by the parsed guards
+        out.append(c)
+    return out
+
+
+def _interior(conds) -> list:
+    """The open version of each condition (≥ → >, ≤ → <): where a derivative can exist."""
+    out: list = []
+    for c in conds:
+        if isinstance(c, sp.GreaterThan):
+            c = sp.StrictGreaterThan(c.lhs, c.rhs, evaluate=False)
+        elif isinstance(c, sp.LessThan):
+            c = sp.StrictLessThan(c.lhs, c.rhs, evaluate=False)
+        if c not in out:
+            out.append(c)
+    return out
+
+
+def _set_relation(s: sp.Set, var):
+    """A domain of discourse as a relation in `var` (a union of intervals or a finite set)."""
+    if s == S.Reals:
+        return sp.true
+    if isinstance(s, sp.Interval):
+        parts = []
+        if s.inf != -sp.oo:
+            parts.append((sp.StrictGreaterThan if s.left_open else sp.GreaterThan)(var, s.inf, evaluate=False))
+        if s.sup != sp.oo:
+            parts.append((sp.StrictLessThan if s.right_open else sp.LessThan)(var, s.sup, evaluate=False))
+        return parts[0] if len(parts) == 1 else sp.And(*parts)
+    if isinstance(s, sp.Union):
+        return sp.Or(*[_set_relation(a, var) for a in s.args])
+    if isinstance(s, sp.FiniteSet) and s.args:
+        return sp.Or(*[sp.Eq(var, e, evaluate=False) for e in s.args])
+    raise LeanPrintError(f"domain of discourse {s} is not a union of intervals")
+
+
+def _var_restrictions(obj, ns, var, field: str, main_src: str, main_rel) -> tuple[list, list]:
+    """Every condition the problem puts on `var` besides the relation the template states: its
+    declared domain, its constraints, every OTHER given and the domain of discourse, with the
+    source texts (for the as-written check). Refuses what it cannot state: a constraint or a given
+    in another variable, a domain of discourse that is not a union of intervals, or a variable
+    whose integrality differs from the statement's field."""
+    from ..normalize.parse import parse_domain
+    vd = next((v for v in obj.vars if v.name == var.name), None)
+    dom = vd.domain if vd is not None else "real"
+    if (dom in _INT_DOMAINS) != (field == "ℤ"):
+        raise LeanPrintError(f"{var} is {dom} but the statement quantifies over {field}")
+    if any(v.constraints for v in obj.vars if v.name != var.name):
+        raise LeanPrintError("a constraint on another variable")
+    conds: list = []
+    srcs: list = []
+    mk = _DOMAIN_REL.get(dom)
+    if mk:
+        conds.append(mk(var))
+    others = [g for g in obj.givens if g.strip() != str(main_src).strip()]
+    for src in list(vd.constraints if vd is not None else []) + others:
+        r = parse_relation(src, ns)
+        srcs.append(src)
+        if r is sp.true or r == main_rel:
+            continue
+        if r is not sp.false and getattr(r, "free_symbols", set()) - {var}:
+            raise LeanPrintError(f"{src!r} is not a condition on {var} alone")
+        conds.append(r)
+    if obj.domain_of_discourse:
+        if len(obj.vars) > 1:
+            raise LeanPrintError("domain of discourse with several variables")
+        r = _set_relation(parse_domain(obj.domain_of_discourse, var, ns), var)
+        if r is not sp.true:
+            conds.append(r)
+    return conds, srcs
+
+
+def _dedupe(rels, field: str) -> list:
+    out, seen = [], set()
+    for r in rels:
+        t = relation_to_lean(r, field)
+        if t not in seen:
+            seen.add(t)
+            out.append(r)
+    return out
+
+
+def _guard_rels(exprs, var=None) -> list:
+    """The open definedness conditions of `exprs`, as relations (closed ones: the printer)."""
+    out: list = []
+    for e in exprs:
+        for c in _definedness(e, var):
+            if getattr(c, "free_symbols", None) and c not in out:
+                out.append(c)
+    return out
+
+
+def _exact_truth(rel) -> bool | None:
+    """Truth of a CLOSED relation, decided exactly (no numeric tolerance): None when SymPy cannot
+    decide it. A side that is not a real number makes the relation false (it is about ℝ)."""
+    if rel is sp.true or rel is True:
+        return True
+    if rel is sp.false or rel is False:
+        return False
+    if isinstance(rel, (sp.And, sp.Or)):
+        parts = [_exact_truth(a) for a in rel.args]
+        if isinstance(rel, sp.And):
+            return False if False in parts else (True if all(p is True for p in parts) else None)
+        return True if True in parts else (False if all(p is False for p in parts) else None)
+    if not isinstance(rel, sp.core.relational.Relational) or rel.free_symbols:
+        return None
+    try:
+        lhs, rhs = sp.simplify(rel.lhs), sp.simplify(rel.rhs)
+        for v in (lhs, rhs):
+            if v.has(sp.nan, sp.zoo, sp.oo, -sp.oo):
+                return False
+            if v.is_extended_real is not True:
+                return False if v.is_extended_real is False else None
+        d = sp.simplify(lhs - rhs)
+    except Exception:  # noqa: BLE001
+        return None
+    if isinstance(rel, sp.Equality):
+        return True if d == 0 else (False if d.is_zero is False else None)
+    if isinstance(rel, sp.Unequality):
+        return False if d == 0 else (True if d.is_zero is False else None)
+    if isinstance(rel, sp.StrictGreaterThan):
+        return d.is_positive
+    if isinstance(rel, sp.GreaterThan):
+        return d.is_nonnegative
+    if isinstance(rel, sp.StrictLessThan):
+        return d.is_negative
+    if isinstance(rel, sp.LessThan):
+        return d.is_nonpositive
+    return None
+
+
+def _subst(rel, assign: dict):
+    """Put the witness into a relation WITHOUT letting SymPy decide it on the way."""
+    if isinstance(rel, (sp.And, sp.Or)):
+        return rel.func(*[_subst(a, assign) for a in rel.args])
+    if isinstance(rel, sp.core.relational.Relational):
+        with sp.evaluate(False):
+            lhs, rhs = rel.lhs.xreplace(assign), rel.rhs.xreplace(assign)
+        return rel.func(lhs, rhs, evaluate=False)
+    return rel.xreplace(assign)
+
+
+_WITNESS_GRID = (sp.Integer(0), sp.Integer(1), sp.Integer(2), sp.Integer(-1), sp.Rational(1, 2),
+                 sp.Integer(3), sp.Integer(-2), sp.Integer(5), sp.Rational(-1, 2), sp.Integer(10))
+# integer unknowns (a Diophantine given leaves one free): 0, ±1, ±2, …, ±40
+_WITNESS_GRID_Z = tuple(sp.Integer(s * k) for k in range(41) for s in ((1,) if k == 0 else (1, -1)))
+
+
+def _find_witness(obj, ns, syms, hyp_rels, field: str) -> list | None:
+    """A point where EVERY hypothesis holds, checked exactly on the hypotheses as written
+    (definedness guards included). SymPy proposes candidates — the solutions of the given
+    equations, then a small grid for whatever they leave free — and only proposes: the audit has
+    Lean prove `∃ …, hypotheses` at the point again. None when no candidate passes."""
+    from ..sandbox import run as sb_run
+    eqs = []
+    for src in list(obj.givens) + [c for v in obj.vars for c in v.constraints]:
+        try:
+            r = parse_relation(src, ns)
+        except Exception:  # noqa: BLE001
+            return None
+        if r is sp.false:
+            return None
+        if isinstance(r, sp.Equality):
+            eqs.append(r)
+    cands: list = [{}]
+    if eqs:
+        res = sb_run("mathverify.sandbox.ops:solve_system", eqs, list(syms), timeout=10.0)
+        if not res.ok or not isinstance(res.value, list):
+            return None
+        cands = [d for d in res.value if isinstance(d, dict)][:12]
+    for cand in cands:
+        vals = {s: sp.sympify(cand.get(s, s)) for s in syms}
+        free = sorted({f for v in vals.values() for f in v.free_symbols}, key=str)
+        if set(free) - set(syms):
+            continue
+        tried = 0
+        grid = _WITNESS_GRID_Z if field == "ℤ" else _WITNESS_GRID
+        for combo in __import__("itertools").product(grid, repeat=len(free)):
+            tried += 1
+            if tried > 1500:
+                break
+            sub = dict(zip(free, combo))
+            assign = {s: vals[s].xreplace(sub) for s in syms}
+            if any((not v.is_Integer) if field == "ℤ" else (v.is_extended_real is not True or not v.is_finite)
+                   for v in assign.values()):
+                continue
+            if all(_exact_truth(_subst(r, assign)) is True for r in hyp_rels):
+                return [assign[s] for s in syms]
+    return None
+
+
 # ---------------------------------------------------------------------------- templates
 def _t_evaluate(obj, ns, ca, name) -> LeanStatement | None:
     p = obj.task.params
     field = _field_for(obj)
+    if field == "ℝ" and any(v.domain in _INT_DOMAINS for v in obj.vars):
+        return None          # an integer unknown in a real binder: ℝ-solvable is not ℤ-solvable
     expr_src = p.get("expr") or obj.unknown_of_interest
     if not expr_src:
         return None
-    target = parse_structural(expr_src, ns)
-    claimed = parse_structural(str(ca["payload"]), ns) if ca["kind"] in ("value", "expression") \
+    # target, givens, constraints and claim are all read AS WRITTEN (principles 3 and 12)
+    target = parse_structural(expr_src, ns, strict=True)
+    claimed = _parse_written(ca["payload"], ns) if ca["kind"] in ("value", "expression") \
         else parse_answer(ca["kind"], ca["payload"], ns)
     if isinstance(claimed, sp.Set) or claimed is None:
         return None
-    if isinstance(target, sp.MatrixBase) or isinstance(claimed, sp.MatrixBase):
+    matrix = isinstance(target, sp.MatrixBase) or isinstance(claimed, sp.MatrixBase)
+    if matrix:
         field = "ℝ"
-    given_rels = [parse_relation_structural(g, ns) for g in obj.givens]
-    hyps = [relation_to_lean(r, field) for r in given_rels]
-    hyps += _domain_hyps(obj, ns, field)
+    elif claimed.free_symbols and (obj.givens or obj.answer_shape != "expression"):
+        # "evaluate a given a + b = 10": `10 - b` restates a given, it is not a value (audit E04)
+        return None
+    given_rels = [parse_relation_structural(g, ns, strict=True) for g in obj.givens]
+    cons_rels = [parse_relation_structural(c, ns, strict=True) for v in obj.vars for c in v.constraints]
+    rels = list(given_rels)
+    for v in obj.vars:
+        mk = _DOMAIN_REL.get(v.domain)
+        if mk:
+            rels.append(mk(ns[v.name]))
+    rels += cons_rels
     # Junk values (see the section at the top): a claim whose value depends on where a variable
     # sits is out of scope, and every open partial operation in the givens or the target becomes
     # a guard hypothesis. Without the guard, `1/(x-2) = 0` is satisfied by x = 2 in Lean, so
     # "evaluate x" would be proved = 2 for a system that has no solution at all; with it, the
-    # hypotheses are contradictory and the vacuity probe rejects the proof.
-    if not isinstance(claimed, sp.MatrixBase) and open_guards([claimed], field):
+    # hypotheses are contradictory and no witness exists (sat_probe), nor passes the vacuity probe.
+    if not matrix and open_guards([claimed], field):
         return None
-    if not isinstance(target, sp.MatrixBase):
-        hyps += [g for g in open_guards(given_rels + [target], field) if g not in hyps]
+    if not matrix:
+        rels += _guard_rels(given_rels + cons_rels + [target])
+    hyp_rels = _dedupe(rels, field)
+    hyps = [relation_to_lean(r, field) for r in hyp_rels]
     tgt_txt, cl_txt = sympy_to_lean(target, field), sympy_to_lean(claimed, field)
-    goal = f"{tgt_txt} = {cl_txt}"
+    if tgt_txt == cl_txt:
+        return None
+    # a closed target has no variable to fix its type: Lean would read `7 / 2 = 3` in ℕ (C3)
+    goal = f"({tgt_txt} : {field}) = {cl_txt}" if (not matrix and not target.free_symbols) \
+        else f"{tgt_txt} = {cl_txt}"
     binders = f"({' '.join(v.name for v in obj.vars)} : {field})" if obj.vars else ""
     kind = "closed_arithmetic" if (not obj.vars and not hyps) else "evaluate_system"
+    witness = None
+    if hyps:
+        w = _find_witness(obj, ns, [ns[v.name] for v in obj.vars], hyp_rels, field)
+        if w is not None:
+            try:
+                witness = tuple(sympy_to_lean(val, field) for val in w)
+            except LeanPrintError:
+                witness = None
     hints: list[str] = []
     # `Real.sqrt X = v` needs the square witness; the template knows both sides
     if tgt_txt.startswith("Real.sqrt ") and not target.free_symbols:
@@ -510,7 +916,8 @@ def _t_evaluate(obj, ns, ca, name) -> LeanStatement | None:
         hints.append(f"  rw [show {inner} = {cl_txt} ^ 2 by norm_num,\n"
                      f"     Real.sqrt_sq (by norm_num : (0:ℝ) ≤ {cl_txt})]")
     hints += _trig_hints(target, field)
-    return LeanStatement(name, binders, hyps, goal, field, kind, hints=tuple(hints))
+    return LeanStatement(name, binders, hyps, goal, field, kind, hints=tuple(hints),
+                         sat_vars=tuple(v.name for v in obj.vars), witness=witness)
 
 
 _STD_ANGLE = {30: "Real.pi / 6", 45: "Real.pi / 4", 60: "Real.pi / 3", 90: "Real.pi / 2",
@@ -556,7 +963,6 @@ def _trig_hints(target, field: str) -> list[str]:
 
 
 def _t_solve_equation(obj, ns, ca, name) -> LeanStatement | None:
-    from ..certify.domain import definedness_conditions
     p = obj.task.params
     field = _field_for(obj)
     var = ns.get(p.get("var", "x"))
@@ -574,13 +980,13 @@ def _t_solve_equation(obj, ns, ca, name) -> LeanStatement | None:
         roots = list(claimed.args)
     else:
         return None
-    conds = []
-    for v in obj.vars:
-        if v.name == var.name:
-            c = _DOMAIN_COND.get(v.domain)
-            if c:
-                conds.append(parse_relation(c.format(v=v.name), ns))
-    conds += list(definedness_conditions(rel, var))
+    if any(getattr(r, "free_symbols", None) for r in roots):
+        return None                             # a "root" in the unknown itself is not a value
+    # every restriction of the problem is a guard of the iff AND a condition each root must meet
+    restr, rsrcs = _var_restrictions(obj, ns, var, field, eq_src, rel)
+    parsed_defs = [c for r in [rel] + restr for c in _definedness(r, var)]
+    defs = _merge_written(parsed_defs, _written_conds([eq_src] + rsrcs, ns, var), var)
+    conds = _dedupe(restr + defs, field)
     guard = "".join(f"({relation_to_lean(c, field)}) → " for c in conds)
     eq_txt = relation_to_lean(rel, field)
     if roots:
@@ -674,20 +1080,24 @@ def _solve_equation_hints(rel, var, roots, conds, memberships, field) -> tuple[s
 
 
 def _t_solve_inequality(obj, ns, ca, name) -> LeanStatement | None:
-    from ..certify.domain import definedness_conditions
     p = obj.task.params
     field = _field_for(obj)
     var = ns.get(p.get("var", "x"))
     if not isinstance(var, sp.Symbol):
         return None
     src = p.get("inequality") or (obj.givens[0] if obj.givens else None)
-    if not src or len(obj.givens) > 1:
+    if not src:
         return None
     rel = parse_relation(src, ns)
     claimed = parse_answer("set" if ca["kind"] in ("set", "interval") else "set", ca["payload"], ns)
-    if not isinstance(claimed, sp.Set):
+    if not isinstance(claimed, sp.Set) or claimed.free_symbols:
         return None
-    conds = list(definedness_conditions(rel, var))
+    # every other given, the variable's domain and constraints and the domain of discourse are
+    # conditions of the solution set too (audit 25 Sep 2026: all four were dropped)
+    restr, rsrcs = _var_restrictions(obj, ns, var, field, src, rel)
+    parsed_defs = [c for r in [rel] + restr for c in _definedness(r, var)]
+    defs = _merge_written(parsed_defs, _written_conds([src] + rsrcs, ns, var), var)
+    conds = _dedupe(restr + defs, field)
     guard = "".join(f"({relation_to_lean(c, field)}) → " for c in conds)
     memb = _interval_to_lean(claimed, var.name, field)
     parts = [f"(∀ {var.name} : {field}, {guard}(({relation_to_lean(rel, field)}) ↔ ({memb})))"]
@@ -732,8 +1142,12 @@ def _t_equation_of(obj, ns, ca, name) -> LeanStatement | None:
         else:
             return None
     # A curve written with a partial operation in x or y (`y = 1/x`) takes junk values off its
-    # domain, so the iff would be about points that are not on either curve. Out of scope.
+    # domain, so the iff would be about points that are not on either curve. Out of scope — and
+    # that is decided on the claim AS WRITTEN: `y = x**2/x` parses to `y = x` and was certified
+    # as the line through the origin, which it misses (audit 25 Sep 2026).
     if open_guards([claimed, truth], "ℝ"):
+        return None
+    if not isinstance(ca["payload"], str) or _written_conds([ca["payload"]], ns):
         return None
     goal = (f"∀ {x.name} {y.name} : ℝ, (({relation_to_lean(claimed, 'ℝ')}) ↔ "
             f"({relation_to_lean(truth, 'ℝ')}))")
@@ -755,11 +1169,14 @@ def _t_series_sum(obj, ns, ca, name) -> LeanStatement | None:
     claimed = parse_answer(ca["kind"], ca["payload"], ns)
     if isinstance(claimed, sp.Set) or claimed is None:
         return None
-    # every summand must be defined: ∑_{k=-1}^{1} 1/k is undefined, but Lean adds −1 + 0 + 1 = 0
-    for k in range(int(lo), int(hi) + 1):
-        for c in _definedness(term, var):
-            if getattr(c, "free_symbols", None) and _closed_truth(c.subs(var, k)) is not True:
-                return None
+    # every summand must be defined: ∑_{k=-1}^{1} 1/k is undefined, but Lean adds −1 + 0 + 1 = 0;
+    # and defined AS WRITTEN: the normal parse folds k/k to 1 (audit 25 Sep 2026: "Σ k/k = 3")
+    for e in [term] + _as_written(p["term"], ns):
+        for c in _definedness(e, var):
+            for k in range(int(lo), int(hi) + 1):
+                cc = c.subs(var, k) if getattr(c, "free_symbols", None) else c
+                if _closed_truth(cc) is not True:
+                    return None
     field = "ℤ" if (term.is_polynomial(var) and all(c.is_Integer for c in sp.Poly(term, var).coeffs())
                     and claimed.is_Integer) else "ℝ"
     body = sympy_to_lean(term.subs(var, sp.Symbol(var.name)), field)
@@ -786,6 +1203,10 @@ def _t_extremum(obj, ns, ca, name) -> LeanStatement | None:
     # f must be defined on the whole interval: at a pole Lean's f is 0, so e.g. −1/x² on [−1, 1]
     # would have a provable "maximum 0" attained at the junk point x = 0
     if not defined_on(f, var, iv):
+        return None
+    # ... and so must f AS WRITTEN: `x/x − x²` parses to 1 − x², whose maximum 1 at x = 0 is a
+    # point where the problem's f does not exist (audit 25 Sep 2026)
+    if not all(defined_on(w, var, iv) for w in _as_written(p["f"], ns)):
         return None
     memb = _interval_to_lean(iv, var.name, "ℝ")
     fx = sympy_to_lean(f, "ℝ")
@@ -833,14 +1254,27 @@ def _t_count_integers(obj, ns, ca, name) -> LeanStatement | None:
     var = ns.get(p.get("var", "x"))
     if not isinstance(var, sp.Symbol) or not obj.givens:
         return None
-    rels = [parse_relation(g, ns) for g in obj.givens]
+    if any(v.name != var.name for v in obj.vars):
+        return None                         # another unknown: the count would be of pairs
+    vd = next((v for v in obj.vars if v.name == var.name), None)
+    cons = list(vd.constraints) if vd is not None else []
+    rels = [parse_relation(g, ns) for g in list(obj.givens) + cons]
     if open_guards(rels, "ℤ"):
         return None                         # a partial operation in the predicate: junk-prone
+    if _written_conds(list(obj.givens) + cons, ns, var):
+        return None                         # ... also one the normal parse folded away (x/x)
+    # the declared domain restricts what is counted (audit 25 Sep 2026: "positive x with x² < 10"
+    # was counted over all of ℤ)
+    mk = _DOMAIN_REL.get(vd.domain if vd is not None else "real")
+    if mk:
+        rels.append(mk(var))
     from ..equiv import exact_integer
     n = exact_integer(ca["payload"])     # never int(): a claimed 3.5 would become a proof of 3
     if n is None:
         return None
-    sol = sp.solveset(rels[0] if len(rels) == 1 else sp.And(*rels), var, S.Reals)
+    # the box only has to CONTAIN the solutions (Lean proves that below); solveset takes one
+    # relation at a time (an And of several was a ValueError, i.e. no statement at all)
+    sol = _solve_region(rels, var)
     if not isinstance(sol, sp.Interval) or sol.inf == -sp.oo or sol.sup == sp.oo:
         return None
     lo, hi = sp.ceiling(sol.inf), sp.floor(sol.sup)
@@ -868,7 +1302,7 @@ def _t_linalg(obj, ns, ca, name) -> LeanStatement | None:
                 f"({sympy_to_lean(C)} * {sympy_to_lean(A)} = 1)")
         return LeanStatement(name, "", [], goal, "ℝ", "linalg_inverse")
     if op == "matrix_expr":
-        T = parse_structural(p["expr"], ns)          # keep the power/product unevaluated
+        T = parse_structural(p["expr"], ns, strict=True)   # keep the power/product unevaluated
         C = claimed
         if not isinstance(C, sp.MatrixBase):
             return None
@@ -940,9 +1374,9 @@ def _t_definite_integral(obj, ns, ca, name) -> LeanStatement | None:
     # piecewise integrands (Abs, floor, sign) need a split Mathlib will not do on its own
     if integrand.has(sp.Abs, sp.floor, sp.ceiling, sp.sign, sp.Piecewise):
         return None
-    a = parse_structural(str(p["a"]), ns)
-    b = parse_structural(str(p["b"]), ns)
-    claimed = parse_structural(str(ca["payload"]), ns) if ca["kind"] in ("value", "expression") \
+    a = parse_structural(str(p["a"]), ns, strict=True)
+    b = parse_structural(str(p["b"]), ns, strict=True)
+    claimed = _parse_written(ca["payload"], ns) if ca["kind"] in ("value", "expression") \
         else parse_answer(ca["kind"], ca["payload"], ns)
     if claimed is None or isinstance(claimed, sp.Set):
         return None
@@ -954,6 +1388,10 @@ def _t_definite_integral(obj, ns, ca, name) -> LeanStatement | None:
         return None
     lo, hi = (a, b) if bool(sp.N(a - b, 30) <= 0) else (b, a)
     if not defined_on(integrand, var, sp.Interval(lo, hi)):
+        return None
+    # as written, too: `exp(log(x))` parses to x, and "∫_{-2}^{-1} exp(log x) dx = −3/2" was
+    # certified for an integrand that is nowhere real on the interval (audit 25 Sep 2026)
+    if not all(defined_on(w, var, sp.Interval(lo, hi)) for w in _as_written(p["integrand"], ns)):
         return None
     body = sympy_to_lean(integrand, "ℝ")
     goal = (f"∫ {var.name} in ({sympy_to_lean(a, 'ℝ')} : ℝ)..({sympy_to_lean(b, 'ℝ')}), {body} "
@@ -1187,9 +1625,15 @@ def _t_derivative(obj, ns, ca, name) -> LeanStatement | None:
         return None
     if any(s.name == "t" for s in f.free_symbols):
         return None
+    # f AS WRITTEN decides where it exists: `sqrt(x)**2` parses to x, and "its derivative at −1
+    # is 1" was certified (audit 25 Sep 2026)
+    f_w = _as_written(p["f"], ns)
+    if len(f_w) != 1:
+        return None
+    f_w = f_w[0]
     f_t = f.subs(var, t)
     f_lean = sympy_to_lean(f_t, "ℝ")
-    claimed = parse_structural(str(ca["payload"]), ns)
+    claimed = _parse_written(ca["payload"], ns)
     if claimed is None or isinstance(claimed, sp.Set) or (claimed.free_symbols - {var}):
         return None
     sing = _real_singularities(f, var)
@@ -1197,7 +1641,7 @@ def _t_derivative(obj, ns, ca, name) -> LeanStatement | None:
         return None
     at = p.get("at")
     if at not in (None, ""):
-        pt = parse_structural(str(at), ns)
+        pt = parse_structural(str(at), ns, strict=True)
         if pt.free_symbols or claimed.free_symbols:
             return None
         if any(sp.simplify(s - pt) == 0 for s in sing):
@@ -1205,20 +1649,30 @@ def _t_derivative(obj, ns, ca, name) -> LeanStatement | None:
         # a singularity check is not a domain check: √x and log x have no singularity at −1,
         # yet in Lean `HasDerivAt Real.sqrt 0 (-1)` and `HasDerivAt Real.log (-1) (-1)` are TRUE
         # (both functions are totalised there). The point must be interior to the real domain.
-        if not interior_defined_at(f, var, pt):
+        if not interior_defined_at(f, var, pt) or not interior_defined_at(f_w, var, pt):
             return None
-        pt_lean = f"({sympy_to_lean(pt, 'ℝ')})"
+        # typed: an untyped `(2)` in the hint `hasDerivAt_id' (2)` elaborated in ℕ
+        pt_lean = f"({sympy_to_lean(pt, 'ℝ')} : ℝ)"
         goal = f"HasDerivAt (fun t : ℝ => {f_lean}) ({sympy_to_lean(claimed, 'ℝ')}) {pt_lean}"
         return LeanStatement(name, "", [], goal, "ℝ", "derivative_at",
                              hints=_hasderiv_tactics(_hasderiv_proof(f_t, t, pt, pt_lean),
                                                      [], []))
     vn = var.name
-    # The ∀ below covers junk regions too (for √x, all of x < 0). That keeps the statement SOUND
-    # for the real domain — Lean agrees with the reals at every interior point of it — as long
-    # as the real domain is not empty; √(−x² − 1) is 0 everywhere in Lean and has derivative 0.
-    if not has_interior_point([f], var):
+    if not has_interior_point([f, f_w], var):
         return None
-    guards = [f"{vn} ≠ {sympy_to_lean(s, 'ℝ')}" for s in sing]
+    # The ∀ ranges over the INTERIOR of f's real domain (as written and as parsed), minus its
+    # poles: there Lean's f is the real f, and nowhere else is the derivative a question. The
+    # claimed derivative must be defined on all of it, or the statement is about its junk values.
+    dom_conds = _interior(_open(_definedness(f_w, var) + _definedness(f, var)))
+    region = sp.Complement(_solve_region(dom_conds, var), sp.FiniteSet(*sing))
+    for c in _open(_definedness(claimed, var)):
+        bad = _violation_set(c, var, region)
+        if bad is None or bad != S.EmptySet:
+            return None
+    guards: list[str] = []
+    for g in [f"{vn} ≠ {sympy_to_lean(s, 'ℝ')}" for s in sing] + [relation_to_lean(c, "ℝ") for c in dom_conds]:
+        if g not in guards:
+            guards.append(g)
     head, intro = _forall_head(vn, guards)
     goal = head + f"HasDerivAt (fun t : ℝ => {f_lean}) ({sympy_to_lean(claimed, 'ℝ')}) {vn}"
     return LeanStatement(name, "", [], goal, "ℝ", "derivative_fun",
@@ -1230,9 +1684,11 @@ _PLUS_C = re.compile(r"\s*[+]\s*[Cc]\s*$")
 
 
 def _t_antiderivative(obj, ns, ca, name) -> LeanStatement | None:
-    """"∫ f dx = F + C" says exactly that F' = f wherever both are defined, which is what the
-    theorem asserts. The excluded points come from SymPy's singularity set of the two expressions,
-    never from the claim, so a wrong claim cannot shrink the statement it has to satisfy."""
+    """"∫ f dx = F + C" says exactly that F' = f on the domain of f, which is what the theorem
+    asserts. The region comes from the INTEGRAND (as written and as parsed), never from the claim,
+    so a wrong claim cannot shrink the statement it has to satisfy; and the claim must be defined
+    on ALL of that region (audit 25 Sep 2026, C8): Lean's `Real.log t` is log|t|, so
+    "∫ dx/x = ln x + C" was certified although ln x does not exist for x < 0."""
     p = obj.task.params
     var = ns.get(p.get("var", "x"))
     if not isinstance(var, sp.Symbol) or ca["kind"] not in ("expression", "value"):
@@ -1251,14 +1707,27 @@ def _t_antiderivative(obj, ns, ca, name) -> LeanStatement | None:
             return None
     if any(s.name == "t" for s in integrand.free_symbols | anti.free_symbols):
         return None
+    f_w, F_w = _as_written(p["integrand"], ns), _as_written(payload, ns)
+    if len(f_w) != 1 or len(F_w) != 1:
+        return None
     sing_f, sing_F = _real_singularities(integrand, var), _real_singularities(anti, var)
     if sing_f is None or sing_F is None:
         return None
-    if not has_interior_point([integrand, anti], var):
+    if not has_interior_point([integrand, f_w[0]], var):
         return None                          # defined nowhere on ℝ: the ∀ would be all junk
     vn = var.name
-    pts = sorted(set(sing_f + sing_F), key=str)       # exact points; no nsimplify snapping
-    guards = [f"{vn} ≠ {sympy_to_lean(s, 'ℝ')}" for s in pts]
+    dom_conds = _interior(_open(_definedness(f_w[0], var) + _definedness(integrand, var)))
+    region = sp.Complement(_solve_region(dom_conds, var), sp.FiniteSet(*sing_f))
+    for c in _open(_definedness(F_w[0], var) + _definedness(anti, var)):
+        bad = _violation_set(c, var, region)
+        if bad is None or bad != S.EmptySet:
+            return None                      # the claim is undefined where the integrand is not
+    if any(region.contains(s) is not sp.false for s in sing_F):
+        return None                          # a pole of the claim inside the integrand's domain
+    guards: list[str] = []
+    for g in [f"{vn} ≠ {sympy_to_lean(s, 'ℝ')}" for s in sing_f] + [relation_to_lean(c, "ℝ") for c in dom_conds]:
+        if g not in guards:
+            guards.append(g)
     head, intro = _forall_head(vn, guards)
     anti_lean = sympy_to_lean(anti.subs(var, t), "ℝ")
     goal = head + (f"HasDerivAt (fun t : ℝ => {anti_lean}) "
@@ -1278,9 +1747,9 @@ def _t_count_structures(obj, ns, ca, name) -> LeanStatement | None:
         return None                     # a filtered count needs the predicate translated as well
     if ca["kind"] != "count":
         return None
-    try:
-        claimed = int(ca["payload"])
-    except (TypeError, ValueError):
+    from ..equiv import exact_integer
+    claimed = exact_integer(ca["payload"])    # never int(): 6.5 became a proof of 6 (audit 25 Sep)
+    if claimed is None:
         return None
     space = p.get("space") or {}
     structure = space.get("structure")
@@ -1314,11 +1783,9 @@ def _t_count_structures(obj, ns, ca, name) -> LeanStatement | None:
     return None
 
 
-def _rec_to_lean(expr, f, nvar, fname: str) -> str:
-    """Render a recurrence right-hand side, where `f(n-k)` has no direct SymPy->Lean rendering.
-    Each application is swapped for a placeholder symbol, the exact printer does the rest, and the
-    placeholders are put back — so the term still goes through the printer that refuses to guess."""
-    subs, back = {}, {}
+def _rec_placeholders(expr, f, nvar):
+    """`expr` with each `f(n-k)` swapped for a placeholder symbol: (new expr, {tag: k})."""
+    subs, shifts = {}, {}
     for app in sorted(expr.atoms(sp.core.function.AppliedUndef), key=str):
         if app.func is not f or len(app.args) != 1:
             raise LeanPrintError(f"unsupported application {app}")
@@ -1327,11 +1794,18 @@ def _rec_to_lean(expr, f, nvar, fname: str) -> str:
             raise LeanPrintError(f"non-constant or forward index {app}")
         tag = sp.Symbol(f"RECPLACEHOLDER{abs(int(shift))}")
         subs[app] = tag
-        back[tag.name] = f"{fname} {nvar.name}" if shift == 0 \
-            else f"{fname} ({nvar.name} - {abs(int(shift))})"
-    out = sympy_to_lean(expr.xreplace(subs), "ℝ")
-    for tag_name, rendered in back.items():
-        out = out.replace(tag_name, rendered)
+        shifts[tag.name] = abs(int(shift))
+    return expr.xreplace(subs), shifts
+
+
+def _rec_to_lean(expr, f, nvar, fname: str) -> str:
+    """Render a recurrence right-hand side, where `f(n-k)` has no direct SymPy->Lean rendering.
+    Each application is swapped for a placeholder symbol, the exact printer does the rest, and the
+    placeholders are put back — so the term still goes through the printer that refuses to guess."""
+    sub, shifts = _rec_placeholders(expr, f, nvar)
+    out = sympy_to_lean(sub, "ℝ")
+    for tag_name, k in shifts.items():
+        out = out.replace(tag_name, f"{fname} {nvar.name}" if k == 0 else f"{fname} ({nvar.name} - {k})")
     return out
 
 
@@ -1350,12 +1824,19 @@ def _t_recurrence_term(obj, ns, ca, name) -> LeanStatement | None:
     if not isinstance(nvar, sp.Symbol):
         nvar = sp.Symbol(vname, integer=True)
         ns2[vname] = nvar
+    from ..equiv import exact_integer
     try:
         rel = parse_relation(p["recurrence"], ns2)
-        initial = {int(sp.sympify(str(k))): parse_expr_str(str(v), ns2)
-                   for k, v in (p.get("initial") or {}).items()}
-        index = int(p["index"])
-        claimed = parse_structural(str(ca["payload"]), ns2) if ca["kind"] in ("value", "expression") \
+        initial = {}
+        for k, v in (p.get("initial") or {}).items():
+            ki = exact_integer(k)             # never int(sympify(...)): 1.5 would become 1
+            if ki is None or _written_conds([str(v)], ns2):
+                return None
+            initial[ki] = parse_expr_str(str(v), ns2)
+        index = exact_integer(p["index"])
+        if index is None:
+            return None
+        claimed = _parse_written(ca["payload"], ns2) if ca["kind"] in ("value", "expression") \
             else None
     except (ParseError, LeanPrintError, TypeError, ValueError, KeyError, sp.SympifyError):
         return None
@@ -1369,8 +1850,18 @@ def _t_recurrence_term(obj, ns, ca, name) -> LeanStatement | None:
     if not (start <= index <= start + 40) or rel.rhs.has(f(nvar)):
         return None
     # `a(n) = 1/a(n-1)` with a term that reaches 0: Lean iterates through 1/0 = 0 and proves a
-    # value for a sequence that does not exist. A partial operation in the recurrence is out.
-    if open_guards([rel.rhs], "ℝ"):
+    # value for a sequence that does not exist. A partial operation in the recurrence is out —
+    # read on the placeholder form (an applied `a(n-1)` has no domain rule) and AS WRITTEN.
+    rhs_sub, shifts = _rec_placeholders(rel.rhs, f, nvar)
+    if open_guards([rhs_sub], "ℝ"):
+        return None
+    for side in _as_written(p["recurrence"], ns2):
+        if _open(_definedness(_rec_placeholders(side, f, nvar)[0])):
+            return None
+    # ℕ subtraction truncates: with only a(0) given, `a(n-2)` at n = 1 is a(1 - 2) = a(0) in Lean,
+    # a term the problem never defined (audit 25 Sep 2026, C5: "a(3) = 5" was certified). Every
+    # backward reach from the first recurrence index must land on a given term.
+    if start - max(shifts.values(), default=0) < min(initial):
         return None
     try:
         rhs = _rec_to_lean(rel.rhs, f, nvar, fname)
@@ -1386,8 +1877,10 @@ def _t_recurrence_term(obj, ns, ca, name) -> LeanStatement | None:
     hints = ("\n".join(steps + [f"  norm_num at {ev}", f"  linarith [{facts}]"]),
              "\n".join(steps + [f"  norm_num at {ev} ⊢", f"  linarith [{facts}]"]),
              "\n".join(steps + [f"  norm_num at {ev}", f"  nlinarith [{facts}]"]))
+    # the hypotheses define the sequence (initial terms, then each term from earlier ones only),
+    # so exactly one sequence satisfies them: satisfiable by construction
     return LeanStatement(name, f"({fname} : ℕ → ℝ)", hyps, goal, "ℝ", "recurrence_term",
-                         hints=hints)
+                         hints=hints, sat_by_construction=True)
 
 
 # ---------------------------------------------------------------------------- domain_of
@@ -1569,21 +2062,22 @@ def _t_domain_of(obj, ns, ca, name) -> LeanStatement | None:
     is exactly where they hold. The statement never contains f itself, so no junk value can enter
     it, and a condition that itself holds a partial operation (`log(√x − 1)` needs `√x − 1 > 0`)
     is out of scope rather than printed."""
-    from ..certify.domain import definedness_conditions
     p = obj.task.params
     var = ns.get(p.get("var", "x"))
     if not isinstance(var, sp.Symbol) or ca["kind"] not in ("set", "interval"):
         return None
     if not _real_only(obj, ns, {var.name}):
         return None
-    expr = parse_structural(p["expr"], ns)
+    expr = parse_structural(p["expr"], ns, strict=True)
     if expr.free_symbols - {var}:
         return None
     claimed = parse_answer(ca["kind"], ca["payload"], ns)
     if not isinstance(claimed, sp.Set):
         return None
     conds = []
-    for c in definedness_conditions(expr, var):
+    # exact or nothing: `0**x`, `(-2)**x`, `factorial(x)` have no condition list and were
+    # certified "domain ℝ" (audit 25 Sep 2026, C9); _definedness refuses them
+    for c in _definedness(expr, var):
         if not getattr(c, "free_symbols", None):
             if _closed_truth(c) is not True:
                 return None
@@ -1628,11 +2122,10 @@ def _t_simplify_expression(obj, ns, ca, name) -> LeanStatement | None:
     p = obj.task.params
     if ca["kind"] not in ("expression", "value") or not p.get("expr"):
         return None
-    target = parse_structural(p["expr"], ns)
-    try:
-        claimed = parse_structural(str(ca["payload"]), ns)
-    except (ParseError, sp.SympifyError, TypeError, ValueError):
-        claimed = parse_answer(ca["kind"], ca["payload"], ns)       # LaTeX and other forms
+    # both AS WRITTEN, with no fallback to the simplifying parse (principles 3 and 12): a LaTeX
+    # claim is read by an evaluating parser, so it abstains rather than being compared rewritten
+    target = parse_structural(p["expr"], ns, strict=True)
+    claimed = _parse_written(ca["payload"], ns)
     if claimed is None or isinstance(claimed, (sp.Set, sp.MatrixBase)) or isinstance(target, sp.MatrixBase):
         return None
     syms = sorted(target.free_symbols, key=lambda s_: s_.name)
@@ -1737,6 +2230,8 @@ def _t_count_solutions(obj, ns, ca, name) -> LeanStatement | None:
     rels += [parse_relation(c, ns) for v in vars_ for c in v.constraints]
     if open_guards(rels, "ℤ"):
         return None                           # a partial operation in the predicate: junk-prone
+    if _written_conds(list(obj.givens) + [c for v in vars_ for c in v.constraints], ns):
+        return None                           # ... also one the normal parse folded away (x/x = 1)
     for r in rels:
         for node in sp.preorder_traversal(r):
             if isinstance(node, sp.Mod):
@@ -1795,6 +2290,93 @@ TEMPLATES: dict[str, Callable] = {
 }
 
 
+# What each template states of the problem's restrictions. A restriction a template does not
+# state makes it refuse (audit 25 Sep 2026, C2): dropping one changed the question — "x² < 4 over
+# x > 0" was certified as (−2, 2). `index`: the variable is a summation / sequence index, whose
+# integrality is the template's own.
+_ENCODES: dict[str, frozenset] = {
+    "evaluate": frozenset({"givens", "constraints", "domains"}),
+    "solve_equation": frozenset({"givens", "constraints", "domains", "dod"}),
+    "solve_inequality": frozenset({"givens", "constraints", "domains", "dod"}),
+    "count_integers": frozenset({"givens", "constraints", "domains"}),
+    "count_solutions": frozenset({"givens", "constraints", "domains"}),
+    "series_sum": frozenset({"index"}),
+    "recurrence_term": frozenset({"index"}),
+}
+
+
+def _restrictions_gate(obj) -> None:
+    enc = _ENCODES.get(obj.task.kind, frozenset())
+    if any(v.domain in _UNSUPPORTED_DOMAINS for v in obj.vars):
+        raise LeanPrintError("complex/rational variables have no faithful ℝ/ℤ statement")
+    if obj.domain_of_discourse and "dod" not in enc:
+        raise LeanPrintError("domain of discourse not stated by this template")
+    if any(v.constraints for v in obj.vars) and "constraints" not in enc:
+        raise LeanPrintError("variable constraints not stated by this template")
+    if obj.givens and "givens" not in enc:
+        raise LeanPrintError("givens not stated by this template")
+    if "domains" not in enc:
+        allowed = {None, "real"} | (set(_INT_DOMAINS) if "index" in enc else set())
+        if any(v.domain not in allowed for v in obj.vars):
+            raise LeanPrintError("variable domain not stated by this template")
+
+
+def _functions_faithful(obj, ns) -> None:
+    """A problem function's body is parsed with simplification (`f(x) = x/x` becomes 1): refuse
+    unless its domain as written is exactly its domain as parsed."""
+    for fd in obj.functions:
+        body = getattr(ns.get(fd.name), "body", None)
+        if body is None:
+            raise LeanPrintError(f"function {fd.name} has no parsed body")
+        w = _as_written(fd.expr, ns)
+        if len(w) != 1:
+            raise LeanPrintError(f"function {fd.name} is not one expression")
+        wc, pc = _open(_definedness(w[0])), _open(_definedness(body))
+        if len(fd.args) == 1 and isinstance(ns.get(fd.args[0]), sp.Symbol):
+            v = ns[fd.args[0]]
+            dw, dp = _solve_region(wc, v), _solve_region(pc, v)
+            for c, region in [(c, dw) for c in pc] + [(c, dp) for c in wc]:
+                bad = _violation_set(c, v, region)
+                if bad is None or bad != S.EmptySet:
+                    raise LeanPrintError(f"function {fd.name}: simplification changed its domain")
+        elif set(map(str, wc)) != set(map(str, pc)):
+            raise LeanPrintError(f"function {fd.name}: simplification changed its domain")
+
+
+# a claim that cannot be read as written may still be a plain number set; one with an operation
+# that can be undefined cannot (the evaluating parse would already have rewritten it)
+_RISKY_CLAIM = re.compile(r"sqrt|log|ln|tan|cot|sec|csc|asin|acos|atan|root|exp|\*\*|\^|/|%|mod|"
+                          r"factorial|binomial|gcd|lcm|frac|√|÷", re.IGNORECASE)
+
+
+def _claim_written_ok(obj, ca, ns) -> None:
+    """The claim is compared as written (principle 3): a closed part of it that is undefined as
+    written — `sqrt(-1)**2`, which evaluates to −1 — refuses, as does an operation with no exact
+    domain rule. Its OPEN conditions are each template's business."""
+    from ..normalize.parse import parse_as_written
+    payload = ca.get("payload")
+    for txt in (payload if isinstance(payload, list) else [payload]):
+        if not isinstance(txt, str):
+            continue
+        s = strip_presentation(txt)
+        if obj.task.kind == "antiderivative":
+            s = _PLUS_C.sub("", s)
+        w = parse_as_written(s, ns)
+        if w is None:
+            try:
+                w = [_latex_written(s, ns)]
+            except LeanPrintError:
+                if _RISKY_CLAIM.search(s):
+                    raise LeanPrintError(f"claim {txt!r} cannot be read as written") from None
+                continue
+        for side in w:
+            if isinstance(side, sp.Dict) and not side:
+                continue                              # `{}`: the empty set
+            for c in _definedness(side):
+                if not getattr(c, "free_symbols", None) and _closed_truth(c) is not True:
+                    raise LeanPrintError(f"claim {txt!r} is undefined as written ({c})")
+
+
 _TRIVIAL_SPLIT = " = "
 
 
@@ -1834,6 +2416,9 @@ def build_statement(ir: dict[str, Any], claimed_answer: dict[str, Any], name: st
     if fn is None:
         return None
     try:
+        _restrictions_gate(obj)
+        _functions_faithful(obj, ns)
+        _claim_written_ok(obj, claimed_answer, ns)
         st = fn(obj, ns, claimed_answer, name)
     except LeanPrintError:
         return None
