@@ -392,6 +392,48 @@ def _summation_worker(term, var, lo, hi):
         return f"error: {type(e).__name__}: {e}"
 
 
+MAX_STEP_INDEX = 200                     # steps name early terms; a far index is not iterated
+
+
+def sequence_term_values(ir, ctx: Ctx, indices) -> tuple[str | None, dict[int, Any]]:
+    """The task's sequence name and its exact terms at the given integer indices (only the ones
+    the recurrence determines uniquely), for checking a step such as `a(3) = 6`. The step layer
+    skipped every such step as an undeclared name, so a wrong intermediate term under a right
+    final answer was certified (audit of 25 Sep 2026). Same iteration as the certificate below."""
+    p = ir.task.params or {}
+    if ir.task.kind not in ("recurrence_term", "closed_form") or not isinstance(p.get("recurrence"), str):
+        return None, {}
+    fname, var = p.get("name", "a"), p.get("var", "n")
+    try:
+        ns, f, n = _rec_ns(ctx, fname, var)
+        rel = parse_relation(p["recurrence"], ns)
+        initial = _parse_initial(p.get("initial", {}), ns)
+    except Exception:  # noqa: BLE001 - the certificate reports the parse error itself
+        return fname, {}
+    if not isinstance(rel, sp.Equality) or not initial:
+        return fname, {}
+    rec_conds = _written_conditions(p["recurrence"], ns)
+    if rec_conds is None:
+        return fname, {}
+    sh = _shifts(rel, f, n)
+    if sh and max(sh) != 0:
+        M = max(sh)
+        rel = rel.subs(n, n - M)
+        rec_conds = [c.subs(n, n - M) for c in rec_conds]
+    out: dict[int, Any] = {}
+    for k in sorted(set(indices)):
+        if k in initial:
+            out[k] = initial[k]
+            continue
+        if k < min(initial) or k > MAX_STEP_INDEX:
+            continue
+        r = sb_run("mathverify.certify.series:_iterate_worker", rel, f, n, initial, k, rec_conds,
+                   timeout=ctx.timeout)
+        if r.ok and r.value[0] is not None:
+            out[k] = r.value[0]
+    return fname, out
+
+
 def verify(ir, solution, ctx: Ctx):
     kind = ir.task.kind
     if kind not in ("recurrence_term", "closed_form", "series_sum"):

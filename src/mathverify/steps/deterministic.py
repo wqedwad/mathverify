@@ -452,6 +452,32 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
     return "unknown", ev
 
 
+def _with_sequence_terms(ir, ctx: Ctx, text: str, ns: dict[str, Any]):
+    """`text` with every call of the task's sequence at an integer index replaced by the exact
+    term, or None when that does not make it a checkable relation (a symbolic index, a term the
+    recurrence does not determine, another undeclared name)."""
+    from sympy.core.function import AppliedUndef
+    from ..certify.series import sequence_term_values
+    p = ir.task.params or {}
+    if ir.task.kind not in ("recurrence_term", "closed_form") or not isinstance(p.get("recurrence"), str):
+        return None
+    fname = p.get("name", "a")
+    if not isinstance(fname, str) or fname in ns:
+        return None
+    try:
+        rel = _parse_claim(text, dict(ns, **{fname: sp.Function(fname)}))
+    except Exception:  # noqa: BLE001 - another undeclared name, or not well-formed
+        return None
+    calls = [c for c in rel.atoms(AppliedUndef) if c.func.__name__ == fname]
+    if not calls or any(len(c.args) != 1 or not isinstance(c.args[0], sp.Integer) for c in calls):
+        return None
+    _, terms = sequence_term_values(ir, ctx, {int(c.args[0]) for c in calls})
+    if any(int(c.args[0]) not in terms for c in calls):
+        return None
+    out = rel.xreplace({c: terms[int(c.args[0])] for c in calls})
+    return None if out.atoms(AppliedUndef) else out
+
+
 def check_steps(ir, solution, ctx: Ctx):
     with Timer() as t:
         per_step: list[dict[str, Any]] = []
@@ -495,16 +521,22 @@ def check_steps(ir, solution, ctx: Ctx):
                 n_skip += 1
                 per_step.append(entry)
                 continue
+            step_ns = _step_namespace(ctx.ns) if st.kind == "compute" else ctx.ns
             try:
-                claim = _parse_claim(st.claim, _step_namespace(ctx.ns) if st.kind == "compute" else ctx.ns)
+                claim = _parse_claim(st.claim, step_ns)
             except UndeclaredSymbolError as e:
-                # The solver named something of its own (`u = sqrt(x+4)`). Well-formed
-                # mathematics we simply cannot check: skipped, no penalty (§3 rule 3).
-                entry["status"] = "skipped"
-                entry["reason"] = f"undeclared_symbol: {str(e)[:120]}"
-                n_skip += 1
-                per_step.append(entry)
-                continue
+                # A term of the task's own sequence at an integer index (`a(3) = 6`) is not the
+                # solver's symbol: it is read with the term's exact value (audit of 25 Sep 2026).
+                claim = _with_sequence_terms(ir, ctx, st.claim, step_ns)
+                if claim is None:
+                    # The solver named something of its own (`u = sqrt(x+4)`). Well-formed
+                    # mathematics we simply cannot check: skipped, no penalty (§3 rule 3).
+                    entry["status"] = "skipped"
+                    entry["reason"] = f"undeclared_symbol: {str(e)[:120]}"
+                    n_skip += 1
+                    per_step.append(entry)
+                    continue
+                entry["sequence_terms"] = True
             except Exception as e:  # noqa: BLE001
                 # Not well-formed at all. This is NOT "an unproven step", it is a solution that
                 # does not meet the structured contract, and silently skipping it let an

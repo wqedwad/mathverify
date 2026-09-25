@@ -530,3 +530,21 @@ def test_givens_that_are_the_counted_condition_are_not_a_domain():
     assert verify(ir, {"claimed_answer": {"kind": "count", "payload": 5}, "steps": []}).verdict == "CORRECT"
     ir = _ir("solve_inequality", {"var": "x"}, ["cbrt(x) < -1"], shape="interval")
     assert _run(ir, "interval", "(-oo, -1)").verdict == "CORRECT"
+
+
+SEQ = {"task": {"kind": "recurrence_term", "params": {"recurrence": "a(n) = a(n-1) + 2*a(n-2)",
+                                                      "initial": {"1": "1", "2": "3"}, "index": 6, "var": "n"}},
+       "vars": [{"name": "n", "domain": "positive_integer"}], "givens": [], "answer_shape": "scalar"}
+
+
+@pytest.mark.parametrize("claim,verdict", [
+    ("a(3) = 6", "INCORRECT"), ("a(6) = 44", "INCORRECT"), ("a(1) = 2", "INCORRECT"),
+    ("a(3) = 5", "CORRECT"), ("a(6) = a(5) + 2*a(4)", "CORRECT"), ("a(n) = a(n-1) + 2*a(n-2)", "CORRECT"),
+    ("u = 5", "CORRECT"),
+])
+def test_a_step_naming_a_term_of_the_task_sequence_is_checked(claim, verdict):
+    """`a(3) = 6` (true 5) was skipped as an undeclared name and the solution was CORRECT. A
+    symbolic index and the solver's own symbol are still skipped (principle 5)."""
+    steps = [{"id": "s1", "kind": "eq", "claim": claim}]
+    r = verify(SEQ, {"claimed_answer": {"kind": "value", "payload": "43"}, "steps": steps})
+    assert r.verdict == verdict
