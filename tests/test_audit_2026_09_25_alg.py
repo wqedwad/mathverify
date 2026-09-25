@@ -352,3 +352,37 @@ def test_inequality_systems_and_exact_rational_sets():
     cubic = "(2*cos(8*pi/9), 2*cos(4*pi/9)) U (2*cos(2*pi/9), oo)"
     assert _ineq("x**3 - 3*x + 1 > 0", cubic) == "CORRECT"
     assert _ineq("x**3 - 3*x + 1 > 0", "(2*cos(8*pi/9), 2*cos(4*pi/9)) U [2*cos(2*pi/9), oo)") == "INCORRECT"
+
+
+# ---------------------------------------------------------------------------------------------
+# Coordinator follow-ups (merged-tree measurements, 25 Sep 2026)
+# ---------------------------------------------------------------------------------------------
+def test_z3_and_algebra_agree_on_domain_and_given_inequalities():
+    ir = {"task": {"kind": "solve_equation", "params": {"equation": "x**2 = 4", "var": "x"}},
+          "vars": [{"name": "x"}], "givens": [], "answer_shape": "set", "domain_of_discourse": "x > 0"}
+    assert verify(ir, {"claimed_answer": {"kind": "set", "payload": "{2}"}, "steps": []}).verdict == "CORRECT"
+    # 2x = 4 with x > 5: {2} is wrong (was CORRECT through z3), ∅ is right
+    assert _v("solve_equation", {"var": "x"}, "set", "{2}", givens=["2*x = 4", "x > 5"]) == "INCORRECT"
+    assert _v("solve_equation", {"var": "x"}, "set", "{}", givens=["2*x = 4", "x > 5"]) == "CORRECT"
+    assert _v("solve_equation", {"var": "x"}, "set", "{2}", givens=["x**2 = 4", "x > 0"]) == "CORRECT"
+
+
+def test_identity_x_plus_1_and_open_domain_cubic():
+    assert _v("solve_equation", {"equation": "x + 1 = x + 1", "var": "x"}, "set", "{}") == "INCORRECT"
+    assert _solve("x**3 = x", "{1}", dod="x > 0") == "CORRECT"
+
+
+@pytest.mark.parametrize("expr,claim,vars_,expected", [
+    ("x", "sqrt(x)**2", None, "INCORRECT"),                      # Lean audit E10: was CORRECT
+    ("x", "sqrt(x)**2", [{"name": "x", "domain": "positive_real"}], "CORRECT"),
+    ("sqrt(x)**2", "x", None, "CORRECT"),
+    ("1/x + 1/(x + 1)", "(2*x + 1)/(x*(x + 1))", None, "CORRECT"),
+    ("x + 1", "x**2/x + 1", None, "INCORRECT"),
+])
+def test_claim_is_read_as_written(expr, claim, vars_, expected):
+    assert _v("simplify_expression", {"expr": expr}, "expression", claim, vars_=vars_) == expected
+
+
+def test_claim_as_written_in_evaluate_expression():
+    assert _v("evaluate", {"expr": "x + 1"}, "value", "x**2/x + 1", vars_=[{"name": "x"}]) == "INCORRECT"
+    assert _v("evaluate", {"expr": "(x**2 - 1)/(x - 1)"}, "value", "x + 1", vars_=[{"name": "x"}]) == "CORRECT"

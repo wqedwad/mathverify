@@ -182,6 +182,22 @@ def _verify_identity(rel, var, dom, claimed, ev, ctx, t):
     return unknown(LAYER, "identity_equation_undecided", 0, ev)
 
 
+def _with_given_inequalities(ctx: Ctx, var, dom, exclude=None):
+    """The domain restricted by every single-variable given that is not an equation
+    (`x > 5` next to `2x = 4`). Ignoring them certified {2} for 2x = 4, x > 5 in the z3 layer
+    while the algebra layer refuted it (audit of 25 Sep 2026). None when one cannot be solved."""
+    for g in ctx.givens():
+        if g is exclude or isinstance(g, Eq) or not isinstance(g, (sp.core.relational.Relational, And)):
+            continue
+        if g.free_symbols != {var}:
+            continue
+        rr = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(g), var, S.Reals, timeout=ctx.timeout)
+        if not rr.ok or isinstance(rr.value, ConditionSet):
+            return None
+        dom = sp.Intersection(dom, rr.value)
+    return dom
+
+
 def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     p = ir.task.params
     var = ctx.sym(p.get("var", "x"))
@@ -196,7 +212,9 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     claimed, err = parse_or_unknown(LAYER, _claimed_as_set, ctx, solution)
     if err:
         return err
-    dom = ctx.domain_for(var)
+    dom = _with_given_inequalities(ctx, var, ctx.domain_for(var), exclude=rel)
+    if dom is None:
+        return unknown(LAYER, "given_inequality_not_solvable")
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
     if not isinstance(claimed, FiniteSet):
         roots, sev = solve_guarded(rel, var, dom, ctx.timeout)
@@ -479,6 +497,12 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         if target.free_symbols:
             dom = {s_: ctx.domain_for(s_) for s_ in target.free_symbols}
             shape = "expression"
+            und, why = _claim_undefined_where_expr_defined(solution, ctx, dom)
+            if und is True:
+                ev["reason"] = f"claim_as_written: {why}"
+                return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
+            if und is None:
+                return unknown(LAYER, f"claim_as_written_undecided: {why}", 0, ev)
         ok, cev = answers_equivalent(claimed, target, shape=shape, domain=dom,
                                      rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
         ev["compare"] = cev
@@ -540,6 +564,37 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
     return unknown(LAYER, "undecided", 0, ev)
 
 
+def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[bool | None, str]:
+    """Is the CLAIM, read as written, undefined at some point where the problem's expression is
+    defined? The claim is parsed with SymPy's automatic simplification, which erases its own
+    undefined points: `sqrt(x)**2` becomes x, and was certified as a simplification of x on ℝ
+    (Lean audit E10, 25 Sep 2026). True -> the claim is not equal to the expression on its domain."""
+    from .domain import written_definedness
+    payload = solution.claimed_answer.payload
+    if not isinstance(payload, str):
+        return False, "payload_not_text"
+    try:
+        conds, nowhere = written_definedness(payload, ctx.claim_ns(solution))
+    except Exception as e:  # noqa: BLE001
+        return None, f"claim_not_readable_as_written: {type(e).__name__}"
+    if nowhere & set(dom):
+        return True, "claim_defined_nowhere"
+    for c in conds:
+        fs = c.free_symbols & set(dom)
+        if not fs:
+            continue
+        if len(fs) > 1:
+            return None, f"multivariate_claim_condition: {c}"
+        (v,) = tuple(fs)
+        bad = sp.Eq(c.lhs, c.rhs) if isinstance(c, sp.Ne) else sp.Not(c)
+        rr = sb_run("mathverify.sandbox.ops:solveset_in", bad, v, dom[v], timeout=ctx.timeout)
+        if not rr.ok or isinstance(rr.value, ConditionSet):
+            return None, f"claim_condition_undecided: {c}"
+        if rr.value is not S.EmptySet:
+            return True, f"claim_undefined_on {rr.value} (condition {c})"
+    return False, "claim_defined_on_expression_domain"
+
+
 def _verify_simplify(ir, solution, ctx: Ctx, t):
     p = ir.task.params
     expr, err = parse_or_unknown(LAYER, ctx.expr, p["expr"])
@@ -574,6 +629,12 @@ def _verify_simplify(ir, solution, ctx: Ctx, t):
         if okS is True:
             return result(LAYER, "pass", 0.99, True, ev, t.ms, primary=True)
         return unknown(LAYER, "multivariate_definedness_needs_symbolic_proof", 0, ev)
+    und, why = _claim_undefined_where_expr_defined(solution, ctx, dom)
+    if und is True:
+        ev = {"expr": str(expr), "claimed": str(claimed), "reason": f"claim_as_written: {why}"}
+        return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
+    if und is None:
+        return unknown(LAYER, f"claim_as_written_undecided: {why}", 0, {"expr": str(expr), "claimed": str(claimed)})
     ok, cev = answers_equivalent(claimed, expr, shape="expression", domain=dom)
     ev = {"expr": str(expr), "claimed": str(claimed), "compare": cev, "domain": {str(k): str(v) for k, v in dom.items()}}
     if ok is True:

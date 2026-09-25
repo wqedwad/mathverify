@@ -211,7 +211,10 @@ def verify(ir, solution, ctx: Ctx):
             if var.name not in syms_info:
                 syms_info[var.name] = "real"
             try:
-                cons = [rel] + ctx.var_constraints() + _discourse_constraints(ctx)
+                # the other single-variable givens that are not equations (x > 5 next to 2x = 4)
+                # restrict the solutions too; the algebra layer uses them the same way
+                extra = [g for g in ctx.givens() if not isinstance(g, Eq) and g.free_symbols == {var}]
+                cons = [rel] + extra + ctx.var_constraints() + _discourse_constraints(ctx)
             except _DomainUntranslatable as e:
                 return unknown(LAYER, f"domain_of_discourse_not_translatable: {e}")
             for c in definedness_conditions(rel, var):
