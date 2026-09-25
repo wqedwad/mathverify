@@ -10,7 +10,8 @@ The audit fed 98 wrong claims to build_statement + prove_statement (tactic ladde
   C2  restrictions dropped — var constraints, domain_of_discourse, every given but the first,
       complex/rational domains. Now: stated as guards, or the template refuses.
   C3  closed goals elaborated in ℕ (`7 / 2 = 3`). Now: typed.
-  C4  Mod: ℤ `%` is Euclidean in Lean, ℝ `%` is identically 0. Now: refused everywhere.
+  C4  Mod: ℤ `%` is Euclidean in Lean, `x % 0 = x`, ℝ `%` is identically 0. Now: refused, except
+      an integer mod a positive integer literal, printed in ℤ (Int.emod = SymPy's Mod there).
   C5  recurrences: ℕ subtraction turned an undefined a(-1) into a(0). Now: refused.
   C6  vacuity probe weaker than the proof search. Now: stronger probe AND a positive proof that
       the hypotheses hold at a witness (the sat probe), for every proof source.
@@ -204,7 +205,7 @@ REFUSED = {  # label prefix -> must produce NO statement
     "B20", "B21",                              # non-integer count
     "B40",                                     # claim undefined on the integrand's domain
     "E04",                                     # claim in the problem's unknowns
-    "E13", "E15",                              # Mod
+    "E15",                                     # Mod of a real variable
 }
 
 
@@ -289,19 +290,56 @@ def test_c3_closed_goals_and_relations_are_typed():
     assert relation_to_lean(rel).startswith("((1 / 2) : ℝ) =")
 
 
-def test_c4_mod_is_refused_in_every_template():
-    cases = [
-        (_ir("evaluate", {"expr": "Mod(x, -2)"}, [{"name": "x", "domain": "integer"}], ["x = 7"]), _val("1")),
-        (_ir("evaluate", {"expr": "Mod(7, 2)"}), _val("1")),
-        (_ir("series_sum", {"term": "Mod(k, -3)", "var": "k", "lo": "1", "hi": "3"},
-             [{"name": "k", "domain": "integer"}]), _val("3")),
-        (_ir("count_integers", {"var": "x"}, [{"name": "x", "domain": "integer"}], ["Mod(x, 2) = 0", "x**2 < 9"],
-             shape="count"), _cnt(3)),
-        (_ir("solve_equation", {"equation": "Mod(x, 3) = 1", "var": "x"}, [{"name": "x", "domain": "integer"}],
-             shape="set"), _set("{1}")),
-    ]
-    for ir_, claim in cases:
-        assert _build(ir_, claim) is None, ir_
+MOD_REFUSED = [   # no faithful Lean rendering: every template refuses
+    ("negative divisor", _ir("evaluate", {"expr": "Mod(x, -2)"}, [{"name": "x", "domain": "integer"}], ["x = 7"]),
+     _val("1")),
+    ("negative divisor, closed", _ir("evaluate", {"expr": "Mod(7, -2)"}), _val("-1")),
+    ("zero divisor", _ir("evaluate", {"expr": "Mod(7, 0)"}), _val("7")),
+    ("symbolic divisor", _ir("evaluate", {"expr": "Mod(x, n)"}, [{"name": "x", "domain": "integer"},
+                                                                 {"name": "n", "domain": "integer"}],
+                             ["x = 7", "n = 2"]), _val("1")),
+    ("real dividend", _ir("evaluate", {"expr": "Mod(x, 3)"}, X, ["x = 7"]), _val("1")),
+    ("rational dividend", _ir("evaluate", {"expr": "Mod(7/2, 2)"}), _val("3/2")),
+    ("negative divisor in a sum", _ir("series_sum", {"term": "Mod(k, -3)", "var": "k", "lo": "1", "hi": "3"},
+                                      [{"name": "k", "domain": "integer"}]), _val("3")),
+    ("real variable in a simplification", _ir("simplify_expression", {"expr": "Mod(x, 2)"}, X, shape="expression"),
+     _ex("0")),
+]
+
+
+@pytest.mark.parametrize("label,ir,claim", MOD_REFUSED, ids=[m[0] for m in MOD_REFUSED])
+def test_c4_mod_outside_the_safe_subset_is_refused(label, ir, claim):
+    assert _build(ir, claim) is None, label
+
+
+# integer mod a positive literal: printed in ℤ, where Lean's Int.emod equals SymPy's Mod
+MOD_SAFE = [  # (label, ir, claim, right?)
+    ("5^100 mod 7 = 2", _ir("evaluate", {"expr": "Mod(5**100, 7)"}), _val("2"), True),
+    ("5^100 mod 7 = 3", _ir("evaluate", {"expr": "Mod(5**100, 7)"}), _val("3"), False),
+    ("-7 mod 3 = 2 (negative dividend)", _ir("evaluate", {"expr": "Mod(-7, 3)"}), _val("2"), True),
+    ("-7 mod 3 = -1 (truncated-division answer)", _ir("evaluate", {"expr": "Mod(-7, 3)"}), _val("-1"), False),
+    ("n + 4 = 28, n even, 3n + 6 = 78", _ir("evaluate", {"expr": "n + 4"}, [{"name": "n", "domain": "nonneg_integer"}],
+                                            ["Mod(n, 2) = 0", "n + (n + 2) + (n + 4) = 78"]), _val("28"), True),
+    ("n + 4 = 30, n even, 3n + 6 = 78", _ir("evaluate", {"expr": "n + 4"}, [{"name": "n", "domain": "nonneg_integer"}],
+                                            ["Mod(n, 2) = 0", "n + (n + 2) + (n + 4) = 78"]), _val("30"), False),
+    ("sum k mod 2, k = 1..4 = 2", _ir("series_sum", {"term": "Mod(k, 2)", "var": "k", "lo": "1", "hi": "4"},
+                                      [{"name": "k", "domain": "integer"}]), _val("2"), True),
+    ("sum k mod 2, k = 1..4 = 0", _ir("series_sum", {"term": "Mod(k, 2)", "var": "k", "lo": "1", "hi": "4"},
+                                      [{"name": "k", "domain": "integer"}]), _val("0"), False),
+    ("even x with x^2 < 9: 3", _ir("count_integers", {"var": "x"}, [{"name": "x", "domain": "integer"}],
+                                   ["Mod(x, 2) = 0", "x**2 < 9"], shape="count"), _cnt(3), True),
+    ("even x with x^2 < 9: 2", _ir("count_integers", {"var": "x"}, [{"name": "x", "domain": "integer"}],
+                                   ["Mod(x, 2) = 0", "x**2 < 9"], shape="count"), _cnt(2), False),
+]
+
+
+def test_c4_safe_mod_is_printed_in_the_integers():
+    st = _build(MOD_SAFE[0][1], MOD_SAFE[0][2])
+    assert st is not None and st.goal.startswith("((((5 ^ 100) % 7 : ℤ) : ℝ) : ℝ) = 2"), st and st.goal
+    st = _build(MOD_SAFE[4][1], MOD_SAFE[4][2])
+    assert st is not None and "(n % 2 : ℤ) = 0" in st.hypotheses and st.witness == ("24",)
+    for label, ir_, claim, _right in MOD_SAFE:
+        assert _build(ir_, claim) is not None, label
 
 
 def test_c5_recurrence_with_enough_initial_terms_is_kept():
@@ -542,3 +580,15 @@ def test_live_right_answers_keep_their_certificate(lean, label, ir, claim):
     assert st is not None, label
     r = P.prove_statement(st, use_model=False, lean=lean, tactic_timeout=45)
     assert r["proved"] and r["audit"]["clean"], (label, [a.get("errors") for a in r["attempts"]][:3], r.get("audit"))
+
+
+@pytest.mark.parametrize("label,ir,claim,right", MOD_SAFE, ids=[m[0] for m in MOD_SAFE])
+def test_live_safe_mod_certifies_exactly_the_right_answers(lean, label, ir, claim, right):
+    st = _build(ir, claim)
+    assert st is not None, label
+    r = P.prove_statement(st, use_model=False, lean=lean, tactic_timeout=45)
+    certified = bool(r["proved"] and r["audit"]["clean"])
+    if right:
+        assert certified, (label, [a.get("errors") for a in r["attempts"]][:3], r.get("audit"))
+    else:
+        assert not certified, (label, r.get("proof"), r.get("audit"))

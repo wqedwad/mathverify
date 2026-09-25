@@ -128,13 +128,20 @@ def parse_relation_structural(src: str, ns: dict[str, Any], strict: bool = False
 # Definedness comes from `certify.domain.definedness_conditions` — the same definition the
 # deterministic layer uses, so the two layers cannot disagree about what "defined" means.
 
+def _safe_mod(node) -> bool:
+    """The one `Mod` Lean states faithfully: an INTEGER dividend and a positive integer literal
+    divisor d. Then SymPy's floored Mod and Lean's `Int.emod` are the same number in [0, d)."""
+    a, d = node.args
+    return isinstance(d, sp.Integer) and int(d) > 0 and a.is_integer is True
+
+
 def _definedness(expr, var=None) -> list:
     """Definedness conditions of `expr`, EXACT or a LeanPrintError (the template abstains).
 
-    * `Mod`/`%` is refused outright (audit 25 Sep 2026, C4): Lean's ℤ `%` is Euclidean where
-      SymPy's is floored (7 % -2: 1 vs -1), and ℝ `%` is Mathlib's EuclideanDomain remainder of a
-      field, i.e. identically 0 — "Σ_{k=1}^{4} k mod 2 = 0" and "x mod 2 simplifies to 0" were
-      certified.
+    * `Mod`/`%` is refused (audit 25 Sep 2026, C4) unless `_safe_mod`: Lean's ℤ `%` is Euclidean
+      where SymPy's is floored (7 % -2: 1 vs -1), `x % 0 = x` in Lean, and ℝ `%` is Mathlib's
+      EuclideanDomain remainder of a field, i.e. identically 0 — "Σ_{k=1}^{4} k mod 2 = 0" and
+      "x mod 2 simplifies to 0" were certified. A safe Mod is printed in ℤ (`_print_lean`).
     * any operation whose real domain the rules do not describe (0**x, (-2)**x, factorial(x), …)
       is refused (`certify.domain.definedness_conditions_strict`, C9).
     * a matrix contributes the conditions of its entries."""
@@ -148,13 +155,25 @@ def _definedness(expr, var=None) -> list:
                 for it in node:
                     out += [c for c in _definedness(it, var) if c not in out]
         return out
-    for node in sp.preorder_traversal(expr):
-        if isinstance(node, sp.Mod):
-            raise LeanPrintError(f"Mod in {expr}: Lean's % is Euclidean on ℤ and 0 on ℝ")
+    mods = [n for n in sp.preorder_traversal(expr) if isinstance(n, sp.Mod)]
+    back: dict = {}
+    extra: list = []
+    if mods:
+        for m in mods:
+            if not _safe_mod(m):
+                raise LeanPrintError(f"Mod in {expr}: only an integer mod a positive literal is faithful")
+        reps = {}
+        for m in mods:
+            dm = sp.Dummy(integer=True)
+            reps[m], back[dm] = dm, m
+            extra += [c for c in _definedness(m.args[0], var) if c not in extra]
+        with sp.evaluate(False):
+            expr = expr.xreplace(reps)                 # a safe Mod is total: its dividend decides
     conds = definedness_conditions_strict(expr, var)
     if conds is None:
         raise LeanPrintError(f"the real domain of {expr} is not known exactly")
-    return list(conds)
+    conds = [c.xreplace(back) if back and hasattr(c, "xreplace") else c for c in conds]
+    return list(conds) + [c for c in extra if c not in conds]
 
 
 def _closed_truth(c) -> bool | None:
@@ -361,8 +380,12 @@ def _print_lean(e, field: str = "ℝ") -> str:
             return f"Real.log {_paren(_print_lean(e.args[0], field))}"
         raise LeanPrintError("log with explicit base")
     if isinstance(e, sp.Mod):
-        # never: ℤ `%` is Euclidean in Lean (SymPy floors), ℝ `%` is identically 0 (C4, 25 Sep)
-        raise LeanPrintError("Mod has no faithful Lean rendering")
+        # only an integer mod a positive literal, computed in ℤ (Int.emod = SymPy's Mod there) and
+        # cast: ℤ `%` is Euclidean in Lean (SymPy floors) and ℝ `%` is identically 0 (C4, 25 Sep)
+        if not _safe_mod(e):
+            raise LeanPrintError("Mod has no faithful Lean rendering here")
+        txt = f"({_print_lean(e.args[0], 'ℤ')} % {int(e.args[1])} : ℤ)"
+        return txt if field == "ℤ" else f"({txt} : {field})"
     # inert or evaluated forms of the integer helpers print the same way
     cname = e.__class__.__name__
     if cname == "gcd" and len(e.args) == 2:
@@ -1177,9 +1200,18 @@ def _t_series_sum(obj, ns, ca, name) -> LeanStatement | None:
                 cc = c.subs(var, k) if getattr(c, "free_symbols", None) else c
                 if _closed_truth(cc) is not True:
                     return None
+    # the ∑ binds the index over ℤ: say so, so that an integer-only operation (a safe Mod) prints
+    term_z = term.subs(var, sp.Symbol(var.name, integer=True))
     field = "ℤ" if (term.is_polynomial(var) and all(c.is_Integer for c in sp.Poly(term, var).coeffs())
                     and claimed.is_Integer) else "ℝ"
-    body = sympy_to_lean(term.subs(var, sp.Symbol(var.name)), field)
+    if field == "ℝ" and claimed.is_Integer and term_z.is_integer is True:
+        # an integer-valued summand (k mod 2) sums to the same number in ℤ, where `decide` works
+        try:
+            sympy_to_lean(term_z, "ℤ")
+            field = "ℤ"
+        except LeanPrintError:
+            pass
+    body = sympy_to_lean(term_z, field)
     goal = (f"(∑ {var.name} ∈ Finset.Icc ({sympy_to_lean(lo, 'ℤ')} : ℤ) {sympy_to_lean(hi, 'ℤ')}, "
             f"({body} : {field})) = {sympy_to_lean(claimed, field)}")
     return LeanStatement(name, "", [], goal, field, "series_sum_finite")
@@ -1272,9 +1304,15 @@ def _t_count_integers(obj, ns, ca, name) -> LeanStatement | None:
     n = exact_integer(ca["payload"])     # never int(): a claimed 3.5 would become a proof of 3
     if n is None:
         return None
-    # the box only has to CONTAIN the solutions (Lean proves that below); solveset takes one
-    # relation at a time (an And of several was a ValueError, i.e. no statement at all)
-    sol = _solve_region(rels, var)
+    # the box only has to CONTAIN the solutions (Lean proves that below), so it is cut from the
+    # relations solveset can solve (one at a time: an And of several was a ValueError, i.e. no
+    # statement at all); one it cannot (`Mod(x, 2) = 0`) only filters inside the box
+    sol: sp.Set = S.Reals
+    for r in rels:
+        try:
+            sol = sp.Intersection(sol, _solve_region([r], var))
+        except LeanPrintError:
+            continue
     if not isinstance(sol, sp.Interval) or sol.inf == -sp.oo or sol.sup == sp.oo:
         return None
     lo, hi = sp.ceiling(sol.inf), sp.floor(sol.sup)
