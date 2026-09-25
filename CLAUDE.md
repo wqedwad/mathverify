@@ -120,5 +120,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   (401). Araç ref'ini orada yalnız ortam değişkenindeki `MATHVERIFY_GITHUB_TOKEN` ile çekebilir
   (DECISIONS §53). Belirteç değeri hiçbir çıktıya yazılmaz; değişken adı `GITHUB_TOKEN`/`GH_TOKEN`
   olmaz.
+  **Düzeltme (25 Eylül 2026, ölçüm):** claude.ai ortam değişkenleri kurulum betiğine ulaşmaz,
+  yalnız oturuma verilir. Belirteç Setup script metnindeki önyükleyicinin `T=''` satırında durur;
+  `setup_env.sh` onu yalnız çekim aşamasına verir, `fetch_artifacts.sh` git denemeleri düşerse
+  dosyaları belirteçle `raw.githubusercontent.com`'dan indirir (DECISIONS §54). Kurulum betiğini
+  etkileyecek bir ayar ortam değişkeni olarak değil, betik metninde verilir.
 - Bulutta boşta kalan VM geri alınınca arka plandaki iş kaybolur: `check.py --full` ya da Lean
   kurulumu sürerken oturum etkin tutulur.

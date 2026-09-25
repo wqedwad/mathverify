@@ -18,6 +18,8 @@ Sayılar 24 Eylül'deki tek seferlik routine oturumunun ölçümüdür (§12,
 
 ```bash
 #!/bin/bash
+{ set +vx; } 2>/dev/null
+T=''
 S=
 for d in "${CLAUDE_PROJECT_DIR:-}" /home/*/* /root/* /workspace /workspace/* /tmp/*; do
   if [ -f "$d/scripts/cloud/setup_env.sh" ] && grep -qs 'wqedwad/asd' "$d/.git/config"; then
@@ -29,7 +31,12 @@ if [ -z "$S" ]; then
   GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
     https://github.com/wqedwad/asd /tmp/mv-boot && S=/tmp/mv-boot/scripts/cloud/setup_env.sh
 fi
-if [ -n "$S" ]; then bash "$S"; else echo "mathverify: setup_env.sh not found"; fi
+if [ -n "$S" ]; then
+  MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" bash "$S" || true
+else
+  echo "mathverify: setup_env.sh not found"
+fi
+unset T
 rm -rf /tmp/mv-boot
 exit 0
 ```
@@ -40,6 +47,14 @@ exit 0
    koşmadı. Sonuç `/opt/mathverify-logs/setup_env.status`'ta (§6). Betik tanımlanmasa da kanca aynı
    kurulumu arka planda başlatır (routine oturumunda böyle oldu), ama o zaman kurulum oturumun
    içinde koşar ve bitene dek Lean kullanılamaz.
+   **Düzeltme (25 Eylül 2026, ölçüm; HANDOFF §0.12):** önyükleyici değişti. Belirteç üçüncü
+   satırda `T=''` tırnaklarının arasına yapıştırılır (3. madde); dışa aktarılmaz, yalnız
+   `setup_env.sh`'e verilir, o da yalnız araç çekimine geçirir. İlk satır (`{ set +vx; }`) izlenen
+   bir kabuğun (`-x`/`-v`) belirteci basmasını önler. `T` boş kalırsa davranış eskisiyle aynıdır. Alanın kendisinden iki
+   gerçek koşu oldu (24 Eylül gecesi; 25 Eylül 08:02:50 UTC) ve ikisi de araç ref'ini çekemedi
+   (`FAILED mode=all ... reason=fetch`, 0–1 s). Alanın yapacağı tam koşu oturum içinden temiz
+   önekte yeniden ölçüldü: `OK mode=all` **192 s** (çekim 47, Python 1, uv ön ısıtma 8,
+   `setup_lean` 118, REPL 22; 11 GB).
 3. **Ortam değişkeni gerekmez** (§3.3). Anahtarlar depodaki `.env`'den gelir (§10).
    **Düzeltme (24 Eylül 2026, gece, ölçüm):** kurulum betiği alanından ilk gerçek koşu araç ref'ini
    çekemedi: betik, Claude Code'un GitHub vekili bağlanmadan önce koştuğu için özel depo 401 döndü
@@ -61,6 +76,29 @@ exit 0
       hâli `master`a birleştikten **sonra** yapılır: betik checkout'taki `master` kopyasını çalıştırır.
    4. Yeni bir sohbet açılır; oturum §12'deki "belirteçle kurulum" maddesini ölçer.
    Belirtecin süresi dolarsa hiçbir şey bozulmaz: çekim yine 401 alır, kanca kurulumu devralır.
+
+   **Düzeltme (25 Eylül 2026, ölçüm; HANDOFF §0.12, DECISIONS §54):** 2. adım işe yaramadı.
+   Değişken oturumda tanımlıydı (`github_pat_` biçiminde, 93 karakter), ama 6 s önce aynı makinede
+   koşan kurulum betiği `MATHVERIFY_GITHUB_TOKEN is not set: no token retry` yazdı ve yine
+   `FAILED ... reason=fetch` ile bitti. claude.ai ortam değişkenleri oturuma verilir, kurulum
+   betiğine ulaşmaz (resmî belge bunu açıkça söylemiyor; aynı gözlem `anthropics/claude-code#63541`
+   ve `#55440`'ta). Belirtecin kendisi geçerli: oturum içinden `raw.githubusercontent.com`
+   üzerinden araç ref'inin dosyalarını okudu (başlıksız 404, uydurma belirteçle 404, gerçek
+   belirteçle 200). Yeni adımlar (1. adım, belirtecin oluşturulması, aynı kalır):
+   1. Bu değişiklik (`fetch_artifacts.sh`'in belirteçli `raw.githubusercontent.com` adımı,
+      `setup_env.sh`'in değişken adları satırı, yeni önyükleyici) kullanıcı onayı ve yedekle
+      `master`a birleştirilir: kurulum betiği checkout'taki `master` kopyasını çalıştırır.
+   2. **Setup script** alanının metni yukarıdaki yeni önyükleyiciyle değiştirilir ve belirteç
+      üçüncü satırda tırnakların arasına yapıştırılır: `T='github_pat_...'`.
+      Metin değiştiği için anlık görüntü yeniden kurulur; ayrı yorum satırı gerekmez. Belgeye göre
+      betik metnini de ortamı kullanan herkes okuyabilir (ortam değişkenleriyle aynı görünürlük);
+      bu kişisel ortamda o kişi yalnız kullanıcıdır. Belirteç sohbete yine yapıştırılmaz.
+   3. **Environment variables** alanındaki `MATHVERIFY_GITHUB_TOKEN` satırı silinir: kurulum
+      betiğine ulaşmıyor; oturumda hiç kullanılmıyor (orada kimliği GitHub vekili ekler), ama her
+      komut okuyabiliyor. İsteğe bağlı: aynı alana zararsız `MATHVERIFY_SETUP_CANARY=1` eklenirse
+      sonraki kurulum koşusu herhangi bir ortam değişkeninin kurulum betiğine ulaşıp ulaşmadığını
+      günlüğe yazar (§6, `environment (names only)` satırı).
+   4. Yeni bir sohbet açılır; oturum §12'deki "belirteç önyükleyicide" maddesini ölçer.
 4. **Routine istemleri:** bir bulut routine'inin (zamanlanmış ya da tek seferlik ajan) istemi push
    hedefini açıkça **yeni bir dal** olarak verir ya da hiç push istemez. "Oturumun kendi dalına push
    et" yazılmaz: 24 Eylül'deki routine oturumu varsayılan dal `master`da başladı ve `master`a push
@@ -118,6 +156,11 @@ bilmesi gereken her şey depodadır: `CLAUDE.md`, `HANDOFF.md`, `DECISIONS.md` v
 **Ek (24 Eylül 2026):** 1. madde fiilen sağlanmış: routine oturumu özel depoyu klonladı ve push
 edebildi.
 
+**Düzeltme (25 Eylül 2026, ölçüm):** 2. maddedeki `MATHVERIFY_REPO_REF`'i claude.ai ortam değişkeni
+olarak vermek hiçbir zaman işe yaramazdı: ortam değişkenleri kurulum betiğine ulaşmıyor (§3.3).
+Klon yedeğinin dalı ancak Setup script metninde `export` ile verilebilir; o klon da kimliksizdir ve
+özel depoda düşer. Ölçülen iki koşuda checkout zaten `/home/user/asd`'deydi, klon yedeği gerekmedi.
+
 ## 3. Ortam ayarları
 
 ### 3.1 Ağ
@@ -167,6 +210,8 @@ birebir alıntı:
 
 ```bash
 #!/bin/bash
+{ set +vx; } 2>/dev/null
+T=''
 S=
 for d in "${CLAUDE_PROJECT_DIR:-}" /home/*/* /root/* /workspace /workspace/* /tmp/*; do
   if [ -f "$d/scripts/cloud/setup_env.sh" ] && grep -qs 'wqedwad/asd' "$d/.git/config"; then
@@ -178,7 +223,12 @@ if [ -z "$S" ]; then
   GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 ${MATHVERIFY_REPO_REF:+--branch "$MATHVERIFY_REPO_REF"} \
     https://github.com/wqedwad/asd /tmp/mv-boot && S=/tmp/mv-boot/scripts/cloud/setup_env.sh
 fi
-if [ -n "$S" ]; then bash "$S"; else echo "mathverify: setup_env.sh not found"; fi
+if [ -n "$S" ]; then
+  MATHVERIFY_GITHUB_TOKEN="${T:-${MATHVERIFY_GITHUB_TOKEN:-}}" bash "$S" || true
+else
+  echo "mathverify: setup_env.sh not found"
+fi
+unset T
 rm -rf /tmp/mv-boot
 exit 0
 ```
@@ -235,6 +285,24 @@ görüntü bu başarısız koşudan sonra alındığı için Lean taşımaz; kan
 oturumda 167 s). Çözüm: `MATHVERIFY_GITHUB_TOKEN` (§3.3, "Senin yapman gerekenler" 3. madde);
 `fetch_artifacts.sh` düz çekim düşünce onunla bir kez daha dener.
 
+**Ölçüm ve düzeltme (25 Eylül 2026, ikinci normal oturum; HANDOFF §0.12, DECISIONS §54):**
+belirteç claude.ai ortam değişkeni olarak tanımlıyken alan yine koştu (makine 08:02:44'te açıldı,
+betik 08:02:50'de `mode=all`, checkout `/home/user/asd` `d66bf2d`) ve yine düştü:
+`MATHVERIFY_GITHUB_TOKEN is not set: no token retry`,
+`FAILED mode=all ... reason=fetch python=missing lean=missing total=1s`. Oturumda aynı değişken
+tanımlıydı. Kendi betiklerimiz değişkeni düşürmüyor (dışa aktarılmış bir değişken önyükleyiciden
+`token_applies`'a ulaşıyor; oturum içinde denendi) ve zamanlama da açıklamıyor (platformun kendi
+günlüğünde kurulum betiğinin bitişiyle Claude Code'un başlatılması arası 16 ms). Düzeltme: belirteç
+Setup script metninde verilir (önyükleyicinin `T=''` satırı) ve `fetch_artifacts.sh` git
+denemeleri düşerse dosyaları `raw.githubusercontent.com`'dan belirteçle indirir (§11). Kurulum
+betiği aşamasında GitHub trafiğinin GitHub vekilinden geçip geçmediği ve vekilin kullanıcının
+`Authorization` başlığını geçirip geçirmediği ölçülmedi **[DOĞRULANMADI]**: belgeye göre betiğin
+release istekleri de vekilin depo kapsamına girer; oturum içinde vekil `api.github.com`'a giden
+başlığı kendi kimliğiyle değiştiriyor (uydurma belirteç de 200 aldı), `raw.githubusercontent.com`'a
+giden başlık ise değişmeden GitHub'a ulaşıyor. `setup_env.sh` artık her koşuda gördüğü değişkenlerin
+yalnız adlarını yazar (`environment (names only): set=[...] unset=[...]`, §6): sonraki alan koşusu
+belirtecin, vekil değişkenlerinin ve `CLAUDE_PROJECT_DIR`'in orada olup olmadığını gösterir.
+
 ### 3.3 Ortam değişkenleri
 
 **Gerekli değişken yok.** Anahtarlar `.env`'den okunur (§10). İsteğe bağlı olanlar:
@@ -253,6 +321,16 @@ oturumda 167 s). Çözüm: `MATHVERIFY_GITHUB_TOKEN` (§3.3, "Senin yapman gerek
 **Düzeltme (24 Eylül 2026, gece):** "Gerekli değişken yok" işlev için hâlâ doğru, ama kurulum
 betiğinin anlık görüntüye Lean koyabilmesi için `MATHVERIFY_GITHUB_TOKEN` gerekiyor (tablo, §3.2).
 
+**Düzeltme (25 Eylül 2026, ölçüm):** bu tablo, değişkenlerin claude.ai ortam ayarından kurulum
+betiğine ulaştığını varsayıyordu; ulaşmıyor (§3.2). claude.ai ortam değişkenleri oturuma gelir:
+oturumdaki komutlar (ölçüldü), SessionStart kancası ve kancanın başlattığı
+`setup_env.sh --lean-only` onları görür (kanca sürecinde ayrıca ölçülmedi). Anlık görüntüyü kuran
+kurulum betiği koşusu yalnız Setup script metninde `export` edilenleri görür. Buna göre
+`MATHVERIFY_REPO_REF` claude.ai değişkeni olarak etkisizdir; `MATHVERIFY_ARTIFACT_REF` ve
+`MATHVERIFY_SKIP_LEAN` yalnız oturum içi koşuları etkiler; belirteç önyükleyicinin `T=''`
+satırında verilir ("Senin yapman gerekenler" 3. madde). 25 Eylül'de eklenen isteğe bağlı
+değişkenler (§5): `MATHVERIFY_GITHUB_RAW_URL`, `MATHVERIFY_ARTIFACT_VIA`, `MATHVERIFY_SETUP_CANARY`.
+
 ## 4. Oturum başında ne olur
 
 | | Kurulum betiği (`setup_env.sh`) | SessionStart kancası (`session_start.sh`) |
@@ -267,6 +345,9 @@ betiğinin anlık görüntüye Lean koyabilmesi için `MATHVERIFY_GITHUB_TOKEN` 
 `HOME=/root`), checkout `/home/user/asd`. Kanca o oturumda elle, root olarak çalıştırıldı
 (`CLAUDE_CODE_REMOTE=true`); oturum `master`da başladığı ve kanca o an `master`da olmadığı için
 platform onu ilk turda çalıştırmadı. Normal `Bash` komutlarında `CLAUDE_PROJECT_DIR` boş.
+
+**Ek (25 Eylül 2026, ölçüm):** claude.ai ortam değişkenlerini kurulum betiği görmez, oturum görür
+(§3.2, §3.3).
 
 Kanca sırasıyla:
 
@@ -372,6 +453,9 @@ verilince kullanılır. Routine oturumunda (`4d01ba2`, bu değişiklikten önce)
 | `MATHVERIFY_ARTIFACT_SRC` | — | `parts/` + `SHA256SUMS.full` içeren yerel dizin (tamamen çevrimdışı kurulum ve test için) |
 | `MATHVERIFY_GITHUB_TOKEN` | — | (24 Eylül gecesi eklendi) araç ref'inin düz çekimi düşerse bir kez daha bununla denenir (kurulum betiği aşaması; §3.3, DECISIONS §53) |
 | `MATHVERIFY_GITHUB_TOKEN_URL` | `https://github.com/` | belirtecin gönderilebileceği adres öneki; dışındaki adrese gönderilmez (testler yerel sunucu için değiştirir) |
+| `MATHVERIFY_GITHUB_RAW_URL` | `https://raw.githubusercontent.com/` | (25 Eylül'de eklendi) git denemeleri düşünce araç dosyalarının belirteçle indirildiği adres; boşsa bu adım atlanır; testler yerel sunucuya çevirir (§11) |
+| `MATHVERIFY_ARTIFACT_VIA` | `auto` | (25 Eylül'de eklendi) `raw`: git adımları atlanır, yalnız belirteçli dosya indirme (ölçüm için) |
+| `MATHVERIFY_SETUP_CANARY` | — | (25 Eylül'de eklendi) zararsız işaret; `setup_env.sh` yalnız adının görülüp görülmediğini yazar (§6) |
 | `MATHVERIFY_SKIP_LEAN` | — | `1`: kanca Lean kurulumu başlatmaz |
 | `MATHVERIFY_REPO_URL` / `MATHVERIFY_REPO_REF` | `https://github.com/wqedwad/asd` / uzak varsayılan dal | kurulum betiğinin klon yedeği |
 | `MATHVERIFY_PROFILE_D` | `/etc/profile.d` | `mathverify.sh`'in yazıldığı yer |
@@ -385,6 +469,11 @@ verilince kullanılır. Routine oturumunda (`4d01ba2`, bu değişiklikten önce)
 **Düzeltme (24 Eylül 2026):** `MATHLIB_CACHE_DIR` bulut kurulumunda `setup_env.sh` tarafından
 `$OPT/.mathlib-ltar` verilir (yukarıdaki düzeltme). Routine oturumunda `CLAUDE_PROJECT_DIR`
 normal `Bash` komutlarında boş ölçüldü; kanca bu değişken boşsa depoyu kendi konumundan bulur.
+
+**Düzeltme (25 Eylül 2026, ölçüm):** tablodaki değişkenler kurulum betiği koşusunda ancak Setup
+script metninde `export` edilirse etkilidir; claude.ai ortam değişkeni oraya ulaşmaz (§3.3). Bu
+özellikle `MATHVERIFY_GITHUB_TOKEN`, `MATHVERIFY_REPO_URL`/`_REF` ve `MATHVERIFY_PROFILE_D` için
+önemlidir; kancada ve elle yapılan koşularda hepsi olağan ortam değişkeni gibi çalışır.
 
 ## 6. Günlükler, durum dosyaları ve yeniden deneme
 
@@ -414,6 +503,14 @@ OK|FAILED mode=all|lean|python failed=[<aşamalar>] stages=[<ad>(<süre>s|skippe
 - `lean=ready`: kurulum var ve `lean/` sabitleriyle aynı (`lean.done`); `lean=stale`: bitmiş bir
   kurulum var ama başka sabitlerle yapılmış (kullanılır, güncellenmesi gerekir); `lean=missing`:
   bitmiş kurulum yok.
+
+**Ek (25 Eylül 2026): değişken adları satırı.** `setup_env.sh` her koşunun başında şu satırı yazar
+(yalnız adlar, değer asla):
+`environment (names only): set=[...] unset=[...]`. Bakılan adlar: `MATHVERIFY_GITHUB_TOKEN`,
+`MATHVERIFY_SETUP_CANARY`, `MATHVERIFY_REPO_REF`, `MATHVERIFY_ARTIFACT_REF`, `CLAUDE_PROJECT_DIR`,
+`CLAUDE_CODE_REMOTE`, `HTTPS_PROXY`/`https_proxy`, `HTTP_PROXY`/`http_proxy`, `NO_PROXY`/`no_proxy`,
+`GIT_CONFIG_COUNT`. Kurulum betiği koşusunda (Claude Code'dan önce) bunların hangisinin var olduğu
+henüz hiç ölçülmedi; kancanın başlattığı koşuda `CLAUDE_CODE_REMOTE` ve vekil değişkenleri beklenir.
 
 Routine oturumunda ölçülen satır (kancanın başlattığı `--lean-only`, `4d01ba2`):
 `OK mode=lean failed=[] stages=[fetch_artifacts(55s) python(1s) setup_lean(119s) setup_lean_repl(19s)] python=3.14.6 lean=ready total=195s`.
@@ -589,6 +686,25 @@ MATHVERIFY_ARTIFACT_SRC=/yol/parts-dizini bash scripts/fetch_artifacts.sh /tmp/a
 
 **Kural:** bir ref asla yerinde yeniden yazılmaz; yeni içerik yeni ad alır (`bulut-v3`, …). Eski
 ref'ler kullanıcıya sormadan silinmez.
+
+**Ek (25 Eylül 2026): belirteçli dosya indirme (`raw.githubusercontent.com`).** Git denemeleri
+(düz çekim, sonra belirteçle çekim) düşerse ve `MATHVERIFY_GITHUB_TOKEN` tanımlıysa
+`fetch_artifacts.sh` ref'in dosyalarını tek tek indirir:
+`<MATHVERIFY_GITHUB_RAW_URL><sahip>/<depo>/<ref>/SHA256SUMS.full`, `SHA256SUMS.parts` ve orada
+listelenen her parça. Her parça `SHA256SUMS.parts`'a, birleştirilen dosyalar `SHA256SUMS.full`'a
+karşı doğrulanır; biri tutmazsa hiçbir şey yerine konmaz ve sıradaki yola (checkout'un kendi uzak
+ayarı) geçilir. Belirteç `Authorization: token ...` başlığı olarak, curl'e stdin'deki bir
+yapılandırmadan verilir (komut satırında yok), yalnız uzak adres `MATHVERIFY_GITHUB_TOKEN_URL`
+altındaysa gönderilir ve yönlendirme izlenmez. `fetch_artifacts.sh` belirteci kendi kabuğunda
+tutar (git ve curl ortamında görmez); `setup_env.sh` onu yalnız çekim aşamasına verir (uv, pip,
+Lean, Lake görmez). Gerekçe (oturum içinde ölçüldü, 25 Eylül): GitHub
+vekili `api.github.com`'a giden başlığı kendi kimliğiyle değiştiriyor (uydurma belirteç de 200
+aldı); `raw.githubusercontent.com` ise vekilin değil güvenlik vekilinin arkasında ve başlık GitHub'a
+değişmeden ulaşıyor (başlıksız 404, uydurma belirteçle 404, gerçek belirteçle 200). Ref adıyla
+(`refs/arac/bulut-v2/...`) ve commit'le adreslenebiliyor. Ölçüm (oturum içinde,
+`MATHVERIFY_ARTIFACT_VIA=raw`, gerçek belirteç): toplam **32 s** (25 parça, 1.1G, 26 s; birleştirme
+1 s; SHA256 4 s), 5/5 dosya OK, günlükte belirteç 0 kez. Kurulum betiği aşamasında bu yolun
+çalıştığı henüz ölçülmedi **[DOĞRULANMADI]** (§12).
 *Ek (24 Eylül 2026):* v2 bulutta doğrulandı (yukarıda); v1'in içeriği v2'de de var. v1 geçmiş için
 duruyor, silinip silinmeyeceği hâlâ açık soru (HANDOFF §12, madde 15).
 
@@ -603,6 +719,9 @@ betik olarak yok, adımları `fetch_artifacts.sh` ve `setup_lean.sh`'in bekledi�
    `mathlib-cache-<MATHLIB_REV ilk 7>.tar` (tek üst dizin `mathlib/`, içinde `.ltar`'lar) ve
    varsa paket kaynakları.
 3. `SHA256SUMS.full`'u yaz, her dosyayı 49 MiB'lık `parts/<ad>.part-NNN` parçalarına böl.
+   *Ek (25 Eylül 2026):* `SHA256SUMS.parts`'ı da yaz (her parçanın SHA256'sı, `sha256sum -b`
+   biçiminde, `*<ad>.part-NNN`): belirteçli dosya indirme parça listesini ondan okur. `bulut-v1`
+   ve `bulut-v2`'de var.
 4. Ayrı bir çalışma dizininde bu ağacı tek bir öksüz (orphan) commit yap ve
    `git push origin <commit>:refs/arac/bulut-vN` ile gönder.
 5. `fetch_artifacts.sh`'in varsayılan ref'ini güncelle; önce `MATHVERIFY_ARTIFACT_SRC` ile
@@ -710,6 +829,37 @@ oturumda ölçülür):
       betiğine ulaştığı (belge bunu açıkça söylemiyor).
 - [ ] Anlık görüntü `/opt`'u koruyor mu: belirteçli koşudan sonraki **ikinci** yeni sohbette kanca
       Lean'i ilk anda "HAZIR" buluyor ve `setup_env.log`'a yeni bir `mode=all` satırı eklenmiyor mu.
+
+**Düzeltme (25 Eylül 2026, ikinci normal oturum; HANDOFF §0.12):**
+
+- [x] **Belirteçle kurulum (ortam değişkeni olarak)** → **başarısız**: değişken kurulum betiğine
+      ulaşmadı. Makine 08:02:44 UTC'de açıldı; alan 08:02:50'de `mode=all` koştu (checkout
+      `/home/user/asd` `d66bf2d`); `fetch_artifacts`: düz çekim `could not read Username`, ardından
+      `MATHVERIFY_GITHUB_TOKEN is not set: no token retry`; durum
+      `FAILED mode=all failed=[fetch_artifacts python uv_prewarm setup_lean setup_lean_repl] ... reason=fetch python=missing lean=missing total=1s`.
+      Oturumun `Bash`'inde değişken tanımlıydı (`github_pat_`, 93 karakter). Belirteç geçerli
+      (`raw.githubusercontent.com`'da 200; başlıksız ve uydurma belirteçle 404).
+- [x] Kurulum betiği yeniden koştu mu? → **Evet**: `/opt/mathverify-logs`'ta 24 Eylül'den kayıt yok,
+      yani bu makine 24 Eylül görüntüsünden başlamadı; görüntü yeniden kuruldu (kullanıcının betik
+      metnini değiştirmesiyle tutarlı, onayı alınmadı).
+- [x] Kancanın devraldığı kurulum: kanca 8 s (3.14.6 yok, yedek 3.12.3, `.venv` 7 s), Lean
+      **222 s**'de hazır (`OK mode=lean`: çekim 55, Python 1, `setup_lean` 142, REPL 20). Kancanın
+      elle yeniden koşusu **35 s** (`.venv` 3.14.6 ile 35 s: uv ön ısıtması hiç koşmadığı için
+      çevrimdışı deneme düştü, çevrimiçi çözümleme 27.5 s). Tam takım 845 test: **840 passed /
+      5 skipped / 0 failed**, 112 s (Lean yüzünden atlama yok).
+- [x] Alanın yapacağı tam koşu, oturum içinden temiz önekte: `OK mode=all` **192 s** (çekim 47,
+      Python 1, uv ön ısıtma 8, `setup_lean` 118, REPL 22; 11 GB). Belirteçli dosya indirme yolu
+      tek başına (`MATHVERIFY_ARTIFACT_VIA=raw`): **32 s**, 5/5 SHA256 OK (§11).
+- [ ] **Belirteç önyükleyicide** (bu değişiklik `master`da, "Senin yapman gerekenler" 3. madde,
+      25 Eylül düzeltmesi): yeni sohbette `setup_env.status` `OK mode=all`; `setup_env.log`'daki
+      `environment (names only)` satırı (`MATHVERIFY_GITHUB_TOKEN` `set` listesinde mi; vekil
+      değişkenleri ve `CLAUDE_PROJECT_DIR` var mı; kanarya eklendiyse `MATHVERIFY_SETUP_CANARY`);
+      `fetch_artifacts.log`'da hangi yolun çalıştığı (`the token fetch succeeded` = git + belirteç,
+      `the raw download succeeded` = dosya indirme) ve süresi; uv ön ısıtmanın süresi; kanca açılışta
+      "Lean: HAZIR" diyor mu.
+- [ ] Anlık görüntü `/opt`'u koruyor mu (değişmedi): belirteçli başarılı koşudan sonraki **ikinci**
+      yeni sohbette `setup_env.log` önceki `mode=all` satırıyla başlıyor, yeni `mode=all` satırı
+      yok ve kanca Lean'i ilk anda "HAZIR" buluyor mu.
 
 ## 13. Bulut routine istemleri
 

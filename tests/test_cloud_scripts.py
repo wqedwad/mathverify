@@ -58,6 +58,7 @@ BASH = _real_bash()
 needs_bash = pytest.mark.skipif(
     BASH is None, reason="no real bash (Windows: Git Bash; the WSL bash launcher is never used)")
 posix_only = pytest.mark.skipif(os.name == "nt", reason="runs the cloud scripts natively (POSIX)")
+needs_curl = pytest.mark.skipif(shutil.which("curl") is None, reason="curl not found")
 
 
 # ---- static contracts -----------------------------------------------------------------------
@@ -169,6 +170,73 @@ def test_both_scripts_fingerprint_lean_the_same_way():
 def test_the_artifact_ref_is_chosen_only_by_fetch_artifacts():
     for script in (HOOK, SETUP_ENV):
         assert "refs/arac/" not in script.read_text(encoding="utf-8"), script.name
+
+
+BULUT = ROOT / "docs" / "BULUT.md"
+
+
+def _bootstrap_from_header() -> str:
+    """The paste-ready setup-script bootstrap quoted in setup_env.sh's header comment."""
+    lines = SETUP_ENV.read_text(encoding="utf-8").splitlines()
+    start = lines.index("#   #!/bin/bash")
+    end = lines.index("#   exit 0", start)
+    return "\n".join(ln[len("#   "):] if ln.startswith("#   ") else ln.lstrip("#")
+                     for ln in lines[start:end + 1]) + "\n"
+
+
+def test_the_docs_quote_the_setup_script_bootstrap_verbatim():
+    # docs/BULUT.md tells the user to paste this text; both copies there must be the header's.
+    blocks = re.findall(r"```bash\n(#!/bin/bash\n.*?)```", BULUT.read_text(encoding="utf-8"), re.S)
+    copies = [b for b in blocks if "scripts/cloud/setup_env.sh" in b]
+    assert len(copies) == 2, blocks
+    boot = _bootstrap_from_header()
+    assert all(c == boot for c in copies), (boot, copies)
+    # claude.ai environment variables do not reach the setup script (25 Sep 2026): the token is
+    # pasted into the text, after a guard that keeps a traced shell from printing it
+    lines = boot.splitlines()
+    assert lines[1:3] == ["{ set +vx; } 2>/dev/null", "T=''"], boot
+    assert not [ln for ln in lines if ln.lstrip().startswith("export ")], boot
+
+
+@posix_only
+@needs_bash
+@pytest.mark.parametrize("case", ["empty", "pasted", "pasted-x", "pasted-v", "pasted-e", "platform"])
+def test_the_bootstrap_passes_its_token_to_setup_env_only_and_never_fails(tmp_path, case):
+    token = "github_pat_BOOT_0123456789_abc"
+    proj = tmp_path / "proj"
+    marker = tmp_path / "seen"
+    _write_exec(proj / "scripts" / "cloud" / "setup_env.sh", f"""
+        #!/usr/bin/env bash
+        echo "token=${{MATHVERIFY_GITHUB_TOKEN:+set}} len=${{#MATHVERIFY_GITHUB_TOKEN}} T=${{T:+leaked}}" > "{marker}"
+        exit 3
+    """)
+    (proj / ".git").mkdir()
+    (proj / ".git" / "config").write_text('[remote "origin"]\n\turl = https://github.com/wqedwad/asd\n')
+    # grep is the bootstrap's only other child here: it must not get the token either
+    greps = tmp_path / "grep-env"
+    _write_exec(tmp_path / "bin" / "grep", f"""
+        #!/bin/bash
+        echo "token=${{MATHVERIFY_GITHUB_TOKEN:+set}} T=${{T:+leaked}}" >> "{greps}"
+        exec {shutil.which("grep")} "$@"
+    """)
+    boot = _bootstrap_from_header()
+    if case.startswith("pasted"):
+        boot = boot.replace("T=''", f"T='{token}'")
+    boot = boot.replace("/tmp/mv-boot", str(tmp_path / "mv-boot"))  # never touch the host's /tmp
+    script = tmp_path / "boot.sh"
+    script.write_text(boot, encoding="utf-8", newline="\n")
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+           "HOME": str(tmp_path), "CLAUDE_PROJECT_DIR": str(proj)}
+    if case == "platform":  # a value the platform might pass one day is used, not overwritten
+        env["MATHVERIFY_GITHUB_TOKEN"] = token
+    flags = {"pasted-x": ["-x"], "pasted-v": ["-v"], "pasted-e": ["-e"]}.get(case, [])
+    r = subprocess.run([BASH, *flags, str(script)], env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stdout + r.stderr  # the session is never blocked
+    want = "token= len=0 T=" if case == "empty" else f"token=set len={len(token)} T="
+    assert marker.read_text().strip() == want
+    assert token not in r.stdout + r.stderr, r.stdout + r.stderr
+    if case != "platform":  # there the variable came from outside, exported by the caller
+        assert set(greps.read_text().split("\n")) <= {"token= T=", ""}, greps.read_text()
 
 
 @needs_bash
@@ -1236,6 +1304,58 @@ def test_setup_env_failed_fetch_leaves_an_installed_prefix_alone(installed):
 
 
 @posix_only
+def test_setup_env_logs_which_variables_it_sees_by_name_only(lean_bed):
+    # 25 Sep 2026: the claude.ai environment variable reached the session but not the setup
+    # script. Each run now records, by name only, what it saw (token, proxy, project dir).
+    bed = lean_bed
+    token = "github_pat_SETUPENV_0123456789_secret"
+    proxy = "http://proxyuser:proxypass@127.0.0.1:9"
+    r, _ = bed.setup_env("--lean-only", MATHVERIFY_ARTIFACT_SRC=str(bed.tmp / "unreachable"),
+                         MATHVERIFY_GITHUB_TOKEN=token, HTTPS_PROXY=proxy, CLAUDE_PROJECT_DIR=None,
+                         MATHVERIFY_SETUP_CANARY="1")
+    assert r.returncode == 0
+    log = (bed.opt / "mathverify-logs" / "setup_env.log").read_text()
+    (line,) = [ln for ln in log.splitlines() if "environment (names only):" in ln]
+    have = re.search(r"set=\[([^]]*)\]", line).group(1).split()
+    lack = re.search(r"unset=\[([^]]*)\]", line).group(1).split()
+    assert have == ["MATHVERIFY_GITHUB_TOKEN", "MATHVERIFY_SETUP_CANARY", "HTTPS_PROXY"], line
+    assert {"CLAUDE_PROJECT_DIR", "CLAUDE_CODE_REMOTE", "https_proxy", "HTTP_PROXY",
+            "GIT_CONFIG_COUNT", "MATHVERIFY_REPO_REF"} <= set(lack), line
+    # no value anywhere: output, logs, status, or any file the run left in the bed
+    secrets = (token, "SETUPENV", "proxypass")
+    out = r.stdout + r.stderr
+    assert not [s for s in secrets if s in out], out
+    for f in bed.tmp.rglob("*"):
+        if f.is_file() and not f.is_symlink():
+            data = f.read_bytes()
+            assert not [s for s in secrets if s.encode() in data], f
+
+
+@posix_only
+def test_setup_env_gives_the_token_to_the_fetch_stage_only(lean_bed):
+    # uv, pip and the packages' code, Lean and Lake never need the artifact token: only
+    # fetch_artifacts.sh gets it (25 Sep 2026)
+    bed = lean_bed
+    seen = bed.tmp / "stage-env"
+    for name in ("fetch_artifacts.sh", "setup_lean.sh", "setup_lean_repl.sh"):
+        real = bed.repo / "scripts" / name
+        real.rename(real.with_name(f"real-{name}"))
+        _write_exec(real, f"""
+            #!/usr/bin/env bash
+            echo "{name} ${{MATHVERIFY_GITHUB_TOKEN:+token}}" >> "{seen}"
+            exec bash "$(dirname "$0")/real-{name}" "$@"
+        """)
+    token = "github_pat_STAGE_0123456789_secret"
+    r, _ = bed.setup_env("--lean-only", MATHVERIFY_GITHUB_TOKEN=token)
+    assert bed.status().startswith("OK mode=lean"), bed.status() + r.stdout
+    assert seen.read_text().splitlines() == [
+        "fetch_artifacts.sh token", "setup_lean.sh ", "setup_lean_repl.sh "], seen.read_text()
+    assert token not in r.stdout + r.stderr and "STAGE_0123" not in r.stdout + r.stderr
+    log = (bed.opt / "mathverify-logs" / "setup_env.log").read_text()
+    assert "set=[MATHVERIFY_GITHUB_TOKEN" in log and token not in log
+
+
+@posix_only
 def test_setup_env_unverified_artifacts_skip_the_stages(lean_bed):
     bed = lean_bed
     # a fetch that reports success but leaves a damaged artifact set behind
@@ -1748,7 +1868,9 @@ def test_setup_lean_repl_updates_a_linked_checkout_at_its_target(installed, case
 # private repository answered it 401 ("could not read Username"; 24 Sep 2026). These tests serve
 # the artifact ref with `git http-backend` behind the same 401 and check that the token is sent
 # only after the plain fetch failed, only to its own URL prefix, and is never printed, written or
-# put on a command line.
+# put on a command line. The same server answers the raw-file download (step 2 of the script,
+# 25 Sep 2026) under /raw/ the way raw.githubusercontent.com answers a private repository: 404
+# unless the Authorization header is "token <the token>".
 
 TOKEN = "github_pat_TEST_0123456789_abcdefghij_TOKEN"
 OWNER = "sahip"
@@ -1756,12 +1878,18 @@ OWNER = "sahip"
 
 class _GitServer(http.server.ThreadingHTTPServer):
     """git smart HTTP on 127.0.0.1. With `auth` set, a request without exactly that Authorization
-    header gets 401. `seen` records every request's Authorization and marker headers."""
+    header gets 401. `seen` records every request's Authorization and marker headers.
+    /raw/<raw_prefix><path> serves <raw_root>/<path> when the Authorization header is exactly
+    `raw_auth`, else 404; `raw_override` maps a path to other bytes (damage) or to a redirect."""
     daemon_threads = True
 
-    def __init__(self, root: Path, auth: str | None):
+    def __init__(self, root: Path, auth: str | None, raw_root: Path | None = None,
+                 raw_prefix: str = "", raw_auth: str | None = None,
+                 raw_override: dict[str, bytes | tuple[int, str]] | None = None):
         super().__init__(("127.0.0.1", 0), _GitHandler)
         self.root, self.auth, self.seen = root, auth, []
+        self.raw_root, self.raw_prefix, self.raw_auth = raw_root, raw_prefix, raw_auth
+        self.raw_override = raw_override or {}
 
 
 class _GitHandler(http.server.BaseHTTPRequestHandler):
@@ -1778,11 +1906,36 @@ class _GitHandler(http.server.BaseHTTPRequestHandler):
             return out
         return self.rfile.read(int(self.headers.get("Content-Length") or 0))
 
+    def _reply(self, status: int, payload: bytes = b"", headers: tuple = ()):
+        self.send_response(status)
+        for name, value in headers:
+            self.send_header(name, value)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _raw(self):
+        srv = self.server
+        rel = self.path[len("/raw/"):]
+        if (srv.raw_root is None or srv.raw_auth is None or not rel.startswith(srv.raw_prefix)
+                or self.headers.get_all("Authorization") != [srv.raw_auth]):
+            return self._reply(404, b"404: Not Found")
+        rel = rel[len(srv.raw_prefix):]
+        override = srv.raw_override.get(rel)
+        if isinstance(override, tuple):
+            return self._reply(override[0], b"", (("Location", override[1]),))
+        f = srv.raw_root / rel
+        if override is None and (".." in rel.split("/") or not f.is_file()):
+            return self._reply(404, b"404: Not Found")
+        self._reply(200, override if override is not None else f.read_bytes())
+
     def _serve(self):
         body = self._body() if self.command == "POST" else b""
         self.server.seen.append({"path": self.path,
                                  "auth": self.headers.get_all("Authorization") or [],
                                  "marker": self.headers.get_all("X-Mathverify-Test") or []})
+        if self.path.startswith("/raw/"):
+            return self._raw()
         if self.server.auth is not None and self.headers.get("Authorization") != self.server.auth:
             self.send_response(401)
             self.send_header("WWW-Authenticate", 'Basic realm="test"')
@@ -1823,6 +1976,10 @@ def _basic(user: str, secret: str) -> str:
     return "Basic " + base64.b64encode(f"{user}:{secret}".encode()).decode()
 
 
+def _raw_requests(seen: list[dict]) -> list[dict]:
+    return [s for s in seen if s["path"].startswith("/raw/")]
+
+
 class TokenBed:
     """The artifact set of the `artifacts` fixture on ref refs/arac/test of a bare repository
     served over HTTP, a checkout whose origin points at it, and a `git` wrapper on PATH that
@@ -1838,6 +1995,12 @@ class TokenBed:
         _git(bare, "init", "-q", "--bare")
         work = tmp_path / "artifact-tree"
         shutil.copytree(src, work)
+        # the published refs carry SHA256SUMS.parts: every "<name>.part-<digits>" and its SHA256
+        (work / "SHA256SUMS.parts").write_text("".join(
+            f"{hashlib.sha256(f.read_bytes()).hexdigest()} *{f.name}\n"
+            for f in sorted((work / "parts").iterdir()) if re.search(r"\.part-\d+$", f.name)),
+            encoding="utf-8", newline="\n")
+        self.tree = work
         _git(work, "init", "-q")
         _git(work, "add", "-A")
         _git(work, "commit", "-q", "-m", "artifacts")
@@ -1850,16 +2013,30 @@ class TokenBed:
         self.home = tmp_path / "home"
         self.home.mkdir()
         self.argv_log = tmp_path / "git-argv.log"
+        self.curl_argv_log = tmp_path / "curl-argv.log"
         self.bin = tmp_path / "bin"
+        # every git and curl records its command line and whether the token is in its environment
+        self.child_env_log = tmp_path / "child-env.log"
         _write_exec(self.bin / "git", f"""
             #!/bin/bash
             printf '%s\\n' "$*" >> '{self.argv_log}'
+            echo "git ${{MATHVERIFY_GITHUB_TOKEN:+token-in-env}}" >> '{self.child_env_log}'
             exec '{shutil.which("git")}' "$@"
             """)
+        if shutil.which("curl"):
+            _write_exec(self.bin / "curl", f"""
+                #!/bin/bash
+                printf '%s\\n' "$*" >> '{self.curl_argv_log}'
+                echo "curl ${{MATHVERIFY_GITHUB_TOKEN:+token-in-env}}" >> '{self.child_env_log}'
+                exec '{shutil.which("curl")}' "$@"
+                """)
 
     def run(self, auth: str | None, token: str | None, token_url: str | None = "server",
-            extra_env: dict[str, str] | None = None, origin_userinfo: str = ""):
-        server = _GitServer(self.srv, auth)
+            extra_env: dict[str, str] | None = None, origin_userinfo: str = "",
+            raw_auth: str | None = None, raw_override: dict | None = None):
+        # MATHVERIFY_GITHUB_RAW_URL always points at this server: no test reaches the real host
+        server = _GitServer(self.srv, auth, raw_root=self.tree, raw_prefix=f"{OWNER}/asd/{self.REF}/",
+                            raw_auth=raw_auth, raw_override=raw_override)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
@@ -1872,7 +2049,8 @@ class TokenBed:
             _git(self.checkout, "remote", "add", "origin", origin)
             env = {"PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
                    "HOME": str(self.home), "LC_ALL": "C", "GIT_CONFIG_NOSYSTEM": "1",
-                   "MATHVERIFY_ARTIFACT_REF": self.REF, **(extra_env or {})}
+                   "MATHVERIFY_ARTIFACT_REF": self.REF, "MATHVERIFY_GITHUB_RAW_URL": f"{base}raw/",
+                   **(extra_env or {})}
             if token is not None:
                 env["MATHVERIFY_GITHUB_TOKEN"] = token
             if token_url == "server":
@@ -1932,6 +2110,7 @@ def test_fetch_artifacts_retries_a_401_with_the_github_token(token_bed):
     argv = bed.argv_log.read_text()
     assert "fetch" in argv and TOKEN not in argv and b64 not in argv
     assert bed.leaks(TOKEN, b64) == []
+    assert "token-in-env" not in bed.child_env_log.read_text()  # the script keeps it to itself
 
 
 @posix_only
@@ -1942,8 +2121,12 @@ def test_fetch_artifacts_without_a_token_fails_like_the_setup_script(token_bed):
     out = r.stdout + r.stderr
     assert r.returncode == 1, out
     assert "MATHVERIFY_GITHUB_TOKEN is not set: no token retry" in r.stdout, out
+    # the measured cause (25 Sep 2026) and its fix are named where the failure is read
+    assert "claude.ai environment variables do not reach the setup script; " \
+           "put it in the setup script's text" in r.stdout, out
     assert "could not read Username" in r.stderr, out
     assert seen and all(s["auth"] == [] for s in seen), seen
+    assert _raw_requests(seen) == [], seen
     assert sorted(os.listdir(dest)) == []
 
 
@@ -1959,6 +2142,8 @@ def test_fetch_artifacts_never_sends_the_token_outside_its_url_prefix(token_bed)
            "https://github.com/: token not sent" in r.stdout, out
     assert seen and all(s["auth"] == [] for s in seen), seen
     assert TOKEN not in out and bed.leaks(TOKEN) == []
+    assert _raw_requests(seen) == [], seen  # nor the raw download: same prefix rule
+    assert "no raw download" not in r.stdout, out  # token_applies said why; raw stays silent
 
 
 @posix_only
@@ -1973,6 +2158,7 @@ def test_fetch_artifacts_does_not_send_the_token_when_the_plain_fetch_works(toke
         assert (dest / name).read_bytes() == data
     assert seen and all(s["auth"] == [] for s in seen), seen
     assert "MATHVERIFY_GITHUB_TOKEN" not in r.stdout, out
+    assert _raw_requests(seen) == [], seen
 
 
 @posix_only
@@ -1998,8 +2184,10 @@ def test_fetch_artifacts_never_logs_credentials_embedded_in_the_url(token_bed):
     assert "is not under https://github.com/: token not sent" in r.stdout, out
     assert "gizli-parola" not in r.stdout, out
     assert all(s["auth"] != [_basic(OWNER, TOKEN)] for s in seen), seen
+    assert _raw_requests(seen) == [], seen
 
 
+@needs_curl
 @posix_only
 @needs_bash
 def test_fetch_artifacts_wrong_token_fails_fast_without_printing_it(token_bed):
@@ -2008,7 +2196,115 @@ def test_fetch_artifacts_wrong_token_fails_fast_without_printing_it(token_bed):
     r, dest, seen, _ = bed.run(auth=_basic(OWNER, TOKEN), token=wrong)
     out = r.stdout + r.stderr
     assert r.returncode == 1, out
-    assert [s for s in seen if s["auth"]] and all(
-        s["auth"] in ([], [_basic(OWNER, wrong)]) for s in seen), seen
+    git_reqs = [s for s in seen if s not in _raw_requests(seen)]
+    assert [s for s in git_reqs if s["auth"]] and all(
+        s["auth"] in ([], [_basic(OWNER, wrong)]) for s in git_reqs), seen
+    # the raw download is tried with the same token, answered 404 like a private repository
+    assert _raw_requests(seen) and all(s["auth"] == [f"token {wrong}"] for s in _raw_requests(seen)), seen
+    assert "raw download of SHA256SUMS.full failed (HTTP 404)" in r.stdout, out
     assert wrong not in out and bed.leaks(wrong, _basic(OWNER, wrong).split()[1]) == []
     assert sorted(os.listdir(dest)) == []
+
+
+# ---- step 2: the raw-file download with the token (25 Sep 2026) --------------------------------
+# In the setup-script phase the git request may go through the GitHub proxy, which owns the
+# Authorization header on api.github.com (measured in a session: a bogus token got the proxy's
+# own 200). raw.githubusercontent.com is behind the security proxy only: without the header 404,
+# a bogus token 404, the real token 200 (measured). So after the token git fetch fails the parts
+# are downloaded file by file, each checked against SHA256SUMS.parts.
+
+RAW_TOKEN_AUTH = f"token {TOKEN}"
+
+
+@needs_curl
+@posix_only
+@needs_bash
+def test_fetch_artifacts_downloads_the_raw_files_when_the_token_fetch_fails(token_bed):
+    bed, files = token_bed
+    # git refuses even the token (a proxy that drops or replaces the header); raw takes it
+    r, dest, seen, _ = bed.run(auth="Basic never-matches", token=TOKEN, raw_auth=RAW_TOKEN_AUTH)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    for name, data in files.items():
+        assert (dest / name).read_bytes() == data
+    assert "retrying the fetch with MATHVERIFY_GITHUB_TOKEN (value not printed)" in r.stdout, out
+    assert "downloading refs/arac/test file by file from " in r.stdout, out
+    assert re.search(r"downloaded 4 part\(s\) in \d+s \(.*\), each matching SHA256SUMS.parts", r.stdout), out
+    assert "the raw download succeeded" in r.stdout and "inside" not in r.stdout, out
+    raw = _raw_requests(seen)
+    assert [s["path"].rsplit("/", 1)[-1] for s in raw] == [
+        "SHA256SUMS.full", "SHA256SUMS.parts", "alpha.bin.part-000", "alpha.bin.part-001",
+        "alpha.bin.part-002", "beta.txt.part-000"], raw  # the junk "part-old" is not listed
+    assert all(s["auth"] == [RAW_TOKEN_AUTH] for s in raw), raw
+    assert all(s["path"].startswith(f"/raw/{OWNER}/asd/refs/arac/test/") for s in raw), raw
+    # the value is in no output, file or command line (curl reads the header from stdin)
+    b64 = _basic(OWNER, TOKEN).split()[1]
+    assert TOKEN not in out and b64 not in out
+    assert TOKEN not in bed.argv_log.read_text() and bed.leaks(TOKEN, b64) == []
+    curl_argv = bed.curl_argv_log.read_text()
+    assert curl_argv.count("-K -") == 6 and TOKEN not in curl_argv, curl_argv
+    assert not re.search(r"(^| )(-L|--location)( |$)", curl_argv, re.M), curl_argv
+    assert "token-in-env" not in bed.child_env_log.read_text()
+    assert (dest / ".source").read_text() == "ref refs/arac/test\n"
+    assert not list(dest.glob(".fetch.*"))
+
+
+@needs_curl
+@posix_only
+@needs_bash
+def test_fetch_artifacts_raw_only_mode_never_runs_a_git_fetch(token_bed):
+    bed, files = token_bed
+    r, dest, seen, _ = bed.run(auth=_basic(OWNER, TOKEN), token=TOKEN, raw_auth=RAW_TOKEN_AUTH,
+                               extra_env={"MATHVERIFY_ARTIFACT_VIA": "raw"})
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    for name, data in files.items():
+        assert (dest / name).read_bytes() == data
+    assert seen and seen == _raw_requests(seen), seen
+    assert not [a for a in bed.argv_log.read_text().splitlines() if "fetch" in a.split()]
+    # raw-only without a token says why and fails, it never falls back to git
+    shutil.rmtree(dest)
+    r2, dest2, seen2, _ = bed.run(auth=None, token=None, extra_env={"MATHVERIFY_ARTIFACT_VIA": "raw"})
+    assert r2.returncode == 1 and seen2 == [], r2.stdout + r2.stderr
+    assert "MATHVERIFY_GITHUB_TOKEN is not set" in r2.stdout
+    assert "the raw download of refs/arac/test was not possible or failed" in r2.stderr
+
+
+@needs_curl
+@posix_only
+@needs_bash
+@pytest.mark.parametrize("damage", ["part", "missing", "redirect", "sums"])
+def test_fetch_artifacts_raw_download_fails_closed(token_bed, damage):
+    bed, _ = token_bed
+    override = {
+        "part": {"parts/alpha.bin.part-001": b"tampered"},
+        "missing": {"parts/beta.txt.part-000": (404, "")},
+        # a redirect is never followed: the header must not travel to another URL
+        "redirect": {"SHA256SUMS.parts": (302, "/raw/elsewhere/SHA256SUMS.parts")},
+        "sums": {"SHA256SUMS.full": b"0" * 64 + b"  alpha.bin\n"},
+    }[damage]
+    r, dest, seen, _ = bed.run(auth="Basic never-matches", token=TOKEN, raw_auth=RAW_TOKEN_AUTH,
+                               raw_override=override)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert sorted(os.listdir(dest)) == [], out  # DEST unchanged, no work directory left
+    assert "the raw download succeeded" not in r.stdout or damage == "sums", out
+    assert not [s for s in seen if "elsewhere" in s["path"]], seen
+    expect = {"part": "the downloaded parts do not match SHA256SUMS.parts",
+              "missing": "raw download of parts/beta.txt.part-000 failed (HTTP 404)",
+              "redirect": "raw download of SHA256SUMS.parts failed (HTTP 302)",
+              "sums": "SHA256 verification failed; DEST left unchanged"}[damage]
+    assert expect in out, out
+    assert TOKEN not in out and bed.leaks(TOKEN) == []
+
+
+@posix_only
+@needs_bash
+def test_fetch_artifacts_raw_refuses_a_token_that_cannot_be_a_github_token(token_bed):
+    bed, _ = token_bed
+    odd = 'abc" \nheader = "X-Injected: 1'
+    r, dest, seen, _ = bed.run(auth="Basic never-matches", token=odd, raw_auth=RAW_TOKEN_AUTH)
+    assert r.returncode == 1
+    assert "MATHVERIFY_GITHUB_TOKEN has characters no GitHub token has: no raw download" in r.stdout
+    assert _raw_requests(seen) == [], seen
+
