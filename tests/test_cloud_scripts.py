@@ -2435,3 +2435,28 @@ def test_fetch_artifacts_never_exports_the_token_under_another_name(token_bed):
     assert r.returncode == 0, r.stdout + r.stderr
     log = bed.child_env_log.read_text()
     assert log and "token-in-env" not in log and "TOKEN-in-env" not in log, log
+
+
+@needs_curl
+@posix_only
+@needs_bash
+def test_fetch_artifacts_falls_back_to_the_checkout_after_a_failed_raw_download(token_bed):
+    # step 3 after step 2 failed: nothing of the raw attempt may be used (RAWDIR is reset). A
+    # credential only the checkout's own git sees (a global includeIf on its gitdir, which
+    # copy_git_config does not copy) lets step 3 succeed while steps 1 and 2 fail.
+    # (Found by the independent review of 25 Sep 2026: that reset had no test.)
+    bed, files = token_bed
+    cred = "Basic " + base64.b64encode(b"checkout-only:secret").decode()
+    inc = bed.home / "checkout-only.inc"
+    inc.write_text(f"[http]\n\textraHeader = Authorization: {cred}\n")
+    (bed.home / ".gitconfig").write_text(f'[includeIf "gitdir:{bed.checkout}/"]\n\tpath = {inc}\n')
+    r, dest, seen, _ = bed.run(auth=cred, token=TOKEN, raw_auth=None)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    assert "retrying the fetch with MATHVERIFY_GITHUB_TOKEN" in r.stdout, out
+    assert "raw download of SHA256SUMS.full failed (HTTP 404, curl exit 0)" in r.stdout, out
+    assert "fresh-repository fetch failed; fetching refs/arac/test from origin inside" in r.stdout, out
+    assert _raw_requests(seen), seen
+    for name, data in files.items():
+        assert (dest / name).read_bytes() == data
+    assert TOKEN not in out
