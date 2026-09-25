@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import sympy as sp
-from sympy import Eq, Ne, FiniteSet
+from sympy import S, Eq, Ne, FiniteSet
 
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
@@ -72,8 +72,15 @@ def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_va
         if n >= 2:
             out["status"] = "ir_incomplete"
             return out
-        if out["claim_sat"] is True:
+        # Exactly one satisfiable option is NOT a proof that the givens determine the value: the
+        # true value may simply be missing from the options. Measured (audit of 25 Sep 2026):
+        # 3a + 5b = 41 over positive integers allows a + b ∈ {9, 11, 13}; with options
+        # {9, 10, 12} only 9 was satisfiable and "a + b = 9" was certified CORRECT. The claim is
+        # certified only when every other value is also excluded (other_unsat).
+        if out["claim_sat"] is True and out["other_unsat"] is True:
             out["status"] = "certified"
+        elif out["claim_sat"] is True and out["other_unsat"] is False:
+            out["status"] = "not_unique"
         elif out["claim_sat"] is False:
             out["status"] = "refuted"
         return out
@@ -86,8 +93,58 @@ def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_va
     return out
 
 
+class _DomainUntranslatable(ValueError):
+    pass
+
+
+def _set_as_relation(dom, v):
+    """A domain set as a z3-translatable relation in v (finite bounds only)."""
+    if dom == S.Reals:
+        return sp.true
+    if dom is S.EmptySet:
+        return sp.false
+    if isinstance(dom, sp.Interval):
+        parts = []
+        if dom.inf != -sp.oo:
+            parts.append(sp.Gt(v, dom.inf, evaluate=False) if dom.left_open else sp.Ge(v, dom.inf, evaluate=False))
+        if dom.sup != sp.oo:
+            parts.append(sp.Lt(v, dom.sup, evaluate=False) if dom.right_open else sp.Le(v, dom.sup, evaluate=False))
+        return sp.And(*parts) if parts else sp.true
+    if isinstance(dom, sp.FiniteSet):
+        return sp.Or(*[sp.Eq(v, p, evaluate=False) for p in dom.args])
+    if isinstance(dom, sp.Union):
+        return sp.Or(*[_set_as_relation(a, v) for a in dom.args])
+    if isinstance(dom, sp.Intersection):
+        return sp.And(*[_set_as_relation(a, v) for a in dom.args if a not in (S.Integers,)])
+    if isinstance(dom, sp.Complement) and isinstance(dom.args[1], sp.FiniteSet):
+        return sp.And(_set_as_relation(dom.args[0], v),
+                      *[sp.Ne(v, p, evaluate=False) for p in dom.args[1].args])
+    if dom in (S.Integers,):
+        return sp.true
+    raise _DomainUntranslatable(str(dom))
+
+
+def _discourse_constraints(ctx: Ctx) -> list:
+    """The problem's domain of discourse (`domain_of_discourse`) for each variable it mentions.
+    It used to be ignored here: z3 then found the root x = 0 of x³ = x "missing" from the claim
+    {1} on x > 0 and refuted the right answer (audit of 25 Sep 2026)."""
+    from ..normalize.parse import parse_domain
+    dod = ctx.ir.domain_of_discourse
+    if not dod:
+        return []
+    out = []
+    for v in ctx.syms():
+        if not ctx._dod_mentions(v):
+            continue
+        dom = parse_domain(dod, v, ctx.ns)
+        rel = _set_as_relation(dom, v)
+        if rel is not sp.true:
+            out.append(rel)
+    return out
+
+
 def _constraints(ctx: Ctx, extra_rels=None) -> list:
-    rels = ctx.givens() + ctx.var_constraints() + list(extra_rels or [])
+    rels = ctx.givens() + ctx.var_constraints() + _discourse_constraints(ctx) + list(extra_rels or [])
     # definedness of every expression appearing in the givens (sqrt radicand >= 0, denominators != 0)
     out = list(rels)
     for r in rels:
@@ -128,7 +185,15 @@ def verify(ir, solution, ctx: Ctx):
                         options[letter] = ctx.option_value(letter)
                     except Exception:
                         options[letter] = None
-            cons = _constraints(ctx)
+            try:
+                cons = _constraints(ctx)
+            except _DomainUntranslatable as e:
+                return unknown(LAYER, f"domain_of_discourse_not_translatable: {e}")
+            # the target must be defined at the solution (1/√a with a = 0 has no value)
+            for v in ctx.syms():
+                for c in definedness_conditions(target, v):
+                    if c not in cons:
+                        cons.append(c)
             cert = uniqueness_certificate(cons, target, syms_info, claimed, options)
             ev.update({"target": str(target), "claimed": str(claimed), "constraints": [str(c) for c in cons], "z3": cert})
         else:  # solve_equation: each claimed root sat; all-other unsat (completeness by z3)
@@ -145,7 +210,10 @@ def verify(ir, solution, ctx: Ctx):
                 return unknown(LAYER, "claimed_set_not_finite")
             if var.name not in syms_info:
                 syms_info[var.name] = "real"
-            cons = [rel] + ctx.var_constraints()
+            try:
+                cons = [rel] + ctx.var_constraints() + _discourse_constraints(ctx)
+            except _DomainUntranslatable as e:
+                return unknown(LAYER, f"domain_of_discourse_not_translatable: {e}")
             for c in definedness_conditions(rel, var):
                 cons.append(c)
             # exclude non-rational claimed roots (z3 works over exact rationals/algebraics)

@@ -49,29 +49,61 @@ def has_float(*es) -> bool:
 
 def exact_zero_test(d) -> bool | None:
     """Sandbox worker: True when `d` is PROVABLY 0, False when provably nonzero, None undecided.
-    Only exact methods: CAS rewrites that reach 0, and the minimal polynomial."""
+    Only exact methods: CAS rewrites that reach 0, and the minimal polynomial (for an algebraic
+    number it is `t` exactly when the number is 0; tried early because it is fast and decisive
+    where `simplify` stalls, e.g. 2·cos(2π/9) − CRootOf(x³ − 3x + 1, 2))."""
     d = sp.sympify(d)
     if d == 0:
         return True
-    for fn in (sp.expand, lambda e: sp.cancel(sp.together(e)), sp.radsimp, sp.simplify,
-               lambda e: sp.expand_log(e, force=False), sp.logcombine, sp.trigsimp,
-               lambda e: sp.simplify(e.rewrite(sp.exp)), sp.expand_complex):
+
+    def cheap(e):
+        for fn in (sp.expand, lambda e_: sp.cancel(sp.together(e_))):
+            try:
+                r = fn(e)
+            except Exception:  # noqa: BLE001
+                continue
+            if r == 0:
+                return True
+        return None
+
+    if cheap(d):
+        return True
+    try:
+        t = sp.Dummy("t")
+        m = sp.minimal_polynomial(d, t)
+        return bool(sp.expand(m - t) == 0)
+    except Exception:  # noqa: BLE001 - NotAlgebraic, …: try the rewrites
+        pass
+    for fn in (sp.radsimp, sp.simplify, lambda e: sp.expand_log(e, force=False), sp.logcombine,
+               sp.trigsimp, lambda e: sp.simplify(e.rewrite(sp.exp)), sp.expand_complex):
         try:
             r = fn(d)
         except Exception:  # noqa: BLE001
             continue
         if r == 0 or (getattr(r, "is_number", False) and r.is_zero is True):
             return True
-    try:
-        t = sp.Dummy("t")
-        m = sp.minimal_polynomial(d, t)
-        return bool(sp.expand(m - t) == 0)
-    except Exception:  # noqa: BLE001 - NotAlgebraic, …
-        return None
+    return None
+
+
+_MIN_BITS = 20
+
+
+def _part_state(f):
+    """'zero' for an exact 0, 'value' for a part carrying significant bits, 'unknown' for a
+    zero-looking Float with no significant bits (evalf could not separate it from 0)."""
+    if f == 0 and not isinstance(f, sp.Float):
+        return "zero"
+    prec = getattr(f, "_prec", None)
+    if isinstance(f, sp.Float):
+        return "value" if (prec is not None and prec >= _MIN_BITS and f != 0) else "unknown"
+    return "value" if f != 0 else "zero"
 
 
 def _evalf_strict(e):
-    """(real part, imaginary part) of a constant with every nonzero part certified, or None."""
+    """(real part, imaginary part, state_re, state_im) of a constant, or None when evalf fails.
+    A part is trusted only when it carries significant bits: strict evalf may return a
+    no-significance zero such as '-0.e-38' for the imaginary part of a real number written with
+    complex radicals (the casus irreducibilis roots of x³ − 3x + 1) instead of raising."""
     from sympy.core.evalf import PrecisionExhausted
     try:
         v = e.evalf(_SIGN_DPS, strict=True)
@@ -87,7 +119,7 @@ def _evalf_strict(e):
         return None
     if not (re_.is_number and im_.is_number):
         return None
-    return re_, im_
+    return re_, im_, _part_state(re_), _part_state(im_)
 
 
 def certified_sign(e, timeout: float = 5.0):
@@ -112,18 +144,53 @@ def certified_sign(e, timeout: float = 5.0):
     e = real_odd_roots(e)
     parts = _evalf_strict(e)
     if parts is not None:
-        re_, im_ = parts
-        if im_ != 0:
+        re_, im_, s_re, s_im = parts
+        if s_im == "value":
             return NONREAL
-        if re_ != 0:
+        if s_im == "unknown" and not _imaginary_part_is_zero(e, timeout):
+            return None
+        if s_re == "value":
             return 1 if re_ > 0 else -1
-        if e.is_zero is True:
+        if s_re == "zero" and s_im == "zero" and e.is_zero is True:
             return 0
+    if _in_sandbox_worker():
+        # already inside the worker (e.g. the z3 translation): its caller holds the timeout, and
+        # a daemonic worker cannot start a worker of its own
+        try:
+            return 0 if exact_zero_test(e) is True else None
+        except Exception:  # noqa: BLE001
+            return None
     from ..sandbox import run as sb_run
     r = sb_run("mathverify.equiv.numeric:exact_zero_test", e, timeout=timeout)
     if r.ok and r.value is True:
         return 0
     return None
+
+
+def _in_sandbox_worker() -> bool:
+    import multiprocessing
+    try:
+        return bool(multiprocessing.current_process().daemon)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _imaginary_part_is_zero(e, timeout: float) -> bool:
+    """Is Im(e) PROVED to be 0? (a real number written with complex radicals)."""
+    try:
+        im_e = sp.im(e)
+    except Exception:  # noqa: BLE001
+        return False
+    if im_e == 0:
+        return True
+    if _in_sandbox_worker():
+        try:
+            return exact_zero_test(im_e) is True
+        except Exception:  # noqa: BLE001
+            return False
+    from ..sandbox import run as sb_run
+    r = sb_run("mathverify.equiv.numeric:exact_zero_test", im_e, timeout=timeout)
+    return bool(r.ok and r.value is True)
 
 
 def exact_equal(a, b, timeout: float = 5.0) -> bool | None:
@@ -163,11 +230,13 @@ def certified_integer(c, timeout: float = 5.0):
     if c.is_integer is False:
         return False, None
     parts = _evalf_strict(real_odd_roots(c))
-    if parts is None:
+    if parts is None or parts[2] != "value":
         return None, None
-    re_, im_ = parts
-    if im_ != 0:
+    if parts[3] == "value":
         return False, None
+    if parts[3] == "unknown" and not _imaginary_part_is_zero(real_odd_roots(c), timeout):
+        return None, None
+    re_ = parts[0]
     k = sp.Integer(int(sp.floor(re_ + sp.Rational(1, 2))))    # nearest integer to the value
     s = certified_sign(c - k, timeout=timeout)
     if s == 0:
@@ -191,12 +260,11 @@ def certified_floor(v, timeout: float = 5.0):
     if getattr(v, "free_symbols", None) or v.has(sp.oo, sp.S.NegativeInfinity, sp.zoo, sp.nan):
         return None
     parts = _evalf_strict(real_odd_roots(v))
-    if parts is None:
+    if parts is None or parts[2] != "value" or parts[3] == "value" or (
+            parts[3] == "unknown" and not _imaginary_part_is_zero(real_odd_roots(v), timeout)):
         is_int, k = certified_integer(v, timeout=timeout)
         return k if is_int else None
-    re_, im_ = parts
-    if im_ != 0:
-        return None
+    re_ = parts[0]
     k = sp.Integer(int(sp.floor(re_ + sp.Rational(1, 2))))
     s = certified_sign(v - k, timeout=timeout)
     if s == 0:
