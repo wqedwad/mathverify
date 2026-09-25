@@ -288,7 +288,10 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     solution set. Each was refuted as written (audit of 25 Sep 2026). A bare "2,3" (no space) is
     also the Turkish decimal 2.3 and is left alone: the decimal-comma check abstains on it."""
     ca = solution.claimed_answer
-    if ir.answer_shape not in ("set", "interval") or ca.kind not in ("set", "interval", "condition") \
+    # the claim's own kind says it is a set; the IR's answer_shape is often left at its default
+    set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in ("solve_equation", "solve_inequality",
+                                                                          "domain_of")
+    if not set_task or ca.kind not in ("set", "interval", "condition") \
             or not isinstance(ca.payload, str) or ca.payload_source == "option_letter":
         return []
     names = {v.name for v in ir.vars}
@@ -301,8 +304,8 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     if m and m.group(1) in names:
         text = m.group(2).strip()
         flags.append("payload_notation_normalized")
-    if ir.answer_shape == "set" and "," in text and not re.search(r"[{}\[\]()]", text) \
-            and not re.search(r"\d,\d", text):
+    if (ca.kind == "set" or ir.answer_shape == "set") and ca.kind != "interval" and "," in text \
+            and not re.search(r"[{}\[\]()]", text) and not re.search(r"\d,\d", text):
         text = "{" + text + "}"
         flags.append("payload_notation_normalized")
     if isinstance(tvar, str) and re.search(r"[<>]", text) and not re.search(r"[{}\[\]]", text):

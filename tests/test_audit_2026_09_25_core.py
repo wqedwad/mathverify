@@ -548,3 +548,19 @@ def test_a_step_naming_a_term_of_the_task_sequence_is_checked(claim, verdict):
     steps = [{"id": "s1", "kind": "eq", "claim": claim}]
     r = verify(SEQ, {"claimed_answer": {"kind": "value", "payload": "43"}, "steps": steps})
     assert r.verdict == verdict
+
+
+@pytest.mark.parametrize("ir,kind,right,wrong", [
+    ({"task": {"kind": "solve_equation", "params": {"var": "x"}}, "vars": [{"name": "x"}],
+      "givens": ["x**2 - 5*x + 6 = 0"]}, "set", "2, 3", "2, 4"),
+    ({"task": {"kind": "solve_inequality", "params": {"var": "x"}}, "vars": [{"name": "x"}],
+      "givens": ["x >= 3"]}, "interval", "x >= 3", "x >= 4"),
+    ({"task": {"kind": "solve_inequality", "params": {"var": "x"}}, "vars": [{"name": "x"}],
+      "givens": ["x >= 3"]}, "condition", "x >= 3", "x > 3"),
+    ({"task": {"kind": "domain_of", "params": {"expr": "sqrt(x)", "var": "x"}}, "vars": [{"name": "x"}],
+      "givens": []}, "interval", "x >= 0", "x > 0"),
+])
+def test_set_notation_is_read_when_answer_shape_is_left_at_its_default(ir, kind, right, wrong):
+    """The IR's answer_shape is often absent (scalar); the claim's kind says it is a set."""
+    assert verify(ir, {"claimed_answer": {"kind": kind, "payload": right}, "steps": []}).verdict == "CORRECT"
+    assert verify(ir, {"claimed_answer": {"kind": kind, "payload": wrong}, "steps": []}).verdict == "INCORRECT"
