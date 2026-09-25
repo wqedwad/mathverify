@@ -1,6 +1,6 @@
 # Değerlendirme raporu (Phase 1, deterministik katmanlar)
 
-Toplam öğe: **280** · anahtar sızma testi: **GEÇTİ** · ortalama süre/öğe: 126 ms
+Toplam öğe: **280** · anahtar sızma testi: **GEÇTİ** · ortalama süre/öğe: 127 ms
 
 ## Ana metrikler
 

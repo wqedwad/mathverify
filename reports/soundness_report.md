@@ -1,6 +1,6 @@
 # Metamorfik sağlamlık taraması (SymPy üretimli yanlış ve eşdeğer cevaplar)
 
-Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 32 s
+Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 40 s
 
 - **Yanlış cevap varyantı: 448** — yanlış onay (CORRECT): **0** (hedef 0) · UNKNOWN: 0
 - **Eşdeğer cevap varyantı: 214** — yanlış red (INCORRECT): **0** (hedef 0) · UNKNOWN (kaybedilen kapsama): 0

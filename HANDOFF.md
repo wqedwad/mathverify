@@ -403,6 +403,7 @@ maddeyi yapmıştı. Oturumun isteği "kurulum betiğini ölç". Karar DECISIONS
   `timeout -k 10 250` ile koşturur; sınıra takılan koşu `reason=terminated` yazar, kanca kalanını
   kurar. (6) Bağımsız inceleme bulguları (curl çıkış durumu, `curl -q`, adres ve ref denetimi,
   `unset` sırası) düzeltildi. Testler ve `check.py --full` sonucu DECISIONS §54'te.
+- **Doğrulama (25 Eylül 2026):** `check.py --full` **24/24** (`b4e91f0`, 09:16–10:05 UTC, 2937 s ≈ 49 dk: pytest 131, `run_eval` 72, `run_lean` 117, adversaryal 2478, sağlamlık 98, kalibrasyon 39 s); birim testleri 870 passed / 5 skipped; kapı değerleri önceki koşularla aynı (121 sertifika, Lean FP 0, junk 0/17, 21 139 saldırıda %0, 0/448, 0/214, 0/46, 0/184, 0/6); raporlarda yalnız süre satırları değişti. Ardından bağımsız incelemenin son bulgusu için bir test eklendi (`9aa6c2d`, betik değişmedi): tam takım 876 test, **871 passed / 5 skipped / 0 failed** (136 s; Lean yüzünden atlama yok); toplam 35 mutasyonun hepsi en az bir testi düşürdü.
 - **Açık [DOĞRULANMADI]:** kurulum betiği aşamasında `raw.githubusercontent.com`'a (ya da belirteçle
   git'e) erişim. Bu değişiklik `master`a birleşip kullanıcı önyükleyiciyi belirteçle güncelleyince ilk
   yeni sohbette ölçülür (`docs/BULUT.md` §12).

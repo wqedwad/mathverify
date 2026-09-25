@@ -1,22 +1,22 @@
-check.py --full · 2026-09-24 22:15:41 · claude/funny-cray-bey5o1 @ b042729 · commit edilmemiş değişiklik: 1 dosya
+check.py --full · 2026-09-25 09:16:42 · claude/compassionate-shannon-759r85 @ b4e91f0 · commit edilmemiş değişiklik: 2 dosya
 
 == testler ==
-  pytest: 98 s (exit 0)
+  pytest: 131 s (exit 0)
 == pyflakes ==
   pyflakes: 1 s (exit 1)
 == deterministik değerlendirme ==
-  run_eval: 58 s (exit 0)
+  run_eval: 72 s (exit 0)
 == Lean taraması ==
-  run_lean: 92 s (exit 0)
+  run_lean: 117 s (exit 0)
 == adversaryal ==
-  adversarial: 1985 s (exit 0)
+  adversarial: 2478 s (exit 0)
 == metamorfik sağlamlık ==
-  soundness_fuzz: 79 s (exit 0)
+  soundness_fuzz: 98 s (exit 0)
 == kalibrasyon ==
-  calibrate: 31 s (exit 0)
+  calibrate: 39 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  840 passed, 5 skipped in 96.79s (0:01:36)   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  870 passed, 5 skipped in 129.70s (0:02:09)   (hedef: hepsi geçer)
   [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
