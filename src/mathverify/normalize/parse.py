@@ -367,6 +367,17 @@ def _check_code(code: str, raw: str, names) -> None:
             raise ParseError(f"{raw!r} indexes a computed value: not read")
 
 
+def sympify_nontext(v):
+    """`sympify` for a value that is NOT text: a number or an object SymPy already built. Anything
+    else is refused. `strict=True` is not enough: SymPy converts a dict (and a tuple) through
+    `Tuple`, which sympifies the strings inside WITHOUT strict, i.e. evaluates them with Python's
+    builtins in reach — `{"k": "__import__(...)"}` as a problem parameter ran code (audit of
+    25 Sep 2026)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float, sp.Basic)):
+        raise ParseError(f"not a number or an expression: {type(v).__name__}")
+    return sp.sympify(v, strict=True)
+
+
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
                        transformations, evaluate: bool = True):
     """parse_expr, after checking that the code it is about to evaluate is plain arithmetic."""
@@ -480,7 +491,10 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
-        return sp.sympify(s)
+        try:
+            return sympify_nontext(s)             # a container of strings is never evaluated
+        except (sp.SympifyError, TypeError) as e:
+            raise ParseError(f"not an expression: {type(s).__name__}") from e
     raw = s
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
@@ -677,7 +691,10 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
-        val = sp.sympify(s)
+        try:
+            val = sympify_nontext(s)                # see parse_expr_str: containers are refused
+        except (sp.SympifyError, TypeError) as e:
+            raise ParseError(f"not a set: {type(s).__name__}") from e
         return val if isinstance(val, sp.Set) else FiniteSet(val)
     s2 = preclean(s)
     # union split at top level on " U " / "∪" (already mapped to " U ")
@@ -740,9 +757,12 @@ def parse_answer(kind: str, payload, ns: dict[str, Any] | None = None):
             raise ParseError("value answer must be a single expression")
         return parse_expr_str(str(payload), ns)
     if kind == "count":
-        if isinstance(payload, bool):
-            raise ParseError("count must be an integer")
-        return Integer(int(payload))
+        # never int(): it truncates 3.7 to 3 (principle 3)
+        from ..equiv import exact_integer
+        n = exact_integer(payload)
+        if n is None:
+            raise ParseError(f"count must be an integer, got {payload!r}")
+        return Integer(n)
     if kind == "set":
         if isinstance(payload, (list, tuple)):
             return FiniteSet(*[parse_expr_str(str(p), ns) for p in payload])
