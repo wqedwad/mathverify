@@ -31,6 +31,12 @@ GitHub'daki `master`a push etti (`origin/master` = `572ef57`; §0.9). Kod kaybı
 alındı. Dalın sonraki commit'leri (`7993055`…`4002898`) `572ef57`'nin üstünde, `bulut-2026-09-24`
 dalında; `master`a birleştirilmeleri yine kullanıcı onayı ve yedekle olur.
 
+**Düzeltme (24 Eylül 2026, gece, bulut oturumu, `git ls-remote origin`):** birleştirme yapılmış:
+GitHub'da `master` = `bulut-2026-09-24` = `18fd298`. GitHub'da ayrıca `yedek/master-2026-09-24-2` →
+`572ef57` etiketi var; bu, `master` `572ef57`'den ileri alınmadan önceki yedek olmalı (çıkarım;
+yerel bundle'ı buluttan görülemez **[DOĞRULANMADI]**). Bu oturumun ölçümleri ve kurulum betiğinin
+GitHub belirteci §0.11'de.
+
 **Durum tek cümlede (23 Eylül):** Kodda yarım kalmış bir iş yok ve commit edilmemiş değişiklik yok.
 `scripts/check.py --full` 23/23 kapı geçiyor. 23 Eylül'deki bütün iş (iki denetim, bellek sınırı,
 tanımlılık açığı, üç Lean şablonu, pyflakes kapısı, temizlik) `master`da; her birleştirmeden önceki
@@ -280,6 +286,57 @@ gösterdiği (942 GB boş) için hiçbir şey uyarmadı (DECISIONS §49).
   bakar (bulunamazsa `/mnt/c`; `docs/LEAN_SETUP.md`) ve yeni kurulumu ölçülen boyutla hesaplar (7.7 GB, araç zinciri yoksa +3.0 GB, +1 GB pay;
   beşinci tur). Kural (`CLAUDE.md` "Ortam tuzakları / Windows"): WSL'de büyük bir kurulumdan önce
   C:'nin boş alanına Windows tarafından bakılır.
+
+### 0.11 İlk normal bulut oturumu: kurulum betiği alanından gerçek koşu (24 Eylül, gece)
+
+Kullanıcının açtığı normal (routine olmayan) bir bulut oturumu, `master` = `18fd298`, ortamın
+"Setup script" alanında önyükleyici tanımlı. Dal `claude/funny-cray-bey5o1`. Karar DECISIONS §53.
+
+- **Kurulum betiği gerçekten koştu ama hiçbir şey kuramadı.** `setup_env.status`:
+  `FAILED mode=all ... reason=fetch python=missing lean=missing total=0s`, 19:54:52 UTC, kancadan
+  2 s önce (kanca yalnız `--lean-only` başlatır; `mode=all` alandan gelir). Günlükteki satır
+  `repository: /home/user/asd (18fd298)`: checkout betik koşarken hazırdı. Araç ref'inin çekimi 0 s'de
+  düştü: `fatal: could not read Username for 'https://github.com'` (özel depo 401 döndü), yedek yol
+  (`git ls-remote origin`) da aynı hatayla. Python ve Lean aşamaları bilerek atlandı, betik 0 ile
+  çıktı, oturum engellenmedi.
+- **Neden** (resmî belge, `code.claude.com/docs/en/cloud-environments`, 24 Eylül'de okundu): Claude
+  Code ajan vekiline kurulum betiğinden **sonra** bağlanır; GitHub kimliğini oturumdaki GitHub vekili
+  ekler. Oturum içinde yeniden üretildi: vekil değişkenleri kaldırılıp GitHub'a doğrudan gidilince
+  aynı 401 ve aynı ileti; vekil üzerinden (git kimlik değişkenleri kaldırılsa bile) çekim çalışıyor.
+  Ortamın "API credentials" özelliği çözüm değil: belgeye göre GitHub isteklerine ve kurulum betiği
+  isteklerine hiç eklenmez.
+- **Sonucu:** belgeye göre anlık görüntü kurulum betiğinin ilk koşusundan sonra alınır, ~7 gün
+  yeniden kullanılır; betik yalnız metni ya da ağ ayarı değişince ya da süre dolunca yeniden koşar.
+  Görüntüde Lean ve Python 3.14.6 yok; her yeni sohbette kanca kurulumu arka planda yeniden yapar.
+- **Kancanın devraldığı kurulum:** kanca 7 s (3.14.6 yok, yedek 3.12.3, `.venv` 7 s), Lean
+  **167 s**'de hazır: çekim 48 s, Python 1 s, `setup_lean` 99 s, REPL 17 s (`OK mode=lean`).
+  Kancanın elle yeniden koşusu 6 s, `.venv` 3.14.6 ile. `lean_available()` True. `pytest tests -rs`:
+  838 test, **833 passed / 5 skipped / 0 failed**, 89 s (atlananlar: 3'ü root altında salt okunur
+  dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade; Lean yüzünden yok).
+- **Aynı sohbete devam:** ~50 dk boşluktan sonra makine yeniden başlatılmıştı (açılış 20:50:45 UTC)
+  ama disk korunmuştu: Lean, `.venv`, günlükler yerinde; kanca 15 s, Lean HAZIR, kurulum betiği
+  yeniden koşmadı (belgeyle uyumlu: "resuming never re-runs the setup script").
+- **Devam ettirilen sohbette Lean'in ilk açılışı çok yavaş.** Sohbet ikinci kez devam ettirilince
+  makine yine yeniden başlatılmıştı (açılış 21:45:52 UTC). Ardından koşan tam takımda ilk canlı Lean
+  testi (`test_lean_proves_true_and_refuses_false`) pytest'in 300 s sınırında zaman aşımına uğradı ve
+  sonraki 8 canlı Lean testi "Lean/Mathlib toolchain not available" ile atlandı (843 test: 1 failed,
+  13 skipped, 476 s). Hemen sonra `lean_available()` 5.8 s'de True; disk önbelleği bilerek
+  boşaltılınca (`drop_caches`) 26.9 s; Lean test dosyaları ve tam takım yeniden temiz: **838 passed /
+  5 skipped / 0 failed**, 94 s. Yani yeniden başlatmadan sonraki ilk açılış sıradan bir soğuk
+  önbellekten çok daha yavaş; neden (geri yüklenen diskin ilk okunuşta yavaş gelmesi) çıkarım
+  **[DOĞRULANMADI]**. Kural: devam ettirilmiş bir sohbette `check.py --full` ya da Lean testlerinden
+  önce Lean dosyaları bir kez okunarak ısıtılır (komut `docs/BULUT.md` §8; `lean_available(900)`
+  yetmez, istemcinin `import Mathlib` sınırı ayrıca 300 s: `LeanClient.boot_timeout`); yoksa "Lean
+  erişilebilir" kapısı ve canlı Lean testleri bilerek düşer. Isıtmanın bu durumu çözdüğü ölçülmedi. Kancanın arka planda ısıtması önerildi,
+  yapılmadı (§7).
+- **Düzeltme: `MATHVERIFY_GITHUB_TOKEN`** (`scripts/fetch_artifacts.sh`, DECISIONS §53). Ortam
+  değişkeninde yalnız bu depoyu okuyabilen bir GitHub belirteci varsa, çekim düz denemesi düştükten
+  **sonra** onunla bir kez daha denenir; yalnız `https://github.com/` altındaki adrese, komut satırına,
+  günlüğe ya da diske yazılmadan. Oturum içinde düz deneme vekil sayesinde başarılı olduğu için
+  belirteç hiç gönderilmez. 7 yeni test (gerçek `git http-backend`, 401 döndüren yerel sunucu);
+  8 mutasyonun hepsi en az bir testi düşürdü. Takım 845 test. `check.py --full` **24/24** (`b042729`, 22:15–22:55 UTC, aşamaların toplamı 2344 s ≈ 39 dk: pytest 98, `run_eval` 58, `run_lean` 92, adversaryal 1985, sağlamlık 79, kalibrasyon 31 s); birim testleri 840 passed / 5 skipped; kapı değerleri önceki koşularla aynı (121 sertifika, FP 0, junk 0/17, 21 139 saldırıda %0, 0/448, 0/214, 0/46, 0/184, 0/6); raporlarda yalnız süre satırları değişti. Gerçek belirteçle kurulum betiği
+  alanından koşu henüz ölçülmedi **[DOĞRULANMADI]**: kullanıcı adımları `docs/BULUT.md` "Senin yapman
+  gerekenler" 3. madde, ölçülecekler §12.
 
 ---
 
@@ -974,6 +1031,12 @@ edilmemişti; güncel durum `git status` ile görülür.
 
   Etiket GitHub'a da push edildi. Geri dönüş talimatı yine `OKU.txt`'te.
 
+**Düzeltme (24 Eylül 2026, gece, bulut oturumu):** tablo eksik. GitHub'da (`git ls-remote origin`)
+dördüncü bir etiket var: `yedek/master-2026-09-24-2` → `572ef57`; `master` ve `bulut-2026-09-24` ikisi
+de `18fd298`. Yani dal `master`a birleştirildi ve etiket, `master` `572ef57`'den ileri alınmadan
+önceki yedek olmalı (çıkarım). Buna karşılık gelen bundle'ın `C:\Users\kullanici\mathverify-yedek\`
+altında olup olmadığı buluttan görülemez **[DOĞRULANMADI]**.
+
 Commit geçmişi (eskiden yeniye):
 
 | Commit | Ne |
@@ -1164,6 +1227,22 @@ bir ortam değişkeni tanımlıysa `override=False` yüzünden `.env`'deki deği
 4. **F3/F4** anahtarlar yenilendikten sonra, kararı değişmeden (aşağıda 3–4; bulutta `api.meta.ai`
    için Custom ağ).
 
+**Düzeltme (24 Eylül 2026, gece):** 2. adım yapıldı (kurulum betiği alanda tanımlı) ve 3. adım bu
+oturumda başladı (§0.11): kurulum betiği alanından koştu ama özel depoya kimliksiz gittiği için
+araç ref'ini çekemedi. Yeni sıra, F3/F4'ten önce:
+
+1. `MATHVERIFY_GITHUB_TOKEN` değişikliğinin (`claude/funny-cray-bey5o1` dalı) `check.py --full`
+   24/24 ile doğrulanması ve kullanıcı onayı + yedekle `master`a birleştirilmesi (kurulum betiği
+   checkout'taki `master`ın kopyasını çalıştırır; birleşmeden etkisi olmaz).
+2. Kullanıcı: GitHub'da belirteç + ortam değişkeni + kurulum betiğine bir yorum satırı (görüntünün
+   yeniden kurulması için), adımlar `docs/BULUT.md` "Senin yapman gerekenler" 3. madde.
+3. Sonraki yeni sohbette ölçüm: `setup_env.status` `OK mode=all`, `fetch_artifacts.log`'da "the
+   token fetch succeeded", kanca "Lean: HAZIR" ile açılıyor; bir sonraki yeni sohbette de görüntünün
+   `/opt`'u koruduğu (`docs/BULUT.md` §12).
+4. Devam ettirilen sohbette Lean'in ilk açılışı >300 s sürebiliyor (§0.11). Kancanın, yeniden
+   başlatmadan sonra Lean dosyalarını arka planda bir kez okuyarak ısıtması düşünülebilir; ancak
+   gerçek bir yeniden başlatmada ölçülerek eklenir (ölçülmemiş iyileştirme iyileştirme sayılmaz).
+
 Eski listenin ilk iki maddesi 23 Eylül'de tamamlandı: sandbox bellek sınırı (§6.4) ve kapı
 günlüğü (§6.5). Aynı gün, kullanıcının "geri kalan lokal işlemleri yap" talimatıyla, eski 2.
 maddedeki lokal kalite işlerinin hepsi yapıldı (ölü `nsimplify` dalı, betikler, zaman aşımı, üç
@@ -1278,7 +1357,7 @@ bu soruları açık bırakır.
 | `docs/sartname/` | Özgün şartname (kanonik `_1.md`, eski `_eski.md`) |
 | `lean/` (`PINS` + proje dosyaları) | Sabit Lean/Mathlib/REPL/elan sürümleri; elle düzenlenmez (`lean/README.md`) |
 | `scripts/setup_lean.sh`, `scripts/setup_lean_repl.sh` | Sabit, çevrimdışı yapılabilen Lean kurulumu (WSL ve Linux) |
-| `scripts/fetch_artifacts.sh` | Araç ref'ini (`refs/arac/bulut-vN`) çeker, parçaları birleştirir, SHA256 ile doğrular |
+| `scripts/fetch_artifacts.sh` | Araç ref'ini (`refs/arac/bulut-vN`) çeker, parçaları birleştirir, SHA256 ile doğrular. *Ek (24 Eylül gecesi):* düz çekim düşerse `MATHVERIFY_GITHUB_TOKEN` ile bir kez daha dener (kurulum betiği aşaması, §0.11, DECISIONS §53) |
 | `scripts/cloud/setup_env.sh` | Bulut ortam kurulum betiği (root, `/opt`, her zaman 0); başlığında yapıştırılacak önyükleyici |
 | `scripts/cloud/session_start.sh`, `.claude/settings.json` | SessionStart kancası; yalnız `CLAUDE_CODE_REMOTE=true` iken iş yapar |
 | `requirements.lock` | Paket kilidi (32 paket) |
@@ -1410,6 +1489,7 @@ Windows'ta okunur. `.env` artık depoda izleniyor (§0.3). Yeni değişkenler (a
 | `MATHLIB_CACHE_DIR`, `XDG_CACHE_HOME` | Mathlib `.ltar` önbelleği, varsayılan `$HOME/.cache/mathlib` |
 | `CLAUDE_CODE_REMOTE`, `CLAUDE_PROJECT_DIR`, `CLAUDE_ENV_FILE` | Platformun verdiği değişkenler; kanca yalnız `CLAUDE_CODE_REMOTE=true` iken iş yapar |
 | `MATHVERIFY_LEAN_OFFLINE` | (24 Eylül akşamı eklendi) `1`: `setup_lean.sh` ve `setup_lean_repl.sh` sıkı çevrimdışı; her çevrimiçi yedek (araç zinciri indirmesi, `lake exe cache get`, klon, `apt-get`) reddedilir, eksik artefakt betiği bir şey yazmadan durdurur. `setup_env.sh` her zaman `1` verir; varsayılan `0` |
+| `MATHVERIFY_GITHUB_TOKEN` | (24 Eylül gecesi eklendi) yalnız bu depoyu okuyabilen GitHub belirteci (fine-grained, Contents: read-only); claude.ai ortamının değişkenlerinde, depoda değil. `fetch_artifacts.sh` onu yalnız düz çekim düştükten sonra ve yalnız `MATHVERIFY_GITHUB_TOKEN_URL` (varsayılan `https://github.com/`) altındaki adrese gönderir; değer hiçbir çıktıya yazılmaz (§0.11, DECISIONS §53). `GITHUB_TOKEN`/`GH_TOKEN` adı kullanılmaz |
 
 **Düzeltme (24 Eylül 2026, akşam, `eba49b5`):** `MATHLIB_CACHE_DIR` satırındaki
 `$HOME/.cache/mathlib` yalnız araç dizini olmadan yapılan kurulumda geçerli. Bulut kurulumu
