@@ -21,6 +21,66 @@ class LeakageError(ValueError):
     """Raised when answer-key material reaches the verification pipeline."""
 
 
+class MalformedIR(ValueError):
+    """The problem IR does not have the documented shape (a field that must be text is a list or a
+    dict, a task kind that is not text...). Measured 25 Sep 2026: a dict where an expression
+    belongs reached `sympify`, which evaluated the strings inside it (code ran), and a list as the
+    task kind escaped `verify` as a TypeError. The verifier abstains on it."""
+
+
+def _text(v: Any, where: str, optional: bool = False) -> None:
+    if v is None and optional:
+        return
+    if not isinstance(v, str):
+        raise MalformedIR(f"{where} must be text, got {type(v).__name__}")
+
+
+def _texts(v: Any, where: str) -> None:
+    if not isinstance(v, list):
+        raise MalformedIR(f"{where} must be a list of texts, got {type(v).__name__}")
+    for i, x in enumerate(v):
+        _text(x, f"{where}[{i}]")
+
+
+def _check_shape(d: dict[str, Any]) -> None:
+    task = d.get("task")
+    if isinstance(task, dict):
+        _text(task.get("kind"), "task.kind")
+        if not isinstance(task.get("params", {}), dict):
+            raise MalformedIR("task.params must be an object")
+    elif not isinstance(task, str):
+        raise MalformedIR("task must be an object or a kind")
+    for k in ("givens", "sanity"):
+        if k in d:
+            _texts(d[k], k)
+    for k in ("unknown_of_interest", "answer_shape", "units", "domain_of_discourse", "topic", "level",
+              "question_en"):
+        if k in d:
+            _text(d[k], k, optional=True)
+    for i, v in enumerate(d.get("vars", []) or []):
+        if isinstance(v, dict):
+            _text(v.get("name"), f"vars[{i}].name")
+            _text(v.get("domain", "real"), f"vars[{i}].domain")
+            _texts(v.get("constraints", []), f"vars[{i}].constraints")
+        elif not isinstance(v, str):
+            raise MalformedIR(f"vars[{i}] must be an object or a name")
+    for i, f in enumerate(d.get("functions", []) or []):
+        if not isinstance(f, dict):
+            raise MalformedIR(f"functions[{i}] must be an object")
+        _text(f.get("name"), f"functions[{i}].name")
+        _text(f.get("expr"), f"functions[{i}].expr")
+        _texts(f.get("args", ["x"]), f"functions[{i}].args")
+        _texts(f.get("params", []), f"functions[{i}].params")
+        _text(f.get("domain"), f"functions[{i}].domain", optional=True)
+    opts = d.get("options")
+    if opts is not None:
+        if not isinstance(opts, dict):
+            raise MalformedIR("options must be an object")
+        for k, v in opts.items():
+            if isinstance(v, bool) or not isinstance(v, (str, int, float)):
+                raise MalformedIR(f"options[{k!r}] must be text or a number")
+
+
 def _scan_forbidden(obj: Any, path: str = "") -> None:
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -106,16 +166,24 @@ class ProblemIR:
     # ------------------------------------------------------------------
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "ProblemIR":
-        _scan_forbidden(d)
+        _scan_forbidden(d)                        # LeakageError first: it is never downgraded
+        if not isinstance(d, dict):
+            raise MalformedIR("the problem IR must be an object")
+        _check_shape(d)
         d = dict(d)
-        task = d.pop("task")
-        if isinstance(task, str):
-            task = {"kind": task}
-        task_obj = Task(kind=task["kind"], params=dict(task.get("params", {})))
-        vars_ = [Var(**v) if isinstance(v, dict) else Var(name=str(v)) for v in d.pop("vars", [])]
-        funcs = [FunctionDef(**f) for f in d.pop("functions", [])]
-        ops = [Operator(**o) for o in d.pop("operators", [])]
-        return cls(task=task_obj, vars=vars_, functions=funcs, operators=ops, **d)
+        try:
+            task = d.pop("task")
+            if isinstance(task, str):
+                task = {"kind": task}
+            task_obj = Task(kind=task["kind"], params=dict(task.get("params", {})))
+            vars_ = [Var(**v) if isinstance(v, dict) else Var(name=str(v)) for v in d.pop("vars", [])]
+            funcs = [FunctionDef(**f) for f in d.pop("functions", [])]
+            ops = [Operator(**o) for o in d.pop("operators", [])]
+            return cls(task=task_obj, vars=vars_, functions=funcs, operators=ops, **d)
+        except LeakageError:
+            raise
+        except (TypeError, ValueError, KeyError) as e:   # unknown field, domain, answer_shape
+            raise MalformedIR(f"problem IR: {e}") from e
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

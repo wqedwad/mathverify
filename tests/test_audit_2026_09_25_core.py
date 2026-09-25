@@ -407,3 +407,76 @@ def test_a_given_inequality_on_an_inequality_restricts_it():
     ir = _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, ["x > 0"], shape="interval")
     assert _run(ir, "interval", "(-2, 2)").verdict == "INCORRECT"
     assert _run(ir, "interval", "(0, 2)").verdict == "CORRECT"
+
+
+# --- the shape of the inputs: no container is ever evaluated -------------------------------------
+
+def _marker_payload(tmp_path, tag):
+    return f"__import__('pathlib').Path({str(tmp_path / tag)!r}).touch() or 2"
+
+
+@pytest.mark.parametrize("wrap", [lambda s: [s], lambda s: {"k": s}, lambda s: [[s]], lambda s: (s,)])
+def test_a_container_of_strings_is_never_evaluated(tmp_path, wrap):
+    """sympify(dict) goes through Tuple, which sympifies the strings inside without strict: a
+    dict as a count claim or as a problem parameter ran code (audit of 25 Sep 2026)."""
+    from mathverify.normalize.parse import parse_set_str, sympify_nontext
+    src = _marker_payload(tmp_path, "ran")
+    assert exact_integer(wrap(src)) is None
+    for fn in (parse_expr_str, parse_set_str, sympify_nontext):
+        with pytest.raises(ParseError):
+            fn(wrap(src))
+    count = _ir("count_roots", {"expr": "x**2 - 4", "var": "x"}, shape="count")
+    for ca in ({"kind": "count", "payload": wrap(src)}, {"kind": "value", "payload": "2", "option": wrap(src)}):
+        verify(count, {"claimed_answer": ca, "steps": []})
+    for ir in (_ir("evaluate", {"expr": wrap(src)}),
+               _ir("evaluate", {"expr": "f(1)"}, functions=[{"name": "f", "expr": wrap(src), "args": ["x"]}])):
+        r = verify(ir, {"claimed_answer": {"kind": "value", "payload": "2"}, "steps": []})
+        assert r.verdict == "UNKNOWN"
+    assert not (tmp_path / "ran").exists()
+
+
+@pytest.mark.parametrize("ca", [
+    {"kind": "count", "payload": {"a": "2"}}, {"kind": "count", "payload": True},
+    {"kind": "value", "payload": "2", "option": ["A"]}, {"kind": ["value"], "payload": "2"},
+    {"kind": "value", "payload": [["2"]]}, {"kind": "value", "payload": "2", "no_such_field": 1},
+])
+def test_a_claimed_answer_of_the_wrong_shape_abstains(ca):
+    r = verify(_ir("evaluate", {"expr": "1 + 1"}), {"claimed_answer": ca, "steps": []})
+    assert r.verdict == "UNKNOWN" and "malformed_solution" in r.flags
+
+
+@pytest.mark.parametrize("kind,payload", [("value", ["2"]), ("count", ["2"]), ("interval", ["(0, 1)"])])
+def test_only_a_set_may_be_written_as_a_list(kind, payload):
+    r = _run(_ir("evaluate", {"expr": "1 + 1"}), kind, payload)
+    assert r.verdict == "UNKNOWN" and "claim_unreadable" in r.flags
+    assert _run(SOLVE, "set", ["2", "3"]).verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda ir: ir["task"].__setitem__("kind", ["evaluate"]),
+    lambda ir: ir.__setitem__("answer_shape", 7),
+    lambda ir: ir.__setitem__("answer_shape", "no_such_shape"),
+    lambda ir: ir.__setitem__("givens", "2*x = 7"),
+    lambda ir: ir.__setitem__("givens", [["2*x = 7"]]),
+    lambda ir: ir["vars"][0].__setitem__("domain", "no_such_domain"),
+    lambda ir: ir.__setitem__("functions", [{"name": "f", "expr": {"k": "x"}}]),
+    lambda ir: ir.__setitem__("options", {"A": ["3"]}),
+    lambda ir: ir.__setitem__("no_such_field", 1),
+])
+def test_a_malformed_problem_abstains_instead_of_raising(mutate):
+    import copy
+    ir = copy.deepcopy(EVAL)
+    mutate(ir)
+    r = verify(ir, {"claimed_answer": {"kind": "value", "payload": "7/2"}, "steps": []})
+    assert r.verdict == "UNKNOWN" and "ir_malformed" in r.flags
+
+
+def test_answer_key_leakage_still_stops_the_pipeline():
+    """Principle 1: a malformed IR abstains, but an answer key is never downgraded to UNKNOWN."""
+    from mathverify.ir import LeakageError
+    ir = dict(EVAL, gold_answer="7/2")
+    with pytest.raises(LeakageError):
+        verify(ir, {"claimed_answer": {"kind": "value", "payload": "7/2"}, "steps": []})
+    ir = dict(EVAL, givens=[["x"]], answer_key="7/2")
+    with pytest.raises(LeakageError):
+        verify(ir, {"claimed_answer": {"kind": "value", "payload": "7/2"}, "steps": []})

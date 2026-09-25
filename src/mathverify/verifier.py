@@ -18,7 +18,7 @@ from .certify import MODULES
 from .certify.base import make_ctx, result, unknown, Timer
 from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
-from .ir import ProblemIR, LeakageError
+from .ir import MalformedIR, ProblemIR, LeakageError
 from .router import route, DEFERRED_KINDS
 from .solution import MalformedSolution, Solution
 from .steps import check_steps
@@ -304,8 +304,16 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
 def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     from .normalize.parse import ClaimNotAValue, check_claim_is_value
     ca = solution.claimed_answer
-    if ca.payload_source == "option_letter" or not isinstance(ca.payload, str):
+    if ca.payload_source == "option_letter":
         return None                         # the option's own text is the problem's, not a claim
+    if ca.kind in ("value", "count", "expression", "interval", "condition", "equation") \
+            and isinstance(ca.payload, list):
+        # only a set may be written as a list of elements; any other kind would be read as a set
+        # or refused as "not an integer" — a verdict about a claim of the wrong shape
+        return unknown("intake.claim", f"a {ca.kind} answer written as a list: not read",
+                       flags=["parse_error", "claim_unreadable"])
+    if not isinstance(ca.payload, str):
+        return None
     try:
         check_claim_is_value(ca.payload, [f.name for f in ir.functions])
     except ClaimNotAValue as e:
@@ -417,9 +425,13 @@ def fuse_layers(layers: list[LayerResult], extra_flags: list[str] | None = None,
 def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
                   timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
     """Run the deterministic layers and return (layers, flags) without fusing."""
-    if isinstance(problem_ir, dict):
-        problem_ir = ProblemIR.from_dict(problem_ir)
     layers: list[LayerResult] = []
+    if isinstance(problem_ir, dict):
+        try:
+            problem_ir = ProblemIR.from_dict(problem_ir)
+        except MalformedIR as e:                   # LeakageError is not caught: it must stop
+            layers.append(unknown("intake.ir", f"ir_malformed: {e}", flags=["ir_malformed"]))
+            return layers, []
     if isinstance(solution, dict):
         try:
             solution = Solution.from_dict(solution)

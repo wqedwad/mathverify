@@ -44,8 +44,23 @@ class ClaimedAnswer:
     payload_source: str | None = None
 
     def __post_init__(self):
-        if self.kind not in ANSWER_KINDS:
-            raise ValueError(f"unknown answer kind {self.kind!r}")
+        if not isinstance(self.kind, str) or self.kind not in ANSWER_KINDS:
+            raise MalformedSolution(f"unknown answer kind {self.kind!r}")
+        # The payload is text, a list of texts, or a number. A dict, a nested list or a list of
+        # numbers reached `sympify`, which evaluates the strings inside a container with Python's
+        # builtins in reach: `{"payload": ["__import__(...)"]}` ran code (audit of 25 Sep 2026).
+        p = self.payload
+        ok = p is None or isinstance(p, str) or (isinstance(p, (int, float)) and not isinstance(p, bool)) \
+            or (isinstance(p, (list, tuple)) and all(isinstance(x, str) for x in p))
+        if not ok:
+            raise MalformedSolution(f"claimed answer payload of type {type(p).__name__} is not text or a number")
+        if isinstance(p, tuple):
+            self.payload = list(p)
+        if self.option is not None and not isinstance(self.option, str):
+            raise MalformedSolution(f"option must be a letter, got {type(self.option).__name__}")
+        for name in ("raw", "payload_source"):
+            if getattr(self, name) is not None and not isinstance(getattr(self, name), str):
+                raise MalformedSolution(f"{name} must be text")
         if self.option is not None:
             self.option = _normalize_option(self.option)
 
@@ -114,7 +129,12 @@ class Solution:
         ca = d["claimed_answer"]
         if isinstance(ca, str):
             ca = {"kind": "value", "payload": ca}
-        ca_obj = ClaimedAnswer(**ca)
+        try:
+            ca_obj = ClaimedAnswer(**ca)
+        except MalformedSolution:
+            raise
+        except (TypeError, ValueError) as e:     # an unknown field, a missing kind
+            raise MalformedSolution(f"claimed answer: {e}") from e
         steps = []
         raw_steps = d.get("steps", [])
         if raw_steps is None:

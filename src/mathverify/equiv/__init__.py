@@ -46,9 +46,10 @@ def exact_integer(v) -> int | None:
         except (ParseError, sp.SympifyError, TypeError, ValueError):
             return None
     else:
+        from ..normalize.parse import ParseError, sympify_nontext
         try:
-            e = sp.sympify(v)
-        except (sp.SympifyError, TypeError, ValueError):
+            e = sympify_nontext(v)              # a container (list, dict) is refused, never evaluated
+        except (ParseError, sp.SympifyError, TypeError, ValueError):
             return None
     if isinstance(e, sp.Integer):
         return int(e)
