@@ -228,3 +228,91 @@ def test_count_payload_text_is_parsed_not_evaluated():
     assert _v(_cnt(space), "binomial(3, 1)", "count") == "CORRECT"
     assert _v(_cnt(space), "7/2", "count") == "INCORRECT"
     assert _v(_cnt(space), 3, "count") == "CORRECT"
+
+
+# ------------------------------------------------------------------------------------------------
+# series: closed forms need a proof; definedness as written; no silent branch; exact bounds
+# (C6, C7, C9, M2, LOW int bounds)
+# ------------------------------------------------------------------------------------------------
+_NV = [{"name": "n", "domain": "positive_integer"}]
+
+
+def _cf(rec, initial):
+    return _ir("closed_form", {"recurrence": rec, "initial": initial, "var": "n"}, vars=_NV,
+               answer_shape="expression")
+
+
+def _rt(rec, initial, index):
+    return _ir("recurrence_term", {"recurrence": rec, "initial": initial, "index": index, "var": "n"}, vars=_NV)
+
+
+def _iterate(rec_step, a1, upto):
+    vals = {1: sp.Integer(a1)}
+    for k in range(2, upto + 1):
+        vals[k] = rec_step(vals[k - 1], k)
+    return vals
+
+
+def test_closed_form_window_is_not_a_proof():
+    ar = _iterate(lambda p, k: p + 3, 2, 40)                        # a(n) = 3n - 1
+    n = sp.Symbol("n")
+    claim = 3 * n - 1 + 3 * sp.floor(n / 22)
+    assert claim.subs(n, 22) != ar[22]                              # wrong from n = 22 on
+    assert _v(_cf("a(n) = a(n-1) + 3", {"1": "2"}), "3*n - 1 + 3*floor(n/22)", "expression") != "CORRECT"
+    ge = _cf("a(n) = 2*a(n-1)", {"1": "3"})
+    assert _v(ge, "3*2**(n-1) + floor(n/23)", "expression") != "CORRECT"
+    assert _v(ge, "3*2**(n-1) + (n-1)*exp(-100*n)", "expression") != "CORRECT"   # wrong at every n >= 2
+    assert _v(_cf("a(n) = a(n-1) + 2", {"1": "2"}),
+              "2*n + " + "*".join(f"(n-{j})" for j in range(1, 22)), "expression") != "CORRECT"
+    assert _v(ge, "3*2**(n-1)", "expression") == "CORRECT"
+    assert _v(ge, "3*2**n", "expression") == "INCORRECT"
+
+
+def test_closed_form_of_arithmetic_sequence_no_longer_crashes():
+    ir = _cf("a(n) = a(n-1) + 3", {"1": "2"})
+    assert _v(ir, "3*n - 1", "expression") == "CORRECT"
+    assert _v(ir, "3*(n-1) + 2", "expression") == "CORRECT"
+    assert _v(ir, "3*n + 1", "expression") == "INCORRECT"
+    fwd = _cf("a(n+1) = a(n) + 3", {"1": "2"})
+    assert _v(fwd, "3*n - 1", "expression") == "CORRECT"
+    # the given terms must determine the sequence: order 2 with one term is not enough (a(2) free)
+    binet = "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)"
+    assert _v(_cf("a(n) = a(n-1) + a(n-2)", {"1": "1"}), binet, "expression") == "UNKNOWN"
+    assert _v(_cf("a(n) = a(n-1) + a(n-2)", {"1": "1", "2": "1"}), binet, "expression") == "CORRECT"
+    # ... but a claim that breaks the recurrence where all its terms are in range is refuted
+    assert _v(_cf("a(n) = a(n-1) + a(n-2)", {"1": "1"}), "1", "expression") == "INCORRECT"
+
+
+def test_recurrence_defined_as_written():
+    # (n-3)/(n-3) cancels on parsing; as written a(3) does not exist, so neither does a(5)
+    assert _v(_rt("a(n) = a(n-1)*(n-3)/(n-3) + 1", {"1": "1"}, 5), "5") == "UNKNOWN"
+    assert _v(_rt("a(n) = a(n-1) + 1/(n-3)", {"1": "1"}, 5), "5") == "UNKNOWN"
+    assert _v(_rt("a(n) = a(n-1) + 2*a(n-2)", {"1": "1", "2": "3"}, 6), "43") == "CORRECT"
+    assert _v(_rt("a(n+1) = 2*a(n) + 1", {"1": "1"}, 5), "31") == "CORRECT"          # forward form
+    assert _v(_cf("a(n) = a(n-1) + 1/(n-3)", {"1": "1"}), "1", "expression") != "CORRECT"
+
+
+def test_implicit_recurrence_needs_a_unique_real_value():
+    # a(n)**2 = 4*a(n-1), a(1) = 4: a(2) = ±4, a(3) = ±4 on the real branches -> not unique
+    ir = _rt("a(n)**2 = 4*a(n-1)", {"1": "4"}, 3)
+    assert _v(ir, "4") == "UNKNOWN"
+    assert _v(ir, "-4*I") == "UNKNOWN"
+    # a(n)**3 = 8*a(n-1): one real cube root per step -> a(3) = 16**(1/3) = 2*2**(1/3)
+    cub = _rt("a(n)**3 = 8*a(n-1)", {"1": "1"}, 3)
+    assert _v(cub, "2*2**(1/3)") == "CORRECT"
+    assert _v(cub, "2") == "INCORRECT"
+
+
+def test_series_sum_definedness_and_integer_bounds():
+    for vars_ in ([], [{"name": "k", "domain": "positive_integer"}]):
+        ir = _ir("series_sum", {"term": "k/k", "var": "k", "lo": -1, "hi": 1}, vars=vars_)
+        assert _v(ir, "3") == "UNKNOWN", vars_                 # 0/0 at k = 0, as written
+    half = _ir("series_sum", {"term": "k", "var": "k", "lo": "1/2", "hi": 3},
+               vars=[{"name": "k", "domain": "positive_integer"}])
+    assert _v(half, "6") == "UNKNOWN"                           # int(1/2) = 0 was used
+    ok = _ir("series_sum", {"term": "k**2", "var": "k", "lo": 1, "hi": 10},
+             vars=[{"name": "k", "domain": "positive_integer"}])
+    assert _v(ok, "385") == "CORRECT"
+    two = _ir("series_sum", {"term": "1/(k**2 + 1)", "var": "k", "lo": "-oo", "hi": "oo"},
+              vars=[{"name": "k", "domain": "integer"}])
+    assert _v(two, "pi/tanh(pi)") == "CORRECT"
