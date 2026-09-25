@@ -496,3 +496,11 @@ def test_a_degree_option_is_read_in_degrees_for_an_angle_target():
     for payload, opt in (("60", "C"), ("70", "C"), ("60°", "D")):
         ca = {"kind": "value", "payload": payload, "option": opt}
         assert verify(ir, {"claimed_answer": ca, "steps": []}).verdict == "INCORRECT", (payload, opt)
+@pytest.mark.parametrize("payload", ["(5, 1)", "(1, 1)", "(2, -2)"])
+def test_a_reversed_interval_is_not_read_as_the_empty_set(payload):
+    """SymPy's Interval(5, 1) is EmptySet: "(5, 1)" was certified as the answer to x² + 1 < 0."""
+    ir = _ir("solve_inequality", {"inequality": "x**2 + 1 < 0", "var": "x"}, shape="interval")
+    assert _run(ir, "interval", payload).verdict == "UNKNOWN"
+    assert _run(ir, "interval", "EmptySet").verdict == "CORRECT"
+    ir2 = _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, shape="interval")
+    assert _run(ir2, "interval", "(-2, 2)").verdict == "CORRECT"
