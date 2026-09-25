@@ -504,3 +504,29 @@ def test_a_reversed_interval_is_not_read_as_the_empty_set(payload):
     assert _run(ir, "interval", "EmptySet").verdict == "CORRECT"
     ir2 = _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, shape="interval")
     assert _run(ir2, "interval", "(-2, 2)").verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("ineq,given,wrong,right", [
+    ("x**2 < 4", "x > 0", "(-2, 2)", "(0, 2)"),
+    ("cbrt(x) < -1", "x > -10", "(-oo, -1)", "(-10, -1)"),     # odd roots are real roots
+])
+def test_a_side_condition_restricts_the_task_relation(ineq, given, wrong, right):
+    ir = _ir("solve_inequality", {"inequality": ineq, "var": "x"}, [given], shape="interval")
+    assert _run(ir, "interval", wrong).verdict == "INCORRECT"
+    assert _run(ir, "interval", right).verdict == "CORRECT"
+
+
+def test_a_side_condition_that_cannot_be_solved_abstains():
+    ir = _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, ["sin(x) > x/2 - 1"], shape="interval")
+    r = _run(ir, "interval", "(-2, 2)")
+    assert r.verdict == "UNKNOWN" and "given_not_applied" in r.flags
+
+
+def test_givens_that_are_the_counted_condition_are_not_a_domain():
+    """The broad first version of the side-condition rule broke count_integers (TypeError on a
+    log bound) and cube-root inequalities (principal root: empty domain); measured on the merge."""
+    ir = {"task": {"kind": "count_integers", "params": {"var": "x"}}, "vars": [{"name": "x", "domain": "integer"}],
+          "givens": ["Abs(x) < log(8)/log(2)"], "answer_shape": "count"}
+    assert verify(ir, {"claimed_answer": {"kind": "count", "payload": 5}, "steps": []}).verdict == "CORRECT"
+    ir = _ir("solve_inequality", {"var": "x"}, ["cbrt(x) < -1"], shape="interval")
+    assert _run(ir, "interval", "(-oo, -1)").verdict == "CORRECT"

@@ -67,25 +67,14 @@ class Ctx:
                         dom = sp.Intersection(dom, sp.solveset(rel, var, S.Reals))
                 except Exception:
                     pass
-        # A given inequality on this variable alone restricts it like a declared constraint:
-        # "x² = 4, x > 0" has the one root 2, and "2x = 4, x > 5" has none, but only the equation
-        # was solved and {−2, 2} and {2} were certified (audit of 25 Sep 2026). Equations are left to
-        # the certificates. `limit` skips its givens (the point approached may lie outside).
-        if self.ir.task.kind != "limit":
-            for g in self.ir.givens:
-                try:
-                    rel = parse_relation(g, self.ns)
-                except Exception:  # noqa: BLE001 - not a relation: nothing to restrict
-                    continue
-                if isinstance(rel, sp.Eq) or not isinstance(rel, sp.core.relational.Relational) \
-                        or rel.free_symbols != {var}:
-                    continue
-                try:
-                    sol = sp.solveset(rel, var, S.Reals)
-                except Exception:  # noqa: BLE001
-                    continue
-                if not isinstance(sol, sp.ConditionSet):
-                    dom = sp.Intersection(dom, sol)
+        # A given inequality on this variable alone restricts it like a declared constraint when
+        # the task carries its own relation in params: "x² < 4" with the given "x > 0" is (0, 2),
+        # but only the parameter was solved and (−2, 2) was certified (audit of 25 Sep 2026). When
+        # the relation itself is a given, the algebra certificates solve the givens as a system.
+        # Odd roots are real roots (equiv.numeric.real_odd_roots), as everywhere else.
+        rs, _ = self.side_conditions(var)
+        for sol in rs:
+            dom = sp.Intersection(dom, sol)
         # the problem's own expressions must be defined, as written (see written_conditions)
         conds, nowhere = self.written_conditions()
         if var in nowhere:
@@ -108,6 +97,40 @@ class Ctx:
     _WRITTEN_PARAMS = {"evaluate": ("expr",), "simplify_expression": ("expr",), "domain_of": ("expr",),
                        "solve_equation": ("equation",), "solve_inequality": ("inequality",),
                        "count_roots": ("expr",)}
+
+    _MAIN_RELATION = {"solve_equation": "equation", "solve_inequality": "inequality"}
+
+    def side_conditions(self, var: sp.Symbol) -> tuple[list[sp.Set], list[str]]:
+        """Solution sets of the single-variable given inequalities that are SIDE conditions (the
+        task's own relation is in params), and the ones that could not be solved exactly. A side
+        condition that cannot be applied leaves the certificates answering another question, so
+        the verifier abstains on it (`given_not_applied`) instead of dropping it silently."""
+        key = f"side:{var.name}"
+        if key in self.cache:
+            return self.cache[key]
+        sets: list[sp.Set] = []
+        unapplied: list[str] = []
+        pk = self._MAIN_RELATION.get(self.ir.task.kind)
+        if pk and isinstance((self.ir.task.params or {}).get(pk), str):
+            from ..equiv.numeric import real_odd_roots
+            for g in self.ir.givens:
+                try:
+                    rel = parse_relation(g, self.ns)
+                except Exception:  # noqa: BLE001 - not a relation: nothing to restrict
+                    continue
+                if isinstance(rel, sp.Eq) or not isinstance(rel, sp.core.relational.Relational) \
+                        or rel.free_symbols != {var}:
+                    continue
+                try:
+                    sol = sp.solveset(real_odd_roots(rel), var, S.Reals)
+                except Exception:  # noqa: BLE001
+                    sol = None
+                if sol is None or isinstance(sol, sp.ConditionSet) or sol.has(sp.ConditionSet):
+                    unapplied.append(g)
+                else:
+                    sets.append(sol)
+        self.cache[key] = (sets, unapplied)
+        return sets, unapplied
 
     def written_conditions(self) -> tuple[list[Any], set]:
         """Definedness of the problem's expressions AS WRITTEN (open conditions, and symbols of an

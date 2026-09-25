@@ -111,7 +111,7 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
                          "layer_exception", "malformed_solution", "option_unreadable",
                          "decimal_comma_ambiguous", "recovered_answer_refuted",
                          # the prose around the value negates or doubts it ("5 değil")
-                         "payload_negated", "problem_undefined_as_written", "var_domain_unsupported", "ir_malformed",
+                         "payload_negated", "problem_undefined_as_written", "var_domain_unsupported", "ir_malformed", "given_not_applied",
                          # the claimed answer is a computation or restates the question: the
                          # certificates would be checking an answer the verifier itself produced
                          "claim_is_not_a_value",

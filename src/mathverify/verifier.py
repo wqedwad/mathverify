@@ -514,6 +514,18 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
                               "reason over the reals)", flags=["var_domain_unsupported"]))
         return layers, clean_flags
 
+    # A side condition (a given inequality next to the task's own relation) that cannot be solved
+    # exactly would be dropped from the domain: the certificates would answer another question.
+    try:
+        tvar = (problem_ir.task.params or {}).get("var")
+        unapplied = ctx.side_conditions(ctx.sym(tvar))[1] if isinstance(tvar, str) else []
+    except Exception:  # noqa: BLE001 - a failed probe adds no fact
+        unapplied = []
+    if unapplied:
+        layers.append(unknown("intake.domain", f"given_not_applied: {unapplied[:3]}",
+                              flags=["given_not_applied"]))
+        return layers, clean_flags
+
     # The problem's own expression is undefined as written at a point with nothing left to choose
     # (`f(-1)` for f(x) = log(x) − log(x) + x). SymPy simplified it to a value, and that value was
     # certified. There is no answer to check against.
