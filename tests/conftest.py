@@ -14,6 +14,9 @@ if str(SRC) not in sys.path:
 
 os.environ.setdefault("PYTHONUTF8", "1")
 
+# Every run of the suite checks which documents the tests open (tests/doc_read_guard.py).
+from doc_read_guard import pytest_sessionfinish, pytest_terminal_summary  # noqa: E402,F401  (hooks pytest calls)
+
 
 @pytest.fixture(scope="session")
 def x():

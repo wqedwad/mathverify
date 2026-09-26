@@ -3,8 +3,13 @@
     .venv/Scripts/python.exe scripts/check.py            # Windows: hızlı (testler + değerlendirme)
     .venv/Scripts/python.exe scripts/check.py --full     # + Lean taraması + adversaryal + kalibrasyon
     .venv/bin/python scripts/check.py [--full]           # Linux/macOS: aynı kapılar
+    .venv/bin/python scripts/check.py --plan [--base B]  # hangi kontrol gerekli (DECISIONS §59)
 
 Her kapı için ölçülen sayıyı ve hedefi yazar, herhangi biri düşerse çıkış kodu 1 olur.
+Kademeli kural: yalnız hiçbir kodun okumadığı belgeler ve `reports/` altındaki üretilmiş raporlar
+değiştiyse kontrol gerekmez; başka her değişiklik koddur ve birleştirmeden önce son hâlde bir
+`--full` ister; karar verilemeyen durum da `--full` ister. `--plan` yalnız kararı yazar (çıkış 0:
+başka kontrol gerekmez, 1: `--full` gerekli); hızlı koşu kararı kapılardan sonra hatırlatır.
 `--full` çıktısını ayrıca `reports/check_full.log`a yazar (tarih, dal, commit ve kirli dosya
 sayısıyla birlikte).
 Hiçbir kapı tahmine dayanmaz: hepsi bu koşuda üretilmiş raporlardan okunur. Bir harness'ın
@@ -14,8 +19,10 @@ kapıları aynı adlarla FAIL olur.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -26,6 +33,11 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 REPORTS = ROOT / "reports"
 ENV = dict(os.environ, PYTHONUTF8="1")
+# Inherited settings that would change what the gates measure and leave no trace in the log: extra
+# pytest options (a `-k` deselects most of the suite and "birim testleri" still passes) and plugins,
+# and the sandbox's in-process debugging mode (no process isolation, no hard timeouts).
+for _var in ("PYTEST_ADDOPTS", "PYTEST_PLUGINS", "MATHVERIFY_SANDBOX"):
+    ENV.pop(_var, None)
 
 
 def venv_python(root: Path, windows: bool | None = None) -> str:
@@ -339,6 +351,18 @@ def adversarial_gates(adv: dict) -> list[dict]:
     return gates
 
 
+def adversarial_note(path: Path) -> str | None:
+    """One log line on how the sweep ran (not a gate): worker processes, sandbox calls that timed out
+    or restarted, and the items attacked again alone because of them (harness.adversarial). None
+    when the report is missing or unreadable (the gates already say so)."""
+    try:
+        adv = json.loads(path.read_text(encoding="utf-8"))
+        return (f"    adversarial: {adv['workers']} süreç · sandbox zaman aşımı {adv['sandbox_timeouts']} · "
+                f"yeniden başlatma {adv['sandbox_restarts']} · tek başına yeniden denenen {len(adv['rechecked'])}")
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def soundness_gates(sf: dict) -> list[dict]:
     gates: list[dict] = []
     gates.append(gate("SymPy üretimli yanlış cevapta yanlış onay",
@@ -414,29 +438,489 @@ def _git(*a: str) -> str:
     return p.stdout.strip() if p.returncode == 0 else "?"
 
 
+# --------------------------------------------------------------------------- staged checking
+# Which check a change needs (DECISIONS §59, user decision of 26 Sep 2026). A --full run took
+# 59-77 min and three sessions spent most of 8-9 hours waiting, often after a documentation-only
+# change. The rule: documentation that no code reads and the reports the checks write need no
+# check; any other change is code and needs the quick check while working and one --full on the
+# final state before it is merged into master; whatever cannot be decided needs the --full.
+#
+# This file names no document in a string (only in comments and docstrings): the rule below reads
+# the string constants of every Python file, this one included, to find the documents code reads.
+
+REPORT_LOG = "reports/check_full.log"
+DOC_SUFFIX = ".md"
+# Directories never scanned for Python code when git cannot list the files: the environment,
+# caches and git's own.
+_SKIP_DIRS = frozenset({".git", ".venv", "__pycache__", ".pytest_cache", ".hypothesis", "node_modules"})
+# Where documentation lives: files at the repository root and everything under docs/. A .md file
+# anywhere else sits next to code that may copy, hash or package it, which no scan of names can
+# see: tests/test_cloud_scripts.py copies lean/ and src/ into its test beds, and the cloud scripts
+# fingerprint every file under lean/ but its README. So it counts as code by its place.
+DOC_DIRS = ("docs/",)
+# Documents in those places that code reads without naming them in a Python string, with the
+# reason; a key ending in "/" covers every document under that directory. None today.
+# tests/doc_read_guard.py fails the test session when a test opens a document that is neither
+# named nor covered here, and tests/test_staged_check.py fails when a shell script mentions or
+# walks one that is not covered.
+DOCS_READ_UNNAMED: dict[str, str] = {}
+# A file name ending in .md inside a string: "BULUT.md", "docs/x.md", "*.md", the constant tail
+# "_report.md" of f"{tag}_report.md". Built from DOC_SUFFIX so that the pattern's own text holds no
+# such name.
+_MD_TOKEN = re.compile(r"[\w.*?\[\]/\\-]*" + re.escape(DOC_SUFFIX) + r"(?!\w)", re.IGNORECASE)
+_RUN_LINE = (r" · (?P<when>.+?) · (?P<branch>.+) @ (?P<commit>[0-9a-f]{4,40}) · "
+             r"commit edilmemiş değişiklik: (?P<dirty>\d+) dosya")
+_LOG_HEADER = re.compile(r"check\.py --full" + _RUN_LINE)
+_LOG_END = re.compile(r"check\.py --full sonu" + _RUN_LINE)
+_LOG_TOTAL = re.compile(r"(?P<ok>\d+)/(?P<n>\d+) kapı geçti")
+_WORD = re.compile(r"\w")
+
+
+class UnreadableSource(Exception):
+    """A Python file the scan cannot parse: which documents it reads is unknown."""
+
+
+def _git_run(root: Path, *a: str, timeout: float | None = None, env: dict | None = None):
+    try:
+        return subprocess.run(["git", *a], cwd=root, capture_output=True, timeout=timeout, env=env)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _git_lines(root: Path, *a: str) -> list[str] | None:
+    """git's NUL-separated output (`-z`: paths unquoted, whatever their characters) as a list,
+    or None when git fails."""
+    p = _git_run(root, *a)
+    if p is None or p.returncode != 0:
+        return None
+    return [x for x in p.stdout.decode("utf-8", "replace").split("\0") if x]
+
+
+def _git_value(root: Path, *a: str) -> str | None:
+    p = _git_run(root, *a)
+    if p is None or p.returncode != 0:
+        return None
+    return p.stdout.decode("utf-8", "replace").strip() or None
+
+
+def is_report(path: str) -> bool:
+    """A file the checks write: `reports/<name>.md` (a harness report, produced and never written
+    by hand) or the --full log. A change to one is the output of a check, not a reason for one."""
+    p = path.replace("\\", "/")
+    head, _, name = p.rpartition("/")
+    return p == REPORT_LOG or (head == "reports" and name.lower().endswith(DOC_SUFFIX))
+
+
+def is_doc(path: str) -> bool:
+    """A .md file in a documentation place (the root, DOC_DIRS): the only files that can be
+    "belge". Everywhere else a .md file is code by its place."""
+    p = path.replace("\\", "/")
+    return (p.lower().endswith(DOC_SUFFIX) and not is_report(p)
+            and ("/" not in p or p.startswith(DOC_DIRS)))
+
+
+def read_unnamed(doc: str) -> str | None:
+    """Why code reads `doc` without naming it (DOCS_READ_UNNAMED), or None."""
+    d = doc.replace("\\", "/")
+    for key, why in DOCS_READ_UNNAMED.items():
+        if d == key or (key.endswith("/") and d.startswith(key)):
+            return why
+    return None
+
+
+def python_sources(root: Path) -> list[Path]:
+    """The Python files of the working tree: tracked, and untracked but not ignored (as git lists
+    them, so a nested repository or worktree and ignored scratch are not the project's code).
+    Without git, every .py under `root` outside _SKIP_DIRS and nested repositories."""
+    listed = _git_lines(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.py")
+    if listed is not None:
+        return [root / p for p in sorted(set(listed)) if (root / p).is_file()]
+    out = []
+    for d, dirs, files in os.walk(root):
+        dirs[:] = sorted(x for x in dirs if x not in _SKIP_DIRS and not (Path(d) / x / ".git").exists())
+        out += [Path(d) / f for f in sorted(files) if f.endswith(".py")]
+    return out
+
+
+def code_strings(root: Path) -> list[tuple[str, str, bool]]:
+    """(file:line, text, tail) of every string constant in the repository's Python code, f-string
+    parts included. `tail` marks text appended to a value only known at run time: an f-string part
+    after a {field}, the right side of `+`, the argument of `with_suffix`. Docstrings and other bare
+    string statements are left out: like comments, they are prose (a test's docstring citing a
+    document does not read it). Raises UnreadableSource for a file that cannot be read or parsed
+    (parsed from bytes, as Python itself reads it: a UTF-8 BOM or a coding cookie is honoured)."""
+    import ast
+    import warnings
+    out = []
+    for f in python_sources(root):
+        rel = f.relative_to(root).as_posix()
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")        # invalid escapes etc. in the scanned files
+                tree = ast.parse(f.read_bytes(), filename=str(f))
+        except (OSError, SyntaxError, ValueError) as e:
+            raise UnreadableSource(f"{rel}: {type(e).__name__}") from e
+        prose, tails = set(), set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Expr):
+                prose.add(id(n.value))
+            elif isinstance(n, ast.JoinedStr):
+                tails.update(id(v) for i, v in enumerate(n.values)
+                             if i and isinstance(n.values[i - 1], ast.FormattedValue))
+            elif isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add):
+                tails.add(id(n.right))
+            elif isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "with_suffix":
+                tails.update(id(a) for a in n.args)
+        consts = sorted((n for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                         and id(n) not in prose), key=lambda n: (n.lineno, n.col_offset))
+        out += [(f"{rel}:{n.lineno}", n.value, id(n) in tails) for n in consts]
+    return out
+
+
+# What may stand right before a whole file name in a string: its start, a space, a quote, an opening
+# bracket, a separator. Anything else ("}" of "{}.md", ")" of "%(n)s.md", "%" of "%s.md") means the
+# name is completed at run time and only its ending is known.
+_NAME_START = frozenset(" \t\n\"'`(,;:=<")
+
+
+def doc_tokens(text: str, tail: bool = False) -> list[tuple[str, bool]]:
+    """(token, suffix) for every file name ending in .md in `text`. `suffix` is True when only the
+    ending is known (a tail, or a placeholder right before the token); after a printf placeholder
+    the token's first letter is the conversion ("%s.md"), so it is dropped."""
+    out = []
+    for m in _MD_TOKEN.finditer(text):
+        token, i = m.group(), m.start()
+        before = text[i - 1] if i else ""
+        suffix = tail if i == 0 else before not in _NAME_START
+        if i and before in "%)":
+            token = token[1:]
+        out.append((token, suffix))
+    return out
+
+
+def names_doc(token: str, doc: str, suffix: bool = False) -> bool:
+    """Does `token` name the document `doc` (a repository path)? Loosely, so that a doubt counts as
+    a read. Case-insensitively (Windows opens BULUT.md for bulut.md), by the file name in any
+    directory (`ROOT / "docs" / "X.md"` carries only "X.md"), and as the end of a longer name after
+    a character that is not a letter or digit ("kurulum notu.md" leaves the token "notu.md"); a
+    glob names what it matches ("*.md" every document); a suffix token names every document whose
+    name ends with it ("_report.md"; the bare extension: every document). The bare extension as a
+    whole token is a type test (`p.endswith(".md")`), not a name."""
+    t = token.replace("\\", "/").lower()
+    d = doc.replace("\\", "/").lower()
+    base, tbase = d.rpartition("/")[2], t.rpartition("/")[2]
+    if any(c in t for c in "*?["):
+        return fnmatch.fnmatchcase(d, t) or fnmatch.fnmatchcase(base, tbase)
+    if suffix:
+        return base.endswith(tbase)
+    if tbase == DOC_SUFFIX:
+        return False
+    return base == tbase or (base.endswith(tbase) and not _WORD.match(base[-len(tbase) - 1]))
+
+
+def docs_named_by_code(root: Path, docs) -> dict[str, str]:
+    """{document: why it counts as read} for the documents in `docs` that DOCS_READ_UNNAMED covers
+    or that a string constant of the repository's Python code names (the first place found). A read
+    document is code: a change to it can change what the checks or the verifier do. A name assembled
+    without a constant that ends in .md (`"".join(...)`) is not seen here; in the tests
+    tests/doc_read_guard.py catches it at run time. Raises UnreadableSource."""
+    docs = sorted(set(docs))
+    found = {d: f"adsız okuyucu: {read_unnamed(d)}" for d in docs if read_unnamed(d)}
+    if len(found) == len(docs):
+        return found
+    for where, text, tail in code_strings(root):
+        for token, suffix in doc_tokens(text, tail):
+            for d in docs:
+                if d not in found and names_doc(token, d, suffix):
+                    found[d] = where
+    return found
+
+
+def changed_since(root: Path, rev: str) -> list[str] | None:
+    """Files that differ between commit `rev` and the working tree: committed, staged and unstaged
+    changes (`git diff <rev>` compares the commit with the working tree), deletions, both sides of
+    a rename (--no-renames), and every untracked file that the repository's .gitignore files do not
+    ignore (personal excludes and status.showUntrackedFiles hide nothing here). None if git fails."""
+    tracked = _git_lines(root, "diff", "--name-only", "-z", "--no-renames", rev, "--")
+    untracked = _git_lines(root, "ls-files", "--others", "--exclude-per-directory=.gitignore", "-z")
+    if tracked is None or untracked is None:
+        return None
+    return sorted(set(tracked) | set(untracked))
+
+
+def hidden_files(root: Path) -> list[str] | None:
+    """Tracked files git is told to ignore changes in (assume-unchanged, skip-worktree): their edits
+    appear in no diff, so nothing about them can be decided. None if git fails."""
+    rows = _git_lines(root, "ls-files", "-v", "-z")
+    if rows is None:
+        return None
+    return sorted(r[2:] for r in rows if len(r) > 2 and (r[0].islower() or r[0] == "S"))
+
+
+def dirty_files(root: Path) -> list[str] | None:
+    """What a --full run's log counts as uncommitted: every change against HEAD that could shape
+    the run (changed_since, hidden_files), reports left out, since the run rewrites them itself.
+    None if git fails."""
+    changed, hidden = changed_since(root, "HEAD"), hidden_files(root)
+    if changed is None or hidden is None:
+        return None
+    return sorted({f for f in changed + hidden if not is_report(f)})
+
+
+def classify(files, named: dict[str, str]) -> dict[str, str]:
+    """"rapor" (written by the checks), "belge" (documentation no code reads) or "kod"."""
+    return {f: "rapor" if is_report(f) else "belge" if is_doc(f) and f not in named else "kod"
+            for f in files}
+
+
+def _code_of(root: Path, files) -> list[str]:
+    return [f for f, c in classify(files, docs_named_by_code(root, [f for f in files if is_doc(f)])).items()
+            if c == "kod"]
+
+
+def last_full_run(root: Path) -> dict:
+    """What `reports/check_full.log` proves. {"ok": True, "commit": sha, ...} only for a --full run
+    that finished with every gate passed, whose tree was clean (no uncommitted change but reports)
+    when it started and when it ended, on the same commit, which this repository has; otherwise
+    {"ok": False, "why": ...}."""
+    try:
+        lines = [l.strip() for l in (root / REPORT_LOG).read_text(encoding="utf-8").splitlines()]
+    except (OSError, UnicodeDecodeError):
+        return {"ok": False, "why": "günlük yok"}
+    head = _LOG_HEADER.fullmatch(lines[0]) if lines else None
+    if head is None:
+        return {"ok": False, "why": "günlüğün başlığı okunamadı"}
+    info = {"when": head["when"], "branch": head["branch"], "short": head["commit"]}
+    if int(head["dirty"]):
+        return {**info, "ok": False, "why": f"koşu commit edilmemiş {head['dirty']} değişiklikle başlamış"}
+    totals = [(i, m) for i, m in enumerate(map(_LOG_TOTAL.fullmatch, lines)) if m]
+    if not totals:
+        return {**info, "ok": False, "why": "koşu bitmemiş (kapı özeti yok)"}
+    at, total = totals[-1]
+    ok, n = int(total["ok"]), int(total["n"])
+    marks = [l[:6] for l in lines if l.startswith("[OK  ]") or l.startswith("[FAIL]")]
+    info["gates"] = f"{ok}/{n}"
+    if n == 0 or ok != n or len(totals) > 1 or marks.count("[FAIL]") or marks.count("[OK  ]") != n:
+        return {**info, "ok": False, "why": f"kapılar geçmedi ({ok}/{n})"}
+    ends = [m for m in map(_LOG_END.fullmatch, lines[at + 1:]) if m]
+    if not ends:
+        return {**info, "ok": False, "why": "koşunun sonu kaydedilmemiş"}
+    if ends[-1]["commit"] != head["commit"] or int(ends[-1]["dirty"]):
+        return {**info, "ok": False, "why": f"ağaç koşu sırasında değişti (sonda {ends[-1]['commit']}, "
+                                           f"commit edilmemiş {ends[-1]['dirty']} değişiklik)"}
+    sha = _git_value(root, "rev-parse", "--verify", "--quiet", f"{head['commit']}^{{commit}}")
+    if sha is None:
+        return {**info, "ok": False, "why": f"günlüğün commit'i {head['commit']} bu depoda yok"}
+    return {**info, "ok": True, "commit": sha}
+
+
+def fetch_origin(root: Path) -> str:
+    """Bring origin/master up to date: "tamam", "origin yok" (no such remote: the local refs are all
+    there is) or why it failed. A stale origin/master hides code merged since, and only a fresh one
+    can show that the base received none."""
+    if _git_value(root, "remote", "get-url", "origin") is None:
+        return "origin yok"
+    p = _git_run(root, "fetch", "--quiet", "origin", "master", timeout=60,
+                 env=dict(os.environ, GIT_TERMINAL_PROMPT="0"))
+    if p is None:
+        return "başarısız (git çalışmadı ya da 60 s'de bitmedi)"
+    return "tamam" if p.returncode == 0 else f"başarısız (çıkış {p.returncode})"
+
+
+def choose_base(root: Path, base: str | None = None) -> tuple[str, str] | str:
+    """(base, merge base with HEAD), or why none can be used. An explicit `base` is used as given;
+    by default origin/master, which is what a pull request merges into, and master only in a
+    repository without it. Local master may hold merges that were never pushed, or be the branch
+    itself: on master with an unpushed commit, master's merge base with HEAD is HEAD and the commit
+    would vanish (review finding, 26 Sep 2026). An existing base without a merge base (unrelated
+    history, a shallow clone cut before it) decides nothing: no fallback."""
+    for b in ([base] if base else ["origin/master", "master"]):
+        if _git_value(root, "rev-parse", "--verify", "--quiet", f"{b}^{{commit}}") is None:
+            continue
+        if _git_value(root, "symbolic-ref", "--quiet", "--short", "HEAD") == b:
+            return f"HEAD {b} dalının kendisi: karşılaştırılacak bağımsız taban yok"
+        mb = _git_value(root, "merge-base", b, "HEAD")
+        return (b, mb) if mb else f"{b} ile HEAD'in ortak atası yok"
+    return f"taban bulunamadı ({base or 'origin/master, master'})"
+
+
+def plan(root: Path, base: str | None = None, fetch: bool = True) -> dict:
+    """The staged-check decision for the working tree against `base` (choose_base; origin/master is
+    fetched first unless `fetch` is False). "level": "yok" (no check: only documentation no code
+    reads and reports changed, and the base received no code that might read that documentation),
+    "tamam" (code changed, and the last --full passed on exactly this code: nothing that differs
+    from its commit is code, the base received no code since the branch left it, and the base is
+    known to be fresh) or "tam" (the --full is still needed, or the decision could not be made)."""
+    out: dict = {"base": base, "files": {}, "named": {}, "full": None, "base_ahead": [], "hidden": []}
+    try:
+        return _plan(out, root, base, fetch)
+    except UnreadableSource as e:
+        return {**out, "level": "tam", "why": f"Python kaynağı okunamadı ({e}): hangi belgeleri okuduğu bilinmiyor"}
+
+
+def _plan(out: dict, root: Path, base: str | None, fetch: bool) -> dict:
+    out["fetch"] = fetch_origin(root) if fetch else "yapılmadı (--no-fetch)"
+    fresh = out["fetch"] in ("tamam", "origin yok")
+    hidden = hidden_files(root)
+    if hidden is None:
+        return {**out, "level": "tam", "why": "git okunamadı"}
+    if hidden:
+        out["hidden"] = hidden
+        return {**out, "level": "tam", "why": "git bazı dosyalardaki değişiklikleri gizliyor (assume-unchanged/skip-worktree)"}
+    chosen = choose_base(root, base)
+    if isinstance(chosen, str):
+        return {**out, "level": "tam", "why": chosen}
+    out.update(base=chosen[0], merge_base=chosen[1],
+               base_tip=_git_value(root, "rev-parse", "--verify", "--quiet", f"{chosen[0]}^{{commit}}") or "?")
+    files = changed_since(root, out["merge_base"])
+    if files is None:
+        return {**out, "level": "tam", "why": "git değişen dosyaları veremedi"}
+    out["files"] = {f: "?" for f in files}
+    named = docs_named_by_code(root, [f for f in files if is_doc(f)])
+    out.update(files=classify(files, named), named=named)
+    code = [f for f, c in out["files"].items() if c == "kod"]
+    # Code the base received after the branch left it: merged, it is code no run has seen, and it
+    # may read a document this branch changed (the scan above saw only this branch's code).
+    ahead = _git_lines(root, "diff", "--name-only", "-z", "--no-renames", f"HEAD...{out['base']}", "--")
+    if ahead is None:
+        return {**out, "level": "tam", "why": "tabanın dal ayrıldıktan sonra ne aldığı okunamadı"}
+    out["base_ahead"] = _code_of(root, ahead)
+    merge_first = f"önce {out['base']} bu dala birleştirilir, sonra --plan yeniden"
+    if not code:
+        if "belge" not in out["files"].values():
+            return {**out, "level": "yok", "why": "kod ve belge değişmedi"}
+        if out["base_ahead"]:
+            return {**out, "level": "tam", "why": f"{out['base']} bu daldan sonra kod aldı; o kod değişen "
+                                                  f"belgeleri okuyor olabilir: {merge_first}"}
+        if not fresh:
+            return {**out, "level": "tam", "why": f"tabanın güncelliği bilinmiyor (fetch: {out['fetch']})"}
+        return {**out, "level": "yok", "why": "kod değişmedi"}
+    full = out["full"] = last_full_run(root)
+    if not full["ok"]:
+        return {**out, "level": "tam", "why": f"kod değişti; son --full bu kodu kapsamıyor: {full['why']}"}
+    since = changed_since(root, full["commit"])
+    if since is None:
+        return {**out, "level": "tam", "why": "son --full'dan bu yana değişenler okunamadı"}
+    full["code_since"] = _code_of(root, since)
+    if full["code_since"]:
+        return {**out, "level": "tam", "why": f"kod, son --full'dan ({full['short']}) bu yana değişti"}
+    if out["base_ahead"]:
+        return {**out, "level": "tam", "why": f"{out['base']} bu daldan sonra kod aldı: {merge_first}, sonra --full"}
+    if not fresh:
+        return {**out, "level": "tam", "why": f"tabanın güncelliği bilinmiyor (fetch: {out['fetch']})"}
+    return {**out, "level": "tamam", "why": f"son --full ({full['gates']}, {full['short']}) bu kodda geçti"}
+
+
+_PLAN_ADVICE = {
+    "yok": "kontrol gerekmez",
+    "tamam": "tam kontrol bu kodda yapılmış; birleştirmeden önce başka kontrol gerekmez",
+    "tam": "çalışırken hızlı check.py; birleştirmeden önce son hâlde bir kez check.py --full",
+}
+
+
+def render_plan(p: dict) -> list[str]:
+    lines = ["== kademeli kontrol (DECISIONS §59) =="]
+    if p.get("fetch"):
+        lines.append(f"  origin/master fetch: {p['fetch']}")
+    if p.get("merge_base"):
+        lines.append(f"  taban: {p['base']} {p.get('base_tip', '?')[:7]} (ortak ata {p['merge_base'][:7]})")
+    files = p.get("files") or {}
+    counts = {c: sum(1 for v in files.values() if v == c) for c in ("kod", "belge", "rapor")}
+    lines.append(f"  değişen: {len(files)} dosya (kod {counts['kod']}, belge {counts['belge']}, "
+                 f"rapor {counts['rapor']})")
+    order = ("kod", "belge", "rapor", "?")
+    for f, c in sorted(files.items(), key=lambda kv: (order.index(kv[1]), kv[0])):
+        why = f"  (okuyan: {p['named'][f]})" if f in p.get("named", {}) else ""
+        lines.append(f"    {c:<5} {f}{why}")
+    for f in p.get("hidden") or []:
+        lines.append(f"    gizli {f}")
+    for f in p.get("base_ahead") or []:
+        lines.append(f"    taban {f}  ({p['base']} bu daldan sonra aldı)")
+    full = p.get("full")
+    if full is not None:
+        state = "geçerli" if full["ok"] else f"geçersiz: {full['why']}"
+        where = f"{full.get('gates', '?')} · {full.get('when', '?')} · {full.get('branch', '?')} @ {full.get('short', '?')}"
+        lines.append(f"  son --full: {where} ({state})")
+        for f in full.get("code_since") or []:
+            lines.append(f"    o koşudan bu yana değişen kod: {f}")
+    lines.append(f"  karar: {p['level'].upper()} · {p['why']} → {_PLAN_ADVICE[p['level']]}")
+    return lines
+
+
+def plan_report(root: Path, base: str | None = None, fetch: bool = True) -> tuple[int, list[str]]:
+    """(exit code, lines): 0 when nothing more is needed before merging, 1 when a --full is. Never
+    raises: a failure to decide is itself the decision "tam"."""
+    try:
+        p = plan(root, base, fetch)
+        return (0 if p["level"] in ("yok", "tamam") else 1), render_plan(p)
+    except Exception as e:  # noqa: BLE001 - an undecidable change needs the full check
+        return 1, ["== kademeli kontrol (DECISIONS §59) ==",
+                   f"  karar: TAM · karar verilemedi ({type(e).__name__}: {e}) → {_PLAN_ADVICE['tam']}"]
+
+
+def unexplained_doc_reads(root: Path, opened) -> list[str]:
+    """The files among `opened` (paths a process opened) inside `root` that the staged-check rule
+    does not count as code (classify): a document neither named nor in DOCS_READ_UNNAMED, or a
+    report (the rule never counts one as code, so no test may depend on one). Ignored: paths outside the repository, under _SKIP_DIRS, and gone by now (pytest's own
+    temporary cache directory). Raises UnreadableSource."""
+    top = Path(root).resolve()
+    rels = set()
+    for p in opened:
+        try:
+            full = Path(p).resolve()
+            rel = full.relative_to(top).as_posix()
+        except (OSError, ValueError):
+            continue
+        if rel.split("/")[0] in _SKIP_DIRS or not full.exists():
+            continue
+        if rel.lower().endswith(DOC_SUFFIX) or rel == REPORT_LOG:
+            rels.add(rel)
+    named = docs_named_by_code(top, [r for r in rels if is_doc(r)])
+    return sorted(r for r in rels if classify([r], named)[r] != "kod")
+
+
+def _count(files) -> str:
+    return "?" if files is None else str(len(files))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--full", action="store_true", help="Lean, adversaryal ve kalibrasyonu da koştur")
+    ap.add_argument("--plan", action="store_true",
+                    help="yalnız kademeli kontrol kararını yaz (çıkış 0: başka kontrol gerekmez, 1: --full gerekli)")
+    ap.add_argument("--base", default=None, help="karşılaştırma tabanı (varsayılan origin/master, yoksa master)")
+    ap.add_argument("--no-fetch", action="store_true",
+                    help="origin/master'ı güncelleme; taban bayat olabileceğinden belge ya da kod değiştiyse karar TAM olur")
     args = ap.parse_args(argv)
+    if args.plan:
+        rc, lines = plan_report(ROOT, args.base, not args.no_fetch)
+        print("\n".join(lines))
+        return rc
     if not args.full:
-        return _main(args)
+        rc = _main(args)
+        print()
+        print("\n".join(plan_report(ROOT, args.base, not args.no_fetch)[1]))   # a reminder: the exit code is the gates'
+        return rc
     # The full run writes its own log. The 21/21 run of 23 Sep lived only in a session's temp
     # file while reports/check_full.log still said 12/12 from 19 Sep; the header ties the log
-    # to the code it measured.
+    # to the code it measured, and the closing line shows the tree was the same at the end: the
+    # staged-check rule accepts the log as proof for that commit only then (last_full_run).
     log = ROOT / "reports" / "check_full.log"
     with log.open("w", encoding="utf-8") as fh:
         out = sys.stdout
         sys.stdout = _Tee(out, fh)
         try:
-            # The log is already open for writing, so git sees it modified; counted, it made the
-            # header say 1 on a clean tree (every log until 26 Sep 2026).
-            own = log.relative_to(ROOT).as_posix()
-            dirty = [l for l in _git("status", "--porcelain", "--", f":(exclude){own}").splitlines()
-                     if l.strip()]
+            # Reports are not counted: the run rewrites them (the open log among them; counted, it
+            # made the header say 1 on a clean tree until 26 Sep 2026), and a quick check.py
+            # before the --full leaves reports/eval_report.md modified.
             print(f"check.py --full · {time.strftime('%Y-%m-%d %H:%M:%S')} · "
                   f"{_git('rev-parse', '--abbrev-ref', 'HEAD')} @ {_git('rev-parse', '--short', 'HEAD')} · "
-                  f"commit edilmemiş değişiklik: {len(dirty)} dosya\n")
-            return _main(args)
+                  f"commit edilmemiş değişiklik: {_count(dirty_files(ROOT))} dosya\n")
+            rc = _main(args)
+            print(f"\ncheck.py --full sonu · {time.strftime('%Y-%m-%d %H:%M:%S')} · "
+                  f"{_git('rev-parse', '--abbrev-ref', 'HEAD')} @ {_git('rev-parse', '--short', 'HEAD')} · "
+                  f"commit edilmemiş değişiklik: {_count(dirty_files(ROOT))} dosya")
+            return rc
         finally:
             sys.stdout = out
 
@@ -500,6 +984,9 @@ def _main(args) -> int:
         print("== adversaryal ==")
         gates += harness_step([PY, "-m", "harness.adversarial"], "adversarial", "adversarial_results.json",
                               ADVERSARIAL_GATES, adversarial_gates)
+        note = adversarial_note(REPORTS / "adversarial_results.json")
+        if note:
+            print(note)
 
         print("== metamorfik sağlamlık ==")
         gates += harness_step([PY, "-m", "harness.soundness_fuzz"], "soundness_fuzz", "soundness_results.json",
