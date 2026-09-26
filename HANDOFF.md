@@ -11,8 +11,8 @@
 
 1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §55–§57 (son üç karar). Bulutta ayrıca
    oturum başındaki `[mathverify bulut oturumu …]` bloğu ve `docs/BULUT.md`.
-2. `git status`, `git log --oneline -5`. Bu belge `master`a birleşene kadar yeni bir bulut sohbeti
-   `master`dan başlar ve **eski** HANDOFF'u okur (§3, adım 1).
+2. `git status`, `git log --oneline -5`. Yeni bir bulut sohbeti `master`dan başlar; başka bir dalda
+   birleşmemiş iş varsa `git ls-remote origin` ile görülür (§6).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests` (Windows'ta `.venv/Scripts/python.exe`).
    Beklenen (Linux, Lean kurulu): **1323 passed / 5 skipped / 0 failed**, ~250–330 s (atlananlar: 3
    root altında salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade). Lean yüzünden atlama
@@ -32,10 +32,9 @@ Değerlendirme seti 280 sentetik öğe (A/B/C/D = %30/%25/%30/%15), ÖSYM metni 
 
 ## 2. Durum (26 Eylül 2026)
 
-**Kod.** `master` = `e07d4f7` (`wqedwad/asd#3`: `claude/practical-faraday-7a4iy4`'ün 6 commit'i,
-`check.py` günlük başlığı ve soğuk Lean ısıtması düzeltmeleri, DECISIONS §56; 11:09 UTC). Bu dal
-aynı dalı ayrıca `e933ffb`'de almıştı (ağacı `e07d4f7` ile aynı), sonra `master`ı birleştirdi; üstüne
-yalnız belgeler ve bir yorum satırı. Kodda yarım iş yok.
+**Kod.** `master` = `fa94093` (`wqedwad/asd#4`: bu belgenin yeniden yapılandırılması, yalnız belgeler
+ve bir yorum). Ondan önce `e07d4f7` (`wqedwad/asd#3`: `check.py` günlük başlığı ve soğuk Lean ısıtması
+düzeltmeleri, DECISIONS §56). Birleşmemiş dal yok. Kodda yarım iş yok.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
@@ -43,7 +42,7 @@ bitti). F4 (kritik + meta-doğrulama): kod tamam, çevrimdışı testli, **hiç 
 20 Eylül (11 boşluk), 23 Eylül (4 yanlış onay sınıfı + tanımlılık), 25–26 Eylül (kod çalıştırma,
 cebir/kalkülüs/geometri/girdi sınıfları, formal katmanda 53/98 yanlış sertifika → 0/99; DECISIONS §55).
 
-**Son `check.py --full`.** **24/24**, `e933ffb` (ağacı `master` `e07d4f7` ile aynı), bulutta
+**Son `check.py --full`.** **24/24**, `e933ffb` (kodu `master` `fa94093` ile aynı), bulutta
 11:09–12:26 UTC, ~77 dk (adversaryal 3764 s), 1323 passed / 5 skipped. Önceki: `5414d6b`, 59 dk.
 
 **Bulut.** Kurulum betiği alanda, belirteç önyükleyicinin `T=''` satırında. 26 Eylül sabahı alandan
@@ -52,9 +51,9 @@ sohbet) anlık görüntü kullanılmadı**; betik baştan koştu ve 250 s sını
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalın `master`a birleştirilmesi** (kullanıcı onayıyla; önce yedek etiketi + yerel bundle,
-   §6). Birleşmeden yeni sohbetler eski HANDOFF'u okur. PR #3'ten önceki `master` (`ee7b2dd`) için
-   GitHub'da yedek etiketi yok (§4.7): bundle alındıysa etiketi de push edilir.
+1. **Yedek etiketleri (isteğe bağlı, yerelde):** PR #3 (`ee7b2dd`) ve PR #4 (`e07d4f7`) öncesi
+   `master` için etiket yok (§6). PR #4'te kullanıcı, kod değişikliği olmadığı için yedek almamayı
+   seçti. Sonraki kod birleştirmelerinde kural yine geçerli: etiket + bundle.
 2. **Bulut kurulum kararı** (B1–B2): anlık görüntü yeniden kullanılmıyorsa her yeni sohbet açılmadan
    ~3–4 dk bekliyor ve üstüne kanca kalanı kuruyor. Seçenekler: (a) bir yeni sohbette daha ölçmek
    (görüntü bir kez mi kaçtı?); (b) betiği ~5 dk yönergesine kadar uzatmak (`timeout` 250 → ~280 s)
@@ -166,8 +165,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 12. Depo herkese açılacak ya da paylaşılacak mı? Açılırsa önce anahtarlar yenilenir ve `.env`
     geçmişten temizlenir.
 13. Bulut kurulumu: §3 adım 2'nin (a)/(b)/(c) seçeneği.
-14. Birleşmiş uzak dallar (`bulut-2026-09-24`, `claude/funny-cray-bey5o1`,
-    `claude/compassionate-shannon-759r85`, `claude/practical-faraday-7a4iy4`) silinsin mi?
+14. Birleşmiş uzak dallar (`bulut-2026-09-24`, `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`,
+    `-practical-faraday-…`, `-trusting-curie-…`; hepsi `master`da, §6) silinsin mi?
 
 ### 4.5 Teknik borç
 
@@ -225,9 +224,9 @@ stdout'undan geri kondu (DECISIONS §57).
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (`git ls-remote origin`, 26 Eylül): `master` `e07d4f7`; `claude/practical-faraday-7a4iy4`
-  `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`, `claude/funny-cray-bey5o1` `51e7651`,
-  `bulut-2026-09-24` `18fd298` (dördü de `master`da);
+- **Dallar** (`git ls-remote origin`, 26 Eylül): `master` `fa94093`; `claude/trusting-curie-76slml`,
+  `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
+  `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
   `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b` (eski); araç ref'leri
   `refs/arac/bulut-v1` `c6d0cc1`, `refs/arac/bulut-v2` `f90d5e4` (kullanılan).
 - **Yedek etiketleri** (GitHub'da; bundle'lar yalnız `C:\Users\kullanici\mathverify-yedek\`, geri dönüş
@@ -242,6 +241,7 @@ stdout'undan geri kondu (DECISIONS §57).
   | `yedek/master-2026-09-25` | `18fd298` (PR #1 öncesi) | **[DOĞRULANMADI]** |
   | `yedek/master-2026-09-26` | `d66bf2d` (PR #2 öncesi) | `mathverify-master-d66bf2d-2026-09-26.bundle`; içindeki `refs/heads/master` eski yerel `18fd298`, geri dönüş klon + `git checkout yedek/master-2026-09-26` |
   | yok | `ee7b2dd` (PR #3 öncesi) | **[DOĞRULANMADI]** |
+  | yok | `e07d4f7` (PR #4 öncesi) | alınmadı (kullanıcı kararı: yalnız belge değişikliği) |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout'ta): (1)
   `git tag yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create
