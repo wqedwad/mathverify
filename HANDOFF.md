@@ -1188,6 +1188,21 @@ de `18fd298`. Yani dal `master`a birleştirildi ve etiket, `master` `572ef57`'de
 önceki yedek olmalı (çıkarım). Buna karşılık gelen bundle'ın `C:\Users\kullanici\mathverify-yedek\`
 altında olup olmadığı buluttan görülemez **[DOĞRULANMADI]**.
 
+**Ek (26 Eylül 2026, kullanıcının makinesinde, `claude/compassionate-shannon-759r85` birleştirilmeden önce):**
+
+| Etiket | `master` | Bundle (`C:\Users\kullanici\mathverify-yedek\`) |
+|---|---|---|
+| `yedek/master-2026-09-26` | `d66bf2d` (PR #1'in birleştirmesi) | `mathverify-master-d66bf2d-2026-09-26.bundle` (`git bundle verify`: "is okay", 18 ref, tam geçmiş) |
+
+- Etiket GitHub'a push edildi; bulut oturumundan `git ls-remote` ile görüldü: etiket ve `origin/master`
+  ikisi de `d66bf2d`.
+- **Dikkat:** bundle'daki `refs/heads/master` kullanıcının yerel, eski `master`ıdır (`18fd298`);
+  güncel `master` bundle'da `refs/remotes/origin/master` ve etiket olarak durur. Bu bundle'dan geri
+  dönüş `git clone --branch master` ile değil, klonlayıp `git checkout yedek/master-2026-09-26` ile
+  yapılır. Yerel checkout `~/mathverify`, dalı `bulut-2026-09-24`.
+- GitHub'da belgelenmemiş bir etiket daha var: `yedek/master-2026-09-25` → `18fd298` (PR #1'den
+  önceki `master`). Karşılık gelen bir bundle olup olmadığı bilinmiyor **[DOĞRULANMADI]**.
+
 Commit geçmişi (eskiden yeniye):
 
 | Commit | Ne |
