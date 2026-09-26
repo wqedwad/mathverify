@@ -702,6 +702,13 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   bağlam uzunluğu: her istek bütün konuşmayı yeniden okur (`code.claude.com/docs/en/costs`).
   Yerelle karşılaştırma için iki tarafta da `/context` ve `/usage` çalıştırılır; yerel taraf
   ölçülmedi.
+  *Maliyet dökümü* (Opus 5.5 liste fiyatı, `platform.claude.com/docs/en/about-claude/pricing`:
+  önbellek okuma $0.20, 1 saatlik önbellek yazma $8, girdi $4, çıktı $20 / MTok). Bu oturumun
+  sayıları (35.77 M okuma, 0.336 M yazma, 13.9k girdi, 124.7k çıktı) bu fiyatlarla $12.39 ediyor;
+  platformun `cost_usd` değeri 12.36. Dağılım: bağlam okuma %58, önbellek yazma %22, çıktı
+  (düşünme dahil) %20. Buluta özgü kısım yaklaşık $1.0–1.2 (%8–10; tahmin). Bunun çoğu uzun
+  `--full` sırasındaki beklemeler; uzun test koşmayan bir oturumda ~%3–4. Abonelik sınırının
+  token'ları liste fiyatıyla mı ağırlıklandırdığı yayımlanmamış **[DOĞRULANMADI]**.
 
 ## 9. Buluttan yerele ve birleştirme
 
