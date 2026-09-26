@@ -8,6 +8,14 @@
 > ortam değişkenleri kurulum betiğine ulaşmıyor; belirteç artık önyükleyicinin metninde, araç
 > dosyaları gerekirse `raw.githubusercontent.com`'dan. Kararı DECISIONS §54, yeni sıra §7 başında.
 >
+> **Yeni sohbete geçiş (26 Eylül 2026).** Bu belgenin bu hâli ve 25 Eylül'ün bütün işi (§0.12, §0.13)
+> `claude/compassionate-shannon-759r85` dalındadır; `master`a birleştirilene kadar `master`da yoktur.
+> Yeni bir bulut sohbeti varsayılan dal `master`dan başlar ve eski HANDOFF'u okur. O yüzden ya dal
+> önce `master`a birleştirilir (kullanıcı onayı ve yedek, §5.4), ya da yeni sohbetin ilk mesajı dalı
+> söyler: "`claude/compassionate-shannon-759r85` dalından devam et; önce HANDOFF §0.13 ve §7'yi oku."
+> Oturumun geçici alanı yeni sohbete taşınmaz; denetimin ölçüm betikleri bu yüzden
+> `denetim/2026-09-25/`'dedir.
+>
 > **25 Eylül, aynı oturumun devamı:** sistematik denetim (§0.13). Cevap metni kod olarak çalışıyordu;
 > yanlış onay sınıfları ve formal katmandaki 53 yanlış sertifika kapatıldı. "Lean FP 0" yalnız
 > değerlendirme setinde ölçülmüştü (Düzeltme §5.1). Kararlar DECISIONS §55, yeni sıra §7 başında.
@@ -460,6 +468,11 @@ denetim, yerelde krediye bağlı olmayan ciddi açıklar buldu. Hepsi aynı otur
   ilkeller, sonsuz sınırlı integraller, gelenek farkı olan tek taraflı durumlar, `asec`/`acsc`
   ayrıştırıcıda yok. Yanlış çarpanlara ayırma adımı (`x² − 5x + 6 = 2(x − 2)(x − 3)`, öncül
   x² − 5x + 6 = 0) öncüllerin çözümlerinde doğru olduğundan reddedilmez (DECISIONS §55).
+- **Ölçüm betikleri depoda (26 Eylül eki):** `denetim/2026-09-25/` (README'de koşturma ve sonuçlar).
+  Depodaki çalıştırıcı eski kodda aynı sayıları üretti. İlk kez koşulan C grubu (geometri denetçisinin
+  beklentili betikleri) bir açık daha gösterdi: toplamın bağlı değişkeni (`Sum(k, (k, 1, 4)) = 11`)
+  tanımsız ad sayılıp yanlış adım atlanıyordu; düzeltildi (DECISIONS §55 Ek). C'de kalan 20 fark:
+  16 UNKNOWN (kapsama), 2 beklenti hatası, 1 bilinen sınır (iki kayıt).
 - **Doğrulama:** `check.py --full` **24/24** (`c1d4c3e`, 16:30–17:30 UTC, aşamaların toplamı 3595 s ≈ 60 dk: pytest 276, `run_eval` 87, `run_lean` 131, adversaryal 2936, sağlamlık 119, kalibrasyon 44 s); birim testleri **1314 passed / 5 skipped** (denetim öncesi 871 / 5); Lean 121 sertifika (24 Eylül kümesiyle aynı), FP 0, junk **0/33**; 21 139 saldırıda %0; 0/448, 0/214, 0/46, 0/184, 0/6. İlk birleşik koşu (`0eb99b6`) de 24/24 geçmişti, ama adversaryal raporda anlamı koruyan saldırılarda UNKNOWN'a düşen 2896 → 2964 çıktı: `x in {…}` adım biçimi görünmez karakter ya da `\boxed{}` ile 7 doğru çözümde UNKNOWN oluyordu. Düzeltildi (`c1d4c3e`); son koşuda 2894, karşıt karara dönen yine 0. Değerlendirme setinde karar değişmedi. Denetimin 29 düzeltme commit'i (beş dal ve birleşik dal) ve 10 birleştirme commit'i bu dalda (`da963b2..`); geçici dallar ve worktree'ler silindi (içerikleri bu dalda). Push: yalnız bu oturumun dalı.
 
 
