@@ -17,6 +17,18 @@ def load_dependent(it) -> dict:
     return _result(it, "UNKNOWN" if in_worker else "CORRECT", timeouts=int(in_worker))
 
 
+def timed_out_everywhere(it) -> dict:
+    """A sandbox call times out wherever the item runs, with the same rows: in one process there is
+    no other worker's load to rule out."""
+    return _result(it, "CORRECT", timeouts=1)
+
+
+def counted(it) -> dict:
+    """Different counts of each kind (1 timeout, 2 restarts, 3 errors) and the same rows everywhere:
+    the totals and the log line must keep them apart."""
+    return _result(it, "CORRECT", timeouts=1, restarts=2, errors=3)
+
+
 def load_independent(it) -> dict:
     """The sandbox restarts in a worker, but the rows are the same alone."""
     in_worker = mp.parent_process() is not None

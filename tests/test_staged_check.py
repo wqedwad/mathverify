@@ -53,9 +53,11 @@ def git(repo: Path, *a: str) -> str:
 
 
 def write(repo: Path, rel: str, text: str = "x\n") -> None:
+    """LF on every OS: on Windows write_text would write CRLF, and a test of line endings would hold
+    nothing there (review)."""
     p = repo / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text, encoding="utf-8")
+    p.write_text(text, encoding="utf-8", newline="\n")
 
 
 READER = 'from pathlib import Path\nGUIDE = Path(__file__).parent.parent / "docs" / "rehber.md"\n'
@@ -64,7 +66,8 @@ READER = 'from pathlib import Path\nGUIDE = Path(__file__).parent.parent / "docs
 @pytest.fixture
 def repo(tmp_path, git_env):
     """master: code, a document a test reads (docs/rehber.md), one nothing reads (notlar.md),
-    reports; then the branch `dal` checked out. No remote: the local master is the base."""
+    reports, a lock the test environment meets; then the branch `dal` checked out. No remote: the
+    local master is the base."""
     r = tmp_path / "repo"
     r.mkdir()
     git(r, "init", "-q")
@@ -74,6 +77,7 @@ def repo(tmp_path, git_env):
     write(r, "tests/test_reader.py", READER)
     write(r, "reports/eval_report.md")
     write(r, "reports/check_full.log", "old\n")
+    write(r, "requirements.lock", "sympy==1.14.0\n")
     git(r, "add", "-A")
     git(r, "commit", "-q", "-m", "base")
     git(r, "checkout", "-q", "-b", "dal")
@@ -88,10 +92,13 @@ def commit(repo: Path, msg: str = "c") -> str:
 
 def full_log(repo: Path, sha: str, *, dirty: int = 0, gates=("a", "b"), failed=(), total_line=True,
              end_sha: str | None = None, end_dirty: int = 0, end_line=True, totals=None, warmup="0",
-             extra=(), reports_line=True) -> None:
-    """A --full log as main writes it, for the reports on disk now (the run just wrote them)."""
+             extra=(), reports_line=True, env=("ortam: Python 3",), lock=None) -> None:
+    """A --full log as main writes it, for the reports on disk now (the run just wrote them) and the
+    lock on disk, met (`lock`: other kilit lines)."""
     run = " · 2026-09-26 12:00:00 · dal @ {} · commit edilmemiş değişiklik: {} dosya"
-    lines = ["check.py --full" + run.format(sha[:7], dirty), "ortam: Python 3", "", "== Lean ısınma =="]
+    if lock is None:
+        lock = (f"kilit: requirements.lock {check.lock_digest(repo)} · 1 paket · uyuşmayan: yok",)
+    lines = ["check.py --full" + run.format(sha[:7], dirty), *env, *lock, "", "== Lean ısınma =="]
     if warmup is not None:
         lines.append(f"  lean_warmup: 9 s (exit {warmup})")
     lines += ["== testler ==", "  pytest: 1 s (exit 0)", *extra, "", "== kapılar =="]
@@ -268,16 +275,39 @@ def test_documentation_nothing_reads_needs_no_check(repo):
     write(repo, "yeni.md")                                             # untracked, also documentation
     p = check.plan(repo)
     assert p["level"] == "yok" and p["files"] == {"notlar.md": "belge", "yeni.md": "belge"}
-    assert p["fetch"] == "origin yok"
+    assert p["fetch"] == "uzak yok"
     rc, lines = check.plan_report(repo)
     assert rc == 0 and lines[-1].startswith("  karar: YOK")
 
 
-def test_reports_need_no_check(repo):
+def test_reports_need_the_full_run_that_wrote_them(repo):
+    """A report is a --full's output: a branch that changes only reports needs no check when the
+    last --full ran on this code, wrote them and is committed; a report from a direct harness call
+    or a hand edit would otherwise enter master unchecked (review, 26 Sep 2026)."""
     write(repo, "reports/eval_report.md", "new\n")
-    write(repo, "reports/check_full.log", "new\n")
     commit(repo)
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "geçerli bir --full'a bağlı değil" in p["why"] and p["full"]["why"] == "günlüğün başlığı okunamadı"
+    full_log(repo, git(repo, "rev-parse", "HEAD"))                     # the run on this code wrote them
+    p = check.plan(repo)
+    assert p["level"] == "tam" and p["why"] == "raporlar ya da günlük commit edilmemiş" and p["advice"] == check._ADVICE_COMMIT
+    commit(repo, "log")
     assert check.plan(repo)["level"] == "yok"
+    write(repo, "reports/eval_report.md", "by hand\n")
+    commit(repo, "edited")
+    p = check.plan(repo)
+    assert p["level"] == "tam" and p["full"]["why"] == check.REPORTS_CHANGED and p["advice"] == check._ADVICE_REPORTS.format(paths="reports/eval_report.md")
+
+
+def test_reports_of_a_run_on_other_code_are_not_accepted(repo):
+    write(repo, "code.py", "x = 2\n")
+    sha = commit(repo)
+    git(repo, "checkout", "-q", "-b", "rapor-dali", "master")          # the reports, without that code
+    write(repo, "reports/eval_report.md", "new\n")
+    full_log(repo, sha)
+    commit(repo, "reports")
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "bu kodda değil" in p["why"] and p["full"]["code_since"] == ["code.py"]
 
 
 def test_a_document_a_test_reads_is_code(repo):
@@ -341,7 +371,37 @@ def test_changes_git_hides_decide_nothing(repo, flag):
     git(repo, "update-index", flag, "code.py")
     write(repo, "code.py", "x = 2\n")                                 # an edit no diff shows
     p = check.plan(repo)
-    assert p["level"] == "tam" and p["hidden"] == ["code.py"] and "gizliyor" in p["why"]
+    assert p["level"] == "tam" and p["hidden"] == ["code.py"] and "göstermiyor" in p["why"]
+    assert p["advice"] == check._ADVICE_HIDDEN
+
+
+def test_an_untracked_gitignore_that_hides_code_decides_nothing(repo):
+    """A tool's untracked .gitignore holding "*" ignores itself and untracked code beside it; a
+    --full would measure code the merge lacks (review, 26 Sep 2026). One under a directory the
+    tracked rules ignore (.venv/.gitignore) hides nothing of the project."""
+    write(repo, ".gitignore", ".venv/\n")
+    commit(repo, "ignore .venv")
+    write(repo, ".venv/.gitignore", "*\n")
+    write(repo, ".venv/lib/x.py")
+    assert check.hidden_files(repo) == []
+    write(repo, "helpers/.gitignore", "*\n")
+    write(repo, "helpers/extra.py")
+    assert check.hidden_files(repo) == ["helpers/.gitignore"] and check.dirty_files(repo) == ["helpers/.gitignore"]
+    p = check.plan(repo)
+    assert p["level"] == "tam" and p["hidden"] == ["helpers/.gitignore"] and p["advice"] == check._ADVICE_HIDDEN
+
+
+def test_a_clean_filter_that_hides_edits_decides_nothing(repo):
+    """A filter from .git/info/attributes rewrites code before git compares it: the edit on disk
+    reaches no diff (review)."""
+    git(repo, "config", "filter.gizle.clean", "grep -v GIZLI")
+    git(repo, "config", "filter.gizle.smudge", "cat")
+    (repo / ".git" / "info").mkdir(exist_ok=True)
+    (repo / ".git" / "info" / "attributes").write_text("*.py filter=gizle\n", encoding="utf-8")
+    write(repo, "code.py", "x = 1\ny = 2  # GIZLI\n")
+    assert check.changed_since(repo, "HEAD") == []                    # what the filter hides
+    assert "code.py" in check.hidden_files(repo)
+    assert check.plan(repo)["level"] == "tam"
 
 
 def test_personal_excludes_hide_no_untracked_file(repo):
@@ -397,6 +457,8 @@ def test_named_documents_and_data_changed_after_the_last_full_run(repo, path):
 
 @pytest.mark.parametrize("log, why", [
     (dict(dirty=1), "commit edilmemiş 1 değişiklikle başlamış"),
+    (dict(dirty="?"), "koşunun başında git değişiklikleri veremedi"),
+    (dict(end_dirty="?"), "ağaç koşu sırasında değişti"),
     (dict(total_line=False, end_line=False), "koşu bitmemiş"),
     (dict(failed=("c",)), "kapılar geçmedi (2/3)"),
     (dict(gates=()), "kapılar geçmedi (0/0)"),
@@ -423,10 +485,62 @@ def test_reports_changed_after_the_run_are_not_its_reports(repo):
     --full no longer rides on it."""
     write(repo, "code.py", "x = 2\n")
     full_log(repo, commit(repo))
+    commit(repo, "log")
     assert check.plan(repo)["level"] == "tamam"
-    write(repo, "reports/adversarial_report.md", "one item\n")
+    write(repo, "reports/eval_report.md", "one item\n")
     p = check.plan(repo)
-    assert p["level"] == "tam" and "raporlar --full'dan sonra değişmiş" in p["full"]["why"]
+    assert p["level"] == "tam" and p["full"]["why"] == check.REPORTS_CHANGED and p["advice"] == check._ADVICE_REPORTS.format(paths="reports/eval_report.md")
+    git(repo, "restore", "reports/")                                   # what the advice says
+    assert check.plan(repo)["level"] == "tamam"
+    write(repo, "reports/Yeni_Report.MD", "added\n")                   # a new report, whatever its case
+    assert check.plan(repo)["full"]["why"] == check.REPORTS_CHANGED
+
+
+def test_a_report_changed_before_its_run_was_committed_is_lost(repo):
+    """`git restore reports/` would also bring back the old log and throw the new run away (review)."""
+    write(repo, "code.py", "x = 2\n")
+    full_log(repo, commit(repo))                                      # the run's log, not committed yet
+    write(repo, "reports/eval_report.md", "a quick check.py after the --full\n")
+    p = check.plan(repo)
+    assert p["full"]["why"] == check.REPORTS_CHANGED and p["advice"] == check._ADVICE_REPORTS_LOST, p
+
+
+def test_evidence_that_is_not_committed_is_not_what_gets_merged(repo):
+    """The log and the digests are read from disk, but a pull request merges HEAD (review)."""
+    write(repo, "code.py", "x = 2\n")
+    full_log(repo, commit(repo))
+    p = check.plan(repo)
+    assert p["level"] == "tam" and p["why"] == "raporlar ya da günlük commit edilmemiş" and p["advice"] == check._ADVICE_COMMIT
+    git(repo, "add", "reports/check_full.log")                         # staged is not committed either
+    assert check.plan(repo)["level"] == "tam"
+    commit(repo, "log")
+    assert check.plan(repo)["level"] == "tamam"
+    log = (repo / "reports" / "check_full.log").read_text(encoding="utf-8")
+    write(repo, "reports/check_full.log", "old\n")
+    commit(repo, "log lost")
+    write(repo, "reports/check_full.log", log)                         # right on disk, wrong in HEAD
+    assert check.plan(repo)["level"] == "tam"
+
+
+def test_the_reports_a_full_run_rewrites_are_the_harnesses_reports():
+    written = {f"reports/{name}" for path, name in CODE_DOC_CONSTANTS
+               if path.startswith("harness/") and not name.startswith("_")}
+    assert check.REWRITTEN == written | {check.REPORT_LOG} and len(written) == 5
+
+
+def test_a_report_edited_before_the_run_makes_it_dirty(repo):
+    """A --full rewrites its own reports but only binds the others (the F3 reports): one edited
+    before the run is uncommitted change, not output (review)."""
+    write(repo, "reports/f3_report.md", "committed\n")
+    commit(repo)
+    write(repo, "reports/eval_report.md", "left by a quick check.py\n")
+    write(repo, "reports/check_full.log", "being written\n")
+    assert check.dirty_files(repo) == []
+    write(repo, "reports/f3_report.md", "by hand\n")
+    assert check.dirty_files(repo) == ["reports/f3_report.md"]
+    if not (repo / "reports" / "EVAL_REPORT.MD").exists():             # a case-sensitive file system
+        write(repo, "reports/EVAL_REPORT.MD", "another file\n")
+        assert check.dirty_files(repo) == ["reports/EVAL_REPORT.MD", "reports/f3_report.md"]
 
 
 def test_a_full_run_log_that_is_not_one(repo):
@@ -435,6 +549,8 @@ def test_a_full_run_log_that_is_not_one(repo):
     for text in ("", "check.py --full · ? · ? @ ? · x\n"):
         write(repo, "reports/check_full.log", text)
         assert "başlığı okunamadı" in check.plan(repo)["full"]["why"]
+    (repo / "reports" / "check_full.log").write_bytes(b"\xff\xfe")
+    assert check.plan(repo)["full"]["why"] == "günlük okunamadı (UTF-8 değil)"
     (repo / "reports" / "check_full.log").unlink()
     assert check.plan(repo)["full"]["why"] == "günlük yok"
     full_log(repo, "0123456789abcdef0123456789abcdef01234567")   # a commit this repository lacks
@@ -450,7 +566,7 @@ def test_an_extra_ok_or_fail_line_breaks_the_count(repo):
     assert not check.plan(repo)["full"]["ok"]
 
 
-def test_the_full_run_writes_what_the_plan_accepts(repo, monkeypatch):
+def test_the_full_run_writes_what_the_plan_accepts(repo, monkeypatch, capsys):
     """main --full's header and closing line, with the gates stubbed: reports are not counted (the
     run rewrites them, a quick check.py leaves eval_report.md modified), anything else is, and a
     file changed during the run shows in the closing line."""
@@ -461,13 +577,23 @@ def test_the_full_run_writes_what_the_plan_accepts(repo, monkeypatch):
     monkeypatch.setattr(check, "_main", lambda args: print("  lean_warmup: 1 s (exit 0)\n\n  [OK  ] a  1\n\n1/1 kapı geçti") or 0)
     assert check.main(["--full"]) == 0
     assert check.last_full_run(repo)["ok"]
+    commit(repo, "the run's reports and log")
     assert check.plan(repo)["level"] == "tamam"
     monkeypatch.setattr(check, "_main", lambda args: write(repo, "code.py", "x = 3\n") or print("1/1 kapı geçti") or 0)
     assert check.main(["--full"]) == 0
     lines = (repo / "reports" / "check_full.log").read_text(encoding="utf-8").splitlines()
     assert lines[0].endswith("commit edilmemiş değişiklik: 0 dosya") and lines[1].startswith("ortam: Python")
+    assert re.search(r" · \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC · ", lines[0]) and lines[3] == ""
+    assert re.fullmatch(r"kilit: requirements\.lock [0-9a-f]{16} · 1 paket · uyuşmayan: yok", lines[2])
     assert lines[-2].startswith("check.py --full sonu") and lines[-2].endswith("commit edilmemiş değişiklik: 1 dosya")
+    assert " UTC · " in lines[-2]
     assert lines[-1].startswith("check.py --full raporları · reports/eval_report.md ")
+    capsys.readouterr()
+    assert check.main(["--full"]) == 0                                 # code.py is still changed: said at once
+    lines = (repo / "reports" / "check_full.log").read_text(encoding="utf-8").splitlines()
+    assert lines[0].endswith("commit edilmemiş değişiklik: 1 dosya")
+    assert lines[3] == "UYARI: ağaç temiz değil, bu koşu --plan için kanıt olmaz: code.py"
+    assert "UYARI: ağaç temiz değil" in capsys.readouterr().out
 
 
 # --------------------------------------------------------------------------- the base
@@ -522,7 +648,7 @@ def test_a_documentation_branch_waits_for_code_the_base_received(repo):
     commit(repo)
     git(repo, "checkout", "-q", "dal")
     p = check.plan(repo)
-    assert p["level"] == "tam" and p["base_ahead"] == ["tests/test_notes.py"]
+    assert p["level"] == "tam" and p["base_ahead"] == ["tests/test_notes.py"] and p["advice"] == check._ADVICE_MERGE
     git(repo, "merge", "-q", "--no-edit", "master")
     p = check.plan(repo)
     assert p["level"] == "tam" and p["files"] == {"notlar.md": "kod"}   # now named by the merged test
@@ -583,15 +709,21 @@ def test_no_base_unrelated_history_or_no_git_means_the_full_check(repo, tmp_path
 # --------------------------------------------------------------------------- fetching origin/master
 
 
+REAL_LOCAL_ORIGIN = check.local_origin
+
+
 @pytest.fixture
-def cloned(tmp_path, git_env):
-    """A branch in a clone of a bare `origin`, and a second clone that can push to origin/master."""
+def cloned(tmp_path, git_env, monkeypatch):
+    """A branch in a clone of a bare `origin`, and a second clone that can push to origin/master.
+    The bare repository stands in for GitHub: an origin on this machine is otherwise never fresh."""
+    monkeypatch.setattr(check, "local_origin", lambda url: False)
     origin, work, other = tmp_path / "origin.git", tmp_path / "work", tmp_path / "other"
     seed = tmp_path / "seed"
     seed.mkdir()
     git(seed, "init", "-q")
     write(seed, "code.py", "x = 1\n")
     write(seed, "notlar.md")
+    write(seed, "requirements.lock", "sympy==1.14.0\n")
     commit(seed, "base")
     git(tmp_path, "clone", "-q", "--bare", str(seed), str(origin))
     git(tmp_path, "clone", "-q", str(origin), str(work))
@@ -612,20 +744,24 @@ def test_the_plan_fetches_code_merged_on_the_remote(cloned):
     assert check.plan(cloned.work, fetch=False)["base_ahead"] == ["remote.py"]    # the ref stays fetched
 
 
-def test_without_a_fresh_base_only_a_report_change_passes(cloned):
+def test_without_a_fresh_base_or_a_readable_remote_nothing_passes(cloned):
     git(cloned.work, "remote", "set-url", "origin", str(cloned.origin.parent / "gone.git"))
     write(cloned.work, "code.py", "x = 2\n")
     full_log(cloned.work, commit(cloned.work))
     commit(cloned.work, "log")
     p = check.plan(cloned.work)
     assert p["fetch"].startswith("başarısız") and p["level"] == "tam" and "güncelliği bilinmiyor" in p["why"]
+    assert p["advice"] == check._ADVICE_FETCH
     assert check.plan(cloned.work, fetch=False)["level"] == "tam"                 # --no-fetch: same
     git(cloned.work, "checkout", "-q", "-b", "belge-dali", "origin/master")
     write(cloned.work, "notlar.md", "changed\n")
     assert check.plan(cloned.work)["level"] == "tam"                             # documentation: tam too
     git(cloned.work, "checkout", "-q", "notlar.md")
     write(cloned.work, "reports/eval_report.md", "rapor\n")
-    assert check.plan(cloned.work)["level"] == "yok"                             # a report alone: no check
+    full_log(cloned.work, git(cloned.work, "rev-parse", "HEAD"))
+    commit(cloned.work, "reports")
+    p = check.plan(cloned.work)                                                 # a report bound by its run
+    assert p["level"] == "tam" and p["why"] == "origin'deki belge-dali okunamadı" and p["advice"] == check._ADVICE_FETCH
 
 
 # --------------------------------------------------------------------------- what gets merged
@@ -671,13 +807,20 @@ def test_unpushed_commits_of_local_master_count_as_what_the_base_received(repo):
     git(repo, "checkout", "-q", "dal")
     p = check.plan(repo)
     assert p["level"] == "tam" and p["base_ahead"] == ["src_yerel.py"]
+    # origin/master received nothing: merging it is a no-op, so the reason names local master (review)
+    assert "yerel master'da push edilmemiş kod var (src_yerel.py)" in p["why"] and p["advice"] == check._ADVICE_LOCAL_MASTER
 
 
 def test_the_rule_files_never_approve_their_own_change(repo):
     write(repo, "scripts/check.py", "RULE = 1\n")
     full_log(repo, commit(repo))
+    commit(repo, "log")
     p = check.plan(repo)
     assert p["level"] == "tam" and "kuralın kendi dosyaları" in p["why"] and p["full"]["ok"]
+    assert check.render_plan(p)[-1].endswith(check._ADVICE_RULES)   # not "run the --full" again
+    # the decision and its allowlists: a file off this list would judge its own change
+    assert set(check.RULE_FILES) == {"scripts/check.py", "tests/doc_read_guard.py", "tests/conftest.py",
+                                     "tests/test_staged_check.py"}
 
 
 def test_submodule_moves_are_seen_whatever_the_config(repo, tmp_path):
@@ -763,7 +906,7 @@ def test_head_must_be_what_its_upstream_holds(cloned):
     write(cloned.work, "notlar.md", "not pushed\n")
     commit(cloned.work)
     p = check.plan(cloned.work)
-    assert p["level"] == "tam" and "push edilmemiş" in p["why"]
+    assert p["level"] == "tam" and "push edilmemiş" in p["why"] and p["advice"] == check._ADVICE_SYNC
     git(cloned.work, "push", "-q", "origin", "dal")
     assert check.plan(cloned.work)["level"] == "yok"
 
@@ -806,22 +949,25 @@ def test_the_quick_run_reminds_of_the_plan_without_changing_its_exit_code(repo, 
 
 
 def test_the_gates_do_not_inherit_what_would_change_them(monkeypatch):
-    names = ("PYTEST_ADDOPTS", "PYTEST_PLUGINS", "MATHVERIFY_SANDBOX", "MATHVERIFY_CALIBRATION")
+    names = ("PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTEST_DISABLE_PLUGIN_AUTOLOAD", "MATHVERIFY_SANDBOX",
+             "MATHVERIFY_CALIBRATION", "FORCE_COLOR", "PYTHONOPTIMIZE", "PYTHONHASHSEED")
     for var in names:
         monkeypatch.setenv(var, "on")
+    monkeypatch.setenv("PY_COLORS", "1")
     monkeypatch.setenv("MATHVERIFY_LEAN_PROJECT", "/lean")
     spec = importlib.util.spec_from_file_location("check_script_env", ROOT / "scripts" / "check.py")
     fresh = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fresh)                        # ENV is built when the script loads
-    assert not set(names) & set(fresh.ENV) and fresh.ENV["PYTHONUTF8"] == "1"
+    assert not set(names) & set(fresh.ENV) and fresh.ENV["PYTHONUTF8"] == "1" and fresh.ENV["PY_COLORS"] == "0"
     assert fresh.ENV["MATHVERIFY_LEAN_PROJECT"] == "/lean"
 
 
 def test_the_log_names_the_environment_but_no_value(monkeypatch):
     monkeypatch.setitem(check.ENV, "MATHVERIFY_DENEME_ANAHTAR", "gizli-deger-123")
-    line = check._environment()
+    line, lock = check.environment_lines(ROOT)
     assert line.startswith("ortam: Python ") and "sympy " in line and "z3-solver " in line
-    assert "MATHVERIFY_DENEME_ANAHTAR" in line and "gizli-deger-123" not in line
+    assert "MATHVERIFY_DENEME_ANAHTAR" in line and "gizli-deger-123" not in line + lock
+    assert re.fullmatch(r"kilit: requirements\.lock [0-9a-f]{16} · \d+ paket · uyuşmayan: .+", lock)
 
 
 # --------------------------------------------------------------------------- this repository
@@ -845,7 +991,8 @@ def test_the_documents_code_reads_in_this_repository():
     assert set(named) == {guide}, named
     assert named[guide].startswith("tests/test_cloud_scripts.py:")
     elsewhere = {d for d in tracked if not check.is_doc(d) and not check.is_report(d)}
-    assert elsewhere == {"lean/README" + MD, "scripts/dev/README" + MD, "denetim/2026-09-25/README" + MD}
+    assert elsewhere == {"lean/README" + MD, "scripts/dev/README" + MD, "denetim/2026-09-25/README" + MD,
+                         "denetim/2026-09-26/README" + MD}
 
 
 def test_the_scan_covers_every_tracked_python_file():
@@ -1026,16 +1173,100 @@ def test_the_guard_sees_a_hard_link(tmp_path):
     assert os.path.realpath(target) in doc_read_guard.OPENED
 
 
+def test_a_hard_link_s_source_is_read_from_the_working_directory(tmp_path, monkeypatch):
+    """Unlike a symlink's target, os.link's source is a path like any other (review)."""
+    import doc_read_guard
+    write(tmp_path, "sert" + MD)
+    (tmp_path / "alt").mkdir()
+    doc = os.path.realpath(tmp_path / ("sert" + MD))
+    doc_read_guard.OPENED.discard(doc)
+    monkeypatch.chdir(tmp_path)
+    try:
+        os.link("sert" + MD, "alt/ikinci-ad.txt")
+    except (OSError, NotImplementedError):
+        pytest.skip("hard links are not available here")
+    assert doc in doc_read_guard.OPENED
+
+
 def test_the_guard_sees_a_linked_directory(tmp_path):
     import doc_read_guard
     src = tmp_path / "belgeler"
     write(src, "alt/ic" + MD)
-    doc_read_guard.OPENED.discard(os.path.realpath(src / "alt" / ("ic" + MD)))
+    write(src, "BUYUK" + MD.upper())                                  # Windows reads it as a document too
+    docs = {os.path.realpath(src / "alt" / ("ic" + MD)), os.path.realpath(src / ("BUYUK" + MD.upper()))}
+    doc_read_guard.OPENED.difference_update(docs)
     try:
         os.symlink(src, tmp_path / "bag", target_is_directory=True)
     except (OSError, NotImplementedError):
         pytest.skip("symlinks are not available here")
-    assert os.path.realpath(src / "alt" / ("ic" + MD)) in doc_read_guard.OPENED
+    assert docs <= doc_read_guard.OPENED
+
+
+def test_the_guard_reads_a_relative_link_from_the_link_s_directory(tmp_path, monkeypatch):
+    """os.symlink("../docs", link): the target is relative to the link's directory; read from the
+    working directory it named nothing and a linked directory of documents went unseen (mutation
+    check, 26 Sep 2026)."""
+    import doc_read_guard
+    write(tmp_path, "d/belgeler/ic" + MD)
+    write(tmp_path, "d/tek" + MD)
+    (tmp_path / "d" / "baglar").mkdir()
+    docs = {os.path.realpath(tmp_path / "d" / "belgeler" / ("ic" + MD)), os.path.realpath(tmp_path / "d" / ("tek" + MD))}
+    doc_read_guard.OPENED.difference_update(docs)
+    monkeypatch.chdir(tmp_path)                                       # not the links' directory
+    try:
+        os.symlink("../belgeler", tmp_path / "d" / "baglar" / "dizin", target_is_directory=True)
+        os.symlink("../tek" + MD, tmp_path / "d" / "baglar" / "dosya")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available here")
+    assert docs <= doc_read_guard.OPENED
+
+
+def test_the_guard_resolves_a_path_when_it_is_used(tmp_path, monkeypatch):
+    """A relative path, or one through a link, means what it meant at the open: the working
+    directory can change and the link can be gone by the end of the session."""
+    import doc_read_guard
+    write(tmp_path, "gercek/docs/x" + MD)
+    write(tmp_path, "gercek/docs/alt/y" + MD)
+    docs = {os.path.realpath(tmp_path / "gercek" / "docs" / ("x" + MD)),
+            os.path.realpath(tmp_path / "gercek" / "docs" / "alt" / ("y" + MD))}
+    doc_read_guard.OPENED.difference_update(docs)
+    try:
+        os.symlink(tmp_path / "gercek", tmp_path / "gecici", target_is_directory=True)
+        monkeypatch.chdir(tmp_path / "gecici")
+        with open("docs/x" + MD, encoding="utf-8"):                   # relative, through the link
+            pass
+        os.symlink(tmp_path / "gecici" / "docs" / "alt", tmp_path / "bag", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available here")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "gecici").unlink()
+    assert docs <= doc_read_guard.OPENED
+
+
+def test_the_guard_sees_a_windows_junction(tmp_path):
+    """_winapi.CreateJunction links a directory without the privilege a symlink needs on Windows;
+    its audit event is simulated here, as CPython raises it (Modules/_winapi.c)."""
+    import doc_read_guard
+    write(tmp_path, "belgeler/ic" + MD)
+    doc = os.path.realpath(tmp_path / "belgeler" / ("ic" + MD))
+    doc_read_guard.OPENED.discard(doc)
+    sys.audit("_winapi.CreateJunction", str(tmp_path / "belgeler"), str(tmp_path / "bag"))
+    assert doc in doc_read_guard.OPENED
+
+
+def test_the_guard_takes_every_event_it_names(tmp_path):
+    """Each audit event the guard lists records its source (shutil.copyfile opens the file too on
+    today's Pythons, so only a direct call shows the event itself is handled)."""
+    import doc_read_guard
+    doc = tmp_path / ("olay" + MD)
+    doc.write_text("x\n", encoding="utf-8")
+    for event in ("open", "shutil.copyfile", "_winapi.CopyFile2", "os.link", "os.symlink", "_winapi.CreateJunction"):
+        doc_read_guard.OPENED.discard(os.path.realpath(doc))
+        doc_read_guard.record(event, (str(doc), str(tmp_path / "hedef"), 0))
+        assert os.path.realpath(doc) in doc_read_guard.OPENED, event
+    doc_read_guard.OPENED.discard(os.path.realpath(doc))
+    doc_read_guard.record("os.rename", (str(doc), str(tmp_path / "hedef"), None, None))
+    assert os.path.realpath(doc) not in doc_read_guard.OPENED
 
 
 def test_windows_names_are_read_as_windows_reads_them():
@@ -1043,6 +1274,8 @@ def test_windows_names_are_read_as_windows_reads_them():
     for name in ("x" + MD + ".", "x" + MD + " ", "x" + MD + "::$DATA", "x" + MD + ". . "):
         assert doc_read_guard._windows_name("C:\\r\\docs\\" + name) == "C:\\r\\docs\\x" + MD, name
     assert doc_read_guard._windows_name("C:\\r\\notes.txt") == "C:\\r\\notes.txt"
+    assert doc_read_guard._windows_name("C:/r/docs/x" + MD + "::$DATA") == "C:/r/docs/x" + MD   # forward slashes
+    assert doc_read_guard._windows_name("C:x" + MD + ".") == "C:x" + MD                           # drive-relative
 
 
 def test_the_guard_never_breaks_an_open():
@@ -1105,3 +1338,428 @@ def test_a_session_that_reads_only_named_documents_passes(tmp_path):
                                    f"def test_reads(tmp_path):\n    open({guide!r}, encoding='utf-8').read()\n"
                                    f"    shutil.copytree({lean!r}, tmp_path / 'lean', ignore=shutil.ignore_patterns('.lake'))\n")
     assert p.returncode == 0 and "belge-okuma" not in p.stdout, p.stdout + p.stderr
+
+
+# --------------------------------------------------------------------------- round 3 of the review
+
+
+def test_head_must_be_what_its_branch_on_origin_holds(cloned):
+    """The pull request merges the branch as origin holds it, read there: not a local tracking ref,
+    which may be stale, missing or origin/master (review, 26 Sep 2026)."""
+    write(cloned.work, "notlar.md", "changed\n")
+    commit(cloned.work)
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and p["why"] == "origin'de dal dalı yok (push edilmemiş)" and p["advice"] == check._ADVICE_PUSH
+    git(cloned.work, "branch", "-q", "-u", "origin/master")          # an upstream that is the base proves nothing
+    assert check.plan(cloned.work)["why"] == "origin'de dal dalı yok (push edilmemiş)"
+    git(cloned.work, "push", "-q", "origin", "dal")
+    assert check.plan(cloned.work)["level"] == "yok"
+    assert "güncelliği bilinmiyor" in check.plan(cloned.work, fetch=False)["why"]
+    assert check._push_problem(cloned.work, False) == ("origin'deki dal okunmadı (--no-fetch)", check._ADVICE_NO_FETCH)
+    git(cloned.other, "fetch", "-q", "origin", "dal")                 # someone else pushes to the branch:
+    git(cloned.other, "checkout", "-q", "-b", "dal", "FETCH_HEAD")    # the local tracking ref stays as it was
+    write(cloned.other, "their.py")
+    commit(cloned.other, "theirs")
+    git(cloned.other, "push", "-q", "origin", "dal")
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and "HEAD ile aynı değil" in p["why"] and p["advice"] == check._ADVICE_SYNC, p
+    git(cloned.work, "checkout", "-q", "--detach")
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and "bir dala bağlı değil" in p["why"] and p["advice"] == check._ADVICE_SWITCH
+
+
+def test_nothing_changed_here_but_origin_s_branch_holds_code(cloned):
+    """The checkout's branch sits at master; another session pushed code to origin's copy of it.
+    The pull request merges origin's copy: nothing changed here is no proof (review, 26 Sep 2026)."""
+    git(cloned.work, "push", "-q", "origin", "dal")                   # dal = master, on origin too
+    assert check.plan(cloned.work)["level"] == "yok"
+    git(cloned.other, "fetch", "-q", "origin", "dal")
+    git(cloned.other, "checkout", "-q", "-b", "dal", "FETCH_HEAD")
+    write(cloned.other, "their.py", "import os\n")
+    commit(cloned.other, "theirs")
+    git(cloned.other, "push", "-q", "origin", "dal")
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and "HEAD ile aynı değil" in p["why"] and p["advice"] == check._ADVICE_SYNC, p
+    git(cloned.work, "checkout", "-q", "-b", "yeni", "origin/master")  # a branch origin does not have: no PR yet
+    assert check.plan(cloned.work)["level"] == "yok"
+    git(cloned.work, "checkout", "-q", "--detach")
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and "bir dala bağlı değil" in p["why"] and p["advice"] == check._ADVICE_SWITCH
+    assert check.plan(cloned.work, fetch=False)["level"] == "tam"
+
+
+def test_ls_remote_s_pattern_is_not_the_branch(cloned):
+    """`git ls-remote origin refs/heads/dal` also lists a/refs/heads/dal (review)."""
+    write(cloned.work, "notlar.md", "changed\n")
+    commit(cloned.work)
+    git(cloned.work, "push", "-q", "origin", "HEAD:refs/heads/a/refs/heads/dal")
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and p["why"] == "origin'de dal dalı yok (push edilmemiş)", p
+    git(cloned.work, "push", "-q", "origin", "HEAD~1:refs/heads/dal")
+    assert "HEAD ile aynı değil" in check.plan(cloned.work)["why"]
+
+
+def test_a_branch_pushed_under_another_name_is_read_there(cloned):
+    write(cloned.work, "notlar.md", "changed\n")
+    commit(cloned.work)
+    git(cloned.work, "push", "-q", "-u", "origin", "dal:claude/ozellik")
+    assert check.plan(cloned.work)["level"] == "yok"
+    write(cloned.work, "notlar.md", "again\n")
+    commit(cloned.work)
+    assert "origin'deki claude/ozellik HEAD ile aynı değil" in check.plan(cloned.work)["why"]
+
+
+def test_what_no_full_run_settles_is_said_before_asking_for_one(cloned):
+    """A code branch without a valid log: when the base received code, or origin cannot vouch for
+    master, a --full would be thrown away; say that first (review)."""
+    write(cloned.work, "code.py", "x = 2\n")
+    commit(cloned.work)
+    git(cloned.work, "push", "-q", "origin", "dal")
+    assert check.plan(cloned.work)["advice"] is None                 # the --full it needs
+    write(cloned.other, "remote.py")
+    commit(cloned.other, "merged elsewhere")
+    git(cloned.other, "push", "-q", "origin", "master")
+    p = check.plan(cloned.work)
+    assert p["full"] is None and p["advice"] == check._ADVICE_MERGE and "birleştirilir" in p["why"], p
+    git(cloned.work, "fetch", "-q", "origin")
+    git(cloned.work, "merge", "-q", "--no-edit", "origin/master")
+    git(cloned.work, "push", "-q", "origin", "dal")
+    git(cloned.work, "remote", "set-url", "origin", str(cloned.origin.parent / "gone.git"))
+    p = check.plan(cloned.work)
+    assert p["full"] is None and p["advice"] == check._ADVICE_FETCH and "güncelliği bilinmiyor" in p["why"], p
+
+
+def test_the_full_run_counts_only_for_what_was_pushed(cloned):
+    write(cloned.work, "code.py", "x = 2\n")
+    full_log(cloned.work, commit(cloned.work))
+    commit(cloned.work, "log")
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and p["why"] == "origin'de dal dalı yok (push edilmemiş)" and p["full"]["ok"], p
+    git(cloned.work, "push", "-q", "origin", "dal")
+    assert check.plan(cloned.work)["level"] == "tamam"
+
+
+def test_on_local_master_no_push_is_asked(cloned):
+    """Merging locally, HEAD is master: there is no pull request to compare with."""
+    git(cloned.work, "checkout", "-q", "master")
+    write(cloned.work, "notlar.md", "merged locally\n")
+    commit(cloned.work)
+    p = check.plan(cloned.work)
+    assert p["level"] == "yok" and p["base"] == "origin/master", p
+
+
+def criss_cross(repo: Path) -> None:
+    """master and dal each merge the other's first commit: two merge bases."""
+    git(repo, "checkout", "-q", "master")
+    write(repo, "m.py")
+    m1 = commit(repo, "m1")
+    git(repo, "checkout", "-q", "dal")
+    write(repo, "d.py")
+    d1 = commit(repo, "d1")
+    git(repo, "checkout", "-q", "master")
+    git(repo, "merge", "-q", "--no-edit", "--no-ff", d1)
+    git(repo, "checkout", "-q", "dal")
+    git(repo, "merge", "-q", "--no-edit", "--no-ff", m1)
+
+
+def test_a_criss_cross_history_decides_nothing(repo):
+    """With two merge bases the branch's changes and the base's depend on which one is taken, and
+    git diff HEAD...base takes its own (review)."""
+    criss_cross(repo)
+    assert len(git(repo, "merge-base", "--all", "master", "dal").split()) == 2
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "çapraz" in p["why"] and p["advice"] == check._ADVICE_MERGE
+    git(repo, "merge", "-q", "--no-edit", "master")
+    assert "çapraz" not in check.plan(repo)["why"]
+
+
+def test_local_master_in_a_criss_cross_decides_nothing(repo):
+    git(repo, "update-ref", "refs/remotes/origin/master", git(repo, "rev-parse", "master"))
+    criss_cross(repo)
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "birden çok ortak atası" in p["why"] and p["advice"] == check._ADVICE_LOCAL_MASTER, p
+
+
+def test_a_base_from_this_machine_or_another_remote_is_not_fresh(cloned, tmp_path, monkeypatch):
+    """Only origin on a server can vouch for the real master: a clone of another checkout, a backup
+    bundle as origin, or a remote under another name leaves the base's freshness unknown (review)."""
+    write(cloned.work, "notlar.md", "changed\n")
+    commit(cloned.work)
+    git(cloned.work, "push", "-q", "origin", "dal")
+    assert check.plan(cloned.work)["level"] == "yok"
+    monkeypatch.setattr(check, "local_origin", REAL_LOCAL_ORIGIN)
+    p = check.plan(cloned.work)                                        # the bare origin is a directory here
+    assert p["fetch"] == "origin bu makinede bir yol: tazeliği bilinmiyor" and p["level"] == "tam", p
+    assert p["advice"] == check._ADVICE_ORIGIN
+    bundle = tmp_path / "yedek.bundle"
+    git(cloned.work, "bundle", "create", str(bundle), "--all")
+    no_suffix = str(cloned.origin)[:-len(".git")]                      # git adds .git itself (review)
+    for url in (str(bundle), "file://" + bundle.as_posix(), "file://localhost" + bundle.as_posix(),
+                os.path.relpath(bundle, cloned.work), no_suffix):
+        git(cloned.work, "remote", "set-url", "origin", url)
+        p = check.plan(cloned.work)
+        assert p["fetch"] == "origin bu makinede bir yol: tazeliği bilinmiyor" and p["level"] == "tam", (url, p)
+    for url, local in [("https://github.com/wqedwad/asd", False), ("git@github.com:wqedwad/asd.git", False),
+                       ("ssh://git@github.com/wqedwad/asd", False), ("http://proxy@127.0.0.1:9/git/wqedwad/asd", False),
+                       ("C:\\Users\\x\\yedek.bundle", True), ("C:/Users/x/yedek", True),
+                       ("file:///C:/Users/x/yedek.bundle", True), ("../yedek", True), ("yedek.git", True),
+                       ("./a:b", True)]:
+        assert check.local_origin(url) is local, url
+    git(cloned.work, "remote", "rename", "origin", "yukari")
+    p = check.plan(cloned.work)
+    assert p["fetch"] == "origin yok (başka uzak var)" and p["level"] == "tam", p
+
+
+def test_the_base_keeps_its_rule_files(repo):
+    """A branch cannot take a file off the rule's list: the base's list counts too (review)."""
+    git(repo, "checkout", "-q", "master")
+    write(repo, "scripts/check.py", 'RULE_FILES = ("kural.py", "scripts/check.py")\n')
+    write(repo, "kural.py", "K = 1\n")
+    commit(repo, "the base's rule")
+    git(repo, "checkout", "-q", "dal")
+    git(repo, "merge", "-q", "--no-edit", "master")
+    assert check.base_rule_files(repo, "master") == ("kural.py", "scripts/check.py")
+    write(repo, "kural.py", "K = 2\n")
+    full_log(repo, commit(repo))
+    commit(repo, "log")
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "(kural.py)" in p["why"] and p["advice"] == check._ADVICE_RULES, p
+    assert check.base_rule_files(repo, "yok-boyle-dal") == ()
+    git(repo, "checkout", "-q", "master")
+    write(repo, "scripts/check.py", 'RULE_FILES: tuple = ("kural.py",)\n')    # annotated
+    commit(repo, "annotated")
+    assert check.base_rule_files(repo, "master") == ("kural.py",)
+    write(repo, "scripts/check.py", 'RULE_FILES = ("a.py",)\nRULE_FILES = ("b.py",)\n')
+    commit(repo, "reassigned")
+    assert check.base_rule_files(repo, "master") == ("a.py", "b.py")
+    for text in ('CORE = ("scripts/check.py",)\nRULE_FILES = CORE + ("kural.py",)\n',
+                 'A, RULE_FILES = 1, ("kural.py",)\n', 'RULE_FILES = ("x.py",)\nRULE_FILES += ("kural.py",)\n',
+                 "def (:\n"):
+        write(repo, "scripts/check.py", text)
+        commit(repo, "unreadable")
+        assert check.base_rule_files(repo, "master") is None, text
+    write(repo, "scripts/check.py", "X = 1\n")                       # a base older than the list
+    commit(repo, "no list")
+    assert check.base_rule_files(repo, "master") == ()
+    write(repo, "scripts/check.py", 'CORE = ("scripts/check.py",)\nRULE_FILES = CORE + ("kural.py",)\n')
+    commit(repo, "unreadable again")
+    git(repo, "checkout", "-q", "dal")
+    git(repo, "merge", "-q", "--no-edit", "master")
+    write(repo, "code.py", "x = 9\n")
+    full_log(repo, commit(repo))
+    commit(repo, "log")
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "kural listesi (RULE_FILES) okunamadı" in p["why"] and p["advice"] == check._ADVICE_RULES
+
+
+def test_the_environment_of_the_run_must_be_the_locked_one(repo):
+    """A verdict can change with SymPy's or latex2sympy2's version: the log's kilit line must show
+    every pin of requirements.lock met, for the lock as it is now (review)."""
+    write(repo, "code.py", "x = 2\n")
+    sha = commit(repo)
+    full_log(repo, sha)
+    assert check.last_full_run(repo)["ok"]
+    digest = check.lock_digest(repo)
+    for lock, why in [((f"kilit: requirements.lock {digest} · 1 paket · uyuşmayan: sympy 1.13.3 ≠ 1.14.0",),
+                       "ortam kilitle uyuşmuyor (sympy 1.13.3 ≠ 1.14.0)"),
+                      (("kilit: requirements.lock 0123456789abcdef · 1 paket · uyuşmayan: yok",), "kilit koşudan sonra değişti"),
+                      (("kilit: yok",), "kilit denetlenemedi (yok)"),
+                      ((), "kilit satırı yok ya da birden çok"),
+                      ((f"kilit: requirements.lock {digest} · 1 paket · uyuşmayan: yok",) * 2, "kilit satırı yok ya da birden çok")]:
+        full_log(repo, sha, lock=lock)
+        full = check.last_full_run(repo)
+        assert why in full["why"], (lock, full)
+        assert full.get("advice") == (check._ADVICE_LOCK if "uyuşmuyor" in why or "denetlenemedi" in why else None)
+    for env in [(), ("ortam: Python 3", "ortam: Python 3")]:
+        full_log(repo, sha, env=env)
+        assert check.last_full_run(repo)["why"] == "ortam satırı yok ya da birden çok"
+    (repo / "requirements.lock").unlink()
+    full_log(repo, sha, lock=(f"kilit: requirements.lock {digest} · 1 paket · uyuşmayan: yok",))
+    assert "kilit koşudan sonra değişti" in check.last_full_run(repo)["why"]
+
+
+def test_the_kilit_line_is_every_pin_for_this_platform(tmp_path):
+    """The gates' interpreter (PY) is asked, not check.py's own; markers are evaluated there."""
+    write(tmp_path, "requirements.lock", "sympy==1.14.0\n    # via x\nsympy-yok-boyle==1.0\nmpmath==0.0.1\n"
+                                          "colorama==0.4.6 ; sys_platform == 'kimsenin-platformu'\n")
+    env, lock = check.environment_lines(tmp_path)
+    assert env.startswith("ortam: Python ") and "sympy 1.14.0" in env
+    assert lock == (f"kilit: requirements.lock {check.lock_digest(tmp_path)} · 3 paket · uyuşmayan: "
+                    f"sympy-yok-boyle yok ≠ 1.0, mpmath 1.3.0 ≠ 0.0.1")
+    lf = check.lock_digest(tmp_path)
+    (tmp_path / "requirements.lock").write_bytes(b"sympy==1.14.0\r\n    # via x\r\nsympy-yok-boyle==1.0\r\nmpmath==0.0.1\r\n"
+                                                 b"colorama==0.4.6 ; sys_platform == 'kimsenin-platformu'\r\n")
+    assert check.lock_digest(tmp_path) == lf                           # a Windows checkout's CRLF
+    (tmp_path / "requirements.lock").write_bytes("sympy==1.14.0\n".encode("utf-16"))   # PowerShell 5's redirection
+    assert check.environment_lines(tmp_path)[1] == "kilit: requirements.lock okunamadı (UTF-8 değil)"
+    (tmp_path / "requirements.lock").unlink()
+    assert check.environment_lines(tmp_path)[1] == "kilit: yok"
+
+
+def test_a_utf16_lock_decides_without_raising(repo):
+    write(repo, "code.py", "x = 2\n")
+    full_log(repo, commit(repo))
+    commit(repo, "log")
+    (repo / "requirements.lock").write_bytes("sympy==1.14.0\n".encode("utf-16"))
+    p = check.plan(repo)                                              # the lock changed: TAM, with a reason
+    assert p["level"] == "tam" and "kilit koşudan sonra değişti" in p["why"], p
+
+
+def test_colour_codes_hide_no_skipped_line(repo):
+    """FORCE_COLOR or PY_COLORS=1 coloured pytest's summary: the Lean skip vanished from the log
+    and the plan accepted a run whose Lean tests did not run (review)."""
+    line = "\x1b[33mSKIPPED\x1b[0m [87] tests/test_f5_lean.py:19: Lean/Mathlib toolchain not available"
+    assert check.pytest_problems("x\n" + line + "\n") == [check._ANSI.sub("", line)]
+    write(repo, "code.py", "x = 2\n")
+    full_log(repo, commit(repo), extra=["    " + line])
+    assert check.last_full_run(repo)["why"] == "Lean testleri atlanmış (toolchain yok)"
+
+
+def test_colour_settings_do_not_reach_the_pytest_gate(tmp_path, monkeypatch):
+    monkeypatch.setenv("PY_COLORS", "1")
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    spec = importlib.util.spec_from_file_location("check_script_colour", ROOT / "scripts" / "check.py")
+    fresh = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fresh)
+    write(tmp_path, "test_lean_like.py", "import pytest\n\ndef test_a():\n    pytest.skip('Lean/Mathlib toolchain not available')\n")
+    p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-rfEs", "-p", "no:cacheprovider", "test_lean_like.py"],
+                       cwd=tmp_path, env=fresh.ENV, capture_output=True, text=True, encoding="utf-8")
+    assert "\x1b[" not in p.stdout, p.stdout
+    assert any(check._LEAN_SKIPPED in x for x in fresh.pytest_problems(p.stdout)), p.stdout
+
+
+@pytest.mark.skipif(not hasattr(__import__("ast"), "TemplateStr"), reason="t-strings: Python 3.14+")
+def test_template_strings_are_names_completed_at_run_time(tmp_path, git_env):
+    write(tmp_path, "a.py", 'stem = "x"\nNAME = t"{stem}' + MD + '"\n')
+    assert ("a.py:2", MD, True) in check.code_strings(tmp_path)
+    assert check.docs_named_by_code(tmp_path, ["docs/rehber" + MD]) == {"docs/rehber" + MD: "a.py:2"}
+
+
+def _link(repo: Path, path: str, target: str) -> None:
+    """A tracked symbolic link made on git's side (the index entry), whatever the file system."""
+    blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=repo, input=target.encode(),
+                          capture_output=True, check=True).stdout.decode().strip()
+    git(repo, "update-index", "--add", "--cacheinfo", f"120000,{blob},{path}")
+
+
+def test_a_link_is_read_from_git_not_from_the_disk(repo):
+    """On Windows (core.symlinks=false) a tracked link is checked out as a plain file holding its
+    target; an absolute target may be any document (review)."""
+    git(repo, "config", "core.symlinks", "false")
+    doc = "docs/veri" + MD
+    write(repo, doc, "data\n")
+    _link(repo, "evalset/x.json", "../" + doc)
+    git(repo, "add", doc)
+    git(repo, "commit", "-q", "-m", "a link")                        # not add -A: the link is not on disk yet
+    git(repo, "checkout", "--", "evalset/x.json")
+    assert (repo / "evalset" / "x.json").is_file() and not (repo / "evalset" / "x.json").is_symlink()
+    assert check.linked_docs(repo, [doc, "notlar" + MD]) == {doc: "bağlantı: evalset/x.json"}
+    _link(repo, "evalset/y.json", "/mutlak/yol")
+    assert check.linked_docs(repo, [doc, "notlar" + MD]) == {doc: "bağlantı: evalset/x.json",
+                                                            "notlar" + MD: "bağlantı: evalset/y.json"}
+
+
+def test_reports_are_hashed_as_git_stores_them(repo):
+    """A Windows checkout (core.autocrlf, text=auto) has CRLF on disk: a --full from the cloud must
+    still bind its reports there (review)."""
+    write(repo, "code.py", "x = 2\n")
+    (repo / "reports" / "eval_report.md").write_bytes(b"a\nb\n")
+    full_log(repo, commit(repo))
+    commit(repo, "log")
+    assert b"\r" not in subprocess.run(["git", "cat-file", "-p", "HEAD:reports/eval_report.md"], cwd=repo,
+                                       capture_output=True, check=True).stdout
+    lf = check.report_digests(repo)
+    git(repo, "config", "core.autocrlf", "true")
+    for f in ("reports/eval_report.md", "reports/check_full.log"):
+        (repo / f).unlink()
+    git(repo, "checkout", "--", "reports/")
+    assert b"\r\n" in (repo / "reports" / "eval_report.md").read_bytes()
+    assert check.report_digests(repo) == lf and check.plan(repo)["level"] == "tamam"
+    (repo / "reports" / ("alt" + MD)).mkdir()                        # not a file: no crash, and no match
+    assert check.report_digests(repo)["reports/alt" + MD] == "okunamadı"
+    try:
+        os.symlink(repo / "reports" / "eval_report.md", repo / "reports" / ("bag" + MD))
+    except (OSError, NotImplementedError):
+        return
+    assert check.report_digests(repo)["reports/bag" + MD] == "okunamadı"     # a link is not a report
+
+
+def test_remotes_git_cannot_list_are_not_no_remotes(repo, monkeypatch):
+    """A failing `git remote` is not a repository without remotes: that would make the base fresh
+    and skip the push check."""
+    real = check._git_lines
+    monkeypatch.setattr(check, "_git_lines", lambda root, *a: None if a == ("remote",) else real(root, *a))
+    assert check.fetch_origin(repo) == "başarısız (uzaklar okunamadı)"
+    assert check._push_problem(repo, True) == ("uzaklar okunamadı", None)
+    write(repo, "notlar.md", "changed\n")
+    assert check.plan(repo)["level"] == "tam"
+
+
+def test_without_remotes_no_fetch_changes_nothing(repo):
+    write(repo, "notlar.md", "changed\n")
+    p = check.plan(repo, fetch=False)
+    assert p["fetch"] == "uzak yok" and p["level"] == "yok"
+
+
+def test_the_full_run_warns_at_once_when_it_will_prove_nothing(repo, monkeypatch, capsys):
+    """An environment off the lock, or a tree git cannot read, is said at the start, not 25 minutes
+    later by --plan (review)."""
+    monkeypatch.setattr(check, "ROOT", repo)
+    monkeypatch.setattr(check, "_main", lambda args: print("1/1 kapı geçti") or 0)
+    monkeypatch.setattr(check, "environment_lines", lambda root: ("ortam: Python 3", "kilit: yok"))
+    assert check.main(["--full"]) == 0
+    log = (repo / "reports" / "check_full.log").read_text(encoding="utf-8")
+    assert "UYARI: ortam requirements.lock'la uyuşmuyor ya da denetlenemedi" in log
+    monkeypatch.setattr(check, "dirty_files", lambda root: None)
+    assert check.main(["--full"]) == 0
+    lines = (repo / "reports" / "check_full.log").read_text(encoding="utf-8").splitlines()
+    assert lines[0].endswith("commit edilmemiş değişiklik: ? dosya")
+    assert "UYARI: git değişiklikleri veremedi, bu koşu --plan için kanıt olmaz" in lines
+
+
+def test_a_failing_rev_list_is_not_an_empty_one(repo, monkeypatch):
+    """Local master's unpushed commits are read with rev-list; a failure there must not read as
+    "none" (review)."""
+    git(repo, "update-ref", "refs/remotes/origin/master", git(repo, "rev-parse", "master"))
+    git(repo, "checkout", "-q", "master")
+    write(repo, "src_yerel.py")
+    commit(repo, "merged locally, not pushed")
+    git(repo, "checkout", "-q", "dal")
+    write(repo, "notlar.md", "changed\n")
+    real = check._git_run
+    monkeypatch.setattr(check, "_git_run", lambda root, *a, **k: types.SimpleNamespace(returncode=128, stdout=b"")
+                        if a[:1] == ("rev-list",) else real(root, *a, **k))
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "yerel master" in p["why"], p
+
+
+def test_a_shallow_clone_without_the_merge_base_says_so(cloned, tmp_path):
+    write(cloned.other, "code.py", "x = 2\n")
+    commit(cloned.other, "master moves on")
+    git(cloned.other, "push", "-q", "origin", "master")
+    git(cloned.other, "push", "-q", "origin", "HEAD~1:refs/heads/yan")   # a branch from the older master
+    shallow = tmp_path / "shallow"
+    git(tmp_path, "clone", "-q", "--depth", "1", "file://" + cloned.origin.as_posix(), str(shallow))
+    git(shallow, "fetch", "-q", "--depth", "1", "origin", "yan:yan")
+    git(shallow, "checkout", "-q", "yan")
+    p = check.plan(shallow)
+    assert p["level"] == "tam" and "ortak atası yok" in p["why"] and p["advice"] == check._ADVICE_SHALLOW, p
+
+
+def test_a_tag_with_the_branch_s_name_changes_nothing(cloned):
+    """`symbolic-ref --short` says "heads/dal" when a tag dal exists too (review)."""
+    write(cloned.work, "notlar.md", "changed\n")
+    commit(cloned.work)
+    git(cloned.work, "push", "-q", "origin", "dal")
+    git(cloned.work, "tag", "dal")
+    assert check._head_branch(cloned.work) == "dal" and check.plan(cloned.work)["level"] == "yok"
+
+
+def test_link_targets_are_read_the_same_on_every_os(repo):
+    """A link blob is git's text: "..\\x" and "C:x" mean the same in the cloud and on Windows (review)."""
+    doc = "docs/veri" + MD
+    write(repo, doc, "data\n")
+    for target, hit in [("../" + doc, True), ("..\\" + doc.replace("/", "\\"), True), ("C:veri" + MD, True),
+                        ("D:\\yedek\\x" + MD, True), ("../docs/baska" + MD, False)]:
+        _link(repo, "evalset/x.json", target)
+        assert (doc in check.linked_docs(repo, [doc])) is hit, target

@@ -206,22 +206,57 @@ def _mutate_steps(sol: dict[str, Any], fn: Callable[[str], str]) -> dict[str, An
     return out if touched else None
 
 
+_Z3_OPS = frozenset({"z3_check", "z3_enumerate"})     # mathverify.sandbox.ops: (status, ...) with its own timeout
+
+
+def _watch_sandbox(sb) -> None:
+    """Count, on the sandbox object, what the load of the other workers can cause and its own
+    counters miss: a call that found the worker gone or never ready (a SandboxError with no live
+    worker after it: a start that took over 60 s, a broken pipe; a death also counts as a
+    restart), and a z3 check that answered "unknown" after spending its own timeout. A computation
+    that raised in a live worker is an answer, not a loss. The layers pass a SandboxError on as a
+    cas_error flag at only a few call sites: a start that failed changed verdicts with every counter
+    at 0 (review, 26 Sep 2026). Installed once per sandbox; what the calls return is unchanged."""
+    if getattr(sb, "lost_calls", None) is not None or not hasattr(sb, "call"):
+        return
+    from mathverify.sandbox import SandboxError
+    call = sb.call
+    sb.lost_calls = sb.z3_timeouts = 0
+
+    def watched(fn_path, *args, **kwargs):
+        t0 = time.perf_counter()
+        try:
+            out = call(fn_path, *args, **kwargs)
+        except SandboxError:
+            if not sb._alive():
+                sb.lost_calls += 1
+            raise
+        if fn_path.rpartition(":")[2] in _Z3_OPS and isinstance(out, (tuple, list)) and out and out[0] == "unknown":
+            limit_ms = kwargs.get("timeout_ms", args[3] if len(args) > 3 else 4000)
+            if time.perf_counter() - t0 >= 0.9 * limit_ms / 1000:
+                sb.z3_timeouts += 1
+        return out
+
+    sb.call = watched
+
+
 def attack_item(it: dict[str, Any]) -> dict[str, Any]:
     """Every attack on one item, as (attack, kind, base verdict, verdict) rows in the order the
     sweep has always run them. It needs nothing but the item, so any process can compute it;
-    `run` scores the rows in item order. Also records the item's wall time, how many sandbox calls
-    timed out or restarted the sandbox during it, and how many verifications carried a sandbox
-    or layer error (a sandbox that died or never became ready while starting counts in neither
-    counter; review, 26 Sep 2026). The sandbox's hard timeouts (5-8 s) are the load-sensitive path:
-    the verifier's own work in the worker has no timeout, so the load of the other workers only
-    slows it. z3's internal timeout (4 s) runs inside the sandbox and is not counted; its largest
-    call over the 89 evaluate/solve_equation items took 21 ms (review), and the largest sandbox call
-    on the heaviest items 12% of its timeout. The error flags were measured absent from all 2027
-    verifications of 28 items (every tenth), so they cost no rechecks in a normal sweep."""
+    `run` scores the rows in item order. Also records the item's wall time and three counters of
+    what the load of the other workers can decide: sandbox timeouts (the sandbox's hard timeouts,
+    5-8 s, and z3 checks that ran out their own 4 s: _watch_sandbox), sandbox restarts, and errors
+    (verifications that carry a sandbox or layer error flag, plus sandbox calls that found the
+    worker gone or never ready). The verifier's own work in the worker has no timeout, so the load
+    only slows it. The largest z3 call over the 89 evaluate/solve_equation items took 21 ms and the
+    largest sandbox call on the heaviest items 12% of its timeout (review); the error flags were
+    absent from all 2027 verifications of 28 items (every tenth): a normal sweep has no rechecks."""
     from mathverify.sandbox import get_sandbox
     from mathverify.verifier import verify as _verify
     sb = get_sandbox()
+    _watch_sandbox(sb)
     timeouts0, restarts0, t0 = sb.timeouts, sb.restarts, time.perf_counter()
+    lost0, z3_timeouts0 = getattr(sb, "lost_calls", 0), getattr(sb, "z3_timeouts", 0)
     errors = 0
 
     def verify(ir, sol):
@@ -265,12 +300,14 @@ def attack_item(it: dict[str, Any]) -> dict[str, Any]:
                     continue
                 rows.append((f"mc:{name}", kind, mc_base.verdict, verify(ir, mutated).verdict))
     return {"id": labels["id"], "base": base.verdict, "rows": rows, "seconds": time.perf_counter() - t0,
-            "sandbox_timeouts": sb.timeouts - timeouts0, "sandbox_restarts": sb.restarts - restarts0,
-            "sandbox_errors": errors}
+            "sandbox_timeouts": sb.timeouts - timeouts0 + getattr(sb, "z3_timeouts", 0) - z3_timeouts0,
+            "sandbox_restarts": sb.restarts - restarts0,
+            "sandbox_errors": errors + getattr(sb, "lost_calls", 0) - lost0}
 
 
 # Verification flags of a sandbox or layer failure (mathverify.sandbox.pool.Sandbox.run, verifier
-# layers): a sandbox killed or slow while starting shows only here.
+# layers). Few layers pass a sandbox's cas_error on; a lost sandbox is counted at the call instead
+# (_watch_sandbox).
 _ERROR_FLAGS = frozenset({"cas_error", "layer_exception"})
 
 

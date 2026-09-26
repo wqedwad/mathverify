@@ -25,6 +25,12 @@ from harness import adversarial as A
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# The sweep runs in this process with workers=1: an attack answer shaped "{...}(...)" reaches SymPy's
+# parse_expr, whose eval of the transformed code makes Python warn at compile time; the TypeError
+# that follows is caught and the claim is UNKNOWN (tyt-kap-003, 26 Sep 2026). A worker's or the
+# harness's stderr shows the same warning; the pytest gate should not.
+pytestmark = pytest.mark.filterwarnings("ignore:'dict' object is not callable; perhaps you missed a comma:SyntaxWarning")
+
 # A slower item first (2.8 s in the 26 Sep sweep; an interval answer), then quick ones (0.1-0.4 s;
 # a set answer among them); together they reach every attack surface (answer, option letter kept,
 # steps) and the set and interval shapes.
@@ -108,6 +114,20 @@ def test_a_recheck_that_agrees_is_kept_and_counted():
     assert two["per_attack"] == one["per_attack"] and two["successes"] == one["successes"]
 
 
+def test_a_lost_item_fails_the_sweep(monkeypatch):
+    """The pool must give one result per item: scoring pairs them by position (review)."""
+    monkeypatch.setattr(A, "_item_results", lambda items, workers, attack: iter([attack(it) for it in items[:-1]]))
+    with pytest.raises(ValueError):
+        A.run(FAKE_ITEMS, workers=1, attack=adversarial_fakes.load_independent)
+
+
+def test_one_process_is_the_reference_and_is_never_rechecked():
+    one = A.run(FAKE_ITEMS, workers=1, attack=adversarial_fakes.timed_out_everywhere)
+    assert one["rechecked"] == [] and one["sandbox_timeouts"] == 3
+    two = A.run(FAKE_ITEMS, workers=2, attack=adversarial_fakes.timed_out_everywhere)
+    assert two["rechecked"] == ["a", "b", "c"] and two["per_attack"] == one["per_attack"]
+
+
 def test_a_base_verdict_the_load_decided_fails_the_sweep_even_without_attacks():
     """An item no attack applies to has no rows: the base verdict is compared too (review)."""
     with pytest.raises(A.LoadDependentResult, match="1 sandbox/katman hatası"):
@@ -120,10 +140,12 @@ def test_the_log_line_of_the_sweep(tmp_path):
     check = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(check)
     report = tmp_path / "adversarial_results.json"
-    report.write_text(json.dumps(A.run(FAKE_ITEMS, workers=2, attack=adversarial_fakes.load_independent)),
-                      encoding="utf-8")
-    assert check.adversarial_note(report) == ("    adversarial: 2 süreç · sandbox zaman aşımı 0 · yeniden başlatma 3 · "
-                                              "sandbox/katman hatası 0 · tek başına yeniden denenen 3")
+    r = A.run(FAKE_ITEMS, workers=2, attack=adversarial_fakes.counted)
+    assert (r["sandbox_timeouts"], r["sandbox_restarts"], r["sandbox_errors"]) == (3, 6, 9)
+    assert [(p["sandbox_timeouts"], p["sandbox_restarts"], p["sandbox_errors"]) for p in r["per_item"]] == [(1, 2, 3)] * 3
+    report.write_text(json.dumps(r), encoding="utf-8")
+    assert check.adversarial_note(report) == ("    adversarial: 2 süreç · sandbox zaman aşımı 3 · yeniden başlatma 6 · "
+                                              "sandbox/katman hatası 9 · tek başına yeniden denenen 3")
     assert check.adversarial_note(tmp_path / "yok.json") is None
 
 
@@ -143,21 +165,80 @@ def test_the_recheck_runs_after_the_pool_is_gone(tmp_path, monkeypatch):
 def test_attack_item_counts_the_sandbox_timeouts_and_restarts(evalset_items, monkeypatch):
     import mathverify.sandbox
     import mathverify.verifier
-    sb = types.SimpleNamespace(timeouts=5, restarts=7)            # counters from earlier items
+    # counters from earlier items; z3_timeouts and lost_calls as _watch_sandbox keeps them
+    sb = types.SimpleNamespace(timeouts=5, restarts=7, z3_timeouts=11, lost_calls=13)
     calls = []
 
     def verify(ir, sol):
         calls.append(1)
         sb.timeouts += 1
         sb.restarts += 2
+        sb.z3_timeouts += 1
+        sb.lost_calls += len(calls) % 2
         layer = types.SimpleNamespace(flags=["layer_exception"] if len(calls) % 3 == 0 else [])
-        return types.SimpleNamespace(verdict="CORRECT", flags=["cas_error"] if len(calls) == 1 else [], layers=[layer])
+        own = ["cas_error"] if len(calls) == 1 or len(calls) % 3 == 0 else []     # both kinds on every third call
+        return types.SimpleNamespace(verdict="CORRECT", flags=own, layers=[layer])
 
     monkeypatch.setattr(mathverify.sandbox, "get_sandbox", lambda: sb)
     monkeypatch.setattr(mathverify.verifier, "verify", verify)
     r = A.attack_item(next(it for it in evalset_items if it["id"] == IDS[1]))
-    assert len(calls) > 1 and r["sandbox_timeouts"] == len(calls) and r["sandbox_restarts"] == 2 * len(calls)
-    assert r["sandbox_errors"] == 1 + len(calls) // 3             # call 1: cas_error; every third: layer_exception
+    assert len(calls) > 1 and r["sandbox_timeouts"] == 2 * len(calls) and r["sandbox_restarts"] == 2 * len(calls)
+    # a verification with an error flag counts once; a lost sandbox call counts too
+    assert r["sandbox_errors"] == 1 + len(calls) // 3 + (len(calls) + 1) // 2
+
+
+def test_what_the_sandbox_counters_miss_is_counted():
+    """A call that finds the worker gone or never ready, and a z3 check that spent its own timeout,
+    are what the load of the other workers can cause; a computation that raised in a live worker
+    and a quick "unknown" are answers (review, 26 Sep 2026)."""
+    from mathverify.sandbox import SandboxError
+    state = {"alive": True, "calls": 0}
+
+    def call(fn_path, *args, **kwargs):
+        state["calls"] += 1
+        if fn_path == "never-ready":
+            state["alive"] = False
+            raise SandboxError("worker did not become ready")
+        if fn_path == "raised":
+            raise SandboxError("ZeroDivisionError: division by zero")
+        if kwargs.get("timeout_ms", args[3] if len(args) > 3 else None) == 50:
+            time.sleep(0.06)                                # past its own 50 ms
+        return ("unknown", None)
+
+    sb = types.SimpleNamespace(call=call, _alive=lambda: state["alive"])
+    A._watch_sandbox(sb)
+    A._watch_sandbox(sb)                                    # once per sandbox
+    with pytest.raises(SandboxError):
+        sb.call("raised")
+    assert (sb.lost_calls, state["calls"]) == (0, 1)
+    with pytest.raises(SandboxError):
+        sb.call("never-ready")
+    assert sb.lost_calls == 1
+    z3 = "mathverify.sandbox.ops:z3_check"
+    assert sb.call(z3, [], {}, [], 5000) == ("unknown", None) and sb.z3_timeouts == 0     # quick
+    assert sb.call(z3, [], {}, [], 50) == ("unknown", None) and sb.z3_timeouts == 1
+    assert sb.call(z3, [], {}, [], timeout_ms=50) == ("unknown", None) and sb.z3_timeouts == 2
+    assert sb.call("mathverify.sandbox.ops:other", [], {}, [], 50) and sb.z3_timeouts == 2
+
+
+def test_a_sandbox_that_never_became_ready_is_counted(evalset_items, monkeypatch):
+    """The first start of a worker's sandbox fails under load (60 s without "ready"): the item's
+    verdicts change and it must be rechecked (review: every counter stayed at 0)."""
+    from mathverify.sandbox import SandboxError, get_sandbox
+    sb = get_sandbox()
+    sb._kill()                                              # the next call starts a worker
+    real, failed = sb._start, []
+
+    def start():
+        if not failed:
+            failed.append(1)
+            raise SandboxError("worker did not become ready")
+        real()
+
+    monkeypatch.setattr(sb, "_start", start)
+    # ayt-lim-014: its layers pass no cas_error on, and its verdict falls to UNKNOWN (measured)
+    r = A.attack_item(next(it for it in evalset_items if it["id"] == "ayt-lim-014"))
+    assert failed and r["sandbox_errors"] >= 1, r
 
 
 def _marked(marker: bytes) -> list[int]:
@@ -172,12 +253,29 @@ def _marked(marker: bytes) -> list[int]:
     return pids
 
 
-def _busy(pid: int) -> bool:
-    """Has the process used more than a second of CPU (utime, /proc/<pid>/stat field 14)?"""
+def _stat(pid: int) -> tuple[int, int] | None:
+    """(parent pid, user CPU time in clock ticks): /proc/<pid>/stat fields 4 and 14."""
     try:
-        return int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[11]) > os.sysconf("SC_CLK_TCK")
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        return int(fields[1]), int(fields[11])
     except (OSError, ValueError, IndexError):
-        return False
+        return None
+
+
+def _spinning_sandboxes(tag: bytes, parent: int) -> int:
+    """Marked processes whose parent is a pool worker and that used more than a second of CPU: the
+    sandboxes, computing. A worker compiling its imports without a bytecode cache passes a second
+    too, before any sandbox exists (review), so the sweep's own children never count."""
+    stats = {pid: _stat(pid) for pid in _marked(tag)}
+    workers = {pid for pid, s in stats.items() if s and s[0] == parent}
+    return sum(1 for s in stats.values() if s and s[0] in workers and s[1] > os.sysconf("SC_CLK_TCK"))
+
+
+def _cmdline(pid: int) -> bytes:
+    try:
+        return Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return b""
 
 
 @pytest.mark.skipif(not Path("/proc/self/environ").exists(), reason="needs /proc to find the processes")
@@ -201,7 +299,7 @@ def test_workers_do_not_outlive_a_killed_sweep(tmp_path):
     tag = marker.encode()
     try:
         deadline = time.monotonic() + 120
-        while sum(_busy(p) for p in _marked(tag) if p != parent.pid) < 2:     # both sandboxes spinning
+        while _spinning_sandboxes(tag, parent.pid) < 2:
             assert parent.poll() is None and time.monotonic() < deadline, "the sandboxes did not start computing"
             time.sleep(0.5)
         os.kill(parent.pid, signal.SIGKILL)
@@ -211,10 +309,17 @@ def test_workers_do_not_outlive_a_killed_sweep(tmp_path):
             time.sleep(0.5)
         assert _marked(tag) == []
     finally:
-        for pid in _marked(tag):
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except OSError:
-                pass
+        # everything but multiprocessing's resource tracker first: killed too, it cannot unlink the
+        # pool's semaphores in /dev/shm (review); it exits by itself once the others are gone
         if parent.poll() is None:
             parent.kill()
+        for last in (False, True):
+            for pid in _marked(tag):
+                if last or b"resource_tracker" not in _cmdline(pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+            deadline = time.monotonic() + 5
+            while not last and _marked(tag) and time.monotonic() < deadline:
+                time.sleep(0.2)

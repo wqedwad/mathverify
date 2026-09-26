@@ -9,6 +9,8 @@ links inside the repository (audit hooks on "open", "shutil.copyfile", "_winapi.
 "os.link" and "os.symlink"; on Windows shutil.copy2 copies through CopyFile2 and opens nothing)
 and fails the session when one of them is a document the rule does not count as code, or a
 report the checks write (the rule never counts reports as code, so no test may depend on one).
+A relative link target is read from the link's directory; "_winapi.CreateJunction" (a Windows
+directory link) is watched like a linked directory.
 
 Loaded by tests/conftest.py for every run of the suite, and with `-p doc_read_guard` by its own
 end-to-end test. Not seen: child processes (the harnesses of a --full, a script a test runs:
@@ -28,19 +30,25 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 OPENED: set[str] = set()
 # The source path comes first in each. os.link and os.symlink give a document a second name that
-# a later read (in this process or a child) would not show.
-_EVENTS = frozenset({"open", "shutil.copyfile", "_winapi.CopyFile2", "os.link", "os.symlink"})
+# a later read (in this process or a child) would not show; _winapi.CreateJunction is Windows's
+# directory link that needs no privilege.
+_EVENTS = frozenset({"open", "shutil.copyfile", "_winapi.CopyFile2", "os.link", "os.symlink", "_winapi.CreateJunction"})
+_DIRECTORY_LINKS = ("os.symlink", "_winapi.CreateJunction")
 _WATCHED = (".md", "check_full.log")                                       # documents, the --full log
 
 
 def _windows_name(p: str) -> str:
-    """Windows opens "X.md." and "X.md " and "X.md::$DATA" as X.md: drop what it drops."""
-    head, sep, tail = p.rpartition("\\") if "\\" in p else p.rpartition("/")
+    """Windows opens "X.md." and "X.md " and "X.md::$DATA" as X.md: drop what it drops. The name is
+    what follows the last backslash, or the whole path when it has none: a "/" path's only colon
+    before its name is a drive ("C:/r/x.md", "C:x.md"), since a Windows name cannot hold one."""
+    head, sep, tail = p.rpartition("\\")
+    if not sep and p[1:2] == ":":                  # the drive stays
+        head, tail = p[:2], p[2:]
     return head + sep + tail.split(":", 1)[0].rstrip(". ")
 
 
 def _watch(event: str, p: str) -> None:
-    if event == "os.symlink" and os.path.isdir(p):     # a linked directory: every watched file in it
+    if event in _DIRECTORY_LINKS and os.path.isdir(p):  # a linked directory: every watched file in it
         for d, _, files in os.walk(p):
             OPENED.update(os.path.realpath(os.path.join(d, f)) for f in files if f.lower().endswith(_WATCHED))
         return
@@ -64,7 +72,11 @@ def record(event: str, args) -> None:
         path = args[0]
         if isinstance(path, int):                  # open(fd)
             return
-        _watch(event, os.fsdecode(path))
+        path = os.fsdecode(path)
+        if event == "os.symlink" and not os.path.isabs(path) and len(args) > 1 and not isinstance(args[1], int):
+            # a link's target is relative to the link's own directory, not to the working one
+            path = os.path.join(os.path.dirname(os.fsdecode(args[1])), path)
+        _watch(event, path)
     except Exception:  # noqa: BLE001
         pass
 
