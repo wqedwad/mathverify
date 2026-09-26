@@ -402,7 +402,9 @@ def test_lean_client_survives_a_timeout():
         while _live_members(old.pid) and time.monotonic() < deadline:
             time.sleep(0.1)
         assert not _live_members(old.pid), f"orphans left in group {old.pid}"
-    r2 = lean.run("example : (1 : ℝ) + 1 = 2 := by norm_num", timeout=60)
+    # the respawned REPL loads Mathlib again: on a cold disk (right after a container restart) that
+    # took minutes, so recovery gets the same budget as `_lean()`'s availability check
+    r2 = lean.run("example : (1 : ℝ) + 1 = 2 := by norm_num", timeout=300)
     assert r2.clean                                     # client recovered
 
 

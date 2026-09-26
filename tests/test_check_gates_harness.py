@@ -63,6 +63,9 @@ class FakeRun:
         self.report_existed = {}                     # did the report exist when the harness started?
 
     def __call__(self, cmd, label):
+        self.labels = getattr(self, "labels", []) + [label]
+        if label == "lean_warmup":
+            return 0, ""
         if label == "pytest":
             return 0, "3 passed in 0.10s"
         if label == "pyflakes":
@@ -101,6 +104,22 @@ def test_happy_path_is_unchanged_and_counts_are_24_and_12(monkeypatch, tmp_path)
     assert names.index("Lean erişilebilir") + 1 == names.index("Lean FP")
     rc, by_name, names = _gates(monkeypatch, tmp_path, full=False)
     assert rc == 0 and names == QUICK and len(names) == 12
+
+
+def test_the_full_run_warms_lean_up_before_the_tests_and_the_quick_run_does_not(monkeypatch, tmp_path):
+    """Right after a container restart the first Lean start took ~400 s, longer than the 300 s the
+    Lean tests wait: a --full run skipped 87 of them and failed one (26 Sep 2026). The warm-up is not
+    a gate: the gate count stays 24."""
+    fake = FakeRun(tmp_path)
+    monkeypatch.setattr(check, "REPORTS", tmp_path)
+    monkeypatch.setattr(check, "run", fake)
+    check._main(argparse.Namespace(full=True))
+    assert fake.labels[:2] == ["lean_warmup", "pytest"]
+    fake2 = FakeRun(tmp_path)
+    monkeypatch.setattr(check, "run", fake2)
+    check._main(argparse.Namespace(full=False))
+    assert "lean_warmup" not in fake2.labels
+    assert "timeout=900" in check._LEAN_WARMUP
 
 
 def test_owned_names_and_targets_match_the_success_path():

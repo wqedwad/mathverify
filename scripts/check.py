@@ -437,8 +437,19 @@ def main(argv=None) -> int:
             sys.stdout = out
 
 
+# The first Lean start after a container restart read Mathlib from a cold disk for ~400 s (measured
+# 26 Sep 2026), longer than the 300 s the Lean tests wait before skipping: a --full run right after a
+# restart skipped 87 Lean tests and failed one. The warm-up waits once, up to 15 min, outside the gates.
+_LEAN_WARMUP = ("import sys\nfrom mathverify.formal import lean_available\n"
+                "sys.exit(0 if lean_available(timeout=900) else 1)\n")
+
+
 def _main(args) -> int:
     gates: list[dict] = []
+
+    if args.full:
+        print("== Lean ısınma ==")
+        run([PY, "-c", _LEAN_WARMUP], "lean_warmup")
 
     print("== testler ==")
     rc, out = run([PY, "-m", "pytest", "tests", "-q", "-rfEs", "-o", "addopts=-p no:cacheprovider"], "pytest")
