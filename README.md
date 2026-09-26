@@ -33,6 +33,7 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean sürümleri, kapı sertleştirmesi (`check.py --full` 24 kapı) | **tamam** (`bulut-2026-09-24`; [HANDOFF arşivi §0](docs/arsiv/HANDOFF-2026-09-26.md), DECISIONS §34–43, [docs/BULUT.md](docs/BULUT.md)) |
 | 24 Eylül: gerçek bulut ölçümü (tek seferlik routine oturumu, `4d01ba2`) | **ölçüldü**: Lean kurulumu 195 s, testler 515 passed / 2 skipped / 0 failed, hızlı `check.py` 12/12; bulunan iki sorun (Python yedeği, `ANTHROPIC_BASE_URL`) düzeltildi; `check.py --full` bulutta henüz koşmadı ([docs/bulut_tani_2026-09-24.md](docs/bulut_tani_2026-09-24.md), DECISIONS §44–48) |
 | 25–26 Eylül: sistematik denetim (kod çalıştırma, yanlış onay sınıfları, formal katman) ve bulut kurulumu | **ölçüldü**: `check.py --full` bulutta **24/24** (son `5414d6b`, 1323 passed / 5 skipped; 24 Eylül satırındaki "bulutta henüz koşmadı" o günden sonra eskidi); kurulum betiği alandan ilk kez başarılı (`OK mode=all`, 180 s; o sohbet "Lean: HAZIR" ile açıldı), ama sonraki yeni sohbet anlık görüntüyü kullanmadı ve betik 250 s sınırında kesildi ([HANDOFF §4.1](HANDOFF.md), [arşiv §0.12–0.14](docs/arsiv/HANDOFF-2026-09-26.md), DECISIONS §54–56) |
+| 26 Eylül (akşam): tam kontrolün kısaltılması (adversaryal tarama 4 süreçte, kademeli kontrol `check.py --plan`) | **ölçüldü**: `check.py --full` **24/24**, ~25 dk (önce 59–77 dk); adversaryal rapor yalnız süre satırında farklı; 1468 passed / 5 skipped (bu dal, birleşmedi; DECISIONS §59) |
 
 ## Ölçülen sonuçlar
 
@@ -221,6 +222,7 @@ export PYTHONUTF8=1
 ```
 
 ```bash
+$PY scripts/check.py --plan     # hangi kontrol gerekli: YOK / TAMAM / TAM (DECISIONS §59)
 $PY scripts/check.py --full
 ```
 
