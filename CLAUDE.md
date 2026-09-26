@@ -51,27 +51,44 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 ## Her değişiklikte
 
 - Hangi kontrolün gerektiğini `scripts/check.py --plan` söyler (DECISIONS §59). İşe başlarken, kod
-  commit'lerinden sonra ve PR açmadan ya da birleştirmeden hemen önce koşulur; o an her şey commit
-  ve push edilmiş olmalı (PR commit'leri birleştirir; HEAD upstream'iyle aynı değilse karar TAM).
-  Önce `origin/master`ı çeker, taban odur (yoksa `master`). Ortak atadan bu yana HEAD'de, indekste,
-  çalışma ağacında ya da izlenmeyen dosyalarda değişenler üçe ayrılır: **rapor** (`reports/*.md`,
-  `reports/check_full.log`), **belge** (kökte ya da `docs/` altında olup hiçbir Python dizgi
-  sabitinin adlandırmadığı `.md`), **kod** (geri kalan her şey: testlerin okuduğu belge, bugün
-  `docs/BULUT.md`; başka dizinlerdeki `.md`; veri, kilit, betik, ayar).
-  - **YOK** (çıkış 0): kod değişmedi; belge değiştiyse taban da güncel ve dal ayrıldıktan sonra kod
-    almamış. Kontrol gerekmez.
+  commit'lerinden sonra, PR açmadan önce ve birleştirmeden hemen önce (PR ile birleştirmede de, yedekten
+  sonra; birleştirmeyi kim yapıyorsa o) koşulur. O an her şey commit ve push edilmiş olmalı: PR dalı
+  `origin`deki hâliyle birleştirir; `--plan` o hâli `git ls-remote` ile okur (upstream'i `origin`de başka
+  addaysa o dalı) ve HEAD'den farklıysa, dal `origin`de yoksa ya da HEAD bir dala bağlı değilse karar
+  TAM (yerel `master`ın kendisinde ve uzaksız depoda bu denetim yok). Önce `origin/master`ı çeker,
+  taban odur (yoksa `master`); `origin` bu makinede bir yolsa (bir kopyanın klonu, bundle) ya da yoksa
+  taban taze sayılmaz. Ortak atadan bu yana HEAD'de, indekste, çalışma ağacında ya da izlenmeyen
+  dosyalarda değişenler üçe ayrılır: **rapor** (`reports/*.md`, `reports/check_full.log`), **belge**
+  (kökte ya da `docs/` altında olup hiçbir Python dizgi ya da bytes sabitinin adlandırmadığı, izlenen
+  bir sembolik bağlantının göstermediği ve `check.DOCS_READ_UNNAMED`'da olmayan `.md`), **kod** (geri
+  kalan her şey: testlerin okuduğu belge, bugün `docs/BULUT.md`; başka dizinlerdeki `.md`; veri, kilit,
+  betik, ayar). Git'in göstermediği değişiklik (assume-unchanged, skip-worktree, süzgeç, kendini
+  gizleyen izlenmeyen `.gitignore`) ve çapraz birleşme karar verdirmez.
+  - **YOK** (çıkış 0): kod değişmedi. Belge değiştiyse taban güncel ve dal ayrıldıktan sonra kod
+    almamış; rapor değiştiyse onları yazan geçerli bir `--full` bu kodda (TAMAM'daki gibi) ve raporlarla
+    günlük commit edilmiş; dal push edilmiş. Hiçbir şey değişmediyse de dalın `origin`deki hâli
+    HEAD'le aynı olmalı (dal `origin`de yoksa birleştirilecek bir şey yok). Kontrol gerekmez.
   - **TAMAM** (çıkış 0): `reports/check_full.log` bu kodda temiz ağaçla başlayıp aynı commit'te temiz
-    biten, bütün kapıları geçen, Lean testleri atlanmamış bir `--full` gösteriyor ve raporlar o
-    koşununki; o commit'ten bu yana yalnız belge ve rapor değişti; taban kod almadı. Başka kontrol
-    gerekmez. Kuralın kendi dosyaları (`scripts/check.py`, `tests/doc_read_guard.py`,
-    `tests/conftest.py`) değiştiyse TAMAM verilmez: `--full` bütün kapılardan geçtiyse birleştirme
-    kararı kişinindir.
-  - **TAM** (çıkış 1): başka her durum ve karar verilemeyen her durum (fetch düştü, `--no-fetch`, git
-    okunamadı, günlük eksik ya da bozuk). Çalışırken `pytest` ve hızlı `scripts/check.py` (~5 dk);
-    birleştirmeden önce son kod commit'inde, temiz ağaçta bir kez `scripts/check.py --full`
-    (bulutta 4 vCPU ile ~25 dk, Windows'ta ölçülmedi; arka planda; günlüğü
-    `reports/check_full.log`a kendisi yazar). Sonra raporlar ve günlük değiştirilmeden commit
-    edilir, belgeler yazılır, `--plan` yeniden koşulur.
+    biten, bütün kapıları geçen, Lean testleri atlanmamış ve `requirements.lock`un bu platform için
+    sabitlediği bütün paketlerle koşmuş bir `--full` gösteriyor; raporlar o koşununki ve günlükle
+    birlikte commit edilmiş; o commit'ten bu yana yalnız belge ve rapor değişti; taban kod almadı ve
+    güncel; dal push edilmiş. Başka kontrol gerekmez. Kuralın kendi dosyaları (`scripts/check.py`,
+    `tests/doc_read_guard.py`, `tests/conftest.py`, `tests/test_staged_check.py`; tabanın
+    `check.py`'sindeki liste de sayılır) değiştiyse TAMAM verilmez: o TAM, TAMAM'ın öteki bütün
+    koşullarının tuttuğunu söyler; birleştirme kararını kişi `son --full … (geçerli)` satırına bakarak
+    verir.
+  - **TAM** (çıkış 1): başka her durum ve karar verilemeyen her durum (fetch düştü, git okunamadı,
+    günlük eksik ya da bozuk; `--no-fetch` ile uzaklı bir depoda `master` dışındaki her dal). Karar
+    satırı nedenine göre ne yapılacağını söyler (push ya da pull, fetch, tabanı birleştirme, yerel
+    `master`ı düzeltme, raporları geri getirme, commit, gizlemeyi kaldırma, `.venv`'i kilide eşitleme,
+    kişi kararı); `--full` yalnız kod için gerekir. Çalışırken `pytest` ve hızlı `scripts/check.py`
+    (bulutta ~7 dk, ölçüldü); birleştirmeden önce son kod commit'inde, temiz ağaçta bir kez
+    `scripts/check.py --full` (bulutta 4 vCPU ile ~26 dk, Windows'ta ölçülmedi; arka planda; günlüğü
+    `reports/check_full.log`a kendisi yazar, ağaç kirliyse ya da ortam kilitle uyuşmuyorsa başta
+    uyarır). Sonra raporlar ve günlük değiştirilmeden commit ve push edilir, belgeler yazılır,
+    `--plan` yeniden koşulur.
+    `--full`dan sonra hızlı `check.py` ya da tek bir harness `reports/`a yazmaz: yazarsa koşunun
+    raporu gider (günlük commit edilmemişse geri getirilemez, `--full` yeniden gerekir).
   Lean'siz ya da Lean'i yarıda kaybeden bir koşuda Lean kapıları bilerek düşer; o koşu "geçti"
   sayılmaz, `--plan` da onu kabul etmez. Şüphede `--full`.
 - Her yeni Lean şablonu yanlış cevaplı öğelerde ve junk-value sondasında da koşturulur. Lean FP
@@ -154,7 +171,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   --exclude=./.venv -cf - .) | (cd "$T/asd" && tar -xf -)`, ardından `test -f "$T/asd/scripts/check.py"`.
   Kopya düşerse `cd` de düşer ve komutlar ana checkout'ta koşar: 26 Eylül'de bir doğrulayıcı dala
   "wip" commit'i attı, `master` ve `origin/master` ref'lerini taşıdı (reflog'dan geri alındı,
-  DECISIONS §59). Ajanlara ana checkout'ta yalnız `git -C <checkout>` ile okuma izni verilir.
+  DECISIONS §59). Ajanlara ana checkout'ta yalnız `git -C <checkout>` ile okuma izni verilir. Kopyada
+  push'a karşı `git -C "$T/asd" remote remove origin`; iş bitince `rm -rf "$T"` (kopyada `.env` var).
 
 ### Windows
 
