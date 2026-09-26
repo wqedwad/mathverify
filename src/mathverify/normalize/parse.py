@@ -11,13 +11,15 @@ the caller is expected to run parsing inside the sandbox worker for untrusted te
 """
 from __future__ import annotations
 
+import ast
 import re
 from typing import Any
 
 import sympy as sp
 from sympy import (S, Symbol, Rational, Integer, Interval, FiniteSet, Union, Intersection,
                    Complement, EmptySet, Eq, Ne, Lt, Le, Gt, Ge, And, Or, Not, pi, E, I, oo, zoo, nan)
-from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, convert_xor)
+from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, convert_xor,
+                                        stringify_expr)
 
 __all__ = ["ParseError", "UndeclaredSymbolError", "ClaimNotAValue", "COMPUTING_OPERATORS",
            "claim_namespace", "check_claim_is_value", "build_namespace", "parse_expr_str", "parse_relation", "parse_answer",
@@ -309,6 +311,81 @@ _TRANSFORMS_FLOAT = standard_transformations + (convert_xor,)
 
 _PARSER_KEYWORDS = {"in", "U", "N", "and", "or", "not"}
 
+# What the text becomes after SymPy's token transformations is plain Python that `eval` runs. Only
+# arithmetic, calls, literals and containers mean mathematics there; everything else has PYTHON
+# semantics that silently replace the mathematics (audit of 25 Sep 2026): `and`/`or` return one of
+# their operands by truthiness, so the step claim `a = 20 and a = 16` became `a = 16` and the false
+# `a = 20` was never checked, and the payload `0 or 7/2` was certified as 7/2 (113 of 141 correct
+# evalset answers wrapped that way were CORRECT). `==`, `in` and `is` give Python booleans, a
+# conditional picks a branch, a comprehension or walrus runs code. They are rejected, not guessed.
+_ALLOWED_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Call, ast.Name, ast.Load,
+                  ast.Constant, ast.Tuple, ast.List, ast.Set, ast.Dict, ast.Attribute,
+                  ast.keyword, ast.Subscript, ast.Slice, ast.Compare,
+                  ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.FloorDiv,
+                  ast.UAdd, ast.USub, ast.Lt, ast.LtE, ast.Gt, ast.GtE)
+
+
+# SymPy's own transformations write these calls with a string argument (Symbol('x'),
+# Rational('3.5')); any other string literal is text that some callee may hand to `sympify`, which
+# evaluates it with Python's builtins in reach.
+_STR_ARG_CALLS = frozenset({"Symbol", "Function", "Rational", "Float", "Integer"})
+_STR_LITERAL_RE = re.compile(r"^(?:[A-Za-z_][A-Za-z_0-9]*|[0-9.]+(?:[eE][-+]?[0-9]+)?)$")
+# the side of a one-sided limit, `Limit(f, x, 0, '+')`: a sign, never text a callee could run
+_DIRECTION_LITERALS = frozenset({"+", "-", "+-", "-+"})
+
+
+def _check_code(code: str, raw: str, names) -> None:
+    """Raise ParseError unless the transformed code is plain arithmetic (see _ALLOWED_NODES) over
+    the given names only: `eval` adds Python's builtins (`__import__`, `getattr`, `exit`...) to
+    any namespace that lacks them, so a name outside `names` is never evaluated."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except SyntaxError:
+        return                                   # parse_expr reports the syntax error itself
+    str_ok: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in _STR_ARG_CALLS and len(node.args) == 1:
+            str_ok.add(id(node.args[0]))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id not in names:
+            raise ParseError(f"{raw!r} names {node.id!r}, which is not in the namespace: not read")
+        if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes)) \
+                and node.value not in _DIRECTION_LITERALS and not (
+                id(node) in str_ok and isinstance(node.value, str) and _STR_LITERAL_RE.match(node.value)):
+            raise ParseError(f"{raw!r} contains a string literal: not read")
+        if not isinstance(node, _ALLOWED_NODES):
+            raise ParseError(f"{raw!r} uses Python syntax that is not mathematics here "
+                             f"({type(node).__name__}): not read")
+        if isinstance(node, ast.Compare) and len(node.ops) != 1:
+            raise ParseError(f"{raw!r} chains comparisons inside an expression: not read")
+        if isinstance(node, ast.Attribute) and not (
+                isinstance(node.value, ast.Name) and f"{node.value.id}.{node.attr}" in _ALLOWED_DOTTED):
+            raise ParseError(f"{raw!r} accesses an attribute: not read")
+        if isinstance(node, ast.Subscript) and not isinstance(node.value, ast.Name):
+            # `a[n]` names a term; `[3][0]` or `(1, 2)[1]` computes the value the claim should state
+            raise ParseError(f"{raw!r} indexes a computed value: not read")
+
+
+def sympify_nontext(v):
+    """`sympify` for a value that is NOT text: a number or an object SymPy already built. Anything
+    else is refused. `strict=True` is not enough: SymPy converts a dict (and a tuple) through
+    `Tuple`, which sympifies the strings inside WITHOUT strict, i.e. evaluates them with Python's
+    builtins in reach — `{"k": "__import__(...)"}` as a problem parameter ran code (audit of
+    25 Sep 2026)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float, sp.Basic)):
+        raise ParseError(f"not a number or an expression: {type(v).__name__}")
+    return sp.sympify(v, strict=True)
+
+
+def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
+                       transformations, evaluate: bool = True):
+    """parse_expr, after checking that the code it is about to evaluate is plain arithmetic."""
+    _check_code(stringify_expr(s, local_dict, global_dict, transformations), s,
+                set(local_dict) | set(global_dict))
+    return parse_expr(s, local_dict=local_dict, global_dict=global_dict,
+                      transformations=transformations, evaluate=evaluate)
+
 
 def _check_safe(s: str, ns: dict[str, Any]) -> list[str]:
     """Hard rejections raise; undeclared identifiers are RETURNED so the caller can tell a
@@ -358,17 +435,29 @@ def _raise_for_undeclared(s: str, ns: dict[str, Any], undeclared: list[str], raw
         called = re.search(rf"(?<![\w.]){re.escape(u)}\s*\(", s) is not None
         probe_ns[u] = sp.Function(u) if called else Symbol(u)
     try:
-        parse_expr(s, local_dict=probe_ns, global_dict={}, transformations=transformations,
-                   evaluate=True)
+        guarded_parse_expr(s, local_dict=probe_ns, global_dict={}, transformations=transformations,
+                           evaluate=True)
     except Exception as e:
         raise ParseError(f"cannot parse {raw!r}: {e}") from e
     raise UndeclaredSymbolError(
         f"unknown identifier(s) {undeclared} in {raw!r} (declare them in the IR)")
 
 
+# A decimal in LaTeX becomes a 53-bit Float in latex2sympy, and a Float is compared at its own
+# precision (~1e-12): `0.3333333333333 \cdot 1` was certified as 1/3 while the same decimal in the
+# canonical syntax, read exactly, was refused (audit of 25 Sep 2026). The digits are the number the
+# solver wrote, so reading them as the exact fraction is not a rewrite (principle 3).
+_LATEX_DECIMAL = re.compile(r"(?<![\d.])(\d+)\.(\d+)(?![\d.])")
+
+
+def _exact_latex_decimals(s: str) -> str:
+    return _LATEX_DECIMAL.sub(
+        lambda m: r"\left(\frac{%d}{%d}\right)" % (int(m.group(1) + m.group(2)), 10 ** len(m.group(2))), s)
+
+
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     from latex2sympy2_extended import latex2sympy
-    expr = latex2sympy(s)
+    expr = latex2sympy(_exact_latex_decimals(s))
     # rebind free symbols to the IR symbols (assumptions)
     reps = {}
     for fs in expr.free_symbols:
@@ -402,7 +491,10 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
-        return sp.sympify(s)
+        try:
+            return sympify_nontext(s)             # a container of strings is never evaluated
+        except (sp.SympifyError, TypeError) as e:
+            raise ParseError(f"not an expression: {type(s).__name__}") from e
     raw = s
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
@@ -416,8 +508,8 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     if undeclared:
         _raise_for_undeclared(s, ns, undeclared, raw, transformations)
     try:
-        return parse_expr(s, local_dict=ns, global_dict={},
-                          transformations=transformations, evaluate=True)
+        return guarded_parse_expr(s, local_dict=ns, global_dict={},
+                                  transformations=transformations, evaluate=True)
     except ParseError:
         raise
     except Exception as e:
@@ -434,14 +526,27 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None):
     `sqrt(x)**2` becomes x and `x**2/x` becomes x before any condition can be read, so the points
     where the problem's own expression is undefined disappear (measured 23 Sep 2026: wrong answers
     to domain_of, solve_equation, solve_inequality and evaluate were certified CORRECT, and the
-    right ones refuted). Returns None for anything this cannot read faithfully (LaTeX, undeclared
-    or forbidden names); the caller then adds no condition, which is the old behaviour."""
+    right ones refuted). LaTeX is read by latex2sympy with evaluation off. Returns None for
+    anything this cannot read faithfully (undeclared or forbidden names); the caller then adds no
+    condition, which is the old behaviour."""
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
         return None
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
+        # LaTeX used to return None here, so `\frac{x}{x}` carried no condition at all and every
+        # undefined point of a LaTeX-written problem was lost (audit of 25 Sep 2026). latex2sympy
+        # keeps the written structure when SymPy's evaluation is off.
+        try:
+            with sp.evaluate(False):
+                e = _latex_to_sympy(s, ns)
+        except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
+            return None
+        if isinstance(e, sp.core.relational.Relational):
+            return sp.Tuple(e.lhs, e.rhs)
+        if isinstance(e, sp.Basic) and not isinstance(e, sp.logic.boolalg.Boolean):
+            return sp.Tuple(e)
         return None
     s = preclean(s)
     local = dict(ns, Add=sp.Add, Mul=sp.Mul, Pow=sp.Pow)
@@ -451,8 +556,8 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None):
             if _check_safe(chunk, ns):
                 return None
             with sp.evaluate(False):
-                out.append(parse_expr(chunk, local_dict=local, global_dict={},
-                                      transformations=_TRANSFORMS, evaluate=False))
+                out.append(guarded_parse_expr(chunk, local_dict=local, global_dict={},
+                                              transformations=_TRANSFORMS, evaluate=False))
         except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
             return None
     return sp.Tuple(*out)
@@ -557,6 +662,15 @@ def _parse_single_set(s: str, ns):
     if m and not s.startswith(("Interval", "FiniteSet", "Union")):
         lo = parse_expr_str(m.group(2), ns)
         hi = parse_expr_str(m.group(3), ns)
+        # A reversed interval "(5, 1)" is not notation for the empty set: SymPy's Interval(5, 1)
+        # is EmptySet, so the right answer to "x² + 1 < 0" was certified from a claim that
+        # names no interval at all (audit of 25 Sep 2026). A degenerate "(a, a)" is refused too.
+        try:
+            order = sp.sympify(hi - lo).is_positive if lo.is_real is not False and hi.is_real is not False else None
+        except Exception:  # noqa: BLE001
+            order = None
+        if order is False and not (lo == hi and m.group(1) == "[" and m.group(4) == "]"):
+            raise ParseError(f"interval {s!r} has its end before its start: not an interval")
         return Interval(lo, hi, left_open=(m.group(1) == "("), right_open=(m.group(4) == ")"))
     val = parse_expr_str(s, ns)
     if isinstance(val, sp.Set):
@@ -586,7 +700,10 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
-        val = sp.sympify(s)
+        try:
+            val = sympify_nontext(s)                # see parse_expr_str: containers are refused
+        except (sp.SympifyError, TypeError) as e:
+            raise ParseError(f"not a set: {type(s).__name__}") from e
         return val if isinstance(val, sp.Set) else FiniteSet(val)
     s2 = preclean(s)
     # union split at top level on " U " / "∪" (already mapped to " U ")
@@ -649,9 +766,12 @@ def parse_answer(kind: str, payload, ns: dict[str, Any] | None = None):
             raise ParseError("value answer must be a single expression")
         return parse_expr_str(str(payload), ns)
     if kind == "count":
-        if isinstance(payload, bool):
-            raise ParseError("count must be an integer")
-        return Integer(int(payload))
+        # never int(): it truncates 3.7 to 3 (principle 3)
+        from ..equiv import exact_integer
+        n = exact_integer(payload)
+        if n is None:
+            raise ParseError(f"count must be an integer, got {payload!r}")
+        return Integer(n)
     if kind == "set":
         if isinstance(payload, (list, tuple)):
             return FiniteSet(*[parse_expr_str(str(p), ns) for p in payload])

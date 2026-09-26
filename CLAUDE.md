@@ -42,6 +42,10 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 12. Tanımlılık, ifadenin yazıldığı biçimden okunur (`parse_as_written`, `Ctx.written_conditions`).
     SymPy'nin otomatik sadeleştirmesi (`x/x` → 1) tanımsız noktayı siler; değer için normal ayrıştırma,
     tanımlılık için yazıldığı biçim.
+13. Girdi kod değildir. İddia ve IR metni yalnız korumalı ayrıştırıcıyla okunur (`guarded_parse_expr`).
+    `sympify`'a ham metin ya da kapsayıcı (liste, sözlük, demet) verilmez: metni Python yerleşikleri
+    erişilebilirken değerlendirir, `strict=True` sözlüğü korumaz (`sympify_nontext`). Biçimi bozuk
+    girdi istisna olarak sızmaz, UNKNOWN olur; `LeakageError` hariç.
 
 ## Her değişiklikte
 
@@ -96,6 +100,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - Lean yoksa Lean testleri sessizce atlanır; `pytest -rs` ile kontrol et.
 - Sandbox kullanan probe'lar gerçek bir dosyada ve `if __name__ == "__main__":` içinde olmalı
   (sandbox her işletim sisteminde multiprocessing `spawn` kullanır).
+- `pkill -f`/`pgrep -f <desen>` deseni komut satırında taşıyan kendi kabuğunu da eşler (çıkış 144,
+  25 Eylül'de iki kez). Süreci PID ile durdur. Arka planda `a && (b) & (c)` yazma: `cd` ve değişkenler
+  yalnız ilk alt kabuğa uygulanır; birden çok koşuyu bir betik dosyasına yaz.
+- Bir ölçümün kaynak yolu, ölçüm sürerken değişen bir checkout olmasın (ileri sarma, birleştirme):
+  "önce" ölçümü ayrı bir `git worktree` kopyasında koşulur.
 
 ### Windows
 
@@ -120,5 +129,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   (401). Araç ref'ini orada yalnız ortam değişkenindeki `MATHVERIFY_GITHUB_TOKEN` ile çekebilir
   (DECISIONS §53). Belirteç değeri hiçbir çıktıya yazılmaz; değişken adı `GITHUB_TOKEN`/`GH_TOKEN`
   olmaz.
+  **Düzeltme (25 Eylül 2026, ölçüm):** claude.ai ortam değişkenleri kurulum betiğine ulaşmaz,
+  yalnız oturuma verilir. Belirteç Setup script metnindeki önyükleyicinin `T=''` satırında durur;
+  `setup_env.sh` onu yalnız çekim aşamasına verir, `fetch_artifacts.sh` git denemeleri düşerse
+  dosyaları belirteçle `raw.githubusercontent.com`'dan indirir (DECISIONS §54). Kurulum betiğini
+  etkileyecek bir ayar ortam değişkeni olarak değil, betik metninde verilir.
 - Bulutta boşta kalan VM geri alınınca arka plandaki iş kaybolur: `check.py --full` ya da Lean
   kurulumu sürerken oturum etkin tutulur.

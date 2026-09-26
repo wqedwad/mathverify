@@ -32,7 +32,11 @@ _IN_SET = re.compile(r"^\s*([A-Za-z_]\w*)\s+in\s+(\{.*\})\s*$")
 
 
 def _parse_claim(claim: str, ns: dict[str, Any]):
-    m = _IN_SET.match(claim)
+    from ..normalize.parse import _strip_invisible, strip_presentation
+    # invisible characters and display wrappers (\boxed{}, $…$) are removed before the `x in {…}`
+    # form is recognised: otherwise the form fell through to the general parser, whose guard
+    # refuses Python's `in`, and 7 correct solutions became UNKNOWN (adversarial run, 25 Sep 2026)
+    m = _IN_SET.match(strip_presentation(_strip_invisible(claim)))
     if m:
         from ..normalize.parse import parse_set_str
         var = ns.get(m.group(1))
@@ -63,6 +67,21 @@ def _holds(rel, point: dict) -> bool | None:
         if any(r is True for r in rs):
             return True
         return False if all(r is False for r in rs) else None
+    if isinstance(rel, (Eq, sp.Ne)) and (isinstance(rel.lhs, sp.MatrixBase) or isinstance(rel.rhs, sp.MatrixBase)):
+        # matrix sides: compared entrywise, as `compute` claims are. A wrong `eq` step
+        # "M*M**-1 = Matrix([[1, 0], [0, 2]])" stayed "unknown" and was never refuted (audit of
+        # 25 Sep 2026, linalg).
+        try:
+            lhs = rel.lhs.subs(point, simultaneous=True)
+            rhs = rel.rhs.subs(point, simultaneous=True)
+        except Exception:  # noqa: BLE001
+            return None
+        if getattr(lhs, "free_symbols", None) or getattr(rhs, "free_symbols", None):
+            return None
+        ok, _ = answers_equivalent(lhs, rhs, shape="scalar")
+        if ok is None:
+            return None
+        return ok if isinstance(rel, Eq) else (not ok)
     if isinstance(rel, sp.core.relational.Relational):
         # substitute the two sides separately: `Eq(a, b).subs(...)` with Float points
         # auto-evaluates to False on last-bit rounding differences (measured: the identity
@@ -99,42 +118,118 @@ def _in_domains(ctx: Ctx, point: dict) -> bool:
     return True
 
 
+def _step_namespace(ns: dict[str, Any]) -> dict[str, Any]:
+    """Namespace for `compute` claims: the calculus operators stay UNEVALUATED so the certificates
+    below see them. SymPy stores `Limit(e, x, a)` with dir='+' and `limit(...)` / `diff(...)` /
+    `at(diff(...))` evaluate at parse time, so "Limit(|x|/x, x, 0) = 1" was checked from the right
+    only and "at(diff(Abs(x), x), x, 0) = 0" became 0 = 0 (audit of 25 Sep 2026). A limit written
+    without a direction is two-sided (SOLVER_FORMAT, E6)."""
+    out = dict(ns)
+
+    def _limit(e, v, p, d=None):
+        if d is None:
+            p_ = sp.sympify(p)
+            d = "-" if p_ == sp.oo else "+" if p_ == -sp.oo else "+-"
+        return sp.Limit(e, v, p, d)
+
+    def _at(e, v, val):
+        e = sp.sympify(e)
+        return sp.Subs(e, v, val) if e.has(sp.Derivative) else e.subs(v, val)
+
+    out["Limit"] = out["limit"] = _limit
+    out["Integral"] = out["integrate"] = lambda *a: sp.Integral(*a)
+    out["Derivative"] = out["diff"] = lambda *a: sp.Derivative(*a)
+    out["at"] = _at
+    out["Subs"] = sp.Subs
+    return out
+
+
+def _derivative_points(expr) -> list:
+    """Subs(Derivative(f, (x, n)), x, a) atoms: a derivative evaluated at a point."""
+    return [s_ for s_ in expr.atoms(sp.Subs)
+            if isinstance(s_.expr, sp.Derivative) and len(s_.variables) == 1
+            and s_.expr.variables and set(s_.expr.variables) == set(s_.variables)]
+
+
 def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
     ev: dict[str, Any] = {}
     if not isinstance(claim, Eq):
         return "skipped", {"reason": "compute_claim_not_equation"}
     lhs, rhs = claim.lhs, claim.rhs
-    if lhs.has(sp.Integral) and any(len(a) == 1 for i in lhs.atoms(sp.Integral) for a in i.limits):
-        # indefinite integral: derivative certificate on rhs
+    if rhs.has(sp.Integral, sp.Limit, sp.Subs) and not lhs.has(sp.Integral, sp.Limit, sp.Subs):
+        lhs, rhs = rhs, lhs                    # "1 = Limit(...)" is the same claim
+    indefinite = [i for i in (lhs.atoms(sp.Integral) | rhs.atoms(sp.Integral))
+                  if any(len(a) == 1 for a in i.limits)]
+    if indefinite:
         from ..certify.calculus import antiderivative_certificate
-        integ = list(lhs.atoms(sp.Integral))[0]
-        if lhs != integ:
-            return "skipped", {"reason": "indefinite_integral_in_compound_expression"}
+        integ = indefinite[0]
         var = integ.limits[0][0]
-        F = rhs.subs(sp.Symbol("C"), 0)
-        ok, cev = antiderivative_certificate(F, integ.function, var, timeout=ctx.timeout)
-        ev["antiderivative"] = cev
-        return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
-    if isinstance(lhs, sp.Limit):
-        # E6 leaks into the step layer otherwise: Limit.doit() is SymPy's one-sided default,
-        # so "Limit(|x|/x, x, 0) = 1" would be *verified*. Classify two-sidedly instead.
-        from ..certify.limits import classify_limit
-        e_, v_, p_, d_ = lhs.args
-        side = None if str(d_) in ("+-", "real") else str(d_)
-        cls = classify_limit(e_, v_, p_, side, timeout=ctx.timeout)
-        ev["limit_classification"] = {k: str(v) for k, v in cls.items()}
-        if cls["kind"] == "UNKNOWN":
-            return "unknown", ev
-        if cls["kind"] == "DNE":
-            return "refuted", {**ev, "reason": "limit_does_not_exist"}
-        val = cls["value"]
-        if cls["kind"] == "INF":
-            return ("verified" if rhs == val else "refuted"), ev
-        ok, cev = answers_equivalent(rhs, val, shape="scalar")
+        if lhs == integ and not rhs.has(sp.Integral, sp.Limit, sp.Derivative, sp.Subs):
+            # indefinite integral: derivative certificate on rhs
+            F = rhs.subs(sp.Symbol("C"), 0)
+            dom = ctx.domain_for(var) if var.name in ctx.ns else S.Reals
+            ok, cev = antiderivative_certificate(F, integ.function, var, timeout=ctx.timeout, discourse=dom)
+            ev["antiderivative"] = cev
+            return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
+        # inside a larger expression ("2*Integral(x, x) = x**3"): both sides are families that
+        # differ by a constant, so their derivatives must agree. It was skipped before (measured).
+        if len(indefinite) != len(lhs.atoms(sp.Integral) | rhs.atoms(sp.Integral)) \
+                or any(i.limits[0][0] != var or len(i.limits) != 1 for i in indefinite) \
+                or claim.has(sp.Limit, sp.Subs, sp.Sum):
+            return "unknown", {"reason": "indefinite_integral_mixed_with_other_operations"}
+        r = sb_run("mathverify.steps.deterministic:_diff_doit", lhs - rhs, var, timeout=ctx.timeout)
+        if not r.ok:
+            return "unknown", {"reason": f"diff_failed: {r.error}"}
+        d = r.value
+        ev["derivative_of_difference"] = str(d)
+        if d == 0:
+            return "verified", ev
+        dom = {s_: ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals for s_ in d.free_symbols}
+        ok, cev = answers_equivalent(d, S.Zero, shape="expression" if d.free_symbols else "scalar",
+                                     domain=dom or None, seed=ctx.seed)
         ev["compare"] = cev
-        return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
-    if lhs.has(sp.Limit):
-        return "unknown", {"reason": "limit_inside_compound_expression"}
+        return ("refuted" if ok is False else "unknown"), ev
+    subst: dict[Any, Any] = {}
+    lims = lhs.atoms(sp.Limit) | rhs.atoms(sp.Limit)
+    ders = _derivative_points(lhs) + _derivative_points(rhs)
+    if lims or ders:
+        # E6 leaks into the step layer otherwise: Limit.doit() is SymPy's one-sided default,
+        # so "Limit(|x|/x, x, 0) = 1" would be *verified*. Classify two-sidedly instead; the same
+        # for a derivative at a point (sign(0) = 0 is not a derivative). Every such atom is
+        # replaced by its certified value, wherever it sits in the claim.
+        from ..certify.limits import classify_limit
+        from ..certify.calculus import derivative_at_point
+        for L in lims:
+            e_, v_, p_, d_ = L.args
+            side = None if str(d_) in ("+-", "real") else str(d_)
+            cls = classify_limit(e_, v_, p_, side, timeout=ctx.timeout)
+            ev.setdefault("limit_classification", []).append({k: str(v) for k, v in cls.items()})
+            if cls["kind"] == "UNKNOWN":
+                return "unknown", ev
+            if cls["kind"] == "DNE":
+                return "refuted", {**ev, "reason": "limit_does_not_exist"}
+            subst[L] = cls["value"]
+        for D in ders:
+            der = D.expr
+            v_ = der.variables[0]
+            f_ = der.expr
+            dap = derivative_at_point(f_, v_, len(der.variables), D.point[0], timeout=ctx.timeout)
+            ev.setdefault("derivative_at_point", []).append({k: str(v) for k, v in dap.items()})
+            if dap["status"] in ("corner", "discontinuous", "cusp"):
+                return "refuted", {**ev, "reason": "derivative_does_not_exist"}
+            if dap["status"] != "value":
+                return "unknown", ev
+            subst[D] = dap["value"]
+        lhs, rhs = lhs.xreplace(subst), rhs.xreplace(subst)
+        if lhs.has(sp.Integral, sp.Derivative, sp.Limit, sp.Subs, sp.Sum):
+            return "unknown", {**ev, "reason": "operation_left_after_substitution"}
+        if lhs.has(sp.oo, -sp.oo) or rhs.has(sp.oo, -sp.oo):
+            if lhs == rhs:
+                return "verified", ev
+            if (lhs in (sp.oo, -sp.oo) or rhs in (sp.oo, -sp.oo)) and lhs.is_number and rhs.is_number \
+                    and not lhs.has(sp.zoo, sp.nan) and not rhs.has(sp.zoo, sp.nan):
+                return "refuted", ev
+            return "unknown", ev
     r = sb_run("mathverify.steps.deterministic:_doit", lhs, timeout=ctx.timeout)
     if not r.ok:
         return "unknown", {"reason": f"doit_failed: {r.error}"}
@@ -142,6 +237,11 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
     ev["lhs_evaluated"] = str(val)
     if val.has(sp.Integral, sp.Derivative, sp.Limit, sp.Sum):
         return "unknown", {"reason": "cas_could_not_evaluate", **ev}
+    if rhs.has(sp.Integral, sp.Derivative, sp.Limit, sp.Sum, sp.Subs):
+        r2 = sb_run("mathverify.steps.deterministic:_doit", rhs, timeout=ctx.timeout)
+        if not r2.ok or r2.value.has(sp.Integral, sp.Derivative, sp.Limit, sp.Sum):
+            return "unknown", {"reason": "cas_could_not_evaluate_rhs", **ev}
+        rhs = r2.value
     free = val.free_symbols | rhs.free_symbols
     if free:
         dom = {s_: ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals for s_ in free}
@@ -150,6 +250,11 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
         ok, cev = answers_equivalent(rhs, val, shape="scalar")
     ev["compare"] = cev
     return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
+
+
+def _diff_doit(e, var):
+    from ..certify.calculus import classical
+    return sp.simplify(classical(sp.diff(e, var).doit()))
 
 
 def _doit(e):
@@ -184,6 +289,85 @@ def _small_integer_grid(doms: dict) -> list[dict]:
     return pts
 
 
+def _negation(claim):
+    if isinstance(claim, Eq):
+        return sp.Ne(claim.lhs, claim.rhs)
+    if isinstance(claim, sp.core.relational.Relational):
+        return claim.negated
+    return None
+
+
+def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> dict | None:
+    """A point of the premises' solution set (within the domain) where the claim is false."""
+    from ..certify.calculus import _points_of
+    neg = _negation(claim)
+    if neg is None or any(not isinstance(p, sp.core.relational.Relational) for p in premises):
+        return None
+    region = ctx.domain_for(v) if v.name in ctx.ns else S.Reals
+    for p in premises:
+        r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
+        if not r.ok or r.value.has(sp.ConditionSet):
+            return None
+        region = sp.Intersection(region, r.value)
+    rb = sb_run("mathverify.sandbox.ops:solveset_in", neg, v, region, timeout=ctx.timeout)
+    if not rb.ok or rb.value is S.EmptySet or rb.value.has(sp.ConditionSet):
+        return None
+    for pt in _points_of(rb.value):
+        point = {v: pt}
+        if not _in_domains(ctx, point):
+            continue
+        if all(_decide(p, point, ctx) is True for p in premises) and _decide(claim, point, ctx) is False:
+            return point
+    return None
+
+
+def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
+    """Truth of a relation at a point, exact at exact zeros: the difference of the sides is
+    simplified first, and a numeric sign is only trusted when it is far from zero. `_holds`
+    compares tolerantly, which misreads x^2 - 2x - 1 >= 0 at x = 1 - sqrt(2) (measured)."""
+    from ..equiv.numeric import to_mp
+    import mpmath as mp
+    if not isinstance(rel, sp.core.relational.Relational):
+        return None
+    try:
+        a, b = rel.lhs.subs(point, simultaneous=True), rel.rhs.subs(point, simultaneous=True)
+    except Exception:  # noqa: BLE001
+        return None
+    if a.free_symbols or b.free_symbols:
+        return None
+    r = sb_run("mathverify.sandbox.ops:simplify_diff", a, b, timeout=ctx.timeout)
+    if not r.ok:
+        return None
+    d = r.value
+    if d == 0:
+        sign = 0
+    else:
+        try:
+            dv = to_mp(d, 60)
+            av, bv = to_mp(a, 60), to_mp(b, 60)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(dv, mp.mpc) or isinstance(av, mp.mpc) or isinstance(bv, mp.mpc):
+            return None if isinstance(rel, (Eq, sp.Ne)) else False
+        scale = max(abs(av), abs(bv), mp.mpf(1))
+        if abs(dv) <= mp.mpf(10) ** -40 * scale:
+            return None
+        sign = 1 if dv > 0 else -1
+    if isinstance(rel, Eq):
+        return sign == 0
+    if isinstance(rel, sp.Ne):
+        return sign != 0
+    if isinstance(rel, sp.StrictLessThan):
+        return sign < 0
+    if isinstance(rel, sp.LessThan):
+        return sign <= 0
+    if isinstance(rel, sp.StrictGreaterThan):
+        return sign > 0
+    if isinstance(rel, sp.GreaterThan):
+        return sign >= 0
+    return None
+
+
 def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
     ev: dict[str, Any] = {"n_premises": len(premises)}
     syms = set(claim.free_symbols)
@@ -206,6 +390,16 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
     if not syms:
         h = _holds(claim, {})
         return ("verified" if h is True else "refuted" if h is False else "unknown"), ev
+    # route 0 (one unknown): the premises' solution SET, and the part of it where the claim fails.
+    # Random samples miss thin sets: "x < 1.4" under x^2 < 2, "x != 3" under (x-3)/(x+2) <= 0 and
+    # "-2 < x" under x^2 - 5x - 14 <= 0 all went unrefuted (audit of 25 Sep 2026). A witness is
+    # still checked pointwise against every premise, so a wrong solveset cannot refute a step.
+    if len(syms) == 1:
+        w = _set_counterexample(claim, premises, syms[0], ctx)
+        if w is not None:
+            ev["counterexample"] = {str(k): str(v) for k, v in w.items()}
+            ev["route"] = "premise_set"
+            return "refuted", ev
     eqs = [p for p in premises if isinstance(p, Eq)]
     others = [p for p in premises if not isinstance(p, Eq)]
     points: list[dict] = []
@@ -262,6 +456,53 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
     return "unknown", ev
 
 
+def _with_bound_dummies(text: str, ns: dict[str, Any]):
+    """`text` read with its undeclared names as symbols, when every one of them is a BOUND variable
+    (the index of a Sum or Product, the variable of an Integral or a Limit) and none is left free.
+    `Sum(k, (k, 1, 4)) = 11` was skipped as naming an undeclared `k`, so the wrong step was never
+    checked, while `1 + 2 + 3 + 4 = 11` was refuted (audit of 25 Sep 2026). A free undeclared name
+    is still the solver's own symbol and the step is skipped (principle 5)."""
+    from ..normalize.parse import _check_safe, _strip_invisible, preclean
+    try:
+        names = _check_safe(preclean(_strip_invisible(text)), ns)
+    except Exception:  # noqa: BLE001 - not well-formed: reported by the caller
+        return None
+    if not names or any(n in ns for n in names):
+        return None
+    try:
+        rel = _parse_claim(text, dict(ns, **{n: sp.Symbol(n) for n in names}))
+    except Exception:  # noqa: BLE001
+        return None
+    free = {getattr(f, "name", None) for f in getattr(rel, "free_symbols", set())}
+    return None if free & set(names) else rel
+
+
+def _with_sequence_terms(ir, ctx: Ctx, text: str, ns: dict[str, Any]):
+    """`text` with every call of the task's sequence at an integer index replaced by the exact
+    term, or None when that does not make it a checkable relation (a symbolic index, a term the
+    recurrence does not determine, another undeclared name)."""
+    from sympy.core.function import AppliedUndef
+    from ..certify.series import sequence_term_values
+    p = ir.task.params or {}
+    if ir.task.kind not in ("recurrence_term", "closed_form") or not isinstance(p.get("recurrence"), str):
+        return None
+    fname = p.get("name", "a")
+    if not isinstance(fname, str) or fname in ns:
+        return None
+    try:
+        rel = _parse_claim(text, dict(ns, **{fname: sp.Function(fname)}))
+    except Exception:  # noqa: BLE001 - another undeclared name, or not well-formed
+        return None
+    calls = [c for c in rel.atoms(AppliedUndef) if c.func.__name__ == fname]
+    if not calls or any(len(c.args) != 1 or not isinstance(c.args[0], sp.Integer) for c in calls):
+        return None
+    _, terms = sequence_term_values(ir, ctx, {int(c.args[0]) for c in calls})
+    if any(int(c.args[0]) not in terms for c in calls):
+        return None
+    out = rel.xreplace({c: terms[int(c.args[0])] for c in calls})
+    return None if out.atoms(AppliedUndef) else out
+
+
 def check_steps(ir, solution, ctx: Ctx):
     with Timer() as t:
         per_step: list[dict[str, Any]] = []
@@ -305,16 +546,24 @@ def check_steps(ir, solution, ctx: Ctx):
                 n_skip += 1
                 per_step.append(entry)
                 continue
+            step_ns = _step_namespace(ctx.ns) if st.kind == "compute" else ctx.ns
             try:
-                claim = _parse_claim(st.claim, ctx.ns)
+                claim = _parse_claim(st.claim, step_ns)
             except UndeclaredSymbolError as e:
-                # The solver named something of its own (`u = sqrt(x+4)`). Well-formed
-                # mathematics we simply cannot check: skipped, no penalty (§3 rule 3).
-                entry["status"] = "skipped"
-                entry["reason"] = f"undeclared_symbol: {str(e)[:120]}"
-                n_skip += 1
-                per_step.append(entry)
-                continue
+                # A term of the task's own sequence at an integer index (`a(3) = 6`) is not the
+                # solver's symbol: it is read with the term's exact value (audit of 25 Sep 2026).
+                claim, read_with = _with_sequence_terms(ir, ctx, st.claim, step_ns), "sequence_terms"
+                if claim is None:
+                    claim, read_with = _with_bound_dummies(st.claim, step_ns), "bound_variables"
+                if claim is None:
+                    # The solver named something of its own (`u = sqrt(x+4)`). Well-formed
+                    # mathematics we simply cannot check: skipped, no penalty (§3 rule 3).
+                    entry["status"] = "skipped"
+                    entry["reason"] = f"undeclared_symbol: {str(e)[:120]}"
+                    n_skip += 1
+                    per_step.append(entry)
+                    continue
+                entry["read_with"] = read_with
             except Exception as e:  # noqa: BLE001
                 # Not well-formed at all. This is NOT "an unproven step", it is a solution that
                 # does not meet the structured contract, and silently skipping it let an

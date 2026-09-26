@@ -5,6 +5,17 @@ cartesian products of explicit sets) and the event or counted set by a predicate
 tuple `t`, evaluated with a whitelisted AST (no eval of arbitrary code). Small spaces are
 enumerated exactly; when the space exceeds the cap a Monte-Carlo estimate is used ONLY to
 refute (an 8-sigma miss) — never to certify.
+
+Exact arithmetic (audit of 25 Sep 2026): predicates are evaluated over exact rationals. A float
+literal becomes the rational it spells (`0.3` -> 3/10), `/` and negative powers give Fractions,
+and float elements of the space are read the same way. Measured before: with elements
+[0.1, 0.2, 0.5] the predicate `sum(t) == 0.3` was False for (0.1, 0.2), the count 0 was
+certified and the true count 2 refuted.
+
+Monte Carlo sampling draws from exactly the counted space (positions, not values; multisets
+uniformly by stars and bars; arrangement_all at full length). Measured before: multisets were
+drawn as sorted sequences (not uniform), so the correct count C(100, 5) of all-distinct
+5-multisets was refuted.
 """
 from __future__ import annotations
 
@@ -12,6 +23,7 @@ import ast
 import itertools
 import math
 import random
+from fractions import Fraction
 from typing import Any, Iterable
 
 import sympy as sp
@@ -37,10 +49,72 @@ _ALLOWED_NODES = (ast.Expression, ast.BoolOp, ast.BinOp, ast.UnaryOp, ast.Compar
 _ALLOWED_CALLS = {"sum", "len", "set", "sorted", "list", "tuple", "min", "max", "abs", "all", "any",
                   "range", "enumerate", "zip", "reversed", "int", "str", "gcd", "isqrt", "prod"}
 _ALLOWED_ATTRS = {"count", "index"}
+
+
+def _is_exact_number(v) -> bool:
+    return isinstance(v, (int, Fraction))
+
+
+def _exact_div(a, b):
+    """`/` over exact rationals (Python's int / int is a float)."""
+    if _is_exact_number(a) and _is_exact_number(b):
+        return Fraction(a) / Fraction(b)
+    if isinstance(a, float) or isinstance(b, float):
+        raise TypeError("float operand in a predicate division")
+    return a / b
+
+
+def _exact_pow(a, b):
+    if isinstance(b, Fraction):
+        if b.denominator != 1:
+            raise ValueError("fractional power in a predicate: not exact, not evaluated")
+        b = int(b)
+    if _is_exact_number(a) and isinstance(b, int):
+        return Fraction(a) ** b if b < 0 else a ** b
+    if isinstance(a, float) or isinstance(b, float):
+        raise TypeError("float operand in a predicate power")
+    return a ** b
+
+
+def _exact_value(v):
+    """A float element of the space is the decimal it spells (JSON 0.1 -> 1/10)."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, float):
+        return Fraction(repr(v))
+    if isinstance(v, list):
+        return [_exact_value(u) for u in v]
+    if isinstance(v, tuple):
+        return tuple(_exact_value(u) for u in v)
+    return v
+
+
 _SAFE_GLOBALS = {"sum": sum, "len": len, "set": set, "sorted": sorted, "list": list, "tuple": tuple,
                  "min": min, "max": max, "abs": abs, "all": all, "any": any, "range": range,
                  "enumerate": enumerate, "zip": zip, "reversed": reversed, "int": int, "str": str,
-                 "gcd": math.gcd, "isqrt": math.isqrt, "prod": math.prod, "__builtins__": {}}
+                 "gcd": math.gcd, "isqrt": math.isqrt, "prod": math.prod,
+                 # exact-arithmetic hooks inserted by _ExactArithmetic (not callable by name from
+                 # a predicate: the whitelist check runs on the predicate's own tree first)
+                 "_F": Fraction, "_div": _exact_div, "_pow": _exact_pow, "__builtins__": {}}
+
+
+class _ExactArithmetic(ast.NodeTransformer):
+    """float literal -> Fraction('literal'); a / b -> _div(a, b); a ** b -> _pow(a, b)."""
+
+    def visit_Constant(self, node):
+        if isinstance(node.value, float) and not isinstance(node.value, bool):
+            new = ast.Call(func=ast.Name(id="_F", ctx=ast.Load()), args=[ast.Constant(repr(node.value))],
+                           keywords=[])
+            return ast.copy_location(new, node)
+        return node
+
+    def visit_BinOp(self, node):
+        self.generic_visit(node)
+        hook = {ast.Div: "_div", ast.Pow: "_pow"}.get(type(node.op))
+        if hook is None:
+            return node
+        new = ast.Call(func=ast.Name(id=hook, ctx=ast.Load()), args=[node.left, node.right], keywords=[])
+        return ast.copy_location(new, node)
 
 
 class PredicateError(ValueError):
@@ -71,6 +145,7 @@ def compile_predicate(src: str):
             raise PredicateError(f"disallowed attribute: {node.attr}")
         if isinstance(node, ast.Name) and node.id.startswith("__"):
             raise PredicateError("dunder names are not allowed")
+    tree = ast.fix_missing_locations(_ExactArithmetic().visit(tree))
     code = compile(tree, "<predicate>", "eval")
 
     def fn(t):
@@ -83,9 +158,13 @@ def compile_predicate(src: str):
 # ---------------------------------------------------------------------------
 def _elements(space: dict[str, Any]) -> list:
     if "elements" in space:
-        return list(space["elements"])
+        return [_exact_value(v) for v in space["elements"]]
     n = int(space["n"])
     return list(range(1, n + 1))
+
+
+def _sets(space: dict[str, Any]) -> list[list]:
+    return [[_exact_value(v) for v in s] for s in space["sets"]]
 
 
 def space_size(space: dict[str, Any]) -> int:
@@ -110,7 +189,7 @@ def space_size(space: dict[str, Any]) -> int:
 def iterate_space(space: dict[str, Any]) -> Iterable[tuple]:
     st = space["structure"]
     if st == "product":
-        return itertools.product(*[list(s) for s in space["sets"]])
+        return itertools.product(*_sets(space))
     els = _elements(space)
     k = int(space.get("k", len(els)))
     if st == "permutation":
@@ -128,18 +207,23 @@ def iterate_space(space: dict[str, Any]) -> Iterable[tuple]:
 
 def sample_space(space: dict[str, Any], rng: random.Random) -> tuple:
     st = space["structure"]
+    # Uniform over EXACTLY the tuples iterate_space enumerates (positions, not values).
     if st == "product":
-        return tuple(rng.choice(list(s)) for s in space["sets"])
+        return tuple(rng.choice(s) for s in _sets(space))
     els = _elements(space)
     k = int(space.get("k", len(els)))
-    if st in ("permutation", "arrangement_all"):
+    if st == "arrangement_all":
+        return tuple(rng.sample(els, len(els)))          # enumerated at full length whatever k is
+    if st == "permutation":
         return tuple(rng.sample(els, k))
     if st == "combination":
-        return tuple(sorted(rng.sample(els, k), key=els.index))
+        return tuple(els[i] for i in sorted(rng.sample(range(len(els)), k)))
     if st == "sequence":
         return tuple(rng.choice(els) for _ in range(k))
     if st == "multiset_combination":
-        return tuple(sorted(rng.choices(els, k=k), key=els.index))
+        # stars and bars: k-subsets of n + k - 1 slots <-> k-multisets of n positions, uniformly
+        slots = sorted(rng.sample(range(len(els) + k - 1), k))
+        return tuple(els[c - j] for j, c in enumerate(slots))
     raise ValueError(st)
 
 
@@ -151,6 +235,37 @@ def count_exact(space: dict[str, Any], predicate: str) -> int:
 
 def _count_worker(space, predicate):
     return count_exact(space, predicate)
+
+
+def count_distinct(space: dict[str, Any], predicate: str) -> int:
+    """Number of DIFFERENT value tuples that satisfy the predicate."""
+    fn = compile_predicate(predicate)
+    seen = set()
+    for t in iterate_space(space):
+        if fn(t):
+            seen.add(_hashable(t))
+    return len(seen)
+
+
+def _hashable(v):
+    if isinstance(v, (list, tuple)):
+        return tuple(_hashable(u) for u in v)
+    if isinstance(v, (set, frozenset)):
+        return frozenset(_hashable(u) for u in v)
+    return v
+
+
+def _distinct_worker(space, predicate):
+    return count_distinct(space, predicate)
+
+
+def has_repeated_values(space: dict[str, Any]) -> bool:
+    """Does the space list the same value twice (letters of ANKARA, two identical balls)?"""
+    try:
+        pools = _sets(space) if space.get("structure") == "product" else [_elements(space)]
+        return any(len({_hashable(v) for v in pool}) != len(pool) for pool in pools)
+    except Exception:  # noqa: BLE001
+        return True
 
 
 def _mc_worker(space, predicate, n, seed):
@@ -185,12 +300,33 @@ def certify_count(space: dict[str, Any], predicate: str, claimed: int, seed: int
             return None, ev
         ev["count"] = r.value
         ev["method"] = "exhaustive"
+        if has_repeated_values(space):
+            # Positions are counted, and "how many different words from ANKARA" counts values:
+            # the two readings differ (720 vs 120, measured) and the IR does not say which one is
+            # meant. Decide only when both readings agree, or the claim matches neither.
+            rd = sb_run("mathverify.certify.combinatorics:_distinct_worker", space, predicate, timeout=timeout)
+            if not rd.ok:
+                ev["error"] = rd.error
+                ev["flags"] = rd.flags
+                return None, ev
+            ev["count_distinct_values"] = rd.value
+            if rd.value != r.value:
+                if int(claimed) in (r.value, rd.value):
+                    ev["reason"] = "repeated_elements_positions_vs_values_ambiguous"
+                    return None, ev
+                return False, ev
         return (r.value == int(claimed)), ev
     # too big: Monte Carlo can only refute
+    if has_repeated_values(space):
+        ev["reason"] = "repeated_elements_positions_vs_values_ambiguous"
+        return None, ev
     r = sb_run("mathverify.certify.combinatorics:_mc_worker", space, predicate, MC_SAMPLES, seed, timeout=timeout)
     if not r.ok:
         ev["error"] = r.error
         return None, ev
+    if int(claimed) < 0 or int(claimed) > size:
+        ev["reason"] = "count_outside_the_space"
+        return False, ev
     p_hat = r.value / MC_SAMPLES
     p_claim = int(claimed) / size
     sigma = math.sqrt(max(p_hat * (1 - p_hat), 1e-9) / MC_SAMPLES)
@@ -207,8 +343,14 @@ def certify_probability(space: dict[str, Any], event: str, claimed, seed: int = 
     ev: dict[str, Any] = {"space": space, "event": event, "claimed": str(claimed)}
     # The claim is compared AS STATED. `nsimplify` used to run here and it snaps to the nearest
     # "nice" number: 500000003/3000000000 became 1/6 and was certified against an exact
-    # enumeration of 1/6 (measured). Decimal claims keep their own precision through
-    # answers_equivalent's float floor; exact claims are compared exactly.
+    # enumeration of 1/6 (measured). Exact claims are compared exactly. A decimal written in the
+    # payload reaches this point as the exact rational it spells (the claim parser rationalises
+    # `0.1666666666666667` to 1666666666666667/10^16), so a rounded decimal is a different number
+    # and is refuted; only a sympy Float passed in directly keeps answers_equivalent's float floor.
+    if isinstance(claimed, str):
+        # never sympify raw text (it is Python eval with builtins): the caller parses the claim
+        ev["error"] = "claimed_probability_must_be_parsed"
+        return None, ev
     c = sp.sympify(claimed)
     try:
         cf = float(c)
@@ -261,7 +403,15 @@ def verify(ir, solution, ctx: Ctx):
         if kind == "count_structures":
             ca = solution.claimed_answer
             try:
-                raw = ca.payload if ca.kind == "count" else ctx.claimed(solution)
+                if ca.kind == "count" and isinstance(ca.payload, str):
+                    # parsed in the claim namespace, never sympify'd: the raw text used to reach
+                    # sympy.sympify (Python eval with builtins) in this process (audit 25 Sep 2026)
+                    from ..normalize.parse import parse_expr_str
+                    raw = parse_expr_str(ca.payload, ctx.claim_ns(solution))
+                elif ca.kind == "count":
+                    raw = ca.payload
+                else:
+                    raw = ctx.claimed(solution)
             except Exception as e:  # noqa: BLE001
                 return unknown(LAYER, f"claimed_not_parsed: {e}", flags=["parse_error"])
             # `int()` truncated a claimed 241/2 to 120 and certified it (measured); a count that
@@ -270,12 +420,12 @@ def verify(ir, solution, ctx: Ctx):
             if claimed is None:
                 return result(LAYER, "fail", 0.99, True, {"claimed": str(raw),
                               "reason": "claimed_count_is_not_an_integer"}, t.ms, primary=True)
-            ok, ev = certify_count(space, p.get("predicate", ""), claimed, seed=ctx.seed)
+            ok, ev = certify_count(space, p.get("predicate", ""), claimed, seed=ctx.seed, timeout=ctx.timeout)
         else:
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
-            ok, ev = certify_probability(space, p.get("event", ""), claimed, seed=ctx.seed)
+            ok, ev = certify_probability(space, p.get("event", ""), claimed, seed=ctx.seed, timeout=ctx.timeout)
     conf = 0.99 if ev.get("method") == "exhaustive" else 0.95
     if ok is True:
         return result(LAYER, "pass", conf, True, ev, t.ms, primary=True)

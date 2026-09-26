@@ -147,6 +147,12 @@ Kural (`formal/statement.py`, bölüm "junk values"):
 
 `harness/run_lean.py` her koşuda 17 junk-value sondasını yeniden dener (23 Eylül'e kadar 12); bir
 tanesinin sertifika alması kapıyı düşürür.
+**Düzeltme (25 Eylül 2026):** sonda sayısı 33. 25 Eylül formal denetiminin aileleri eklendi: kapalı
+hedefte ℕ bölmesi, güvenli alt küme dışında Mod, özyinelemede ℕ çıkarması, düşürülen kısıt
+(`domain_of_discourse`, değişken kısıtı, ikinci veri), karmaşık değişken, çelişik veriler,
+sadeleştiren ayrıştırma ve iddianın junk bölgesi (DECISIONS §55). Hipotezli bir ifade artık yalnız
+tanıkla kanıtlanan `∃ vars, h1 ∧ … ∧ hn` ile temizdir; Mod yalnız pozitif tam sayı sabit bölen ve tam
+sayı bölünende basılır.
 
 ## Tanımlılık, ifadenin yazıldığı biçimden okunur
 

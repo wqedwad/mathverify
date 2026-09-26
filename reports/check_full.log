@@ -1,22 +1,27 @@
-check.py --full · 2026-09-24 22:15:41 · claude/funny-cray-bey5o1 @ b042729 · commit edilmemiş değişiklik: 1 dosya
+check.py --full · 2026-09-26 03:01:58 · claude/compassionate-shannon-759r85 @ 67d1619 · commit edilmemiş değişiklik: 1 dosya
 
+== Lean ısınma ==
+  lean_warmup: 10 s (exit 0)
 == testler ==
-  pytest: 98 s (exit 0)
+  pytest: 280 s (exit 0)
+    SKIPPED [3] tests/test_cloud_scripts.py:637: root writes read-only directories
+    SKIPPED [1] tests/test_cloud_scripts.py:956: opt-in: downloads the locked packages (MATHVERIFY_CLOUD_INTEGRATION=1)
+    SKIPPED [1] tests/test_f5_lean.py:68: statement out of scope for this item
 == pyflakes ==
-  pyflakes: 1 s (exit 1)
+  pyflakes: 2 s (exit 1)
 == deterministik değerlendirme ==
-  run_eval: 58 s (exit 0)
+  run_eval: 85 s (exit 0)
 == Lean taraması ==
-  run_lean: 92 s (exit 0)
+  run_lean: 132 s (exit 0)
 == adversaryal ==
-  adversarial: 1985 s (exit 0)
+  adversarial: 2915 s (exit 0)
 == metamorfik sağlamlık ==
-  soundness_fuzz: 79 s (exit 0)
+  soundness_fuzz: 117 s (exit 0)
 == kalibrasyon ==
-  calibrate: 31 s (exit 0)
+  calibrate: 43 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  840 passed, 5 skipped in 96.79s (0:01:36)   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  1321 passed, 5 skipped in 278.69s (0:04:38)   (hedef: hepsi geçer)
   [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
@@ -31,7 +36,7 @@ check.py --full · 2026-09-24 22:15:41 · claude/funny-cray-bey5o1 @ b042729 · 
   [OK  ] Lean erişilebilir                               evet (121 sertifika)   (hedef: evet, ≥1 sertifika)
   [OK  ] Lean FP                                         0   (hedef: 0)
   [OK  ] Lean sertifika                                  121/280   (hedef: raporlanır)
-  [OK  ] Lean junk-value sertifikası                     0/17   (hedef: 0)
+  [OK  ] Lean junk-value sertifikası                     0/33   (hedef: 0)
   [OK  ] saldırı başarısı                                0.000%   (hedef: < %2)
   [OK  ] saldırı yüzeyleri                               cevap,şık,adım   (hedef: cevap+şık+adım)
   [OK  ] SymPy üretimli yanlış cevapta yanlış onay       0/448   (hedef: 0)

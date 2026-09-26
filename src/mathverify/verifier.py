@@ -18,9 +18,9 @@ from .certify import MODULES
 from .certify.base import make_ctx, result, unknown, Timer
 from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
-from .ir import ProblemIR, LeakageError
+from .ir import MalformedIR, ProblemIR, LeakageError
 from .router import route, DEFERRED_KINDS
-from .solution import Solution
+from .solution import MalformedSolution, Solution
 from .steps import check_steps
 from .types import LayerResult, VerificationResult
 from .versions import collect_versions
@@ -37,6 +37,31 @@ def _versions() -> dict[str, str]:
     return dict(_VERSIONS)
 
 
+_NO_SOLUTION = re.compile(r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s*küme|no\s*(real\s*)?solution|∅|emptyset",
+                          re.IGNORECASE)
+
+
+def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
+    """The chosen option's value and the claim, in the same units. For an angle target of
+    synthetic_geometry the certificate measures in degrees, so a degree mark is the unit of the
+    number (`70°` is 70), not a conversion to radians: payload "70" with option "70°" was refuted
+    while the certificate proved 70 (audit of 25 Sep 2026)."""
+    ca = solution.claimed_answer
+    target = str((ir.task.params or {}).get("target", ""))
+    if ir.task.kind == "synthetic_geometry" and "angle(" in target:
+        from .certify.geometry_numeric import has_degree_mark, strip_degree_marks
+        from .normalize.parse import parse_expr_str
+        opt = str(ir.options[ca.option])
+        ov = parse_expr_str(strip_degree_marks(opt), ctx.ns) if has_degree_mark(opt) else ctx.option_value(ca.option)
+        pay = ca.payload
+        if isinstance(pay, str) and has_degree_mark(pay):
+            cv = parse_expr_str(strip_degree_marks(pay), ctx.claim_ns(solution))
+        else:
+            cv = ctx.claimed(solution)
+        return ov, cv
+    return ctx.option_value(ca.option), ctx.claimed(solution)
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
@@ -44,9 +69,26 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
         return None
     with Timer() as t:
         if ca.option not in ir.options:
+            if not re.fullmatch(r"[A-Z]", str(ca.option)):
+                # not a letter at all ("B, C", prose): what the solver chose is unknown, so the
+                # payload's certificate cannot stand for the solution — abstain, never refute
+                return unknown("mc.consistency", f"option_unreadable: {ca.option!r}", t.ms,
+                               flags=["option_unreadable"])
             return result("mc.consistency", "fail", 0.99, True,
                           {"reason": "option_letter_not_in_question", "option": ca.option}, t.ms)
         opt_text = str(ir.options[ca.option]).strip().lower()
+        if _NO_SOLUTION.search(opt_text):
+            # "Çözüm yok" is the empty solution set, not "does not exist": the generic "yok" test
+            # below refuted a correct empty-set answer that chose it (audit of 25 Sep 2026)
+            ev = {"option": ca.option, "option_text": opt_text, "claimed": str(ca.payload)}
+            try:
+                cv = ctx.claimed(solution) if ca.kind != "none" else sp.S.EmptySet
+            except Exception as e:  # noqa: BLE001
+                return unknown("mc.consistency", f"claim_parse_error: {e}", t.ms, ev)
+            if cv == sp.S.EmptySet or ca.kind == "none":
+                return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
+            ev["reason"] = "option_says_no_solution_but_a_solution_was_claimed"
+            return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if ca.kind == "dne":
             ok = bool(re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text))
             ev = {"option": ca.option, "option_text": opt_text, "claimed": "DNE"}
@@ -61,8 +103,7 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
         if ca.payload in (None, ""):
             return unknown("mc.consistency", "no_payload_to_compare", t.ms)
         try:
-            ov = ctx.option_value(ca.option)
-            cv = ctx.claimed(solution)
+            ov, cv = _option_and_claim(ir, solution, ctx)
         except Exception as e:  # noqa: BLE001
             return unknown("mc.consistency", f"option_parse_error: {e}", t.ms)
         shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
@@ -147,6 +188,12 @@ _MATHY = re.compile(r"[0-9+\-*/^=<>≤≥≠∞√πα-ωΑ-Ω]|\\[A-Za-z]+")
 _TAGLIKE = re.compile(r"^<[^<>]*>(?:[^<>]*</[^<>]*>)?$")
 
 
+_NEGATION = re.compile(
+    r"(?<!\w)(değil|degil|olamaz|olmaz|yanlış|yanlis|hariç|haric|dışında|disinda|hayır|hayir|yok|"
+    r"belki|muhtemelen|sanırım|sanirim|galiba|not|no|never|cannot|can't|isn't|wrong|except|maybe|"
+    r"perhaps|probably)(?!\w)|\?", re.IGNORECASE)
+
+
 def _is_prose_token(tok: str) -> bool:
     """A token that can be dropped while cleaning: no digits, no operators, no LaTeX macro —
     i.e. words and punctuation, not mathematics. Markup such as `<verdict>CORRECT</verdict>`
@@ -214,6 +261,11 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     for k in range(len(toks) - 1, 0, -1):
         if not _is_prose_token(toks[k]):
             break
+        # prose that negates or doubts the value ("5 değil", "5 olamaz", "belki 5") is not junk:
+        # dropping it turned "not 5" into 5 and certified it (audit of 25 Sep 2026). Abstain.
+        if _NEGATION.search(" ".join(toks[k:])):
+            flags.append("payload_negated")
+            return flags
         cands.append(" ".join(toks[:k]))
     original = ca.payload
     for c in cands:
@@ -230,15 +282,102 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     return flags
 
 
+def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]:
+    """Notation only, never values (principle 3): for a set/interval answer, "x ∈ S" is S, a bare
+    list "2, 3" is {2, 3}, and a condition on the task variable alone ("x >= 3") is its exact
+    solution set. Each was refuted as written (audit of 25 Sep 2026). A bare "2,3" (no space) is
+    also the Turkish decimal 2.3 and is left alone: the decimal-comma check abstains on it."""
+    ca = solution.claimed_answer
+    # the claim's own kind says it is a set; the IR's answer_shape is often left at its default
+    set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in ("solve_equation", "solve_inequality",
+                                                                          "domain_of")
+    if not set_task or ca.kind not in ("set", "interval", "condition") \
+            or not isinstance(ca.payload, str) or ca.payload_source == "option_letter":
+        return []
+    names = {v.name for v in ir.vars}
+    tvar = (ir.task.params or {}).get("var")
+    if isinstance(tvar, str):
+        names.add(tvar)
+    text = ca.payload.strip()
+    flags: list[str] = []
+    m = re.match(r"^([A-Za-z]\w*)\s*(?:∈|\bin\b)\s*(.+)$", text)
+    if m and m.group(1) in names:
+        text = m.group(2).strip()
+        flags.append("payload_notation_normalized")
+    if (ca.kind == "set" or ir.answer_shape == "set") and ca.kind != "interval" and "," in text \
+            and not re.search(r"[{}\[\]()]", text) and not re.search(r"\d,\d", text):
+        text = "{" + text + "}"
+        flags.append("payload_notation_normalized")
+    if isinstance(tvar, str) and re.search(r"[<>]", text) and not re.search(r"[{}\[\]]", text):
+        from .normalize.parse import parse_relation
+        try:
+            rel = parse_relation(text, ctx.ns)
+            if {str(x) for x in rel.free_symbols} == {tvar}:
+                text = str(rel.as_set())
+                flags.append("payload_notation_normalized")
+        except Exception:  # noqa: BLE001 - left as written; the certificates report it
+            pass
+    if flags:
+        ca.payload = text
+        if ca.kind == "condition":
+            ca.kind = "set"
+    return flags
+
+
 def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     from .normalize.parse import ClaimNotAValue, check_claim_is_value
     ca = solution.claimed_answer
-    if ca.payload_source == "option_letter" or not isinstance(ca.payload, str):
+    if ca.payload_source == "option_letter":
         return None                         # the option's own text is the problem's, not a claim
+    if ca.kind in ("value", "count", "expression", "interval", "condition", "equation") \
+            and isinstance(ca.payload, list):
+        # only a set may be written as a list of elements; any other kind would be read as a set
+        # or refused as "not an integer" — a verdict about a claim of the wrong shape
+        return unknown("intake.claim", f"a {ca.kind} answer written as a list: not read",
+                       flags=["parse_error", "claim_unreadable"])
+    if not isinstance(ca.payload, str):
+        return None
     try:
         check_claim_is_value(ca.payload, [f.name for f in ir.functions])
     except ClaimNotAValue as e:
         return unknown("intake.claim", str(e)[:200], flags=["claim_is_not_a_value"])
+    # A count written as text is read like any claim: with the guarded parser. Unreadable text
+    # (`3 or 4`, a Python expression) abstains; the count certificates would refute it as "not an
+    # integer", which is a verdict about a claim nobody could read.
+    if ca.kind == "count":
+        from .normalize.parse import ParseError, parse_expr_str
+        try:
+            parse_expr_str(ca.payload, ctx.claim_ns(solution))
+        except ParseError as e:
+            return unknown("intake.claim", f"claimed count {ca.payload!r} is not readable: {str(e)[:120]}",
+                           flags=["parse_error", "claim_unreadable"])
+    # "3,5" is 3.5 in Turkish and the pair (3, 5) in the structured syntax. Reading it either way
+    # would be a guess (principle 3), and the pair reading turned a right 3.5 into INCORRECT.
+    if ca.kind in ("value", "count", "set") and not re.search(r"[{}\[\]()]", ca.payload) \
+            and re.search(r"\d,\d", ca.payload):
+        return unknown("intake.claim", f"claimed answer {ca.payload!r}: decimal comma or pair? not guessed",
+                       flags=["decimal_comma_ambiguous"])
+    # A value-shaped answer that still contains the problem's unknowns is not a value: `{x}` for
+    # "solve x**2 - 5x + 6 = 0" was certified (z3 found Eq(x, x) satisfiable), and `10 - b` for
+    # "evaluate a" restates a given (audit of 25 Sep 2026). The unknown is the task's variable
+    # when it names one; otherwise a variable the givens pin down. A free parameter (`k` in
+    # "solve x² = k") may appear in a right answer.
+    if ir.answer_shape in ("scalar", "set", "count") and ca.kind in ("value", "set", "count"):
+        tvar = (ir.task.params or {}).get("var")
+        if isinstance(tvar, str):
+            unknowns = {tvar}
+        else:
+            in_givens = set(re.findall(r"[A-Za-z_]\w*", " ".join(str(g) for g in ir.givens)))
+            unknowns = {v.name for v in ir.vars} & in_givens
+        try:
+            claimed = ctx.claimed(solution)
+            names = {s.name for s in getattr(claimed, "free_symbols", set())}
+        except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
+            names = set()
+        hit = sorted(names & unknowns)
+        if hit:
+            return unknown("intake.claim", f"claimed answer {ca.payload!r} still contains the unknown(s) {hit}",
+                           flags=["claim_is_not_a_value"])
     if ir.task.kind == "evaluate":
         target = (ir.task.params or {}).get("expr") or ir.unknown_of_interest
         if target and _same_structure(str(ca.payload), str(target), ctx):
@@ -309,11 +448,19 @@ def fuse_layers(layers: list[LayerResult], extra_flags: list[str] | None = None,
 def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
                   timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
     """Run the deterministic layers and return (layers, flags) without fusing."""
-    if isinstance(problem_ir, dict):
-        problem_ir = ProblemIR.from_dict(problem_ir)
-    if isinstance(solution, dict):
-        solution = Solution.from_dict(solution)
     layers: list[LayerResult] = []
+    if isinstance(problem_ir, dict):
+        try:
+            problem_ir = ProblemIR.from_dict(problem_ir)
+        except MalformedIR as e:                   # LeakageError is not caught: it must stop
+            layers.append(unknown("intake.ir", f"ir_malformed: {e}", flags=["ir_malformed"]))
+            return layers, []
+    if isinstance(solution, dict):
+        try:
+            solution = Solution.from_dict(solution)
+        except MalformedSolution as e:
+            layers.append(unknown("intake.solution", f"malformed_solution: {e}", flags=["malformed_solution"]))
+            return layers, []
 
     try:
         ctx = make_ctx(problem_ir, seed=seed, timeout=timeout)
@@ -326,6 +473,8 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     scope_flags: list[str] = []
     if ca.option and ca.payload in (None, "") and problem_ir.options and ca.option in problem_ir.options:
         ca.payload = problem_ir.options[ca.option]
+        if problem_ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
+            ca.payload = "{}"
         # The certificate is now about to verify the OPTION's own value, so the only thing
         # being checked is the letter the solver picked — a 1-in-5 guess carries as much
         # evidence as a worked solution. That is legitimate answer-level verification, but it
@@ -341,6 +490,8 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
             else:
                 ca.kind = "value"
 
+    scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
+
     # DECISIONS §2 defines CORRECT as "the claimed answer is right AND no step was refuted".
     # With no checkable step the second conjunct is vacuously true, so a CORRECT verdict here
     # says nothing about the reasoning. The verdict is kept (abstaining would destroy path
@@ -353,6 +504,43 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
 
     clean_flags = _sanitize_payload(solution, ctx) + scope_flags
 
+    # Every certificate reasons over the real numbers (symbols are real, z3 sorts are Real/Int, the
+    # domain starts at ℝ). A variable declared complex or rational was silently read as real:
+    # "x² = −1 over ℂ has no solution" and "x⁴ = 1 over ℂ gives x² + 1 = 2" were certified, and the
+    # right answers would have been refuted (audit of 25 Sep 2026). There is no sound verdict here.
+    unsupported = sorted(v.name for v in problem_ir.vars if v.domain in ("complex", "rational"))
+    if problem_ir.vars and str(problem_ir.domain_of_discourse or "").strip().lower() in (
+            "complex", "complexes", "c", "ℂ"):
+        unsupported = unsupported or ["domain_of_discourse"]
+    if unsupported:
+        layers.append(unknown("intake.domain", f"var_domain_unsupported: {unsupported} (the certificates "
+                              "reason over the reals)", flags=["var_domain_unsupported"]))
+        return layers, clean_flags
+
+    # A side condition (a given inequality next to the task's own relation) that cannot be solved
+    # exactly would be dropped from the domain: the certificates would answer another question.
+    try:
+        tvar = (problem_ir.task.params or {}).get("var")
+        unapplied = ctx.side_conditions(ctx.sym(tvar))[1] if isinstance(tvar, str) else []
+    except Exception:  # noqa: BLE001 - a failed probe adds no fact
+        unapplied = []
+    if unapplied:
+        layers.append(unknown("intake.domain", f"given_not_applied: {unapplied[:3]}",
+                              flags=["given_not_applied"]))
+        return layers, clean_flags
+
+    # The problem's own expression is undefined as written at a point with nothing left to choose
+    # (`f(-1)` for f(x) = log(x) − log(x) + x). SymPy simplified it to a value, and that value was
+    # certified. There is no answer to check against.
+    try:
+        undefined = ctx.written_undefined()
+    except Exception:  # noqa: BLE001 - a failed probe adds no fact
+        undefined = []
+    if undefined:
+        layers.append(unknown("intake.definedness", f"problem_undefined_as_written: {undefined[:3]}",
+                              flags=["problem_undefined_as_written"]))
+        return layers, clean_flags
+
     # A claimed answer must be a VALUE. A computation (`integrate(…)`, `limit(…)`) or the
     # question written back (`f(g(2))`, `gcd(84, 120)` for "evaluate gcd(84, 120)") would make
     # the certificates compute the answer themselves — every one of those was certified CORRECT
@@ -360,6 +548,9 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     not_a_value = _claim_not_a_value(problem_ir, solution, ctx)
     if not_a_value is not None:
         layers.append(not_a_value)
+        # the certificates would read these claims one way and refute them: nothing to check
+        if {"decimal_comma_ambiguous", "claim_unreadable"} & set(not_a_value.flags):
+            return layers, clean_flags
 
     mc = _mc_consistency(problem_ir, solution, ctx)
     if mc is not None:
@@ -381,6 +572,13 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
             raise
         except Exception as e:  # noqa: BLE001
             lr = unknown(name, f"layer_exception: {type(e).__name__}: {str(e)[:200]}", flags=["layer_exception"])
+        # A payload reconstructed from prose is advisory (SOLVER_FORMAT.md): a recovery mistake may
+        # abstain but never refute. Only mc.consistency honoured that; the certificates refuted the
+        # recovered claim directly, so a solution that chose the right letter was INCORRECT when
+        # the extractor picked up an intermediate set from the prose (audit of 25 Sep 2026).
+        if solution.claimed_answer.payload_source == "recovered_text" and lr.verdict == "fail":
+            lr = unknown(name, "recovered_claim_refuted: the reconstructed payload is advisory, not refuted",
+                         lr.latency_ms, lr.evidence, flags=["recovered_answer_refuted"])
         layers.append(lr)
 
     if run_steps and solution.steps:

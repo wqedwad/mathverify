@@ -31,11 +31,26 @@ def exact_integer(v) -> int | None:
     NEVER `int(v)`: it truncates, so a claimed count of 7/2 became 3 and was certified CORRECT
     (measured by harness/soundness_fuzz.py on 13 counting items). A count is an integer by
     definition, so a non-integer claim is a wrong claim, not a claim to be rounded. `3.0` is
-    the integer 3 written as a decimal and is accepted as such."""
-    try:
-        e = sp.sympify(v)
-    except (sp.SympifyError, TypeError, ValueError):
+    the integer 3 written as a decimal and is accepted as such.
+
+    Text is read with the guarded parser, NEVER `sp.sympify(str)`: sympify evaluates the string
+    with Python's builtins in reach, so a claimed count such as `__import__('os')....` ran code in
+    the verifier's own process and was then certified (audit of 25 Sep 2026), and `3 or 4` was
+    read as 3."""
+    if isinstance(v, bool):
         return None
+    if isinstance(v, str):
+        from ..normalize.parse import ParseError, parse_expr_str
+        try:
+            e = parse_expr_str(v)
+        except (ParseError, sp.SympifyError, TypeError, ValueError):
+            return None
+    else:
+        from ..normalize.parse import ParseError, sympify_nontext
+        try:
+            e = sympify_nontext(v)              # a container (list, dict) is refused, never evaluated
+        except (ParseError, sp.SympifyError, TypeError, ValueError):
+            return None
     if isinstance(e, sp.Integer):
         return int(e)
     if not getattr(e, "is_number", False) or e.is_real is False:

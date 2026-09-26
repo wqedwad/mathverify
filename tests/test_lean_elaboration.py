@@ -29,8 +29,11 @@ REVIEWER_HEAD = "theorem mv_r6r_k (x : ℝ) (h1 : x - brokenk = 0) : x = brokenk
 
 def _brokenk() -> LeanStatement:
     """The reviewer's statement: `brokenk` is defined nowhere."""
+    # a witness since 25 Sep 2026: a statement with hypotheses is only clean once Lean proves them
+    # satisfiable (prove._audit's sat probe), and that probe carries the option too
     return LeanStatement(name="mv_r6r_k", binders="(x : ℝ)", hypotheses=["x - brokenk = 0"],
-                         goal="x = brokenk", field="ℝ", kind="equation_root")
+                         goal="x = brokenk", field="ℝ", kind="equation_root",
+                         sat_vars=("x",), witness=("0",))
 
 
 def _goal_only(goal: str) -> LeanStatement:
@@ -68,6 +71,8 @@ def test_every_rendered_command_opens_with_autoimplicit_off(evalset_items):
             with_probes += 1
             assert _opens_once_with_the_option(st.vacuity_probe(), f"theorem {st.name}_vacuity ")
             assert _opens_once_with_the_option(st.no_hyp_probe("  norm_num"), f"theorem {st.name}_nohyp ")
+            if st.sat_probe() is not None:
+                assert _opens_once_with_the_option(st.sat_probe(), f"theorem {st.name}_sat ")
         else:
             assert st.vacuity_probe() is None and st.no_hyp_probe("  norm_num") is None
     assert len(statements) > 110 and with_probes > 20
@@ -75,7 +80,8 @@ def test_every_rendered_command_opens_with_autoimplicit_off(evalset_items):
 
 class _RecordingLean:
     """Records every command. A proof attempt compiles when `compiles(code)`; `#print axioms` answers
-    with the safe axioms; both probes get a Lean error (answered: consistent and used hypotheses)."""
+    with the safe axioms; both probes get a Lean error (answered: consistent and used hypotheses),
+    and the satisfiability probe compiles (the hypotheses hold at the witness)."""
 
     def __init__(self, compiles):
         self.codes: list[str] = []
@@ -87,6 +93,8 @@ class _RecordingLean:
             return LeanResult(ok=True, infos=[SAFE_AXIOMS_INFO])
         if "_vacuity " in code or "_nohyp " in code:
             return LeanResult(ok=False, errors=["linarith failed"])
+        if "_sat " in code:
+            return LeanResult(ok=True, env=8)
         if self.compiles(code):
             return LeanResult(ok=True, env=7)
         return LeanResult(ok=False, errors=["linarith failed"])
@@ -103,7 +111,8 @@ def test_prove_statement_sends_every_ladder_and_probe_command_with_autoimplicit_
     assert r["proved"] and r["proof"] == "  linarith" and r["audit"]["clean"]   # the fake's verdicts
     sent = _statement_commands(fake.codes)
     heads = [c[len(AUTOIMPLICIT_OFF):].split(" (", 1)[0] for c in sent]
-    assert heads == ["theorem mv_r6r_k"] * 3 + ["theorem mv_r6r_k_vacuity", "theorem mv_r6r_k_nohyp"]
+    assert heads == ["theorem mv_r6r_k"] * 3 + ["theorem mv_r6r_k_vacuity", "theorem mv_r6r_k_nohyp",
+                                              "theorem mv_r6r_k_sat : ∃ x : ℝ,"]
     assert all(_opens_once_with_the_option(c) for c in sent), sent
     assert fake.codes.count("#print axioms mv_r6r_k") == 1
     # the record is unchanged: the statement itself, without the compile option
@@ -124,7 +133,7 @@ def test_a_model_written_proof_is_compiled_with_autoimplicit_off(monkeypatch):
     r = P.prove_statement(_brokenk(), use_model=True, model_attempts=1, lean=fake, tactic_timeout=45)
     assert r["proved"] and r["source"] == "model:anthropic"
     sent = _statement_commands(fake.codes)
-    assert len(sent) == len(P.ladder_for("equation_root")) + 1 + 2      # ladder, model proof, probes
+    assert len(sent) == len(P.ladder_for("equation_root")) + 1 + 3      # ladder, model proof, 3 probes
     assert all(_opens_once_with_the_option(c) for c in sent), sent
     assert len(prompts) == 1 and "autoImplicit" not in prompts[0]
     assert f"{REVIEWER_HEAD} := by\n  <your proof here>" in prompts[0]

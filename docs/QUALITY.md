@@ -55,11 +55,17 @@ alt kümede hatayı en aza indirmek için belirsizlikte çekimser kalınır
 | Sayısal "eşit" kanıt değildir | Kesin kesirler kesin; eşitlik her hassasiyet basamağında; farkın kendisi değerlendirilir | `tests/test_equiv.py` (10³⁰+1, Ramanujan sabiti, e⁻¹⁰⁰⁰) |
 | Math-Verify ikinci görüştür | Tek başına karar vermez | birim testi |
 | Formal ifade sadık olmalı | Şablonla, modelsiz; tanımlılık (junk-value) korumaları | Lean FP = 0; junk-value sondası = 0 |
+| Girdi kod değildir | `guarded_parse_expr` (AST beyaz listesi), `sympify_nontext` (kapsayıcı reddi), `MalformedSolution` / `MalformedIR` | tür ve enjeksiyon taraması: kod çalıştırma = 0, sızan istisna = 0; `tests/test_audit_2026_09_25_core.py` |
 | Kanıt denetlenir | sorry/aksiyom/vakum/kullanılmayan hipotez; her sonda alternatifi `done` ile kapanır | Lean taraması |
 | LLM sinyali yalnız temkin katar | yetki tablosu, `_BLOCK_POSITIVE_FLAGS` | F3/F4 birim testleri |
 | Kararın kapsamı açık | `answer_level_only`, `KAPSAM:` satırı | birim testi |
 | Doğrulayıcı test edilir | `harness/soundness_fuzz.py`, `harness/adversarial.py` (3 yüzey) | `check.py --full` kapıları |
 | Benchmark denetlenir | Etiket tutarlılık denetimi; her görev türünün öğesi var | "ölçülmeyen görev türü = yok" |
+
+**Düzeltme (25 Eylül 2026):** "Lean FP = 0" yalnız değerlendirme setindeki öğelerde ölçülmüştü ve
+genel bir güvence değildi: set dışında yazılan 98 yanlış iddianın 53'ü Lean'de temiz sertifika
+alıyordu. Düzeltildi (0/99) ve yeni aileler junk kapısında kalıcı (DECISIONS §55). Aynı denetimde
+cevap metninin kod olarak çalıştığı da bulundu; yukarıdaki "Girdi kod değildir" satırı bu yüzden var.
 | Faturalama ölçüm değildir | `LLMFatalError` | F3 birim testleri |
 
 ## 3. Bilinen ve bilerek bırakılan sınırlar

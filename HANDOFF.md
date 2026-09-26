@@ -4,6 +4,22 @@
 > yanında "Düzeltme (24 Eylül 2026)" notu). §1–§12'nin geri kalanı ve aşağıdaki paragraf 23 Eylül
 > oturumunundur.
 >
+> **25 Eylül eklendi:** kurulum betiğinin belirteçle ikinci gerçek koşusu ve ölçümü (§0.12): claude.ai
+> ortam değişkenleri kurulum betiğine ulaşmıyor; belirteç artık önyükleyicinin metninde, araç
+> dosyaları gerekirse `raw.githubusercontent.com`'dan. Kararı DECISIONS §54, yeni sıra §7 başında.
+>
+> **Yeni sohbete geçiş (26 Eylül 2026).** Bu belgenin bu hâli ve 25 Eylül'ün bütün işi (§0.12, §0.13)
+> `claude/compassionate-shannon-759r85` dalındadır; `master`a birleştirilene kadar `master`da yoktur.
+> Yeni bir bulut sohbeti varsayılan dal `master`dan başlar ve eski HANDOFF'u okur. O yüzden ya dal
+> önce `master`a birleştirilir (kullanıcı onayı ve yedek, §5.4), ya da yeni sohbetin ilk mesajı dalı
+> söyler: "`claude/compassionate-shannon-759r85` dalından devam et; önce HANDOFF §0.13 ve §7'yi oku."
+> Oturumun geçici alanı yeni sohbete taşınmaz; denetimin ölçüm betikleri bu yüzden
+> `denetim/2026-09-25/`'dedir.
+>
+> **25 Eylül, aynı oturumun devamı:** sistematik denetim (§0.13). Cevap metni kod olarak çalışıyordu;
+> yanlış onay sınıfları ve formal katmandaki 53 yanlış sertifika kapatıldı. "Lean FP 0" yalnız
+> değerlendirme setinde ölçülmüştü (Düzeltme §5.1). Kararlar DECISIONS §55, yeni sıra §7 başında.
+>
 > **24 Eylül akşamı eklendi:** gerçek bulut ölçümü (§0.8), `master`ın erken birleşmesi olayı (§0.9),
 > WSL diskinin C:'yi doldurması olayı (§0.10), ölçümden sonraki kod değişiklikleri (§0.5 eki) ve
 > yeni sıradaki adımlar (§7 başı). Kararları DECISIONS §44–49.
@@ -337,6 +353,131 @@ Kullanıcının açtığı normal (routine olmayan) bir bulut oturumu, `master` 
   8 mutasyonun hepsi en az bir testi düşürdü. Takım 845 test. `check.py --full` **24/24** (`b042729`, 22:15–22:55 UTC, aşamaların toplamı 2344 s ≈ 39 dk: pytest 98, `run_eval` 58, `run_lean` 92, adversaryal 1985, sağlamlık 79, kalibrasyon 31 s); birim testleri 840 passed / 5 skipped; kapı değerleri önceki koşularla aynı (121 sertifika, FP 0, junk 0/17, 21 139 saldırıda %0, 0/448, 0/214, 0/46, 0/184, 0/6); raporlarda yalnız süre satırları değişti. Gerçek belirteçle kurulum betiği
   alanından koşu henüz ölçülmedi **[DOĞRULANMADI]**: kullanıcı adımları `docs/BULUT.md` "Senin yapman
   gerekenler" 3. madde, ölçülecekler §12.
+  **Düzeltme (25 Eylül 2026, ölçüm §0.12):** belirteç claude.ai ortam değişkeni olarak verilince
+  kurulum betiğine hiç ulaşmadı (oturumda tanımlıydı, betik "not set" yazdı). Belirteç artık
+  önyükleyicinin metninde verilir ve `fetch_artifacts.sh` git denemeleri düşerse dosyaları
+  `raw.githubusercontent.com`'dan indirir (DECISIONS §54).
+
+### 0.12 İkinci normal bulut oturumu: belirteç ortam değişkeninde, kurulum betiği yine düştü (25 Eylül)
+
+Kullanıcının açtığı normal bir bulut oturumu (`master` = `d66bf2d`, `wqedwad/asd#1` birleşmişti; dal
+`claude/compassionate-shannon-759r85`). Kullanıcı `docs/BULUT.md` "Senin yapman gerekenler" 3.
+maddeyi yapmıştı. Oturumun isteği "kurulum betiğini ölç". Karar DECISIONS §54.
+
+- **Kurulum betiği yine düştü.** Makine 08:02:44 UTC'de açıldı; alan 08:02:50'de `mode=all` koştu
+  (checkout `/home/user/asd` `d66bf2d` hazırdı). Düz çekim `could not read Username`, ardından
+  `MATHVERIFY_GITHUB_TOKEN is not set: no token retry`; durum
+  `FAILED mode=all failed=[fetch_artifacts python uv_prewarm setup_lean setup_lean_repl] ... reason=fetch python=missing lean=missing total=1s`.
+  Oturumun `Bash`'inde aynı değişken tanımlı (`github_pat_` biçiminde, 93 karakter; değer basılmadı).
+- **Neden: claude.ai ortam değişkenleri kurulum betiğine ulaşmıyor, yalnız oturuma veriliyor.**
+  Başka açıklamalar ölçümle elendi: kendi betiklerimiz değil (dışa aktarılmış bir değişken
+  önyükleyiciden `token_applies`'a ulaşıyor); zamanlama değil (platform günlüğü
+  `/tmp/environment-manager-*.diag.log`: `init_script_completed` 08:02:51.149,
+  `starting_claude_code` 08:02:51.165); eski görüntü ya da başka makine değil (24 Eylül kaydı yok;
+  platform günlüğündeki betik çıktısı 2137 bayt = bu koşunun `setup_env.log` satırları). Resmî
+  belge sessiz; aynı gözlem `anthropics/claude-code#63541`, `#55440` ve bağımsız bir kurulum
+  deposunda. Açık kalan dar varyantlar (boş değer, dışa aktarılmamış değer, ada göre süzme) düzeltmeyi
+  etkilemez.
+- **Anlık görüntü yeniden kuruldu:** `/opt/mathverify-logs`'ta 24 Eylül'den kayıt yok ve betik bu
+  makinede açılıştan 6 s sonra koştu. Belgeye göre betik ancak metni ya da ağ ayarı değişince (ya da
+  ~7 günde) yeniden koşar. Platform günlüğü (`/tmp/env-manager.log`) alandaki betiği 618 bayt
+  yazıyor, belgelenen önyükleyici 605 bayt: kısa bir ek satır (kullanıcının yorum satırıyla
+  tutarlı), belirteç yok. Aynı günlükte betikten önce `Git proxy sidecar skipped: boot-clone mount
+  is on`: kurulum betiği aşamasında GitHub git vekili çalışmıyor.
+- **Belirteç geçerli, ama hangi yoldan?** Oturum içinde GitHub vekili `api.github.com`'a giden
+  `Authorization` başlığını kendi kimliğiyle değiştiriyor: uydurma belirteç de 200 aldı, aynı
+  `Github-Authentication-Token-Expiration` ile; kimliksiz git isteğine de özel depo için 200. Yani
+  oturum içinden belirteç git yolunda sınanamıyor ve kurulum betiği aşamasında vekilin başlığı
+  geçirip geçirmediği bilinmiyor. `raw.githubusercontent.com` ise belgeye göre güvenlik vekilinin
+  arkasında: başlıksız 404, uydurma belirteçle 404, gerçek belirteçle 200 (belirteç geçerli, başlık
+  değişmeden ulaşıyor). Ref adıyla ve commit'le adreslenebiliyor; `SHA256SUMS.parts` ref'te var.
+- **Kancanın devraldığı kurulum (bu oturum):** kanca 8 s (3.14.6 yok, yedek 3.12.3, `.venv` 7 s),
+  Lean **222 s**'de hazır (`OK mode=lean`: çekim 55, Python 1, `setup_lean` 142, REPL 20). Kancanın
+  elle yeniden koşusu **35 s**: `.venv` 3.14.6 ile; uv ön ısıtması hiç koşmadığı için çevrimdışı
+  deneme düştü, çevrimiçi çözümleme 27.5 s sürdü (24 Eylül gecesi aynı adım 6 s'ydi). Tam takım 845
+  test: **840 passed / 5 skipped / 0 failed**, 112 s (atlananlar: 3'ü root altında salt okunur dizin,
+  1 isteğe bağlı indirme, 1 kapsam dışı ifade).
+- **Alanın yapacağı tam koşu** (oturum içinden, temiz önek, oturumun ağ yolu): `OK mode=all`
+  **192 s** (çekim 47, Python 1, uv ön ısıtma 8, `setup_lean` 118, REPL 22; 11 GB). ~5 dk yönergesinin
+  altında.
+- **Düzeltme** (DECISIONS §54): (1) Belirteç Setup script metnine yapıştırılır. Önyükleyicinin
+  `T=''` satırı dışa aktarılmaz, `setup_env.sh`'e yalnız o komut için verilir, `{ set +vx; }` satırı
+  izlenen bir kabuğun belirteci basmasını önler, `|| true` betik `-e` ile koşsa bile oturumu
+  engellemez. (2) `setup_env.sh` belirteci yalnız çekim aşamasına verir; uv, pip, Lean ve Lake
+  görmez. (3) `fetch_artifacts.sh` belirteci kendi kabuğunda tutar. Düz çekim ve belirteçle git
+  çekimi düşerse dosyaları `raw.githubusercontent.com`'dan indirir, her parçayı `SHA256SUMS.parts`'a
+  karşı doğrular (`MATHVERIFY_ARTIFACT_VIA=raw` yalnız bu yol). Ölçüm (oturum içinde, gerçek
+  belirteç): **32 s**, 5/5 SHA256 OK, günlükte belirteç 0 kez. (4) `setup_env.sh` gördüğü
+  değişkenlerin yalnız adlarını yazar (`environment (names only): set=[...] unset=[...]`); sonraki
+  alan koşusu, kurulum betiği aşamasında belirteç, vekil değişkenleri ve `CLAUDE_PROJECT_DIR` olup
+  olmadığını gösterir. (5) **Süre sınırı:** resmî belgeye göre ~5 dakikayı aşan kurulum betiği yeni
+  oturumları kilitler; çekim başarılı olunca tam koşu 192–234 s sürüyor. Önyükleyici `setup_env.sh`'i
+  `timeout -k 10 250` ile koşturur; sınıra takılan koşu `reason=terminated` yazar, kanca kalanını
+  kurar. (6) Bağımsız inceleme bulguları (curl çıkış durumu, `curl -q`, adres ve ref denetimi,
+  `unset` sırası) düzeltildi. Testler ve `check.py --full` sonucu DECISIONS §54'te.
+- **Doğrulama (25 Eylül 2026):** `check.py --full` **24/24** (`b4e91f0`, 09:16–10:05 UTC, 2937 s ≈ 49 dk: pytest 131, `run_eval` 72, `run_lean` 117, adversaryal 2478, sağlamlık 98, kalibrasyon 39 s); birim testleri 870 passed / 5 skipped; kapı değerleri önceki koşularla aynı (121 sertifika, Lean FP 0, junk 0/17, 21 139 saldırıda %0, 0/448, 0/214, 0/46, 0/184, 0/6); raporlarda yalnız süre satırları değişti. Ardından bağımsız incelemenin son bulgusu için bir test eklendi (`9aa6c2d`, betik değişmedi): tam takım 876 test, **871 passed / 5 skipped / 0 failed** (136 s; Lean yüzünden atlama yok); toplam 35 mutasyonun hepsi en az bir testi düşürdü.
+- **Açık [DOĞRULANMADI]:** kurulum betiği aşamasında `raw.githubusercontent.com`'a (ya da belirteçle
+  git'e) erişim. Bu değişiklik `master`a birleşip kullanıcı önyükleyiciyi belirteçle güncelleyince ilk
+  yeni sohbette ölçülür (`docs/BULUT.md` §12).
+
+### 0.13 25 Eylül sistematik denetimi: kod çalıştırma, yanlış onay sınıfları, formal katman
+
+Aynı oturumun devamı (dal `claude/compassionate-shannon-759r85`). Kullanıcı sordu: "localdeki bütün
+sorunlar çözülmüş mü, tek kalan API anahtarı ekleyip test etmek mi?" **Cevap: hayır.** Yeni bir
+denetim, yerelde krediye bağlı olmayan ciddi açıklar buldu. Hepsi aynı oturumda düzeltildi ve
+ölçüldü. Karar ve ayrıntı DECISIONS §55.
+
+- **Yöntem.** Beş bağımsız denetçi (A cebir/sayma, B kalkülüs/trig, C geometri/kombinatorik/seri/
+  lineer cebir, D ayrıştırıcı/girdi/birleştirme, E Lean), her bulgu kendi doğruluk denetimiyle
+  (kesin SymPy, kaba kuvvet, el ispatı). Düzeltmeler dosya sahipliğine göre beş dalda yapıldı
+  (`claude/denetim-wt|geo|alg|lean|calc`; çakışma yalnız `certify/domain.py`'de ve çekirdek test
+  dosyasında, ikisi de ekleme) ve `claude/denetim-int`'te birleştirilip oturum dalına ileri sarıldı.
+  Lean'i yalnız bir ajan kullandı (tek REPL).
+- **En ciddi bulgu: kod çalıştırma.** Cevap metni `sympify` ile okunduğunda Python kodu doğrulayıcının
+  kendi sürecinde çalışıyordu (`__import__('os')...`). Birleştirmeden sonra ikinci kapı bulundu:
+  `sympify(..., strict=True)` sözlük/demet içindeki metni yine değerlendirir. Artık: AST beyaz
+  listesi (`guarded_parse_expr`), metin dışı değer yalnız sayı/SymPy nesnesi (`sympify_nontext`),
+  girdi biçimi denetimi (`MalformedSolution`, `MalformedIR`).
+- **Ölçüm (eski kod `da963b2` → yeni kod, aynı betikler, Lean'siz):**
+
+  | Ölçüm | Eski kod | Yeni kod |
+  |---|---|---|
+  | Enjeksiyon taraması (doğru 141 cevap × 2 sarmal): kod çalıştırıp CORRECT | 113/282 | 0/282 |
+  | Alan taraması (23 görev türü, her alan × 7 tür, 4753 durum): kod çalıştırma / sızan istisna | ilk öğelerde 18 kod çalıştırma, sonra asıldı | 0 / 0 |
+  | Denetçi A tekrar betikleri (17 dosya): hatalı karar | 78 | 0 |
+  | Denetçi A sonda derlemi (25 betik): yanlış onay / yanlış ret | 85 / 38 | 2 / 3 (4'ü etiket hatası, 1'i bilinen sınır) |
+  | Denetçi B tekrar betikleri (23 dosya): hatalı karar | 94 | 0 |
+  | Denetçi E vakaları, deterministik katman: yanlış karar | 17 | 0 |
+  | Lean: yanlış iddiaya sertifika (denetçinin 98'lik kümesi; el ispatı 14) | 53/98 (12/14) | 0/99 (0/14) |
+  | `run_lean`: sertifika / FP / junk | 121 / 0 / 0 of 17 | 121 / 0 / 0 of 33 |
+
+- **Değerlendirme seti** (280 kayıt): hiçbir karar değişmedi; cevap düzeyi 154 / 0 / 84 / 0 / 0
+  (TP / FP / TN / FN / UNKNOWN), çözüm düzeyinde bilinen tek FP `tyt-prob-018`.
+- **Düzeltme (25 Eylül 2026): "Lean FP 0" yalnız değerlendirme setindeki sorularda ölçülmüştü.**
+  Denetçinin set dışında yazdığı 98 yanlış iddianın 53'ü Lean'de temiz sertifika alıyordu (model
+  yazımı 14 ispatın 12'si de). Önceki oturum raporlarında bu sayı genel bir güvence gibi sunuldu;
+  yanlıştı. Düzeltmeden sonra 0/99 ve 0/14; yeni sınıflar `run_lean`'in junk kapısında kalıcı (17 → 33).
+- **Hatalarım (bu oturum).** (1) İlk geniş "verilen eşitsizlik tanım kümesini daraltır" kuralı
+  birleştirmede iki doğru cevabı bozdu (sayma TypeError, küp kökü); ölçümle bulundu ve daraltıldı.
+  (2) Arka plan komutunda `a && (b) & (c)` yazdım: `cd` ve değişken yalnız ilk alt kabuğa uygulandı,
+  bir koşu hiç başlamadı ve ana checkout'a boş bir dosya düştü (taşındı). (3) `pkill -f <desen>`
+  komut satırında deseni taşıyan kendi kabuğumu iki kez öldürdü (çıkış 144; §11). (4) "Önce" tür
+  taraması ileri sardığım dalın kaynağını okuyordu; `da963b2`'nin ayrı bir kopyasında yeniden koşuldu.
+- **Açık kalanlar** (hiçbiri doğru cevabı reddetmez; UNKNOWN kapsama kaybı ya da bilinen sınır):
+  kanıtsız eşdeğer doğru biçimleri, sembolik kanıtı olmayan kapalı biçimler, periyodik tanım kümeli
+  ilkeller, sonsuz sınırlı integraller, gelenek farkı olan tek taraflı durumlar, `asec`/`acsc`
+  ayrıştırıcıda yok. Yanlış çarpanlara ayırma adımı (`x² − 5x + 6 = 2(x − 2)(x − 3)`, öncül
+  x² − 5x + 6 = 0) öncüllerin çözümlerinde doğru olduğundan reddedilmez (DECISIONS §55).
+- **Ölçüm betikleri depoda (26 Eylül eki):** `denetim/2026-09-25/` (README'de koşturma ve sonuçlar).
+  Depodaki çalıştırıcı eski kodda aynı sayıları üretti. İlk kez koşulan C grubu (geometri denetçisinin
+  beklentili betikleri) bir açık daha gösterdi: toplamın bağlı değişkeni (`Sum(k, (k, 1, 4)) = 11`)
+  tanımsız ad sayılıp yanlış adım atlanıyordu; düzeltildi (DECISIONS §55 Ek). C'de kalan 20 fark:
+  16 UNKNOWN (kapsama), 2 beklenti hatası, 1 bilinen sınır (iki kayıt).
+- **Son doğrulama (26 Eylül):** `check.py --full` **24/24** (`67d1619`, ≈ 60 dk), **1321 passed / 5 skipped**,
+  Lean 121 / FP 0 / junk 0/33, saldırı %0. Konteyner yeniden başlatılınca ilk Lean açılışı ~400 s
+  sürüyor; `--full` artık önce Lean'i ısıtır (DECISIONS §55 Ek 3). Önceki doğrulama:
+- **Doğrulama:** `check.py --full` **24/24** (`c1d4c3e`, 16:30–17:30 UTC, aşamaların toplamı 3595 s ≈ 60 dk: pytest 276, `run_eval` 87, `run_lean` 131, adversaryal 2936, sağlamlık 119, kalibrasyon 44 s); birim testleri **1314 passed / 5 skipped** (denetim öncesi 871 / 5); Lean 121 sertifika (24 Eylül kümesiyle aynı), FP 0, junk **0/33**; 21 139 saldırıda %0; 0/448, 0/214, 0/46, 0/184, 0/6. İlk birleşik koşu (`0eb99b6`) de 24/24 geçmişti, ama adversaryal raporda anlamı koruyan saldırılarda UNKNOWN'a düşen 2896 → 2964 çıktı: `x in {…}` adım biçimi görünmez karakter ya da `\boxed{}` ile 7 doğru çözümde UNKNOWN oluyordu. Düzeltildi (`c1d4c3e`); son koşuda 2894, karşıt karara dönen yine 0. Değerlendirme setinde karar değişmedi. Denetimin 29 düzeltme commit'i (beş dal ve birleşik dal) ve 10 birleştirme commit'i bu dalda (`da963b2..`); geçici dallar ve worktree'ler silindi (içerikleri bu dalda). Push: yalnız bu oturumun dalı.
+
 
 ---
 
@@ -850,6 +991,7 @@ Bunlar **tekrar denenmemeli.** Her birinin neden başarısız olduğu yanında y
 | 23 Eylül, aynı oturumun devamı: tanımlılık açığı (11 yanlış-onay vakası), üç Lean şablonu, pyflakes kapısı, temizlik | tamam, `master`a birleştirildi (§5.3) |
 | 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean + çevrimdışı kurulum, kapı sertleştirmesi (24 kapı) | tamam, `bulut-2026-09-24` dalında (§0) |
 | 24 Eylül akşamı: gerçek bulut ölçümü, Lean kapılarının "cevap verdi" koşulu, denetim sondası (ilke 7), çevrimdışı ve aşamalı kurulum, Python yedeği, `ANTHROPIC_BASE_URL` | ölçüldü ve düzeltildi (§0.5 eki, §0.8); `bulut-2026-09-24` dalında. **Düzeltme:** dalın `4d01ba2` hâli GitHub'daki `master`da (`572ef57`, §0.9) |
+| 25 Eylül sistematik denetimi: kod çalıştırma, yanlış onay sınıfları (cebir, kalkülüs, geometri, girdi), formal katman | kapatıldı ve ölçüldü (§0.13, DECISIONS §55); `claude/compassionate-shannon-759r85` dalında |
 
 Son `check.py --full` sonucu (23 Eylül 2026 15:56, `yerel-kalite-2026-09-23` @ `e2aa08d` + §5.3'teki
 commit edilmemiş değişiklikler; günlük `reports/check_full.log`; toplam ~67 dk, adversaryal 3490 s):
@@ -896,6 +1038,15 @@ günlük `reports/check_full.log`.
 durumundan. D3 gereği süre bir kapı değil. Hiçbir sonuç dosyasında `MemoryError` ya da worker
 ölümü yok. Önceki koşuya göre değişen tek sayı: anlamı koruyan saldırılarda UNKNOWN'a düşen 2898 →
 2896 (`homoglyph`, karşıt karara dönen yine 0) ve kalibrasyon doğrulama kapsaması 0.864 → 0.879.
+
+**Düzeltme (25 Eylül 2026): "Lean FP 0" genel bir güvence değildi.** Tablodaki ve bu belgenin
+başka yerlerindeki "Lean FP 0" yalnız değerlendirme setinin cevabı yanlış öğelerinde ölçülmüştü.
+25 Eylül denetiminde set dışında yazılan 98 yanlış iddianın 53'ü Lean'de temiz sertifika aldı
+(kısıtların düşürülmesi, sadeleştiren ayrıştırma, ℕ'de okunan kapalı hedefler, Mod, zayıf boşluk
+sondası; §0.13, DECISIONS §55). Düzeltildi (0/99) ve bu aileler artık junk kapısında kalıcı sonda
+(17 → 33). Aynı denetim, deterministik katmanda da set dışı yanlış onay sınıfları ve cevap
+metninin kod olarak çalıştığı bir açık buldu. Değerlendirme setindeki precision 1.000'ın o sete
+özgü olduğu, genelleme olmadığı bir kez daha görüldü. Son `check.py --full`: §0.13.
 
 ### 5.2 Yarım kalan iş
 
@@ -1036,6 +1187,21 @@ dördüncü bir etiket var: `yedek/master-2026-09-24-2` → `572ef57`; `master` 
 de `18fd298`. Yani dal `master`a birleştirildi ve etiket, `master` `572ef57`'den ileri alınmadan
 önceki yedek olmalı (çıkarım). Buna karşılık gelen bundle'ın `C:\Users\kullanici\mathverify-yedek\`
 altında olup olmadığı buluttan görülemez **[DOĞRULANMADI]**.
+
+**Ek (26 Eylül 2026, kullanıcının makinesinde, `claude/compassionate-shannon-759r85` birleştirilmeden önce):**
+
+| Etiket | `master` | Bundle (`C:\Users\kullanici\mathverify-yedek\`) |
+|---|---|---|
+| `yedek/master-2026-09-26` | `d66bf2d` (PR #1'in birleştirmesi) | `mathverify-master-d66bf2d-2026-09-26.bundle` (`git bundle verify`: "is okay", 18 ref, tam geçmiş) |
+
+- Etiket GitHub'a push edildi; bulut oturumundan `git ls-remote` ile görüldü: etiket ve `origin/master`
+  ikisi de `d66bf2d`.
+- **Dikkat:** bundle'daki `refs/heads/master` kullanıcının yerel, eski `master`ıdır (`18fd298`);
+  güncel `master` bundle'da `refs/remotes/origin/master` ve etiket olarak durur. Bu bundle'dan geri
+  dönüş `git clone --branch master` ile değil, klonlayıp `git checkout yedek/master-2026-09-26` ile
+  yapılır. Yerel checkout `~/mathverify`, dalı `bulut-2026-09-24`.
+- GitHub'da belgelenmemiş bir etiket daha var: `yedek/master-2026-09-25` → `18fd298` (PR #1'den
+  önceki `master`). Karşılık gelen bir bundle olup olmadığı bilinmiyor **[DOĞRULANMADI]**.
 
 Commit geçmişi (eskiden yeniye):
 
@@ -1201,6 +1367,38 @@ bir ortam değişkeni tanımlıysa `override=False` yüzünden `.env`'deki deği
 
 ## 7. Sıradaki adımlar
 
+**Güncel sıra (25 Eylül 2026, denetimden sonra; §0.13).** Bunlar önce gelir:
+
+1. Bu dal (`claude/compassionate-shannon-759r85`: kurulum betiği işi, §0.12, ve 25 Eylül denetimi,
+   §0.13) kullanıcı onayı ve yedekle (etiket + bundle, §5.4) `master`a birleştirilir.
+2. Aşağıdaki §0.12 sırasının 2.–4. adımları (Setup script metni, belirteç, sonraki sohbette ölçüm).
+3. Krediye bağlı ölçümler (F3/F4) kod dondurulup anahtarlar yenilendikten sonra (kullanıcı kararı,
+   23 Eylül). Bu denetimden sonra F3 ölçümü baştan koşulmalı: iddia okuma ve birleştirme kuralları
+   değişti; eski F3 sayıları eski koda aittir.
+4. Gerçek veri: hangi modelin çözümleri, hangi sorular, etiketleri kim koyacak (kullanıcı kararı).
+   Denetçilerin sonda derlemlerinde 4 etiket yanlış çıktı; etiketler kaba kuvvetle ya da ikinci bir
+   kişiyle denetlenmeli.
+5. Açık kapsama işleri (hiçbiri doğru cevabı reddetmiyor): §0.13 "Açık kalanlar".
+
+**Güncel sıra (25 Eylül 2026; §0.12).** Aşağıdaki listeler geçerli kalır; bunlar önce gelir. 24 Eylül
+gecesi sırasının 2. adımı (belirteç ortam değişkeninde) yapıldı ama işe yaramadı:
+
+1. Bu oturumun dalı (`claude/compassionate-shannon-759r85`: `fetch_artifacts.sh`'in belirteçli
+   `raw.githubusercontent.com` adımı, belirtecin yalnız çekim aşamasına gitmesi, değişken adları
+   satırı, yeni önyükleyici, belgeler) kullanıcı onayı ve yedekle (etiket + bundle, §5.4) `master`a
+   birleştirilir. Kurulum betiği checkout'taki `master` kopyasını çalıştırır.
+2. Kullanıcı: Setup script alanının metnini yeni önyükleyiciyle değiştirir ve belirteci `T=''`
+   tırnaklarının arasına yapıştırır; Environment variables'taki `MATHVERIFY_GITHUB_TOKEN` satırını
+   siler; isteğe bağlı `MATHVERIFY_SETUP_CANARY=1` ekler (`docs/BULUT.md` "Senin yapman
+   gerekenler" 3. madde, 25 Eylül düzeltmesi). Metin değiştiği için görüntü yeniden kurulur.
+3. Sonraki yeni sohbette ölçüm (`docs/BULUT.md` §12): `setup_env.status` `OK mode=all`;
+   `environment (names only)` satırı; `fetch_artifacts.log`'da hangi yolun çalıştığı; kanca açılışta
+   "Lean: HAZIR". Bir sonraki yeni sohbette görüntünün `/opt`'u koruduğu. Dosya indirme yolu da
+   düşerse (ör. kurulum aşamasında `raw.githubusercontent.com` kapalıysa), kalan seçenekler
+   DECISIONS §54 *Seçilmeyenler* (b) ve (c): açık bir araç deposu (kullanıcı kararı) ya da yalnız
+   kanca (her yeni sohbet ~4 dk).
+4. Devam ettirilen sohbette Lean'in ilk açılışı >300 s sürebiliyor (§0.11; değişmedi).
+
 **Güncel sıra (24 Eylül 2026, akşam).** Aşağıdaki eski liste geçerli kalır; bunlar önce gelir:
 
 1. **Kullanıcı WSL disk imajını sıkıştırır** (§0.10). Bu belge yazılırken `.vhdx` 103.8 GB, C:'de
@@ -1357,8 +1555,8 @@ bu soruları açık bırakır.
 | `docs/sartname/` | Özgün şartname (kanonik `_1.md`, eski `_eski.md`) |
 | `lean/` (`PINS` + proje dosyaları) | Sabit Lean/Mathlib/REPL/elan sürümleri; elle düzenlenmez (`lean/README.md`) |
 | `scripts/setup_lean.sh`, `scripts/setup_lean_repl.sh` | Sabit, çevrimdışı yapılabilen Lean kurulumu (WSL ve Linux) |
-| `scripts/fetch_artifacts.sh` | Araç ref'ini (`refs/arac/bulut-vN`) çeker, parçaları birleştirir, SHA256 ile doğrular. *Ek (24 Eylül gecesi):* düz çekim düşerse `MATHVERIFY_GITHUB_TOKEN` ile bir kez daha dener (kurulum betiği aşaması, §0.11, DECISIONS §53) |
-| `scripts/cloud/setup_env.sh` | Bulut ortam kurulum betiği (root, `/opt`, her zaman 0); başlığında yapıştırılacak önyükleyici |
+| `scripts/fetch_artifacts.sh` | Araç ref'ini (`refs/arac/bulut-vN`) çeker, parçaları birleştirir, SHA256 ile doğrular. *Ek (24 Eylül gecesi):* düz çekim düşerse `MATHVERIFY_GITHUB_TOKEN` ile bir kez daha dener (kurulum betiği aşaması, §0.11, DECISIONS §53). *Ek (25 Eylül):* o da düşerse dosyaları belirteçle `raw.githubusercontent.com`'dan indirir, her parçayı `SHA256SUMS.parts`'a karşı doğrular; belirteç ortamda değil kabuk değişkeninde (§0.12, DECISIONS §54) |
+| `scripts/cloud/setup_env.sh` | Bulut ortam kurulum betiği (root, `/opt`, her zaman 0); başlığında yapıştırılacak önyükleyici. *Ek (25 Eylül):* önyükleyici belirteci `T=''` satırında alır; betik belirteci yalnız çekim aşamasına verir ve gördüğü değişkenlerin adlarını günlüğe yazar (§0.12) |
 | `scripts/cloud/session_start.sh`, `.claude/settings.json` | SessionStart kancası; yalnız `CLAUDE_CODE_REMOTE=true` iken iş yapar |
 | `requirements.lock` | Paket kilidi (32 paket) |
 | `reports/arsiv/2026-09-24/` | Rapor JSON'larının anlık görüntüsü; iki F3 dosyası yeniden üretilemez |
@@ -1489,7 +1687,9 @@ Windows'ta okunur. `.env` artık depoda izleniyor (§0.3). Yeni değişkenler (a
 | `MATHLIB_CACHE_DIR`, `XDG_CACHE_HOME` | Mathlib `.ltar` önbelleği, varsayılan `$HOME/.cache/mathlib` |
 | `CLAUDE_CODE_REMOTE`, `CLAUDE_PROJECT_DIR`, `CLAUDE_ENV_FILE` | Platformun verdiği değişkenler; kanca yalnız `CLAUDE_CODE_REMOTE=true` iken iş yapar |
 | `MATHVERIFY_LEAN_OFFLINE` | (24 Eylül akşamı eklendi) `1`: `setup_lean.sh` ve `setup_lean_repl.sh` sıkı çevrimdışı; her çevrimiçi yedek (araç zinciri indirmesi, `lake exe cache get`, klon, `apt-get`) reddedilir, eksik artefakt betiği bir şey yazmadan durdurur. `setup_env.sh` her zaman `1` verir; varsayılan `0` |
-| `MATHVERIFY_GITHUB_TOKEN` | (24 Eylül gecesi eklendi) yalnız bu depoyu okuyabilen GitHub belirteci (fine-grained, Contents: read-only); claude.ai ortamının değişkenlerinde, depoda değil. `fetch_artifacts.sh` onu yalnız düz çekim düştükten sonra ve yalnız `MATHVERIFY_GITHUB_TOKEN_URL` (varsayılan `https://github.com/`) altındaki adrese gönderir; değer hiçbir çıktıya yazılmaz (§0.11, DECISIONS §53). `GITHUB_TOKEN`/`GH_TOKEN` adı kullanılmaz |
+| `MATHVERIFY_GITHUB_TOKEN` | (24 Eylül gecesi eklendi) yalnız bu depoyu okuyabilen GitHub belirteci (fine-grained, Contents: read-only); claude.ai ortamının değişkenlerinde, depoda değil. `fetch_artifacts.sh` onu yalnız düz çekim düştükten sonra ve yalnız `MATHVERIFY_GITHUB_TOKEN_URL` (varsayılan `https://github.com/`) altındaki adrese gönderir; değer hiçbir çıktıya yazılmaz (§0.11, DECISIONS §53). `GITHUB_TOKEN`/`GH_TOKEN` adı kullanılmaz. **Düzeltme (25 Eylül 2026, ölçüm):** claude.ai ortam değişkeni kurulum betiğine ulaşmaz; belirteç Setup script metnindeki önyükleyicinin `T=''` satırında verilir, ortam değişkeninden silinir (§0.12, DECISIONS §54) |
+| `MATHVERIFY_GITHUB_RAW_URL` / `MATHVERIFY_ARTIFACT_VIA` | (25 Eylül'de eklendi) belirteçli dosya indirmenin adresi (varsayılan `https://raw.githubusercontent.com/`; boşsa adım atlanır) / `raw`: yalnız o yol (ölçüm için) |
+| `MATHVERIFY_SETUP_CANARY` | (25 Eylül'de eklendi) zararsız işaret; claude.ai ortamına eklenirse `setup_env.sh` adının kurulum betiğine ulaşıp ulaşmadığını yazar |
 
 **Düzeltme (24 Eylül 2026, akşam, `eba49b5`):** `MATHLIB_CACHE_DIR` satırındaki
 `$HOME/.cache/mathlib` yalnız araç dizini olmadan yapılan kurulumda geçerli. Bulut kurulumu
@@ -1497,6 +1697,10 @@ Windows'ta okunur. `.env` artık depoda izleniyor (§0.3). Yeni değişkenler (a
 yanındaki geçici `.<proje>.ltar.<pid>`'e açar; ikisi de kurulumdan sonra silinir. Routine oturumunun
 ölçtüğü `/root/.cache/mathlib` (448 MB) bu değişiklikten önceki `4d01ba2`'dendi; anlık görüntüde
 artık `.ltar` kalmaz (`docs/LEAN_SETUP.md`, `docs/BULUT.md` §5).
+
+**Düzeltme (25 Eylül 2026, ölçüm):** bu tablodaki değişkenler claude.ai ortam ayarından verilirse
+yalnız oturuma (komutlar, kanca, kancanın başlattığı `--lean-only`) ulaşır; anlık görüntüyü kuran
+kurulum betiği koşusu yalnız Setup script metninde verilenleri görür (§0.12, `docs/BULUT.md` §3.3).
 
 ### Harici servisler ve bağımlılıklar
 

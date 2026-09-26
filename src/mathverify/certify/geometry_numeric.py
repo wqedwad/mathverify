@@ -6,18 +6,29 @@ area, ratio). We do NOT reason synthetically. We build many random configuration
 satisfy the constraints exactly (to 25+ digits), measure the target in each, and accept the
 claim only when
 
-  * every realisation is non-degenerate (no coincident points, no zero-area triangles),
+  * no two points of a realisation coincide,
   * the target agrees across ALL realisations (otherwise the constraints do not determine
     it -> IR incomplete / ill-posed -> UNKNOWN, never a guess), and
-  * the common value equals the claim.
+  * the common value equals the claim at 80 digits: two realisations are polished by Newton's
+    method at 80 digits and the claim must agree to 1e-60 (relative); a difference above 1e-40
+    refutes, anything between abstains.
 
-Gauge: point 1 at the origin, point 2 on the positive x-axis. If no length constraint fixes
-the scale, dist(P1, P2) is set to 1 and the target must be scale-invariant (angle, ratio);
-a length target then yields UNKNOWN with a flag.
+Gauge: point 1 at the origin, point 2 on the x-axis (rotation and translation only — every
+constraint helper is invariant under them). The SCALE is never fixed by the gauge: before the
+audit of 25 Sep 2026 a heuristic decided whether a length constraint fixed it and otherwise set
+dist(P1, P2) = 1, and it missed constants 1, 2, 1/2, sqrt(2) and area constraints — the added
+constraint made undetermined targets look determined ("CA = CB = 1, angle C = 60" was certified).
+With the scale left free, a scale-dependent target simply varies across realisations. When a
+constraint or the target uses absolute coordinates (px, py) no gauge is applied at all.
+
+Angles are in degrees (angle() returns degrees). A degree mark written in a constraint, the
+target or the claim (`40°`, `40 derece`) therefore means the plain number: the parser's generic
+rule would turn it into radians (40*pi/180) and build a different figure (measured: tyt-geo-002
+written as `angle(B,A,C) = 40°` certified 90 - pi/9 and refuted 70).
 
 Every realisation is found with a damped Gauss–Newton / Levenberg–Marquardt solve on the
 residuals (symbolic Jacobian from SymPy, mpmath arithmetic). Free parameters (unknowns not
-pinned by the constraints) are sampled randomly per realisation with a fixed seed.
+pinned by the constraints) are sampled as exact rationals per realisation with a fixed seed.
 """
 from __future__ import annotations
 
@@ -28,8 +39,9 @@ import mpmath as mp
 import sympy as sp
 from sympy import Matrix, sqrt, pi, acos, Abs
 
-from ..equiv.numeric import num_equal
-from ..normalize.parse import parse_relation, ParseError, _SAFE_NAMES, preclean
+from ..equiv.numeric import to_mp
+from ..normalize.parse import (parse_relation, ParseError, _SAFE_NAMES, preclean, _DEG_NUM_RE,
+                               _DEG_PAREN_RE)
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown
 
@@ -141,8 +153,41 @@ GEO_FUNCS = {
 
 
 # ---------------------------------------------------------------------------
+# degree marks
+# ---------------------------------------------------------------------------
+def has_degree_mark(s: str) -> bool:
+    return isinstance(s, str) and bool(_DEG_NUM_RE.search(s) or _DEG_PAREN_RE.search(s))
+
+
+def strip_degree_marks(s: str) -> str:
+    """`40°` -> `40`, `(a+b)°` -> `(a+b)`: angle() is measured in degrees, so a degree mark is
+    the unit of the plain number, not a conversion to radians."""
+    s = _DEG_PAREN_RE.sub(r"(\1)", s)
+    return _DEG_NUM_RE.sub(r"\1", s)
+
+
+def _uses_coordinates(texts) -> bool:
+    import re
+    return any(re.search(r"(?<![\w.])p[xy]\s*\(", t) for t in texts if isinstance(t, str))
+
+
+# ---------------------------------------------------------------------------
 # realisation engine
 # ---------------------------------------------------------------------------
+_HI_DPS = 80                   # precision of the polished realisations used for the comparison
+_HI_EQUAL = mp.mpf("1e-60")    # |claim - value| <= this * max(1, |value|)  -> equal
+_HI_DIFFERENT = mp.mpf("1e-40")  # above this (same scale) -> genuinely different
+_LO_DIFFERENT = mp.mpf("1e-8")   # without a polished value only a gross difference refutes
+
+
+def _to_mpf(v):
+    if isinstance(v, sp.Rational):
+        return mp.mpf(v.p) / v.q
+    if isinstance(v, (mp.mpf, mp.mpc)):
+        return v
+    return mp.mpf(str(v))
+
+
 class GeoProblem:
     def __init__(self, points: list[str], constraints: list[str], target: str, seed: int = 0,
                  extra_ns: dict | None = None):
@@ -158,23 +203,24 @@ class GeoProblem:
             self.syms[f"{p}_x"], self.syms[f"{p}_y"] = sx, sy
             ns[p] = Matrix([sx, sy])
         self.ns = ns
-        # gauge: P1 = (0,0), P2 = (s, 0)
-        self.fixed: dict[sp.Symbol, Any] = {}
-        p1, p2 = self.points[0], self.points[1]
-        self.fixed[self.syms[f"{p1}_x"]] = sp.Integer(0)
-        self.fixed[self.syms[f"{p1}_y"]] = sp.Integer(0)
-        self.fixed[self.syms[f"{p2}_y"]] = sp.Integer(0)
-        self.residuals: list[Any] = []
         self.raw_constraints = list(constraints)
+        # gauge (rotation + translation only): P1 = (0, 0), P2 on the x-axis. Never the scale.
+        self.fixed: dict[sp.Symbol, Any] = {}
+        self.gauge = not _uses_coordinates(list(constraints) + [target])
+        if self.gauge:
+            p1, p2 = self.points[0], self.points[1]
+            self.fixed[self.syms[f"{p1}_x"]] = sp.Integer(0)
+            self.fixed[self.syms[f"{p1}_y"]] = sp.Integer(0)
+            self.fixed[self.syms[f"{p2}_y"]] = sp.Integer(0)
+        self.residuals: list[Any] = []
         for c in constraints:
             rel = self._parse(c)
             rels = rel if isinstance(rel, list) else [rel]
             for r in rels:
                 self.residuals.append(self._to_residual(r))
-        self.target = self._parse_expr(target)
+        self.target = self._parse_expr(strip_degree_marks(target))
+        # informational only: nothing is decided from it any more (see the module docstring)
         self.scale_fixed = self._scale_is_fixed()
-        if not self.scale_fixed:
-            self.fixed[self.syms[f"{p2}_x"]] = sp.Integer(1)
         self.unknowns = [s for s in self.syms.values() if s not in self.fixed]
         # constraint-introduced parameters (e.g. t for on-segment)
         extra = set()
@@ -186,7 +232,7 @@ class GeoProblem:
 
     # ---- parsing -----------------------------------------------------------
     def _parse(self, s: str):
-        s2 = preclean(s)
+        s2 = preclean(strip_degree_marks(s))
         if any(op in s2 for op in ("<", ">", "!=")):
             raise ParseError("inequality constraints are not supported in geometry_numeric")
         if "=" in s2:
@@ -207,7 +253,6 @@ class GeoProblem:
 
     def _scale_is_fixed(self) -> bool:
         for r in self.residuals:
-            # a residual that fixes a length/area (contains a numeric constant and a dist/area)
             if r.has(sp.sqrt) or any(isinstance(a, sp.Pow) for a in r.atoms(sp.Pow)):
                 consts = [a for a in r.atoms(sp.Number) if a not in (0, 1, -1, 2, -2, sp.Rational(1, 2))]
                 if consts or (r.is_polynomial() and any(t.is_number and t != 0 for t in sp.Add.make_args(r))):
@@ -215,16 +260,25 @@ class GeoProblem:
         return False
 
     # ---- numeric solve ----------------------------------------------------
-    def realise(self, n: int = _N_REAL, dps: int = _DPS) -> tuple[list[Any], dict[str, Any]]:
-        """Return list of target values (mpf) from independent realisations + evidence."""
+    def _free_value(self, s, rng):
+        # exact rationals: the same realisation can then be polished at any precision
+        if s.name.startswith("t_"):
+            return sp.Rational(rng.randint(150, 850), 1000)
+        return sp.Rational(rng.randint(-3000, 3000), 1000)
+
+    def realise(self, n: int = _N_REAL, dps: int = _DPS, n_polish: int = 2
+                ) -> tuple[list[Any], dict[str, Any]]:
+        """Return list of target values (mpf) from independent realisations + evidence.
+        `ev["hi_values"]` holds up to `n_polish` of them recomputed at _HI_DPS digits."""
         rng = random.Random(self.seed)
         ev: dict[str, Any] = {"n_unknowns": len(self.unknowns), "n_constraints": len(self.residuals),
-                              "n_free": self.n_free, "scale_fixed": self.scale_fixed, "attempts": 0,
-                              "realisations": 0, "degenerate": 0}
+                              "n_free": self.n_free, "scale_fixed": self.scale_fixed, "gauge": self.gauge,
+                              "attempts": 0, "realisations": 0, "degenerate": 0}
         subs_fixed = dict(self.fixed)
         res = [r.subs(subs_fixed) for r in self.residuals]
         tgt = self.target.subs(subs_fixed)
         values = []
+        solved: list[tuple[list, list, dict, dict]] = []
         if self.n_free < 0:
             ev["error"] = "overdetermined"
             return values, ev
@@ -232,22 +286,20 @@ class GeoProblem:
             attempts = 0
             while len(values) < n and attempts < n * 6:
                 attempts += 1
-                # choose free unknowns and random values for them
                 free = rng.sample(self.unknowns, self.n_free) if self.n_free else []
-                fv = {s: mp.mpf(rng.uniform(-3, 3)) if not s.name.startswith("t_") else mp.mpf(rng.uniform(0.15, 0.85))
-                      for s in free}
+                fv = {s: self._free_value(s, rng) for s in free}
                 solve_for = [s for s in self.unknowns if s not in free]
-                res_k = [r.subs({s: sp.Float(str(v), dps) for s, v in fv.items()}) for r in res]
+                res_k = [r.subs(fv) for r in res]
                 sol = _newton(res_k, solve_for, rng, dps)
                 if sol is None:
                     continue
-                full = dict(fv)
+                full = {s: _to_mpf(v) for s, v in fv.items()}
                 full.update(sol)
                 # degeneracy: all points distinct
                 pts = {}
                 for p in self.points:
                     sx, sy = self.syms[f"{p}_x"], self.syms[f"{p}_y"]
-                    pts[p] = (mp.mpf(str(subs_fixed.get(sx, full.get(sx)))), mp.mpf(str(subs_fixed.get(sy, full.get(sy)))))
+                    pts[p] = (_to_mpf(subs_fixed.get(sx, full.get(sx))), _to_mpf(subs_fixed.get(sy, full.get(sy))))
                 degenerate = False
                 names = list(pts)
                 for i in range(len(names)):
@@ -257,20 +309,42 @@ class GeoProblem:
                 if degenerate:
                     ev["degenerate"] += 1
                     continue
-                try:
-                    f = sp.lambdify(list(full.keys()), tgt, "mpmath")
-                    val = f(*[mp.mpf(str(v)) for v in full.values()])
-                except Exception:
+                val = _eval_target(tgt, full)
+                if val is None:
                     continue
-                if isinstance(val, mp.mpc):
-                    if abs(val.imag) > mp.mpf("1e-20"):
-                        continue
-                    val = val.real
                 values.append(val)
+                solved.append((res_k, solve_for, sol, fv))
             ev["attempts"] = attempts
             ev["realisations"] = len(values)
             ev["sample_values"] = [mp.nstr(v, 15) for v in values[:4]]
+        # polish the first realisations at high precision (Newton converges quadratically from
+        # a 1e-22 solution of a regular system; a singular one does not polish and is reported)
+        hi = []
+        for res_k, solve_for, sol, fv in solved[:n_polish]:
+            with mp.workdps(_HI_DPS):
+                sol_hi = _polish(res_k, solve_for, sol, _HI_DPS)
+                if sol_hi is None:
+                    continue
+                full = {s: _to_mpf(v) for s, v in fv.items()}
+                full.update(sol_hi)
+                v = _eval_target(tgt, full)
+                if v is not None:
+                    hi.append(mp.nstr(v, _HI_DPS))
+        ev["hi_values"] = hi
         return values, ev
+
+
+def _eval_target(tgt, full):
+    try:
+        f = sp.lambdify(list(full.keys()), tgt, "mpmath")
+        val = f(*[_to_mpf(v) for v in full.values()])
+    except Exception:  # noqa: BLE001
+        return None
+    if isinstance(val, mp.mpc):
+        if abs(val.imag) > mp.mpf(10) ** (-(mp.mp.dps - 10)):
+            return None
+        val = val.real
+    return val
 
 
 def _newton(residuals, unknowns, rng, dps, tries: int = 12, iters: int = 80):
@@ -288,47 +362,112 @@ def _newton(residuals, unknowns, rng, dps, tries: int = 12, iters: int = 80):
     for _ in range(tries):
         x = mp.matrix([mp.mpf(rng.uniform(-3, 3)) if not u.name.startswith("t_") else mp.mpf(rng.uniform(0.15, 0.85))
                        for u in unknowns])
-        lam = mp.mpf("1e-3")
-        ok = False
-        for _it in range(iters):
-            try:
-                Fx = mp.matrix(fF(*x))
-                Jx = mp.matrix(fJ(*x))
-            except (ZeroDivisionError, ValueError):
-                break
-            nrm = mp.norm(Fx)
-            if nrm < mp.mpf(_RES_TOL):
-                ok = True
-                break
-            try:
-                A = Jx.T * Jx + lam * mp.eye(len(unknowns))
-                dx = mp.lu_solve(A, -(Jx.T * Fx))
-            except ZeroDivisionError:
-                break
-            x_new = x + dx
-            try:
-                nrm_new = mp.norm(mp.matrix(fF(*x_new)))
-            except (ZeroDivisionError, ValueError):
-                lam *= 10
-                continue
-            if nrm_new < nrm:
-                x = x_new
-                lam = max(lam / 3, mp.mpf("1e-30"))
-            else:
-                lam *= 10
-                if lam > mp.mpf("1e12"):
-                    break
-        if ok:
+        x = _lm(fF, fJ, x, len(unknowns), mp.mpf(_RES_TOL), iters)
+        if x is not None:
             return {u: x[i] for i, u in enumerate(unknowns)}
     return None
 
 
-def certify_geometry(points, constraints, target, claimed, seed: int = 0, extra_ns=None
-                     ) -> tuple[bool | None, dict[str, Any]]:
+def _lm(fF, fJ, x, n_unk, tol, iters):
+    lam = mp.mpf("1e-3")
+    for _it in range(iters):
+        try:
+            Fx = mp.matrix(fF(*x))
+            Jx = mp.matrix(fJ(*x))
+        except (ZeroDivisionError, ValueError):
+            return None
+        nrm = mp.norm(Fx)
+        if nrm < tol:
+            return x
+        try:
+            A = Jx.T * Jx + lam * mp.eye(n_unk)
+            dx = mp.lu_solve(A, -(Jx.T * Fx))
+        except ZeroDivisionError:
+            return None
+        x_new = x + dx
+        try:
+            nrm_new = mp.norm(mp.matrix(fF(*x_new)))
+        except (ZeroDivisionError, ValueError):
+            lam *= 10
+            continue
+        if nrm_new < nrm:
+            x = x_new
+            lam = max(lam / 3, mp.mpf("1e-60"))
+        else:
+            lam *= 10
+            if lam > mp.mpf("1e12"):
+                return None
+    return None
+
+
+def _polish(residuals, unknowns, sol, dps):
+    """Refine a solution found at _DPS to `dps` digits; None when it does not converge."""
+    if not unknowns:
+        with mp.workdps(dps):
+            if all(abs(_to_mpf(sp.N(r, dps + 5))) < mp.mpf(10) ** (-(dps - 10)) for r in residuals):
+                return {}
+        return None
+    F = sp.Matrix(residuals)
+    J = F.jacobian(unknowns)
+    fF = sp.lambdify(unknowns, F, "mpmath")
+    fJ = sp.lambdify(unknowns, J, "mpmath")
+    x = mp.matrix([mp.mpf(sol[u]) for u in unknowns])
+    x = _lm(fF, fJ, x, len(unknowns), mp.mpf(10) ** (-(dps - 10)), 60)
+    return None if x is None else {u: x[i] for i, u in enumerate(unknowns)}
+
+
+def compare_claim(claimed, hi_values: list[str], v0) -> tuple[bool | None, dict[str, Any]]:
+    """Claim vs the realised target value. Exact claims are never snapped to a tolerance: at
+    _HI_DPS digits the claim must agree to 1e-60 (relative to max(1, |value|)); a claim with a
+    nonzero imaginary part is not a real length/angle."""
+    ev: dict[str, Any] = {}
+    if hi_values:
+        with mp.workdps(_HI_DPS):
+            vh = [mp.mpf(s) for s in hi_values]
+            scale = max(abs(vh[0]), mp.mpf(1))
+            if any(abs(v - vh[0]) > _HI_EQUAL * scale for v in vh[1:]):
+                ev["reason"] = "polished_realisations_disagree"
+                return None, ev
+            try:
+                cv = to_mp(claimed, _HI_DPS)
+            except Exception as e:  # noqa: BLE001
+                ev["reason"] = f"claim_not_numeric: {e}"
+                return None, ev
+            diff = abs(cv - vh[0])
+            ev["abs_diff@80"] = mp.nstr(diff, 5)
+            if isinstance(cv, mp.mpc) and cv.imag != 0:
+                ev["reason"] = "claim_is_not_real"
+                return False, ev
+            if diff <= _HI_EQUAL * scale:
+                ev["decided_by"] = "agree_to_1e-60_at_80_digits"
+                return True, ev
+            if diff > _HI_DIFFERENT * scale:
+                ev["decided_by"] = "differ_above_1e-40_at_80_digits"
+                return False, ev
+            ev["reason"] = "difference_between_1e-60_and_1e-40"
+            return None, ev
+    # no polished value (singular system): only a gross difference is evidence
+    with mp.workdps(_DPS):
+        try:
+            cv = to_mp(claimed, _DPS)
+        except Exception as e:  # noqa: BLE001
+            ev["reason"] = f"claim_not_numeric: {e}"
+            return None, ev
+        diff = abs(cv - v0)
+        if diff > _LO_DIFFERENT * max(abs(v0), mp.mpf(1)):
+            ev["decided_by"] = "gross_difference_without_polish"
+            return False, ev
+    ev["reason"] = "not_polished_no_decision"
+    return None, ev
+
+
+def certify_geometry(points, constraints, target, claimed, seed: int = 0, extra_ns=None,
+                     timeout: float = 25.0) -> tuple[bool | None, dict[str, Any]]:
     ev: dict[str, Any] = {"points": list(points), "constraints": list(constraints), "target": target,
                           "claimed": str(claimed)}
     try:
-        gp = GeoProblem(points, constraints, target, seed=seed, extra_ns=extra_ns)
+        # parsed here first so that a malformed IR is reported without starting the sandbox
+        GeoProblem(points, constraints, target, seed=seed, extra_ns=extra_ns)
     except ParseError as e:
         ev["error"] = f"parse_error: {e}"
         return None, ev
@@ -336,7 +475,7 @@ def certify_geometry(points, constraints, target, claimed, seed: int = 0, extra_
         ev["error"] = f"setup_error: {type(e).__name__}: {e}"
         return None, ev
     r = sb_run("mathverify.certify.geometry_numeric:_realise_worker", points, constraints, target, seed,
-               timeout=25)
+               timeout=timeout)
     if not r.ok:
         ev["error"] = r.error
         ev["flags"] = r.flags
@@ -355,29 +494,33 @@ def certify_geometry(points, constraints, target, claimed, seed: int = 0, extra_
     if spread > mp.mpf("1e-15"):
         ev["reason"] = "target_not_determined_by_constraints"
         return None, ev
-    if not gp.scale_fixed and not _scale_invariant(gp):
-        ev["reason"] = "scale_not_fixed_but_target_is_a_length"
-        return None, ev
-    ok, cev = num_equal(claimed, sp.Float(mp.nstr(v0, 28), 28), rel_tol=1e-18)
+    ok, cev = compare_claim(claimed, rev.get("hi_values") or [], v0)
     ev["compare"] = cev
+    if cev.get("reason"):
+        ev["reason"] = cev["reason"]
     ev["value"] = mp.nstr(v0, 25)
     return ok, ev
-
-
-def _scale_invariant(gp: GeoProblem) -> bool:
-    """Heuristic: angles and ratios are scale invariant; lengths/areas are not."""
-    t = gp.target
-    if t.has(acos):
-        return True
-    num, den = sp.fraction(sp.together(t))
-    # ratio of two lengths / two areas
-    return bool(den != 1 and (num.has(sp.sqrt) == den.has(sp.sqrt)))
 
 
 def _realise_worker(points, constraints, target, seed):
     gp = GeoProblem(points, constraints, target, seed=seed)
     values, ev = gp.realise()
     return [mp.nstr(v, 40) for v in values], ev
+
+
+def _claim_for_angle_units(ctx: Ctx, solution, target: str):
+    """The claim, read with degree marks meaning degrees (angle targets only)."""
+    from ..normalize.parse import parse_expr_str
+    payload = solution.claimed_answer.payload
+    if not has_degree_mark(payload):
+        return ctx.claimed(solution), False
+    if "angle(" not in target:
+        raise ValueError("a degree mark on a claim whose target is not an angle")
+    v = parse_expr_str(strip_degree_marks(payload), ctx.claim_ns(solution))
+    calc = (sp.Integral, sp.Derivative, sp.Limit, sp.Sum, sp.Product)
+    if getattr(v, "has", None) and v.has(*calc):
+        raise ValueError("claimed answer is an unevaluated computation")
+    return v, True
 
 
 def verify(ir, solution, ctx: Ctx):
@@ -387,12 +530,19 @@ def verify(ir, solution, ctx: Ctx):
     with Timer() as t:
         p = ir.task.params
         try:
-            claimed = ctx.claimed(solution)
+            claimed, _deg = _claim_for_angle_units(ctx, solution, str(p.get("target", "")))
         except Exception as e:  # noqa: BLE001
             return unknown(LAYER, f"parse_error: {e}", flags=["parse_error"])
-        if isinstance(claimed, sp.Set) or claimed is None:
+        if isinstance(claimed, sp.Set) or claimed is None or not isinstance(claimed, sp.Expr):
             return unknown(LAYER, "claimed_not_scalar")
-        ok, ev = certify_geometry(p["points"], p["constraints"], p["target"], claimed, seed=ctx.seed)
+        ok, ev = certify_geometry(p["points"], p["constraints"], p["target"], claimed, seed=ctx.seed,
+                                  timeout=ctx.timeout)
+        if ok is False and "angle(" in str(p["target"]) and claimed.has(pi) and ev.get("hi_values"):
+            # `pi/2` for a 90-degree target: right in radians, the unit is the only question
+            alt, _ = compare_claim(claimed * 180 / pi, ev["hi_values"], mp.mpf(0))
+            if alt is True:
+                ok = None
+                ev["reason"] = "claim_matches_in_radians_target_is_in_degrees"
     if ok is True:
         return result(LAYER, "pass", 0.97, True, ev, t.ms, primary=True)
     if ok is False:

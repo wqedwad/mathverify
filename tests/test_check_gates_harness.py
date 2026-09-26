@@ -63,6 +63,9 @@ class FakeRun:
         self.report_existed = {}                     # did the report exist when the harness started?
 
     def __call__(self, cmd, label):
+        self.labels = getattr(self, "labels", []) + [label]
+        if label == "lean_warmup":
+            return 0, ""
         if label == "pytest":
             return 0, "3 passed in 0.10s"
         if label == "pyflakes":
@@ -101,6 +104,22 @@ def test_happy_path_is_unchanged_and_counts_are_24_and_12(monkeypatch, tmp_path)
     assert names.index("Lean erişilebilir") + 1 == names.index("Lean FP")
     rc, by_name, names = _gates(monkeypatch, tmp_path, full=False)
     assert rc == 0 and names == QUICK and len(names) == 12
+
+
+def test_the_full_run_warms_lean_up_before_the_tests_and_the_quick_run_does_not(monkeypatch, tmp_path):
+    """Right after a container restart the first Lean start took ~400 s, longer than the 300 s the
+    Lean tests wait: a --full run skipped 87 of them and failed one (26 Sep 2026). The warm-up is not
+    a gate: the gate count stays 24."""
+    fake = FakeRun(tmp_path)
+    monkeypatch.setattr(check, "REPORTS", tmp_path)
+    monkeypatch.setattr(check, "run", fake)
+    check._main(argparse.Namespace(full=True))
+    assert fake.labels[:2] == ["lean_warmup", "pytest"]
+    fake2 = FakeRun(tmp_path)
+    monkeypatch.setattr(check, "run", fake2)
+    check._main(argparse.Namespace(full=False))
+    assert "lean_warmup" not in fake2.labels
+    assert "timeout=900" in check._LEAN_WARMUP
 
 
 def test_owned_names_and_targets_match_the_success_path():
@@ -435,7 +454,8 @@ def _is_elaboration_check(code):
 class _JunkLean:
     """Only the vacuous junk statement `x = 2 from 1/(x-2) = 0` compiles (it does in the real sweep);
     every other ladder attempt gets a Lean error. `#print axioms` and the two audit probes of its
-    proof answer as the scenario says; every statement elaborates."""
+    proof answer as the scenario says; every statement elaborates. The satisfiability probe (since
+    25 Sep 2026 part of every audit of a statement with hypotheses) compiles when it is sent."""
 
     def __init__(self, target_head, *, vacuity, nohyp, axioms=SAFE_AXIOMS_REPLY):
         self.target_head, self.vacuity, self.nohyp, self.axioms = target_head, vacuity, nohyp, axioms
@@ -451,16 +471,23 @@ class _JunkLean:
             return self.vacuity
         if "_nohyp" in head:
             return self.nohyp
+        if "_sat" in head:
+            return LeanResult(ok=True)
         if code.startswith(self.target_head):
             return LeanResult(ok=True, env=7)
         return LeanResult(ok=False, errors=["linarith failed"])
+
+
+def _n_junk() -> int:
+    from harness.run_lean import JUNK_PROBES
+    return len(JUNK_PROBES)          # 17 until 25 Sep 2026, then the formal-audit families
 
 
 JUNK_AUDIT_SCENARIOS = {  # name -> (vacuity, nohyp, axioms, audit_unanswered, junk gate value, gate ok)
     "A_both_probes_timed_out": (TIMED_OUT, TIMED_OUT, SAFE_AXIOMS_REPLY, ["vacuity", "no_hyp"],
                                 "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
     "B_vacuity_answered_contradictory": (LeanResult(ok=True), LeanResult(ok=False, errors=["linarith failed"]),
-                                         SAFE_AXIOMS_REPLY, [], "0/17", True),
+                                         SAFE_AXIOMS_REPLY, [], f"0/{_n_junk()}", True),
     "C_axiom_print_timed_out": (LeanResult(ok=False, errors=["linarith failed"]),
                                 LeanResult(ok=False, errors=["unsolved goals"]), TIMED_OUT, ["axioms"],
                                 "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
@@ -469,7 +496,7 @@ JUNK_AUDIT_SCENARIOS = {  # name -> (vacuity, nohyp, axioms, audit_unanswered, j
                             "Lean denetim cevapsız 1/1 kanıtlanan ifade", False),
     # every probe answered and none objects: a real certificate, which the gate still counts
     "E_answered_and_clean": (LeanResult(ok=False, errors=["linarith failed"]),
-                             LeanResult(ok=False, errors=["unsolved goals"]), SAFE_AXIOMS_REPLY, [], "1/17", False),
+                             LeanResult(ok=False, errors=["unsolved goals"]), SAFE_AXIOMS_REPLY, [], f"1/{_n_junk()}", False),
 }
 
 
@@ -484,6 +511,14 @@ def test_junk_probe_with_an_unanswered_audit_fails_the_junk_gate(monkeypatch, sc
     target_head = build_statement(ir, ca).theorem("").split(":= by")[0]
     fake = _JunkLean(target_head, vacuity=vacuity, nohyp=nohyp, axioms=axioms)
     monkeypatch.setattr(P, "get_lean", lambda: fake)
+    if scenario.startswith("E_"):
+        # Since 25 Sep 2026 an audit is clean only when Lean also proves the hypotheses satisfiable
+        # at the template's witness, and this junk statement has none (its hypotheses contradict
+        # each other). To keep testing the GATE on a clean certificate, scenario E hands the
+        # template a witness and the fake Lean accepts it.
+        import sympy as sp
+        from mathverify.formal import statement as S
+        monkeypatch.setattr(S, "_find_witness", lambda *a, **k: [sp.Integer(2)])
     junk = run_lean.junk_probe(45)
     target = next(j for j in junk if j["label"] == JUNK_TARGET)
     assert target["proved"] is True and target["lean_answered"] is True and target["n_unanswered"] == 0

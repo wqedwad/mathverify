@@ -32,3 +32,15 @@ def test_the_real_tree_is_clean_except_waived_lines():
     p = subprocess.run([sys.executable, "-m", "pyflakes", "src", "harness", "scripts", "tests", "evalset/build"],
                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert check.pyflakes_findings(p.stdout + p.stderr, p.returncode, ROOT) == ([], False)
+
+
+def test_the_log_names_the_failed_and_skipped_tests():
+    """A '1 failed ... 92 skipped' gate line alone did not say which test failed (26 Sep 2026)."""
+    out = ("....F\nFAILED tests/test_x.py::test_a - AssertionError\n"
+           "SKIPPED [87] tests/test_lean_audit_2026_09_25.py:471: Lean/Mathlib toolchain not available\n"
+           "ERROR tests/test_y.py - ImportError\n1 failed, 3 passed, 87 skipped in 1.00s\n")
+    assert check.pytest_problems(out) == [
+        "FAILED tests/test_x.py::test_a - AssertionError",
+        "SKIPPED [87] tests/test_lean_audit_2026_09_25.py:471: Lean/Mathlib toolchain not available",
+        "ERROR tests/test_y.py - ImportError"]
+    assert check.pytest_problems("5 passed in 1.0s\n") == []
