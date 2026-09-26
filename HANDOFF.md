@@ -47,9 +47,9 @@ yalnız süre satırlarında farklı (DECISIONS §59). Tek süreçli eski koşul
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Windows'ta ilk koşu** (T8): yerel checkout `master`ı çeker, `check.py --plan` ve bir `--full`
-   koşar (4 süreçli tarama, `.venv`'in `requirements.lock`la eşitliği, süre). Ölçülene kadar Windows'ta
-   TAMAM beklenmez; kilit uyuşmazsa karar satırı `.venv`'i eşitlemeyi söyler.
+1. **Windows'ta tam kontrol yarıda kaldı** (T8): ilk denemede testler sırasında ya da sonrasında Git Bash
+   yanıt vermez oldu, kullanıcı durdurdu. Tam kontrol bulutta koşar; Windows'ta yeniden denenecekse
+   Görev Yöneticisi'nde bellek izlenir ve donduğu adım günlükten okunur (günlük geri alınmadan önce).
 2. **Yedek etiketleri (isteğe bağlı):** PR #3 ve PR #4 öncesi `master` için etiket yok (§6); kod
    birleştirmelerinde kural yine geçerli: etiket + bundle.
 3. **Bulut kurulum kararı** (B1–B2: görüntü 13:35 sohbetinde kullanıldı, 11:00'dekinde kullanılmadı).
@@ -174,10 +174,10 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   "commit edilmemiş değişiklik" sayısından 1 düşülür (günlük kendini sayıyordu; `3925180`).
 - **T7.** `docs/BULUT.md` ~1070 satır ve tarihçe biriktiriyor (§12'de sonradan kapanmış üç madde
   hâlâ `[ ]`); buradaki gibi güncel durum + arşiv ayrımı gerekebilir. Testler onu okuyor: kod sayılır.
-- **T8. Windows'ta koşmadı** (DECISIONS §59) **[DOĞRULANMADI]**: 4 süreçli tarama (`spawn`), ebeveyn
-  izleyicisi (öldürme testi `/proc` ister), bekçinin `CopyFile2`/junction yolu (taklit), `--plan` (CRLF
-  özeti Linux'ta `core.autocrlf` ile sınandı), `--full` süresi. Windows `.venv`'i `requirements.lock`la
-  eşit değilse oradaki hiçbir `--full` kabul edilmez (karar satırı eşitlemeyi önerir). **T9. Kuralın
+- **T8. Windows'ta ölçülenler ve ölçülmeyenler** (DECISIONS §59): `.venv` kilitle eşit (32 paket; bulutta
+  31, `colorama` yalnız Windows'ta), Lean ısınması 40 s. `--full` bitmedi (neden **[DOĞRULANMADI]**,
+  bellek olabilir); 4 süreçli tarama (`spawn`), ebeveyn izleyicisi, bekçinin `CopyFile2`/junction yolu,
+  `--plan`'ın buluttaki bir `--full`u Windows checkout'unda kabul etmesi ve süre ölçülmedi. **T9. Kuralın
   sınırları:** bekçi alt süreçleri ve `os.open(dir_fd=…)`'yu görmez (test dışı kodun `.md` sabitleri ve
   kabuk betikleri testlerle sabitlendi); koşu sırasında yapılıp bitmeden geri alınan değişiklik
   günlükten anlaşılmaz; günlük düz metin (raporlar özetle bağlı, sahteciliğe karşı koruma yok).
