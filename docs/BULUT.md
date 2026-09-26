@@ -642,6 +642,15 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   (Windows'ta ~25–70 dk; bulutta ~63 dk (3793 s; adversaryal 3220 s; 4 vCPU), ölçüldü) ya da Lean kurulumu sürerken oturum etkin
   tutulur. `check.py --full` günlüğü `reports/check_full.log`a koşu sırasında yazar; yarıda kalan
   koşu yarım günlük bırakır.
+  **Düzeltme (26 Eylül 2026, ölçüm; HANDOFF §0.14):** ajan turunu bitirmiş, arka plandaki
+  `--full`'un bildirimini bekliyordu. Platform konteyneri 08:50:49 UTC'de SIGTERM ile kapattı
+  (`/tmp/env-manager.log`: "Received signal, shutting down gracefully"). Koşu kalibrasyon
+  aşamasında kayboldu: ~57 dk'lık iş gitti, kapılar hiç değerlendirilmedi. 24 Eylül'deki "boşta
+  beklerken geri alınmadı" gözlemi (§12) genellenemez; kapanmanın boşta kalmadan olduğu çıkarım.
+  "Oturum etkin tutulur" şu demek: ajan turunu bitirmez ve koşuyu ön planda ≤10 dk'lık bekleme
+  komutlarıyla izler (ör. `timeout 580 bash -c 'until grep -qE "<desen>" <çıktı>; do sleep 5; done'`).
+  Sohbete dönüşte platform `session_mode: "resume"` ile açıldı ("Skipping initialization script",
+  207 ms). Disk korunmuştu ve kanca 13 s sürdü.
 - **Git:** bulut oturumu yalnız **kendi dalına** push edebilir. Etiket, `master` ve başka dallar
   push edilemez. `master`a birleştirme GitHub'da PR ile ya da yerel checkout'ta yapılır;
   birleştirmeden önceki yedek (etiket + bundle) de yerelde alınır (§9).
@@ -660,6 +669,15 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   bu durumu çözdüğü ölçülmedi):
   `find "$MATHVERIFY_LEAN_PROJECT/.lake" "$ELAN_HOME/toolchains" -name '*.olean' -print0 | xargs -0 cat > /dev/null`
   ve ardından `PYTHONUTF8=1 .venv/bin/python -c "from mathverify.formal.lean_client import lean_available; print(lean_available())"`.
+  **Düzeltme (26 Eylül 2026, ölçüm; HANDOFF §0.14):** `check.py --full`'un ısıtması (`67d1619`) tam
+  bu uyarıya rağmen `lean_available(timeout=900)` kullanıyordu. Gerçek bir yeniden başlatmadan sonra
+  "`lean_warmup: 302 s (exit 1)`" yazdı: istemcinin 300 s açılış sınırı. Takım yine geçti (pytest
+  306 s, sıcak diskte 251–270 s; Lean yüzünden atlama yok), çünkü düşen deneme önbelleği kısmen
+  ısıtmıştı. Soğuk `import Mathlib` bu kez ~340–360 s sürdü (çıkarım: 302 s + takımdaki 36–55 s
+  fazla).
+  Düzeltme (`5414d6b`): ısıtma kendi `LeanClient(boot_timeout=900)` istemcisini kurar. Sıcak diskte
+  9 s, çıkış 0. Soğuk yolda yeni ısıtma bir sonraki gerçek yeniden başlatmada ölçülür
+  **[DOĞRULANMADI]**.
 - **Bellek dosyaları:** `~/.claude` taşınmaz; kalıcı her bilgi depoya yazılır.
 
 ## 9. Buluttan yerele ve birleştirme
@@ -867,6 +885,9 @@ oturumda ölçülür):
 - [x] Uzun `--full` sırasında makine geri alınıyor mu? → Hayır: ajan arka plan işini boşta
       beklerken koşu bitti ve ajan bildirimle uyandı (63 dk). Kural yine de geçerli: gerekirse
       kısa durum komutlarıyla oturum etkin tutulur.
+      **Düzeltme (26 Eylül 2026, ölçüm):** bu kez alındı. Ajan turunu bitirip bildirimi
+      beklerken konteyner 08:50:49 UTC'de SIGTERM ile kapandı; `--full` kalibrasyon aşamasında
+      kayboldu (§8). Tur bitirilmez; koşu ön planda ≤10 dk'lık beklemelerle izlenir.
 - [x] Ortamın stop hook'u: `~/.claude/stop-hook-git-check.sh` commit edilmemiş değişiklik görünce
       commit + push ister (`check.py` `reports/`'u yeniden yazar). Normal oturumda raporlar
       commit edilir; teşhis oturumunda yok sayılır.
@@ -964,7 +985,9 @@ yeni önyükleyiciyle değiştirmiş, belirteci `T=''` satırına koymuştu.
       - *Takım:* 1326 test, **1321 passed / 5 skipped / 0 failed**, 251 s (ilk koşu 258 s, ikincisi
         251 s: süre ısınmayla değişmiyor). Atlananların 3'ü root altında salt okunur dizin, 1'i isteğe bağlı
         indirme, 1'i kapsam dışı ifade; Lean yüzünden atlama yok.
-        `check.py --full`: koşuyor; sonucu sonraki commit'te (HANDOFF §0.14).
+        `check.py --full` bu oturumda üç kez başladı. İlki kalibrasyonda
+        konteyner kapanınca kayboldu (§8), ikincisi durduruldu, üçüncüsü **24/24** geçti
+        (`5414d6b`, 3543 s ≈ 59 dk, adversaryal 2894 s; 1323 passed / 5 skipped; HANDOFF §0.14).
 - [ ] **Anlık görüntü `/opt`'u koruyor mu** (açık; bu oturumda ölçülemez). Bu sohbete dönmek
       sayılmaz: devam ettirilen oturum betiği hiç koşturmaz. Ölçüm, bu başarılı koşudan sonra açılan
       **ilk yeni sohbette** yapılır; arada Setup script metni ve ağ ayarı değişmemiş olmalı ve ~7
