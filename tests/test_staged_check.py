@@ -87,9 +87,14 @@ def commit(repo: Path, msg: str = "c") -> str:
 
 
 def full_log(repo: Path, sha: str, *, dirty: int = 0, gates=("a", "b"), failed=(), total_line=True,
-             end_sha: str | None = None, end_dirty: int = 0, end_line=True, totals=None) -> None:
+             end_sha: str | None = None, end_dirty: int = 0, end_line=True, totals=None, warmup="0",
+             extra=(), reports_line=True) -> None:
+    """A --full log as main writes it, for the reports on disk now (the run just wrote them)."""
     run = " · 2026-09-26 12:00:00 · dal @ {} · commit edilmemiş değişiklik: {} dosya"
-    lines = ["check.py --full" + run.format(sha[:7], dirty), "", "== kapılar =="]
+    lines = ["check.py --full" + run.format(sha[:7], dirty), "ortam: Python 3", "", "== Lean ısınma =="]
+    if warmup is not None:
+        lines.append(f"  lean_warmup: 9 s (exit {warmup})")
+    lines += ["== testler ==", "  pytest: 1 s (exit 0)", *extra, "", "== kapılar =="]
     lines += [f"  [OK  ] {g}  1   (hedef: 1)" for g in gates]
     lines += [f"  [FAIL] {g}  0   (hedef: 1)" for g in failed]
     n = len(gates) + len(failed)
@@ -97,6 +102,8 @@ def full_log(repo: Path, sha: str, *, dirty: int = 0, gates=("a", "b"), failed=(
         lines += ["", *(totals or [f"{len(gates)}/{n} kapı geçti"])]
     if end_line:
         lines += ["", "check.py --full sonu" + run.format((end_sha or sha)[:7], end_dirty)]
+    if reports_line:
+        lines.append("check.py --full raporları · " + " · ".join(f"{k} {v}" for k, v in check.report_digests(repo).items()))
     write(repo, "reports/check_full.log", "\n".join(lines) + "\n")
 
 
@@ -114,6 +121,8 @@ def test_reports_and_documents():
     assert not check.is_report("reports/f3_run.log") and not check.is_report("reports/lean_results.json")
     assert check.is_doc("docs/rehber.md") and check.is_doc("NOTLAR.MD") and check.is_doc("docs\\alt\\x.md")
     assert not check.is_doc("reports/eval_report.md") and not check.is_doc("code.py")
+    # a case-insensitive disk: Docs/ is docs/, Reports/ is reports/
+    assert check.is_doc("Docs/x.md") and check.is_report("Reports/eval_report.md") and check.is_report("REPORTS/CHECK_FULL.LOG")
     # documentation lives at the root and under docs/; elsewhere a .md file is code by its place
     for elsewhere in ("reports/sub/x.md", "lean/notlar.md", "src/mathverify/paket.md", "scripts/dev/not.md",
                       "docsx/a.md", "tests/data/b.md"):
@@ -155,6 +164,10 @@ def test_names_doc_by_ending():
     assert check.names_doc("hber" + MD, "docs/rehber.md", suffix=True)
     assert not check.names_doc("_report" + MD, "docs/rehber.md", suffix=True)
     assert check.names_doc(MD, "docs/rehber.md", suffix=True)
+    # a glob after a run-time stem: f"docs/{stem}[12].md", "docs/%s?.md" % stem (review)
+    assert check.names_doc("[12]" + MD, "docs/notes1.md", suffix=True)
+    assert check.names_doc("?" + MD, "docs/notes1.md", suffix=True)
+    assert not check.names_doc("[12]" + MD, "docs/notes3.md", suffix=True)
 
 
 @pytest.mark.parametrize("text, tail, expected", [
@@ -189,6 +202,11 @@ def test_only_code_strings_count_not_prose(tmp_path, git_env):
     assert named == {"docs/e.md": "m.py:6", "x_f.md": "m.py:7", "yg.md": "m.py:8",
                      "docs/a.md": "m.py:9", "docs/b.md": "m.py:9", "c.md": "m.py:9", "d.md": "m.py:9",
                      "z.md": "m.py:9"}
+
+
+def test_bytes_constants_are_names_too(tmp_path, git_env):
+    write(tmp_path, "n.py", "k = open(b'docs/h.md')\n")
+    assert check.docs_named_by_code(tmp_path, ["docs/h.md", "docs/i.md"]) == {"docs/h.md": "n.py:1"}
 
 
 def test_a_type_test_alone_names_nothing(tmp_path, git_env):
@@ -341,8 +359,8 @@ def test_personal_excludes_hide_no_untracked_file(repo):
 def test_the_last_full_run_covers_the_same_code(repo):
     write(repo, "code.py", "x = 2\n")
     sha = commit(repo, "code")
+    write(repo, "reports/eval_report.md", "new\n")       # the run rewrites its reports
     full_log(repo, sha)                                   # --full ran on this commit, clean, all gates OK
-    write(repo, "reports/eval_report.md", "new\n")
     commit(repo, "reports")
     write(repo, "notlar.md", "after\n")                   # later documentation, even uncommitted
     p = check.plan(repo)
@@ -387,12 +405,28 @@ def test_named_documents_and_data_changed_after_the_last_full_run(repo, path):
     (dict(end_line=False), "sonu kaydedilmemiş"),
     (dict(end_dirty=1), "ağaç koşu sırasında değişti"),
     (dict(end_sha="0" * 40), "ağaç koşu sırasında değişti"),
+    (dict(warmup="1"), "Lean ısınması başarısız"),
+    (dict(warmup=None), "Lean ısınması başarısız ya da kayıtsız"),
+    (dict(extra=["    SKIPPED [87] tests/test_f5_lean.py:19: Lean/Mathlib toolchain not available"]),
+     "Lean testleri atlanmış"),
+    (dict(reports_line=False), "raporların özeti kaydedilmemiş"),
 ])
 def test_a_full_run_that_proves_nothing_is_not_accepted(repo, log, why):
     write(repo, "code.py", "x = 2\n")
     full_log(repo, commit(repo), **log)
     p = check.plan(repo)
     assert p["level"] == "tam" and not p["full"]["ok"] and why in p["full"]["why"], p["full"]
+
+
+def test_reports_changed_after_the_run_are_not_its_reports(repo):
+    """A report edited by hand, or overwritten by a partial harness run into reports/, after the
+    --full no longer rides on it."""
+    write(repo, "code.py", "x = 2\n")
+    full_log(repo, commit(repo))
+    assert check.plan(repo)["level"] == "tamam"
+    write(repo, "reports/adversarial_report.md", "one item\n")
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "raporlar --full'dan sonra değişmiş" in p["full"]["why"]
 
 
 def test_a_full_run_log_that_is_not_one(repo):
@@ -424,15 +458,16 @@ def test_the_full_run_writes_what_the_plan_accepts(repo, monkeypatch):
     commit(repo)
     write(repo, "reports/eval_report.md", "left by a quick check.py\n")
     monkeypatch.setattr(check, "ROOT", repo)
-    monkeypatch.setattr(check, "_main", lambda args: print("\n  [OK  ] a  1\n\n1/1 kapı geçti") or 0)
+    monkeypatch.setattr(check, "_main", lambda args: print("  lean_warmup: 1 s (exit 0)\n\n  [OK  ] a  1\n\n1/1 kapı geçti") or 0)
     assert check.main(["--full"]) == 0
     assert check.last_full_run(repo)["ok"]
     assert check.plan(repo)["level"] == "tamam"
     monkeypatch.setattr(check, "_main", lambda args: write(repo, "code.py", "x = 3\n") or print("1/1 kapı geçti") or 0)
     assert check.main(["--full"]) == 0
     lines = (repo / "reports" / "check_full.log").read_text(encoding="utf-8").splitlines()
-    assert lines[0].endswith("commit edilmemiş değişiklik: 0 dosya")
-    assert lines[-1].startswith("check.py --full sonu") and lines[-1].endswith("commit edilmemiş değişiklik: 1 dosya")
+    assert lines[0].endswith("commit edilmemiş değişiklik: 0 dosya") and lines[1].startswith("ortam: Python")
+    assert lines[-2].startswith("check.py --full sonu") and lines[-2].endswith("commit edilmemiş değişiklik: 1 dosya")
+    assert lines[-1].startswith("check.py --full raporları · reports/eval_report.md ")
 
 
 # --------------------------------------------------------------------------- the base
@@ -593,6 +628,146 @@ def test_without_a_fresh_base_only_a_report_change_passes(cloned):
     assert check.plan(cloned.work)["level"] == "yok"                             # a report alone: no check
 
 
+# --------------------------------------------------------------------------- what gets merged
+
+
+@pytest.mark.parametrize("with_log", [True, False])
+def test_committed_code_reverted_only_in_the_working_tree_is_still_code(repo, with_log):
+    """A pull request merges HEAD, not the working tree: code committed after the --full and then
+    reverted only on disk (`git checkout HEAD~1 -- file`) is still in what gets merged (review)."""
+    write(repo, "code.py", "x = 2\n")
+    sha = commit(repo)
+    if with_log:
+        full_log(repo, sha)
+        commit(repo, "log")
+    write(repo, "code.py", "x = 3\n")
+    commit(repo, "after the run")
+    git(repo, "checkout", "HEAD~1", "--", "code.py")       # the working tree is back, HEAD is not
+    write(repo, "notlar.md", "edited\n")
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "code.py" in code_files(p), p
+    if with_log:
+        assert p["full"]["code_since"] == ["code.py"]
+
+
+def test_a_change_staged_then_undone_on_disk_is_still_seen(repo):
+    write(repo, "code.py", "x = 2\n")
+    git(repo, "add", "code.py")
+    write(repo, "code.py", "x = 1\n")                      # disk equals HEAD, the index does not
+    assert code_files(check.plan(repo)) == {"code.py"}
+
+
+def test_unpushed_commits_of_local_master_count_as_what_the_base_received(repo):
+    """A local merge brings local master's unpushed commits in: the plan against origin/master
+    must see them too (review)."""
+    git(repo, "update-ref", "refs/remotes/origin/master", git(repo, "rev-parse", "master"))
+    write(repo, "code.py", "x = 2\n")
+    full_log(repo, commit(repo))
+    commit(repo, "log")
+    assert check.plan(repo)["level"] == "tamam"
+    git(repo, "checkout", "-q", "master")
+    write(repo, "src_yerel.py")
+    commit(repo, "merged locally, not pushed")
+    git(repo, "checkout", "-q", "dal")
+    p = check.plan(repo)
+    assert p["level"] == "tam" and p["base_ahead"] == ["src_yerel.py"]
+
+
+def test_the_rule_files_never_approve_their_own_change(repo):
+    write(repo, "scripts/check.py", "RULE = 1\n")
+    full_log(repo, commit(repo))
+    p = check.plan(repo)
+    assert p["level"] == "tam" and "kuralın kendi dosyaları" in p["why"] and p["full"]["ok"]
+
+
+def test_submodule_moves_are_seen_whatever_the_config(repo, tmp_path):
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    git(lib, "init", "-q")
+    write(lib, "a.py")
+    commit(lib, "lib 1")
+    git(repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(lib), "vendor/lib")
+    git(repo, "checkout", "-q", "master")
+    commit(repo, "submodule on master")
+    git(repo, "checkout", "-q", "dal")
+    git(repo, "merge", "-q", "--no-edit", "master")
+    git(repo, "-C", "vendor/lib", "config", "user.name", "t")
+    write(repo, "vendor/lib/b.py")
+    git(repo, "-C", "vendor/lib", "add", "-A")
+    git(repo, "-C", "vendor/lib", "commit", "-q", "-m", "lib 2")
+    git(repo, "config", "diff.ignoreSubmodules", "all")     # the user's config must not hide the move
+    commit(repo, "bump")
+    assert "vendor/lib" in code_files(check.plan(repo))
+
+
+def test_a_nested_worktree_is_not_content(repo):
+    """git lists a worktree or clone inside the tree as one untracked directory; it is not the
+    project's content and must not make every log dirty (review)."""
+    git(repo, "worktree", "add", "-q", ".claude/worktrees/onceki", "HEAD")
+    write(repo, "notlar.md", "changed\n")
+    p = check.plan(repo)
+    assert p["files"] == {"notlar.md": "belge"} and check.dirty_files(repo) == ["notlar.md"]
+
+
+def test_a_tracked_link_to_a_document_makes_it_read(repo):
+    write(repo, "docs/veri.md", "data\n")
+    (repo / "evalset").mkdir()
+    try:
+        os.symlink("../docs/veri.md", repo / "evalset" / "x.json")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available here")
+    git(repo, "checkout", "-q", "master")
+    commit(repo, "a data item that is a link")
+    git(repo, "checkout", "-q", "dal")
+    git(repo, "merge", "-q", "--no-edit", "master")
+    write(repo, "docs/veri.md", "changed\n")
+    p = check.plan(repo)
+    assert p["files"] == {"docs/veri.md": "kod"} and p["named"]["docs/veri.md"] == "bağlantı: evalset/x.json"
+
+
+# --------------------------------------------------------------------------- the base must be fresh
+
+
+def test_a_single_branch_clone_still_fetches_master(cloned):
+    """`git fetch origin master` with a refspec that does not map master only writes FETCH_HEAD:
+    origin/master stayed stale and TAMAM ignored the code merged on the remote (review)."""
+    git(cloned.work, "config", "remote.origin.fetch", "+refs/heads/dal:refs/remotes/origin/dal")
+    write(cloned.work, "code.py", "x = 2\n")
+    full_log(cloned.work, commit(cloned.work))
+    commit(cloned.work, "log")
+    write(cloned.other, "remote.py")
+    commit(cloned.other, "merged elsewhere")
+    git(cloned.other, "push", "-q", "origin", "master")
+    p = check.plan(cloned.work)
+    assert p["fetch"] == "tamam" and p["base_ahead"] == ["remote.py"] and p["level"] == "tam", p
+
+
+def test_a_base_other_than_the_fetched_master_is_not_fresh(cloned):
+    write(cloned.other, "remote.py")
+    commit(cloned.other, "merged elsewhere")
+    git(cloned.other, "push", "-q", "origin", "master")
+    git(cloned.work, "checkout", "-q", "-b", "belge-dali", "master")     # local master: now stale
+    write(cloned.work, "notlar.md", "changed\n")
+    p = check.plan(cloned.work, "master")
+    assert p["fetch"] == "tamam" and p["level"] == "tam" and "güncelliği bilinmiyor" in p["why"], p
+    assert check.plan(cloned.work)["level"] == "tam"                      # origin/master: remote.py is ahead
+
+
+def test_head_must_be_what_its_upstream_holds(cloned):
+    """The pull request merges the pushed head: a decision about an unpushed HEAD says nothing
+    about it (review)."""
+    write(cloned.work, "notlar.md", "pushed\n")
+    commit(cloned.work)
+    git(cloned.work, "push", "-q", "-u", "origin", "dal")
+    assert check.plan(cloned.work)["level"] == "yok"
+    write(cloned.work, "notlar.md", "not pushed\n")
+    commit(cloned.work)
+    p = check.plan(cloned.work)
+    assert p["level"] == "tam" and "push edilmemiş" in p["why"]
+    git(cloned.work, "push", "-q", "origin", "dal")
+    assert check.plan(cloned.work)["level"] == "yok"
+
+
 # --------------------------------------------------------------------------- reporting and the CLI
 
 
@@ -617,7 +792,8 @@ def test_the_plan_command_exit_code(repo, monkeypatch, capsys):
     assert check.main(["--plan"]) == 0 and "karar: YOK" in capsys.readouterr().out
     write(repo, "code.py", "x = 2\n")
     assert check.main(["--plan"]) == 1 and "karar: TAM" in capsys.readouterr().out
-    assert check.main(["--plan", "--base", "yok-boyle-dal"]) == 1
+    with pytest.raises(SystemExit):
+        check.main(["--plan", "--base", "HEAD"])          # no base to choose: --base HEAD made code vanish (review)
 
 
 def test_the_quick_run_reminds_of_the_plan_without_changing_its_exit_code(repo, monkeypatch, capsys):
@@ -629,10 +805,23 @@ def test_the_quick_run_reminds_of_the_plan_without_changing_its_exit_code(repo, 
     assert "== kademeli kontrol" in out and "karar: TAM" in out
 
 
-def test_the_gates_do_not_inherit_what_would_change_them():
-    for var in ("PYTEST_ADDOPTS", "PYTEST_PLUGINS", "MATHVERIFY_SANDBOX"):
-        assert var not in check.ENV
-    assert check.ENV["PYTHONUTF8"] == "1"
+def test_the_gates_do_not_inherit_what_would_change_them(monkeypatch):
+    names = ("PYTEST_ADDOPTS", "PYTEST_PLUGINS", "MATHVERIFY_SANDBOX", "MATHVERIFY_CALIBRATION")
+    for var in names:
+        monkeypatch.setenv(var, "on")
+    monkeypatch.setenv("MATHVERIFY_LEAN_PROJECT", "/lean")
+    spec = importlib.util.spec_from_file_location("check_script_env", ROOT / "scripts" / "check.py")
+    fresh = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fresh)                        # ENV is built when the script loads
+    assert not set(names) & set(fresh.ENV) and fresh.ENV["PYTHONUTF8"] == "1"
+    assert fresh.ENV["MATHVERIFY_LEAN_PROJECT"] == "/lean"
+
+
+def test_the_log_names_the_environment_but_no_value(monkeypatch):
+    monkeypatch.setitem(check.ENV, "MATHVERIFY_DENEME_ANAHTAR", "gizli-deger-123")
+    line = check._environment()
+    assert line.startswith("ortam: Python ") and "sympy " in line and "z3-solver " in line
+    assert "MATHVERIFY_DENEME_ANAHTAR" in line and "gizli-deger-123" not in line
 
 
 # --------------------------------------------------------------------------- this repository
@@ -724,6 +913,34 @@ def test_shell_scripts_read_no_document_the_rule_misses():
     assert ("scripts/cloud/setup_env.sh", "lean") in walks                  # the walk test sees the known one
 
 
+# Every string or bytes constant that looks like a document name or the documentation directory,
+# in the Python code the tests do not guard at run time: the harnesses a --full runs, the scripts,
+# the verifier (denetim/ holds audit tools no check runs). Report names are outputs; check.py's
+# own constants are the rule's. A new one means code that may handle documents: look at it, then
+# list it here (or make it a named read).
+CODE_DOC_CONSTANTS = {
+    ("harness/adversarial.py", "adversarial_report.md"), ("harness/calibrate.py", "calibration_report.md"),
+    ("harness/run_eval.py", "eval_report.md"), ("harness/run_f3.py", "_report.md"),
+    ("harness/run_lean.py", "lean_report.md"), ("harness/soundness_fuzz.py", "soundness_report.md"),
+    ("scripts/check.py", ".md"), ("scripts/check.py", "docs/"),
+}
+
+
+def test_code_outside_the_tests_handles_no_document_unseen():
+    """The static scan misses a name built without a .md constant in it ("".join, an EXT constant
+    and a type test after a walk) and the runtime guard sees only the test process: for the code
+    that produces the gates, every .md-shaped constant is pinned (review, 26 Sep 2026)."""
+    found = set()
+    for where, text, _ in check.code_strings(ROOT):
+        path = where.rsplit(":", 1)[0]
+        if path.startswith(("tests/", "denetim/")):
+            continue
+        low = text.lower()
+        if MD in low or low.strip("/") == "docs" or low.startswith("docs/"):
+            found.add((path, text))
+    assert found == CODE_DOC_CONSTANTS, f"new: {found - CODE_DOC_CONSTANTS}, gone: {CODE_DOC_CONSTANTS - found}"
+
+
 def test_the_plan_runs_on_this_repository(monkeypatch):
     """Offline and without the real --full log: no test may depend on a report (the guard)."""
     monkeypatch.setattr(check, "REPORT_LOG", "reports/bu-testte-yok.log")
@@ -738,7 +955,7 @@ def test_the_guard_counts_unnamed_documents_and_reports(repo):
     write(repo, "reports/check_full.log", "log\n")
     opened = [repo / "docs" / "rehber.md", repo / "notlar.md", repo / "reports" / "eval_report.md",
               repo / "reports" / "check_full.log", repo / ".venv" / "pkg" / "x.md", repo.parent / "outside.md",
-              repo / "code.py", repo / "pytest-cache-files-x" / "gone.md"]
+              repo / "code.py", repo / "pytest-cache-files-x" / "gone.md", repo / "gone.md"]
     assert check.unexplained_doc_reads(repo, [str(p) for p in opened]) == [
         "notlar.md", "reports/check_full.log", "reports/eval_report.md"]
 
@@ -787,14 +1004,45 @@ def test_the_guard_follows_links(tmp_path):
     import doc_read_guard
     target = tmp_path / ("hedef" + MD)
     target.write_text("x\n", encoding="utf-8")
-    doc_read_guard.OPENED.discard(os.path.realpath(target))
     link = tmp_path / "bag.txt"
     try:
         link.symlink_to(target)
     except (OSError, NotImplementedError):
         pytest.skip("symlinks are not available here")
-    link.read_text(encoding="utf-8")
+    doc_read_guard.OPENED.discard(os.path.realpath(target))          # the write and the link itself were seen
+    link.read_text(encoding="utf-8")                                  # a read under a name that hides it
     assert os.path.realpath(target) in doc_read_guard.OPENED
+
+
+def test_the_guard_sees_a_hard_link(tmp_path):
+    import doc_read_guard
+    target = tmp_path / ("sert" + MD)
+    target.write_text("x\n", encoding="utf-8")
+    doc_read_guard.OPENED.discard(os.path.realpath(target))
+    try:
+        os.link(target, tmp_path / "ikinci-ad.txt")                   # the second name is no link to follow
+    except (OSError, NotImplementedError):
+        pytest.skip("hard links are not available here")
+    assert os.path.realpath(target) in doc_read_guard.OPENED
+
+
+def test_the_guard_sees_a_linked_directory(tmp_path):
+    import doc_read_guard
+    src = tmp_path / "belgeler"
+    write(src, "alt/ic" + MD)
+    doc_read_guard.OPENED.discard(os.path.realpath(src / "alt" / ("ic" + MD)))
+    try:
+        os.symlink(src, tmp_path / "bag", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available here")
+    assert os.path.realpath(src / "alt" / ("ic" + MD)) in doc_read_guard.OPENED
+
+
+def test_windows_names_are_read_as_windows_reads_them():
+    import doc_read_guard
+    for name in ("x" + MD + ".", "x" + MD + " ", "x" + MD + "::$DATA", "x" + MD + ". . "):
+        assert doc_read_guard._windows_name("C:\\r\\docs\\" + name) == "C:\\r\\docs\\x" + MD, name
+    assert doc_read_guard._windows_name("C:\\r\\notes.txt") == "C:\\r\\notes.txt"
 
 
 def test_the_guard_never_breaks_an_open():

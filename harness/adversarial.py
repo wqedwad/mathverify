@@ -209,16 +209,28 @@ def _mutate_steps(sol: dict[str, Any], fn: Callable[[str], str]) -> dict[str, An
 def attack_item(it: dict[str, Any]) -> dict[str, Any]:
     """Every attack on one item, as (attack, kind, base verdict, verdict) rows in the order the
     sweep has always run them. It needs nothing but the item, so any process can compute it;
-    `run` scores the rows in item order. Also records the item's wall time and how many sandbox
-    calls timed out or restarted the sandbox during it. The sandbox's hard timeouts (5-8 s) are the
-    load-sensitive path: the verifier's own work in the worker has no timeout, so the load of the
-    other workers only slows it. z3's internal timeout (4 s) runs inside the sandbox and is not
-    counted; its largest call over the 89 evaluate/solve_equation items took 21 ms (review, 26 Sep
-    2026), and the largest sandbox call on the heaviest items 12% of its timeout."""
+    `run` scores the rows in item order. Also records the item's wall time, how many sandbox calls
+    timed out or restarted the sandbox during it, and how many verifications carried a sandbox
+    or layer error (a sandbox that died or never became ready while starting counts in neither
+    counter; review, 26 Sep 2026). The sandbox's hard timeouts (5-8 s) are the load-sensitive path:
+    the verifier's own work in the worker has no timeout, so the load of the other workers only
+    slows it. z3's internal timeout (4 s) runs inside the sandbox and is not counted; its largest
+    call over the 89 evaluate/solve_equation items took 21 ms (review), and the largest sandbox call
+    on the heaviest items 12% of its timeout. The error flags were measured absent from all 2027
+    verifications of 28 items (every tenth), so they cost no rechecks in a normal sweep."""
     from mathverify.sandbox import get_sandbox
-    from mathverify.verifier import verify
+    from mathverify.verifier import verify as _verify
     sb = get_sandbox()
     timeouts0, restarts0, t0 = sb.timeouts, sb.restarts, time.perf_counter()
+    errors = 0
+
+    def verify(ir, sol):
+        nonlocal errors
+        res = _verify(ir, sol)
+        flags = set(res.flags).union(*(l.flags for l in res.layers))
+        errors += bool(flags & _ERROR_FLAGS)
+        return res
+
     rows: list[tuple[str, str, str, str]] = []
     ir, sol, labels = split_for_verifier(it)
     base_sol = copy.deepcopy(sol)
@@ -253,11 +265,17 @@ def attack_item(it: dict[str, Any]) -> dict[str, Any]:
                     continue
                 rows.append((f"mc:{name}", kind, mc_base.verdict, verify(ir, mutated).verdict))
     return {"id": labels["id"], "base": base.verdict, "rows": rows, "seconds": time.perf_counter() - t0,
-            "sandbox_timeouts": sb.timeouts - timeouts0, "sandbox_restarts": sb.restarts - restarts0}
+            "sandbox_timeouts": sb.timeouts - timeouts0, "sandbox_restarts": sb.restarts - restarts0,
+            "sandbox_errors": errors}
+
+
+# Verification flags of a sandbox or layer failure (mathverify.sandbox.pool.Sandbox.run, verifier
+# layers): a sandbox killed or slow while starting shows only here.
+_ERROR_FLAGS = frozenset({"cas_error", "layer_exception"})
 
 
 # The sweep was 80% of `check.py --full` (2894-3764 s of 59-77 min) and ran on one core of four
-# (DECISIONS §58). Items are independent, so they go to a pool of processes.
+# (DECISIONS §58). Items are independent, so they go to a pool of processes (DECISIONS §59).
 DEFAULT_WORKERS = 4
 
 
@@ -310,8 +328,9 @@ def run(items, verbose: bool = False, workers: int = 1, attack=None) -> dict[str
     """Attack every item and score the results in item order. The scoring is the same code for
     any number of workers, so the report is identical but for the timings: `per_attack` keeps its
     insertion order, `successes` its order (tests/test_adversarial_parallel.py). An item whose
-    sandbox timed out or restarted in a pool worker is attacked again here, alone, and the sweep
-    fails (LoadDependentResult) unless the rows are the same. `attack` (default attack_item) is
+    sandbox timed out, restarted or failed in a pool worker is attacked again here, alone, after
+    the pool has shut down, and the sweep fails (LoadDependentResult) unless the base verdict and
+    the rows are the same. `attack` (default attack_item) is
     for tests; with workers > 1 it must be importable by name."""
     attack = attack or attack_item
     per_attack: dict[str, Counter] = {}
@@ -348,21 +367,29 @@ def run(items, verbose: bool = False, workers: int = 1, attack=None) -> dict[str
             else:
                 c["rejected"] += 1
 
-    for it, r in zip(items, _item_results(items, workers, attack), strict=True):   # an item lost is an error
-        if workers > 1 and (r["sandbox_timeouts"] or r["sandbox_restarts"]):
+    results = []
+    for r in _item_results(items, workers, attack):     # the pool is shut down once this loop ends
+        results.append(r)
+        if verbose:
+            print(f"  {r['id']}: base={r['base']}", flush=True)
+    for it, r in zip(items, results, strict=True):      # an item lost is an error
+        if workers > 1 and (r["sandbox_timeouts"] or r["sandbox_restarts"] or r["sandbox_errors"]):
+            # Alone for real: the workers are gone, so this run has the machine to itself. A recheck
+            # while they still ran reproduced their load (review, 26 Sep 2026). The base verdict is
+            # compared too: an item without attacks has no rows to differ in.
             alone = attack(it)
-            if alone["rows"] != r["rows"]:
+            if (alone["base"], alone["rows"]) != (r["base"], r["rows"]):
                 raise LoadDependentResult(
                     f"{r['id']}: bir işçide {r['sandbox_timeouts']} sandbox zaman aşımı, {r['sandbox_restarts']} "
-                    f"yeniden başlatma ve tek başına koşudan farklı sonuç; --workers 1 ile koşun")
+                    f"yeniden başlatma, {r['sandbox_errors']} sandbox/katman hatası ve tek başına koşudan farklı "
+                    f"sonuç: makinedeki yük kaldırılıp tarama yeniden koşulur (tek süreç: --workers 1)")
             rechecked.append(r["id"])
+    for r in results:
         for name, kind, base_verdict, verdict in r["rows"]:
             score(name, kind, base_verdict, verdict, r["id"])
         per_item.append({"id": r["id"], "base": r["base"], "attacks": len(r["rows"]),
                          "seconds": round(r["seconds"], 3), "sandbox_timeouts": r["sandbox_timeouts"],
-                         "sandbox_restarts": r["sandbox_restarts"]})
-        if verbose:
-            print(f"  {r['id']}: base={r['base']}", flush=True)
+                         "sandbox_restarts": r["sandbox_restarts"], "sandbox_errors": r["sandbox_errors"]})
     dur = time.perf_counter() - t0
     pres = {k: v for k, v in per_attack.items() if kind_of[k] == "preserving"}
     chg = {k: v for k, v in per_attack.items() if kind_of[k] == "changing"}
@@ -371,7 +398,8 @@ def run(items, verbose: bool = False, workers: int = 1, attack=None) -> dict[str
     return {
         "n_items": len(items), "n_attacks": n_pairs, "seconds": dur, "workers": workers,
         "sandbox_timeouts": sum(p["sandbox_timeouts"] for p in per_item),
-        "sandbox_restarts": sum(p["sandbox_restarts"] for p in per_item), "rechecked": rechecked,
+        "sandbox_restarts": sum(p["sandbox_restarts"] for p in per_item),
+        "sandbox_errors": sum(p["sandbox_errors"] for p in per_item), "rechecked": rechecked,
         "preserving": {"n": n_pres, "held": sum(c["held"] for c in pres.values()),
                        "abstained": sum(c["abstained"] for c in pres.values()),
                        "flipped": sum(c["flipped"] for c in pres.values())},
