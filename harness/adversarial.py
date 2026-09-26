@@ -11,17 +11,20 @@ Two kinds of attack, with opposite success criteria:
                         an attack success; keeping CORRECT on an unchanged-looking but
                         different number is exactly the failure mode [12] measures.
 
-    python -m harness.adversarial [--limit N] [--out reports]
+    python -m harness.adversarial [--limit N] [--workers N] [--out reports]
 """
 from __future__ import annotations
 
 import argparse
 import copy
 import json
+import multiprocessing as mp
+import os
 import re
 import sys
 import time
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
@@ -203,13 +206,178 @@ def _mutate_steps(sol: dict[str, Any], fn: Callable[[str], str]) -> dict[str, An
     return out if touched else None
 
 
-def run(items, verbose: bool = False) -> dict[str, Any]:
-    from mathverify.verifier import verify
+_Z3_OPS = frozenset({"z3_check", "z3_enumerate"})     # mathverify.sandbox.ops: (status, ...) with its own timeout
+
+
+def _watch_sandbox(sb) -> None:
+    """Count, on the sandbox object, what the load of the other workers can cause and its own
+    counters miss: a call that found the worker gone or never ready (a SandboxError with no live
+    worker after it: a start that took over 60 s, a broken pipe; a death also counts as a
+    restart), and a z3 check that answered "unknown" after spending its own timeout. A computation
+    that raised in a live worker is an answer, not a loss. The layers pass a SandboxError on as a
+    cas_error flag at only a few call sites: a start that failed changed verdicts with every counter
+    at 0 (review, 26 Sep 2026). Installed once per sandbox; what the calls return is unchanged."""
+    if getattr(sb, "lost_calls", None) is not None or not hasattr(sb, "call"):
+        return
+    from mathverify.sandbox import SandboxError
+    call = sb.call
+    sb.lost_calls = sb.z3_timeouts = 0
+
+    def watched(fn_path, *args, **kwargs):
+        t0 = time.perf_counter()
+        try:
+            out = call(fn_path, *args, **kwargs)
+        except SandboxError:
+            if not sb._alive():
+                sb.lost_calls += 1
+            raise
+        if fn_path.rpartition(":")[2] in _Z3_OPS and isinstance(out, (tuple, list)) and out and out[0] == "unknown":
+            limit_ms = kwargs.get("timeout_ms", args[3] if len(args) > 3 else 4000)
+            if time.perf_counter() - t0 >= 0.9 * limit_ms / 1000:
+                sb.z3_timeouts += 1
+        return out
+
+    sb.call = watched
+
+
+def attack_item(it: dict[str, Any]) -> dict[str, Any]:
+    """Every attack on one item, as (attack, kind, base verdict, verdict) rows in the order the
+    sweep has always run them. It needs nothing but the item, so any process can compute it;
+    `run` scores the rows in item order. Also records the item's wall time and three counters of
+    what the load of the other workers can decide: sandbox timeouts (the sandbox's hard timeouts,
+    5-8 s, and z3 checks that ran out their own 4 s: _watch_sandbox), sandbox restarts, and errors
+    (verifications that carry a sandbox or layer error flag, plus sandbox calls that found the
+    worker gone or never ready). The verifier's own work in the worker has no timeout, so the load
+    only slows it. The largest z3 call over the 89 evaluate/solve_equation items took 21 ms and the
+    largest sandbox call on the heaviest items 12% of its timeout (review); the error flags were
+    absent from all 2027 verifications of 28 items (every tenth): a normal sweep has no rechecks."""
+    from mathverify.sandbox import get_sandbox
+    from mathverify.verifier import verify as _verify
+    sb = get_sandbox()
+    _watch_sandbox(sb)
+    timeouts0, restarts0, t0 = sb.timeouts, sb.restarts, time.perf_counter()
+    lost0, z3_timeouts0 = getattr(sb, "lost_calls", 0), getattr(sb, "z3_timeouts", 0)
+    errors = 0
+
+    def verify(ir, sol):
+        nonlocal errors
+        res = _verify(ir, sol)
+        flags = set(res.flags).union(*(l.flags for l in res.layers))
+        errors += bool(flags & _ERROR_FLAGS)
+        return res
+
+    rows: list[tuple[str, str, str, str]] = []
+    ir, sol, labels = split_for_verifier(it)
+    base_sol = copy.deepcopy(sol)
+    base_sol["claimed_answer"]["option"] = None     # compare like with like
+    base = verify(ir, base_sol)
+    if base.verdict != "UNKNOWN":
+        for name, kind, fn in ATTACKS:
+            mutated = _mutate_solution(base_sol, name, fn)
+            if mutated is None:
+                continue
+            rows.append((name, kind, base.verdict, verify(ir, mutated).verdict))
+
+        # Junk in the STEPS, not in the answer. The refuter only refutes with a concrete
+        # counterexample, so a garbled claim must at worst become unverifiable.
+        for name, kind, fn in ATTACKS:
+            if kind != "preserving" or name in _SHAPES_FOR:
+                continue                            # shape-specific rewrites make no sense here
+            mutated = _mutate_steps(base_sol, fn)
+            if mutated is None:
+                continue
+            rows.append((f"step:{name}", kind, base.verdict, verify(ir, mutated).verdict))
+
+    # The multiple-choice path with the letter LEFT IN. 257 of 260 solutions carry one and
+    # every attack above strips it, so the branch where the letter decides — the one that
+    # was measured calling a wrong solution CORRECT — was never attacked at all.
+    if sol["claimed_answer"].get("option"):
+        mc_base = verify(ir, sol)
+        if mc_base.verdict != "UNKNOWN":
+            for name, kind, fn in ATTACKS:
+                mutated = _mutate_solution(sol, name, fn, keep_option=True)
+                if mutated is None:
+                    continue
+                rows.append((f"mc:{name}", kind, mc_base.verdict, verify(ir, mutated).verdict))
+    return {"id": labels["id"], "base": base.verdict, "rows": rows, "seconds": time.perf_counter() - t0,
+            "sandbox_timeouts": sb.timeouts - timeouts0 + getattr(sb, "z3_timeouts", 0) - z3_timeouts0,
+            "sandbox_restarts": sb.restarts - restarts0,
+            "sandbox_errors": errors + getattr(sb, "lost_calls", 0) - lost0}
+
+
+# Verification flags of a sandbox or layer failure (mathverify.sandbox.pool.Sandbox.run, verifier
+# layers). Few layers pass a sandbox's cas_error on; a lost sandbox is counted at the call instead
+# (_watch_sandbox).
+_ERROR_FLAGS = frozenset({"cas_error", "layer_exception"})
+
+
+# The sweep was 80% of `check.py --full` (2894-3764 s of 59-77 min) and ran on one core of four
+# (DECISIONS §58). Items are independent, so they go to a pool of processes (DECISIONS §59).
+DEFAULT_WORKERS = 4
+
+
+def default_workers() -> int:
+    """DEFAULT_WORKERS, but never more than the CPUs this process may use: more workers than
+    CPUs only adds load, and load is what could push a sandbox call past its timeout."""
+    cpus = getattr(os, "process_cpu_count", os.cpu_count)() or 1
+    return max(1, min(DEFAULT_WORKERS, cpus))
+
+
+def _exit_with_parent() -> None:
+    """Pool initializer: when the sweep's own process dies, end this worker and the sandbox it
+    started. Killed by PID, the parent never shuts the pool down, and a worker blocks for ever on
+    queues whose other ends it holds itself: 3 workers and 3 sandboxes were left running, one of
+    them at 86% CPU (review, 26 Sep 2026), where the single-process sweep left nothing."""
+    import threading
+    parent = mp.parent_process()
+    if parent is None:
+        return
+
+    def watch():
+        parent.join()                      # returns once the parent's sentinel closes
+        for child in mp.active_children():
+            child.kill()
+        os._exit(1)
+
+    threading.Thread(target=watch, daemon=True, name="parent-watch").start()
+
+
+def _item_results(items, workers: int, attack):
+    """`attack` over `items`, yielded in ITEM order. With workers > 1 a pool of processes takes
+    the items one at a time (chunksize 1: a free worker takes the next item, so a heavy item does
+    not hold up a pre-assigned share); Executor.map yields results in submission order whatever
+    order they finish in, and cancels the not yet started items when one raises. `spawn`, as the
+    sandbox itself uses, on every OS: fork is unsafe with threads and the default differs by OS
+    and Python version (forkserver on Linux from 3.14)."""
+    if workers <= 1:
+        yield from map(attack, items)
+        return
+    ctx = mp.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_exit_with_parent) as ex:
+        yield from ex.map(attack, items, chunksize=1)
+
+
+class LoadDependentResult(RuntimeError):
+    """An item gave different results in a pool worker and alone: the load decided a verdict."""
+
+
+def run(items, verbose: bool = False, workers: int = 1, attack=None) -> dict[str, Any]:
+    """Attack every item and score the results in item order. The scoring is the same code for
+    any number of workers, so the report is identical but for the timings: `per_attack` keeps its
+    insertion order, `successes` its order (tests/test_adversarial_parallel.py). An item whose
+    sandbox timed out, restarted or failed in a pool worker is attacked again here, alone, after
+    the pool has shut down, and the sweep fails (LoadDependentResult) unless the base verdict and
+    the rows are the same. `attack` (default attack_item) is
+    for tests; with workers > 1 it must be importable by name."""
+    attack = attack or attack_item
     per_attack: dict[str, Counter] = {}
     successes: list[dict[str, Any]] = []
+    per_item: list[dict[str, Any]] = []
+    rechecked: list[str] = []
     n_pairs = 0
     t0 = time.perf_counter()
     kind_of: dict[str, str] = {}
+    workers = max(1, min(workers, len(items)))
 
     def score(name, kind, base_verdict, verdict, item_id):
         nonlocal n_pairs
@@ -236,48 +404,39 @@ def run(items, verbose: bool = False) -> dict[str, Any]:
             else:
                 c["rejected"] += 1
 
-    for it in items:
-        ir, sol, labels = split_for_verifier(it)
-        base_sol = copy.deepcopy(sol)
-        base_sol["claimed_answer"]["option"] = None     # compare like with like
-        base = verify(ir, base_sol)
-        if base.verdict != "UNKNOWN":
-            for name, kind, fn in ATTACKS:
-                mutated = _mutate_solution(base_sol, name, fn)
-                if mutated is None:
-                    continue
-                score(name, kind, base.verdict, verify(ir, mutated).verdict, labels["id"])
-
-            # Junk in the STEPS, not in the answer. The refuter only refutes with a concrete
-            # counterexample, so a garbled claim must at worst become unverifiable.
-            for name, kind, fn in ATTACKS:
-                if kind != "preserving" or name in _SHAPES_FOR:
-                    continue                            # shape-specific rewrites make no sense here
-                mutated = _mutate_steps(base_sol, fn)
-                if mutated is None:
-                    continue
-                score(f"step:{name}", kind, base.verdict, verify(ir, mutated).verdict, labels["id"])
-
-        # The multiple-choice path with the letter LEFT IN. 257 of 260 solutions carry one and
-        # every attack above strips it, so the branch where the letter decides — the one that
-        # was measured calling a wrong solution CORRECT — was never attacked at all.
-        if sol["claimed_answer"].get("option"):
-            mc_base = verify(ir, sol)
-            if mc_base.verdict != "UNKNOWN":
-                for name, kind, fn in ATTACKS:
-                    mutated = _mutate_solution(sol, name, fn, keep_option=True)
-                    if mutated is None:
-                        continue
-                    score(f"mc:{name}", kind, mc_base.verdict, verify(ir, mutated).verdict, labels["id"])
+    results = []
+    for r in _item_results(items, workers, attack):     # the pool is shut down once this loop ends
+        results.append(r)
         if verbose:
-            print(f"  {labels['id']}: base={base.verdict}", flush=True)
+            print(f"  {r['id']}: base={r['base']}", flush=True)
+    for it, r in zip(items, results, strict=True):      # an item lost is an error
+        if workers > 1 and (r["sandbox_timeouts"] or r["sandbox_restarts"] or r["sandbox_errors"]):
+            # Alone for real: the workers are gone, so this run has the machine to itself. A recheck
+            # while they still ran reproduced their load (review, 26 Sep 2026). The base verdict is
+            # compared too: an item without attacks has no rows to differ in.
+            alone = attack(it)
+            if (alone["base"], alone["rows"]) != (r["base"], r["rows"]):
+                raise LoadDependentResult(
+                    f"{r['id']}: bir işçide {r['sandbox_timeouts']} sandbox zaman aşımı, {r['sandbox_restarts']} "
+                    f"yeniden başlatma, {r['sandbox_errors']} sandbox/katman hatası ve tek başına koşudan farklı "
+                    f"sonuç: makinedeki yük kaldırılıp tarama yeniden koşulur (tek süreç: --workers 1)")
+            rechecked.append(r["id"])
+    for r in results:
+        for name, kind, base_verdict, verdict in r["rows"]:
+            score(name, kind, base_verdict, verdict, r["id"])
+        per_item.append({"id": r["id"], "base": r["base"], "attacks": len(r["rows"]),
+                         "seconds": round(r["seconds"], 3), "sandbox_timeouts": r["sandbox_timeouts"],
+                         "sandbox_restarts": r["sandbox_restarts"], "sandbox_errors": r["sandbox_errors"]})
     dur = time.perf_counter() - t0
     pres = {k: v for k, v in per_attack.items() if kind_of[k] == "preserving"}
     chg = {k: v for k, v in per_attack.items() if kind_of[k] == "changing"}
     n_pres = sum(c["n"] for c in pres.values())
     n_chg = sum(c["n"] for c in chg.values())
     return {
-        "n_items": len(items), "n_attacks": n_pairs, "seconds": dur,
+        "n_items": len(items), "n_attacks": n_pairs, "seconds": dur, "workers": workers,
+        "sandbox_timeouts": sum(p["sandbox_timeouts"] for p in per_item),
+        "sandbox_restarts": sum(p["sandbox_restarts"] for p in per_item),
+        "sandbox_errors": sum(p["sandbox_errors"] for p in per_item), "rechecked": rechecked,
         "preserving": {"n": n_pres, "held": sum(c["held"] for c in pres.values()),
                        "abstained": sum(c["abstained"] for c in pres.values()),
                        "flipped": sum(c["flipped"] for c in pres.values())},
@@ -286,6 +445,7 @@ def run(items, verbose: bool = False) -> dict[str, Any]:
                      "accepted_wrong": sum(c["accepted_wrong"] for c in chg.values())},
         "per_attack": {k: dict(v) for k, v in per_attack.items()},
         "successes": successes,
+        "per_item": per_item,
     }
 
 
@@ -337,14 +497,18 @@ def main(argv=None):
     ap.add_argument("--ids", default=None, help="virgülle ayrılmış öğe kimlikleri (hedefli tekrar için)")
     ap.add_argument("--out", default=str(ROOT / "reports"))
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--workers", type=int, default=None,
+                    help=f"süreç sayısı (varsayılan: {DEFAULT_WORKERS}, en çok işlemci sayısı; 1 = tek süreç)")
     args = ap.parse_args(argv)
+    if args.workers is not None and args.workers < 1:
+        ap.error("--workers en az 1 olmalı")
     items = load_items(ROOT / "evalset" / "items")
     if args.ids:
         want = set(args.ids.split(","))
         items = [it for it in items if it["id"] in want]
     if args.limit:
         items = items[:args.limit]
-    s = run(items, verbose=args.verbose)
+    s = run(items, verbose=args.verbose, workers=args.workers or default_workers())
     out = Path(args.out)
     out.mkdir(exist_ok=True)
     (out / "adversarial_results.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")

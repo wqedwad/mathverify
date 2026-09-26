@@ -647,6 +647,10 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   (Windows'ta ~25–70 dk; bulutta ~63 dk (3793 s; adversaryal 3220 s; 4 vCPU), ölçüldü) ya da Lean kurulumu sürerken oturum etkin
   tutulur. `check.py --full` günlüğü `reports/check_full.log`a koşu sırasında yazar; yarıda kalan
   koşu yarım günlük bırakır.
+  **Düzeltme (26 Eylül 2026, ölçüm; DECISIONS §59):** bu süreler adversaryal tarama tek süreçteyken
+  ölçüldü. Tarama 4 sürece dağıtıldıktan sonra `--full` bulutta ~25 dk (`a8edb0d`: aşamaların
+  toplamı 1513 s, adversaryal 794 s; 4 vCPU); Windows'ta ölçülmedi. Koşunun etkin tutulması kuralı
+  değişmedi.
   **Düzeltme (26 Eylül 2026, ölçüm; HANDOFF §0.14):** ajan turunu bitirmiş, arka plandaki
   `--full`'un bildirimini bekliyordu. Platform konteyneri 08:50:49 UTC'de SIGTERM ile kapattı
   (`/tmp/env-manager.log`: "Received signal, shutting down gracefully"). Koşu kalibrasyon

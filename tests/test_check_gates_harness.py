@@ -1331,3 +1331,11 @@ def test_py_is_this_platforms_venv_interpreter():
     assert check.PY == check.venv_python(check.ROOT)
     if sys.platform == "win32" and (ROOT / ".venv" / "Scripts" / "python.exe").exists():
         assert check.PY == str(ROOT / ".venv" / "Scripts" / "python.exe")      # unchanged on Windows
+
+
+def test_a_step_that_hangs_fails_instead_of_holding_the_run(capsys):
+    """A deadlock in a harness (a pool that never shuts down) held --full for ever (review)."""
+    rc, out = check.run([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(60)"],
+                        "asili", timeout=3)
+    assert rc == 124 and "started" in out and "3 s içinde bitmedi" in out
+    assert "asili: " in capsys.readouterr().out and check.STEP_TIMEOUT >= 3764
