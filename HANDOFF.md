@@ -9,32 +9,28 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §55–§57 (son üç karar). Bulutta ayrıca
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §55–§58 (son dört madde). Bulutta ayrıca
    oturum başındaki `[mathverify bulut oturumu …]` bloğu ve `docs/BULUT.md`.
-2. `git status`, `git log --oneline -5`. Yeni bir bulut sohbeti `master`dan başlar; başka bir dalda
-   birleşmemiş iş varsa `git ls-remote origin` ile görülür (§6).
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests` (Windows'ta `.venv/Scripts/python.exe`).
-   Beklenen (Linux, Lean kurulu): **1323 passed / 5 skipped / 0 failed**, ~250–330 s (atlananlar: 3
-   root altında salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade). Lean yüzünden atlama
-   Lean'in hazır olmadığını gösterir (`-rs`). `addopts` `-q` içerir; ek `-q` özet satırını siler.
+2. `git status`, `git log --oneline -5`; birleşmemiş başka dal var mı: `git ls-remote origin` (§6).
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1323
+   passed / 5 skipped**, ~250–330 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
+   ifade); Lean yüzünden atlama = Lean hazır değil. `addopts` `-q` içerir; ek `-q` özeti siler.
 4. §3'teki ilk işe geç. Tekrar denenmemesi gerekenler: arşiv §4.
 
 ## 1. Proje (kısaca)
 
-Türkçe bir matematik sorusu (TYT/AYT ya da üniversite) ve bir AI'ın çözümü verildiğinde çözüme
-**üç değerli** karar verir: CORRECT / INCORRECT / UNKNOWN. Karar kanıtla verilir (sertifikalar, adım
-reddedici, Lean 4 + Mathlib). Cevap anahtarı hatta hiç girmez. LLM katmanları (L4/L5/L6') kararı
-yalnız daha temkinli yapabilir. Değişmez ilkeler `CLAUDE.md`'de (1–13). Mimari, yetki tablosu ve
-kararların gerekçesi arşiv §2–§3'te ve `docs/ARCHITECTURE.md`'de. Kilitli kararlar D1–D6
-(`DECISIONS.md` §1) yeniden sorulmaz. Giriş noktaları: `mathverify.verifier.verify` (deterministik),
-`mathverify.pipeline.run_pipeline` (LLM'li tam hat), `scripts/verify_cli.py`, `scripts/check.py`.
-Değerlendirme seti 280 sentetik öğe (A/B/C/D = %30/%25/%30/%15), ÖSYM metni yok.
+Türkçe bir matematik sorusu ve bir AI'ın çözümüne **üç değerli** karar verir (CORRECT / INCORRECT /
+UNKNOWN); karar kanıtla verilir (sertifikalar, adım reddedici, Lean 4 + Mathlib), cevap anahtarı hatta
+girmez, LLM katmanları kararı yalnız daha temkinli yapar. İlkeler `CLAUDE.md`'de, mimari ve gerekçeler
+arşiv §2–§3 ve `docs/ARCHITECTURE.md`'de; kilitli kararlar D1–D6 (`DECISIONS.md` §1) sorulmaz.
+Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `scripts/verify_cli.py`,
+`scripts/check.py`. Değerlendirme seti 280 sentetik öğe (A/B/C/D = %30/%25/%30/%15).
 
 ## 2. Durum (26 Eylül 2026)
 
-**Kod.** `master` = `fa94093` (`wqedwad/asd#4`: bu belgenin yeniden yapılandırılması, yalnız belgeler
-ve bir yorum). Ondan önce `e07d4f7` (`wqedwad/asd#3`: `check.py` günlük başlığı ve soğuk Lean ısıtması
-düzeltmeleri, DECISIONS §56). Birleşmemiş dal yok. Kodda yarım iş yok.
+**Kod.** `master` = `39733a0` (`wqedwad/asd#4`–`#5`: bu belgenin yeniden yapılandırılması, yalnız
+belgeler). Son kod değişikliği `e07d4f7` (`wqedwad/asd#3`: `check.py` düzeltmeleri, DECISIONS §56).
+Kodda yarım iş yok.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
@@ -42,7 +38,7 @@ bitti). F4 (kritik + meta-doğrulama): kod tamam, çevrimdışı testli, **hiç 
 20 Eylül (11 boşluk), 23 Eylül (4 yanlış onay sınıfı + tanımlılık), 25–26 Eylül (kod çalıştırma,
 cebir/kalkülüs/geometri/girdi sınıfları, formal katmanda 53/98 yanlış sertifika → 0/99; DECISIONS §55).
 
-**Son `check.py --full`.** **24/24**, `e933ffb` (kodu `master` `fa94093` ile aynı), bulutta
+**Son `check.py --full`.** **24/24**, `e933ffb` (kodu bugünkü `master` ile aynı), bulutta
 11:09–12:26 UTC, ~77 dk (adversaryal 3764 s), 1323 passed / 5 skipped. Önceki: `5414d6b`, 59 dk.
 
 **Bulut.** Kurulum betiği alanda, belirteç önyükleyicinin `T=''` satırında. 26 Eylül sabahı alandan
@@ -51,22 +47,33 @@ sohbet) anlık görüntü kullanılmadı**; betik baştan koştu ve 250 s sını
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yedek etiketleri (isteğe bağlı, yerelde):** PR #3 (`ee7b2dd`) ve PR #4 (`e07d4f7`) öncesi
-   `master` için etiket yok (§6). PR #4'te kullanıcı, kod değişikliği olmadığı için yedek almamayı
-   seçti. Sonraki kod birleştirmelerinde kural yine geçerli: etiket + bundle.
-2. **Bulut kurulum kararı** (B1–B2): anlık görüntü yeniden kullanılmıyorsa her yeni sohbet açılmadan
+1. **Yedek etiketleri (isteğe bağlı):** PR #3 ve PR #4 öncesi `master` için etiket yok (§6); kod
+   birleştirmelerinde kural yine geçerli: etiket + bundle.
+2. **Tam kontrolü kısaltma: kullanıcı onayladı (26 Eylül), sıradaki iş bu** (DECISIONS §58; ~1,5–2
+   saat, tahmin). `--full` 59–77 dk, %80'i tek çekirdekte koşan adversaryal tarama; elle 4'e bölmek
+   32 öğede 468 → 273 s, sonuç aynıydı. Yapılacaklar: (1) `harness/adversarial.py` öğeleri 4 sürece
+   dinamik dağıtır (boşalan süreç sıradakini alır), sonuçlar öğe sırasıyla birleştirilir; tek süreçli
+   ve bölünmüş koşunun eşitliği bir teste bağlanır. (2) `check.py` değişen dosyalara bakıp "tam kontrol
+   gerekli mi" der (`git diff --name-only master...HEAD`): hiçbir testin okumadığı `.md` → kontrol yok;
+   testlerin okuduğu belge (şu an `docs/BULUT.md`, `tests/test_cloud_scripts.py` okur) kod sayılır;
+   kod → çalışırken hızlı `check.py`, birleştirmeden önce son hâlde bir kez `--full`; şüphede tam.
+   CLAUDE.md "Her değişiklikte" buna göre yazılır. `src/` (uygulamaya giden doğrulayıcı) değişmez.
+   **Kalite ölçütü:** yeni `--full` 24/24, kapı değerleri aynı ve commit'li `reports/adversarial_report.md`
+   ile yeni rapor arasında yalnız süre satırı farklı. Tutmazsa birleştirilmez. Kod değişikliği olduğu
+   için birleştirmeden önce kullanıcıya yedek (etiket + bundle) sorulur.
+3. **Bulut kurulum kararı** (B1–B2; belgeye göre anlık görüntü yalnız betik ~5 dk içinde biterse alınır): anlık görüntü yeniden kullanılmıyorsa her yeni sohbet açılmadan
    ~3–4 dk bekliyor ve üstüne kanca kalanı kuruyor. Seçenekler: (a) bir yeni sohbette daha ölçmek
    (görüntü bir kez mi kaçtı?); (b) betiği ~5 dk yönergesine kadar uzatmak (`timeout` 250 → ~280 s)
    ya da REPL derlemesini kancaya bırakmak; (c) Setup script'i boşaltıp kurulumu yalnız kancaya
    bırakmak (sohbet hemen açılır, Lean ~3–4 dk arka planda). Karar kullanıcının; ölçmeden kod yok.
-3. **Küçük, krediye bağlı olmayan:** `fetch_artifacts.log`'un üzerine yazılması (B3) ve kalibrasyon
+4. **Küçük, krediye bağlı olmayan:** `fetch_artifacts.log`'un üzerine yazılması (B3) ve kalibrasyon
    raporunun belirlenimsiz satır sırası (T4); ikisi bir `--full`'la birlikte yapılabilir.
-4. **Gerçek bir yeniden başlatmadan sonra** ilk `--full`'un `lean_warmup` satırı okunur (B6):
+5. **Gerçek bir yeniden başlatmadan sonra** ilk `--full`'un `lean_warmup` satırı okunur (B6):
    `exit 0` beklenir, süre 300 s'yi aşabilir. Yeniden başlatma: devam ettirilen sohbette `uptime`
    birkaç dakika.
-5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
+6. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
    23 Eylül). Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-6. **Gerçek veri** (K4) ve **açık kapsama işleri** (§4.2). Hepsi kullanıcı kararı ister (§4.4).
+7. **Gerçek veri** (K4) ve **açık kapsama işleri** (§4.2). Hepsi kullanıcı kararı ister (§4.4).
 
 ## 4. Açık maddeler (tam liste)
 
@@ -94,9 +101,8 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
   ısıtmayı kendi `LeanClient(boot_timeout=900)` istemcisiyle yapar; soğuk yolda **[DOĞRULANMADI]**
   (bu oturumda Lean yeni kurulmuştu, ısınma 12 s). Yavaşlığın nedeni **[DOĞRULANMADI]**. Kancanın
   arka planda ısıtması önerildi, yapılmadı; ancak gerçek bir yeniden başlatmada ölçülerek eklenir.
-- **B7. Belirteç yenileme** (süresi dolunca): GitHub'da yeni fine-grained belirteç (Contents:
-  read-only, yalnız `wqedwad/asd`), Setup script'in `T='...'` satırına. Süresi dolmuş belirteç bir
-  şey bozmaz: çekim düşer, kanca kurar (167–239 s).
+- **B7. Belirteç yenileme:** yeni fine-grained belirteç (Contents: read-only, yalnız `wqedwad/asd`)
+  Setup script'in `T='...'` satırına; süresi dolmuşsa çekim düşer, kanca kurar (167–239 s).
 - **B8.** Etiket ve `master` buluttan push edilmez (kural); etiket push'u bulutta hiç denenmedi.
 - **B9.** Lean istemcisinin bulutta bellek tüketimi ölçülmedi (WSL'de ~7.2 GB PSS; makine 15 GB).
 - **B10. Kullanım/maliyet** (BULUT §8): tek seferlik bulut kredisinin kaynağı haber siteleri
@@ -164,7 +170,7 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 11. `refs/arac/bulut-v1` silinsin mi (v2 doğrulandı, v1'in içeriğini taşıyor)? Sormadan silinmez.
 12. Depo herkese açılacak ya da paylaşılacak mı? Açılırsa önce anahtarlar yenilenir ve `.env`
     geçmişten temizlenir.
-13. Bulut kurulumu: §3 adım 2'nin (a)/(b)/(c) seçeneği.
+13. Bulut kurulumu: §3 adım 3'ün (a)/(b)/(c) seçeneği.
 14. Birleşmiş uzak dallar (`bulut-2026-09-24`, `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`,
     `-practical-faraday-…`, `-trusting-curie-…`; hepsi `master`da, §6) silinsin mi?
 
@@ -198,8 +204,7 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   bundle'ı yerel makinede var mı: buluttan görülemez. PR #3'ten önceki `master` (`ee7b2dd`) için
   GitHub'da etiket yok; yerelde yedek alınıp alınmadığı bilinmiyor.
 - 26 Eylül 01:06 koşusunda düşen testin adı kaydedilmedi (en olası `test_lean_client_survives_a_timeout`).
-- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7 iddia, 54 çift,
-  `Bilmiyorum` 0.990, 13 öğe, junk 0.995, 245/260, `}` saldırısı) yalnız kayıttan.
+- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan.
 - Alandaki önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843).
 - B1, B6 ve B10'daki işaretli maddeler.
 
@@ -224,7 +229,7 @@ stdout'undan geri kondu (DECISIONS §57).
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (`git ls-remote origin`, 26 Eylül): `master` `fa94093`; `claude/trusting-curie-76slml`,
+- **Dallar** (`git ls-remote origin`, 26 Eylül): `master` `39733a0`; `claude/trusting-curie-76slml`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
   `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
   `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b` (eski); araç ref'leri
@@ -280,10 +285,8 @@ stdout'undan geri kondu (DECISIONS §57).
 | `$PY evalset/build/build_all.py` | 280 öğeyi yeniden üretir |
 | `denetim/2026-09-25/araclar/olc.sh src <dizin>` + `say.py <dizin>` | 25 Eylül denetiminin ölçümleri (README orada) |
 
-Kurulum: Linux `uv venv --python 3.14 .venv && uv pip install --python .venv/bin/python -r
-requirements.lock && uv pip install --python .venv/bin/python --no-deps -e .`; Lean
-`bash scripts/setup_lean.sh && bash scripts/setup_lean_repl.sh` (Windows'ta `wsl -d Ubuntu --`
-önekiyle; `docs/LEAN_SETUP.md`). Ortam değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
+Kurulum (Linux; bulutta kanca yapar): `docs/BULUT.md` §4, Lean `docs/LEAN_SETUP.md`. Ortam
+değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 
 ## 9. Nerede ne var
 
@@ -292,9 +295,6 @@ requirements.lock && uv pip install --python .venv/bin/python --no-deps -e .`; L
   ve reddedilen seçenekler, **§4 denenen ve işe yaramayanlar (tekrar denenmez)**, §8 kritik dosyalar,
   §9 komutlar ve ortam değişkenleri, §11 tuzaklar (SymPy, ayrıştırıcı, Lean, Windows, bulut).
 - **`DECISIONS.md`:** §1 kilitli kararlar, §7 (34–43) GitHub/bulut, 44–54 bulut ölçümleri, §8 (55)
-  25 Eylül denetimi, §9 (56) 26 Eylül bulut ölçümü, §10 (57) bu belgenin düzeni.
-- **`docs/`:** `ARCHITECTURE`, `QUALITY` (literatür → mekanizma → kapı), `SOLVER_FORMAT`,
-  `LLM_LAYERS`, `LEAN_SETUP`, `E1-E10-measurement`, `BULUT` (§12 ölçüm listesi, §13 routine
-  istemleri), `sartname/` (kanonik şartname), `bulut_tani_2026-09-24.md`.
-- **`reports/arsiv/2026-09-24/`:** rapor JSON'larının anlık görüntüsü; iki F3 dosyası yeniden
-  üretilemez.
+  25 Eylül denetimi, §9 (56) 26 Eylül bulut ölçümü, §10 (57) belge düzeni, (58) tam kontrol süresi.
+- **`docs/`:** `ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`, `LLM_LAYERS`, `LEAN_SETUP`,
+  `E1-E10-measurement`, `BULUT` (§12, §13), `sartname/`; `reports/arsiv/` (iki F3 JSON'u üretilemez).
