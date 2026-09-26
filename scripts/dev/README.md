@@ -16,7 +16,7 @@ Hepsi proje kökünden, `PYTHONUTF8=1` ile çalıştırılır: Windows'ta
 | `clean_imports.py` | pyflakes'in bildirdiği kullanılmayan import adlarını **dosyalarda siler** (bilinçli olanlar `KEEP` içinde) | pyflakes |
 
 `lean_try.py` içindeki bazı adaylar (`Matrix.dotProduct`) bugün elaborate olmaz; F5 geliştirme
-kaydıdır (HANDOFF §4). Çalışan taktikler `src/mathverify/formal/prove.py` içindedir.
+kaydıdır (`docs/arsiv/HANDOFF-2026-09-26.md` §4). Çalışan taktikler `src/mathverify/formal/prove.py` içindedir.
 
 `scripts/diag_sandbox.py` 23 Eylül 2026'da silindi: yaptığı her şeyi (çağrı, zaman aşımı,
 `mem_mode`) `tests/test_sandbox.py` sınıyor.

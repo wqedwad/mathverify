@@ -1,6 +1,6 @@
 # 25 Eylül 2026 sistematik denetiminin betikleri
 
-Bu dizin, 25 Eylül denetiminin (DECISIONS §55, HANDOFF §0.13) tekrar-üretim ve ölçüm betiklerini
+Bu dizin, 25 Eylül denetiminin (DECISIONS §55, `docs/arsiv/HANDOFF-2026-09-26.md` §0.13) tekrar-üretim ve ölçüm betiklerini
 taşır. Denetim sırasında oturumun geçici alanındaydılar; yeni bir oturum "önce → sonra" sayılarını
 yeniden ölçebilsin diye depoya alındılar. Kalıcı kapı bunlar değil, `tests/test_audit_2026_09_25_*.py`
 ve `check.py --full`'dur. Bu betikler pyflakes kapısının ve pytest'in dışında durur (denetçi kodu,

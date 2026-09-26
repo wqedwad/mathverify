@@ -1,5 +1,8 @@
 # Bulutta çalışma — Claude Code on the web el kitabı
 
+> **Not (26 Eylül 2026):** bu belgedeki "HANDOFF §N" göndermeleri 26 Eylül'e kadarki numaralara
+> aittir; o belge artık `docs/arsiv/HANDOFF-2026-09-26.md`. Güncel bulut durumu `HANDOFF.md` §7'de.
+
 ## Senin yapman gerekenler (kullanıcı, bir kez; 24 Eylül 2026)
 
 claude.ai'de bir kez yapılacak ayarlar; gerisini depo yapar (kurulum betiği + oturum kancası).
@@ -71,6 +74,8 @@ exit 0
    bu süre boyunca açılmayı bekledi: makine 07:39:00 UTC'de açıldı, betik 07:39:06 ile 07:42:06
    arasında koştu, Claude Code 07:42:06.9'da başlatıldı. Kanca 6 s sürdü ve "Lean: HAZIR" yazdı.
    Sonraki yeni sohbetlerin bu görüntüden beklemeden açıldığı henüz ölçülmedi (§12).
+   **Düzeltme (26 Eylül 2026, ölçüm; §12):** ~3,5 saat sonraki yeni sohbet görüntüyü kullanmadı;
+   betik baştan koştu, 250 s sınırında kesildi ve sohbet açılmak için 252 s bekledi.
 3. **Ortam değişkeni gerekmez** (§3.3). Anahtarlar depodaki `.env`'den gelir (§10).
    **Düzeltme (24 Eylül 2026, gece, ölçüm):** kurulum betiği alanından ilk gerçek koşu araç ref'ini
    çekemedi: betik, Claude Code'un GitHub vekili bağlanmadan önce koştuğu için özel depo 401 döndü
@@ -141,7 +146,7 @@ exit 0
 > Ölçülen maddeler §12'de işaretli; ölçümle çürüyen ifadelerin yanında "Düzeltme" notu var. O
 > oturumdan sonraki davranış değişiklikleri (`7993055`…`4002898`) de ilgili bölümlere eklendi.
 
-Kalıcı kurallar `CLAUDE.md`'de, güncel durum `HANDOFF.md`'de (§0 bulut özeti). Bu belge yalnız
+Kalıcı kurallar `CLAUDE.md`'de, güncel durum `HANDOFF.md`'de (§7 bulut özeti). Bu belge yalnız
 bulut ortamını anlatır.
 
 ## 1. Özet
@@ -1030,6 +1035,19 @@ yeni önyükleyiciyle değiştirmiş, belirteci `T=''` satırına koymuştu.
       (4) kanca ilk anda "Lean: HAZIR" diyor;
       (5) oturum açılışı artık ~3 dk beklemiyor: "Environment initialization completed (parallel)"
       satırındaki `duration_ms` bu koşuda 182336'ydı.
+      **Ölçüm (26 Eylül 2026, dördüncü normal oturum, dal `claude/trusting-curie-76slml`) → korumadı.**
+      Başarılı koşudan ~3,5 saat sonra açılan ilk yeni sohbet. Beş ölçütün beşi de "görüntü
+      kullanılmadı" diyor: (1) `setup_env.log` 11:00:50 UTC'de yeni bir `==== setup_env.sh
+      mode=all` satırıyla başladı; plan `python=1 uv-prewarm=1 lean=1`, yani `/opt` boştu. (2)
+      `/tmp/env-manager.log`: `session_mode: "new"`, 11:00:50'de "Running init script",
+      `script_length: 843` (sabahki koşuyla aynı uzunluk; metnin değişmediği çıkarım). (3) btime
+      11:00:43, betikten önce. (4) Kanca "Lean: KURULUYOR" yazdı. (5) `env_init_completed`
+      `duration_ms: 252238`. Betik 250 s sınırında REPL aşamasında durduruldu:
+      `FAILED mode=all stages=[fetch_artifacts(66s) python(1s) uv_prewarm(17s) setup_lean(156s)]
+      reason=terminated total=250s` (sabahki koşu 180 s: çekim 46, `setup_lean` 110). Kanca kalanı
+      42 s'de kurdu (`OK mode=lean`). Çekim yolu bilinmiyor: kancanın koşusu `fetch_artifacts.log`'u
+      sıfırladı. Görüntünün neden kullanılmadığı (ağ ayarı değişikliği, görüntünün hiç alınmaması,
+      başka bir havuz) **[DOĞRULANMADI]**. Seçenekler `HANDOFF.md` §3 adım 2'de.
 
 ## 13. Bulut routine istemleri
 

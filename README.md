@@ -4,8 +4,10 @@
 ürettiği çözüm verildiğinde, çözümün geçerli olup olmadığına **kanıtla** karar verir, cevabı
 kendisi üretip karşılaştırarak değil. Cevap anahtarı doğrulama hattına hiç girmez.
 
-**Yeni bir oturum devralıyorsa önce [HANDOFF.md](HANDOFF.md) okunmalı:** yapılan işin tamamı,
-ölçülen sonuçlar, bulunan hatalar ve kalan iş orada.
+**Yeni bir oturum devralıyorsa önce [HANDOFF.md](HANDOFF.md) okunmalı:** güncel durum, son ölçülen
+sayılar, açık işlerin tam listesi ve sıradaki adımlar orada. 26 Eylül'e kadarki ayrıntılı tarihçe
+(kararların gerekçesi, denenip işe yaramayanlar, tuzaklar):
+[docs/arsiv/HANDOFF-2026-09-26.md](docs/arsiv/HANDOFF-2026-09-26.md).
 
 Şartname (handoff): [docs/sartname/fable-handoff-matematik-dogrulama_1.md](docs/sartname/fable-handoff-matematik-dogrulama_1.md)
 (24 Eylül 2026'dan beri depoda; önce yalnız yerel `Downloads` klasöründeydi) · Kararlar: [DECISIONS.md](DECISIONS.md)
@@ -24,13 +26,13 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | F2 sentetik geometri, kombinatorik, seriler, lineer cebir | **tamam** |
 | F3 LLM ön yüzü, L4 çapraz aile, L5 metamorfik | **kod tamam, ölçüm yarım** (Anthropic kredisi bitti) |
 | F4 kritik + meta-doğrulama | **kod tamam, hiç koşmadı** (ölçüm hattı hazır, kredi bekliyor) |
-| Denetim (20 Eylül): krediyle ilgisi olmayan 11 boşluk | **kapatıldı ve ölçüldü** ([HANDOFF §4](HANDOFF.md), DECISIONS §23–25) |
-| İkinci denetim (23 Eylül): literatür + doğrulayıcının metamorfik testi | **4 yanlış-onay sınıfı kapatıldı** ([HANDOFF §3–4](HANDOFF.md), DECISIONS §26–30, [docs/QUALITY.md](docs/QUALITY.md)) |
+| Denetim (20 Eylül): krediyle ilgisi olmayan 11 boşluk | **kapatıldı ve ölçüldü** ([HANDOFF arşivi §4](docs/arsiv/HANDOFF-2026-09-26.md), DECISIONS §23–25) |
+| İkinci denetim (23 Eylül): literatür + doğrulayıcının metamorfik testi | **4 yanlış-onay sınıfı kapatıldı** ([HANDOFF arşivi §3–4](docs/arsiv/HANDOFF-2026-09-26.md), DECISIONS §26–30, [docs/QUALITY.md](docs/QUALITY.md)) |
 | F5 Lean 4 + Mathlib | **tamam ve ölçüldü** (model gerektirmeyen yolla) |
 | F6 adversaryal sertleştirme + kalibrasyon | **tamam ve ölçüldü** |
-| 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean sürümleri, kapı sertleştirmesi (`check.py --full` 24 kapı) | **tamam** (`bulut-2026-09-24`; [HANDOFF §0](HANDOFF.md), DECISIONS §34–43, [docs/BULUT.md](docs/BULUT.md)) |
+| 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean sürümleri, kapı sertleştirmesi (`check.py --full` 24 kapı) | **tamam** (`bulut-2026-09-24`; [HANDOFF arşivi §0](docs/arsiv/HANDOFF-2026-09-26.md), DECISIONS §34–43, [docs/BULUT.md](docs/BULUT.md)) |
 | 24 Eylül: gerçek bulut ölçümü (tek seferlik routine oturumu, `4d01ba2`) | **ölçüldü**: Lean kurulumu 195 s, testler 515 passed / 2 skipped / 0 failed, hızlı `check.py` 12/12; bulunan iki sorun (Python yedeği, `ANTHROPIC_BASE_URL`) düzeltildi; `check.py --full` bulutta henüz koşmadı ([docs/bulut_tani_2026-09-24.md](docs/bulut_tani_2026-09-24.md), DECISIONS §44–48) |
-| 25–26 Eylül: sistematik denetim (kod çalıştırma, yanlış onay sınıfları, formal katman) ve bulut kurulumu | **ölçüldü**: `check.py --full` bulutta **24/24** (son `5414d6b`, 1323 passed / 5 skipped; 24 Eylül satırındaki "bulutta henüz koşmadı" o günden sonra eskidi); kurulum betiği alandan ilk kez başarılı (`OK mode=all`, 180 s), yeni sohbet "Lean: HAZIR" ile açılıyor ([HANDOFF §0.12–0.14](HANDOFF.md), DECISIONS §54–56) |
+| 25–26 Eylül: sistematik denetim (kod çalıştırma, yanlış onay sınıfları, formal katman) ve bulut kurulumu | **ölçüldü**: `check.py --full` bulutta **24/24** (son `5414d6b`, 1323 passed / 5 skipped; 24 Eylül satırındaki "bulutta henüz koşmadı" o günden sonra eskidi); kurulum betiği alandan ilk kez başarılı (`OK mode=all`, 180 s; o sohbet "Lean: HAZIR" ile açıldı), ama sonraki yeni sohbet anlık görüntüyü kullanmadı ve betik 250 s sınırında kesildi ([HANDOFF §4.1](HANDOFF.md), [arşiv §0.12–0.14](docs/arsiv/HANDOFF-2026-09-26.md), DECISIONS §54–56) |
 
 ## Ölçülen sonuçlar
 
@@ -85,7 +87,7 @@ Adversaryal sertleştirme, **üç yüzeyde** ([reports/adversarial_report.md](re
 Eski tarama 6009 saldırıyı **tek** yüzeye uyguluyordu ve her saldırıda şık harfini siliyordu.
 Genişletildiğinde iki gerçek zafiyet çıktı ve ikisi de kapatıldı: adım iddiasını bozarak reddi
 iptal etmek (INCORRECT → CORRECT) ve küme cevaplarında `{` önekinin doğru cevabı reddettirmesi
-(CORRECT → INCORRECT). Ayrıntı: [HANDOFF §4](HANDOFF.md).
+(CORRECT → INCORRECT). Ayrıntı: [HANDOFF arşivi §4](docs/arsiv/HANDOFF-2026-09-26.md).
 
 Metamorfik sağlamlık taraması — doğrulayıcının kendisinin testi ([reports/soundness_report.md](reports/soundness_report.md)). Her problemin altın cevabından
 SymPy ile kesin olarak yanlış ve kesin olarak eşdeğer cevaplar üretilir:
@@ -110,7 +112,7 @@ okunuyor ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tanımlılık-ifadenin-yaz
 
 F3 (tam otomatik hat) kısmi ölçümü ([reports/f3_report.md](reports/f3_report.md)): 218 öğenin
 151'i `Your credit balance is too low` ile düştü — ve tarama durması gerekirken durmadı; o hata
-20 Eylül'de kapatıldı (HANDOFF §4, DECISIONS §23). Faturalama hatası almayan 67 öğede IR kabulü
+20 Eylül'de kapatıldı (HANDOFF arşivi §4, DECISIONS §23). Faturalama hatası almayan 67 öğede IR kabulü
 **64/67**; reddedilen 3 öğe (`ayt-diz-008`, `ayt-diz-013`, `ayt-diz-018`) üç turun sonunda
 round-trip'te Meta yargıcının puan döndürmediği öğeler. Kabul edilen 64 öğede görev türü elle
 yazılanla aynı 64/64, çıkarılan IR ile elle yazılan IR'ın kararı aynı 63/64, cevap düzeyi
@@ -213,7 +215,7 @@ ilk oturumda ölçülecekler: [docs/BULUT.md](docs/BULUT.md).
 Komutlar proje kökünden; yorumlayıcı platforma göre:
 
 ```bash
-PY=.venv/Scripts/python.exe     # Windows (Git Bash; PowerShell için HANDOFF §9)
+PY=.venv/Scripts/python.exe     # Windows (Git Bash; PowerShell için HANDOFF arşivi §9)
 PY=.venv/bin/python             # Linux / bulut
 export PYTHONUTF8=1
 ```
@@ -265,14 +267,14 @@ F3 koşusu L4, L5 ve L6'yı birlikte ölçer; `--no-l4` / `--no-l5` / `--no-l6` 
 kapatılır. F4 kritiğinin sayıları raporun "L6 kritik + meta-doğrulama (F4)" bölümünde çıkar.
 `--max-cost 20` verilirse toplam harcama o dolar değerine ulaştığında tarama kendini durdurur;
 gözetimsiz bir koşunun bakiyeyi boşaltmasına karşı. Sağlayıcı faturalama/kimlik hatası verirse
-koşu ilk hatada durur — **bu 20 Eylül'de düzeltildi, öncesinde durmuyordu** (HANDOFF §4, DECISIONS §23).
+koşu ilk hatada durur — **bu 20 Eylül'de düzeltildi, öncesinde durmuyordu** (HANDOFF arşivi §4, DECISIONS §23).
 
 Gerçek bir AI çözücünün çıktıları ölçülecekse `--solver-family anthropic|meta` **verilmelidir**:
 çapraz aile ayrımı (DECISIONS §17) ancak o zaman uygulanır, yoksa her kayda
 `solver_family_unknown` bayrağı konur.
 
 > `reports/f3_report.md` 18 Eylül'deki yarım koşudan kalmadır ve eski raporlayıcıyla
-> üretilmiştir; "Yol (b)" bölümü HANDOFF §6.6 ile birlikte okunmalıdır.
+> üretilmiştir; "Yol (b)" bölümü HANDOFF arşivi §6.6 ve güncel HANDOFF §4.3 (K1) ile birlikte okunmalıdır.
 
 Tek bir öğeyi doğrulamak:
 
