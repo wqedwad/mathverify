@@ -1041,8 +1041,8 @@ def plan(root: Path, base: str | None = None, fetch: bool = True) -> dict:
     that differs from its commit is code, its log and reports are committed, the base received no
     code since the branch left it and is fresh, HEAD is what its branch on origin holds, and the
     rule's own files are unchanged) or "tam" (the --full is still needed, or the decision could not
-    be made)."""
-    out: dict = {"base": base, "files": {}, "named": {}, "full": None, "base_ahead": [], "hidden": []}
+    be made). "files" stays None when the decision came before git listed them."""
+    out: dict = {"base": base, "files": None, "named": {}, "full": None, "base_ahead": [], "hidden": []}
     try:
         return _plan(out, root, base, fetch)
     except UnreadableSource as e:
@@ -1310,10 +1310,14 @@ def render_plan(p: dict) -> list[str]:
         lines.append(f"  HEAD: {p['head'][:7]}")
     if p.get("merge_base"):
         lines.append(f"  taban: {p['base']} {p.get('base_tip', '?')[:7]} (ortak ata {p['merge_base'][:7]})")
-    files = p.get("files") or {}
-    counts = {c: sum(1 for v in files.values() if v == c) for c in ("kod", "belge", "rapor")}
-    lines.append(f"  değişen: {len(files)} dosya (kod {counts['kod']}, belge {counts['belge']}, "
-                 f"rapor {counts['rapor']})")
+    files = p.get("files")
+    if files is None:                              # decided before git listed them: not "0 dosya"
+        lines.append("  değişen: okunmadı")
+        files = {}
+    else:
+        counts = {c: sum(1 for v in files.values() if v == c) for c in ("kod", "belge", "rapor")}
+        lines.append(f"  değişen: {len(files)} dosya (kod {counts['kod']}, belge {counts['belge']}, "
+                     f"rapor {counts['rapor']})")
     order = ("kod", "belge", "rapor", "?")
     for f, c in sorted(files.items(), key=lambda kv: (order.index(kv[1]), kv[0])):
         why = f"  (okuyan: {p['named'][f]})" if f in p.get("named", {}) else ""

@@ -373,6 +373,10 @@ def test_changes_git_hides_decide_nothing(repo, flag):
     p = check.plan(repo)
     assert p["level"] == "tam" and p["hidden"] == ["code.py"] and "göstermiyor" in p["why"]
     assert p["advice"] == check._ADVICE_HIDDEN
+    # decided before the files were listed: how many changed is unknown, not zero (26 Sep 2026)
+    write(repo, "notlar.md", "changed\n")
+    p = check.plan(repo)
+    assert p["files"] is None and "  değişen: okunmadı" in check.render_plan(p), check.render_plan(p)
 
 
 def test_an_untracked_gitignore_that_hides_code_decides_nothing(repo):
@@ -704,6 +708,7 @@ def test_no_base_unrelated_history_or_no_git_means_the_full_check(repo, tmp_path
     bare = tmp_path / "not-a-repo"
     bare.mkdir()
     assert check.plan(bare)["level"] == "tam" and check.plan_report(bare)[0] == 1
+    assert "  değişen: okunmadı" in check.plan_report(bare)[1]
 
 
 # --------------------------------------------------------------------------- fetching origin/master
