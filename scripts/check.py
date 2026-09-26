@@ -366,6 +366,14 @@ def calibration_gates(cal: dict) -> list[dict]:
     return [gate("kalibre test precision (poz/neg)", f"{t['pos_precision']}/{t['neg_precision']}", "raporlanır", True)]
 
 
+def pytest_problems(out: str) -> list[str]:
+    """The FAILED/ERROR lines of a pytest run and its skip-reason totals. check.py printed only the
+    last summary line, so a run with "1 failed ... 92 skipped" left no trace of which test failed
+    or why Lean tests were skipped (26 Sep 2026: first Lean use after a resumed session)."""
+    keep = ("FAILED ", "ERROR ", "SKIPPED ")
+    return [l.strip() for l in out.splitlines() if l.startswith(keep)]
+
+
 def pyflakes_findings(out: str, rc: int, root: Path) -> tuple[list[str], bool]:
     """(findings not waived by a `# noqa` on their own source line, pyflakes-did-not-run)."""
     findings, parsed = [], 0
@@ -433,9 +441,11 @@ def _main(args) -> int:
     gates: list[dict] = []
 
     print("== testler ==")
-    rc, out = run([PY, "-m", "pytest", "tests", "-q", "-o", "addopts=-p no:cacheprovider"], "pytest")
+    rc, out = run([PY, "-m", "pytest", "tests", "-q", "-rfEs", "-o", "addopts=-p no:cacheprovider"], "pytest")
     last = [l for l in out.splitlines() if "passed" in l or "failed" in l]
     gates.append(gate("birim testleri", last[-1].strip() if last else "?", "hepsi geçer", rc == 0))
+    for line in pytest_problems(out)[:40]:
+        print(f"    {line}")
 
     print("== pyflakes ==")
     # Tests never reach many `except` branches; an undefined name there is a NameError waiting
