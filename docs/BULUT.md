@@ -65,6 +65,12 @@ exit 0
    (`FAILED mode=all ... reason=fetch`, 0–1 s). Alanın yapacağı tam koşu oturum içinden temiz
    önekte yeniden ölçüldü: `OK mode=all` **192 s** (çekim 47, Python 1, uv ön ısıtma 8,
    `setup_lean` 118, REPL 22; 11 GB).
+   **Ölçüm (26 Eylül 2026; HANDOFF §0.14, §12):** alandan ilk **başarılı** koşu. Belirteç `T=''`
+   satırındayken ilk yeni sohbette `OK mode=all` **180 s** (çekim 46, git + belirteç yoluyla;
+   Python 1, uv ön ısıtma 9, `setup_lean` 110, REPL 21). 250 s sınırının 70 s altında kaldı. Oturum
+   bu süre boyunca açılmayı bekledi: makine 07:39:00 UTC'de açıldı, betik 07:39:06 ile 07:42:06
+   arasında koştu, Claude Code 07:42:06.9'da başlatıldı. Kanca 6 s sürdü ve "Lean: HAZIR" yazdı.
+   Sonraki yeni sohbetlerin bu görüntüden beklemeden açıldığı henüz ölçülmedi (§12).
 3. **Ortam değişkeni gerekmez** (§3.3). Anahtarlar depodaki `.env`'den gelir (§10).
    **Düzeltme (24 Eylül 2026, gece, ölçüm):** kurulum betiği alanından ilk gerçek koşu araç ref'ini
    çekemedi: betik, Claude Code'un GitHub vekili bağlanmadan önce koştuğu için özel depo 401 döndü
@@ -109,6 +115,11 @@ exit 0
       sonraki kurulum koşusu herhangi bir ortam değişkeninin kurulum betiğine ulaşıp ulaşmadığını
       günlüğe yazar (§6, `environment (names only)` satırı).
    4. Yeni bir sohbet açılır; oturum §12'deki "belirteç önyükleyicide" maddesini ölçer.
+
+   **Ölçüm (26 Eylül 2026; §12):** dört adım yapıldı ve kurulum çalıştı. Alandaki betik
+   843 bayt: sondaki satır sonu olmadan belgelenen önyükleyici (750 bayt) artı 93 karakterlik
+   belirteç. Oturumun ortamında `MATHVERIFY_GITHUB_TOKEN` yok, yani 3. adım yapılmış. Kanarya
+   eklenmemiş.
 4. **Routine istemleri:** bir bulut routine'inin (zamanlanmış ya da tek seferlik ajan) istemi push
    hedefini açıkça **yeni bir dal** olarak verir ya da hiç push istemez. "Oturumun kendi dalına push
    et" yazılmaz: 24 Eylül'deki routine oturumu varsayılan dal `master`da başladı ve `master`a push
@@ -317,6 +328,17 @@ giden başlık ise değişmeden GitHub'a ulaşıyor. `setup_env.sh` artık her k
 yalnız adlarını yazar (`environment (names only): set=[...] unset=[...]`, §6): sonraki alan koşusu
 belirtecin, vekil değişkenlerinin ve `CLAUDE_PROJECT_DIR`'in orada olup olmadığını gösterir.
 
+**Ölçüm (26 Eylül 2026, üçüncü normal oturum; HANDOFF §0.14, §12):** belirteç `T=''` satırındayken
+alan başarılı oldu: `OK mode=all ... total=180s`. Düz çekim yine 1 s'de `could not read Username`
+ile düştü. Ardından git + belirteç denemesi **başarılı** oldu ("the token fetch succeeded", 37 s,
+1.1G). Dosya indirme yoluna gerek kalmadı. Kurulum betiği aşamasında hiçbir vekil değişkeni yok
+(`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `GIT_CONFIG_COUNT` tanımsız) ve platform günlüğü yine
+`Git proxy sidecar skipped: boot-clone mount is on` yazıyor. Buna göre GitHub, bu aşamada
+kullanıcının belirtecini git'in HTTP temel kimlik doğrulamasıyla kabul ediyor. Arada saydam bir
+vekil olup olmadığı bilinmiyor; bu sonuç için önemi yok. Checkout betik koşarken hazırdı
+(`repository: /home/user/asd (ee7b2dd)`). `CLAUDE_PROJECT_DIR` tanımsızdı; önyükleyici checkout'u
+`/home/*/*` aramasıyla buldu.
+
 ### 3.3 Ortam değişkenleri
 
 **Gerekli değişken yok.** Anahtarlar `.env`'den okunur (§10). İsteğe bağlı olanlar:
@@ -428,6 +450,11 @@ yedeği, `.venv` 4 s'de HATA, Lean arka planda başlatıldı, 7 rapor JSON'u kop
 olduktan sonra ikinci koşu **7 s** (Python 3.14.6, `.venv` 7 s'de KURULDU, Lean HAZIR). Platformun
 kendisinin tetiklediği kanca henüz ölçülmedi (§12).
 
+**Düzeltme (26 Eylül 2026):** platformun tetiklediği kanca iki kez ölçüldü. İkinci routine
+oturumunda (24 Eylül) 10 s sürdü. Kurulum betiği alandan başarıyla koştuktan sonra açılan oturumda
+(26 Eylül, §12) **6 s** sürdü: Python 3.14.6 `/opt`'tan geldi, `.venv` uv önbelleğinden 6 s'de
+kuruldu (31 paket 36 ms'de çözüldü), satırda "Lean: HAZIR" vardı.
+
 ## 5. Dizin düzeni ve ortam değişkenleri
 
 Önek `MATHVERIFY_OPT` (varsayılan `/opt`). `/opt` oturum kullanıcısı için yazılabilir değilse
@@ -528,6 +555,12 @@ henüz hiç ölçülmedi; kancanın başlattığı koşuda `CLAUDE_CODE_REMOTE` 
 Ayrıca yeni bir `reason`: `terminated`: koşu bir sinyalle durduruldu (önyükleyicinin 250 s süre
 sınırı ya da kapanış); satır `FAILED mode=... stages=[<o ana dek bitenler>] reason=terminated
 total=<N>s` biçimindedir.
+
+**Ölçüm (26 Eylül 2026, alandan koşu; §12):**
+`environment (names only): set=[MATHVERIFY_GITHUB_TOKEN CLAUDE_CODE_REMOTE] unset=[MATHVERIFY_SETUP_CANARY MATHVERIFY_REPO_REF MATHVERIFY_ARTIFACT_REF CLAUDE_PROJECT_DIR HTTPS_PROXY https_proxy HTTP_PROXY http_proxy NO_PROXY no_proxy GIT_CONFIG_COUNT]`.
+Belirteç önyükleyiciden geldi. `CLAUDE_CODE_REMOTE` kurulum aşamasında da tanımlı. Vekil
+değişkenleri ve `CLAUDE_PROJECT_DIR` tanımsız. Aynı koşunun durum satırı:
+`OK mode=all failed=[] stages=[fetch_artifacts(46s) python(1s) uv_prewarm(9s) setup_lean(110s) setup_lean_repl(21s)] python=3.14.6 lean=ready total=180s`.
 
 Routine oturumunda ölçülen satır (kancanın başlattığı `--lean-only`, `4d01ba2`):
 `OK mode=lean failed=[] stages=[fetch_artifacts(55s) python(1s) setup_lean(119s) setup_lean_repl(19s)] python=3.14.6 lean=ready total=195s`.
@@ -728,6 +761,9 @@ değişmeden ulaşıyor (başlıksız 404, uydurma belirteçle 404, gerçek beli
 `MATHVERIFY_ARTIFACT_VIA=raw`, gerçek belirteç): toplam **32 s** (25 parça, 1.1G, 26 s; birleştirme
 1 s; SHA256 4 s), 5/5 dosya OK, günlükte belirteç 0 kez. Kurulum betiği aşamasında bu yolun
 çalıştığı henüz ölçülmedi **[DOĞRULANMADI]** (§12).
+**Ölçüm (26 Eylül 2026, §12):** kurulum betiği aşamasında bu yola sıra gelmedi. Ondan önceki
+git + belirteç denemesi başarılı oldu (37 s, 1.1G git nesnesi; birleştirme 8 s, SHA256 1 s,
+5/5 OK). Dosya indirme yolu yedek olarak duruyor; kurulum aşamasında hâlâ hiç koşmadı.
 *Ek (24 Eylül 2026):* v2 bulutta doğrulandı (yukarıda); v1'in içeriği v2'de de var. v1 geçmiş için
 duruyor, silinip silinmeyeceği hâlâ açık soru (HANDOFF §12, madde 15).
 
@@ -883,6 +919,64 @@ oturumda ölçülür):
 - [ ] Anlık görüntü `/opt`'u koruyor mu (değişmedi): belirteçli başarılı koşudan sonraki **ikinci**
       yeni sohbette `setup_env.log` önceki `mode=all` satırıyla başlıyor, yeni `mode=all` satırı
       yok ve kanca Lean'i ilk anda "HAZIR" buluyor mu.
+
+**Ölçüm (26 Eylül 2026, üçüncü normal oturum; HANDOFF §0.14):** `master` = `ee7b2dd`
+(`wqedwad/asd#2` birleşmişti), dal `claude/practical-faraday-7a4iy4`. Kullanıcı Setup script metnini
+yeni önyükleyiciyle değiştirmiş, belirteci `T=''` satırına koymuştu.
+
+- [x] **Belirteç önyükleyicide** → **çalıştı.**
+      - *Zaman çizelgesi* (`/proc/stat` btime; platform günlükleri `/tmp/env-manager.log` ve
+        `/tmp/environment-manager-*.diag.log`): makine 07:39:00 UTC'de açıldı. Platform
+        07:39:04'te ortamı `session_mode: "new"` ve `has_init_script: true` ile başlattı. Depo
+        07:39:06.2'de klonlandı (1.6 s). Betik 07:39:06.9'da başladı (`script_length: 843`) ve
+        07:42:06.9'da bitti. `init_script_completed`'ın `output_length: 1920` değeri
+        `setup_env.log`'un bayt sayısına eşit. Claude Code 07:42:06.9'da başlatıldı, kanca
+        07:42:08'de koştu. Oturum açılışı toplam 182 s bekledi
+        (`Environment initialization completed (parallel)`, `duration_ms: 182336`).
+      - *Durum:* `OK mode=all failed=[] stages=[fetch_artifacts(46s) python(1s) uv_prewarm(9s) setup_lean(110s) setup_lean_repl(21s)] python=3.14.6 lean=ready total=180s`.
+        250 s sınırının 70 s, ~5 dk yönergesinin 120 s altında.
+      - *Değişken adları:* `set=[MATHVERIFY_GITHUB_TOKEN CLAUDE_CODE_REMOTE]`. Kanarya, iki ref
+        değişkeni, `CLAUDE_PROJECT_DIR`, altı vekil değişkeni ve `GIT_CONFIG_COUNT` tanımsız (§6).
+        Belirteç önyükleyiciden geldi: oturumun ortamında `MATHVERIFY_GITHUB_TOKEN` yok, yani
+        Environment variables satırı silinmiş ve başka bir kaynak kalmamış. Kanarya eklenmemiş
+        (oturumda da yok), bu yüzden "hiçbir ortam değişkeni kurulum betiğine ulaşmıyor mu" sorusu bu
+        koşuda sınanmadı. Checkout `CLAUDE_PROJECT_DIR` olmadan, `/home/*/*` aramasıyla bulundu
+        (`repository: /home/user/asd (ee7b2dd)`); klon yedeğine düşülmedi.
+      - *Alandaki metin:* belgelenen önyükleyici, sondaki satır sonu olmadan 750 bayt. 25 Eylül'de
+        ölçülen belirteç 93 karakter. 750 + 93 = 843, platformun yazdığı `script_length`'e eşit.
+        Alan belgelenen önyükleyiciyle aynı ve içinde yalnız belirteç var. Bu bir çıkarım: yalnız
+        uzunluk eşleşiyor, içerik okunmadı.
+      - *Çekim yolu* (`fetch_artifacts.log`): düz çekim 1 s'de `could not read Username`, ardından
+        "retrying the fetch with MATHVERIFY_GITHUB_TOKEN" ve **"the token fetch succeeded"**
+        (git + belirteç). 1.1G git nesnesi 37 s'de indi, birleştirme 8 s, SHA256 1 s, 5/5 OK;
+        aşama 46 s. `raw.githubusercontent.com` yoluna sıra gelmedi (§11).
+      - *uv ön ısıtma:* **9 s**: 31 paket PyPI'den ve projenin kendisi, "imports OK".
+      - *Kanca:* açılışta kendiliğinden koştu, **6 s**. Python 3.14.6 `/opt`'tan geldi. `.venv`
+        uv önbelleğinden 6 s'de KURULDU (31 paket 36 ms'de çözüldü). Satırda **"Lean: HAZIR"**
+        vardı ve 7 rapor JSON'u arşivden kopyalandı.
+      - *Artıklar ve disk:* `/opt/arac`, `/opt/.mathlib-ltar` (8906 `.ltar`, 448M), `/tmp/mv-boot`
+        ve geçici uv ve REPL dizinleri silinmiş. Kurulum `/opt`'ta ~10.7G tutuyor
+        (`mathverify-lean` 7.2G, `elan` 3.0G, `repl` 234M, `uv-cache` 159M, `python3.14` 112M).
+        Kökte 20G boş.
+      - *Belirteç sızıntısı:* `/opt/mathverify-logs`, `/etc/profile.d` ve checkout'un
+        `.git/config`'inde `github_pat_`/`ghp_` biçimi 0 dosyada bulundu. Daha geniş bir tarama
+        oturumun izin denetimine takıldı ve yapılmadı.
+      - *Takım:* 1326 test, **1321 passed / 5 skipped / 0 failed**, 251 s (ilk koşu 258 s, ikincisi
+        251 s: süre ısınmayla değişmiyor). Atlananların 3'ü root altında salt okunur dizin, 1'i isteğe bağlı
+        indirme, 1'i kapsam dışı ifade; Lean yüzünden atlama yok.
+        `check.py --full`: koşuyor; sonucu sonraki commit'te (HANDOFF §0.14).
+- [ ] **Anlık görüntü `/opt`'u koruyor mu** (açık; bu oturumda ölçülemez). Bu sohbete dönmek
+      sayılmaz: devam ettirilen oturum betiği hiç koşturmaz. Ölçüm, bu başarılı koşudan sonra açılan
+      **ilk yeni sohbette** yapılır; arada Setup script metni ve ağ ayarı değişmemiş olmalı ve ~7
+      günlük süre (~3 Ekim) dolmamış olmalı. Bakılacaklar:
+      (1) `setup_env.log` 07:39:06'daki `mode=all` satırıyla başlıyor ve yeni `==== setup_env.sh`
+      satırı yok;
+      (2) `/tmp/env-manager.log`'da "Running init script" satırı yok, "Initializing Anthropic
+      environment" satırındaki `session_mode` değeri not edilir;
+      (3) makinenin açılışı (`/proc/stat` btime) `setup_env.log`'un ilk satırından sonra;
+      (4) kanca ilk anda "Lean: HAZIR" diyor;
+      (5) oturum açılışı artık ~3 dk beklemiyor: "Environment initialization completed (parallel)"
+      satırındaki `duration_ms` bu koşuda 182336'ydı.
 
 ## 13. Bulut routine istemleri
 
