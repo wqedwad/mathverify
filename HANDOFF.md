@@ -15,6 +15,15 @@
 > söyler: "`claude/compassionate-shannon-759r85` dalından devam et; önce HANDOFF §0.13 ve §7'yi oku."
 > Oturumun geçici alanı yeni sohbete taşınmaz; denetimin ölçüm betikleri bu yüzden
 > `denetim/2026-09-25/`'dedir.
+> **Düzeltme (26 Eylül 2026):** dal `wqedwad/asd#2` ile `master`a birleştirildi (`ee7b2dd`). Önceki
+> `master`ın yedeği `yedek/master-2026-09-26` (`d66bf2d`, §5.4). Bu uyarı artık geçerli değil.
+>
+> **26 Eylül eklendi (üçüncü normal bulut oturumu, §0.14):** kurulum betiği alandan ilk kez
+> başarılı oldu: `OK mode=all`, 180 s, git + belirteç yoluyla. Kanca açılışta "Lean: HAZIR" yazdı.
+> Açık kalan tek bulut maddesi, sonraki yeni sohbetin bu anlık görüntüden açılması. Aynı oturumda
+> iki `check.py` düzeltmesi yapıldı: günlük başlığı kendini sayıyordu; `--full`'un Lean ısıtması
+> soğuk yolda 300 s'de düşüyordu. Ayrıca konteyner, `--full` sürerken ben turu bitirince kapatıldı.
+> Yeni sıra §7 başında.
 >
 > **25 Eylül, aynı oturumun devamı:** sistematik denetim (§0.13). Cevap metni kod olarak çalışıyordu;
 > yanlış onay sınıfları ve formal katmandaki 53 yanlış sertifika kapatıldı. "Lean FP 0" yalnız
@@ -419,6 +428,9 @@ maddeyi yapmıştı. Oturumun isteği "kurulum betiğini ölç". Karar DECISIONS
 - **Açık [DOĞRULANMADI]:** kurulum betiği aşamasında `raw.githubusercontent.com`'a (ya da belirteçle
   git'e) erişim. Bu değişiklik `master`a birleşip kullanıcı önyükleyiciyi belirteçle güncelleyince ilk
   yeni sohbette ölçülür (`docs/BULUT.md` §12).
+  **Düzeltme (26 Eylül 2026, ölçüm §0.14):** belirteçle git çalıştı ("the token fetch succeeded",
+  37 s) ve kurulum `OK mode=all` 180 s ile bitti. Dosya indirme yoluna sıra gelmedi; o yol kurulum
+  aşamasında hâlâ ölçülmedi, yedek olarak duruyor.
 
 ### 0.13 25 Eylül sistematik denetimi: kod çalıştırma, yanlış onay sınıfları, formal katman
 
@@ -476,7 +488,89 @@ denetim, yerelde krediye bağlı olmayan ciddi açıklar buldu. Hepsi aynı otur
 - **Son doğrulama (26 Eylül):** `check.py --full` **24/24** (`67d1619`, ≈ 60 dk), **1321 passed / 5 skipped**,
   Lean 121 / FP 0 / junk 0/33, saldırı %0. Konteyner yeniden başlatılınca ilk Lean açılışı ~400 s
   sürüyor; `--full` artık önce Lean'i ısıtır (DECISIONS §55 Ek 3). Önceki doğrulama:
+  **Düzeltme (26 Eylül 2026, ölçüm §0.14):** o ısıtma soğuk yolda işe yaramıyordu (302 s'de düştü,
+  istemcinin 300 s açılış sınırı); `5414d6b`'de düzeltildi.
 - **Doğrulama:** `check.py --full` **24/24** (`c1d4c3e`, 16:30–17:30 UTC, aşamaların toplamı 3595 s ≈ 60 dk: pytest 276, `run_eval` 87, `run_lean` 131, adversaryal 2936, sağlamlık 119, kalibrasyon 44 s); birim testleri **1314 passed / 5 skipped** (denetim öncesi 871 / 5); Lean 121 sertifika (24 Eylül kümesiyle aynı), FP 0, junk **0/33**; 21 139 saldırıda %0; 0/448, 0/214, 0/46, 0/184, 0/6. İlk birleşik koşu (`0eb99b6`) de 24/24 geçmişti, ama adversaryal raporda anlamı koruyan saldırılarda UNKNOWN'a düşen 2896 → 2964 çıktı: `x in {…}` adım biçimi görünmez karakter ya da `\boxed{}` ile 7 doğru çözümde UNKNOWN oluyordu. Düzeltildi (`c1d4c3e`); son koşuda 2894, karşıt karara dönen yine 0. Değerlendirme setinde karar değişmedi. Denetimin 29 düzeltme commit'i (beş dal ve birleşik dal) ve 10 birleştirme commit'i bu dalda (`da963b2..`); geçici dallar ve worktree'ler silindi (içerikleri bu dalda). Push: yalnız bu oturumun dalı.
+
+### 0.14 Üçüncü normal bulut oturumu: kurulum betiği alandan ilk kez başarılı (26 Eylül)
+
+Kullanıcının açtığı normal bir bulut oturumu. `master` = `ee7b2dd`, `wqedwad/asd#2`'nin birleştirme
+commit'i (ebeveynleri `d66bf2d` ve `93343c3`). Dal `claude/practical-faraday-7a4iy4`. Kullanıcı
+Setup script metnini yeni önyükleyiciyle değiştirmiş ve belirteci `T=''` satırına koymuştu.
+İstek: "`docs/BULUT.md` §12'deki kurulum ölçümünü yap, sonra HANDOFF'u güncelle". Ayrıntılı ölçüm
+`docs/BULUT.md` §12'de, karar kaydı DECISIONS §56'da.
+
+- **Kurulum betiği alandan ilk kez başarılı oldu.** Durum satırı:
+  `OK mode=all failed=[] stages=[fetch_artifacts(46s) python(1s) uv_prewarm(9s) setup_lean(110s) setup_lean_repl(21s)] python=3.14.6 lean=ready total=180s`.
+  Bu, 250 s sınırının 70 s, ~5 dk yönergesinin 120 s altında. Makine 07:39:00 UTC'de açıldı, betik
+  07:39:06.9–07:42:06.9 arasında koştu, Claude Code 07:42:06.9'da başlatıldı. Yani bu yeni sohbet
+  açılmak için ~3 dk bekledi (platform: `duration_ms: 182336`).
+- **Çalışan yol: git + belirteç.** Düz çekim yine 1 s'de `could not read Username` ile düştü;
+  ardından "the token fetch succeeded" geldi (37 s, 1.1G, 5/5 SHA256 OK). DECISIONS §54'ün
+  `raw.githubusercontent.com` yedeğine sıra gelmedi. Kurulum aşamasında vekil değişkeni yok ve
+  git vekili yine "skipped". Buna göre GitHub bu aşamada kullanıcının belirtecini doğrudan kabul
+  ediyor. 25 Eylül'ün açık sorusu (§0.12 "Açık") böylece kapandı.
+- **Değişken adları satırı** (ilk kez alandan):
+  `set=[MATHVERIFY_GITHUB_TOKEN CLAUDE_CODE_REMOTE]`. Kanarya, `MATHVERIFY_REPO_REF`,
+  `MATHVERIFY_ARTIFACT_REF`, `CLAUDE_PROJECT_DIR`, vekil değişkenleri ve `GIT_CONFIG_COUNT`
+  tanımsız. Belirteç önyükleyiciden geldi: oturumun ortamında `MATHVERIFY_GITHUB_TOKEN` yok
+  (kullanıcı Environment variables satırını silmiş). Kanarya eklenmediği için "ortam değişkenleri
+  kurulum betiğine hiç ulaşmıyor mu" sorusu bu koşuda sınanmadı. Önyükleyici checkout'u
+  `/home/*/*` aramasıyla buldu.
+- **Alandaki metin belgelenen önyükleyiciyle aynı** (çıkarım). Platformun `script_length` değeri
+  843. Belgelenen önyükleyici sondaki satır sonu olmadan 750 bayt, 25 Eylül'de ölçülen belirteç 93
+  karakter. Yalnız uzunluk eşleşiyor; içerik okunmadı.
+- **Kanca** kendiliğinden koştu ve 6 s sürdü: Python 3.14.6 `/opt`'tan geldi, `.venv` uv
+  önbelleğinden 6 s'de kuruldu, satırda **"Lean: HAZIR"** vardı. 25 Eylül'de kanca Lean'i
+  222 s'de, 24 Eylül gecesi 167 s'de kuruyordu. Artıklar (`/opt/arac`, `.ltar`'lar, `/tmp/mv-boot`)
+  silinmiş. Kurulum `/opt`'ta ~10.7G tutuyor. Günlüklerde, `/etc/profile.d`'de ve checkout'un git
+  ayarında belirteç biçimi 0 dosyada bulundu (daha geniş bir tarama oturumun izin denetimine takıldı).
+- **Takım:** 1326 test, **1321 passed / 5 skipped / 0 failed**, 251 s (atlananlar: 3'ü root altında
+  salt okunur dizin, 1'i isteğe bağlı indirme, 1'i kapsam dışı ifade; Lean yüzünden yok). 25 Eylül'ün
+  112 s'si 845 testlikti; süre, denetimle büyüyen takımdan geliyor (ilk koşu 258 s, ikincisi 251 s).
+- **`check.py --full` üç kez başladı.** (1) `ee7b2dd` (belgeler hariç `master`), 07:53:58: ısınma 7 s,
+  pytest 256 s, `run_eval` 84, `run_lean` 114, adversaryal 2802, sağlamlık 109 s, hepsi çıkış 0.
+  Ama kalibrasyon sürerken konteyner kapatıldı (aşağıda); kapılar hiç değerlendirilmedi, yani bu
+  koşu "geçti" sayılmaz. (2) `3925180` (başlık düzeltmesi), yeniden başlatmadan hemen sonra: başlık
+  "0 dosya", ısınma **302 s (exit 1)** (aşağıda), pytest 306 s ile çıkış 0. Isıtma düzeltmesiyle
+  bir koşu zaten gerekeceği için `run_lean` sırasında ben durdurdum; kısmi günlük yalnız oturumun
+  geçici alanında. (3) `5414d6b` (ısıtma düzeltmesi): **24/24** (`5414d6b`, 09:06:31–10:05:35 UTC, aşamaların toplamı 3543 s ≈ 59 dk: ısınma 9, pytest 270, pyflakes 2, `run_eval` 83, `run_lean` 124, adversaryal 2894, sağlamlık 117, kalibrasyon 44 s); başlık "0 dosya"; birim testleri **1323 passed / 5 skipped** (iki yeni test); kapı değerleri önceki koşularla aynı (121 sertifika, Lean FP 0, junk 0/33; 21 139 saldırıda %0, UNKNOWN'a düşen 2894, karşıt karara dönen 0; 0/448, 0/214, 0/46, 0/184, 0/6). Raporlarda yalnız süre satırları ve kalibrasyon tablosunda eşit ağırlıklı iki satırın yeri değişti (§6.8).
+- **Konteyner kapandı (08:50:49 UTC).** Turumu bitirmiş, arka plandaki koşunun bildirimini
+  bekliyordum. Platform SIGTERM gönderdi (`/tmp/env-manager.log`: "Received signal, shutting down
+  gracefully"). Sohbete dönüş `session_mode: "resume"` ile oldu: "Skipping initialization script",
+  disk korunmuştu, kanca 13 s sürdü, `setup_env.log`'da yine tek `mode=all` satırı vardı (devam
+  ettirilen oturum betiği koşturmaz; belgeyle uyumlu). 24 Eylül'deki "boşta beklerken geri
+  alınmadı" gözlemi (DECISIONS §52) genellenemez. Kural uygulamada: tur bitirilmez, koşu ön planda
+  ≤10 dk'lık beklemelerle izlenir (`docs/BULUT.md` §8, CLAUDE.md).
+- **Yeni bulgu: `--full`'un Lean ısıtması soğuk yolda işe yaramıyordu** (`67d1619`, DECISIONS §55
+  Ek 3). Isıtma `lean_available(timeout=900)` ile bekliyordu, ama o süre yalnız sondaya gidiyordu;
+  `import Mathlib` istemcinin 300 s `boot_timeout`'uyla bekleniyordu. `docs/BULUT.md` §8 bunu zaten
+  uyarıyordu. Gerçek yeniden başlatmada `lean_warmup: 302 s (exit 1)`. Takım yine geçti (Lean
+  yüzünden atlama yok), çünkü düşen deneme önbelleği kısmen ısıtmıştı. Soğuk `import Mathlib` bu
+  kez ~340–360 s sürdü (çıkarım: 302 s + takımdaki 36–55 s fazla; sıcak diskte pytest
+  251–270 s). Düzeltme `5414d6b`: ısıtma kendi `LeanClient(boot_timeout=900)` istemcisini kurar
+  ve her durumda kapatır; doğrulayıcının yolu değişmedi. Eski test yalnız
+  ısıtma metninde `"timeout=900"` dizgisini arıyordu. Yeni test ısıtmayı sahte bir istemciyle ayrı
+  süreçte koşturur; dört mutasyon testi düşürdü (eski sürümün kendisi dahil). Canlı: sıcak diskte
+  9 s, çıkış 0. Soğuk yolda yeni ısıtma bir sonraki gerçek yeniden başlatmada ölçülür
+  **[DOĞRULANMADI]**.
+- **Yan bulgu: kapı günlüğünün başlığı kendini sayıyordu.** `check.py --full`, `reports/check_full.log`u
+  `w` ile açtıktan sonra `git status`'u sayıyordu. Günlük o anda zaten değişmiş olduğu için başlık
+  temiz ağaçta bile "commit edilmemiş değişiklik: 1 dosya" yazıyordu; commit'li `67d1619` günlüğünde
+  de böyleydi. Başlığın işi günlüğü ölçtüğü koda bağlamak (§6.5), sayı ise hiçbir zaman 0
+  olamıyordu. Düzeltildi (`scripts/check.py`): günlüğün kendisi git'e `:(exclude)` yol belirteciyle
+  dışlanarak sorulur. Yeni test gerçek bir geçici git deposunda koşar: temiz ağaçta "0 dosya",
+  iki değişiklikte "2 dosya" bekler. Üç mutasyonun (dışlama yok, her şeyi dışla, sayıdan 1 çıkar)
+  üçü de testi düşürdü. Canlı: `3925180` ve `5414d6b` koşularının başlığı "commit edilmemiş
+  değişiklik: 0 dosya".
+- **Açık:** anlık görüntünün `/opt`'u koruduğu. Bu sohbette ölçülemez; bu sohbete dönmek de
+  sayılmaz. Bundan sonra açılan ilk yeni sohbette ölçülür; bakılacaklar `docs/BULUT.md` §12'de.
+- **Hatalarım (bu oturum).** (1) `pyproject.toml`'daki `addopts` zaten `-q` içeriyor. Komuta bir
+  `-q` daha eklediğim için ilk tam takım koşusunun özet satırı bastırıldı (`-qq`) ve 258 s'lik koşu
+  yeniden yapıldı (§11). (2) `--full` sürerken turu bitirdim; CLAUDE.md'nin "oturum etkin tutulur"
+  kuralını çiğnedim. Konteyner kapandı ve ~57 dk'lık koşu kayboldu. (3) İlk `--full`'u `nohup … &`
+  ile başlattım, bildirim gelmeyeceği için PID ile durdurup harness'in arka plan özelliğiyle yeniden
+  başlattım (6 s kayıp).
 
 
 ---
@@ -1203,6 +1297,11 @@ altında olup olmadığı buluttan görülemez **[DOĞRULANMADI]**.
 - GitHub'da belgelenmemiş bir etiket daha var: `yedek/master-2026-09-25` → `18fd298` (PR #1'den
   önceki `master`). Karşılık gelen bir bundle olup olmadığı bilinmiyor **[DOĞRULANMADI]**.
 
+**Ek (26 Eylül 2026, bulut oturumu, `git ls-remote origin`):** `wqedwad/asd#2` birleştirildi:
+`master` = `ee7b2dd`, bir birleştirme commit'i (ebeveynleri `d66bf2d` ve `93343c3`, 26 Eylül 10:25
++03:00). Öncesinin yedeği yukarıdaki `yedek/master-2026-09-26` (`d66bf2d`). GitHub'daki etiketler
+değişmedi (altı `yedek/` etiketi). `claude/compassionate-shannon-759r85` `93343c3`'te duruyor.
+
 Commit geçmişi (eskiden yeniye):
 
 | Commit | Ne |
@@ -1341,6 +1440,7 @@ değil. Bu açık kodla kapanmaz.
   hesaplanabilir; ölçülmedi.
 - `antiderivative` yazıldığı haliyle tanımlılık için ayrıca sınanmadı (kaldırılabilir nokta ilkel
   fonksiyonu değiştirmez; ölçülmedi). `tangent_line`'ın noktası sınanıyor.
+- **Ek (26 Eylül 2026):** Kalibrasyon raporunda eşit ağırlıklı satırların sırası koşudan koşuya değişiyor: ağırlık sözlüğü `harness/calibrate.py` `fit` içinde `set(r["signals"])` yinelemesiyle kuruluyor ve dizgi karma tohumu süreç başına rastgele. Ölçüm (26 Eylül): üç `PYTHONHASHSEED` ile eşikler, sonuçlar, eğri ve ağırlık değerleri aynı, yalnız anahtar sırası farklı; `--full`'un sonucuyla da aynı. Yani yalnız görünüm, kapı etkilenmiyor. `score` toplamı da aynı sırayla yapıyor; kayan nokta sırası bir eşikte kararı çevirebilir mi, ölçülmedi (bu veride çevirmedi). Önerilen düzeltme: rapor sıralamasında `(-abs(ağırlık), ad)` anahtarı, `fit` ve `score`'da `sorted(set(...))`. Yapılmadı: her `harness/` değişikliği yeni bir `--full` ister.
 
 ### 6.9 Güvenlik
 
@@ -1366,6 +1466,29 @@ bir ortam değişkeni tanımlıysa `override=False` yüzünden `.env`'deki deği
 ---
 
 ## 7. Sıradaki adımlar
+
+**Güncel sıra (26 Eylül 2026; §0.14).** Bunlar önce gelir. 25 Eylül'ün iki listesindeki bulut
+adımları yapıldı: dal birleştirildi (`ee7b2dd`), önyükleyici belirteçle yapıştırıldı ve ölçüm
+alındı (kurulum `OK mode=all`, 180 s).
+
+1. **Sonraki yeni sohbet anlık görüntüyü ölçer** (`docs/BULUT.md` §12'deki son açık madde).
+   Kullanıcının yapacağı bir şey yok; yalnız arada Setup script metni ve ağ ayarı değiştirilmez.
+   Görüntünün süresi ~3 Ekim'de dolar; o zaman betik yeniden koşar, belirteç hâlâ geçerliyse yine
+   ~3 dk sürer.
+2. Bu dal (`claude/practical-faraday-7a4iy4`: belgeler, `check.py` günlük başlığı ve Lean ısıtması
+   düzeltmeleri) kullanıcı onayı ve yedekle (§5.4) `master`a birleştirilir. Kurulumu etkilemez;
+   `scripts/cloud/` değişmedi.
+3. Konteyner bir sonraki kez yeniden başlatıldığında (devam ettirilen sohbette `uptime` birkaç
+   dakikaysa) ilk `check.py --full`'un `lean_warmup` satırı okunur: soğuk yolda çıkış 0 ve süre
+   300 s'yi aşabilir; `(exit 1)` ise ısıtma yine yetmiyor demektir (§0.14 **[DOĞRULANMADI]**).
+4. Belirtecin süresi dolunca ya da belirteç yenilenince: GitHub'da yeni fine-grained belirteç
+   (Contents: read-only, yalnız `wqedwad/asd`), Setup script'in `T='...'` satırı güncellenir.
+   Metin değiştiği için görüntü yeniden kurulur. Süresi dolmuş belirteç hiçbir şeyi bozmaz: çekim
+   düşer (`reason=fetch`), kanca kurulumu oturum içinde yapar (ölçülen 167–239 s).
+5. Küçük iş: kalibrasyon raporunun satır sırasını belirlenimli yap (§6.8 Ek; yalnız görünüm).
+   Kod dondurulmadan önce, başka bir `harness/` değişikliğiyle aynı `--full`'a bağlanabilir.
+6. Sonrası değişmedi: aşağıdaki 25 Eylül listesinin 3.–5. maddeleri (F3/F4 kod dondurulup
+   anahtarlar yenilendikten sonra, gerçek veri kararı, açık kapsama işleri).
 
 **Güncel sıra (25 Eylül 2026, denetimden sonra; §0.13).** Bunlar önce gelir:
 
@@ -1905,6 +2028,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - Ana dal GitHub'da da `master` ve depo varsayılanı o (24 Eylül).
 - `reports/check_full.log`'u `check.py --full` kendisi yazar; elle yönlendirme gerekmez. Koşu
   başında dosya sıfırlanır, yarıda kalan koşu yarım günlük bırakır.
+  **Ek (26 Eylül 2026):** başlıktaki "commit edilmemiş değişiklik" sayısı günlüğün kendisini de
+  sayıyordu, temiz ağaçta da 1 yazıyordu (§0.14). 26 Eylül'den önceki günlüklerde bu sayıdan 1
+  düşülür.
+- `pyproject.toml`'daki `addopts` zaten `-q` içerir. Komuta bir `-q` daha eklemek `-qq` olur ve
+  pytest son satırı ("N passed, M skipped") basmaz. Sayı gerekiyorsa ek `-q` verilmez (26 Eylül,
+  §0.14).
 - `llm_cache/` git'te izleniyor (145 dosya, `828fb95`'ten beri). İçinde 18–19 Eylül F3
   koşularının gerçek API yanıtları var; `run_f3` varsayılan `auto` modda aynı istekleri ücretsiz
   tekrar oynatır. **Testler buna bağlı değil:** `ScriptedClient` ve `tmp_path` kullanıyorlar.

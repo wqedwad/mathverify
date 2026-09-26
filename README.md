@@ -30,6 +30,7 @@ Lean kurulumu: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md) · Raporlar: [reports/](
 | F6 adversaryal sertleştirme + kalibrasyon | **tamam ve ölçüldü** |
 | 24 Eylül: özel GitHub deposu, Linux/bulut desteği, sabit Lean sürümleri, kapı sertleştirmesi (`check.py --full` 24 kapı) | **tamam** (`bulut-2026-09-24`; [HANDOFF §0](HANDOFF.md), DECISIONS §34–43, [docs/BULUT.md](docs/BULUT.md)) |
 | 24 Eylül: gerçek bulut ölçümü (tek seferlik routine oturumu, `4d01ba2`) | **ölçüldü**: Lean kurulumu 195 s, testler 515 passed / 2 skipped / 0 failed, hızlı `check.py` 12/12; bulunan iki sorun (Python yedeği, `ANTHROPIC_BASE_URL`) düzeltildi; `check.py --full` bulutta henüz koşmadı ([docs/bulut_tani_2026-09-24.md](docs/bulut_tani_2026-09-24.md), DECISIONS §44–48) |
+| 25–26 Eylül: sistematik denetim (kod çalıştırma, yanlış onay sınıfları, formal katman) ve bulut kurulumu | **ölçüldü**: `check.py --full` bulutta **24/24** (son `5414d6b`, 1323 passed / 5 skipped; 24 Eylül satırındaki "bulutta henüz koşmadı" o günden sonra eskidi); kurulum betiği alandan ilk kez başarılı (`OK mode=all`, 180 s), yeni sohbet "Lean: HAZIR" ile açılıyor ([HANDOFF §0.12–0.14](HANDOFF.md), DECISIONS §54–56) |
 
 ## Ölçülen sonuçlar
 
