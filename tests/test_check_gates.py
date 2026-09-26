@@ -44,3 +44,31 @@ def test_the_log_names_the_failed_and_skipped_tests():
         "SKIPPED [87] tests/test_lean_audit_2026_09_25.py:471: Lean/Mathlib toolchain not available",
         "ERROR tests/test_y.py - ImportError"]
     assert check.pytest_problems("5 passed in 1.0s\n") == []
+
+
+def test_the_log_header_does_not_count_the_log_itself(tmp_path, monkeypatch):
+    """The log is open for writing when git is asked, so it always looked modified and a clean
+    tree read '1 dosya' (26 Sep 2026). A real repository, since the exclusion is git's."""
+    import subprocess
+
+    def git(*a):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a],
+                       cwd=tmp_path, check=True, capture_output=True)
+
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "check_full.log").write_text("old log\n", encoding="utf-8")
+    (tmp_path / "code.py").write_text("x = 1\n", encoding="utf-8")
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "clean")
+    monkeypatch.setattr(check, "ROOT", tmp_path)
+    monkeypatch.setattr(check, "_main", lambda args: 0)
+
+    def header():
+        assert check.main(["--full"]) == 0
+        return (tmp_path / "reports" / "check_full.log").read_text(encoding="utf-8").splitlines()[0]
+
+    assert header().endswith("commit edilmemiş değişiklik: 0 dosya")
+    (tmp_path / "code.py").write_text("x = 2\n", encoding="utf-8")
+    (tmp_path / "new.py").write_text("y = 1\n", encoding="utf-8")
+    assert header().endswith("commit edilmemiş değişiklik: 2 dosya")

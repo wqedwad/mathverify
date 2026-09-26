@@ -428,7 +428,11 @@ def main(argv=None) -> int:
         out = sys.stdout
         sys.stdout = _Tee(out, fh)
         try:
-            dirty = [l for l in _git("status", "--porcelain").splitlines() if l.strip()]
+            # The log is already open for writing, so git sees it modified; counted, it made the
+            # header say 1 on a clean tree (every log until 26 Sep 2026).
+            own = log.relative_to(ROOT).as_posix()
+            dirty = [l for l in _git("status", "--porcelain", "--", f":(exclude){own}").splitlines()
+                     if l.strip()]
             print(f"check.py --full · {time.strftime('%Y-%m-%d %H:%M:%S')} · "
                   f"{_git('rev-parse', '--abbrev-ref', 'HEAD')} @ {_git('rev-parse', '--short', 'HEAD')} · "
                   f"commit edilmemiş değişiklik: {len(dirty)} dosya\n")
