@@ -164,6 +164,8 @@ MUTATIONS = [
     ("C100 master upstream'i hedef sayılır", CHECK, '            and merge != "refs/heads/master":', "            and True:", TS),
     ("C101 değişiklik yokken push aranmaz", CHECK, "        pushed = _push_problem(root, fetch, absent_ok=True)\n",
      "        pushed = None\n", TS),
+    ("C118 eski taban: değişen dosyalar boş", CHECK, 'return {**out, "level": "tam", "why": f"tabanın güncelliği',
+     'return {**out, "files": {}, "level": "tam", "why": f"tabanın güncelliği', TS),
     ("C102 değişiklik yokken olmayan dal da TAM", CHECK, ", absent_ok=True)", ")", TS),
     ("C57 belge: taban kodu yok sayılır", CHECK, '            if out["base_ahead"]:                  # that code',
      "            if False:                  # that code", TS),

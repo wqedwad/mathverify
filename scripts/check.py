@@ -1163,8 +1163,12 @@ def _plan(out: dict, root: Path, base: str | None, fetch: bool) -> dict:
                base_tip=_git_value(root, "rev-parse", "--verify", "--quiet", f"{chosen[0]}^{{commit}}") or "?")
     origin_tip = _git_value(root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/master^{commit}")
     fresh = out["fetch"] == "uzak yok" or (out["fetch"] == "tamam" and out["base_tip"] == origin_tip)
-    stale = {**out, "level": "tam", "why": f"tabanın güncelliği bilinmiyor (fetch: {out['fetch']})",
-             "advice": _fresh_advice(out["fetch"])}
+
+    def stale() -> dict:
+        # built when it is returned: a copy taken here would render the files found below as none
+        return {**out, "level": "tam", "why": f"tabanın güncelliği bilinmiyor (fetch: {out['fetch']})",
+                "advice": _fresh_advice(out["fetch"])}
+
     files = changed_since(root, out["merge_base"])
     if files is None:
         return {**out, "level": "tam", "why": "git değişen dosyaları veremedi"}
@@ -1215,7 +1219,7 @@ def _plan(out: dict, root: Path, base: str | None, fetch: bool) -> dict:
                 return {**out, "level": "tam", "why": received["why"] + "; o kod değişen belgeleri okuyor olabilir",
                         "advice": received["advice"]}
             if not fresh:
-                return stale
+                return stale()
         if "rapor" in kinds:
             # a report is a --full's output: it rides on a run that produced it for this code
             full = out["full"] = last_full_run(root)
@@ -1237,7 +1241,7 @@ def _plan(out: dict, root: Path, base: str | None, fetch: bool) -> dict:
     if out["base_ahead"]:
         return {**out, "level": "tam", "why": received["why"] + "; --full birleşik hâlde", "advice": received["advice"]}
     if not fresh:
-        return stale
+        return stale()
     full = out["full"] = last_full_run(root)
     if not full["ok"]:
         return {**out, "level": "tam", "why": f"kod değişti; son --full bu kodu kapsamıyor: {full['why']}",

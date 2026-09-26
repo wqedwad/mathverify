@@ -896,6 +896,21 @@ def test_a_base_other_than_the_fetched_master_is_not_fresh(cloned):
     assert check.plan(cloned.work)["level"] == "tam"                      # origin/master: remote.py is ahead
 
 
+
+def test_a_stale_base_still_lists_what_changed(cloned):
+    """The stale-base verdict was a copy of the plan taken before the files were read: it rendered
+    "değişen: 0 dosya" for a branch that had changed two documents (26 Sep 2026)."""
+    write(cloned.work, "notlar.md", "changed\n")
+    p = check.plan(cloned.work, fetch=False)
+    assert "güncelliği bilinmiyor" in p["why"] and p["files"] == {"notlar.md": "belge"}, p
+    write(cloned.work, "code.py", "x = 2\n")
+    p = check.plan(cloned.work, fetch=False)
+    assert "güncelliği bilinmiyor" in p["why"] and p["files"] == {"notlar.md": "belge", "code.py": "kod"}, p
+    git(cloned.work, "remote", "set-url", "origin", str(cloned.origin.parent / "gone.git"))
+    rc, lines = check.plan_report(cloned.work)
+    assert rc == 1 and "  değişen: 2 dosya (kod 1, belge 1, rapor 0)" in lines, lines
+    assert any(line.startswith("  karar: TAM · tabanın güncelliği bilinmiyor (fetch: başarısız") for line in lines)
+
 def test_head_must_be_what_its_upstream_holds(cloned):
     """The pull request merges the pushed head: a decision about an unpushed HEAD says nothing
     about it (review)."""
