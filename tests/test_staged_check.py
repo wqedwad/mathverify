@@ -946,7 +946,7 @@ def test_a_python_file_that_does_not_parse_makes_the_decision_tam(repo):
     p = check.plan(repo)
     assert p["level"] == "tam" and "tests/broken.py" in p["why"]
     assert p["files"] == {"notlar.md": "?", "tests/broken.py": "?"}
-    assert "değişen: 2 dosya" in "\n".join(check.render_plan(p))
+    assert "  değişen: 2 dosya (kod 0, belge 0, rapor 0, sınıflanmadı 2)" in check.render_plan(p)
 
 
 def test_the_plan_command_exit_code(repo, monkeypatch, capsys):

@@ -1315,9 +1315,10 @@ def render_plan(p: dict) -> list[str]:
         lines.append("  değişen: okunmadı")
         files = {}
     else:
-        counts = {c: sum(1 for v in files.values() if v == c) for c in ("kod", "belge", "rapor")}
+        counts = {c: sum(1 for v in files.values() if v == c) for c in ("kod", "belge", "rapor", "?")}
+        unsorted = f", sınıflanmadı {counts['?']}" if counts["?"] else ""     # not zero of each kind
         lines.append(f"  değişen: {len(files)} dosya (kod {counts['kod']}, belge {counts['belge']}, "
-                     f"rapor {counts['rapor']})")
+                     f"rapor {counts['rapor']}{unsorted})")
     order = ("kod", "belge", "rapor", "?")
     for f, c in sorted(files.items(), key=lambda kv: (order.index(kv[1]), kv[0])):
         why = f"  (okuyan: {p['named'][f]})" if f in p.get("named", {}) else ""

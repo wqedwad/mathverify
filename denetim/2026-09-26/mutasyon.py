@@ -168,6 +168,8 @@ MUTATIONS = [
      'return {**out, "files": {}, "level": "tam", "why": f"tabanın güncelliği', TS),
     ("C119 okunmamış dosyalar 0 dosya", CHECK, '"files": None, "named": {}', '"files": {}, "named": {}', TS),
     ("C120 okunmamış dosyalar gösterilmez", CHECK, "    if files is None:  ", "    if False:  ", TS),
+    ("C121 sınıflanmamış dosyalar sayılmaz", CHECK, 'if counts["?"] else ""     # not zero of each kind',
+     'if False else ""     # not zero of each kind', TS),
     ("C102 değişiklik yokken olmayan dal da TAM", CHECK, ", absent_ok=True)", ")", TS),
     ("C57 belge: taban kodu yok sayılır", CHECK, '            if out["base_ahead"]:                  # that code',
      "            if False:                  # that code", TS),
