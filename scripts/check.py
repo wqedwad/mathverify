@@ -428,7 +428,11 @@ def main(argv=None) -> int:
         out = sys.stdout
         sys.stdout = _Tee(out, fh)
         try:
-            dirty = [l for l in _git("status", "--porcelain").splitlines() if l.strip()]
+            # The log is already open for writing, so git sees it modified; counted, it made the
+            # header say 1 on a clean tree (every log until 26 Sep 2026).
+            own = log.relative_to(ROOT).as_posix()
+            dirty = [l for l in _git("status", "--porcelain", "--", f":(exclude){own}").splitlines()
+                     if l.strip()]
             print(f"check.py --full · {time.strftime('%Y-%m-%d %H:%M:%S')} · "
                   f"{_git('rev-parse', '--abbrev-ref', 'HEAD')} @ {_git('rev-parse', '--short', 'HEAD')} · "
                   f"commit edilmemiş değişiklik: {len(dirty)} dosya\n")
@@ -440,8 +444,17 @@ def main(argv=None) -> int:
 # The first Lean start after a container restart read Mathlib from a cold disk for ~400 s (measured
 # 26 Sep 2026), longer than the 300 s the Lean tests wait before skipping: a --full run right after a
 # restart skipped 87 Lean tests and failed one. The warm-up waits once, up to 15 min, outside the gates.
-_LEAN_WARMUP = ("import sys\nfrom mathverify.formal import lean_available\n"
-                "sys.exit(0 if lean_available(timeout=900) else 1)\n")
+# It owns its client: lean_available(timeout=900) bounded only the probe, `import Mathlib` still had
+# the client's 300 s boot budget, and the warm-up gave up after 302 s on a real restart (26 Sep 2026).
+_LEAN_WARMUP = ("import sys\nfrom mathverify.formal.lean_client import LeanClient\n"
+                "c = LeanClient(boot_timeout=900)\n"
+                "try:\n"
+                "    ok = c.run('example : (2 : Nat) + 2 = 4 := by norm_num', timeout=120).clean\n"
+                "except Exception:\n"
+                "    ok = False\n"
+                "finally:\n"
+                "    c.close()\n"
+                "sys.exit(0 if ok else 1)\n")
 
 
 def _main(args) -> int:

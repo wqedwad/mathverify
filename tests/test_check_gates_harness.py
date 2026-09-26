@@ -119,7 +119,61 @@ def test_the_full_run_warms_lean_up_before_the_tests_and_the_quick_run_does_not(
     monkeypatch.setattr(check, "run", fake2)
     check._main(argparse.Namespace(full=False))
     assert "lean_warmup" not in fake2.labels
-    assert "timeout=900" in check._LEAN_WARMUP
+
+
+# Stands in for mathverify.formal.lean_client in the warm-up's own process. A cold `import Mathlib`
+# took ~400 s after a real restart, so only a client whose boot budget covers that gets through.
+_STUB_CLIENT = """
+import json, os
+LOG, MODE = os.environ["WARMUP_LOG"], os.environ["WARMUP_MODE"]
+
+def _log(**d):
+    with open(LOG, "a", encoding="utf-8") as f:
+        f.write(json.dumps(d) + "\\n")
+
+class _Result:
+    def __init__(self, clean):
+        self.clean = clean
+
+class LeanClient:
+    def __init__(self, boot_timeout=300.0, **kw):
+        self.boot_timeout = boot_timeout
+        _log(boot_timeout=boot_timeout)
+
+    def run(self, code, timeout=120.0, env=-1):
+        if self.boot_timeout < 400 or MODE == "raise":
+            raise RuntimeError("REPL did not start: import Mathlib timed out")
+        return _Result(MODE == "clean")
+
+    def close(self):
+        _log(closed=True)
+"""
+
+
+def _warm_up(tmp_path, mode):
+    import os
+    import subprocess
+    stub = tmp_path / "stub" / "mathverify" / "formal"
+    stub.mkdir(parents=True, exist_ok=True)
+    (stub.parent / "__init__.py").write_text("", encoding="utf-8")
+    (stub / "__init__.py").write_text("", encoding="utf-8")
+    (stub / "lean_client.py").write_text(_STUB_CLIENT, encoding="utf-8")
+    log = tmp_path / f"{mode}.jsonl"
+    env = dict(os.environ, PYTHONPATH=str(tmp_path / "stub"), WARMUP_LOG=str(log), WARMUP_MODE=mode)
+    p = subprocess.run([sys.executable, "-c", check._LEAN_WARMUP], cwd=tmp_path, env=env,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return p.returncode, [json.loads(l) for l in log.read_text(encoding="utf-8").splitlines()]
+
+
+def test_the_warm_up_gives_the_mathlib_import_its_own_15_minute_budget(tmp_path):
+    """lean_available(timeout=900) bounded only the probe; `import Mathlib` kept the client's 300 s
+    boot budget and the warm-up gave up after 302 s on a real restart (26 Sep 2026)."""
+    rc, log = _warm_up(tmp_path, "clean")
+    assert rc == 0 and log[0]["boot_timeout"] >= 900 and {"closed": True} in log
+    rc, log = _warm_up(tmp_path, "unclean")       # a probe that does not elaborate is not warm
+    assert rc == 1 and {"closed": True} in log
+    rc, log = _warm_up(tmp_path, "raise")         # a REPL that never starts: fails, still closed
+    assert rc == 1 and {"closed": True} in log
 
 
 def test_owned_names_and_targets_match_the_success_path():

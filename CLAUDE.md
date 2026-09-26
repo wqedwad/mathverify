@@ -135,4 +135,6 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   dosyaları belirteçle `raw.githubusercontent.com`'dan indirir (DECISIONS §54). Kurulum betiğini
   etkileyecek bir ayar ortam değişkeni olarak değil, betik metninde verilir.
 - Bulutta boşta kalan VM geri alınınca arka plandaki iş kaybolur: `check.py --full` ya da Lean
-  kurulumu sürerken oturum etkin tutulur.
+  kurulumu sürerken oturum etkin tutulur. Etkin tutmak şu demek: ajan turunu bitirmez, koşuyu ön
+  planda ≤10 dk'lık bekleme komutlarıyla izler. 26 Eylül'de tur bitince konteyner SIGTERM ile
+  kapandı ve ~57 dk'lık koşu kayboldu (DECISIONS §56).
