@@ -1,8 +1,9 @@
 # CLAUDE.md — mathverify kalıcı kuralları
 
-Güncel durum, ölçülen sayılar ve sıradaki iş için önce `HANDOFF.md`, sonra `DECISIONS.md` okunur;
-bulut oturumunda ayrıca `docs/BULUT.md`. Kullanıcının `~/.claude` belleği buluta taşınmaz: oturumun
-bilmesi gereken her şey depoya yazılır.
+Güncel durum, açık işler ve sıradaki iş için önce `HANDOFF.md`, sonra `DECISIONS.md` okunur;
+bulut oturumunda ayrıca `docs/BULUT.md`. Tarihçe `docs/arsiv/`'de (26 Eylül'e kadarki HANDOFF:
+`docs/arsiv/HANDOFF-2026-09-26.md`; tekrar denenmeyecekler onun §4'ünde, tuzaklar §11'inde).
+Kullanıcının `~/.claude` belleği buluta taşınmaz: oturumun bilmesi gereken her şey depoya yazılır.
 Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz.
 
 ## Kullanıcıyla çalışma
@@ -49,16 +50,35 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 
 ## Her değişiklikte
 
-- Bitirmeden önce `scripts/check.py --full` bütün kapılardan geçmeli (~25–45 dk, arka planda;
+- Bitirmeden önce `scripts/check.py --full` bütün kapılardan geçmeli (~35–70 dk, arka planda;
   günlüğü `reports/check_full.log`a kendisi yazar). Hızlı döngüde `pytest` ve `scripts/check.py`
   yeterli. Lean'siz ya da Lean'i yarıda kaybeden bir koşuda Lean kapıları bilerek düşer; o koşu
   "geçti" sayılmaz.
 - Her yeni Lean şablonu yanlış cevaplı öğelerde ve junk-value sondasında da koşturulur. Lean FP
   ve junk sertifikası 0 kalmalı.
 - Her bulgu ölçümle bulunur, ölçümle doğrulanır, bir teste ya da kalıcı bir kapıya bağlanır.
-- Kararlar gerekçe ve ölçümle `DECISIONS.md`'ye yazılır. Yanlış çıkan eski ifade silinmez,
-  "Düzeltme (tarih)" notuyla düzeltilir.
+- Kararlar gerekçe ve ölçümle `DECISIONS.md`'ye yazılır. `DECISIONS.md`'de ve `docs/` belgelerinde
+  yanlış çıkan eski ifade silinmez, "Düzeltme (tarih)" notuyla düzeltilir. `HANDOFF.md` bunun
+  dışındadır (aşağıda).
 - Raporlar (`reports/*.md`) üretilir, elle yazılmaz.
+
+## HANDOFF.md: güncel durum belgesi
+
+- `HANDOFF.md` yalnız bugünü taşır: durum, son ölçülen sayılar, açık maddelerin **tam** listesi,
+  sıradaki adımlar, kullanıcı kararları, dallar ve yedekler. ~300 satırı geçmez.
+- Tarihçe biriktirilmez. Eskiyen ifade yerinde güncellenir; HANDOFF'a "Düzeltme" ya da "Ek" notu
+  eklenmez. Ölçümün ayrıntısı ve gerekçesi `DECISIONS.md`'ye (bulutsa `docs/BULUT.md`'ye) yazılır,
+  HANDOFF bir satırla oraya gönderir. Önceden raporlanmış bir iddia yanlış çıktıysa düzeltme
+  `DECISIONS.md`'ye "Düzeltme (tarih)" notuyla yazılır ve kullanıcıya açıkça söylenir; HANDOFF
+  doğrusunu taşır.
+- Açık madde sessizce düşmez. Yalnız kapandığında, kanıtı `DECISIONS.md`'de ya da bir commit'te
+  durarak çıkarılır. Yeniden yazımdan önce eski hâlin açık maddeleri tek tek yenisinde aranır.
+- Belge ~300 satırı aşacaksa önce sıkıştırılır. Yetmezse eski hâl `git mv` ile
+  `docs/arsiv/HANDOFF-YYYY-MM-DD.md` olur ve yenisi yazılır. Arşiv düzenlenmez; yalnız başına arşiv
+  notu konur.
+- Her oturum işini bitirirken HANDOFF'u günceller (başlıktaki tarih ve dal dahil). Birleşmemiş başka
+  bir dal HANDOFF'u değiştirdiyse önce o dal alınır ya da HANDOFF'ta açık madde olarak yazılır. Aksi
+  hâlde iki sürüm çakışır ve biri kaybolur.
 
 ## Asla
 
@@ -76,7 +96,7 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 - Yedeksiz birleştirme. Her `master` birleştirmesinden önce `yedek/master-YYYY-MM-DD[-N]` etiketi ve
   yerel makinede `C:\Users\kullanici\mathverify-yedek\` altına bir bundle alınır; geri dönüş
   `git reset --hard <etiket>` ya da `git clone --branch master <bundle>`. Etiket ve bundle'lar
-  kullanıcıya sormadan silinmez (`HANDOFF.md` §5.4).
+  kullanıcıya sormadan silinmez (yedek tablosu `HANDOFF.md` §6).
 - Bulut oturumundan etiket ya da `master` push etmeye çalışma: bulut yalnız oturumun kendi dalını
   push edebilir. Birleştirme PR ile ya da yerel checkout'ta, yedek de yerelde alınır.
 - **Düzeltme (24 Eylül 2026):** oturumun kendi dalı başladığı daldır; routine oturumu varsayılan
@@ -104,7 +124,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   25 Eylül'de iki kez). Süreci PID ile durdur. Arka planda `a && (b) & (c)` yazma: `cd` ve değişkenler
   yalnız ilk alt kabuğa uygulanır; birden çok koşuyu bir betik dosyasına yaz.
 - Bir ölçümün kaynak yolu, ölçüm sürerken değişen bir checkout olmasın (ileri sarma, birleştirme):
-  "önce" ölçümü ayrı bir `git worktree` kopyasında koşulur.
+  "önce" ölçümü ayrı bir `git worktree` kopyasında koşulur. `check.py --full` sürerken aynı checkout'ta
+  `git stash`, `checkout` ya da `reset` yapılmaz: izlenen `reports/check_full.log` yeniden yaratılır
+  ve koşu silinmiş dosyaya yazar (26 Eylül, DECISIONS §57).
 
 ### Windows
 
@@ -116,7 +138,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - WSL içinde `df` C:'yi görmez, sanal diski gösterir. WSL'deki büyük kurulumlar `ext4.vhdx`'i
   büyütüp C:'yi doldurabilir (24 Eylül: 103.8 GB, C: 0 bayt, WSL açılamadı; `.vhdx` kendiliğinden
   küçülmez). WSL'de büyük bir kurulumdan önce C:'nin boş alanına Windows tarafından bak
-  (`HANDOFF.md` §0.10).
+  (olay: `docs/arsiv/HANDOFF-2026-09-26.md` §0.10).
 
 ### Linux / bulut
 

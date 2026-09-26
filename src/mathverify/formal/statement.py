@@ -503,8 +503,8 @@ class LeanStatement:
         # Every alternative is wrapped in `(…; done)`. `first` commits to the first alternative
         # that RUNS, not the first that CLOSES the goal, and `norm_num at *` runs happily while
         # leaving the goal open — so in the original probe `norm_num at *` silently shadowed
-        # `simp_all` behind it. HANDOFF §4 records the same trap for the proof ladders; the
-        # probe had been left in the old form since F5.
+        # `simp_all` behind it. docs/arsiv/HANDOFF-2026-09-26.md §4 records the same trap for the
+        # proof ladders; the probe had been left in the old form since F5.
         closers = ["linarith", "nlinarith", "simp at *; linarith", "norm_num at *; linarith",
                    "field_simp at *; linarith", "simp at *; nlinarith"]
         inner = "first | " + " | ".join(f"({c}; done)" for c in closers)
