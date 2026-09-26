@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 26 Eylül 2026 (gece)**, dal `claude/keen-ramanujan-oqseru`. Bu belge yalnız **bugünün**
+> **Son güncelleme: 26 Eylül 2026 (gece)**, dal `claude/keen-ramanujan-oqseru` (birleşti). Bu belge yalnız **bugünün**
 > durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -31,10 +31,10 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 
 ## 2. Durum (26 Eylül 2026)
 
-**Kod.** `master` = `849b492` (`wqedwad/asd#6`, yalnız belgeler). Bu dal (`claude/keen-ramanujan-oqseru`,
-birleşmedi, `wqedwad/asd#7`): adversaryal tarama 4 sürece dağıtıldı, kademeli kontrol kuralı `check.py --plan`
-ve çalışma anı belge-okuma bekçisi; dört inceleme turu ve depodaki koşucuyla 158/158 mutasyon
-(DECISIONS §59); `src/` değişmedi. Kodda yarım iş yok.
+**Kod.** `master` = `wqedwad/asd#7`'nin birleşmesi (öncesi `849b492`, yedeği `yedek/master-2026-09-26-2`):
+adversaryal tarama 4 sürece dağıtıldı, kademeli kontrol kuralı `check.py --plan` ve çalışma anı
+belge-okuma bekçisi; dört inceleme turu ve depodaki koşucuyla 158/158 mutasyon (DECISIONS §59); `src/`
+değişmedi. Kodda yarım iş yok.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
@@ -47,11 +47,9 @@ yalnız süre satırlarında farklı (DECISIONS §59). Tek süreçli eski koşul
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalın PR'ı** (`wqedwad/asd#7`; kod değişikliği, DECISIONS §59). Birleştirmeden önce kullanıcıya yedek
-   (etiket + bundle, §6) sorulur, birleştirmeden hemen önce `check.py --plan` yeniden koşulur. `--full`
-   24/24 son kodda geçti; `--plan` bu dala TAMAM demez, çünkü kuralın kendi dosyaları değişti (karar
-   satırı öteki koşulların tuttuğunu söyler): birleştirme kararı kişinin. PR açıkken `master` kod
-   alırsa önce birleştirilir ve `--full` yeniden koşulur (`--plan` bunu söyler).
+1. **Windows'ta ilk koşu** (T8): yerel checkout `master`ı çeker, `check.py --plan` ve bir `--full`
+   koşar (4 süreçli tarama, `.venv`'in `requirements.lock`la eşitliği, süre). Ölçülene kadar Windows'ta
+   TAMAM beklenmez; kilit uyuşmazsa karar satırı `.venv`'i eşitlemeyi söyler.
 2. **Yedek etiketleri (isteğe bağlı):** PR #3 ve PR #4 öncesi `master` için etiket yok (§6); kod
    birleştirmelerinde kural yine geçerli: etiket + bundle.
 3. **Bulut kurulum kararı** (B1–B2: görüntü 13:35 sohbetinde kullanıldı, 11:00'dekinde kullanılmadı).
@@ -148,7 +146,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 
 1. Ne zaman silinebilir (sormadan silinmez, §6): yedek etiketleri ve bundle'lar; `refs/arac/bulut-v1`
    (v2 doğrulandı, v1'in içeriğini taşıyor); `master`a girmiş uzak dallar (`bulut-2026-09-24`,
-   `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`).
+   `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`,
+   `-keen-ramanujan-…`).
 2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? API anahtarları
    ne zaman yenilenecek (§4.6)?
 3. Gerçek çözücü çıktıları: hangi model/uygulama, kaç çözüm, etiketleri kim koyacak?
@@ -225,8 +224,8 @@ Günlük başta ve sonda UTC saat, commit ve kirli dosya sayısını, ortamı ve
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (`git ls-remote origin`, 26 Eylül gece): `master` `849b492`; **`claude/keen-ramanujan-oqseru`
-  (bu dal, birleşmedi, `wqedwad/asd#7`)**; `claude/trusting-curie-76slml` `1fddfc6`,
+- **Dallar** (`git ls-remote origin`, 26 Eylül gece): `master` (`wqedwad/asd#7`'nin birleşmesi);
+  `claude/keen-ramanujan-oqseru` (`wqedwad/asd#7`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
   `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
   `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b` (eski); araç ref'leri
@@ -244,7 +243,7 @@ Günlük başta ve sonda UTC saat, commit ve kirli dosya sayısını, ortamı ve
   | `yedek/master-2026-09-26` | `d66bf2d` (PR #2 öncesi) | `mathverify-master-d66bf2d-2026-09-26.bundle`; içindeki `refs/heads/master` eski yerel `18fd298`, geri dönüş klon + `git checkout yedek/master-2026-09-26` |
   | yok | `ee7b2dd` (PR #3 öncesi) | **[DOĞRULANMADI]** |
   | yok | `e07d4f7` (PR #4 öncesi) | alınmadı (kullanıcı kararı, "yalnız belge" gerekçesiyle; PR kod da içeriyordu: DECISIONS §59 Düzeltme) |
-  | yok | `849b492` (bu dalın PR'ı öncesi) | kod değişikliği: birleştirmeden önce kullanıcıya sorulur |
+  | `yedek/master-2026-09-26-2` | `849b492` (PR #7 öncesi) | `mathverify-master-849b492-2026-09-26.bundle` (kullanıcının betiği: yerel `master` önce ileri sarıldı, `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout'ta): (1)
   `git tag yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create
