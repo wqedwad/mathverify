@@ -16,8 +16,8 @@ Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.
 
 | Sinyal | destek | geçerli | geçersiz | güvenilirlik | log-odds ağırlığı | kullanıldı |
 |---|---|---|---|---|---|---|
-| `flag:step_refuted` | 48 | 0 | 48 | 0.000 | -3.892 | evet |
 | `steps.refute:fail:support` | 48 | 0 | 48 | 0.000 | -3.892 | evet |
+| `flag:step_refuted` | 48 | 0 | 48 | 0.000 | -3.892 | evet |
 | `certify.algebra:fail:primary` | 17 | 0 | 17 | 0.000 | -2.890 | evet |
 | `certify.calculus:fail:primary` | 7 | 0 | 7 | 0.000 | -2.079 | evet |
 | `certify.wordproblem:fail:primary` | 6 | 0 | 6 | 0.000 | -1.946 | evet |

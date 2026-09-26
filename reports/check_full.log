@@ -1,22 +1,27 @@
-check.py --full · 2026-09-25 16:30:27 · claude/compassionate-shannon-759r85 @ c1d4c3e · commit edilmemiş değişiklik: 11 dosya
+check.py --full · 2026-09-26 03:01:58 · claude/compassionate-shannon-759r85 @ 67d1619 · commit edilmemiş değişiklik: 1 dosya
 
+== Lean ısınma ==
+  lean_warmup: 10 s (exit 0)
 == testler ==
-  pytest: 276 s (exit 0)
+  pytest: 280 s (exit 0)
+    SKIPPED [3] tests/test_cloud_scripts.py:637: root writes read-only directories
+    SKIPPED [1] tests/test_cloud_scripts.py:956: opt-in: downloads the locked packages (MATHVERIFY_CLOUD_INTEGRATION=1)
+    SKIPPED [1] tests/test_f5_lean.py:68: statement out of scope for this item
 == pyflakes ==
   pyflakes: 2 s (exit 1)
 == deterministik değerlendirme ==
-  run_eval: 87 s (exit 0)
+  run_eval: 85 s (exit 0)
 == Lean taraması ==
-  run_lean: 131 s (exit 0)
+  run_lean: 132 s (exit 0)
 == adversaryal ==
-  adversarial: 2936 s (exit 0)
+  adversarial: 2915 s (exit 0)
 == metamorfik sağlamlık ==
-  soundness_fuzz: 119 s (exit 0)
+  soundness_fuzz: 117 s (exit 0)
 == kalibrasyon ==
-  calibrate: 44 s (exit 0)
+  calibrate: 43 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  1314 passed, 5 skipped in 274.91s (0:04:34)   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  1321 passed, 5 skipped in 278.69s (0:04:38)   (hedef: hepsi geçer)
   [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)

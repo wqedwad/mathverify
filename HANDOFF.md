@@ -473,6 +473,9 @@ denetim, yerelde krediye bağlı olmayan ciddi açıklar buldu. Hepsi aynı otur
   beklentili betikleri) bir açık daha gösterdi: toplamın bağlı değişkeni (`Sum(k, (k, 1, 4)) = 11`)
   tanımsız ad sayılıp yanlış adım atlanıyordu; düzeltildi (DECISIONS §55 Ek). C'de kalan 20 fark:
   16 UNKNOWN (kapsama), 2 beklenti hatası, 1 bilinen sınır (iki kayıt).
+- **Son doğrulama (26 Eylül):** `check.py --full` **24/24** (`67d1619`, ≈ 60 dk), **1321 passed / 5 skipped**,
+  Lean 121 / FP 0 / junk 0/33, saldırı %0. Konteyner yeniden başlatılınca ilk Lean açılışı ~400 s
+  sürüyor; `--full` artık önce Lean'i ısıtır (DECISIONS §55 Ek 3). Önceki doğrulama:
 - **Doğrulama:** `check.py --full` **24/24** (`c1d4c3e`, 16:30–17:30 UTC, aşamaların toplamı 3595 s ≈ 60 dk: pytest 276, `run_eval` 87, `run_lean` 131, adversaryal 2936, sağlamlık 119, kalibrasyon 44 s); birim testleri **1314 passed / 5 skipped** (denetim öncesi 871 / 5); Lean 121 sertifika (24 Eylül kümesiyle aynı), FP 0, junk **0/33**; 21 139 saldırıda %0; 0/448, 0/214, 0/46, 0/184, 0/6. İlk birleşik koşu (`0eb99b6`) de 24/24 geçmişti, ama adversaryal raporda anlamı koruyan saldırılarda UNKNOWN'a düşen 2896 → 2964 çıktı: `x in {…}` adım biçimi görünmez karakter ya da `\boxed{}` ile 7 doğru çözümde UNKNOWN oluyordu. Düzeltildi (`c1d4c3e`); son koşuda 2894, karşıt karara dönen yine 0. Değerlendirme setinde karar değişmedi. Denetimin 29 düzeltme commit'i (beş dal ve birleşik dal) ve 10 birleştirme commit'i bu dalda (`da963b2..`); geçici dallar ve worktree'ler silindi (içerikleri bu dalda). Push: yalnız bu oturumun dalı.
 
 
