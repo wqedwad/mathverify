@@ -456,6 +456,27 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
     return "unknown", ev
 
 
+def _with_bound_dummies(text: str, ns: dict[str, Any]):
+    """`text` read with its undeclared names as symbols, when every one of them is a BOUND variable
+    (the index of a Sum or Product, the variable of an Integral or a Limit) and none is left free.
+    `Sum(k, (k, 1, 4)) = 11` was skipped as naming an undeclared `k`, so the wrong step was never
+    checked, while `1 + 2 + 3 + 4 = 11` was refuted (audit of 25 Sep 2026). A free undeclared name
+    is still the solver's own symbol and the step is skipped (principle 5)."""
+    from ..normalize.parse import _check_safe, _strip_invisible, preclean
+    try:
+        names = _check_safe(preclean(_strip_invisible(text)), ns)
+    except Exception:  # noqa: BLE001 - not well-formed: reported by the caller
+        return None
+    if not names or any(n in ns for n in names):
+        return None
+    try:
+        rel = _parse_claim(text, dict(ns, **{n: sp.Symbol(n) for n in names}))
+    except Exception:  # noqa: BLE001
+        return None
+    free = {getattr(f, "name", None) for f in getattr(rel, "free_symbols", set())}
+    return None if free & set(names) else rel
+
+
 def _with_sequence_terms(ir, ctx: Ctx, text: str, ns: dict[str, Any]):
     """`text` with every call of the task's sequence at an integer index replaced by the exact
     term, or None when that does not make it a checkable relation (a symbolic index, a term the
@@ -531,7 +552,9 @@ def check_steps(ir, solution, ctx: Ctx):
             except UndeclaredSymbolError as e:
                 # A term of the task's own sequence at an integer index (`a(3) = 6`) is not the
                 # solver's symbol: it is read with the term's exact value (audit of 25 Sep 2026).
-                claim = _with_sequence_terms(ir, ctx, st.claim, step_ns)
+                claim, read_with = _with_sequence_terms(ir, ctx, st.claim, step_ns), "sequence_terms"
+                if claim is None:
+                    claim, read_with = _with_bound_dummies(st.claim, step_ns), "bound_variables"
                 if claim is None:
                     # The solver named something of its own (`u = sqrt(x+4)`). Well-formed
                     # mathematics we simply cannot check: skipped, no penalty (§3 rule 3).
@@ -540,7 +563,7 @@ def check_steps(ir, solution, ctx: Ctx):
                     n_skip += 1
                     per_step.append(entry)
                     continue
-                entry["sequence_terms"] = True
+                entry["read_with"] = read_with
             except Exception as e:  # noqa: BLE001
                 # Not well-formed at all. This is NOT "an unproven step", it is a solution that
                 # does not meet the structured contract, and silently skipping it let an

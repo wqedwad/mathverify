@@ -577,3 +577,18 @@ def test_the_in_set_step_form_survives_invisible_and_display_wrappers(wrap):
     assert r.verdict == "CORRECT", r.flags
     steps[1]["claim"] = wrap("x in {2, 4}")
     assert verify(SOLVE, {"claimed_answer": {"kind": "set", "payload": "{2, 3}"}, "steps": steps}).verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("claim,verdict", [
+    ("Sum(k, (k, 1, 4)) = 11", "INCORRECT"), ("Sum(k, (k, 1, 4)) = 10", "CORRECT"),
+    ("Product(k, (k, 1, 4)) = 25", "INCORRECT"), ("Product(k, (k, 1, 4)) = 24", "CORRECT"),
+    ("m + 1 = 11", "CORRECT"),                                   # a free undeclared name: still skipped
+])
+def test_a_bound_variable_is_not_an_undeclared_name(claim, verdict):
+    """`Sum(k, (k, 1, 4)) = 11` was skipped as naming an undeclared `k` (a bound index), so the
+    wrong step never reached the refuter; `1 + 2 + 3 + 4 = 11` was refuted (audit, C dcell)."""
+    ir = {"task": {"kind": "count_structures", "params": {"space": {"structure": "combination", "n": 5, "k": 2},
+                                                          "predicate": ""}},
+          "vars": [], "givens": [], "answer_shape": "count"}
+    steps = [{"id": "s1", "kind": "compute", "claim": claim}]
+    assert verify(ir, {"claimed_answer": {"kind": "count", "payload": "10"}, "steps": steps}).verdict == verdict
