@@ -679,6 +679,29 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   9 s, çıkış 0. Soğuk yolda yeni ısıtma bir sonraki gerçek yeniden başlatmada ölçülür
   **[DOĞRULANMADI]**.
 - **Bellek dosyaları:** `~/.claude` taşınmaz; kalıcı her bilgi depoya yazılır.
+- **Kullanım sınırı (26 Eylül 2026, araştırma ve ölçüm).** Resmî belgeye göre bulut oturumları
+  hesaptaki diğer bütün Claude kullanımıyla aynı sınırı paylaşır; bulut makinesi için ayrı ücret
+  yok (`code.claude.com/docs/en/claude-code-on-the-web`, "Limitations"). İstisna, 23–24 Eylül 2026'da
+  başlayan tek seferlik bulut kredisi: Pro $100, Max $250. Bu kredi normal sınırdan ayrı ve önce o
+  harcanıyor; 7 Ekim'e kadar talep edilir (`claude.ai/code/claim-credit`, CLI'da `/claim-credit`),
+  4 Kasım'da (PT) biter. Bunun kaynağı haber siteleri; resmî duyuru sayfası bulunamadı
+  **[DOĞRULANMADI]**. Bu oturumun kendi bilgisi bununla uyumlu: `get_session` →
+  `rate_limit_info.rateLimitType: "ccr_promotional"`, `resetsAt` 2026-11-05 08:00 UTC,
+  `isUsingOverage: false`. Oturumun API fiyatıyla hesaplanan maliyeti `usage.cost_usd` = 12.36.
+  Kalan kredi buradan görülemiyor (claude.ai → Settings → Usage).
+  *Bulutun ölçülen ek yükü* (bu oturum, 160 istek, 40.7 M token bağlam okuması):
+  - Platformun Stop kancası (`stop-hook-git-check.sh`) commit edilmemiş değişiklikte 4 ek tur
+    açtı: en az 1.0 M token, %2.5.
+  - `--full` sırasında turu açık tutan 11 bekleme isteği: 3.5 M token, %8.5. Yerelde bildirim
+    beklemek bunun çoğunu gereksiz kılar.
+  - Buluta özgü sistem istemi eki her istekte 28.5 KB (~7k token, tahmin; önbellekten okunur).
+
+  Buluta özgü olmayan ama daha büyük iki etken var. Birincisi oturumun çaba düzeyi `xhigh`: masaüstü
+  uygulamasının oturum ayarı (`flag_settings.effortLevel`). Opus 5.5'in varsayılanı `medium`
+  (`code.claude.com/docs/en/model-config`). Düşünme token'ları çıktı olarak sayılır. İkincisi
+  bağlam uzunluğu: her istek bütün konuşmayı yeniden okur (`code.claude.com/docs/en/costs`).
+  Yerelle karşılaştırma için iki tarafta da `/context` ve `/usage` çalıştırılır; yerel taraf
+  ölçülmedi.
 
 ## 9. Buluttan yerele ve birleştirme
 
