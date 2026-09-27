@@ -535,6 +535,13 @@ script metninde `export` edilirse etkilidir; claude.ai ortam değişkeni oraya u
 | `setup_env.nohup.log` | kancanın arka planda başlattığı kurulumun çıktısı |
 | `session_start.log`, `venv.log` | kancanın ve `.venv` kurulumunun günlüğü |
 
+**Ek (27 Eylül 2026): aşama günlükleri artık her koşuyu tutar.** `run_stage` ve `skip_stage` aşama
+günlüğüne ekleyerek yazar; her koşu `==== [zaman] setup_env.sh mode=… pid=…: …` satırıyla başlar.
+Önce üzerine yazıyordu: 26 Eylül'de kancanın `--lean-only` koşusu, 250 s sınırında durdurulan
+kurulum betiği koşusunun `fetch_artifacts.log`'unu sildi ve o koşunun çekim yolu kayboldu (§12).
+`setup_env.log`'a kopyalanan "son 25 satır" yalnız bu koşudan alınır. Test:
+`test_setup_env_stage_logs_keep_every_run` (DECISIONS §60).
+
 **Ek (24 Eylül 2026): `setup_env.status` satırının alanları.**
 
 ```
@@ -643,6 +650,9 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   ~0.5 GB; 24 Eylül ölçümü); 15 GB'lık makinede iki istemci ~14.4 GB eder, bu yüzden aynı anda iki
   Lean taraması (ya da Lean'li iki `check.py --full`) koşturulmaz. Bulutta iki taramanın birlikte
   denenmesi ölçülmedi.
+  **Ek (27 Eylül 2026, ölçüm):** düz `pytest tests` sırasında 5 s arayla örneklendi: tek `repl`
+  süreci RSS 7.08 GB, PSS 6.78 GB; `MemAvailable` en düşük 14.46 GB (bu anda sayfa önbelleği
+  8.6 GB, geri alınabilir). `lake env` sürecinin payı bu ölçümde yok.
 - **Boşta kalan VM geri alınır ve arka plandaki kabuk işi kaybolur.** `check.py --full`
   (Windows'ta ~25–70 dk; bulutta ~63 dk (3793 s; adversaryal 3220 s; 4 vCPU), ölçüldü) ya da Lean kurulumu sürerken oturum etkin
   tutulur. `check.py --full` günlüğü `reports/check_full.log`a koşu sırasında yazar; yarıda kalan
@@ -687,6 +697,17 @@ deneme zaman aşımına uğrarsa bu kapılar bilerek düşer; bulutta tam tarama
   Düzeltme (`5414d6b`): ısıtma kendi `LeanClient(boot_timeout=900)` istemcisini kurar. Sıcak diskte
   9 s, çıkış 0. Soğuk yolda yeni ısıtma bir sonraki gerçek yeniden başlatmada ölçülür
   **[DOĞRULANMADI]**.
+  **Ek (27 Eylül 2026, ölçüm; DECISIONS §60):** düz `pytest` de artık Lean testi seçtiğinde ilk
+  testten önce, testlerin 300 s sınırının dışında aynı biçimde ısınır (`tests/lean_warmup.py`). Bu
+  sohbet `session_mode: "resume-cached"` ile açıldı (VM 09:39 UTC); sayfa önbelleği 0.45 GB'tı.
+  İlk iş olarak düz `pytest tests -rs`: "Lean ısınması: 345 s, hazır", **1514 passed / 5 skipped**,
+  655 s, Lean yüzünden atlama yok. Sonra Lean dosyaları (`/opt/mathverify-lean`, `/opt/elan`,
+  `/opt/repl`, 9.9 GiB) `posix_fadvise(DONTNEED)` ile konuğun sayfa önbelleğinden atıldı (8.65 →
+  0.66 GB): eski kodla iki canlı Lean testi 31 s'de geçti. Yani soğuk açılışın maliyeti konuğun sayfa
+  önbelleğinde değil, daha aşağıda (görüntüden gelen diskin ilk okunması olduğu çıkarım
+  **[DOĞRULANMADI]**); yukarıdaki "önbellek boşaltılmış açılış 26.9 s" ölçümüyle tutarlı. Bu yüzden
+  eski kodun düşmesi burada yeniden üretilemedi; `check.py --full`'un ısıtması aynı bütçeyle (900 s)
+  çalıştığı için soğuk yolda 345 s'yi karşılar (çıkarım; `--full` bu oturumda ısınmış diskte koştu).
 - **Bellek dosyaları:** `~/.claude` taşınmaz; kalıcı her bilgi depoya yazılır.
 - **Kullanım sınırı (26 Eylül 2026, araştırma ve ölçüm).** Resmî belgeye göre bulut oturumları
   hesaptaki diğer bütün Claude kullanımıyla aynı sınırı paylaşır; bulut makinesi için ayrı ücret
