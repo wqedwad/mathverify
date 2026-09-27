@@ -1323,6 +1323,33 @@ def test_setup_env_failed_fetch_leaves_an_installed_prefix_alone(installed):
 
 
 @posix_only
+def test_setup_env_stage_logs_keep_every_run(installed):
+    # 26 Sep 2026: the hook's --lean-only run overwrote fetch_artifacts.log, and how the setup-script
+    # run before it had fetched the artifacts was lost (HANDOFF B3). Stage logs now append.
+    bed = installed
+    logs = bed.opt / "mathverify-logs"
+    first = {n: (logs / f"{n}.log").read_text() for n in ("fetch_artifacts", "setup_lean")}
+    assert all(t.startswith("==== [") and t.count("\n==== [") == 0 for t in first.values()), first
+    bed.change_pins()                                      # so that the second run has work to do
+    r, _ = bed.setup_env("--lean-only", MATHVERIFY_ARTIFACT_SRC=str(bed.tmp / "unreachable"))
+    assert bed.status().startswith("FAILED mode=lean failed=[fetch_artifacts "), bed.status() + r.stdout
+    for name, before in first.items():
+        text = (logs / f"{name}.log").read_text()
+        assert text.startswith(before), name               # the first run is still there, unchanged
+        runs = text[len(before):]
+        assert runs.startswith("==== [") and runs.count("==== [") == 1, runs
+        assert re.match(r"==== \[\S+\] setup_env\.sh mode=lean pid=\d+: ", runs), runs
+    assert "skipped: no verified artifacts (reason=fetch)" in (logs / "setup_lean.log").read_text()
+    # The failure's excerpt in setup_env.log quotes this run only, never the run before it.
+    log = (logs / "setup_env.log").read_text()
+    head, _, excerpt = log.rpartition("stage fetch_artifacts: FAILED")
+    assert head and "last lines of" in excerpt.splitlines()[0], log
+    quoted = [ln[len("    | "):] for ln in excerpt.splitlines()[1:] if ln.startswith("    | ")]
+    this_run = (logs / "fetch_artifacts.log").read_text()[len(first["fetch_artifacts"]):]
+    assert quoted and quoted[0].startswith("==== [") and all(q in this_run.splitlines() for q in quoted), quoted
+
+
+@posix_only
 def test_setup_env_logs_which_variables_it_sees_by_name_only(lean_bed):
     # 25 Sep 2026: the claude.ai environment variable reached the session but not the setup
     # script. Each run now records, by name only, what it saw (token, proxy, project dir).

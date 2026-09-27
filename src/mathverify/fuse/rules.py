@@ -13,6 +13,7 @@ Rules (all mandatory per the handoff):
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -74,21 +75,30 @@ def load_calibration(path: Path | str | None = None, force: bool = False) -> dic
     return _CALIB
 
 
-def calibrated_score(layers: list[LayerResult], calib: dict[str, Any]) -> float:
-    """Posterior log-odds that the solution is valid, from the measured signal weights."""
+def calibrated_score(layers: list[LayerResult], calib: dict[str, Any],
+                     extra_flags: list[str] | tuple[str, ...] = ()) -> float:
+    """Posterior log-odds that the solution is valid, from the measured signal weights.
+
+    The signals are the ones harness/calibrate.py fitted: the layers' verdicts and flags AND the
+    flags the verifier adds next to the layers (`extra_flags`: the scope flags such as
+    answer_level_only). Without the latter the running model was not the measured one: on 16 of
+    the 280 items it scored 0.41 higher than the fit, and tyt-geo-009 passed a threshold the fitted
+    model held it under (measured 27 Sep 2026). The sum is exact (math.fsum), so the order of the
+    signals cannot move a score across a threshold."""
     model = calib["model"]
-    z = model.get("prior", 0.0)
     sigs = set()
     for l in layers:
         if l.verdict in ("pass", "fail"):
             sigs.add(f"{l.layer}:{l.verdict}:{'primary' if l.primary else 'support'}")
         for f in l.flags:
             sigs.add(f"flag:{f}")
-    for s in sigs:
+    sigs.update(f"flag:{f}" for f in extra_flags)
+    terms = [model.get("prior", 0.0)]
+    for s in sorted(sigs):
         w = model["weights"].get(s)
         if w and w.get("used"):
-            z += w["weight"]
-    return z
+            terms.append(w["weight"])
+    return math.fsum(terms)
 
 # Flags that by themselves forbid a CORRECT verdict (the certificate may be computed on
 # a wrong problem object). F3 additions: an IR that failed its round-trip audit, a
@@ -135,7 +145,8 @@ def _noisy_or(confs: list[float]) -> float:
     return 1.0 - p
 
 
-def fuse(layers: list[LayerResult]) -> dict[str, Any]:
+def fuse(layers: list[LayerResult], extra_flags: list[str] | None = None) -> dict[str, Any]:
+    """`extra_flags` (the verifier's flags next to the layers) only enter the calibrated score."""
     flags: list[str] = []
     for l in layers:
         for f in l.flags:
@@ -192,7 +203,7 @@ def fuse(layers: list[LayerResult]) -> dict[str, Any]:
         if conf >= THRESH_POS:
             calib = load_calibration()
             if calib is not None:
-                z = calibrated_score(layers, calib)
+                z = calibrated_score(layers, calib, extra_flags or ())
                 hi = calib["thresholds"]["hi"]
                 if z < hi:
                     flags.append("calibrated_below_threshold")

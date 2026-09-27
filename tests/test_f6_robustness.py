@@ -103,6 +103,83 @@ def test_calibrated_score_uses_only_supported_signals():
     assert calibrated_score(layers, model) == pytest.approx(0.5 - 3.0)
 
 
+def test_the_running_calibration_scores_the_flags_the_fit_saw(tmp_path):
+    """harness/calibrate.py fits on the layers' signals AND the verifier's own flags (scope flags
+    such as answer_level_only). The running fusion saw only the former: with the fitted model,
+    tyt-geo-009 passed a threshold the fit held it under (27 Sep 2026)."""
+    from mathverify.verifier import fuse_layers
+    model = {"model": {"prior": 0.0, "weights": {"flag:answer_level_only": {"weight": -5.0, "used": True}}},
+             "thresholds": {"hi": -1.0, "lo": -9.0, "target_precision": 0.98}}
+    p = tmp_path / "calibration.json"
+    p.write_text(json.dumps(model), encoding="utf-8")
+    cert = LayerResult("certify.algebra", "pass", 0.99, True, {}, 1.0, primary=True)
+    assert calibrated_score([cert], model, ["answer_level_only"]) == -5.0
+    load_calibration(p, force=True)
+    try:
+        assert fuse_layers([cert]).verdict == "CORRECT"                       # z = 0 >= -1
+        out = fuse_layers([cert], extra_flags=["answer_level_only"])        # z = -5 < -1
+        assert out.verdict == "UNKNOWN" and "calibrated_below_threshold" in out.flags
+    finally:
+        load_calibration(force=True)
+
+
+@pytest.mark.parametrize("item_id", ["tyt-geo-009", "tyt-prob-001", "tyt-prob-013"])
+def test_the_running_score_is_the_fitted_score(evalset_items, item_id):
+    """Every signal the fit records gets a distinct weight; the verifier's score must equal the
+    harness's for the same item, bit for bit (both sum exactly)."""
+    from harness.calibrate import collect, score
+    from harness.loader import split_for_verifier
+    from mathverify.verifier import verify_layers
+    item = next(i for i in evalset_items if i["id"] == item_id)
+    (rec,) = collect([item])
+    weights = {s: {"weight": 0.1 * (k + 1) * (-1) ** k, "used": True} for k, s in enumerate(sorted(rec["signals"]))}
+    calib = {"model": {"prior": 0.3, "weights": weights}}
+    ir, sol, _ = split_for_verifier(item)
+    layers, flags = verify_layers(ir, sol)
+    assert rec["signals"] and calibrated_score(layers, calib, flags) == score(rec, calib["model"])
+
+
+_FIT_AND_RENDER = """
+import json, sys
+sys.path[:0] = [{root!r}, {root!r} + "/src"]
+from harness.calibrate import fit, render_md
+sigs = ["flag:z", "flag:a", "flag:m", "b:pass:primary", "y:fail:support"]
+# flag:tie1 and flag:tie2 always fire together: same counts, same weight
+recs = [{{"split": "train", "valid": k % 3 != 0,
+          "signals": sigs[k % 5:] + (["flag:tie2", "flag:tie1"] if k % 2 == 0 else [])}} for k in range(60)]
+model = fit(recs)
+res = {{sp: {{"n": 0, "pos_precision": None, "neg_precision": None, "coverage": None, "fp": 0, "fn": 0,
+             "unknown": 0}} for sp in ("train", "val", "test")}}
+print(json.dumps(list(model["weights"])))
+print(render_md(model, res, [], 1.0, -1.0, 0.98))
+"""
+
+
+def test_the_calibration_report_does_not_depend_on_the_hash_seed():
+    """T4: the weights were built by iterating sets of strings, so their order, and the order of
+    rows with the same |weight| in calibration_report.md, changed with PYTHONHASHSEED (seen in two
+    --full runs, reproduced 27 Sep 2026 with seeds 0 and 2)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+    root = str(Path(__file__).resolve().parents[1])
+    code = _FIT_AND_RENDER.format(root=root)
+    outs = set()
+    for seed in ("0", "1", "2", "3", "4", "5"):
+        env = dict(os.environ, PYTHONHASHSEED=seed, PYTHONUTF8="1")
+        r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
+        assert r.returncode == 0, r.stderr
+        outs.add(r.stdout)
+    assert len(outs) == 1
+    (out,) = outs
+    names = json.loads(out.splitlines()[0])
+    assert names == sorted(names)
+    rows = [ln.split("`")[1] for ln in out.splitlines() if ln.startswith("| `")]
+    tie = [s for s in rows if s.startswith("flag:tie")]
+    assert len(rows) == len(names) and tie == sorted(tie)
+
+
 # ------------------------------------------------------------------ verdict scope (B2)
 def test_a_bare_option_guess_is_answered_but_never_presented_as_a_verified_solution():
     """A solver that writes nothing but a letter gets the letter checked — that is legitimate
@@ -212,3 +289,25 @@ def test_an_undeclared_name_used_as_a_function_is_not_called_malformed():
                                               "vars": [{"name": "n", "domain": "positive_integer"}]}))
     with pytest.raises(UndeclaredSymbolError):
         parse_relation("a(n) = 3*n + 2", ns)
+
+
+def test_calibrated_scores_are_exact_sums():
+    """0.1 + 0.2 + 0.3 is 0.6000000000000001 added left to right: a score next to a threshold
+    would be on either side of it depending on the order of its signals. Both scorers sum exactly."""
+    from harness.calibrate import score
+    weights = {"flag:a": {"weight": 0.2, "used": True}, "flag:b": {"weight": 0.3, "used": True}}
+    assert score({"signals": ["flag:b", "flag:a"]}, {"prior": 0.1, "weights": weights}) == 0.6
+    layers = [LayerResult("x", "unknown", 0.0, False, {}, 1.0, flags=["a", "b"])]
+    assert calibrated_score(layers, {"model": {"prior": 0.1, "weights": weights}}) == 0.6
+
+
+def test_the_report_orders_equal_weights_by_name_whatever_order_the_model_has():
+    from harness.calibrate import render_md
+    w = {"weight": -1.0, "used": True, "support": 9, "valid": 1, "invalid": 8, "reliability": 0.111}
+    res = {sp: {"n": 0, "pos_precision": None, "neg_precision": None, "coverage": None, "fp": 0, "fn": 0,
+                "unknown": 0} for sp in ("train", "val", "test")}
+    for names in (["flag:b", "flag:a", "flag:c"], ["flag:c", "flag:b", "flag:a"]):
+        model = {"prior": 0.0, "n_train": 9, "n_valid": 1, "n_invalid": 8, "weights": {n: w for n in names}}
+        rows = [ln.split("`")[1] for ln in render_md(model, res, [], 1.0, -1.0, 0.98).splitlines()
+                if ln.startswith("| `")]
+        assert rows == ["flag:a", "flag:b", "flag:c"]

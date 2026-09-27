@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 27 Eylül 2026 (gece)**, dal `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`, `master`a birleşti).
+> **Son güncelleme: 27 Eylül 2026 (öğle)**, dal `claude/dreamy-meitner-rvrwlj` (`wqedwad/asd#9` açık, birleşmedi; §3 adım 1).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -10,13 +10,14 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §56–§59 (son dört madde). Bulutta ayrıca
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §57–§60 (son dört madde). Bulutta ayrıca
    oturum başındaki `[mathverify bulut oturumu …]` bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`; birleşmemiş başka dal var mı: `git ls-remote origin` (§6).
    Bulut klonunda yerel `master` ve `origin/master` bayat olabilir: `git fetch origin master`.
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1514
-   passed / 5 skipped**, ~320–335 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
-   ifade); Lean yüzünden atlama = Lean hazır değil (konteynerin ilk Lean kullanımı soğuk: B6).
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1531
+   passed / 5 skipped**, ~330 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
+   ifade). Lean testi seçen oturum önce Lean'i ısıtır ("Lean ısınması: N s"; soğuk konteynerde ~345 s,
+   B6); Lean yüzünden atlama = Lean hazır değil.
    `addopts` `-q` içerir; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
 4. §3'teki ilk işe geç. Tekrar denenmemesi gerekenler: arşiv §4.
 
@@ -34,65 +35,67 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 **Kod.** `master` = `wqedwad/asd#8`'in birleşmesi (öncesi `5c2f83e`, yedeği `yedek/master-2026-09-27`).
 `#7`: adversaryal tarama 4 sürece dağıtıldı, kademeli kontrol kuralı `check.py --plan` ve çalışma anı
 belge-okuma bekçisi. `#8`: `--plan` satırındaki üç görünüm kusuru düzeltildi (kararlar ve çıkış kodları
-aynı). Dört inceleme turu, depodaki koşucuyla 162/162 mutasyon (DECISIONS §59); `src/` değişmedi. Kodda
-yarım iş yok.
+aynı). Dört inceleme turu, depodaki koşucuyla 162/162 mutasyon (DECISIONS §59); `src/` değişmedi.
+**Bu dal** (`claude/dreamy-meitner-rvrwlj`, DECISIONS §60): düz `pytest` Lean testinden önce Lean'i
+ısıtır (B6), kalibrasyon raporu tohumdan bağımsız (T4), çalışma anındaki kalibre skor uyumun skoru
+(yan bulgu: `tyt-geo-009` eşiği yanlış tarafta geçiyordu), kurulum betiğinin aşama günlükleri
+ekleyerek yazılır (B3); 21/21 mutasyon. Kodda yarım iş yok.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
 bitti). F4 (kritik + meta-doğrulama): kod tamam, çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23
 ve 25–26 Eylül (formal katmanda 53/98 yanlış sertifika → 0/99; DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `f3105ef` (`#8`'in son kodu), bulutta 26 Eylül 23:33:18–23:57:59 UTC,
-**~25 dk** (adversaryal 772 s, 4 süreç, zaman aşımı 0), 1514 passed / 5 skipped; raporlar `f93178f`'ninkilerden
-yalnız süre satırlarında ve eşit ağırlıklı iki kalibrasyon satırının sırasında (T4) farklı (DECISIONS §59).
+**Son `check.py --full`.** **24/24**, `14d4e9d` (bu dalın son kodu), bulutta 27 Eylül 10:19:33–10:44:17 UTC,
+**~25 dk** (adversaryal 772 s, 4 süreç, zaman aşımı 0), 1531 passed / 5 skipped; raporlar `f3105ef`'ninkilerden
+yalnız süre satırlarında ve kalibrasyon tablosunun artık ada göre sıralı satırlarında farklı (DECISIONS §60).
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Windows'ta tam kontrol yarıda kaldı** (T8): ilk denemede testler sırasında ya da sonrasında Git Bash
+1. **`wqedwad/asd#9` birleştirilecek mi** (kullanıcı kararı). `--plan`: TAM; son `--full` (24/24,
+   `14d4e9d`) geçerli ve öteki bütün koşullar tutuyor, yalnız kuralın kendi dosyası `tests/conftest.py`
+   değişti (ısınma kancasını yükleyen bir satır). Birleştirmeden önce yedek (§6 yöntemi) ve `--plan`.
+2. **Windows'ta tam kontrol yarıda kaldı** (T8): ilk denemede testler sırasında ya da sonrasında Git Bash
    yanıt vermez oldu, kullanıcı durdurdu. Tam kontrol bulutta koşar; Windows'ta yeniden denenecekse
    Görev Yöneticisi'nde bellek izlenir ve donduğu adım günlükten okunur (günlük geri alınmadan önce).
-2. **Yedek etiketleri (isteğe bağlı):** PR #3 ve PR #4 öncesi `master` için etiket yok (§6).
-3. **Bulut kurulum kararı** (B1–B2: görüntü 13:35 sohbetinde kullanıldı, 11:00'dekinde kullanılmadı).
+3. **Yedek etiketleri (isteğe bağlı):** PR #3 ve PR #4 öncesi `master` için etiket yok (§6).
+4. **Bulut kurulum kararı** (B1–B2: görüntü 13:35 sohbetinde kullanıldı, 11:00'dekinde kullanılmadı).
    Seçenekler: (a) bir iki yeni sohbette daha ölçmek (hangi koşulda `new` açılıyor?); (b) betiği ~5 dk
    yönergesine kadar uzatmak (`timeout` 250 → ~280 s) ya da REPL derlemesini kancaya bırakmak; (c) Setup
    script'i boşaltıp kurulumu yalnız kancaya bırakmak. Karar kullanıcının; ölçmeden kod yok.
-4. **Küçük, krediye bağlı olmayan:** B3 (`fetch_artifacts.log`'un üzerine yazılması), T4 (kalibrasyon
-   raporunun satır sırası; 26 Eylül'de de görüldü), B6 (soğuk Lean'de düz `pytest` bir testi düşürüyor).
-   Hepsi kod: `--full` ister. Gerçek bir yeniden başlatmadan sonraki ilk `--full`'da `lean_warmup`
-   satırı okunur (B6): exit 0 beklenir, süre 300 s'yi aşabilir.
-5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
+5. **Soğuk açılışta `--full`:** gerçek bir yeniden başlatmadan sonraki ilk `--full`'da `lean_warmup`
+   satırı okunur (B6): exit 0 beklenir, süre 300 s'yi aşabilir (düz pytest'in ısınması 345 s ölçüldü).
+6. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
    23 Eylül). Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-6. **Gerçek veri** (K4) ve **açık kapsama işleri** (§4.2). Hepsi kullanıcı kararı ister (§4.4).
+7. **Gerçek veri** (K4) ve **açık kapsama işleri** (§4.2). Hepsi kullanıcı kararı ister (§4.4).
 
 ## 4. Açık maddeler (tam liste)
 
-Kaynak: arşivdeki §0.8–§0.14, §5–§7, §12, DECISIONS §53–§59 ve BULUT §12. Bir madde yalnız kapandığında,
+Kaynak: arşivdeki §0.8–§0.14, §5–§7, §12, DECISIONS §53–§60 ve BULUT §12. Bir madde yalnız kapandığında,
 kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.1 Bulut ve ortam
 
 - **B1. Anlık görüntü bazen kullanılmıyor** (DECISIONS §56 Ek, §59 (e); BULUT §12). 11:00 sohbeti
   `session_mode: "new"` ile betiği yeniden koşturdu (`/opt` boştu, sohbet 252 s bekledi, kanca "Lean:
-  KURULUYOR"). 13:35 sohbeti `resume-cached` ile açıldı: betik koşmadı, `/opt` 07:39'daki `setup-only`
-  koşusunun (OK, 199 s) görüntüsünden geldi, kanca 3 s. Hangi koşulda `new` açıldığı **[DOĞRULANMADI]**.
+  KURULUYOR"). 13:35 sohbeti ve 27 Eylül 09:39 sohbeti `resume-cached` ile açıldı: betik koşmadı, `/opt`
+  26 Eylül 07:39'daki `setup-only` koşusunun (OK, 199 s) görüntüsünden geldi, kanca 2–3 s. Hangi koşulda `new` açıldığı **[DOĞRULANMADI]**.
 - **B2. 250 s sınırı aşıldı** (11:00 sohbeti): çekim 66 s, `setup_lean` 156 s, REPL aşamasında
   durduruldu (`reason=terminated`); kanca kalanı 42 s'de kurdu. Süre 180–250 s arasında oynuyor
   (07:39'daki iki koşu 180 ve 199 s).
-- **B3. Bu koşunun çekim yolu bilinmiyor:** kancanın `--lean-only` koşusu `fetch_artifacts.log`'u
-  sıfırladı (`setup_env.log` ekleyerek yazıyor). Düzeltme: çekim günlüğü de eklemeli yazmalı.
 - **B4.** `raw.githubusercontent.com` dosya indirme yolu kurulum aşamasında hiç koşmadı (yedek; oturum
   içinde 32 s, 5/5 OK; DECISIONS §54). **B5.** "claude.ai ortam değişkenleri kurulum betiğine hiç
   ulaşmıyor mu": kanarya (`MATHVERIFY_SETUP_CANARY=1`) eklenmedi, sınanmadı; düzeni etkilemiyor.
 - **B6. Soğuk Lean açılışı.** Yeniden başlatmadan ya da görüntüden sonra ilk `import Mathlib`
-  ~340–400 s. 26 Eylül (görüntüden açılan konteyner): düz `pytest`'te
-  `test_f5_lean.py::test_lean_proves_true_and_refuses_false` pytest-timeout'la (300 s) düştü, 92 Lean
-  testi atlandı; ısınmış ikinci koşu temiz. `--full`'un ısıtması (`boot_timeout=900`) soğuk yolda
-  **[DOĞRULANMADI]**; yavaşlığın nedeni **[DOĞRULANMADI]**. Kancanın arka planda ısıtması önerildi;
-  yapılmadı, gerçek bir yeniden başlatmada ölçülerek eklenir.
+  ~340–400 s. Düz `pytest` artık ilk Lean testinden önce, testlerin 300 s sınırının dışında ısınır;
+  27 Eylül soğuk konteynerde 345 s, 1514/5, Lean atlaması yok (DECISIONS §60). Açık: yavaşlığın nedeni
+  (konuğun sayfa önbelleği değil: boşaltılınca 31 s; görüntü diskinin ilk okunması çıkarım
+  **[DOĞRULANMADI]**) ve `--full`'un ısıtmasının soğuk yolda ölçülmesi (aynı 900 s bütçe; çıkarım).
 - **B7. Belirteç yenileme:** yeni fine-grained belirteç (Contents: read-only, yalnız `wqedwad/asd`)
   Setup script'in `T='...'` satırına; süresi dolmuşsa çekim düşer, kanca kurar (167–239 s). **B8.**
   Etiket ve `master` buluttan push edilmez (kural); etiket push'u bulutta hiç denenmedi.
-- **B9.** Lean istemcisinin bulutta bellek tüketimi ölçülmedi (WSL'de ~7.2 GB PSS; makine 15 GB).
+- **B9.** Bulutta `repl` süreci RSS 7.08 GB / PSS 6.78 GB (27 Eylül); `lake env`'in payı ölçülmedi
+  (WSL'de istemci başına ~7.2 GB PSS; makine 15 GB).
 - **B10. Kullanım/maliyet** (BULUT §8): tek seferlik bulut kredisinin kaynağı haber siteleri
   **[DOĞRULANMADI]**; abonelik sınırının token ağırlıklandırması yayımlanmamış **[DOĞRULANMADI]**;
   yerel tarafın maliyeti ölçülmedi.
@@ -159,16 +162,13 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
 8. Depo herkese açılacak ya da paylaşılacak mı? Açılırsa önce anahtarlar yenilenir, `.env` geçmişten
    temizlenir.
-9. Bulut kurulumu: §3 adım 3'ün (a)/(b)/(c) seçeneği.
+9. Bulut kurulumu: §3 adım 4'ün (a)/(b)/(c) seçeneği.
 
 ### 4.5 Teknik borç
 
 - **T1.** `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5, 7–11; madde numaraları atlıyor; §2 ve §3.9
   bilerek Faz 1 anlık görüntüsü ("180 öğe").
 - **T2.** Biçimlendirici yok; pyflakes dışında stil denetimi yok. **T3.** CI yok.
-- **T4.** Kalibrasyon raporunda eşit ağırlıklı satırların sırası koşudan koşuya değişiyor
-  (`fit`'te `set(...)` yinelemesi). Üç tohumda sonuçlar aynı; `score` toplam sırasının bir eşikte
-  kararı çevirip çeviremeyeceği ölçülmedi. Öneri: `(-abs(ağırlık), ad)` sırası, `sorted(set(...))`.
 - **T5.** `reports/lean_setup.log` eski `stable` kurulumunun günlüğü (sabit kurulumunki bulutta
   `/opt/mathverify-logs/setup_lean.log`). **T6.** 26 Eylül öncesi `check_full.log` başlıklarında
   "commit edilmemiş değişiklik" sayısından 1 düşülür (günlük kendini sayıyordu; `3925180`).
@@ -202,11 +202,11 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 - Alandaki önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843).
 - B1, B6 ve B10'daki işaretli maddeler.
 
-## 5. Son ölçülen sayılar (kapılar, `f3105ef`; `f93178f`, `a8edb0d` ve `5414d6b` ile aynı)
+## 5. Son ölçülen sayılar (kapılar, `14d4e9d`; `f3105ef`, `f93178f`, `a8edb0d` ve `5414d6b` ile aynı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri | 1514 passed / 5 skipped | hepsi geçer |
+| Birim testleri | 1531 passed / 5 skipped | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
@@ -222,8 +222,8 @@ Süre: `--full` bulutta **~25–26 dk** (4 süreçli adversaryal 772–811 s); t
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (`git ls-remote origin`, 27 Eylül gece): `master` (`wqedwad/asd#8`'in birleşmesi);
-  `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
+- **Dallar** (`git ls-remote origin`, 27 Eylül öğle): `master` `c2e4fdf` (`wqedwad/asd#8`'in birleşmesi);
+  `claude/dreamy-meitner-rvrwlj` (`wqedwad/asd#9`, birleşmedi); `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
   `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
   `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b` (eski); araç ref'leri
@@ -277,6 +277,7 @@ Süre: `--full` bulutta **~25–26 dk** (4 süreçli adversaryal 772–811 s); t
 | `$PY scripts/check.py` / `--full` | Hızlı (~7 dk) / 24 kapı (~26 dk bulutta; günlüğü kendisi yazar, arka planda izlenir) |
 | `$PY -m harness.run_eval` · `run_lean --timeout 45` · `adversarial [--workers N]` · `soundness_fuzz` · `calibrate` | Tek tek ölçümler → `reports/` (`--full`dan sonra koşulursa `--plan` o koşuyu kabul etmez; `git restore reports/`) |
 | `$PY denetim/2026-09-26/mutasyon.py [-j N] [C G A]` | Kural, bekçi ve paralel taramanın mutasyon denetimi (README orada) |
+| `$PY denetim/2026-09-27/mutasyon.py [-j N] [L K B]` | Lean ısınması, kalibrasyon, aşama günlükleri (DECISIONS §60) |
 | `$PY -m harness.run_f3 --workers 6 --pathb --max-cost 40 --solver-family …` | Kredili F3/F4 (`--no-l4/--no-l5/--no-l6`, `--limit`, `--ids`) |
 | `$PY scripts/verify_cli.py --item evalset/items/tyt-prob-001.json [--lean] [--text "…"]` | Tek öğe |
 | `$PY evalset/build/build_all.py` | 280 öğeyi yeniden üretir |
@@ -293,6 +294,7 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
   §9 komutlar ve ortam değişkenleri, §11 tuzaklar (SymPy, ayrıştırıcı, Lean, Windows, bulut).
 - **`DECISIONS.md`:** §1 kilitli kararlar, §7 (34–43) GitHub/bulut, 44–54 bulut ölçümleri, §8 (55)
   25 Eylül denetimi, §9 (56) 26 Eylül bulut ölçümü, §10 (57) belge düzeni, (58) tam kontrol süresi,
-  §11 (59) paralel tarama, kademeli kontrol, inceleme turları ve mutasyonlar.
+  §11 (59) paralel tarama, kademeli kontrol, inceleme turları ve mutasyonlar, §12 (60) soğuk Lean,
+  kalibrasyon sırası ve çalışma anı skoru, aşama günlükleri.
 - **`docs/`:** `ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`, `LLM_LAYERS`, `LEAN_SETUP`, `E1-E10-measurement`,
   `BULUT` (§12, §13), `sartname/`; `reports/arsiv/` (iki F3 JSON'u üretilemez); `denetim/` (ölçüm betikleri).

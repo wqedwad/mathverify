@@ -14,7 +14,8 @@
 #   elan/ mathverify-lean/ repl/
 #                      Lean toolchain, pinned Mathlib project and REPL
 #                      (scripts/setup_lean.sh, scripts/setup_lean_repl.sh)
-#   mathverify-logs/   setup_env.log (timestamped), one log per stage, setup_env.status
+#   mathverify-logs/   setup_env.log (timestamped), one log per stage, setup_env.status; every
+#                      run appends to them (a stage log's runs start with a "====" line)
 # and, as root, /etc/profile.d/mathverify.sh (ELAN_HOME, MATHVERIFY_LEAN_PROJECT,
 # MATHVERIFY_LEAN_REPL, MATHVERIFY_OPT, PATH).
 #
@@ -273,19 +274,26 @@ art_verifies() {
 
 STAGES_FILE="$LOGDIR/stages.$$"
 : >"$STAGES_FILE"
-# run_stage NAME CMD...: run CMD with its output in $LOGDIR/NAME.log; record the result.
+# A stage log keeps every run: each run appends after a "====" line. It used to be overwritten, and
+# the hook's --lean-only run after a stopped setup-script run erased how that run had fetched the
+# artifacts (26 Sep 2026; setup_env.log already appended).
+stage_header() {
+  echo "==== [$(date -u +%Y-%m-%dT%H:%M:%SZ)] setup_env.sh mode=$MODE pid=$$: $*"
+}
+# run_stage NAME CMD...: run CMD with its output appended to $LOGDIR/NAME.log; record the result.
 run_stage() {
-  local name="$1" slog="$LOGDIR/$1.log" t rc
+  local name="$1" slog="$LOGDIR/$1.log" t rc start
   shift
   t=$(date +%s)
   log "stage $name: start (log $slog)"
-  { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; "$@"; } >"$slog" 2>&1
+  start=$(( $(wc -c 2>/dev/null <"$slog" || echo 0) + 1 ))
+  { stage_header "$*"; "$@"; } >>"$slog" 2>&1
   rc=$?
   if [ "$rc" -eq 0 ]; then
     log "stage $name: OK in $(( $(date +%s) - t ))s"
   else
-    loud "stage $name: FAILED (exit $rc) after $(( $(date +%s) - t ))s; last lines of $slog:"
-    tail -n 25 "$slog" 2>/dev/null | sed 's/^/    | /' | tee -a "$LOG"
+    loud "stage $name: FAILED (exit $rc) after $(( $(date +%s) - t ))s; last lines of $slog (this run):"
+    tail -c +"$start" "$slog" 2>/dev/null | tail -n 25 | sed 's/^/    | /' | tee -a "$LOG"
   fi
   echo "$name $rc $(( $(date +%s) - t ))" >>"$STAGES_FILE"
   return "$rc"
@@ -293,7 +301,7 @@ run_stage() {
 # skip_stage NAME WHY: record NAME as failed without running it (its log says why).
 skip_stage() {
   loud "stage $1: SKIPPED, $2"
-  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] skipped: $2" >"$LOGDIR/$1.log"
+  { stage_header "$1"; echo "skipped: $2"; } >>"$LOGDIR/$1.log"
   echo "$1 1 skipped" >>"$STAGES_FILE"
 }
 
