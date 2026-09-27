@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 27 Eylül 2026 (gece)**, dal `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`, birleşmedi).
+> **Son güncelleme: 27 Eylül 2026 (gece)**, dal `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`, `master`a birleşti).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -15,8 +15,8 @@
 2. `git status`, `git log --oneline -5`; birleşmemiş başka dal var mı: `git ls-remote origin` (§6).
    Bulut klonunda yerel `master` ve `origin/master` bayat olabilir: `git fetch origin master`.
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1514
-   passed / 5 skipped** (`master`da 1513), ~320–335 s (3 root salt okunur dizin, 1 isteğe bağlı indirme,
-   1 kapsam dışı ifade); Lean yüzünden atlama = Lean hazır değil (konteynerin ilk Lean kullanımı soğuk: B6).
+   passed / 5 skipped**, ~320–335 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
+   ifade); Lean yüzünden atlama = Lean hazır değil (konteynerin ilk Lean kullanımı soğuk: B6).
    `addopts` `-q` içerir; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
 4. §3'teki ilk işe geç. Tekrar denenmemesi gerekenler: arşiv §4.
 
@@ -29,42 +29,40 @@ arşiv §2–§3 ve `docs/ARCHITECTURE.md`'de; kilitli kararlar D1–D6 (`DECISI
 Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `scripts/verify_cli.py`,
 `scripts/check.py`. Değerlendirme seti 280 sentetik öğe (A/B/C/D = %30/%25/%30/%15).
 
-## 2. Durum (26 Eylül 2026)
+## 2. Durum (27 Eylül 2026)
 
-**Kod.** `master` = `wqedwad/asd#7`'nin birleşmesi (öncesi `849b492`, yedeği `yedek/master-2026-09-26-2`):
-adversaryal tarama 4 sürece dağıtıldı, kademeli kontrol kuralı `check.py --plan` ve çalışma anı
-belge-okuma bekçisi; dört inceleme turu ve depodaki koşucuyla 158/158 mutasyon (DECISIONS §59); `src/`
-değişmedi. Bu dal (`wqedwad/asd#8`, birleşmedi): `--plan` satırındaki üç görünüm kusuru düzeltildi
-(kararlar ve çıkış kodları aynı); 162/162 mutasyon (DECISIONS §59). Kodda yarım iş yok.
+**Kod.** `master` = `wqedwad/asd#8`'in birleşmesi (öncesi `5c2f83e`, yedeği `yedek/master-2026-09-27`).
+`#7`: adversaryal tarama 4 sürece dağıtıldı, kademeli kontrol kuralı `check.py --plan` ve çalışma anı
+belge-okuma bekçisi. `#8`: `--plan` satırındaki üç görünüm kusuru düzeltildi (kararlar ve çıkış kodları
+aynı). Dört inceleme turu, depodaki koşucuyla 162/162 mutasyon (DECISIONS §59); `src/` değişmedi. Kodda
+yarım iş yok.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
 bitti). F4 (kritik + meta-doğrulama): kod tamam, çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23
 ve 25–26 Eylül (formal katmanda 53/98 yanlış sertifika → 0/99; DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `f3105ef` (bu dal, son kod), bulutta 26 Eylül 23:33:18–23:57:59 UTC,
+**Son `check.py --full`.** **24/24**, `f3105ef` (`#8`'in son kodu), bulutta 26 Eylül 23:33:18–23:57:59 UTC,
 **~25 dk** (adversaryal 772 s, 4 süreç, zaman aşımı 0), 1514 passed / 5 skipped; raporlar `f93178f`'ninkilerden
 yalnız süre satırlarında ve eşit ağırlıklı iki kalibrasyon satırının sırasında (T4) farklı (DECISIONS §59).
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalın PR'ı** (`wqedwad/asd#8`, kod): birleştirmeden önce yedek (§6), hemen önce `--plan`. Kuralın
-   kendi dosyaları değiştiği için TAMAM gelmez (karar satırı öteki koşulları söyler); karar kişinin.
-2. **Windows'ta tam kontrol yarıda kaldı** (T8): ilk denemede testler sırasında ya da sonrasında Git Bash
+1. **Windows'ta tam kontrol yarıda kaldı** (T8): ilk denemede testler sırasında ya da sonrasında Git Bash
    yanıt vermez oldu, kullanıcı durdurdu. Tam kontrol bulutta koşar; Windows'ta yeniden denenecekse
    Görev Yöneticisi'nde bellek izlenir ve donduğu adım günlükten okunur (günlük geri alınmadan önce).
-3. **Yedek etiketleri (isteğe bağlı):** PR #3 ve PR #4 öncesi `master` için etiket yok (§6).
-4. **Bulut kurulum kararı** (B1–B2: görüntü 13:35 sohbetinde kullanıldı, 11:00'dekinde kullanılmadı).
+2. **Yedek etiketleri (isteğe bağlı):** PR #3 ve PR #4 öncesi `master` için etiket yok (§6).
+3. **Bulut kurulum kararı** (B1–B2: görüntü 13:35 sohbetinde kullanıldı, 11:00'dekinde kullanılmadı).
    Seçenekler: (a) bir iki yeni sohbette daha ölçmek (hangi koşulda `new` açılıyor?); (b) betiği ~5 dk
    yönergesine kadar uzatmak (`timeout` 250 → ~280 s) ya da REPL derlemesini kancaya bırakmak; (c) Setup
    script'i boşaltıp kurulumu yalnız kancaya bırakmak. Karar kullanıcının; ölçmeden kod yok.
-5. **Küçük, krediye bağlı olmayan:** B3 (`fetch_artifacts.log`'un üzerine yazılması), T4 (kalibrasyon
+4. **Küçük, krediye bağlı olmayan:** B3 (`fetch_artifacts.log`'un üzerine yazılması), T4 (kalibrasyon
    raporunun satır sırası; 26 Eylül'de de görüldü), B6 (soğuk Lean'de düz `pytest` bir testi düşürüyor).
    Hepsi kod: `--full` ister. Gerçek bir yeniden başlatmadan sonraki ilk `--full`'da `lean_warmup`
    satırı okunur (B6): exit 0 beklenir, süre 300 s'yi aşabilir.
-6. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
+5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
    23 Eylül). Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-7. **Gerçek veri** (K4) ve **açık kapsama işleri** (§4.2). Hepsi kullanıcı kararı ister (§4.4).
+6. **Gerçek veri** (K4) ve **açık kapsama işleri** (§4.2). Hepsi kullanıcı kararı ister (§4.4).
 
 ## 4. Açık maddeler (tam liste)
 
@@ -148,7 +146,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 
 1. Ne zaman silinebilir (sormadan silinmez, §6): yedek etiketleri ve bundle'lar; `refs/arac/bulut-v1`
    (v2 doğrulandı, v1'in içeriğini taşıyor); `master`a girmiş uzak dallar (`bulut-2026-09-24`,
-   `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`).
+   `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`,
+   `-keen-ramanujan-…`).
 2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? API anahtarları
    ne zaman yenilenecek (§4.6)?
 3. Gerçek çözücü çıktıları: hangi model/uygulama, kaç çözüm, etiketleri kim koyacak?
@@ -160,7 +159,7 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
 8. Depo herkese açılacak ya da paylaşılacak mı? Açılırsa önce anahtarlar yenilenir, `.env` geçmişten
    temizlenir.
-9. Bulut kurulumu: §3 adım 4'ün (a)/(b)/(c) seçeneği.
+9. Bulut kurulumu: §3 adım 3'ün (a)/(b)/(c) seçeneği.
 
 ### 4.5 Teknik borç
 
@@ -223,8 +222,8 @@ Süre: `--full` bulutta **~25–26 dk** (4 süreçli adversaryal 772–811 s); t
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (`git ls-remote origin`, 27 Eylül gece): `master` `5c2f83e` (`wqedwad/asd#7`'nin birleşmesi);
-  **`claude/keen-ramanujan-oqseru` (bu dal, `wqedwad/asd#8`, birleşmedi)**, `claude/trusting-curie-76slml` `1fddfc6`,
+- **Dallar** (`git ls-remote origin`, 27 Eylül gece): `master` (`wqedwad/asd#8`'in birleşmesi);
+  `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
   `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
   `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b` (eski); araç ref'leri
@@ -243,7 +242,7 @@ Süre: `--full` bulutta **~25–26 dk** (4 süreçli adversaryal 772–811 s); t
   | yok | `ee7b2dd` (PR #3 öncesi) | **[DOĞRULANMADI]** |
   | yok | `e07d4f7` (PR #4 öncesi) | alınmadı (kullanıcı kararı, "yalnız belge" gerekçesiyle; PR kod da içeriyordu: DECISIONS §59 Düzeltme) |
   | `yedek/master-2026-09-26-2` | `849b492` (PR #7 öncesi) | `mathverify-master-849b492-2026-09-26.bundle` (kullanıcının betiği: yerel `master` önce ileri sarıldı, `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
-  | yok | `5c2f83e` (bu dalın PR'ı öncesi) | kod değişikliği: birleştirmeden önce kullanıcıya sorulur |
+  | `yedek/master-2026-09-27` | `5c2f83e` (PR #8 öncesi) | `mathverify-master-5c2f83e-2026-09-27.bundle` (kullanıcının betiği "YEDEK TAMAM" yazdı: `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout'ta): (1)
   `git tag yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create
