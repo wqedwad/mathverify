@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 27 Eylül 2026 (öğle)**, dal `claude/dreamy-meitner-rvrwlj` (PR açık, birleşmedi; §3 adım 1).
+> **Son güncelleme: 27 Eylül 2026 (öğle)**, dal `claude/dreamy-meitner-rvrwlj` (`wqedwad/asd#9` açık, birleşmedi; §3 adım 1).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -52,7 +52,7 @@ yalnız süre satırlarında ve kalibrasyon tablosunun artık ada göre sıralı
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalın PR'ı birleştirilecek mi** (kullanıcı kararı). `--plan`: TAM; son `--full` (24/24,
+1. **`wqedwad/asd#9` birleştirilecek mi** (kullanıcı kararı). `--plan`: TAM; son `--full` (24/24,
    `14d4e9d`) geçerli ve öteki bütün koşullar tutuyor, yalnız kuralın kendi dosyası `tests/conftest.py`
    değişti (ısınma kancasını yükleyen bir satır). Birleştirmeden önce yedek (§6 yöntemi) ve `--plan`.
 2. **Windows'ta tam kontrol yarıda kaldı** (T8): ilk denemede testler sırasında ya da sonrasında Git Bash
@@ -223,7 +223,7 @@ Süre: `--full` bulutta **~25–26 dk** (4 süreçli adversaryal 772–811 s); t
 ## 6. Dallar, etiketler, yedekler
 
 - **Dallar** (`git ls-remote origin`, 27 Eylül öğle): `master` `c2e4fdf` (`wqedwad/asd#8`'in birleşmesi);
-  `claude/dreamy-meitner-rvrwlj` (bu dal, birleşmedi); `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
+  `claude/dreamy-meitner-rvrwlj` (`wqedwad/asd#9`, birleşmedi); `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
   `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
   `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b` (eski); araç ref'leri
