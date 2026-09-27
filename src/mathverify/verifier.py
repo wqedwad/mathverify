@@ -433,7 +433,7 @@ def verify(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 
 def fuse_layers(layers: list[LayerResult], extra_flags: list[str] | None = None, started: float | None = None,
                 versions_extra: dict[str, str] | None = None) -> VerificationResult:
     """Fuse any list of layers (deterministic ones plus, in F3+, LLM-derived soft layers)."""
-    fused = fuse(layers)
+    fused = fuse(layers, extra_flags=extra_flags)
     total_ms = (time.perf_counter() - started) * 1000 if started else 0.0
     all_flags = list(fused["flags"]) + [f for f in (extra_flags or []) if f not in fused["flags"]]
     trace = fused["trace"] + scope_note(all_flags, fused["verdict"]) + f"\nToplam süre: {total_ms:.0f} ms"

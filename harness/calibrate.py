@@ -81,8 +81,11 @@ def fit(recs, min_support: int = 5, alpha: float = 1.0) -> dict[str, Any]:
     for r in train:
         for s in set(r["signals"]):
             counts[s]["valid" if r["valid"] else "invalid"] += 1
+    # Sorted, so the model (calibration.json) does not depend on the string hash seed: iterating
+    # the sets gave the weights in another order under another PYTHONHASHSEED (26 Sep 2026, T4).
     weights: dict[str, dict[str, Any]] = {}
-    for s, c in counts.items():
+    for s in sorted(counts):
+        c = counts[s]
         support = c["valid"] + c["invalid"]
         p_valid = (c["valid"] + alpha) / (n_valid + 2 * alpha)
         p_invalid = (c["invalid"] + alpha) / (n_invalid + 2 * alpha)
@@ -95,13 +98,15 @@ def fit(recs, min_support: int = 5, alpha: float = 1.0) -> dict[str, Any]:
 
 
 def score(rec, model) -> float:
-    """Posterior log-odds that the solution is valid."""
-    z = model["prior"]
-    for s in set(rec["signals"]):
+    """Posterior log-odds that the solution is valid. An exact sum (math.fsum): the order of the
+    signals cannot move a score across a threshold. The running verifier scores the same way
+    (mathverify.fuse.calibrated_score)."""
+    terms = [model["prior"]]
+    for s in sorted(set(rec["signals"])):
         w = model["weights"].get(s)
         if w and w["used"]:
-            z += w["weight"]
-    return z
+            terms.append(w["weight"])
+    return math.fsum(terms)
 
 
 def decide(z: float, hi: float, lo: float) -> str:
@@ -174,7 +179,7 @@ def render_md(model, res, curve, hi, lo, target) -> str:
                f"{fmt(m['coverage'])} | {m['fp']} | {m['fn']} | {m['unknown']} |\n")
     md += "\n## Ölçülen sinyal güvenilirlikleri (eğitim bölmesi)\n\n"
     md += "| Sinyal | destek | geçerli | geçersiz | güvenilirlik | log-odds ağırlığı | kullanıldı |\n|---|---|---|---|---|---|---|\n"
-    for s, w in sorted(model["weights"].items(), key=lambda kv: -abs(kv[1]["weight"])):
+    for s, w in sorted(model["weights"].items(), key=lambda kv: (-abs(kv[1]["weight"]), kv[0])):
         rel = "n/a" if w["reliability"] is None else f"{w['reliability']:.3f}"
         md += (f"| `{s}` | {w['support']} | {w['valid']} | {w['invalid']} | {rel} | "
                f"{w['weight']:+.3f} | {'evet' if w['used'] else 'hayır (destek < eşik)'} |\n")
