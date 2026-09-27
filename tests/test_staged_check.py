@@ -373,6 +373,10 @@ def test_changes_git_hides_decide_nothing(repo, flag):
     p = check.plan(repo)
     assert p["level"] == "tam" and p["hidden"] == ["code.py"] and "göstermiyor" in p["why"]
     assert p["advice"] == check._ADVICE_HIDDEN
+    # decided before the files were listed: how many changed is unknown, not zero (26 Sep 2026)
+    write(repo, "notlar.md", "changed\n")
+    p = check.plan(repo)
+    assert p["files"] is None and "  değişen: okunmadı" in check.render_plan(p), check.render_plan(p)
 
 
 def test_an_untracked_gitignore_that_hides_code_decides_nothing(repo):
@@ -704,6 +708,7 @@ def test_no_base_unrelated_history_or_no_git_means_the_full_check(repo, tmp_path
     bare = tmp_path / "not-a-repo"
     bare.mkdir()
     assert check.plan(bare)["level"] == "tam" and check.plan_report(bare)[0] == 1
+    assert "  değişen: okunmadı" in check.plan_report(bare)[1]
 
 
 # --------------------------------------------------------------------------- fetching origin/master
@@ -896,6 +901,21 @@ def test_a_base_other_than_the_fetched_master_is_not_fresh(cloned):
     assert check.plan(cloned.work)["level"] == "tam"                      # origin/master: remote.py is ahead
 
 
+
+def test_a_stale_base_still_lists_what_changed(cloned):
+    """The stale-base verdict was a copy of the plan taken before the files were read: it rendered
+    "değişen: 0 dosya" for a branch that had changed two documents (26 Sep 2026)."""
+    write(cloned.work, "notlar.md", "changed\n")
+    p = check.plan(cloned.work, fetch=False)
+    assert "güncelliği bilinmiyor" in p["why"] and p["files"] == {"notlar.md": "belge"}, p
+    write(cloned.work, "code.py", "x = 2\n")
+    p = check.plan(cloned.work, fetch=False)
+    assert "güncelliği bilinmiyor" in p["why"] and p["files"] == {"notlar.md": "belge", "code.py": "kod"}, p
+    git(cloned.work, "remote", "set-url", "origin", str(cloned.origin.parent / "gone.git"))
+    rc, lines = check.plan_report(cloned.work)
+    assert rc == 1 and "  değişen: 2 dosya (kod 1, belge 1, rapor 0)" in lines, lines
+    assert any(line.startswith("  karar: TAM · tabanın güncelliği bilinmiyor (fetch: başarısız") for line in lines)
+
 def test_head_must_be_what_its_upstream_holds(cloned):
     """The pull request merges the pushed head: a decision about an unpushed HEAD says nothing
     about it (review)."""
@@ -926,7 +946,7 @@ def test_a_python_file_that_does_not_parse_makes_the_decision_tam(repo):
     p = check.plan(repo)
     assert p["level"] == "tam" and "tests/broken.py" in p["why"]
     assert p["files"] == {"notlar.md": "?", "tests/broken.py": "?"}
-    assert "değişen: 2 dosya" in "\n".join(check.render_plan(p))
+    assert "  değişen: 2 dosya (kod 0, belge 0, rapor 0, sınıflanmadı 2)" in check.render_plan(p)
 
 
 def test_the_plan_command_exit_code(repo, monkeypatch, capsys):

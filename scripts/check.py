@@ -1041,8 +1041,8 @@ def plan(root: Path, base: str | None = None, fetch: bool = True) -> dict:
     that differs from its commit is code, its log and reports are committed, the base received no
     code since the branch left it and is fresh, HEAD is what its branch on origin holds, and the
     rule's own files are unchanged) or "tam" (the --full is still needed, or the decision could not
-    be made)."""
-    out: dict = {"base": base, "files": {}, "named": {}, "full": None, "base_ahead": [], "hidden": []}
+    be made). "files" stays None when the decision came before git listed them."""
+    out: dict = {"base": base, "files": None, "named": {}, "full": None, "base_ahead": [], "hidden": []}
     try:
         return _plan(out, root, base, fetch)
     except UnreadableSource as e:
@@ -1163,8 +1163,12 @@ def _plan(out: dict, root: Path, base: str | None, fetch: bool) -> dict:
                base_tip=_git_value(root, "rev-parse", "--verify", "--quiet", f"{chosen[0]}^{{commit}}") or "?")
     origin_tip = _git_value(root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/master^{commit}")
     fresh = out["fetch"] == "uzak yok" or (out["fetch"] == "tamam" and out["base_tip"] == origin_tip)
-    stale = {**out, "level": "tam", "why": f"tabanın güncelliği bilinmiyor (fetch: {out['fetch']})",
-             "advice": _fresh_advice(out["fetch"])}
+
+    def stale() -> dict:
+        # built when it is returned: a copy taken here would render the files found below as none
+        return {**out, "level": "tam", "why": f"tabanın güncelliği bilinmiyor (fetch: {out['fetch']})",
+                "advice": _fresh_advice(out["fetch"])}
+
     files = changed_since(root, out["merge_base"])
     if files is None:
         return {**out, "level": "tam", "why": "git değişen dosyaları veremedi"}
@@ -1215,7 +1219,7 @@ def _plan(out: dict, root: Path, base: str | None, fetch: bool) -> dict:
                 return {**out, "level": "tam", "why": received["why"] + "; o kod değişen belgeleri okuyor olabilir",
                         "advice": received["advice"]}
             if not fresh:
-                return stale
+                return stale()
         if "rapor" in kinds:
             # a report is a --full's output: it rides on a run that produced it for this code
             full = out["full"] = last_full_run(root)
@@ -1237,7 +1241,7 @@ def _plan(out: dict, root: Path, base: str | None, fetch: bool) -> dict:
     if out["base_ahead"]:
         return {**out, "level": "tam", "why": received["why"] + "; --full birleşik hâlde", "advice": received["advice"]}
     if not fresh:
-        return stale
+        return stale()
     full = out["full"] = last_full_run(root)
     if not full["ok"]:
         return {**out, "level": "tam", "why": f"kod değişti; son --full bu kodu kapsamıyor: {full['why']}",
@@ -1306,10 +1310,15 @@ def render_plan(p: dict) -> list[str]:
         lines.append(f"  HEAD: {p['head'][:7]}")
     if p.get("merge_base"):
         lines.append(f"  taban: {p['base']} {p.get('base_tip', '?')[:7]} (ortak ata {p['merge_base'][:7]})")
-    files = p.get("files") or {}
-    counts = {c: sum(1 for v in files.values() if v == c) for c in ("kod", "belge", "rapor")}
-    lines.append(f"  değişen: {len(files)} dosya (kod {counts['kod']}, belge {counts['belge']}, "
-                 f"rapor {counts['rapor']})")
+    files = p.get("files")
+    if files is None:                              # decided before git listed them: not "0 dosya"
+        lines.append("  değişen: okunmadı")
+        files = {}
+    else:
+        counts = {c: sum(1 for v in files.values() if v == c) for c in ("kod", "belge", "rapor", "?")}
+        unsorted = f", sınıflanmadı {counts['?']}" if counts["?"] else ""     # not zero of each kind
+        lines.append(f"  değişen: {len(files)} dosya (kod {counts['kod']}, belge {counts['belge']}, "
+                     f"rapor {counts['rapor']}{unsorted})")
     order = ("kod", "belge", "rapor", "?")
     for f, c in sorted(files.items(), key=lambda kv: (order.index(kv[1]), kv[0])):
         why = f"  (okuyan: {p['named'][f]})" if f in p.get("named", {}) else ""
