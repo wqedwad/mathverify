@@ -54,8 +54,8 @@ yalnız süre satırlarında ve kalibrasyon tablosunun artık ada göre sıralı
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalı bitirmek:** Windows'ta `scripts/dev/windows_full.ps1` yeniden (24/24 beklenir, T8), bulutta
-   `--full`, sonra PR ve kişi kararı (kuralın dosyaları: `check.py`, `test_staged_check.py`).
+1. **Bu dalı bitirmek:** Windows'ta 24/24 geçti (T8); bulutta `--full`, sonra PR ve kişi kararı (kuralın
+   dosyaları: `check.py`, `test_staged_check.py`).
 2. **Yedek etiketleri (isteğe bağlı):** PR #3, PR #4 ve PR #9 öncesi `master` için etiket yok (§6).
 3. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
    yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
@@ -172,10 +172,9 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   "commit edilmemiş değişiklik" sayısından 1 düşülür (günlük kendini sayıyordu; `3925180`).
 - **T7.** `docs/BULUT.md` ~1070 satır ve tarihçe biriktiriyor (§12'de sonradan kapanmış üç madde
   hâlâ `[ ]`); buradaki gibi güncel durum + arşiv ayrımı gerekebilir. Testler onu okuyor: kod sayılır.
-- **T8. Windows** (DECISIONS §59, §61): 27 Eylül `windows_full.ps1` ile `--full` donmadan bitti, **30 dk,
-  23/24** (pytest 670 s, adversaryal 768 s; 32 GB makinede en az 2.5 GB boş, WSL en çok 11.6 GB). Düşen tek
-  test Windows'a özgü bir `check.run` hatasıydı (düzeltildi, Windows'ta yeniden koşulmadı). İlk denemedeki
-  Git Bash donmasının nedeni **[DOĞRULANMADI]**. Ölçülmeyen: ebeveyn izleyicisi, `CopyFile2`/junction yolu,
+- **T8. Windows** (DECISIONS §59, §61): 27 Eylül `windows_full.ps1` ile önce 23/24 (Windows'a özgü `check.run`
+  hatası, düzeltildi), sonra `eab80f1`'de **24/24, 31 dk** (pytest 696 s, adversaryal 763 s; 32 GB makinede en
+  az 4.3 GB boş, WSL en çok 11.7 GB). İlk denemedeki Git Bash donmasının nedeni **[DOĞRULANMADI]**. Ölçülmeyen: ebeveyn izleyicisi, `CopyFile2`/junction yolu,
   `--plan`'ın buluttaki `--full`u Windows checkout'unda kabul etmesi. **T9. Kuralın
   sınırları:** bekçi alt süreçleri ve `os.open(dir_fd=…)`'yu görmez (test dışı kodun `.md` sabitleri ve
   kabuk betikleri testlerle sabitlendi); koşu sırasında yapılıp bitmeden geri alınan değişiklik
