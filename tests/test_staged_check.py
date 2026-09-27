@@ -1088,6 +1088,7 @@ def test_shell_scripts_read_no_document_the_rule_misses():
 CODE_DOC_CONSTANTS = {
     ("harness/adversarial.py", "adversarial_report.md"), ("harness/calibrate.py", "calibration_report.md"),
     ("harness/run_eval.py", "eval_report.md"), ("harness/run_f3.py", "_report.md"),
+    ("harness/run_solver.py", "_report.md"),
     ("harness/run_lean.py", "lean_report.md"), ("harness/soundness_fuzz.py", "soundness_report.md"),
     ("scripts/check.py", ".md"), ("scripts/check.py", "docs/"),
 }
