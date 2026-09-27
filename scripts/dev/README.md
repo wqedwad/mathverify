@@ -13,6 +13,7 @@ Hepsi proje kökünden, `PYTHONUTF8=1` ile çalıştırılır: Windows'ta
 | `lean_try.py` | Aday taktikleri canlı REPL'de somut hedeflere karşı dener (yeni Lean şablonu geliştirirken) | Lean (Windows'ta WSL içinde, Linux'ta yerel) |
 | `smoke_extract.py` | Birkaç öğede soru metninden IR çıkarımı ve elle IR ile karar karşılaştırması | **API kredisi** |
 | `smoke_llm.py` | İki model ailesine birer yapısal çağrı | **API kredisi** |
+| `windows_full.ps1` | Windows'ta `check.py --full`'u PowerShell'den koşturur; çıktıyı pencere yerine dosyaya yazar, 10 s'de bir belleği (boş RAM, WSL/Lean, Python süreçleri) `%TEMP%\mathverify-full\mem.csv`'ye kaydeder, sonunda süre ve bellek özeti (HANDOFF T8) | Windows, Lean (WSL) |
 | `clean_imports.py` | pyflakes'in bildirdiği kullanılmayan import adlarını **dosyalarda siler** (bilinçli olanlar `KEEP` içinde) | pyflakes |
 
 `lean_try.py` içindeki bazı adaylar (`Matrix.dotProduct`) bugün elaborate olmaz; F5 geliştirme
