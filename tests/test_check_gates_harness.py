@@ -1339,3 +1339,15 @@ def test_a_step_that_hangs_fails_instead_of_holding_the_run(capsys):
                         "asili", timeout=3)
     assert rc == 124 and "started" in out and "3 s içinde bitmedi" in out
     assert "asili: " in capsys.readouterr().out and check.STEP_TIMEOUT >= 3764
+
+
+@pytest.mark.parametrize("stdout,stderr", [(b"started\n", None), ("started\n", None), ("started\n", "warn\n")])
+def test_a_hung_step_keeps_its_output_whether_bytes_or_text(monkeypatch, stdout, stderr):
+    """POSIX gives the timed-out child's output as bytes, Windows as text (CPython collects it with
+    communicate() after the kill). The text case raised TypeError and crashed --full on Windows."""
+    def hang(cmd, **kw):
+        raise check.subprocess.TimeoutExpired(cmd, kw["timeout"], output=stdout, stderr=stderr)
+    monkeypatch.setattr(check.subprocess, "run", hang)
+    rc, out = check.run(["x"], "asili", timeout=3)
+    assert rc == 124 and out.startswith("started\n") and out.endswith("asili: 3 s içinde bitmedi, durduruldu")
+    assert ("warn" in out) == bool(stderr)

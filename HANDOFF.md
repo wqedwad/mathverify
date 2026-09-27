@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 27 Eylül 2026 (öğle)**, dal `claude/dreamy-meitner-rvrwlj` (`wqedwad/asd#9`, `master`a birleşti).
+> **Son güncelleme: 27 Eylül 2026 (öğleden sonra)**, dal `claude/dreamy-meitner-rvrwlj` (`#9` birleşti; sonrası birleşmedi, §2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -39,7 +39,9 @@ aynı). Dört inceleme turu, depodaki koşucuyla 162/162 mutasyon (DECISIONS §5
 `#9` (DECISIONS §60): düz `pytest` Lean testinden önce Lean'i
 ısıtır (B6), kalibrasyon raporu tohumdan bağımsız (T4), çalışma anındaki kalibre skor uyumun skoru
 (yan bulgu: `tyt-geo-009` eşiği yanlış tarafta geçiyordu), kurulum betiğinin aşama günlükleri
-ekleyerek yazılır (B3); 21/21 mutasyon. Kodda yarım iş yok.
+ekleyerek yazılır (B3); 21/21 mutasyon. **Bu dalda, birleşmemiş** (DECISIONS §61): K4 düzeneği
+`harness/run_solver.py` (henüz ücretli koşu yok), `scripts/dev/windows_full.ps1`, `check.run`'ın Windows'ta
+takılan adımda çökmesinin düzeltmesi. Bu hâlde `--full` yok; kuralın iki dosyası değişti (kişi kararı).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
@@ -52,19 +54,18 @@ yalnız süre satırlarında ve kalibrasyon tablosunun artık ada göre sıralı
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Windows'ta tam kontrol yarıda kaldı** (T8): ilk denemede testler sırasında ya da sonrasında Git Bash
-   yanıt vermez oldu, kullanıcı durdurdu. Tam kontrol bulutta koşar; Windows'ta yeniden denenecekse
-   Görev Yöneticisi'nde bellek izlenir ve donduğu adım günlükten okunur (günlük geri alınmadan önce).
+1. **Bu dalı bitirmek:** Windows'ta `scripts/dev/windows_full.ps1` yeniden (24/24 beklenir, T8), bulutta
+   `--full`, sonra PR ve kişi kararı (kuralın dosyaları: `check.py`, `test_staged_check.py`).
 2. **Yedek etiketleri (isteğe bağlı):** PR #3, PR #4 ve PR #9 öncesi `master` için etiket yok (§6).
-3. **Bulut kurulum kararı** (B1–B2: görüntü 13:35 sohbetinde kullanıldı, 11:00'dekinde kullanılmadı).
-   Seçenekler: (a) bir iki yeni sohbette daha ölçmek (hangi koşulda `new` açılıyor?); (b) betiği ~5 dk
-   yönergesine kadar uzatmak (`timeout` 250 → ~280 s) ya da REPL derlemesini kancaya bırakmak; (c) Setup
-   script'i boşaltıp kurulumu yalnız kancaya bırakmak. Karar kullanıcının; ölçmeden kod yok.
+3. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
+   yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
+   sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanını o değiştirir).
 4. **Soğuk açılışta `--full`:** gerçek bir yeniden başlatmadan sonraki ilk `--full`'da `lean_warmup`
    satırı okunur (B6): exit 0 beklenir, süre 300 s'yi aşabilir (düz pytest'in ısınması 345 s ölçüldü).
 5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
    23 Eylül). Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-6. **Gerçek veri** (K4) ve **açık kapsama işleri** (§4.2). Hepsi kullanıcı kararı ister (§4.4).
+6. **Gerçek veri (K4):** Muse Spark ile `run_solver --family meta --limit 10 --max-cost 1`, sonra tam koşu.
+   Bulutta `api.meta.ai` 403 (ağ Custom gerekir); yerelde açık. **Açık kapsama işleri** (§4.2) kullanıcı kararı.
 
 ## 4. Açık maddeler (tam liste)
 
@@ -139,7 +140,7 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   `.env` güncellenip commit edilir; `--max-cost` olmadan koşulmaz; `llm_cache/` istek hash'iyle
   anahtarlı, değişen istem yeniden ücretlenir; bulutta ağ Custom + `api.meta.ai`
   (`api.anthropic.com` açık); ~0,066 $/öğe (yarım koşu).
-- **K4. Gerçek AI çözücü çıktıları:** `--solver-family anthropic|meta` zorunlu. Etiketler kaba
+- **K4. Gerçek AI çözücü çıktıları:** düzenek `harness/run_solver.py` (DECISIONS §61); `run_f3`'te `--solver-family` zorunlu. Etiketler kaba
   kuvvetle ya da ikinci kişiyle denetlenmeli (denetim derlemlerinde 4 etiket yanlış çıktı).
 
 ### 4.4 Kullanıcı kararları (açık sorular)
@@ -171,10 +172,11 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   "commit edilmemiş değişiklik" sayısından 1 düşülür (günlük kendini sayıyordu; `3925180`).
 - **T7.** `docs/BULUT.md` ~1070 satır ve tarihçe biriktiriyor (§12'de sonradan kapanmış üç madde
   hâlâ `[ ]`); buradaki gibi güncel durum + arşiv ayrımı gerekebilir. Testler onu okuyor: kod sayılır.
-- **T8. Windows'ta ölçülenler ve ölçülmeyenler** (DECISIONS §59): `.venv` kilitle eşit (32 paket; bulutta
-  31, `colorama` yalnız Windows'ta), Lean ısınması 40 s. `--full` bitmedi (neden **[DOĞRULANMADI]**,
-  bellek olabilir); 4 süreçli tarama (`spawn`), ebeveyn izleyicisi, bekçinin `CopyFile2`/junction yolu,
-  `--plan`'ın buluttaki bir `--full`u Windows checkout'unda kabul etmesi ve süre ölçülmedi. **T9. Kuralın
+- **T8. Windows** (DECISIONS §59, §61): 27 Eylül `windows_full.ps1` ile `--full` donmadan bitti, **30 dk,
+  23/24** (pytest 670 s, adversaryal 768 s; 32 GB makinede en az 2.5 GB boş, WSL en çok 11.6 GB). Düşen tek
+  test Windows'a özgü bir `check.run` hatasıydı (düzeltildi, Windows'ta yeniden koşulmadı). İlk denemedeki
+  Git Bash donmasının nedeni **[DOĞRULANMADI]**. Ölçülmeyen: ebeveyn izleyicisi, `CopyFile2`/junction yolu,
+  `--plan`'ın buluttaki `--full`u Windows checkout'unda kabul etmesi. **T9. Kuralın
   sınırları:** bekçi alt süreçleri ve `os.open(dir_fd=…)`'yu görmez (test dışı kodun `.md` sabitleri ve
   kabuk betikleri testlerle sabitlendi); koşu sırasında yapılıp bitmeden geri alınan değişiklik
   günlükten anlaşılmaz; günlük düz metin (raporlar özetle bağlı, sahteciliğe karşı koruma yok).

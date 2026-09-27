@@ -78,9 +78,13 @@ def run(cmd: list[str], label: str, timeout: float = STEP_TIMEOUT) -> tuple[int,
         p = subprocess.run(cmd, cwd=ROOT, env=ENV, capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=timeout)
         rc, out = p.returncode, p.stdout + p.stderr
-    except subprocess.TimeoutExpired as e:      # the child is killed; its output comes as bytes
+    except subprocess.TimeoutExpired as e:
+        # The child is killed. POSIX hands over the output so far as bytes; Windows collects it with
+        # communicate() after the kill, decoded like the call, so it is text there. b"".join of that
+        # text raised TypeError: a hung step crashed --full on Windows (measured 27 Sep 2026).
         rc = 124
-        out = b"".join(x for x in (e.stdout, e.stderr) if x).decode("utf-8", "replace")
+        out = "".join(x.decode("utf-8", "replace") if isinstance(x, bytes) else x
+                      for x in (e.stdout, e.stderr) if x)
         out += f"\n{label}: {timeout:.0f} s içinde bitmedi, durduruldu"
     print(f"  {label}: {time.perf_counter() - t0:.0f} s (exit {rc})")
     return rc, out

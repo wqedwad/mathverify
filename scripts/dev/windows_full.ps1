@@ -47,7 +47,9 @@ $head = @(
     "RAM: $totalMB MB, islemci: $($env:NUMBER_OF_PROCESSORS), C: bos $cFreeGB GB",
     "WSL bellek ayari: $wslMem"
 )
-$head | Tee-Object -FilePath $summary | Write-Host
+# Out-File -Encoding utf8, not Tee-Object: in PowerShell 5.1 Tee-Object writes UTF-16 (measured 27 Sep).
+$head | Out-File -FilePath $summary -Encoding utf8
+$head | ForEach-Object { Write-Host $_ }
 
 # Memory sampler: a separate job, so a stuck check.py does not stop the record.
 $sampler = Start-Job -ArgumentList $mem -ScriptBlock {
@@ -104,7 +106,8 @@ $result = @(
 if (Test-Path $log) {
     $result += Get-Content $log -Encoding UTF8 | Where-Object { $_ -match '^\s+\w+: \d+ s \(exit' -or $_ -match 'kapi gecti|kap. ge.ti' }
 }
-$result | Tee-Object -FilePath $summary -Append | Write-Host
+$result | Out-File -FilePath $summary -Append -Encoding utf8
+$result | ForEach-Object { Write-Host $_ }
 Write-Host ''
 Write-Host "Kayitlar: $out  (summary.txt, mem.csv, console.txt, check_full.log)"
 Write-Host 'Raporlari geri almak icin: git restore reports/'
