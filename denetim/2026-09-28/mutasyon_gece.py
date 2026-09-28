@@ -6,7 +6,11 @@ day's evening (mutasyon.py, next to this file) is the record of its own measurem
 not edited: its V05 names a line this audit rewrote (W06 is its successor). Measured equivalent
 and left out: an undecided emptiness of the premise set counted as empty (W07). On the set route
 the set has one variable and no parameter, and SymPy decided it in each of the ten regions tried
-(tan, sin, cos, exp, log and sums of them on intervals).
+(tan, sin, cos, exp, log and sums of them on intervals). Also left out: an assignment of several
+variables checked for one of them (X04). It survived and it is sound: SymPy calls the set empty
+only when no value of the other variables allowed by their assumptions meets the domain, so the
+mutant refutes only genuine contradictions; restricting the check to one variable is a choice of
+scope, not a guard.
 
     .venv/bin/python denetim/2026-09-28/mutasyon_gece.py [-j N] [--list] [name ...]
 
@@ -51,9 +55,6 @@ MUTATIONS = [
     ("X03 seçeneğin bir parçası alan dışıysa yeter", DET,
      "        if not (e.ok and e.value is True):\n            return False\n    return True\n",
      "        if e.ok and e.value is True:\n            return True\n    return False\n", TK),
-    ("X04 çok değişkenli atama da denetlenir", DET,
-     "    if len(claim.free_symbols) != 1:\n        return False\n    (v,) = claim.free_symbols\n",
-     "    v = sorted(claim.free_symbols, key=str)[0]\n", TK),
 ]
 
 if __name__ == "__main__":

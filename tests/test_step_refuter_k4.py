@@ -232,7 +232,9 @@ def test_an_assignment_no_value_of_the_domain_satisfies_is_refuted(ir, answer, k
 @pytest.mark.parametrize("ir,answer,kind,steps", [
     (_FORCED, "2", "value", [("eq", "n = 1"), ("compute", "1 + 1 = 2")]),
     (_SIMP, "x + 3", "expression", [("eq", "x = 2"), _SIMP_STEP]),           # refuted before #11 as well
-    (_ir("ayt-diz-002"), "62", "value", [("eq", "n in {0, 20}"), ("compute", "5 + (20 - 1)*3 = 62")]),
+    # a choice: one option outside the domain, one inside. (On a positive-integer n SymPy drops the
+    # option n = 0 while parsing, so "n in {0, 20}" is just n = 20 and would test nothing.)
+    (_SIMP, "x + 3", "expression", [("eq", "x in {2, 3}"), _SIMP_STEP]),
 ])
 def test_an_assignment_some_value_of_the_domain_satisfies_stays_a_definition(ir, answer, kind, steps):
     r = verify(ir, _sol(answer, kind, steps))
