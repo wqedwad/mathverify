@@ -92,8 +92,81 @@ def test_the_window_reads_the_interval_or_nothing(interval, expected):
     assert len(_task_window(ir, make_ctx(ir))) == expected
 
 
+# ------------------------------------------------------------------ (A') a window the premises miss
+def _extremum(f, interval, which="max"):
+    return {"task": {"kind": "extremum", "params": {"f": f, "var": "x", "interval": interval, "which": which}},
+            "vars": [{"name": "x"}], "givens": [], "answer_shape": "scalar"}
+
+
+def _trig(equation, interval):
+    return {"task": {"kind": "trig_solve", "params": {"equation": equation, "var": "x", "interval": interval}},
+            "vars": [{"name": "x"}], "givens": [], "answer_shape": "set"}
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps,bad", [
+    # critical points +-1 lie outside [2, 4]: "x = 3" held vacuously and the right maximum 52 was CORRECT
+    (_extremum("x**3 - 3*x", "[2, 4]"), "52", "value",
+     [("compute", "diff(x**3 - 3*x, x) = 3*x**2 - 3"), ("eq", "3*x**2 - 3 = 0"), ("eq", "x = 3"),
+      ("compute", "at(x**3 - 3*x, x, 4) = 52")], "s3"),
+    (_extremum("x**2 - 6*x", "[0, 2]", "min"), "-8", "value",
+     [("compute", "diff(x**2 - 6*x, x) = 2*x - 6"), ("eq", "2*x - 6 = 0"), ("eq", "x = 1"),
+      ("compute", "at(x**2 - 6*x, x, 2) = -8")], "s3"),
+    # cos x = -1 has no root in [0, pi): the answer {} is right, "x = 0" is not
+    (_trig("cos(x) = -1", "[0, pi)"), "{}", "set", [("eq", "cos(x) = -1"), ("eq", "x = 0")], "s2"),
+])
+def test_a_wrong_step_is_refuted_when_the_premises_have_no_instance_in_the_window(ir, answer, kind, steps, bad):
+    """Probe of 28 Sep 2026: all three were INCORRECT before the window existed and CORRECT with it."""
+    r = verify(ir, _sol(answer, kind, steps))
+    assert r.verdict == "INCORRECT" and _steps(r)[bad][0] == "refuted", (r.verdict, _steps(r))
+    layer = next(l for l in r.layers if l.layer == "steps.refute")
+    ev = next(e for e in layer.evidence["steps"] if e["id"] == bad)["evidence"]
+    assert ev["window_dropped"] == "no_premise_instance_inside_the_task_interval"
+
+
+def test_the_right_roots_outside_the_window_are_still_a_consequence():
+    steps = [("compute", "diff(x**3 - 3*x, x) = 3*x**2 - 3"), ("eq", "3*x**2 - 3 = 0"), ("eq", "x in {-1, 1}"),
+             ("compute", "at(x**3 - 3*x, x, 4) = 52")]
+    r = verify(_extremum("x**3 - 3*x", "[2, 4]"), _sol("52", "value", steps))
+    assert r.verdict == "CORRECT" and _steps(r)["s3"][0] == "verified", _steps(r)
+
+
+def _ctx2():
+    from mathverify.certify.base import make_ctx
+    from mathverify.intake.structured import load_problem_ir
+    ir = load_problem_ir({"task": {"kind": "extremum", "params": {"f": "x**2 - a*x", "var": "x", "interval": "[3, 5]",
+                                                                  "which": "min"}},
+                          "vars": [{"name": "x"}, {"name": "a"}], "givens": [], "answer_shape": "scalar"})
+    ctx = make_ctx(ir)
+    return ctx, ctx.ns["x"], ctx.ns["a"]
+
+
+def test_a_solved_system_outside_the_window_drops_the_window():
+    """Two unknowns: the solved premises give x = 1 only, outside [3, 5]."""
+    from mathverify.steps.deterministic import _check_eq
+    ctx, x, a = _ctx2()
+    prem, window = [sp.Eq(a, 2), sp.Eq(2 * x - a, 0)], [sp.Le(3, x), sp.Le(x, 5)]
+    status, ev = _check_eq(sp.Eq(x + a, 4), prem, ctx, [], window)
+    assert status == "refuted" and ev["window_dropped"], ev
+    assert _check_eq(sp.Eq(x + a, 3), prem, ctx, [], window)[0] == "verified"
+
+
+def test_sampling_draws_the_windows_variable_from_the_window():
+    """No equations: sampled. A window far from the samples' usual range is still met, so a claim
+    true on it is not refuted outside it; a window the premises cannot meet is dropped."""
+    from mathverify.steps.deterministic import _check_eq
+    ctx, x, a = _ctx2()
+    prem = [sp.Gt(a, 0), sp.Gt(x, a)]
+    far = [sp.Le(1000, x), sp.Le(x, 1001)]
+    status, ev = _check_eq(sp.Gt(x, 500), prem, ctx, [], far)
+    assert status == "unknown" and "window_dropped" not in ev, ev
+    assert _check_eq(sp.Lt(x, a), prem, ctx, [], far)[0] == "refuted"
+    missed = [sp.Le(-5, x), sp.Le(x, -4)]
+    status, ev = _check_eq(sp.Lt(x, a), prem, ctx, [], missed)
+    assert status == "refuted" and ev["window_dropped"], ev
+
+
 # ------------------------------------------------------------------ (B) assignments
-DIZ = [("eq", "n = 20"), ("eq", "k = 5 + (n - 1)*3"), ("eq", "k = 5 + (20 - 1)*3"), ("compute", "5 + (20 - 1)*3 = 62")]
+DIZ =[("eq", "n = 20"), ("eq", "k = 5 + (n - 1)*3"), ("eq", "k = 5 + (20 - 1)*3"), ("compute", "5 + (20 - 1)*3 = 62")]
 
 
 def test_an_assignment_bound_only_by_domains_is_a_definition():

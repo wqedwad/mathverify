@@ -7,7 +7,7 @@ For every step of kind `eq` or `compute` with a parseable claim:
   * `eq`: claim is a relation that should follow from the premises. Premises are the
     IR givens plus ALL earlier parseable step claims (not only the cited ones, so that
     under-citation is never penalised), the variables' domain constraints and the task's own
-    interval. We look for a point that satisfies every premise,
+    interval (when the premises have an instance inside it). We look for a point that satisfies every premise,
     lies in the problem domain, and violates the claim. Found => REFUTED with that point.
     A claim that restates one of the problem's own objects (the curve of a tangent line) is
     neither checked nor a premise (`_task_objects`).
@@ -331,39 +331,40 @@ def _outside(region, sets, conjunction: bool):
     return sp.Complement(region, inside)
 
 
-def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None, bool]:
+def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None, bool, bool]:
     """(a point of the premises' solution set, within the domain, where the claim is false; whether
-    the claim is PROVED on that set). Proved means the premises' set is exactly computed, not empty,
-    and the part of it where the claim fails is exactly empty. An And/Or claim was never tried here:
-    "x in {pi/6, 5*pi/6}" under cos 2x = 1/2 on [0, 2*pi) was not refuted, and `solve`'s two
-    principal roots made it "verified" (ayt-trig-010, 28 Sep 2026)."""
+    the claim is PROVED on that set; whether that set is PROVED empty). Proved means the premises'
+    set is exactly computed, not empty, and the part of it where the claim fails is exactly empty.
+    An And/Or claim was never tried here: "x in {pi/6, 5*pi/6}" under cos 2x = 1/2 on [0, 2*pi) was
+    not refuted, and `solve`'s two principal roots made it "verified" (ayt-trig-010, 28 Sep 2026)."""
     from ..certify.calculus import _points_of
     if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
-        return None, False
+        return None, False, False
     region = ctx.domain_for(v) if v.name in ctx.ns else S.Reals
     for p in premises:
         r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
         if not r.ok or r.value.has(sp.ConditionSet):
-            return None, False
+            return None, False, False
         region = sp.Intersection(region, r.value)
     fail = _fail_set(claim, v, region, ctx)
     if fail is None:
-        return None, False
+        return None, False, False
     if fail is S.EmptySet:
-        nonempty = sb_run("mathverify.steps.deterministic:_nonempty", region, timeout=ctx.timeout)
-        return None, bool(nonempty.ok and nonempty.value is True)
+        e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
+        return None, bool(e.ok and e.value is False), bool(e.ok and e.value is True)
     for pt in _points_of(fail):
         point = {v: pt}
         if not _in_domains(ctx, point):
             continue
         if all(_decide(p, point, ctx) is True for p in premises) and _decide(claim, point, ctx) is False:
-            return point, False
-    return None, False
+            return point, False, False
+    return None, False, False
 
 
-def _nonempty(s) -> bool:
-    """True only when SymPy decides the set is not empty; a vacuous proof is no proof."""
-    return s.is_empty is False
+def _emptiness(s) -> bool | None:
+    """SymPy's decision on whether the set is empty; None when undecided. Only False proves a claim
+    on the set: a vacuous proof is no proof."""
+    return s.is_empty
 
 
 def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
@@ -427,7 +428,20 @@ def _is_assignment(claim) -> bool:
 def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: list = ()) -> tuple[str, dict]:
     """`premises`: the givens, earlier claims and case assumptions. `restrictions`: the variables'
     domain constraints (`var_constraints`). `window`: the task's own interval for its variable
-    (`_task_window`). All three bound the counterexample search; they differ in what they BIND."""
+    (`_task_window`). All three bound the counterexample search; they differ in what they BIND.
+
+    The window only counts when the premises have an instance inside it. When they have none, every
+    claim held vacuously: "x = 3" from 3x² − 3 = 0 (roots ±1) on the interval [2, 4] was no longer
+    refuted, and a solution with that wrong step and the right maximum became CORRECT (probe of
+    28 Sep 2026; refuted before the window existed). The step is then checked without the window."""
+    status, ev = _check_eq_in(claim, premises, ctx, restrictions, window)
+    if ev.pop("_window_without_instance", False):
+        status, ev = _check_eq_in(claim, premises, ctx, restrictions, ())
+        ev["window_dropped"] = "no_premise_instance_inside_the_task_interval"
+    return status, ev
+
+
+def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:
     syms = set(claim.free_symbols)
     prem_syms: set = set()
     for p in premises:
@@ -446,7 +460,8 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     # it can only shrink the set a counterexample is drawn from. It joins only when its variable
     # is already in play.
     window = [w for w in window if w.free_symbols <= syms]
-    premises = list(premises) + list(restrictions) + window
+    base = list(premises) + list(restrictions)
+    premises = base + window
     ev: dict[str, Any] = {"n_premises": len(premises)}
     # A claim that introduces symbols the premises do not constrain is *definitional*
     # ("the tangent line is y = 2x - 1", "let x = 4") and cannot be refuted as a
@@ -468,7 +483,7 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     # "-2 < x" under x^2 - 5x - 14 <= 0 all went unrefuted (audit of 25 Sep 2026). A witness is
     # still checked pointwise against every premise, so a wrong solveset cannot refute a step.
     if len(syms) == 1:
-        w, proved = _set_counterexample(claim, premises, syms[0], ctx)
+        w, proved, empty = _set_counterexample(claim, premises, syms[0], ctx)
         if w is not None:
             ev["counterexample"] = {str(k): str(v) for k, v in w.items()}
             ev["route"] = "premise_set"
@@ -476,8 +491,11 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
         if proved:
             ev["route"] = "premise_set"
             return "verified", ev
+        if empty and window:
+            return "unknown", {**ev, "_window_without_instance": True}
     eqs = [p for p in premises if isinstance(p, Eq)]
-    others = [p for p in premises if not isinstance(p, Eq)]
+    others = [p for p in base if not isinstance(p, Eq)]
+    bounds = [p for p in window if not isinstance(p, Eq)]
     points: list[dict] = []
     # Only a finite solution set of polynomial equations is known to be complete; anything sampled
     # (a parametric solution, rejection sampling, `solve`'s principal roots of a transcendental
@@ -514,18 +532,28 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     # route 2: rejection sampling over the domain when nothing solvable
     if not points:
         doms = {q: ctx.domain_for(q) for q in syms}
-        for pt in sample_points(doms, 60, ctx.seed) + _small_integer_grid(doms):
+        # the window's variable is drawn from inside the window: drawn from its whole domain, the
+        # samples could all miss a narrow window that the premises do meet
+        wdoms = _window_domains(doms, window, ctx)
+        for pt in sample_points(wdoms, 60, ctx.seed) + _small_integer_grid(wdoms):
             if all(_holds(p, pt) is True for p in premises):
                 points.append(pt)
         ev["rejection_sampled"] = len(points)
+        if window and not points and any(all(_holds(p, pt) is True for p in base)
+                                         for pt in sample_points(doms, 60, ctx.seed) + _small_integer_grid(doms)):
+            return "unknown", {**ev, "_window_without_instance": True}
         if len(points) < 3 and premises:
             return "unknown", {"reason": "no_premise_satisfying_points", **ev}
-    checked = 0
+    checked = inside = outside = 0
     for pt in points:
         if not _in_domains(ctx, pt):
             continue
         if any(_holds(p, pt) is False for p in others):
             continue
+        if any(_holds(p, pt) is False for p in bounds):
+            outside += 1
+            continue
+        inside += 1
         h = _holds(claim, pt)
         if h is False:
             # confirm robustly: every premise must hold definitively at this point
@@ -534,12 +562,29 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
                 return "refuted", ev
         if h is True:
             checked += 1
+    if outside and not inside:
+        return "unknown", {**ev, "_window_without_instance": True}
     ev["points_checked"] = checked
     if checked and checked == len([p for p in points if _in_domains(ctx, p)]):
         if exhaustive:
             return "verified", ev
         ev["reason"] = "no_counterexample_at_sampled_points"
     return "unknown", ev
+
+
+def _window_domains(doms: dict, window: list, ctx: Ctx) -> dict:
+    """`doms` with the window's variable restricted to the window; `doms` itself when the window
+    cannot be read as a set."""
+    out = dict(doms)
+    for w in window:
+        if len(w.free_symbols) != 1 or next(iter(w.free_symbols)) not in out:
+            return dict(doms)
+        (v,) = w.free_symbols
+        r = sb_run("mathverify.sandbox.ops:solveset_in", w, v, S.Reals, timeout=ctx.timeout)
+        if not r.ok or r.value.has(sp.ConditionSet):
+            return dict(doms)
+        out[v] = sp.Intersection(out[v], r.value)
+    return out
 
 
 def _is_polynomial(rel, syms) -> bool:
