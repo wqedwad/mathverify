@@ -1,0 +1,277 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "solver_meta",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "You are a careful mathematics solver. Solve the given Turkish question and report the solution in the verifier's structured format so that every quantitative claim can be machine-checked.\n\nRules for steps (this is what makes your work verifiable):\n- Each step is ONE relation in canonical SymPy-like syntax (explicit '*', '**' for powers, sqrt, log natural, Abs, pi, oo, degrees as 30°).\n- kind eq: a relation about the unknowns derived from the givens or earlier steps; `from` lists the step ids it uses ([] when it follows from the problem statement alone).\n- kind compute: an explicit calculation \"operation = result\": 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit((x**2 - 4)/(x - 2), x, 2) = 4, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20, gcd(84, 120) = 12.\n- kind case: a case assumption; branch steps cite it in `from`. kind assert: domain conditions. kind note: prose. kind conclude: the final statement / option.\n- Use the symbol names you are told to use for the unknowns; declare nothing else — if you need an auxiliary symbol, keep that step as a note.\n- Check domain conditions (log arguments, even roots, denominators, one-sided limits) explicitly.\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite; payload canonical; option = the chosen letter for multiple choice (\"\" if open-ended). Reply in JSON."
+   },
+   {
+    "role": "user",
+    "content": "## Question (Turkish)\nf(x) = x³ − 3x fonksiyonunun [−2, 3] aralığındaki en büyük değeri kaçtır?\nA) 2  B) 16  C) 18  D) 20  E) 24\n\n## Notation\nunknown symbols to use: x\nanswer shape expected: scalar\n\n## Structured solution (JSON)"
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "xhigh",
+  "max_completion_tokens": 16000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"claimed_answer\": {\"kind\": \"value\", \"option\": \"C\", \"payload\": \"18\"}, \"final_answer_text\": \"En büyük değer 18'dir, seçenek C.\", \"steps\": [{\"claim\": \"x >= -2\", \"from\": [], \"id\": \"a1\", \"kind\": \"assert\", \"text\": \"Tanım aralığının sol ucu x>=-2.\"}, {\"claim\": \"x <= 3\", \"from\": [], \"id\": \"a2\", \"kind\": \"assert\", \"text\": \"Tanım aralığının sağ ucu x<=3.\"}, {\"claim\": \"\", \"from\": [\"a1\", \"a2\"], \"id\": \"n1\", \"kind\": \"note\", \"text\": \"Polinom sürekli olduğundan kapalı aralıkta max kritik nokta veya uçlarda alınır.\"}, {\"claim\": \"diff(x**3 - 3*x, x) = 3*x**2 - 3\", \"from\": [], \"id\": \"s1\", \"kind\": \"compute\", \"text\": \"Türev hesaplanır.\"}, {\"claim\": \"3*x**2 - 3 = 0\", \"from\": [\"s1\"], \"id\": \"s2\", \"kind\": \"eq\", \"text\": \"Kritik nokta koşulu türevin sıfırlanmasıdır.\"}, {\"claim\": \"x**2 - 1 = 0\", \"from\": [\"s2\"], \"id\": \"s3\", \"kind\": \"eq\", \"text\": \"Denklem 3'e bölünerek sadeleştirilir.\"}, {\"claim\": \"(x - 1)*(x + 1) = 0\", \"from\": [\"s3\"], \"id\": \"s4\", \"kind\": \"eq\", \"text\": \"Çarpanlara ayrılır.\"}, {\"claim\": \"x = -1\", \"from\": [\"s4\"], \"id\": \"c1\", \"kind\": \"case\", \"text\": \"Birinci kritik nokta.\"}, {\"claim\": \"x = 1\", \"from\": [\"s4\"], \"id\": \"c2\", \"kind\": \"case\", \"text\": \"İkinci kritik nokta.\"}, {\"claim\": \"at(x**3 - 3*x, x, -2) = -2\", \"from\": [], \"id\": \"v1\", \"kind\": \"compute\", \"text\": \"Sol uç değer hesaplanır.\"}, {\"claim\": \"at(x**3 - 3*x, x, -1) = 2\", \"from\": [\"c1\"], \"id\": \"v2\", \"kind\": \"compute\", \"text\": \"x=-1 kritik noktasında değer hesaplanır.\"}, {\"claim\": \"at(x**3 - 3*x, x, 1) = -2\", \"from\": [\"c2\"], \"id\": \"v3\", \"kind\": \"compute\", \"text\": \"x=1 kritik noktasında değer hesaplanır.\"}, {\"claim\": \"at(x**3 - 3*x, x, 3) = 18\", \"from\": [], \"id\": \"v4\", \"kind\": \"compute\", \"text\": \"Sağ uç değer hesaplanır.\"}, {\"claim\": \"Max(-2, 2, -2, 18) = 18\", \"from\": [\"v1\", \"v2\", \"v3\", \"v4\"], \"id\": \"m1\", \"kind\": \"compute\", \"text\": \"Aday değerlerin en büyüğü seçilir.\"}, {\"claim\": \"18 = 18\", \"from\": [\"m1\"], \"id\": \"fin\", \"kind\": \"conclude\", \"text\": \"En büyük değer 18, seçenek C.\"}]}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "value",
+    "option": "C",
+    "payload": "18"
+   },
+   "final_answer_text": "En büyük değer 18'dir, seçenek C.",
+   "steps": [
+    {
+     "claim": "x >= -2",
+     "from": [],
+     "id": "a1",
+     "kind": "assert",
+     "text": "Tanım aralığının sol ucu x>=-2."
+    },
+    {
+     "claim": "x <= 3",
+     "from": [],
+     "id": "a2",
+     "kind": "assert",
+     "text": "Tanım aralığının sağ ucu x<=3."
+    },
+    {
+     "claim": "",
+     "from": [
+      "a1",
+      "a2"
+     ],
+     "id": "n1",
+     "kind": "note",
+     "text": "Polinom sürekli olduğundan kapalı aralıkta max kritik nokta veya uçlarda alınır."
+    },
+    {
+     "claim": "diff(x**3 - 3*x, x) = 3*x**2 - 3",
+     "from": [],
+     "id": "s1",
+     "kind": "compute",
+     "text": "Türev hesaplanır."
+    },
+    {
+     "claim": "3*x**2 - 3 = 0",
+     "from": [
+      "s1"
+     ],
+     "id": "s2",
+     "kind": "eq",
+     "text": "Kritik nokta koşulu türevin sıfırlanmasıdır."
+    },
+    {
+     "claim": "x**2 - 1 = 0",
+     "from": [
+      "s2"
+     ],
+     "id": "s3",
+     "kind": "eq",
+     "text": "Denklem 3'e bölünerek sadeleştirilir."
+    },
+    {
+     "claim": "(x - 1)*(x + 1) = 0",
+     "from": [
+      "s3"
+     ],
+     "id": "s4",
+     "kind": "eq",
+     "text": "Çarpanlara ayrılır."
+    },
+    {
+     "claim": "x = -1",
+     "from": [
+      "s4"
+     ],
+     "id": "c1",
+     "kind": "case",
+     "text": "Birinci kritik nokta."
+    },
+    {
+     "claim": "x = 1",
+     "from": [
+      "s4"
+     ],
+     "id": "c2",
+     "kind": "case",
+     "text": "İkinci kritik nokta."
+    },
+    {
+     "claim": "at(x**3 - 3*x, x, -2) = -2",
+     "from": [],
+     "id": "v1",
+     "kind": "compute",
+     "text": "Sol uç değer hesaplanır."
+    },
+    {
+     "claim": "at(x**3 - 3*x, x, -1) = 2",
+     "from": [
+      "c1"
+     ],
+     "id": "v2",
+     "kind": "compute",
+     "text": "x=-1 kritik noktasında değer hesaplanır."
+    },
+    {
+     "claim": "at(x**3 - 3*x, x, 1) = -2",
+     "from": [
+      "c2"
+     ],
+     "id": "v3",
+     "kind": "compute",
+     "text": "x=1 kritik noktasında değer hesaplanır."
+    },
+    {
+     "claim": "at(x**3 - 3*x, x, 3) = 18",
+     "from": [],
+     "id": "v4",
+     "kind": "compute",
+     "text": "Sağ uç değer hesaplanır."
+    },
+    {
+     "claim": "Max(-2, 2, -2, 18) = 18",
+     "from": [
+      "v1",
+      "v2",
+      "v3",
+      "v4"
+     ],
+     "id": "m1",
+     "kind": "compute",
+     "text": "Aday değerlerin en büyüğü seçilir."
+    },
+    {
+     "claim": "18 = 18",
+     "from": [
+      "m1"
+     ],
+     "id": "fin",
+     "kind": "conclude",
+     "text": "En büyük değer 18, seçenek C."
+    }
+   ]
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 701,
+  "output_tokens": 6058,
+  "cost_usd": 0.02662275,
+  "latency_ms": 89482.07698300006,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0e8f2-556f-7794-a142-c47d43da5814",
+  "meta": {
+   "effort": "xhigh",
+   "tag": "solver_meta",
+   "streamed": true
+  }
+ },
+ "recorded_at": "2026-09-28T16:57:27"
+}

@@ -6,8 +6,11 @@ For every step of kind `eq` or `compute` with a parseable claim:
     with rhs (domain-aware). A definite difference => REFUTED.
   * `eq`: claim is a relation that should follow from the premises. Premises are the
     IR givens plus ALL earlier parseable step claims (not only the cited ones, so that
-    under-citation is never penalised). We look for a point that satisfies every premise,
+    under-citation is never penalised), the variables' domain constraints and the task's own
+    interval. We look for a point that satisfies every premise,
     lies in the problem domain, and violates the claim. Found => REFUTED with that point.
+    A claim that restates one of the problem's own objects (the curve of a tangent line) is
+    neither checked nor a premise (`_task_objects`).
 Outcomes per step: verified | refuted | unknown | skipped. The layer result is `fail`
 (hard) only when at least one step is refuted; otherwise `unknown` (never `pass`).
 """
@@ -368,13 +371,35 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     return None
 
 
-def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
-    ev: dict[str, Any] = {"n_premises": len(premises)}
+def _is_assignment(claim) -> bool:
+    """An equation, or a finite choice of equations (`x in {1, 2}`): the shape of "let n = 20"."""
+    return isinstance(claim, Eq) or (isinstance(claim, Or) and all(isinstance(a, Eq) for a in claim.args))
+
+
+def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: list = ()) -> tuple[str, dict]:
+    """`premises`: the givens, earlier claims and case assumptions. `restrictions`: the variables'
+    domain constraints (`var_constraints`). `window`: the task's own interval for its variable
+    (`_task_window`). All three bound the counterexample search; they differ in what they BIND."""
     syms = set(claim.free_symbols)
     prem_syms: set = set()
     for p in premises:
         syms |= p.free_symbols
         prem_syms |= p.free_symbols
+    # A domain restriction only narrows a symbol, it never determines one: an assignment whose
+    # symbols nothing but their domains constrain is a definition. "n = 20" (the 20th term) was
+    # refuted with the point {k: 109, n: 50}, which satisfies only k > 0 and n > 0 and is no
+    # instance of the problem (K4, 28 Sep 2026: 11 correct ayt-diz solutions). An inequality still
+    # counts them: "x >= 3" against the written condition x - 2 >= 0 is a refutable consequence.
+    for p in restrictions:
+        syms |= p.free_symbols
+        if not _is_assignment(claim):
+            prem_syms |= p.free_symbols
+    # The window binds nothing, so the definitional test below is the same with or without it and
+    # it can only shrink the set a counterexample is drawn from. It joins only when its variable
+    # is already in play.
+    window = [w for w in window if w.free_symbols <= syms]
+    premises = list(premises) + list(restrictions) + window
+    ev: dict[str, Any] = {"n_premises": len(premises)}
     # A claim that introduces symbols the premises do not constrain is *definitional*
     # ("the tangent line is y = 2x - 1", "let x = 4") and cannot be refuted as a
     # consequence. The only refutable shape without premise support is an identity
@@ -456,6 +481,76 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
     return "unknown", ev
 
 
+def _task_window(ir, ctx: Ctx) -> list:
+    """The task's own interval for its variable (`params.interval` of `trig_solve` and `extremum`)
+    as relations. It was not a premise: "x = pi/3" from tan x = sqrt(3) on [0, pi) was refuted with
+    x = 4*pi/3 (K4, 28 Sep 2026: ayt-trig-004/-013/-017), and a solver's `assert` steps stating the
+    interval never join the pool. An And is split so the premise-set route stays open."""
+    from ..normalize.parse import parse_set_str
+    p = ir.task.params or {}
+    iv = p.get("interval")
+    v = ctx.ns.get(p.get("var", "x"))
+    if not isinstance(iv, str) or not iv.strip() or not isinstance(v, sp.Symbol):
+        return []
+    try:
+        rel = parse_set_str(iv, ctx.ns).as_relational(v)
+    except Exception:  # noqa: BLE001 - an interval we cannot read restricts nothing
+        return []
+    parts = list(rel.args) if isinstance(rel, And) else [rel]
+    if any(r in (sp.true, sp.false) or not _is_relation(r) for r in parts):
+        return []
+    return parts
+
+
+def _task_objects(ir, ctx: Ctx) -> list:
+    """Equations of the problem's own objects that are NOT the answer, written in the answer's
+    coordinates: the curve of a tangent line, the given line of a parallel/perpendicular line, the
+    circle of a tangent to a circle. A solver that writes the curve as `y = x**2` and the tangent as
+    `y = 2*x - 1` names two objects with one `y`; the tangent was refuted against the curve with
+    (x, x**2) (K4, 28 Sep 2026: ayt-tur-003/-010/-013)."""
+    p = ir.task.params or {}
+    kind = ir.task.kind
+    try:
+        if kind == "tangent_line" and isinstance(p.get("f"), str):
+            x, y = ctx.ns.get(p.get("var", "x")), ctx.ns.get(p.get("dep", "y"))
+            if isinstance(x, sp.Symbol) and isinstance(y, sp.Symbol):
+                return [Eq(y, ctx.expr(p["f"]))]
+        if kind == "equation_of":
+            obj = p.get("object")
+            if obj in ("line_point_parallel", "line_point_perpendicular") and isinstance(p.get("line"), str):
+                return [ctx.rel(p["line"])]
+            x, y = ctx.ns.get("x"), ctx.ns.get("y")
+            if obj == "tangent_to_circle_at_point" and isinstance(x, sp.Symbol) and isinstance(y, sp.Symbol):
+                (cx, cy), (px, py) = ([ctx.expr(str(c)) for c in p[k]] for k in ("center", "point"))
+                return [Eq((x - cx) ** 2 + (y - cy) ** 2, (px - cx) ** 2 + (py - cy) ** 2)]
+    except Exception:  # noqa: BLE001 - parameters we cannot read name no object
+        return []
+    return []
+
+
+def _ratio(a, b):
+    return sp.simplify(sp.cancel(a / b))
+
+
+def _states_task_object(claim, objects: list, ctx: Ctx) -> bool:
+    """True when the claim is the equation of one of `objects` up to a nonzero constant factor.
+    Anything less certain is False, and the claim is checked as before."""
+    if not isinstance(claim, Eq):
+        return False
+    a = claim.lhs - claim.rhs
+    for obj in objects:
+        if not isinstance(obj, Eq) or obj.free_symbols != claim.free_symbols or not claim.free_symbols:
+            continue
+        b = obj.lhs - obj.rhs
+        if a == 0 or b == 0:
+            continue
+        r = sb_run("mathverify.steps.deterministic:_ratio", a, b, timeout=ctx.timeout)
+        if r.ok and isinstance(r.value, sp.Expr) and not r.value.free_symbols and r.value.is_finite \
+                and r.value.is_zero is False:
+            return True
+    return False
+
+
 def _with_bound_dummies(text: str, ns: dict[str, Any]):
     """`text` read with its undeclared names as symbols, when every one of them is a BOUND variable
     (the index of a Sum or Product, the variable of an Integral or a Limit) and none is left free.
@@ -508,11 +603,13 @@ def check_steps(ir, solution, ctx: Ctx):
         per_step: list[dict[str, Any]] = []
         parsed: dict[str, Any] = {}
         parsed_cases: dict[str, frozenset] = {}
-        givens = []
+        givens, restrictions = [], []
         try:
-            givens = ctx.givens() + ctx.var_constraints()
+            givens, restrictions = ctx.givens(), ctx.var_constraints()
         except Exception:
             pass
+        window = _task_window(ir, ctx)
+        objects = _task_objects(ir, ctx)
         first_bad = None
         n_ref = n_ver = n_unk = n_skip = n_malformed = 0
         case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
@@ -589,6 +686,14 @@ def check_steps(ir, solution, ctx: Ctx):
                 continue
             my_cases = case_closure(st.id)
             my_case_ids = frozenset(k for k in case_claims if case_claims[k] in my_cases)
+            if st.kind == "eq" and objects and _states_task_object(claim, objects, ctx):
+                # the problem's own curve (or given line, circle), not a constraint on the
+                # answer's coordinates: not checked, and it never becomes a premise
+                entry["status"] = "skipped"
+                entry["reason"] = "states_a_task_object"
+                n_skip += 1
+                per_step.append(entry)
+                continue
             try:
                 if st.kind == "compute":
                     status, ev = _check_compute(claim, ctx)
@@ -598,7 +703,7 @@ def check_steps(ir, solution, ctx: Ctx):
                     premises = list(givens) + [parsed[k] for k in parsed
                                                if k != st.id and parsed_cases.get(k, frozenset()) <= my_case_ids]
                     premises += my_cases
-                    status, ev = _check_eq(claim, premises, ctx)
+                    status, ev = _check_eq(claim, premises, ctx, restrictions, window)
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
             entry["status"] = status

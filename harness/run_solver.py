@@ -25,6 +25,7 @@ measurement (principle 10).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 import threading
@@ -56,6 +57,13 @@ def _claimed_value(ir: dict[str, Any], solution: dict[str, Any]) -> tuple[str, A
     return kind, payload
 
 
+def _is_dne(kind: str, payload: Any) -> bool:
+    """"The limit does not exist", however it is written: the `dne` kind, or a payload that is only
+    one of the verifier's own DNE phrases (`DNE`, `limit yoktur`, …)."""
+    from mathverify.intake.restructure import _DNE
+    return kind == "dne" or (isinstance(payload, str) and _DNE.fullmatch(payload.strip().rstrip(".").strip()) is not None)
+
+
 def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_kind: str) -> tuple[str, str]:
     """(label, why): the solver's final answer against the key, decided only when SymPy proves it."""
     import sympy as sp
@@ -63,20 +71,49 @@ def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_k
     from mathverify.intake.structured import load_problem_ir
     from mathverify.normalize.parse import build_namespace, parse_answer
     kind, payload = _claimed_value(ir, solution)
-    if payload in (None, ""):
-        return "undecided", "no answer"
     task = (ir.get("task") or {}).get("kind")
-    mod_c = task == "antiderivative"
     try:
         ns = build_namespace(load_problem_ir(ir))
+    except Exception as e:  # noqa: BLE001
+        return "undecided", f"IR unparsed: {type(e).__name__}"
+    # A key of `DNE` and a claim of "limit yoktur" were `undecided` (K4, 28 Sep 2026: ayt-lim-009).
+    # Nonexistence against a finite number is a proved difference; against an infinite limit it is a
+    # matter of convention and stays undecided.
+    g_dne, c_dne = _is_dne(gold_kind, gold), _is_dne(kind, payload)
+    if g_dne or c_dne:
+        if g_dne and c_dne:
+            return "right", "both do not exist"
+        other_kind, other = (kind, payload) if g_dne else (gold_kind, gold)
+        try:
+            v = parse_answer(other_kind if other_kind != "dne" else "value", str(other), ns)
+        except Exception:  # noqa: BLE001
+            return "undecided", "does not exist vs unparsed"
+        if isinstance(v, sp.Expr) and v.is_number and v.is_finite:
+            return "wrong", "does not exist vs a finite value"
+        return "undecided", "does not exist vs a non-finite answer"
+    if payload in (None, ""):
+        return "undecided", "no answer"
+    mod_c = task == "antiderivative"
+    if mod_c:
+        # the key is written `F + C` and was never parsed: `C` is the binomial in the parser's
+        # namespace (ayt-int-005/-010/-014/-021). As in the antiderivative certificate, a trailing
+        # `+ C` is dropped and any other `C` is a symbol set to 0.
+        from mathverify.certify.calculus import _TRAILING_C
+        ns = dict(ns, C=sp.Symbol("C"))
+        gold, payload = _TRAILING_C.sub("", str(gold)), _TRAILING_C.sub("", str(payload))
+    try:
         g = parse_answer(gold_kind, str(gold), ns)
     except Exception as e:  # noqa: BLE001
         return "undecided", f"key unparsed: {type(e).__name__}"
+    if mod_c and isinstance(g, sp.Basic):
+        g = g.subs(ns["C"], 0)
     for k in dict.fromkeys((kind, gold_kind)):
         try:
             c = parse_answer(k, int(payload) if k == "count" and isinstance(payload, int) else str(payload), ns)
         except Exception:  # noqa: BLE001
             continue
+        if mod_c and isinstance(c, sp.Basic):
+            c = c.subs(ns["C"], 0)
         try:
             if _equal(c, g, mod_constant=mod_c):
                 return "right", f"equal as {k}"
@@ -89,6 +126,20 @@ def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_k
     return "undecided", f"not proved ({kind} vs {gold_kind})"
 
 
+def _request_lock(args, it: dict[str, Any], ir: dict[str, Any]):
+    """One call at a time per distinct request. The A/B/C/D items of one question send the same
+    request (280 items, 86 distinct requests); two of them in flight together were both paid for,
+    since the cache is written only when a call returns. The second now waits and reads the first
+    one's answer from the cache."""
+    locks = getattr(args, "request_locks", None)
+    if locks is None:
+        return contextlib.nullcontext()
+    from mathverify.resolve.cross_family import _solver_user_prompt
+    key = _solver_user_prompt(it["question_tr"], it.get("options"), ir, None)
+    with args.lock:
+        return locks.setdefault(key, threading.Lock())
+
+
 def run_item(it: dict[str, Any], args) -> dict[str, Any]:
     from mathverify.llm import LLMFatalError
     from mathverify.resolve import solve_with_family
@@ -99,17 +150,22 @@ def run_item(it: dict[str, Any], args) -> dict[str, Any]:
     stop = getattr(args, "stop", None)
     if stop is not None and stop.is_set():       # the run was stopped: no new paid call
         return {**rec, "skipped": True}
-    try:
-        r = solve_with_family(it["question_tr"], it.get("options"), ir, args.family, effort=args.effort,
-                              tag=f"solver_{args.family}")
-    except LLMFatalError as e:
-        rec.update(fatal=f"{type(e).__name__}: {str(e)[:300]}", ms=(time.perf_counter() - t0) * 1000)
-        _account(args, rec)
-        return rec
-    except Exception as e:  # noqa: BLE001  (a crash is recorded, the sweep goes on)
-        rec.update(error=f"{type(e).__name__}: {str(e)[:200]}", tb=traceback.format_exc()[-1500:],
-                   cost_usd=0.0, ms=(time.perf_counter() - t0) * 1000)
-        return rec
+    with _request_lock(args, it, ir):
+        if stop is not None and stop.is_set():
+            return {**rec, "skipped": True}
+        try:
+            r = solve_with_family(it["question_tr"], it.get("options"), ir, args.family, effort=args.effort,
+                                  tag=f"solver_{args.family}")
+        except LLMFatalError as e:
+            # accounted for (and the run stopped) before the lock is released: an item waiting for
+            # the same request must see the stop, not start a paid call of its own
+            rec.update(fatal=f"{type(e).__name__}: {str(e)[:300]}", ms=(time.perf_counter() - t0) * 1000)
+            _account(args, rec)
+            return rec
+        except Exception as e:  # noqa: BLE001  (a crash is recorded, the sweep goes on)
+            rec.update(error=f"{type(e).__name__}: {str(e)[:200]}", tb=traceback.format_exc()[-1500:],
+                       cost_usd=0.0, ms=(time.perf_counter() - t0) * 1000)
+            return rec
     sol = r.get("solution")
     rec.update(model=r.get("model"), cost_usd=r.get("cost_usd", 0.0), calls=r.get("calls", 0),
                stop_reason=r.get("stop_reason"), errors=r.get("errors") or [], solution=sol,
@@ -237,7 +293,7 @@ def main(argv=None):
     records: list[dict[str, Any]] = []
     t_all = time.perf_counter()
     aborted, spent = None, 0.0
-    args.stop, args.lock, args.spent_so_far = threading.Event(), threading.Lock(), 0.0
+    args.stop, args.lock, args.spent_so_far, args.request_locks = threading.Event(), threading.Lock(), 0.0, {}
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futs = {pool.submit(run_item, it, args): it for it in items}
         # After a stop the loop keeps collecting: a call already running when the run stopped is
