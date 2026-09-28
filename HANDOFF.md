@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 28 Eylül 2026 (gece)**, dal `claude/dreamy-meitner-rvrwlj` (`#9` birleşti; sonrası birleşmedi, §2).
+> **Son güncelleme: 28 Eylül 2026 (gece)**, dal `claude/dreamy-meitner-rvrwlj` (`#9` birleşti; sonrası `wqedwad/asd#10`, açık).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -54,7 +54,7 @@ ve 25–26 Eylül (formal katmanda 53/98 yanlış sertifika → 0/99; DECISIONS 
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalın PR'ı** (kişi kararı): `--full` bulutta ve Windows'ta 24/24; kuralın dosyaları (`check.py`,
+1. **`wqedwad/asd#10`** (kişi kararı): `--full` bulutta ve Windows'ta 24/24; kuralın dosyaları (`check.py`,
    `test_staged_check.py`) değiştiği için `--plan` TAMAM veremez. Birleştirmeden önce yedek (§6) ve `--plan`.
 2. **Yedek etiketleri (isteğe bağlı):** PR #3, PR #4 ve PR #9 öncesi `master` için etiket yok (§6).
 3. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
