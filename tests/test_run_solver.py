@@ -246,3 +246,33 @@ def test_an_item_waiting_for_its_request_starts_no_call_after_a_stop(tmp_path, m
                          "--ids", "ayt-tur-003,ayt-tur-010"])
     assert first_in.is_set() and len(client.calls) == 1, client.calls
     assert s["aborted"] == "LLMCreditError: insufficient balance" and s["n"] == 1
+
+
+@pytest.mark.parametrize("payload,expected", [("70°", "right"), ("70", "right"), ("70 derece", "right"),
+                                              ("80°", "wrong"), ("7*pi/18", "wrong")])
+def test_an_angle_in_degrees_is_labelled_as_the_certificate_reads_it(items, payload, expected):
+    """angle() is in degrees: `70°` is 70. The generic parser made it 7*pi/18 and three right answers
+    became false acceptances in the report (tyt-geo-002/-008/-013, 28 Sep 2026)."""
+    label, why = _label(items, "tyt-geo-002", "value", payload)
+    assert label == expected, why
+
+
+@pytest.mark.parametrize("payload,expected", [("{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}", "right"),
+                                              ("{pi/6 + 2*n*pi, 5*pi/6 + 2*n*pi}", "right"),
+                                              ("{pi/6 + 2*k*pi}", "undecided"),
+                                              ("{5*pi/6 + 2*k*pi, pi/6 + 2*k*pi}", "right")])
+def test_a_general_trig_solution_is_labelled_only_when_it_is_the_same_set(items, payload, expected):
+    """The key's `k` was undeclared (ayt-trig-002). Two sets with a symbolic integer parameter are
+    never proved different: that path would call {pi/6 + 2*n*pi} wrong against {pi/6 + 2*k*pi}."""
+    label, why = _label(items, "ayt-trig-002", "set", payload)
+    assert label == expected, why
+
+
+@pytest.mark.parametrize("item,payload,expected", [
+    ("uni-la-004", "(16, 14)", "right"), ("uni-la-004", "[16, 14]", "right"), ("uni-la-004", "(16, 15)", "wrong"),
+    ("uni-la-004", "(16, 14, 0)", "wrong"),
+    ("uni-la-003", "[1, 1]", "right"), ("uni-la-003", "(2, 2)", "undecided"), ("uni-la-003", "(1, -1)", "undecided")])
+def test_a_tuple_answer_is_labelled_element_by_element(items, item, payload, expected):
+    """(16,14) against (16, 14) was `undecided` (uni-la-*). An eigenvector is right up to a factor."""
+    label, why = _label(items, item, "expression", payload)
+    assert label == expected, why

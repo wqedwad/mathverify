@@ -64,6 +64,24 @@ def _is_dne(kind: str, payload: Any) -> bool:
     return kind == "dne" or (isinstance(payload, str) and _DNE.fullmatch(payload.strip().rstrip(".").strip()) is not None)
 
 
+def _sequence_label(c, g, *, scale_free: bool) -> tuple[str, str] | None:
+    """A tuple or list answer ((16, 14), [1, 1]) against the key's, element by element. An eigenvector
+    is right up to a nonzero factor, so a different one is not proved wrong."""
+    from harness.soundness_fuzz import _differs, _equal
+    import sympy as sp
+    try:
+        c, g = [sp.sympify(x) for x in c], [sp.sympify(x) for x in g]
+        if len(c) == len(g) and all(_equal(x, y) for x, y in zip(c, g)):
+            return "right", "equal element by element"
+        if scale_free:
+            return "undecided", "an eigenvector is not compared up to its factor"
+        if len(c) != len(g) or any(_differs(x, y) for x, y in zip(c, g)):
+            return "wrong", "different element by element"
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_kind: str) -> tuple[str, str]:
     """(label, why): the solver's final answer against the key, decided only when SymPy proves it."""
     import sympy as sp
@@ -93,6 +111,17 @@ def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_k
         return "undecided", "does not exist vs a non-finite answer"
     if payload in (None, ""):
         return "undecided", "no answer"
+    params = (ir.get("task") or {}).get("params") or {}
+    if task == "synthetic_geometry" and "angle(" in str(params.get("target", "")):
+        # angle() is in degrees: `70°` is 70, as the geometry certificate reads it. The generic parser
+        # made it 7*pi/18 and three right answers were labelled wrong (tyt-geo-002/-008/-013).
+        from mathverify.certify.geometry_numeric import strip_degree_marks
+        gold, payload = strip_degree_marks(str(gold)), strip_degree_marks(str(payload))
+    int_params = ()
+    if task == "trig_solve":
+        # a general solution's integer parameter, as the trig certificate declares it (ayt-trig-002)
+        int_params = tuple(sp.Symbol(n_, integer=True) for n_ in ("k", "n"))
+        ns = dict(ns, **{s_.name: s_ for s_ in int_params})
     mod_c = task == "antiderivative"
     if mod_c:
         # the key is written `F + C` and was never parsed: `C` is the binomial in the parser's
@@ -114,6 +143,18 @@ def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_k
             continue
         if mod_c and isinstance(c, sp.Basic):
             c = c.subs(ns["C"], 0)
+        if isinstance(c, (tuple, list)) and isinstance(g, (tuple, list)):
+            label = _sequence_label(c, g, scale_free=params.get("op") == "eigenvector")
+            if label:
+                return label
+            continue
+        if int_params and any(getattr(v, "free_symbols", set()) & set(int_params) for v in (c, g)):
+            # sets with a symbolic integer parameter: only the same set is decided. A difference of
+            # two such sets is not proved by SymPy (k and n name the same integers)
+            k_, n_ = int_params
+            if isinstance(c, sp.Basic) and isinstance(g, sp.Basic) and c.xreplace({n_: k_}) == g.xreplace({n_: k_}):
+                return "right", f"same general solution as {k}"
+            return "undecided", "general solutions are not compared"
         try:
             if _equal(c, g, mod_constant=mod_c):
                 return "right", f"equal as {k}"

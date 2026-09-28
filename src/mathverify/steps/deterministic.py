@@ -369,7 +369,8 @@ def _nonempty(s) -> bool:
 def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     """Truth of a relation at a point, exact at exact zeros: the difference of the sides is
     simplified first, and a numeric sign is only trusted when it is far from zero. `_holds`
-    compares tolerantly, which misreads x^2 - 2x - 1 >= 0 at x = 1 - sqrt(2) (measured)."""
+    compares tolerantly, which misreads x^2 - 2x - 1 >= 0 at x = 1 - sqrt(2) (measured; on 28 Sep 2026
+    `_holds` read it right, and agreed with this function on every boundary point tried)."""
     from ..equiv.numeric import to_mp
     import mpmath as mp
     if isinstance(rel, (And, Or)):
