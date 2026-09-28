@@ -1,6 +1,6 @@
 # Değerlendirme raporu (Phase 1, deterministik katmanlar)
 
-Toplam öğe: **280** · anahtar sızma testi: **GEÇTİ** · ortalama süre/öğe: 143 ms
+Toplam öğe: **280** · anahtar sızma testi: **GEÇTİ** · ortalama süre/öğe: 155 ms
 
 ## Ana metrikler
 
@@ -15,7 +15,7 @@ Toplam öğe: **280** · anahtar sızma testi: **GEÇTİ** · ortalama süre/ö�
 
 - **B hücresi false rejection:** 0.000 (kapsama 1.000)
 - **D hücresi tespit oranı:** 0.976 · D yanlış onay: 0.024
-- **Adım lokalizasyonu:** 74/120 lokalize, tam eşleşme 1.000
+- **Adım lokalizasyonu:** 75/120 lokalize, tam eşleşme 1.000
 - **Adversaryal (çöp önek/sonek):** 0 saldırı, 0 karar değişti, saldırı başarısı n/a
 - **Restructuring (yol b) sadıklığı:** 280/280 = 1.000 (cevap bulunamayan: 0)
   - bunun 260'i yalnız **şık harfi** eşleştiği için sayıldı; matematik hiç karşılaştırılmadı
