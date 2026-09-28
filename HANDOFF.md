@@ -10,15 +10,13 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §60–§63 (son dört madde). Bulutta ayrıca
-   oturum başındaki `[mathverify bulut oturumu …]` bloğu ve `docs/BULUT.md`.
-2. `git status`, `git log --oneline -5`; birleşmemiş başka dal var mı: `git ls-remote origin` (§6).
-   Bulut klonunda yerel `master` ve `origin/master` bayat olabilir: `git fetch origin master`.
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1639
-   passed / 5 skipped**, sıcak Lean'le ~400 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
-   ifade). Lean testi seçen oturum önce Lean'i ısıtır (soğukta 345–470 s, B6); Lean yüzünden atlama = Lean
-   hazır değil. `addopts` `-q` içerir; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
-4. §3'teki ilk işe geç. Tekrar denenmemesi gerekenler: arşiv §4.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§66; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
+   origin master` (yerel `master`/`origin/master` bayat olabilir).
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1653 passed / 5 skipped** (3 root salt okunur dizin,
+   1 isteğe bağlı indirme, 1 kapsam dışı ifade); sıcak Lean'le ~400 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
+   atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
+4. §3'teki ilk işe geç. Tekrar denenmeyecekler: arşiv §4.
 
 ## 1. Proje (kısaca)
 
@@ -36,10 +34,11 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 `#11` (DECISIONS §63): adım reddedicinin üç haksız reddi (görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin
 bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
 Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
-**Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§65): anahtar yenileme F3/F4 önkoşulu değil
-(kullanıcı). `#11`'in gevşetmelerinin hedefli denetimi, parça 1 (A): öncüllerin aralıkta örneği yokken aralık her
-iddiayı geçiriyordu (doğru cevaplı yanlış adımlı D çözümü CORRECT); aralık o durumda düşürülür. 280 + 278 (K4) çözümde
-değişim 0; 7 yeni test eski kodda 7/7 düşer; mutasyon 8/8 (`denetim/2026-09-28/mutasyon_gece.py`).
+**Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§66): anahtar yenileme F3/F4 önkoşulu değil
+(kullanıcı). `#11`'in gevşetmelerinin hedefli denetimi; iki yanlış onay açığı kapandı (ikisinde de doğru cevaplı,
+yanlış adımlı D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği yokken aralık her iddiayı geçiriyordu,
+artık düşürülür; (B) tanım kümesiyle çelişen atama (`n = 0`, n > 0) tanımsal sayılıyordu, artık denetlenir.
+280 + 278 (K4) çözümde değişim 0; 10 yeni red testi eski kodda düşer; mutasyon 11/11 (`denetim/2026-09-28/mutasyon_gece.py`).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -55,11 +54,10 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Hedefli denetimin kalan parçaları** (kullanıcı: "parça parça", DECISIONS §64): (B) yalnız tanım kümesinin
-   bağladığı atama tanımsal (`n = 21` gibi yanlış bir atama, sonra çelişmezse denetlenmez; `#11` öncesi her atama
-   reddediliyordu); (C) görev nesnesi adımları atlanıyor. Her parça: sonda (`2f11c84`/`c0a2caf` worktree), düzeltme
-   ya da sınır kaydı, test, 280 + 278 çözümde fark, mutasyon. Sonra K4 (f): cevap anahtarlarının bağımsız denetimi.
-   Hepsinden sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
+1. **Hedefli denetimin kalan parçası** (kullanıcı: "parça parça", DECISIONS §64): (C) görev nesnesi adımları
+   (teğetin eğrisi, verilen doğru, çember) atlanıyor. Yöntem (A)/(B)'deki gibi: sonda (`2f11c84`/`c0a2caf` worktree),
+   düzeltme ya da sınır kaydı, test, 280 + 278 çözümde fark, mutasyon. Sonra K4 (f): cevap anahtarlarının bağımsız
+   denetimi. Hepsinden sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
    **ertelendi** (kullanıcı, 28 Eylül akşam); adım 5'teki kod dondurmadan önce yeniden sorulur. Bu model hiç yanlış
    cevap vermediği için yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
@@ -125,6 +123,8 @@ V11 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya
   çalışmıyor (ilke 13), ama model kodu çalıştırılacaksa gVisor/Firecracker gerekir.
 - **V11. Aralıkta örneği olmayan öncülde esas kök** (DECISIONS §65): `cos x = −1`, [0, π) gibi aralıkta kökü
   olmayan görevde periyotsuz yazılan doğru esas kök adımı (`x = pi`) reddedilir (x = 3π); `#11` öncesiyle aynı, D6 gereği.
+- **V12. Tanım kümesine uyan yanlış atama** (DECISIONS §66): IR'da öncülün bağlamadığı bir sembole yanlış değer
+  (`ayt-diz-002`'de `n = 21`) tanımsal kalır; sonra çelişilmezse çözüm CORRECT. `#11` öncesi doğrusu da reddediliyordu.
 
 ### 4.3 Kredili ölçüm
 
