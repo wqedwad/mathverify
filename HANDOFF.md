@@ -35,10 +35,11 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
 Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
 **Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§66): anahtar yenileme F3/F4 önkoşulu değil
-(kullanıcı). `#11`'in gevşetmelerinin hedefli denetimi; iki yanlış onay açığı kapandı (ikisinde de doğru cevaplı,
-yanlış adımlı D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği yokken aralık her iddiayı geçiriyordu,
-artık düşürülür; (B) tanım kümesiyle çelişen atama (`n = 0`, n > 0) tanımsal sayılıyordu, artık denetlenir.
-280 + 278 (K4) çözümde değişim 0; 10 yeni red testi eski kodda düşer; mutasyon 11/11 (`denetim/2026-09-28/mutasyon_gece.py`).
+(kullanıcı). `#11`'in gevşetmelerinin hedefli denetimi (§65–§67) bitti; iki yanlış onay açığı kapandı (ikisinde de
+doğru cevaplı, yanlış adımlı D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği yokken aralık her iddiayı
+geçiriyordu, artık düşürülür; (B) tanım kümesiyle çelişen atama (`n = 0`, n > 0) tanımsaldı, artık denetlenir.
+(C) açık değil (bekçi testleri). 280 + 278 (K4) çözümde değişim 0; 10 yeni red testi eski kodda düşer; mutasyon
+11/11 (`denetim/2026-09-28/mutasyon_gece.py`). Yan bulgu V13 (haksız red, `#11`'den önce de).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -54,10 +55,9 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Hedefli denetimin kalan parçası** (kullanıcı: "parça parça", DECISIONS §64): (C) görev nesnesi adımları
-   (teğetin eğrisi, verilen doğru, çember) atlanıyor. Yöntem (A)/(B)'deki gibi: sonda (`2f11c84`/`c0a2caf` worktree),
-   düzeltme ya da sınır kaydı, test, 280 + 278 çözümde fark, mutasyon. Sonra K4 (f): cevap anahtarlarının bağımsız
-   denetimi. Hepsinden sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
+1. **Sıradaki parçalar** (kullanıcı: "parça parça", DECISIONS §64): V13'ün düzeltmesi (öncüllerin serbest bıraktığı
+   sembole değer veren atama seçimdir; D tespiti ve sağlamlık taramasıyla ölçülerek), sonra K4 (f): cevap
+   anahtarlarının bağımsız denetimi. Hepsinden sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
    **ertelendi** (kullanıcı, 28 Eylül akşam); adım 5'teki kod dondurmadan önce yeniden sorulur. Bu model hiç yanlış
    cevap vermediği için yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
@@ -95,7 +95,7 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.2 Doğrulayıcı: bilinen sınırlar ve kapsama
 
-V11 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli sınır.
+V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli sınır.
 
 - **V1. `tyt-prob-018`:** çözüm düzeyindeki tek yanlış onay (doğru ama gerekçesiz adım; kanıtlanmış adım L6
   kritiğini ezer; aynı sınıf: C'deki 12 aritmetiği doğru `compute` adımı, §63). Karar F4 ölçümüne bağlı
@@ -125,6 +125,8 @@ V11 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya
   olmayan görevde periyotsuz yazılan doğru esas kök adımı (`x = pi`) reddedilir (x = 3π); `#11` öncesiyle aynı, D6 gereği.
 - **V12. Tanım kümesine uyan yanlış atama** (DECISIONS §66): IR'da öncülün bağlamadığı bir sembole yanlış değer
   (`ayt-diz-002`'de `n = 21`) tanımsal kalır; sonra çelişilmezse çözüm CORRECT. `#11` öncesi doğrusu da reddediliyordu.
+- **V13. Seçilen nokta sonuç sayılır** (DECISIONS §67): `y = 2*x - 1`'den sonra y-kesişimi için `x = 0` reddedilir
+  (havuzdaki doğru x'i bağlıyor); doğru çözüm INCORRECT. Her sürümde; gerçek veride görülmedi. Düzeltme sıradaki parça.
 
 ### 4.3 Kredili ölçüm
 
@@ -169,9 +171,8 @@ V11 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya
 
 ### 4.5 Teknik borç
 
-- **T1.** `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5, 7–13; madde numaraları atlıyor; §2 ve §3.9
-  bilerek Faz 1 anlık görüntüsü ("180 öğe").
-- **T2.** Biçimlendirici yok; pyflakes dışında stil denetimi yok. **T3.** CI yok.
+- **T1.** `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5, 7–14; madde numaraları atlıyor; §2 ve §3.9 bilerek Faz 1 anlık
+  görüntüsü ("180 öğe"). **T2.** Biçimlendirici yok; pyflakes dışında stil denetimi yok. **T3.** CI yok.
 - **T5.** `reports/lean_setup.log` eski `stable` kurulumunun günlüğü (sabit kurulumunki bulutta
   `/opt/mathverify-logs/setup_lean.log`). **T6.** 26 Eylül öncesi `check_full.log` başlıklarında
   "commit edilmemiş değişiklik" sayısından 1 düşülür (günlük kendini sayıyordu; `3925180`).
@@ -184,22 +185,19 @@ V11 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya
 
 ### 4.6 Güvenlik
 
-- **S1.** `.env` kullanıcı kararıyla özel depoda izleniyor
-  (DECISIONS §35); değerler git geçmişinde ve GitHub'da. F3/F4 için yenileme gerekmiyor (kullanıcı,
-  DECISIONS §64); depo açılırsa önce yenilenir ve geçmiş temizlenir. Bulutta Meta anahtarı artık ortamın API kimlik bilgisinde (VM'ye girmez);
-  `.env`'deki eski Meta anahtarının iptali kullanıcıda.
-- **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür). Sızarsa depoyu ve
-  `.env`'i okutur. `unset`, root'un `/proc/<pid>/environ` okumasına karşı korumaz (DECISIONS §54).
-  Sızıntı taraması yalnız günlüklerde, `/etc/profile.d`'de ve `.git/config`'te yapıldı (0 bulgu);
-  daha geniş tarama izin denetimine takıldı, yapılmadı.
+- **S1.** `.env` kullanıcı kararıyla özel depoda izleniyor (DECISIONS §35),
+  değerler git geçmişinde ve GitHub'da. F3/F4 için yenileme gerekmiyor (§64); depo açılırsa önce yenilenir, geçmiş temizlenir.
+  Bulutta Meta anahtarı ortamın API kimlik bilgisinde (VM'ye girmez); `.env`'deki eski Meta anahtarının iptali kullanıcıda.
+- **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür); sızarsa depoyu ve `.env`'i okutur. `unset`,
+  root'un `/proc/<pid>/environ` okumasına karşı korumaz (DECISIONS §54). Sızıntı taraması yalnız günlüklerde, `/etc/profile.d`'de
+  ve `.git/config`'te yapıldı (0 bulgu); daha geniş tarama izin denetimine takıldı, yapılmadı.
 
 ### 4.7 Doğrulanmamış kayıtlar
 
 - §6'da **[DOĞRULANMADI]** işaretli yedekler (`572ef57`, `18fd298` bundle'ları; `ee7b2dd`'nin yerel yedeği): buluttan
   görülemez. 26 Eylül 01:06 koşusunda düşen testin adı kaydedilmedi (muhtemelen B6'daki Lean testi).
-- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan.
-- Alandaki önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843).
-- B1, B6, B10 ve K4'teki işaretli maddeler.
+- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan; alandaki
+  önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843); B1, B6, B10 ve K4'teki işaretli maddeler.
 
 ## 5. Son ölçülen sayılar (kapılar, `3e1805d`; aksi yazılmadıkça `7d9e9a1` ve öncekilerle aynı)
 
