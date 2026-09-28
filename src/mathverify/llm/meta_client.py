@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -24,6 +25,17 @@ __all__ = ["MetaClient"]
 
 _URL = "https://api.meta.ai/v1/chat/completions"
 _EFFORT = {"low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "xhigh"}
+
+
+def tls_context() -> ssl.SSLContext:
+    """The default verified context without VERIFY_X509_STRICT. Python 3.13+ sets that flag, and the
+    Claude Code cloud's egress proxy re-signs TLS with a CA that has no key-usage extension: every
+    request failed with "CA cert does not include key usage extension" (27 Sep 2026), while curl
+    passed. The chain and the host name are still verified (CERT_REQUIRED, check_hostname); only
+    the stricter RFC 5280 profile checks are dropped."""
+    ctx = ssl.create_default_context()
+    ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+    return ctx
 
 
 class MetaClient:
@@ -66,7 +78,7 @@ class MetaClient:
         req = urllib.request.Request(_URL, data=data, method="POST", headers={
             "Authorization": f"Bearer {self._key}", "Content-Type": "application/json",
             "Accept": "text/event-stream" if body.get("stream") else "application/json"})
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+        with urllib.request.urlopen(req, timeout=self.timeout, context=tls_context()) as resp:
             if not body.get("stream"):
                 payload = json.loads(resp.read().decode("utf-8"))
                 return payload, ""

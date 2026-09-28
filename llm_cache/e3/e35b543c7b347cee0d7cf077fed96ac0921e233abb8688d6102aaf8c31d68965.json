@@ -1,0 +1,270 @@
+{
+ "provider": "meta",
+ "model": "muse-spark-1.3",
+ "tag": "solver_meta",
+ "request": {
+  "model": "muse-spark-1.3",
+  "messages": [
+   {
+    "role": "developer",
+    "content": "You are a careful mathematics solver. Solve the given Turkish question and report the solution in the verifier's structured format so that every quantitative claim can be machine-checked.\n\nRules for steps (this is what makes your work verifiable):\n- Each step is ONE relation in canonical SymPy-like syntax (explicit '*', '**' for powers, sqrt, log natural, Abs, pi, oo, degrees as 30°).\n- kind eq: a relation about the unknowns derived from the givens or earlier steps; `from` lists the step ids it uses ([] when it follows from the problem statement alone).\n- kind compute: an explicit calculation \"operation = result\": 240/80 = 3, diff(x**2*exp(x), x) = (2*x + x**2)*exp(x), Integral(log(x), x) = x*log(x) - x, Limit((x**2 - 4)/(x - 2), x, 2) = 4, at(x**3 - 3*x, x, 3) = 18, binomial(6, 3) = 20, gcd(84, 120) = 12.\n- kind case: a case assumption; branch steps cite it in `from`. kind assert: domain conditions. kind note: prose. kind conclude: the final statement / option.\n- Use the symbol names you are told to use for the unknowns; declare nothing else — if you need an auxiliary symbol, keep that step as a note.\n- Check domain conditions (log arguments, even roots, denominators, one-sided limits) explicitly.\nclaimed_answer: kind value | set | interval | expression | count | equation | dne | infinite; payload canonical; option = the chosen letter for multiple choice (\"\" if open-ended). Reply in JSON."
+   },
+   {
+    "role": "user",
+    "content": "## Question (Turkish)\nsin 75° değeri aşağıdakilerden hangisidir?\nA) (sqrt(6) + sqrt(2))/4  B) (sqrt(6) - sqrt(2))/4  C) sqrt(3)/2  D) (sqrt(2) + 1)/2  E) sqrt(2)/2\n\n## Notation\nanswer shape expected: scalar\n\n## Structured solution (JSON)"
+   }
+  ],
+  "temperature": 0,
+  "seed": 0,
+  "reasoning_effort": "xhigh",
+  "max_completion_tokens": 16000,
+  "response_format": {
+   "type": "json_schema",
+   "json_schema": {
+    "name": "output",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "claimed_answer": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "condition",
+          "count",
+          "dne",
+          "equation",
+          "expression",
+          "infinite",
+          "interval",
+          "none",
+          "set",
+          "value"
+         ]
+        },
+        "payload": {
+         "type": "string",
+         "description": "canonical expression / set / interval; '' for dne"
+        },
+        "option": {
+         "type": "string",
+         "description": "option letter for multiple choice, '' otherwise"
+        }
+       },
+       "required": [
+        "kind",
+        "payload",
+        "option"
+       ],
+       "additionalProperties": false
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "kind": {
+          "type": "string",
+          "enum": [
+           "assert",
+           "case",
+           "compute",
+           "conclude",
+           "eq",
+           "note"
+          ]
+         },
+         "claim": {
+          "type": "string",
+          "description": "machine-readable relation in canonical syntax; '' for prose"
+         },
+         "from": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "id",
+         "kind",
+         "claim",
+         "from",
+         "text"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "final_answer_text": {
+       "type": "string",
+       "description": "one line, human readable"
+      }
+     },
+     "required": [
+      "claimed_answer",
+      "steps",
+      "final_answer_text"
+     ],
+     "additionalProperties": false
+    },
+    "strict": true
+   }
+  }
+ },
+ "response": {
+  "text": "{\"claimed_answer\":{\"kind\":\"value\",\"option\":\"A\",\"payload\":\"(sqrt(6) + sqrt(2))/4\"},\"final_answer_text\":\"sin 75° = (sqrt(6)+sqrt(2))/4, cevap A\",\"steps\":[{\"claim\":\"75° = 30° + 45°\",\"from\":[],\"id\":\"s_decomp\",\"kind\":\"eq\",\"text\":\"75 derece toplam olarak yazildi\"},{\"claim\":\"2 > 0\",\"from\":[],\"id\":\"a2\",\"kind\":\"assert\",\"text\":\"sqrt(2) icin tanim kosulu\"},{\"claim\":\"3 > 0\",\"from\":[],\"id\":\"a3\",\"kind\":\"assert\",\"text\":\"sqrt(3) icin tanim kosulu\"},{\"claim\":\"6 > 0\",\"from\":[],\"id\":\"a6\",\"kind\":\"assert\",\"text\":\"sqrt(6) icin tanim kosulu\"},{\"claim\":\"4 != 0\",\"from\":[],\"id\":\"a_denom\",\"kind\":\"assert\",\"text\":\"payda sifir degil\"},{\"claim\":\"2 != 0\",\"from\":[],\"id\":\"a_denom2\",\"kind\":\"assert\",\"text\":\"payda sifir degil\"},{\"claim\":\"sin(30°) = 1/2\",\"from\":[],\"id\":\"s_sin30\",\"kind\":\"eq\",\"text\":\"bilinen sin 30 degeri\"},{\"claim\":\"cos(30°) = sqrt(3)/2\",\"from\":[\"a3\",\"a_denom2\"],\"id\":\"s_cos30\",\"kind\":\"eq\",\"text\":\"bilinen cos 30 degeri\"},{\"claim\":\"sin(45°) = sqrt(2)/2\",\"from\":[\"a2\",\"a_denom2\"],\"id\":\"s_sin45\",\"kind\":\"eq\",\"text\":\"bilinen sin 45 degeri\"},{\"claim\":\"cos(45°) = sqrt(2)/2\",\"from\":[\"a2\",\"a_denom2\"],\"id\":\"s_cos45\",\"kind\":\"eq\",\"text\":\"bilinen cos 45 degeri\"},{\"claim\":\"sin(75°) = sin(30°)*cos(45°) + cos(30°)*sin(45°)\",\"from\":[\"s_decomp\"],\"id\":\"s_form\",\"kind\":\"eq\",\"text\":\"sinus toplam formulu uygulandi\"},{\"claim\":\"sin(30°)*cos(45°) + cos(30°)*sin(45°) = (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2)\",\"from\":[\"s_sin30\",\"s_cos30\",\"s_sin45\",\"s_cos45\"],\"id\":\"s_sub\",\"kind\":\"compute\",\"text\":\"bilinen degerler yerine konuldu\"},{\"claim\":\"(1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2) = (sqrt(6) + sqrt(2))/4\",\"from\":[\"s_sub\",\"a_denom\",\"a6\"],\"id\":\"s_simp\",\"kind\":\"compute\",\"text\":\"ifade sadelestirildi\"},{\"claim\":\"sin(75°) = (sqrt(6) + sqrt(2))/4\",\"from\":[\"s_form\",\"s_sub\",\"s_simp\"],\"id\":\"s_conc\",\"kind\":\"conclude\",\"text\":\"A secenegi bulunur\"}]}",
+  "parsed": {
+   "claimed_answer": {
+    "kind": "value",
+    "option": "A",
+    "payload": "(sqrt(6) + sqrt(2))/4"
+   },
+   "final_answer_text": "sin 75° = (sqrt(6)+sqrt(2))/4, cevap A",
+   "steps": [
+    {
+     "claim": "75° = 30° + 45°",
+     "from": [],
+     "id": "s_decomp",
+     "kind": "eq",
+     "text": "75 derece toplam olarak yazildi"
+    },
+    {
+     "claim": "2 > 0",
+     "from": [],
+     "id": "a2",
+     "kind": "assert",
+     "text": "sqrt(2) icin tanim kosulu"
+    },
+    {
+     "claim": "3 > 0",
+     "from": [],
+     "id": "a3",
+     "kind": "assert",
+     "text": "sqrt(3) icin tanim kosulu"
+    },
+    {
+     "claim": "6 > 0",
+     "from": [],
+     "id": "a6",
+     "kind": "assert",
+     "text": "sqrt(6) icin tanim kosulu"
+    },
+    {
+     "claim": "4 != 0",
+     "from": [],
+     "id": "a_denom",
+     "kind": "assert",
+     "text": "payda sifir degil"
+    },
+    {
+     "claim": "2 != 0",
+     "from": [],
+     "id": "a_denom2",
+     "kind": "assert",
+     "text": "payda sifir degil"
+    },
+    {
+     "claim": "sin(30°) = 1/2",
+     "from": [],
+     "id": "s_sin30",
+     "kind": "eq",
+     "text": "bilinen sin 30 degeri"
+    },
+    {
+     "claim": "cos(30°) = sqrt(3)/2",
+     "from": [
+      "a3",
+      "a_denom2"
+     ],
+     "id": "s_cos30",
+     "kind": "eq",
+     "text": "bilinen cos 30 degeri"
+    },
+    {
+     "claim": "sin(45°) = sqrt(2)/2",
+     "from": [
+      "a2",
+      "a_denom2"
+     ],
+     "id": "s_sin45",
+     "kind": "eq",
+     "text": "bilinen sin 45 degeri"
+    },
+    {
+     "claim": "cos(45°) = sqrt(2)/2",
+     "from": [
+      "a2",
+      "a_denom2"
+     ],
+     "id": "s_cos45",
+     "kind": "eq",
+     "text": "bilinen cos 45 degeri"
+    },
+    {
+     "claim": "sin(75°) = sin(30°)*cos(45°) + cos(30°)*sin(45°)",
+     "from": [
+      "s_decomp"
+     ],
+     "id": "s_form",
+     "kind": "eq",
+     "text": "sinus toplam formulu uygulandi"
+    },
+    {
+     "claim": "sin(30°)*cos(45°) + cos(30°)*sin(45°) = (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2)",
+     "from": [
+      "s_sin30",
+      "s_cos30",
+      "s_sin45",
+      "s_cos45"
+     ],
+     "id": "s_sub",
+     "kind": "compute",
+     "text": "bilinen degerler yerine konuldu"
+    },
+    {
+     "claim": "(1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2) = (sqrt(6) + sqrt(2))/4",
+     "from": [
+      "s_sub",
+      "a_denom",
+      "a6"
+     ],
+     "id": "s_simp",
+     "kind": "compute",
+     "text": "ifade sadelestirildi"
+    },
+    {
+     "claim": "sin(75°) = (sqrt(6) + sqrt(2))/4",
+     "from": [
+      "s_form",
+      "s_sub",
+      "s_simp"
+     ],
+     "id": "s_conc",
+     "kind": "conclude",
+     "text": "A secenegi bulunur"
+    }
+   ]
+  },
+  "provider": "meta",
+  "model": "muse-spark-1.3",
+  "input_tokens": 710,
+  "output_tokens": 4045,
+  "cost_usd": 0.01807875,
+  "latency_ms": 57275.38889499988,
+  "stop_reason": "end_turn",
+  "request_id": "chatcmpl-01a0e886-ecaf-76fe-94b1-156aebc724ba",
+  "meta": {
+   "effort": "xhigh",
+   "tag": "solver_meta",
+   "streamed": false
+  }
+ },
+ "recorded_at": "2026-09-28T14:59:11"
+}
