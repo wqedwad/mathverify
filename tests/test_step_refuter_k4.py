@@ -331,15 +331,6 @@ def test_a_wrong_point_or_line_is_still_caught_without_the_curve_as_a_premise(st
     assert r.verdict == "INCORRECT" and _steps(r)[flagged][0] == "refuted", _steps(r)
 
 
-def test_a_point_chosen_on_a_stated_line_is_refuted_as_a_consequence():
-    """V13, a false rejection in every version (before #11 too): the tangent's y-intercept written as
-    "x = 0", "y = -1" after "y = 2*x - 1". The line in the pool binds x, so the chosen x = 0 is read as
-    a consequence of it and refuted. Pinned here so that a fix is a visible change."""
-    steps = _SLOPE + [("eq", "y = 2*x - 1"), ("eq", "x = 0"), ("eq", "y = -1")]
-    r = verify(_ir("ayt-tur-003"), _sol("y = 2*x - 1", "equation", steps, option="A"))
-    assert _steps(r)["s4"][0] == "refuted" and r.verdict == "INCORRECT", _steps(r)
-
-
 @pytest.mark.parametrize("claim", ["y = x**2 + 1", "y = 2*x**2", "y**2 = x**2"])
 def test_a_curve_that_is_not_the_tasks_is_checked_as_before(claim):
     from mathverify.certify.base import make_ctx
@@ -472,3 +463,78 @@ def test_decide_reads_and_and_or():
     assert _decide(sp.Or(sp.Eq(x, 1), sp.Eq(x, 3)), pt, ctx) is False
     assert _decide(sp.And(sp.Gt(x, 1), sp.Lt(x, 3)), pt, ctx) is True
     assert _decide(sp.And(sp.Gt(x, 1), sp.Lt(x, 2)), pt, ctx) is False
+
+
+# ------------------------------------------------------------------ (D) a choice of a free symbol
+_LINE = _SLOPE + [("eq", "y = 2*x - 1")]
+
+
+def _tan(steps):
+    return verify(_ir("ayt-tur-003"), _sol("y = 2*x - 1", "equation", _LINE + steps, option="A"))
+
+
+@pytest.mark.parametrize("steps", [[("eq", "x = 0"), ("eq", "y = -1")], [("eq", "y = -1"), ("eq", "x = 0")]])
+def test_a_point_chosen_on_a_stated_line_is_a_choice(steps):
+    """V13 (every version before 28 Sep 2026, night): the tangent's y-intercept after "y = 2*x - 1".
+    The line leaves x free, so "x = 0" was read as a consequence of it and refuted, and the right
+    solution was INCORRECT. Now it is a choice, and the other coordinate is checked at that point."""
+    r = _tan(steps)
+    st = _steps(r)
+    assert st["s4"] == ("skipped", "choice_of_a_free_symbol") and st["s5"][0] == "verified", st
+    assert r.verdict == "CORRECT", r.decision_trace
+
+
+@pytest.mark.parametrize("steps", [
+    [("eq", "x = 0"), ("eq", "y = -2")],                          # the wrong ordinate of the chosen point
+    [("eq", "y = -1"), ("eq", "x = 1")],                          # the wrong abscissa
+    [("eq", "x = 0"), ("eq", "y = -1"), ("eq", "y = 3*x - 1")],   # a wrong line: a choice is no premise of it
+])
+def test_a_wrong_coordinate_or_line_after_a_choice_is_refuted(steps):
+    r = _tan(steps)
+    assert r.verdict == "INCORRECT" and _steps(r)[f"s{3 + len(steps)}"][0] == "refuted", _steps(r)
+
+
+def test_a_second_point_of_the_same_line_is_a_known_limit():
+    """V13 narrowed: the x-intercept after the y-intercept ("y = 0" once x = 0 is chosen) is refuted,
+    since it cannot be told apart from a wrong ordinate of the chosen point; D6 takes the refutation."""
+    r = _tan([("eq", "x = 0"), ("eq", "y = -1"), ("eq", "y = 0"), ("eq", "x = 1/2")])
+    assert _steps(r)["s6"][0] == "refuted" and r.verdict == "INCORRECT", _steps(r)
+
+
+_UNDER = {"task": {"kind": "evaluate", "params": {"expr": "x + y"}}, "vars": [{"name": "x"}, {"name": "y"}],
+          "givens": ["x + y = 10"], "answer_shape": "scalar"}
+_INEQ = {"task": {"kind": "solve_inequality", "params": {"var": "x", "inequality": "x**2 < 4"}},
+         "vars": [{"name": "x"}], "givens": ["x**2 < 4"], "answer_shape": "interval"}
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps,verdict", [
+    (_UNDER, "10", "value", [("eq", "x = 3"), ("eq", "y = 7"), ("compute", "3 + 7 = 10")], "CORRECT"),
+    (_UNDER, "10", "value", [("eq", "x = 3"), ("eq", "y = 8"), ("compute", "3 + 7 = 10")], "INCORRECT"),
+    (_INEQ, "(-2, 2)", "interval", [("eq", "x = 0"), ("eq", "x**2 - 4 < 0")], "CORRECT"),     # a test point
+    (_INEQ, "(-2, 2)", "interval", [("eq", "x = 3"), ("eq", "x**2 - 4 < 0")], "INCORRECT"),   # outside the set
+])
+def test_a_choice_must_be_allowed_by_the_premises(ir, answer, kind, steps, verdict):
+    r = verify(ir, _sol(answer, kind, steps))
+    assert r.verdict == verdict, _steps(r)
+
+
+@pytest.mark.parametrize("ir,steps", [
+    ({"task": {"kind": "solve_equation", "params": {"var": "x", "equation": "x**2 = 4"}}, "vars": [{"name": "x"}],
+      "givens": ["x**2 = 4"], "answer_shape": "set"}, [("eq", "x = 2")]),                     # one root of two
+    ({"task": {"kind": "trig_solve", "params": {"var": "x", "equation": "tan(x) = sqrt(3)"}},
+      "vars": [{"name": "x"}], "givens": ["tan(x) = sqrt(3)"], "answer_shape": "set"}, [("eq", "x = 4*pi/3")]),
+])
+def test_a_value_picked_from_a_finite_or_discrete_set_is_no_choice(ir, steps):
+    """A root is a consequence to check, not a free choice: the premises allow finitely many values, or
+    a discrete infinity of them (tan x = sqrt(3) with no interval), not a continuum."""
+    assert _steps(verify(ir, _sol("{2}", "set", steps)))["s1"][0] == "refuted"
+
+
+def test_has_continuum():
+    from mathverify.steps.deterministic import _has_continuum
+    x = sp.Symbol("x")
+    assert _has_continuum(sp.S.Reals) and _has_continuum(sp.Interval(0, 1))
+    assert _has_continuum(sp.Union(sp.FiniteSet(5), sp.Interval.open(0, 1)))
+    assert _has_continuum(sp.Complement(sp.Interval(0, 1), sp.FiniteSet(sp.Rational(1, 2))))
+    assert not _has_continuum(sp.FiniteSet(1, 2)) and not _has_continuum(sp.Interval(1, 1))
+    assert not _has_continuum(sp.S.Naturals) and not _has_continuum(sp.solveset(sp.tan(x) - sp.sqrt(3), x, sp.S.Reals))

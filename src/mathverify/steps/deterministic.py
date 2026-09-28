@@ -447,6 +447,97 @@ def _outside_domain(claim, ctx: Ctx) -> bool:
     return True
 
 
+def _point_symbol(claim, ctx: Ctx):
+    """The symbol a claim gives a constant value ("x = 0", "y = -1", "x in {1, 2}"), else None."""
+    sym = None
+    for a in (claim.args if isinstance(claim, Or) else (claim,)):
+        if not isinstance(a, Eq):
+            return None
+        side = next((s_ for s_, o in ((a.lhs, a.rhs), (a.rhs, a.lhs))
+                     if isinstance(s_, sp.Symbol) and not o.free_symbols), None)
+        if side is None or ctx.ns.get(side.name) != side or (sym is not None and side != sym):
+            return None
+        sym = side
+    return sym
+
+
+def _has_continuum(s) -> bool:
+    """True when the set holds an interval of positive length. A discrete infinite set (the roots
+    k*pi + pi/3 of tan x = sqrt(3), the natural numbers) does not: a value picked from it is a root,
+    to be checked, not a free choice."""
+    if s == S.Reals:
+        return True
+    if isinstance(s, sp.Interval):
+        return bool((s.measure > 0) == True)  # noqa: E712 (sympy tri-state)
+    if isinstance(s, sp.Union):
+        return any(_has_continuum(a) for a in s.args)
+    if isinstance(s, sp.Complement):
+        return _has_continuum(s.args[0]) and s.args[1].is_finite_set is True
+    return False
+
+
+def _continuum(s, ctx: Ctx) -> bool:
+    r = sb_run("mathverify.steps.deterministic:_has_continuum", s, timeout=ctx.timeout)
+    return bool(r.ok and r.value is True)
+
+
+def _free_choice(claim, v, premises: list, ctx: Ctx) -> dict | None:
+    """A witness when the premises leave `v` free over a continuum and the claim's value of `v` is
+    one of those they allow; None otherwise. "x = 0" after the line y = 2x − 1 is then a CHOICE (the
+    point where the line meets the y-axis), not a consequence: it was refuted and a right solution
+    was INCORRECT (V13, 28 Sep 2026). A value the premises exclude is still refuted, and so is one
+    picked from a finite or discrete set (a root of x² = 4, of tan x = sqrt(3))."""
+    if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
+        return None
+    syms = set().union({v}, *(p.free_symbols for p in premises))
+    if any(ctx.ns.get(q.name) != q for q in syms):
+        return None
+    eqs = [p for p in premises if isinstance(p, Eq)]
+    if syms == {v} or not eqs:
+        region = ctx.domain_for(v)
+        for p in premises:
+            if p.free_symbols == {v}:
+                r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
+                if not r.ok or r.value.has(sp.ConditionSet):
+                    return None
+                region = sp.Intersection(region, r.value)
+        if not _continuum(region, ctx):
+            return None
+    else:
+        r = sb_run("mathverify.sandbox.ops:solve_system", eqs, sorted(syms, key=lambda s_: s_.name), True,
+                   timeout=ctx.timeout)
+        sols = [s_ for s_ in r.value if isinstance(s_, dict)] if r.ok and isinstance(r.value, list) else []
+        if not sols:
+            return None
+        params = set()
+        for s_ in sols:
+            params |= s_[v].free_symbols if v in s_ else {v}
+        if not any(_continuum(ctx.domain_for(q), ctx) for q in params):
+            return None
+    for part in (claim.args if isinstance(claim, Or) else (claim,)):
+        c = part.rhs if part.lhs == v else part.lhs
+        rest = sorted(syms - {v}, key=lambda s_: s_.name)
+        cands: list[dict] = [{}]
+        if rest:
+            sub = [p.subs(v, c) for p in eqs]
+            sub = [p for p in sub if p is not sp.true]
+            cands = []
+            if sub and all(isinstance(p, Eq) for p in sub):
+                r = sb_run("mathverify.sandbox.ops:solve_system", sub, rest, True, timeout=ctx.timeout)
+                for s_ in (r.value if r.ok and isinstance(r.value, list) else []):
+                    if isinstance(s_, dict):
+                        free = {q: sp.Integer(0) for q in rest if q not in s_}
+                        free.update({q: sp.Integer(0) for e in s_.values() for q in e.free_symbols})
+                        cands.append({q: s_.get(q, q).subs(free) for q in rest})
+            if not sub:
+                cands = sample_points({q: ctx.domain_for(q) for q in rest}, 24, ctx.seed)
+        for pt in cands:
+            point = {v: c, **pt}
+            if _in_domains(ctx, point) and all(_decide(p, point, ctx) is True for p in premises):
+                return point
+    return None
+
+
 def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: list = ()) -> tuple[str, dict]:
     """`premises`: the givens, earlier claims and case assumptions. `restrictions`: the variables'
     domain constraints (`var_constraints`). `window`: the task's own interval for its variable
@@ -750,6 +841,7 @@ def check_steps(ir, solution, ctx: Ctx):
         first_bad = None
         n_ref = n_ver = n_unk = n_skip = n_malformed = 0
         case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
+        choices: dict[Any, Any] = {}              # symbol -> the solver's latest choice of its value
         from_map: dict[str, list[str]] = {s.id: list(s.from_ids) for s in solution.steps}
 
         def case_closure(sid: str) -> list:
@@ -831,6 +923,7 @@ def check_steps(ir, solution, ctx: Ctx):
                 n_skip += 1
                 per_step.append(entry)
                 continue
+            chosen = False
             try:
                 if st.kind == "compute":
                     status, ev = _check_compute(claim, ctx)
@@ -840,12 +933,33 @@ def check_steps(ir, solution, ctx: Ctx):
                     premises = list(givens) + [parsed[k] for k in parsed
                                                if k != st.id and parsed_cases.get(k, frozenset()) <= my_case_ids]
                     premises += my_cases
-                    status, ev = _check_eq(claim, premises, ctx, restrictions, window)
+                    # a point assignment ("x = 0") is checked with the solver's latest choices of the
+                    # OTHER symbols: "y = -1" after the choice "x = 0" is a fact about that point
+                    point = _point_symbol(claim, ctx)
+                    extra = [c for s_, c in choices.items() if s_ != point] if point is not None else []
+                    status, ev = _check_eq(claim, premises + extra, ctx, restrictions, window)
+                    if point is not None and status == "refuted":
+                        w = _free_choice(claim, point, premises + extra + list(restrictions), ctx)
+                        if w is not None:
+                            status, chosen = "skipped", True
+                            ev = {"reason": "choice_of_a_free_symbol", "witness": {str(k): str(v) for k, v in w.items()}}
+                    elif point is not None and extra and status != "skipped":
+                        # decided only thanks to a choice: a fact about the chosen point, not a
+                        # premise for the general relations that follow
+                        chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
             entry["status"] = status
             entry["evidence"] = ev
             per_step.append(entry)
+            if chosen:
+                # neither refuted nor a premise of the pool; it stands for its symbol until the next choice
+                n_skip += status == "skipped"
+                n_ver += status == "verified"
+                n_unk += status == "unknown"
+                if isinstance(claim, Eq):
+                    choices[point] = claim
+                continue
             if status == "refuted":
                 n_ref += 1
                 if first_bad is None:

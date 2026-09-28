@@ -1,6 +1,8 @@
 """Mutation check of the night of 28 Sep 2026 (DECISIONS §65 onward): the fixes of the targeted audit
 of the step refuter's #11 relaxations. (W) the task window is dropped when the premises have no
-instance inside it. (X) an assignment no value of its variable's domain satisfies is no definition. The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
+instance inside it. (X) an assignment no value of its variable's domain satisfies is no definition.
+(Y) a point assignment the premises leave free over a continuum is a choice (V13). The machinery
+(throwaway clones of the committed HEAD, exit codes, clean-up) is
 the one of denetim/2026-09-26/mutasyon.py; only the list of mutations is new. The list of the same
 day's evening (mutasyon.py, next to this file) is the record of its own measurement at 3e1805d and is
 not edited: its V05 names a line this audit rewrote (W06 is its successor). Measured equivalent
@@ -55,6 +57,21 @@ MUTATIONS = [
     ("X03 seçeneğin bir parçası alan dışıysa yeter", DET,
      "        if not (e.ok and e.value is True):\n            return False\n    return True\n",
      "        if e.ok and e.value is True:\n            return True\n    return False\n", TK),
+    # --- (Y) a choice of a free symbol
+    ("Y01 seçim yok", DET, "                        if w is not None:\n", "                        if False:\n", TK),
+    ("Y02 seçimler öncül değil", DET,
+     "                    extra = [c for s_, c in choices.items() if s_ != point] if point is not None else []\n",
+     "                    extra = []\n", TK),
+    ("Y03 seçim havuza girer", DET,
+     "                if isinstance(claim, Eq):\n                    choices[point] = claim\n                continue\n",
+     "                if isinstance(claim, Eq):\n                    choices[point] = claim\n", TK),
+    ("Y04 ayrık küme de serbest", DET, "    return bool(r.ok and r.value is True)\n", "    return bool(r.ok)\n", TK),
+    ("Y05 tanık aranmaz", DET,
+     "            if _in_domains(ctx, point) and all(_decide(p, point, ctx) is True for p in premises):\n",
+     "            if True:\n", TK),
+    ("Y06 seçimden türeyen olgu havuza girer", DET,
+     "                        chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == \"refuted\"\n",
+     "                        chosen = False\n", TK),
 ]
 
 if __name__ == "__main__":
