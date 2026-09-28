@@ -1,6 +1,6 @@
 """Mutation check of the night of 28 Sep 2026 (DECISIONS §65 onward): the fixes of the targeted audit
 of the step refuter's #11 relaxations. (W) the task window is dropped when the premises have no
-instance inside it. The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
+instance inside it. (X) an assignment no value of its variable's domain satisfies is no definition. The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
 the one of denetim/2026-09-26/mutasyon.py; only the list of mutations is new. The list of the same
 day's evening (mutasyon.py, next to this file) is the record of its own measurement at 3e1805d and is
 not edited: its V05 names a line this audit rewrote (W06 is its successor). Measured equivalent
@@ -42,6 +42,18 @@ MUTATIONS = [
      "            outside += 1\n", TK),
     ("W09 aralık düşünce de aralıklı sonuç döner", DET,
      "        status, ev = _check_eq_in(claim, premises, ctx, restrictions, ())\n", "        pass\n", TK),
+    # --- (X) an assignment outside the domain
+    ("X01 alan dışı atama tanımsal kalır", DET,
+     "    binds = not _is_assignment(claim) or (not claim.free_symbols <= prem_syms and _outside_domain(claim, ctx))\n",
+     "    binds = not _is_assignment(claim)\n", TK),
+    ("X02 alan içi çözüm de alan dışı sayılır", DET, "        if not (e.ok and e.value is True):\n            return False\n",
+     "        if not e.ok:\n            return False\n", TK),
+    ("X03 seçeneğin bir parçası alan dışıysa yeter", DET,
+     "        if not (e.ok and e.value is True):\n            return False\n    return True\n",
+     "        if e.ok and e.value is True:\n            return True\n    return False\n", TK),
+    ("X04 çok değişkenli atama da denetlenir", DET,
+     "    if len(claim.free_symbols) != 1:\n        return False\n    (v,) = claim.free_symbols\n",
+     "    v = sorted(claim.free_symbols, key=str)[0]\n", TK),
 ]
 
 if __name__ == "__main__":

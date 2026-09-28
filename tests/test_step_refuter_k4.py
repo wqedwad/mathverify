@@ -211,6 +211,44 @@ def test_a_finite_choice_is_an_assignment_too():
     assert r.verdict == "CORRECT", r.decision_trace
 
 
+_FORCED = {"task": {"kind": "evaluate", "params": {"expr": "n + 1"}},
+           "vars": [{"name": "n", "domain": "positive_integer", "constraints": ["n <= 1"]}], "givens": []}
+_SIMP = {"task": {"kind": "simplify_expression", "params": {"expr": "(x**2 - 9)/(x - 3)"}},
+         "vars": [{"name": "x"}], "givens": [], "answer_shape": "expression"}
+_SIMP_STEP = ("compute", "(x**2 - 9)/(x - 3) = x + 3")
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps", [
+    (_ir("ayt-diz-002"), "62", "value", [("eq", "n = 0"), ("compute", "5 + (20 - 1)*3 = 62")]),  # n > 0
+    (_FORCED, "2", "value", [("eq", "n = 2"), ("compute", "1 + 1 = 2")]),                 # constraints leave n = 1
+    (_SIMP, "x + 3", "expression", [("eq", "x = 3"), _SIMP_STEP]),                         # written x != 3
+])
+def test_an_assignment_no_value_of_the_domain_satisfies_is_refuted(ir, answer, kind, steps):
+    """Probe of 28 Sep 2026: all three were INCORRECT before #11 and CORRECT after it (definitional)."""
+    r = verify(ir, _sol(answer, kind, steps))
+    assert r.verdict == "INCORRECT" and _steps(r)["s1"][0] == "refuted", (r.verdict, _steps(r))
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps", [
+    (_FORCED, "2", "value", [("eq", "n = 1"), ("compute", "1 + 1 = 2")]),
+    (_SIMP, "x + 3", "expression", [("eq", "x = 2"), _SIMP_STEP]),           # refuted before #11 as well
+    (_ir("ayt-diz-002"), "62", "value", [("eq", "n in {0, 20}"), ("compute", "5 + (20 - 1)*3 = 62")]),
+])
+def test_an_assignment_some_value_of_the_domain_satisfies_stays_a_definition(ir, answer, kind, steps):
+    r = verify(ir, _sol(answer, kind, steps))
+    assert _steps(r)["s1"] == ("skipped", "definitional_claim_introduces_unconstrained_symbols"), _steps(r)
+    assert r.verdict == "CORRECT", r.decision_trace
+
+
+def test_a_wrong_assignment_the_domain_allows_is_a_known_limit():
+    """V12: "n = 21" where the task asks the 20th term. The IR's n is the recurrence's index, not the
+    asked one (`index` is a parameter, no given binds n), so nothing refutes it. Before #11 it was
+    refuted, but so was the right "n = 20": that detection did not discriminate."""
+    r = verify(_ir("ayt-diz-002"), _sol("62", "value", [("eq", "n = 21")] + DIZ[2:], option="C"))
+    assert _steps(r)["s1"] == ("skipped", "definitional_claim_introduces_unconstrained_symbols")
+    assert r.verdict == "CORRECT", r.decision_trace
+
+
 def test_an_inequality_is_still_checked_against_the_domain_conditions():
     """The written condition x - 3 >= 0 of sqrt(x - 3) still binds a non-assignment: "x >= 4" is a
     refutable consequence (x = 3), "x >= 3" follows."""

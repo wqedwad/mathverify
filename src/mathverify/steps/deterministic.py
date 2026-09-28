@@ -425,6 +425,28 @@ def _is_assignment(claim) -> bool:
     return isinstance(claim, Eq) or (isinstance(claim, Or) and all(isinstance(a, Eq) for a in claim.args))
 
 
+def _outside_domain(claim, ctx: Ctx) -> bool:
+    """True when the assignment has one variable and no value of its domain satisfies it (proved):
+    "n = 0" for a positive integer n, "n = 2" where the declared constraints leave only n = 1. Such a
+    step defines nothing, every instance of the problem contradicts it; made definitional with
+    "n = 20", it was no longer refuted and a solution with it and the right answer became CORRECT
+    (probe of 28 Sep 2026; refuted before). Anything undecided is False: the step stays a definition."""
+    if len(claim.free_symbols) != 1:
+        return False
+    (v,) = claim.free_symbols
+    if ctx.ns.get(v.name) != v:
+        return False
+    dom = ctx.domain_for(v)
+    for part in (claim.args if isinstance(claim, Or) else (claim,)):
+        r = sb_run("mathverify.sandbox.ops:solveset_in", part, v, dom, timeout=ctx.timeout)
+        if not r.ok or r.value.has(sp.ConditionSet):
+            return False
+        e = sb_run("mathverify.steps.deterministic:_emptiness", r.value, timeout=ctx.timeout)
+        if not (e.ok and e.value is True):
+            return False
+    return True
+
+
 def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: list = ()) -> tuple[str, dict]:
     """`premises`: the givens, earlier claims and case assumptions. `restrictions`: the variables'
     domain constraints (`var_constraints`). `window`: the task's own interval for its variable
@@ -451,10 +473,12 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
     # symbols nothing but their domains constrain is a definition. "n = 20" (the 20th term) was
     # refuted with the point {k: 109, n: 50}, which satisfies only k > 0 and n > 0 and is no
     # instance of the problem (K4, 28 Sep 2026: 11 correct ayt-diz solutions). An inequality still
-    # counts them: "x >= 3" against the written condition x - 2 >= 0 is a refutable consequence.
+    # counts them: "x >= 3" against the written condition x - 2 >= 0 is a refutable consequence. So
+    # does an assignment no value of the domain satisfies (`_outside_domain`).
+    binds = not _is_assignment(claim) or (not claim.free_symbols <= prem_syms and _outside_domain(claim, ctx))
     for p in restrictions:
         syms |= p.free_symbols
-        if not _is_assignment(claim):
+        if binds:
             prem_syms |= p.free_symbols
     # The window binds nothing, so the definitional test below is the same with or without it and
     # it can only shrink the set a counterexample is drawn from. It joins only when its variable
