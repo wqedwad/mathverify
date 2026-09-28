@@ -39,6 +39,10 @@ def tls_context() -> ssl.SSLContext:
     return ctx
 
 
+class _IncompleteStream(ConnectionError):
+    """A stream that ended before its closing usage event: retried like a dropped connection."""
+
+
 class MetaClient:
     provider = "meta"
     family = "meta"
@@ -129,6 +133,11 @@ class MetaClient:
         for attempt in range(self.max_retries + 1):
             try:
                 payload, text = self._post(dict(body, stream=stream))
+                if stream and not (payload or {}).get("usage"):
+                    # every complete stream ends with a usage event (measured 4/4, 28 Sep 2026). One
+                    # ended at 68 s with a bare `stop` and no content (ayt-diz-004); it was cached, so
+                    # every rerun replayed the empty answer. An incomplete stream is retried, never cached.
+                    raise _IncompleteStream(f"stream ended without usage after {len(text)} characters")
                 if not stream:
                     choice = (payload.get("choices") or [{}])[0]
                     text = ((choice.get("message") or {}).get("content")) or ""

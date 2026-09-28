@@ -300,28 +300,70 @@ def _negation(claim):
     return None
 
 
-def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> dict | None:
-    """A point of the premises' solution set (within the domain) where the claim is false."""
-    from ..certify.calculus import _points_of
+def _claim_parts(claim) -> list | None:
+    """The relations an And/Or claim is made of (a chain `0 <= p <= 1`, a choice `x in {1, 2}`),
+    None when a part is not a plain relation."""
+    parts = list(claim.args)
+    return parts if all(isinstance(a, sp.core.relational.Relational) for a in parts) else None
+
+
+def _fail_set(claim, v, region, ctx: Ctx):
+    """The part of `region` where the claim is false, or None when it cannot be computed exactly."""
     neg = _negation(claim)
-    if neg is None or any(not isinstance(p, sp.core.relational.Relational) for p in premises):
+    if neg is not None:
+        rb = sb_run("mathverify.sandbox.ops:solveset_in", neg, v, region, timeout=ctx.timeout)
+        return rb.value if rb.ok and not rb.value.has(sp.ConditionSet) else None
+    parts = _claim_parts(claim) if isinstance(claim, (And, Or)) else None
+    if parts is None:
         return None
+    sets = []
+    for a in parts:
+        r = sb_run("mathverify.sandbox.ops:solveset_in", a, v, S.Reals, timeout=ctx.timeout)
+        if not r.ok or r.value.has(sp.ConditionSet):
+            return None
+        sets.append(r.value)
+    rb = sb_run("mathverify.steps.deterministic:_outside", region, sets, isinstance(claim, And), timeout=ctx.timeout)
+    return rb.value if rb.ok and not rb.value.has(sp.ConditionSet) else None
+
+
+def _outside(region, sets, conjunction: bool):
+    inside = sp.Intersection(*sets) if conjunction else sp.Union(*sets)
+    return sp.Complement(region, inside)
+
+
+def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None, bool]:
+    """(a point of the premises' solution set, within the domain, where the claim is false; whether
+    the claim is PROVED on that set). Proved means the premises' set is exactly computed, not empty,
+    and the part of it where the claim fails is exactly empty. An And/Or claim was never tried here:
+    "x in {pi/6, 5*pi/6}" under cos 2x = 1/2 on [0, 2*pi) was not refuted, and `solve`'s two
+    principal roots made it "verified" (ayt-trig-010, 28 Sep 2026)."""
+    from ..certify.calculus import _points_of
+    if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
+        return None, False
     region = ctx.domain_for(v) if v.name in ctx.ns else S.Reals
     for p in premises:
         r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
         if not r.ok or r.value.has(sp.ConditionSet):
-            return None
+            return None, False
         region = sp.Intersection(region, r.value)
-    rb = sb_run("mathverify.sandbox.ops:solveset_in", neg, v, region, timeout=ctx.timeout)
-    if not rb.ok or rb.value is S.EmptySet or rb.value.has(sp.ConditionSet):
-        return None
-    for pt in _points_of(rb.value):
+    fail = _fail_set(claim, v, region, ctx)
+    if fail is None:
+        return None, False
+    if fail is S.EmptySet:
+        nonempty = sb_run("mathverify.steps.deterministic:_nonempty", region, timeout=ctx.timeout)
+        return None, bool(nonempty.ok and nonempty.value is True)
+    for pt in _points_of(fail):
         point = {v: pt}
         if not _in_domains(ctx, point):
             continue
         if all(_decide(p, point, ctx) is True for p in premises) and _decide(claim, point, ctx) is False:
-            return point
-    return None
+            return point, False
+    return None, False
+
+
+def _nonempty(s) -> bool:
+    """True only when SymPy decides the set is not empty; a vacuous proof is no proof."""
+    return s.is_empty is False
 
 
 def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
@@ -330,6 +372,11 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     compares tolerantly, which misreads x^2 - 2x - 1 >= 0 at x = 1 - sqrt(2) (measured)."""
     from ..equiv.numeric import to_mp
     import mpmath as mp
+    if isinstance(rel, (And, Or)):
+        vals = [_decide(a, point, ctx) for a in rel.args]
+        if isinstance(rel, And):
+            return False if False in vals else True if all(v_ is True for v_ in vals) else None
+        return True if True in vals else False if all(v_ is False for v_ in vals) else None
     if not isinstance(rel, sp.core.relational.Relational):
         return None
     try:
@@ -420,14 +467,23 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     # "-2 < x" under x^2 - 5x - 14 <= 0 all went unrefuted (audit of 25 Sep 2026). A witness is
     # still checked pointwise against every premise, so a wrong solveset cannot refute a step.
     if len(syms) == 1:
-        w = _set_counterexample(claim, premises, syms[0], ctx)
+        w, proved = _set_counterexample(claim, premises, syms[0], ctx)
         if w is not None:
             ev["counterexample"] = {str(k): str(v) for k, v in w.items()}
             ev["route"] = "premise_set"
             return "refuted", ev
+        if proved:
+            ev["route"] = "premise_set"
+            return "verified", ev
     eqs = [p for p in premises if isinstance(p, Eq)]
     others = [p for p in premises if not isinstance(p, Eq)]
     points: list[dict] = []
+    # Only a finite solution set of polynomial equations is known to be complete; anything sampled
+    # (a parametric solution, rejection sampling, `solve`'s principal roots of a transcendental
+    # equation) can miss the one point where the claim fails. "verified" was said for all of them:
+    # x >= 6 under x + y = 10, x >= y (x = y = 5), and the wrong "x in {pi/6, 5*pi/6}" of ayt-trig-010.
+    # Nothing but the L6 cross-check reads "verified", and it overrules the critic on it.
+    exhaustive = False
     # route 1: solve the equational premises
     if eqs:
         r = sb_run("mathverify.sandbox.ops:solve_system", eqs, syms, True, timeout=ctx.timeout)
@@ -436,6 +492,7 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
             ev["solutions"] = len(sols)
             if not sols:
                 return "unknown", {"reason": "premises_inconsistent_or_unsolved", **ev}
+            exhaustive = all(_is_polynomial(p, syms) for p in eqs)
             for s_ in sols:
                 # parametric solution: sample the remaining free symbols
                 rem = set()
@@ -443,6 +500,7 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
                     rem |= v.free_symbols
                 rem |= set(syms) - set(s_.keys())
                 if rem:
+                    exhaustive = False
                     doms = {q: ctx.domain_for(q) for q in rem}
                     for pt in sample_points(doms, 24, ctx.seed) + _small_integer_grid(doms):
                         full = {k: sp.simplify(v.subs(pt)) for k, v in s_.items()}
@@ -477,8 +535,17 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
             checked += 1
     ev["points_checked"] = checked
     if checked and checked == len([p for p in points if _in_domains(ctx, p)]):
-        return "verified", ev
+        if exhaustive:
+            return "verified", ev
+        ev["reason"] = "no_counterexample_at_sampled_points"
     return "unknown", ev
+
+
+def _is_polynomial(rel, syms) -> bool:
+    try:
+        return bool((rel.lhs - rel.rhs).is_polynomial(*syms))
+    except Exception:  # noqa: BLE001 - a matrix, or anything else that is not an expression
+        return False
 
 
 def _task_window(ir, ctx: Ctx) -> list:

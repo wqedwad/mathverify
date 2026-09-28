@@ -140,10 +140,12 @@ def test_an_inequality_is_still_checked_against_the_domain_conditions():
 
 def test_a_domain_condition_of_two_variables_still_narrows_the_search():
     """sqrt(x - y) is defined only for x >= y; with x + y = 10 that makes x >= 5 a consequence.
-    The restriction binds nothing for an assignment but it is still a premise of every search."""
+    The restriction binds nothing for an assignment but it is still a premise of every search:
+    without it x = 0, y = 10 refutes the true step. (Sampled, so not "verified": see below.)"""
     ir = {"task": {"kind": "evaluate", "params": {"expr": "sqrt(x - y)"}},
           "vars": [{"name": "x"}, {"name": "y"}], "givens": ["x + y = 10"]}
-    assert _steps(verify(ir, _sol("0", "value", [("eq", "x >= 5")])))["s1"][0] == "verified"
+    assert _steps(verify(ir, _sol("0", "value", [("eq", "x >= 5")])))["s1"] == \
+        ("unknown", "no_counterexample_at_sampled_points")
     assert _steps(verify(ir, _sol("0", "value", [("eq", "x >= 20")])))["s1"][0] == "refuted"
 
 
@@ -176,7 +178,8 @@ def test_the_curve_is_recognised_in_any_equivalent_form_and_never_refuted(curve)
     steps = [("eq", "y - 1 = 2*(x - 1)"), ("eq", curve), ("eq", "y = 2*x - 1")]
     r = verify(_ir("ayt-tur-003"), _sol("y = 2*x - 1", "equation", steps, option="A"))
     st = _steps(r)
-    assert st["s2"] == ("skipped", "states_a_task_object") and st["s3"][0] == "verified", st
+    assert st["s2"] == ("skipped", "states_a_task_object"), st
+    assert st["s3"] == ("unknown", "no_counterexample_at_sampled_points"), st     # a line, sampled
     assert r.verdict == "CORRECT"
 
 
@@ -217,3 +220,88 @@ def test_the_circle_of_a_tangent_to_circle_task_is_no_premise():
     steps = [("eq", "x**2 + y**2 = 25"), ("eq", "3*x + 4*y = 25")]
     r = verify(ir, _sol("3*x + 4*y = 25", "equation", steps))
     assert _steps(r)["s1"] == ("skipped", "states_a_task_object") and r.verdict == "CORRECT", r.decision_trace
+
+
+# ------------------------------------------------------------------ "verified" means proved
+def _one(ir, claim):
+    return _steps(verify(ir, _sol("0", "value", [("eq", claim)])))["s1"]
+
+
+def test_a_sampled_consequence_is_not_verified():
+    """x >= 6 does not follow from x + y = 10 and x >= y (x = y = 5), but no sampled point of the
+    line fell in y in (4, 5] and it was "verified" (28 Sep 2026). The only reader of "verified" is
+    the L6 cross-check, which then overruled a critic that was right."""
+    from mathverify.critic.critique import _deterministic_cross_check
+    ir = {"task": {"kind": "evaluate", "params": {"expr": "sqrt(x - y)"}},
+          "vars": [{"name": "x"}, {"name": "y"}], "givens": ["x + y = 10"]}
+    r = verify(ir, _sol("0", "value", [("eq", "x >= 6")]))
+    assert _steps(r)["s1"][0] != "verified"
+    layer = next(l for l in r.layers if l.layer == "steps.refute")
+    xc = _deterministic_cross_check(ir, {}, {"first_bad_step": "s1"}, layer.evidence)
+    assert xc["flagged_step_status"] != "verified"
+
+
+def test_a_wrong_choice_of_roots_is_refuted_on_the_premise_set():
+    """ayt-trig-010's own wrong step: `x in {pi/6, 5*pi/6}` for cos 2x = 1/2 on [0, 2*pi). An Or never
+    reached the premise-set route, and `solve`'s principal roots made it "verified"."""
+    it = json.loads((ROOT / "evalset" / "items" / "ayt-trig-010.json").read_text(encoding="utf-8"))
+    r = verify(it["problem_ir"], it["solution"])
+    layer = next(l for l in r.layers if l.layer == "steps.refute")
+    s2 = next(e for e in layer.evidence["steps"] if e["id"] == "s2")
+    assert s2["status"] == "refuted" and s2["evidence"]["route"] == "premise_set", s2
+    assert sp.sympify(s2["evidence"]["counterexample"]["x"]) in (7 * sp.pi / 6, 11 * sp.pi / 6)
+    assert r.verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("claim,expected", [("0 <= x < pi", "refuted"), ("x in {pi/6, 7*pi/6}", "refuted")])
+def test_a_chain_or_a_choice_that_fails_on_part_of_the_premise_set_is_refuted(claim, expected):
+    """A chain is the intersection of its parts, a choice their union."""
+    st = _steps(verify(_ir("ayt-trig-010"), _sol("{pi/6}", "set", [("eq", claim)])))["s1"]
+    assert st[0] == expected, st
+
+
+def test_the_principal_roots_of_a_transcendental_equation_prove_nothing():
+    """solve(sin x = 0) gives 0 and pi; cos(x/2) >= 0 holds at both and fails at 2*pi."""
+    ir = {"task": {"kind": "evaluate", "params": {"expr": "x"}}, "vars": [{"name": "x"}, {"name": "y"}],
+          "givens": ["sin(x) = 0", "y = 1"]}
+    assert _one(ir, "cos(x/2) >= 0") == ("unknown", "no_counterexample_at_sampled_points")
+
+
+@pytest.mark.parametrize("claim", ["x in {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}", "0 <= x < 2*pi"])
+def test_a_right_and_or_claim_is_proved_on_the_premise_set(claim):
+    ir = _ir("ayt-trig-010")
+    st = _steps(verify(ir, _sol("{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}", "set", [("eq", claim)])))["s1"]
+    assert st[0] == "verified", st
+
+
+def test_a_single_root_is_proved_on_the_premise_set():
+    r = verify(_ir("ayt-trig-004"), _sol("{pi/3}", "set", TRIG + [("eq", "x = pi/3")], option="B"))
+    layer = next(l for l in r.layers if l.layer == "steps.refute")
+    s6 = next(e for e in layer.evidence["steps"] if e["id"] == "s6")
+    assert s6["status"] == "verified" and s6["evidence"]["route"] == "premise_set"
+
+
+def test_inconsistent_premises_prove_nothing():
+    ir = {"task": {"kind": "evaluate", "params": {"expr": "x"}}, "vars": [{"name": "x"}],
+          "givens": ["x > 2", "x < 1"]}
+    assert _one(ir, "x > 5")[0] != "verified"
+
+
+def test_a_polynomial_system_with_finitely_many_solutions_is_exhaustive():
+    ir = {"task": {"kind": "evaluate", "params": {"expr": "x"}}, "vars": [{"name": "x"}, {"name": "y"}],
+          "givens": ["x + y = 5", "x*y = 6"]}
+    assert _one(ir, "x**2 + y**2 = 13")[0] == "verified"
+    assert _one(ir, "x**2 + y**2 = 14")[0] == "refuted"
+
+
+def test_decide_reads_and_and_or():
+    from mathverify.certify.base import make_ctx
+    from mathverify.intake.structured import load_problem_ir
+    from mathverify.steps.deterministic import _decide
+    ctx = make_ctx(load_problem_ir({"task": {"kind": "evaluate", "params": {"expr": "x"}}, "vars": [{"name": "x"}]}))
+    x = ctx.ns["x"]
+    pt = {x: sp.Integer(2)}
+    assert _decide(sp.Or(sp.Eq(x, 1), sp.Eq(x, 2)), pt, ctx) is True
+    assert _decide(sp.Or(sp.Eq(x, 1), sp.Eq(x, 3)), pt, ctx) is False
+    assert _decide(sp.And(sp.Gt(x, 1), sp.Lt(x, 3)), pt, ctx) is True
+    assert _decide(sp.And(sp.Gt(x, 1), sp.Lt(x, 2)), pt, ctx) is False

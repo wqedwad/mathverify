@@ -84,3 +84,40 @@ def test_retries_run_out_with_an_error(tmp_path, monkeypatch):
     with pytest.raises(LLMError, match="HTTP 502"):
         c.complete("sys", "user", schema={"type": "object"}, effort="xhigh")
     assert calls == [False, True, True]
+
+
+def _flaky_stream(tmp_path, monkeypatch, bad):
+    """A streaming client whose first `bad` streams end without their usage event."""
+    calls, sleeps = [], []
+    left = [bad]
+
+    def fake_post(body):
+        calls.append(bool(body.get("stream")))
+        if left[0]:
+            left[0] -= 1
+            return {"id": "c", "choices": [{"delta": {}, "finish_reason": "stop", "index": 0}]}, ""
+        return dict(_LAST), '{"ok": 1}'
+
+    cache = LLMCache(tmp_path, mode="auto")
+    c = MetaClient(model="muse-spark-1.3", cache=cache, max_retries=2)
+    c._key = "k"
+    monkeypatch.setattr(c, "_post", fake_post)
+    monkeypatch.setattr(meta_client.time, "sleep", lambda s: sleeps.append(s))
+    return c, calls, sleeps, cache
+
+
+def test_a_stream_without_its_usage_event_is_retried_and_not_cached(tmp_path, monkeypatch):
+    """ayt-diz-004 (28 Sep 2026): a stream ended at 68 s with a bare stop, no content and no usage;
+    the empty answer was cached and every rerun replayed it."""
+    c, calls, sleeps, cache = _flaky_stream(tmp_path, monkeypatch, bad=1)
+    r = c.complete("sys", "user", schema={"type": "object"}, effort="xhigh")
+    assert calls == [True, True] and len(sleeps) == 1
+    assert r.parsed == {"ok": 1} and r.output_tokens == 2000
+
+
+def test_incomplete_streams_to_the_end_raise_and_leave_no_cache_record(tmp_path, monkeypatch):
+    c, calls, _, cache = _flaky_stream(tmp_path, monkeypatch, bad=3)
+    with pytest.raises(LLMError, match="stream ended without usage"):
+        c.complete("sys", "user", schema={"type": "object"}, effort="xhigh")
+    assert calls == [True, True, True]
+    assert not [p for p in tmp_path.rglob("*.json")]

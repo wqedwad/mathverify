@@ -1,6 +1,6 @@
 """Mutation check of the K4 fixes of 28 Sep 2026 (DECISIONS §63): the step refuter's task interval
-(A), assignments bound only by domains (B) and the problem's own objects (C); the Meta client's
-streaming (M); the K4 harness's answer labels and per-request lock (E). The machinery (throwaway
+(A), assignments bound only by domains (B), the problem's own objects (C) and "verified" meaning
+proved (V); the Meta client's streaming (M); the K4 harness's answer labels and per-request lock (E). The machinery (throwaway
 clones of the committed HEAD, exit codes, clean-up) is the one of denetim/2026-09-26/mutasyon.py;
 only the list of mutations is new.
 
@@ -64,12 +64,28 @@ MUTATIONS = [
     ("C05 oran sabit olmasa da nesne", DET,
      "        if r.ok and isinstance(r.value, sp.Expr) and not r.value.free_symbols and r.value.is_finite \\\n",
      "        if r.ok and isinstance(r.value, sp.Expr) and r.value.is_finite is not False \\\n", TK),
+    # --- (V) "verified" means proved (a finding of the same day)
+    ("V01 örneklenen sonuç verified", DET, "        if exhaustive:\n            return \"verified\", ev\n",
+     "        if True:\n            return \"verified\", ev\n", TK),
+    ("V02 parametrik çözüm de tam", DET, "                if rem:\n                    exhaustive = False\n",
+     "                if rem:\n", TK),
+    ("V03 polinom olmayan denklem de tam", DET,
+     "        return bool((rel.lhs - rel.rhs).is_polynomial(*syms))\n", "        return True\n", TK),
+    ("V04 And/Or küme yoluna girmez", DET,
+     "    parts = _claim_parts(claim) if isinstance(claim, (And, Or)) else None\n", "    parts = None\n", TK),
+    ("V05 boş bölge kanıt sayılır", DET,
+     "        return None, bool(nonempty.ok and nonempty.value is True)\n", "        return None, True\n", TK),
+    ("V06 küme yolu kanıt vermez", DET, "        if proved:\n", "        if False:\n", TK),
+    ("V07 _decide And/Or okumaz", DET, "    if isinstance(rel, (And, Or)):\n        vals", "    if False:\n        vals", TK),
+    ("V08 zincir birleşim sayılır", DET, "sets, isinstance(claim, And), timeout", "sets, False, timeout", TK),
     # --- (M) the Meta client
     ("M01 502 akışa geçirmez", META, "                if e.code in (502, 504, 524, 408) and not stream:",
      "                if e.code in (504, 524, 408) and not stream:", TM),
     ("M02 akışsız başlar", META, "                 max_retries: int = 4, stream: bool = True):",
      "                 max_retries: int = 4, stream: bool = False):", TM),
     ("M03 kip ayarı yok sayılır", META, "        stream = self.stream\n", "        stream = False\n", TM),
+    ("M04 usage'sız akış kabul", META, "                if stream and not (payload or {}).get(\"usage\"):\n",
+     "                if False:\n", TM),
     # --- (E) the K4 harness
     ("E01 C sembol değil", RS, "        ns = dict(ns, C=sp.Symbol(\"C\"))\n", "        ns = dict(ns)\n", TR),
     ("E02 sondaki + C ayıklanmaz", RS,
