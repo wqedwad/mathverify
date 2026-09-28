@@ -60,14 +60,15 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 1. **Bu dalın birleştirilmesi** (`wqedwad/asd#11`): önce kullanıcıya yedek sorulur (§6 yöntemi, yerelde), birleştirmeden
    hemen önce `scripts/check.py --plan`. Kuralın kendi dosyalarına dokunulmadı: son `--full` geçerliyse TAMAM beklenir.
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi
-   (`tyt-say-*`; önbellek anahtarları değişir, 280 öğe yeniden ücretli ~1.3–5 $); bu model hiç yanlış cevap
-   vermediği için yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
+   (`tyt-say-*`) **ertelendi** (kullanıcı, 28 Eylül akşam: "daha sonra bakarız"); şimdilik değişmez, adım 5'teki kod
+   dondurmadan önce yeniden sorulur. Bu model hiç yanlış cevap vermediği için yanlış onay direnci için daha zayıf
+   bir çözücü ya da başka aile gerekir.
 3. **Yedek etiketleri (isteğe bağlı):** PR #3, #4, #9 ve #10 öncesi `master` için etiket yok (§6).
 4. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
    yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
    sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanını o değiştirir).
 5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
-   23 Eylül). Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
+   23 Eylül). Dondurmadan önce kullanıcıya §4.4 madde 3'teki istem kararı sorulur. Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
 6. **Açık kapsama işleri** (§4.2) kullanıcı kararı. Gerçek çözücü için Anthropic ailesi bakiye bekliyor.
 
 ## 4. Açık maddeler (tam liste)
@@ -155,7 +156,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? API anahtarları
    ne zaman yenilenecek (§4.6)?
 3. Gerçek çözücü çıktıları: Muse Spark 1.3 ile 280 öğe yapıldı (§2). Açık: çözücü istemi IR sembollerinin anlamını
-   (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli ve ölçülen şey değişir)? Yanlış onay
+   (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli ve ölçülen şey değişir)? **Ertelendi**
+   (28 Eylül akşam; kod dondurmadan önce yeniden sorulur). Etki: yalnız haksız red (86 sorudan 1), yanlış onay yok. Yanlış onay
    direnci için hangi (daha zayıf ya da başka aileden) çözücü? Etiketleri kim denetleyecek?
 4. Lisans ve CI (uzak depo özel GitHub `wqedwad/asd`; CI ve LICENSE yok). CI açılırsa hızlı
    `scripts/check.py` koşar; Lean ve `--full` kurulum ister.
