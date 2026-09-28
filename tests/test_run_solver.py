@@ -145,3 +145,134 @@ def test_calls_running_when_the_run_stops_are_still_reported(tmp_path):
     # every call made is reported and paid for; at most one per worker ran past the second cost
     assert s["n"] == len(client.calls) == _Slow.started and s["cost_usd"] == float(s["n"])
     assert 4 <= s["n"] <= 4 + 3, s["n"]
+
+
+def _label(items, item_id, kind, payload, option=None):
+    from harness.loader import split_for_verifier
+    ir, key, labels = split_for_verifier(items[item_id])
+    sol = {"claimed_answer": {"kind": kind, "payload": payload, "option": option}, "steps": []}
+    return run_solver.answer_label(ir, sol, labels["gold_answer"], key["claimed_answer"]["kind"])
+
+
+@pytest.mark.parametrize("payload,expected", [("x*log(x) - x", "right"), ("x*log(x) - x + C", "right"),
+                                              ("x*log(x) - x + c", "right"), ("x*log(x) - x + 7", "right"),
+                                              ("C + x*log(x) - x", "right"),
+                                              ("x*log(x) + x", "wrong"), ("x*log(x) + x + C", "wrong")])
+def test_an_antiderivative_is_labelled_up_to_the_constant_of_the_key(items, payload, expected):
+    """The key is `x*log(x) - x + C`; `C` is the binomial in the parser's namespace and the key was
+    never read, so every antiderivative stayed `undecided` (K4, 28 Sep 2026: ayt-int-005)."""
+    label, why = _label(items, "ayt-int-005", "expression", payload)
+    assert label == expected, why
+
+
+@pytest.mark.parametrize("kind,payload,option,expected", [
+    ("dne", None, "E", "right"), ("dne", None, None, "right"), ("value", "limit yoktur", None, "right"),
+    ("value", "", "E", "right"), ("value", "DNE.", None, "right"),
+    ("value", "1", "C", "wrong"), ("value", "0", None, "wrong"),
+    ("infinite", "oo", None, "undecided")])
+def test_a_limit_that_does_not_exist_is_labelled_whatever_its_wording(items, kind, payload, option, expected):
+    """Key `DNE` (kind value), option E `limit yoktur` (ayt-lim-009 was `undecided`). A finite value
+    against nonexistence is a proved difference; an infinite limit is a convention and not decided."""
+    label, why = _label(items, "ayt-lim-009", kind, payload, option)
+    assert label == expected, why
+
+
+def test_a_constant_inside_the_key_is_set_to_zero(items):
+    from harness.loader import split_for_verifier
+    ir, _, _ = split_for_verifier(items["ayt-int-005"])
+    sol = {"claimed_answer": {"kind": "expression", "payload": "x*log(x) - x"}, "steps": []}
+    assert run_solver.answer_label(ir, sol, "C + x*log(x) - x", "expression")[0] == "right"
+
+
+def test_nonexistence_against_a_finite_key_is_wrong_and_e_is_a_number(items):
+    assert _label(items, "ayt-lim-001", "dne", None)[0] == "wrong"          # key 4
+    assert _label(items, "ayt-lim-001", "value", "limit yoktur")[0] == "wrong"
+    assert not run_solver._is_dne("value", "E") and not run_solver._is_dne("value", "limit yoktur ya da 2")
+
+
+def test_one_request_is_never_paid_for_twice_at_once(tmp_path):
+    """ayt-tur-003 and -010 ask the same question, so they send the same request; the second must
+    wait for the first (whose answer the cache then serves) instead of paying in parallel. A
+    different question still runs alongside."""
+    import threading
+    import time as _t
+    lock, inflight, peak, overlap = threading.Lock(), {}, {}, []
+
+    class _Tracked(ScriptedClient):
+        def complete(self, system, user, **kw):
+            with lock:
+                inflight[user] = inflight.get(user, 0) + 1
+                peak[user] = max(peak.get(user, 0), inflight[user])
+                overlap.append(sum(inflight.values()))
+            _t.sleep(0.3)
+            with lock:
+                inflight[user] -= 1
+            return super().complete(system, user, **kw)
+
+    client = _Tracked("meta", {"solver_meta": solution_reply("equation", "y = 2*x - 1", option="A")})
+    set_client_override("meta", client)
+    s = run_solver.main(["--family", "meta", "--max-cost", "5", "--workers", "3", "--out", str(tmp_path),
+                         "--ids", "ayt-tur-003,ayt-tur-010,ayt-ana-002"])
+    assert s["n"] == 3 and len(client.calls) == 3
+    assert len(peak) == 2 and max(peak.values()) == 1, peak
+    assert max(overlap) == 2                        # the other question ran alongside
+
+
+def test_an_item_waiting_for_its_request_starts_no_call_after_a_stop(tmp_path, monkeypatch):
+    """The first of two identical requests fails on billing and stops the run; the second, which
+    was waiting for it, must not start a paid call of its own. The stop is set before the lock is
+    released: a slow `_account` widens the window in which the other order let the call through."""
+    import threading
+    import time as _t
+    first_in = threading.Event()
+    real_account = run_solver._account
+
+    def slow_account(args, rec):
+        _t.sleep(0.3)
+        real_account(args, rec)
+
+    monkeypatch.setattr(run_solver, "_account", slow_account)
+
+    class _Broke(ScriptedClient):
+        def complete(self, system, user, **kw):
+            self.calls.append((kw.get("tag"), user))
+            first_in.set()
+            _t.sleep(0.3)                           # the second item is now waiting on the lock
+            raise LLMCreditError("insufficient balance")
+
+    client = _Broke("meta", {})
+    set_client_override("meta", client)
+    s = run_solver.main(["--family", "meta", "--max-cost", "5", "--workers", "2", "--out", str(tmp_path),
+                         "--ids", "ayt-tur-003,ayt-tur-010"])
+    assert first_in.is_set() and len(client.calls) == 1, client.calls
+    assert s["aborted"] == "LLMCreditError: insufficient balance" and s["n"] == 1
+
+
+@pytest.mark.parametrize("payload,expected", [("70°", "right"), ("70", "right"), ("70 derece", "right"),
+                                              ("80°", "wrong"), ("7*pi/18", "wrong")])
+def test_an_angle_in_degrees_is_labelled_as_the_certificate_reads_it(items, payload, expected):
+    """angle() is in degrees: `70°` is 70. The generic parser made it 7*pi/18 and three right answers
+    became false acceptances in the report (tyt-geo-002/-008/-013, 28 Sep 2026)."""
+    label, why = _label(items, "tyt-geo-002", "value", payload)
+    assert label == expected, why
+
+
+@pytest.mark.parametrize("payload,expected", [("{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}", "right"),
+                                              ("{pi/6 + 2*n*pi, 5*pi/6 + 2*n*pi}", "right"),
+                                              ("{pi/6 + 2*k*pi}", "undecided"),
+                                              ("{5*pi/6 + 2*k*pi, pi/6 + 2*k*pi}", "right")])
+def test_a_general_trig_solution_is_labelled_only_when_it_is_the_same_set(items, payload, expected):
+    """The key's `k` was undeclared (ayt-trig-002). Two sets with a symbolic integer parameter are
+    never proved different: that path would call {pi/6 + 2*n*pi} wrong against {pi/6 + 2*k*pi}."""
+    label, why = _label(items, "ayt-trig-002", "set", payload)
+    assert label == expected, why
+
+
+@pytest.mark.parametrize("item,payload,expected", [
+    ("uni-la-004", "(16, 14)", "right"), ("uni-la-004", "[16, 14]", "right"), ("uni-la-004", "(16, 15)", "wrong"),
+    ("uni-la-004", "(16, 14, 0)", "wrong"),
+    ("uni-la-003", "[1, 1]", "right"), ("uni-la-003", "(2, 2)", "undecided"), ("uni-la-003", "(1, -1)", "undecided")])
+def test_a_tuple_answer_is_labelled_element_by_element(items, item, payload, expected):
+    """(16,14) against (16, 14) was `undecided` (uni-la-*). An eigenvector is right up to a factor."""
+    label, why = _label(items, item, "expression", payload)
+    assert label == expected, why

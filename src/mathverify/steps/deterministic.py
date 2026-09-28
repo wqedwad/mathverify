@@ -6,8 +6,11 @@ For every step of kind `eq` or `compute` with a parseable claim:
     with rhs (domain-aware). A definite difference => REFUTED.
   * `eq`: claim is a relation that should follow from the premises. Premises are the
     IR givens plus ALL earlier parseable step claims (not only the cited ones, so that
-    under-citation is never penalised). We look for a point that satisfies every premise,
+    under-citation is never penalised), the variables' domain constraints and the task's own
+    interval. We look for a point that satisfies every premise,
     lies in the problem domain, and violates the claim. Found => REFUTED with that point.
+    A claim that restates one of the problem's own objects (the curve of a tangent line) is
+    neither checked nor a premise (`_task_objects`).
 Outcomes per step: verified | refuted | unknown | skipped. The layer result is `fail`
 (hard) only when at least one step is refuted; otherwise `unknown` (never `pass`).
 """
@@ -297,36 +300,84 @@ def _negation(claim):
     return None
 
 
-def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> dict | None:
-    """A point of the premises' solution set (within the domain) where the claim is false."""
-    from ..certify.calculus import _points_of
+def _claim_parts(claim) -> list | None:
+    """The relations an And/Or claim is made of (a chain `0 <= p <= 1`, a choice `x in {1, 2}`),
+    None when a part is not a plain relation."""
+    parts = list(claim.args)
+    return parts if all(isinstance(a, sp.core.relational.Relational) for a in parts) else None
+
+
+def _fail_set(claim, v, region, ctx: Ctx):
+    """The part of `region` where the claim is false, or None when it cannot be computed exactly."""
     neg = _negation(claim)
-    if neg is None or any(not isinstance(p, sp.core.relational.Relational) for p in premises):
+    if neg is not None:
+        rb = sb_run("mathverify.sandbox.ops:solveset_in", neg, v, region, timeout=ctx.timeout)
+        return rb.value if rb.ok and not rb.value.has(sp.ConditionSet) else None
+    parts = _claim_parts(claim) if isinstance(claim, (And, Or)) else None
+    if parts is None:
         return None
+    sets = []
+    for a in parts:
+        r = sb_run("mathverify.sandbox.ops:solveset_in", a, v, S.Reals, timeout=ctx.timeout)
+        if not r.ok or r.value.has(sp.ConditionSet):
+            return None
+        sets.append(r.value)
+    rb = sb_run("mathverify.steps.deterministic:_outside", region, sets, isinstance(claim, And), timeout=ctx.timeout)
+    return rb.value if rb.ok and not rb.value.has(sp.ConditionSet) else None
+
+
+def _outside(region, sets, conjunction: bool):
+    inside = sp.Intersection(*sets) if conjunction else sp.Union(*sets)
+    return sp.Complement(region, inside)
+
+
+def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None, bool]:
+    """(a point of the premises' solution set, within the domain, where the claim is false; whether
+    the claim is PROVED on that set). Proved means the premises' set is exactly computed, not empty,
+    and the part of it where the claim fails is exactly empty. An And/Or claim was never tried here:
+    "x in {pi/6, 5*pi/6}" under cos 2x = 1/2 on [0, 2*pi) was not refuted, and `solve`'s two
+    principal roots made it "verified" (ayt-trig-010, 28 Sep 2026)."""
+    from ..certify.calculus import _points_of
+    if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
+        return None, False
     region = ctx.domain_for(v) if v.name in ctx.ns else S.Reals
     for p in premises:
         r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
         if not r.ok or r.value.has(sp.ConditionSet):
-            return None
+            return None, False
         region = sp.Intersection(region, r.value)
-    rb = sb_run("mathverify.sandbox.ops:solveset_in", neg, v, region, timeout=ctx.timeout)
-    if not rb.ok or rb.value is S.EmptySet or rb.value.has(sp.ConditionSet):
-        return None
-    for pt in _points_of(rb.value):
+    fail = _fail_set(claim, v, region, ctx)
+    if fail is None:
+        return None, False
+    if fail is S.EmptySet:
+        nonempty = sb_run("mathverify.steps.deterministic:_nonempty", region, timeout=ctx.timeout)
+        return None, bool(nonempty.ok and nonempty.value is True)
+    for pt in _points_of(fail):
         point = {v: pt}
         if not _in_domains(ctx, point):
             continue
         if all(_decide(p, point, ctx) is True for p in premises) and _decide(claim, point, ctx) is False:
-            return point
-    return None
+            return point, False
+    return None, False
+
+
+def _nonempty(s) -> bool:
+    """True only when SymPy decides the set is not empty; a vacuous proof is no proof."""
+    return s.is_empty is False
 
 
 def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     """Truth of a relation at a point, exact at exact zeros: the difference of the sides is
     simplified first, and a numeric sign is only trusted when it is far from zero. `_holds`
-    compares tolerantly, which misreads x^2 - 2x - 1 >= 0 at x = 1 - sqrt(2) (measured)."""
+    compares tolerantly, which misreads x^2 - 2x - 1 >= 0 at x = 1 - sqrt(2) (measured; on 28 Sep 2026
+    `_holds` read it right, and agreed with this function on every boundary point tried)."""
     from ..equiv.numeric import to_mp
     import mpmath as mp
+    if isinstance(rel, (And, Or)):
+        vals = [_decide(a, point, ctx) for a in rel.args]
+        if isinstance(rel, And):
+            return False if False in vals else True if all(v_ is True for v_ in vals) else None
+        return True if True in vals else False if all(v_ is False for v_ in vals) else None
     if not isinstance(rel, sp.core.relational.Relational):
         return None
     try:
@@ -368,13 +419,35 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     return None
 
 
-def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
-    ev: dict[str, Any] = {"n_premises": len(premises)}
+def _is_assignment(claim) -> bool:
+    """An equation, or a finite choice of equations (`x in {1, 2}`): the shape of "let n = 20"."""
+    return isinstance(claim, Eq) or (isinstance(claim, Or) and all(isinstance(a, Eq) for a in claim.args))
+
+
+def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: list = ()) -> tuple[str, dict]:
+    """`premises`: the givens, earlier claims and case assumptions. `restrictions`: the variables'
+    domain constraints (`var_constraints`). `window`: the task's own interval for its variable
+    (`_task_window`). All three bound the counterexample search; they differ in what they BIND."""
     syms = set(claim.free_symbols)
     prem_syms: set = set()
     for p in premises:
         syms |= p.free_symbols
         prem_syms |= p.free_symbols
+    # A domain restriction only narrows a symbol, it never determines one: an assignment whose
+    # symbols nothing but their domains constrain is a definition. "n = 20" (the 20th term) was
+    # refuted with the point {k: 109, n: 50}, which satisfies only k > 0 and n > 0 and is no
+    # instance of the problem (K4, 28 Sep 2026: 11 correct ayt-diz solutions). An inequality still
+    # counts them: "x >= 3" against the written condition x - 2 >= 0 is a refutable consequence.
+    for p in restrictions:
+        syms |= p.free_symbols
+        if not _is_assignment(claim):
+            prem_syms |= p.free_symbols
+    # The window binds nothing, so the definitional test below is the same with or without it and
+    # it can only shrink the set a counterexample is drawn from. It joins only when its variable
+    # is already in play.
+    window = [w for w in window if w.free_symbols <= syms]
+    premises = list(premises) + list(restrictions) + window
+    ev: dict[str, Any] = {"n_premises": len(premises)}
     # A claim that introduces symbols the premises do not constrain is *definitional*
     # ("the tangent line is y = 2x - 1", "let x = 4") and cannot be refuted as a
     # consequence. The only refutable shape without premise support is an identity
@@ -395,14 +468,23 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
     # "-2 < x" under x^2 - 5x - 14 <= 0 all went unrefuted (audit of 25 Sep 2026). A witness is
     # still checked pointwise against every premise, so a wrong solveset cannot refute a step.
     if len(syms) == 1:
-        w = _set_counterexample(claim, premises, syms[0], ctx)
+        w, proved = _set_counterexample(claim, premises, syms[0], ctx)
         if w is not None:
             ev["counterexample"] = {str(k): str(v) for k, v in w.items()}
             ev["route"] = "premise_set"
             return "refuted", ev
+        if proved:
+            ev["route"] = "premise_set"
+            return "verified", ev
     eqs = [p for p in premises if isinstance(p, Eq)]
     others = [p for p in premises if not isinstance(p, Eq)]
     points: list[dict] = []
+    # Only a finite solution set of polynomial equations is known to be complete; anything sampled
+    # (a parametric solution, rejection sampling, `solve`'s principal roots of a transcendental
+    # equation) can miss the one point where the claim fails. "verified" was said for all of them:
+    # x >= 6 under x + y = 10, x >= y (x = y = 5), and the wrong "x in {pi/6, 5*pi/6}" of ayt-trig-010.
+    # Nothing but the L6 cross-check reads "verified", and it overrules the critic on it.
+    exhaustive = False
     # route 1: solve the equational premises
     if eqs:
         r = sb_run("mathverify.sandbox.ops:solve_system", eqs, syms, True, timeout=ctx.timeout)
@@ -411,6 +493,7 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
             ev["solutions"] = len(sols)
             if not sols:
                 return "unknown", {"reason": "premises_inconsistent_or_unsolved", **ev}
+            exhaustive = all(_is_polynomial(p, syms) for p in eqs)
             for s_ in sols:
                 # parametric solution: sample the remaining free symbols
                 rem = set()
@@ -418,6 +501,7 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
                     rem |= v.free_symbols
                 rem |= set(syms) - set(s_.keys())
                 if rem:
+                    exhaustive = False
                     doms = {q: ctx.domain_for(q) for q in rem}
                     for pt in sample_points(doms, 24, ctx.seed) + _small_integer_grid(doms):
                         full = {k: sp.simplify(v.subs(pt)) for k, v in s_.items()}
@@ -452,8 +536,87 @@ def _check_eq(claim, premises: list, ctx: Ctx) -> tuple[str, dict]:
             checked += 1
     ev["points_checked"] = checked
     if checked and checked == len([p for p in points if _in_domains(ctx, p)]):
-        return "verified", ev
+        if exhaustive:
+            return "verified", ev
+        ev["reason"] = "no_counterexample_at_sampled_points"
     return "unknown", ev
+
+
+def _is_polynomial(rel, syms) -> bool:
+    try:
+        return bool((rel.lhs - rel.rhs).is_polynomial(*syms))
+    except Exception:  # noqa: BLE001 - a matrix, or anything else that is not an expression
+        return False
+
+
+def _task_window(ir, ctx: Ctx) -> list:
+    """The task's own interval for its variable (`params.interval` of `trig_solve` and `extremum`)
+    as relations. It was not a premise: "x = pi/3" from tan x = sqrt(3) on [0, pi) was refuted with
+    x = 4*pi/3 (K4, 28 Sep 2026: ayt-trig-004/-013/-017), and a solver's `assert` steps stating the
+    interval never join the pool. An And is split so the premise-set route stays open."""
+    from ..normalize.parse import parse_set_str
+    p = ir.task.params or {}
+    iv = p.get("interval")
+    v = ctx.ns.get(p.get("var", "x"))
+    if not isinstance(iv, str) or not iv.strip() or not isinstance(v, sp.Symbol):
+        return []
+    try:
+        rel = parse_set_str(iv, ctx.ns).as_relational(v)
+    except Exception:  # noqa: BLE001 - an interval we cannot read restricts nothing
+        return []
+    parts = list(rel.args) if isinstance(rel, And) else [rel]
+    if any(r in (sp.true, sp.false) or not _is_relation(r) for r in parts):
+        return []
+    return parts
+
+
+def _task_objects(ir, ctx: Ctx) -> list:
+    """Equations of the problem's own objects that are NOT the answer, written in the answer's
+    coordinates: the curve of a tangent line, the given line of a parallel/perpendicular line, the
+    circle of a tangent to a circle. A solver that writes the curve as `y = x**2` and the tangent as
+    `y = 2*x - 1` names two objects with one `y`; the tangent was refuted against the curve with
+    (x, x**2) (K4, 28 Sep 2026: ayt-tur-003/-010/-013)."""
+    p = ir.task.params or {}
+    kind = ir.task.kind
+    try:
+        if kind == "tangent_line" and isinstance(p.get("f"), str):
+            x, y = ctx.ns.get(p.get("var", "x")), ctx.ns.get(p.get("dep", "y"))
+            if isinstance(x, sp.Symbol) and isinstance(y, sp.Symbol):
+                return [Eq(y, ctx.expr(p["f"]))]
+        if kind == "equation_of":
+            obj = p.get("object")
+            if obj in ("line_point_parallel", "line_point_perpendicular") and isinstance(p.get("line"), str):
+                return [ctx.rel(p["line"])]
+            x, y = ctx.ns.get("x"), ctx.ns.get("y")
+            if obj == "tangent_to_circle_at_point" and isinstance(x, sp.Symbol) and isinstance(y, sp.Symbol):
+                (cx, cy), (px, py) = ([ctx.expr(str(c)) for c in p[k]] for k in ("center", "point"))
+                return [Eq((x - cx) ** 2 + (y - cy) ** 2, (px - cx) ** 2 + (py - cy) ** 2)]
+    except Exception:  # noqa: BLE001 - parameters we cannot read name no object
+        return []
+    return []
+
+
+def _ratio(a, b):
+    return sp.simplify(sp.cancel(a / b))
+
+
+def _states_task_object(claim, objects: list, ctx: Ctx) -> bool:
+    """True when the claim is the equation of one of `objects` up to a nonzero constant factor.
+    Anything less certain is False, and the claim is checked as before."""
+    if not isinstance(claim, Eq):
+        return False
+    a = claim.lhs - claim.rhs
+    for obj in objects:
+        if not isinstance(obj, Eq) or obj.free_symbols != claim.free_symbols or not claim.free_symbols:
+            continue
+        b = obj.lhs - obj.rhs
+        if a == 0 or b == 0:
+            continue
+        r = sb_run("mathverify.steps.deterministic:_ratio", a, b, timeout=ctx.timeout)
+        if r.ok and isinstance(r.value, sp.Expr) and not r.value.free_symbols and r.value.is_finite \
+                and r.value.is_zero is False:
+            return True
+    return False
 
 
 def _with_bound_dummies(text: str, ns: dict[str, Any]):
@@ -508,11 +671,13 @@ def check_steps(ir, solution, ctx: Ctx):
         per_step: list[dict[str, Any]] = []
         parsed: dict[str, Any] = {}
         parsed_cases: dict[str, frozenset] = {}
-        givens = []
+        givens, restrictions = [], []
         try:
-            givens = ctx.givens() + ctx.var_constraints()
+            givens, restrictions = ctx.givens(), ctx.var_constraints()
         except Exception:
             pass
+        window = _task_window(ir, ctx)
+        objects = _task_objects(ir, ctx)
         first_bad = None
         n_ref = n_ver = n_unk = n_skip = n_malformed = 0
         case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
@@ -589,6 +754,14 @@ def check_steps(ir, solution, ctx: Ctx):
                 continue
             my_cases = case_closure(st.id)
             my_case_ids = frozenset(k for k in case_claims if case_claims[k] in my_cases)
+            if st.kind == "eq" and objects and _states_task_object(claim, objects, ctx):
+                # the problem's own curve (or given line, circle), not a constraint on the
+                # answer's coordinates: not checked, and it never becomes a premise
+                entry["status"] = "skipped"
+                entry["reason"] = "states_a_task_object"
+                n_skip += 1
+                per_step.append(entry)
+                continue
             try:
                 if st.kind == "compute":
                     status, ev = _check_compute(claim, ctx)
@@ -598,7 +771,7 @@ def check_steps(ir, solution, ctx: Ctx):
                     premises = list(givens) + [parsed[k] for k in parsed
                                                if k != st.id and parsed_cases.get(k, frozenset()) <= my_case_ids]
                     premises += my_cases
-                    status, ev = _check_eq(claim, premises, ctx)
+                    status, ev = _check_eq(claim, premises, ctx, restrictions, window)
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
             entry["status"] = status

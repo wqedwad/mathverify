@@ -4,8 +4,9 @@ Endpoint: POST https://api.meta.ai/v1/chat/completions, `Authorization: Bearer <
 Parameters used: reasoning_effort (Muse Spark always reasons; "xhigh" is the maximum),
 temperature 0 + seed 0 (determinism is *not* guaranteed by the API — the record/replay
 cache provides it), max_completion_tokens, response_format json_schema for structured
-output. Non-streaming requests can hit a server-side time limit (HTTP 504), so long calls
-are retried in streaming mode and the SSE deltas are concatenated.
+output. Requests stream by default and the SSE deltas are concatenated; the last event carries
+`usage` without `stream_options` (measured 28 Sep 2026). A non-streaming request (`stream=False`)
+can hit a time limit on the way (HTTP 504, or 502 from a proxy) and is retried as a stream.
 Implemented with the standard library (urllib) — no third-party OpenAI shim.
 """
 from __future__ import annotations
@@ -38,16 +39,25 @@ def tls_context() -> ssl.SSLContext:
     return ctx
 
 
+class _IncompleteStream(ConnectionError):
+    """A stream that ended before its closing usage event: retried like a dropped connection."""
+
+
 class MetaClient:
     provider = "meta"
     family = "meta"
 
     def __init__(self, model: str | None = None, cache: LLMCache | None = None, timeout: float = 900.0,
-                 max_retries: int = 4):
+                 max_retries: int = 4, stream: bool = True):
         self.model = model or os.environ.get("MATHVERIFY_META_MODEL", "muse-spark-1.3")
         self.cache = cache or default_cache()
         self.timeout = timeout
         self.max_retries = max_retries
+        # Streaming from the first attempt: through the cloud's egress proxy a non-streaming call
+        # that has not answered in ~31 s ends with 502, while a stream's headers arrive at once
+        # (measured 28 Sep 2026, ayt-tur-001: 502 at 31 s, then the stream finished in 58 s).
+        # `stream` is not part of the cache key, so cached answers are unaffected.
+        self.stream = stream
         self._key = os.environ.get("META_MODEL_API_KEY")
 
     def _body(self, system: str | list[str], user: str, schema: dict | None, effort: str, max_tokens: int,
@@ -119,10 +129,15 @@ class MetaClient:
                     pass
             return resp
         text, payload, err = "", None, None
-        stream = False
+        stream = self.stream
         for attempt in range(self.max_retries + 1):
             try:
                 payload, text = self._post(dict(body, stream=stream))
+                if stream and not (payload or {}).get("usage"):
+                    # every complete stream ends with a usage event (measured 4/4, 28 Sep 2026). One
+                    # ended at 68 s with a bare `stop` and no content (ayt-diz-004); it was cached, so
+                    # every rerun replayed the empty answer. An incomplete stream is retried, never cached.
+                    raise _IncompleteStream(f"stream ended without usage after {len(text)} characters")
                 if not stream:
                     choice = (payload.get("choices") or [{}])[0]
                     text = ((choice.get("message") or {}).get("content")) or ""
@@ -133,8 +148,11 @@ class MetaClient:
             except urllib.error.HTTPError as e:
                 detail = e.read().decode("utf-8", "replace")[:300]
                 err = f"HTTP {e.code}: {detail}"
-                if e.code in (504, 524, 408) and not stream:
-                    stream = True                      # retry the same request as a stream
+                if e.code in (502, 504, 524, 408) and not stream:
+                    # retry the same request as a stream, at once. The cloud's egress proxy answers
+                    # a non-streaming call still running at ~31 s with 502 "upstream request failed":
+                    # 61 of 179 items failed after five such attempts (K4, 28 Sep 2026)
+                    stream = True
                 elif e.code in (429, 500, 502, 503):
                     time.sleep(min(60, 2 ** attempt * 3))
                 elif e.code in (401, 403):

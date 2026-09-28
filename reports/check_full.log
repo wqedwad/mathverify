@@ -1,30 +1,30 @@
-check.py --full · 2026-09-27 23:44:44 UTC · claude/dreamy-meitner-rvrwlj @ 7d9e9a1 · commit edilmemiş değişiklik: 0 dosya
+check.py --full · 2026-09-28 18:14:01 UTC · claude/busy-bardeen-ckr5bw @ 3e1805d · commit edilmemiş değişiklik: 0 dosya
 ortam: Python 3.14.6 (/home/user/asd/.venv/bin/python) · Linux-6.18.44-fc-v37-x86_64-with-glibc2.39 · sympy 1.14.0 · mpmath 1.3.0 · z3-solver 5.1.0.0 · math-verify 0.9.0 · pytest 9.1.1 · MATHVERIFY_*: MATHVERIFY_LEAN_PROJECT, MATHVERIFY_LEAN_REPL, MATHVERIFY_OPT
 kilit: requirements.lock 6d0fd0b1dbf0017e · 31 paket · uyuşmayan: yok
 
 == Lean ısınma ==
-  lean_warmup: 307 s (exit 0)
+  lean_warmup: 11 s (exit 0)
 == testler ==
-  pytest: 321 s (exit 0)
+  pytest: 399 s (exit 0)
     SKIPPED [3] tests/test_cloud_scripts.py:637: root writes read-only directories
     SKIPPED [1] tests/test_cloud_scripts.py:956: opt-in: downloads the locked packages (MATHVERIFY_CLOUD_INTEGRATION=1)
     SKIPPED [1] tests/test_f5_lean.py:68: statement out of scope for this item
 == pyflakes ==
   pyflakes: 2 s (exit 1)
 == deterministik değerlendirme ==
-  run_eval: 81 s (exit 0)
+  run_eval: 88 s (exit 0)
 == Lean taraması ==
-  run_lean: 112 s (exit 0)
+  run_lean: 147 s (exit 0)
 == adversaryal ==
-  adversarial: 734 s (exit 0)
+  adversarial: 793 s (exit 0)
     adversarial: 4 süreç · sandbox zaman aşımı 0 · yeniden başlatma 0 · sandbox/katman hatası 0 · tek başına yeniden denenen 0
 == metamorfik sağlamlık ==
-  soundness_fuzz: 119 s (exit 0)
+  soundness_fuzz: 129 s (exit 0)
 == kalibrasyon ==
-  calibrate: 43 s (exit 0)
+  calibrate: 48 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  1546 passed, 5 skipped in 319.55s (0:05:19)   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  1639 passed, 5 skipped in 395.44s (0:06:35)   (hedef: hepsi geçer)
   [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
@@ -51,5 +51,5 @@ kilit: requirements.lock 6d0fd0b1dbf0017e · 31 paket · uyuşmayan: yok
 
 24/24 kapı geçti
 
-check.py --full sonu · 2026-09-28 00:13:25 UTC · claude/dreamy-meitner-rvrwlj @ 7d9e9a1 · commit edilmemiş değişiklik: 0 dosya
-check.py --full raporları · reports/adversarial_report.md 3c1dc7c7310b1c48 · reports/calibration_report.md 7de549f281115306 · reports/eval_report.md 8ceb38fe7b9ff239 · reports/f3_report.md 56eff4480c766d52 · reports/f3_smoke_report.md cf2998470164dd93 · reports/lean_report.md aff0858c335a6140 · reports/soundness_report.md 0d21905768d6fbc2
+check.py --full sonu · 2026-09-28 18:40:57 UTC · claude/busy-bardeen-ckr5bw @ 3e1805d · commit edilmemiş değişiklik: 0 dosya
+check.py --full raporları · reports/adversarial_report.md 478af887b8989f54 · reports/calibration_report.md 8721148abeb13e1d · reports/eval_report.md 5d81043de69aa138 · reports/f3_report.md 56eff4480c766d52 · reports/f3_smoke_report.md cf2998470164dd93 · reports/lean_report.md 3f81ab27d0882d4a · reports/solver_meta_report.md a06fa448bb7a64b1 · reports/soundness_report.md db8107c4a11326b7
