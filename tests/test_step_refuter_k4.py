@@ -314,6 +314,32 @@ def test_a_wrong_rewrite_of_the_tangent_is_still_refuted(wrong):
     assert _steps(r)["s6"][0] == "refuted" and r.verdict == "INCORRECT"
 
 
+_SLOPE = [("compute", "diff(x**2, x) = 2*x"), ("compute", "at(2*x, x, 1) = 2")]
+
+
+@pytest.mark.parametrize("steps,flagged", [
+    ([("eq", "y = x**2"), ("eq", "x = 1"), ("eq", "y = 2")] + _SLOPE + [("eq", "y = 2*x - 1")], "s6"),
+    ([("eq", "x = 1"), ("eq", "y = 2")] + _SLOPE + [("eq", "y = 2*x - 1")], "s5"),
+    ([("eq", "y = x**2")] + _SLOPE + [("eq", "y = 2*x + 1"), ("eq", "y = 2*x - 1")], "s5"),
+])
+def test_a_wrong_point_or_line_is_still_caught_without_the_curve_as_a_premise(steps, flagged):
+    """Probe of 28 Sep 2026 (C): with the curve out of the premises, a wrong ordinate of the point of
+    tangency ("y = 2", f(1) = 1) or a wrong line in the middle is a definition and is not refuted
+    itself, but the right answer contradicts it: the solution stays INCORRECT, as before #11. The
+    step flagged is the later, right one: a localization limit, not a false accept."""
+    r = verify(_ir("ayt-tur-003"), _sol("y = 2*x - 1", "equation", steps, option="A"))
+    assert r.verdict == "INCORRECT" and _steps(r)[flagged][0] == "refuted", _steps(r)
+
+
+def test_a_point_chosen_on_a_stated_line_is_refuted_as_a_consequence():
+    """V13, a false rejection in every version (before #11 too): the tangent's y-intercept written as
+    "x = 0", "y = -1" after "y = 2*x - 1". The line in the pool binds x, so the chosen x = 0 is read as
+    a consequence of it and refuted. Pinned here so that a fix is a visible change."""
+    steps = _SLOPE + [("eq", "y = 2*x - 1"), ("eq", "x = 0"), ("eq", "y = -1")]
+    r = verify(_ir("ayt-tur-003"), _sol("y = 2*x - 1", "equation", steps, option="A"))
+    assert _steps(r)["s4"][0] == "refuted" and r.verdict == "INCORRECT", _steps(r)
+
+
 @pytest.mark.parametrize("claim", ["y = x**2 + 1", "y = 2*x**2", "y**2 = x**2"])
 def test_a_curve_that_is_not_the_tasks_is_checked_as_before(claim):
     from mathverify.certify.base import make_ctx
@@ -351,6 +377,9 @@ def test_the_given_line_of_a_parallel_line_task_is_no_premise():
     assert _steps(r)["s1"] == ("skipped", "states_a_task_object") and r.verdict == "CORRECT", r.decision_trace
     bad = verify(ir, _sol("y = 2*x + 3", "equation", steps[:2] + [("eq", "y = 2*x + 4")]))
     assert _steps(bad)["s3"][0] == "refuted"
+    # a wrong line in the middle, no point-slope form: the right answer contradicts it (probe C4)
+    mid = verify(ir, _sol("y = 2*x + 3", "equation", [steps[0], ("eq", "y = 3*x + 2"), steps[2]]))
+    assert mid.verdict == "INCORRECT" and _steps(mid)["s3"][0] == "refuted", _steps(mid)
 
 
 def test_the_circle_of_a_tangent_to_circle_task_is_no_premise():
