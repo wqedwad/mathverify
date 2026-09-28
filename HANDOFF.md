@@ -57,8 +57,8 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalın birleştirilmesi** (`wqedwad/asd#11`): önce kullanıcıya yedek sorulur (§6 yöntemi, yerelde), birleştirmeden
-   hemen önce `scripts/check.py --plan`. Kuralın kendi dosyalarına dokunulmadı: son `--full` geçerliyse TAMAM beklenir.
+1. **Bu dalın birleştirilmesi** (`wqedwad/asd#11`): yedek alındı (`yedek/master-2026-09-28`, §6); birleştirme kararı
+   kullanıcıda, hemen önce `scripts/check.py --plan` (son koşu TAMAM).
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi
    (`tyt-say-*`) **ertelendi** (kullanıcı, 28 Eylül akşam: "daha sonra bakarız"); şimdilik değişmez, adım 5'teki kod
    dondurmadan önce yeniden sorulur. Bu model hiç yanlış cevap vermediği için yanlış onay direnci için daha zayıf
@@ -248,6 +248,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   | `yedek/master-2026-09-26-2` | `849b492` (PR #7 öncesi) | `mathverify-master-849b492-2026-09-26.bundle` (kullanıcının betiği: yerel `master` önce ileri sarıldı, `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
   | `yedek/master-2026-09-27` | `5c2f83e` (PR #8 öncesi) | `mathverify-master-5c2f83e-2026-09-27.bundle` (kullanıcının betiği "YEDEK TAMAM" yazdı: `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
   | yok | `c2e4fdf`, `622a178` (PR #9, #10 öncesi) | alınmadı (kullanıcı kararı, 27 Eylül "yedeğe gerek yok"; 28 Eylül "birleştir") |
+  | `yedek/master-2026-09-28` | `2f11c84` (PR #11 öncesi) | `mathverify-master-2f11c84-2026-09-28.bundle` (kullanıcı, 28 Eylül akşam: `bundle verify` "okay", deneme klonu `2f11c84`; etiket buluttan doğrulandı. İlk denemede etiket bayat yerel `master`ı (`5c2f83e`) göstermişti, silinip yeniden kondu) |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout `C:\Users\kullanici\mathverify`'da): (1) `git tag
   yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create C:/Users/kullanici/mathverify-yedek/mathverify-master-<kısa-hash>-YYYY-MM-DD.bundle
