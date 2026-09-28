@@ -65,8 +65,8 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 4. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
    yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
    sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanını o değiştirir).
-5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
-   23 Eylül). Dondurmadan önce kullanıcıya §4.4 madde 3'teki istem kararı sorulur. Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
+5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı, 23 Eylül; anahtar yenileme
+   önkoşul değil, 28 Eylül gece, DECISIONS §64). Dondurmadan önce kullanıcıya §4.4 madde 3'teki istem kararı sorulur. Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
 6. **Açık kapsama işleri** (§4.2) kullanıcı kararı. Gerçek çözücü için Anthropic ailesi bakiye bekliyor.
 
 ## 4. Açık maddeler (tam liste)
@@ -131,8 +131,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 - **K2. F4 ilk kez** (L6 açık; ~15–25 $). Belirleyici sayılar: D tespiti, doğru çözümde yanlış
   suçlama, "sertifikanın iptal ettiği kritik raporu" (V1). 28 Eylül'den beri çapraz denetim eleştirmeni yalnız
   kanıtlanmış (`verified`) adımda geçersiz sayar; örneklenmiş adımlar artık `unknown` (DECISIONS §63 D).
-- **K3. Ön koşullar:** kod dondurulur (sonraki her değişiklik sayıları eskitir); anahtarlar yenilenir,
-  `.env` güncellenip commit edilir; `--max-cost` olmadan koşulmaz; `llm_cache/` istek hash'iyle
+- **K3. Ön koşullar:** kod dondurulur (sonraki her değişiklik sayıları eskitir); anahtar yenileme gerekmez
+  (kullanıcı, DECISIONS §64); `--max-cost` olmadan koşulmaz; `llm_cache/` istek hash'iyle
   anahtarlı, değişen istem yeniden ücretlenir; bulutta `api.meta.ai` ortamın API kimlik bilgisiyle açık
   (DECISIONS §62; vekil anahtarı ekler); ~0,066 $/öğe (yarım koşu).
 - **K4. Gerçek AI çözücü çıktıları:** `harness/run_solver.py`; Muse Spark 1.3 ile 280 öğe tamam (§2; DECISIONS §63).
@@ -150,8 +150,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
    (v2 doğrulandı, v1'in içeriğini taşıyor); `master`a girmiş uzak dallar (`bulut-2026-09-24`,
    `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`,
    `-keen-ramanujan-…`, `-dreamy-meitner-…`, `-busy-bardeen-…`).
-2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? API anahtarları
-   ne zaman yenilenecek (§4.6)?
+2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? Anahtar yenileme
+   F3/F4 için gerekmiyor (DECISIONS §64); depo açılırsa gerekir (madde 8).
 3. Gerçek çözücü çıktıları: Muse Spark 1.3 ile 280 öğe yapıldı (§2). Açık: çözücü istemi IR sembollerinin anlamını
    (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli ve ölçülen şey değişir)? **Ertelendi**
    (28 Eylül akşam; kod dondurmadan önce yeniden sorulur). Etki: yalnız haksız red (86 sorudan 1), yanlış onay yok. Yanlış onay
@@ -182,9 +182,9 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 ### 4.6 Güvenlik
 
 - **S1.** `.env` kullanıcı kararıyla özel depoda izleniyor
-  (DECISIONS §35); değerler git geçmişinde ve GitHub'da. F3/F4'ten önce yenilenir; depo açılırsa önce
-  yenilenir ve geçmiş temizlenir. Bulutta Meta anahtarı artık ortamın API kimlik bilgisinde (VM'ye girmez);
-  `.env`'deki eski Meta anahtarının iptali ve Anthropic anahtarının yenilenmesi kullanıcıda.
+  (DECISIONS §35); değerler git geçmişinde ve GitHub'da. F3/F4 için yenileme gerekmiyor (kullanıcı,
+  DECISIONS §64); depo açılırsa önce yenilenir ve geçmiş temizlenir. Bulutta Meta anahtarı artık ortamın API kimlik bilgisinde (VM'ye girmez);
+  `.env`'deki eski Meta anahtarının iptali kullanıcıda.
 - **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür). Sızarsa depoyu ve
   `.env`'i okutur. `unset`, root'un `/proc/<pid>/environ` okumasına karşı korumaz (DECISIONS §54).
   Sızıntı taraması yalnız günlüklerde, `/etc/profile.d`'de ve `.git/config`'te yapıldı (0 bulgu);
