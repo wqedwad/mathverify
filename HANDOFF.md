@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 28 Eylül 2026 (gece)**, dal `claude/dreamy-meitner-rvrwlj` (`#9` birleşti; sonrası `wqedwad/asd#10`, açık).
+> **Son güncelleme: 28 Eylül 2026**, dal `claude/dreamy-meitner-rvrwlj` (`wqedwad/asd#10` ile `master`a birleşti; yeni iş yeni dalda).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -10,15 +10,14 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §57–§60 (son dört madde). Bulutta ayrıca
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §59–§62 (son dört madde). Bulutta ayrıca
    oturum başındaki `[mathverify bulut oturumu …]` bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`; birleşmemiş başka dal var mı: `git ls-remote origin` (§6).
    Bulut klonunda yerel `master` ve `origin/master` bayat olabilir: `git fetch origin master`.
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1546
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1548
    passed / 5 skipped**, ~330 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
-   ifade). Lean testi seçen oturum önce Lean'i ısıtır ("Lean ısınması: N s"; soğuk konteynerde ~345 s,
-   B6); Lean yüzünden atlama = Lean hazır değil.
-   `addopts` `-q` içerir; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
+   ifade). Lean testi seçen oturum önce Lean'i ısıtır (soğukta 345–470 s, B6); Lean yüzünden atlama = Lean
+   hazır değil. `addopts` `-q` içerir; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
 4. §3'teki ilk işe geç. Tekrar denenmemesi gerekenler: arşiv §4.
 
 ## 1. Proje (kısaca)
@@ -30,18 +29,18 @@ arşiv §2–§3 ve `docs/ARCHITECTURE.md`'de; kilitli kararlar D1–D6 (`DECISI
 Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `scripts/verify_cli.py`,
 `scripts/check.py`. Değerlendirme seti 280 sentetik öğe (A/B/C/D = %30/%25/%30/%15).
 
-## 2. Durum (27 Eylül 2026)
+## 2. Durum (28 Eylül 2026)
 
-**Kod.** `master` = `wqedwad/asd#9`'un birleşmesi `622a178` (öncesi `c2e4fdf`; yedek alınmadı, kullanıcı kararı).
+**Kod.** `master` = `wqedwad/asd#10`'un birleşmesi (öncesi `622a178`; yedek alınmadı, kullanıcı talimatı; `#9` öncesi `c2e4fdf` de yedeksiz).
 `#7`: adversaryal tarama 4 sürece dağıtıldı, kademeli kontrol kuralı `check.py --plan` ve çalışma anı
 belge-okuma bekçisi. `#8`: `--plan` satırındaki üç görünüm kusuru düzeltildi (kararlar ve çıkış kodları
 aynı). Dört inceleme turu, depodaki koşucuyla 162/162 mutasyon (DECISIONS §59); `src/` değişmedi.
 `#9` (DECISIONS §60): düz `pytest` Lean testinden önce Lean'i
 ısıtır (B6), kalibrasyon raporu tohumdan bağımsız (T4), çalışma anındaki kalibre skor uyumun skoru
 (yan bulgu: `tyt-geo-009` eşiği yanlış tarafta geçiyordu), kurulum betiğinin aşama günlükleri
-ekleyerek yazılır (B3); 21/21 mutasyon. **Bu dalda, birleşmemiş** (DECISIONS §61): K4 düzeneği
-`harness/run_solver.py` (henüz ücretli koşu yok), `scripts/dev/windows_full.ps1`, `check.run`'ın Windows'ta
-takılan adımda çökmesinin düzeltmesi. `--full` 24/24 bulutta ve Windows'ta; kuralın iki dosyası değişti (kişi kararı).
+ekleyerek yazılır (B3); 21/21 mutasyon. `#10` (DECISIONS §61–§62): K4 düzeneği `harness/run_solver.py`,
+`scripts/dev/windows_full.ps1`, `check.run`'ın Windows'ta takılan adımda çökmesinin düzeltmesi, Meta istemcisinin
+bulut vekiliyle TLS'i (`1f83458`: son `--full`'dan sonra, yalnız tam takımla doğrulandı), K4'ün kısmi koşusu.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
@@ -54,16 +53,18 @@ ve 25–26 Eylül (formal katmanda 53/98 yanlış sertifika → 0/99; DECISIONS 
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **`wqedwad/asd#10`** (kişi kararı): `--full` bulutta ve Windows'ta 24/24; kuralın dosyaları (`check.py`,
-   `test_staged_check.py`) değiştiği için `--plan` TAMAM veremez. Birleştirmeden önce yedek (§6) ve `--plan`.
-2. **Yedek etiketleri (isteğe bağlı):** PR #3, PR #4 ve PR #9 öncesi `master` için etiket yok (§6).
+1. **K4'ü bitirmek** (DECISIONS §62): (a) adım reddedicinin iki haksız reddi: görevin `interval`'ı öncül değil
+   (`ayt-trig-004/-013/-017`), yalnız tanım kümesiyle "bağlı" atama (`n = 20`) reddediliyor (11 `ayt-diz`);
+   `ayt-tur-003/-010/-013` incelenmedi. Düzeltme ölçümle: D tespiti, sağlamlık, mutasyon, `--full`. (b) Meta
+   istemcisi 502'de de akış kipine geçmeli (61 öğe ~245 s'de 502); etiketleyici ilkelde `+ C`'yi, DNE'yi tanımalı.
+   (c) Sonra `run_solver --family meta --max-cost 10`: 118 çözüm önbellekten ücretsiz, kalan 162 ücretli.
+2. **Yedek etiketleri (isteğe bağlı):** PR #3, #4, #9 ve #10 öncesi `master` için etiket yok (§6).
 3. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
    yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
    sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanını o değiştirir).
 4. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
    23 Eylül). Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-5. **Gerçek veri (K4):** Muse Spark ile `run_solver --family meta --limit 10 --max-cost 1`, sonra tam koşu.
-   Bulutta `api.meta.ai` 403 (ağ Custom gerekir); yerelde açık. **Açık kapsama işleri** (§4.2) kullanıcı kararı.
+5. **Açık kapsama işleri** (§4.2) kullanıcı kararı. Gerçek çözücü için Anthropic ailesi bakiye bekliyor.
 
 ## 4. Açık maddeler (tam liste)
 
@@ -136,9 +137,10 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   suçlama, "sertifikanın iptal ettiği kritik raporu" (V1).
 - **K3. Ön koşullar:** kod dondurulur (sonraki her değişiklik sayıları eskitir); anahtarlar yenilenir,
   `.env` güncellenip commit edilir; `--max-cost` olmadan koşulmaz; `llm_cache/` istek hash'iyle
-  anahtarlı, değişen istem yeniden ücretlenir; bulutta ağ Custom + `api.meta.ai`
-  (`api.anthropic.com` açık); ~0,066 $/öğe (yarım koşu).
-- **K4. Gerçek AI çözücü çıktıları:** düzenek `harness/run_solver.py` (DECISIONS §61); `run_f3`'te `--solver-family` zorunlu. Etiketler kaba
+  anahtarlı, değişen istem yeniden ücretlenir; bulutta `api.meta.ai` ortamın API kimlik bilgisiyle açık
+  (DECISIONS §62; vekil anahtarı ekler); ~0,066 $/öğe (yarım koşu).
+- **K4. Gerçek AI çözücü çıktıları:** `harness/run_solver.py`; Muse Spark 1.3 kısmi koşu 179/280 (118 çözüm, yanlış
+  onay 0, INCORRECT + doğru cevap 17, 1.62 $; DECISIONS §62, §3 adım 1). Etiketler kaba
   kuvvetle ya da ikinci kişiyle denetlenmeli (denetim derlemlerinde 4 etiket yanlış çıktı).
 
 ### 4.4 Kullanıcı kararları (açık sorular)
@@ -182,7 +184,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 
 - **S1.** `.env` kullanıcı kararıyla özel depoda izleniyor
   (DECISIONS §35); değerler git geçmişinde ve GitHub'da. F3/F4'ten önce yenilenir; depo açılırsa önce
-  yenilenir ve geçmiş temizlenir. Geçerlilikleri en son 19 Eylül'de görüldü **[DOĞRULANMADI]**.
+  yenilenir ve geçmiş temizlenir. Bulutta Meta anahtarı artık ortamın API kimlik bilgisinde (VM'ye girmez);
+  `.env`'deki eski Meta anahtarının iptali ve Anthropic anahtarının yenilenmesi kullanıcıda.
 - **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür). Sızarsa depoyu ve
   `.env`'i okutur. `unset`, root'un `/proc/<pid>/environ` okumasına karşı korumaz (DECISIONS §54).
   Sızıntı taraması yalnız günlüklerde, `/etc/profile.d`'de ve `.git/config`'te yapıldı (0 bulgu);
@@ -239,7 +242,7 @@ Süre: `--full` bulutta **~25–26 dk** (4 süreçli adversaryal 772–811 s); t
   | yok | `e07d4f7` (PR #4 öncesi) | alınmadı (kullanıcı kararı, "yalnız belge" gerekçesiyle; PR kod da içeriyordu: DECISIONS §59 Düzeltme) |
   | `yedek/master-2026-09-26-2` | `849b492` (PR #7 öncesi) | `mathverify-master-849b492-2026-09-26.bundle` (kullanıcının betiği: yerel `master` önce ileri sarıldı, `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
   | `yedek/master-2026-09-27` | `5c2f83e` (PR #8 öncesi) | `mathverify-master-5c2f83e-2026-09-27.bundle` (kullanıcının betiği "YEDEK TAMAM" yazdı: `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
-  | yok | `c2e4fdf` (PR #9 öncesi) | alınmadı (kullanıcı kararı, 27 Eylül: "yedeğe gerek yok") |
+  | yok | `c2e4fdf`, `622a178` (PR #9, #10 öncesi) | alınmadı (kullanıcı kararı, 27 Eylül "yedeğe gerek yok"; 28 Eylül "birleştir") |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout'ta): (1)
   `git tag yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create
@@ -253,7 +256,7 @@ Süre: `--full` bulutta **~25–26 dk** (4 süreçli adversaryal 772–811 s); t
 - Makine: Ubuntu 24.04, 4 CPU, 15 GB RAM, ~30 GB disk, root, checkout `/home/user/asd`; sistem `python3`
   3.11 (kanca 3.14.6'yı `/opt`'tan, yoksa 3.12/3.13'ü seçer). Ağ (Trusted): açık GitHub, PyPI,
   `raw.githubusercontent.com`, `api.anthropic.com`; kapalı `releases.lean-lang.org`, `cache.mathlib.org`,
-  `releases.astral.sh`, `api.meta.ai` (Lean, Mathlib önbelleği ve Python araç ref'inden gelir).
+  `releases.astral.sh` (Lean, Mathlib önbelleği ve Python araç ref'inden gelir); `api.meta.ai` kimlik bilgisiyle açık.
 - Kurulum betiği aşamasında GitHub git vekili yok; özel depoya kimliksiz 401. claude.ai ortam
   değişkenleri betiğe ulaşmaz; belirteç önyükleyicinin metninde (DECISIONS §53–§54, §56).
 - Kanca (`scripts/cloud/session_start.sh`) 6–15 s; eksikse Lean'i arka planda kurar (167–239 s).
