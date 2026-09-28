@@ -10,10 +10,10 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§66; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§68; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1653 passed / 5 skipped** (3 root salt okunur dizin,
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1669 passed / 5 skipped** (3 root salt okunur dizin,
    1 isteğe bağlı indirme, 1 kapsam dışı ifade); sıcak Lean'le ~400 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
    atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
 4. §3'teki ilk işe geç. Tekrar denenmeyecekler: arşiv §4.
@@ -38,8 +38,8 @@ Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon 
 (kullanıcı). `#11`'in gevşetmelerinin hedefli denetimi (§65–§67) bitti; iki yanlış onay açığı kapandı (ikisinde de
 doğru cevaplı, yanlış adımlı D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği yokken aralık her iddiayı
 geçiriyordu, artık düşürülür; (B) tanım kümesiyle çelişen atama (`n = 0`, n > 0) tanımsaldı, artık denetlenir.
-(C) açık değil (bekçi testleri). 280 + 278 (K4) çözümde değişim 0; 10 yeni red testi eski kodda düşer; mutasyon
-11/11 (`denetim/2026-09-28/mutasyon_gece.py`). Yan bulgu V13 (haksız red, `#11`'den önce de).
+(C) açık değil (bekçi testleri). V13 düzeltildi (§68): serbest sembole değer veren atama seçimdir. 558 çözümde
+değişim 0; sağlamlık ve adversaryal raporları yalnız süre satırında farklı; mutasyon 17/17 (`mutasyon_gece.py`).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -55,9 +55,8 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Sıradaki parçalar** (kullanıcı: "parça parça", DECISIONS §64): V13'ün düzeltmesi (öncüllerin serbest bıraktığı
-   sembole değer veren atama seçimdir; D tespiti ve sağlamlık taramasıyla ölçülerek), sonra K4 (f): cevap
-   anahtarlarının bağımsız denetimi. Hepsinden sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
+1. **Sıradaki parça** (kullanıcı: "parça parça", DECISIONS §64): K4 (f), cevap anahtarlarının bağımsız denetimi.
+   Sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
    **ertelendi** (kullanıcı, 28 Eylül akşam); adım 5'teki kod dondurmadan önce yeniden sorulur. Bu model hiç yanlış
    cevap vermediği için yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
@@ -125,8 +124,8 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
   olmayan görevde periyotsuz yazılan doğru esas kök adımı (`x = pi`) reddedilir (x = 3π); `#11` öncesiyle aynı, D6 gereği.
 - **V12. Tanım kümesine uyan yanlış atama** (DECISIONS §66): IR'da öncülün bağlamadığı bir sembole yanlış değer
   (`ayt-diz-002`'de `n = 21`) tanımsal kalır; sonra çelişilmezse çözüm CORRECT. `#11` öncesi doğrusu da reddediliyordu.
-- **V13. Seçilen nokta sonuç sayılır** (DECISIONS §67): `y = 2*x - 1`'den sonra y-kesişimi için `x = 0` reddedilir
-  (havuzdaki doğru x'i bağlıyor); doğru çözüm INCORRECT. Her sürümde; gerçek veride görülmedi. Düzeltme sıradaki parça.
+- **V13. Aynı doğrunun ikinci noktası** (DECISIONS §67–§68): seçim kuralı y-kesişimini kabul eder, ama ardından x-kesişimi
+  (`y = 0`) seçilen x = 0 noktasında reddedilir (yanlış ordinattan ayrılamaz; D6); doğru çözüm INCORRECT. Gerçek veride yok.
 
 ### 4.3 Kredili ölçüm
 
