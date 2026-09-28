@@ -13,6 +13,8 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 - Kullanıcı en kaliteli, kapsamlı ve özerk işi ister. "Emin ol" ya da "tek eksik bu mu" soruları
   harfiyen kastedilir: önceki cevabı tekrarlama, yeni ve sistematik bir denetim yap. Krediye bağlı
   olmayan bir açık bulunursa aynı turda düzelt.
+- Kullanıcıya dönen özet kısa ve sade olur: önce sonuç, sonra ondan beklenen karar(lar); ayrıntı DECISIONS'ta ve
+  HANDOFF'ta, o isterse anlatılır (kullanıcı isteği, 28 Eylül 2026).
 - Ölçülmüş sayı ver; "testler geçiyor" kanıt değildir. Doğrulanmamış bilgiyi işaretle. Önceki bir
   iddia yanlış çıktıysa bunu açıkça söyle.
 - Şartnamenin kilitli kararları (D1–D6, `DECISIONS.md` §1) yeniden sorulmaz. Şartname:
