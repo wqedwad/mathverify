@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 28 Eylül 2026, akşam**, dal `claude/busy-bardeen-ckr5bw` (`wqedwad/asd#11` ile `master`a birleşti, yedekli; yeni iş yeni dalda).
+> **Son güncelleme: 28 Eylül 2026, gece**, dal `claude/inspiring-cori-xcgjld` (`master`dan, birleşmedi; `#11` birleşti, yedekli).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -31,22 +31,21 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 
 ## 2. Durum (28 Eylül 2026)
 
-**Kod.** `master` = `wqedwad/asd#11`'in birleşmesi (öncesi `2f11c84`, yedek `yedek/master-2026-09-28`, §6; `#10` öncesi
-`622a178` ve `#9` öncesi `c2e4fdf` yedeksiz, kullanıcı talimatı). `#7`–`#8`: 4 süreçli adversaryal tarama, kademeli kontrol `check.py --plan`, belge-okuma
-bekçisi (DECISIONS §59). `#9`: soğuk Lean ısınması, kalibrasyon sırası, aşama günlükleri (§60). `#10`: K4 düzeneği
-`harness/run_solver.py`, Windows `--full`, Meta TLS, K4 kısmi koşusu (§61–§62).
-`#11` (`claude/busy-bardeen-ckr5bw`; DECISIONS §63): adım reddedicinin üç haksız reddi
-(görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin bağladığı atama tanımsal; teğetin eğrisi ve
-`equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta (örneklenen sonuç `unknown`; And/Or
-iddiaları küme yolunda), Meta istemcisi ilk denemeden akışla (`usage`'sız akış yeniden denenir, önbelleğe
-girmez), K4 etiketleyicisi (`+ C`, DNE, açıda derece, genel trigonometrik çözüm, demet), aynı isteğe kilit.
-42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
+**Kod.** `master` = `wqedwad/asd#11`'in birleşmesi (öncesi `2f11c84`, yedek `yedek/master-2026-09-28`, §6; `#9`, `#10`
+öncesi yedeksiz, kullanıcı talimatı). `#7`–`#10`: DECISIONS §59–§62 (paralel tarama, `--plan`, bekçi, soğuk Lean, K4 düzeneği).
+`#11` (DECISIONS §63): adım reddedicinin üç haksız reddi (görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin
+bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
+Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
+**Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§65): anahtar yenileme F3/F4 önkoşulu değil
+(kullanıcı). `#11`'in gevşetmelerinin hedefli denetimi, parça 1 (A): öncüllerin aralıkta örneği yokken aralık her
+iddiayı geçiriyordu (doğru cevaplı yanlış adımlı D çözümü CORRECT); aralık o durumda düşürülür. 280 + 278 (K4) çözümde
+değişim 0; 7 yeni test eski kodda 7/7 düşer; mutasyon 8/8 (`denetim/2026-09-28/mutasyon_gece.py`).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
 çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23, 25–26 Eylül (DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `3e1805d` (bu dalın son kodu), bulutta 28 Eylül 18:14:01–18:40:57 UTC, **~27 dk**
+**Son `check.py --full`.** **24/24**, `3e1805d` (`#11`'in son kodu; bu dal sonra kod değiştirdi, birleşmeden önce `--full`), bulutta 28 Eylül 18:14:01–18:40:57 UTC, **~27 dk**
 (ısınma 11 s, pytest 399 s, adversaryal 793 s), 1639 passed / 5 skipped; `--plan` TAMAM (DECISIONS §63). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
 
 **K4 (Muse Spark 1.3, 280 öğe, koşu 3, `776e5b4`; DECISIONS §63).** 278 çözüm; CORRECT|right 274, INCORRECT|right 4,
@@ -56,15 +55,17 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** yeni dal aç (`master`dan); `master`ın `#11`'in birleşmesi olduğunu `git log --oneline -3` ile
-   doğrula. Kullanıcı yeni bir iş vermediyse aşağıdaki sırayı öner, kararları ona sor.
+1. **Hedefli denetimin kalan parçaları** (kullanıcı: "parça parça", DECISIONS §64): (B) yalnız tanım kümesinin
+   bağladığı atama tanımsal (`n = 21` gibi yanlış bir atama, sonra çelişmezse denetlenmez; `#11` öncesi her atama
+   reddediliyordu); (C) görev nesnesi adımları atlanıyor. Her parça: sonda (`2f11c84`/`c0a2caf` worktree), düzeltme
+   ya da sınır kaydı, test, 280 + 278 çözümde fark, mutasyon. Sonra K4 (f): cevap anahtarlarının bağımsız denetimi.
+   Hepsinden sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
    **ertelendi** (kullanıcı, 28 Eylül akşam); adım 5'teki kod dondurmadan önce yeniden sorulur. Bu model hiç yanlış
    cevap vermediği için yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
 3. **Yedek etiketleri (isteğe bağlı):** PR #3, #4, #9 ve #10 öncesi `master` için etiket yok (§6).
-4. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
-   yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
-   sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanını o değiştirir).
+4. **Bulut kurulumu** (B1–B2, DECISIONS §61): ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` →
+   `275`; sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanı). 28 Eylül gecesi de `resume-cached`.
 5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı, 23 Eylül; anahtar yenileme
    önkoşul değil, 28 Eylül gece, DECISIONS §64). Dondurmadan önce kullanıcıya §4.4 madde 3'teki istem kararı sorulur. Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
 6. **Açık kapsama işleri** (§4.2) kullanıcı kararı. Gerçek çözücü için Anthropic ailesi bakiye bekliyor.
@@ -96,7 +97,7 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.2 Doğrulayıcı: bilinen sınırlar ve kapsama
 
-Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli sınır.
+V11 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli sınır.
 
 - **V1. `tyt-prob-018`:** çözüm düzeyindeki tek yanlış onay (doğru ama gerekçesiz adım; kanıtlanmış adım L6
   kritiğini ezer; aynı sınıf: C'deki 12 aritmetiği doğru `compute` adımı, §63). Karar F4 ölçümüne bağlı
@@ -122,6 +123,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   iddianın 53'ü Lean'de sertifika alıyordu. Yeni bir denetim yeni sınıf bulabilir.
 - **V10.** Sandbox süreç izolasyonudur, güvenlik sandbox'ı değil. Girdi artık kod olarak
   çalışmıyor (ilke 13), ama model kodu çalıştırılacaksa gVisor/Firecracker gerekir.
+- **V11. Aralıkta örneği olmayan öncülde esas kök** (DECISIONS §65): `cos x = −1`, [0, π) gibi aralıkta kökü
+  olmayan görevde periyotsuz yazılan doğru esas kök adımı (`x = pi`) reddedilir (x = 3π); `#11` öncesiyle aynı, D6 gereği.
 
 ### 4.3 Kredili ölçüm
 
@@ -278,7 +281,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
 | `$PY scripts/check.py --plan [--no-fetch]` | Hangi kontrol gerekli: YOK / TAMAM (çıkış 0) / TAM (1) (DECISIONS §59, CLAUDE.md) |
 | `$PY scripts/check.py` / `--full` | Hızlı (~7 dk) / 24 kapı (~26 dk bulutta; günlüğü kendisi yazar, arka planda izlenir) |
 | `$PY -m harness.run_eval` · `run_lean --timeout 45` · `adversarial [--workers N]` · `soundness_fuzz` · `calibrate` | Tek tek ölçümler → `reports/` (`--full`dan sonra koşulursa `--plan` o koşuyu kabul etmez; `git restore reports/`) |
-| `$PY denetim/2026-09-2{6,7,8}/mutasyon.py [-j N] [ön ek…]` | Mutasyon denetimleri: kural/bekçi/tarama (README 26'da), Lean ısınması/kalibrasyon/günlükler (§60), K4 düzeltmeleri (§63) |
+| `$PY denetim/2026-09-2{6,7,8}/mutasyon.py [-j N] [ön ek…]` | Mutasyon denetimleri: kural/bekçi/tarama (README 26'da), Lean ısınması/kalibrasyon/günlükler (§60), K4 düzeltmeleri (§63); `2026-09-28/mutasyon_gece.py` hedefli denetim (§65) |
 | `$PY -m harness.run_solver --family meta --max-cost 10 --workers 6` | K4 (kredili; aynı istekler kilitle sıralanır, önbellekten gelenler ücretsiz ama sınıra sayılır) |
 | `$PY -m harness.run_f3 --workers 6 --pathb --max-cost 40 --solver-family …` | Kredili F3/F4 (`--no-l4/--no-l5/--no-l6`, `--limit`, `--ids`) |
 | `$PY scripts/verify_cli.py --item evalset/items/tyt-prob-001.json [--lean] [--text "…"]` | Tek öğe |
