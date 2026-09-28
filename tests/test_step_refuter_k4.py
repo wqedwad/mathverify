@@ -150,6 +150,16 @@ def test_a_solved_system_outside_the_window_drops_the_window():
     assert _check_eq(sp.Eq(x + a, 3), prem, ctx, [], window)[0] == "verified"
 
 
+def test_a_thin_premise_set_outside_the_window_drops_it_on_the_set_route():
+    """x = sqrt(2) written as two inequalities: no sample and no grid point lands on it, so only the
+    premise-set route can tell that the window [0, 1] leaves no instance."""
+    from mathverify.steps.deterministic import _check_eq
+    ctx, x, _ = _ctx2()
+    prem, window = [sp.Ge(x, sp.sqrt(2)), sp.Le(x, sp.sqrt(2))], [sp.Le(0, x), sp.Le(x, 1)]
+    status, ev = _check_eq(sp.Eq(x, 2), prem, ctx, [], window)
+    assert status == "refuted" and ev["window_dropped"] and ev["route"] == "premise_set", ev
+
+
 def test_sampling_draws_the_windows_variable_from_the_window():
     """No equations: sampled. A window far from the samples' usual range is still met, so a claim
     true on it is not refuted outside it; a window the premises cannot meet is dropped."""

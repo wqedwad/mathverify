@@ -3,7 +3,10 @@ of the step refuter's #11 relaxations. (W) the task window is dropped when the p
 instance inside it. The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
 the one of denetim/2026-09-26/mutasyon.py; only the list of mutations is new. The list of the same
 day's evening (mutasyon.py, next to this file) is the record of its own measurement at 3e1805d and is
-not edited: its V05 names a line this audit rewrote (W06 is its successor).
+not edited: its V05 names a line this audit rewrote (W06 is its successor). Measured equivalent
+and left out: an undecided emptiness of the premise set counted as empty (W07). On the set route
+the set has one variable and no parameter, and SymPy decided it in each of the ten regions tried
+(tan, sin, cos, exp, log and sums of them on intervals).
 
     .venv/bin/python denetim/2026-09-28/mutasyon_gece.py [-j N] [--list] [name ...]
 
@@ -35,9 +38,6 @@ MUTATIONS = [
      "        wdoms = doms\n", TK),
     ("W06 boş bölge kanıt sayılır", DET, "return None, bool(e.ok and e.value is False), bool(e.ok and e.value is True)",
      "return None, bool(e.ok), bool(e.ok and e.value is True)", TK),
-    ("W07 karar verilemeyen bölge boş sayılır", DET,
-     "return None, bool(e.ok and e.value is False), bool(e.ok and e.value is True)",
-     "return None, bool(e.ok and e.value is False), bool(e.ok and e.value is not False)", TK),
     ("W08 aralık dışı nokta içeride sayılır", DET, "            outside += 1\n            continue\n",
      "            outside += 1\n", TK),
     ("W09 aralık düşünce de aralıklı sonuç döner", DET,
