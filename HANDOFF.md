@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 27 Eylül 2026 (öğleden sonra)**, dal `claude/dreamy-meitner-rvrwlj` (`#9` birleşti; sonrası birleşmedi, §2).
+> **Son güncelleme: 28 Eylül 2026 (gece)**, dal `claude/dreamy-meitner-rvrwlj` (`#9` birleşti; sonrası birleşmedi, §2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -14,7 +14,7 @@
    oturum başındaki `[mathverify bulut oturumu …]` bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`; birleşmemiş başka dal var mı: `git ls-remote origin` (§6).
    Bulut klonunda yerel `master` ve `origin/master` bayat olabilir: `git fetch origin master`.
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1531
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1546
    passed / 5 skipped**, ~330 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
    ifade). Lean testi seçen oturum önce Lean'i ısıtır ("Lean ısınması: N s"; soğuk konteynerde ~345 s,
    B6); Lean yüzünden atlama = Lean hazır değil.
@@ -41,30 +41,28 @@ aynı). Dört inceleme turu, depodaki koşucuyla 162/162 mutasyon (DECISIONS §5
 (yan bulgu: `tyt-geo-009` eşiği yanlış tarafta geçiyordu), kurulum betiğinin aşama günlükleri
 ekleyerek yazılır (B3); 21/21 mutasyon. **Bu dalda, birleşmemiş** (DECISIONS §61): K4 düzeneği
 `harness/run_solver.py` (henüz ücretli koşu yok), `scripts/dev/windows_full.ps1`, `check.run`'ın Windows'ta
-takılan adımda çökmesinin düzeltmesi. Bu hâlde `--full` yok; kuralın iki dosyası değişti (kişi kararı).
+takılan adımda çökmesinin düzeltmesi. `--full` 24/24 bulutta ve Windows'ta; kuralın iki dosyası değişti (kişi kararı).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü.
 F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül kodu, 218 öğenin 64'ü, kredi
 bitti). F4 (kritik + meta-doğrulama): kod tamam, çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23
 ve 25–26 Eylül (formal katmanda 53/98 yanlış sertifika → 0/99; DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `14d4e9d` (`#9`un son kodu), bulutta 27 Eylül 10:19:33–10:44:17 UTC,
-**~25 dk** (adversaryal 772 s, 4 süreç, zaman aşımı 0), 1531 passed / 5 skipped; raporlar `f3105ef`'ninkilerden
-yalnız süre satırlarında ve kalibrasyon tablosunun artık ada göre sıralı satırlarında farklı (DECISIONS §60).
+**Son `check.py --full`.** **24/24**, `7d9e9a1` (bu dalın son kodu), bulutta 27–28 Eylül 23:44:44–00:13:25 UTC,
+**~29 dk** (soğuk Lean ısınması 307 s, adversaryal 734 s), 1546 passed / 5 skipped; Windows'ta `eab80f1` 24/24,
+31 dk (DECISIONS §61).
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Bu dalı bitirmek:** Windows'ta 24/24 geçti (T8); bulutta `--full`, sonra PR ve kişi kararı (kuralın
-   dosyaları: `check.py`, `test_staged_check.py`).
+1. **Bu dalın PR'ı** (kişi kararı): `--full` bulutta ve Windows'ta 24/24; kuralın dosyaları (`check.py`,
+   `test_staged_check.py`) değiştiği için `--plan` TAMAM veremez. Birleştirmeden önce yedek (§6) ve `--plan`.
 2. **Yedek etiketleri (isteğe bağlı):** PR #3, PR #4 ve PR #9 öncesi `master` için etiket yok (§6).
 3. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
    yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
    sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanını o değiştirir).
-4. **Soğuk açılışta `--full`:** gerçek bir yeniden başlatmadan sonraki ilk `--full`'da `lean_warmup`
-   satırı okunur (B6): exit 0 beklenir, süre 300 s'yi aşabilir (düz pytest'in ısınması 345 s ölçüldü).
-5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
+4. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
    23 Eylül). Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-6. **Gerçek veri (K4):** Muse Spark ile `run_solver --family meta --limit 10 --max-cost 1`, sonra tam koşu.
+5. **Gerçek veri (K4):** Muse Spark ile `run_solver --family meta --limit 10 --max-cost 1`, sonra tam koşu.
    Bulutta `api.meta.ai` 403 (ağ Custom gerekir); yerelde açık. **Açık kapsama işleri** (§4.2) kullanıcı kararı.
 
 ## 4. Açık maddeler (tam liste)
@@ -88,7 +86,7 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
   ~340–400 s. Düz `pytest` artık ilk Lean testinden önce, testlerin 300 s sınırının dışında ısınır;
   27 Eylül soğuk konteynerde 345 s, 1514/5, Lean atlaması yok (DECISIONS §60). Açık: yavaşlığın nedeni
   (konuğun sayfa önbelleği değil: boşaltılınca 31 s; görüntü diskinin ilk okunması çıkarım
-  **[DOĞRULANMADI]**) ve `--full`'un ısıtmasının soğuk yolda ölçülmesi (aynı 900 s bütçe; çıkarım).
+  **[DOĞRULANMADI]**). `--full`'un ısıtması soğuk yolda 307 s, exit 0 (28 Eylül, DECISIONS §61).
 - **B7. Belirteç yenileme:** yeni fine-grained belirteç (Contents: read-only, yalnız `wqedwad/asd`)
   Setup script'in `T='...'` satırına; süresi dolmuşsa çekim düşer, kanca kurar (167–239 s). **B8.**
   Etiket ve `master` buluttan push edilmez (kural); etiket push'u bulutta hiç denenmedi.
@@ -160,7 +158,7 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
 8. Depo herkese açılacak ya da paylaşılacak mı? Açılırsa önce anahtarlar yenilenir, `.env` geçmişten
    temizlenir.
-9. Bulut kurulumu: §3 adım 3'ün (a)/(b)/(c) seçeneği.
+9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 3)?
 
 ### 4.5 Teknik borç
 
@@ -200,11 +198,11 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 - Alandaki önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843).
 - B1, B6 ve B10'daki işaretli maddeler.
 
-## 5. Son ölçülen sayılar (kapılar, `14d4e9d`; `f3105ef`, `f93178f`, `a8edb0d` ve `5414d6b` ile aynı)
+## 5. Son ölçülen sayılar (kapılar, `7d9e9a1`; `14d4e9d`, `f3105ef`, `f93178f`, `a8edb0d` ve `5414d6b` ile aynı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri | 1531 passed / 5 skipped | hepsi geçer |
+| Birim testleri | 1546 passed / 5 skipped | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
