@@ -2,7 +2,8 @@
 (A), assignments bound only by domains (B), the problem's own objects (C) and "verified" meaning
 proved (V); the Meta client's streaming (M); the K4 harness's answer labels and per-request lock (E). The machinery (throwaway
 clones of the committed HEAD, exit codes, clean-up) is the one of denetim/2026-09-26/mutasyon.py;
-only the list of mutations is new.
+only the list of mutations is new. Measured equivalent and left out: the restrictions dropped from
+the premises of the search (`_in_domains` checks them at every point, `domain_for` on the set route).
 
     .venv/bin/python denetim/2026-09-28/mutasyon.py [-j N] [--list] [name ...]
 
@@ -49,8 +50,6 @@ MUTATIONS = [
     ("B04 kısıtlar yine öncüllerle birlikte", DET,
      "            givens, restrictions = ctx.givens(), ctx.var_constraints()",
      "            givens, restrictions = ctx.givens() + ctx.var_constraints(), []", TK),
-    ("B05 kısıtlar aramaya girmiyor", DET, "    premises = list(premises) + list(restrictions) + window\n",
-     "    premises = list(premises) + window\n", TK),
     # --- (C) the problem's own objects
     ("C01 teğet eğrisi tanınmıyor", DET, "                return [Eq(y, ctx.expr(p[\"f\"]))]\n",
      "                return []\n", TK),

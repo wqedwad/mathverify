@@ -140,8 +140,9 @@ def test_an_inequality_is_still_checked_against_the_domain_conditions():
 
 def test_a_domain_condition_of_two_variables_still_narrows_the_search():
     """sqrt(x - y) is defined only for x >= y; with x + y = 10 that makes x >= 5 a consequence.
-    The restriction binds nothing for an assignment but it is still a premise of every search:
-    without it x = 0, y = 10 refutes the true step. (Sampled, so not "verified": see below.)"""
+    The restriction binds nothing for an assignment but it still narrows every search: as a premise
+    and, point by point, through `_in_domains` (so dropping it from the premises alone changes
+    nothing: an equivalent mutation, B05). Sampled, so not "verified": see below."""
     ir = {"task": {"kind": "evaluate", "params": {"expr": "sqrt(x - y)"}},
           "vars": [{"name": "x"}, {"name": "y"}], "givens": ["x + y = 10"]}
     assert _steps(verify(ir, _sol("0", "value", [("eq", "x >= 5")])))["s1"] == \
@@ -199,6 +200,20 @@ def test_a_curve_that_is_not_the_tasks_is_checked_as_before(claim):
     ir = load_problem_ir(_ir("ayt-tur-003"))
     ctx = make_ctx(ir)
     assert not _states_task_object(parse_relation(claim, ctx.ns), _task_objects(ir, ctx), ctx)
+
+
+def test_only_a_constant_factor_is_recognised():
+    """(x**2 + 1)*(y - x**2) = 0 is the same curve over the reals, but the rule is the conservative
+    one its docstring states: a nonzero CONSTANT factor. Anything else is checked as before."""
+    from mathverify.certify.base import make_ctx
+    from mathverify.intake.structured import load_problem_ir
+    from mathverify.normalize.parse import parse_relation
+    from mathverify.steps.deterministic import _states_task_object, _task_objects
+    ir = load_problem_ir(_ir("ayt-tur-003"))
+    ctx = make_ctx(ir)
+    objs = _task_objects(ir, ctx)
+    assert _states_task_object(parse_relation("3*y = 3*x**2", ctx.ns), objs, ctx)
+    assert not _states_task_object(parse_relation("(x**2 + 1)*y = (x**2 + 1)*x**2", ctx.ns), objs, ctx)
 
 
 def _eq_of(obj, **params):
