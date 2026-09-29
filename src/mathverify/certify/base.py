@@ -268,11 +268,10 @@ class Ctx:
                 fd = fdefs.get(call.func.__name__)
                 if fd is None or len(call.args) != len(fd.args):
                     continue
+                # the body's own real arguments, as the callable was built (parse._make_function)
                 body_ns = dict(self.ns)
-                arg_syms = []
-                for a in fd.args:
-                    body_ns[a] = self.ns.get(a) if isinstance(self.ns.get(a), sp.Symbol) else sp.Symbol(a)
-                    arg_syms.append(body_ns[a])
+                arg_syms = [sp.Symbol(a, real=True) for a in fd.args]
+                body_ns.update(zip(fd.args, arg_syms))
                 cs, nw = written_definedness(fd.expr, body_ns)
                 args = [real_calls(a) for a in call.args]
                 sub = dict(zip(arg_syms, args))

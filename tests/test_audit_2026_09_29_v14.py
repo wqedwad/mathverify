@@ -354,3 +354,57 @@ def test_a_closed_integral_inside_a_larger_expression_is_confirmed_too():
     ir = _ir("evaluate", {"expr": "x*Integral(Abs(cos(t)), (t, -pi, pi))"},
              [{"name": "x", "domain": "real"}, {"name": "t", "domain": "real"}], shape="expression")
     assert _run(ir, "2*x", kind="expression").verdict != "CORRECT"      # SymPy's 2; the integral is 4
+
+
+# --- second recheck: computing notation and the problem's functions --------------------------------
+
+@pytest.mark.parametrize("expr,vars_,wrong,right", [
+    ("integrate(Abs(cos(x)), (x, -1, 1))", XR, "0", "2*sin(1)"),
+    ("limit(n*tan(pi/n), n, oo)", NN, "0", "pi"),
+])
+def test_a_closed_integrate_or_limit_is_a_form_not_sympys_value(expr, vars_, wrong, right):
+    """`integrate` and `limit` computed while parsing, so SymPy's wrong value was the task's value:
+    0 was certified for both (the values are 2 sin 1 and pi) and the right answers refuted."""
+    assert _run(_ir("evaluate", {"expr": expr}, vars_), wrong).verdict != "CORRECT"
+    assert _run(_ir("evaluate", {"expr": expr}, vars_), right).verdict != "INCORRECT"
+    from mathverify.normalize.parse import build_namespace, parse_expr_str
+    from mathverify.intake.structured import load_problem_ir
+    parsed = parse_expr_str(expr, build_namespace(load_problem_ir(_ir("evaluate", {"expr": expr}, vars_))))
+    assert isinstance(parsed, (sp.Integral, sp.Limit))
+
+
+def test_an_antiderivative_and_a_limit_with_a_parameter_are_still_computed():
+    from mathverify.normalize.parse import build_namespace, parse_expr_str
+    a, x, n = sp.Symbol("a"), sp.Symbol("x"), sp.Symbol("n", positive=True, integer=True)
+    ns = build_namespace(None, {"a": a, "x": x, "n": n})
+    assert sp.simplify(parse_expr_str("integrate(2*x, x)", ns) - x**2) == 0
+    assert parse_expr_str("limit((1 + a/n)**n, n, oo)", ns) == sp.exp(a)
+
+
+FP = {"vars": [{"name": "x", "domain": "positive_real"}, {"name": "k", "domain": "positive_integer"}],
+      "functions": [{"name": "f", "expr": "sqrt(x**2) + x", "args": ["x"], "params": []}]}
+
+
+@pytest.mark.parametrize("expr,wrong,right", [("Sum(f(k), (k, -2, 2))", "0", "6"),
+                                              ("Integral(f(x), (x, -1, 1))", "0", "1"),
+                                              ("f(-1)", "-2", "0")])
+def test_a_functions_argument_is_not_the_problem_variable_of_that_name(expr, wrong, right):
+    """With x declared positive, f(x) = sqrt(x**2) + x was parsed as 2x: f(-1) was -2 and the sum of
+    f(k) over -2..2 was 0 (it is 6). The formal argument is the function's own real variable."""
+    ir = dict(_ir("evaluate", {"expr": expr}), **FP)
+    assert _run(ir, wrong).verdict == "INCORRECT"
+    assert _run(ir, right).verdict == "CORRECT"
+
+
+def test_a_call_at_the_problem_variable_still_uses_its_domain():
+    ir = dict(_ir("simplify_expression", {"expr": "f(x)"}, shape="expression"), **FP)
+    assert _run(ir, "2*x").verdict == "CORRECT"
+
+
+def test_a_form_inside_an_integrand_gives_no_numeric_value():
+    """The inner ∫|cos t| over [-pi, pi] was computed by its own quadrature at every point:
+    3.99999920... at 30 and at 50 digits, "converged", so the true value 4 was refuted."""
+    ir = _ir("definite_integral", {"integrand": "integrate(Abs(cos(t)), (t, -pi, pi))", "var": "x",
+                                   "a": "0", "b": "1"}, XR + [{"name": "t", "domain": "real"}])
+    assert _run(ir, "4").verdict != "INCORRECT"
+    assert _run(ir, "2").verdict != "CORRECT"

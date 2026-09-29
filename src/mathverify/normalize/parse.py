@@ -202,7 +202,28 @@ def _Limit(e, v, p, d=None):  # noqa: N802 - the name is the notation
 
 
 def _limit(e, v, p, d=None):
+    """`limit` computes, unless the limit is closed: then it stays the form, and a value is taken
+    only when numbers confirm SymPy's (equiv.forms). With n an integer SymPy's limit of n*tan(pi/n)
+    at oo is 0 (the limit is pi), and the parse certified 0 (audit of 29 Sep 2026)."""
+    form = _Limit(e, v, p, d)
+    if isinstance(form, sp.Limit) and not form.free_symbols:
+        return form
     return sp.limit(e, v, p, d if d is not None else _two_sided(p))
+
+
+def _integrate(*args, **kwargs):
+    """`integrate` computes, unless the integral is definite in every variable and closed: then it
+    stays the form, as `Integral` does, and its value is confirmed by numbers (equiv.forms). SymPy
+    integrates |cos x| over [-1, 1] to 0 (the value is 2 sin 1), and the parse certified 0 (audit
+    of 29 Sep 2026). An antiderivative or an integral with a parameter is computed as before."""
+    form = sp.Integral(*args, **kwargs)
+    if isinstance(form, sp.Integral) and not form.free_symbols and form.limits \
+            and all(len(lim) == 3 for lim in form.limits):
+        return form
+    return sp.integrate(*args, **kwargs)
+
+
+_integrate.binds_range = True  # type: ignore[attr-defined]
 
 
 class arccot(sp.Function):  # noqa: N801 - the name is the notation
@@ -257,7 +278,7 @@ _SAFE_NAMES: dict[str, Any] = {
     "re": sp.re, "im": sp.im, "conjugate": sp.conjugate, "arg": sp.arg,
     # calculus (unevaluated forms allowed in step claims)
     "Sum": sp.Sum, "Product": sp.Product, "Integral": sp.Integral, "Derivative": sp.Derivative,
-    "Limit": _Limit, "diff": sp.diff, "integrate": sp.integrate, "limit": _limit,
+    "Limit": _Limit, "diff": sp.diff, "integrate": _integrate, "limit": _limit,
     # numbers
     "Rational": Rational, "Integer": Integer, "Float": sp.Float, "S": S, "nsimplify": sp.nsimplify,
     # relations / logic
@@ -363,8 +384,14 @@ def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, A
 
 
 def _make_function(fdef, ns):
-    argsyms = [ns[a] for a in fdef.args]
-    body = parse_expr_str(fdef.expr, ns)
+    # A formal argument is the function's own real variable. Taken from the namespace, it carried
+    # the domain of a problem variable with the same name: with x declared positive the body
+    # sqrt(x**2) + x was folded to 2*x, so f(-1) was -2 and the sum of f(k) over -2..2 was 0 (it is
+    # 6; audit of 29 Sep 2026). A call substitutes its argument, whose own assumptions apply then.
+    body_ns = dict(ns)
+    body_ns.update({a: Symbol(a, real=True) for a in fdef.args})
+    argsyms = [body_ns[a] for a in fdef.args]
+    body = parse_expr_str(fdef.expr, body_ns)
 
     def _f(*args):
         if len(args) != len(argsyms):

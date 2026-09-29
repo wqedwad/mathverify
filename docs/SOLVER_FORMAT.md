@@ -69,7 +69,12 @@ Gösterim gelenekleri (29 Eylül 2026, DECISIONS §72):
 - `Sum`/`Product` indisi ve belirli `Integral`/`integrate` değişkeni bağlayıcının içinde yereldir: IR'da
   aynı adla bildirilen değişkenin varsayımlarını almaz (k pozitif bildirilmişken
   `Sum(Abs(k), (k, -2, 2)) = 6`). Aynı ad iç içe ya da bir bağlayıcıda iki kez bağlanamaz; ters toplam
-  aralığı (`Sum(k, (k, 3, 1))`) okunmaz. `Limit` bildirilmiş sembolü korur (tam sayı `n` ile dizi limiti).
+  aralığı (`Sum(k, (k, 3, 1))`) ve tam sayı olmayan sınır (`Sum(k, (k, 1, 7/2))`) okunmaz. `Limit`
+  bildirilmiş sembolü korur (tam sayı `n` ile dizi limiti).
+- Yönü yazılmamış `Limit`/`limit` her yerde iki taraflıdır (`Limit(Abs(x)/x, x, 0)` yoktur); tek taraf
+  `Limit(e, x, 0, "+")` ile yazılır. Kapalı bir integral, toplam, çarpım ya da limit ancak SymPy'nin
+  değeri sayısal olarak doğrulanınca değer sayılır; doğrulanamayan biçimli iddia UNKNOWN kalır.
+- Köşede türev (`at(diff(Abs(x), x), x, 0)`) okunmaz: türevi olmayan noktada değer yoktur.
 
 ## Çözüm (`solution`)
 

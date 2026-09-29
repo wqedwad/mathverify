@@ -79,6 +79,12 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
     measured to be off by 5e-3 on the endpoint-singular ln x/sqrt x.
     """
     ev: dict[str, Any] = {"integrand": str(integrand), "a": str(a), "b": str(b)}
+    if isinstance(integrand, sp.Basic) and integrand.has(sp.Integral, sp.Sum, sp.Product, sp.Limit):
+        # a form inside the integrand is evaluated by its own quadrature or summation, whose error
+        # the ladder does not see: the constant ∫|cos t| over [-pi, pi] came out 3.99999920... at 30
+        # and at 50 digits, "converged", and the true value 4 was refuted (audit of 29 Sep 2026)
+        ev["error"] = "a form inside the integrand has no confirmed numeric value"
+        return None, ev
     a, b = sp.sympify(a), sp.sympify(b)
     pts = find_breakpoints(integrand, var, a, b, timeout)
     ev["breakpoints"] = pts

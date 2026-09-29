@@ -2367,15 +2367,17 @@ def _functions_faithful(obj, ns) -> None:
     """A problem function's body is parsed with simplification (`f(x) = x/x` becomes 1): refuse
     unless its domain as written is exactly its domain as parsed."""
     for fd in obj.functions:
-        body = getattr(ns.get(fd.name), "body", None)
-        if body is None:
+        fn = ns.get(fd.name)
+        body, argsyms = getattr(fn, "body", None), getattr(fn, "argsyms", None)
+        if body is None or argsyms is None or len(argsyms) != len(fd.args):
             raise LeanPrintError(f"function {fd.name} has no parsed body")
-        w = _as_written(fd.expr, ns)
+        # read with the function's own arguments, as its body was parsed (parse._make_function)
+        w = _as_written(fd.expr, dict(ns, **dict(zip(fd.args, argsyms))))
         if len(w) != 1:
             raise LeanPrintError(f"function {fd.name} is not one expression")
         wc, pc = _open(_definedness(w[0])), _open(_definedness(body))
-        if len(fd.args) == 1 and isinstance(ns.get(fd.args[0]), sp.Symbol):
-            v = ns[fd.args[0]]
+        if len(fd.args) == 1 and isinstance(argsyms[0], sp.Symbol):
+            v = argsyms[0]
             dw, dp = _solve_region(wc, v), _solve_region(pc, v)
             for c, region in [(c, dw) for c in pc] + [(c, dp) for c in wc]:
                 bad = _violation_set(c, v, region)
