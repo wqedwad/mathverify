@@ -1,0 +1,244 @@
+[
+ {
+  "qid": "Q02",
+  "question": "A(1, 2) ve B(4, 6) noktaları arasındaki uzaklık kaç birimdir?",
+  "options": {
+   "A": "3",
+   "B": "4",
+   "C": "5",
+   "D": "25",
+   "E": "7"
+  }
+ },
+ {
+  "qid": "Q06",
+  "question": "a₁ = 1, a₂ = 3 ve n ≥ 3 için aₙ = aₙ₋₁ + 2aₙ₋₂ olduğuna göre a₆ kaçtır?",
+  "options": {
+   "A": "21",
+   "B": "32",
+   "C": "43",
+   "D": "64",
+   "E": "85"
+  }
+ },
+ {
+  "qid": "Q10",
+  "question": "1² + 2² + … + 10² toplamı kaçtır?",
+  "options": {
+   "A": "285",
+   "B": "330",
+   "C": "385",
+   "D": "440",
+   "E": "505"
+  }
+ },
+ {
+  "qid": "Q14",
+  "question": "∫₀¹ x·eˣ dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "E - 1",
+   "D": "E/2",
+   "E": "2*E - 1"
+  }
+ },
+ {
+  "qid": "Q18",
+  "question": "lim_{x→0} |x|/x limiti için aşağıdakilerden hangisi doğrudur?",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "2",
+   "E": "limit yoktur"
+  }
+ },
+ {
+  "qid": "Q22",
+  "question": "cos 2x = 1/2 denkleminin [0, 2π) aralığındaki çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{pi/6, 5*pi/6}",
+   "B": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+   "C": "{pi/3, 5*pi/3}",
+   "D": "{pi/6, 11*pi/6}",
+   "E": "{pi/3, 2*pi/3, 4*pi/3, 5*pi/3}"
+  }
+ },
+ {
+  "qid": "Q26",
+  "question": "f(x) = x³ − 3x fonksiyonunun [−2, 3] aralığındaki en büyük değeri kaçtır?",
+  "options": {
+   "A": "2",
+   "B": "16",
+   "C": "18",
+   "D": "20",
+   "E": "24"
+  }
+ },
+ {
+  "qid": "Q30",
+  "question": "x > 0 olmak üzere f(x) = x + 4/x fonksiyonunun en küçük değeri kaçtır?",
+  "options": {
+   "A": "2",
+   "B": "4",
+   "C": "6",
+   "D": "8",
+   "E": "0"
+  }
+ },
+ {
+  "qid": "Q34",
+  "question": "√(x + 4) = x − 2 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{0}",
+   "B": "{5}",
+   "C": "{0, 5}",
+   "D": "{-4}",
+   "E": "{}"
+  }
+ },
+ {
+  "qid": "Q38",
+  "question": "x² − 5x − 14 < 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(-2, 7)",
+   "B": "[-2, 7]",
+   "C": "(-oo, -2) U (7, oo)",
+   "D": "(-7, 2)",
+   "E": "(2, 7)"
+  }
+ },
+ {
+  "qid": "Q42",
+  "question": "f(x) = (2x + 3)/(x − 1) olduğuna göre f⁻¹(5) kaçtır?",
+  "options": {
+   "A": "2/3",
+   "B": "8/3",
+   "C": "3",
+   "D": "10/3",
+   "E": "4"
+  }
+ },
+ {
+  "qid": "Q46",
+  "question": "ABC üçgeninde |AB| = |AC| ve m(∠A) = 40°'dir. m(∠B) kaç derecedir?",
+  "options": {
+   "A": "40",
+   "B": "50",
+   "C": "60",
+   "D": "70",
+   "E": "80"
+  }
+ },
+ {
+  "qid": "Q50",
+  "question": "ABC üçgeninde m(∠A) = 50° ve m(∠B) = 60°'dir. m(∠C) kaç derecedir?",
+  "options": {
+   "A": "60",
+   "B": "65",
+   "C": "70",
+   "D": "75",
+   "E": "80"
+  }
+ },
+ {
+  "qid": "Q54",
+  "question": "1/x + 1/(x + 1) ifadesinin tek kesir hâlindeki eşiti aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(2*x + 1)/(x*(x + 1))",
+   "B": "(2*x + 1)/(x + 1)",
+   "C": "2/(2*x + 1)",
+   "D": "(x + 1)/(x*(x + 1))",
+   "E": "1/(x*(x + 1))"
+  }
+ },
+ {
+  "qid": "Q58",
+  "question": "İki zar birlikte atılıyor. Üst yüze gelen sayıların toplamının 7 olma olasılığı kaçtır?",
+  "options": {
+   "A": "1/12",
+   "B": "1/9",
+   "C": "1/6",
+   "D": "5/36",
+   "E": "1/4"
+  }
+ },
+ {
+  "qid": "Q62",
+  "question": "Bir torbada 3 kırmızı ve 2 mavi top vardır. Aynı anda çekilen 2 topun ikisinin de kırmızı olma olasılığı kaçtır?",
+  "options": {
+   "A": "1/5",
+   "B": "3/10",
+   "C": "9/25",
+   "D": "1/2",
+   "E": "3/5"
+  }
+ },
+ {
+  "qid": "Q66",
+  "question": "Bir sayının 3 katının 5 fazlası, aynı sayının 5 katının 7 eksiğine eşittir. Bu sayı kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "6",
+   "D": "9",
+   "E": "12"
+  }
+ },
+ {
+  "qid": "Q70",
+  "question": "OBEB(84, 120) kaçtır?",
+  "options": {
+   "A": "6",
+   "B": "8",
+   "C": "12",
+   "D": "24",
+   "E": "36"
+  }
+ },
+ {
+  "qid": "Q74",
+  "question": "x² − 5x − 14 < 0 eşitsizliğini sağlayan kaç farklı x tam sayısı vardır?",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  }
+ },
+ {
+  "qid": "Q78",
+  "question": "lim_{n→∞} (1 + 1/n)ⁿ limitinin değeri nedir?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "E",
+   "D": "E**2",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q82",
+  "question": "A = [[2, 1], [1, 2]] matrisinin özdeğerleri kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{1, 3}",
+   "B": "{1, 2}",
+   "C": "{2, 3}",
+   "D": "{-1, 3}",
+   "E": "{0, 4}"
+  }
+ },
+ {
+  "qid": "Q86",
+  "question": "A = [[2, 0, 1], [1, 3, 2], [1, 1, 1]] matrisinin determinantı kaçtır?",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  }
+ }
+]

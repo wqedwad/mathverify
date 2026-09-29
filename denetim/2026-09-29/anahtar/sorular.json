@@ -1,0 +1,942 @@
+[
+ {
+  "qid": "Q01",
+  "question": "A(1, 2) ve B(4, 8) noktalarından geçen doğrunun denklemi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "y = 2*x",
+   "B": "y = 2*x + 1",
+   "C": "y = x + 1",
+   "D": "y = 3*x - 1",
+   "E": "y = (x + 3)/2"
+  }
+ },
+ {
+  "qid": "Q02",
+  "question": "A(1, 2) ve B(4, 6) noktaları arasındaki uzaklık kaç birimdir?",
+  "options": {
+   "A": "3",
+   "B": "4",
+   "C": "5",
+   "D": "25",
+   "E": "7"
+  }
+ },
+ {
+  "qid": "Q03",
+  "question": "Merkezi M(2, −1) ve yarıçapı 3 olan çemberin denklemi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(x - 2)**2 + (y + 1)**2 = 9",
+   "B": "(x + 2)**2 + (y - 1)**2 = 9",
+   "C": "(x - 2)**2 + (y + 1)**2 = 3",
+   "D": "x**2 + y**2 - 4*x + 2*y + 4 = 0",
+   "E": "(x - 2)**2 + (y - 1)**2 = 9"
+  }
+ },
+ {
+  "qid": "Q04",
+  "question": "P(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "20",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q05",
+  "question": "Köşeleri A(0, 0), B(4, 0) ve C(0, 3) olan üçgenin alanı kaç birimkaredir?",
+  "options": {
+   "A": "5",
+   "B": "6",
+   "C": "7",
+   "D": "12",
+   "E": "24"
+  }
+ },
+ {
+  "qid": "Q06",
+  "question": "a₁ = 1, a₂ = 3 ve n ≥ 3 için aₙ = aₙ₋₁ + 2aₙ₋₂ olduğuna göre a₆ kaçtır?",
+  "options": {
+   "A": "21",
+   "B": "32",
+   "C": "43",
+   "D": "64",
+   "E": "85"
+  }
+ },
+ {
+  "qid": "Q07",
+  "question": "İlk terimi 5 ve ortak farkı 3 olan aritmetik dizinin 20. terimi kaçtır?",
+  "options": {
+   "A": "59",
+   "B": "60",
+   "C": "62",
+   "D": "65",
+   "E": "68"
+  }
+ },
+ {
+  "qid": "Q08",
+  "question": "İlk terimi 3 ve ortak çarpanı 2 olan geometrik dizinin genel terimi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "3*2**n",
+   "B": "3*2**(n-1)",
+   "C": "2*3**(n-1)",
+   "D": "6**(n-1)",
+   "E": "3**n"
+  }
+ },
+ {
+  "qid": "Q09",
+  "question": "a₁ = a₂ = 1 ve aₙ = aₙ₋₁ + aₙ₋₂ (Fibonacci) dizisinin genel terimi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "B": "(((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "C": "((1+sqrt(5))/2)**n",
+   "D": "(((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5)",
+   "E": "2**(n-1)"
+  }
+ },
+ {
+  "qid": "Q10",
+  "question": "1² + 2² + … + 10² toplamı kaçtır?",
+  "options": {
+   "A": "285",
+   "B": "330",
+   "C": "385",
+   "D": "440",
+   "E": "505"
+  }
+ },
+ {
+  "qid": "Q11",
+  "question": "Σ_{k=1}^{∞} 1/2ᵏ serisinin toplamı kaçtır?",
+  "options": {
+   "A": "1/2",
+   "B": "1",
+   "C": "3/2",
+   "D": "2",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q12",
+  "question": "∫ ln x dx integrali aşağıdakilerden hangisine eşittir? (C sabit)",
+  "options": {
+   "A": "x*log(x) - x + C",
+   "B": "x*log(x) + C",
+   "C": "log(x)/x + C",
+   "D": "x*log(x) + x + C",
+   "E": "1/x + C"
+  }
+ },
+ {
+  "qid": "Q13",
+  "question": "∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "6",
+   "B": "21",
+   "C": "23",
+   "D": "25",
+   "E": "27"
+  }
+ },
+ {
+  "qid": "Q14",
+  "question": "∫₀¹ x·eˣ dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "E - 1",
+   "D": "E/2",
+   "E": "2*E - 1"
+  }
+ },
+ {
+  "qid": "Q15",
+  "question": "∫₀^π sin x dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "pi",
+   "E": "-2"
+  }
+ },
+ {
+  "qid": "Q16",
+  "question": "lim_{x→2} (x² − 4)/(x − 2) limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "2",
+   "C": "4",
+   "D": "8",
+   "E": "limit yoktur"
+  }
+ },
+ {
+  "qid": "Q17",
+  "question": "lim_{x→0} sin(3x)/x limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "3",
+   "D": "1/3",
+   "E": "limit yoktur"
+  }
+ },
+ {
+  "qid": "Q18",
+  "question": "lim_{x→0} |x|/x limiti için aşağıdakilerden hangisi doğrudur?",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "2",
+   "E": "limit yoktur"
+  }
+ },
+ {
+  "qid": "Q19",
+  "question": "lim_{x→∞} (2x² + 1)/(x² − 5) limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "5",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q20",
+  "question": "lim_{x→1} (√x − 1)/(x − 1) limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1/4",
+   "C": "1/2",
+   "D": "1",
+   "E": "2"
+  }
+ },
+ {
+  "qid": "Q21",
+  "question": "lim_{x→0⁺} x·ln x limitinin değeri kaçtır?",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "-∞",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q22",
+  "question": "cos 2x = 1/2 denkleminin [0, 2π) aralığındaki çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{pi/6, 5*pi/6}",
+   "B": "{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}",
+   "C": "{pi/3, 5*pi/3}",
+   "D": "{pi/6, 11*pi/6}",
+   "E": "{pi/3, 2*pi/3, 4*pi/3, 5*pi/3}"
+  }
+ },
+ {
+  "qid": "Q23",
+  "question": "sin x = 1/2 denkleminin çözüm kümesi aşağıdakilerden hangisidir? (k ∈ Z)",
+  "options": {
+   "A": "{pi/6 + 2*k*pi}",
+   "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+   "C": "{pi/6 + k*pi}",
+   "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+   "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+  }
+ },
+ {
+  "qid": "Q24",
+  "question": "sin 75° değeri aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(sqrt(6) + sqrt(2))/4",
+   "B": "(sqrt(6) - sqrt(2))/4",
+   "C": "sqrt(3)/2",
+   "D": "(sqrt(2) + 1)/2",
+   "E": "sqrt(2)/2"
+  }
+ },
+ {
+  "qid": "Q25",
+  "question": "tan x = √3 denkleminin [0, π) aralığındaki çözümü kaçtır?",
+  "options": {
+   "A": "pi/6",
+   "B": "pi/3",
+   "C": "2*pi/3",
+   "D": "pi/4",
+   "E": "5*pi/6"
+  }
+ },
+ {
+  "qid": "Q26",
+  "question": "f(x) = x³ − 3x fonksiyonunun [−2, 3] aralığındaki en büyük değeri kaçtır?",
+  "options": {
+   "A": "2",
+   "B": "16",
+   "C": "18",
+   "D": "20",
+   "E": "24"
+  }
+ },
+ {
+  "qid": "Q27",
+  "question": "f(x) = x²·eˣ olduğuna göre f'(0) kaçtır?",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "2",
+   "E": "E"
+  }
+ },
+ {
+  "qid": "Q28",
+  "question": "y = x² eğrisine x = 1 apsisli noktasından çizilen teğetin denklemi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "y = 2*x - 1",
+   "B": "y = 2*x + 1",
+   "C": "y = x",
+   "D": "y = 2*x",
+   "E": "y = x + 1"
+  }
+ },
+ {
+  "qid": "Q29",
+  "question": "f(x) = ln(x² + 1) fonksiyonunun türevi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "2*x/(x**2 + 1)",
+   "B": "1/(x**2 + 1)",
+   "C": "2*x*log(x**2 + 1)",
+   "D": "x/(x**2 + 1)",
+   "E": "2/(x**2 + 1)"
+  }
+ },
+ {
+  "qid": "Q30",
+  "question": "x > 0 olmak üzere f(x) = x + 4/x fonksiyonunun en küçük değeri kaçtır?",
+  "options": {
+   "A": "2",
+   "B": "4",
+   "C": "6",
+   "D": "8",
+   "E": "0"
+  }
+ },
+ {
+  "qid": "Q31",
+  "question": "f(x) = x³ − 6x² + 9x + 1 fonksiyonunun yerel maksimum değeri kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "5",
+   "D": "7",
+   "E": "9"
+  }
+ },
+ {
+  "qid": "Q32",
+  "question": "f(x) = x³ + ax² + bx fonksiyonu x = 1 noktasında yerel ekstremuma sahiptir ve f(1) = −3'tür. a·b çarpımı kaçtır?",
+  "options": {
+   "A": "-5",
+   "B": "-4",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q33",
+  "question": "log(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{0}",
+   "B": "{4}",
+   "C": "{0, 4}",
+   "D": "{1}",
+   "E": "{}"
+  }
+ },
+ {
+  "qid": "Q34",
+  "question": "√(x + 4) = x − 2 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{0}",
+   "B": "{5}",
+   "C": "{0, 5}",
+   "D": "{-4}",
+   "E": "{}"
+  }
+ },
+ {
+  "qid": "Q35",
+  "question": "x/(x − 3) = 3/(x − 3) + 2 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{3}",
+   "B": "{}",
+   "C": "{0}",
+   "D": "{-3}",
+   "E": "{0, 3}"
+  }
+ },
+ {
+  "qid": "Q36",
+  "question": "|2x − 3| = 5 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{4}",
+   "B": "{-1, 4}",
+   "C": "{-4, 1}",
+   "D": "{1, 4}",
+   "E": "{-1}"
+  }
+ },
+ {
+  "qid": "Q37",
+  "question": "x² − (m + 1)x + 4 = 0 denkleminin çakışık iki reel kökü olduğuna göre m'nin pozitif değeri kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "5",
+   "D": "7",
+   "E": "15"
+  }
+ },
+ {
+  "qid": "Q38",
+  "question": "x² − 5x − 14 < 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(-2, 7)",
+   "B": "[-2, 7]",
+   "C": "(-oo, -2) U (7, oo)",
+   "D": "(-7, 2)",
+   "E": "(2, 7)"
+  }
+ },
+ {
+  "qid": "Q39",
+  "question": "(x − 1)/(x + 2) ≥ 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(-oo, -2) U [1, oo)",
+   "B": "(-oo, -2] U [1, oo)",
+   "C": "[-2, 1]",
+   "D": "(-2, 1)",
+   "E": "(-oo, -2) U (1, oo)"
+  }
+ },
+ {
+  "qid": "Q40",
+  "question": "|x − 3| < 2 eşitsizliğini sağlayan kaç farklı x tam sayısı vardır?",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q41",
+  "question": "f(x) = 2x + 3 ve g(x) = x² − 1 olduğuna göre (f∘g)(2) kaçtır?",
+  "options": {
+   "A": "7",
+   "B": "8",
+   "C": "9",
+   "D": "10",
+   "E": "11"
+  }
+ },
+ {
+  "qid": "Q42",
+  "question": "f(x) = (2x + 3)/(x − 1) olduğuna göre f⁻¹(5) kaçtır?",
+  "options": {
+   "A": "2/3",
+   "B": "8/3",
+   "C": "3",
+   "D": "10/3",
+   "E": "4"
+  }
+ },
+ {
+  "qid": "Q43",
+  "question": "P(x) = x³ − 2x² + kx + 6 polinomunun (x − 3) ile bölümünden kalan 0 olduğuna göre k kaçtır?",
+  "options": {
+   "A": "-5",
+   "B": "-3",
+   "C": "3",
+   "D": "5",
+   "E": "7"
+  }
+ },
+ {
+  "qid": "Q44",
+  "question": "P(x) = x⁵ − 3x³ + x + 1 polinomunun kaç farklı reel kökü vardır?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q45",
+  "question": "ABC dik üçgeninde m(∠B) = 90°, |AB| = 6 cm ve |BC| = 8 cm'dir. |AC| kaç cm'dir?",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "12",
+   "E": "14"
+  }
+ },
+ {
+  "qid": "Q46",
+  "question": "ABC üçgeninde |AB| = |AC| ve m(∠A) = 40°'dir. m(∠B) kaç derecedir?",
+  "options": {
+   "A": "40",
+   "B": "50",
+   "C": "60",
+   "D": "70",
+   "E": "80"
+  }
+ },
+ {
+  "qid": "Q47",
+  "question": "ABCD dikdörtgeninde |AB| = 12 cm ve |BC| = 5 cm'dir. |AC| köşegeni kaç cm'dir?",
+  "options": {
+   "A": "11",
+   "B": "12",
+   "C": "13",
+   "D": "15",
+   "E": "17"
+  }
+ },
+ {
+  "qid": "Q48",
+  "question": "ABC üçgeninde |AB| = |AC| = 10 cm, |BC| = 12 cm ve D noktası [BC]'nin orta noktasıdır. |AD| kaç cm'dir?",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  }
+ },
+ {
+  "qid": "Q49",
+  "question": "Dik kenarları 6 cm ve 8 cm olan dik üçgenin alanı kaç cm²'dir?",
+  "options": {
+   "A": "12",
+   "B": "20",
+   "C": "24",
+   "D": "30",
+   "E": "48"
+  }
+ },
+ {
+  "qid": "Q50",
+  "question": "ABC üçgeninde m(∠A) = 50° ve m(∠B) = 60°'dir. m(∠C) kaç derecedir?",
+  "options": {
+   "A": "60",
+   "B": "65",
+   "C": "70",
+   "D": "75",
+   "E": "80"
+  }
+ },
+ {
+  "qid": "Q51",
+  "question": "f(x) = √(x − 3) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "[3, oo)",
+   "B": "(3, oo)",
+   "C": "(-oo, 3]",
+   "D": "[-3, oo)",
+   "E": "(-oo, -3]"
+  }
+ },
+ {
+  "qid": "Q52",
+  "question": "f(x) = 1/(x² − 4) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+   "B": "(-oo, -2) U (2, oo)",
+   "C": "(-2, 2)",
+   "D": "(-oo, 2) U (2, oo)",
+   "E": "(-oo, -2) U (-2, oo)"
+  }
+ },
+ {
+  "qid": "Q53",
+  "question": "f(x) = ln(x − 1) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(1, oo)",
+   "B": "[1, oo)",
+   "C": "(-oo, 1)",
+   "D": "(0, oo)",
+   "E": "(-1, oo)"
+  }
+ },
+ {
+  "qid": "Q54",
+  "question": "1/x + 1/(x + 1) ifadesinin tek kesir hâlindeki eşiti aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(2*x + 1)/(x*(x + 1))",
+   "B": "(2*x + 1)/(x + 1)",
+   "C": "2/(2*x + 1)",
+   "D": "(x + 1)/(x*(x + 1))",
+   "E": "1/(x*(x + 1))"
+  }
+ },
+ {
+  "qid": "Q55",
+  "question": "(x + 1)² − (x − 1)² ifadesinin en sade hâli aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "4*x",
+   "B": "2*x",
+   "C": "2",
+   "D": "4",
+   "E": "x**2 + 1"
+  }
+ },
+ {
+  "qid": "Q56",
+  "question": "x + y = 10 denklemini sağlayan kaç farklı (x, y) pozitif tam sayı ikilisi vardır?",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "11",
+   "E": "12"
+  }
+ },
+ {
+  "qid": "Q57",
+  "question": "2x + 3y = 12 denklemini sağlayan kaç farklı (x, y) negatif olmayan tam sayı ikilisi vardır?",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q58",
+  "question": "İki zar birlikte atılıyor. Üst yüze gelen sayıların toplamının 7 olma olasılığı kaçtır?",
+  "options": {
+   "A": "1/12",
+   "B": "1/9",
+   "C": "1/6",
+   "D": "5/36",
+   "E": "1/4"
+  }
+ },
+ {
+  "qid": "Q59",
+  "question": "5 kişi yan yana bir sıraya kaç farklı şekilde dizilebilir?",
+  "options": {
+   "A": "24",
+   "B": "60",
+   "C": "100",
+   "D": "120",
+   "E": "125"
+  }
+ },
+ {
+  "qid": "Q60",
+  "question": "6 kişilik bir gruptan 3 kişilik bir komite kaç farklı şekilde seçilebilir?",
+  "options": {
+   "A": "15",
+   "B": "18",
+   "C": "20",
+   "D": "30",
+   "E": "120"
+  }
+ },
+ {
+  "qid": "Q61",
+  "question": "{1, 2, 3, 4, 5} rakamlarıyla rakamları birbirinden farklı üç basamaklı kaç sayı yazılabilir?",
+  "options": {
+   "A": "10",
+   "B": "30",
+   "C": "60",
+   "D": "100",
+   "E": "125"
+  }
+ },
+ {
+  "qid": "Q62",
+  "question": "Bir torbada 3 kırmızı ve 2 mavi top vardır. Aynı anda çekilen 2 topun ikisinin de kırmızı olma olasılığı kaçtır?",
+  "options": {
+   "A": "1/5",
+   "B": "3/10",
+   "C": "9/25",
+   "D": "1/2",
+   "E": "3/5"
+  }
+ },
+ {
+  "qid": "Q63",
+  "question": "Bir madeni para 3 kez atılıyor. En az 2 kez tura gelme olasılığı kaçtır?",
+  "options": {
+   "A": "1/8",
+   "B": "3/8",
+   "C": "1/2",
+   "D": "5/8",
+   "E": "7/8"
+  }
+ },
+ {
+  "qid": "Q64",
+  "question": "Bir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?",
+  "options": {
+   "A": "12",
+   "B": "14",
+   "C": "16",
+   "D": "18",
+   "E": "20"
+  }
+ },
+ {
+  "qid": "Q65",
+  "question": "Ali bir işi tek başına 6 saatte, Veli aynı işi tek başına 3 saatte bitirebilmektedir. İkisi birlikte çalışırsa bu işi kaç saatte bitirirler?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q66",
+  "question": "Bir sayının 3 katının 5 fazlası, aynı sayının 5 katının 7 eksiğine eşittir. Bu sayı kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "6",
+   "D": "9",
+   "E": "12"
+  }
+ },
+ {
+  "qid": "Q67",
+  "question": "Bir babanın yaşı oğlunun yaşının 4 katıdır. 5 yıl sonra babanın yaşı oğlunun yaşının 3 katı olacaktır. Baba bugün kaç yaşındadır?",
+  "options": {
+   "A": "30",
+   "B": "36",
+   "C": "40",
+   "D": "44",
+   "E": "48"
+  }
+ },
+ {
+  "qid": "Q68",
+  "question": "Bir araç 240 km'lik bir yolu saatte 80 km hızla gidip aynı yolu saatte 60 km hızla geri dönmüştür. Gidiş-dönüş toplam kaç saat sürmüştür?",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  }
+ },
+ {
+  "qid": "Q69",
+  "question": "Bir satıcı bir malı %20 kârla 360 TL'ye satmıştır. Satıcı bu malı kaç TL'ye almıştır?",
+  "options": {
+   "A": "288",
+   "B": "296",
+   "C": "300",
+   "D": "320",
+   "E": "340"
+  }
+ },
+ {
+  "qid": "Q70",
+  "question": "OBEB(84, 120) kaçtır?",
+  "options": {
+   "A": "6",
+   "B": "8",
+   "C": "12",
+   "D": "24",
+   "E": "36"
+  }
+ },
+ {
+  "qid": "Q71",
+  "question": "x ve y pozitif tam sayılar olmak üzere 3x + 5y = 41 ve x < y ise x + y kaçtır?",
+  "options": {
+   "A": "7",
+   "B": "8",
+   "C": "9",
+   "D": "10",
+   "E": "11"
+  }
+ },
+ {
+  "qid": "Q72",
+  "question": "İki basamaklı bir doğal sayının rakamları toplamı 11'dir. Rakamlarının yerleri değiştirildiğinde elde edilen sayı, sayının kendisinden 27 fazla olduğuna göre bu sayı kaçtır?",
+  "options": {
+   "A": "38",
+   "B": "47",
+   "C": "56",
+   "D": "65",
+   "E": "74"
+  }
+ },
+ {
+  "qid": "Q73",
+  "question": "Ardışık üç çift doğal sayının toplamı 78 olduğuna göre bu sayıların en büyüğü kaçtır?",
+  "options": {
+   "A": "24",
+   "B": "26",
+   "C": "28",
+   "D": "30",
+   "E": "32"
+  }
+ },
+ {
+  "qid": "Q74",
+  "question": "x² − 5x − 14 < 0 eşitsizliğini sağlayan kaç farklı x tam sayısı vardır?",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  }
+ },
+ {
+  "qid": "Q75",
+  "question": "5^100 sayısının 7 ile bölümünden kalan kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q76",
+  "question": "∫₀¹ (ln x)/√x dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "-4",
+   "B": "-2",
+   "C": "-1",
+   "D": "0",
+   "E": "2"
+  }
+ },
+ {
+  "qid": "Q77",
+  "question": "A = [[1, 2], [3, 4]] matrisinin determinantı kaçtır?",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  }
+ },
+ {
+  "qid": "Q78",
+  "question": "lim_{n→∞} (1 + 1/n)ⁿ limitinin değeri nedir?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "E",
+   "D": "E**2",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q79",
+  "question": "Σ_{k=1}^{∞} 1/(k(k+1)) serisinin toplamı kaçtır?",
+  "options": {
+   "A": "1/2",
+   "B": "1",
+   "C": "2",
+   "D": "log(2)",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q80",
+  "question": "A = [[2, 1], [1, 2]] matrisinin en büyük özdeğeri kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q81",
+  "question": "A = [[1, 2], [3, 4]] matrisinin tersi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "Matrix([[-2, 1], [3/2, -1/2]])",
+   "B": "Matrix([[4, -2], [-3, 1]])",
+   "C": "Matrix([[-4, 2], [3, -1]])",
+   "D": "Matrix([[1, -2], [-3, 4]])",
+   "E": "Matrix([[2, -1], [-3/2, 1/2]])"
+  }
+ },
+ {
+  "qid": "Q82",
+  "question": "A = [[2, 1], [1, 2]] matrisinin özdeğerleri kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{1, 3}",
+   "B": "{1, 2}",
+   "C": "{2, 3}",
+   "D": "{-1, 3}",
+   "E": "{0, 4}"
+  }
+ },
+ {
+  "qid": "Q83",
+  "question": "A = [[2, 1], [1, 2]] matrisinin λ = 3 özdeğerine karşılık gelen bir özvektörünü bulunuz.",
+  "options": null
+ },
+ {
+  "qid": "Q84",
+  "question": "x + y = 30 ve 2x + 4y = 88 sistemini matris yöntemiyle çözünüz. (x, y) çifti nedir?",
+  "options": {
+   "A": "(16, 14)",
+   "B": "(14, 16)",
+   "C": "(18, 12)",
+   "D": "(12, 18)",
+   "E": "(20, 10)"
+  }
+ },
+ {
+  "qid": "Q85",
+  "question": "A = [[1, 1], [0, 1]] olduğuna göre A³ aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "Matrix([[1, 3], [0, 1]])",
+   "B": "Matrix([[1, 2], [0, 1]])",
+   "C": "Matrix([[3, 3], [0, 3]])",
+   "D": "Matrix([[1, 1], [0, 1]])",
+   "E": "Matrix([[1, 4], [0, 1]])"
+  }
+ },
+ {
+  "qid": "Q86",
+  "question": "A = [[2, 0, 1], [1, 3, 2], [1, 1, 1]] matrisinin determinantı kaçtır?",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  }
+ }
+]
