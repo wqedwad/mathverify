@@ -91,18 +91,71 @@ def _point_line_dist(x0, y0, a, b, c):
     return sp.Abs(a * x0 + b * y0 + c) / sp.sqrt(a ** 2 + b ** 2)
 
 
+# SymPy's `gcd`/`lcm` are the POLYNOMIAL gcd/lcm: with a symbol, `gcd(n, 4)` is 1 and `lcm(n, 2)` is
+# 2*n, so for "n = 12, gcd(n, 4) = ?" the answer 1 was certified and 4 refuted (V14, 29 Sep 2026).
+# Here they are the gcd/lcm of numbers, left unevaluated until every argument is one. Numbers keep
+# SymPy's reading: integers exactly, fractions by the school rule gcd(a/b, c/d) = gcd(a, c)/lcm(b, d).
+# The class names are `gcd`/`lcm` on purpose: printed, the expression reads back the same, and the
+# Lean printer and the domain rules recognise the operation by that name.
+def _number_args(cls, args) -> bool:
+    if len(args) < 2:
+        raise TypeError(f"{cls.__name__} takes at least two arguments")
+    return all(isinstance(a, sp.Rational) for a in args)
+
+
+class gcd(sp.Function):  # noqa: N801 - the name is the notation
+    @classmethod
+    def eval(cls, *args):
+        if _number_args(cls, args):
+            out = args[0]
+            for a in args[1:]:
+                out = sp.gcd(out, a)
+            return out
+        return None
+
+    def _eval_is_integer(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+    def _eval_is_nonnegative(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+
+class lcm(sp.Function):  # noqa: N801 - the name is the notation
+    @classmethod
+    def eval(cls, *args):
+        if _number_args(cls, args):
+            out = args[0]
+            for a in args[1:]:
+                out = sp.lcm(out, a)
+            return out
+        return None
+
+    def _eval_is_integer(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+    def _eval_is_nonnegative(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+
+def _arccot(x):
+    """arccot with values in (0, pi), the convention of the Turkish curriculum (AYT). SymPy's `acot`
+    takes values in (-pi/2, pi/2]: acot(-1) = -pi/4 where AYT reads 3*pi/4, so the right answer was
+    refuted and -pi/4 certified (V14, 29 Sep 2026). pi/2 - atan(x) is that function on all of R."""
+    return pi / 2 - sp.atan(x)
+
+
 _SAFE_NAMES: dict[str, Any] = {
     # constants
     "pi": pi, "E": E, "e": E, "I": I, "i": I, "oo": oo, "inf": oo, "zoo": zoo, "nan": nan,
     # elementary
     "sin": sp.sin, "cos": sp.cos, "tan": sp.tan, "cot": sp.cot, "sec": sp.sec, "csc": sp.csc,
-    "asin": sp.asin, "acos": sp.acos, "atan": sp.atan, "acot": sp.acot, "atan2": sp.atan2,
-    "arcsin": sp.asin, "arccos": sp.acos, "arctan": sp.atan, "arccot": sp.acot,
+    "asin": sp.asin, "acos": sp.acos, "atan": sp.atan, "acot": _arccot, "atan2": sp.atan2,
+    "arcsin": sp.asin, "arccos": sp.acos, "arctan": sp.atan, "arccot": _arccot,
     "sinh": sp.sinh, "cosh": sp.cosh, "tanh": sp.tanh,
     "exp": sp.exp, "log": sp.log, "ln": sp.log, "sqrt": sp.sqrt, "cbrt": sp.cbrt, "root": sp.root,
     "Abs": sp.Abs, "abs": sp.Abs, "floor": sp.floor, "ceiling": sp.ceiling, "ceil": sp.ceiling,
     "frac": sp.frac, "sign": sp.sign, "Mod": sp.Mod, "mod": sp.Mod,
-    "gcd": sp.gcd, "lcm": sp.lcm, "igcd": sp.igcd, "ilcm": sp.ilcm,
+    "gcd": gcd, "lcm": lcm, "igcd": sp.igcd, "ilcm": sp.ilcm,
     "factorial": sp.factorial, "binomial": sp.binomial, "C": sp.binomial, "comb": sp.binomial,
     "P": _perm, "perm": _perm, "deg": _deg,
     "dist": _dist, "slope": _slope, "tri_area": _tri_area, "dot": _dot, "point_line_dist": _point_line_dist,
@@ -378,13 +431,85 @@ def sympify_nontext(v):
     return sp.sympify(v, strict=True)
 
 
+# Binders whose TEXT gives the range of their variable: the index of a Sum or a Product runs over the
+# integers between its limits, the variable of a definite integral over the interval between them.
+# A declaration of the same name in the IR describes the problem's free variable, not this dummy:
+# with k declared positive, `Sum(Abs(k), (k, -2, 2))` was read as Sum(k, ...) = 0 and `0**k` became
+# 0 before the sum was even built, so a wrong answer was certified (V14, 29 Sep 2026). The dummy is
+# read without assumptions, as the LaTeX branch (latex2sympy's own symbol) and an undeclared index
+# (`steps.deterministic._with_bound_dummies`) already read it; SymPy sums and integrates such a
+# symbol like the declared one (measured on the common sums and integrals), and an integer
+# assumption would be wrong for limits that are not integers (`Sum(sin(pi*k), (k, 1/2, 5/2))`).
+# A Limit keeps the declared symbol: there the declaration IS the range (an integer n makes
+# n → oo a limit of a sequence: sin(pi*n) → 0, which as a function has no limit).
+_RANGE_BINDERS = ("Sum", "Product", "Integral", "integrate")
+
+
+def _rebind_range_dummies(code: str, local_dict: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    """`code` with the variable of every range binder renamed, inside the binder only, to a fresh
+    name for an assumption-free symbol of the same name; None when there is nothing to rename."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except SyntaxError:
+        return None
+    used = set(local_dict) | {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    fresh: dict[str, str] = {}                    # fresh python name -> symbol name
+
+    def alloc(sym_name: str) -> str:
+        i = 0
+        while f"_bound_{sym_name}_{i}" in used:
+            i += 1
+        name = f"_bound_{sym_name}_{i}"
+        used.add(name)
+        fresh[name] = sym_name
+        return name
+
+    def rename(node, old: str, new: str) -> None:
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Name) and sub.id == old:
+                sub.id = new
+
+    class _Rebind(ast.NodeTransformer):
+        def visit_Call(self, node):
+            f = node.func
+            if isinstance(f, ast.Name) and f.id in _RANGE_BINDERS and node.args \
+                    and local_dict.get(f.id) is _SAFE_NAMES[f.id]:
+                limits = node.args[1:]
+                for m, lim in enumerate(limits):
+                    if not (isinstance(lim, ast.Tuple) and len(lim.elts) == 3 and isinstance(lim.elts[0], ast.Name)):
+                        continue
+                    old = lim.elts[0].id
+                    new = alloc(fresh.get(old, old))
+                    # the variable of limit m binds the body and the limits of the sums INSIDE it,
+                    # i.e. the ones listed before it (SymPy: the first limit is the innermost)
+                    for scope in [node.args[0]] + [e for inner in limits[:m] if isinstance(inner, ast.Tuple)
+                                                   for e in inner.elts[1:]]:
+                        rename(scope, old, new)
+                    lim.elts[0] = ast.Name(id=new, ctx=ast.Load())
+            self.generic_visit(node)
+            return node
+
+    tree = _Rebind().visit(tree)
+    if not fresh:
+        return None
+    return ast.unparse(tree), {name: Symbol(sym) for name, sym in fresh.items()}
+
+
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
                        transformations, evaluate: bool = True):
     """parse_expr, after checking that the code it is about to evaluate is plain arithmetic."""
-    _check_code(stringify_expr(s, local_dict, global_dict, transformations), s,
-                set(local_dict) | set(global_dict))
-    return parse_expr(s, local_dict=local_dict, global_dict=global_dict,
-                      transformations=transformations, evaluate=evaluate)
+    names = set(local_dict) | set(global_dict)
+    code = stringify_expr(s, local_dict, global_dict, transformations)
+    _check_code(code, s, names)
+    rebound = _rebind_range_dummies(code, local_dict) if any(b in code for b in _RANGE_BINDERS) else None
+    if rebound is None:
+        return parse_expr(s, local_dict=local_dict, global_dict=global_dict,
+                          transformations=transformations, evaluate=evaluate)
+    code, dummies = rebound
+    local = dict(local_dict, **dummies)
+    _check_code(code, s, names | set(dummies))
+    # the code is already transformed: no transformation runs twice on it
+    return parse_expr(code, local_dict=local, global_dict=global_dict, transformations=(), evaluate=evaluate)
 
 
 def _check_safe(s: str, ns: dict[str, Any]) -> list[str]:
@@ -455,9 +580,15 @@ def _exact_latex_decimals(s: str) -> str:
         lambda m: r"\left(\frac{%d}{%d}\right)" % (int(m.group(1) + m.group(2)), 10 ** len(m.group(2))), s)
 
 
+# LaTeX has no \arccot macro; latex2sympy reads \arccot and \cot^{-1} but not the usual spelling
+_LATEX_ARCCOT = re.compile(r"\\(?:operatorname|mathrm)\s*\{\s*arccot\s*\}")
+
+
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     from latex2sympy2_extended import latex2sympy
-    expr = latex2sympy(_exact_latex_decimals(s))
+    expr = latex2sympy(_exact_latex_decimals(_LATEX_ARCCOT.sub(r"\\arccot ", s)))
+    if isinstance(expr, sp.Basic) and expr.has(sp.acot):
+        expr = expr.replace(sp.acot, _arccot)        # the (0, pi) convention, as in the canonical branch
     # rebind free symbols to the IR symbols (assumptions)
     reps = {}
     for fs in expr.free_symbols:
