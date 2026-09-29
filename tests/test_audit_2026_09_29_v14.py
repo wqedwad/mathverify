@@ -258,6 +258,17 @@ def test_a_wrong_integral_step_stays_refuted_where_sympys_closed_form_is_wrong()
         assert r.verdict == "INCORRECT" and _steps(r)[0] == "refuted"
 
 
+def test_a_true_integral_step_is_not_refuted_by_sympys_wrong_value():
+    """simplify(a - b) evaluates the integral: SymPy's ∫_0^{2π} |sin 2x| dx is 2, the value is 4, so
+    the exact comparison refuted the true step unless numbers confirm SymPy's value first."""
+    ir = _ir("evaluate", {"expr": "x"}, XR, ["x = 1"])
+    r = _run(ir, "1", [("eq", "Integral(Abs(sin(2*x)), (x, 0, 2*pi)) = 4"), ("eq", "x = 1")])
+    assert _steps(r)[0] != "refuted" and r.verdict != "INCORRECT"
+    # and the false step that agrees with SymPy's value is refuted, not verified (simplify gives 0)
+    r = _run(ir, "1", [("eq", "Integral(Abs(sin(2*x)), (x, 0, 2*pi)) = 2"), ("eq", "x = 1")])
+    assert _steps(r)[0] == "refuted" and r.verdict == "INCORRECT"
+
+
 def test_a_true_series_step_is_not_refuted_by_euler_maclaurin():
     """SymPy's numeric value of Σ cos(πk/4)/k² is 0.565345; the sum is 11π²/192 = 0.565446."""
     r = _run(_ir("evaluate", {"expr": "1"}, KP), "1", [("eq", "Sum(cos(pi*k/4)/k**2, (k, 1, oo)) = 11*pi**2/192")])
