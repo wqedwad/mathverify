@@ -2,7 +2,10 @@
 soundness sweep's `_differs` / `_equal` (a difference proved at a point of the problem's domain, exact
 numbers compared exactly, what SymPy cannot reduce is no difference, the labeller's odd payloads).
 Measured equivalent and left out: the nan guard of `_is_zero` (Z06): without it the precision ladder
-compares nan and raises, which the same function turns into no decision.
+compares nan and raises, which the same function turns into no decision. And the ladder's own
+thresholds (Z08): SymPy's exact is_zero is asked first and decides every tiny nonzero tried
+(10**-40, 1/40!, 2*10**-36 against 10**-36, a 40-digit decimal of E, atan(1/2) + atan(1/3) + 10**-40
+against pi/4); what it leaves undecided were exact zeros. The old defect was not asking it.
 The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is the one of
 denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
 
@@ -39,8 +42,6 @@ MUTATIONS = [
     # --- exact numbers
     ("Z07 ondalık yazıldığı gibi okunmaz", SF,
      "    return e.xreplace({f: sp.Rational(str(f)) for f in floats}) if floats else e\n", "    return e\n", TSF),
-    ("Z08 mutlak tolerans", SF, "    if v80 < sp.Float(\"1e-70\") and v160 < sp.Float(\"1e-150\"):\n",
-     "    if v80 < sp.Float(\"1e-35\"):\n", TSF),
     ("Z09 süreksizlik koruması yok", SF,
      "        if isinstance(e, sp.Basic) and not e.free_symbols and _jump_at_a_possible_zero(e):\n",
      "        if False:\n", TSF),

@@ -208,9 +208,12 @@ def test_a_parameters_constant_is_no_difference_even_when_sympy_can_tell_it_is_n
 
 
 def test_a_decimal_truncation_is_not_the_fraction():
-    """15 digits of 8/3 equalled 8/3 at the Float's own precision; read as the decimal it prints, it
-    does not."""
-    assert _differs(sp.Rational(8, 3), sp.Float("2.66666666666667")) and not _equal(sp.Rational(8, 3), sp.Float("2.66666666666667"))
+    """A Float of 8/3 at double precision subtracts from 8/3 to 0; read as the decimal it prints
+    (2.66666666666667), it is not 8/3. The first version exactified the difference, already 0."""
+    for f in (sp.Float(8 / 3), sp.Float("2.666666666666666666", 15)):
+        assert sp.Rational(8, 3) - f == 0                                # SymPy's own arithmetic
+        assert _differs(sp.Rational(8, 3), f) and not _equal(sp.Rational(8, 3), f)
+        assert _differs(sp.Matrix([[sp.Rational(8, 3)]]), sp.Matrix([[f]]))
 
 
 def test_a_tiny_difference_sympy_cannot_decide_is_found_by_the_ladder():

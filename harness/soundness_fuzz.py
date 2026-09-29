@@ -50,6 +50,8 @@ _DISCONTINUOUS = ("sign", "floor", "ceiling", "frac", "Heaviside", "Piecewise", 
 def _exact(e):
     """Floats read as the decimals they print as (0.1 is 1/10, a 39-digit 2.666…7 is not 8/3)."""
     import sympy as sp
+    if isinstance(e, sp.MatrixBase):
+        return e.applyfunc(_exact)
     if not isinstance(e, sp.Basic):
         return e
     floats = e.atoms(sp.Float)
@@ -342,6 +344,8 @@ def _differs(a, b, *, mod_constant: bool = False, var=None, admissible=None) -> 
     """True only when SymPy can PROVE a != b (up to an additive constant if asked; `var` is the
     variable of integration, `admissible` the problem's domain for a point proof)."""
     import sympy as sp
+    # each side read as written BEFORE they meet: 8/3 - Float(8/3) is 0 in SymPy's own arithmetic
+    a, b = _exact(a), _exact(b)
     if isinstance(a, sp.Equality) or isinstance(b, sp.Equality):
         if not (isinstance(a, sp.Equality) and isinstance(b, sp.Equality)):
             return False
@@ -392,6 +396,7 @@ def _differs(a, b, *, mod_constant: bool = False, var=None, admissible=None) -> 
 
 def _equal(a, b, *, mod_constant: bool = False, var=None) -> bool:
     import sympy as sp
+    a, b = _exact(a), _exact(b)
     if isinstance(a, sp.Equality) or isinstance(b, sp.Equality):
         if not (isinstance(a, sp.Equality) and isinstance(b, sp.Equality)):
             return False
