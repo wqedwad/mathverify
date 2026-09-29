@@ -92,8 +92,91 @@ def test_the_window_reads_the_interval_or_nothing(interval, expected):
     assert len(_task_window(ir, make_ctx(ir))) == expected
 
 
+# ------------------------------------------------------------------ (A') a window the premises miss
+def _extremum(f, interval, which="max"):
+    return {"task": {"kind": "extremum", "params": {"f": f, "var": "x", "interval": interval, "which": which}},
+            "vars": [{"name": "x"}], "givens": [], "answer_shape": "scalar"}
+
+
+def _trig(equation, interval):
+    return {"task": {"kind": "trig_solve", "params": {"equation": equation, "var": "x", "interval": interval}},
+            "vars": [{"name": "x"}], "givens": [], "answer_shape": "set"}
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps,bad", [
+    # critical points +-1 lie outside [2, 4]: "x = 3" held vacuously and the right maximum 52 was CORRECT
+    (_extremum("x**3 - 3*x", "[2, 4]"), "52", "value",
+     [("compute", "diff(x**3 - 3*x, x) = 3*x**2 - 3"), ("eq", "3*x**2 - 3 = 0"), ("eq", "x = 3"),
+      ("compute", "at(x**3 - 3*x, x, 4) = 52")], "s3"),
+    (_extremum("x**2 - 6*x", "[0, 2]", "min"), "-8", "value",
+     [("compute", "diff(x**2 - 6*x, x) = 2*x - 6"), ("eq", "2*x - 6 = 0"), ("eq", "x = 1"),
+      ("compute", "at(x**2 - 6*x, x, 2) = -8")], "s3"),
+    # cos x = -1 has no root in [0, pi): the answer {} is right, "x = 0" is not
+    (_trig("cos(x) = -1", "[0, pi)"), "{}", "set", [("eq", "cos(x) = -1"), ("eq", "x = 0")], "s2"),
+])
+def test_a_wrong_step_is_refuted_when_the_premises_have_no_instance_in_the_window(ir, answer, kind, steps, bad):
+    """Probe of 28 Sep 2026: all three were INCORRECT before the window existed and CORRECT with it."""
+    r = verify(ir, _sol(answer, kind, steps))
+    assert r.verdict == "INCORRECT" and _steps(r)[bad][0] == "refuted", (r.verdict, _steps(r))
+    layer = next(l for l in r.layers if l.layer == "steps.refute")
+    ev = next(e for e in layer.evidence["steps"] if e["id"] == bad)["evidence"]
+    assert ev["window_dropped"] == "no_premise_instance_inside_the_task_interval"
+
+
+def test_the_right_roots_outside_the_window_are_still_a_consequence():
+    steps = [("compute", "diff(x**3 - 3*x, x) = 3*x**2 - 3"), ("eq", "3*x**2 - 3 = 0"), ("eq", "x in {-1, 1}"),
+             ("compute", "at(x**3 - 3*x, x, 4) = 52")]
+    r = verify(_extremum("x**3 - 3*x", "[2, 4]"), _sol("52", "value", steps))
+    assert r.verdict == "CORRECT" and _steps(r)["s3"][0] == "verified", _steps(r)
+
+
+def _ctx2():
+    from mathverify.certify.base import make_ctx
+    from mathverify.intake.structured import load_problem_ir
+    ir = load_problem_ir({"task": {"kind": "extremum", "params": {"f": "x**2 - a*x", "var": "x", "interval": "[3, 5]",
+                                                                  "which": "min"}},
+                          "vars": [{"name": "x"}, {"name": "a"}], "givens": [], "answer_shape": "scalar"})
+    ctx = make_ctx(ir)
+    return ctx, ctx.ns["x"], ctx.ns["a"]
+
+
+def test_a_solved_system_outside_the_window_drops_the_window():
+    """Two unknowns: the solved premises give x = 1 only, outside [3, 5]."""
+    from mathverify.steps.deterministic import _check_eq
+    ctx, x, a = _ctx2()
+    prem, window = [sp.Eq(a, 2), sp.Eq(2 * x - a, 0)], [sp.Le(3, x), sp.Le(x, 5)]
+    status, ev = _check_eq(sp.Eq(x + a, 4), prem, ctx, [], window)
+    assert status == "refuted" and ev["window_dropped"], ev
+    assert _check_eq(sp.Eq(x + a, 3), prem, ctx, [], window)[0] == "verified"
+
+
+def test_a_thin_premise_set_outside_the_window_drops_it_on_the_set_route():
+    """x = sqrt(2) written as two inequalities: no sample and no grid point lands on it, so only the
+    premise-set route can tell that the window [0, 1] leaves no instance."""
+    from mathverify.steps.deterministic import _check_eq
+    ctx, x, _ = _ctx2()
+    prem, window = [sp.Ge(x, sp.sqrt(2)), sp.Le(x, sp.sqrt(2))], [sp.Le(0, x), sp.Le(x, 1)]
+    status, ev = _check_eq(sp.Eq(x, 2), prem, ctx, [], window)
+    assert status == "refuted" and ev["window_dropped"] and ev["route"] == "premise_set", ev
+
+
+def test_sampling_draws_the_windows_variable_from_the_window():
+    """No equations: sampled. A window far from the samples' usual range is still met, so a claim
+    true on it is not refuted outside it; a window the premises cannot meet is dropped."""
+    from mathverify.steps.deterministic import _check_eq
+    ctx, x, a = _ctx2()
+    prem = [sp.Gt(a, 0), sp.Gt(x, a)]
+    far = [sp.Le(1000, x), sp.Le(x, 1001)]
+    status, ev = _check_eq(sp.Gt(x, 500), prem, ctx, [], far)
+    assert status == "unknown" and "window_dropped" not in ev, ev
+    assert _check_eq(sp.Lt(x, a), prem, ctx, [], far)[0] == "refuted"
+    missed = [sp.Le(-5, x), sp.Le(x, -4)]
+    status, ev = _check_eq(sp.Lt(x, a), prem, ctx, [], missed)
+    assert status == "refuted" and ev["window_dropped"], ev
+
+
 # ------------------------------------------------------------------ (B) assignments
-DIZ = [("eq", "n = 20"), ("eq", "k = 5 + (n - 1)*3"), ("eq", "k = 5 + (20 - 1)*3"), ("compute", "5 + (20 - 1)*3 = 62")]
+DIZ =[("eq", "n = 20"), ("eq", "k = 5 + (n - 1)*3"), ("eq", "k = 5 + (20 - 1)*3"), ("compute", "5 + (20 - 1)*3 = 62")]
 
 
 def test_an_assignment_bound_only_by_domains_is_a_definition():
@@ -124,6 +207,46 @@ def test_a_finite_choice_is_an_assignment_too():
     assert isinstance(choice, sp.Or)
     assert _check_eq(choice, [], ctx, ctx.var_constraints())[0] == "skipped"
     r = verify(_ir("ayt-diz-002"), _sol("62", "value", [("eq", "n in {20}")] + DIZ[1:], option="C"))
+    assert _steps(r)["s1"] == ("skipped", "definitional_claim_introduces_unconstrained_symbols")
+    assert r.verdict == "CORRECT", r.decision_trace
+
+
+_FORCED = {"task": {"kind": "evaluate", "params": {"expr": "n + 1"}},
+           "vars": [{"name": "n", "domain": "positive_integer", "constraints": ["n <= 1"]}], "givens": []}
+_SIMP = {"task": {"kind": "simplify_expression", "params": {"expr": "(x**2 - 9)/(x - 3)"}},
+         "vars": [{"name": "x"}], "givens": [], "answer_shape": "expression"}
+_SIMP_STEP = ("compute", "(x**2 - 9)/(x - 3) = x + 3")
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps", [
+    (_ir("ayt-diz-002"), "62", "value", [("eq", "n = 0"), ("compute", "5 + (20 - 1)*3 = 62")]),  # n > 0
+    (_FORCED, "2", "value", [("eq", "n = 2"), ("compute", "1 + 1 = 2")]),                 # constraints leave n = 1
+    (_SIMP, "x + 3", "expression", [("eq", "x = 3"), _SIMP_STEP]),                         # written x != 3
+])
+def test_an_assignment_no_value_of_the_domain_satisfies_is_refuted(ir, answer, kind, steps):
+    """Probe of 28 Sep 2026: all three were INCORRECT before #11 and CORRECT after it (definitional)."""
+    r = verify(ir, _sol(answer, kind, steps))
+    assert r.verdict == "INCORRECT" and _steps(r)["s1"][0] == "refuted", (r.verdict, _steps(r))
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps", [
+    (_FORCED, "2", "value", [("eq", "n = 1"), ("compute", "1 + 1 = 2")]),
+    (_SIMP, "x + 3", "expression", [("eq", "x = 2"), _SIMP_STEP]),           # refuted before #11 as well
+    # a choice: one option outside the domain, one inside. (On a positive-integer n SymPy drops the
+    # option n = 0 while parsing, so "n in {0, 20}" is just n = 20 and would test nothing.)
+    (_SIMP, "x + 3", "expression", [("eq", "x in {2, 3}"), _SIMP_STEP]),
+])
+def test_an_assignment_some_value_of_the_domain_satisfies_stays_a_definition(ir, answer, kind, steps):
+    r = verify(ir, _sol(answer, kind, steps))
+    assert _steps(r)["s1"] == ("skipped", "definitional_claim_introduces_unconstrained_symbols"), _steps(r)
+    assert r.verdict == "CORRECT", r.decision_trace
+
+
+def test_a_wrong_assignment_the_domain_allows_is_a_known_limit():
+    """V12: "n = 21" where the task asks the 20th term. The IR's n is the recurrence's index, not the
+    asked one (`index` is a parameter, no given binds n), so nothing refutes it. Before #11 it was
+    refuted, but so was the right "n = 20": that detection did not discriminate."""
+    r = verify(_ir("ayt-diz-002"), _sol("62", "value", [("eq", "n = 21")] + DIZ[2:], option="C"))
     assert _steps(r)["s1"] == ("skipped", "definitional_claim_introduces_unconstrained_symbols")
     assert r.verdict == "CORRECT", r.decision_trace
 
@@ -191,6 +314,23 @@ def test_a_wrong_rewrite_of_the_tangent_is_still_refuted(wrong):
     assert _steps(r)["s6"][0] == "refuted" and r.verdict == "INCORRECT"
 
 
+_SLOPE = [("compute", "diff(x**2, x) = 2*x"), ("compute", "at(2*x, x, 1) = 2")]
+
+
+@pytest.mark.parametrize("steps,flagged", [
+    ([("eq", "y = x**2"), ("eq", "x = 1"), ("eq", "y = 2")] + _SLOPE + [("eq", "y = 2*x - 1")], "s6"),
+    ([("eq", "x = 1"), ("eq", "y = 2")] + _SLOPE + [("eq", "y = 2*x - 1")], "s5"),
+    ([("eq", "y = x**2")] + _SLOPE + [("eq", "y = 2*x + 1"), ("eq", "y = 2*x - 1")], "s5"),
+])
+def test_a_wrong_point_or_line_is_still_caught_without_the_curve_as_a_premise(steps, flagged):
+    """Probe of 28 Sep 2026 (C): with the curve out of the premises, a wrong ordinate of the point of
+    tangency ("y = 2", f(1) = 1) or a wrong line in the middle is a definition and is not refuted
+    itself, but the right answer contradicts it: the solution stays INCORRECT, as before #11. The
+    step flagged is the later, right one: a localization limit, not a false accept."""
+    r = verify(_ir("ayt-tur-003"), _sol("y = 2*x - 1", "equation", steps, option="A"))
+    assert r.verdict == "INCORRECT" and _steps(r)[flagged][0] == "refuted", _steps(r)
+
+
 @pytest.mark.parametrize("claim", ["y = x**2 + 1", "y = 2*x**2", "y**2 = x**2"])
 def test_a_curve_that_is_not_the_tasks_is_checked_as_before(claim):
     from mathverify.certify.base import make_ctx
@@ -228,6 +368,9 @@ def test_the_given_line_of_a_parallel_line_task_is_no_premise():
     assert _steps(r)["s1"] == ("skipped", "states_a_task_object") and r.verdict == "CORRECT", r.decision_trace
     bad = verify(ir, _sol("y = 2*x + 3", "equation", steps[:2] + [("eq", "y = 2*x + 4")]))
     assert _steps(bad)["s3"][0] == "refuted"
+    # a wrong line in the middle, no point-slope form: the right answer contradicts it (probe C4)
+    mid = verify(ir, _sol("y = 2*x + 3", "equation", [steps[0], ("eq", "y = 3*x + 2"), steps[2]]))
+    assert mid.verdict == "INCORRECT" and _steps(mid)["s3"][0] == "refuted", _steps(mid)
 
 
 def test_the_circle_of_a_tangent_to_circle_task_is_no_premise():
@@ -320,3 +463,78 @@ def test_decide_reads_and_and_or():
     assert _decide(sp.Or(sp.Eq(x, 1), sp.Eq(x, 3)), pt, ctx) is False
     assert _decide(sp.And(sp.Gt(x, 1), sp.Lt(x, 3)), pt, ctx) is True
     assert _decide(sp.And(sp.Gt(x, 1), sp.Lt(x, 2)), pt, ctx) is False
+
+
+# ------------------------------------------------------------------ (D) a choice of a free symbol
+_LINE = _SLOPE + [("eq", "y = 2*x - 1")]
+
+
+def _tan(steps):
+    return verify(_ir("ayt-tur-003"), _sol("y = 2*x - 1", "equation", _LINE + steps, option="A"))
+
+
+@pytest.mark.parametrize("steps", [[("eq", "x = 0"), ("eq", "y = -1")], [("eq", "y = -1"), ("eq", "x = 0")]])
+def test_a_point_chosen_on_a_stated_line_is_a_choice(steps):
+    """V13 (every version before 28 Sep 2026, night): the tangent's y-intercept after "y = 2*x - 1".
+    The line leaves x free, so "x = 0" was read as a consequence of it and refuted, and the right
+    solution was INCORRECT. Now it is a choice, and the other coordinate is checked at that point."""
+    r = _tan(steps)
+    st = _steps(r)
+    assert st["s4"] == ("skipped", "choice_of_a_free_symbol") and st["s5"][0] == "verified", st
+    assert r.verdict == "CORRECT", r.decision_trace
+
+
+@pytest.mark.parametrize("steps", [
+    [("eq", "x = 0"), ("eq", "y = -2")],                          # the wrong ordinate of the chosen point
+    [("eq", "y = -1"), ("eq", "x = 1")],                          # the wrong abscissa
+    [("eq", "x = 0"), ("eq", "y = -1"), ("eq", "y = 3*x - 1")],   # a wrong line: a choice is no premise of it
+])
+def test_a_wrong_coordinate_or_line_after_a_choice_is_refuted(steps):
+    r = _tan(steps)
+    assert r.verdict == "INCORRECT" and _steps(r)[f"s{3 + len(steps)}"][0] == "refuted", _steps(r)
+
+
+def test_a_second_point_of_the_same_line_is_a_known_limit():
+    """V13 narrowed: the x-intercept after the y-intercept ("y = 0" once x = 0 is chosen) is refuted,
+    since it cannot be told apart from a wrong ordinate of the chosen point; D6 takes the refutation."""
+    r = _tan([("eq", "x = 0"), ("eq", "y = -1"), ("eq", "y = 0"), ("eq", "x = 1/2")])
+    assert _steps(r)["s6"][0] == "refuted" and r.verdict == "INCORRECT", _steps(r)
+
+
+_UNDER = {"task": {"kind": "evaluate", "params": {"expr": "x + y"}}, "vars": [{"name": "x"}, {"name": "y"}],
+          "givens": ["x + y = 10"], "answer_shape": "scalar"}
+_INEQ = {"task": {"kind": "solve_inequality", "params": {"var": "x", "inequality": "x**2 < 4"}},
+         "vars": [{"name": "x"}], "givens": ["x**2 < 4"], "answer_shape": "interval"}
+
+
+@pytest.mark.parametrize("ir,answer,kind,steps,verdict", [
+    (_UNDER, "10", "value", [("eq", "x = 3"), ("eq", "y = 7"), ("compute", "3 + 7 = 10")], "CORRECT"),
+    (_UNDER, "10", "value", [("eq", "x = 3"), ("eq", "y = 8"), ("compute", "3 + 7 = 10")], "INCORRECT"),
+    (_INEQ, "(-2, 2)", "interval", [("eq", "x = 0"), ("eq", "x**2 - 4 < 0")], "CORRECT"),     # a test point
+    (_INEQ, "(-2, 2)", "interval", [("eq", "x = 3"), ("eq", "x**2 - 4 < 0")], "INCORRECT"),   # outside the set
+])
+def test_a_choice_must_be_allowed_by_the_premises(ir, answer, kind, steps, verdict):
+    r = verify(ir, _sol(answer, kind, steps))
+    assert r.verdict == verdict, _steps(r)
+
+
+@pytest.mark.parametrize("ir,steps", [
+    ({"task": {"kind": "solve_equation", "params": {"var": "x", "equation": "x**2 = 4"}}, "vars": [{"name": "x"}],
+      "givens": ["x**2 = 4"], "answer_shape": "set"}, [("eq", "x = 2")]),                     # one root of two
+    ({"task": {"kind": "trig_solve", "params": {"var": "x", "equation": "tan(x) = sqrt(3)"}},
+      "vars": [{"name": "x"}], "givens": ["tan(x) = sqrt(3)"], "answer_shape": "set"}, [("eq", "x = 4*pi/3")]),
+])
+def test_a_value_picked_from_a_finite_or_discrete_set_is_no_choice(ir, steps):
+    """A root is a consequence to check, not a free choice: the premises allow finitely many values, or
+    a discrete infinity of them (tan x = sqrt(3) with no interval), not a continuum."""
+    assert _steps(verify(ir, _sol("{2}", "set", steps)))["s1"][0] == "refuted"
+
+
+def test_has_continuum():
+    from mathverify.steps.deterministic import _has_continuum
+    x = sp.Symbol("x")
+    assert _has_continuum(sp.S.Reals) and _has_continuum(sp.Interval(0, 1))
+    assert _has_continuum(sp.Union(sp.FiniteSet(5), sp.Interval.open(0, 1)))
+    assert _has_continuum(sp.Complement(sp.Interval(0, 1), sp.FiniteSet(sp.Rational(1, 2))))
+    assert not _has_continuum(sp.FiniteSet(1, 2)) and not _has_continuum(sp.Interval(1, 1))
+    assert not _has_continuum(sp.S.Naturals) and not _has_continuum(sp.solveset(sp.tan(x) - sp.sqrt(3), x, sp.S.Reals))

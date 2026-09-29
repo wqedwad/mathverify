@@ -21,6 +21,9 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
   `docs/sartname/fable-handoff-matematik-dogrulama_1.md`.
 - Krediye bağlı ölçümler (F3/F4) ancak bütün lokal kalite işi bitip kod dondurulduktan ve API
   anahtarları yenilendikten sonra koşulur (kullanıcı kararı, 23 Eylül 2026).
+  **Düzeltme (28 Eylül 2026):** anahtar yenileme F3/F4'ün önkoşulu değil (kullanıcı kararı,
+  DECISIONS §64); lokal kalite işi ve kod dondurma önkoşulu geçerli. Depo açılırsa önce yenileme
+  kuralı ("Asla" bölümü) geçerli.
 
 ## Doğrulayıcının değişmez ilkeleri
 

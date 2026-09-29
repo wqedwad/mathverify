@@ -1,0 +1,23 @@
+[
+{"qid": "Q04", "answer": "4", "option": "C", "options_matching": ["C"], "check": "Distance formula |9+16-5|/5 = 4; separately, minimizing squared distance along the line in sympy also gives 4", "confident": true, "note": ""},
+{"qid": "Q08", "answer": "3*2**(n-1)", "option": "B", "options_matching": ["B"], "check": "Evaluated every option for n=1..5 against 3,6,12,24,48; only B matches", "confident": true, "note": "A (3*2**n) would be right only if indexing starts at n=0. The standard a_n = a_1*r**(n-1) with n starting at 1 gives B."},
+{"qid": "Q12", "answer": "x*log(x) - x + C", "option": "A", "options_matching": ["A"], "check": "Differentiated each option and compared with log(x): only A matches; numeric quad of log on [1,3] equals the A antiderivative difference", "confident": true, "note": ""},
+{"qid": "Q16", "answer": "4", "option": "C", "options_matching": ["C"], "check": "sympy limit gives 4; numeric values at 1.999 and 2.001 are about 3.999 and 4.001", "confident": true, "note": ""},
+{"qid": "Q20", "answer": "1/2", "option": "C", "options_matching": ["C"], "check": "sympy limit gives 1/2; numeric values at 0.9999 and 1.0001 are about 0.500013 and 0.499988", "confident": true, "note": ""},
+{"qid": "Q24", "answer": "(sqrt(6) + sqrt(2))/4", "option": "A", "options_matching": ["A"], "check": "Subtracted sin(75 deg) from each option at 30 digits: A differs by 0, all others are nonzero", "confident": true, "note": ""},
+{"qid": "Q28", "answer": "y = 2*x - 1", "option": "A", "options_matching": ["A"], "check": "Symbolic derivative gives slope 2 at (1,1), so y = 2x - 1; central-difference numeric slope is 2.0000000", "confident": true, "note": ""},
+{"qid": "Q32", "answer": "-5", "option": "A", "options_matching": ["A"], "check": "Solved f'(1)=0 and f(1)=-3 to get a=1, b=-5; f'=(x-1)(3x+5) changes sign at x=1, so it is a real extremum", "confident": true, "note": ""},
+{"qid": "Q36", "answer": "{-1, 4}", "option": "B", "options_matching": ["B"], "check": "sympy solveset gives {-1, 4}; brute-force integer scan over [-100, 100] finds the same", "confident": true, "note": ""},
+{"qid": "Q40", "answer": "3", "option": "B", "options_matching": ["B"], "check": "Brute-force integer scan finds x = 2, 3, 4", "confident": true, "note": ""},
+{"qid": "Q44", "answer": "3", "option": "C", "options_matching": ["C"], "check": "Factors as (x-1)(x^4+x^3-2x^2-2x-1); sympy real_roots and Sturm count_roots give 3; nroots gives -1.690, 1, 1.505 plus a complex pair; sign changes confirmed on a grid", "confident": true, "note": ""},
+{"qid": "Q48", "answer": "8", "option": "C", "options_matching": ["C"], "check": "sqrt(100-36) = 8; with coordinates B=(-6,0), C=(6,0), A=(0,8), |AB| = 10 as required", "confident": true, "note": ""},
+{"qid": "Q52", "answer": "(-oo, -2) U (-2, 2) U (2, oo)", "option": "A", "options_matching": ["A"], "check": "sympy continuous_domain gives R minus {-2, 2}; set equality with option A is True", "confident": true, "note": ""},
+{"qid": "Q56", "answer": "9", "option": "B", "options_matching": ["B"], "check": "Brute-force enumeration of positive integer pairs with x + y = 10", "confident": true, "note": ""},
+{"qid": "Q60", "answer": "20", "option": "C", "options_matching": ["C"], "check": "itertools.combinations count and math.comb(6,3) both give 20", "confident": true, "note": ""},
+{"qid": "Q64", "answer": "16", "option": "C", "options_matching": ["C"], "check": "Brute force over hen counts 0..30 with 2t + 4(30-t) = 88 gives only t = 16 (14 sheep)", "confident": true, "note": ""},
+{"qid": "Q68", "answer": "7", "option": "B", "options_matching": ["B"], "check": "240/80 + 240/60 = 3 + 4 in exact rationals", "confident": true, "note": ""},
+{"qid": "Q72", "answer": "47", "option": "B", "options_matching": ["B"], "check": "Brute force over two-digit numbers with digit sum 11 and reversed minus number = 27 gives only 47", "confident": true, "note": ""},
+{"qid": "Q76", "answer": "-4", "option": "A", "options_matching": ["A"], "check": "Antiderivative 2*sqrt(x)*log(x) - 4*sqrt(x) checked by differentiation, value -4; substitution x=u^2 gives the integral of 4 ln u = -4; mpmath tanh-sinh gives -3.99999999999999886", "confident": true, "note": "sympy's direct integrate returns an unevaluated Meijer-G expression, so it was not used as a check."},
+{"qid": "Q80", "answer": "3", "option": "C", "options_matching": ["C"], "check": "sympy eigenvals give {1, 3}; the characteristic polynomial det(M - x*I) = 0 also gives roots 1 and 3", "confident": true, "note": ""},
+{"qid": "Q84", "answer": "(16, 14)", "option": "A", "options_matching": ["A"], "check": "A.inv()*B gives (16, 14); sympy solve of the system gives the same", "confident": true, "note": ""}
+]

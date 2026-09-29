@@ -1,0 +1,233 @@
+[
+ {
+  "qid": "Q04",
+  "question": "P(3, 4) noktasının 3x + 4y − 5 = 0 doğrusuna uzaklığı kaç birimdir?",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "20",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q08",
+  "question": "İlk terimi 3 ve ortak çarpanı 2 olan geometrik dizinin genel terimi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "3*2**n",
+   "B": "3*2**(n-1)",
+   "C": "2*3**(n-1)",
+   "D": "6**(n-1)",
+   "E": "3**n"
+  }
+ },
+ {
+  "qid": "Q12",
+  "question": "∫ ln x dx integrali aşağıdakilerden hangisine eşittir? (C sabit)",
+  "options": {
+   "A": "x*log(x) - x + C",
+   "B": "x*log(x) + C",
+   "C": "log(x)/x + C",
+   "D": "x*log(x) + x + C",
+   "E": "1/x + C"
+  }
+ },
+ {
+  "qid": "Q16",
+  "question": "lim_{x→2} (x² − 4)/(x − 2) limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "2",
+   "C": "4",
+   "D": "8",
+   "E": "limit yoktur"
+  }
+ },
+ {
+  "qid": "Q20",
+  "question": "lim_{x→1} (√x − 1)/(x − 1) limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1/4",
+   "C": "1/2",
+   "D": "1",
+   "E": "2"
+  }
+ },
+ {
+  "qid": "Q24",
+  "question": "sin 75° değeri aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(sqrt(6) + sqrt(2))/4",
+   "B": "(sqrt(6) - sqrt(2))/4",
+   "C": "sqrt(3)/2",
+   "D": "(sqrt(2) + 1)/2",
+   "E": "sqrt(2)/2"
+  }
+ },
+ {
+  "qid": "Q28",
+  "question": "y = x² eğrisine x = 1 apsisli noktasından çizilen teğetin denklemi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "y = 2*x - 1",
+   "B": "y = 2*x + 1",
+   "C": "y = x",
+   "D": "y = 2*x",
+   "E": "y = x + 1"
+  }
+ },
+ {
+  "qid": "Q32",
+  "question": "f(x) = x³ + ax² + bx fonksiyonu x = 1 noktasında yerel ekstremuma sahiptir ve f(1) = −3'tür. a·b çarpımı kaçtır?",
+  "options": {
+   "A": "-5",
+   "B": "-4",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q36",
+  "question": "|2x − 3| = 5 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{4}",
+   "B": "{-1, 4}",
+   "C": "{-4, 1}",
+   "D": "{1, 4}",
+   "E": "{-1}"
+  }
+ },
+ {
+  "qid": "Q40",
+  "question": "|x − 3| < 2 eşitsizliğini sağlayan kaç farklı x tam sayısı vardır?",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q44",
+  "question": "P(x) = x⁵ − 3x³ + x + 1 polinomunun kaç farklı reel kökü vardır?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q48",
+  "question": "ABC üçgeninde |AB| = |AC| = 10 cm, |BC| = 12 cm ve D noktası [BC]'nin orta noktasıdır. |AD| kaç cm'dir?",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  }
+ },
+ {
+  "qid": "Q52",
+  "question": "f(x) = 1/(x² − 4) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(-oo, -2) U (-2, 2) U (2, oo)",
+   "B": "(-oo, -2) U (2, oo)",
+   "C": "(-2, 2)",
+   "D": "(-oo, 2) U (2, oo)",
+   "E": "(-oo, -2) U (-2, oo)"
+  }
+ },
+ {
+  "qid": "Q56",
+  "question": "x + y = 10 denklemini sağlayan kaç farklı (x, y) pozitif tam sayı ikilisi vardır?",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "11",
+   "E": "12"
+  }
+ },
+ {
+  "qid": "Q60",
+  "question": "6 kişilik bir gruptan 3 kişilik bir komite kaç farklı şekilde seçilebilir?",
+  "options": {
+   "A": "15",
+   "B": "18",
+   "C": "20",
+   "D": "30",
+   "E": "120"
+  }
+ },
+ {
+  "qid": "Q64",
+  "question": "Bir çiftlikteki tavuk ve koyunların baş sayısı toplamı 30, ayak sayısı toplamı 88'dir. Bu çiftlikte kaç tavuk vardır?",
+  "options": {
+   "A": "12",
+   "B": "14",
+   "C": "16",
+   "D": "18",
+   "E": "20"
+  }
+ },
+ {
+  "qid": "Q68",
+  "question": "Bir araç 240 km'lik bir yolu saatte 80 km hızla gidip aynı yolu saatte 60 km hızla geri dönmüştür. Gidiş-dönüş toplam kaç saat sürmüştür?",
+  "options": {
+   "A": "6",
+   "B": "7",
+   "C": "8",
+   "D": "9",
+   "E": "10"
+  }
+ },
+ {
+  "qid": "Q72",
+  "question": "İki basamaklı bir doğal sayının rakamları toplamı 11'dir. Rakamlarının yerleri değiştirildiğinde elde edilen sayı, sayının kendisinden 27 fazla olduğuna göre bu sayı kaçtır?",
+  "options": {
+   "A": "38",
+   "B": "47",
+   "C": "56",
+   "D": "65",
+   "E": "74"
+  }
+ },
+ {
+  "qid": "Q76",
+  "question": "∫₀¹ (ln x)/√x dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "-4",
+   "B": "-2",
+   "C": "-1",
+   "D": "0",
+   "E": "2"
+  }
+ },
+ {
+  "qid": "Q80",
+  "question": "A = [[2, 1], [1, 2]] matrisinin en büyük özdeğeri kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q84",
+  "question": "x + y = 30 ve 2x + 4y = 88 sistemini matris yöntemiyle çözünüz. (x, y) çifti nedir?",
+  "options": {
+   "A": "(16, 14)",
+   "B": "(14, 16)",
+   "C": "(18, 12)",
+   "D": "(12, 18)",
+   "E": "(20, 10)"
+  }
+ }
+]

@@ -1,0 +1,244 @@
+[
+ {
+  "qid": "Q01",
+  "question": "A(1, 2) ve B(4, 8) noktalarından geçen doğrunun denklemi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "y = 2*x",
+   "B": "y = 2*x + 1",
+   "C": "y = x + 1",
+   "D": "y = 3*x - 1",
+   "E": "y = (x + 3)/2"
+  }
+ },
+ {
+  "qid": "Q05",
+  "question": "Köşeleri A(0, 0), B(4, 0) ve C(0, 3) olan üçgenin alanı kaç birimkaredir?",
+  "options": {
+   "A": "5",
+   "B": "6",
+   "C": "7",
+   "D": "12",
+   "E": "24"
+  }
+ },
+ {
+  "qid": "Q09",
+  "question": "a₁ = a₂ = 1 ve aₙ = aₙ₋₁ + aₙ₋₂ (Fibonacci) dizisinin genel terimi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "B": "(((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)",
+   "C": "((1+sqrt(5))/2)**n",
+   "D": "(((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5)",
+   "E": "2**(n-1)"
+  }
+ },
+ {
+  "qid": "Q13",
+  "question": "∫₋₃³ (|x − 1| + |x + 2|) dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "6",
+   "B": "21",
+   "C": "23",
+   "D": "25",
+   "E": "27"
+  }
+ },
+ {
+  "qid": "Q17",
+  "question": "lim_{x→0} sin(3x)/x limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "3",
+   "D": "1/3",
+   "E": "limit yoktur"
+  }
+ },
+ {
+  "qid": "Q21",
+  "question": "lim_{x→0⁺} x·ln x limitinin değeri kaçtır?",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "-∞",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q25",
+  "question": "tan x = √3 denkleminin [0, π) aralığındaki çözümü kaçtır?",
+  "options": {
+   "A": "pi/6",
+   "B": "pi/3",
+   "C": "2*pi/3",
+   "D": "pi/4",
+   "E": "5*pi/6"
+  }
+ },
+ {
+  "qid": "Q29",
+  "question": "f(x) = ln(x² + 1) fonksiyonunun türevi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "2*x/(x**2 + 1)",
+   "B": "1/(x**2 + 1)",
+   "C": "2*x*log(x**2 + 1)",
+   "D": "x/(x**2 + 1)",
+   "E": "2/(x**2 + 1)"
+  }
+ },
+ {
+  "qid": "Q33",
+  "question": "log(x − 1) + log(x − 3) = log 3 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{0}",
+   "B": "{4}",
+   "C": "{0, 4}",
+   "D": "{1}",
+   "E": "{}"
+  }
+ },
+ {
+  "qid": "Q37",
+  "question": "x² − (m + 1)x + 4 = 0 denkleminin çakışık iki reel kökü olduğuna göre m'nin pozitif değeri kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "5",
+   "D": "7",
+   "E": "15"
+  }
+ },
+ {
+  "qid": "Q41",
+  "question": "f(x) = 2x + 3 ve g(x) = x² − 1 olduğuna göre (f∘g)(2) kaçtır?",
+  "options": {
+   "A": "7",
+   "B": "8",
+   "C": "9",
+   "D": "10",
+   "E": "11"
+  }
+ },
+ {
+  "qid": "Q45",
+  "question": "ABC dik üçgeninde m(∠B) = 90°, |AB| = 6 cm ve |BC| = 8 cm'dir. |AC| kaç cm'dir?",
+  "options": {
+   "A": "8",
+   "B": "9",
+   "C": "10",
+   "D": "12",
+   "E": "14"
+  }
+ },
+ {
+  "qid": "Q49",
+  "question": "Dik kenarları 6 cm ve 8 cm olan dik üçgenin alanı kaç cm²'dir?",
+  "options": {
+   "A": "12",
+   "B": "20",
+   "C": "24",
+   "D": "30",
+   "E": "48"
+  }
+ },
+ {
+  "qid": "Q53",
+  "question": "f(x) = ln(x − 1) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(1, oo)",
+   "B": "[1, oo)",
+   "C": "(-oo, 1)",
+   "D": "(0, oo)",
+   "E": "(-1, oo)"
+  }
+ },
+ {
+  "qid": "Q57",
+  "question": "2x + 3y = 12 denklemini sağlayan kaç farklı (x, y) negatif olmayan tam sayı ikilisi vardır?",
+  "options": {
+   "A": "2",
+   "B": "3",
+   "C": "4",
+   "D": "5",
+   "E": "6"
+  }
+ },
+ {
+  "qid": "Q61",
+  "question": "{1, 2, 3, 4, 5} rakamlarıyla rakamları birbirinden farklı üç basamaklı kaç sayı yazılabilir?",
+  "options": {
+   "A": "10",
+   "B": "30",
+   "C": "60",
+   "D": "100",
+   "E": "125"
+  }
+ },
+ {
+  "qid": "Q65",
+  "question": "Ali bir işi tek başına 6 saatte, Veli aynı işi tek başına 3 saatte bitirebilmektedir. İkisi birlikte çalışırsa bu işi kaç saatte bitirirler?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q69",
+  "question": "Bir satıcı bir malı %20 kârla 360 TL'ye satmıştır. Satıcı bu malı kaç TL'ye almıştır?",
+  "options": {
+   "A": "288",
+   "B": "296",
+   "C": "300",
+   "D": "320",
+   "E": "340"
+  }
+ },
+ {
+  "qid": "Q73",
+  "question": "Ardışık üç çift doğal sayının toplamı 78 olduğuna göre bu sayıların en büyüğü kaçtır?",
+  "options": {
+   "A": "24",
+   "B": "26",
+   "C": "28",
+   "D": "30",
+   "E": "32"
+  }
+ },
+ {
+  "qid": "Q77",
+  "question": "A = [[1, 2], [3, 4]] matrisinin determinantı kaçtır?",
+  "options": {
+   "A": "-2",
+   "B": "-1",
+   "C": "0",
+   "D": "1",
+   "E": "2"
+  }
+ },
+ {
+  "qid": "Q81",
+  "question": "A = [[1, 2], [3, 4]] matrisinin tersi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "Matrix([[-2, 1], [3/2, -1/2]])",
+   "B": "Matrix([[4, -2], [-3, 1]])",
+   "C": "Matrix([[-4, 2], [3, -1]])",
+   "D": "Matrix([[1, -2], [-3, 4]])",
+   "E": "Matrix([[2, -1], [-3/2, 1/2]])"
+  }
+ },
+ {
+  "qid": "Q85",
+  "question": "A = [[1, 1], [0, 1]] olduğuna göre A³ aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "Matrix([[1, 3], [0, 1]])",
+   "B": "Matrix([[1, 2], [0, 1]])",
+   "C": "Matrix([[3, 3], [0, 3]])",
+   "D": "Matrix([[1, 1], [0, 1]])",
+   "E": "Matrix([[1, 4], [0, 1]])"
+  }
+ }
+]

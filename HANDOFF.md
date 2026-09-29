@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 28 Eylül 2026, akşam**, dal `claude/busy-bardeen-ckr5bw` (`wqedwad/asd#11` ile `master`a birleşti, yedekli; yeni iş yeni dalda).
+> **Son güncelleme: 29 Eylül 2026, akşam**, dal `claude/inspiring-cori-xcgjld` (`wqedwad/asd#12` ile `master`a birleşti, yedeksiz: kullanıcı kararı; yeni iş yeni dalda).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -10,15 +10,13 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §60–§63 (son dört madde). Bulutta ayrıca
-   oturum başındaki `[mathverify bulut oturumu …]` bloğu ve `docs/BULUT.md`.
-2. `git status`, `git log --oneline -5`; birleşmemiş başka dal var mı: `git ls-remote origin` (§6).
-   Bulut klonunda yerel `master` ve `origin/master` bayat olabilir: `git fetch origin master`.
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. Beklenen (Linux, Lean kurulu): **1639
-   passed / 5 skipped**, sıcak Lean'le ~400 s (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı
-   ifade). Lean testi seçen oturum önce Lean'i ısıtır (soğukta 345–470 s, B6); Lean yüzünden atlama = Lean
-   hazır değil. `addopts` `-q` içerir; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
-4. §3'teki ilk işe geç. Tekrar denenmemesi gerekenler: arşiv §4.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§71; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
+   origin master` (yerel `master`/`origin/master` bayat olabilir).
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1726 passed / 5 skipped** (3 root salt okunur dizin,
+   1 isteğe bağlı indirme, 1 kapsam dışı ifade); sıcak Lean'le ~400 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
+   atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
+4. §3'teki ilk işe geç. Tekrar denenmeyecekler: arşiv §4.
 
 ## 1. Proje (kısaca)
 
@@ -31,23 +29,24 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 
 ## 2. Durum (28 Eylül 2026)
 
-**Kod.** `master` = `wqedwad/asd#11`'in birleşmesi (öncesi `2f11c84`, yedek `yedek/master-2026-09-28`, §6; `#10` öncesi
-`622a178` ve `#9` öncesi `c2e4fdf` yedeksiz, kullanıcı talimatı). `#7`–`#8`: 4 süreçli adversaryal tarama, kademeli kontrol `check.py --plan`, belge-okuma
-bekçisi (DECISIONS §59). `#9`: soğuk Lean ısınması, kalibrasyon sırası, aşama günlükleri (§60). `#10`: K4 düzeneği
-`harness/run_solver.py`, Windows `--full`, Meta TLS, K4 kısmi koşusu (§61–§62).
-`#11` (`claude/busy-bardeen-ckr5bw`; DECISIONS §63): adım reddedicinin üç haksız reddi
-(görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin bağladığı atama tanımsal; teğetin eğrisi ve
-`equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta (örneklenen sonuç `unknown`; And/Or
-iddiaları küme yolunda), Meta istemcisi ilk denemeden akışla (`usage`'sız akış yeniden denenir, önbelleğe
-girmez), K4 etiketleyicisi (`+ C`, DNE, açıda derece, genel trigonometrik çözüm, demet), aynı isteğe kilit.
-42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
+**Kod.** `master` = `wqedwad/asd#12`'nin birleşmesi (öncesi `c0a2caf` = `#11`'in birleşmesi; `#12`, `#9`, `#10` öncesi
+yedeksiz, kullanıcı talimatı; `#11` öncesi `yedek/master-2026-09-28`, §6). `#7`–`#10`: DECISIONS §59–§62 (paralel tarama, `--plan`, bekçi, soğuk Lean, K4 düzeneği).
+`#11` (DECISIONS §63): adım reddedicinin üç haksız reddi (görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin
+bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
+Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
+**Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§70; anahtar yenileme F3/F4 önkoşulu değil, §64).
+`#11`'in hedefli denetimi: iki yanlış onay açığı kapandı (D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği
+yokken aralık düşürülür, (B) tanım kümesiyle çelişen atama denetlenir; (C) açık değil. V13: serbest sembole değer veren
+atama seçimdir (§68). 558 çözümde değişim 0; mutasyon 17/17. Anahtarlar 86/86 bağımsız doğru (§69). Etiketleme oracle'ı
+farkı tanım kümesinde noktayla kanıtlıyor, sayıları kesin karşılaştırıyor (§70; adversaryal iş akışı 70 gerçek sorun,
+hepsi düzeltildi; 1e-35 toleransı yanlışı "right" yapıyordu); tarama 448 → 457 yanlış varyant, yanlış onay 0.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
 çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23, 25–26 Eylül (DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `3e1805d` (bu dalın son kodu), bulutta 28 Eylül 18:14:01–18:40:57 UTC, **~27 dk**
-(ısınma 11 s, pytest 399 s, adversaryal 793 s), 1639 passed / 5 skipped; `--plan` TAMAM (DECISIONS §63). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
+**Son `check.py --full`.** **24/24**, `14f4d07` (`#12`'nin son kodu, raporlar `7fbf9ac`), bulutta 29 Eylül 17:59:56–18:23:09 UTC,
+**~23 dk** (ısınma 39 s, pytest 349 s, adversaryal 661 s), 1726 passed / 5 skipped; `--plan` TAMAM (DECISIONS §71). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
 
 **K4 (Muse Spark 1.3, 280 öğe, koşu 3, `776e5b4`; DECISIONS §63).** 278 çözüm; CORRECT|right 274, INCORRECT|right 4,
 yanlış onay **0**, `undecided` 0; çözücü 278/278 doğru (yakalama gücü bu modelle ölçülemedi). 4 INCORRECT tek soru
@@ -56,18 +55,20 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** yeni dal aç (`master`dan); `master`ın `#11`'in birleşmesi olduğunu `git log --oneline -3` ile
-   doğrula. Kullanıcı yeni bir iş vermediyse aşağıdaki sırayı öner, kararları ona sor.
-2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
-   **ertelendi** (kullanıcı, 28 Eylül akşam); adım 5'teki kod dondurmadan önce yeniden sorulur. Bu model hiç yanlış
-   cevap vermediği için yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
-3. **Yedek etiketleri (isteğe bağlı):** PR #3, #4, #9 ve #10 öncesi `master` için etiket yok (§6).
-4. **Bulut kurulumu** (B1–B2, DECISIONS §61): görüntü yalnız betik metni, ağ ayarı ya da ~7 gün değişince
-   yeniden kurulur. Öneri: ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` → `275`;
-   sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanını o değiştirir).
-5. **Kod dondurma → anahtarları yenileme → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı,
-   23 Eylül). Dondurmadan önce kullanıcıya §4.4 madde 3'teki istem kararı sorulur. Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-6. **Açık kapsama işleri** (§4.2) kullanıcı kararı. Gerçek çözücü için Anthropic ailesi bakiye bekliyor.
+1. **Yeni sohbet:** yeni dal `master`dan; `master`ın `#12`'nin birleşmesi olduğunu `git fetch origin master && git log
+   --oneline -3 origin/master` ile doğrula; `--plan` koş.
+2. **V14 düzeltmesi** (önerilen, kullanıcı onayıyla; DECISIONS §70): ayrıştırıcıda `gcd`/`lcm` sembolle polinom işlemi
+   olmasın, `Sum`/`Product`'ın bağlı indisi IR değişkeninin varsayımını almasın, `arccot` (0, π) okunsun. Yöntem bu dalın
+   parçalarındaki gibi: sonda, test, 280 + 278 çözümde fark, sağlamlık/adversaryal, mutasyon, tam takım.
+3. **`--full`** son kodda, temiz ağaçta (~27 dk; oturum etkin tutulur, ≤10 dk beklemelerle izlenir); raporlar ve günlük
+   değiştirilmeden commit + push; `--plan` TAMAM olmalı. Beklenen fark: sağlamlık raporunda 448 → 457 yanlış varyant.
+4. **PR** `master`a; birleştirmeden önce kullanıcı yerelde yedek alır (§6 yöntemi: ff-only, etiket, bundle, push etiket),
+   `--plan` hemen önce; birleştirme kullanıcı isteyince.
+5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
+6. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
+   önce kalibrasyon (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
+7. **İsteğe bağlı / kullanıcı kararı:** yanlış onay direnci için daha zayıf ya da başka aileden çözücü (K4 e); yedek
+   etiketleri (PR #3, #4, #9, #10 öncesi, §6); bulut önyükleyicisi 250 → 275 s (B1–B2); açık kapsama işleri (§4.2, V1–V14).
 
 ## 4. Açık maddeler (tam liste)
 
@@ -96,7 +97,7 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.2 Doğrulayıcı: bilinen sınırlar ve kapsama
 
-Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli sınır.
+V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli sınır.
 
 - **V1. `tyt-prob-018`:** çözüm düzeyindeki tek yanlış onay (doğru ama gerekçesiz adım; kanıtlanmış adım L6
   kritiğini ezer; aynı sınıf: C'deki 12 aritmetiği doğru `compute` adımı, §63). Karar F4 ölçümüne bağlı
@@ -122,6 +123,14 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   iddianın 53'ü Lean'de sertifika alıyordu. Yeni bir denetim yeni sınıf bulabilir.
 - **V10.** Sandbox süreç izolasyonudur, güvenlik sandbox'ı değil. Girdi artık kod olarak
   çalışmıyor (ilke 13), ama model kodu çalıştırılacaksa gVisor/Firecracker gerekir.
+- **V11. Aralıkta örneği olmayan öncülde esas kök** (DECISIONS §65): `cos x = −1`, [0, π) gibi aralıkta kökü
+  olmayan görevde periyotsuz yazılan doğru esas kök adımı (`x = pi`) reddedilir (x = 3π); `#11` öncesiyle aynı, D6 gereği.
+- **V12. Tanım kümesine uyan yanlış atama** (DECISIONS §66): IR'da öncülün bağlamadığı bir sembole yanlış değer
+  (`ayt-diz-002`'de `n = 21`) tanımsal kalır; sonra çelişilmezse çözüm CORRECT. `#11` öncesi doğrusu da reddediliyordu.
+- **V13. Aynı doğrunun ikinci noktası** (DECISIONS §67–§68): seçim kuralı y-kesişimini kabul eder, ama ardından x-kesişimi
+  (`y = 0`) seçilen x = 0 noktasında reddedilir (yanlış ordinattan ayrılamaz; D6); doğru çözüm INCORRECT. Gerçek veride yok.
+- **V14. Ayrıştırıcı gelenekleri** (DECISIONS §70): `gcd`/`lcm` sembollerle polinom gcd/lcm (`lcm(n, 2)` → 2n); `Sum`'ın
+  bağlı indisi aynı adlı IR değişkeninin varsayımını alır; `arccot` = SymPy `acot`. Yapay girdilerde yanlış karar.
 
 ### 4.3 Kredili ölçüm
 
@@ -131,8 +140,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 - **K2. F4 ilk kez** (L6 açık; ~15–25 $). Belirleyici sayılar: D tespiti, doğru çözümde yanlış
   suçlama, "sertifikanın iptal ettiği kritik raporu" (V1). 28 Eylül'den beri çapraz denetim eleştirmeni yalnız
   kanıtlanmış (`verified`) adımda geçersiz sayar; örneklenmiş adımlar artık `unknown` (DECISIONS §63 D).
-- **K3. Ön koşullar:** kod dondurulur (sonraki her değişiklik sayıları eskitir); anahtarlar yenilenir,
-  `.env` güncellenip commit edilir; `--max-cost` olmadan koşulmaz; `llm_cache/` istek hash'iyle
+- **K3. Ön koşullar:** kod dondurulur (sonraki her değişiklik sayıları eskitir); anahtar yenileme gerekmez
+  (kullanıcı, DECISIONS §64); `--max-cost` olmadan koşulmaz; `llm_cache/` istek hash'iyle
   anahtarlı, değişen istem yeniden ücretlenir; bulutta `api.meta.ai` ortamın API kimlik bilgisiyle açık
   (DECISIONS §62; vekil anahtarı ekler); ~0,066 $/öğe (yarım koşu).
 - **K4. Gerçek AI çözücü çıktıları:** `harness/run_solver.py`; Muse Spark 1.3 ile 280 öğe tamam (§2; DECISIONS §63).
@@ -140,9 +149,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
   (b) `tyt-esf-007/-014`'ün sorusu çözülemiyor (akış kesilmesi, sonra Meta 504 "request timed out");
   (c) akışın `usage`'sız kesilmesinin nedeni **[DOĞRULANMADI]** (koşu 2'de 48 canlı çağrının 5'i; istemci yeniden
   dener); (d) eksik akışların ve 504'lerin ücretlendirilip ücretlendirilmediği **[DOĞRULANMADI]**; (e) çözücü hiç
-  yanlış cevap vermedi: yanlış onay direnci için başka çözücü gerekir; (f) cevap etiketleri kaba kuvvetle ya da
-  ikinci kişiyle denetlenmeli (denetim derlemlerinde 4 etiket yanlış çıktı; bugün etiketleyicinin 3 "yanlış onayı"
-  kendi hatasıydı).
+  yanlış cevap vermedi: yanlış onay direnci için başka çözücü gerekir. ((f) anahtarlar 86/86, §69; (g) etiketleyici
+  farkı kanıtlıyor, §70: kapandı. Kalan: ilkel eşitliği yerel, ℝ'de sıçrayan ilkel `right` etiketlenebilir.)
 
 ### 4.4 Kullanıcı kararları (açık sorular)
 
@@ -150,12 +158,12 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
    (v2 doğrulandı, v1'in içeriğini taşıyor); `master`a girmiş uzak dallar (`bulut-2026-09-24`,
    `claude/funny-cray-bey5o1`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`,
    `-keen-ramanujan-…`, `-dreamy-meitner-…`, `-busy-bardeen-…`).
-2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? API anahtarları
-   ne zaman yenilenecek (§4.6)?
+2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? Anahtar yenileme
+   F3/F4 için gerekmiyor (DECISIONS §64); depo açılırsa gerekir (madde 8).
 3. Gerçek çözücü çıktıları: Muse Spark 1.3 ile 280 öğe yapıldı (§2). Açık: çözücü istemi IR sembollerinin anlamını
    (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli ve ölçülen şey değişir)? **Ertelendi**
    (28 Eylül akşam; kod dondurmadan önce yeniden sorulur). Etki: yalnız haksız red (86 sorudan 1), yanlış onay yok. Yanlış onay
-   direnci için hangi (daha zayıf ya da başka aileden) çözücü? Etiketleri kim denetleyecek?
+   direnci için hangi (daha zayıf ya da başka aileden) çözücü? (Anahtarlar denetlendi: §69.)
 4. Lisans ve CI (özel `wqedwad/asd`; CI ve LICENSE yok; CI açılırsa hızlı `check.py` koşar).
 5. Sınırlar: `tyt-prob-018` kuralı F4'ten sonra daraltılsın mı (V1)? Çözücü sembolü adımları sınır mı,
    yapısal formata sembol tanımı mı (V2)? Ekstremum/türev/seride tanımsız noktada çekimserlik yeter mi (V3)?
@@ -166,9 +174,8 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 
 ### 4.5 Teknik borç
 
-- **T1.** `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5, 7–13; madde numaraları atlıyor; §2 ve §3.9
-  bilerek Faz 1 anlık görüntüsü ("180 öğe").
-- **T2.** Biçimlendirici yok; pyflakes dışında stil denetimi yok. **T3.** CI yok.
+- **T1.** `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5, 7–14; madde numaraları atlıyor; §2 ve §3.9 bilerek Faz 1 anlık
+  görüntüsü ("180 öğe"). **T2.** Biçimlendirici yok; pyflakes dışında stil denetimi yok. **T3.** CI yok.
 - **T5.** `reports/lean_setup.log` eski `stable` kurulumunun günlüğü (sabit kurulumunki bulutta
   `/opt/mathverify-logs/setup_lean.log`). **T6.** 26 Eylül öncesi `check_full.log` başlıklarında
   "commit edilmemiş değişiklik" sayısından 1 düşülür (günlük kendini sayıyordu; `3925180`).
@@ -181,24 +188,21 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 
 ### 4.6 Güvenlik
 
-- **S1.** `.env` kullanıcı kararıyla özel depoda izleniyor
-  (DECISIONS §35); değerler git geçmişinde ve GitHub'da. F3/F4'ten önce yenilenir; depo açılırsa önce
-  yenilenir ve geçmiş temizlenir. Bulutta Meta anahtarı artık ortamın API kimlik bilgisinde (VM'ye girmez);
-  `.env`'deki eski Meta anahtarının iptali ve Anthropic anahtarının yenilenmesi kullanıcıda.
-- **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür). Sızarsa depoyu ve
-  `.env`'i okutur. `unset`, root'un `/proc/<pid>/environ` okumasına karşı korumaz (DECISIONS §54).
-  Sızıntı taraması yalnız günlüklerde, `/etc/profile.d`'de ve `.git/config`'te yapıldı (0 bulgu);
-  daha geniş tarama izin denetimine takıldı, yapılmadı.
+- **S1.** `.env` kullanıcı kararıyla özel depoda izleniyor (DECISIONS §35),
+  değerler git geçmişinde ve GitHub'da. F3/F4 için yenileme gerekmiyor (§64); depo açılırsa önce yenilenir, geçmiş temizlenir.
+  Bulutta Meta anahtarı ortamın API kimlik bilgisinde (VM'ye girmez); `.env`'deki eski Meta anahtarının iptali kullanıcıda.
+- **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür); sızarsa depoyu ve `.env`'i okutur. `unset`,
+  root'un `/proc/<pid>/environ` okumasına karşı korumaz (DECISIONS §54). Sızıntı taraması yalnız günlüklerde, `/etc/profile.d`'de
+  ve `.git/config`'te yapıldı (0 bulgu); daha geniş tarama izin denetimine takıldı, yapılmadı.
 
 ### 4.7 Doğrulanmamış kayıtlar
 
 - §6'da **[DOĞRULANMADI]** işaretli yedekler (`572ef57`, `18fd298` bundle'ları; `ee7b2dd`'nin yerel yedeği): buluttan
   görülemez. 26 Eylül 01:06 koşusunda düşen testin adı kaydedilmedi (muhtemelen B6'daki Lean testi).
-- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan.
-- Alandaki önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843).
-- B1, B6, B10 ve K4'teki işaretli maddeler.
+- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan; alandaki
+  önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843); B1, B6, B10 ve K4'teki işaretli maddeler.
 
-## 5. Son ölçülen sayılar (kapılar, `3e1805d`; aksi yazılmadıkça `7d9e9a1` ve öncekilerle aynı)
+## 5. Son ölçülen sayılar (kapılar, `14f4d07`; aksi yazılmadıkça `3e1805d` ve öncekilerle aynı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
@@ -209,7 +213,7 @@ Hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli s
 | Çözüm düzeyi pozitif precision; D tespiti | 0.994 (1 FP, V1); 0.976 (41/42) | raporlanır |
 | Lean erişilebilir; sertifika; FP; junk | evet; 121/280; 0; 0/33 | —; —; 0; 0 |
 | Adversaryal saldırı başarısı (3 yüzey) | %0 (21 139 saldırı; UNKNOWN'a düşen 2890, önce 2894) | < %2 |
-| Yanlış onay / eşdeğerde red / değer olmayan iddia / adım dönüşümünde red | 0/448, 0/214, 0/46, 0/184 | 0 |
+| Yanlış onay / eşdeğerde red / değer olmayan iddia / adım dönüşümünde red | 0/457 (önce 0/448, §70), 0/214, 0/46, 0/184 | 0 |
 | Nedeni açıklanmayan kaçırılan bozuk adım; adım lokalizasyonu | 0/6; 75/120 (önce 74) | 0; raporlanır |
 
 Raporlar `reports/*.md` (üretilir, elle yazılmaz), kapı günlüğü `reports/check_full.log`.
@@ -217,8 +221,8 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (`git ls-remote origin`, 28 Eylül akşam): `master` = `wqedwad/asd#11`'in birleşmesi (öncesi `2f11c84`);
-  `claude/busy-bardeen-ckr5bw` `wqedwad/asd#11` (birleşti);
+- **Dallar** (29 Eylül akşam): `master` = `wqedwad/asd#12`'nin birleşmesi (öncesi `c0a2caf`); `claude/inspiring-cori-xcgjld`
+  `wqedwad/asd#12` (birleşti); `claude/busy-bardeen-ckr5bw` `wqedwad/asd#11` (birleşti);
   `claude/dreamy-meitner-rvrwlj` `60d539c` (`#9`, `#10`), `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
   `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
@@ -241,6 +245,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   | `yedek/master-2026-09-27` | `5c2f83e` (PR #8 öncesi) | `mathverify-master-5c2f83e-2026-09-27.bundle` (kullanıcının betiği "YEDEK TAMAM" yazdı: `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
   | yok | `c2e4fdf`, `622a178` (PR #9, #10 öncesi) | alınmadı (kullanıcı kararı, 27 Eylül "yedeğe gerek yok"; 28 Eylül "birleştir") |
   | `yedek/master-2026-09-28` | `2f11c84` (PR #11 öncesi) | `mathverify-master-2f11c84-2026-09-28.bundle` (kullanıcı, 28 Eylül akşam: `bundle verify` "okay", deneme klonu `2f11c84`; etiket buluttan doğrulandı. İlk denemede etiket bayat yerel `master`ı (`5c2f83e`) göstermişti, silinip yeniden kondu) |
+  | yok | `c0a2caf` (PR #12 öncesi) | alınmadı (kullanıcı kararı, 29 Eylül "birleştir bu dalı yedeğe gerek yok") |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout `C:\Users\kullanici\mathverify`'da): (0) `git fetch
   origin`, `git checkout master`, `git merge --ff-only origin/master`, `git log -1 --oneline` = beklenen commit (28 Eylül:
@@ -248,7 +253,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create C:/Users/kullanici/mathverify-yedek/mathverify-master-<kısa-hash>-YYYY-MM-DD.bundle
   --all`, `git bundle verify` ve deneme klonu; (3) `git push origin <etiket>`; etiket buluttan `git ls-remote` ile doğrulanır;
   (4) hemen önce `scripts/check.py --plan`. Geri dönüş `git reset --hard <etiket>`. Buluttan `master`/etiket push edilmez.
-- **Yerel checkout** (28 Eylül akşam): `master` `2f11c84`; `#11`'den sonra `git pull` gerekir. Stash'te Windows `--full`
+- **Yerel checkout** (28 Eylül akşam): `master` `2f11c84`; `#11` ve `#12`den sonra `git pull` gerekir. Stash'te Windows `--full`
   raporları (`eab80f1`; kullanıcı silebilir), yerel `claude/dreamy-meitner-rvrwlj` eski (`eab80f1`, birleşmiş).
 
 ## 7. Bulut özeti (ölçülmüş)
@@ -278,7 +283,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
 | `$PY scripts/check.py --plan [--no-fetch]` | Hangi kontrol gerekli: YOK / TAMAM (çıkış 0) / TAM (1) (DECISIONS §59, CLAUDE.md) |
 | `$PY scripts/check.py` / `--full` | Hızlı (~7 dk) / 24 kapı (~26 dk bulutta; günlüğü kendisi yazar, arka planda izlenir) |
 | `$PY -m harness.run_eval` · `run_lean --timeout 45` · `adversarial [--workers N]` · `soundness_fuzz` · `calibrate` | Tek tek ölçümler → `reports/` (`--full`dan sonra koşulursa `--plan` o koşuyu kabul etmez; `git restore reports/`) |
-| `$PY denetim/2026-09-2{6,7,8}/mutasyon.py [-j N] [ön ek…]` | Mutasyon denetimleri: kural/bekçi/tarama (README 26'da), Lean ısınması/kalibrasyon/günlükler (§60), K4 düzeltmeleri (§63) |
+| `$PY denetim/2026-09-2{6,7,8}/mutasyon.py [-j N] [ön ek…]` | Mutasyon denetimleri: kural/bekçi/tarama (README 26'da), Lean ısınması/kalibrasyon/günlükler (§60), K4 düzeltmeleri (§63); `2026-09-28/mutasyon_gece.py` hedefli denetim (§65) |
 | `$PY -m harness.run_solver --family meta --max-cost 10 --workers 6` | K4 (kredili; aynı istekler kilitle sıralanır, önbellekten gelenler ücretsiz ama sınıra sayılır) |
 | `$PY -m harness.run_f3 --workers 6 --pathb --max-cost 40 --solver-family …` | Kredili F3/F4 (`--no-l4/--no-l5/--no-l6`, `--limit`, `--ids`) |
 | `$PY scripts/verify_cli.py --item evalset/items/tyt-prob-001.json [--lean] [--text "…"]` | Tek öğe |

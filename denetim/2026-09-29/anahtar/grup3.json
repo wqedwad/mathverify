@@ -1,0 +1,227 @@
+[
+ {
+  "qid": "Q03",
+  "question": "Merkezi M(2, −1) ve yarıçapı 3 olan çemberin denklemi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(x - 2)**2 + (y + 1)**2 = 9",
+   "B": "(x + 2)**2 + (y - 1)**2 = 9",
+   "C": "(x - 2)**2 + (y + 1)**2 = 3",
+   "D": "x**2 + y**2 - 4*x + 2*y + 4 = 0",
+   "E": "(x - 2)**2 + (y - 1)**2 = 9"
+  }
+ },
+ {
+  "qid": "Q07",
+  "question": "İlk terimi 5 ve ortak farkı 3 olan aritmetik dizinin 20. terimi kaçtır?",
+  "options": {
+   "A": "59",
+   "B": "60",
+   "C": "62",
+   "D": "65",
+   "E": "68"
+  }
+ },
+ {
+  "qid": "Q11",
+  "question": "Σ_{k=1}^{∞} 1/2ᵏ serisinin toplamı kaçtır?",
+  "options": {
+   "A": "1/2",
+   "B": "1",
+   "C": "3/2",
+   "D": "2",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q15",
+  "question": "∫₀^π sin x dx integralinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "pi",
+   "E": "-2"
+  }
+ },
+ {
+  "qid": "Q19",
+  "question": "lim_{x→∞} (2x² + 1)/(x² − 5) limitinin değeri kaçtır?",
+  "options": {
+   "A": "0",
+   "B": "1",
+   "C": "2",
+   "D": "5",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q23",
+  "question": "sin x = 1/2 denkleminin çözüm kümesi aşağıdakilerden hangisidir? (k ∈ Z)",
+  "options": {
+   "A": "{pi/6 + 2*k*pi}",
+   "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+   "C": "{pi/6 + k*pi}",
+   "D": "{pi/6 + k*pi, 5*pi/6 + k*pi}",
+   "E": "{pi/3 + 2*k*pi, 2*pi/3 + 2*k*pi}"
+  }
+ },
+ {
+  "qid": "Q27",
+  "question": "f(x) = x²·eˣ olduğuna göre f'(0) kaçtır?",
+  "options": {
+   "A": "-1",
+   "B": "0",
+   "C": "1",
+   "D": "2",
+   "E": "E"
+  }
+ },
+ {
+  "qid": "Q31",
+  "question": "f(x) = x³ − 6x² + 9x + 1 fonksiyonunun yerel maksimum değeri kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "3",
+   "C": "5",
+   "D": "7",
+   "E": "9"
+  }
+ },
+ {
+  "qid": "Q35",
+  "question": "x/(x − 3) = 3/(x − 3) + 2 denkleminin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "{3}",
+   "B": "{}",
+   "C": "{0}",
+   "D": "{-3}",
+   "E": "{0, 3}"
+  }
+ },
+ {
+  "qid": "Q39",
+  "question": "(x − 1)/(x + 2) ≥ 0 eşitsizliğinin çözüm kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "(-oo, -2) U [1, oo)",
+   "B": "(-oo, -2] U [1, oo)",
+   "C": "[-2, 1]",
+   "D": "(-2, 1)",
+   "E": "(-oo, -2) U (1, oo)"
+  }
+ },
+ {
+  "qid": "Q43",
+  "question": "P(x) = x³ − 2x² + kx + 6 polinomunun (x − 3) ile bölümünden kalan 0 olduğuna göre k kaçtır?",
+  "options": {
+   "A": "-5",
+   "B": "-3",
+   "C": "3",
+   "D": "5",
+   "E": "7"
+  }
+ },
+ {
+  "qid": "Q47",
+  "question": "ABCD dikdörtgeninde |AB| = 12 cm ve |BC| = 5 cm'dir. |AC| köşegeni kaç cm'dir?",
+  "options": {
+   "A": "11",
+   "B": "12",
+   "C": "13",
+   "D": "15",
+   "E": "17"
+  }
+ },
+ {
+  "qid": "Q51",
+  "question": "f(x) = √(x − 3) fonksiyonunun en geniş tanım kümesi aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "[3, oo)",
+   "B": "(3, oo)",
+   "C": "(-oo, 3]",
+   "D": "[-3, oo)",
+   "E": "(-oo, -3]"
+  }
+ },
+ {
+  "qid": "Q55",
+  "question": "(x + 1)² − (x − 1)² ifadesinin en sade hâli aşağıdakilerden hangisidir?",
+  "options": {
+   "A": "4*x",
+   "B": "2*x",
+   "C": "2",
+   "D": "4",
+   "E": "x**2 + 1"
+  }
+ },
+ {
+  "qid": "Q59",
+  "question": "5 kişi yan yana bir sıraya kaç farklı şekilde dizilebilir?",
+  "options": {
+   "A": "24",
+   "B": "60",
+   "C": "100",
+   "D": "120",
+   "E": "125"
+  }
+ },
+ {
+  "qid": "Q63",
+  "question": "Bir madeni para 3 kez atılıyor. En az 2 kez tura gelme olasılığı kaçtır?",
+  "options": {
+   "A": "1/8",
+   "B": "3/8",
+   "C": "1/2",
+   "D": "5/8",
+   "E": "7/8"
+  }
+ },
+ {
+  "qid": "Q67",
+  "question": "Bir babanın yaşı oğlunun yaşının 4 katıdır. 5 yıl sonra babanın yaşı oğlunun yaşının 3 katı olacaktır. Baba bugün kaç yaşındadır?",
+  "options": {
+   "A": "30",
+   "B": "36",
+   "C": "40",
+   "D": "44",
+   "E": "48"
+  }
+ },
+ {
+  "qid": "Q71",
+  "question": "x ve y pozitif tam sayılar olmak üzere 3x + 5y = 41 ve x < y ise x + y kaçtır?",
+  "options": {
+   "A": "7",
+   "B": "8",
+   "C": "9",
+   "D": "10",
+   "E": "11"
+  }
+ },
+ {
+  "qid": "Q75",
+  "question": "5^100 sayısının 7 ile bölümünden kalan kaçtır?",
+  "options": {
+   "A": "1",
+   "B": "2",
+   "C": "3",
+   "D": "4",
+   "E": "5"
+  }
+ },
+ {
+  "qid": "Q79",
+  "question": "Σ_{k=1}^{∞} 1/(k(k+1)) serisinin toplamı kaçtır?",
+  "options": {
+   "A": "1/2",
+   "B": "1",
+   "C": "2",
+   "D": "log(2)",
+   "E": "∞"
+  }
+ },
+ {
+  "qid": "Q83",
+  "question": "A = [[2, 1], [1, 2]] matrisinin λ = 3 özdeğerine karşılık gelen bir özvektörünü bulunuz.",
+  "options": null
+ }
+]

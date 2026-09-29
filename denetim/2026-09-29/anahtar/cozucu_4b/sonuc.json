@@ -1,0 +1,23 @@
+[
+{"qid": "Q04", "answer": "4", "option": "C", "options_matching": ["C"], "check": "Formula |9+16-5|/5=4; independently minimized distance over parametrized line points (sympy), got 4", "confident": true, "note": ""},
+{"qid": "Q08", "answer": "3*2**(n-1)", "option": "B", "options_matching": ["B"], "check": "Evaluated each option at n=1..5 against 3,6,12,24,48; only B matches", "confident": true, "note": "Assumes indexing from n=1 (standard); with n starting at 0, A would give the same sequence"},
+{"qid": "Q12", "answer": "x*log(x) - x + C", "option": "A", "options_matching": ["A"], "check": "Integration by parts by hand; differentiated every option symbolically, only A gives log(x)", "confident": true, "note": ""},
+{"qid": "Q16", "answer": "4", "option": "C", "options_matching": ["C"], "check": "Factored to x+2 -> 4; sympy limit 4; numeric values at 2+-1e-4 are 4.0001/3.9999", "confident": true, "note": ""},
+{"qid": "Q20", "answer": "1/2", "option": "C", "options_matching": ["C"], "check": "Rationalized to 1/(sqrt(x)+1) -> 1/2; sympy limit 1/2; numeric at 1+-1e-6 is about 0.5", "confident": true, "note": ""},
+{"qid": "Q24", "answer": "(sqrt(6) + sqrt(2))/4", "option": "A", "options_matching": ["A"], "check": "Used sin(45+30); compared options with math.sin(75 deg) numerically and with sympy sin(5pi/12) symbolically; only A equal", "confident": true, "note": ""},
+{"qid": "Q28", "answer": "y = 2*x - 1", "option": "A", "options_matching": ["A"], "check": "Slope 2 at (1,1); x**2-(2x-1) factors as (x-1)**2 (double contact); other options do not", "confident": true, "note": ""},
+{"qid": "Q32", "answer": "-5", "option": "A", "options_matching": ["A"], "check": "Solved f'(1)=0, f(1)=-3 -> a=1, b=-5; integer brute force gives the same unique pair; f'=(x-1)(3x+5), f''(1)=8 so it is a real extremum", "confident": true, "note": ""},
+{"qid": "Q36", "answer": "{-1, 4}", "option": "B", "options_matching": ["B"], "check": "sympy solveset over the reals; integer brute force over [-100,100] gives -1 and 4", "confident": true, "note": ""},
+{"qid": "Q40", "answer": "3", "option": "B", "options_matching": ["B"], "check": "1<x<5; brute force over integers gives [2,3,4]", "confident": true, "note": ""},
+{"qid": "Q44", "answer": "3", "option": "C", "options_matching": ["C"], "check": "P(1)=0, P=(x-1)(x**4+x**3-2x**2-2x-1); sympy real_roots/count_roots gives 3; mpmath polyroots gives real roots -1.690, 1, 1.505; P is squarefree", "confident": true, "note": ""},
+{"qid": "Q48", "answer": "8", "option": "C", "options_matching": ["C"], "check": "Median equals altitude: sqrt(100-36)=8; coordinate model B(-6,0), C(6,0), A(0,8) confirms AB=AC=10", "confident": true, "note": ""},
+{"qid": "Q52", "answer": "(-oo, -2) U (-2, 2) U (2, oo)", "option": "A", "options_matching": ["A"], "check": "sympy continuous_domain equals option A as a set; the others omit points or include +-2", "confident": true, "note": ""},
+{"qid": "Q56", "answer": "9", "option": "B", "options_matching": ["B"], "check": "Enumerated positive integer pairs summing to 10: 9", "confident": true, "note": ""},
+{"qid": "Q60", "answer": "20", "option": "C", "options_matching": ["C"], "check": "C(6,3)=20; itertools.combinations count 20", "confident": true, "note": ""},
+{"qid": "Q64", "answer": "16", "option": "C", "options_matching": ["C"], "check": "Brute force t in 0..30 with 2t+4(30-t)=88 gives t=16 (14 sheep)", "confident": true, "note": ""},
+{"qid": "Q68", "answer": "7", "option": "B", "options_matching": ["B"], "check": "240/80+240/60=3+4=7 (exact rational)", "confident": true, "note": ""},
+{"qid": "Q72", "answer": "47", "option": "B", "options_matching": ["B"], "check": "Brute force over 10..99 with digit sum 11 and reversed = N+27 gives only 47", "confident": true, "note": ""},
+{"qid": "Q76", "answer": "-4", "option": "A", "options_matching": ["A"], "check": "Antiderivative 2*sqrt(x)*log(x)-4*sqrt(x) differentiates back correctly and gives -4 with limit 0 at 0+; mpmath quad gives -3.99999998; substitution x=u**2 gives int 4 ln u = -4.0", "confident": true, "note": "sympy integrate returned unevaluated (Meijer G); did not rely on it"},
+{"qid": "Q80", "answer": "3", "option": "C", "options_matching": ["C"], "check": "Characteristic polynomial (2-l)**2-1 -> l=1,3; sympy eigenvals {1,3}; mpmath eig max 3.0", "confident": true, "note": ""},
+{"qid": "Q84", "answer": "(16, 14)", "option": "A", "options_matching": ["A"], "check": "Matrix inverse times rhs and LU solve both give (16,14); substitution by hand: 16+14=30, 32+56=88", "confident": true, "note": ""}
+]
