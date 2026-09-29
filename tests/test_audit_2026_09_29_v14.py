@@ -408,3 +408,53 @@ def test_a_form_inside_an_integrand_gives_no_numeric_value():
                                    "a": "0", "b": "1"}, XR + [{"name": "t", "domain": "real"}])
     assert _run(ir, "4").verdict != "INCORRECT"
     assert _run(ir, "2").verdict != "CORRECT"
+
+
+# --- the critic's angle: the as-written reading of computing notation --------------------------------
+
+F3 = [{"name": "f", "args": ["x"], "expr": "x**3 - 3*x"}]
+
+
+@pytest.mark.parametrize("kind,params,shape,wrong,right,functions", [
+    ("solve_equation", {"equation": "diff(f(x), x) = 0", "var": "x"}, "set", "{1}", "{-1, 1}", F3),
+    ("solve_inequality", {"inequality": "diff(f(x), x) < 0", "var": "x"}, "interval", "(0, 1)", "(-1, 1)", F3),
+    ("solve_equation", {"equation": "diff(x**2, x) = 0", "var": "x"}, "set", "EmptySet", "{0}", None),
+])
+def test_a_derivative_read_as_written_adds_no_condition_of_the_raw_power_rule(kind, params, shape, wrong,
+                                                                            right, functions):
+    """With evaluation off SymPy differentiated x**3 into x**3*(0*log(x) + 3/x): the conditions
+    x > 0 and x != 0 were the problem's, so the half-line answers were certified."""
+    ir = _ir(kind, params, shape=shape)
+    if functions:
+        ir["functions"] = functions
+    assert _run(ir, wrong, kind=shape).verdict == "INCORRECT"
+    assert _run(ir, right, kind=shape).verdict == "CORRECT"
+
+
+def test_a_derivative_read_as_written_keeps_its_operands_conditions():
+    from mathverify.normalize.parse import build_namespace, parse_as_written
+    x = sp.Symbol("x", real=True)
+    ns = build_namespace(None, {"x": x})
+    from mathverify.certify.domain import definedness_conditions
+    conds = definedness_conditions(parse_as_written("diff(x**2/x, x)", ns), None)
+    assert sp.Ne(x, 0) in conds
+    assert not any(c.has(sp.log) for c in conds)
+
+
+@pytest.mark.parametrize("p,c,right,wrong", [(-1, -3, "35", "-35"), (-2, 0, "16", "15")])
+def test_a_critical_point_at_a_negative_abscissa(p, c, right, wrong):
+    """ayt-tur-007 at p < 0: the raw derivative's log(x) made x = p undefined, so the right a*b was
+    UNKNOWN."""
+    ir = {"task": {"kind": "evaluate", "params": {"expr": "a*b"}}, "vars": [{"name": "a"}, {"name": "b"}],
+          "functions": [{"name": "f", "expr": "x**3 + a*x**2 + b*x", "args": ["x"], "params": ["a", "b"]}],
+          "givens": [f"at(diff(f(x), x), x, {p}) = 0", f"f({p}) = {c}"], "answer_shape": "scalar"}
+    assert _run(ir, right).verdict == "CORRECT"
+    assert _run(ir, wrong).verdict == "INCORRECT"
+
+
+def test_an_integral_with_a_parameter_bound_keeps_the_texts_conditions():
+    """Read as written, integrate(x, (x, 0, y)) raised and every condition of the text was lost:
+    the domain of integrate(x, (x, 0, y)) + y/y was certified to be R."""
+    ir = _ir("domain_of", {"expr": "integrate(x, (x, 0, y)) + y/y", "var": "y"},
+             XR + [{"name": "y", "domain": "real"}], shape="interval")
+    assert _run(ir, "(-oo, oo)", kind="interval").verdict != "CORRECT"

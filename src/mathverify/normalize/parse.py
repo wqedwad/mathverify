@@ -887,6 +887,30 @@ _REL_OPS = ["<=", ">=", "!=", "==", "=", "<", ">"]
 _REL_CLASS = {"<=": Le, ">=": Ge, "!=": Ne, "==": Eq, "=": Eq, "<": Lt, ">": Gt}
 
 
+def _written_diff(e, *args, **kwargs):
+    """`diff` read as written. SymPy differentiates with evaluation off into the raw power rule,
+    x**3 -> x**3*(0*log(x) + 3/x), whose log and 1/x are conditions the problem never imposed: {1}
+    was certified for f'(x) = 0 with f = x**3 - 3x, and (0, 1) for f'(x) < 0 (critic of the V14
+    audit, 29 Sep 2026). The derivative is taken with evaluation on; the operand as written rides
+    along as 0*operand so its own conditions (x**2/x at 0) stay. The tree is for definedness only."""
+    with sp.evaluate(True):
+        d = sp.diff(e, *args, **kwargs)
+    return sp.Add(d, sp.Mul(sp.S.Zero, e, evaluate=False), evaluate=False)
+
+
+def _written_integrate(*args, **kwargs):
+    """`integrate` read as written is the form, as `Integral` is: with evaluation off an integral
+    with a parameter bound (x from 0 to y) raised, the reading returned None and every condition
+    of the text was lost (y/y at y = 0 was certified)."""
+    return sp.Integral(*args, **kwargs)
+
+
+# computing helpers of the namespace read as forms (or, for diff, computed with evaluation on)
+# when a text is read as written
+_WRITTEN_COMPUTING = {"diff": (sp.diff, _written_diff), "integrate": (_integrate, _written_integrate),
+                      "limit": (_limit, _Limit)}
+
+
 def parse_as_written(s: str, ns: dict[str, Any] | None = None):
     """The sides of `s` EXACTLY AS WRITTEN, with SymPy's automatic simplification switched off,
     as a Tuple — for reading DEFINEDNESS only, never values. With evaluation on, `x/x` becomes 1,
@@ -917,6 +941,9 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None):
         return None
     s = preclean(s)
     local = dict(ns, Add=sp.Add, Mul=sp.Mul, Pow=sp.Pow)
+    for name, (computing, written) in _WRITTEN_COMPUTING.items():
+        if local.get(name) is computing:
+            local[name] = written
     out = []
     for _, chunk in _split_top_level(s):
         try:
