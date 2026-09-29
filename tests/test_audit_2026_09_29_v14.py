@@ -236,6 +236,33 @@ def test_a_closed_claim_about_a_limit_is_not_decided_from_the_right():
     assert _steps(r) != ["verified"]
 
 
+def test_a_wrong_integral_step_stays_refuted_where_sympys_closed_form_is_wrong():
+    """The integrator's converged value (2 sin 1, not SymPy's 0) refutes "= 0"."""
+    ir = _ir("evaluate", {"expr": "x"}, XR, ["x = 1"])
+    for kind in ("eq", "compute"):
+        r = _run(ir, "1", [(kind, "Integral(Abs(cos(x)), (x, -1, 1)) = 0"), ("eq", "x = 1")])
+        assert r.verdict == "INCORRECT" and _steps(r)[0] == "refuted"
+
+
+def test_a_true_series_step_is_not_refuted_by_euler_maclaurin():
+    """SymPy's numeric value of Σ cos(πk/4)/k² is 0.565345; the sum is 11π²/192 = 0.565446."""
+    r = _run(_ir("evaluate", {"expr": "1"}, KP), "1", [("eq", "Sum(cos(pi*k/4)/k**2, (k, 1, oo)) = 11*pi**2/192")])
+    assert r.verdict != "INCORRECT" and _steps(r) != ["refuted"]
+
+
+def test_no_number_is_read_off_an_unconfirmed_form():
+    from mathverify.equiv.numeric import to_mp
+    x = sp.Symbol("x", real=True)
+    with pytest.raises(ValueError):
+        to_mp(sp.Integral(sp.Abs(sp.cos(x)), (x, -1, 1)), 30)
+
+
+def test_a_closed_latex_relation_stays_a_relation():
+    """Converting acot inside it re-evaluated it: the false step became False and was skipped."""
+    rel = parse_relation(r"\cot^{-1}(-1) = -\frac{\pi}{4}", dict(_SAFE_NAMES))
+    assert isinstance(rel, sp.Eq)
+
+
 def test_a_definite_integral_task_integrates_over_the_interval():
     ir = _ir("definite_integral", {"integrand": "Abs(x)", "var": "x", "a": "-1", "b": "1"}, XP)
     assert _run(ir, "0").verdict == "INCORRECT"

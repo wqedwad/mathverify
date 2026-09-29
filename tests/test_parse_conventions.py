@@ -76,6 +76,11 @@ def test_gcd_and_lcm_read_back_and_cross_the_sandbox():
         assert pickle.loads(pickle.dumps(e)) == e
 
 
+def test_the_list_form_of_gcd_and_lcm():
+    assert parse_expr_str("gcd([84, 120])", NS) == 12
+    assert parse_expr_str("lcm([4, 6, 10])", NS) == 60
+
+
 def test_gcd_needs_two_arguments():
     with pytest.raises(ParseError):
         parse_expr_str("gcd(4)", NS)

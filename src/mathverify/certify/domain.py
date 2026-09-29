@@ -174,9 +174,6 @@ def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
             continue
         return None                               # unknown operation: no exact domain
     conds = definedness_conditions(e, var)
-    # a closed gcd/lcm read as written stays unevaluated (lcm(-4, 6)): its value, for solving
-    conds = [c.replace(lambda n: type(n).__name__ in ("gcd", "lcm") and not n.free_symbols,
-                       lambda n: n.func(*n.args)) if isinstance(c, sp.Basic) else c for c in conds]
     for node in sp.preorder_traversal(e):
         if isinstance(node, sp.Pow):
             ex = _numeric_exponent(node.args[1])

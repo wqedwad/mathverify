@@ -249,7 +249,10 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
         lhs, rhs = checked_forms(lhs, ctx.timeout), checked_forms(rhs, ctx.timeout)
     except UnverifiedForm as e:
         # SymPy's value of a closed integral/sum/product that numbers do not confirm decides
-        # nothing: "Integral(Abs(cos(x)), (x, -1, 1)) = 0" was verified (audit of 29 Sep 2026)
+        # nothing: "Integral(Abs(cos(x)), (x, -1, 1)) = 0" was verified (audit of 29 Sep 2026);
+        # the integrator's own value can still refute it
+        if _integrals_refute(claim, ctx):
+            return "refuted", {**ev, "reason": "integrals_numeric_value_differs"}
         return "unknown", {**ev, "reason": f"unverified_form: {str(e)[:200]}"}
     r = sb_run("mathverify.steps.deterministic:_doit", lhs, timeout=ctx.timeout)
     if not r.ok:
@@ -587,12 +590,35 @@ def _closed_claim(claim, ctx: Ctx) -> str:
         # limit that is two-sided in the problem is not decided by that value (E6)
         return "unknown"
     h = True if claim is sp.true else False if claim is sp.false else _decide(claim, {}, ctx)
-    if h is None and not (isinstance(claim, sp.Basic) and claim.has(sp.Integral, sp.Sum, sp.Product, sp.Derivative)) \
-            and _holds(claim, {}) is False:
-        # the tolerant numeric check refutes only a claim without forms: its evaluation of a sum
-        # (Euler-Maclaurin) refuted true identities, and it ran for half an hour on one (audit)
-        h = False
+    if h is None:
+        if not isinstance(claim, sp.Basic) or not claim.has(sp.Integral, sp.Sum, sp.Product, sp.Derivative):
+            h = False if _holds(claim, {}) is False else None
+        elif _integrals_refute(claim, ctx):
+            h = False
     return "verified" if h is True else "refuted" if h is False else "unknown"
+
+
+def _integrals_refute(claim, ctx: Ctx) -> bool:
+    """A closed equation whose only forms are integrals is refuted when each integral's converged
+    numeric value (the certificate's integrator, with its error) makes the sides differ beyond that
+    error: "Integral(Abs(cos(x)), (x, -1, 1)) = 0" stays refuted where SymPy's closed form is wrong.
+    The tolerant `_holds` is not used over forms: its value of a sum (Euler-Maclaurin) is wrong for
+    oscillating terms (Σ cos(πk/4)/k² came out 0.565345, it is 11π²/192 = 0.565446) and refuted
+    true identities; nor over a sum or product at all (audit of 29 Sep 2026)."""
+    if not isinstance(claim, Eq) or claim.has(sp.Sum, sp.Product, sp.Limit, sp.Derivative):
+        return False
+    from ..equiv.forms import _numeric
+    from ..equiv.numeric import num_equal
+    reps, tol = {}, 1e-25
+    for n in claim.atoms(sp.Integral):
+        if n.free_symbols:
+            return False
+        v = _numeric(n, ctx.timeout)
+        if v is None:
+            return False
+        reps[n], tol = v[0], max(tol, v[1])
+    ok, _ = num_equal(claim.lhs.xreplace(reps), claim.rhs.xreplace(reps), rel_tol=max(100 * tol, 1e-15))
+    return ok is False
 
 
 def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:
