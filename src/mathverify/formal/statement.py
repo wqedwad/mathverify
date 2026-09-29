@@ -1179,9 +1179,13 @@ def _t_equation_of(obj, ns, ca, name) -> LeanStatement | None:
 
 def _t_series_sum(obj, ns, ca, name) -> LeanStatement | None:
     p = obj.task.params
-    var = ns.get(p.get("var", "k"))
-    if not isinstance(var, sp.Symbol):
+    if not isinstance(ns.get(p.get("var", "k")), sp.Symbol):
         return None
+    # the index runs over [lo, hi] (an integer and nothing more, as in certify.series): with k
+    # declared positive, Abs(k) folded to k and "∑_{k=-2}^{2} k = 0" was stated for the wrong claim 0
+    # (audit of 29 Sep 2026)
+    var = sp.Symbol(p.get("var", "k"), integer=True)
+    ns = dict(ns, **{var.name: var})
     lo = parse_expr_str(str(p.get("lo", "1")), ns)
     hi = parse_expr_str(str(p.get("hi", "oo")), ns)
     if hi == sp.oo or lo == -sp.oo or not (lo.is_Integer and hi.is_Integer):

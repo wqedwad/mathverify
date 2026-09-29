@@ -101,6 +101,20 @@ def test_a_limit_nothing_numeric_corroborates_is_not_certified(expr, to, claim):
     assert r.verdict == "UNKNOWN"
 
 
+def test_gcd_is_symmetric():
+    ir = _ir("evaluate", {"expr": "gcd(n, 4)"}, NN, shape="expression")
+    assert _run(ir, "gcd(4, n)", kind="expression").verdict == "CORRECT"
+
+
+def test_the_lean_series_statement_reads_the_index_over_its_range():
+    """k declared positive folded Abs(k) to k: the goal "∑_{k=-2}^{2} k = 0" is true in Lean for the
+    wrong claim 0 (the sum of |k| is 6)."""
+    from mathverify.formal.statement import build_statement
+    ir = _ir("series_sum", {"term": "Abs(k)", "var": "k", "lo": "-2", "hi": "2"}, KP)
+    st = build_statement(ir, {"kind": "value", "payload": "0", "option": None})
+    assert st is None or "|" in st.goal
+
+
 def test_latex_gcd_is_the_integer_gcd():
     """latex2sympy computes \\gcd with SymPy's polynomial gcd: n = 12, \\gcd(n, 4) certified 1."""
     ir = _ir("evaluate", {"expr": r"\gcd(n, 4)"}, NN, ["n = 12"])

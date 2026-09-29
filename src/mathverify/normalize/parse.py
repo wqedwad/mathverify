@@ -104,6 +104,13 @@ def _number_args(cls, args) -> bool:
     return all(isinstance(a, sp.Rational) for a in args)
 
 
+def _canonical_order(cls, args):
+    """gcd and lcm are symmetric: the arguments in SymPy's canonical order, so gcd(4, n) is gcd(n, 4)
+    (the two were not recognised as equal; audit of 29 Sep 2026)."""
+    ordered = tuple(sorted(args, key=sp.default_sort_key))
+    return cls(*ordered) if ordered != tuple(args) else None
+
+
 def _numeric_integer_op(op):
     """The numeric value (lambdify, evalf) of gcd/lcm: exact at integer points, none elsewhere. The
     random-point check could not evaluate the class at all and read that as "defined on one side
@@ -133,7 +140,7 @@ class gcd(sp.Function):  # noqa: N801 - the name is the notation
             for a in args[1:]:
                 out = sp.gcd(out, a)
             return out
-        return None
+        return _canonical_order(cls, args)
 
     def _eval_is_integer(self):
         return True if all(a.is_integer for a in self.args) else None
@@ -152,7 +159,7 @@ class lcm(sp.Function):  # noqa: N801 - the name is the notation
             for a in args[1:]:
                 out = sp.lcm(out, a)
             return out
-        return None
+        return _canonical_order(cls, args)
 
     def _eval_is_integer(self):
         return True if all(a.is_integer for a in self.args) else None
