@@ -483,3 +483,25 @@ def test_the_lean_function_gate_reads_the_body_with_the_functions_own_argument()
         return build_statement(ir, {"kind": "value", "payload": "55"})
     assert st("1/k**2") is not None
     assert st("k/k") is None
+
+
+def test_an_excluded_point_whose_realness_sympy_cannot_decide_is_still_checked():
+    """arccot(2) + arccot(3) = pi/4, so 1/sin(arccot(x) + arccot(2) + arccot(3)) is undefined only at
+    x = -1. solveset excludes -tan(atan(2) + atan(3)) = 1 instead; is_real is None there, the guard
+    skipped the point, and the true domain was refuted."""
+    ir = _ir("domain_of", {"expr": "1/sin(arccot(x) + arccot(2) + arccot(3))", "var": "x"}, shape="interval")
+    assert _run(ir, "(-oo, -1) U (-1, oo)", kind="interval").verdict != "INCORRECT"
+    assert _run(ir, "(-oo, 1) U (1, oo)", kind="interval").verdict != "CORRECT"
+
+
+@pytest.mark.parametrize("kind,params,givens,shape,claim", [
+    ("extremum", {"f": "x + 0*tan(arccot(2) + arccot(1/2))", "var": "x", "interval": "[0, 1]", "which": "max"},
+     [], "scalar", "1"),
+    ("solve_equation", {"var": "x"}, ["x + tan(arccot(2) + arccot(1/2)) - tan(arccot(2) + arccot(1/2)) = 1"],
+     "set", "{1}"),
+])
+def test_a_closed_condition_no_check_proves_is_not_dropped_beside_a_variable(kind, params, givens, shape, claim):
+    """arccot(2) + arccot(1/2) = pi/2: tan of it is undefined, but its condition cos(...) != 0 stayed
+    symbolic, had no free symbol, and was dropped; both problems were certified (on 35af293 too)."""
+    ir = _ir(kind, params, givens=givens, shape=shape)
+    assert _run(ir, claim, kind="set" if shape == "set" else "value").verdict != "CORRECT"

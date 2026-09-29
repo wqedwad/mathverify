@@ -184,26 +184,20 @@ class Ctx:
         from ..normalize.parse import parse_as_written
         from .domain import definedness_conditions
         e = parse_as_written(src, self.ns)
-        if e is None or e.free_symbols:
+        if e is None:
             return False
         try:
             conds = definedness_conditions(e, None)
         except Exception:  # noqa: BLE001
             return False
-        if any(c is sp.false for c in conds) or self._undefined_term(e):
+        if not e.free_symbols and (any(c is sp.false for c in conds) or self._undefined_term(e)):
             return True
         # a closed condition SymPy left standing is one it could not decide: it counts only when it
         # is proved. tan(arccot(2) + arccot(1/2)) is tan(pi/2); its condition cos(...) != 0 stayed
-        # symbolic and the value oo was certified (-oo before V14; audit of 29 Sep 2026)
-        from .domain import relation_holds_at
-
-        def proved(c) -> bool:
-            try:
-                return relation_holds_at(c, sp.Dummy("_closed"), 0) is True
-            except Exception:  # noqa: BLE001 - a check that fails proves nothing
-                return False
-        return any(isinstance(c, sp.core.relational.Relational) and not c.free_symbols and not proved(c)
-                   for c in conds)
+        # symbolic and the value oo was certified (-oo before V14; audit of 29 Sep 2026). Inside an
+        # expression with a variable (x + tan(...) - tan(...) = 1) the condition was dropped too.
+        from .domain import closed_condition_undecided
+        return closed_condition_undecided(conds)
 
     @staticmethod
     def _undefined_term(e) -> bool:

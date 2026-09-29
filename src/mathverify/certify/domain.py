@@ -398,14 +398,42 @@ def written_definedness(src: str, ns: dict[str, Any]) -> tuple[list[Any], set]:
     return conds, nowhere
 
 
+def closed_condition_undecided(conds) -> bool:
+    """Is one of these definedness conditions CLOSED (no free symbol), left standing by SymPy and
+    proved by no exact check? tan(arccot(2) + arccot(1/2)) is tan(pi/2): its condition
+    cos(arccot(2) + arccot(1/2)) != 0 stays symbolic, carries no symbol, and was dropped, so the
+    maximum of x + 0*tan(...) on [0, 1] and the root of x + tan(...) - tan(...) = 1 were certified
+    (audit of 29 Sep 2026). The expression may be undefined everywhere; the caller abstains."""
+    for c in conds:
+        if isinstance(c, sp.core.relational.Relational) and not c.free_symbols:
+            try:
+                if relation_holds_at(c, sp.Dummy("_closed"), 0) is not True:
+                    return True
+            except Exception:  # noqa: BLE001 - a check that fails proves nothing
+                return True
+    return False
+
+
+def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
+    """`closed_condition_undecided` for an IR text read as written (see `written_definedness`)."""
+    from ..normalize.parse import parse_as_written
+    e = parse_as_written(src, ns)
+    if e is None:
+        return False
+    try:
+        return closed_condition_undecided(definedness_conditions(e, None))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> bool | None:
     """Is the expression, AS WRITTEN, undefined somewhere in `region` (a point set, an interval, an
     index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
     own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
     and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT."""
     conds, nowhere = written_definedness(src, ns)
-    if var in nowhere:
-        return True
+    if var in nowhere or written_closed_undecided(src, ns):
+        return True                    # a closed condition no check proves: the callers abstain
     for c in conds:
         if c.free_symbols - {var}:
             return None
@@ -462,7 +490,10 @@ def _solveset_contradicted(cond, var, s) -> bool:
         parts = piece.args if isinstance(piece, sp.Union) else (piece,)
         for p in parts:
             if isinstance(p, sp.FiniteSet) and len(p) <= 12:
-                checks += [(q, inside) for q in p if q.is_real]
+                # SymPy cannot always tell a closed point is real: -tan(atan(2) + atan(3)) (= 1, the
+                # point it wrongly excludes for 1/sin(arccot(x) + arccot(2) + arccot(3))) has is_real
+                # None, went unchecked, and the true domain R minus {-1} was refuted
+                checks += [(q, inside) for q in p if q.is_real or (q.is_number and q.is_real is None)]
             elif isinstance(p, sp.Interval) and p.measure.is_positive:
                 lo, hi = p.inf, p.sup
                 q = (lo + hi) / 2 if lo.is_finite and hi.is_finite else (hi - 1 if lo.is_infinite and hi.is_finite
