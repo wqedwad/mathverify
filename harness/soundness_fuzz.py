@@ -44,20 +44,284 @@ KIND_OF_SHAPE = {"scalar": "value", "expression": "expression", "set": "set", "i
                  "count": "count", "equation": "equation", "dne_or_scalar": "value"}
 
 
+_DISCONTINUOUS = ("sign", "floor", "ceiling", "frac", "Heaviside", "Piecewise", "Mod")
+
+
+def _exact(e):
+    """Floats read as the decimals they print as (0.1 is 1/10, a 39-digit 2.666…7 is not 8/3)."""
+    import sympy as sp
+    if not isinstance(e, sp.Basic):
+        return e
+    floats = e.atoms(sp.Float)
+    return e.xreplace({f: sp.Rational(str(f)) for f in floats}) if floats else e
+
+
+def _number_is_zero(z) -> bool | None:
+    """A number without symbols: SymPy's exact decision, else the precision ladder. An exact zero
+    evaluates far below each rung's accuracy and keeps shrinking (1e-172, 1e-250, 1e-328 at 40, 80,
+    160 digits); a nonzero keeps its value. The old test, |N(z, 40)| < 1e-35, called 10**-40, a
+    39-digit decimal of 8/3 and one of E "zero" (audit of 29 Sep 2026). A discontinuous function of
+    an exact zero (sign(8*cos(pi/9)*cos(2*pi/9)*cos(4*pi/9) - 1)) flips with the precision: no decision."""
+    import sympy as sp
+    z0 = z.is_zero
+    if z0 is not None:
+        return z0
+    if any(f.func.__name__ in _DISCONTINUOUS for f in z.atoms(sp.Function)) or z.has(sp.Piecewise, sp.Mod):
+        return None
+    try:
+        v80, v160 = (sp.Abs(sp.N(z, p)).evalf(p) for p in (80, 160))
+    except Exception:  # noqa: BLE001
+        return None
+    if v80 < sp.Float("1e-70") and v160 < sp.Float("1e-150"):
+        return True
+    if v160 > sp.Float("1e-140") and abs(v80 - v160) <= sp.Float("1e-10") * v160:
+        return False
+    return None
+
+
+def _jump_at_a_possible_zero(e) -> bool:
+    """A discontinuous function (sign, floor, …) of a number that may be exactly zero (or an integer,
+    for floor): simplify() and N() evaluate it on one side and the result depends on the precision."""
+    import sympy as sp
+    for f in e.atoms(sp.Function):
+        if f.func.__name__ in _DISCONTINUOUS and f.args and not f.args[0].free_symbols:
+            arg = f.args[0]
+            if f.func.__name__ in ("floor", "ceiling", "frac"):
+                arg = arg - sp.floor(sp.N(arg, 30))    # the nearest integer below: the jump
+            if _number_is_zero(arg) is not False:
+                return True
+    return False
+
+
+def _heavy(e) -> bool:
+    import sympy as sp
+    return isinstance(e, sp.Basic) and e.has(sp.Sum, sp.Product, sp.Integral, sp.Limit, sp.Derivative, sp.Subs,
+                                             sp.factorial, sp.binomial, sp.gamma, sp.RisingFactorial,
+                                             sp.FallingFactorial)
+
+
+def _simplify(e):
+    """simplify(), in the sandbox with a time limit when the expression holds a sum, a product or a
+    special function: simplify() of Sum(1/factorial(k), (k, 0, n)) minus its reindexed form did not
+    return in 120 s, and one such claim would stall the labelling of a whole K4 run (audit of
+    29 Sep 2026). None when it does not finish."""
+    import sympy as sp
+    if not _heavy(e):
+        return sp.simplify(e)
+    from mathverify.sandbox import run as sb_run
+    r = sb_run("mathverify.sandbox.ops:simplify_diff", e, sp.Integer(0), timeout=10)
+    return r.value if r.ok else None
+
+
 def _is_zero(e) -> bool | None:
     import sympy as sp
     try:
-        z = sp.simplify(e)
+        e = _exact(e)
+        if isinstance(e, sp.Basic) and not e.free_symbols and _jump_at_a_possible_zero(e):
+            return None
+        z = _simplify(e)
+        if z is None:
+            return None
     except Exception:  # noqa: BLE001
         return None
     if z == 0:
         return True
+    if z.has(sp.nan):
+        return None                                # oo - oo is nan: no decision (it read as "nonzero")
+    if z in (sp.oo, -sp.oo, sp.zoo):
+        return False                               # an infinity against a finite value
     if getattr(z, "free_symbols", None):
         return False if z.is_zero is False else None
     try:
-        return abs(complex(sp.N(z, 40))) < 1e-35
+        return _number_is_zero(z)
     except (TypeError, ValueError):
         return None
+
+
+def _real_roots(e):
+    """Odd roots of negative NUMBERS read as real roots, the curriculum's convention: (-8)**(1/3) is
+    -2, not SymPy's principal complex root, which made the right answer -2 "different" (audit of
+    29 Sep 2026). The harness keeps its own reading, independent of the verifier's."""
+    import sympy as sp
+    if not isinstance(e, sp.Basic) or not e.has(sp.Pow):
+        return e
+    return e.replace(
+        lambda t: (isinstance(t, sp.Pow) and t.exp.is_Rational and not t.exp.is_Integer and t.exp.q % 2 == 1
+                   and not t.base.free_symbols and t.base.is_negative is True),
+        lambda t: (-1) ** t.exp.p * sp.Abs(t.base) ** t.exp)
+
+
+def _points(syms) -> list[dict]:
+    """A fixed grid of exact points, each symbol drawn from the values its assumptions allow (the
+    IR's domain: a positive integer n takes 1..5, a real x also negative and fractional values).
+    The caller narrows it to the problem's domain (`admissible`)."""
+    import itertools
+    import sympy as sp
+    half, third = sp.Rational(1, 2), sp.Rational(1, 3)
+
+    def values(s):
+        if s.is_integer:
+            return [1, 2, 3, 4, 5] if s.is_positive else [0, 1, 2, 3, 4] if s.is_nonnegative else [1, 2, -1, 3, 0, -2]
+        if s.is_positive:
+            return [half, 2, 3, third, sp.Rational(5, 2)]
+        if s.is_nonnegative:
+            return [half, 2, 0, 3, third]
+        return [half, 2, -half, 3, -2, third]
+    syms = sorted(syms, key=lambda s_: s_.name)
+    return [dict(zip(syms, map(sp.sympify, combo)))
+            for combo in itertools.islice(itertools.product(*(values(s) for s in syms)), 64)]
+
+
+def _real_value(e, pt):
+    """The value of `e` at the point when EVERY part of it is a finite real number there, else None.
+    Checking the result alone let sqrt(x - 1)*sqrt(x + 1) be "defined" at x = -2 (its value -sqrt(3)
+    is real, its factors are not) and differ from sqrt(x**2 - 1) there (audit of 29 Sep 2026)."""
+    import sympy as sp
+    try:
+        e = _real_roots(e)
+        for part in sp.preorder_traversal(e):
+            if not getattr(part, "free_symbols", None):
+                continue
+            if not isinstance(part, sp.Expr):
+                return None
+            if isinstance(part, (sp.Sum, sp.Product)):
+                # a range read backwards: SymPy's Karr convention gives Sum(1, (k, 1, -1)) = -1, the
+                # school reading an empty sum 0; a point where they differ is no point (audit of 29 Sep 2026)
+                for _, lo, hi in part.limits:
+                    lo_v, hi_v = sp.sympify(lo).subs(pt), sp.sympify(hi).subs(pt)
+                    if lo_v.is_number and hi_v.is_number and (hi_v < lo_v) is sp.true:
+                        return None
+            v = _real_roots(part.subs(pt))
+            if getattr(v, "free_symbols", None) or v.has(sp.zoo, sp.oo, -sp.oo, sp.nan):
+                return None
+            z = complex(sp.N(v, 30))
+            if z.imag != 0 or z.real != z.real or abs(z.real) == float("inf"):
+                return None
+        return _real_roots(e.subs(pt))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _nonzero(v) -> bool:
+    """True only when the number is proved nonzero (`_is_zero`)."""
+    return _is_zero(v) is False
+
+
+def _differs_at_a_point(a, b, *, mod_constant: bool = False, var=None, admissible=None) -> bool:
+    """A difference proved by exact evaluation at a point of the problem's domain (`admissible`, from
+    the IR: domains, constraints, written conditions, givens) where both sides are defined. Up to an
+    additive constant: a point where the derivatives in the variable of integration `var` differ, so
+    a parameter (a**3/3) or a different constant on each piece of the domain is no difference.
+    SymPy's own `is_zero` cannot decide 3*2**(n-1) - 3**n or (1 - 2x)/(x² + 1): the K4 labeller left
+    26 wrong options of the dataset `undecided`, and this sweep dropped 9 wrong variants (29 Sep 2026)."""
+    import sympy as sp
+    free = set(getattr(a, "free_symbols", set())) | set(getattr(b, "free_symbols", set()))
+    if not free or not all(isinstance(s, sp.Symbol) for s in free):
+        return False
+    if mod_constant and (var is None or var not in free):
+        return False
+    slope = None
+    if mod_constant:
+        try:
+            slope = sp.diff(a - b, var)
+        except Exception:  # noqa: BLE001
+            return False
+    for pt in _points(free):
+        try:
+            if admissible is not None and not admissible(pt):
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        av, bv = _real_value(a, pt), _real_value(b, pt)
+        if av is None or bv is None:
+            continue
+        d = av - bv if slope is None else _real_value(slope, pt)
+        if d is not None and _nonzero(d):
+            return True
+    return False
+
+
+def admissible_points(ir: dict):
+    """The problem's domain as a test on a point, for the point proof of `_differs`: each symbol in its
+    domain (`domain_for`: the IR's domains, constraints, side conditions), every variable constraint
+    and written condition (`var_constraints`) and every given true there, and a sequence's index not
+    below its first given term. A condition about symbols the point leaves unset rejects the point.
+    Without it the grid took x = -1/2 where the problem says x > 0, and x and |x|, atan(x) + atan(1/x)
+    and pi/2, 2x and sqrt(x)*sqrt(4x) came out "different" (audit of 29 Sep 2026)."""
+    import sympy as sp
+    from mathverify.certify.base import make_ctx
+    from mathverify.intake.structured import load_problem_ir
+    try:
+        ctx = make_ctx(load_problem_ir(ir))
+        conds = list(ctx.var_constraints()) + list(ctx.givens())
+    except Exception:  # noqa: BLE001 - an IR whose domain cannot be read allows no point
+        return lambda pt: False
+    params = (ir.get("task") or {}).get("params") or {}
+    first = None
+    if isinstance(params.get("initial"), dict) and isinstance(params.get("var"), str):
+        try:
+            first = (params["var"], min(int(k) for k in params["initial"]))
+        except (TypeError, ValueError):
+            first = None
+    doms: dict = {}
+
+    def ok(pt) -> bool:
+        sub = {}
+        for s_, v in pt.items():
+            sym = ctx.ns.get(s_.name)
+            if not isinstance(sym, sp.Symbol):
+                continue
+            if first is not None and s_.name == first[0] and v < first[1]:
+                return False
+            if s_.name not in doms:
+                doms[s_.name] = ctx.domain_for(sym)
+            if doms[s_.name].contains(v) is not sp.true:
+                return False
+            sub[sym] = v
+        for c in conds:
+            fs = getattr(c, "free_symbols", set())
+            if not fs & set(sub):
+                continue
+            if not fs <= set(sub) or c.subs(sub) is not sp.true:
+                return False
+        return True
+    return ok
+
+
+def _integer_parameter(s) -> bool:
+    import sympy as sp
+    return any(x.is_integer for x in getattr(s, "free_symbols", set()) if isinstance(x, sp.Symbol))
+
+
+def _curves_differ(a, b, admissible=None) -> bool:
+    """A point of the curve `a` (grid values for all its symbols but one, the last one solved for
+    exactly) where `b` is defined and does not hold. Only polynomial equations are solved."""
+    import sympy as sp
+    syms = sorted(set(a.free_symbols) | set(b.free_symbols), key=lambda s_: s_.name)
+    if not syms or not all(isinstance(s_, sp.Symbol) for s_ in syms):
+        return False
+    fa = a.lhs - a.rhs
+    solve_for, rest = syms[-1], syms[:-1]
+    if not fa.has(solve_for) or not fa.is_polynomial(solve_for):
+        return False
+    for pt in (_points(rest) if rest else [{}])[:16]:
+        try:
+            roots = sp.solveset(fa.subs(pt), solve_for, sp.S.Reals)
+        except Exception:  # noqa: BLE001
+            continue
+        if not isinstance(roots, sp.FiniteSet):
+            continue
+        for r in list(roots)[:4]:
+            full = {**pt, solve_for: r}
+            try:
+                if admissible is not None and not admissible(full):
+                    continue
+            except Exception:  # noqa: BLE001
+                continue
+            lv, rv = _real_value(b.lhs, full), _real_value(b.rhs, full)
+            if lv is not None and rv is not None and _is_zero(fa.subs(full)) is True and _nonzero(lv - rv):
+                return True
+    return False
 
 
 def _eq_ratio(a, b):
@@ -71,18 +335,29 @@ def _eq_ratio(a, b):
         return None
 
 
-def _differs(a, b, *, mod_constant: bool = False) -> bool:
-    """True only when SymPy can PROVE a != b (up to an additive constant if asked)."""
+def _differs(a, b, *, mod_constant: bool = False, var=None, admissible=None) -> bool:
+    """True only when SymPy can PROVE a != b (up to an additive constant if asked; `var` is the
+    variable of integration, `admissible` the problem's domain for a point proof)."""
     import sympy as sp
     if isinstance(a, sp.Equality) or isinstance(b, sp.Equality):
         if not (isinstance(a, sp.Equality) and isinstance(b, sp.Equality)):
             return False
         r = _eq_ratio(a, b)
-        return r is not None and (bool(r.free_symbols) or r == 0)
+        if r is not None and not r.free_symbols:
+            return r == 0
+        # a ratio SymPy could not reduce is no proof: the same circle with a nested radical on the
+        # right, sqrt(...) = 3 against its square (audit of 29 Sep 2026). A point of one curve that
+        # is not on the other is.
+        return _curves_differ(a, b, admissible) or _curves_differ(b, a, admissible)
     if isinstance(a, sp.Set) or isinstance(b, sp.Set):
         try:
-            return (a == b) is False and bool(sp.Complement(a, b) != sp.S.EmptySet
-                                             or sp.Complement(b, a) != sp.S.EmptySet)
+            a, b = _exact(a), _exact(b)
+            if a == b or _integer_parameter(a) or _integer_parameter(b):
+                return False                       # a set over k in Z is not compared member by member
+            # only a complement SymPy REDUCED to a nonempty set proves a difference; an unevaluated
+            # one (a member it cannot compare, an endpoint written as a nested radical) does not
+            return any(c.is_empty is False and not isinstance(c, sp.Complement)
+                       for c in (sp.Complement(a, b), sp.Complement(b, a)))
         except Exception:  # noqa: BLE001
             return False
     if isinstance(a, sp.MatrixBase) or isinstance(b, sp.MatrixBase):
@@ -90,19 +365,29 @@ def _differs(a, b, *, mod_constant: bool = False) -> bool:
             return a.shape == b.shape and any(_is_zero(x - y) is False for x, y in zip(a, b))
         except Exception:  # noqa: BLE001
             return False
-    d = a - b
+    try:
+        if a == b:
+            return False                           # oo and oo, the same expression
+        a, b = _real_roots(a), _real_roots(b)
+        d = a - b
+    except Exception:  # noqa: BLE001 - a Boolean or anything without a difference
+        return False
     if mod_constant:
         free = getattr(d, "free_symbols", set())
         if not free:
             return False                           # differs only by a constant: equivalent
+        # only the variable of integration: a parameter's term (a**3/3) is a constant
+        wrt = [var] if var is not None else list(free)
         try:
-            return any(_is_zero(sp.diff(d, s)) is False for s in free)
+            if any(_is_zero(sp.diff(d, s)) is False for s in wrt):
+                return True
         except Exception:  # noqa: BLE001
-            return False
-    return _is_zero(d) is False
+            pass
+        return _differs_at_a_point(a, b, mod_constant=True, var=var, admissible=admissible)
+    return _is_zero(d) is False or _differs_at_a_point(a, b, admissible=admissible)
 
 
-def _equal(a, b, *, mod_constant: bool = False) -> bool:
+def _equal(a, b, *, mod_constant: bool = False, var=None) -> bool:
     import sympy as sp
     if isinstance(a, sp.Equality) or isinstance(b, sp.Equality):
         if not (isinstance(a, sp.Equality) and isinstance(b, sp.Equality)):
@@ -119,10 +404,14 @@ def _equal(a, b, *, mod_constant: bool = False) -> bool:
             return a.shape == b.shape and all(_is_zero(x - y) is True for x, y in zip(a, b))
         except Exception:  # noqa: BLE001
             return False
-    d = a - b
+    try:
+        d = _real_roots(a) - _real_roots(b)
+    except Exception:  # noqa: BLE001
+        return False
     if mod_constant:
         free = getattr(d, "free_symbols", set())
-        return all(_is_zero(sp.diff(d, s)) is True for s in free) if free else True
+        wrt = [var] if var is not None else list(free)
+        return all(_is_zero(sp.diff(d, s)) is True for s in wrt) if free else True
     return _is_zero(d) is True
 
 
@@ -134,8 +423,10 @@ def _pstr(e) -> str:
     return sp.sstr(e)
 
 
-def variants(gold, shape: str, kind_task: str, ns) -> tuple[list[tuple[str, Any]], list[tuple[str, Any]]]:
-    """(wrong, equivalent) lists of (name, sympy object)."""
+def variants(gold, shape: str, kind_task: str, ns, var=None) -> tuple[list[tuple[str, Any]], list[tuple[str, Any]]]:
+    """(wrong, equivalent) lists of (name, sympy object). `var` is the task's own variable: a parameter
+    picked by name (a before x) made `plus_x` of an antiderivative gold + a, a constant apart, not wrong
+    (audit of 29 Sep 2026)."""
     import sympy as sp
     wrong: list[tuple[str, Any]] = []
     equiv: list[tuple[str, Any]] = []
@@ -208,7 +499,7 @@ def variants(gold, shape: str, kind_task: str, ns) -> tuple[list[tuple[str, Any]
                 from decimal import Decimal
                 equiv.append(("decimal", sp.Float(str(Decimal(int(gold.p)) / Decimal(int(gold.q))), 30)))
     else:                                                 # an expression in the problem's symbols
-        x = free[0]
+        x = var if var in free else free[0]
         wrong += [("plus_x", gold + x), ("doubled", 2 * gold), ("shifted_argument", gold.subs(x, x + 1))]
         if not mod_c:
             wrong.append(("plus_one", gold + 1))
@@ -386,7 +677,10 @@ def run(items, limit_unique: int | None = None) -> dict[str, Any]:
             continue
         task = ir["task"]["kind"]
         mod_c = task == "antiderivative"
-        wrong, equiv = variants(gold, shape, task, ns)
+        task_var = ns.get((ir["task"].get("params") or {}).get("var") or "")
+        var = task_var if mod_c else None
+        adm = admissible_points(ir)
+        wrong, equiv = variants(gold, shape, task, ns, var=task_var)
         ir_no_opt = dict(ir, options=None)
         for name, payload in non_answers(ir):
             s2 = {"claimed_answer": {"kind": "expression" if kind == "expression" else "value",
@@ -403,7 +697,8 @@ def run(items, limit_unique: int | None = None) -> dict[str, Any]:
                                       "payload": payload, "gold": str(it["gold_answer"]), "verdict": verdict})
         for label, group in (("wrong", wrong), ("equiv", equiv)):
             for name, v in group:
-                ok = _differs(v, gold, mod_constant=mod_c) if label == "wrong" else _equal(v, gold, mod_constant=mod_c)
+                ok = (_differs(v, gold, mod_constant=mod_c, var=var, admissible=adm) if label == "wrong"
+                      else _equal(v, gold, mod_constant=mod_c, var=var))
                 if not ok:
                     skipped[f"{label}:{name}:not_proved"] += 1
                     continue

@@ -276,3 +276,43 @@ def test_a_tuple_answer_is_labelled_element_by_element(items, item, payload, exp
     """(16,14) against (16, 14) was `undecided` (uni-la-*). An eigenvector is right up to a factor."""
     label, why = _label(items, item, "expression", payload)
     assert label == expected, why
+
+
+@pytest.mark.parametrize("item,kind,payload,expected", [
+    ("ayt-trig-004", "value", "pi/3", "right"),          # the key is written {pi/3}
+    ("ayt-trig-004", "value", "{pi/3}", "right"),
+    ("ayt-trig-004", "value", "2*pi/3", "wrong"),
+    ("ayt-trig-004", "value", "{pi/3, 2*pi/3}", "wrong"),
+    ("ayt-diz-003", "expression", "3**n", "wrong"),      # both were `undecided` (29 Sep 2026)
+    ("ayt-tur-004", "expression", "1/(x**2 + 1)", "wrong"),
+    ("ayt-tur-004", "expression", "2*x/(x**2 + 1)", "right"),
+])
+def test_one_value_and_expressions_are_decided(items, item, kind, payload, expected):
+    """A one-member key set against its member, and wrong expressions whose difference SymPy's
+    is_zero cannot decide (proved at a point of the variable's domain; DECISIONS §70)."""
+    label, why = _label(items, item, kind, payload)
+    assert label == expected, why
+
+
+@pytest.mark.parametrize("item,kind,payload,option,expected", [
+    ("tyt-den-004", "set", "-1, 4", None, "right"),          # a listing without braces (a set holding a tuple)
+    ("tyt-den-004", "set", [-1, 4], None, "right"),          # a JSON list was stringified into Interval(-1, 4)
+    ("uni-la-002", "value", "1, 3", None, "right"),
+    ("tyt-den-004", "value", "{1, 2, 3, ...}", None, "undecided"),   # an Ellipsis crashed outside any try
+    ("ayt-trig-004", "value", None, ["B"], "undecided"),     # a list as the letter crashed
+    ("ayt-int-001", "value", "{x*log(x) - x + C}", None, "right"),   # the `+ C` inside the braces
+    ("tyt-kap-007", "interval", "x > 1", None, "undecided"),         # a condition is no proved difference
+    ("tyt-kap-007", "interval", "[1, oo)", None, "wrong"),
+])
+def test_the_labeller_reads_listings_and_survives_odd_payloads(items, item, kind, payload, option, expected):
+    """Adversarial audit of 29 Sep 2026 (DECISIONS §70)."""
+    label, why = _label(items, item, kind, payload, option=option)
+    assert label == expected, why
+
+
+def test_two_independent_parameters_are_not_merged():
+    """A key with k and n independent is a larger set than a claim coupling them: renaming n to k made
+    {pi/6 + 3*k*pi} "the same general solution" as {pi/6 + 2*k*pi + n*pi}."""
+    ir = {"task": {"kind": "trig_solve", "params": {"var": "x"}}, "vars": [{"name": "x"}], "givens": ["sin(x) = 1/2"]}
+    sol = {"claimed_answer": {"kind": "set", "payload": "{pi/6 + 3*k*pi}"}, "steps": []}
+    assert run_solver.answer_label(ir, sol, "{pi/6 + 2*k*pi + n*pi}", "set")[0] != "right"

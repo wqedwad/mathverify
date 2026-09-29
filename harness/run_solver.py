@@ -50,8 +50,9 @@ def _claimed_value(ir: dict[str, Any], solution: dict[str, Any]) -> tuple[str, A
     ca = solution.get("claimed_answer") or {}
     kind, payload = ca.get("kind") or "value", ca.get("payload")
     opts = ir.get("options") or {}
-    if payload in (None, "") and ca.get("option") in opts:
-        payload = opts[ca["option"]]
+    opt = ca.get("option")
+    if payload in (None, "") and isinstance(opt, str) and opt in opts:     # a list as the letter crashed
+        payload = opts[opt]
         if kind == "option":
             kind = "value"
     return kind, payload
@@ -64,7 +65,53 @@ def _is_dne(kind: str, payload: Any) -> bool:
     return kind == "dne" or (isinstance(payload, str) and _DNE.fullmatch(payload.strip().rstrip(".").strip()) is not None)
 
 
-def _sequence_label(c, g, *, scale_free: bool) -> tuple[str, str] | None:
+def _unwrap_singleton(c, g):
+    """(c, g) made comparable: a one-member set against a scalar compares the member (the parser reads
+    `{pi/3}` of kind `value` as a Python set, of kind `set` as a FiniteSet); Python sets become
+    FiniteSets; a listing written without braces (`-1, 4`: a tuple, or a set holding one tuple) against
+    a set of plain members becomes the set of its members (audit of 29 Sep 2026). Anything that does not
+    convert (`{1, 2, ...}` holds an Ellipsis) is returned as it came: it crashed outside any try."""
+    try:
+        return _comparable(c, g)
+    except Exception:  # noqa: BLE001
+        return c, g
+
+
+def _comparable(c, g):
+    import sympy as sp
+
+    def scalar(v):
+        return isinstance(v, sp.Expr) and not isinstance(v, sp.MatrixBase)
+
+    def member(v):
+        if isinstance(v, (sp.FiniteSet, set, frozenset)) and len(v) == 1:
+            m = next(iter(v))
+            return m if scalar(m) else None
+        return None
+    if member(c) is not None and scalar(g):
+        return member(c), g
+    if member(g) is not None and scalar(c):
+        return c, member(g)
+    # two Python sets were never compared (set - set is no SymPy difference): as FiniteSets they are
+    c, g = (sp.FiniteSet(*v) if isinstance(v, (set, frozenset)) else v for v in (c, g))
+
+    def plain_set(v):
+        return isinstance(v, sp.FiniteSet) and not any(isinstance(m, (sp.Tuple, tuple)) for m in v)
+
+    def listing(v):
+        if isinstance(v, (tuple, list, sp.Tuple)):
+            return sp.FiniteSet(*v)
+        if isinstance(v, sp.FiniteSet) and len(v) == 1 and isinstance(next(iter(v)), sp.Tuple):
+            return sp.FiniteSet(*next(iter(v)))
+        return None
+    if plain_set(g) and listing(c) is not None:
+        c = listing(c)
+    elif plain_set(c) and listing(g) is not None:
+        g = listing(g)
+    return c, g
+
+
+def _sequence_label(c, g, *, scale_free: bool, admissible=None) -> tuple[str, str] | None:
     """A tuple or list answer ((16, 14), [1, 1]) against the key's, element by element. An eigenvector
     is right up to a nonzero factor, so a different one is not proved wrong."""
     from harness.soundness_fuzz import _differs, _equal
@@ -75,7 +122,7 @@ def _sequence_label(c, g, *, scale_free: bool) -> tuple[str, str] | None:
             return "right", "equal element by element"
         if scale_free:
             return "undecided", "an eigenvector is not compared up to its factor"
-        if len(c) != len(g) or any(_differs(x, y) for x, y in zip(c, g)):
+        if len(c) != len(g) or any(_differs(x, y, admissible=admissible) for x, y in zip(c, g)):
             return "wrong", "different element by element"
     except Exception:  # noqa: BLE001
         return None
@@ -85,7 +132,7 @@ def _sequence_label(c, g, *, scale_free: bool) -> tuple[str, str] | None:
 def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_kind: str) -> tuple[str, str]:
     """(label, why): the solver's final answer against the key, decided only when SymPy proves it."""
     import sympy as sp
-    from harness.soundness_fuzz import _differs, _equal
+    from harness.soundness_fuzz import _differs, _equal, admissible_points
     from mathverify.intake.structured import load_problem_ir
     from mathverify.normalize.parse import build_namespace, parse_answer
     kind, payload = _claimed_value(ir, solution)
@@ -123,6 +170,8 @@ def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_k
         int_params = tuple(sp.Symbol(n_, integer=True) for n_ in ("k", "n"))
         ns = dict(ns, **{s_.name: s_ for s_ in int_params})
     mod_c = task == "antiderivative"
+    var = ns.get(params.get("var") or "") if mod_c else None
+    adm = admissible_points(ir)
     if mod_c:
         # the key is written `F + C` and was never parsed: `C` is the binomial in the parser's
         # namespace (ayt-int-005/-010/-014/-021). As in the antiderivative certificate, a trailing
@@ -138,13 +187,18 @@ def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_k
         g = g.subs(ns["C"], 0)
     for k in dict.fromkeys((kind, gold_kind)):
         try:
-            c = parse_answer(k, int(payload) if k == "count" and isinstance(payload, int) else str(payload), ns)
+            # a JSON list stays a list: stringified, [-1, 4] read as the interval [-1, 4] (audit of 29 Sep 2026)
+            raw = payload if isinstance(payload, list) or (k == "count" and isinstance(payload, int)) else str(payload)
+            c = parse_answer(k, raw, ns)
         except Exception:  # noqa: BLE001
             continue
         if mod_c and isinstance(c, sp.Basic):
             c = c.subs(ns["C"], 0)
+        if mod_c and isinstance(c, (set, frozenset)):
+            # `{F + C}`: the trailing `+ C` sits before the brace and was never stripped (audit of 29 Sep 2026)
+            c = {e.subs(ns["C"], 0) if isinstance(e, sp.Basic) else e for e in c}
         if isinstance(c, (tuple, list)) and isinstance(g, (tuple, list)):
-            label = _sequence_label(c, g, scale_free=params.get("op") == "eigenvector")
+            label = _sequence_label(c, g, scale_free=params.get("op") == "eigenvector", admissible=adm)
             if label:
                 return label
             continue
@@ -152,13 +206,19 @@ def answer_label(ir: dict[str, Any], solution: dict[str, Any], gold: Any, gold_k
             # sets with a symbolic integer parameter: only the same set is decided. A difference of
             # two such sets is not proved by SymPy (k and n name the same integers)
             k_, n_ = int_params
-            if isinstance(c, sp.Basic) and isinstance(g, sp.Basic) and c.xreplace({n_: k_}) == g.xreplace({n_: k_}):
+            # renaming n to k is sound only when each side has one parameter: a key with k and n
+            # independent is a larger set than a claim that couples them (audit of 29 Sep 2026)
+            one = all(len({k_, n_} & getattr(v, "free_symbols", set())) <= 1 for v in (c, g))
+            if one and isinstance(c, sp.Basic) and isinstance(g, sp.Basic) and c.xreplace({n_: k_}) == g.xreplace({n_: k_}):
                 return "right", f"same general solution as {k}"
             return "undecided", "general solutions are not compared"
+        # one value against the set of that one value ("çözümü kaçtır" keyed as {pi/3}): the member is
+        # compared (ayt-trig-004, 29 Sep 2026). A set of two or more stays a set.
+        c, g = _unwrap_singleton(c, g)
         try:
-            if _equal(c, g, mod_constant=mod_c):
+            if _equal(c, g, mod_constant=mod_c, var=var):
                 return "right", f"equal as {k}"
-            if _differs(c, g, mod_constant=mod_c):
+            if _differs(c, g, mod_constant=mod_c, var=var, admissible=adm):
                 return "wrong", f"different as {k}"
         except Exception:  # noqa: BLE001
             continue
