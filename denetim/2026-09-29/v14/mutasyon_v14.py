@@ -135,6 +135,17 @@ MUTATIONS = [
      "        if any(c is sp.false for c in conds):", TA),
     ("D04 belirli integral bildirilmiş değişkenle", CAL, "            var = sp.Symbol(var.name, real=True)\n",
      "            var = ctx.sym(var.name)\n", TA),
+    # --- (L) limits, points of derivatives, series (the unevaluated-forms lens)
+    ("L01 yönsüz Limit sağdan", P, '    "Limit": _Limit, "diff": sp.diff,', '    "Limit": sp.Limit, "diff": sp.diff,', TA),
+    ("L02 köşede at okunur", P, "        if n.args[0].subs(v, val).is_zero:", "        if False:", TA),
+    ("L03 kapalı Limit SymPy'ye bırakılır", FO, "            if isinstance(n, sp.Limit):", "            if False:", TA),
+    ("L04 to_mp limiti okur", NUM, "        if expr.has(sp.Integral, sp.Sum, sp.Product, sp.Limit):",
+     "        if expr.has(sp.Integral, sp.Sum, sp.Product):", TA),
+    ("L05 büyüyen zarf DNE", LIM, "        if _grows_without_bound(ro.value):", "        if False:", TA),
+    ("L06 işaret değiştiren seride nsum reddeder", "src/mathverify/certify/series.py",
+     "        if ok is False and one_signed and converged:", "        if ok is False and converged:", TA),
+    ("L07 yakınsamamış nsum reddeder", "src/mathverify/certify/series.py",
+     "        if ok is False and one_signed and converged:", "        if ok is False and one_signed:", TA),
     # --- (C) claims
     ("C01 alt indisli LaTeX bağlayıcısı değer", P,
      '_LATEX_COMPUTING = re.compile(r"\\\\(?:int|iint|oint|lim|sum|prod)(?![A-Za-z])|',
