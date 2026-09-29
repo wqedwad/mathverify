@@ -383,9 +383,8 @@ def certify_series_sum(term, var, lo, hi, claimed, timeout: float = 10.0) -> tup
         # of 29 Sep 2026).
         rt = sb_run("mathverify.certify.series:_one_signed_terms", term, var, lo, timeout=timeout)
         one_signed = bool(rt.ok and rt.value is True)
-        rn2 = sb_run("mathverify.certify.series:_nsum_worker", term, var, lo, hi, 50, timeout=timeout * 2) \
-            if one_signed else None
-        num2 = sp.Float(rn2.value, 50) if rn2 is not None and rn2.ok else None
+        rn2 = sb_run("mathverify.certify.series:_nsum_worker", term, var, lo, hi, 50, timeout=timeout * 2)
+        num2 = sp.Float(rn2.value, 50) if rn2.ok else None
         converged = num2 is not None and num_equal(num_val, num2, rel_tol=1e-20)[0] is True
         ev["numeric_reliable"] = one_signed and converged
         if ok is False and one_signed and converged:

@@ -275,11 +275,14 @@ def test_a_true_series_step_is_not_refuted_by_euler_maclaurin():
     assert r.verdict != "INCORRECT" and _steps(r) != ["refuted"]
 
 
-def test_no_number_is_read_off_an_unconfirmed_form():
+_X = sp.Symbol("x", real=True)
+
+
+@pytest.mark.parametrize("form", [sp.Integral(sp.Abs(sp.cos(_X)), (_X, -1, 1)), sp.Limit(_X * sp.sin(sp.pi / _X), _X, sp.oo)])
+def test_no_number_is_read_off_an_unconfirmed_form(form):
     from mathverify.equiv.numeric import to_mp
-    x = sp.Symbol("x", real=True)
     with pytest.raises(ValueError):
-        to_mp(sp.Integral(sp.Abs(sp.cos(x)), (x, -1, 1)), 30)
+        to_mp(form, 30)
 
 
 def test_a_closed_latex_relation_stays_a_relation():
@@ -313,6 +316,11 @@ def test_a_derivative_at_a_corner_has_no_value():
     assert _run(_ir("evaluate", {"expr": "at(diff(Abs(x), x), x, 0)"}), "0").verdict != "CORRECT"
     r = _run(_ir("evaluate", {"expr": "2 + 2"}), "4", [("eq", "at(diff(Abs(x), x), x, 0) = 0")])
     assert _steps(r) != ["verified"]
+
+
+def test_a_closed_limit_is_decided_two_sided_with_numbers():
+    assert _run(_ir("evaluate", {"expr": "Limit(sin(x)/x, x, 0)"}), "1").verdict == "CORRECT"
+    assert _run(_ir("evaluate", {"expr": "Limit(sin(x)/x, x, 0)"}), "2").verdict == "INCORRECT"
 
 
 def test_sympys_wrong_sequence_limit_certifies_nothing():
