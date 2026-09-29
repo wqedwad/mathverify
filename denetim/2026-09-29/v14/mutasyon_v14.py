@@ -167,6 +167,14 @@ MUTATIONS = [
      "    with sp.evaluate(True):\n        d = sp.diff(e, *args, **kwargs)",
      "    with sp.evaluate(False):\n        d = sp.diff(e, *args, **kwargs)", TA),
     ("M09 yazılı okumada hesaplayan adlar", P, "        if local.get(name) is computing:", "        if False:", TA),
+    # --- (T) definedness the recheck of the first round's findings closed
+    ("T01 kararsız kapalı koşul aralıkta yok sayılır", DOM,
+     "    if var in nowhere or written_closed_undecided(src, ns):", "    if var in nowhere:", TA),
+    ("T02 kararsız kapalı koşul değişkenin yanında yok sayılır", BASE,
+     "        return closed_condition_undecided(conds)", "        return not e.free_symbols and closed_condition_undecided(conds)", TA),
+    ("T03 gerçekliği belirsiz nokta denetlenmez", DOM,
+     "                checks += [(q, inside) for q in p if q.is_real or (q.is_number and q.is_real is None)]",
+     "                checks += [(q, inside) for q in p if q.is_real]", TA),
     # --- (C) claims
     ("C01 alt indisli LaTeX bağlayıcısı değer", P,
      '_LATEX_COMPUTING = re.compile(r"\\\\(?:int|iint|oint|lim|sum|prod)(?![A-Za-z])|',
