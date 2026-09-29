@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 29 Eylül 2026, akşam**, dal `claude/inspiring-cori-xcgjld` (`master`dan, birleşmedi; `#11` birleşti, yedekli).
+> **Son güncelleme: 29 Eylül 2026, akşam**, dal `claude/inspiring-cori-xcgjld` (`wqedwad/asd#12` ile `master`a birleşti, yedeksiz: kullanıcı kararı; yeni iş yeni dalda).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -10,7 +10,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§70; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§71; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1726 passed / 5 skipped** (3 root salt okunur dizin,
@@ -29,8 +29,8 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 
 ## 2. Durum (28 Eylül 2026)
 
-**Kod.** `master` = `wqedwad/asd#11`'in birleşmesi (öncesi `2f11c84`, yedek `yedek/master-2026-09-28`, §6; `#9`, `#10`
-öncesi yedeksiz, kullanıcı talimatı). `#7`–`#10`: DECISIONS §59–§62 (paralel tarama, `--plan`, bekçi, soğuk Lean, K4 düzeneği).
+**Kod.** `master` = `wqedwad/asd#12`'nin birleşmesi (öncesi `c0a2caf` = `#11`'in birleşmesi; `#12`, `#9`, `#10` öncesi
+yedeksiz, kullanıcı talimatı; `#11` öncesi `yedek/master-2026-09-28`, §6). `#7`–`#10`: DECISIONS §59–§62 (paralel tarama, `--plan`, bekçi, soğuk Lean, K4 düzeneği).
 `#11` (DECISIONS §63): adım reddedicinin üç haksız reddi (görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin
 bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
 Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
@@ -45,8 +45,8 @@ hepsi düzeltildi; 1e-35 toleransı yanlışı "right" yapıyordu); tarama 448 �
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
 çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23, 25–26 Eylül (DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `3e1805d` (`#11`'in son kodu; bu dal sonra kod değiştirdi, birleşmeden önce `--full`), bulutta 28 Eylül 18:14:01–18:40:57 UTC, **~27 dk**
-(ısınma 11 s, pytest 399 s, adversaryal 793 s), 1639 passed / 5 skipped; `--plan` TAMAM (DECISIONS §63). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
+**Son `check.py --full`.** **24/24**, `14f4d07` (`#12`'nin son kodu, raporlar `7fbf9ac`), bulutta 29 Eylül 17:59:56–18:23:09 UTC,
+**~23 dk** (ısınma 39 s, pytest 349 s, adversaryal 661 s), 1726 passed / 5 skipped; `--plan` TAMAM (DECISIONS §71). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
 
 **K4 (Muse Spark 1.3, 280 öğe, koşu 3, `776e5b4`; DECISIONS §63).** 278 çözüm; CORRECT|right 274, INCORRECT|right 4,
 yanlış onay **0**, `undecided` 0; çözücü 278/278 doğru (yakalama gücü bu modelle ölçülemedi). 4 INCORRECT tek soru
@@ -55,8 +55,8 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** bu dal (`claude/inspiring-cori-xcgjld`, `5463b19`+) `master`a birleşmedi. Yeni oturum kendi dalını bu
-   daldan açar: `git fetch origin claude/inspiring-cori-xcgjld && git checkout -B <yeni-dal> FETCH_HEAD`; `--plan` koşar.
+1. **Yeni sohbet:** yeni dal `master`dan; `master`ın `#12`'nin birleşmesi olduğunu `git fetch origin master && git log
+   --oneline -3 origin/master` ile doğrula; `--plan` koş.
 2. **V14 düzeltmesi** (önerilen, kullanıcı onayıyla; DECISIONS §70): ayrıştırıcıda `gcd`/`lcm` sembolle polinom işlemi
    olmasın, `Sum`/`Product`'ın bağlı indisi IR değişkeninin varsayımını almasın, `arccot` (0, π) okunsun. Yöntem bu dalın
    parçalarındaki gibi: sonda, test, 280 + 278 çözümde fark, sağlamlık/adversaryal, mutasyon, tam takım.
@@ -202,7 +202,7 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
 - Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan; alandaki
   önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843); B1, B6, B10 ve K4'teki işaretli maddeler.
 
-## 5. Son ölçülen sayılar (kapılar, `3e1805d`; aksi yazılmadıkça `7d9e9a1` ve öncekilerle aynı)
+## 5. Son ölçülen sayılar (kapılar, `14f4d07`; aksi yazılmadıkça `3e1805d` ve öncekilerle aynı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
@@ -213,7 +213,7 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
 | Çözüm düzeyi pozitif precision; D tespiti | 0.994 (1 FP, V1); 0.976 (41/42) | raporlanır |
 | Lean erişilebilir; sertifika; FP; junk | evet; 121/280; 0; 0/33 | —; —; 0; 0 |
 | Adversaryal saldırı başarısı (3 yüzey) | %0 (21 139 saldırı; UNKNOWN'a düşen 2890, önce 2894) | < %2 |
-| Yanlış onay / eşdeğerde red / değer olmayan iddia / adım dönüşümünde red | 0/448, 0/214, 0/46, 0/184 | 0 |
+| Yanlış onay / eşdeğerde red / değer olmayan iddia / adım dönüşümünde red | 0/457 (önce 0/448, §70), 0/214, 0/46, 0/184 | 0 |
 | Nedeni açıklanmayan kaçırılan bozuk adım; adım lokalizasyonu | 0/6; 75/120 (önce 74) | 0; raporlanır |
 
 Raporlar `reports/*.md` (üretilir, elle yazılmaz), kapı günlüğü `reports/check_full.log`.
@@ -221,8 +221,8 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (`git ls-remote origin`, 28 Eylül akşam): `master` = `wqedwad/asd#11`'in birleşmesi (öncesi `2f11c84`);
-  `claude/busy-bardeen-ckr5bw` `wqedwad/asd#11` (birleşti);
+- **Dallar** (29 Eylül akşam): `master` = `wqedwad/asd#12`'nin birleşmesi (öncesi `c0a2caf`); `claude/inspiring-cori-xcgjld`
+  `wqedwad/asd#12` (birleşti); `claude/busy-bardeen-ckr5bw` `wqedwad/asd#11` (birleşti);
   `claude/dreamy-meitner-rvrwlj` `60d539c` (`#9`, `#10`), `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
   `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
@@ -245,6 +245,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   | `yedek/master-2026-09-27` | `5c2f83e` (PR #8 öncesi) | `mathverify-master-5c2f83e-2026-09-27.bundle` (kullanıcının betiği "YEDEK TAMAM" yazdı: `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
   | yok | `c2e4fdf`, `622a178` (PR #9, #10 öncesi) | alınmadı (kullanıcı kararı, 27 Eylül "yedeğe gerek yok"; 28 Eylül "birleştir") |
   | `yedek/master-2026-09-28` | `2f11c84` (PR #11 öncesi) | `mathverify-master-2f11c84-2026-09-28.bundle` (kullanıcı, 28 Eylül akşam: `bundle verify` "okay", deneme klonu `2f11c84`; etiket buluttan doğrulandı. İlk denemede etiket bayat yerel `master`ı (`5c2f83e`) göstermişti, silinip yeniden kondu) |
+  | yok | `c0a2caf` (PR #12 öncesi) | alınmadı (kullanıcı kararı, 29 Eylül "birleştir bu dalı yedeğe gerek yok") |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout `C:\Users\kullanici\mathverify`'da): (0) `git fetch
   origin`, `git checkout master`, `git merge --ff-only origin/master`, `git log -1 --oneline` = beklenen commit (28 Eylül:
@@ -252,7 +253,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create C:/Users/kullanici/mathverify-yedek/mathverify-master-<kısa-hash>-YYYY-MM-DD.bundle
   --all`, `git bundle verify` ve deneme klonu; (3) `git push origin <etiket>`; etiket buluttan `git ls-remote` ile doğrulanır;
   (4) hemen önce `scripts/check.py --plan`. Geri dönüş `git reset --hard <etiket>`. Buluttan `master`/etiket push edilmez.
-- **Yerel checkout** (28 Eylül akşam): `master` `2f11c84`; `#11`'den sonra `git pull` gerekir. Stash'te Windows `--full`
+- **Yerel checkout** (28 Eylül akşam): `master` `2f11c84`; `#11` ve `#12`den sonra `git pull` gerekir. Stash'te Windows `--full`
   raporları (`eab80f1`; kullanıcı silebilir), yerel `claude/dreamy-meitner-rvrwlj` eski (`eab80f1`, birleşmiş).
 
 ## 7. Bulut özeti (ölçülmüş)
