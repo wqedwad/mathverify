@@ -458,3 +458,28 @@ def test_an_integral_with_a_parameter_bound_keeps_the_texts_conditions():
     ir = _ir("domain_of", {"expr": "integrate(x, (x, 0, y)) + y/y", "var": "y"},
              XR + [{"name": "y", "domain": "real"}], shape="interval")
     assert _run(ir, "(-oo, oo)", kind="interval").verdict != "CORRECT"
+
+
+@pytest.mark.parametrize("body,expr,claim,at2", [("x/x", "f(0)", "1", "1"), ("sqrt(x)**2", "f(-1)", "-1", "2"),
+                                                 ("x**2/x", "f(0) + 1", "1", "2")])
+def test_a_call_outside_the_declared_domain_keeps_the_bodys_written_conditions(body, expr, claim, at2):
+    """x declared positive: the body's written conditions (x != 0, x >= 0) were read on the declared
+    symbol, where SymPy folds them to True, so f(0) = 1 for f(x) = x/x was certified (on 35af293 too)."""
+    ir = dict(_ir("evaluate", {"expr": expr}), vars=XP, functions=[{"name": "f", "expr": body, "args": ["x"]}])
+    assert _run(ir, claim).verdict != "CORRECT"
+    ok = dict(_ir("evaluate", {"expr": "f(2)"}), vars=XP, functions=[{"name": "f", "expr": body, "args": ["x"]}])
+    assert _run(ok, at2).verdict == "CORRECT"
+
+
+def test_the_lean_function_gate_reads_the_body_with_the_functions_own_argument():
+    """The gate compares the body as written with the body as parsed; both are read with the formal
+    argument. Read with the declared positive integer k, 1/k**2 was refused and k/k (whose parse lost
+    k != 0) passed."""
+    from mathverify.formal.statement import build_statement
+
+    def st(body):
+        ir = {"task": {"kind": "series_sum", "params": {"term": "f(k)", "var": "k", "lo": "1", "hi": "10"}},
+              "vars": KP, "givens": [], "answer_shape": "scalar", "functions": [{"name": "f", "expr": body, "args": ["k"]}]}
+        return build_statement(ir, {"kind": "value", "payload": "55"})
+    assert st("1/k**2") is not None
+    assert st("k/k") is None
