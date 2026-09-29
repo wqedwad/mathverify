@@ -1,6 +1,8 @@
 """Mutation check of the harness oracle fixes of 29 Sep 2026 (DECISIONS §70): the K4 labeller and the
 soundness sweep's `_differs` / `_equal` (a difference proved at a point of the problem's domain, exact
 numbers compared exactly, what SymPy cannot reduce is no difference, the labeller's odd payloads).
+Measured equivalent and left out: the nan guard of `_is_zero` (Z06): without it the precision ladder
+compares nan and raises, which the same function turns into no decision.
 The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is the one of
 denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
 
@@ -35,7 +37,6 @@ MUTATIONS = [
      "        d = av - bv\n", TSF),
     ("Z23 plus_x ada göre", SF, "        x = var if var in free else free[0]\n", "        x = free[0]\n", TSF),
     # --- exact numbers
-    ("Z06 nan fark sayılır", SF, "    if z.has(sp.nan):\n        return None", "    if False:\n        return None", TSF),
     ("Z07 ondalık yazıldığı gibi okunmaz", SF,
      "    return e.xreplace({f: sp.Rational(str(f)) for f in floats}) if floats else e\n", "    return e\n", TSF),
     ("Z08 mutlak tolerans", SF, "    if v80 < sp.Float(\"1e-70\") and v160 < sp.Float(\"1e-150\"):\n",

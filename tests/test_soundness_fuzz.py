@@ -199,3 +199,26 @@ def test_plus_x_adds_the_tasks_variable_not_the_first_symbol_by_name():
     gold = _x ** 2 / 2 + _a * _x
     wrong, _ = variants(gold, "expression", "antiderivative", {"x": _x, "a": _a}, var=_x)
     assert dict(wrong)["plus_x"] == gold + _x
+
+
+def test_a_parameters_constant_is_no_difference_even_when_sympy_can_tell_it_is_nonzero():
+    """d/da (sin(x) + a - sin(x)) = 1 is provably nonzero: differentiating in every symbol called a
+    right antiderivative different. Only the variable of integration counts."""
+    assert not _differs(sp.sin(_x) + _a, sp.sin(_x), mod_constant=True, var=_x)
+
+
+def test_a_decimal_truncation_is_not_the_fraction():
+    """15 digits of 8/3 equalled 8/3 at the Float's own precision; read as the decimal it prints, it
+    does not."""
+    assert _differs(sp.Rational(8, 3), sp.Float("2.66666666666667")) and not _equal(sp.Rational(8, 3), sp.Float("2.66666666666667"))
+
+
+def test_a_tiny_difference_sympy_cannot_decide_is_found_by_the_ladder():
+    v = sp.atan(sp.Rational(1, 2)) + sp.atan(sp.Rational(1, 3)) + sp.Integer(10) ** -40
+    assert _differs(v, sp.pi / 4) and not _equal(v, sp.pi / 4)
+
+
+def test_a_sum_is_evaluated_at_a_point():
+    k = sp.Symbol("k", integer=True, positive=True)
+    assert _differs(sp.Sum(k, (k, 1, _n)), _n ** 2)                      # 3 against 4 at n = 2
+    assert not _differs(sp.Sum(k, (k, 1, _n)), _n * (_n + 1) / 2)

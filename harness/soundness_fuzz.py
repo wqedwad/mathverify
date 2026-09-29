@@ -179,8 +179,11 @@ def _real_value(e, pt):
     import sympy as sp
     try:
         e = _real_roots(e)
+        # a sum's bound index is no symbol of the point: the parts that hold it are checked as the sum
+        bound = {v for node in sp.preorder_traversal(e) if isinstance(node, (sp.Sum, sp.Product, sp.Integral))
+                 for v in node.variables}
         for part in sp.preorder_traversal(e):
-            if not getattr(part, "free_symbols", None):
+            if not getattr(part, "free_symbols", None) or part.free_symbols & bound:
                 continue
             if not isinstance(part, sp.Expr):
                 return None

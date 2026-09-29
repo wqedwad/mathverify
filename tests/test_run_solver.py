@@ -316,3 +316,11 @@ def test_two_independent_parameters_are_not_merged():
     ir = {"task": {"kind": "trig_solve", "params": {"var": "x"}}, "vars": [{"name": "x"}], "givens": ["sin(x) = 1/2"]}
     sol = {"claimed_answer": {"kind": "set", "payload": "{pi/6 + 3*k*pi}"}, "steps": []}
     assert run_solver.answer_label(ir, sol, "{pi/6 + 2*k*pi + n*pi}", "set")[0] != "right"
+
+
+def test_a_braced_constant_is_dropped_even_without_the_tasks_variable():
+    """`{F + C}`: with no `var` in the task every symbol is differentiated, and a C left inside the
+    braces made the right antiderivative "wrong"."""
+    ir = {"task": {"kind": "antiderivative", "params": {"integrand": "log(x)"}}, "vars": [{"name": "x"}], "givens": []}
+    sol = {"claimed_answer": {"kind": "value", "payload": "{x*log(x) - x + C}"}, "steps": []}
+    assert run_solver.answer_label(ir, sol, "x*log(x) - x + C", "expression")[0] == "right"
