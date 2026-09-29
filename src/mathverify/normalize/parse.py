@@ -179,6 +179,32 @@ def _integer_op(cls):
     return call
 
 
+def _at(e, v, val):
+    """e at v = val. A derivative at a corner is no derivative: diff(Abs(x), x) is sign(x), and
+    sign(0) = 0 certified "the derivative of |x| at 0 is 0" (audit of 29 Sep 2026). A sign, Heaviside
+    or DiracDelta whose argument vanishes at the point is refused, not read."""
+    e = sp.sympify(e)
+    for n in e.atoms(sp.sign, sp.Heaviside, sp.DiracDelta):
+        if n.args[0].subs(v, val).is_zero:
+            raise ParseError(f"at({e}, {v}, {val}): {n} is taken where its argument is 0")
+    return e.subs(v, val)
+
+
+def _two_sided(p) -> str:
+    return "-" if p == oo else "+" if p == -oo else "+-"
+
+
+def _Limit(e, v, p, d=None):  # noqa: N802 - the name is the notation
+    """A limit written without a direction is two-sided (SOLVER_FORMAT, E6), as in compute steps.
+    SymPy's default is the right side: Limit(Abs(x)/x, x, 0) was 1 and certified (audit of
+    29 Sep 2026)."""
+    return sp.Limit(e, v, p, d if d is not None else _two_sided(p))
+
+
+def _limit(e, v, p, d=None):
+    return sp.limit(e, v, p, d if d is not None else _two_sided(p))
+
+
 class arccot(sp.Function):  # noqa: N801 - the name is the notation
     """arccot with values in (0, pi), the convention of the Turkish curriculum (AYT). SymPy's `acot`
     takes values in (-pi/2, pi/2]: acot(-1) = -pi/4 where AYT reads 3*pi/4, so the right answer was
@@ -223,7 +249,7 @@ _SAFE_NAMES: dict[str, Any] = {
     "factorial": sp.factorial, "binomial": sp.binomial, "C": sp.binomial, "comb": sp.binomial,
     "P": _perm, "perm": _perm, "deg": _deg,
     "dist": _dist, "slope": _slope, "tri_area": _tri_area, "dot": _dot, "point_line_dist": _point_line_dist,
-    "at": lambda e, v, val: sp.sympify(e).subs(v, val),     # at(diff(f(x), x), x, 1)
+    "at": _at,                                               # at(diff(f(x), x), x, 1)
     "eigmax": lambda m: sp.Max(*[k for k in sp.Matrix(m).eigenvals() if k.is_real]),
     "eigmin": lambda m: sp.Min(*[k for k in sp.Matrix(m).eigenvals() if k.is_real]),
     "trace": lambda m: sp.Matrix(m).trace(), "rank": lambda m: sp.Matrix(m).rank(),
@@ -231,7 +257,7 @@ _SAFE_NAMES: dict[str, Any] = {
     "re": sp.re, "im": sp.im, "conjugate": sp.conjugate, "arg": sp.arg,
     # calculus (unevaluated forms allowed in step claims)
     "Sum": sp.Sum, "Product": sp.Product, "Integral": sp.Integral, "Derivative": sp.Derivative,
-    "Limit": sp.Limit, "diff": sp.diff, "integrate": sp.integrate, "limit": sp.limit,
+    "Limit": _Limit, "diff": sp.diff, "integrate": sp.integrate, "limit": _limit,
     # numbers
     "Rational": Rational, "Integer": Integer, "Float": sp.Float, "S": S, "nsimplify": sp.nsimplify,
     # relations / logic

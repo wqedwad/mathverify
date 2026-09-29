@@ -320,13 +320,13 @@ def to_mp(expr, dps: int):
         expr = real_odd_roots(sp.sympify(expr))
         if expr.free_symbols:
             raise ValueError(f"expression has free symbols: {expr.free_symbols}")
-        if expr.has(sp.Derivative, sp.Limit):
-            expr = expr.replace(lambda n: isinstance(n, (sp.Derivative, sp.Limit)), lambda n: n.doit())
-        if expr.has(sp.Integral, sp.Sum, sp.Product):
+        if expr.has(sp.Derivative):
+            expr = expr.replace(lambda n: isinstance(n, sp.Derivative), lambda n: n.doit())
+        if expr.has(sp.Integral, sp.Sum, sp.Product, sp.Limit):
             # neither SymPy's closed form (|cos x| on [-1, 1] integrates to 0) nor a bare numeric
             # evaluation (Euler-Maclaurin misses oscillating sums: Σ sin(πk/2)/k came out -2) is a
             # value here; callers confirm forms first (equiv.forms; audit of 29 Sep 2026)
-            raise ValueError("an unevaluated integral, sum or product has no confirmed value")
+            raise ValueError("an unevaluated integral, sum, product or limit has no confirmed value")
         if expr is sp.nan or expr is sp.zoo:
             raise ValueError("nan/zoo")
         if expr in (sp.oo, -sp.oo):

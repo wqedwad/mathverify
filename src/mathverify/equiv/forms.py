@@ -22,7 +22,7 @@ import sympy as sp
 
 __all__ = ["UnverifiedForm", "has_closed_form", "checked_forms"]
 
-_FORMS = (sp.Integral, sp.Sum, sp.Product)
+_FORMS = (sp.Integral, sp.Sum, sp.Product, sp.Limit)
 _MAX_TERMS = 10_000
 
 
@@ -95,6 +95,16 @@ def checked_forms(e, timeout: float = 8.0):
             return e
         reps = {}
         for n in inner:
+            if isinstance(n, sp.Limit):
+                # SymPy's limit, corroborated numerically near the point and two-sided unless a side
+                # is written (certify.limits): with n an integer SymPy says lim n·sin(π/n) = 0 (π)
+                from ..certify.limits import classify_limit
+                e_, v_, p_, d_ = n.args
+                cls = classify_limit(e_, v_, p_, None if str(d_) in ("+-", "real") else str(d_), timeout=timeout)
+                if cls.get("kind") not in ("VAR", "INF") or cls.get("value") is None:
+                    raise UnverifiedForm(f"{n}: {cls.get('kind')}")
+                reps[n] = cls["value"]
+                continue
             r = sb_run("mathverify.sandbox.ops:doit_expr", n, timeout=timeout)
             if not r.ok or not isinstance(r.value, sp.Basic) or r.value.has(*_FORMS) \
                     or r.value.has(sp.nan, sp.zoo) or r.value.free_symbols:

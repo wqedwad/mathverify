@@ -585,13 +585,9 @@ def _closed_claim(claim, ctx: Ctx) -> str:
     (`_decide`); a numeric evaluation that tells the sides apart refutes it too. Sent through the
     premises' set route, a closed relation SymPy could not decide came back "proved": the LaTeX step
     "\\gcd(84, 120) = 7" and "gcd(pi, 2) != 1" were verified (audit of 29 Sep 2026)."""
-    if isinstance(claim, sp.Basic) and claim.has(sp.Limit):
-        # outside a compute claim, SymPy reads Limit(e, x, a) from the right: a closed claim about a
-        # limit that is two-sided in the problem is not decided by that value (E6)
-        return "unknown"
     h = True if claim is sp.true else False if claim is sp.false else _decide(claim, {}, ctx)
     if h is None:
-        if not isinstance(claim, sp.Basic) or not claim.has(sp.Integral, sp.Sum, sp.Product, sp.Derivative):
+        if not isinstance(claim, sp.Basic) or not claim.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative):
             h = False if _holds(claim, {}) is False else None
         elif _integrals_refute(claim, ctx):
             h = False

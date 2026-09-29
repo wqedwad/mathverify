@@ -127,7 +127,7 @@ def _oscillation_risk(expr, var, point, dirs) -> bool:
     return False
 
 
-def _oscillation(expr, var, point, side) -> list[float] | None:
+def _oscillation(expr, var, point, side) -> list[tuple[float, float, float]] | None:
     """Worker: relative spread of the (real) values on shrinking windows approaching the point.
     Evidence of genuine oscillation only: an identity such as sin^2 + cos^2 has spread ~1e-30."""
     f = sp.lambdify(var, expr, "mpmath")
@@ -159,8 +159,17 @@ def _oscillation(expr, var, point, side) -> list[float] | None:
             if len(vals) < 100:
                 return None
             hi, lo = max(vals), min(vals)
-            out.append(float((hi - lo) / max(1, abs(hi), abs(lo))))
+            out.append((float((hi - lo) / max(1, abs(hi), abs(lo))), float(lo) if abs(lo) < 1e300 else float(mp.sign(lo)) * 1e300,
+                        float(hi) if abs(hi) < 1e300 else float(mp.sign(hi)) * 1e300))
     return out
+
+
+def _grows_without_bound(windows) -> bool:
+    """The values on the nearest window stay on one side of 0 and their envelope towards 0 grew a
+    hundredfold from the first window: they tend to ±oo while oscillating, which is no DNE.
+    x(2 + sin x) -> oo was certified as DNE and oo refuted (audit of 29 Sep 2026)."""
+    (_, lo0, hi0), (_, lo1, hi1) = windows[0], windows[-1]
+    return (lo0 > 0 and lo1 >= 100 * lo0) or (hi0 < 0 and hi1 <= 100 * hi0)
 
 
 def _limit_dir(expr, var, point, d):
@@ -206,8 +215,11 @@ def _one_side(expr, var, point, d, timeout) -> tuple[str, Any, dict[str, Any]]:
     # AccumBounds only says where the limit points could lie. It is DNE when the values really
     # keep oscillating; an identity in disguise is retried after simplification instead.
     ro = sb_run("mathverify.certify.limits:_oscillation", expr, var, point, d, timeout=timeout)
-    ev["oscillation_spread"] = ro.value if ro.ok else None
-    if ro.ok and ro.value and all(s_ >= 1e-3 for s_ in ro.value):
+    ev["oscillation_spread"] = [w[0] for w in ro.value] if ro.ok and ro.value else None
+    if ro.ok and ro.value and all(w[0] >= 1e-3 for w in ro.value):
+        if _grows_without_bound(ro.value):
+            ev["flags"] = ["oscillates_while_diverging"]
+            return "UNKNOWN", v, ev
         return "DNE", v, ev
     rs = sb_run("mathverify.certify.limits:_limit_simplified", expr, var, point,
                 None if point in (oo, -oo) else d, timeout=timeout)

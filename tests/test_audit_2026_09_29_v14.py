@@ -298,3 +298,51 @@ def test_a_definite_integral_task_integrates_over_the_interval():
 def test_a_sum_with_an_undefined_term_is_undefined(vars_):
     """k/k read as 1: Σ_{k=-1}^{1} k/k = 3 was certified."""
     assert _run(_ir("evaluate", {"expr": "Sum(k/k, (k, -1, 1))"}, vars_), "3").verdict == "UNKNOWN"
+
+
+# --- limits, points of derivatives, series and products (the unevaluated-forms lens) -------------
+
+@pytest.mark.parametrize("expr,claim", [("Limit(Abs(x)/x, x, 0)", "1"), ("limit(1/x, x, 0)", "oo")])
+def test_a_limit_without_a_direction_is_two_sided(expr, claim):
+    """SymPy reads Limit(e, x, a) from the right; the compute steps already read it two-sided (E6)."""
+    assert _run(_ir("evaluate", {"expr": expr}), claim).verdict != "CORRECT"
+
+
+def test_a_derivative_at_a_corner_has_no_value():
+    """diff(Abs(x), x) is sign(x), and sign(0) = 0 certified "d|x|/dx at 0 is 0"."""
+    assert _run(_ir("evaluate", {"expr": "at(diff(Abs(x), x), x, 0)"}), "0").verdict != "CORRECT"
+    r = _run(_ir("evaluate", {"expr": "2 + 2"}), "4", [("eq", "at(diff(Abs(x), x), x, 0) = 0")])
+    assert _steps(r) != ["verified"]
+
+
+def test_sympys_wrong_sequence_limit_certifies_nothing():
+    """With n an integer SymPy says lim n·sin(π/n) = 0; it is π."""
+    ir = _ir("evaluate", {"expr": "Limit(n*sin(pi/n), n, oo)"}, NN)
+    assert _run(ir, "0").verdict != "CORRECT"
+    assert _run(ir, "pi").verdict != "INCORRECT"
+
+
+def test_an_oscillating_factor_on_a_diverging_quantity_is_no_dne():
+    """x(2 + sin x) >= x tends to oo; the spread of its values was read as oscillation (DNE)."""
+    ir = _ir("limit", {"expr": "x*(2 + sin(x))", "var": "x", "to": "oo"})
+    assert _run(ir, "", kind="dne").verdict != "CORRECT"
+    assert _run(ir, "oo").verdict != "INCORRECT"
+
+
+def test_one_nsum_value_does_not_refute_a_series():
+    """nsum gives 263/315 for Σ sin(πk/2)/k at every precision (the zero terms stop it); it is π/4."""
+    ir = _ir("series_sum", {"term": "sin(pi*k/2)/k", "var": "k", "lo": "1", "hi": "oo"}, KP)
+    assert _run(ir, "pi/4").verdict != "INCORRECT"
+
+
+@pytest.mark.parametrize("expr,claim", [("Sum(sin(k)/k, (k, 1, oo))", "(pi - 1)/2"),
+                                        ("Product(1 - 1/k**2, (k, 2, oo))", "1/2")])
+def test_a_true_value_is_not_refuted_through_sympys_numeric_evaluation_of_a_form(expr, claim):
+    """sp.N of an unevaluated oscillating sum or of a product is wrong: the right answers were INCORRECT."""
+    assert _run(_ir("evaluate", {"expr": expr}, KP), claim).verdict != "INCORRECT"
+
+
+def test_a_closed_integral_inside_a_larger_expression_is_confirmed_too():
+    ir = _ir("evaluate", {"expr": "x*Integral(Abs(cos(t)), (t, -pi, pi))"},
+             [{"name": "x", "domain": "real"}, {"name": "t", "domain": "real"}], shape="expression")
+    assert _run(ir, "2*x", kind="expression").verdict != "CORRECT"      # SymPy's 2; the integral is 4
