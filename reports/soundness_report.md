@@ -1,8 +1,8 @@
 # Metamorfik sağlamlık taraması (SymPy üretimli yanlış ve eşdeğer cevaplar)
 
-Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 55 s
+Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 46 s
 
-- **Yanlış cevap varyantı: 448** — yanlış onay (CORRECT): **0** (hedef 0) · UNKNOWN: 0
+- **Yanlış cevap varyantı: 457** — yanlış onay (CORRECT): **0** (hedef 0) · UNKNOWN: 0
 - **Eşdeğer cevap varyantı: 214** — yanlış red (INCORRECT): **0** (hedef 0) · UNKNOWN (kaybedilen kapsama): 0
 
 ## Adım düzeyi: geçerli dönüşüm hata değildir, bozulan adım yakalanmalıdır
@@ -42,7 +42,7 @@ Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 55 s
 | `non_answer:own_function` | 5 | 0 | 0 | 5 |
 | `non_answer:restates_target` | 23 | 0 | 10 | 13 |
 | `non_answer:sum_object` | 2 | 0 | 0 | 2 |
-| `wrong:doubled` | 57 | 0 | 57 | 0 |
+| `wrong:doubled` | 61 | 0 | 61 | 0 |
 | `wrong:dropped_member` | 3 | 0 | 3 | 0 |
 | `wrong:entry_plus_one` | 2 | 0 | 2 | 0 |
 | `wrong:extra_member` | 5 | 0 | 5 | 0 |
@@ -53,13 +53,13 @@ Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 55 s
 | `wrong:perturbed_1e-9` | 59 | 0 | 59 | 0 |
 | `wrong:plus_half` | 59 | 0 | 59 | 0 |
 | `wrong:plus_one` | 64 | 0 | 64 | 0 |
-| `wrong:plus_x` | 2 | 0 | 2 | 0 |
+| `wrong:plus_x` | 5 | 0 | 5 | 0 |
 | `wrong:relative_1e-6` | 59 | 0 | 59 | 0 |
 | `wrong:rhs_doubled` | 3 | 0 | 3 | 0 |
 | `wrong:rhs_plus_one` | 3 | 0 | 3 | 0 |
 | `wrong:right_endpoint_flipped` | 1 | 0 | 1 | 0 |
 | `wrong:shifted` | 5 | 0 | 5 | 0 |
-| `wrong:shifted_argument` | 3 | 0 | 3 | 0 |
+| `wrong:shifted_argument` | 5 | 0 | 5 | 0 |
 
 ## Yanlış onaylar (0)
 
@@ -74,6 +74,3 @@ yok
 - answer_kind_dne: 1
 - gold_unparsed:ParseError: 1
 - gold_unparsed:UndeclaredSymbolError: 1
-- wrong:doubled:not_proved: 4
-- wrong:plus_x:not_proved: 3
-- wrong:shifted_argument:not_proved: 2
