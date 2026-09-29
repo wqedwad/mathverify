@@ -10,10 +10,10 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§69; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§70; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1669 passed / 5 skipped** (3 root salt okunur dizin,
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1726 passed / 5 skipped** (3 root salt okunur dizin,
    1 isteğe bağlı indirme, 1 kapsam dışı ifade); sıcak Lean'le ~400 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
    atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
 4. §3'teki ilk işe geç. Tekrar denenmeyecekler: arşiv §4.
@@ -34,13 +34,12 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 `#11` (DECISIONS §63): adım reddedicinin üç haksız reddi (görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin
 bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
 Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
-**Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§66): anahtar yenileme F3/F4 önkoşulu değil
-(kullanıcı). `#11`'in gevşetmelerinin hedefli denetimi (§65–§67) bitti; iki yanlış onay açığı kapandı (ikisinde de
-doğru cevaplı, yanlış adımlı D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği yokken aralık her iddiayı
-geçiriyordu, artık düşürülür; (B) tanım kümesiyle çelişen atama (`n = 0`, n > 0) tanımsaldı, artık denetlenir.
-(C) açık değil (bekçi testleri). V13 düzeltildi (§68): serbest sembole değer veren atama seçimdir. 558 çözümde
-değişim 0; sağlamlık ve adversaryal raporları yalnız süre satırında farklı; mutasyon 17/17 (`mutasyon_gece.py`).
-Cevap anahtarları iki bağımsız çözücüyle 86/86 doğru (§69, `denetim/2026-09-29/anahtar/`).
+**Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§70; anahtar yenileme F3/F4 önkoşulu değil, §64).
+`#11`'in hedefli denetimi: iki yanlış onay açığı kapandı (D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği
+yokken aralık düşürülür, (B) tanım kümesiyle çelişen atama denetlenir; (C) açık değil. V13: serbest sembole değer veren
+atama seçimdir (§68). 558 çözümde değişim 0; mutasyon 17/17. Anahtarlar 86/86 bağımsız doğru (§69). Etiketleme oracle'ı
+farkı tanım kümesinde noktayla kanıtlıyor, sayıları kesin karşılaştırıyor (§70; adversaryal iş akışı 70 gerçek sorun,
+hepsi düzeltildi; 1e-35 toleransı yanlışı "right" yapıyordu); tarama 448 → 457 yanlış varyant, yanlış onay 0.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -56,9 +55,8 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Sıradaki parça** (kullanıcı: "parça parça", DECISIONS §64): K4 (g), etiketleyicinin ve `soundness_fuzz._differs`'in
-   ifade farkını somut noktada kesin değerlendirmeyle kanıtlaması (sağlamlık kapısının paydası değişir; §69).
-   Sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
+1. **Sıradaki parça** (kullanıcı: "parça parça", DECISIONS §64): V14 (ayrıştırıcı: `gcd`/`lcm`, `Sum`'ın bağlı indisi,
+   `arccot`; §70) ya da doğrudan bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
    **ertelendi**, dondurmadan önce sorulur; yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
 3. **Yedek etiketleri (isteğe bağlı):** PR #3, #4, #9 ve #10 öncesi `master` için etiket yok (§6).
@@ -127,6 +125,8 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
   (`ayt-diz-002`'de `n = 21`) tanımsal kalır; sonra çelişilmezse çözüm CORRECT. `#11` öncesi doğrusu da reddediliyordu.
 - **V13. Aynı doğrunun ikinci noktası** (DECISIONS §67–§68): seçim kuralı y-kesişimini kabul eder, ama ardından x-kesişimi
   (`y = 0`) seçilen x = 0 noktasında reddedilir (yanlış ordinattan ayrılamaz; D6); doğru çözüm INCORRECT. Gerçek veride yok.
+- **V14. Ayrıştırıcı gelenekleri** (DECISIONS §70): `gcd`/`lcm` sembollerle polinom gcd/lcm (`lcm(n, 2)` → 2n); `Sum`'ın
+  bağlı indisi aynı adlı IR değişkeninin varsayımını alır; `arccot` = SymPy `acot`. Yapay girdilerde yanlış karar.
 
 ### 4.3 Kredili ölçüm
 
@@ -145,9 +145,8 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
   (b) `tyt-esf-007/-014`'ün sorusu çözülemiyor (akış kesilmesi, sonra Meta 504 "request timed out");
   (c) akışın `usage`'sız kesilmesinin nedeni **[DOĞRULANMADI]** (koşu 2'de 48 canlı çağrının 5'i; istemci yeniden
   dener); (d) eksik akışların ve 504'lerin ücretlendirilip ücretlendirilmediği **[DOĞRULANMADI]**; (e) çözücü hiç
-  yanlış cevap vermedi: yanlış onay direnci için başka çözücü gerekir; (g) etiketleyici serbest sembollü iki ifadenin
-  farkını kanıtlayamıyor: yanlış ifade cevabı `undecided` kalır, yanlış onay sayımına girmez (26 yanlış şık; sağlamlık
-  taraması 9 yanlış varyantı dışarıda bırakıyor; §69). ((f) kapandı: anahtarlar 86/86 bağımsız denetimden geçti, §69.)
+  yanlış cevap vermedi: yanlış onay direnci için başka çözücü gerekir. ((f) anahtarlar 86/86, §69; (g) etiketleyici
+  farkı kanıtlıyor, §70: kapandı. Kalan: ilkel eşitliği yerel, ℝ'de sıçrayan ilkel `right` etiketlenebilir.)
 
 ### 4.4 Kullanıcı kararları (açık sorular)
 
