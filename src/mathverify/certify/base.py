@@ -187,9 +187,55 @@ class Ctx:
         if e is None or e.free_symbols:
             return False
         try:
-            return any(c is sp.false for c in definedness_conditions(e, None))
+            conds = definedness_conditions(e, None)
         except Exception:  # noqa: BLE001
             return False
+        if any(c is sp.false for c in conds) or self._undefined_term(e):
+            return True
+        # a closed condition SymPy left standing is one it could not decide: it counts only when it
+        # is proved. tan(arccot(2) + arccot(1/2)) is tan(pi/2); its condition cos(...) != 0 stayed
+        # symbolic and the value oo was certified (-oo before V14; audit of 29 Sep 2026)
+        from .domain import relation_holds_at
+
+        def proved(c) -> bool:
+            try:
+                return relation_holds_at(c, sp.Dummy("_closed"), 0) is True
+            except Exception:  # noqa: BLE001 - a check that fails proves nothing
+                return False
+        return any(isinstance(c, sp.core.relational.Relational) and not c.free_symbols and not proved(c)
+                   for c in conds)
+
+    @staticmethod
+    def _undefined_term(e) -> bool:
+        """A finite Sum or Product (as written) with a term undefined at one of its indices:
+        Σ_{k=-1}^{1} k/k = 3 was certified, because k/k read as 1 and the condition k != 0 only
+        concerned the index (audit of 29 Sep 2026). The series_sum certificate checks this for its
+        own term; here it is checked for a sum inside any closed expression."""
+        from .domain import definedness_conditions, relation_holds_at
+        for n in sp.preorder_traversal(e):
+            if not isinstance(n, (sp.Sum, sp.Product)) or len(n.limits) != 1:
+                continue
+            k0, lo, hi = n.limits[0]
+            if not (getattr(lo, "is_Integer", False) and getattr(hi, "is_Integer", False)) or hi - lo > 200:
+                continue
+            # the index without the declaration of its name: k declared positive made k != 0 true
+            k = sp.Symbol(k0.name)
+            try:
+                with sp.evaluate(False):
+                    body = n.function.xreplace({k0: k})
+                conds = [c for c in definedness_conditions(body, None) if c.has(k)]
+            except Exception:  # noqa: BLE001
+                continue
+            for i in range(int(lo), int(hi) + 1):
+                for c in conds:
+                    if c.free_symbols - {k}:
+                        continue
+                    try:
+                        if relation_holds_at(c, k, sp.Integer(i)) is False:
+                            return True
+                    except Exception:  # noqa: BLE001
+                        continue
+        return False
 
     def _function_call_conditions(self, srcs: list[str]) -> tuple[list[Any], set, list[str]]:
         """The written definedness of the problem's FUNCTIONS at each point they are called. A body

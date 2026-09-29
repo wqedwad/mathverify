@@ -139,8 +139,12 @@ def _step_namespace(ns: dict[str, Any]) -> dict[str, Any]:
         e = sp.sympify(e)
         return sp.Subs(e, v, val) if e.has(sp.Derivative) else e.subs(v, val)
 
+    def _integral(*a):
+        return sp.Integral(*a)
+
+    _integral.binds_range = True          # its variable is a dummy (normalize.parse._binds_range)
     out["Limit"] = out["limit"] = _limit
-    out["Integral"] = out["integrate"] = lambda *a: sp.Integral(*a)
+    out["Integral"] = out["integrate"] = _integral
     out["Derivative"] = out["diff"] = lambda *a: sp.Derivative(*a)
     out["at"] = _at
     out["Subs"] = sp.Subs
@@ -157,6 +161,13 @@ def _derivative_points(expr) -> list:
 def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
     ev: dict[str, Any] = {}
     if not isinstance(claim, Eq):
+        if isinstance(claim, (sp.core.relational.Relational, And, Or, sp.logic.boolalg.BooleanAtom)) \
+                and not getattr(claim, "free_symbols", None):
+            # a closed inequality is checkable like a closed equation: "sin(pi/6) < 0" was skipped
+            # and the solution stayed CORRECT (audit of 29 Sep 2026)
+            status = _closed_claim(claim, ctx)
+            if status != "unknown":
+                return status, {"reason": "closed_relation"}
         return "skipped", {"reason": "compute_claim_not_equation"}
     lhs, rhs = claim.lhs, claim.rhs
     if rhs.has(sp.Integral, sp.Limit, sp.Subs) and not lhs.has(sp.Integral, sp.Limit, sp.Subs):
@@ -233,6 +244,13 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
                     and not lhs.has(sp.zoo, sp.nan) and not rhs.has(sp.zoo, sp.nan):
                 return "refuted", ev
             return "unknown", ev
+    from ..equiv.forms import UnverifiedForm, checked_forms
+    try:
+        lhs, rhs = checked_forms(lhs, ctx.timeout), checked_forms(rhs, ctx.timeout)
+    except UnverifiedForm as e:
+        # SymPy's value of a closed integral/sum/product that numbers do not confirm decides
+        # nothing: "Integral(Abs(cos(x)), (x, -1, 1)) = 0" was verified (audit of 29 Sep 2026)
+        return "unknown", {**ev, "reason": f"unverified_form: {str(e)[:200]}"}
     r = sb_run("mathverify.steps.deterministic:_doit", lhs, timeout=ctx.timeout)
     if not r.ok:
         return "unknown", {"reason": f"doit_failed: {r.error}"}
@@ -387,6 +405,11 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
         return None
     if a.free_symbols or b.free_symbols:
         return None
+    from ..equiv.forms import UnverifiedForm, checked_forms
+    try:
+        a, b = checked_forms(a, ctx.timeout), checked_forms(b, ctx.timeout)
+    except UnverifiedForm:
+        return None                       # SymPy's closed form unconfirmed: simplify would trust it
     r = sb_run("mathverify.sandbox.ops:simplify_diff", a, b, timeout=ctx.timeout)
     if not r.ok:
         return None
@@ -554,7 +577,27 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     return status, ev
 
 
+def _closed_claim(claim, ctx: Ctx) -> str:
+    """A claim with no free symbol is true or false whatever the premises: decided exactly on its own
+    (`_decide`); a numeric evaluation that tells the sides apart refutes it too. Sent through the
+    premises' set route, a closed relation SymPy could not decide came back "proved": the LaTeX step
+    "\\gcd(84, 120) = 7" and "gcd(pi, 2) != 1" were verified (audit of 29 Sep 2026)."""
+    if isinstance(claim, sp.Basic) and claim.has(sp.Limit):
+        # outside a compute claim, SymPy reads Limit(e, x, a) from the right: a closed claim about a
+        # limit that is two-sided in the problem is not decided by that value (E6)
+        return "unknown"
+    h = True if claim is sp.true else False if claim is sp.false else _decide(claim, {}, ctx)
+    if h is None and not (isinstance(claim, sp.Basic) and claim.has(sp.Integral, sp.Sum, sp.Product, sp.Derivative)) \
+            and _holds(claim, {}) is False:
+        # the tolerant numeric check refutes only a claim without forms: its evaluation of a sum
+        # (Euler-Maclaurin) refuted true identities, and it ran for half an hour on one (audit)
+        h = False
+    return "verified" if h is True else "refuted" if h is False else "unknown"
+
+
 def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:
+    if not getattr(claim, "free_symbols", None):
+        return _closed_claim(claim, ctx), {"n_premises": len(premises), "route": "closed_claim"}
     syms = set(claim.free_symbols)
     prem_syms: set = set()
     for p in premises:

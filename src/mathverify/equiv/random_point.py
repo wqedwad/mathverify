@@ -74,7 +74,16 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
     if isinstance(dom, Union):
         return _sample_one(rng.choice(list(dom.args)), rng, depth + 1)
     if isinstance(dom, sp.Range):
-        return sp.Integer(rng.choice(list(dom)))
+        if dom.is_finite_set:
+            return sp.Integer(rng.choice(list(dom)))
+        # an unbounded Range has no list (`Range(2, oo)`: ValueError, audit of 29 Sep 2026), and
+        # SymPy's own indexing of it raises IndexError: the k-th element is computed
+        k, step = rng.randint(0, 120), abs(dom.step)
+        if dom.inf.is_finite:
+            return sp.Integer(dom.inf + k * step)
+        if dom.sup.is_finite:
+            return sp.Integer(dom.sup - k * step)
+        return None
     if isinstance(dom, (Intersection, Complement, ConditionSet)):
         # rejection sampling from a base set
         base = None
@@ -185,7 +194,10 @@ _PERIOD_LIMIT = 5000
 
 
 def _nonsmooth(e) -> list:
-    return [n for n in sp.preorder_traversal(e) if isinstance(n, _NONSMOOTH)]
+    # gcd/lcm (normalize.parse) only have integer values: agreement at sampled points proves nothing
+    # (gcd(n, 1000003) and 1 agree almost everywhere)
+    return [n for n in sp.preorder_traversal(e)
+            if isinstance(n, _NONSMOOTH) or type(n).__name__ in ("gcd", "lcm")]
 
 
 def _in(dom, v) -> bool:
@@ -537,16 +549,32 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
                 return "values_differ", {"point": point, "lhs": mp.nstr(va, 15), "rhs": mp.nstr(vb, 15)}
         return None
 
+    unconfirmed = 0
     for pt in pts:
         d = disagree(pt)
         if d is not None and d[0] == "both_undefined":
             continue                      # both undefined here: uninformative
-        ev["evaluated"] += 1
         if d is not None:
-            ev["counterexample"] = d[1]
-            ev["reason"] = d[0]
-            return False, ev
+            # a numeric disagreement is a counterexample only when the exact values confirm it
+            # (principle 5): "undefined" may only mean that mpmath cannot evaluate an operation
+            # (gcd(n, n + 1) = 1 was refuted at n = 109), and "values differ" may be cancellation:
+            # arccot(x) = atan(1/x) for x > 0 was refuted with a residue of 2e-31 (audit of
+            # 29 Sep 2026)
+            c = _exact_counterexample(a, b, syms, pt)
+            if isinstance(c, dict):
+                ev["evaluated"] += 1
+                ev["counterexample"] = c
+                ev["reason"] = f"exact_{c['exact']}"
+                return False, ev
+            unconfirmed += c is None
+            if c is False:
+                ev["evaluated"] += 1
+                ev["agreed"] += 1
+            continue
+        ev["evaluated"] += 1
         ev["agreed"] += 1
+    if unconfirmed:
+        ev["unconfirmed_points"] = unconfirmed
     if ev["evaluated"] < max(3, n // 3):
         ev["error"] = "too few evaluable points"
         return None, ev
@@ -608,6 +636,9 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
         ev["counterexample"] = witness
         ev["reason"] = "difference_below_working_precision_but_nonzero"
         return False, ev
+    if unconfirmed:
+        ev["reason"] = "disagreement_not_confirmed_exactly"
+        return None, ev
     return True, ev
 
 

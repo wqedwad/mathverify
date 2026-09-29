@@ -117,6 +117,14 @@ def _closed_int(e) -> int | None:
     return int(v) if isinstance(v, sp.Integer) else None
 
 
+def _closed_rational(e):
+    try:
+        v = sp.simplify(e)
+    except Exception:  # noqa: BLE001
+        return None
+    return v if isinstance(v, sp.Rational) else None
+
+
 def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
     """`definedness_conditions`, but EXACT or nothing: None when the expression contains an
     operation whose real domain the rules do not describe (factorial/gamma/gcd of a variable,
@@ -132,6 +140,8 @@ def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
         return None
     for node in sp.preorder_traversal(e):
         if node.is_Atom or isinstance(node, (sp.Add, sp.Mul) + _CONTAINERS + _TOTAL_FUNCS + _BOUNDED_FUNCS):
+            continue
+        if type(node).__name__ == "arccot":            # normalize.parse.arccot read as written: total
             continue
         if isinstance(node, sp.Pow):
             base, ex = node.args
@@ -149,15 +159,24 @@ def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
                     continue                      # c**x with c > 0: defined for every real x
             return None                           # 0**x, (-2)**x, x**x, x**y: no interval rule
         name = type(node).__name__
-        if name in ("factorial", "binomial", "gcd", "lcm"):
+        if name in ("factorial", "binomial"):
             if node.free_symbols:
                 return None
             ints = [_closed_int(a) for a in node.args]
             if any(i is None for i in ints) or any(i < 0 for i in ints):
                 return None
             continue
+        if name in ("gcd", "lcm"):
+            # defined for any rational numbers (normalize.parse.gcd); read as written, lcm(-4, 6)
+            # stays unevaluated and a nonnegative-integer rule refused it (audit of 29 Sep 2026)
+            if node.free_symbols or not all(isinstance(_closed_rational(a), sp.Rational) for a in node.args):
+                return None
+            continue
         return None                               # unknown operation: no exact domain
     conds = definedness_conditions(e, var)
+    # a closed gcd/lcm read as written stays unevaluated (lcm(-4, 6)): its value, for solving
+    conds = [c.replace(lambda n: type(n).__name__ in ("gcd", "lcm") and not n.free_symbols,
+                       lambda n: n.func(*n.args)) if isinstance(c, sp.Basic) else c for c in conds]
     for node in sp.preorder_traversal(e):
         if isinstance(node, sp.Pow):
             ex = _numeric_exponent(node.args[1])
@@ -423,9 +442,40 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
                 return r2.value, ev
             ev["error"] = r.error or r2.error
             return None, ev
+        if _solveset_contradicted(cond, var, r.value):
+            ev["error"] = f"solveset_contradicted_by_exact_check: {cond}"
+            return None, ev
         dom = sp.Intersection(dom, r.value)
     ev["domain"] = str(dom)
     return dom, ev
+
+
+def _solveset_contradicted(cond, var, s) -> bool:
+    """Does an exact check contradict SymPy's solution set of `cond`? Each excluded isolated point must
+    fail the condition, and a point inside each interval piece must meet it (or fail it, outside).
+    solveset reads cos(atan(x) + atan(2)) != 0 as x != -2, where the cosine is 1 (the root is 1/2), and
+    that domain was certified (audit of 29 Sep 2026). Only a contradiction counts: an undecided check
+    leaves SymPy's set as it was."""
+    try:
+        out = sp.Complement(S.Reals, s)
+    except Exception:  # noqa: BLE001
+        return False
+    checks = []
+    for piece, inside in ((s, True), (out, False)):
+        parts = piece.args if isinstance(piece, sp.Union) else (piece,)
+        for p in parts:
+            if isinstance(p, sp.FiniteSet) and len(p) <= 12:
+                checks += [(q, inside) for q in p if q.is_real]
+            elif isinstance(p, sp.Interval) and p.measure.is_positive:
+                lo, hi = p.inf, p.sup
+                q = (lo + hi) / 2 if lo.is_finite and hi.is_finite else (hi - 1 if lo.is_infinite and hi.is_finite
+                                                                         else lo + 1 if lo.is_finite else sp.Integer(0))
+                checks.append((q, inside))
+    for q, inside in checks[:24]:
+        h = relation_holds_at(cond, var, q)
+        if h is not None and h is not inside:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------

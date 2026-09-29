@@ -482,7 +482,13 @@ def verify(ir, solution, ctx: Ctx):
                                                 F_extra=F_extra)
             conf = 0.99 if ev.get("method") == "symbolic" else 0.97
         elif kind == "definite_integral":
-            integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
+            # the variable of a definite integral runs over [a, b], not over its declared domain (the
+            # rule of normalize.parse for a written Integral): with x declared positive, ∫_{-1}^{1} |x| dx
+            # was read as ∫ x dx = 0 and the claim 0 certified (audit of 29 Sep 2026)
+            from ..normalize.parse import parse_expr_str
+            var = sp.Symbol(var.name, real=True)
+            ns_i = dict(ctx.ns, **{var.name: var})
+            integrand, err = parse_or_unknown(LAYER, parse_expr_str, p["integrand"], ns_i)
             if err:
                 return err
             a, err = parse_or_unknown(LAYER, ctx.expr, str(p["a"]))
@@ -494,7 +500,7 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
-            undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ctx.ns,
+            undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ns_i,
                                                              timeout=ctx.timeout)
             if undefined is not False:
                 return unknown(LAYER, "integrand_undefined_on_the_interval_as_written" if undefined

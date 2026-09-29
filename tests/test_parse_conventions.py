@@ -103,9 +103,9 @@ def test_a_polynomial_lcm_step_is_refuted():
     ("Integral(Abs(x), (x, -1, 1))", 1),       # x positive: 0
     ("Integral(sign(x), (x, -2, 1))", -1),     # x positive: 3
     ("integrate(Abs(x), (x, -1, 1))", 1),
-    ("Sum(Sum(k, (k, 1, 3)), (k, 1, 2))", 12),
     ("Sum(k*n, (n, 1, k), (k, 1, 3))", 25),    # the second limit binds the first one's bounds
-    ("Sum(i, (i, 1, 4))", 10),                 # the index, not the imaginary unit
+    ("Sum(Sum(k*n, (n, 1, k)), (k, 1, 3))", 25),
+    ("Sum(Abs(k), [k, -2, 2])", 6),            # a list limit is a limit
     # an integer assumption would be wrong here: SymPy sums at 1/2, 3/2, 5/2
     ("Sum(sin(pi*k), (k, 1/2, 5/2))", 1),
     # what the data uses is unchanged
@@ -119,7 +119,8 @@ def test_the_bound_variable_is_a_fresh_symbol_only_inside_the_binder():
     e = parse_expr_str("Sum(k, (k, 1, 3)) + k", NS)
     assert e.free_symbols == {NS["k"]}                       # the free k is the declared one
     s = next(a for a in e.args if isinstance(a, sp.Sum))
-    assert s.limits[0][0] == sp.Symbol("k") and s.limits[0][0].is_positive is None
+    # an integer, since its limits are (the sum runs over integers), and not declared positive
+    assert s.limits[0][0] == sp.Symbol("k", integer=True) and s.limits[0][0].is_positive is None
     assert e.doit() == NS["k"] + 6
 
 
@@ -133,15 +134,40 @@ def test_a_symbolic_sum_from_zero_keeps_its_first_term():
     assert sp.simplify(parse_expr_str("Sum(0**k, (k, 0, n))", NS).doit()) == 1     # k positive: 0
 
 
+@pytest.mark.parametrize("src", [
+    "Sum(Sum(k, (k, 1, 3)), (k, 1, 2))",        # SymPy flattens it and evaluates |k| + 1 to 0, not 10
+    "Sum(Sum(Abs(k) + 1, (k, -1, 1)), (k, 1, 2))",
+    "integrate(y**2, y, (y, 0, 1))",            # the bare y was the IR symbol, the tuple's the dummy
+    "Integral(1, y, (y, 0, 1))",
+    "Sum(k, (k, 3, 1))",                        # Karr: -2; the school reading differs
+    "Product(k, (k, 3, 1))",
+    "Sum(pi, (pi, 1, 3))",                      # not a variable
+    "Sum(k, (S, 1, 3))",
+])
+def test_a_binder_that_cannot_be_read_faithfully_is_refused(src):
+    with pytest.raises(ParseError):
+        parse_expr_str(src, NS)
+
+
+def test_a_long_sum_of_terms_is_rebound_without_recursion():
+    assert parse_expr_str("Sum(" + " + ".join(["k"] * 600) + ", (k, 1, 2))", NS).doit() == 1800
+
+
 def test_a_limit_keeps_the_declared_symbol():
     """There the declaration is the range: n integer makes it the limit of a sequence."""
     assert parse_expr_str("Limit(sin(pi*n), n, oo)", NS).doit() == 0
 
 
-def test_the_as_written_and_latex_readings_agree():
-    t = parse_as_written("Sum(0**k, (k, 0, 3)) = 1", NS)
-    assert isinstance(t[0], sp.Sum) and t[0].limits[0][0].is_positive is None and t[0].doit() == 1
+def test_the_latex_reading_agrees():
     assert parse_expr_str(r"\sum_{k=0}^{3} 0^{k}", NS).doit() == 1
+    assert parse_expr_str(r"\int_{-1}^{1} |x| dx", NS).doit() == 1
+
+
+def test_the_as_written_reading_keeps_the_declared_symbol():
+    """Definedness is read with the declared symbol inside the binder: a solver's steps about x in
+    an integral over x are checked against the integrand's conditions on x (C1/C2 of the audit)."""
+    t = parse_as_written("Sum(0**k, (k, 0, 3)) = 1", NS)
+    assert isinstance(t[0], sp.Sum) and t[0].limits[0][0] == NS["k"]
 
 
 def test_a_bound_variable_decides_the_answer():

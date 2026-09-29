@@ -98,6 +98,10 @@ def poly_count_roots(expr, var, lo=-oo, hi=oo):
 # ----------------------------------------------------------------------------
 # calculus
 # ----------------------------------------------------------------------------
+def doit_expr(expr):
+    return expr.doit()
+
+
 def diff_expr(expr, var, n=1):
     return sp.diff(expr, var, n)
 

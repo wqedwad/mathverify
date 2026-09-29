@@ -59,6 +59,18 @@ Yardımcı fonksiyonlar: `at(expr, var, value)`, `dist(x1,y1,x2,y2)`, `slope(...
 `tri_area(...)`, `point_line_dist(x0,y0,a,b,c)`, `det`, `trace`, `eigmax`, `eigmin`,
 `gcd`, `lcm`, `binomial`, `P(n,k)`, `deg(x)`.
 
+Gösterim gelenekleri (29 Eylül 2026, DECISIONS §72):
+
+- `gcd`/`lcm` sayıların EBOB/EKOK'udur (kesirde payların EBOB'u / paydaların EKOK'u); bir argüman sayı
+  değilse değerlendirilmez, polinom gcd/lcm'i değildir (`gcd(n, 4)` n = 12'de 4). `\gcd` ve
+  `\operatorname{lcm}` aynı okunur; `gcd([84, 120])` liste biçimi de.
+- `arccot` (ve `acot`, `\operatorname{arccot}`, `\cot^{-1}`) değerleri (0, π) aralığındadır:
+  `arccot(-1) = 3*pi/4`.
+- `Sum`/`Product` indisi ve belirli `Integral`/`integrate` değişkeni bağlayıcının içinde yereldir: IR'da
+  aynı adla bildirilen değişkenin varsayımlarını almaz (k pozitif bildirilmişken
+  `Sum(Abs(k), (k, -2, 2)) = 6`). Aynı ad iç içe ya da bir bağlayıcıda iki kez bağlanamaz; ters toplam
+  aralığı (`Sum(k, (k, 3, 1))`) okunmaz. `Limit` bildirilmiş sembolü korur (tam sayı `n` ile dizi limiti).
+
 ## Çözüm (`solution`)
 
 ```json

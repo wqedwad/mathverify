@@ -195,6 +195,12 @@ def _one_side(expr, var, point, d, timeout) -> tuple[str, Any, dict[str, Any]]:
         if _probe_agrees(vals, v) is False:
             ev["flags"] = ["symbolic_numeric_disagreement"]
             return "UNKNOWN", v, ev
+        if all(x_ is None for x_ in vals):
+            # nothing near the point could be evaluated, so nothing corroborates SymPy, which
+            # substitutes into a function it does not know: lim_{x->0} gcd(x, 4) = 4 was certified
+            # (audit of 29 Sep 2026)
+            ev["flags"] = ["numeric_probe_failed"]
+            return "UNKNOWN", v, ev
     if k != "OSC":
         return k, v, ev
     # AccumBounds only says where the limit points could lie. It is DNE when the values really

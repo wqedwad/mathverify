@@ -96,6 +96,10 @@ def _part_state(f):
     prec = getattr(f, "_prec", None)
     if isinstance(f, sp.Float):
         return "value" if (prec is not None and prec >= _MIN_BITS and f != 0) else "unknown"
+    if not getattr(f, "is_Number", False):
+        # a residual evalf could not evaluate (re(gcd(pi, 2))): no sign; it was read as a nonzero
+        # imaginary part, so gcd(pi, 2) = 1 was refuted and "!= 1" verified (audit of 29 Sep 2026)
+        return "unknown"
     return "value" if f != 0 else "zero"
 
 
@@ -316,8 +320,13 @@ def to_mp(expr, dps: int):
         expr = real_odd_roots(sp.sympify(expr))
         if expr.free_symbols:
             raise ValueError(f"expression has free symbols: {expr.free_symbols}")
-        if expr.has(sp.Integral, sp.Derivative, sp.Limit, sp.Sum, sp.Product):
-            expr = expr.doit()
+        if expr.has(sp.Derivative, sp.Limit):
+            expr = expr.replace(lambda n: isinstance(n, (sp.Derivative, sp.Limit)), lambda n: n.doit())
+        if expr.has(sp.Integral, sp.Sum, sp.Product):
+            # neither SymPy's closed form (|cos x| on [-1, 1] integrates to 0) nor a bare numeric
+            # evaluation (Euler-Maclaurin misses oscillating sums: Σ sin(πk/2)/k came out -2) is a
+            # value here; callers confirm forms first (equiv.forms; audit of 29 Sep 2026)
+            raise ValueError("an unevaluated integral, sum or product has no confirmed value")
         if expr is sp.nan or expr is sp.zoo:
             raise ValueError("nan/zoo")
         if expr in (sp.oo, -sp.oo):

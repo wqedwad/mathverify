@@ -132,6 +132,16 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
     if claimed is None or truth is None:
         ev["method"] = "missing"
         return None, ev
+    # a closed integral, sum or product counts with SymPy's value only when numbers confirm it
+    # (equiv.forms): SymPy integrates |cos x| over [-1, 1] to 0 and the claim 0 was certified
+    from .forms import UnverifiedForm, checked_forms, has_closed_form
+    if has_closed_form(claimed) or has_closed_form(truth):
+        try:
+            claimed, truth = checked_forms(claimed), checked_forms(truth)
+        except UnverifiedForm as e:
+            ev["method"] = "unverified_form"
+            ev["reason"] = str(e)[:300]
+            return None, ev
     mc_, mt_ = as_matrix(claimed), as_matrix(truth)
     if mc_ is not None or mt_ is not None:
         if (mc_ is None) != (mt_ is None):
