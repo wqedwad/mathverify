@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 29 Eylül 2026**, dal `claude/inspiring-cori-xcgjld` (`master`dan, birleşmedi; `#11` birleşti, yedekli).
+> **Son güncelleme: 29 Eylül 2026, akşam**, dal `claude/inspiring-cori-xcgjld` (`master`dan, birleşmedi; `#11` birleşti, yedekli).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -55,16 +55,20 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Sıradaki parça** (kullanıcı: "parça parça", DECISIONS §64): V14 (ayrıştırıcı: `gcd`/`lcm`, `Sum`'ın bağlı indisi,
-   `arccot`; §70) ya da doğrudan bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
-2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
-   **ertelendi**, dondurmadan önce sorulur; yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
-3. **Yedek etiketleri (isteğe bağlı):** PR #3, #4, #9 ve #10 öncesi `master` için etiket yok (§6).
-4. **Bulut kurulumu** (B1–B2, DECISIONS §61): ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` →
-   `275`; sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanı). 28 Eylül gecesi de `resume-cached`.
-5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı, 23 Eylül; anahtar yenileme önkoşul değil, §64).
-   Önce §4.4 madde 3 sorulur; kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-6. **Açık kapsama işleri** (§4.2) kullanıcı kararı. Gerçek çözücü için Anthropic ailesi bakiye bekliyor.
+1. **Yeni sohbet:** bu dal (`claude/inspiring-cori-xcgjld`, `5463b19`+) `master`a birleşmedi. Yeni oturum kendi dalını bu
+   daldan açar: `git fetch origin claude/inspiring-cori-xcgjld && git checkout -B <yeni-dal> FETCH_HEAD`; `--plan` koşar.
+2. **V14 düzeltmesi** (önerilen, kullanıcı onayıyla; DECISIONS §70): ayrıştırıcıda `gcd`/`lcm` sembolle polinom işlemi
+   olmasın, `Sum`/`Product`'ın bağlı indisi IR değişkeninin varsayımını almasın, `arccot` (0, π) okunsun. Yöntem bu dalın
+   parçalarındaki gibi: sonda, test, 280 + 278 çözümde fark, sağlamlık/adversaryal, mutasyon, tam takım.
+3. **`--full`** son kodda, temiz ağaçta (~27 dk; oturum etkin tutulur, ≤10 dk beklemelerle izlenir); raporlar ve günlük
+   değiştirilmeden commit + push; `--plan` TAMAM olmalı. Beklenen fark: sağlamlık raporunda 448 → 457 yanlış varyant.
+4. **PR** `master`a; birleştirmeden önce kullanıcı yerelde yedek alır (§6 yöntemi: ff-only, etiket, bundle, push etiket),
+   `--plan` hemen önce; birleştirme kullanıcı isteyince.
+5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
+6. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
+   önce kalibrasyon (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
+7. **İsteğe bağlı / kullanıcı kararı:** yanlış onay direnci için daha zayıf ya da başka aileden çözücü (K4 e); yedek
+   etiketleri (PR #3, #4, #9, #10 öncesi, §6); bulut önyükleyicisi 250 → 275 s (B1–B2); açık kapsama işleri (§4.2, V1–V14).
 
 ## 4. Açık maddeler (tam liste)
 
