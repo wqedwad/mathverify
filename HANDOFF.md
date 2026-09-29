@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 28 Eylül 2026, gece**, dal `claude/inspiring-cori-xcgjld` (`master`dan, birleşmedi; `#11` birleşti, yedekli).
+> **Son güncelleme: 29 Eylül 2026**, dal `claude/inspiring-cori-xcgjld` (`master`dan, birleşmedi; `#11` birleşti, yedekli).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -10,7 +10,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§68; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§69; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1669 passed / 5 skipped** (3 root salt okunur dizin,
@@ -40,6 +40,7 @@ doğru cevaplı, yanlış adımlı D çözümü CORRECT alıyordu): (A) öncüll
 geçiriyordu, artık düşürülür; (B) tanım kümesiyle çelişen atama (`n = 0`, n > 0) tanımsaldı, artık denetlenir.
 (C) açık değil (bekçi testleri). V13 düzeltildi (§68): serbest sembole değer veren atama seçimdir. 558 çözümde
 değişim 0; sağlamlık ve adversaryal raporları yalnız süre satırında farklı; mutasyon 17/17 (`mutasyon_gece.py`).
+Cevap anahtarları iki bağımsız çözücüyle 86/86 doğru (§69, `denetim/2026-09-29/anahtar/`).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -55,16 +56,16 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Sıradaki parça** (kullanıcı: "parça parça", DECISIONS §64): K4 (f), cevap anahtarlarının bağımsız denetimi.
+1. **Sıradaki parça** (kullanıcı: "parça parça", DECISIONS §64): K4 (g), etiketleyicinin ve `soundness_fuzz._differs`'in
+   ifade farkını somut noktada kesin değerlendirmeyle kanıtlaması (sağlamlık kapısının paydası değişir; §69).
    Sonra bu dalda `--full`, PR, yedek (§6), birleştirme (kullanıcı ister).
 2. **K4'ün açık kararları** (§4.3 K4, §4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`)
-   **ertelendi** (kullanıcı, 28 Eylül akşam); adım 5'teki kod dondurmadan önce yeniden sorulur. Bu model hiç yanlış
-   cevap vermediği için yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
+   **ertelendi**, dondurmadan önce sorulur; yanlış onay direnci için daha zayıf bir çözücü ya da başka aile gerekir.
 3. **Yedek etiketleri (isteğe bağlı):** PR #3, #4, #9 ve #10 öncesi `master` için etiket yok (§6).
 4. **Bulut kurulumu** (B1–B2, DECISIONS §61): ağ ayarı değişecekse aynı anda önyükleyicide `timeout -k 10 250` →
    `275`; sonra ilk yeni sohbette süreler okunur. Karar kullanıcının (Setup script alanı). 28 Eylül gecesi de `resume-cached`.
-5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı, 23 Eylül; anahtar yenileme
-   önkoşul değil, 28 Eylül gece, DECISIONS §64). Dondurmadan önce kullanıcıya §4.4 madde 3'teki istem kararı sorulur. Önce kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
+5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; kullanıcı kararı, 23 Eylül; anahtar yenileme önkoşul değil, §64).
+   Önce §4.4 madde 3 sorulur; kalibrasyon koşusu (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
 6. **Açık kapsama işleri** (§4.2) kullanıcı kararı. Gerçek çözücü için Anthropic ailesi bakiye bekliyor.
 
 ## 4. Açık maddeler (tam liste)
@@ -144,9 +145,9 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
   (b) `tyt-esf-007/-014`'ün sorusu çözülemiyor (akış kesilmesi, sonra Meta 504 "request timed out");
   (c) akışın `usage`'sız kesilmesinin nedeni **[DOĞRULANMADI]** (koşu 2'de 48 canlı çağrının 5'i; istemci yeniden
   dener); (d) eksik akışların ve 504'lerin ücretlendirilip ücretlendirilmediği **[DOĞRULANMADI]**; (e) çözücü hiç
-  yanlış cevap vermedi: yanlış onay direnci için başka çözücü gerekir; (f) cevap etiketleri kaba kuvvetle ya da
-  ikinci kişiyle denetlenmeli (denetim derlemlerinde 4 etiket yanlış çıktı; bugün etiketleyicinin 3 "yanlış onayı"
-  kendi hatasıydı).
+  yanlış cevap vermedi: yanlış onay direnci için başka çözücü gerekir; (g) etiketleyici serbest sembollü iki ifadenin
+  farkını kanıtlayamıyor: yanlış ifade cevabı `undecided` kalır, yanlış onay sayımına girmez (26 yanlış şık; sağlamlık
+  taraması 9 yanlış varyantı dışarıda bırakıyor; §69). ((f) kapandı: anahtarlar 86/86 bağımsız denetimden geçti, §69.)
 
 ### 4.4 Kullanıcı kararları (açık sorular)
 
@@ -159,7 +160,7 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
 3. Gerçek çözücü çıktıları: Muse Spark 1.3 ile 280 öğe yapıldı (§2). Açık: çözücü istemi IR sembollerinin anlamını
    (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli ve ölçülen şey değişir)? **Ertelendi**
    (28 Eylül akşam; kod dondurmadan önce yeniden sorulur). Etki: yalnız haksız red (86 sorudan 1), yanlış onay yok. Yanlış onay
-   direnci için hangi (daha zayıf ya da başka aileden) çözücü? Etiketleri kim denetleyecek?
+   direnci için hangi (daha zayıf ya da başka aileden) çözücü? (Anahtarlar denetlendi: §69.)
 4. Lisans ve CI (özel `wqedwad/asd`; CI ve LICENSE yok; CI açılırsa hızlı `check.py` koşar).
 5. Sınırlar: `tyt-prob-018` kuralı F4'ten sonra daraltılsın mı (V1)? Çözücü sembolü adımları sınır mı,
    yapısal formata sembol tanımı mı (V2)? Ekstremum/türev/seride tanımsız noktada çekimserlik yeter mi (V3)?
