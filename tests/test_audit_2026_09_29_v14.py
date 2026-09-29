@@ -89,6 +89,11 @@ def test_a_false_gcd_identity_is_still_refuted(expr, claim):
     assert _run(_ir("evaluate", {"expr": expr}, NN), claim).verdict == "INCORRECT"
 
 
+def test_agreement_at_sampled_integers_proves_no_gcd_identity():
+    """gcd(n, 1000003) and 1 agree at every small integer; only n = 1000003k tells them apart."""
+    assert _run(_ir("evaluate", {"expr": "gcd(n, 1000003)"}, NN), "1").verdict != "CORRECT"
+
+
 @pytest.mark.parametrize("expr,to,claim", [("gcd(x, 4)", "0", "4"), ("gcd(x, 6)/x", "2", "1"), ("lcm(x, 2)", "1", "2")])
 def test_a_limit_nothing_numeric_corroborates_is_not_certified(expr, to, claim):
     """SymPy substitutes into a function it does not know; lim_{x->0} gcd(x, 4) = 4 was CORRECT."""
@@ -181,6 +186,15 @@ def test_latex_spellings_of_arccot(latex):
     assert _run(_ir("evaluate", {"expr": latex}, []), "3*pi/4").verdict == "CORRECT"
 
 
+@pytest.mark.parametrize("latex", [r"\text{oo} + 1", r"\mathrm{dist} + 1"])
+def test_a_latex_name_the_namespace_gives_to_a_function_or_constant_is_no_symbol(latex):
+    """latex2sympy makes a symbol "oo" or "dist" of these; they passed as declared because the name
+    is in the namespace, though not as a symbol (\\text{arccot}(-1) was the symbol arccot times -1)."""
+    from mathverify.normalize.parse import parse_expr_str
+    with pytest.raises(ParseError, match="undeclared symbol"):
+        parse_expr_str(latex, dict(_SAFE_NAMES))
+
+
 def test_a_false_closed_inequality_step_is_refuted():
     r = _run(_ir("evaluate", {"expr": "sin(pi/6)"}, []), "1/2", [("compute", "sin(pi/6) < 0"),
                                                                 ("compute", "sin(pi/6) = 1/2")])
@@ -197,6 +211,29 @@ def test_sympys_wrong_integral_certifies_nothing():
     assert _steps(r) != ["verified"]
     r = _run(ir, "2*sin(1)", [("eq", "Integral(Abs(cos(x)), (x, -1, 1)) = 2*sin(1)")])
     assert _steps(r) != ["refuted"]
+
+
+@pytest.mark.parametrize("expr,claim", [("Sum(cos(pi*k)/k**2, (k, 1, oo))", "-pi**2/12"),
+                                        ("Sum(sin(pi*k)/k**2, (k, 1, oo))", "0"),
+                                        ("Sum(cos(pi*k)/k, (k, 1, oo))", "-log(2)")])
+def test_an_oscillating_series_over_an_integer_index_is_closed(expr, claim):
+    """An assumption-free index left these unclosed, and the numeric fallback (Euler-Maclaurin) is
+    wrong for oscillating terms: the right answers were INCORRECT."""
+    assert _run(_ir("evaluate", {"expr": expr}, KP), claim).verdict == "CORRECT"
+
+
+def test_a_series_sympy_cannot_close_is_not_refuted_by_its_numeric_fallback():
+    """Σ sin(πk/2)/k = π/4 (Leibniz); SymPy's numeric evaluation of the unevaluated sum gives -2."""
+    ir = _ir("evaluate", {"expr": "1"}, KP)
+    r = _run(ir, "1", [("eq", "Sum(sin(pi*k/2)/k, (k, 1, oo)) = pi/4")])
+    assert r.verdict != "INCORRECT" and _steps(r) != ["refuted"]
+    assert _run(_ir("evaluate", {"expr": "Sum(sin(pi*k/2)/k, (k, 1, oo))"}, KP), "pi/4").verdict != "INCORRECT"
+
+
+def test_a_closed_claim_about_a_limit_is_not_decided_from_the_right():
+    """Outside a compute claim SymPy reads Limit from the right: |x|/x -> 1 would be verified."""
+    r = _run(_ir("evaluate", {"expr": "x"}, XR, ["x > 0"]), "1", [("eq", "Limit(Abs(x)/x, x, 0) = 1")])
+    assert _steps(r) != ["verified"]
 
 
 def test_a_definite_integral_task_integrates_over_the_interval():

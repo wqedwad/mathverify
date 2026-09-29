@@ -141,6 +141,7 @@ def test_a_symbolic_sum_from_zero_keeps_its_first_term():
     "Integral(1, y, (y, 0, 1))",
     "Sum(k, (k, 3, 1))",                        # Karr: -2; the school reading differs
     "Product(k, (k, 3, 1))",
+    "Sum(k, (k, 1, 7/2))",                      # SymPy: 63/8; stepping from 1: 1 + 2 + 3
     "Sum(pi, (pi, 1, 3))",                      # not a variable
     "Sum(k, (S, 1, 3))",
 ])
