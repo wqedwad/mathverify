@@ -1,30 +1,30 @@
-check.py --full · 2026-09-29 17:59:56 UTC · claude/inspiring-cori-xcgjld @ 14f4d07 · commit edilmemiş değişiklik: 0 dosya
-ortam: Python 3.14.6 (/home/user/asd/.venv/bin/python) · Linux-6.18.44-fc-v37-x86_64-with-glibc2.39 · sympy 1.14.0 · mpmath 1.3.0 · z3-solver 5.1.0.0 · math-verify 0.9.0 · pytest 9.1.1 · MATHVERIFY_*: MATHVERIFY_LEAN_PROJECT, MATHVERIFY_LEAN_REPL, MATHVERIFY_OPT
+check.py --full · 2026-09-30 16:32:32 UTC · claude/loving-bardeen-ninmoo @ d68070c · commit edilmemiş değişiklik: 0 dosya
+ortam: Python 3.14.6 (/home/user/asd/.venv/bin/python) · Linux-6.18.44-fc-v50-x86_64-with-glibc2.39 · sympy 1.14.0 · mpmath 1.3.0 · z3-solver 5.1.0.0 · math-verify 0.9.0 · pytest 9.1.1 · MATHVERIFY_*: MATHVERIFY_LEAN_PROJECT, MATHVERIFY_LEAN_REPL, MATHVERIFY_OPT
 kilit: requirements.lock 6d0fd0b1dbf0017e · 31 paket · uyuşmayan: yok
 
 == Lean ısınma ==
-  lean_warmup: 39 s (exit 0)
+  lean_warmup: 452 s (exit 0)
 == testler ==
-  pytest: 349 s (exit 0)
+  pytest: 484 s (exit 0)
     SKIPPED [3] tests/test_cloud_scripts.py:637: root writes read-only directories
     SKIPPED [1] tests/test_cloud_scripts.py:956: opt-in: downloads the locked packages (MATHVERIFY_CLOUD_INTEGRATION=1)
     SKIPPED [1] tests/test_f5_lean.py:68: statement out of scope for this item
 == pyflakes ==
-  pyflakes: 2 s (exit 1)
+  pyflakes: 3 s (exit 1)
 == deterministik değerlendirme ==
-  run_eval: 75 s (exit 0)
+  run_eval: 93 s (exit 0)
 == Lean taraması ==
-  run_lean: 117 s (exit 0)
+  run_lean: 140 s (exit 0)
 == adversaryal ==
-  adversarial: 661 s (exit 0)
+  adversarial: 813 s (exit 0)
     adversarial: 4 süreç · sandbox zaman aşımı 0 · yeniden başlatma 0 · sandbox/katman hatası 0 · tek başına yeniden denenen 0
 == metamorfik sağlamlık ==
-  soundness_fuzz: 111 s (exit 0)
+  soundness_fuzz: 135 s (exit 0)
 == kalibrasyon ==
-  calibrate: 39 s (exit 0)
+  calibrate: 48 s (exit 0)
 
 == kapılar ==
-  [OK  ] birim testleri                                  1726 passed, 5 skipped in 347.41s (0:05:47)   (hedef: hepsi geçer)
+  [OK  ] birim testleri                                  2169 passed, 5 skipped in 478.77s (0:07:58)   (hedef: hepsi geçer)
   [OK  ] pyflakes temiz                                  0 bulgu   (hedef: 0)
   [OK  ] cevap düzeyi pozitif precision                  1.0   (hedef: 0.98)
   [OK  ] cevap düzeyi negatif precision                  1.0   (hedef: 0.98)
@@ -51,5 +51,5 @@ kilit: requirements.lock 6d0fd0b1dbf0017e · 31 paket · uyuşmayan: yok
 
 24/24 kapı geçti
 
-check.py --full sonu · 2026-09-29 18:23:09 UTC · claude/inspiring-cori-xcgjld @ 14f4d07 · commit edilmemiş değişiklik: 0 dosya
-check.py --full raporları · reports/adversarial_report.md dd58448ec5b944e3 · reports/calibration_report.md 8721148abeb13e1d · reports/eval_report.md 0834bd9809fe5891 · reports/f3_report.md 56eff4480c766d52 · reports/f3_smoke_report.md cf2998470164dd93 · reports/lean_report.md 0f64e4672a1c6694 · reports/solver_meta_report.md a06fa448bb7a64b1 · reports/soundness_report.md a8ce1386cdbc997f
+check.py --full sonu · 2026-09-30 17:08:42 UTC · claude/loving-bardeen-ninmoo @ d68070c · commit edilmemiş değişiklik: 0 dosya
+check.py --full raporları · reports/adversarial_report.md 751dbb3703d1b415 · reports/calibration_report.md 8721148abeb13e1d · reports/eval_report.md 5f628311446456ac · reports/f3_report.md 56eff4480c766d52 · reports/f3_smoke_report.md cf2998470164dd93 · reports/lean_report.md e687e6fd7eb5048b · reports/solver_meta_report.md a06fa448bb7a64b1 · reports/soundness_report.md f49453a148c0b30e
