@@ -113,12 +113,23 @@ def _violations(c, d, region):
     return, review of 30 Sep 2026)."""
     if not _spend(_SOLVE_COST):
         return None
-    if isinstance(c, sp.Contains) and c.args[0] == d:
+    if isinstance(c, sp.Contains):
+        # a factorial, binomial or gcd argument's set: the argument's values over the region lie in it
+        # (1/(k - 1)! from k = 1 was undecided: Not(Contains) is no relation solveset takes)
         try:
-            inside = region.is_subset(c.args[1])
+            img = region if c.args[0] == d else sp.imageset(sp.Lambda(d, c.args[0]), region)
+            inside = img.is_subset(c.args[1])
         except Exception:  # noqa: BLE001
             inside = None
-        return S.EmptySet if inside is True else None
+        if inside is True:
+            return S.EmptySet
+        if c.args[0] == d:
+            try:
+                out = sp.Complement(region, c.args[1])
+            except Exception:  # noqa: BLE001
+                return None
+            return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
+        return None
     bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
     # solved for a variable with the facts of the region (an index is an integer, nonnegative on
     # [0, oo)): factorial(k) != 0 was left a ConditionSet over Range(0, oo) and the exponential
@@ -127,7 +138,9 @@ def _violations(c, d, region):
     facts = {}
     if region.is_subset(S.Integers) is True:
         facts["integer"] = True
-        if region.inf.is_nonnegative is True:
+        if region.inf.is_positive is True:
+            facts["positive"] = True                # (k - 1)! from k = 1: k - 1 is nonnegative
+        elif region.inf.is_nonnegative is True:
             facts["nonnegative"] = True
     elif region.is_subset(S.Reals) is True:
         facts["real"] = True
@@ -239,6 +252,18 @@ def _range_conditions(n, var) -> list[Any]:
     return []
 
 
+def _declared_span(v):
+    """(lowest, highest) value a bound may take: itself when it is a real number, from its sign when
+    it is a declared symbol; None otherwise."""
+    if v.is_number:
+        return (v, v) if v.is_real or v in (oo, -oo) else None
+    if v.is_positive or v.is_nonnegative:
+        return (S.Zero, oo)
+    if v.is_negative or v.is_nonpositive:
+        return (-oo, S.Zero)
+    return None
+
+
 def _integral_conditions(n, var) -> list[Any]:
     """A definite integral: the integrand, as written, exists on [a, b] up to finitely many points (an
     improper point is the value's business). ∫_{-1}^{1} (√x)² dx = 0 was certified (30 Sep 2026)."""
@@ -253,15 +278,13 @@ def _integral_conditions(n, var) -> list[Any]:
     d = plain[x]
     region = S.Reals
     a, b = _evaluated(a), _evaluated(b)
-    if a.is_number != b.is_number:
-        # one symbolic bound: the side of the other it lies on, from its declaration (∫_0^x √t dt with
-        # x > 0 runs over [0, x] ⊆ [0, oo); read over R it was undecided, review of 30 Sep 2026)
-        c = a if a.is_number else b
-        sign = (b - a) if a.is_number else (a - b)
-        if c.is_real and sign.is_nonnegative is True:
-            region = Interval(c, oo)
-        elif c.is_real and sign.is_nonpositive is True:
-            region = Interval(-oo, c)
+    if not (a.is_number and b.is_number):
+        # a symbolic bound: the integral runs inside the hull of the values the bounds may take by
+        # their declarations (∫_0^x √t dt and ∫_1^x ln t dt with x > 0 lie in [0, oo); read over R
+        # they were undecided, review of 30 Sep 2026)
+        spans = [_declared_span(v) for v in (a, b)]
+        if all(sp_ is not None for sp_ in spans):
+            region = Interval(min(sp_[0] for sp_ in spans), max(sp_[1] for sp_ in spans))
     if a.is_number and b.is_number:
         order = certified_sign(b - a) if not (a.has(oo, -oo) or b.has(oo, -oo)) else None
         if a.has(oo, -oo) or b.has(oo, -oo):
@@ -292,7 +315,13 @@ def _limit_conditions(n, var) -> list[Any]:
         return [DEFINEDNESS_UNDECIDED]
     for c in named:
         if z0 in (oo, -oo):
-            bad = _violations(c, zd, S.Integers if getattr(z, "is_integer", None) else S.Reals)
+            # a sequence runs over the declared integers (n positive: from 1): 2**n/n! as n -> oo was
+            # undecided over all the integers (review of 30 Sep 2026)
+            if getattr(z, "is_integer", None):
+                over = sp.Range(1, oo) if z.is_positive else sp.Range(0, oo) if z.is_nonnegative else S.Integers
+            else:
+                over = Interval(0, oo) if z.is_nonnegative else S.Reals
+            bad = _violations(c, zd, over)
             if bad is None:
                 return [DEFINEDNESS_UNDECIDED]
             if bad.is_empty is not True and (bad.sup if z0 == oo else bad.inf).is_finite is not True:
@@ -467,15 +496,28 @@ def decide_membership(a, s) -> bool | None:
     if s not in _NUMBER_SETS or not isinstance(a, sp.Expr) or a.free_symbols or a.is_algebraic is not True \
             or sp.count_ops(a) > 40:
         return None
-    try:
-        p = sp.minimal_polynomial(a, sp.Dummy("t"), polys=True)
-    except Exception:  # noqa: BLE001
+    # in the sandbox, under a time limit: six square roots make a polynomial of degree 64, and a small
+    # claimed root held verify() over 200 s in the calling process (review of 30 Sep 2026)
+    from ..equiv.numeric import _in_sandbox_worker
+    if _in_sandbox_worker():
+        return None                                   # a daemonic worker cannot start one of its own
+    r = sb_run("mathverify.certify.domain:_rational_value", a, timeout=_SOLVE_TIMEOUT)
+    if not r.ok:
         return None
-    if p.degree() != 1:
+    if r.value is False:
         return False                                  # irrational: in none of these sets
+    got = s.contains(r.value)
+    return bool(got) if got in (sp.true, sp.false) else None
+
+
+def _rational_value(a):
+    """The rational value of the algebraic number `a`, or False when it is irrational (its minimal
+    polynomial is not linear). Run in the sandbox."""
+    p = sp.minimal_polynomial(a, sp.Dummy("t"), polys=True)
+    if p.degree() != 1:
+        return False
     c1, c0 = p.all_coeffs()
-    r = s.contains(sp.Rational(-c0, c1))
-    return bool(r) if r in (sp.true, sp.false) else None
+    return sp.Rational(-c0, c1)
 
 
 def _certified_compare(lhs, rhs) -> int | str | None:

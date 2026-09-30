@@ -788,3 +788,32 @@ def test_undecided_binders_do_not_multiply_the_time():
     t0 = time.perf_counter()
     r = verify(_ir("limit", {"expr": expr, "var": "x", "to": "0"}, [{"name": "x"}, {"name": "t"}]), _sol("0"))
     assert r.verdict == "UNKNOWN" and time.perf_counter() - t0 < 45
+
+
+NPV2 = [{"name": "n", "domain": "positive_integer"}]
+
+
+@pytest.mark.parametrize("ir,claim,verdict", [
+    # a factorial or binomial of the index in a sequence limit or a shifted series is defined: these
+    # were UNKNOWN after the binder conditions (review of the port)
+    (_ir("evaluate", {"expr": "Limit(2**n/factorial(n), n, oo)"}, NPV2), "0", "CORRECT"),
+    (_ir("evaluate", {"expr": "Limit(2**n/factorial(n), n, oo)"}, NPV2), "1", "INCORRECT"),
+    (_ir("evaluate", {"expr": "Limit(binomial(n, 2)/n**2, n, oo)"}, NPV2), "1/2", "CORRECT"),
+    (_ir("evaluate", {"expr": "Sum(1/factorial(k - 1), (k, 1, oo))"}, KI2), "E", "CORRECT"),
+    (_ir("evaluate", {"expr": "Sum(1/factorial(k - 1), (k, 1, oo))"}, KI2), "1", "INCORRECT"),
+    # an integral up to a declared x > 0 lies in [0, oo)
+    (_ir("evaluate", {"expr": "Integral(sqrt(t), (t, 0, x))"}, XPV + [{"name": "t"}], ["x = 4"]), "16/3", "CORRECT"),
+    (_ir("evaluate", {"expr": "Integral(log(t), (t, 1, x))"}, XPV + [{"name": "t"}], ["x = E"]), "1", "CORRECT"),
+])
+def test_defined_binders_stay_decided(ir, claim, verdict):
+    assert _verdict(ir, _sol(claim)) == verdict
+
+
+def test_the_minimal_polynomial_runs_under_a_time_limit():
+    # degree 64: it held verify() over 200 s in the calling process (review of the port)
+    import time
+    from mathverify.certify.domain import decide_membership
+    six = sp.Add(*[sp.sqrt(p) for p in (2, 3, 5, 7, 11, 13)])
+    t0 = time.perf_counter()
+    assert decide_membership(six, sp.S.Naturals0) in (False, None)
+    assert time.perf_counter() - t0 < 30
