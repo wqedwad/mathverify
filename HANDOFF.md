@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 30 Eylül 2026, sabah (UTC)**, dal `claude/sharp-lamport-f9m2w3` (`7f35e1d` + bu belge; birleşmedi, PR yok). Sohbet bağlamı dolduğu için yeni sohbete devredildi: §3 adım 1'den devam.
+> **Son güncelleme: 30 Eylül 2026, öğleden sonra (UTC)**, dal `claude/sharp-lamport-f9m2w3` (birleşmedi, PR yok). **`master`daki HANDOFF eski:** yeni sohbet bu dalı açıkça almalı (§3 adım 0). Paralel dal `claude/inspiring-franklin-l3cocz` aynı V14 işini ayrıca yaptı; temel bu dal (kullanıcı kararı).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -54,21 +54,24 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet (V14'ün kapanışı):** `git fetch origin claude/sharp-lamport-f9m2w3` ve o dalda çalış (yeni dal açma;
-   bulut oturumu başka dalda başlarsa bu dalı birleştirip kendi dalına push et). `--plan` koş (TAM beklenir: kod değişti).
-   (a) Üçüncü denetimin **eleştirmeni bitti** (`e6712f5` üzerinde, 548 sonda), 9 bulgusu **henüz ele alınmadı**; ham hâli,
-   tekrar betikleri ve beklenen değerler `denetim/2026-09-29/v14/bulgular/tur3_e6712f5.json` → `critic`. Bu turun açtıkları:
-   N1 (yüksek, yanlış onay: parametreli integral/limit gövdeli IR fonksiyonunda değerin tanımlılığı kaybolur), N2 (yüksek,
-   haksız red: değeri tam 0 olan kapalı integral göreli toleransla hiç onaylanmaz), N6 (düşük). Önceden var: N3 (yüksek,
-   LaTeX `\lim` yönsüz sağdan okunur), N8 (yüksek, `limit(a*n*tan(pi/n), n, oo)` parametreli olduğu için ayrıştırmada 0),
-   N5 (alan tek ilişki değilse yok sayılır), N4, N7, N9. Önce güncel kodda yeniden koş (bir kısmı `d38da47`–`7f35e1d`'de
-   kapanmış olabilir), sonra sonda + test + mutasyonla kapat. (b) Tam takım ve 280 + 278 farkı `7f35e1d`'de (ya da sonrasında) koşulmadı:
-   `denetim/2026-09-29/v14/fark.py dump/compare` (eski kod `35af293` ayrı worktree'de; karşılaştırma dökümü yeniden
-   üretilir); ölçüm sürerken aynı checkout'ta dosya değiştirme (ayrı `git worktree` kullan).
+0. Yeni sohbet `master`daki eski HANDOFF'u okur: 30 Eylül'de V14 bu yüzden `claude/inspiring-franklin-l3cocz`'de baştan yapıldı.
+   Kullanıcı kararı: temel bu dal; `franklin`'in eksiği elle taşınır, `git merge` edilmez (aynı dosyalar farklı yazılmış).
+1. **Yeni sohbet (V14'ün kapanışı):** `git fetch origin claude/sharp-lamport-f9m2w3` ve o dalda çalış (oturumun dalı `master`dan
+   açıldıysa `git merge --ff-only FETCH_HEAD`, push oturumun kendi dalına). `--plan` koş (TAM beklenir).
+   (0) **`franklin`'den taşı** (`git show origin/claude/inspiring-franklin-l3cocz:<yol>`; onun DECISIONS §72'si özet verir):
+   küme uç noktası düzeltmesi (`equiv/sets.unify_endpoints`, `Union`/`Intersection`/`Complement` sarmalayıcıları; §70'in
+   dördüncü alt maddesi, bu dalda yok); onun 144 V14 testini (`tests/test_v14_parser_conventions.py`) bu kodda koş, düşen her
+   test ya gerçek açıktır (düzelt) ya gelenek farkıdır (gerekçesiyle DECISIONS'a); özellikle `lcm(4, 6, 10)`, `Limit.subs`'ın
+   bağlı değişkeni değiştirmesi, `x > 0` iken yönsüz limit, DoS bulguları. Taşıma bitince `franklin`'in silinmesi kullanıcıya sorulur.
+   (a) Üçüncü denetimin eleştirmeninin 9 bulgusu açık (`denetim/2026-09-29/v14/bulgular/tur3_e6712f5.json` → `critic`,
+   DECISIONS §72 Ek): yüksek N1, N2 (bu turun), N3, N8 (önceden var); N4–N7, N9. Önce son kodda yeniden koş, sonra sonda +
+   test + mutasyonla kapat. (b) Tam takım ve 280 + 278 farkı (`denetim/2026-09-29/v14/fark.py`, eski kod `35af293` ayrı
+   worktree'de) son kodda; ölçüm sürerken aynı checkout'ta dosya değiştirme.
 2. **`--full`** son kodda, temiz ağaçta (~25–30 dk; oturum etkin tutulur, ≤10 dk beklemelerle izlenir); raporlar ve günlük
    değiştirilmeden commit + push; `--plan` TAMAM olmalı. Beklenen: sağlamlık/adversaryal kapıları 0; Lean sertifika sayısı
    değişebilir (alanlı/`Mod` gövdeli fonksiyonlar, V15). DECISIONS §72'nin "ölçülmedi" satırı sonuçla güncellenir.
-3. **PR** `master`a (kullanıcı isteyince); birleştirmeden önce kullanıcı yerelde yedek alır (§6 yöntemi), `--plan` hemen önce.
+3. **PR** `master`a (kullanıcı isteyince); birleştirmeden önce kullanıcı yerelde yedek alır (§6) ya da yedeksiz der, `--plan`
+   hemen önce. Birleşince `master`daki HANDOFF güncellenmiş olur ve yeni sohbetler doğru yerden başlar.
 4. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
    parametreli belirli integral biçim kalır; "∫₀^a x dx = 2" gibi sorular UNKNOWN olur)?
 5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
@@ -230,7 +233,8 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (30 Eylül): `claude/sharp-lamport-f9m2w3` `7f35e1d`+ (V14, birleşmedi); `master` = `wqedwad/asd#12`'nin birleşmesi (`35af293`; öncesi `c0a2caf`); `claude/inspiring-cori-xcgjld`
+- **Dallar** (30 Eylül): `claude/sharp-lamport-f9m2w3` (V14, temel, birleşmedi); `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel
+  sürümü, taşınacak parçası var, §3); `master` = `wqedwad/asd#12`'nin birleşmesi (`35af293`; öncesi `c0a2caf`); `claude/inspiring-cori-xcgjld`
   `wqedwad/asd#12` (birleşti); `claude/busy-bardeen-ckr5bw` `wqedwad/asd#11` (birleşti);
   `claude/dreamy-meitner-rvrwlj` `60d539c` (`#9`, `#10`), `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
