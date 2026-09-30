@@ -471,6 +471,6 @@ def closed_binding(rel) -> tuple[sp.Symbol, Any] | None:
         return None
     for s_, c in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
         if isinstance(s_, sp.Symbol) and isinstance(c, sp.Expr) and not c.free_symbols \
-                and not c.has(*_OPERATIONS) and c.is_real is True and c.is_finite is True:
+                and not c.has(*_OPERATIONS) and c.is_real is True:    # a real number is finite (not oo)
             return s_, c
     return None
