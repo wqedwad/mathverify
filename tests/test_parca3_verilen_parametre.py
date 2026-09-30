@@ -263,5 +263,7 @@ def test_pins():
     assert _pins(sp.Eq(a * b, 6), [sp.Eq(a, 3)]) is None                          # b not pinned
     assert _pins(sp.Eq(a * b, 6), [sp.Eq(a, 3), sp.Eq(b, 2), sp.Eq(a, 4)]) is None  # two values
     assert _pins(sp.Eq(a * b, 6), [sp.Eq(a, 3), sp.Eq(b, 2), sp.Eq(a, sp.sqrt(9))]) == {a: 3, b: 2}
-    assert _pins(sp.Eq(sp.Integral(a * x, (x, 0, 1)), 1), [sp.Eq(a, 2)]) is None  # an operation
+    # an operation whose bound variable a substitution could reach (a definite Integral, Sum or
+    # Product is substituted since part 8: tests/test_parca8_sabitlenmis_toplam.py)
+    assert _pins(sp.Eq(sp.Limit(a * x, x, 1), 2), [sp.Eq(a, 2)]) is None
     assert _pins(a * b > 6, [sp.Eq(a, 3), sp.Eq(b, 2)]) is None

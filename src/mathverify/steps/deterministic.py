@@ -26,7 +26,7 @@ from ..certify.base import Ctx, Timer, result, unknown
 from ..certify.domain import relation_holds_at, in_domain
 from ..equiv import answers_equivalent
 from ..equiv.random_point import sample_points
-from ..normalize.parse import parse_relation, UndeclaredSymbolError
+from ..normalize.parse import ParseError, parse_relation, UndeclaredSymbolError, _refuse_reversed_ranges
 from ..sandbox import run as sb_run
 
 LAYER = "steps.refute"
@@ -277,16 +277,35 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
     return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
 
 
+def _binders_keep_clear_of(claim, syms) -> bool:
+    """Does `claim` bind variables only in Sums, Products and definite Integrals, none of whose
+    bound variables is one of `syms`? Then replacing `syms` by values (xreplace) reaches their
+    limits and bodies and never a bound variable. A Limit is left out: SymPy's `Limit.subs` also
+    replaces the variable it binds; so are a Derivative, a Subs, a Lambda, an indefinite Integral
+    (its variable is free) and any other binder."""
+    if claim.has(sp.Limit, sp.Derivative, sp.Order):      # they bind without listing bound_symbols
+        return False
+    for node in sp.preorder_traversal(claim):
+        if isinstance(node, (sp.Sum, sp.Product, sp.Integral)):
+            if any(len(lim) != 3 or lim[0] in syms for lim in node.limits):
+                return False
+        elif getattr(node, "bound_symbols", None):        # Subs, Lambda, any other binder
+            return False
+    return True
+
+
 def _pins(claim, premises: list) -> dict | None:
     """The one value each free symbol of `claim` is pinned to by the premises (`a = 1`, `b = -5`),
     or None: a symbol no premise pins, or pins to two values not proved equal, or a claim with an
     operation whose bound variable a substitution could reach. A `compute` claim with the
     problem's parameters ("f(2) = 2" for f = x³ + ax² + bx) was checked as an identity in them
-    and refuted at a = b = 0, which violates the givens (V15 S1, DECISIONS §72)."""
+    and refuted at a = b = 0, which violates the givens (V15 S1, DECISIONS §72). A Sum, Product or
+    definite Integral whose bound variables are not pinned symbols is no such operation: with n = 3
+    given, "Sum(k, (k, 1, n)) = 6" was refuted at an n != 3 (part 8, 30 Sep 2026)."""
     from ..certify.base import closed_binding
     from ..equiv.numeric import exact_equal
     syms = getattr(claim, "free_symbols", None)
-    if not isinstance(claim, Eq) or not syms or claim.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs, sp.Lambda):
+    if not isinstance(claim, Eq) or not syms or not _binders_keep_clear_of(claim, syms):
         return None
     vals: dict[Any, list] = {}
     for p in premises:
@@ -1232,8 +1251,15 @@ def check_steps(ir, solution, ctx: Ctx):
                                         if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids])
                         if pins:
                             # the sides separately: Eq would evaluate itself on substitution
-                            status, pev = _check_compute(Eq(claim.lhs.xreplace(pins), claim.rhs.xreplace(pins),
-                                                            evaluate=False), ctx)
+                            pinned = Eq(claim.lhs.xreplace(pins), claim.rhs.xreplace(pins), evaluate=False)
+                            try:
+                                # a pinned limit of a Sum or Product must pass the parser's range checks
+                                # (reversed, or not an integer apart), or the claim is not read there
+                                _refuse_reversed_ranges(pinned, st.claim)
+                            except ParseError as e:
+                                status, pev = "unknown", {"reason": f"pinned_claim_not_read: {str(e)[:160]}"}
+                            else:
+                                status, pev = _check_compute(pinned, ctx)
                             ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()},
                                   "identity_refuted": ev}
                 else:
