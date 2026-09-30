@@ -7,12 +7,16 @@
     declaration to the function first (sin(pi*n) = 0), so with n a positive integer diff(sin(pi*n), n)
     was 0 and 0 was certified at n = 2 (the derivative is pi*cos(pi*n), pi there), pi refuted, and the
     step "diff(sin(pi*n), n) = 0" verified. Such an operation is no longer read (UNKNOWN); at()/Subs and
-    ranged binders give the variable a real (or assumption-free) dummy and stay readable.
+    ranged binders give the variable a real (or assumption-free) dummy and stay readable. The LaTeX
+    reading follows the same rule by name.
 (3) `equiv.sets.unify_endpoints` refuses an endpoint pair it cannot decide; no test held it (the U04
     mutant, which equates such a pair, survived the whole suite).
-Measured on the code before the change (b788caa): 85 of these 143 tests fail; the other 58 are
-controls (right families, derivatives at a point, a real variable, LaTeX) and the U04 pins, which
-hold there and fail on the mutant.
+(4) Two more guards of the §73 port no test held (the mutations P04 and L03 of
+    denetim/2026-09-30/parca5/mutasyon.py survived): a point binder's argument passed by keyword, and
+    the undirected limit at the closed end of a positive variable.
+Measured on the code before the change (b788caa): 92 of these 160 tests fail; the other 68 are
+controls (right families, derivatives at a point, a real variable) and the pins of U04, P04 and L03,
+which hold there and fail on their mutants.
 """
 from __future__ import annotations
 
@@ -293,12 +297,28 @@ def test_a_step_with_an_undecided_endpoint_pair_is_not_verified():
 
 
 # ---------------------------------------------------------------------------- (4) §73 code the mutations hold
-def test_a_point_binder_variable_passed_by_keyword_is_refused():
-    # passed by keyword, at()'s variable is no positional argument the renaming sees: with x declared
-    # positive the body kept the declared x and sqrt(x**2) at -1 was read as -1 (a mutation of the
-    # keyword refusal survived every V14 test, parca5 mutation list)
-    xp = sp.Symbol("x", positive=True)
-    ns = dict(_SAFE_NAMES, x=xp)
-    for text in ("at(sqrt(x**2), v=x, val=-1)", "at(sqrt(x**2), x, val=-1)"):
-        with pytest.raises(ParseError):
-            parse_expr_str(text, ns)
+@pytest.mark.parametrize("text", ["at(sqrt(x**2), v=x, val=-1)", "at(sqrt(x**2), x, val=-1)",
+                                  "Limit(sqrt(x**2)/x, v=x, p=-oo)", "Limit(sqrt(x**2)/x, x, p=-oo)"])
+def test_a_point_binder_argument_passed_by_keyword_is_refused(text):
+    # A keyword named like a problem variable passes the text check; the renaming sees positional
+    # arguments only, so the body kept the declared x > 0: sqrt(x**2) at -1 was -1 and the limit at -oo
+    # Limit(1, x, -oo). The mutation that drops the keyword refusal (P04) survived every V14 test.
+    ns = dict(_SAFE_NAMES, x=sp.Symbol("x", positive=True), v=sp.Symbol("v"), val=sp.Symbol("val"),
+              p=sp.Symbol("p"))
+    with pytest.raises(ParseError):
+        parse_expr_str(text, ns)
+
+
+XPR = [{"name": "x", "domain": "positive_real"}]
+
+
+@pytest.mark.parametrize("claim,verdict", [("0", "CORRECT"), ("-1", "INCORRECT")])
+def test_an_undirected_limit_at_the_closed_end_is_read_from_inside(claim, verdict):
+    # x > 0: at 0 the limit is the right-hand one (`_domain_end_limits`); two-sided, floor has none. The
+    # mutation that keeps it two-sided (L03) survived every V14 test (x*log(x) has 0 from both sides).
+    assert verify(_ev("Limit(floor(x), x, 0)", XPR, ()), _sol(claim)).verdict == verdict
+
+
+def test_an_undirected_limit_step_at_the_closed_end_is_read_from_inside():
+    r = verify(_ev("x", XPR, ("x = 2",)), _sol("2", steps=[_step(1, "compute", "Limit(floor(x), x, 0) = 0")]))
+    assert _step_statuses(r) == ["verified"] and r.verdict == "CORRECT"
