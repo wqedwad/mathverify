@@ -15,6 +15,7 @@ import ast
 import math
 import re
 import threading
+from fractions import Fraction
 from typing import Any
 
 import sympy as sp
@@ -694,19 +695,20 @@ _BOUND_OPERATIONS = frozenset({"Sum", "Product", "Integral", "integrate", "Limit
                                "Derivative", "Subs", "at"})
 
 
-def _literal_number(node, depth: int = 0):
+def _literal_number(node, depth: int = 0) -> Fraction | None:
     """The exact value of a bound written with numbers only (Integer(3), -Integer(1), 10**3, 7/2),
-    or None. Read from the code, before SymPy builds anything."""
+    or None. Read from the code, before SymPy builds anything, and in Python's own fractions: the
+    as-written reading runs with SymPy's evaluation off."""
     if depth > 30:
         return None
     if isinstance(node, ast.Constant) and type(node.value) is int:
-        return sp.Integer(node.value)
+        return Fraction(node.value)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("Integer", "Rational") \
             and not node.keywords and 1 <= len(node.args) <= 2:
         vals = [_literal_number(a, depth + 1) for a in node.args]
-        if any(v is None or not v.is_Integer for v in vals):
+        if any(v is None or v.denominator != 1 for v in vals) or (len(vals) == 2 and vals[1] == 0):
             return None
-        return sp.Rational(*vals)
+        return vals[0] if len(vals) == 1 else vals[0] / vals[1]
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
         v = _literal_number(node.operand, depth + 1)
         return None if v is None else (-v if isinstance(node.op, ast.USub) else v)
@@ -715,9 +717,9 @@ def _literal_number(node, depth: int = 0):
         if a is None or b is None:
             return None
         if isinstance(node.op, ast.Pow):
-            if not b.is_Integer or abs(b) > 64 or abs(a) > 10**6 or (a == 0 and b < 0):
+            if b.denominator != 1 or abs(b) > 64 or abs(a) > 10**6 or (a == 0 and b < 0):
                 return None
-            return a ** b
+            return a ** int(b)
         if isinstance(node.op, ast.Div):
             return None if b == 0 else a / b
         return a + b if isinstance(node.op, ast.Add) else a - b if isinstance(node.op, ast.Sub) else a * b
@@ -749,7 +751,7 @@ def _refuse_computed_bounds(code: str, raw: str) -> None:
                     continue
                 if hi - lo + 1 < 0:
                     raise ParseError(f"{raw!r} has a {node.func.id} over a reversed range: not read")
-                if not (hi - lo).is_Integer:
+                if (hi - lo).denominator != 1:
                     raise ParseError(f"{raw!r} has a {node.func.id} whose limits are not an integer apart: "
                                      "not read")
 
