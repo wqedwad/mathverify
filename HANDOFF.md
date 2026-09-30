@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 30 Eylül 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` (`wqedwad/asd#13` birleşti, yedeksiz; dal `master` `aa67b20`'den yeniden başladı, birleşmedi; N2–N7, V16–V18 kapandı, §76–§78; Karr ve F9 kaldı). Sohbetler bulutta. Sıradaki iş parça parça (§3 adım 2).
+> **Son güncelleme: 30 Eylül 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` (`wqedwad/asd#13` birleşti, yedeksiz; dal `master` `aa67b20`'den yeniden başladı, birleşmedi; N2–N7, V16–V18 kapandı, §76–§79; F9 kaldı). Sohbetler bulutta. Sıradaki iş parça parça (§3 adım 2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -8,7 +8,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§78; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§79; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2169 passed / 5 skipped** (`d68070c`, `--full` içinde)
@@ -56,8 +56,8 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 2. **Sıradaki iş, parça parça (kullanıcı, 30 Eylül: "işi parçalara böl"; dal `claude/loving-bardeen-ninmoo`, `master`dan).** N1–N9
    yeniden koşuldu (DECISIONS §75, `denetim/2026-09-30/n19/sonda_n19.py`). **Bitti** (§76; birleşik hâlde sonda 84/88, 160 test, fark 0):
    (i) N2 + N4 + N6 + N3'ün eq adımı; (ii) N5; (iii) N7 + V15 S1'in denetçi örnekleri; (vi) başka sembollü kısıt; (v-a) V17; (v-b) V16, V18
-   (§76–§78; yedi parça birleşik `a841e0d`: 678 test, sonda 85/88, fark 0). **Kalan:** V16'nın Karr maddesi (§78 A (4)); (iv) N8 + N1'in
-   kalanı + F9 (adım 3); sonra tam takım, birleştirmeden önce `--full`. `franklin`'in silinmesi kullanıcıya sorulur (§74).
+   (§76–§78); Karr ve sabitlenmiş sembollü toplam adımı (§79; birleşik 767 test, sonda 85/88, fark 0, mutasyon 188/188). **Kalan:** (iv)
+   N8 + N1'in kalanı + F9 (adım 3); tam takım, birleştirmeden önce `--full`. `franklin`'in silinmesi kullanıcıya sorulur (§74).
 3. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
    parametreli belirli integral biçim kalır; "∫₀^a x dx = 2" gibi sorular UNKNOWN olur)?
 4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
@@ -89,7 +89,7 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.2 Doğrulayıcı: bilinen sınırlar ve kapsama
 
-Doğru cevabı reddedenler: V11, V13, V15 (S1, R1). Yanlış onaylar: V1, V15, V16 (Karr). Ötekiler UNKNOWN (kapsama kaybı), kaçırılan adım (V2, V6) ya da bilinçli sınır.
+Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V16 (pinli `Limit` adımı). Yanlış onaylar: V1, V15. Ötekiler UNKNOWN (kapsama kaybı), kaçırılan adım (V2, V6) ya da bilinçli sınır.
 
 - **V1. `tyt-prob-018`:** çözüm düzeyindeki tek yanlış onay (doğru ama gerekçesiz adım; kanıtlanmış adım L6
   kritiğini ezer; aynı sınıf: C'deki 12 aritmetiği doğru `compute` adımı, §63). Karar F4 ölçümüne bağlı
@@ -127,10 +127,10 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1). Yanlış onaylar: V1, V15, V
   sabitlenenler §76'da kapandı); tam sayı bildirilmemiş üst sınırlı toplam (R1). Lean: `Mod`/`floor` gövdeli, tam sayı adlı argümanlı
   fonksiyon reddedilir (L1). (GCD-10 §73'te kapandı.)
   Mutasyon: R02 ve L07'nin eşdeğerliği kanıtlanmadı. Çok sayıda kapsama kaybı (UNKNOWN), liste §72'de.
-- **V16. Taşıma denetiminden kalanlar** (DECISIONS §73; §78'de kapandı, kalanlar): verilenin ters yaptığı sembolik aralıkta Karr değeri
-  (Σ_{k=1}^{n} k, n = −2 → 1 CORRECT; yer `domain._range_conditions`). Bilinçli: 300'den çok sabit uçlu küme (§78 A (6)); çok değişkenli
-  `Subs`. V18 kapandı (§78 C (5)). Açık öneriler (§74): sağlamlık taramasına eşit yazımlı küme ucu varyantı (kalıcı kapı);
-  `franklin`'in `karar_farki.py` yetenekleri `fark.py`'ye.
+- **V16. Taşıma denetiminden kalanlar** (DECISIONS §73; §78–§79'da kapandı). Bilinçli: 300'den çok sabit uçlu küme (§78 A (6)); çok değişkenli
+  `Subs`. Açık (önceden var, §79): pinli `Limit`'li doğru adım reddedilir; özdeşlik denetimi kararsızken pinli yeniden denetim koşmaz.
+  Karar sorusu (§79): ters aralık tanımsız nokta gibi düşer (n² = 4 → Σ_{k=1}^{n} k = 3 CORRECT). Açık öneriler (§74): sağlamlık
+  taramasına eşit yazımlı küme ucu varyantı (kalıcı kapı); `franklin`'in `karar_farki.py` yetenekleri `fark.py`'ye.
 
 ### 4.3 Kredili ölçüm
 
@@ -289,5 +289,5 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 ## 9. Nerede ne var
 
 Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
-`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §78); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §79); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
 `LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).
