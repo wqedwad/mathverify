@@ -24,7 +24,7 @@ from ..equiv.numeric import to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import definedness_conditions, written_definedness
+from .domain import definedness_conditions, written_closed_undecided, written_definedness
 
 LAYER = "certify.limits"
 
@@ -410,8 +410,14 @@ def verify(ir, solution, ctx: Ctx):
                            {"var": str(var), "to": str(point), "side": str(side)},
                            flags=["approach_outside_declared_domain"])
         side = within
-        extra = [c for c in written_definedness(p["expr"], ctx.ns)[0]
-                 if getattr(c, "free_symbols", set()) == {var}]
+        written, nowhere = written_definedness(p["expr"], ctx.ns)
+        if nowhere or written_closed_undecided(p["expr"], ctx.ns):
+            # undefined as written for every value (a sum with an undefined term), or a binder whose
+            # body is not proved to exist: lim_{x->0} x + Σ_{k=-1}^{1} k/k = 3 was certified (review
+            # of 30 Sep 2026; the value parse reads k/k as 1)
+            return unknown(LAYER, "expression_undefined_as_written", t.ms, {"expr": p["expr"]},
+                           flags=["expression_undefined_as_written"])
+        extra = [c for c in written if getattr(c, "free_symbols", set()) == {var}]
         cls = classify_limit(expr, var, point, side, timeout=ctx.timeout,
                              conds=limit_conditions(expr, var, extra))
         ev: dict[str, Any] = {"classification": {k: str(v) for k, v in cls.items()}}

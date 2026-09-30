@@ -904,6 +904,31 @@ def _states_task_object(claim, objects: list, ctx: Ctx) -> bool:
     return False
 
 
+def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
+    """Is the claim, read AS WRITTEN, undefined whatever its free symbols are (a closed condition
+    that fails, e.g. a term of a finite sum at one of its indices)? The value parse folds j/j to 1,
+    and the compute step `Sum(j/j, (j, -1, 1)) = 3` was verified (V14 tests, 30 Sep 2026). Undeclared
+    names are read as `_with_bound_dummies` reads them; a text that cannot be read that way adds
+    nothing."""
+    from ..certify.domain import closed_condition_undecided, definedness_conditions
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    try:
+        names = _check_safe(preclean(_strip_invisible(text)), ns)
+    except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
+        names = []
+    if names:
+        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+    try:
+        w = parse_as_written(text, ns)
+        if w is None:
+            return False
+        conds = definedness_conditions(w, None)
+        # a binder whose body is not proved to exist (DEFINEDNESS_UNDECIDED) is not verified either
+        return any(c is sp.false for c in conds) or closed_condition_undecided(conds)
+    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
+        return False
+
+
 def _with_bound_dummies(text: str, ns: dict[str, Any]):
     """`text` read with its undeclared names as symbols, when every one of them is a BOUND variable
     (the index of a Sum or Product, the variable of an Integral or a Limit) and none is left free.
@@ -1074,6 +1099,15 @@ def check_steps(ir, solution, ctx: Ctx):
                         chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
+            if status != "refuted" and _undefined_as_written(st.claim, step_ns):
+                # the value SymPy checked is not the value of what was written: neither verified
+                # nor a premise (principle 12). A refutation stands: the checkers refute only a
+                # value they computed, and an undefined claim is no true step either.
+                entry["status"] = "unknown"
+                entry["reason"] = "claim_undefined_as_written"
+                n_unk += 1
+                per_step.append(entry)
+                continue
             entry["status"] = status
             entry["evidence"] = ev
             per_step.append(entry)

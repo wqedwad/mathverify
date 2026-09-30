@@ -554,6 +554,12 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
+            # an upper bound below lo - 1 is SymPy's Karr convention (Σ_{k=1}^{-2} k = 1) or an empty
+            # sum (0, certified 30 Sep 2026); the curriculum has neither, and the same sum written as
+            # Sum(k, (k, 1, -2)) is not read (normalize.parse._refuse_reversed_ranges)
+            if (hi - lo + 1).is_extended_negative is True:
+                return unknown(LAYER, "reversed_bounds", t.ms, {"lo": str(lo), "hi": str(hi)},
+                               flags=["reversed_bounds"])
             # every term as written must exist: k/k parses to 1, so Σ_{k=-1}^{1} k/k was "3"
             from .domain import written_undefined_in
             if (lo.is_Integer or lo == -oo) and (hi.is_Integer or hi == oo):

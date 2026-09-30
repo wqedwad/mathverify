@@ -78,6 +78,10 @@ def solve_list(rel, var):
 
 
 def solveset_in(rel, var, domain=S.Reals):
+    # a closed relation SymPy left standing is undecided, not false: solveset returned EmptySet for
+    # it (certify.domain.DEFINEDNESS_UNDECIDED, and cos(acot(2) + acot(1/2)) != 0; 30 Sep 2026)
+    if isinstance(rel, sp.core.relational.Relational) and not rel.free_symbols:
+        return sp.ConditionSet(var, rel, domain)
     return sp.solveset(rel, var, domain)
 
 

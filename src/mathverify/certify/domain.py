@@ -7,6 +7,8 @@ conditions of the ORIGINAL expression, and (c) the original relation itself.
 """
 from __future__ import annotations
 
+import itertools
+import threading
 from typing import Any
 
 import sympy as sp
@@ -42,11 +44,267 @@ def _outer_nodes(e, var, add):
             for c in definedness_conditions(body, var):
                 if not (getattr(c, "free_symbols", set()) & bound):
                     add(c)
+            for c in _binder_conditions(n, var):
+                add(c)
             stack.extend(reversed(outer))
             continue
         yield n
         if isinstance(n, sp.Basic):
             stack.extend(reversed(n.args))
+
+
+class definedness_undecided(sp.Function):  # noqa: N801 - a marker read by closed_condition_undecided
+    """The value of a condition no check could decide: see DEFINEDNESS_UNDECIDED."""
+    nargs = 0
+
+
+# A condition that stands for "the body of a binder is not proved to exist over its range": closed and
+# left standing by SymPy, so `closed_condition_undecided` makes every caller abstain, and never
+# false, so no expression is read as undefined (defined NOWHERE) on its account.
+DEFINEDNESS_UNDECIDED = Ne(definedness_undecided(), 0)
+
+
+def is_undecided(c) -> bool:
+    return c == DEFINEDNESS_UNDECIDED
+
+
+# The index values of a Sum/Product checked one by one, and the work one top-level reading may spend
+# on binders (a solveset counts as _SOLVE_COST points): a nested finite sum is checked at every
+# (outer, inner) pair, and 150 x 150 of them held verify() 33 s, three levels over 400 s (review of
+# 30 Sep 2026). Past the budget the body is not proved to exist and the callers abstain.
+_POINTS = 200
+_BUDGET = 400
+_SOLVE_COST = 50
+_SOLVE_TIMEOUT = 4.0
+_BINDER_STATE = threading.local()
+
+
+def _spend(n: int) -> bool:
+    left = getattr(_BINDER_STATE, "left", None)
+    if left is None:
+        return True                                 # outside a reading (a direct call)
+    if left < n:
+        return False
+    _BINDER_STATE.left = left - n
+    return True
+
+
+def _evaluated(e):
+    """A bound or a point of the as-written tree, evaluated: 10**3 stays Pow(10, 3) there."""
+    with sp.evaluate(True):
+        return e.func(*[_evaluated(a) for a in e.args]) if isinstance(e, sp.Basic) and e.args else e
+
+
+def _named_conditions(body, bound, var):
+    """The written conditions of a binder's body that name one of its bound variables, read on
+    assumption-free dummies (the as-written parse keeps the declared symbol there, and k declared
+    positive made k != 0 true), with the map to the dummies."""
+    plain = {v: sp.Dummy(v.name) for v in bound}
+    with sp.evaluate(False):
+        b = body.xreplace(plain)
+    dummies = set(plain.values())
+    return [c for c in definedness_conditions(b, var) if getattr(c, "free_symbols", set()) & dummies], plain
+
+
+def _violations(c, d, region):
+    """Where in `region` the condition `c` on `d` fails, computed in the sandbox under a time limit;
+    None when that is not known exactly (solveset over a Range of a transcendental condition did not
+    return, review of 30 Sep 2026)."""
+    if not _spend(_SOLVE_COST):
+        return None
+    if isinstance(c, sp.Contains) and c.args[0] == d:
+        try:
+            inside = region.is_subset(c.args[1])
+        except Exception:  # noqa: BLE001
+            inside = None
+        return S.EmptySet if inside is True else None
+    bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
+    r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
+    if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+        return None
+    return r.value
+
+
+def _undefined_at(body, index_values: dict, var) -> bool | None:
+    """The term of a Sum/Product at concrete index values, read as written: False when one of its
+    conditions fails there (the term itself is undefined), None otherwise. Only this makes a sum
+    undefined: a condition read on the symbolic body may be merely sufficient (a real power of a
+    symbolic exponent asks base > 0, and (-1)**1 is defined), and turned into `false` it made
+    x + Σ_{k=1}^{3} (-k)**k = 0 "defined nowhere" and its empty solution set certified (review of
+    30 Sep 2026)."""
+    with sp.evaluate(False):
+        term = body.xreplace(index_values)
+    conds = definedness_conditions(term, var)
+    return False if any(c is sp.false for c in conds) else None
+
+
+def _index_region(lo, hi):
+    """The integers a Sum/Product index runs over (exact), or a superset of them when a bound is
+    symbolic and the range cannot be reversed (hi - lo + 1 >= 0 from the declarations: reversed,
+    SymPy's Karr sum runs over indices outside the superset, review of 30 Sep 2026); None otherwise."""
+    lo_i = lo.is_Integer or lo == -oo
+    hi_i = hi.is_Integer or hi == oo
+    if lo_i and hi_i:
+        start = -oo if lo == -oo else int(lo)
+        stop = oo if hi == oo else int(hi) + 1
+        if start == -oo and stop == oo:
+            return S.Integers, True
+        return sp.Range(start, stop), True
+    if (hi - lo + 1).is_nonnegative is not True:
+        return None, False
+    if lo.is_Integer:
+        return sp.Range(int(lo), oo), False
+    if hi.is_Integer:
+        return sp.Range(-oo, int(hi) + 1), False
+    return S.Integers, False
+
+
+def _range_conditions(n, var) -> list[Any]:
+    """Sum/Product: the term, as written, at every index. A finite range of at most _POINTS indices is
+    checked index by index (the term's own conditions there: a failing one makes the sum undefined,
+    those on the problem's symbols are kept, Σ_{k=1}^{3} 1/(k - x) needs x != 1, 2, 3); a longer or
+    infinite range, or a symbolic bound, by solving each condition over the index range, and a
+    violation found there makes the sum undefined only where the term itself is undefined at it.
+    Before 30 Sep 2026 these conditions were dropped (they name the index, not the problem's
+    variables) and Σ_{k=-1}^{1000} k/k = 1002, Σ_{k<=0} 2^k k/k = 2 and Σ_{k=-1}^{n} k/k with n = 3
+    were certified; the first V14 checked only finite sums of at most 200 terms."""
+    limits = n.limits
+    if any(len(lim) != 3 for lim in limits):
+        return [DEFINEDNESS_UNDECIDED]
+    idx = [lim[0] for lim in limits]
+    named, plain = _named_conditions(n.function, idx, var)
+    if not named:
+        return []
+    bounds = [(_evaluated(lim[1]), _evaluated(lim[2])) for lim in limits]
+    if all(lo.is_Integer and hi.is_Integer for lo, hi in bounds):
+        ranges = [range(int(lo), int(hi) + 1) for lo, hi in bounds]
+        count = 1
+        for r in ranges:
+            count *= len(r)
+        if count <= _POINTS:
+            if not _spend(count):
+                return [DEFINEDNESS_UNDECIDED]
+            out: list[Any] = []
+            for point in itertools.product(*ranges):
+                with sp.evaluate(False):
+                    term = n.function.xreplace({v: sp.Integer(i) for v, i in zip(idx, point)})
+                for c in definedness_conditions(term, var):
+                    if c is sp.false:
+                        return [sp.false]
+                    if c not in out:
+                        out.append(c)
+            return out
+    if len(limits) != 1:
+        return [DEFINEDNESS_UNDECIDED]
+    (lo, hi), = bounds
+    region, exact = _index_region(lo, hi)
+    if region is None:
+        return [DEFINEDNESS_UNDECIDED]
+    d = plain[idx[0]]
+    for c in named:
+        if c.free_symbols != {d}:
+            return [DEFINEDNESS_UNDECIDED]          # also names the problem's symbols or another index
+        bad = _violations(c, d, region)
+        if bad is None:
+            return [DEFINEDNESS_UNDECIDED]
+        if bad.is_empty is True:
+            continue
+        if exact and bad.is_finite_set is True:
+            points = list(itertools.islice(iter(bad), 5))
+            if points and _spend(len(points)) and any(
+                    _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var) is False for i in points):
+                return [sp.false]
+        return [DEFINEDNESS_UNDECIDED]
+    return []
+
+
+def _integral_conditions(n, var) -> list[Any]:
+    """A definite integral: the integrand, as written, exists on [a, b] up to finitely many points (an
+    improper point is the value's business). ∫_{-1}^{1} (√x)² dx = 0 was certified (30 Sep 2026)."""
+    definite = [lim for lim in n.limits if len(lim) == 3]
+    if not definite:
+        return []                                   # an antiderivative: its variable is not bounded
+    if len(n.limits) != 1:
+        named, _ = _named_conditions(n.function, [lim[0] for lim in n.limits], var)
+        return [DEFINEDNESS_UNDECIDED] if named else []
+    x, a, b = n.limits[0]
+    named, plain = _named_conditions(n.function, [x], var)
+    d = plain[x]
+    region = S.Reals
+    a, b = _evaluated(a), _evaluated(b)
+    if a.is_number and b.is_number:
+        order = certified_sign(b - a) if not (a.has(oo, -oo) or b.has(oo, -oo)) else None
+        if a.has(oo, -oo) or b.has(oo, -oo):
+            region = Interval(min(a, b), max(a, b)) if a != b else S.EmptySet
+        elif order in (-1, 0, 1):
+            region = Interval(b, a) if order == -1 else Interval(a, b)
+        else:
+            return [DEFINEDNESS_UNDECIDED] if named else []
+    for c in named:
+        bad = _violations(c, d, region)
+        if bad is None or not (bad.is_empty is True or bad.is_finite_set is True):
+            return [DEFINEDNESS_UNDECIDED]
+    return []
+
+
+def _limit_conditions(n, var) -> list[Any]:
+    """A limit: its expression, as written, exists on a punctured neighbourhood of the point on the
+    approached side(s), and near ±oo from some point on. lim_{x→-∞} (√x)²/x = 1 was certified
+    (30 Sep 2026). A condition that names the problem's symbols too is solved with them as
+    parameters: the hole of (x² - a²)/(x - a) at x = a is no violation near a."""
+    e, z, z0, direction = n.args
+    named, plain = _named_conditions(e, [z], var)
+    if not named:
+        return []
+    zd = plain[z]
+    z0 = _evaluated(z0)
+    if getattr(z, "is_integer", None) and z0 not in (oo, -oo):
+        return [DEFINEDNESS_UNDECIDED]
+    for c in named:
+        if z0 in (oo, -oo):
+            bad = _violations(c, zd, S.Integers if getattr(z, "is_integer", None) else S.Reals)
+            if bad is None:
+                return [DEFINEDNESS_UNDECIDED]
+            if bad.is_empty is not True and (bad.sup if z0 == oo else bad.inf).is_finite is not True:
+                return [DEFINEDNESS_UNDECIDED]
+            continue
+        for side in (("+", "-") if str(direction) == "+-" else (str(direction),)):
+            near = Interval.open(z0, z0 + 1) if side == "+" else Interval.open(z0 - 1, z0)
+            bad = _violations(c, zd, near)
+            if bad is None:
+                return [DEFINEDNESS_UNDECIDED]
+            if bad.is_empty is True:
+                continue
+            try:
+                gap = certified_sign(bad.inf - z0 if side == "+" else z0 - bad.sup)
+            except Exception:  # noqa: BLE001
+                gap = None
+            if gap != 1:
+                return [DEFINEDNESS_UNDECIDED]
+    return []
+
+
+def _binder_conditions(n, var) -> list[Any]:
+    """The conditions a binder's body puts on its bound variable, decided over the binder's range
+    (see _range_conditions, _integral_conditions, _limit_conditions): `false` when the body is proved
+    undefined there, DEFINEDNESS_UNDECIDED when it is not proved to exist, conditions on the
+    problem's own symbols otherwise. The whole reading shares one budget."""
+    top = getattr(_BINDER_STATE, "left", None) is None
+    if top:
+        _BINDER_STATE.left = _BUDGET
+    try:
+        if isinstance(n, (sp.Sum, sp.Product)):
+            return _range_conditions(n, var)
+        if isinstance(n, sp.Integral):
+            return _integral_conditions(n, var)
+        if isinstance(n, sp.Limit):
+            return _limit_conditions(n, var)
+        return []
+    except Exception:  # noqa: BLE001 - a check that fails proves nothing
+        return [DEFINEDNESS_UNDECIDED]
+    finally:
+        if top:
+            _BINDER_STATE.left = None
 
 
 def definedness_conditions(expr, var) -> list[Any]:

@@ -185,11 +185,18 @@ def test_arccot_verdicts(ir, sol, verdict):
     ("Sum(k/Abs(k), (k, -3, -1))", -3), ("Integral(sqrt(x**2), (x, -1, 1))", 1), ("integrate(Abs(x), (x, -1, 1))", 1),
     ("Limit(sqrt(x**2)/x, x, -oo)", -1), ("limit(sqrt(x**2)/x, x, -oo)", -1), ("Limit(Abs(x)/x, x, 0, '-')", -1),
     ("at(diff(sqrt(x**2), x), x, -1)", -1), ("at(sqrt(x**2), x, -1)", 1),
-    ("Sum(Sum(1, (k, 1, 2)), (k, -5, 5))", 22), ("Integral(x*n, (x, 0, n), (n, 0, 1))", sp.Rational(1, 8)),
+    ("Integral(x*n, (x, 0, n), (n, 0, 1))", sp.Rational(1, 8)),
 ])
 def test_a_bound_variable_has_the_facts_of_its_range(text, value):
     e = parse_expr_str(text, _ns(k=K, n=N, x=XP))
     assert sp.simplify(e.doit() - value) == 0
+
+
+def test_a_binder_inside_a_binder_of_the_same_name_is_not_read():
+    # sharp's convention (DECISIONS §72 b): SymPy flattens nested sums of one name, so the text is
+    # refused instead of shadowed (franklin reads it as 22)
+    with pytest.raises(ParseError):
+        parse_expr_str("Sum(Sum(1, (k, 1, 2)), (k, -5, 5))", _ns(k=K, n=N, x=XP))
 
 
 def test_scopes():
@@ -415,7 +422,10 @@ def test_a_binder_variable_written_otherwise_is_still_bound(text):
 
 
 @pytest.mark.parametrize("text", ["Sum(0**k, (k,) + (0, 3))", "Subs(Derivative(sqrt(x**2), x), (x,), (-1,))",
-                                  "at(x**2, 2*x, 1)"])
+                                  "at(x**2, 2*x, 1)",
+                                  # 1*k and k**1 are k again: the IR's k > 0 made 0**k zero (sharp, 30 Sep)
+                                  "Sum(0**k, (1*k, 0, 3))", "Sum(0**k, (k**1, 0, 3))",
+                                  "Product(k, [k, 1, 3] + [])"])
 def test_a_binder_variable_that_is_not_a_name_is_refused(text):
     from mathverify.steps.deterministic import _step_namespace
     with pytest.raises(ParseError):
@@ -591,9 +601,38 @@ def test_nested_bounds_parse_in_linear_time():
     for _ in range(8):
         s = f"Sum(k, (k, -1, {s}))"
     t0 = time.perf_counter()
-    parse_expr_str(s, _ns(k=K))
-    parse_as_written(s, _ns(k=K))
+    # sharp refuses a Sum whose limit is itself an operation (whether the range is reversed cannot
+    # be asked of it cheaply); the refusal, not a value, is what must come in time
+    with pytest.raises(ParseError):
+        parse_expr_str(s, _ns(k=K))
+    assert parse_as_written(s, _ns(k=K)) is None
+    with pytest.raises(ParseError):
+        parse_expr_str(r"\sum_{k=-1}^{\sum_{k=-1}^{\sum_{k=-1}^{\sum_{k=-1}^{1} k} k} k} k", _ns(k=K))
     assert time.perf_counter() - t0 < 10
+
+
+def test_a_sum_over_undefined_terms_is_not_certified():
+    # sharp before this change: "n + 2" and "2" were CORRECT (the index's k != 0 was dropped)
+    NP = [{"name": "n", "domain": "positive_integer"}]
+    assert _verdict(_ir("evaluate", {"expr": "Sum(k/k, (k, -1, n))"}, KP + NP), _sol("n + 2")) == "UNKNOWN"
+    assert _verdict(_ir("evaluate", {"expr": "Sum(k/k*2**k, (k, -oo, 0))"}, KP), _sol("2")) == "UNKNOWN"
+    # a condition that holds on the whole range decides nothing: these stay certified
+    assert _verdict(_ir("evaluate", {"expr": "Sum(1/(k*(k + 1)), (k, 1, n))"}, KP + NP), _sol("n/(n + 1)")) \
+        == "CORRECT"
+    assert _verdict(_ir("evaluate", {"expr": "Sum(1/factorial(k), (k, 0, oo))"}, KP), _sol("E")) == "CORRECT"
+
+
+def test_a_binder_variable_written_with_a_plus_is_bound_in_verdicts():
+    # sharp before this change: "0" was CORRECT and "1" INCORRECT (0**k read with the IR's k > 0)
+    ir = _ir("evaluate", {"expr": "Sum(0**k, (+k, 0, 3))"}, KP)
+    assert _verdict(ir, _sol("1")) == "CORRECT" and _verdict(ir, _sol("0")) == "INCORRECT"
+
+
+def test_a_closed_undecided_condition_is_not_an_empty_solution_set():
+    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED
+    from mathverify.sandbox.ops import solveset_in
+    for c in (DEFINEDNESS_UNDECIDED, sp.Ne(sp.cos(sp.acot(2) + sp.acot(sp.Rational(1, 2))), 0)):
+        assert isinstance(solveset_in(c, XR, sp.S.Reals), sp.ConditionSet)     # was EmptySet
 
 
 def test_set_endpoints_are_compared_pairwise_only_when_near():
@@ -606,7 +645,9 @@ def test_set_endpoints_are_compared_pairwise_only_when_near():
         parse_set_str("{" + ", ".join(f"sqrt({k})" for k in range(2, 402)) + "}", _ns())
 
 
-@pytest.mark.parametrize("text", ["Integral(sqrt(x**2), (x, 1))", "Sum(0**k, (k, 0))", "Integral(x, (x, 0, 1, 2))"])
+@pytest.mark.parametrize("text", ["Integral(sqrt(x**2), (x, 1))", "Sum(0**k, (k, 0))", "Integral(x, (x, 0, 1, 2))",
+                                  # sharp before this change: 1/2 with x > 0 (true -1/2), and 2
+                                  "Integral(sqrt(x**2), (x, -1))", "integrate(x, (x, 0, 1, 2))"])
 def test_limits_other_than_variable_lower_upper_are_refused(text):
     with pytest.raises(ParseError):
         parse_expr_str(text, _ns(k=K, x=XP))

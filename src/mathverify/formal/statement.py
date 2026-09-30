@@ -1190,8 +1190,8 @@ def _t_series_sum(obj, ns, ca, name) -> LeanStatement | None:
     hi = parse_expr_str(str(p.get("hi", "oo")), ns)
     if hi == sp.oo or lo == -sp.oo or not (lo.is_Integer and hi.is_Integer):
         return None                                   # only finite sums are exactly expressible
-    if int(hi) - int(lo) > 200:
-        return None
+    if int(hi) - int(lo) > 200 or int(hi) < int(lo) - 1:
+        return None                                   # reversed bounds: no convention (certify.series)
     term = parse_expr_str(p["term"], ns)
     claimed = parse_answer(ca["kind"], ca["payload"], ns)
     if isinstance(claimed, sp.Set) or claimed is None:
