@@ -11,7 +11,7 @@
 1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§79; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2169 passed / 5 skipped** (`d68070c`, `--full` içinde)
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2936 passed / 5 skipped** (`d0c48ad`, düz `pytest`, Lean ısınması 414 s, toplam 1015 s)
    (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade); Windows'ta `d914dbc`: 2064 passed / 106 skipped
    (+4 yalnız `.git`'siz kopyada düşen kural testi; DECISIONS §73); sıcak Lean'le ~480 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
    atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
@@ -205,7 +205,7 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V16 (pinli `Limit` adımı).
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri (`d68070c` bulut; `d914dbc` Windows) | 2169 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
+| Birim testleri (`d0c48ad` bulut, `--full` dışı; `d914dbc` Windows) | 2936 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
