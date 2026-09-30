@@ -408,14 +408,39 @@ def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, A
                 ns.setdefault(p, Symbol(p, real=True))
             for a in f.args:
                 ns.setdefault(a, Symbol(a, real=True))
+        bindings = given_bindings(ir, ns) if any(getattr(f, "domain", None) for f in ir.functions) else {}
         for f in ir.functions:
-            ns[f.name] = _make_function(f, ns)
+            ns[f.name] = _make_function(f, ns, bindings)
     if extra:
         ns.update(extra)
     return ns
 
 
-def _make_function(fdef, ns):
+def given_bindings(ir, ns: dict[str, Any]) -> dict:
+    """Symbols a given fixes to one real number (`a = 0`), read in the value namespace: a given that
+    computes its value (`a = integrate(...)`) or calls a problem function binds nothing, and a symbol
+    two givens bind to different values is left free."""
+    fnames = [f.name for f in ir.functions]
+    vns = claim_namespace(ns, fnames)
+    found: dict = {}
+    clash: set = set()
+    for g in ir.givens:
+        try:
+            check_claim_is_value(g, fnames)
+            rel = parse_relation(g, vns)
+        except Exception:  # noqa: BLE001 - not a plain binding
+            continue
+        if not isinstance(rel, Eq):
+            continue
+        for s_, v in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+            if isinstance(s_, Symbol) and isinstance(v, sp.Expr) and not v.free_symbols and v.is_real is True:
+                if s_ in found and found[s_] != v:
+                    clash.add(s_)
+                found.setdefault(s_, v)
+    return {s_: v for s_, v in found.items() if s_ not in clash}
+
+
+def _make_function(fdef, ns, bindings: dict | None = None):
     # A formal argument is the function's own real variable. Taken from the namespace, it carried
     # the domain of a problem variable with the same name: with x declared positive the body
     # sqrt(x**2) + x was folded to 2*x, so f(-1) was -2 and the sum of f(k) over -2..2 was 0 (it is
@@ -437,16 +462,22 @@ def _make_function(fdef, ns):
     _f.argsyms = argsyms      # type: ignore[attr-defined]
     _f.fdef = fdef            # type: ignore[attr-defined]
     _f.body_ns = body_ns      # type: ignore[attr-defined]
-    # the declared domain (`"x > 0"`), a condition on the formal arguments; None when there is none
-    # or it cannot be read (then it is not applied, as before)
+    # the declared domain (`"x > 0"`), a condition on the formal arguments; None when there is none.
+    # A domain that cannot be read raises (the problem is not verified): it was dropped silently
+    # unless it was one relation, and "(0, oo)", "x in (0, oo)", "x > 0 and x < 3" or "[0, oo)"
+    # certified {-2, 2} for f(x) = 5 with f = x**2 + 1 (third audit of 30 Sep 2026, N5). A symbol
+    # a given fixes (`x > a` with a = 0) is read with its value; one no given fixes is listed in
+    # `domain_unbound` and the verifier abstains (the domain would be read for every a).
     _f.domain_rel = None      # type: ignore[attr-defined]
+    _f.domain_unbound = ()    # type: ignore[attr-defined]
     if isinstance(getattr(fdef, "domain", None), str) and fdef.domain.strip():
-        try:
-            rel = parse_relation(fdef.domain, body_ns)
-            if isinstance(rel, (sp.core.relational.Relational, sp.And)):
-                _f.domain_rel = rel
-        except Exception:  # noqa: BLE001 - an unreadable domain is not applied
-            pass
+        rel = read_domain_condition(fdef.domain, argsyms, body_ns)
+        if rel is not None:
+            rel = _conjunction(rel.xreplace({s_: v for s_, v in (bindings or {}).items()
+                                             if s_.name not in fdef.args}), fdef.domain)
+        _f.domain_rel = rel
+        if rel is not None:
+            _f.domain_unbound = tuple(sorted(s_.name for s_ in rel.free_symbols if s_.name not in fdef.args))
     return _f
 
 
@@ -1584,6 +1615,13 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     rels = []
     for k in range(1, len(parts)):
         op = parts[k][0]
+        # An order between things that are not expressions is no relation: "x > 0, x < 3" read as
+        # x > (0, x) and (0, x) < 3, which SymPy cannot evaluate. Built unevaluated it passed as a
+        # relation, and every sandbox worker it was sent to died unpickling it (TypeError; third
+        # audit of 30 Sep 2026, N5).
+        if op in ("<", "<=", ">", ">=") and not (isinstance(exprs[k - 1], sp.Expr) and isinstance(exprs[k], sp.Expr)):
+            raise ParseError(f"{s!r}: an order between non-expressions ({parts[k - 1][1].strip()!r} "
+                             f"{op} {parts[k][1].strip()!r}) is not read")
         # evaluate=False everywhere: a relation on an assumption-carrying symbol (x positive)
         # would otherwise collapse to True/False and silently disappear as a constraint
         rels.append(_REL_CLASS[op](exprs[k - 1], exprs[k], evaluate=False))
@@ -1711,6 +1749,95 @@ def parse_domain(spec: str | None, var, ns: dict[str, Any] | None = None) -> sp.
             dom = Intersection(dom, sp.solveset(rel, var, S.Reals))
         return dom
     return parse_set_str(s, ns)
+
+
+_DOMAIN_JOIN_RE = re.compile(r"\s*(?:,|&|∧)\s*|\s+and\s+")
+_DOMAIN_MEMBER_RE = re.compile(r"^([A-Za-z_]\w*)\s+in\s+(.+)$", re.S)
+_RELATION_OP_RE = re.compile(r"[<>=]")
+
+
+def _conjunction(rel, spec: str):
+    """`rel` as a declared domain: a relation whose two sides are expressions, or an And of them;
+    None for True (no restriction). Anything else raises ParseError: a relation with a tuple side
+    (`x > (0, x)`, how "x > 0, x < 3" read) crashed the sandbox workers that unpickled it."""
+    if rel is sp.true:
+        return None
+    parts = rel.args if isinstance(rel, And) else (rel,)
+    for r in parts:
+        if not (isinstance(r, sp.core.relational.Relational) and isinstance(r.lhs, sp.Expr)
+                and isinstance(r.rhs, sp.Expr)):
+            raise ParseError(f"domain {spec!r} is not read as relations between expressions ({r})")
+    return rel
+
+
+def _interval_conditions(st, v, spec: str) -> list:
+    """A set of reals written as a domain (`(0, oo)`, `[0, 3)`) as relations on `v`."""
+    if st == S.Reals:
+        return []
+    if not isinstance(st, Interval):
+        raise ParseError(f"domain {spec!r} is not an interval of reals")
+    out = []
+    if st.start != -oo:
+        out.append((Gt if st.left_open else Ge)(v, st.start, evaluate=False))
+    if st.end != oo:
+        out.append((Lt if st.right_open else Le)(v, st.end, evaluate=False))
+    return out
+
+
+def read_domain_condition(spec: str, argsyms: list, ns: dict[str, Any]):
+    """An IR function's declared domain as a condition on its formal arguments `argsyms`: a
+    relation, or an And of relations, each side an expression; None when it restricts nothing.
+    Read: relations (`x > 0`, `0 < x < 3`), several joined by `,`, `&`, `∧` or `and`, and, for a
+    function of one argument, an interval of reals (`(0, oo)`, `x in [0, oo)`). Each relation must
+    name an argument. Anything else raises ParseError; the caller does not drop it."""
+    if is_latex(spec):
+        pieces, latex = [spec], True
+    else:
+        pieces, latex = _split_domain(preclean(strip_presentation(_strip_invisible(spec)))), False
+    conds: list = []
+    for p in pieces:
+        if not p:
+            raise ParseError(f"domain {spec!r} has an empty part")
+        m = None if latex else _DOMAIN_MEMBER_RE.match(p)
+        if m is not None or (not latex and not _RELATION_OP_RE.search(p)):
+            name, set_txt = (m.group(1), m.group(2)) if m is not None else (None, p)
+            if name is None and len(argsyms) != 1:
+                raise ParseError(f"domain {spec!r}: a set names no argument of a function of several")
+            v = argsyms[0] if name is None else next((a for a in argsyms if a.name == name), None)
+            if v is None:
+                raise ParseError(f"domain {spec!r}: {name} is not an argument")
+            found = _interval_conditions(parse_set_str(set_txt, ns), v, spec)
+        else:
+            rel = _conjunction(parse_relation(p, ns), spec)
+            found = [] if rel is None else list(rel.args if isinstance(rel, And) else (rel,))
+        for c in found:
+            if not c.free_symbols & set(argsyms):
+                raise ParseError(f"domain {spec!r}: {c} is not a condition on the arguments")
+            if c not in conds:
+                conds.append(c)
+    if not conds:
+        return None
+    return _conjunction(conds[0] if len(conds) == 1 else And(*conds), spec)
+
+
+def _split_domain(s: str) -> list[str]:
+    """The top-level parts of a domain joined by `,`, `&`, `∧` or `and` (not inside brackets)."""
+    parts, depth, cur, i = [], 0, "", 0
+    while i < len(s):
+        c = s[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        m = _DOMAIN_JOIN_RE.match(s, i) if depth == 0 else None
+        if m is not None and m.end() > i:
+            parts.append(cur.strip())
+            cur, i = "", m.end()
+            continue
+        cur += c
+        i += 1
+    parts.append(cur.strip())
+    return parts
 
 
 # ----------------------------------------------------------------------------

@@ -550,6 +550,22 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
                               flags=["given_not_applied"]))
         return layers, clean_flags
 
+    # A function's declared domain that names a symbol no given fixes (f on x > a) is a condition
+    # on that symbol too: the certificates read it on the variable alone and dropped it, so {-2, 2}
+    # was certified for f(x) = 5 with f = x**2 + 1 on x > a (third audit of 30 Sep 2026, N5).
+    unbound = [f"{f.name}: {', '.join(getattr(ctx.ns.get(f.name), 'domain_unbound', ()))}"
+               for f in problem_ir.functions if getattr(ctx.ns.get(f.name), "domain_unbound", ())]
+    if unbound:
+        layers.append(unknown("intake.domain", f"function_domain_not_applied: {unbound[:3]}",
+                              flags=["function_domain_not_applied"]))
+        return layers, clean_flags
+    # the same for a declared constraint that does not read as relations (`(0, oo)`, `x in (0, oo)`)
+    unreadable = ctx.unreadable_constraints()
+    if unreadable:
+        layers.append(unknown("intake.domain", f"constraint_unreadable: {unreadable[:3]}",
+                              flags=["constraint_unreadable"]))
+        return layers, clean_flags
+
     # The problem's own expression is undefined as written at a point with nothing left to choose
     # (`f(-1)` for f(x) = log(x) − log(x) + x). SymPy simplified it to a value, and that value was
     # certified. There is no answer to check against.

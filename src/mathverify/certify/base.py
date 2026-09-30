@@ -11,7 +11,7 @@ from sympy import S
 from ..ir import ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
-                               claim_namespace)
+                               claim_namespace, given_bindings)
 from ..solution import Solution
 from ..types import LayerResult
 
@@ -63,10 +63,16 @@ class Ctx:
             for c in vd.constraints:
                 try:
                     rel = parse_relation(c, self.ns)
-                    if rel.free_symbols == {var}:
-                        dom = sp.Intersection(dom, sp.solveset(rel, var, S.Reals))
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 - the verifier abstains on it (unreadable_constraints)
+                    continue
+                # a chain (0 < x < 3) is an And, which solveset does not read: each relation alone
+                for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
+                    try:
+                        r = self._with_bound_values(r, var)
+                        if r.free_symbols == {var}:
+                            dom = sp.Intersection(dom, sp.solveset(r, var, S.Reals))
+                    except Exception:
+                        pass
         # A given inequality on this variable alone restricts it like a declared constraint when
         # the task carries its own relation in params: "x² < 4" with the given "x > 0" is (0, 2),
         # but only the parameter was solved and (−2, 2) was certified (audit of 25 Sep 2026). When
@@ -80,7 +86,11 @@ class Ctx:
         if var in nowhere:
             dom = S.EmptySet
         for c in conds:
-            if c.free_symbols != {var}:
+            c = self._with_bound_values(c, var)
+            if c is sp.false:
+                dom = S.EmptySet
+                continue
+            if getattr(c, "free_symbols", None) != {var}:
                 continue                               # several variables: var_constraints only
             if isinstance(c, sp.Contains):
                 # a gcd/lcm argument must be rational (certify.domain); solveset cannot read the
@@ -96,6 +106,37 @@ class Ctx:
                 dom = sp.Intersection(dom, sol)
         self.cache[key] = dom
         return dom
+
+    def _with_bound_values(self, c, var: sp.Symbol):
+        """A condition on `var` and other symbols, with each symbol a given fixes (`a = 0`) read as
+        its value. A condition on two variables was dropped from the domain: log(x - a) with the
+        given a = 0 is defined on x > 0, yet {-2, 2} was certified for x**2 + 1 + 0*log(x - a) = 5,
+        and a constraint x > a the same (third audit of 30 Sep 2026, N5)."""
+        free = getattr(c, "free_symbols", set())
+        if var not in free or free == {var}:
+            return c
+        if "bindings" not in self.cache:
+            self.cache["bindings"] = given_bindings(self.ir, self.ns)
+        bind = self.cache["bindings"]
+        return c.xreplace({s_: bind[s_] for s_ in free if s_ != var and s_ in bind})
+
+    def unreadable_constraints(self) -> list[str]:
+        """Declared constraints (`vars[].constraints`) that do not read as relations between
+        expressions. The domain dropped them silently: `(0, oo)` (a tuple) certified {-2, 2} for
+        x**2 + 1 = 5, and `x > 0 and x < 3`, `x in (0, oo)` or `[0, oo)` refuted the right {2}
+        (third audit of 30 Sep 2026, N5). The verifier abstains on them."""
+        out = []
+        for v in self.ir.vars:
+            for c in v.constraints:
+                try:
+                    rel = parse_relation(c, self.ns)
+                    ok = all(isinstance(r, sp.core.relational.Relational) and isinstance(r.lhs, sp.Expr)
+                             and isinstance(r.rhs, sp.Expr) for r in (rel.args if isinstance(rel, sp.And) else (rel,)))
+                except Exception:  # noqa: BLE001
+                    ok = False
+                if not ok:
+                    out.append(c)
+        return out
 
     # Params that hold the problem's own expression, per task kind. `limit` is absent on purpose,
     # and its givens are skipped too: the point a limit approaches is typically exactly where the

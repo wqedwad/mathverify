@@ -210,6 +210,12 @@ def _worker_main(conn, mem_mb: int) -> None:
             msg = conn.recv()
         except (EOFError, OSError):
             break
+        except Exception as e:  # noqa: BLE001 - the message was read whole; only rebuilding it failed
+            # A request whose objects cannot be rebuilt is that request's error, not the worker's
+            # end: an unevaluated x > (0, x) raised TypeError here and killed the worker for every
+            # call that carried it (third audit of 30 Sep 2026, N5).
+            conn.send(("err", type(e).__name__, f"request not readable: {e}", traceback.format_exc(), 0.0))
+            continue
         if msg is None:
             break
         fn_path, args, kwargs, seed = msg
