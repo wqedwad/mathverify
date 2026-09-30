@@ -459,7 +459,12 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
     return unknown(LAYER, "symbolic_unavailable" if okS else "undecided", 0, ev)
 
 
-def _filter_solutions(sols: list[dict], ctx: Ctx) -> list[dict]:
+def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None) -> list[dict]:
+    """The solutions inside every domain and constraint. One whose membership in a number set no
+    check decides (the written condition of a gcd/lcm argument, rational, or of a factorial argument,
+    natural, at x = pi + E) is neither kept nor dropped: it goes to `undecided`. The value
+    x + gcd(x, 2) - gcd(2, x) at pi + E was certified (V16, 30 Sep 2026)."""
+    from .domain import decide_membership
     out = []
     cons = ctx.var_constraints()
     for s_ in sols:
@@ -482,6 +487,13 @@ def _filter_solutions(sols: list[dict], ctx: Ctx) -> list[dict]:
                     if h is sp.false:
                         ok = False
                         break
+                    if isinstance(h, sp.Contains) and not h.free_symbols:
+                        m = decide_membership(*h.args)
+                        if m is False or (m is None and undecided is not None):
+                            if m is None:
+                                undecided.append(s_)
+                            ok = False
+                            break
                     if isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
                         hv = relation_holds_at(h, sp.Symbol("_dummy"), 0)
                         if hv is False:
@@ -539,8 +551,12 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         sols = [s_ for s_ in sols if isinstance(s_, dict)]
         ev["raw_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in sols]
         # keep solutions satisfying inequalities/constraints/domains
-        good = []
-        for s_ in _filter_solutions(sols, ctx):
+        good, undecided = [], []
+        admissible = _filter_solutions(sols, ctx, undecided)
+        if undecided:
+            ev["membership_undecided"] = [{str(k): str(v) for k, v in s_.items()} for s_ in undecided]
+            return unknown(LAYER, "solution_membership_undecided", 0, ev)
+        for s_ in admissible:
             okall = True
             for iq in ineqs:
                 h = iq.subs(s_)
@@ -595,6 +611,15 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
         return None, f"claim_not_readable_as_written: {type(e).__name__}"
     if nowhere & set(dom):
         return True, "claim_defined_nowhere"
+    # a problem symbol the claim names only as written (x + log(y) - log(y) folds to x): the problem's
+    # expression, which does not name it, is defined for all its values. Left out of `dom`, the
+    # claim's condition on it was skipped, and x + log(y) - log(y), x + sqrt(y) - sqrt(y),
+    # x + y! - y! and x + gcd(y, 2) - gcd(2, y) were certified simplifications of x (V16, 30 Sep 2026)
+    dom = dict(dom)
+    for c in conds:
+        for s_ in sorted(c.free_symbols - set(dom), key=lambda q: q.name):
+            if ctx.ns.get(s_.name) == s_:
+                dom[s_] = ctx.domain_for(s_)
     for c in conds:
         fs = c.free_symbols & set(dom)
         if not fs:

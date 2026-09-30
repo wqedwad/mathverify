@@ -1015,6 +1015,66 @@ def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
         return False
 
 
+def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: Ctx) -> bool:
+    """Is the claim, read AS WRITTEN, not proved defined at a point the premises allow, when they
+    allow finitely many (a premise pins a symbol, `x = 0`, or the premises on one symbol have a finite
+    solution set, x**2 = 4)? `_undefined_as_written` looks at closed conditions only, and the value
+    parse folds the rest away: the eq step "x/x = 1" was verified under x = 0, "sqrt(x - 3)**2 = x - 3"
+    under x = 2, "x + gcd(x, 2) - gcd(2, x) = pi + E" under x = pi + E and "sqrt(x)**2 = x" under
+    x**2 = 4 (V16, 30 Sep 2026)."""
+    from ..certify.base import closed_binding
+    from ..certify.domain import decide_membership, definedness_conditions
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    try:
+        names = _check_safe(preclean(_strip_invisible(text)), ns)
+    except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
+        names = []
+    if names:
+        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+    try:
+        w = parse_as_written(text, ns)
+        conds = [c for c in definedness_conditions(w, None) if getattr(c, "free_symbols", None)] if w is not None else []
+    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
+        return False
+    if not conds:
+        return False
+    syms = set().union(*(c.free_symbols for c in conds))
+    pins: dict = {}
+    for p in premises:
+        b = closed_binding(p)
+        if b is not None and b[0] in syms:
+            pins.setdefault(b[0], b[1])
+    points: list[dict] = []
+    if set(pins) == syms:
+        points = [pins]
+    elif len(syms) == 1:
+        (v,) = syms
+        own = [p for p in premises if isinstance(p, sp.core.relational.Relational) and p.free_symbols == {v}]
+        if not own or ctx.ns.get(v.name) != v:
+            return False
+        region = ctx.domain_for(v)
+        for p in own:
+            r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
+            if not r.ok or r.value.has(sp.ConditionSet):
+                return False
+            region = sp.Intersection(region, r.value)
+        if not isinstance(region, sp.FiniteSet) or len(region) > 12:
+            return False
+        points = [{v: q} for q in region]
+    for point in points:
+        for c in conds:
+            if isinstance(c, sp.Contains):
+                try:
+                    held = decide_membership(c.args[0].xreplace(point), c.args[1])
+                except Exception:  # noqa: BLE001
+                    held = None
+            else:
+                held = _decide(c, point, ctx)
+            if held is not True:
+                return True
+    return False
+
+
 def _with_bound_dummies(text: str, ns: dict[str, Any]):
     """`text` read with its undeclared names as symbols, when every one of them is a BOUND variable
     (the index of a Sum or Product, the variable of an Integral or a Limit) and none is left free.
@@ -1198,12 +1258,19 @@ def check_steps(ir, solution, ctx: Ctx):
                         chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
-            if status != "refuted" and _undefined_as_written(st.claim, step_ns):
+            why = None
+            if status != "refuted":
+                if _undefined_as_written(st.claim, step_ns):
+                    why = "claim_undefined_as_written"
+                elif _undefined_at_premises(st.claim, step_ns, list(givens) + [
+                        parsed[k] for k in parsed if parsed_cases.get(k, frozenset()) <= my_case_ids] + my_cases, ctx):
+                    why = "claim_undefined_at_the_premises_point"
+            if why is not None:
                 # the value SymPy checked is not the value of what was written: neither verified
                 # nor a premise (principle 12). A refutation stands: the checkers refute only a
                 # value they computed, and an undefined claim is no true step either.
                 entry["status"] = "unknown"
-                entry["reason"] = "claim_undefined_as_written"
+                entry["reason"] = why
                 n_unk += 1
                 per_step.append(entry)
                 continue

@@ -41,8 +41,18 @@ def _outer_nodes(e, var, add):
             else:
                 body, bound = n.function, {lim[0] for lim in n.limits}
                 outer = [x for lim in n.limits for x in lim[1:]]
-            for c in definedness_conditions(body, var):
-                if not (getattr(c, "free_symbols", set()) & bound):
+            # the body is read on assumption-free symbols for its bound variables: the as-written parse
+            # keeps the declared symbol there, and with x declared positive sqrt(-x) in
+            # ∫_{-1}^{0} sqrt(-x) dx gave the closed condition `false` (-x >= 0), the expression
+            # read as defined nowhere and the empty solution set of y + ∫… = 2/3 certified (V16,
+            # 30 Sep 2026). Conditions on the bound variables are decided by _binder_conditions.
+            # (Symbols, not Dummies: an inner binder of the body keeps one cache key across readings.)
+            plain = {v: sp.Symbol(v.name) for v in bound if isinstance(v, sp.Symbol)}
+            with sp.evaluate(False):
+                body = body.xreplace(plain)
+            hidden = bound | set(plain.values())
+            for c in definedness_conditions(body, plain.get(var, var)):
+                if not (getattr(c, "free_symbols", set()) & hidden):
                     add(c)
             for c in _binder_conditions(n, var):
                 add(c)
@@ -264,6 +274,31 @@ def _declared_span(v):
     return None
 
 
+def _reachable(a, b):
+    """The points [a, b] can cover when a bound is symbolic: the hull of the values the bounds may
+    take, open at 0 when only a strict sign reaches it (x > 0 never makes 0 a bound); R when a
+    bound has no declared sign."""
+    parts = []
+    for v in (a, b):
+        if v.is_number:
+            if not (v.is_real or v in (oo, -oo)):
+                return S.Reals
+            parts.append(sp.FiniteSet(v) if v not in (oo, -oo) else S.EmptySet)
+        elif v.is_positive:
+            parts.append(Interval.open(0, oo))
+        elif v.is_nonnegative:
+            parts.append(Interval(0, oo))
+        elif v.is_negative:
+            parts.append(Interval.open(-oo, 0))
+        elif v.is_nonpositive:
+            parts.append(Interval(-oo, 0))
+        else:
+            return S.Reals
+    u = sp.Union(*parts)
+    lo, hi = u.inf, u.sup
+    return Interval(lo, hi, left_open=u.contains(lo) is not sp.true, right_open=u.contains(hi) is not sp.true)
+
+
 def _integral_conditions(n, var) -> list[Any]:
     """A definite integral: the integrand, as written, exists on [a, b] up to finitely many points (an
     improper point is the value's business). ∫_{-1}^{1} (√x)² dx = 0 was certified (30 Sep 2026)."""
@@ -293,10 +328,20 @@ def _integral_conditions(n, var) -> list[Any]:
             region = Interval(b, a) if order == -1 else Interval(a, b)
         else:
             return [DEFINEDNESS_UNDECIDED] if named else []
+    symbolic = not (a.is_number and b.is_number)
     for c in named:
         bad = _violations(c, d, region)
         if bad is None or not (bad.is_empty is True or bad.is_finite_set is True):
             return [DEFINEDNESS_UNDECIDED]
+        if symbolic and bad.is_empty is not True:
+            # an improper point is the value's business only when a value is computed: with a
+            # symbolic bound the value is SymPy's parametric integral, and a derivative of it is
+            # taken by the fundamental theorem without it. diff(∫_1^x dt/t, x) = -1 had {-1}
+            # certified (∫_1^{-1} dt/t does not exist), and diff(∫_0^x dt/t, x) = 1 with x > 0 had
+            # {1} (V16, 30 Sep 2026). A point the bounds may reach leaves the integral undecided.
+            reach = _reachable(a, b)
+            if any(reach.contains(p) is not sp.false for p in bad):
+                return [DEFINEDNESS_UNDECIDED]
     return []
 
 
@@ -807,6 +852,21 @@ def in_domain(dom: sp.Set, c) -> bool | None:
         return None
 
 
+def membership_undecided(dom: sp.Set, c) -> bool:
+    """Does the membership of the constant `c` in `dom` rest on a number-set membership no check
+    decides: a gcd/lcm argument rational, a factorial argument natural (Ctx.domain_for cuts the domain
+    by them), at pi + E? `in_domain` then says None, which the callers read as inside, and the value
+    x + gcd(x, 2) - gcd(2, x) at x = pi + E was certified, and so was the root pi + E of
+    (x - pi - E)(x - 1/2) = gcd(x, 2) - gcd(2, x) (V16, 30 Sep 2026)."""
+    try:
+        r = dom.contains(c)
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(r, sp.Basic) or r is sp.true or r is sp.false:
+        return False
+    return any(decide_membership(*m.args) is None for m in r.atoms(sp.Contains))
+
+
 def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, list[tuple[Any, str]]]:
     """Return (kept, rejected[(candidate, reason)]) for candidate roots of `rel`."""
     conds = definedness_conditions(rel, var)
@@ -819,6 +879,9 @@ def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, l
         d = in_domain(domain, c)
         if d is False:
             rejected.append((c, "outside_domain_of_discourse"))
+            continue
+        if d is None and membership_undecided(domain, c):
+            rejected.append((c, "definedness_undecided: membership in the domain"))
             continue
         bad = None
         for cond in conds:

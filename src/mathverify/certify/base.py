@@ -204,6 +204,15 @@ class Ctx:
     _WRITTEN_PARAMS = {"evaluate": ("expr",), "simplify_expression": ("expr",), "domain_of": ("expr",),
                        "solve_equation": ("equation",), "solve_inequality": ("inequality",),
                        "count_roots": ("expr",)}
+    # The expression of a kind whose certificates read only its OPEN written conditions: one defined
+    # nowhere as written (a closed condition that fails) or with a binder not proved to exist over its
+    # range was differentiated, integrated and simplified as if it existed: the derivative 1 of
+    # x + Σ_{k=-1}^{1} k/k, the antiderivative x of 1 + 0·Σ_{k=-1}^{1} k/k and x as the simplification
+    # of x + sqrt(-y) - sqrt(-y) with y > 0 were certified (V16, 30 Sep 2026). Such an expression makes
+    # the problem undefined as written (`written_undefined`). An equation or a domain defined nowhere
+    # has an answer (no solution, the empty set) and is not listed.
+    _NOWHERE_PARAMS = {"derivative": "f", "tangent_line": "f", "antiderivative": "integrand",
+                       "definite_integral": "integrand", "simplify_expression": "expr", "evaluate": "expr"}
 
     # the task's own relation or expression, in params: a given next to it is a side condition.
     # count_roots and domain_of read no given at all before, so `x > 0` next to x² − 4 left the count
@@ -300,6 +309,9 @@ class Ctx:
         nowhere |= nw
         conds += [c for c in cs if c not in conds]
         undefined += calls
+        fsrc = params.get(self._NOWHERE_PARAMS.get(kind, ""))
+        if isinstance(fsrc, str) and fsrc not in undefined and self._undefined_function(fsrc, kind):
+            undefined.append(fsrc)
         self.cache[key] = (conds, nowhere)
         self.cache["written_undefined"] = undefined
         return conds, nowhere
@@ -333,6 +345,25 @@ class Ctx:
         # expression with a variable (x + tan(...) - tan(...) = 1) the condition was dropped too.
         from .domain import closed_condition_undecided
         return closed_condition_undecided(conds)
+
+    def _undefined_function(self, src: str, kind: str) -> bool:
+        """Is the expression of the task (`_NOWHERE_PARAMS`), read as written, defined nowhere or
+        undecided through a closed condition? The variable of a definite integral is read as a plain
+        real symbol: it runs over [a, b], not over its declared domain (certify.calculus)."""
+        from ..normalize.parse import parse_as_written
+        from .domain import closed_condition_undecided, definedness_conditions
+        ns = self.ns
+        v = (self.ir.task.params or {}).get("var", "x")
+        if kind == "definite_integral" and isinstance(v, str) and isinstance(ns.get(v), sp.Symbol):
+            ns = dict(ns, **{v: sp.Symbol(v, real=True)})
+        e = parse_as_written(src, ns)
+        if e is None:
+            return False
+        try:
+            conds = definedness_conditions(e, None)
+            return any(c is sp.false for c in conds) or self._undefined_term(e) or closed_condition_undecided(conds)
+        except Exception:  # noqa: BLE001 - a failed probe adds no fact
+            return False
 
     @staticmethod
     def _undefined_term(e) -> bool:
