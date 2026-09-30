@@ -615,3 +615,68 @@ def test_an_interval_or_point_outside_the_declared_domain_is_not_certified(kind,
     assert _run(_ir(kind, params, XP), claim).verdict != "CORRECT"
     ok = dict(params, interval="[0, 2]") if kind == "extremum" else dict(params, at="1")
     assert _run(_ir(kind, ok, XP), "-2" if kind == "extremum" else "2").verdict == "CORRECT"
+
+
+# --- the third audit: closed forms inside the problem's relations ------------------------------------
+
+XT = XR + [{"name": "t", "domain": "real"}]
+
+
+@pytest.mark.parametrize("kind,rel,vars_,wrong,right", [
+    ("solve_inequality", "3*x - 2 > integrate(2/t, (t, 1, E))", XT, "EmptySet", "Interval.open(4/3, oo)"),
+    ("solve_equation", "2*x - 1 = integrate(1/t, (t, 1, E))", XT, "EmptySet", "{1}"),
+    ("solve_inequality", "x**2 < limit((t**2 - 9)/(t - 3), t, 3) + 3", XT, "EmptySet", "Interval.open(-3, 3)"),
+    ("solve_inequality", "x > Integral(1/t, (t, 1, E))", XT, "EmptySet", "Interval.open(1, oo)"),
+    ("solve_equation", "x**2 - 3*x = limit(sin(x)/x, x, 0) - 1", XR, "{3}", "{0, 3}"),
+    ("solve_equation", "x**3 = integrate(1/x, (x, 1, E)) - 1", XR, "EmptySet", "{0}"),
+])
+def test_a_bound_variables_conditions_are_not_the_problems(kind, rel, vars_, wrong, right):
+    """Read as written, t != 0 of 1/t inside the integral became a condition of the problem: the
+    solution set collapsed to EmptySet, which was certified; with the bound x the root 0 was dropped."""
+    shape = "interval" if kind == "solve_inequality" else "set"
+    key = "inequality" if kind == "solve_inequality" else "equation"
+    ir = _ir(kind, {key: rel, "var": "x"}, vars_, shape=shape)
+    assert _run(ir, wrong, kind=shape).verdict == "INCORRECT"
+    assert _run(ir, right, kind=shape).verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("kind,params,vars_,givens,claim", [
+    ("evaluate", {"expr": "a*integrate(Abs(cos(x)), (x, -1, 1)) + 1"}, XR + [{"name": "a", "domain": "real"}],
+     ["a = 2"], "1"),
+    ("evaluate", {"expr": "a + limit(n*tan(pi/n), n, oo)"}, NN + [{"name": "a", "domain": "real"}], ["a = 1"], "1"),
+    ("extremum", {"f": "x*integrate(Abs(cos(t)), (t, -1, 1))", "var": "x", "interval": "[0, 1]", "which": "max"},
+     XT, [], "0"),
+    ("evaluate", {"expr": "limit(Integral(Abs(cos(x))/y, (x, -1, 1))*y, y, 1)"}, XR + [{"name": "y", "domain": "real"}],
+     [], "0"),
+])
+def test_a_closed_form_reaches_a_certificate_only_with_a_confirmed_value(kind, params, vars_, givens, claim):
+    """SymPy's unconfirmed value (|cos x| on [-1, 1] integrates to 0; lim n*tan(pi/n) = 0 for an integer
+    n) was taken by simplify, solve_system and the extremum certificate, and 0 or 1 was certified."""
+    assert _run(_ir(kind, params, vars_, givens=givens), claim).verdict != "CORRECT"
+
+
+@pytest.mark.parametrize("kind,params,claim", [
+    ("evaluate", {"expr": "1/limit(sin(2*x)/x, x, 0)"}, "1/2"),
+    ("solve_equation", {"equation": "x*limit(sin(2*t)/t, t, 0) = 6", "var": "x"}, "{3}"),
+    ("derivative", {"f": "x**2*integrate(t, (t, 0, 1))", "var": "x", "at": "2"}, "2"),
+])
+def test_a_confirmed_closed_form_keeps_its_task_decided(kind, params, claim):
+    shape = "set" if kind == "solve_equation" else "scalar"
+    assert _run(_ir(kind, params, XT, shape=shape), claim, kind="set" if shape == "set" else "value").verdict == "CORRECT"
+
+
+def test_a_definition_no_value_satisfies_is_refuted():
+    r = _run(_ir("evaluate", {"expr": "log(2)"}), "log(2)", [("eq", "x**2 + 1 = 0")])
+    assert r.verdict == "INCORRECT" and _steps(r) == ["refuted"]
+    r = _run(_ir("evaluate", {"expr": "log(2)"}), "log(2)", [("eq", "x**2 = 4")])
+    assert _steps(r) == ["skipped"]
+
+
+def test_a_step_about_the_integration_variable_is_read_on_the_interval():
+    """sqrt(x**2) = x inside the integral over [0, 2] was refuted with x = -1 (known limit K)."""
+    r = _run(_ir("evaluate", {"expr": "Integral(sqrt(x**2), (x, 0, 2))"}), "2",
+             [("eq", "sqrt(x**2) = x"), ("compute", "Integral(x, (x, 0, 2)) = 2")])
+    assert r.verdict == "CORRECT" and _steps(r)[0] != "refuted"
+    r = _run(_ir("evaluate", {"expr": "Integral(sqrt(x**2), (x, 0, 2))"}), "2",
+             [("eq", "sqrt(x**2) = -x"), ("compute", "Integral(x, (x, 0, 2)) = 2")])
+    assert _steps(r)[0] == "refuted"

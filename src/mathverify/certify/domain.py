@@ -23,6 +23,32 @@ LAYER = "certify.domain"
 
 
 # ---------------------------------------------------------------------------
+def _outer_nodes(e, var, add):
+    """The nodes of `e` in preorder, a range binder's body excepted: its conditions are taken from
+    `definedness_conditions` of the body, and those on the bound variable are dropped (they hold on
+    the binder's range, not on the problem's variables); its bounds are walked as usual. Walked into,
+    ∫_1^e 1/t dt put t != 0 among the conditions of x > ∫…: the solution set collapsed to EmptySet,
+    which was certified, and with the bound x of Limit(sin(x)/x, x, 0) the root 0 of x**2 = … was
+    dropped (third audit of 30 Sep 2026)."""
+    stack = [e]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, (sp.Integral, sp.Sum, sp.Product)) or isinstance(n, sp.Limit):
+            if isinstance(n, sp.Limit):
+                body, bound, outer = n.args[0], {n.args[1]}, [n.args[2]]
+            else:
+                body, bound = n.function, {lim[0] for lim in n.limits}
+                outer = [x for lim in n.limits for x in lim[1:]]
+            for c in definedness_conditions(body, var):
+                if not (getattr(c, "free_symbols", set()) & bound):
+                    add(c)
+            stack.extend(reversed(outer))
+            continue
+        yield n
+        if isinstance(n, sp.Basic):
+            stack.extend(reversed(n.args))
+
+
 def definedness_conditions(expr, var) -> list[Any]:
     """Collect conditions under which `expr` is a well-defined real number."""
     conds: list[Any] = []
@@ -35,7 +61,7 @@ def definedness_conditions(expr, var) -> list[Any]:
             seen.add(c)
             conds.append(c)
 
-    for node in sp.preorder_traversal(sp.sympify(expr)):
+    for node in _outer_nodes(sp.sympify(expr), var, add):
         if type(node).__name__ == "written_domain":
             # an IR function's declared domain at its call (normalize.parse.written_domain)
             rel = node.args[1]
@@ -411,12 +437,20 @@ def closed_condition_undecided(conds) -> bool:
     cos(arccot(2) + arccot(1/2)) != 0 stays symbolic, carries no symbol, and was dropped, so the
     maximum of x + 0*tan(...) on [0, 1] and the root of x + tan(...) - tan(...) = 1 were certified
     (audit of 29 Sep 2026). The expression may be undefined everywhere; the caller abstains."""
+    from ..equiv.forms import checked_forms, has_closed_form
     for c in conds:
         if isinstance(c, sp.core.relational.Relational) and not c.free_symbols:
             try:
+                if has_closed_form(c):
+                    # Limit(sin(2x)/x, x, 0) != 0 is read with the limit's confirmed value
+                    c = checked_forms(c)
+                    if c is sp.true:
+                        continue
+                    if c is sp.false:
+                        return True
                 if relation_holds_at(c, sp.Dummy("_closed"), 0) is not True:
                     return True
-            except Exception:  # noqa: BLE001 - a check that fails proves nothing
+            except Exception:  # noqa: BLE001 - a check that fails (or a form no number confirms) proves nothing
                 return True
     return False
 

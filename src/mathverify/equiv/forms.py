@@ -92,6 +92,10 @@ def checked_forms(e, timeout: float = 8.0):
     for _ in range(8):
         inner = _innermost(e)
         if not inner:
+            if has_closed_form(e):
+                # a closed form whose inner forms are open (their variable is the outer one's):
+                # nothing checks it, and SymPy's doit of it was certified (third audit, 30 Sep 2026)
+                raise UnverifiedForm(f"a closed form over open inner forms: {e}")
             return e
         reps = {}
         for n in inner:

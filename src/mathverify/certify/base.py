@@ -296,10 +296,30 @@ class Ctx:
 
     # ---- parsing ------------------------------------------------------------
     def rel(self, s: str):
-        return parse_relation(s, self.ns)
+        return self._confirmed(s, parse_relation(s, self.ns))
 
     def expr(self, s: str):
-        return parse_expr_str(s, self.ns)
+        return self._confirmed(s, parse_expr_str(s, self.ns))
+
+    def _confirmed(self, src, e):
+        """The problem's closed integrals, sums, products and limits by values numbers confirm
+        (equiv.forms), or a ParseError: the certificate then abstains. Left as forms, they reached
+        solveset, z3 and simplify, which evaluated them unconfirmed (|cos x| on [-1, 1] to 0: the
+        value 1 of x = 1 + integral with a given was certified) or could not solve at all (third
+        audit of 30 Sep 2026)."""
+        from ..equiv.forms import UnverifiedForm, checked_forms, has_closed_form
+        if not has_closed_form(e):
+            return e
+        key = ("confirmed", src if isinstance(src, str) else sp.srepr(e))
+        if key not in self.cache:
+            try:
+                self.cache[key] = checked_forms(e, timeout=self.timeout)
+            except UnverifiedForm as ex:
+                self.cache[key] = ParseError(f"a closed form with no confirmed value: {ex}")
+        out = self.cache[key]
+        if isinstance(out, ParseError):
+            raise out
+        return out
 
     def givens(self) -> list[Any]:
         return [self.rel(g) for g in self.ir.givens]

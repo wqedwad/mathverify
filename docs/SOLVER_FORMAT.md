@@ -75,6 +75,11 @@ Gösterim gelenekleri (29 Eylül 2026, DECISIONS §72):
   `Limit(e, x, 0, "+")` ile yazılır. Kapalı bir integral, toplam, çarpım ya da limit ancak SymPy'nin
   değeri sayısal olarak doğrulanınca değer sayılır; doğrulanamayan biçimli iddia UNKNOWN kalır.
 - Köşede türev (`at(diff(Abs(x), x), x, 0)`) okunmaz: türevi olmayan noktada değer yoktur.
+- IR fonksiyonunun argümanı fonksiyonun kendi gerçel değişkenidir: aynı adlı bildirilmiş değişkenin
+  varsayımını almaz (x pozitifken `f(x) = sqrt(x**2) + x` için `f(-1) = 0`). Gövdenin yazılı koşulları
+  her çağrıda uygulanır; `domain` alanı (`"x > 0"`) da bir koşuldur, alanlı fonksiyon Lean'e yazılmaz.
+- Görevin aralığı ya da noktası değişkenin bildirilmiş işaret alanının dışındaysa (x pozitifken
+  [-1, 1]) sertifika karar vermez.
 
 ## Çözüm (`solution`)
 

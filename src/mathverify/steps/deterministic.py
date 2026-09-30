@@ -473,6 +473,21 @@ def _outside_domain(claim, ctx: Ctx) -> bool:
     return True
 
 
+def _nowhere_true(claim, ctx: Ctx) -> dict | None:
+    """A point of the (single) variable's domain where the claim is false, checked exactly."""
+    (v,) = claim.free_symbols
+    dom = ctx.domain_for(v)
+    for c in (0, 1, -1, 2, sp.Rational(1, 2), 10):
+        try:
+            if dom.contains(c) is not sp.true:
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        if _holds(claim, {v: sp.Integer(c) if isinstance(c, int) else c}) is False:
+            return {str(v): str(c)}
+    return None
+
+
 def _point_symbol(claim, ctx: Ctx):
     """The symbol a claim gives a constant value ("x = 0", "y = -1", "x in {1, 2}"), else None."""
     sym = None
@@ -652,6 +667,15 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
         identity_shaped = (isinstance(claim, Eq) and claim.lhs.free_symbols == claim.rhs.free_symbols
                            and bool(claim.lhs.free_symbols))
         if not identity_shaped:
+            # a "definition" no value of its variable's domain satisfies defines nothing: x**2 + 1 = 0
+            # about the integration variable of an integral over x (third audit of 30 Sep 2026, once
+            # the integrand's conditions no longer reached the problem's variables). Every point is a
+            # counterexample; one is checked and reported.
+            w = _nowhere_true(claim, ctx) if _outside_domain(claim, ctx) else None
+            if w is not None:
+                ev["counterexample"] = w
+                ev["reason"] = "no_value_of_the_domain_satisfies_the_claim"
+                return "refuted", ev
             ev["reason"] = "definitional_claim_introduces_unconstrained_symbols"
             return "skipped", ev
     syms = sorted(syms, key=lambda s_: s_.name)
@@ -784,7 +808,7 @@ def _task_window(ir, ctx: Ctx) -> list:
     iv = p.get("interval")
     v = ctx.ns.get(p.get("var", "x"))
     if not isinstance(iv, str) or not iv.strip() or not isinstance(v, sp.Symbol):
-        return []
+        return _integration_window(ir, ctx)
     try:
         rel = parse_set_str(iv, ctx.ns).as_relational(v)
     except Exception:  # noqa: BLE001 - an interval we cannot read restricts nothing
@@ -793,6 +817,39 @@ def _task_window(ir, ctx: Ctx) -> list:
     if any(r in (sp.true, sp.false) or not _is_relation(r) for r in parts):
         return []
     return parts
+
+
+def _integration_window(ir, ctx: Ctx) -> list:
+    """The interval of the problem's own integral for its variable: [a, b] of a definite_integral
+    task, or of the one closed integral over a declared variable in an evaluate-like task when that
+    variable occurs nowhere else. A solver's step about x there means x in [a, b]: sqrt(x**2) = x
+    in the integral over [0, 2] was refuted with x = -1 (known limit K of the V14 audit), and
+    log(x**2) = 2*log(x) on [1, e] too, once the integrand's conditions no longer reached the
+    problem's variables (third audit of 30 Sep 2026). Like the task interval, it binds nothing."""
+    from ..normalize.parse import parse_as_written
+    p = ir.task.params or {}
+    try:
+        if ir.task.kind == "definite_integral":
+            v = ctx.ns.get(p.get("var", "x"))
+            a, b = ctx.expr(str(p["a"])), ctx.expr(str(p["b"]))
+        else:
+            src = next((p[k] for k in ("expr", "f") if isinstance(p.get(k), str)), None)
+            w = parse_as_written(src, ctx.ns) if src else None
+            if w is None or len(w) != 1:
+                return []
+            ints = [n for n in sp.preorder_traversal(w[0]) if isinstance(n, sp.Integral)]
+            if len(ints) != 1 or len(ints[0].limits) != 1 or len(ints[0].limits[0]) != 3:
+                return []
+            v, a, b = ints[0].limits[0]
+            outside = w[0].xreplace({ints[0]: sp.Dummy()})
+            if ctx.ns.get(getattr(v, "name", "")) != v or v in outside.free_symbols:
+                return []
+        if not (isinstance(v, sp.Symbol) and a.is_real and b.is_real and a.is_number and b.is_number):
+            return []
+        lo, hi = (a, b) if bool(a <= b) else (b, a)
+    except Exception:  # noqa: BLE001 - a window we cannot read restricts nothing
+        return []
+    return [sp.Ge(v, lo, evaluate=False), sp.Le(v, hi, evaluate=False)]
 
 
 def _task_objects(ir, ctx: Ctx) -> list:
