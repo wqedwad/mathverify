@@ -121,6 +121,33 @@ def test_a_given_reached_through_another_given_is_read():
     assert _run(ir, "{-2, 2, 3}").verdict == "INCORRECT"
 
 
+B = {"name": "b", "domain": "real"}
+
+
+@pytest.mark.parametrize("vars_,givens,dod", [
+    ([dict(XA[0], constraints=["x > b"]), B], ["b = 0"], None),        # the variable's own constraint
+    ([XA[0], B], ["x > b", "b = 0"], None),                             # a given
+    ([XA[0], B], ["b = 0"], "x > b"),                                   # the domain of discourse
+])
+def test_a_parameter_of_a_constraint_on_the_variable_is_read(vars_, givens, dod):
+    """x² = 4 with x > b and b = 0: z3 left b free (b = 0 was reached only through the constraint),
+    so -2 was a root (b = -3) and {-2, 2} was certified. The z3 layer now refutes -2 and accepts {2};
+    the algebra layer still drops x > b (a separate finding), so the verdict is UNKNOWN, not CORRECT."""
+    ir = _eq("x**2 = 4", givens, vars_=vars_)
+    if dod:
+        ir["domain_of_discourse"] = dod
+    r = _run(ir, "{-2, 2}")
+    assert r.verdict != "CORRECT"
+    assert _layer(r, "certify.wordproblem").verdict == "fail"
+    assert _layer(_run(ir, "{2}"), "certify.wordproblem").verdict == "pass"
+
+
+def test_a_free_parameter_of_a_constraint_on_the_variable_blocks_the_z3_certificate():
+    ir = _eq("x**2 = 4", [], vars_=[dict(XA[0], constraints=["x > b"]), B])
+    wp = _layer(_run(ir, "{-2, 2}"), "certify.wordproblem")
+    assert wp.verdict == "unknown" and wp.evidence["z3"]["free_parameters"] == ["b"]
+
+
 def test_a_value_in_another_symbol_does_not_pin():
     """a = b (a variable's own constraint) leaves a as free as b: {0} for x² + a² = 0 holds only
     at a = 0 and must not be certified."""

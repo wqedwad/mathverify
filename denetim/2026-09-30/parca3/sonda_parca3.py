@@ -21,6 +21,8 @@ NOTBAD = {"CORRECT", "UNKNOWN"}       # anything but a false reject
 
 XA = [{"name": "x", "domain": "real"}, {"name": "a", "domain": "real"}]
 XY = [{"name": "x", "domain": "real"}, {"name": "y", "domain": "real"}]
+XB = [{"name": "x", "domain": "real"}, {"name": "b", "domain": "real"}]
+XBC = [{"name": "x", "domain": "real", "constraints": ["x > b"]}, {"name": "b", "domain": "real"}]
 
 
 def _eq(equation, var, vars_, givens):
@@ -76,6 +78,13 @@ def cases_n7():
         ("free a, x^2+a^2=0, {0}", _eq("x**2 + a**2 = 0", "x", XA, []), _set("{0}"), BAD),
         ("free a, x^2=a, {-2,2}", _eq("x**2 = a", "x", XA, []), _set("{-2, 2}"), BAD),
         ("a >= 0, x^2+a^2=0, {0}", _eq("x**2 + a**2 = 0", "x", XA, ["a >= 0"]), _set("{0}"), BAD),
+        # a parameter of a constraint on the variable (the constraint, a given, the domain of discourse)
+        ("x^2=4, var constraint x > b, b=0, {-2,2}", _eq("x**2 = 4", "x", XBC, ["b = 0"]), _set("{-2, 2}"), BAD),
+        ("x^2=4, var constraint x > b, b=0, {2}", _eq("x**2 = 4", "x", XBC, ["b = 0"]), _set("{2}"), NOTBAD),
+        ("x^2=4, given x > b, b=0, {-2,2}", _eq("x**2 = 4", "x", XB, ["x > b", "b = 0"]), _set("{-2, 2}"), BAD),
+        ("x^2=4, given x > b, b=0, {2}", _eq("x**2 = 4", "x", XB, ["x > b", "b = 0"]), _set("{2}"), NOTBAD),
+        ("x^2=4, dod x > b, b=0, {-2,2}", dict(_eq("x**2 = 4", "x", XB, ["b = 0"]), domain_of_discourse="x > b"),
+         _set("{-2, 2}"), BAD),
         # the equation as the first given, next to the binding (the evalset writes it this way)
         ("eq in givens, a=4, {-2,2}",
          {"task": {"kind": "solve_equation", "params": {"var": "x"}}, "vars": XA,

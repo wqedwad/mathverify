@@ -147,29 +147,33 @@ class _GivenSystem(ValueError):
     pass
 
 
-def _equation_givens(ctx: Ctx, rel, var) -> list:
-    """The givens that constrain the equation: every given sharing a symbol with it, directly or
-    through another such given (`a = 4` next to x² = a; `x > 5` next to 2x = 4). Only the
+def _equation_givens(ctx: Ctx, rel, var, seeds: set, others: list) -> tuple[list, set]:
+    """The givens that constrain the equation, and every symbol the equation is tied to: a given
+    or a constraint (`others`: the variables' constraints, the domain of discourse) joins when it
+    shares a symbol with the equation, the claim (`seeds`) or one that joined (`a = 4` next to
+    x² = a; `x > 5` next to 2x = 4; `b = 0` next to the constraint x > b). Only the
     single-variable inequalities in `var` were used before, so z3 read every other symbol of the
     equation as free: the model {x: 0, a: 0} made the right {-2, 2} of x² = a with a = 4 "miss a
     root", and x² + a² = 0 with a = 4 had {0} certified (third audit of 30 Sep 2026, N7). A second
     equation in `var` makes a system, which this certificate does not solve (`_GivenSystem`)."""
-    rest = [g for g in ctx.givens() if g != rel]
-    syms = set(rel.free_symbols) | {var}
+    rest = [(g, True) for g in ctx.givens() if g != rel] + [(c, False) for c in others]
+    syms = set(rel.free_symbols) | {var} | set(seeds)
     used: list = []
     grew = True
     while grew:
         grew = False
-        for g in list(rest):
-            if getattr(g, "free_symbols", set()) & syms:
-                rest.remove(g)
-                used.append(g)
-                syms |= g.free_symbols
+        for item in list(rest):
+            fs = getattr(item[0], "free_symbols", set())
+            if fs & syms:
+                rest.remove(item)
+                if item[1]:
+                    used.append(item[0])
+                syms |= fs
                 grew = True
     for g in used:
         if isinstance(g, Eq) and var in g.free_symbols:
             raise _GivenSystem(str(g))
-    return used
+    return used, syms
 
 
 def _constraints(ctx: Ctx, extra_rels=None) -> list:
@@ -242,8 +246,9 @@ def verify(ir, solution, ctx: Ctx):
             try:
                 # the givens restrict the solutions (x > 5 next to 2x = 4) and fix the parameters
                 # (a = 4 next to x² = a)
-                extra = _equation_givens(ctx, rel, var)
-                cons = [rel] + extra + ctx.var_constraints() + _discourse_constraints(ctx)
+                others = ctx.var_constraints() + _discourse_constraints(ctx)
+                extra, tied = _equation_givens(ctx, rel, var, claimed.free_symbols, others)
+                cons = [rel] + extra + others
             except _DomainUntranslatable as e:
                 return unknown(LAYER, f"domain_of_discourse_not_translatable: {e}")
             except _GivenSystem as e:
@@ -254,7 +259,7 @@ def verify(ir, solution, ctx: Ctx):
             if params:
                 # contradictory givens (a = 4 and a = 9) leave no instance of the problem: a root
                 # z3 then finds "unsatisfiable" is no evidence against the claim
-                st, m = _check(params + ctx.var_constraints(), syms_info, [], 4000)
+                st, m = _check(params + others, syms_info, [], 4000)
                 if st == "unsupported":
                     return unknown(LAYER, f"z3_unsupported: {m}", flags=["z3_unsupported"])
                 if st != "sat":
@@ -262,12 +267,9 @@ def verify(ir, solution, ctx: Ctx):
             # A claimed root is checked for SOME value of the parameters (sat), the other roots for
             # every value (unsat). The claim is the answer only where the givens pin each parameter
             # to one value: with `a` free, {0} for x² + a² = 0 and {-√a, √a, 2} for x² = a were
-            # certified, true only at a = 0 and a = 4.
-            pinned = {b[0] for b in map(closed_binding, extra + ctx.var_constraints()) if b is not None}
-            free_params = set(rel.free_symbols) | claimed.free_symbols
-            for g in extra:
-                free_params |= g.free_symbols
-            free_params = sorted(s_.name for s_ in free_params - pinned - {var})
+            # certified, true only at a = 0 and a = 4; so was {-2, 2} for x² = 4 under x > b.
+            pinned = {b[0] for b in map(closed_binding, extra + others) if b is not None}
+            free_params = sorted(s_.name for s_ in tied - pinned - {var})
             # exclude non-rational claimed roots (z3 works over exact rationals/algebraics)
             roots = list(claimed.args)
             cert: dict[str, Any] = {"roots": {}, "status": "unknown"}
