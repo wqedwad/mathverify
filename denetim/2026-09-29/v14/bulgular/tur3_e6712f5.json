@@ -426,5 +426,137 @@
     "reason": "An exception escapes verify() in all three versions on the same input. Under the rubric a crash is medium. The input is contrived (a 6th derivative)."
    }
   ]
+ },
+ "critic": {
+  "probes_run": 548,
+  "summary": "I ran 540 distinct verify() inputs on each of NEW, PREV and OLD, plus 27 build_statement (Lean) probes on each version and a few direct parse and latex2sympy calls. None of these duplicate the listed F1-F9 or A1-A8 findings. Areas covered: IR functions whose body uses integrate, limit or diff; functions called inside closed forms; step claims in the eq and compute namespaces; LaTeX text in the IR and in steps; declared-domain spellings; change 5 on about 45 realistic closed constants (no regression found); change 7 on about 50 Sum/Product/Integral identities; given-bound parameters; and Lean for functions.\n\nTrue answers were worked out by hand. Periodic sums were checked over whole periods, and residues came from the verifier's own numbers. No timeout or hang was found in NEW. It is faster than PREV/OLD on two inputs: integrate(x*exp(x**2),(x,-1,1)) and a sin(pi*k/2) sum both passed 120 s on PREV/OLD.\n\nIntroduced by this round:\n- N1: Change 6 reads a function body that computes a limit or integral with a parameter as the unevaluated form, so the value's definedness is lost. Complex SymPy values are now certified, and PREV was right on every one:\n  - F(x)=integrate(sqrt(t),(t,0,x)): F(x)^2<0 is certified as (-oo,0), and {-1} is certified for F(x)^2=-4/9.\n  - L(x)=integrate(1/t,(t,1,x)): L(-1)=I*pi is certified.\n  - A(2)=asin(2) is certified.\n  - g(a)=limit(sqrt(a+t^2),t,0): {-9} is certified for g(a)^2=-9.\n  - domain_of now abstains on these functions.\n- N2: A closed integral whose exact value is 0 is never confirmed, because the relative tolerance fails against a quadrature residue of about 5e-55. Lowercase answers such as 0 for the integral of x^2-2x over [0,3] and the integral of cos over [0,pi] fall to UNKNOWN; the MC letter does too. True eq steps such as integrate(3x^2-4x,(x,0,2)) = 8-8 are refuted, where PREV verified them. The capital-Integral, compute and definite_integral step variants were already refuted in PREV.\n- N6 (low): change 7 loses some refutations. A wrong claim about a capital Integral with a parameter, or a sum longer than 2000 terms, is no longer refuted.\n\nPre-existing:\n- N3: LaTeX \\lim_{x\\to a} without a side is read as the right-hand limit, in the IR and in steps. lim |x-2|/(x-2)=1, lim floor x=1 and lim 1/(x-3)=oo are certified; the true answer is DNE.\n- N8: the motivating SymPy bug still certifies when a parameter is present. limit(a*n*tan(pi/n),n,oo)=0 is certified, and EmptySet is certified for limit(a*n*sin(pi/n),n,oo)=2*pi.\n- N4: whole-period trig sums such as Σ_{k=1}^{4n} cos(kπ/2)=0 are refuted. The refutation comes from strict evalf in _definite_nonzero_difference, a path change 7 did not reach.\n- N5: a declared domain spelled '(0, oo)', 'x in (0, oo)', 'x > 0 and x < 3', 'R+' or 'x > 0, x < 3' is silently ignored, so {-2,2} is certified. The last spelling becomes a garbage relation, and in NEW it crashes sandbox workers.\n- N9: a declared domain is not applied inside integrate/limit, so the integral of f over [-2,-1] and the limit at -1 are certified for f defined on x>0.\n- N7: solve_equation with a parameter fixed by a given ('a = 4') refutes the right answer, because the wordproblem layer ignores the given.",
+  "findings": [
+   {
+    "id": "N1",
+    "title": "An IR function whose body is a limit or integral with a parameter loses its value's definedness: complex values and wrong solution sets are certified",
+    "category": "false_accept",
+    "severity": "high",
+    "introduced_by_change": "new",
+    "repro": "ir={task:{kind:'solve_inequality',params:{inequality:'F(x)**2 < 0',var:'x'}},vars:[x,t real],functions:[{name:'F',expr:'integrate(sqrt(t), (t, 0, x))',args:['x']}],answer_shape:'interval'}; claim interval '(-oo, 0)'. Variants: solve_equation 'F(x)**2 = -4/9' claim {-1}; evaluate 'L(-1)' with L=integrate(1/t,(t,1,x)) claim 'I*pi'; evaluate 'A(2)' with A=integrate(1/sqrt(1-t**2),(t,0,x)) claim 'asin(2)'; g=limit(sqrt(a + t**2), t, 0) with args ['a'], solve_equation 'g(a)**2 = -9' claim {-9}; domain_of 'L(x)' claim (0, oo).",
+    "new_result": "(-oo,0) CORRECT and EmptySet INCORRECT; {-1} CORRECT and EmptySet INCORRECT; L(-1)=I*pi CORRECT; A(2)=asin(2) CORRECT; g: {-9} CORRECT; domain_of L and domain_of F: UNKNOWN (domain_undecidable)",
+    "prev_result": "(-oo,0) INCORRECT and EmptySet CORRECT; {-1} INCORRECT (outside_domain_of_discourse) and EmptySet CORRECT; L(-1), A(2), g(-9): UNKNOWN (problem_undefined_as_written); g: {-9} INCORRECT; domain_of: CORRECT",
+    "old_result": "same as PREV",
+    "expected": "F(x)=(2/3)x^{3/2} is real only for x>=0, so F(x)^2 >= 0: the answer is EmptySet for both, and (-oo,0) and {-1} are wrong. The integral of dt/t from 1 to -1 crosses the pole at 0 and diverges; asin(2) is not real; sqrt(-9+t^2) has no real limit at 0. All three should be UNKNOWN. domain_of L is (0,oo) (checked by hand).",
+    "justification": "Change 6 (_written_call) replaces the call with the body read as written. For integrate/limit, that body is the unevaluated Integral/Limit, whose only conditions concern the bound variable t. PREV read the evaluated body (log(x), x**(3/2), asin(x), sqrt(a)) and kept x>0, x>=0, -1<=x<=1 and a>=0. The direct-text version (no function) was already wrong in PREV and OLD, for example 'integrate(sqrt(t),(t,0,x))**2 = -4/9' with {-1} CORRECT, and so were derivatives of such functions (solve diff(L(x),x) = -1 gives {-1} CORRECT on all three). The function path is a new regression: 8 false accepts measured, each correctly decided in PREV. Realistic shape: AYT F(x) = ∫ f(t) dt problems with sqrt(t), 1/t or 1/sqrt(1-t^2) integrands.",
+    "suggested_fix": "In _written_call, when the body contains a computing form with a parameter, also read the conditions of the evaluated body (fn(*args) as written), or wrap the form in a node whose conditions include those of SymPy's value. Alternatively abstain when a function body contains integrate/limit with a free argument."
+   },
+   {
+    "id": "N2",
+    "title": "Closed integrals whose exact value is 0 are never confirmed (relative tolerance against a ~1e-55 residue): answers become UNKNOWN and true steps are refuted",
+    "category": "false_reject",
+    "severity": "high",
+    "introduced_by_change": "new",
+    "repro": "ir=evaluate {expr:'integrate(x**2 - 2*x, (x, 0, 3))'}, vars x real; solution claim '0' with eq step 'integrate(x**2 - 2*x, (x, 0, 3)) = 27/3 - 9'. Also: claim '0' or '1' with no steps; MC options {A:-1,B:0,...} with letter B; eq steps 'integrate(3*x**2 - 4*x, (x, 0, 2)) = 8 - 8', 'integrate(cos(x), (x, 0, pi)) = sin(pi) - sin(0)'; same for (x-1) on [0,2] and sin(2x) on [0,pi].",
+    "new_result": "Step refuted (route closed_claim), so INCORRECT. Answer 0: UNKNOWN (unverified_form: 'SymPy 0, numbers -4.5757914431189705719E-55'); answer 1: UNKNOWN; letter B: UNKNOWN; letter A: UNKNOWN. Compute steps and capital Integral steps: INCORRECT. definite_integral task with an 'Integral(...) = 0' step: INCORRECT.",
+    "prev_result": "Lowercase eq step verified, so CORRECT; answer 0 CORRECT; answer 1 INCORRECT; letter B CORRECT. The compute step, the capital Integral step and the definite_integral step were already INCORRECT in PREV.",
+    "old_result": "All CORRECT, except definite_integral with a step: UNKNOWN.",
+    "expected": "Each integral is exactly 0 (checked by hand): [x^3/3 - x^2]_0^3 = 9 - 9; [x^3 - 2x^2]_0^2 = 8 - 8; sin π - sin 0; [x^2/2 - x]_0^2 = 0; [-cos 2x/2]_0^π = 0. So 0 is CORRECT, 1 is INCORRECT and the steps are true.",
+    "justification": "equiv.forms.checked_forms and steps._integrals_refute compare with num_equal(..., rel_tol). Against an exact 0 no nonzero residue passes a relative test, so checked_forms raises UnverifiedForm, and _integrals_refute returns ok is False, which refutes. That violates principles 4 and 5: a quadrature residue is not a counterexample. Symmetric odd integrals happen to give exactly 0 and pass, while ordinary net-area-zero integrals, a common AYT item, fail. Change 1 turned lowercase integrate into this form, so the lowercase eq step and the answers regress in this round; the capital/compute path is older (V14).",
+    "suggested_fix": "Use an absolute tolerance scaled by the quadrature error estimate (and by the integrand's magnitude) when either side is 0. Never refute on a difference below the integrator's own error bound."
+   },
+   {
+    "id": "N3",
+    "title": "LaTeX \\lim_{x\\to a} without a side is read as the right-hand limit (latex2sympy dir '+'): one-sided values are certified as the two-sided limit, in the IR and in steps",
+    "category": "false_accept",
+    "severity": "high",
+    "introduced_by_change": "preexisting",
+    "repro": "ir=evaluate {expr: '\\\\lim_{x \\\\to 2} \\\\frac{|x - 2|}{x - 2}'} with claim '1'; also '\\\\lim_{x \\\\to 1} \\\\lfloor x \\\\rfloor' with claim 1, '\\\\lim_{x \\\\to 3} \\\\frac{1}{x - 3}' with claim oo, and MC options {A:-1,B:0,C:1,D:2,E:Yoktur} with letter C. In steps: a limit task (side '+') with compute or eq step '\\\\lim_{x \\\\to 2} \\\\frac{|x - 2|}{x - 2} = 1', or '\\\\lim_{x \\\\to 3} \\\\frac{1}{x - 3} = \\\\infty'.",
+    "new_result": "All CORRECT; the steps are 'verified'. latex2sympy returns Limit(Abs(x)/x, x, 0, '+').",
+    "prev_result": "All CORRECT",
+    "old_result": "All CORRECT",
+    "expected": "INCORRECT. The two-sided limits do not exist: |x-2|/(x-2) is -1 from the left and 1 from the right; floor x is 0 and 1; 1/(x-3) is -oo and +oo. The steps are false.",
+    "justification": "The canonical parser makes an undirected limit two-sided (_Limit, SOLVER_FORMAT E6, and change 1 relies on it). _latex_to_sympy keeps latex2sympy's Limit with dir '+', and checked_forms then passes '+' to classify_limit. The same notation typed canonically (limit(Abs(x)/x, x, 0) = 1) is refuted, so the LaTeX branch decides differently. LaTeX is an accepted input for the IR and for path (b) step claims.",
+    "suggested_fix": "In _latex_to_sympy, rebuild every Limit whose direction was not written as two-sided ('+-'), or '-'/'+' at ±oo. Distinguish written 0^+/0^- if latex2sympy exposes them; otherwise refuse one-sided LaTeX limits."
+   },
+   {
+    "id": "N8",
+    "title": "The motivating SymPy limit bug still certifies when a parameter multiplies the sequence: limit(a*n*tan(pi/n), n, oo) is computed at parse as 0",
+    "category": "false_accept",
+    "severity": "high",
+    "introduced_by_change": "preexisting",
+    "repro": "vars n positive_integer, a real. simplify_expression {expr:'limit(a*n*tan(pi/n), n, oo)'} with claim '0'. evaluate the same expression with given 'a = 2' and claim 0. IR function g(a)=limit(a*n*tan(pi/n), n, oo) with 'g(1)' and claim 0. solve_equation 'limit(a*n*sin(pi/n), n, oo) = 2*pi' for a, claim EmptySet.",
+    "new_result": "0 CORRECT; 'pi*a' INCORRECT; g(1)=0 CORRECT and pi INCORRECT; EmptySet CORRECT and {2} INCORRECT",
+    "prev_result": "same",
+    "old_result": "same",
+    "expected": "n·tan(π/n) → π and n·sin(π/n) → π (at n=10^6 the value is 3.14159...), so the limit is π·a: g(1)=π, the given a=2 gives 2π, and the equation's answer is {2}.",
+    "justification": "Change 1 keeps only CLOSED limits unevaluated. With a free parameter, _limit still calls sp.limit, which pulls a out and returns 0 for integer n (the bug quoted in its own docstring). The limit is then taken as the truth, as F9 describes for integrals; F9 covers only integrals, and this is the limit case. The closed variant is now UNKNOWN in NEW, so the protection is bypassed by a factor a.",
+    "suggested_fix": "Keep a limit with a parameter unevaluated as well, or corroborate sp.limit numerically at sample parameter values (classify_limit) before accepting it."
+   },
+   {
+    "id": "N4",
+    "title": "Whole-period trigonometric sums are refuted: _definite_nonzero_difference strictly evaluates an unevaluated Sum and takes a 1e-35 residue as a counterexample",
+    "category": "false_reject",
+    "severity": "medium",
+    "introduced_by_change": "preexisting",
+    "repro": "vars n, k positive_integer; simplify_expression {expr:'Sum(cos(k*pi/2), (k, 1, 4*n))'}, claim expression '0'. Same for Sum(sin(k*pi/2),(k,1,4n)), Sum(cos(2*pi*k/3),(k,1,3n)), Sum(sin(2*pi*k/3),(k,1,3n)) and Sum(cos(pi*k/3),(k,1,6n)), each with claim 0, and Sum(cos(2*pi*k/3),(k,1,3n)) + 1 with claim 1.",
+    "new_result": "INCORRECT (random_point reason 'difference_below_working_precision_but_nonzero', difference 4.13e-35 at n=109, after all 30 points agreed)",
+    "prev_result": "INCORRECT",
+    "old_result": "INCORRECT",
+    "expected": "CORRECT: every full period sums to 0 (0-1+0+1; -1/2-1/2+1; etc.), so each sum is exactly 0 for all n.",
+    "justification": "Change 7 replaced strict evalf of Sum/Product with term-by-term expansion (_written_out) in _exact_counterexample because evalf of such sums is wrong or slow. But random_point_equal's last check, _definite_nonzero_difference, still calls sp.N on the difference with the unevaluated Sum at the sample point. Euler-Maclaurin gives a residue with prec >= 50, and that becomes the refutation (principle 5). This is a consumer of the same evalf path that the fix missed.",
+    "suggested_fix": "In _definite_nonzero_difference, write finite sums out (_written_out) or skip points where the difference contains a Sum/Product/Integral/Limit."
+   },
+   {
+    "id": "N5",
+    "title": "A declared domain not written as a single relation is silently ignored (wrong solution sets certified); 'x > 0, x < 3' becomes a garbage relation that crashes sandbox workers",
+    "category": "false_accept",
+    "severity": "medium",
+    "introduced_by_change": "preexisting",
+    "repro": "functions [{name:'f',expr:'x**2 + 1',args:['x'],domain:D}], solve_equation 'f(x) = 5' for x, claim {-2, 2}. D in: '(0, oo)', 'x in (0, oo)', 'x > 0 and x < 3', 'R+', '[0, oo)', 'x > 0, x < 3'. Also domain 'x > a' with given 'a = 0' and the right claim {2}.",
+    "new_result": "{-2, 2} CORRECT for all six spellings. For 'x > 0, x < 3', parse_relation returns (x > (0, x)) & ((0, x) < 3); NEW adds it as definedness conditions, and three sandbox workers die with 'TypeError: Can only compare inequalities with Expr' while unpickling. For 'x > a' with a = 0, the right {2} is INCORRECT (missing_root).",
+    "prev_result": "{-2, 2} CORRECT (domains never applied); no worker crash; {2} INCORRECT",
+    "old_result": "same as PREV",
+    "expected": "f is defined only on x>0, so {2}: {-2, 2} is INCORRECT, {2} is CORRECT, or the verifier abstains when it cannot read the domain.",
+    "justification": "Change 6 applies a domain only when parse_relation yields a Relational or an And; otherwise it is 'not applied, as before'. Since the domain is now known to matter, an unreadable declared domain should abstain, not drop out. The interval spelling is a natural extractor output, and the prompts do not document the format (evalset uses 'x != 1'). The garbage And from 'x > 0, x < 3' passes the isinstance check.",
+    "suggested_fix": "Abstain (UNKNOWN) when FunctionDef.domain is non-empty but not read as a relation. Parse interval/set spellings with parse_domain. Reject relations whose sides are not Expr."
+   },
+   {
+    "id": "N9",
+    "title": "A function's declared domain is not checked inside integrate/limit: integrals and limits of f outside its domain are certified",
+    "category": "wrong_condition",
+    "severity": "low",
+    "introduced_by_change": "preexisting",
+    "repro": "functions [{name:'f',expr:'x**2 + 1',args:['x'],domain:'x > 0'}]. evaluate 'integrate(f(x), (x, -2, -1))' with claim 10/3, and evaluate 'limit(f(x), x, -1)' with claim 2.",
+    "new_result": "CORRECT for both (definite_integral task, extremum, derivative and sums over the same range now abstain)",
+    "prev_result": "CORRECT",
+    "old_result": "CORRECT",
+    "expected": "UNKNOWN: f is not defined on [-2,-1] or near -1, so neither the integral nor the limit exists.",
+    "justification": "Change 6 puts written_domain(body, x > 0) inside the Integral/Limit, but the condition is on the bound variable. For a closed form nothing checks it over the range, while the definite_integral and extremum certificates now do (written_undefined_in). The treatment of the same f is inconsistent between task kinds.",
+    "suggested_fix": "For a closed Integral/Limit, check the bound variable's written conditions over the integration range or near the point (as written_undefined_in does), and abstain on failure."
+   },
+   {
+    "id": "N6",
+    "title": "Change 7 loses exact refutations: a wrong claim about a capital Integral with a parameter, or a Sum longer than 2000 terms, is no longer refuted",
+    "category": "coverage",
+    "severity": "low",
+    "introduced_by_change": "new",
+    "repro": "vars x, t real: simplify_expression {expr:'Integral(t**2 - 2*t, (t, 0, x))'} with claim 'x**3/3 - x**2 + 1'. vars n, k positive_integer: simplify_expression {expr:'Sum(k, (k, 1, 1000*n))'} with claim '500*n*(1000*n - 1)'.",
+    "new_result": "UNKNOWN for both",
+    "prev_result": "INCORRECT for both",
+    "old_result": "INCORRECT for both",
+    "expected": "INCORRECT: the integral is x^3/3 - x^2, so +1 is off by 1 everywhere; the sum is 500n(1000n+1), not 500n(1000n-1).",
+    "justification": "_exact_counterexample now returns None when an Integral/Limit stays after substitution, or when the range exceeds _MAX_TERMS=2000 (n=3 already gives 3000 terms). The numeric disagreement is then never confirmed. Only coverage is lost; the verdict stays safe.",
+    "suggested_fix": "Confirm an Integral at a point through checked_forms-style numeric evaluation with its error estimate. For long sums, use SymPy's exact doit at the point when the terms are rational."
+   },
+   {
+    "id": "N7",
+    "title": "solve_equation with a parameter fixed by a given: the wordproblem layer ignores the given and refutes the right answer",
+    "category": "false_reject",
+    "severity": "medium",
+    "introduced_by_change": "preexisting",
+    "repro": "vars x, a real; solve_equation {equation:'x**2 = a', var:'x'}, givens ['a = 4'] (or 'a = integrate(2*x, (x, 0, 2))'), claim {-2, 2}. Also equation 'sqrt(y - x) = 2' for y with given 'x = 1', claim {5}.",
+    "new_result": "INCORRECT (certify.wordproblem: missing_root, other_model {x: 0, a: 0}; certify.algebra: claimed_root_undecided)",
+    "prev_result": "INCORRECT",
+    "old_result": "INCORRECT",
+    "expected": "CORRECT: a=4 gives x=±2; x=1 gives y=5.",
+    "justification": "The z3 model that is supposed to show a missing root violates the given a = 4, so it is no counterexample to the problem (principle 5). The diff does not touch this code; the probes of this round's given-with-form cases found it.",
+    "suggested_fix": "Add the givens to the z3 constraints in certify.wordproblem, or abstain when a given binds a free symbol of the equation."
+   }
+  ]
  }
 }

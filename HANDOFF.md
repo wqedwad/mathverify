@@ -56,11 +56,13 @@ soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.
 
 1. **Yeni sohbet (V14'ün kapanışı):** `git fetch origin claude/sharp-lamport-f9m2w3` ve o dalda çalış (yeni dal açma;
    bulut oturumu başka dalda başlarsa bu dalı birleştirip kendi dalına push et). `--plan` koş (TAM beklenir: kod değişti).
-   (a) Üçüncü denetimin **eleştirmeni** 30 Eylül ~04:40 UTC'de başladı, bu belge yazılırken bitmemişti: iş akışı
-   `wf_87e3a021-4af` (betik `~/.claude/projects/-home-user-asd/<oturum>/workflows/scripts/v14-round3-audit.js`); aynı
-   konteynerse günlüğünden sonucu oku (`subagents/workflows/wf_87e3a021-4af/journal.jsonl`), değilse eleştirmeni
-   `7f35e1d` üzerinde yeniden koştur (girdi: `denetim/2026-09-29/v14/bulgular/tur3_e6712f5.json`'ın özetleri). Bulguları
-   sonda + test + mutasyonla kapat. (b) Tam takım ve 280 + 278 farkı `7f35e1d`'de (ya da sonrasında) koşulmadı:
+   (a) Üçüncü denetimin **eleştirmeni bitti** (`e6712f5` üzerinde, 548 sonda), 9 bulgusu **henüz ele alınmadı**; ham hâli,
+   tekrar betikleri ve beklenen değerler `denetim/2026-09-29/v14/bulgular/tur3_e6712f5.json` → `critic`. Bu turun açtıkları:
+   N1 (yüksek, yanlış onay: parametreli integral/limit gövdeli IR fonksiyonunda değerin tanımlılığı kaybolur), N2 (yüksek,
+   haksız red: değeri tam 0 olan kapalı integral göreli toleransla hiç onaylanmaz), N6 (düşük). Önceden var: N3 (yüksek,
+   LaTeX `\lim` yönsüz sağdan okunur), N8 (yüksek, `limit(a*n*tan(pi/n), n, oo)` parametreli olduğu için ayrıştırmada 0),
+   N5 (alan tek ilişki değilse yok sayılır), N4, N7, N9. Önce güncel kodda yeniden koş (bir kısmı `d38da47`–`7f35e1d`'de
+   kapanmış olabilir), sonra sonda + test + mutasyonla kapat. (b) Tam takım ve 280 + 278 farkı `7f35e1d`'de (ya da sonrasında) koşulmadı:
    `denetim/2026-09-29/v14/fark.py dump/compare` (eski kod `35af293` ayrı worktree'de; karşılaştırma dökümü yeniden
    üretilir); ölçüm sürerken aynı checkout'ta dosya değiştirme (ayrı `git worktree` kullan).
 2. **`--full`** son kodda, temiz ağaçta (~25–30 dk; oturum etkin tutulur, ≤10 dk beklemelerle izlenir); raporlar ve günlük
