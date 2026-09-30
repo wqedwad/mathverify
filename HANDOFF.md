@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 30 Eylül 2026, akşam (yerel Windows)**, dal `claude/sharp-lamport-f9m2w3` (birleşmedi, PR yok). **`master`daki HANDOFF eski:** yeni sohbet bu dalı açıkça almalı (§3 adım 0). `franklin`'in parçası ve 144 testi taşındı (DECISIONS §73); kalan: `--full`, `--plan`, PR, birleştirme (§3 adım 1).
+> **Son güncelleme: 30 Eylül 2026, akşam**, dal `claude/sharp-lamport-f9m2w3` (birleşmedi, PR yok). Bu sohbet yanlışlıkla yerel Windows'ta koştu; **sonraki sohbetler bulutta** (kullanıcı, 30 Eylül). **`master`daki HANDOFF eski:** yeni sohbet bu dalı açıkça almalı (§3 adım 0). `franklin`'in parçası ve 144 testi taşındı (DECISIONS §73); kalan: `--full`, `--plan`, PR, birleştirme (§3 adım 1).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -57,14 +57,15 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 ## 3. Sıradaki adımlar (sırayla)
 
 0. Yeni sohbet `master`daki eski HANDOFF'u okur: 30 Eylül'de V14 bu yüzden `claude/inspiring-franklin-l3cocz`'de baştan yapıldı.
-   Yeni sohbet bu dalı açıkça alır: `git fetch origin claude/sharp-lamport-f9m2w3`; yerel Windows checkout'unda `git switch
-   claude/sharp-lamport-f9m2w3` ve `git merge --ff-only origin/claude/sharp-lamport-f9m2w3` (`master`ı ileri sarma, `master`ı push etme).
-1. **Birleştirme (kullanıcı: tek hedef `master`, yedek gerekmez).** Taşıma ve ölçümler bitti (DECISIONS §73). Sırayla:
-   (i) `--plan` (TAM beklenir); (ii) C:'nin boş alanı (30 Eylül 14.3 GB; 10 GB altındaysa sor), sonra ana checkout'ta temiz
-   ağaçta `powershell -ExecutionPolicy Bypass -File scripts\dev\windows_full.ps1` (~31 dk; sürerken checkout'a dokunma);
-   (iii) raporlar ve günlük değiştirilmeden commit + push, §73'ün "`--full` koşulmadı" satırı sonuçla güncellenir; (iv) `--plan`
-   TAMAM → PR ve birleştirme, hemen önce `--plan` yeniden. **Risk:** `--plan`'ın Windows `--full`unu kabul ettiği hiç sınanmadı
-   (T8); etmezse neden bulunur, kullanıcıya sorulur. Beklenen: sağlamlık/adversaryal kapıları 0; Lean sertifika sayısı değişebilir.
+   Yeni (bulut) sohbet bu dalı açıkça alır: `git fetch origin claude/sharp-lamport-f9m2w3 && git merge --ff-only FETCH_HEAD`
+   oturumun kendi dalına; push yalnız oturumun kendi dalına (bulut başka dalı, `master`ı ve etiketi push edemez; CLAUDE.md).
+1. **Birleştirme (kullanıcı: bu ve önceki sohbetlerin işinin hepsi `master`a; yedek gerekmez).** Bu dal V14'ün bütün commit'lerini
+   (29–30 Eylül bulut sohbetleri) ve `franklin` taşımasını (§73) taşır; `franklin` dalı birleştirilmez (gereken parçası taşındı),
+   öteki dallar zaten `master`da (§6). Sırayla: (i) `--plan` (TAM beklenir); (ii) son kodda, temiz ağaçta `check.py --full` arka
+   planda (bulutta ~25–30 dk; tur bitirilmez, ≤10 dk'lık ön plan beklemeleriyle izlenir, CLAUDE.md); sürerken checkout'a dokunma;
+   (iii) raporlar ve günlük değiştirilmeden commit + push (oturumun dalına); §73'ün "`--full` koşulmadı" satırı sonuçla güncellenir;
+   (iv) `--plan` TAMAM → oturumun dalından `master`a PR ve birleştirme (merge commit), hemen önce `--plan` yeniden. Beklenen:
+   sağlamlık/adversaryal kapıları 0; Lean sertifika sayısı değişebilir (V15). Kapı düşerse neden bulunur, kullanıcıya sorulur.
 2. **Birleşmeden sonra, yeni dalda (kullanıcı kararı):** (a) üçüncü denetimin eleştirmeninin 9 bulgusu (`denetim/2026-09-29/v14/
    bulgular/tur3_e6712f5.json` → `critic`, §72 Ek): yüksek N1, N2, N3, N8; N4–N7, N9; önce son kodda yeniden koş, sonra sonda +
    test + mutasyonla kapat. (b) V16 (§4.2). (c) `franklin` dalının silinmesi kullanıcıya sorulur. Birleşince `master`daki
