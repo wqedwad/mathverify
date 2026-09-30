@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 30 Eylül 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` (`wqedwad/asd#13` birleşti, yedeksiz; dal `master` `aa67b20`'den yeniden başladı, birleşmedi). Sohbetler bulutta. Sıradaki iş parça parça (§3 adım 2).
+> **Son güncelleme: 30 Eylül 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` (`wqedwad/asd#13` birleşti, yedeksiz; dal `master` `aa67b20`'den yeniden başladı, birleşmedi; N2–N7 kapandı, §76). Sohbetler bulutta. Sıradaki iş parça parça (§3 adım 2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -8,7 +8,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§75; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§76; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2169 passed / 5 skipped** (`d68070c`, `--full` içinde)
@@ -54,11 +54,10 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 
 1. **Yeni sohbet:** `git fetch origin claude/loving-bardeen-ninmoo` ile bu dalı al (birleşmediyse), `--plan` koş. Push yalnız oturumun dalına.
 2. **Sıradaki iş, parça parça (kullanıcı, 30 Eylül: "işi parçalara böl"; dal `claude/loving-bardeen-ninmoo`, `master`dan).** N1–N9
-   `aa67b20`'de yeniden koşuldu (DECISIONS §75; `denetim/2026-09-30/n19/sonda_n19.py`): N9 kapalı, N1/N3/N8 kısmen, N2/N4–N7 açık.
-   Parçalar: (i) N2 + N4 + N6 + N3'ün eq adımı (kesin sıfır ve sayısal onay; `forms.py`, `random_point.py`, `deterministic.py`);
-   (ii) N5 (fonksiyon alanı, işçi çöküşü); (iii) N7 (+ V15 S1); (iv) N8 + N1'in kalanı + F9 (adım 3'teki karara bağlı); (v) V16, V17.
-   Her parça: sonda + test + mutasyon, sonra hızlı `check.py`; birleştirmeden önce bir `--full`. `franklin`'in silinmesi kullanıcıya
-   sorulur (DECISIONS §74); silmeden önce U01–U07 mutasyonları ve `karar_farki.py`'nin yetenekleri alınır.
+   yeniden koşuldu (DECISIONS §75, `denetim/2026-09-30/n19/sonda_n19.py`). **Bitti** (§76; birleşik hâlde sonda 84/88, 160 test, fark 0):
+   (i) N2 + N4 + N6 + N3'ün eq adımı; (ii) N5 (fonksiyon alanı, işçi çöküşü); (iii) N7 + V15 S1'in denetçi örnekleri. **Sürüyor:** (vi)
+   başka sembollü kısıtın cebir/sayma/`side_conditions`'ta düşmesi (§76 yeni bulgu, §77). **Kalan:** (iv) N8 + N1'in kalanı + F9 (adım 3);
+   (v) V16, V17. Sonra tam takım + hızlı `check.py`, birleştirmeden önce `--full`. `franklin`'in silinmesi kullanıcıya sorulur (§74).
 3. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
    parametreli belirli integral biçim kalır; "∫₀^a x dx = 2" gibi sorular UNKNOWN olur)?
 4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
@@ -124,8 +123,9 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V17 (tam sayı `diff`). Yanl
   (`y = 0`) seçilen x = 0 noktasında reddedilir (yanlış ordinattan ayrılamaz; D6); doğru çözüm INCORRECT. Gerçek veride yok.
 - **V15. V14 denetiminden kalanlar** (DECISIONS §72; V14 kapandı). Yanlış onay (önceden var): parametreli belirli integral,
   belirsiz `integrate` ve parametreli `limit` ayrıştırmada SymPy'ye bırakılır (F9). Haksız red (önceden var): verilenlerin
-  belirlediği sembollü `compute` adımı özdeşlik gibi denetlenir (S1); tam sayı bildirilmemiş üst sınırlı toplam (R1). Lean:
-  `Mod`/`floor` gövdeli, tam sayı adlı argümanlı fonksiyon reddedilir (L1). Değer doğru: `gcd(120, 84)` "değer" (GCD-10).
+  yalnız dolaylı belirlediği sembollü `compute` adımı (a + b = 5, a − b = 1 iken `a*b = 6`) özdeşlik gibi denetlenir (S1; doğrudan
+  sabitlenenler §76'da kapandı); tam sayı bildirilmemiş üst sınırlı toplam (R1). Lean: `Mod`/`floor` gövdeli, tam sayı adlı argümanlı
+  fonksiyon reddedilir (L1). (GCD-10 §73'te kapandı.)
   Mutasyon: R02 ve L07'nin eşdeğerliği kanıtlanmadı. Çok sayıda kapsama kaybı (UNKNOWN), liste §72'de.
 - **V16. Taşıma denetiminden kalanlar** (DECISIONS §73 "Açık kalanlar"; taşımanın açmadığı yanlış onaylar). Yüksek: küme `+`/`-`
   işleçleri uç eşitlemesini atlıyor (V14d'nin kalan yazımı); bağlayıcı değişkeni ilk döngüde IR bildirimini koruyor, alan dışı
@@ -296,5 +296,5 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 ## 9. Nerede ne var
 
 Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
-`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §75); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §76); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
 `LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).
