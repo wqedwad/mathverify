@@ -20,7 +20,7 @@ and extremum (HANDOFF V16 and V18; the audit of the §73 port, its "open" list; 
     with x <= 1 refuted. They now cut the interval (a symbol a given fixes read as its value; a free one
     makes the certificate abstain); an empty region is UNKNOWN. Without an interval the givens cut the
     domain too.
-Measured on the code before the change (20d4edf): 101 of these 138 tests fail; the other 37 are controls
+Measured on the code before the change (20d4edf): 101 of these 140 tests fail; the other 39 are controls
 (defined expressions, interior points, a real variable, declared memberships, the real side of
 log(-x), extremum without a cutting condition), the pins of (4) and the derivative at a point of
 tan(pi/2)'s case in (1), which the point's own written check already held.
@@ -367,6 +367,9 @@ def test_a_free_symbol_in_a_condition_makes_the_extremum_abstain(ir):
     (ext("x**3 - 6*x**2 + 9*x + 1", "local_max"), "5", "1"),
     (ext("x", "max", "[-2, 3]", [_xv("real", ["x > -5"])]), "3", "2"),
     (ext("x", "max", "[-2, 3]", [X, Y], givens=["y = 2"]), "3", "2"),
+    # a given that does not name the variable cuts nothing, even with a free symbol
+    (ext("x", "max", "[-2, 3]", [X, {"name": "a", "domain": "real"}], givens=["a > 0"]), "3", "2"),
+    (ext("-(x - 2)**2", "max", None, [X, {"name": "a", "domain": "real"}], givens=["a > 0"]), "0", "1"),
 ])
 def test_extremum_without_a_cutting_condition_is_unchanged(ir, right, wrong):
     assert _run(ir, right).verdict == "CORRECT"

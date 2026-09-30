@@ -366,9 +366,9 @@ def _conditions_on(ctx: Ctx, var, with_interval: bool) -> tuple[list[sp.Set] | N
         except Exception:  # noqa: BLE001 - not a relation: nothing to cut (as Ctx.side_conditions)
             continue
         for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
-            if r is sp.false:
-                rels.append(r)                  # a contradiction (x < 0 with x declared positive)
-            elif isinstance(r, sp.core.relational.Relational) and var in r.free_symbols:
+            # parse_relation leaves relations unevaluated: x < 0 with x declared positive is solved to
+            # the empty set below
+            if isinstance(r, sp.core.relational.Relational) and var in r.free_symbols:
                 rels.append(r)
     kept, unbound = ctx.on_var(rels, var)
     sets: list[sp.Set] = []
