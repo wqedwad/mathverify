@@ -36,7 +36,12 @@ def definedness_conditions(expr, var) -> list[Any]:
             conds.append(c)
 
     for node in sp.preorder_traversal(sp.sympify(expr)):
-        if isinstance(node, sp.log):
+        if type(node).__name__ == "written_domain":
+            # an IR function's declared domain at its call (normalize.parse.written_domain)
+            rel = node.args[1]
+            for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+                add(c)
+        elif isinstance(node, sp.log):
             add(node.args[0] > 0)
             if len(node.args) > 1:
                 add(node.args[1] > 0)
@@ -142,6 +147,8 @@ def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
         if node.is_Atom or isinstance(node, (sp.Add, sp.Mul) + _CONTAINERS + _TOTAL_FUNCS + _BOUNDED_FUNCS):
             continue
         if type(node).__name__ == "arccot":            # normalize.parse.arccot read as written: total
+            continue
+        if type(node).__name__ == "written_domain":    # its condition is read by definedness_conditions
             continue
         if isinstance(node, sp.Pow):
             base, ex = node.args

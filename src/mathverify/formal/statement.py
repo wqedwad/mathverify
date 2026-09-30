@@ -2367,6 +2367,10 @@ def _functions_faithful(obj, ns) -> None:
     """A problem function's body is parsed with simplification (`f(x) = x/x` becomes 1): refuse
     unless its domain as written is exactly its domain as parsed."""
     for fd in obj.functions:
+        if isinstance(getattr(fd, "domain", None), str) and fd.domain.strip():
+            # the templates state the body, not the declared domain: Lean proved f(-2) = 5 for
+            # f(x) = x**2 + 1 on x > 0 (second audit of 29 Sep 2026)
+            raise LeanPrintError(f"function {fd.name}: its declared domain is not stated")
         fn = ns.get(fd.name)
         body, argsyms = getattr(fn, "body", None), getattr(fn, "argsyms", None)
         if body is None or argsyms is None or len(argsyms) != len(fd.args):

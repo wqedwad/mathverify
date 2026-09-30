@@ -269,6 +269,34 @@ def _breakpoints(exprs, sym, dom, timeout: float = 5.0) -> list | None:
     return pts
 
 
+_FORMS = (sp.Sum, sp.Product, sp.Integral, sp.Limit)
+_MAX_TERMS = 2000
+
+
+def _written_out(e):
+    """`e` with every finite Sum/Product at a point written out term by term (an exact value, not
+    SymPy's closed form), or None when an unevaluated form is left. Taken by strict evalf instead,
+    Σ_{k=1}^{2n} sin²(πk/2) at 48 sample points held one check for 180-330 s in the verifier's own
+    process (second audit of 29 Sep 2026)."""
+    for _ in range(8):
+        inner = [n for n in sp.preorder_traversal(e) if isinstance(n, (sp.Sum, sp.Product))
+                 and not any(isinstance(m, _FORMS) for a in n.args for m in sp.preorder_traversal(a))]
+        if not inner:
+            break
+        reps = {}
+        for n in inner:
+            if len(n.limits) != 1:
+                return None
+            k, lo, hi = n.limits[0]
+            if not (getattr(lo, "is_Integer", False) and getattr(hi, "is_Integer", False)) or hi - lo + 1 > _MAX_TERMS:
+                return None
+            terms = [n.function.subs(k, i) for i in range(int(lo), int(hi) + 1)]
+            reps[n] = (sp.Add if isinstance(n, sp.Sum) else sp.Mul)(*terms) if terms else \
+                (sp.S.Zero if isinstance(n, sp.Sum) else sp.S.One)
+        e = e.xreplace(reps)
+    return None if e.has(*_FORMS) else e
+
+
 def _exact_counterexample(a, b, syms, pt) -> dict[str, Any] | None | bool:
     """Is `pt` an EXACT counterexample? dict when it is, False when the two sides are equal
     there (or both undefined), None when undecided."""
@@ -276,6 +304,10 @@ def _exact_counterexample(a, b, syms, pt) -> dict[str, Any] | None | bool:
     try:
         da = real_odd_roots(a.subs(pt, simultaneous=True))
         db = real_odd_roots(b.subs(pt, simultaneous=True))
+        if da.has(*_FORMS) or db.has(*_FORMS):
+            da, db = _written_out(da), _written_out(db)
+            if da is None or db is None:
+                return None
     except Exception:  # noqa: BLE001
         return None
     und_a = da.has(sp.zoo, sp.nan) or da.has(sp.oo, -sp.oo)

@@ -396,12 +396,55 @@ def _make_function(fdef, ns):
     def _f(*args):
         if len(args) != len(argsyms):
             raise ParseError(f"function {fdef.name} expects {len(argsyms)} args, got {len(args)}")
-        return body.subs(dict(zip(argsyms, args)), simultaneous=True)
+        # a sum over 1..2n in the body gets an integer index once n is an integer argument (the formal
+        # n is real, so the parse left the index plain; second audit of 29 Sep 2026)
+        return _integer_indices(body.subs(dict(zip(argsyms, args)), simultaneous=True))
 
     _f.__name__ = fdef.name
     _f.body = body            # type: ignore[attr-defined]
     _f.argsyms = argsyms      # type: ignore[attr-defined]
+    _f.fdef = fdef            # type: ignore[attr-defined]
+    _f.body_ns = body_ns      # type: ignore[attr-defined]
+    # the declared domain (`"x > 0"`), a condition on the formal arguments; None when there is none
+    # or it cannot be read (then it is not applied, as before)
+    _f.domain_rel = None      # type: ignore[attr-defined]
+    if isinstance(getattr(fdef, "domain", None), str) and fdef.domain.strip():
+        try:
+            rel = parse_relation(fdef.domain, body_ns)
+            if isinstance(rel, (sp.core.relational.Relational, sp.And)):
+                _f.domain_rel = rel
+        except Exception:  # noqa: BLE001 - an unreadable domain is not applied
+            pass
     return _f
+
+
+class written_domain(sp.Function):  # noqa: N801 - a marker read by certify.domain
+    """A call f(a) of an IR function read AS WRITTEN: its body as written with a substituted, and the
+    condition the function's declared domain puts on a. Only definedness reads it (the value parse
+    never builds it). The declared domain was ignored everywhere: f(x) = x**2 + 1 on x > 0 gave
+    f(-2) = 5 and {-2, 2} for f(x) = 5 (second audit of 29 Sep 2026)."""
+    nargs = 2
+
+
+def _written_call(fn, ns, depth=0):
+    """An IR function called inside a text read as written: its body AS WRITTEN (so its conditions,
+    x**2/x at 0, survive) with the arguments substituted unevaluated, inner calls expanded the same
+    way. The evaluated call folded the body first: the derivative of f(x) = (x - 1)**2/(x - 1) at 1,
+    the minimum on [1, 3], a sum over its terms and g(x) = f(x) + 3 at 1 were certified. A body that
+    cannot be read that way gives the evaluated call, as before."""
+    def call(*args):
+        if len(args) != len(fn.argsyms) or depth > 20:
+            return fn(*args)
+        w = parse_as_written(fn.fdef.expr, dict(ns, **dict(zip(fn.fdef.args, fn.argsyms))), _depth=depth + 1)
+        if w is None or len(w) != 1:
+            return fn(*args)
+        sub = dict(zip(fn.argsyms, args))
+        with sp.evaluate(False):
+            out = w[0].xreplace(sub)
+            if fn.domain_rel is not None:
+                out = written_domain(out, fn.domain_rel.xreplace(sub))
+        return out
+    return call
 
 
 # ----------------------------------------------------------------------------
@@ -911,7 +954,7 @@ _WRITTEN_COMPUTING = {"diff": (sp.diff, _written_diff), "integrate": (_integrate
                       "limit": (_limit, _Limit)}
 
 
-def parse_as_written(s: str, ns: dict[str, Any] | None = None):
+def parse_as_written(s: str, ns: dict[str, Any] | None = None, _depth: int = 0):
     """The sides of `s` EXACTLY AS WRITTEN, with SymPy's automatic simplification switched off,
     as a Tuple — for reading DEFINEDNESS only, never values. With evaluation on, `x/x` becomes 1,
     `sqrt(x)**2` becomes x and `x**2/x` becomes x before any condition can be read, so the points
@@ -944,6 +987,9 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None):
     for name, (computing, written) in _WRITTEN_COMPUTING.items():
         if local.get(name) is computing:
             local[name] = written
+    for name, value in list(local.items()):
+        if callable(value) and getattr(value, "fdef", None) is not None:
+            local[name] = _written_call(value, ns, _depth)
     out = []
     for _, chunk in _split_top_level(s):
         try:

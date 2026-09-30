@@ -505,3 +505,98 @@ def test_a_closed_condition_no_check_proves_is_not_dropped_beside_a_variable(kin
     symbolic, had no free symbol, and was dropped; both problems were certified (on 35af293 too)."""
     ir = _ir(kind, params, givens=givens, shape=shape)
     assert _run(ir, claim, kind="set" if shape == "set" else "value").verdict != "CORRECT"
+
+
+# --- the second audit: a problem function read as written ---------------------------------------------
+
+FR = [{"name": "f", "expr": "(x - 1)**2/(x - 1)", "args": ["x"]}]
+
+
+@pytest.mark.parametrize("kind,params,shape,claim,ok_params,ok_claim", [
+    ("derivative", {"f": "f(x)", "var": "x", "at": "1"}, "value", "1", {"f": "f(x)", "var": "x", "at": "2"}, "1"),
+    ("extremum", {"f": "f(x)", "var": "x", "interval": "[1, 3]", "which": "min"}, "value", "0",
+     {"f": "f(x)", "var": "x", "interval": "[2, 3]", "which": "min"}, "1"),
+    ("tangent_line", {"f": "f(x)", "var": "x", "at": "1", "dep": "y"}, "equation", "y = x - 1", None, None),
+])
+def test_a_functions_written_conditions_reach_the_calculus_tasks(kind, params, shape, claim, ok_params, ok_claim):
+    """f(x) = (x - 1)**2/(x - 1) is undefined at 1; called through f, its derivative there, its minimum
+    on [1, 3] and its tangent at 1 were certified (the same text without f was UNKNOWN)."""
+    ir = dict(_ir(kind, params, shape="scalar" if shape == "value" else shape), functions=FR)
+    assert _run(ir, claim, kind=shape).verdict != "CORRECT"
+    if ok_params:
+        assert _run(dict(_ir(kind, ok_params), functions=FR), ok_claim).verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("expr,body,claim", [("Sum(f(k), (k, -1, 1))", "x/x", "3"),
+                                             ("Sum(f(k), (k, -2, 1))", "log(x + 1) - log(x + 1)", "0")])
+def test_a_sum_over_a_functions_undefined_terms_is_undefined(expr, body, claim):
+    ir = dict(_ir("evaluate", {"expr": expr}, [{"name": "k", "domain": "integer"}]),
+              functions=[{"name": "f", "expr": body, "args": ["x"]}])
+    assert _run(ir, claim).verdict != "CORRECT"
+
+
+def test_a_series_term_through_a_function_keeps_its_conditions():
+    fn = [{"name": "a", "expr": "(n - 2)**2/(n - 2)", "args": ["n"]}]
+    V = KP + [{"name": "n", "domain": "positive_integer"}]
+    ir = dict(_ir("series_sum", {"term": "a(k)", "var": "k", "lo": "1", "hi": "4"}, V), functions=fn)
+    assert _run(ir, "2").verdict != "CORRECT"
+    ok = dict(_ir("series_sum", {"term": "a(k)", "var": "k", "lo": "3", "hi": "4"}, V), functions=fn)
+    assert _run(ok, "3").verdict == "CORRECT"
+
+
+G2 = FR + [{"name": "g", "expr": "f(x) + 3", "args": ["x"]}]
+
+
+@pytest.mark.parametrize("kind,params,shape,wrong,right", [
+    ("solve_equation", {"equation": "g(x) = 3", "var": "x"}, "set", "{1}", "{}"),
+    ("domain_of", {"expr": "g(x)", "var": "x"}, "interval", "Reals", "(-oo, 1) U (1, oo)"),
+])
+def test_a_function_calling_a_function_keeps_the_inner_conditions(kind, params, shape, wrong, right):
+    """g(x) = f(x) + 3 lost f's condition x != 1: {1} and the domain R were certified, {} refuted."""
+    ir = dict(_ir(kind, params, shape=shape), functions=G2)
+    assert _run(ir, wrong, kind=shape).verdict == "INCORRECT"
+    assert _run(ir, right, kind=shape).verdict == "CORRECT"
+    assert _run(dict(_ir("evaluate", {"expr": "g(1)"}), functions=G2), "3").verdict != "CORRECT"
+
+
+FDOM = [{"name": "f", "expr": "x**2 + 1", "args": ["x"], "domain": "x > 0"}]
+
+
+@pytest.mark.parametrize("kind,params,shape,wrong,right", [
+    ("solve_equation", {"equation": "f(x) = 5", "var": "x"}, "set", "{-2, 2}", "{2}"),
+    ("solve_inequality", {"inequality": "f(x) < 5", "var": "x"}, "interval", "(-2, 2)", "(0, 2)"),
+])
+def test_a_functions_declared_domain_is_applied(kind, params, shape, wrong, right):
+    """FunctionDef.domain was ignored: f(x) = x**2 + 1 on x > 0 gave {-2, 2} and f(-2) = 5; Lean
+    proved f(-2) = 5."""
+    ir = dict(_ir(kind, params, shape=shape), functions=FDOM)
+    assert _run(ir, wrong, kind=shape).verdict == "INCORRECT"
+    assert _run(ir, right, kind=shape).verdict == "CORRECT"
+    ev = dict(_ir("evaluate", {"expr": "f(-2)"}), functions=FDOM)
+    assert _run(ev, "5").verdict != "CORRECT"
+    from mathverify.formal.statement import build_statement
+    assert build_statement(ev, {"kind": "value", "payload": "5"}) is None
+
+
+def test_a_sum_in_a_function_body_gets_an_integer_index_at_the_call():
+    ir = dict(_ir("simplify_expression", {"expr": "S(n)"}, KP + [{"name": "n", "domain": "positive_integer"}],
+                  shape="expression"),
+              functions=[{"name": "S", "expr": "Sum(cos(pi*k), (k, 1, 2*n))", "args": ["n"]}])
+    assert _run(ir, "1", kind="expression").verdict == "INCORRECT"
+    assert _run(ir, "0", kind="expression").verdict == "CORRECT"
+
+
+def test_a_finite_sum_at_a_sample_point_is_written_out_not_strictly_evaluated():
+    """Σ_{k=1}^{2n} sin²(πk/2) = n took 180-330 s: each exact check of a sample point ran strict evalf
+    on the unevaluated sum in the verifier's own process."""
+    import time
+    from mathverify.equiv.random_point import _written_out
+    k = sp.Symbol("k", integer=True)
+    assert _written_out(sp.Sum(sp.sin(sp.pi * k / 2) ** 2, (k, 1, 6))) == 3
+    assert _written_out(sp.Sum(1 / k ** 2, (k, 1, sp.oo))) is None
+    ir = _ir("simplify_expression", {"expr": "Sum(sin(pi*k/2)**2, (k, 1, 2*n))"},
+             NN + KP, shape="expression")
+    t = time.time()
+    assert _run(ir, "n", kind="expression").verdict == "CORRECT"
+    assert time.time() - t < 120
+    assert _run(ir, "2*n", kind="expression").verdict == "INCORRECT"
