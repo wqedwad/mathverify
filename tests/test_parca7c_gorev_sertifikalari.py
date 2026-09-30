@@ -137,8 +137,11 @@ FN = {"name": "f", "args": ["x"], "expr": "log(-1) - log(-1) + x"}
 def test_a_task_expression_undefined_as_written_is_not_certified(ir, claim, kind):
     r = _run(ir, claim, kind)
     assert r.verdict == "UNKNOWN"
-    assert any(l.evidence.get("reason") in ("expression_undefined_as_written", "f_undefined_as_written",
-                                            "f_undefined_at_point_as_written") for l in r.layers)
+    # the certificate's own reason, or the intake's (part v-b B reads the task expression as written
+    # before any certificate runs: tests/test_parca7b_tanimlilik.py)
+    assert "problem_undefined_as_written" in r.flags or any(
+        l.evidence.get("reason") in ("expression_undefined_as_written", "f_undefined_as_written",
+                                     "f_undefined_at_point_as_written") for l in r.layers)
 
 
 @pytest.mark.parametrize("ir,right,wrong,kind", [
