@@ -185,8 +185,122 @@ def test_a_constant_bound_the_right_way_round_is_read(expr, claim, verdict):
     assert verify(_ir("evaluate", {"expr": expr}, KI), _sol(claim)).verdict == verdict
 
 
+# ---------------------------------------------------------------------------- (4) symbolic bounds
+# A symbolic bound took the value its given puts in: Σ_{k=1}^{n} k with n = -2 is SymPy's Karr sum 1, and
+# Σ_{k=1}^{n/2} k with n = 7 steps from 1 (63/8). Both were CORRECT, while the same sums written with
+# numbers are not read (see (3) and normalize.parse._refuse_reversed_ranges). The range as written now
+# needs hi - lo + 1 >= 0 (hi = lo - 1 is the empty sum) and, for finite bounds, hi - lo an integer.
+KN = [{"name": "k", "domain": "integer"}, {"name": "n", "domain": "integer"}]
+KPN = [{"name": "k", "domain": "integer"}, {"name": "n", "domain": "positive_integer"}]
+KUN = [{"name": "k", "domain": "integer"}, {"name": "n"}]
+KRM = [{"name": "k", "domain": "integer"}, {"name": "m", "domain": "real"}]
+
+
+def _ev(expr, givens=(), vars_=KN):
+    return _ir("evaluate", {"expr": expr}, vars_, givens)
+
+
+@pytest.mark.parametrize("ir,claim", [
+    (_ev("Sum(k, (k, 1, n))", ["n = -2"]), "1"),                    # Karr
+    (_ev("Sum(k, (k, 1, n))", ["n = -2"]), "0"),                    # the empty sum: no convention either
+    (_ev("Sum(k, (k, 1, n))", ["n = -2"], KUN), "1"),
+    (_ev("Sum(k, (k, n, 1))", ["n = 4"]), "-5"),
+    (_ev("floor(Sum(k, (k, 3, n)))", ["n = 1"]), "-2"),
+    (_ev("Product(k, (k, 3, n))", ["n = 0"]), "1/2"),
+    (_ev("Sum(k, (k, 1, n + 1))", ["n = -4"]), "3"),
+    (_ev("Sum(k, (k, 1, n))", ["n + 2 = 0"]), "1"),
+    (_ev("Sum(k, (k, 1, n))", ["n = -1"]), "0"),                    # hi = lo - 2: Karr's 0 is its formula's
+    (_ev("Sum(k, (k, 1, 2*n))", ["n = -1"]), "1"),
+    (_ev("Sum(k, (k, n, 3))", ["n = 5"]), "-4"),
+    (_ev("Sum(k, (k, n, 3))", ["n = 5"]), "0"),
+    (_ev(r"\sum_{k=1}^{n} k", ["n = -2"]), "1"),
+    (_ev(r"\prod_{k=3}^{n} k", ["n = 0"]), "1/2"),
+    # bounds not an integer apart
+    (_ev("Sum(k, (k, 1, n/2))", ["n = 7"]), "63/8"),
+    (_ev("Sum(k, (k, 1, n/2))", ["n = 7"]), "6"),
+    (_ev("Sum(k, (k, 1, m))", ["m = 5/2"], KRM), "35/8"),
+])
+def test_a_given_that_reverses_a_symbolic_range_is_no_value(ir, claim):
+    assert verify(ir, _sol(claim)).verdict == "UNKNOWN"
+
+
+@pytest.mark.parametrize("ir,claim,verdict", [
+    (_ev("Sum(k, (k, 1, n))", ["n = 3"]), "6", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))", ["n = 3"]), "5", "INCORRECT"),
+    (_ev("Sum(k, (k, 1, n))", ["n = 0"]), "0", "CORRECT"),          # hi = lo - 1: the empty sum
+    (_ev("Sum(k, (k, 1, n))", ["n = 0"]), "1", "INCORRECT"),
+    (_ev("Product(k, (k, 3, n))", ["n = 2"]), "1", "CORRECT"),      # the empty product
+    (_ev("Sum(k, (k, n, 3))", ["n = 4"]), "0", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))", ["n = 3"], KPN), "6", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))", ["n = 3"], KUN), "6", "CORRECT"),
+    (_ev("Sum(k, (k, n, n + 2))", ["n = -5"]), "-12", "CORRECT"),   # never reversed: no condition
+    (_ev("Sum(k, (k, n, n + 2))", ["n = -5"]), "-11", "INCORRECT"),
+    (_ev("Sum(k, (k, 1, n/2))", ["n = 6"]), "6", "CORRECT"),
+    (_ev("Sum(k, (k, 1, 2*n))", ["n = 2"]), "10", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n**2))", ["n = -2"]), "10", "CORRECT"),
+    (_ev("Sum(2**k, (k, -oo, n))", ["n = 0"]), "2", "CORRECT"),
+    (_ev(r"\sum_{k=1}^{n} k", ["n = 3"]), "6", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))"), "n*(n + 1)/2", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))"), "n**2/2", "INCORRECT"),
+    (_ev("Sum(k, (k, 1, n))", (), KUN), "n*(n + 1)/2", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))", ["n**2 = 4", "n > 0"]), "3", "CORRECT"),
+])
+def test_a_symbolic_range_the_right_way_round_is_read(ir, claim, verdict):
+    assert verify(ir, _sol(claim)).verdict == verdict
+
+
+@pytest.mark.parametrize("ir,claim,verdict", [
+    # n = -2 reverses the range and is dropped like any point where the expression is undefined:
+    # the value at n = 2 is the only one (before: two values, 3 and Karr's 1, UNKNOWN)
+    (_ev("Sum(k, (k, 1, n))", ["n**2 = 4"]), "3", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))", ["n**2 = 4"]), "1", "INCORRECT"),
+    # -4 is a root of Karr's n(n + 1)/2 = 6 only
+    (_ir("solve_equation", {"var": "n", "equation": "Sum(k, (k, 1, n)) = 6"}, KN, shape="set"), "{-4, 3}",
+     "INCORRECT"),
+    (_ir("solve_equation", {"var": "n", "equation": "Sum(k, (k, 1, n)) = 0"}, KN, shape="set"), "{-1, 0}",
+     "INCORRECT"),
+])
+def test_a_reversed_range_drops_the_solution(ir, claim, verdict):
+    kind = "set" if ir["answer_shape"] == "set" else "value"
+    assert verify(ir, _sol(claim, kind)).verdict == verdict
+
+
+def test_the_range_conditions():
+    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED, definedness_conditions
+    n = sp.Symbol("n", integer=True)
+    m = sp.Symbol("m", real=True)
+    p = sp.Symbol("n", integer=True, positive=True)
+    k, j = sp.Symbol("k", integer=True), sp.Symbol("j", integer=True)
+    with sp.evaluate(False):
+        exprs = [sp.Sum(k, (k, 1, n)), sp.Sum(k, (k, 1, p)), sp.Sum(k, (k, 1, m)), sp.Product(k, (k, 3, n)),
+                 sp.Sum(k, (k, n, n + 2)), sp.Sum(k, (k, 1, n / 2)), sp.Sum(2 ** k, (k, -sp.oo, n)),
+                 sp.Sum(sp.Sum(1, (j, k, 2)), (k, 1, 5)), sp.Sum(sp.Sum(1, (j, 1, k)), (k, 1, 5)),
+                 sp.Sum(sp.Sum(1, (j, 1, n - k)), (k, 1, 3))]
+    got = [definedness_conditions(e, None) for e in exprs]
+    assert got[0] == [sp.Ge(n, 0)]
+    assert got[1] == []
+    assert got[2] == [sp.Ge(m, 0), sp.Contains(m, sp.S.Integers)]
+    assert got[3] == [sp.Ge(n - 2, 0)]
+    assert got[4] == []
+    assert got[5] == [sp.Ge(n / 2, 0), sp.Contains(n / 2, sp.S.Integers)]
+    assert got[6] == []
+    # an inner range an outer index reverses: not read (`false` would make it defined nowhere)
+    assert got[7] == [DEFINEDNESS_UNDECIDED] and sp.false not in got[7]
+    assert got[8] == []
+    assert got[9] == [sp.Ge(n - 1, 0), sp.Ge(n - 2, 0), sp.Ge(n - 3, 0)]
+
+
+def test_a_nested_range_an_outer_index_reverses_is_not_defined_nowhere():
+    """Σ_{k=1}^{5} Σ_{j=k}^{2} 1 runs Karr's sum at k = 4, 5: undecided, so no task reads it as having
+    no value (the empty solution set of x + that = 0 is not certified)."""
+    eq = _ir("solve_equation", {"var": "x", "equation": "x + Sum(Sum(1, (j, k, 2)), (k, 1, 5)) = 0"},
+             [{"name": "x"}, {"name": "k", "domain": "integer"}, {"name": "j", "domain": "integer"}], shape="set")
+    for claim in ("EmptySet", "{0}", "{-3}"):
+        assert verify(eq, _sol(claim, "set")).verdict == "UNKNOWN"
+
+
 # ---------------------------------------------------------------------------- (5) gcd in a list payload
-EQ12 = _ir("solve_equation", {"var": "x", "equation": "x - 12 = 0"}, X, shape="set")
+EQ12 =_ir("solve_equation", {"var": "x", "equation": "x - 12 = 0"}, X, shape="set")
 
 
 @pytest.mark.parametrize("payload", [["gcd(84, 120)"], ["gcd(120, 84)"], ["igcd(84, 120)"], [r"\gcd(84, 120)"],

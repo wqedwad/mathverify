@@ -203,6 +203,107 @@ def _index_region(lo, hi):
     return S.Integers, False
 
 
+def _range_span_conditions(bounds, idx) -> list[Any]:
+    """The range of a Sum/Product as written, for each (lo, hi): hi - lo + 1 >= 0 and, for finite
+    bounds, hi - lo an integer. hi = lo - 1 is the empty sum (0) or product (1), as
+    `normalize.parse._refuse_reversed_ranges` and `series_sum` read it; below that SymPy's Karr
+    convention gives a value the curriculum does not have (Σ_{k=1}^{-2} k = 1, Π_{k=3}^{0} k = 1/2), and
+    bounds not an integer apart step from the lower one (Σ_{k=1}^{7/2} k = 63/8). The parse does not
+    read such a range written with numbers; a symbolic bound took the value of its given: Σ_{k=1}^{n} k
+    with n = -2 was 1 and Σ_{k=1}^{n/2} k with n = 7 was 63/8, CORRECT (V16, 30 Sep 2026). Open on the
+    problem's symbols, the conditions drop such a value like any undefined point. A range reversed or
+    not an integer apart for certain (an outer index put into an inner bound: Σ_{k=1}^{5} Σ_{j=k}^{2} 1
+    at k = 4) is DEFINEDNESS_UNDECIDED, not `false`: its numeric twin is not read, and `false` would
+    read the expression as defined nowhere (an empty solution set certified).
+
+    SymPy writes a nested sum as one binder, innermost limit first, whose inner bounds may name an
+    outer index (Sum(1, (j, k, 2), (k, 1, 5))): such a condition is decided over that index's values
+    (_outer_index_conditions); left open, it named the bound index as a problem symbol."""
+    out: list[Any] = []
+    for i, (lo, hi) in enumerate(bounds):
+        try:
+            with sp.evaluate(True):
+                conds = _one_range_conditions(lo, hi)
+                if conds is not None:
+                    conds = _outer_index_conditions(conds, i, bounds, idx)
+        except Exception:  # noqa: BLE001 - a range no relation reads is not proved to run forward
+            conds = None
+        if conds is None:
+            return [DEFINEDNESS_UNDECIDED]
+        out += [c for c in conds if c not in out]
+    return out
+
+
+def _outer_index_conditions(conds, i, bounds, idx) -> list[Any] | None:
+    """The range conditions of limit `i` with the outer indices they name decided over those indices'
+    values: at each point when the outer bounds are integers (at most _POINTS points), over the index
+    range otherwise (one index, a condition on it alone); None when that is not decided, or when one
+    fails at some point (the inner range is reversed there for certain)."""
+    out: list[Any] = []
+    for c in conds:
+        named = c.free_symbols & set(idx)
+        if not named:
+            out.append(c)
+            continue
+        pos = sorted(idx.index(v) for v in named)
+        if pos[0] <= i:
+            return None                             # a bound naming its own or an inner index
+        if all(bounds[p][0].is_Integer and bounds[p][1].is_Integer for p in pos):
+            ranges = [range(int(bounds[p][0]), int(bounds[p][1]) + 1) for p in pos]
+            count = 1
+            for r in ranges:
+                count *= len(r)
+            if count > _POINTS or not _spend(count):
+                return None
+            for point in itertools.product(*ranges):
+                v = c.xreplace({idx[p]: sp.Integer(x) for p, x in zip(pos, point)})
+                if v is sp.true:
+                    continue
+                if v is sp.false or not v.free_symbols or v.free_symbols & set(idx):
+                    return None
+                if v not in out:
+                    out.append(v)
+            continue
+        if len(pos) != 1 or c.free_symbols != named:
+            return None
+        lo, hi = bounds[pos[0]]
+        region = (sp.Range(int(lo), oo) if lo.is_Integer else sp.Range(-oo, int(hi) + 1) if hi.is_Integer
+                  else S.Integers)
+        # a superset of the index values: when the outer range is reversed its own condition fails
+        bad = _violations(c, idx[pos[0]], region)
+        if bad is None or bad.is_empty is not True:
+            return None
+    return out
+
+
+def _one_range_conditions(lo, hi) -> list[Any] | None:
+    """The open conditions of one range (see _range_span_conditions); None when it is reversed or
+    not an integer apart for certain, or not read."""
+    span = hi - lo + 1
+    if span.has(sp.nan, sp.zoo) or span.is_extended_real is False:
+        return None
+    conds = []
+    if span.is_extended_nonnegative is not True:
+        if span.is_extended_negative is True:
+            return None
+        conds.append(sp.Ge(span, 0))
+    if not (lo.has(oo, -oo) or hi.has(oo, -oo)):
+        gap = hi - lo
+        if gap.is_integer is False:
+            return None
+        if gap.is_integer is not True:
+            # on the bound itself when the other one is an integer: a domain reads Contains(n, Z)
+            conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, S.Integers))
+    out = []
+    for c in conds:
+        if c is sp.true:
+            continue
+        if c is sp.false or not c.free_symbols:
+            return None
+        out.append(c)
+    return out
+
+
 def _range_conditions(n, var) -> list[Any]:
     """Sum/Product: the term, as written, at every index. A finite range of at most _POINTS indices is
     checked index by index (the term's own conditions there: a failing one makes the sum undefined,
@@ -211,15 +312,20 @@ def _range_conditions(n, var) -> list[Any]:
     violation found there makes the sum undefined only where the term itself is undefined at it.
     Before 30 Sep 2026 these conditions were dropped (they name the index, not the problem's
     variables) and Σ_{k=-1}^{1000} k/k = 1002, Σ_{k<=0} 2^k k/k = 2 and Σ_{k=-1}^{n} k/k with n = 3
-    were certified; the first V14 checked only finite sums of at most 200 terms."""
+    were certified; the first V14 checked only finite sums of at most 200 terms.
+
+    The range itself comes first: see _range_span_conditions."""
     limits = n.limits
     if any(len(lim) != 3 for lim in limits):
         return [DEFINEDNESS_UNDECIDED]
+    bounds = [(_evaluated(lim[1]), _evaluated(lim[2])) for lim in limits]
     idx = [lim[0] for lim in limits]
+    spans = _range_span_conditions(bounds, idx)
+    if any(is_undecided(c) for c in spans):
+        return spans
     named, plain = _named_conditions(n.function, idx, var)
     if not named:
-        return []
-    bounds = [(_evaluated(lim[1]), _evaluated(lim[2])) for lim in limits]
+        return spans
     if all(lo.is_Integer and hi.is_Integer for lo, hi in bounds):
         ranges = [range(int(lo), int(hi) + 1) for lo, hi in bounds]
         count = 1
@@ -259,7 +365,7 @@ def _range_conditions(n, var) -> list[Any]:
                     _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var) is False for i in points):
                 return [sp.false]
         return [DEFINEDNESS_UNDECIDED]
-    return []
+    return spans
 
 
 def _declared_span(v):
