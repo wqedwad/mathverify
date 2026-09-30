@@ -441,6 +441,10 @@ def cases_parametric():
          _sol("(a, oo)", "interval"), NO),
         ("par x-a=4 given x>a free {a+4}", _ir("solve_equation", {"equation": "x - a = 4", "var": "x"}, xa, ["x > a"]),
          _sol("{a + 4}"), NOTBAD),
+        # the root a/2 + 1 exists only for a <= 2: the guard cannot decide it, so the solvers' agreement
+        # is no completeness (the empty set was certified)
+        ("par sqrt(x-a)=sqrt(2-x) free {}",
+         _ir("solve_equation", {"equation": "sqrt(x - a) = sqrt(2 - x)", "var": "x"}, xa), _sol("{}"), UNK),
     ]
 
 

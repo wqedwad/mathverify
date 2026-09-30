@@ -276,6 +276,15 @@ def test_controls_parametric_answers_stay_certified(ir, claim, ck):
     assert _run(ir, claim, ck).verdict == "CORRECT"
 
 
+def test_a_root_the_guard_cannot_decide_leaves_the_solution_set_open():
+    """√(x − a) = √(2 − x) has the root a/2 + 1 only for a <= 2. The guard could not decide it and
+    the solvers' agreement was read as completeness: ∅ was certified. The equation's own condition
+    is exempt from condition_not_applied (checked at each root), so this completeness rule is what
+    keeps the exemption sound."""
+    ir = _ir("solve_equation", {"equation": "sqrt(x - a) = sqrt(2 - x)", "var": "x"}, [X, A])
+    assert _run(ir, "{}").verdict == "UNKNOWN"
+
+
 # --- the context helpers ---------------------------------------------------------------------------
 
 def _ctx(ir):

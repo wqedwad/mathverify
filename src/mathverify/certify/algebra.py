@@ -119,6 +119,10 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             s1 = {str(c) for c in r1.value}
             s2 = {str(c) for c in r2.value}
             complete = (s1 == s2) or (set(ev["kept"]) <= s1 and set(ev["kept"]) <= s2)
+            # a candidate the guard could not decide may be a root: agreeing solvers say nothing about
+            # it. With a free a, √(x − a) = √(2 − x) had its root a/2 + 1 undecided and ∅ certified,
+            # though it is the answer only for a > 2 (part vi, 30 Sep 2026)
+            complete = complete and not any(_undecided(why) for _, why in rejected)
             ev["completeness_method"] = "solver_agreement"
             ev["complete"] = complete
         else:
