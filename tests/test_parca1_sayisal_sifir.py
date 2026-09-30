@@ -98,14 +98,16 @@ def test_the_definite_integral_certificate_confirms_an_exact_zero():
 
 
 def test_a_zero_integral_sympy_cannot_evaluate_is_decided_by_the_scale_alone():
-    """With no exact value the claim 0 was compared relatively with the residue and REFUTED."""
-    di = _di("sin(sin(x))", "-1", "1")
+    """With no exact value the claim 0 was compared relatively with the residue and REFUTED. SymPy
+    has no value for ∫_0^{2π} sin(sin x) dx; its quadrature is -4.4e-58 at 50 digits (on [-1, 1] the
+    symmetric nodes give 0.0 exactly, which no relative comparison misreads: not a probe here)."""
+    di = _di("sin(sin(x))", "0", "2*pi")
     assert _run(di, "0").verdict == "CORRECT"
     assert _run(di, "1/10").verdict == "INCORRECT"
     ev = _ev("integrate(sin(x), (x, 0, 2*pi))")
-    r = _run(ev, "0", [("eq", "Integral(sin(sin(x)), (x, -1, 1)) = 0")])
+    r = _run(ev, "0", [("eq", "Integral(sin(sin(x)), (x, 0, 2*pi)) = 0")])
     assert r.verdict == "CORRECT" and _steps(r) != ["refuted"]
-    r = _run(ev, "0", [("eq", "Integral(sin(sin(x)), (x, -1, 1)) = 10**(-30)")])
+    r = _run(ev, "0", [("eq", "Integral(sin(sin(x)), (x, 0, 2*pi)) = 10**(-30)")])
     assert r.verdict == "INCORRECT" and _steps(r) == ["refuted"]
 
 
