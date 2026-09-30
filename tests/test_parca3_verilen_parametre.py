@@ -144,9 +144,10 @@ def test_closed_binding():
     assert closed_binding(sp.Eq(a, 4)) == (a, 4)
     assert closed_binding(sp.Eq(4, a)) == (a, 4)
     assert closed_binding(sp.Eq(a, sp.sqrt(2))) == (a, sp.sqrt(2))
-    for rel in (sp.Eq(a ** 2, 16), sp.Eq(a + 1, 5), sp.Eq(a, b), sp.Eq(a, sp.oo), sp.Eq(a, sp.I),
-                sp.Eq(a, sp.Integral(b, (b, 0, 1))), a > 4):
-        assert closed_binding(rel) is None, rel
+    c = sp.Symbol("c")               # no assumption: Eq(c, I) and Eq(c, oo) stay relations
+    for rel in (sp.Eq(a ** 2, 16), sp.Eq(a + 1, 5), sp.Eq(a, b), sp.Eq(c, sp.oo), sp.Eq(c, sp.I),
+                sp.Eq(c, 2 + sp.I), sp.Eq(a, sp.Integral(b, (b, 0, 1))), a > 4):
+        assert isinstance(rel, (sp.Eq, sp.StrictGreaterThan)) and closed_binding(rel) is None, rel
 
 
 # --- S1: a compute step in the problem's parameters ----------------------------------------------
