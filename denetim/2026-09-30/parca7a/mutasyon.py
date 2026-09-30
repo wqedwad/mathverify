@@ -1,6 +1,7 @@
 """Mutation check of part (v-b A) of 30 Sep 2026 (HANDOFF V16): set `+`/`-` through `_set_op`, the exact
-order of `normalize_set`, the constant bounds of a Sum/Product (text and LaTeX), the gcd check of a list
-payload and the size limit of `unify_endpoints` (rationals counted). The machinery (throwaway clones of the
+order of `normalize_set`, the constant bounds of a Sum/Product (text and LaTeX), the range conditions of a
+symbolic Sum/Product bound (S, the Karr item), the gcd check of a list payload and the size limit of
+`unify_endpoints` (rationals counted). The machinery (throwaway clones of the
 committed HEAD, exit codes, clean-up) is the one of denetim/2026-09-26/mutasyon.py, with the several-files
 target of denetim/2026-09-30/parca5/mutasyon.py.
 
@@ -26,8 +27,10 @@ base = p5.base
 PARSE = "src/mathverify/normalize/parse.py"
 SETS = "src/mathverify/equiv/sets.py"
 VER = "src/mathverify/verifier.py"
+DOMAIN = "src/mathverify/certify/domain.py"
 # this part's tests first (the fastest kill), then the V14 files
 T = "tests/test_parca7a_kume_ayristirici.py tests/test_v14_parser_conventions.py tests/test_audit_2026_09_29_v14.py"
+TS = "tests/test_parca7a_kume_ayristirici.py"
 
 MUTATIONS = [
     # --- (1) set + and -
@@ -83,6 +86,20 @@ MUTATIONS = [
     # --- (6) the size limit
     ("U01 sınır rasyonelleri saymaz", SETS, "            n_const += 1\n",
      "            n_const += not isinstance(e, sp.Rational)\n", T),
+    # --- (4) symbolic bounds (the Karr item; certify.domain._range_span_conditions)
+    ("S01 aralık koşulu adsız gövdede atlanır", DOMAIN,
+     "    if not named:\n        return spans\n", "    if not named:\n        return []\n", TS),
+    ("S02 hi - lo + 1 >= 0 yazılmaz", DOMAIN,
+     "        conds.append(sp.Ge(span, 0))\n", "        pass\n", TS),
+    ("S03 tam sayı aralığı yazılmaz", DOMAIN,
+     "            conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, S.Integers))\n",
+     "            pass\n", TS),
+    ("S04 kesin ters aralık false okunur", DOMAIN,
+     "        if conds is None:\n            return [DEFINEDNESS_UNDECIDED]\n        out += [c for c in conds if c not in out]\n",
+     "        if conds is None:\n            return [sp.false]\n        out += [c for c in conds if c not in out]\n", TS),
+    ("S05 dış indisli iç sınır karar verilmez", DOMAIN,
+     "                if conds is not None:\n                    conds = _outer_index_conditions(conds, i, bounds, idx)\n",
+     "                pass\n", TS),
 ]
 
 
