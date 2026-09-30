@@ -348,7 +348,9 @@ def _fail_set(claim, v, region, ctx: Ctx):
 
 
 def _outside(region, sets, conjunction: bool):
-    inside = sp.Intersection(*sets) if conjunction else sp.Union(*sets)
+    from ..equiv.sets import unify_endpoints
+    region, *sets = unify_endpoints([region, *sets])      # raises when two endpoints are undecided
+    inside =sp.Intersection(*sets) if conjunction else sp.Union(*sets)
     return sp.Complement(region, inside)
 
 

@@ -179,6 +179,22 @@ def _integer_op(cls):
     return call
 
 
+def _set_op(op):
+    """Union/Intersection/Complement written in SymPy's own syntax, their arguments' endpoints made
+    one spelling first (equiv.sets.unify_endpoints), as for the `U` notation: SymPy merged
+    `Union(Interval.open(-oo, R), Interval.open(3, oo))`, R = sqrt(11 + 6*sqrt(2)) - sqrt(2) = 3,
+    into the whole line before anything could compare R with 3 (V14, 30 Sep 2026)."""
+    def build(*sets, **kw):
+        from ..equiv.sets import EndpointsIncomparable, unify_endpoints
+        try:
+            sets = unify_endpoints(list(sets))
+        except EndpointsIncomparable as e:
+            raise ParseError(f"set endpoints cannot be compared exactly: {e}") from e
+        return op(*sets, **kw)
+    build.__name__ = op.__name__
+    return build
+
+
 def _at(e, v, val):
     """e at v = val. A derivative at a corner is no derivative: diff(Abs(x), x) is sign(x), and
     sign(0) = 0 certified "the derivative of |x| at 0 is 0" (audit of 29 Sep 2026). A sign, Heaviside
@@ -285,8 +301,8 @@ _SAFE_NAMES: dict[str, Any] = {
     "Eq": Eq, "Ne": Ne, "Lt": Lt, "Le": Le, "Gt": Gt, "Ge": Ge, "And": And, "Or": Or, "Not": Not,
     "Piecewise": sp.Piecewise,
     # sets
-    "Interval": Interval, "FiniteSet": FiniteSet, "Union": Union, "Intersection": Intersection,
-    "Complement": Complement, "EmptySet": EmptySet, "Reals": S.Reals, "Integers": S.Integers,
+    "Interval": Interval, "FiniteSet": FiniteSet, "Union": _set_op(Union), "Intersection": _set_op(Intersection),
+    "Complement": _set_op(Complement), "EmptySet": EmptySet, "Reals": S.Reals, "Integers": S.Integers,
     "Naturals": S.Naturals, "Naturals0": S.Naturals0, "Complexes": S.Complexes,
     "Range": sp.Range, "ImageSet": sp.ImageSet, "Lambda": sp.Lambda, "ConditionSet": sp.ConditionSet,
     # linear algebra
@@ -1240,6 +1256,11 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
         i += 1
     parts.append(cur)
     sets = [_parse_single_set(p, ns) for p in parts if p.strip()]
+    from ..equiv.sets import unify_endpoints, EndpointsIncomparable
+    try:
+        sets = unify_endpoints(sets)
+    except EndpointsIncomparable as e:
+        raise ParseError(f"set endpoints cannot be compared exactly: {e}") from e
     return Union(*sets) if len(sets) > 1 else sets[0]
 
 
