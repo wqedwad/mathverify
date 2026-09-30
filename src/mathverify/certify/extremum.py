@@ -23,7 +23,7 @@ from ..equiv import answers_equivalent
 from ..equiv.numeric import num_equal, to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 
 LAYER = "certify.extremum"
 
@@ -364,6 +364,9 @@ def verify(ir, solution, ctx: Ctx):
             return err
         from ..normalize.parse import parse_set_str
         iv = parse_set_str(p.get("interval", "Reals"), ctx.ns) if p.get("interval") else ctx.domain_for(var)
+        if not p.get("interval") and ctx.unapplied_conditions(var):
+            # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)
+            return condition_not_applied(LAYER, ctx.unapplied_conditions(var), t.ms)
         claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
         if err:
             return err

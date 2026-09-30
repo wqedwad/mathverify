@@ -19,7 +19,7 @@ from ..equiv.numeric import (num_equal, to_mp, certified_sign, certified_integer
 from ..equiv.symbolic import sym_equal
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 
 LAYER = "certify.domain"
 
@@ -1015,6 +1015,12 @@ def verify(ir, solution, ctx: Ctx):
             return unknown(LAYER, "domain_undecidable", 0, {"error": "definedness_unknown_as_written"},
                            flags=["cas_failed"])
         base = ctx.domain_for(var)
+        # the expression's own conditions are what domain_of_expression solves ([a, oo) for √(x − a))
+        unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions_strict(expr, var) or ())
+        if unbound:
+            # a condition on x that names a symbol no given fixes (x > b): read on ℝ, [-2, 2] was
+            # certified as the domain of √(4 − x²) under x > b (part vi, 30 Sep 2026)
+            return condition_not_applied(LAYER, unbound, t.ms)
         truth, ev = domain_of_expression(expr, var, base, ctx.timeout)
         if truth is None:
             return unknown(LAYER, "domain_undecidable", 0, ev, flags=["cas_failed"])

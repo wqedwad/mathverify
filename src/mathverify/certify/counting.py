@@ -70,7 +70,13 @@ def _count_roots(expr, var, lo, hi, distinct: bool, ctx: Ctx, ev: dict) -> tuple
     """Roots of the problem's expression AS WRITTEN: the zeros of the numerator of the
     (auto-simplified) rational form, minus every point where the denominator vanishes or a
     definedness condition — of the parsed expression or of the written one — fails."""
-    from .domain import definedness_conditions, relation_holds_at
+    from .domain import definedness_conditions, relation_holds_at, in_domain
+    unbound = ctx.unapplied_conditions(var)
+    if unbound:
+        return None, f"condition_not_applied: {[str(u) for u in unbound][:3]}"
+    # the variable's domain (its declared domain and constraints, the domain of discourse, the given
+    # side conditions): the roots were counted on all of ℝ, so x² − 4 under x > 0 had 2 (part vi)
+    dom = ctx.domain_for(var)
     conds_w, nowhere = ctx.written_conditions()
     if var in nowhere:
         ev["reason_detail"] = "expression_defined_nowhere"
@@ -115,6 +121,12 @@ def _count_roots(expr, var, lo, hi, distinct: bool, ctx: Ctx, ev: dict) -> tuple
                 return None, f"interval_membership_undecided: {rt}"
             if s < 0:
                 continue
+        m = in_domain(dom, rt)
+        if m is None:
+            return None, f"domain_membership_undecided: {rt}"
+        if m is False:
+            rejected.append((str(rt), "outside_the_domain"))
+            continue
         dv = certified_sign(den.subs(var, rt))
         if dv is None:
             return None, f"denominator_undecided: {rt}"
@@ -268,7 +280,12 @@ def _count_integers(ctx: Ctx, var, ev: dict) -> tuple[int | None, str | None]:
     SymPy's own Interval ∩ Integers is not used: it compares irrational endpoints numerically and
     raised on |x| < log 8/log 2."""
     from .domain import in_domain, relation_holds_at
-    rels = ctx.givens()
+    # a symbol a given fixes is read as its value: solveset read the binding b = 0 on x as the empty
+    # set, and every count with a binding was 0 (part vi, 30 Sep 2026)
+    rels, unbound = ctx.on_var(ctx.givens(), var)
+    unbound = ctx.unapplied_conditions(var) + unbound
+    if unbound:
+        return None, f"condition_not_applied: {[str(u) for u in unbound][:3]}"
     if not rels:
         return None, "no_givens"
     try:
@@ -409,12 +426,23 @@ def _holds_exact(rel, point: dict) -> bool | None:
 
 
 def _brute_force_count(givens, syms, bounds: dict[str, tuple[int, int]],
-                       limit: int = _FRACTION_LIMIT) -> tuple[int | None, str]:
+                       limit: int = _FRACTION_LIMIT, domains: dict | None = None) -> tuple[int | None, str]:
+    """`domains`: a set of values per symbol (the domain of discourse), decided exactly per value."""
+    from .domain import in_domain
     ranges = []
     size = 1
     for s_ in syms:
         lo, hi = bounds[s_.name]
-        ranges.append(range(int(lo), int(hi) + 1))
+        vals = range(int(lo), int(hi) + 1)
+        d = (domains or {}).get(s_)
+        if d is not None:
+            if len(vals) > limit:
+                return None, "search_space_too_large"
+            member = [(k, in_domain(d, sp.Integer(k))) for k in vals]
+            if any(m is None for _, m in member):
+                return None, f"domain_membership_undecided_for_{s_.name}"
+            vals = [k for k, m in member if m]
+        ranges.append(vals)
         size *= len(ranges[-1])
     if not givens:
         return size, "no_constraints"
@@ -448,6 +476,10 @@ def _brute_force_count(givens, syms, bounds: dict[str, tuple[int, int]],
     return cnt, "exact_sympy"
 
 
+def _why_flags(why: str | None) -> list[str]:
+    return ["condition_not_applied"] if (why or "").startswith("condition_not_applied") else []
+
+
 def verify(ir, solution, ctx: Ctx):
     kind = ir.task.kind
     if kind not in ("count_roots", "count_integers", "count_solutions"):
@@ -475,13 +507,13 @@ def verify(ir, solution, ctx: Ctx):
             hi = ctx.expr(str(p["hi"])) if "hi" in p else oo
             truth, why = _count_roots(expr, var, lo, hi, p.get("distinct", True), ctx, ev)
             if truth is None:
-                return unknown(LAYER, why or "count_failed", 0, ev)
+                return unknown(LAYER, why or "count_failed", 0, ev, flags=_why_flags(why))
             ev["method"] = "exact_real_roots_with_written_definedness"
         elif kind == "count_integers":
             var = ctx.sym(p.get("var", "x"))
             truth, why = _count_integers(ctx, var, ev)
             if truth is None:
-                return unknown(LAYER, why or "count_failed", 0, ev)
+                return unknown(LAYER, why or "count_failed", 0, ev, flags=_why_flags(why))
             ev["method"] = "interval_integer_count"
         else:  # count_solutions: exact brute force over integer boxes
             syms = ctx.syms()
@@ -495,9 +527,13 @@ def verify(ir, solution, ctx: Ctx):
                     return unknown(LAYER, f"non_integer_bounds_for_{v.name}", 0, ev)
                 bounds[v.name] = (lo_b, hi_b)
             rels = ctx.var_constraints() + ctx.givens()
-            truth, how = _brute_force_count(rels, syms, bounds)
+            # the domain of discourse restricts each variable it mentions; it was not read here, so
+            # x + y = 4 on x > 2 counted all 5 pairs of 0..4 (part vi, 30 Sep 2026)
+            doms = {s_: d for s_ in syms if (d := ctx.discourse(s_)) != S.Reals}
+            truth, how = _brute_force_count(rels, syms, bounds, domains=doms)
             if truth is None:
-                return unknown(LAYER, how, 0, ev, flags=["brute_force_limit"])
+                flags = [] if how.startswith("domain_membership") else ["brute_force_limit"]
+                return unknown(LAYER, how, 0, ev, flags=flags)
             ev["method"] = f"brute_force:{how}"
             ev["bounds"] = bounds
         ev["truth"] = truth

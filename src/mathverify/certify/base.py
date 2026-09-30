@@ -47,7 +47,12 @@ class Ctx:
         key = f"dom:{var.name}"
         if key in self.cache:
             return self.cache[key]
-        dom = parse_domain(self.ir.domain_of_discourse, var, self.ns) if self._dod_mentions(var) else S.Reals
+        # conditions on var that name a symbol no given fixes: dropped here, listed for the
+        # certificates (unapplied_conditions)
+        unapplied: list = []
+        dom = self.discourse(var)
+        if dom.free_symbols - {var}:
+            unapplied.append(str(self.ir.domain_of_discourse))
         vd = next((v for v in self.ir.vars if v.name == var.name), None)
         if vd is not None:
             if vd.domain in ("integer",):
@@ -71,6 +76,8 @@ class Ctx:
                         r = self._with_bound_values(r, var)
                         if r.free_symbols == {var}:
                             dom = sp.Intersection(dom, sp.solveset(r, var, S.Reals))
+                        elif var in r.free_symbols:
+                            unapplied.append(c)
                     except Exception:
                         pass
         # A given inequality on this variable alone restricts it like a declared constraint when
@@ -81,6 +88,7 @@ class Ctx:
         rs, _ = self.side_conditions(var)
         for sol in rs:
             dom = sp.Intersection(dom, sol)
+        unapplied += self.cache.get(f"side_unbound:{var.name}", [])
         # the problem's own expressions must be defined, as written (see written_conditions)
         conds, nowhere = self.written_conditions()
         if var in nowhere:
@@ -90,7 +98,10 @@ class Ctx:
             if c is sp.false:
                 dom = S.EmptySet
                 continue
-            if getattr(c, "free_symbols", None) != {var}:
+            fs = getattr(c, "free_symbols", None)
+            if fs != {var}:
+                if fs and var in fs:
+                    unapplied.append(c)                # the condition itself: see unapplied_conditions
                 continue                               # several variables: var_constraints only
             if isinstance(c, sp.Contains):
                 # a gcd/lcm argument must be rational (certify.domain); solveset cannot read the
@@ -104,8 +115,59 @@ class Ctx:
                 continue
             if not isinstance(sol, sp.ConditionSet):
                 dom = sp.Intersection(dom, sol)
+        self.cache[f"unapplied:{var.name}"] = unapplied
         self.cache[key] = dom
         return dom
+
+    def unapplied_conditions(self, var: sp.Symbol, enforced=()) -> list:
+        """The conditions on `var` that `domain_for` could not read on `var` alone: a declared
+        constraint, the domain of discourse or a side-condition given (as written in the IR), or a
+        written condition (the SymPy relation) that still names a symbol no given fixes to a value
+        (`x > b` with b free). The domain dropped them silently, so a certificate answered on all of
+        ℝ: {-2, 2} for x² = 4 under x > b, (-2, 2) for x² < 4 under x > b, 2 roots of x² − 4 (part vi
+        of the third audit, 30 Sep 2026). A certificate whose answer is read on this domain abstains
+        while the list is not empty. `enforced`: the written conditions the certificate checks itself,
+        with the other symbols left symbolic (guard_roots at each root of √(x − a) = 2, so {a + 4}
+        stays certified)."""
+        self.domain_for(var)
+        return [c for c in self.cache.get(f"unapplied:{var.name}", [])
+                if not (isinstance(c, sp.Basic) and c in enforced)]
+
+    def discourse(self, var: sp.Symbol) -> sp.Set:
+        """The domain of discourse for `var` (ℝ when it does not mention var), with each other symbol a
+        given fixes read as its value: `x > b` with the given b = 0 is (0, oo). Read with b as a symbol
+        it was the interval (b, oo), which no certificate could compare or sample."""
+        if not self._dod_mentions(var):
+            return S.Reals
+        ns = dict(self.ns)
+        ns.update({s_.name: v for s_, v in self.bindings().items() if s_ != var})
+        return parse_domain(self.ir.domain_of_discourse, var, ns)
+
+    def bindings(self) -> dict:
+        """The symbols the givens fix to one real number (`normalize.parse.given_bindings`)."""
+        if "bindings" not in self.cache:
+            self.cache["bindings"] = given_bindings(self.ir, self.ns)
+        return self.cache["bindings"]
+
+    def on_var(self, rels, var: sp.Symbol) -> tuple[list, list]:
+        """The relations `rels` read on `var` alone, each other symbol a given fixes read as its value
+        (`x > b` with b = 0 is x > 0). A relation that then always holds is left out: the binding
+        b = 0 itself became 0 = 0, where solveset(b = 0, x) had read it as the empty set, so any given
+        binding made the solution set of an inequality system empty and a count of integers 0, and
+        both were certified (part vi, 30 Sep 2026). The second item lists the relations that still
+        name another symbol: the certificate cannot read them on `var` and abstains."""
+        bind = {s_: v for s_, v in self.bindings().items() if s_ != var}
+        kept: list = []
+        unbound: list = []
+        for r in rels:
+            r2 = r.xreplace(bind) if bind else r
+            if r2 is sp.true:
+                continue
+            if getattr(r2, "free_symbols", set()) - {var}:
+                unbound.append(r)
+            else:
+                kept.append(r2)
+        return kept, unbound
 
     def _with_bound_values(self, c, var: sp.Symbol):
         """A condition on `var` and other symbols, with each symbol a given fixes (`a = 0`) read as
@@ -115,9 +177,7 @@ class Ctx:
         free = getattr(c, "free_symbols", set())
         if var not in free or free == {var}:
             return c
-        if "bindings" not in self.cache:
-            self.cache["bindings"] = given_bindings(self.ir, self.ns)
-        bind = self.cache["bindings"]
+        bind = self.bindings()
         return c.xreplace({s_: bind[s_] for s_ in free if s_ != var and s_ in bind})
 
     def unreadable_constraints(self) -> list[str]:
@@ -145,28 +205,55 @@ class Ctx:
                        "solve_equation": ("equation",), "solve_inequality": ("inequality",),
                        "count_roots": ("expr",)}
 
-    _MAIN_RELATION = {"solve_equation": "equation", "solve_inequality": "inequality"}
+    # the task's own relation or expression, in params: a given next to it is a side condition.
+    # count_roots and domain_of read no given at all before, so `x > 0` next to x² − 4 left the count
+    # at 2 and the domain of √(4 − x²) at [-2, 2] (part vi, 30 Sep 2026)
+    _MAIN_RELATION = {"solve_equation": "equation", "solve_inequality": "inequality", "count_roots": "expr",
+                      "domain_of": "expr"}
 
     def side_conditions(self, var: sp.Symbol) -> tuple[list[sp.Set], list[str]]:
-        """Solution sets of the single-variable given inequalities that are SIDE conditions (the
-        task's own relation is in params), and the ones that could not be solved exactly. A side
-        condition that cannot be applied leaves the certificates answering another question, so
-        the verifier abstains on it (`given_not_applied`) instead of dropping it silently."""
+        """Solution sets of the given relations on `var` that are SIDE conditions (the task's own
+        relation is in params), and the ones that could not be solved exactly. A side condition that
+        cannot be applied leaves the certificates answering another question, so the verifier abstains
+        on it (`given_not_applied`) instead of dropping it silently; so does a given that names a
+        symbol the problem does not declare. A symbol another given fixes (`x > b` with b = 0) is read
+        as its value; a side condition that still names another symbol is listed for
+        `unapplied_conditions`. A given equation on `var` restricts it too: x³ = 8 next to x² = 4
+        left {-2, 2} certified (part vi, 30 Sep 2026); the task's own relation repeated among the
+        givens is no side condition."""
         key = f"side:{var.name}"
         if key in self.cache:
             return self.cache[key]
         sets: list[sp.Set] = []
         unapplied: list[str] = []
+        unbound: list[str] = []
+        params = self.ir.task.params or {}
         pk = self._MAIN_RELATION.get(self.ir.task.kind)
-        if pk and isinstance((self.ir.task.params or {}).get(pk), str):
+        if pk and isinstance(params.get(pk), str):
             from ..equiv.numeric import real_odd_roots
+            from ..normalize.parse import UndeclaredSymbolError
+            try:
+                main = parse_relation(params[pk], self.ns)
+            except Exception:  # noqa: BLE001 - the certificate reports it
+                main = None
             for g in self.ir.givens:
                 try:
                     rel = parse_relation(g, self.ns)
+                except UndeclaredSymbolError:
+                    unapplied.append(g)
+                    continue
                 except Exception:  # noqa: BLE001 - not a relation: nothing to restrict
                     continue
-                if isinstance(rel, sp.Eq) or not isinstance(rel, sp.core.relational.Relational) \
-                        or rel.free_symbols != {var}:
+                if not isinstance(rel, sp.core.relational.Relational) or var not in rel.free_symbols \
+                        or rel == main:
+                    continue
+                rel = self._with_bound_values(rel, var)
+                if rel is sp.false:                     # the values the givens fix contradict it
+                    sets.append(S.EmptySet)
+                    continue
+                if not isinstance(rel, sp.core.relational.Relational) or rel.free_symbols != {var}:
+                    if var in getattr(rel, "free_symbols", set()):
+                        unbound.append(g)
                     continue
                 try:
                     sol = sp.solveset(real_odd_roots(rel), var, S.Reals)
@@ -176,6 +263,7 @@ class Ctx:
                     unapplied.append(g)
                 else:
                     sets.append(sol)
+        self.cache[f"side_unbound:{var.name}"] = unbound
         self.cache[key] = (sets, unapplied)
         return sets, unapplied
 
@@ -449,6 +537,13 @@ def unknown(layer: str, reason: str, ms: float = 0.0, evidence: dict | None = No
     ev = dict(evidence or {})
     ev["reason"] = reason
     return result(layer, "unknown", 0.0, False, ev, ms, flags=flags)
+
+
+def condition_not_applied(layer: str, conds, ms: float = 0.0, evidence: dict | None = None) -> LayerResult:
+    """The certificate abstains: a condition on the variable names a symbol no given fixes (see
+    Ctx.unapplied_conditions and Ctx.on_var), so its answer would be read on too large a domain."""
+    return unknown(layer, f"condition_not_applied: {[str(c) for c in conds][:3]}", ms, evidence,
+                   flags=["condition_not_applied"])
 
 
 def parse_or_unknown(layer: str, fn, *args, **kw):

@@ -13,7 +13,7 @@ from ..equiv.random_point import sample_points
 from ..equiv.numeric import real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
 LAYER = "certify.algebra"
@@ -183,19 +183,21 @@ def _verify_identity(rel, var, dom, claimed, ev, ctx, t):
 
 
 def _with_given_inequalities(ctx: Ctx, var, dom, exclude=None):
-    """The domain restricted by every single-variable given that is not an equation
-    (`x > 5` next to `2x = 4`). Ignoring them certified {2} for 2x = 4, x > 5 in the z3 layer
-    while the algebra layer refuted it (audit of 25 Sep 2026). None when one cannot be solved."""
-    for g in ctx.givens():
-        if g is exclude or isinstance(g, Eq) or not isinstance(g, (sp.core.relational.Relational, And)):
-            continue
-        if g.free_symbols != {var}:
-            continue
+    """The domain restricted by every given on `var` other than the equation itself (`x > 5` next
+    to `2x = 4`). Ignoring them certified {2} for 2x = 4, x > 5 in the z3 layer while the algebra
+    layer refuted it (audit of 25 Sep 2026). A given equation restricts too (x³ = 8 next to x² = 4
+    left {-2, 2} certified), and a symbol another given fixes is read as its value (x > b with
+    b = 0); both were dropped (part vi, 30 Sep 2026). Returns (domain, givens that still name another
+    symbol); the domain is None when a given cannot be solved."""
+    rels = [g for g in ctx.givens() if g != exclude and isinstance(g, (sp.core.relational.Relational, And))
+            and var in g.free_symbols]
+    rels, unbound = ctx.on_var(rels, var)
+    for g in rels:
         rr = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(g), var, S.Reals, timeout=ctx.timeout)
         if not rr.ok or isinstance(rr.value, ConditionSet):
-            return None
+            return None, unbound
         dom = sp.Intersection(dom, rr.value)
-    return dom
+    return dom, unbound
 
 
 def _verify_solve_equation(ir, solution, ctx: Ctx, t):
@@ -212,7 +214,11 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     claimed, err = parse_or_unknown(LAYER, _claimed_as_set, ctx, solution)
     if err:
         return err
-    dom = _with_given_inequalities(ctx, var, ctx.domain_for(var), exclude=rel)
+    dom, unbound = _with_given_inequalities(ctx, var, ctx.domain_for(var), exclude=rel)
+    # the equation's own definedness conditions are checked at every root by guard_roots
+    unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions(rel, var)) + unbound
+    if unbound:
+        return condition_not_applied(LAYER, unbound)
     if dom is None:
         return unknown(LAYER, "given_inequality_not_solvable")
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
@@ -384,6 +390,12 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
     p = ir.task.params
     var = ctx.sym(p.get("var", "x"))
     rels = [ctx.rel(p["inequality"])] if p.get("inequality") else ctx.givens()
+    # a symbol a given fixes is read as its value (the given b = 0 itself drops out); a relation or a
+    # condition that still names another symbol cannot be read on var alone (part vi, 30 Sep 2026)
+    rels, unbound = ctx.on_var(rels, var)
+    unbound = ctx.unapplied_conditions(var) + unbound
+    if unbound:
+        return condition_not_applied(LAYER, unbound)
     if not rels:
         return unknown(LAYER, "no_inequality")
     # odd roots are real roots (see equiv.numeric.real_odd_roots); several givens are a system

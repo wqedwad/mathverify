@@ -235,10 +235,13 @@ def test_a_written_condition_on_a_bound_symbol_restricts_the_domain():
     fn = [{"name": "f", "expr": "x**2 + 1 + 0*log(x - a)", "args": ["x"]}]
     ir = _ir(EQ, XA, ["a = 0"], fn)
     assert _run(ir, "{-2, 2}").verdict != "CORRECT"
-    # the variable itself is not replaced by a given that fixes it
+    # the variable itself is not replaced by a given that fixes it (since part vi the given x = 5 is
+    # a side condition of the equation: the domain is (0, oo) ∩ {5}; the condition keeps x)
     ir = _ir({"equation": "x**2 + 1 + 0*log(x - a) = 5", "var": "x"}, XA, ["a = 0", "x = 5"])
     ctx = make_ctx(ProblemIR.from_dict(ir))
-    assert ctx.domain_for(ctx.sym("x")) == sp.Interval.open(0, sp.oo)
+    x_, a_ = ctx.sym("x"), ctx.sym("a")
+    assert ctx._with_bound_values(x_ - a_ > 0, x_) == (x_ > 0)
+    assert ctx.domain_for(x_) == sp.FiniteSet(5)
     # with the value the condition holds nowhere: log(-x**2 - 1) has no real point
     ir = _ir({"equation": "x**2 + 1 + 0*log(-x**2 - a) = 5", "var": "x"}, XA, ["a = 1"])
     ctx = make_ctx(ProblemIR.from_dict(ir))
