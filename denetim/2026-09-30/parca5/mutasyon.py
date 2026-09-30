@@ -42,8 +42,12 @@ T = "tests/test_parca5_v17.py tests/test_v14_parser_conventions.py tests/test_au
 
 MUTATIONS = [
     # --- (a) this part: the trig family parameter
-    ("V01 aile parametresi IR bildirimini alır", TRIG, "            ns_claim = dict(ns2, **family)\n",
+    ("V01 aile parametresi IR bildirimini alır", TRIG,
+     "            ns_claim = dict(ns2, **family) if not p.get(\"interval\") else ns2\n",
      "            ns_claim = ns2\n", T),
+    ("V14 pencereli iddiada da aile parametresi", TRIG,
+     "            ns_claim = dict(ns2, **family) if not p.get(\"interval\") else ns2\n",
+     "            ns_claim = dict(ns2, **family)\n", T),
     ("V02 m aile parametresi sayılmaz", TRIG,
      "            family = {nm: sp.Symbol(nm, integer=True) for nm in _FAMILY_NAMES\n",
      "            family = {nm: sp.Symbol(nm, integer=True) for nm in (\"n\", \"k\")\n", T),
@@ -70,6 +74,13 @@ MUTATIONS = [
      "            spec = [a.elts[0] if isinstance(a, seq) else a for a in node.args[1:]\n"
      "                    if not isinstance(a, seq) or len(a.elts) == 1]\n",
      "            spec = [a.elts[0] if isinstance(a, seq) else a for a in node.args[1:]]\n", T),
+    ("V11 LaTeX türevi tam sayı değişkende okunur", PARSE, "    _refuse_latex_integer_calculus(expr, ns, s)\n", "", T),
+    ("V12 LaTeX adları yalnız bildirimden sonra denetlenir", PARSE,
+     "    _check_symbols_declared(expr, ns, s)\n    _refuse_latex_integer_calculus(expr, ns, s)\n",
+     "    _refuse_latex_integer_calculus(expr, ns, s)\n", T),
+    ("V13 LaTeX belirsiz integrali denetlenmez", PARSE,
+     "            names = [lim[0].name for lim in node.limits if len(lim) == 1 and isinstance(lim[0], Symbol)]\n",
+     "            names = []\n", T),
     # --- (b) franklin's U01-U07 (U06: equivalent, see the docstring)
     ("U01 küme okunurken uçlar eşitlenmez", PARSE, "        sets = unify_endpoints(sets)\n", "        pass\n", T),
     ("U02 adım kümesinde uçlar eşitlenmez", DET,

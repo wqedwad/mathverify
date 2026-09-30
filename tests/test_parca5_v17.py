@@ -99,6 +99,8 @@ def test_a_window_reads_the_claim_as_before():
     ir = _trig("sin(x) = 0", "k", "positive_integer", "[0, 2*pi)")
     assert verify(ir, _sol("{0, pi}", "set")).verdict == "CORRECT"
     assert verify(ir, _sol("{pi}", "set")).verdict == "INCORRECT"
+    # on a window there is no family: k is the problem's symbol, with its declaration (k > 0)
+    assert verify(ir, _sol("{0, Abs(k)*pi/k}", "set")).verdict == "CORRECT"
 
 
 # ---------------------------------------------------------------------------- (2) calculus in an integer
@@ -158,9 +160,30 @@ def test_other_derivatives_near_an_integer_stay_readable():
     assert parse_expr_str("diff(x*sin(pi*n), x)", ns) == 0                             # sin(pi*n) = 0 is true here
     nr = sp.Symbol("n", real=True)
     assert parse_expr_str("diff(sin(pi*n), n)", _ns(nr)) == sp.pi * sp.cos(sp.pi * nr)
-    # latex2sympy differentiates in its own symbol and substitutes the declared n afterwards
-    e = parse_expr_str(r"\frac{d}{dn} \sin(\pi n)", ns)
-    assert sp.simplify(e.doit() - sp.pi * (-1)**N) == 0
+
+
+@pytest.mark.parametrize("text", [
+    r"\frac{d}{dn} \sin(\pi n)",                          # was right (Subs in latex2sympy's own n)
+    r"\lim_{n \to \infty} \frac{d}{dn} \sin(\pi n)",      # was 0: the limit's integer n reached it
+    r"\sum_{n=1}^{3} \frac{d}{dn} \sin(\pi n)",           # was 0 (it is -pi): the sum's integer index
+    r"\int \sin(\pi n) \, dn",
+    r"\frac{d^2}{dn^2} \left(n \sin(\pi n)\right)",       # d**2*n*sin(pi*n)/dn**2 folded to 0 (2*pi there)
+])
+def test_latex_calculus_in_a_variable_declared_an_integer_is_not_read(text):
+    with pytest.raises(ParseError):
+        parse_expr_str(text, _ns())
+    with pytest.raises(ParseError):
+        parse_expr_str(text, _step_ns())
+
+
+def test_latex_calculus_near_an_integer_stays_readable():
+    ns = _ns()
+    assert sp.simplify(parse_expr_str(r"\int_0^1 \sin(\pi n) \, dn", ns).doit() - 2 / sp.pi) == 0
+    assert sp.simplify(parse_expr_str(r"\frac{d}{dx} x^{n}", ns).doit() - N * XR**(N - 1)) == 0
+    assert parse_expr_str(r"\frac{d}{dx} \left(x \sin(\pi n)\right)", ns).doit() == 0
+    nr = sp.Symbol("n", real=True)
+    e = parse_expr_str(r"\frac{d}{dn} \sin(\pi n)", _ns(nr))
+    assert sp.simplify(e.doit() - sp.pi * sp.cos(sp.pi * nr)) == 0
 
 
 def test_the_as_written_reading_keeps_the_conditions_of_a_bound_derivative():
@@ -196,6 +219,10 @@ def _ev(expr, vars_=NP, givens=("n = 2",)):
     (_ir("derivative", {"f": "x*diff(sin(pi*n), n)", "var": "x"}, XNP, (), "expression"), "pi*(-1)**n",
      "expression"),
     (_ir("limit", {"expr": "x*diff(sin(pi*n), n)", "var": "x", "to": "1"}, XNP), "0", "value"),
+    (_ev(r"\frac{d}{dn} \sin(\pi n)"), "pi", "value"),
+    (_ev(r"\lim_{n \to \infty} \frac{d}{dn} \sin(\pi n)", NP, ()), "0", "value"),
+    (_ev(r"\sum_{n=1}^{3} \frac{d}{dn} \sin(\pi n)", NP, ()), "0", "value"),
+    (_ev(r"\frac{d^2}{dn^2} \left(n \sin(\pi n)\right)"), "0", "value"),
 ])
 def test_a_task_that_differentiates_in_an_integer_is_not_decided(ir, claim, kind):
     assert verify(ir, _sol(claim, kind)).verdict == "UNKNOWN"
@@ -218,8 +245,8 @@ def test_a_step_that_differentiates_in_an_integer_is_not_verified(kind, claim):
     (_ev("diff(sin(pi*n), n)", [{"name": "n", "domain": "real"}]), "pi", "CORRECT"),
     (_ev("diff(sin(pi*n), n)", [{"name": "n", "domain": "real"}]), "0", "INCORRECT"),
     (_ev("diff(sin(pi*n), n)", [{"name": "n"}]), "pi", "CORRECT"),
-    (_ev(r"\frac{d}{dn} \sin(\pi n)"), "pi", "CORRECT"),
-    (_ev(r"\frac{d}{dn} \sin(\pi n)"), "0", "INCORRECT"),
+    (_ev(r"\frac{d}{dn} \sin(\pi n)", [{"name": "n", "domain": "real"}]), "pi", "CORRECT"),
+    (_ev(r"\frac{d}{dn} \sin(\pi n)", [{"name": "n", "domain": "real"}]), "0", "INCORRECT"),
     (_ir("derivative", {"f": "sin(pi*n)", "var": "n", "at": "2"}, NP), "pi", "UNKNOWN"),   # task level, §73 (e)
 ])
 def test_derivatives_at_a_point_and_in_a_real_variable_are_decided_as_before(ir, claim, verdict):

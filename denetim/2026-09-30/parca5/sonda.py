@@ -133,6 +133,15 @@ def cases_d():
         # LaTeX: latex2sympy differentiates in its own symbol and substitutes n afterwards (Subs)
         ("evaluate LaTeX d/dn sin(pi n), n=2: 0", ev(r"\frac{d}{dn} \sin(\pi n)"), _sol("0"), BAD),
         ("evaluate LaTeX d/dn sin(pi n), n=2: pi", ev(r"\frac{d}{dn} \sin(\pi n)"), _sol("pi"), NOTBAD),
+        # ... but a limit's or a sum's integer variable reaches it, and d^2/dn^2 is a product of names
+        ("evaluate LaTeX lim_{n->oo} d/dn sin(pi n): 0", ev(r"\lim_{n \to \infty} \frac{d}{dn} \sin(\pi n)", NP, ()),
+         _sol("0"), BAD),
+        ("evaluate LaTeX sum_{n=1}^{3} d/dn sin(pi n): 0 (true -pi)", ev(r"\sum_{n=1}^{3} \frac{d}{dn} \sin(\pi n)", NP, ()),
+         _sol("0"), BAD),
+        ("evaluate LaTeX sum_{n=1}^{3} d/dn sin(pi n): -pi", ev(r"\sum_{n=1}^{3} \frac{d}{dn} \sin(\pi n)", NP, ()),
+         _sol("-pi"), NOTBAD),
+        ("evaluate LaTeX d^2/dn^2 (n sin(pi n)), n=2: 0 (true 2*pi)", ev(r"\frac{d^2}{dn^2} \left(n \sin(\pi n)\right)"),
+         _sol("0"), BAD),
         # controls: a real or undeclared variable, the derivative at a point, the task level
         ("control n real, n=2: pi", ev("diff(sin(pi*n), n)", NR), _sol("pi"), OK),
         ("control n real, n=2: 0", ev("diff(sin(pi*n), n)", NR), _sol("0"), NO),

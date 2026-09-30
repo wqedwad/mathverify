@@ -371,10 +371,10 @@ def verify(ir, solution, ctx: Ctx):
             # {Abs(k)*pi} and {sqrt(k**2)*pi} were read as {k*pi} and then spread over every integer:
             # the nonnegative multiples of pi alone were certified as the solutions of sin x = 0, and
             # {2*pi*Max(n, 0)} as those of cos x = 1 (V17, DECISIONS §74). An undeclared m stays
-            # undeclared, as before.
+            # undeclared, and a claim on a window (no family) is read as before.
             family = {nm: sp.Symbol(nm, integer=True) for nm in _FAMILY_NAMES
                       if nm != var.name and (nm in ("n", "k") or isinstance(ns2.get(nm), sp.Symbol))}
-            ns_claim = dict(ns2, **family)
+            ns_claim = dict(ns2, **family) if not p.get("interval") else ns2
             if ca.kind in ("set", "interval"):
                 claimed = parse_answer(ca.kind, ca.payload, ns_claim)
             else:

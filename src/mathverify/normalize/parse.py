@@ -1372,10 +1372,42 @@ def _refuse_latex_ranges(s: str) -> None:
                 raise ParseError(f"{s!r} has a sum or product over a reversed range: not read")
 
 
+def _refuse_latex_integer_calculus(expr, ns: dict[str, Any], raw: str) -> None:
+    """The LaTeX counterpart of `_refuse_integer_calculus`, judged on latex2sympy's result while its
+    symbols are still assumption-free, by name: a derivative or an indefinite integral in a name the IR
+    declares an integer is not read, whatever binds it. latex2sympy keeps a first derivative
+    unevaluated, as Subs(Derivative(f(n'), n'), n', n), and an indefinite integral too; a later
+    substitution that reaches n' (a limit's variable, a sum's integer index) puts the declaration inside
+    them: with n a positive integer lim_{n->oo} d/dn sin(pi n) was 0 (no limit) and
+    sum_{n=1}^{3} d/dn sin(pi n) was 0 (it is -pi) (V17, parca5). Outside a binder the Subs form came
+    out right; it is refused too, as the canonical diff(f, n) is. \\frac{d^2}{dn^2} is no derivative to
+    latex2sympy (the product of the undeclared names d**2 and 1/dn**2, see `_latex_to_sympy`)."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Derivative, sp.Integral):
+        return
+    for node in sp.preorder_traversal(expr):
+        if isinstance(node, sp.Derivative):
+            names = [v.name for v in node.variables if isinstance(v, Symbol)]
+        elif isinstance(node, sp.Integral):
+            names = [lim[0].name for lim in node.limits if len(lim) == 1 and isinstance(lim[0], Symbol)]
+        else:
+            continue
+        for name in names:
+            declared = ns.get(name)
+            if isinstance(declared, Symbol) and declared.is_integer is True:
+                raise ParseError(f"{raw!r} takes {type(node).__name__} in {name!r}, a variable declared an "
+                                 "integer: not read")
+
+
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
     _refuse_latex_ranges(s)
     expr = _latex2sympy(_exact_latex_decimals(s))
+    # the names are checked before the IR's symbols bring their declarations too (and again after): with
+    # n an integer, latex2sympy's reading of \frac{d^2}{dn^2} (n \sin(\pi n)), the product
+    # d**2*n*sin(pi*n)/dn**2, folded to 0 and took the undeclared d and dn with it, so 0 was read for a
+    # second derivative that is 2*pi*(-1)**n there (V17, parca5)
+    _check_symbols_declared(expr, ns, s)
+    _refuse_latex_integer_calculus(expr, ns, s)
     if isinstance(expr, sp.Basic):
         from sympy.core.function import AppliedUndef
         ops = {"gcd": gcd, "lcm": lcm}
