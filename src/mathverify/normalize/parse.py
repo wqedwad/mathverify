@@ -1771,9 +1771,8 @@ def _conjunction(rel, spec: str):
 
 
 def _interval_conditions(st, v, spec: str) -> list:
-    """A set of reals written as a domain (`(0, oo)`, `[0, 3)`) as relations on `v`."""
-    if st == S.Reals:
-        return []
+    """A set of reals written as a domain (`(0, oo)`, `[0, 3)`) as relations on `v` (none for ℝ,
+    SymPy's Interval(-oo, oo))."""
     if not isinstance(st, Interval):
         raise ParseError(f"domain {spec!r} is not an interval of reals")
     out = []

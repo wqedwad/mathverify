@@ -9,7 +9,9 @@ denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
     .venv/bin/python denetim/2026-09-30/parca2/mutasyon.py [-j N] [--list] [name ...]
 
 Not mutated, a deliberate equivalent: the two new flags in fuse.rules' blocking set. The intake
-returns right after the layer that carries them, so no other layer can ground a verdict.
+returns right after the layer that carries them, so no other layer can ground a verdict. A first
+run (62aee6f) had A11, "ℝ is not an interval": it lived, because SymPy's Reals is an Interval; the
+redundant check was removed from the code instead.
 
 Kept out of pyflakes and pytest like the rest of denetim/. No string here may name a document.
 """
@@ -53,7 +55,6 @@ MUTATIONS = [
     ("A10 aralık olmayan küme kabul", P,
      '    if not isinstance(st, Interval):\n        raise ParseError(f"domain {spec!r} is not an interval of reals")',
      '    if False:\n        raise ParseError(f"domain {spec!r} is not an interval of reals")', T),
-    ("A11 Reals aralık sayılmaz", P, "    if st == S.Reals:\n        return []\n", "", T),
     ("A12 iki argümanda çıplak küme ilkine", P, "            if name is None and len(argsyms) != 1:",
      "            if False:", T),
     ("A13 argümanı anmayan koşul kabul", P, "            if not c.free_symbols & set(argsyms):", "            if False:", T),
