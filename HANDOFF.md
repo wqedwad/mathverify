@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 30 Eylül 2026, öğleden sonra (UTC)**, dal `claude/sharp-lamport-f9m2w3` (birleşmedi, PR yok). **`master`daki HANDOFF eski:** yeni sohbet bu dalı açıkça almalı (§3 adım 0). Paralel dal `claude/inspiring-franklin-l3cocz` aynı V14 işini ayrıca yaptı; temel bu dal (kullanıcı kararı).
+> **Son güncelleme: 30 Eylül 2026, akşam (yerel Windows)**, dal `claude/sharp-lamport-f9m2w3` (birleşmedi, PR yok). **`master`daki HANDOFF eski:** yeni sohbet bu dalı açıkça almalı (§3 adım 0). `franklin`'in parçası ve 144 testi taşındı (DECISIONS §73); kalan: `--full`, `--plan`, PR, birleştirme (§3 adım 1).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
 > kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
 > `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
@@ -10,11 +10,12 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§72; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§73; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1930 passed / 5 skipped** (`0ec6126`) (3 root salt okunur dizin,
-   1 isteğe bağlı indirme, 1 kapsam dışı ifade); sıcak Lean'le ~400 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **1930 passed / 5 skipped** (`0ec6126`) (3 root salt okunur dizin,
+   1 isteğe bağlı indirme, 1 kapsam dışı ifade); Windows'ta `d914dbc`: **2064 passed / 106 skipped** (+4 yalnız `.git`'siz kopyada
+   düşen kural testi; DECISIONS §73); sıcak Lean'le ~400 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
    atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
 4. §3'teki ilk işe geç. Tekrar denenmeyecekler: arşiv §4.
 
@@ -39,6 +40,8 @@ bulduğu yanlış onaylar kapatıldı: kapalı `Integral`/`Sum`/`Product`/`Limit
 (SymPy ∫₋₁¹|cos x| = 0 diyordu), bağlı değişkenin koşulu problemin koşulu olmaz, IR fonksiyonu yazıldığı biçimde açılır ve
 `domain` alanı uygulanır, yönsüz limit iki taraflı, yazılı türev yalnız türevlenebildiği yerde. 558 çözümde karar değişimi 0
 (adım 26, doğru adımlar unknown → verified). `#12` (`claude/inspiring-cori-xcgjld`, §64–§70) `master`da.
+**30 Eylül akşam (DECISIONS §73):** `franklin`'in küme uç noktası düzeltmesi ve 144 testi taşındı; düşen 41 testin 25'i gerçek
+yanlış onaydı, 9'u gerekçeli gelenek farkı; hepsi kapatıldı ya da uyarlandı. 558 çözümde karar yine 0.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -47,37 +50,31 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 **Son `check.py --full`.** **24/24**, `14f4d07` (`#12`'nin son kodu, raporlar `7fbf9ac`), bulutta 29 Eylül 17:59:56–18:23:09 UTC,
 **~23 dk** (ısınma 39 s, pytest 349 s, adversaryal 661 s), 1726 passed / 5 skipped; `--plan` TAMAM (DECISIONS §71). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
 
-**K4 (Muse Spark 1.3, 280 öğe, koşu 3, `776e5b4`; DECISIONS §63).** 278 çözüm; CORRECT|right 274, INCORRECT|right 4,
-yanlış onay **0**, `undecided` 0; çözücü 278/278 doğru (yakalama gücü bu modelle ölçülemedi). 4 INCORRECT tek soru
-(`tyt-say-*`): çözücü IR'ın `n`'ini başka anlamda kullandı (istem sembolün anlamını vermiyor). Çözümsüz 2 (tek
-soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.3 $ (önbellek kayıtlarından).
+**K4 (Muse Spark 1.3, 280 öğe, `776e5b4`; DECISIONS §63).** 278 çözüm: CORRECT|right 274, INCORRECT|right 4 (tek soru
+`tyt-say-*`: çözücü `n`'i başka anlamda kullandı), yanlış onay **0**; çözücü 278/278 doğru (yakalama gücü ölçülemedi). Çözümsüz
+2 (`tyt-esf-007/-014`: akış kesildi, sonra Meta 504). Harcama ~1.3 $.
 
 ## 3. Sıradaki adımlar (sırayla)
 
 0. Yeni sohbet `master`daki eski HANDOFF'u okur: 30 Eylül'de V14 bu yüzden `claude/inspiring-franklin-l3cocz`'de baştan yapıldı.
-   Kullanıcı kararı: temel bu dal; `franklin`'in eksiği elle taşınır, `git merge` edilmez (aynı dosyalar farklı yazılmış).
-1. **Yeni sohbet (V14'ün kapanışı):** `git fetch origin claude/sharp-lamport-f9m2w3` ve o dalda çalış (oturumun dalı `master`dan
-   açıldıysa `git merge --ff-only FETCH_HEAD`, push oturumun kendi dalına). `--plan` koş (TAM beklenir).
-   (0) **`franklin`'den taşı** (`git show origin/claude/inspiring-franklin-l3cocz:<yol>`; onun DECISIONS §72'si özet verir):
-   küme uç noktası düzeltmesi (`equiv/sets.unify_endpoints`, `Union`/`Intersection`/`Complement` sarmalayıcıları; §70'in
-   dördüncü alt maddesi, bu dalda yok); onun 144 V14 testini (`tests/test_v14_parser_conventions.py`) bu kodda koş, düşen her
-   test ya gerçek açıktır (düzelt) ya gelenek farkıdır (gerekçesiyle DECISIONS'a); özellikle `lcm(4, 6, 10)`, `Limit.subs`'ın
-   bağlı değişkeni değiştirmesi, `x > 0` iken yönsüz limit, DoS bulguları. Taşıma bitince `franklin`'in silinmesi kullanıcıya sorulur.
-   (a) Üçüncü denetimin eleştirmeninin 9 bulgusu açık (`denetim/2026-09-29/v14/bulgular/tur3_e6712f5.json` → `critic`,
-   DECISIONS §72 Ek): yüksek N1, N2 (bu turun), N3, N8 (önceden var); N4–N7, N9. Önce son kodda yeniden koş, sonra sonda +
-   test + mutasyonla kapat. (b) Tam takım ve 280 + 278 farkı (`denetim/2026-09-29/v14/fark.py`, eski kod `35af293` ayrı
-   worktree'de) son kodda; ölçüm sürerken aynı checkout'ta dosya değiştirme.
-2. **`--full`** son kodda, temiz ağaçta (~25–30 dk; oturum etkin tutulur, ≤10 dk beklemelerle izlenir); raporlar ve günlük
-   değiştirilmeden commit + push; `--plan` TAMAM olmalı. Beklenen: sağlamlık/adversaryal kapıları 0; Lean sertifika sayısı
-   değişebilir (alanlı/`Mod` gövdeli fonksiyonlar, V15). DECISIONS §72'nin "ölçülmedi" satırı sonuçla güncellenir.
-3. **PR** `master`a (kullanıcı isteyince); birleştirmeden önce kullanıcı yerelde yedek alır (§6) ya da yedeksiz der, `--plan`
-   hemen önce. Birleşince `master`daki HANDOFF güncellenmiş olur ve yeni sohbetler doğru yerden başlar.
-4. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
+   Yeni sohbet bu dalı açıkça alır: `git fetch origin claude/sharp-lamport-f9m2w3`; yerel Windows checkout'unda `git switch
+   claude/sharp-lamport-f9m2w3` ve `git merge --ff-only origin/claude/sharp-lamport-f9m2w3` (`master`ı ileri sarma, `master`ı push etme).
+1. **Birleştirme (kullanıcı: tek hedef `master`, yedek gerekmez).** Taşıma ve ölçümler bitti (DECISIONS §73). Sırayla:
+   (i) `--plan` (TAM beklenir); (ii) C:'nin boş alanı (30 Eylül 14.3 GB; 10 GB altındaysa sor), sonra ana checkout'ta temiz
+   ağaçta `powershell -ExecutionPolicy Bypass -File scripts\dev\windows_full.ps1` (~31 dk; sürerken checkout'a dokunma);
+   (iii) raporlar ve günlük değiştirilmeden commit + push, §73'ün "`--full` koşulmadı" satırı sonuçla güncellenir; (iv) `--plan`
+   TAMAM → PR ve birleştirme, hemen önce `--plan` yeniden. **Risk:** `--plan`'ın Windows `--full`unu kabul ettiği hiç sınanmadı
+   (T8); etmezse neden bulunur, kullanıcıya sorulur. Beklenen: sağlamlık/adversaryal kapıları 0; Lean sertifika sayısı değişebilir.
+2. **Birleşmeden sonra, yeni dalda (kullanıcı kararı):** (a) üçüncü denetimin eleştirmeninin 9 bulgusu (`denetim/2026-09-29/v14/
+   bulgular/tur3_e6712f5.json` → `critic`, §72 Ek): yüksek N1, N2, N3, N8; N4–N7, N9; önce son kodda yeniden koş, sonra sonda +
+   test + mutasyonla kapat. (b) V16 (§4.2). (c) `franklin` dalının silinmesi kullanıcıya sorulur. Birleşince `master`daki
+   HANDOFF güncellenmiş olur.
+3. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
    parametreli belirli integral biçim kalır; "∫₀^a x dx = 2" gibi sorular UNKNOWN olur)?
-5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
-6. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
+4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
+5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
    önce kalibrasyon (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-7. **İsteğe bağlı / kullanıcı kararı:** yanlış onay direnci için daha zayıf ya da başka aileden çözücü (K4 e); yedek
+6. **İsteğe bağlı / kullanıcı kararı:** yanlış onay direnci için daha zayıf ya da başka aileden çözücü (K4 e); yedek
    etiketleri (PR #3, #4, #9, #10 öncesi, §6); bulut önyükleyicisi 250 → 275 s (B1–B2); açık kapsama işleri (§4.2, V1–V14).
 
 ## 4. Açık maddeler (tam liste)
@@ -87,12 +84,9 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.1 Bulut ve ortam
 
-- **B1. Anlık görüntü bazen kullanılmıyor** (DECISIONS §56 Ek, §59 (e), §61; BULUT §12). 26 Eylül 11:00 sohbeti
-  `new` ile betiği yeniden koşturdu (252 s bekleme); sonraki sohbetler (27 Eylül 09:39, 28 Eylül 16:36 dahil)
-  `resume-cached`: `/opt` 26 Eylül 07:39'daki `setup-only` koşusunun (199 s) görüntüsünden, kanca 2 s. `new`'in
-  nedeni **[DOĞRULANMADI]** (en olası: ağ ayarının değişmesi, §61).
-- **B2. 250 s sınırı aşıldı** (11:00 sohbeti; REPL aşamasında durduruldu, kanca kalanı 42 s'de kurdu). Süre
-  180–250 s arasında oynuyor.
+- **B1. Anlık görüntü bazen kullanılmıyor** (DECISIONS §56 Ek, §59 (e), §61; BULUT §12): 26 Eylül 11:00 sohbeti `new` ile
+  betiği yeniden koşturdu, sonrakiler `resume-cached` (26 Eylül 07:39 `setup-only` görüntüsü); `new`'in nedeni
+  **[DOĞRULANMADI]** (en olası ağ ayarı). **B2.** 250 s sınırı o sohbette aşıldı (kanca kalanı 42 s'de kurdu); süre 180–250 s.
 - **B4.** `raw.githubusercontent.com` dosya indirme yolu kurulum aşamasında hiç koşmadı (yedek; oturum
   içinde 32 s, 5/5 OK; DECISIONS §54). **B5.** "claude.ai ortam değişkenleri kurulum betiğine hiç
   ulaşmıyor mu": kanarya (`MATHVERIFY_SETUP_CANARY=1`) eklenmedi, sınanmadı; düzeni etkilemiyor.
@@ -143,6 +137,12 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
   belirlediği sembollü `compute` adımı özdeşlik gibi denetlenir (S1); tam sayı bildirilmemiş üst sınırlı toplam (R1). Lean:
   `Mod`/`floor` gövdeli, tam sayı adlı argümanlı fonksiyon reddedilir (L1). Değer doğru: `gcd(120, 84)` "değer" (GCD-10).
   Mutasyon: R02 ve L07'nin eşdeğerliği kanıtlanmadı. Çok sayıda kapsama kaybı (UNKNOWN), liste §72'de.
+- **V16. Taşıma denetiminden kalanlar** (DECISIONS §73 "Açık kalanlar"; taşımanın açmadığı yanlış onaylar). Yüksek: küme `+`/`-`
+  işleçleri uç eşitlemesini atlıyor (V14d'nin kalan yazımı); bağlayıcı değişkeni ilk döngüde IR bildirimini koruyor, alan dışı
+  aralıkta boş küme onaylanıyor; serbest sembolsüz tanımsız görev ifadesi (limit/türev/teğet/ekstremum). Orta/düşük: bağlayıcılı
+  noktasız türev/ilkel; pozitif değişkenin 0'daki türevi; `floor` içinde sayı olmayan sınır; gcd/lcm/n! koşulu limit/türev/integralde
+  yok; π + e; log(−x), x > 0; ters sembolik toplamda Karr; `normalize_set` `float` sıralaması; tanımsız adım öncül noktasında;
+  iki değişkenli sadeleştirme; liste yükünde gcd denetimi. Kapsama: çok değişkenli `Subs`; 300'den çok rasyonel uçlu küme.
 
 ### 4.3 Kredili ölçüm
 
@@ -182,7 +182,7 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
 6. Başka sağlayıcıyla (GPT/Gemini, `set_client_override`) ölçüm istenir mi?
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
 8. Depo açılacak/paylaşılacak mı? Açılırsa önce anahtarlar yenilenir, `.env` geçmişten temizlenir.
-9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 4)?
+9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 6)?
 
 ### 4.5 Teknik borç
 
@@ -209,16 +209,15 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
 
 ### 4.7 Doğrulanmamış kayıtlar
 
-- §6'da **[DOĞRULANMADI]** işaretli yedekler (`572ef57`, `18fd298` bundle'ları; `ee7b2dd`'nin yerel yedeği): buluttan
-  görülemez. 26 Eylül 01:06 koşusunda düşen testin adı kaydedilmedi (muhtemelen B6'daki Lean testi).
-- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan; alandaki
-  önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843); B1, B6, B10 ve K4'teki işaretli maddeler.
+- §6'da **[DOĞRULANMADI]** yedekler (`572ef57`, `18fd298` bundle'ları; `ee7b2dd`'nin yerel yedeği); 26 Eylül 01:06'da düşen
+  testin adı; arşiv §4'ün kodu geri almadan üretilemeyen "önce" ölçümleri (7/7, 54 çift, 0.990…); alandaki önyükleyici metninin
+  içeriği (yalnız uzunluk: 843); B1, B6, B10, K4'teki işaretliler; 30 Eylül kopya silinmesinin nedeni (DECISIONS §73).
 
 ## 5. Son ölçülen sayılar (kapılar, `14f4d07`; aksi yazılmadıkça `3e1805d` ve öncekilerle aynı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri (`0ec6126`) | 1930 passed / 5 skipped | hepsi geçer |
+| Birim testleri (`0ec6126` bulut; `d914dbc` Windows) | 1930 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
@@ -234,7 +233,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
 ## 6. Dallar, etiketler, yedekler
 
 - **Dallar** (30 Eylül): `claude/sharp-lamport-f9m2w3` (V14, temel, birleşmedi); `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel
-  sürümü, taşınacak parçası var, §3); `master` = `wqedwad/asd#12`'nin birleşmesi (`35af293`; öncesi `c0a2caf`); `claude/inspiring-cori-xcgjld`
+  sürümü; parçası ve testleri taşındı, DECISIONS §73; silinmesi kullanıcıya sorulacak); `master` = `wqedwad/asd#12`'nin birleşmesi (`35af293`; öncesi `c0a2caf`); `claude/inspiring-cori-xcgjld`
   `wqedwad/asd#12` (birleşti); `claude/busy-bardeen-ckr5bw` `wqedwad/asd#11` (birleşti);
   `claude/dreamy-meitner-rvrwlj` `60d539c` (`#9`, `#10`), `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
   `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
@@ -266,15 +265,14 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create C:/Users/kullanici/mathverify-yedek/mathverify-master-<kısa-hash>-YYYY-MM-DD.bundle
   --all`, `git bundle verify` ve deneme klonu; (3) `git push origin <etiket>`; etiket buluttan `git ls-remote` ile doğrulanır;
   (4) hemen önce `scripts/check.py --plan`. Geri dönüş `git reset --hard <etiket>`. Buluttan `master`/etiket push edilmez.
-- **Yerel checkout** (28 Eylül akşam): `master` `2f11c84`; `#11` ve `#12`den sonra `git pull` gerekir. Stash'te Windows `--full`
-  raporları (`eab80f1`; kullanıcı silebilir), yerel `claude/dreamy-meitner-rvrwlj` eski (`eab80f1`, birleşmiş).
+- **Yerel checkout** (30 Eylül akşam): `master` `35af293` (= `origin/master`), çalışma dalı `claude/sharp-lamport-f9m2w3`. Stash'te
+  Windows `--full` raporları (`eab80f1`; kullanıcı silebilir), yerel `claude/dreamy-meitner-rvrwlj` eski (birleşmiş).
 
 ## 7. Bulut özeti (ölçülmüş)
 
-- Ubuntu 24.04, 4 CPU, 15 GB RAM, ~30 GB disk, root, `/home/user/asd`. Ağ: açık GitHub, PyPI, `raw.githubusercontent.com`,
-  `api.anthropic.com`, `api.meta.ai` (kimlik bilgisiyle); Lean/Mathlib/araç ref'leri kapalı, araç ref'inden gelir.
-- Kurulum betiğinde git vekili yok (401), ortam değişkenleri ulaşmaz; belirteç önyükleyicide (DECISIONS §53–§56). Kanca
-  6–15 s, eksikse Lean'i arka planda kurar (167–239 s); `/opt` ~10.7 GB.
+- Ubuntu 24.04, 4 CPU, 15 GB RAM, ~30 GB disk, root, `/home/user/asd`. Ağ: GitHub, PyPI, `raw.githubusercontent.com`,
+  `api.anthropic.com`, `api.meta.ai` açık; Lean/Mathlib kapalı (araç ref'inden). Kurulum betiğinde git vekili yok (401), ortam
+  değişkenleri ulaşmaz; belirteç önyükleyicide (§53–§56). Kanca 6–15 s, eksikse Lean'i arka planda kurar; `/opt` ~10.7 GB.
 - **Tur bitince uzun iş sürerken konteyner kapatılabiliyor** (26 Eylül `--full` kayboldu; 30 Eylül bir iş akışı): koşu ön
   planda ≤10 dk'lık beklemelerle izlenir. Alt ajanlar oturum kullanım sınırına takılabilir (30 Eylül).
 - Meta (DECISIONS §63): akışsız ~31 s'de 502, akış bazen `usage`'sız kesilir, uzun `xhigh`'ta 504. Stop kancası commit +
