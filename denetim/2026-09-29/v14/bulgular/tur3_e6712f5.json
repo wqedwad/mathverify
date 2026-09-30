@@ -1,0 +1,430 @@
+{
+ "attack:forms": {
+  "probes_run": 430,
+  "summary": "I ran 397 verify() cases on each of NEW (e6712f5), PREV (c59145d) and OLD (35af293), 1,191 runs in all. On top of that: 10 Lean build_statement probes on each version, 7 direct classify_limit sequence probes, and direct checked_forms/answers_equivalent calls. True values were computed by hand and checked with mpmath quad at 30 digits.\n\nWhat works: realistic AYT questions written with lowercase integrate/limit as a plain `evaluate` stay CORRECT/INCORRECT as before (40 integral/limit pairs, bounds with pi/E/sqrt, reversed bounds, one-sided limits, oo, integrate inside limit and limit inside integrate, MC options, IR functions inside integrate/limit, parameter givens). The SymPy-wrong closed forms (|cos| on [-1,1], n*tan(pi/n)) are now UNKNOWN instead of certified in simplify, solve, tangent, derivative-at, limit, count_roots, trig and definite-integral-bound tasks. Lean statements containing a form are refused on all three versions; no Lean change was found.\n\nMain defect, introduced by this round: definedness_conditions walks into the body of a closed integrate/limit form. The bound variable's conditions (t != 0 from 1/t or sin(t)/t, t > 0 from log t, t >= 0 from sqrt t, t != 3 from (t**2-9)/(t-3)) become conditions of the outer problem:\n- In solve_inequality the domain collapses to EmptySet, so the claim EmptySet is certified CORRECT and the right interval is refuted.\n- In solve_equation the root is rejected as \"definedness_undecided\", so EmptySet is certified.\n- When the equation variable has the same name as the bound one, the as-written reading keeps the declared symbol, so real roots such as 0 or 1 are dropped.\nPREV and OLD computed the value at parse and were right on all these cases. Capital Integral/Limit already had the same leak in PREV/OLD, so the root cause is older; this round extends it to the ordinary lowercase notation.\n\nOther introduced changes, all CORRECT -> UNKNOWN (coverage loss):\n- A closed Limit in a denominator: change 5 cannot prove Limit != 0, so the problem is marked problem_undefined_as_written.\n- A benign closed form inside another task's parameters: tangent_line, derivative at a point, extremum, limit task, definite_integral bound or integrand (change 3), count_roots, count_integers, trig_solve, domain_of, series upper bound, solve_equation.\n- Double integrals.\n- The Dirichlet integral and divergent integrals.\n\nUnfixed false acceptances that are the same in NEW, PREV and OLD:\n- sp.simplify / solve_system evaluate the form when evaluate has givens.\n- extremum and antiderivative also evaluate the form.\n- checked_forms returns unchecked a closed form whose inner forms are open.\n- An integrate with a parameter is computed by SymPy without any numeric check.",
+  "findings": [
+   {
+    "id": "F1",
+    "title": "Bound-variable conditions of a closed integrate/limit make the solution set empty: EmptySet certified for inequalities and equations",
+    "category": "false_accept",
+    "severity": "high",
+    "introduced_by_change": "new",
+    "repro": "vars x,t real. (a) solve_inequality {inequality: '3*x - 2 > integrate(2/t, (t, 1, E))', var x}, shape interval, claim 'EmptySet' (ayt3_E). (b) solve_equation {equation: '2*x - 1 = integrate(1/t, (t, 1, E))', var x}, shape set, claim 'EmptySet' (ayt1_E). (c) solve_inequality 'x**2 < limit((t**2 - 9)/(t - 3), t, 3) + 3', claim EmptySet (ayt4_E). (d) Same pattern with vars x,a: 'a < limit(sin(x)/x, x, 0)' var a; with x,t: 'x > integrate(1/t, (t, 1, E))', 'x < integrate(log(t), (t, 1, E))', 'x >= integrate(sqrt(t), (t, 0, 1))', 'x**2 < limit((t**2 - 4)/(t - 2), t, 2)', 'x < limit((1 + 1/t)**t, t, oo)'. All claim EmptySet.",
+    "new_result": "CORRECT for all of (a)-(d). Evidence: certify.algebra domain='EmptySet', truth='EmptySet'. For (b): solve_guarded rejected root 1 as 'definedness_undecided: Ne(t, 0)', complete=true.",
+    "prev_result": "INCORRECT for all (a)-(d)",
+    "old_result": "INCORRECT for all (a)-(d)",
+    "expected": "INCORRECT. (a) The integral is 2 (mpmath quad 2.0), so x > 4/3. (b) The integral is 1, so x = 1. (c) The limit is 6, so x**2 < 9, i.e. (-3, 3). (d) Nonempty sets: (-oo,1), (1,oo), (-oo,1), [2/3,oo), (-2,2), (-oo,E).",
+    "justification": "definedness_conditions (certify/domain.py) walks every node with preorder_traversal, including the body of an Integral/Limit, and emits conditions on the bound variable (Ne(t,0), t>0, t>=0, Ne(t-2,0)). _verify_solve_inequality intersects the domain with solveset_in(c, x, Reals) for a condition that does not contain x; the result is EmptySet, so truth = EmptySet. In solve_guarded the same condition is 'undecided' and removes the root. PREV computed integrate/limit at parse, so no body reached this code. The capital Integral/Limit forms already had the same result in PREV and OLD (E_Sin, E_Intt, E_sqrtR, E_limsqL are CORRECT in all three versions), so the root cause is pre-existing. Making the lowercase notation a form extends it to the ordinary way IRs write these problems.",
+    "suggested_fix": "In definedness_conditions (and the strict and written variants), do not descend into Integral/Sum/Product/Limit bodies for their bound variables. Conditions of a closed form are either settled by checked_forms or make the value unknown; they are never conditions of the outer variable. Also treat a condition with no free symbol in common with var as 'unknown', never as an empty region."
+   },
+   {
+    "id": "F2",
+    "title": "Right answers refuted: lowercase closed integrate/limit in an inequality refutes every claim",
+    "category": "false_reject",
+    "severity": "medium",
+    "introduced_by_change": "new",
+    "repro": "vars x,a real: solve_inequality 'a < limit(sin(x)/x, x, 0)' var a, claim Interval.open(-oo, 1) (si_sin_R). vars x,t: 'x > integrate(1/t, (t, 1, E))' claim Interval.open(1, oo) (si_intt_R). '3*x - 2 > integrate(2/t, (t, 1, E))' claim Interval.open(4/3, oo) (ayt3_R). 'x**2 < limit((t**2 - 9)/(t - 3), t, 3) + 3' claim Interval.open(-3, 3) (ayt4_R). Also R_lnx, R_sqrt, R_limsq, R_limoo, si_sint_R, si_intx_R.",
+    "new_result": "INCORRECT (solution_set_differs, truth EmptySet)",
+    "prev_result": "CORRECT",
+    "old_result": "CORRECT",
+    "expected": "CORRECT. Values checked with mpmath: the integral of 1/t over [1,e] is 1, the integral of 2/t is 2, lim (t**2-9)/(t-3) = 6.",
+    "justification": "This is the same leak as F1, seen from the other side. The domain collapses to EmptySet, so every nonempty claim, including the right one, is refuted with confidence 0.99. Realistic AYT inequality shapes lose correct verdicts. Capital forms (R_Sin, R_Intt, R_sqrtR, R_limsqL) were already INCORRECT in PREV and OLD.",
+    "suggested_fix": "Same as F1."
+   },
+   {
+    "id": "F3",
+    "title": "Same-name bound variable: the as-written reading keeps the declared x, so the limit/integral body's conditions remove real roots of the outer equation",
+    "category": "false_reject",
+    "severity": "medium",
+    "introduced_by_change": "new",
+    "repro": "vars x real. solve_equation 'x**2 = limit((x**2 - 1)/(x - 1), x, 1) - 1' claim {-1, 1} (same1_R). 'x**2 - 3*x = limit(sin(x)/x, x, 0) - 1' claim {0, 3} (same2_R). 'x**3 = integrate(1/x, (x, 1, E)) - 1' claim {0} (same3_R). 'x**2 - x = integrate(1/x, (x, 1, E)) - 1' claim {0, 1} (rb_int_R). 'x + 1 = limit((x**2 - 1)/(x - 1), x, 1)' claim {1} (rb_lim2_R). 'x**2 + 3*x = 3*integrate(log(x), (x, 1, E)) - 3' claim {-3, 0} (rb_log_R). False acceptances of the same kind: 'x**2 <= integrate(1/x, (x, 1, E)) - 1' claim EmptySet (rb_si3_W); 'x**2 + 2*x = integrate(sqrt(x), (x, 0, 1))*0' claim {0} (rb_sqrt_W).",
+    "new_result": "All *_R: INCORRECT. rb_si3_W and rb_sqrt_W: CORRECT.",
+    "prev_result": "All *_R: CORRECT. rb_si3_W and rb_sqrt_W: INCORRECT.",
+    "old_result": "All *_R: CORRECT. rb_si3_W and rb_sqrt_W: INCORRECT.",
+    "expected": "*_R: CORRECT. By hand: each limit/integral equals 2, 1 or 1, so the equations become x**2 = 1, x**2 - 3x = 0, x**3 = 0, x**2 - x = 0, x + 1 = 2, x**2 + 3x = 0. rb_si3_W: the solution set of x**2 <= 0 is {0}, so EmptySet is INCORRECT. rb_sqrt_W: the roots are {-2, 0}, so {0} is INCORRECT.",
+    "justification": "parse_as_written now maps integrate to Integral and limit to _Limit, with rebind=False, so the body keeps the declared symbol x. Its conditions (x != 1, x != 0, x > 0, x >= 0) are read as conditions on the problem's x and exclude true roots. PREV evaluated the call and had no body. Reusing x as the integration or limit variable is common in LLM-extracted IRs. Capital forms (rb_se5, rb_se6, rb_si4) were already wrong in PREV.",
+    "suggested_fix": "In parse_as_written, rebind the variable of integrate/limit (and of Integral/Limit) to a fresh dummy as the value parse does, or drop the conditions on the bound variable (see F1)."
+   },
+   {
+    "id": "F4",
+    "title": "A closed Limit in a denominator or inside another task's parameters now abstains (CORRECT -> UNKNOWN)",
+    "category": "coverage",
+    "severity": "medium",
+    "introduced_by_change": "new",
+    "repro": "evaluate '1/limit(sin(2*x)/x, x, 0)' claim 1/2 (flag problem_undefined_as_written). simplify_expression 'x/limit(sin(2*t)/t, t, 0)' claim x/2. solve_equation 'x*limit(sin(2*t)/t, t, 0) = 6' claim {3}. count_integers given 'x**2 < limit(sin(10*t)/t, t, 0)' claim 7. tangent_line f='x**3 - limit(sin(2*t)/t, t, 0)*x' at 1 claim 'y = x - 2'. derivative f='x**2*integrate(t, (t, 0, 1))' at 2 claim 2. extremum f='x**2 - 2*limit(sin(t)/t, t, 0)*x' on [0,3] min claim -1. limit task expr 'sin(x)/x + integrate(t, (t, 0, 2))' to 0 claim 3. definite_integral integrand x, b='limit(sin(2*t)/t, t, 0)' claim 2. count_roots 'x**2 - integrate(2*t, (t, 0, 2))' claim 2. trig_solve 'sin(x) = limit(sin(t)/(2*t), t, 0)' on [0,2pi) claim {pi/6, 5pi/6}. domain_of 'sqrt(x - integrate(t, (t, 0, 2)))' claim [2, oo). series_sum hi='limit(sin(4*t)/t, t, 0)' claim 10. solve_equation 'x**2 = integrate(2*t, (t, 0, 3))' claim {-3, 3}.",
+    "new_result": "UNKNOWN for all",
+    "prev_result": "CORRECT for all (the paired wrong claims INCORRECT)",
+    "old_result": "CORRECT for all",
+    "expected": "CORRECT. The values follow by hand: lim sin(2x)/x = 2, the integral of t over [0,1] is 1/2, and so on.",
+    "justification": "The certificates receive an unevaluated Limit/Integral where they used to receive a number. closed_condition_undecided cannot prove Ne(Limit, 0), since relation_holds_at cannot evaluate a Limit, so the verifier abstains. solveset returns sqrt(Integral(...)), so completeness is uncertified. derivative_at_point and extremum critical-point solving cannot handle the form, z3 refuses it, and the strict domain reading refuses it. No wrong verdict results, but correct AYT/TYT answers are lost wherever the IR writer embeds a limit or integral as a constant.",
+    "suggested_fix": "Before a certificate uses a parsed task parameter, replace its closed forms with checked_forms(...) values (abstaining on UnverifiedForm). Let relation_holds_at and closed_condition_undecided use checked_forms before declaring a closed condition undecided."
+   },
+   {
+    "id": "F5",
+    "title": "Multi-limit integrate, forms inside a definite_integral integrand, oscillatory and divergent improper integrals lose coverage",
+    "category": "coverage",
+    "severity": "low",
+    "introduced_by_change": "new",
+    "repro": "evaluate 'integrate(x*y, (x, 0, 1), (y, 0, 2))' claim 1. 'integrate(x + y, (x, 0, 1), (y, 0, 1))' claim 1. 'integrate(x*y, (y, 0, x), (x, 0, 1))' claim 1/8. 'integrate(1, (y, x**2, x), (x, 0, 1))' claim 1/6. 'integrate(sin(x)/x, (x, 0, oo))' claim pi/2. 'integrate(1/x, (x, 0, 1))' claim oo. definite_integral integrand 'Integral(t, (t, 0, x))' on [0,1] claim 1/6. Integrand 'Sum(x**k, (k, 0, 3))' claim 25/12. Integrand 'x + integrate(t, (t, 0, 1))' on [0,2] claim 3. Integrand F(x) with F = 'Integral(t**2, (t, 0, x))' claim 1/12.",
+    "new_result": "UNKNOWN for all (checked_forms._numeric returns None for more than one limit; the change-3 guard abstains on any form in the integrand; the numeric check of the Dirichlet integral does not confirm)",
+    "prev_result": "CORRECT for all (wrong claims INCORRECT)",
+    "old_result": "CORRECT for all",
+    "expected": "CORRECT. mpmath: the double integrals are 1, 1, 1/8 and 1/6; quadosc gives the Dirichlet integral 1.5707963... = pi/2; the iterated integral is 1/6; the Sum integrand gives 25/12.",
+    "justification": "The multi-limit closed Integral and the forms inside an integrand are refused, not checked. Rectangular and iterated double integrals and the Dirichlet integral are standard first-year university items. No wrong verdict results.",
+    "suggested_fix": "Check multi-limit integrals by iterated one-variable quadrature, or by splitting the Integral into nested one-limit Integrals so the inner ones become open parameter integrals. In definite_integral, substitute checked_forms values for closed forms in the integrand before quadrature instead of abstaining; keep abstaining only for open forms."
+   },
+   {
+    "id": "F6",
+    "title": "Unconfirmed SymPy value of a closed form still becomes the truth through sp.simplify / solve_system (evaluate with givens)",
+    "category": "false_accept",
+    "severity": "high",
+    "introduced_by_change": "preexisting",
+    "repro": "vars x,a real, evaluate {expr: 'a*integrate(Abs(cos(x)), (x, -1, 1)) + 1'}, givens ['a = 2'], claim '1' (g_int_cos_W). Same shape: expr 'a + 1', givens ['integrate(Abs(cos(x)), (x, -1, 1)) = a'], claim '1' (g2_cos_W). vars n positive_integer and a: expr 'a + limit(n*tan(pi/n), n, oo)', givens ['a = 1'], claim '1' (g_lim_tan_W).",
+    "new_result": "CORRECT for all three; the right answers (4*sin(1) + 1, 2*sin(1) + 1, 1 + pi) are INCORRECT",
+    "prev_result": "CORRECT (right answers INCORRECT)",
+    "old_result": "CORRECT (right answers INCORRECT)",
+    "expected": "INCORRECT. mpmath: the integral of |cos x| over [-1,1] is 1.6829419696 = 2 sin 1; n*tan(pi/n) at n=10^6 is 3.14159265360, so the limit is pi.",
+    "justification": "certify/algebra.py _verify_evaluate computes v = sp.simplify(target.subs(s_)). sp.simplify(2*Integral(|cos x|, (x,-1,1)) + 1) returns 1 (measured; SymPy doit gives 0), and simplify(Limit(n*tan(pi/n), n, oo)) returns 0. solve_system solves Eq(Integral, a) as a = 0. The resulting SymPy value is handed to answers_equivalent as the truth, after checked_forms could have seen the form. This round made the form reach this code, but the stated goal (closed forms valued only when numbers confirm them) is not met on this path.",
+    "suggested_fix": "Run checked_forms on the target and on the givens before solve_system/simplify, abstaining on UnverifiedForm. Or replace sp.simplify with a simplification that does not doit (sp.simplify(..., doit=False)) and keep the form for answers_equivalent."
+   },
+   {
+    "id": "F7",
+    "title": "extremum and antiderivative certificates evaluate a closed form symbolically without numeric confirmation",
+    "category": "false_accept",
+    "severity": "medium",
+    "introduced_by_change": "preexisting",
+    "repro": "vars x,t real. extremum {f: 'x*integrate(Abs(cos(t)), (t, -1, 1))', var x, interval 'Interval(0, 1)', which max} claim '0' (ext_cos_W). antiderivative {integrand: 'x + integrate(Abs(cos(t)), (t, -1, 1))', var x} claim 'x**2/2' (anti_cos_W2). Same integrand without x, claim '0' (anti_cos_W).",
+    "new_result": "CORRECT for all three; the right answers 2*sin(1) and x**2/2 + 2*sin(1)*x are INCORRECT",
+    "prev_result": "CORRECT (right answers INCORRECT)",
+    "old_result": "CORRECT (right answers INCORRECT)",
+    "expected": "INCORRECT. The constant is 2 sin 1 = 1.68294... (mpmath quad), so max = 2 sin 1 and F = x**2/2 + 2 sin(1) x.",
+    "justification": "The extremum proof (EVT with complete critical set) and antiderivative_certificate (symbolic residual dF - f) let SymPy doit the Integral to 0. The form now reaches these certificates, but neither calls checked_forms.",
+    "suggested_fix": "Apply checked_forms to f / integrand at the start of certify.extremum and certify.calculus (all kinds), abstaining on UnverifiedForm."
+   },
+   {
+    "id": "F8",
+    "title": "checked_forms passes through a closed form whose inner forms are open, and answers_equivalent then certifies SymPy's doit",
+    "category": "false_accept",
+    "severity": "medium",
+    "introduced_by_change": "preexisting",
+    "repro": "vars x,y real, evaluate {expr: 'limit(Integral(Abs(cos(x))/y, (x, -1, 1))*y, y, 1)'} claim '0' (nest_lim_W). Direct call: checked_forms(Limit(y*Integral(Abs(cos(x))/y,(x,-1,1)), y, 1, '+-')) returns it unchanged although has_closed_form is True; answers_equivalent(0, that Limit) -> True (zero_test_battery).",
+    "new_result": "CORRECT (the right claim 2*sin(1) is UNKNOWN)",
+    "prev_result": "CORRECT (right claim INCORRECT)",
+    "old_result": "CORRECT (right claim INCORRECT)",
+    "expected": "INCORRECT. The limit is 2 sin 1 = 1.68294... (mpmath).",
+    "justification": "In equiv/forms.py checked_forms, `inner = _innermost(e); if not inner: return e` returns the expression when every closed form contains an open inner form (bound by the outer one). Such a closed form is therefore never confirmed, and sym_equal's zero test lets SymPy doit it (0). This round's nested integrate-in-limit and limit-in-integrate notation reaches this path, and the new to_mp guard does not cover it.",
+    "suggested_fix": "At the start and after each round, raise UnverifiedForm when has_closed_form(e) is true but _innermost(e) is empty. Or evaluate such an outer form numerically as a whole (quadrature or probing of the full expression) before accepting SymPy's value."
+   },
+   {
+    "id": "F9",
+    "title": "An integral with a parameter is still computed by SymPy at parse, unverified: nested integrate and parameter givens certify SymPy's wrong value",
+    "category": "false_accept",
+    "severity": "medium",
+    "introduced_by_change": "preexisting",
+    "repro": "vars x,y real, evaluate {expr: 'integrate(integrate(y*Abs(cos(x)), (x, -1, 1)), (y, 0, 1))'} claim '0' (par_nest_W). vars x,a: evaluate {expr: 'integrate(a*Abs(cos(x)), (x, -1, 1))'}, givens ['a = 1'], claim '0' (par_giv_W).",
+    "new_result": "CORRECT for both; the right answers sin(1) and 2*sin(1) are INCORRECT",
+    "prev_result": "CORRECT (right INCORRECT)",
+    "old_result": "CORRECT (right INCORRECT)",
+    "expected": "INCORRECT. mpmath: the double integral is 0.841470984807896 = sin 1; with a = 1 the integral is 2 sin 1.",
+    "justification": "_integrate computes sp.integrate whenever the Integral has a free symbol. sp.integrate(y*|cos x|, (x,-1,1)) = 0 (measured). The outer closed Integral(0, (y,0,1)) is then 'confirmed' as 0. The docstring accepts this ('an integral with a parameter is computed as before'), but it is the same SymPy defect the round set out to stop, reached through one extra variable.",
+    "suggested_fix": "Keep a definite integral with a parameter unevaluated too (Integral), and let the consumers that need a function of the parameter compute it and cross-check it numerically at sample parameter values. Or at least cross-check sp.integrate's result numerically at a few parameter values at parse time and keep the form when they disagree."
+   }
+  ]
+ },
+ "attack:written": {
+  "probes_run": 430,
+  "summary": "About 430 probe evaluations, roughly 330 distinct inputs, each run on NEW, PREV and OLD. They cover verify() on all task kinds, direct parse_as_written plus definedness_conditions calls, and build_statement (Lean) texts. The as-written changes (4, 5, 6) fixed a lot, measured as NEW correct where PREV was wrong: f'(x)=0 with no spurious half-line, declared domains applied to f(x)=5, f(f(x)), domain_of and count_roots, and derivatives at negative points. They also introduced four soundness defects.\n\n(1) A lowercase diff of an IR function that has a declared domain crashes inside SymPy. The cause is written_domain's Relational argument, which has no .diff. parse_as_written then returns None, so the domain and every other written condition of that text are dropped. Wrong answers such as {-1,1} for f'(x)=0 with f on x>0 become CORRECT; PREV rejected them.\n\n(2) _written_diff turns Abs(u) into sign(u)*u' and adds no kink condition. As a result, domain_of f' = R is certified for |x-2| and |x^2-4|, and closed intervals containing the kinks are certified for f'(x) >= 0 and f'(x) <= 0. PREV abstained or rejected. Part of this is pre-existing through the value path.\n\n(3) The derivative inherits the operand's non-strict conditions (x >= 0) instead of interior ones. So f'(0) for x*sqrt(x), the critical point 0 of x^2*sqrt(x) - 5x^2, and domain [0,oo) of the derivative are certified, and Lean statements are now built for these. The result also depends on the form SymPy returns: x**(3/2) gives the opposite answer.\n\n(4) Lowercase integrate and limit read as written now leak the bound variable's conditions onto the outer variable of the same name. This refutes true roots and accepts EmptySet; capital Integral/Limit already did this in all versions.\n\nCoverage losses:\n- Closed calls of domain functions under 1/, log, sqrt, or composition (f(f(2)), 1/f(2)) now abstain, because Ne(written_domain(...),0) cannot be evaluated.\n- Closed Limit under a partial operation now abstains.\n- Equations containing a closed integral or limit now give claimed_root_undecided (change 1).\n- _functions_faithful refuses Lean for every function with a non-empty domain string, including natural-domain ones like evalset tyt-esf-005.\n\nOne pre-existing crash: verify raises InconsistentAssumptions from verifier._same_structure on a 6th-order derivative. No hang was introduced; NEW was faster than PREV on the 12th derivative of tan.",
+  "findings": [
+   {
+    "id": "A1",
+    "title": "diff of an IR function with a declared domain crashes in the as-written reading; the domain and all written conditions of that text are lost",
+    "category": "false_accept",
+    "severity": "high",
+    "introduced_by_change": "new",
+    "repro": "functions=[{name:f, args:[x], expr:'x**3 - 3*x', domain:'x > 0'}], vars x real. solve_equation {equation:'diff(f(x), x) = 0', var:x}, claim {-1, 1} (set). Also: domain 'x < 0', claim {-1,1}. domain 'x != -1', claim {-1,1}. solve_inequality 'diff(f(x), x) < 0', claim (-1, 1). 'diff(f(x), x) > 0', claim (-oo,-1) U (1,oo). count_roots expr 'diff(f(x), x)', claim 2. domain_of 'diff(f(x), x)', claim (-oo, oo). With f=x**2 on x>0: evaluate 'at(diff(f(x), x), x, -1)', claim -2; solve 'diff(f(x), x) = -2', claim {-1}. Direct: sp.diff(written_domain(x**3-3*x, x>0), x) raises AttributeError: 'StrictGreaterThan' object has no attribute 'diff', and parse_as_written('diff(f(x), x)') returns None.",
+    "new_result": "All the wrong claims above are CORRECT: {-1,1}, (-1,1), count 2, domain R, f'(-1)=-2, {-1}. The right claims are INCORRECT: {1} for x>0, (0,1), (1,oo), count 1, domain (0,oo).",
+    "prev_result": "x>0 cases: {1} CORRECT and {-1,1} INCORRECT, right by accident because the raw power rule's log(x) gave x>0. Domain 'x<0': {-1,1} INCORRECT. at(...,-1): UNKNOWN. diff(f(x),x) = -2: {-1} INCORRECT. domain_of: UNKNOWN.",
+    "old_result": "Same as PREV.",
+    "expected": "f' = 3x^2 - 3 on the declared domain. Worked by hand: x>0 gives {1}; x<0 gives {-1}; x != -1 gives {1}; f'<0 on x>0 gives (0,1); f'>0 gives (1,oo); one root; the domain of f' is (0,oo). For f=x^2 on x>0, f'(-1) is undefined and 2x=-2 has no solution in the domain.",
+    "justification": "NEW's _written_call wraps a call to a function with a domain in the marker written_domain(body, relation). _written_diff runs sp.diff with evaluation on over that node; the chain rule differentiates the Relational argument and raises. parse_as_written catches the exception and returns None, so written_definedness returns no conditions at all. _function_call_conditions reads fd.expr only, never the domain. Capital Derivative(f(x), x) keeps the domain: the same IR gives {-1,1} INCORRECT. Change 6 claims to apply declared domains, but lowercase diff, the most common derivative notation in IRs, silently bypasses it. The Lean path is safe because _functions_faithful refuses functions with domains.",
+    "suggested_fix": "In _written_diff, differentiate a copy with the marker stripped, e.replace(lambda n: type(n).__name__ == 'written_domain', lambda n: n.args[0]), and keep the original e in the 0*operand term so its written_domain conditions stay. Add a test: diff(f(x), x) = 0 with a domain gives {1}."
+   },
+   {
+    "id": "A2",
+    "title": "The as-written derivative of Abs has no kink condition: domain of f' = R and closed intervals containing kinks are certified",
+    "category": "false_accept",
+    "severity": "high",
+    "introduced_by_change": "new",
+    "repro": "domain_of {expr:'diff(Abs(x - 2), x)', var:x}, claim (-oo, oo). Also 'diff(Abs(x**2 - 4), x)', 'diff(Abs(sin(x)), x)', 'diff(Abs(x) + Abs(x - 1), x)' and, with f=Abs(x-2)+x, 'diff(f(x), x)'. With f=Abs(x**2-4): solve_inequality 'diff(f(x), x) >= 0', claim [-2, 0] U [2, oo); 'diff(f(x), x) <= 0', claim (-oo, -2] U [0, 2]. Pre-existing variants: 'diff(Abs(x - 1), x) >= 0', claim [1, oo); 'diff(Abs(x), x) <= 0', claim (-oo, 0]; 'diff(Abs(x - 2) + x, x) >= 1', claim [2, oo). parse_as_written('diff(Abs(x), x)') returns 0*Abs(x) + sign(x) with conditions [].",
+    "new_result": "domain_of R is CORRECT and the true R\\{2} and R\\{-2,2} are INCORRECT. [-2,0] U [2,oo) is CORRECT and the true (-2,0] U (2,oo) is INCORRECT. (-oo,-2] U [0,2] is CORRECT and the true (-oo,-2) U [0,2) is INCORRECT. Pre-existing variants: the wrong closed intervals are CORRECT and the true open ones INCORRECT.",
+    "prev_result": "domain_of: UNKNOWN for both claims. |x^2-4| inequalities: the wrong closed intervals are INCORRECT and the true sets also INCORRECT. Pre-existing variants: same as NEW (wrong CORRECT, right INCORRECT).",
+    "old_result": "Same as PREV.",
+    "expected": "|u| is not differentiable where u = 0 and u' != 0. Worked by hand: the domain of (|x-2|)' is R\\{2}, of (|x^2-4|)' is R\\{-2,2}. For f=|x^2-4|: f'>=0 holds on (-2,0] U (2,oo) and f'<=0 on (-oo,-2) U [0,2). (|x-1|)'>=0 holds on (1,oo); (|x|)'<=0 on (-oo,0).",
+    "justification": "_written_diff computes sp.diff with evaluation on, which gives sign(u)*u' for real u. sign is in _TOTAL_FUNCS, so definedness_conditions_strict gives [] and domain_of certifies R. The raw form PREV built was unreadable, so domain_of abstained. The value path evaluates sign(0)=0 at the kink, so the kink satisfies f'>=0 and f'<=0. _at already refuses sign at a vanishing argument, but the set solvers and domain_of do not. This is a wrong certification on a staple AYT shape: monotonicity of |x^2-4| through f'.",
+    "suggested_fix": "In _written_diff, when the operand contains Abs, sign, Max, Min, floor, ceiling, frac, Heaviside or Piecewise, add each kink condition (for Abs(u): Ne(u, 0)) to the 0*operand term. Alternatively keep the node unevaluated (Derivative) so strict definedness refuses and the certificates abstain. The value path should also refuse sign(u)/Heaviside(u) terms whose argument vanishes on the answer set."
+   },
+   {
+    "id": "A3",
+    "title": "The derivative inherits the operand's non-strict conditions: endpoint derivatives certified, and the result depends on the written form",
+    "category": "false_accept",
+    "severity": "medium",
+    "introduced_by_change": "new",
+    "repro": "solve_equation 'diff(x*sqrt(x), x) = 0', claims {0} and EmptySet. Same with f=x*sqrt(x) and 'diff(f(x), x) = 0'. evaluate 'at(diff(x*sqrt(x), x), x, 0)', claim 0. evaluate a with given 'at(diff(x**2*sqrt(x), x), x, 0) = a', claim 0. solve_equation 'diff(x**2*sqrt(x) - 5*x**2, x) = 0', claims {0, 16} and {16}. domain_of 'diff(x*sqrt(x), x)', claims [0, oo) and (0, oo). solve_inequality 'diff(x*sqrt(x), x) >= 0', claim [0, oo), against 'diff(x**(3/2), x) >= 0', claim [0, oo). solve_equation 'diff((1 - x**2)*sqrt(1 - x**2), x) = 0', claims {-1,0,1} and {0}. build_statement for the first case gives a Lean goal: ∀ x ≥ 0, (3*sqrt x/2 = 0 ↔ x = 0).",
+    "new_result": "{0} CORRECT and EmptySet INCORRECT. at(...,0)=0 CORRECT. a=0 CORRECT. {0,16} CORRECT and {16} INCORRECT. domain [0,oo) CORRECT and (0,oo) INCORRECT. x*sqrt(x) form: [0,oo) CORRECT. x**(3/2) form: [0,oo) INCORRECT and (0,oo) CORRECT. {-1,0,1} CORRECT and {0} INCORRECT. Lean statements are now built for these cases.",
+    "prev_result": "{0} INCORRECT and EmptySet CORRECT. at(...,0): UNKNOWN. {16} CORRECT. domain_of: UNKNOWN. [0,oo) INCORRECT in both forms. No Lean statement.",
+    "old_result": "Same as PREV.",
+    "expected": "x^(3/2) is defined only on [0,oo), so its derivative exists on the interior (0,oo). This is the project's own convention: formal.statement.interior_defined_at says a derivative needs a neighbourhood, so a >= 0 condition means > 0. Worked by hand: f'(x)=0 has no solution; the critical set of x^2*sqrt(x) - 5x^2 is {16}; the domain of f' is (0,oo); for (1-x^2)^(3/2) the answer is {0}.",
+    "justification": "_written_diff adds 0*operand, which keeps the operand's conditions exactly as written (x >= 0). The evaluated derivative 3*sqrt(x)/2 adds nothing stricter. PREV's raw power rule carried log(x), hence x > 0. The same function gets opposite verdicts depending on form, because SymPy's derivative of x**(3/2) is 3*x**(3/2)/(2x) and carries x != 0 by accident. The endpoint reading is debatable in the abstract, but this form-dependence and the conflict with interior_defined_at make one of the two verdicts wrong. The certification also reaches Lean.",
+    "suggested_fix": "In _written_diff, turn every non-strict condition the operand yields (b >= 0 from even roots, x >= -1/x <= 1 from asin/acos, x >= 1 from acosh) into its strict form for the derivative, for example by adding 0*(1/b)**(1/2) terms. Equivalently, apply interior_defined_at's rule to the derivative node."
+   },
+   {
+    "id": "A4",
+    "title": "Lowercase integrate/limit read as written put the integrand's or limit body's conditions on the outer variable of the same name",
+    "category": "false_reject",
+    "severity": "medium",
+    "introduced_by_change": "new",
+    "repro": "solve_equation, var x: 'integrate(log(x), (x, 1, E)) = x**2', claim {-1, 1}. 'integrate(sqrt(x), (x, 0, 4)) = x**2 - 2*x', claim {1 - sqrt(57)/3, 1 + sqrt(57)/3}. 'limit((x**2 - 1)/(x - 1), x, 1) = 2*x', claim {1}. 'x*integrate(1/x, (x, 1, E)) = 0', claims EmptySet and {0}. 'integrate(sqrt(x), (x, 0, 1)) = x + 1', claims EmptySet and {-1/3}. solve_inequality 'x*integrate(1/x, (x, 1, E)) < 1', claim (-oo, 1). Direct: parse_as_written('integrate(1/x, (x, 1, 2))') gives conditions [Ne(x, 0)]; for 'limit((x**2-1)/(x-1), x, 1)' it gives [Ne(x - 1, 0)].",
+    "new_result": "{-1,1}: INCORRECT (claimed_root_invalid: outside_domain). Both roots of the sqrt equation: INCORRECT. {1} for the limit equation: INCORRECT. EmptySet for x*∫1/x = 0: CORRECT. EmptySet for ∫sqrt x = x+1: CORRECT. {0} and {-1/3}: INCORRECT. (-oo,1): INCORRECT.",
+    "prev_result": "True answers CORRECT; EmptySet claims INCORRECT. In PREV the lowercase forms were computed or unreadable, so no condition leaked.",
+    "old_result": "Same as PREV. The capital Integral/Limit forms leak in all three versions: 'x*Integral(1/x, (x, 1, E)) = 0' with EmptySet is CORRECT in NEW, PREV and OLD.",
+    "expected": "The bound variable is a dummy. Worked by hand: ∫_1^e ln x dx = 1 gives x = ±1; ∫_0^4 sqrt x dx = 16/3 gives x = 1 ± sqrt(57)/3; the limit is 2, so x = 1; x*1 = 0 gives x = 0; ∫_0^1 sqrt x dx = 2/3 gives x = -1/3; x < 1 gives (-oo,1).",
+    "justification": "_written_integrate and _Limit now return forms in the as-written reading, parsed with rebind=False. That choice was made so step checks see body conditions on 'x'. At task level these conditions reach Ctx.domain_for through written_conditions as conditions on the solved variable. The result is refuted true roots and certified wrong empty sets, with verdict CORRECT in two cases. The capital forms had this before; this round extends it to integrate/limit, the lowercase notation IR writers use most.",
+    "suggested_fix": "Drop definedness conditions whose symbols are bound by an enclosing Integral/Sum/Product/Limit when building task-level written_conditions. Alternatively rebind bound variables to Dummies in the as-written reading used by Ctx.written_conditions and domain_for, and keep rebind=False only for the step layer."
+   },
+   {
+    "id": "A5",
+    "title": "Closed calls of a function with a declared domain under 1/, log, sqrt or composition now abstain",
+    "category": "coverage",
+    "severity": "medium",
+    "introduced_by_change": "new",
+    "repro": "functions=[{f, expr:'(2*x + 3)/(x - 1)', domain:'x != 1'}], the evalset tyt-esf-005 function. evaluate 'f(f(2))', claim 17/6; evaluate '1/f(2)', claim 1/7. With f=x+1 on x>0: '1/f(2)' claim 1/3; 'log(f(2))' claim log(3); 'sqrt(f(3))' claim 2; 'f(f(1))' claim 3. With f=log(x,2) on x>0: 'f(8)/f(2)' claim 3. With f=tan(x) on 0<x<pi/2: '1/f(pi/4)' claim 1. With f=x-3 on x>2: count_roots '1/f(x) - 1' claim 1. Direct: conditions of '1/f(2)' are [Ne(written_domain(1 + 2, 2 > 0), 0), 2 > 0], and closed_condition_undecided returns True.",
+    "new_result": "UNKNOWN (problem_undefined_as_written, or counting definedness_undecided at 4: Ne(written_domain...)) for every case.",
+    "prev_result": "CORRECT for all.",
+    "old_result": "CORRECT for all.",
+    "expected": "All claims are true by direct arithmetic: f(2)=7, f(7)=17/6, 1/7, 1/3, log 3, 2, f(f(1))=3, 3/1=3, 1/tan(pi/4)=1; x-3=1 gives x=4 > 2, one root.",
+    "justification": "definedness_conditions builds parent conditions on the written_domain marker itself. The marker has no numeric value, so relation_holds_at cannot decide Ne(written_domain(...), 0) or written_domain(...) > 0. Change 5 then counts any undecided closed condition as undefined and abstains. Composition f(f(a)) and 1/f(a) with a declared domain are TYT staples, and the LLM schema asks for a domain on every function.",
+    "suggested_fix": "In definedness_conditions, read a written_domain node's parent conditions through its body: strip the marker (replace written_domain(b, c) by b) before building parent conditions, and add c separately, as the loop already does."
+   },
+   {
+    "id": "A6",
+    "title": "Lean statements are refused for every function with a non-empty domain string, including natural-domain declarations",
+    "category": "lean",
+    "severity": "low",
+    "introduced_by_change": "new",
+    "repro": "The evalset item tyt-esf-005 (solve_equation f(x)=5, f=(2x+3)/(x-1), domain 'x != 1', claim 8/3). With the same f: evaluate 'f(2)' claim 7, derivative at 2 claim -5, extremum max on [2,3] claim 7, definite_integral on [2,3] claim 2+5*log(2). Also f=log(x,2) on 'x > 0', evaluate 'f(8)' claim 3. Call formal.statement.build_statement(ir, claim) on each.",
+    "new_result": "build_statement returns None for all (_functions_faithful: 'its declared domain is not stated'). The deterministic verdicts are unchanged (CORRECT).",
+    "prev_result": "Correct Lean statements were built, e.g. ∀ x, x-1 ≠ 0 → ((3+2x)/(x-1) = 5 ↔ x = 8/3), HasDerivAt ... (-5) 2, and ∫ x in 2..3 ... = 2 + 5 log 2.",
+    "old_result": "Same as PREV.",
+    "expected": "A domain that the template already guards, or that contains every point where the function is called, should keep its statement. Only calls outside the declared domain need refusal; those PREV got wrong (f(-2)=5 for x^2+1 on x>0).",
+    "justification": "The refusal is blanket. The LLM schema field 'domain' ('' if unrestricted) is filled for rational and log functions (2 of 12 functions in the evalset carry 'x != 1'), so F5 loses these statements with no soundness gain where the domain equals the written domain.",
+    "suggested_fix": "Accept when the declared domain is implied by the body's written definedness (the check _functions_faithful already runs), or add the domain relation as a hypothesis or guard at each call point and refuse only when a call point is not proved inside it."
+   },
+   {
+    "id": "A7",
+    "title": "A closed Limit under a partial operation, and equations with a closed integral/limit, now abstain",
+    "category": "coverage",
+    "severity": "low",
+    "introduced_by_change": "new",
+    "repro": "evaluate '1/limit(sin(3*x)/x, x, 0)' claim 1/3; evaluate 'sqrt(limit((x**2 - 4)/(x - 2), x, 2))' claim 2; solve_equation var a 'a/limit(sin(3*x)/x, x, 0) = 6' claim {18}. Change-1 variants: solve_equation var a 'a*limit(sin(3*x)/x, x, 0) = 6' claim {2}; 'x**2 = integrate(2*t, (t, 0, 3))' claim {-3, 3}; 'integrate(sqrt(t), (t, 0, 1)) = x + 1' claim {-1/3}; 'log(x) = limit((1 + 1/t)**t, t, oo)' claim {exp(E)}.",
+    "new_result": "UNKNOWN: problem_undefined_as_written for the first three; claimed_root_undecided or completeness_uncertified for the rest.",
+    "prev_result": "CORRECT for all.",
+    "old_result": "CORRECT for all.",
+    "expected": "All claims are true: the limits are 3, 4 and e, and ∫_0^3 2t dt = 9, so x = ±3; ∫_0^1 sqrt t dt = 2/3, so x = -1/3; x = e^e.",
+    "justification": "Ne(Limit(...), 0) is a closed condition that relation_holds_at cannot evaluate, because the Limit is unevaluated. Change 5 then abstains even when a variable is present. Closed Integral and Sum in the same position are decided (1/integrate(x,(x,0,2)) stays CORRECT), so only Limit is affected. For the equations, the value is now an unevaluated form, and the algebra certificate's claimed-root check cannot decide it. These are measured coverage losses only; UNKNOWN is safe.",
+    "suggested_fix": "Let relation_holds_at and certified_sign value a closed Limit through the same numerically confirmed path as equiv.forms.checked_forms. Apply checked_forms to the equation sides before the root checks in certify.algebra."
+   },
+   {
+    "id": "A8",
+    "title": "verify raises InconsistentAssumptions instead of returning UNKNOWN (pre-existing crash)",
+    "category": "crash_or_hang",
+    "severity": "low",
+    "introduced_by_change": "preexisting",
+    "repro": "evaluate {expr:'at(diff(tan(x)/x, x, 6), x, 1)'}, vars x real, claim 1. Orders 2 and 3 return normally.",
+    "new_result": "EXC InconsistentAssumptions after 146 s. The traceback runs verifier.verify_layers → _claim_not_a_value → _same_structure; the sp.srepr comparison sits outside its try.",
+    "prev_result": "EXC InconsistentAssumptions.",
+    "old_result": "EXC InconsistentAssumptions.",
+    "expected": "A verdict. The claim 1 is wrong; the true value, the 6th derivative of tan(x)/x at 1, is a large positive number. At minimum verify should return UNKNOWN.",
+    "justification": "An exception escapes verify(). The input is contrived (a 6th-order derivative). A related timing note, not a regression: evaluate 'at(diff(tan(x), x, 12), x, 0)' took 369 s on NEW and more than 580 s on PREV and OLD (killed by the probe timeout).",
+    "suggested_fix": "Put the srepr comparison in _same_structure inside the existing try, and return False on any exception."
+   }
+  ]
+ },
+ "verify:forms": {
+  "results": [
+   {
+    "id": "F1",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "high",
+    "old_result": "INCORRECT for every EmptySet claim (ayt3_E, ayt4_E, si_sin_E, si_intt_E, lnx_E, sqrt_E, limsq_E, limoo_E, ayt1_E)",
+    "prev_result": "INCORRECT for every EmptySet claim",
+    "new_result": "CORRECT for all nine EmptySet claims (certify.algebra pass); ayt1_R ({1}) is UNKNOWN (claimed_root_undecided)",
+    "reason": "Reproduced. The true values were checked with mpmath at 30 digits: int 2/t over [1,e] = 2, int 1/t = 1, int log t = 1, int sqrt t over [0,1] = 2/3, lim (t^2-9)/(t-3) = 6, lim (1+1/t)^t = e. So every solution set is nonempty, and certifying EmptySet is a false acceptance. PREV and OLD refute these claims. The cause is this round turning lowercase integrate/limit into forms whose bound-variable conditions reach the outer domain."
+   },
+   {
+    "id": "F2",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "medium",
+    "old_result": "CORRECT for all right claims",
+    "prev_result": "CORRECT for all right claims",
+    "new_result": "INCORRECT for ayt3_R, ayt4_R, si_sin_R, si_intt_R, lnx_R, sqrt_R, limsq_R, limoo_R",
+    "reason": "Reproduced. This is the mirror side of F1: the truth collapses to EmptySet, so right intervals (checked with mpmath) are refuted. PREV and OLD certify them. A right answer refuted is medium."
+   },
+   {
+    "id": "F3",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "high",
+    "old_result": "All *_R CORRECT; rb_sqrt_W and rb_si3_W INCORRECT",
+    "prev_result": "All *_R CORRECT; rb_sqrt_W and rb_si3_W INCORRECT",
+    "new_result": "All *_R INCORRECT (e.g. same1_R: claimed_root_invalid outside_domain_of_discourse); rb_sqrt_W and rb_si3_W CORRECT",
+    "reason": "Reproduced. The true sets were derived by hand: x^2=1 gives {-1,1}; x^2-3x=0 gives {0,3}; x^3=0 gives {0}; x^2-x=0 gives {0,1}; x+1=2 gives {1}; x^2+3x=0 gives {-3,0}; x^2+2x=0 gives {-2,0}; x^2<=0 gives {0}. NEW refutes the right sets and certifies two wrong ones (rb_sqrt_W {0}, rb_si3_W EmptySet). Those two are false acceptances, so the severity is high rather than the auditor's medium. The cause is new: the as-written reading of lowercase integrate/limit keeps the declared x as the bound variable."
+   },
+   {
+    "id": "F4",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "low",
+    "old_result": "CORRECT (f4_eval_W INCORRECT)",
+    "prev_result": "CORRECT for all 11 probed tasks; f4_eval_W INCORRECT",
+    "new_result": "UNKNOWN for all 11 probed tasks (evaluate, simplify, solve_equation x2, derivative, extremum, limit, definite_integral, count_roots, domain_of) and for f4_eval_W. f4_eval flags problem_undefined_as_written.",
+    "reason": "Reproduced on 11 of the listed tasks, and the values were confirmed by hand. No wrong verdict results; the round only loses coverage (abstention). The rubric makes coverage loss low, not the auditor's medium."
+   },
+   {
+    "id": "F5",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "low",
+    "old_result": "CORRECT (f5_dbl_W INCORRECT)",
+    "prev_result": "CORRECT for all; f5_dbl_W INCORRECT",
+    "new_result": "UNKNOWN for all (double, iterated, Dirichlet and divergent integrals; Integral, Sum and integrate forms inside a definite_integral integrand)",
+    "reason": "Reproduced. The values were confirmed with mpmath: 1, 1/8, pi/2 (quadosc) and 25/12. The loss is coverage only, introduced by this round."
+   },
+   {
+    "id": "F6",
+    "reproduced": true,
+    "classification": "real_preexisting",
+    "severity": "high",
+    "old_result": "Wrong claims CORRECT, right claims INCORRECT",
+    "prev_result": "Wrong claims CORRECT, right claims INCORRECT",
+    "new_result": "g_int_cos_W, g2_cos_W, g_lim_tan_W CORRECT; right answers 4sin1+1, 2sin1+1, 1+pi INCORRECT",
+    "reason": "Reproduced. mpmath: the integral of |cos x| over [-1,1] is 1.68294196961579 = 2 sin 1, and n*tan(pi/n) at 1e8 gives 3.14159265... = pi. The evaluate-with-givens path lets SymPy value the form. All three versions behave the same, so the defect is pre-existing; a wrong answer is certified."
+   },
+   {
+    "id": "F7",
+    "reproduced": true,
+    "classification": "real_preexisting",
+    "severity": "high",
+    "old_result": "Wrong claims CORRECT, right INCORRECT",
+    "prev_result": "Wrong claims CORRECT, right INCORRECT",
+    "new_result": "ext_cos_W, anti_cos_W2, anti_cos_W CORRECT; right answers 2sin1, x^2/2+2sin(1)x, 2sin(1)x INCORRECT",
+    "reason": "Reproduced. The constant is 2 sin 1 = 1.68294... (mpmath), so 0 and x^2/2 are wrong. All three versions behave the same. A wrong answer certified is high by the rubric, not the auditor's medium."
+   },
+   {
+    "id": "F8",
+    "reproduced": true,
+    "classification": "real_preexisting",
+    "severity": "high",
+    "old_result": "nest_lim_W CORRECT; right claim INCORRECT",
+    "prev_result": "nest_lim_W CORRECT; right claim INCORRECT",
+    "new_result": "nest_lim_W CORRECT; right claim 2*sin(1) UNKNOWN",
+    "reason": "Reproduced. The limit is 2 sin 1 (y cancels), so the claim 0 is wrong. It is certified in all three versions: a pre-existing false acceptance, high by the rubric. NEW only changed the right claim from INCORRECT to UNKNOWN."
+   },
+   {
+    "id": "F9",
+    "reproduced": true,
+    "classification": "real_preexisting",
+    "severity": "high",
+    "old_result": "Wrong claims CORRECT, right INCORRECT",
+    "prev_result": "Wrong claims CORRECT, right INCORRECT",
+    "new_result": "par_nest_W and par_giv_W CORRECT; right sin(1) and 2sin(1) INCORRECT",
+    "reason": "Reproduced. mpmath: the double integral is 0.8414709848 = sin 1, and with a=1 the integral is 2 sin 1. The parse-time SymPy integral with a parameter is unverified in all three versions: pre-existing, and a wrong answer certified (high)."
+   }
+  ]
+ },
+ "verify:written": {
+  "results": [
+   {
+    "id": "A1",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "high",
+    "old_result": "Same as PREV.",
+    "prev_result": "f=x^3-3x on x>0: {-1,1} INCORRECT, {1} CORRECT; f'<0 gives (0,1) CORRECT; f'>0 gives (1,oo) CORRECT; count 1 CORRECT; domain_of UNKNOWN; x^2 on x>0: at(f',-1)=-2 UNKNOWN, 2x=-2 EmptySet CORRECT and {-1} INCORRECT. On x<0 PREV was also wrong: it certified {1}, but the true set is {-1}.",
+    "new_result": "On x>0, x<0 and x!=-1, {-1,1} is CORRECT and both {1} and {-1} are INCORRECT. (-1,1) CORRECT and (0,1) INCORRECT. (-oo,-1)U(1,oo) CORRECT and (1,oo) INCORRECT. Count 2 CORRECT, 1 INCORRECT. domain_of R CORRECT, (0,oo) INCORRECT. at(f',-1)=-2 CORRECT. {-1} CORRECT and EmptySet INCORRECT. parse_as_written('diff(f(x), x)') with the problem namespace returns None, and written_conditions returns []. The capital Derivative control gives {-1,1} INCORRECT.",
+    "reason": "Reproduced exactly. Worked by hand, f'=3x^2-3 exists only on the declared domain x>0, so f'=0 there gives {1}. NEW certifies {-1,1}, a point outside the domain, and a domain of R. PREV was right in the x>0 cases. The lowercase diff crashes on the written_domain marker, so every declared-domain condition is lost. This is a false acceptance introduced by change 6."
+   },
+   {
+    "id": "A2",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "high",
+    "old_result": "Same as PREV.",
+    "prev_result": "domain_of UNKNOWN for all of these. For |x^2-4|, f'>=0 and f'<=0 were INCORRECT for both the wrong and the right sets. The simple variants (|x-1|, |x|, |x-2|+x) already had the wrong closed intervals CORRECT and the right ones INCORRECT.",
+    "new_result": "domain_of R is CORRECT for diff(Abs(x-2)), Abs(x^2-4), Abs(sin x), Abs(x)+Abs(x-1), and for f=|x-2|+x; the true punctured sets are INCORRECT. For |x^2-4|, [-2,0]U[2,oo) CORRECT and (-2,0]U(2,oo) INCORRECT; (-oo,-2]U[0,2] CORRECT and (-oo,-2)U[0,2) INCORRECT. parse_as_written('diff(Abs(x), x)') gives 0*Abs(x)+sign(x) with no condition.",
+    "reason": "Worked by hand, |u| has no derivative where u=0 and u'!=0. So the domain of (|x-2|)' is R\\{2}, and for |x^2-4|, f'>=0 holds on (-2,0]U(2,oo). NEW certifies R, and closed intervals that contain the kinks, where PREV abstained or refuted both claims. The sign(u) evaluation adds no kink condition. The simple |x-1| variants were already wrong in PREV, but the domain_of and |x^2-4| certifications are new."
+   },
+   {
+    "id": "A3",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "medium",
+    "old_result": "Same as PREV.",
+    "prev_result": "{0} INCORRECT, EmptySet CORRECT. at(...,0) UNKNOWN. {16} CORRECT, {0,16} INCORRECT. domain_of UNKNOWN. [0,oo) INCORRECT and (0,oo) CORRECT in both written forms. For (1-x^2)^(3/2): both claims INCORRECT.",
+    "new_result": "{0} CORRECT and EmptySet INCORRECT (also through f=x*sqrt(x)). at(diff(x*sqrt(x)),x,0)=0 CORRECT. {0,16} CORRECT, {16} INCORRECT. domain_of [0,oo) CORRECT, (0,oo) INCORRECT. diff(x*sqrt(x))>=0: [0,oo) CORRECT, but the same claim for diff(x**(3/2))>=0 is INCORRECT, and (0,oo) is CORRECT there. {-1,0,1} CORRECT, {0} INCORRECT. The 'a given' variant was UNKNOWN in all three versions, not CORRECT as reported. The written condition of diff(x*sqrt(x)) is only [x >= 0].",
+    "reason": "The form-dependence is measured: the same function written x*sqrt(x) and x**(3/2) gets opposite verdicts, so one verdict must be wrong. Under the project's own convention (interior_defined_at: a derivative needs a neighbourhood, so >= 0 means > 0), NEW certifies wrong endpoint critical points (0, and ±1) where PREV was right. I rate it medium, not high, because a one-sided endpoint derivative is a defensible reading in some texts."
+   },
+   {
+    "id": "A4",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "high",
+    "old_result": "Same as PREV for the lowercase forms. Capital 'x*Integral(1/x,(x,1,E)) = 0' already certified EmptySet in OLD.",
+    "prev_result": "True answers CORRECT: {-1,1}, 1±sqrt(57)/3, {1}, {0}, {-1/3}, (-oo,1). The EmptySet claims INCORRECT. The capital Integral form already had EmptySet CORRECT.",
+    "new_result": "True roots INCORRECT: {-1,1}, {1-sqrt(57)/3, 1+sqrt(57)/3}, {1}, {0}, {-1/3}, and (-oo,1). Wrong EmptySet CORRECT for 'x*integrate(1/x,(x,1,E)) = 0' and for 'integrate(sqrt(x),(x,0,1)) = x+1'. parse_as_written('integrate(1/x,(x,1,2))') gives the condition [Ne(x,0)] on the outer x.",
+    "reason": "The bound variable is a dummy. By hand, ∫_1^e dx/x = 1, so x=0, and ∫_0^1 sqrt x dx = 2/3, so x=-1/3. NEW certifies the wrong EmptySet in two cases, where PREV certified the true answers. The auditor filed this as a false reject (medium), but the certified wrong EmptySet makes it high under the rubric. The lowercase leak is new in this round; the capital-form leak was already there."
+   },
+   {
+    "id": "A5",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "low",
+    "old_result": "CORRECT for all (count 0 INCORRECT).",
+    "prev_result": "CORRECT for all the true claims. The wrong count 0 was INCORRECT.",
+    "new_result": "UNKNOWN (problem_undefined_as_written) for f(f(2)), 1/f(2) with the rational function on x!=1, 1/f(2), log(f(2)), sqrt(f(3)) and f(f(1)) with f=x+1 on x>0, f(8)/f(2) with log2, and 1/f(pi/4) with tan. The count_roots case is UNKNOWN for both 1 and 0. Plain f(2)=7 is still CORRECT.",
+    "reason": "All the claims are true by arithmetic. NEW abstains where PREV and OLD certified correctly, because the conditions built on the written_domain marker are undecidable closed conditions. This is a coverage loss only; UNKNOWN is safe, so it is low under the rubric, even though these are TYT staples."
+   },
+   {
+    "id": "A6",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "low",
+    "old_result": "Same as PREV.",
+    "prev_result": "Correct statements were built: ∀ x, x-1≠0 → ((3+2x)/(x-1)=5 ↔ x=8/3); HasDerivAt ... (-5) 2; the extremum statement; ∫ x in 2..3 ... = 2+5 log 2; log 8/log 2 = 3.",
+    "new_result": "build_statement returns None for all six cases with a declared domain. The same function without a domain still builds the statement.",
+    "reason": "This is a measured Lean coverage loss on realistic evalset inputs (tyt-esf-005). The blanket refusal is deliberate and safe, so it is low."
+   },
+   {
+    "id": "A7",
+    "reproduced": true,
+    "classification": "real_new",
+    "severity": "low",
+    "old_result": "Same as PREV.",
+    "prev_result": "CORRECT for the first four cases (1/limit, sqrt(limit), a/limit=6, a*limit=6). In my runs, with t undeclared, PREV was also UNKNOWN for x^2=integrate(2t), integrate(sqrt t)=x+1 and log x=limit(...).",
+    "new_result": "UNKNOWN for all seven: problem_undefined_as_written for the first three. The control 1/integrate(x,(x,0,2)) stays CORRECT.",
+    "reason": "By hand the limits are 3, 4 and e, so the four true claims are right. NEW newly abstains on them, a coverage loss only. For the last three equations I did not reproduce a regression: PREV was also UNKNOWN in my runs, where t was not declared."
+   },
+   {
+    "id": "A8",
+    "reproduced": true,
+    "classification": "real_preexisting",
+    "severity": "medium",
+    "old_result": "EXC InconsistentAssumptions (386 s).",
+    "prev_result": "EXC InconsistentAssumptions (459 s).",
+    "new_result": "EXC InconsistentAssumptions (132 s).",
+    "reason": "An exception escapes verify() in all three versions on the same input. Under the rubric a crash is medium. The input is contrived (a 6th derivative)."
+   }
+  ]
+ }
+}
