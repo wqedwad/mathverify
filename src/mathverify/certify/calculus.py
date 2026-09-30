@@ -28,8 +28,10 @@ from ..equiv.numeric import num_equal, to_mp
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import definedness_conditions, written_definedness, written_undefined_in, relation_holds_at
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
+from .domain import (definedness_conditions, written_definedness, written_undefined_in, relation_holds_at,
+                     in_domain)
+from .limits import membership_conditions, written_undefined_everywhere
 
 LAYER = "certify.calculus"
 
@@ -543,6 +545,40 @@ def _line_equal(claimed, truth, var, dep) -> tuple[bool | None, dict[str, Any]]:
 _TRAILING_C = re.compile(r"\s*\+\s*[Cc]\s*$")
 
 
+def _unreadable_task_expression(src, expr, var, ns, ms):
+    """UNKNOWN when the task's function or integrand is undefined as written for every value of `var`
+    (limits.written_undefined_everywhere) or carries a membership condition on it
+    (limits.membership_conditions); None when neither holds."""
+    if written_undefined_everywhere(src, ns):
+        return unknown(LAYER, "expression_undefined_as_written", ms, {"expr": src},
+                       flags=["expression_undefined_as_written"])
+    members = membership_conditions(src, expr, var, ns)
+    if members:
+        return unknown(LAYER, "membership_condition_on_variable", ms, {"conditions": [str(c) for c in members]},
+                       flags=["membership_condition"])
+    return None
+
+
+def _point_not_interior(ctx: Ctx, var, at, ms):
+    """UNKNOWN unless `at` is an interior point of the variable's domain (`Ctx.domain_for`): a derivative
+    and a tangent line are two-sided (a one-sided derivative is no derivative in the curriculum). With x
+    declared positive the parse folds |x| and sqrt(x**2) to x, and with x declared nonnegative 0 is the
+    closed end: there the derivative 1 and the tangent y = x of |x| at 0 were certified (30 Sep 2026).
+    A condition naming a symbol no given fixes (x >= b, b free) leaves the domain unknown: the
+    certificate abstains (part vi). None when the point is interior."""
+    unapplied = ctx.unapplied_conditions(var)
+    if unapplied:
+        return condition_not_applied(LAYER, unapplied, ms)
+    try:
+        inside = in_domain(ctx.domain_for(var).interior, at)
+    except Exception:  # noqa: BLE001 - an interior SymPy cannot form is no proof
+        inside = None
+    if inside is not True:
+        return unknown(LAYER, "point_not_interior_to_the_domain", ms,
+                       {"at": str(at), "domain": str(ctx.domain_for(var))}, flags=["point_not_interior"])
+    return None
+
+
 # ---------------------------------------------------------------------------
 def verify(ir, solution, ctx: Ctx):
     kind = ir.task.kind
@@ -563,6 +599,9 @@ def verify(ir, solution, ctx: Ctx):
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:
                 return err
+            bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms)
+            if bad is not None:
+                return bad
             from ..normalize.parse import parse_expr_str
             payload = _TRAILING_C.sub("", str(solution.claimed_answer.payload))
             C = sp.Symbol("C")
@@ -596,6 +635,9 @@ def verify(ir, solution, ctx: Ctx):
             integrand, err = parse_or_unknown(LAYER, parse_expr_str, p["integrand"], ns_i)
             if err:
                 return err
+            bad = _unreadable_task_expression(p["integrand"], integrand, var, ns_i, t.ms)
+            if bad is not None:
+                return bad
             a, err = parse_or_unknown(LAYER, ctx.expr, str(p["a"]))
             if err:
                 return err
@@ -669,6 +711,9 @@ def verify(ir, solution, ctx: Ctx):
             f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
             if err:
                 return err
+            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms)
+            if bad is not None:
+                return bad
             try:
                 order = int(p.get("order", 1))
             except (TypeError, ValueError):
@@ -680,6 +725,9 @@ def verify(ir, solution, ctx: Ctx):
                 at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
                 if err:
                     return err
+                bad = _point_not_interior(ctx, var, at, t.ms)
+                if bad is not None:
+                    return bad
                 # x²/x is x after parsing, but it has no value (so no derivative) at 0
                 if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at)) is True:
                     return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
@@ -730,6 +778,10 @@ def verify(ir, solution, ctx: Ctx):
             at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
             if err:
                 return err
+            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms) \
+                or _point_not_interior(ctx, var, at, t.ms)
+            if bad is not None:
+                return bad
             if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at)) is True:
                 return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
                                {"f": p["f"], "at": str(at)}, flags=["written_domain"])

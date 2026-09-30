@@ -342,6 +342,56 @@ def certify_local_extremum(f, var, domain: sp.Set, which: str, claimed, timeout:
     return ok, ev
 
 
+def _conditions_on(ctx: Ctx, var, with_interval: bool) -> tuple[list[sp.Set] | None, list]:
+    """What the problem says of `var` besides the task, as sets that cut the region the extremum is
+    taken over: the given relations that name it and, when the task writes its own interval, the
+    variable's declared constraints and the domain of discourse (`Ctx.domain_for` holds these two
+    otherwise). An explicit interval was read alone: the maximum 3 of x on [-2, 3] was certified with
+    x < 1 as a constraint, a given or the domain of discourse (V18, 30 Sep 2026). A symbol a given fixes
+    is read as its value (`Ctx.on_var`); the second item lists what still names a free symbol (the
+    certificate abstains, part vi). None instead of the sets when a relation cannot be solved exactly."""
+    from ..normalize.parse import UndeclaredSymbolError, parse_relation
+    srcs = list(ctx.ir.givens)
+    if with_interval:
+        vd = next((v for v in ctx.ir.vars if v.name == var.name), None)
+        srcs = (list(vd.constraints) if vd is not None else []) + srcs
+    rels: list = []
+    unread: list = []
+    for s_ in srcs:
+        try:
+            rel = parse_relation(s_, ctx.ns)
+        except UndeclaredSymbolError:
+            unread.append(s_)
+            continue
+        except Exception:  # noqa: BLE001 - not a relation: nothing to cut (as Ctx.side_conditions)
+            continue
+        for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
+            if r is sp.false:
+                rels.append(r)                  # a contradiction (x < 0 with x declared positive)
+            elif isinstance(r, sp.core.relational.Relational) and var in r.free_symbols:
+                rels.append(r)
+    kept, unbound = ctx.on_var(rels, var)
+    sets: list[sp.Set] = []
+    if with_interval:
+        try:
+            ds = ctx.discourse(var)
+        except Exception:  # noqa: BLE001
+            return None, unbound + unread
+        if ds.free_symbols - {var}:
+            unbound.append(str(ctx.ir.domain_of_discourse))
+        else:
+            sets.append(ds)
+    for r in kept:
+        try:
+            sol = sp.solveset(r, var, S.Reals)
+        except Exception:  # noqa: BLE001
+            return None, unbound + unread
+        if isinstance(sol, ConditionSet) or sol.has(ConditionSet):
+            return None, unbound + unread
+        sets.append(sol)
+    return sets, unbound + unread
+
+
 def verify(ir, solution, ctx: Ctx):
     """Task `extremum`: params {"f": str, "var": str, "interval": str,
     "which": max|min|argmax|argmin|local_max|local_min|local_argmax|local_argmin}."""
@@ -362,11 +412,29 @@ def verify(ir, solution, ctx: Ctx):
         f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
         if err:
             return err
+        from .limits import membership_conditions, written_undefined_everywhere
+        if written_undefined_everywhere(p["f"], ctx.ns):
+            # log(-1) - log(-1) + 2 is 2 after parsing: its maximum 2 on [0, 1] was certified
+            return unknown(LAYER, "f_undefined_as_written", t.ms, {"f": p["f"]}, flags=["written_domain"])
+        members = membership_conditions(p["f"], f, var, ctx.ns)
+        if members:
+            # x + x! - x! is x after parsing: its maximum -1 on [-3, -1] was certified (30 Sep 2026)
+            return unknown(LAYER, "membership_condition_on_variable", t.ms,
+                           {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
         from ..normalize.parse import parse_set_str
         iv = parse_set_str(p.get("interval", "Reals"), ctx.ns) if p.get("interval") else ctx.domain_for(var)
         if not p.get("interval") and ctx.unapplied_conditions(var):
             # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)
             return condition_not_applied(LAYER, ctx.unapplied_conditions(var), t.ms)
+        cut, unbound = _conditions_on(ctx, var, bool(p.get("interval")))
+        if unbound:
+            return condition_not_applied(LAYER, unbound, t.ms)
+        if cut is None:
+            return unknown(LAYER, "condition_unsolved", t.ms)
+        if isinstance(iv, sp.Set):
+            iv = sp.Intersection(iv, *cut) if cut else iv
+            if iv is S.EmptySet:
+                return unknown(LAYER, "interval_empty_under_the_conditions", t.ms, {"f": p["f"]})
         claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
         if err:
             return err
