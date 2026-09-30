@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 30 Eylül 2026, akşam (bulut)**, dal `claude/loving-bardeen-ninmoo` (= `claude/sharp-lamport-f9m2w3` + `--full` raporları; `wqedwad/asd#13` ile `master`a birleşti, yedeksiz: kullanıcı kararı; DECISIONS §74). Sohbetler bulutta (kullanıcı, 30 Eylül). Yeni iş `master`dan yeni dalda (§3).
+> **Son güncelleme: 30 Eylül 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` (`wqedwad/asd#13` birleşti, yedeksiz; dal `master` `aa67b20`'den yeniden başladı, birleşmedi). Sohbetler bulutta. Sıradaki iş parça parça (§3 adım 2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -8,7 +8,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§74; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§75; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2169 passed / 5 skipped** (`d68070c`, `--full` içinde)
@@ -52,13 +52,13 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** kendi dalı `master`dan; `git fetch origin master && git log --oneline -3 origin/master` ile `master`ın `#13`'ün
-   birleşmesi olduğunu doğrula, `--plan` koş. Push yalnız oturumun kendi dalına (bulut `master`ı ve etiketi push edemez; CLAUDE.md).
-2. **Birleşmeden sonra, yeni dalda (kullanıcı kararı, 30 Eylül):** (a) üçüncü denetimin eleştirmeninin 9 bulgusu (`denetim/2026-09-29/v14/
-   bulgular/tur3_e6712f5.json` → `critic`, DECISIONS §72 Ek): yüksek N1, N2, N3, N8; N4–N7, N9; önce son kodda yeniden koş, sonra
-   sonda + test + mutasyonla kapat. (b) V16 ve V17 (§4.2). (c) `claude/inspiring-franklin-l3cocz`'nin silinmesi kullanıcıya sorulur
-   (kodu bilerek birleşmedi, bilgisi `master`da, DECISIONS §74); silmeden önce U01–U07 mutasyonları (`3b030a4:denetim/2026-09-30/
-   mutasyon_v14.py`) bu dalın listesine ve `karar_farki.py`'nin yetenekleri `fark.py`'ye alınır.
+1. **Yeni sohbet:** `git fetch origin claude/loving-bardeen-ninmoo` ile bu dalı al (birleşmediyse), `--plan` koş. Push yalnız oturumun dalına.
+2. **Sıradaki iş, parça parça (kullanıcı, 30 Eylül: "işi parçalara böl"; dal `claude/loving-bardeen-ninmoo`, `master`dan).** N1–N9
+   `aa67b20`'de yeniden koşuldu (DECISIONS §75; `denetim/2026-09-30/n19/sonda_n19.py`): N9 kapalı, N1/N3/N8 kısmen, N2/N4–N7 açık.
+   Parçalar: (i) N2 + N4 + N6 + N3'ün eq adımı (kesin sıfır ve sayısal onay; `forms.py`, `random_point.py`, `deterministic.py`);
+   (ii) N5 (fonksiyon alanı, işçi çöküşü); (iii) N7 (+ V15 S1); (iv) N8 + N1'in kalanı + F9 (adım 3'teki karara bağlı); (v) V16, V17.
+   Her parça: sonda + test + mutasyon, sonra hızlı `check.py`; birleştirmeden önce bir `--full`. `franklin`'in silinmesi kullanıcıya
+   sorulur (DECISIONS §74); silmeden önce U01–U07 mutasyonları ve `karar_farki.py`'nin yetenekleri alınır.
 3. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
    parametreli belirli integral biçim kalır; "∫₀^a x dx = 2" gibi sorular UNKNOWN olur)?
 4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
@@ -296,5 +296,5 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 ## 9. Nerede ne var
 
 Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
-`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §74); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §75); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
 `LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).
