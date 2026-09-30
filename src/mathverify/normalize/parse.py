@@ -1023,6 +1023,66 @@ def _rebind_point_dummies(code: str, local_dict: dict[str, Any], global_dict: di
     return new_code, dummies
 
 
+# A derivative or an antiderivative IN a variable declared an integer. SymPy applies the declaration to
+# the function before it differentiates or integrates (sin(pi*n) is 0 and cos(pi*n) is (-1)**n for an
+# integer n): with n a positive integer, diff(sin(pi*n), n) was 0 (the derivative is pi*cos(pi*n), pi at
+# n = 2) and diff(cos(pi*n), n) was I*pi*(-1)**n, so 0 and I*pi were certified at n = 2, pi was refuted,
+# the limit of the "derivative" at oo was 0, the steps "diff(sin(pi*n), n) = 0" and
+# "Integral(sin(pi*n), n) = 7" were verified, and so was the derivative in x of x*diff(sin(pi*n), n)
+# (V17, franklin's completeness audit, DECISIONS §74). A derivative is taken in a real variable; one in
+# a variable declared an integer is no question (the derivative, antiderivative, tangent and extremum
+# certificates abstain on such a task variable, `variable_declared_integer`), and it is not read. at()
+# and Subs bind their variable to a real dummy at a real point (`_point_facts`), a Sum/Integral with
+# limits binds an assumption-free one (`_rebind_range_dummies`): at(diff(sin(pi*n), n), n, 1) stays
+# readable. Checked by name on the code after that rebinding, on every variable argument (diff(f, x, n)
+# differentiates in n too; the order of (x, n) is no variable) and, when none is written, on the body,
+# whose only free symbol SymPy then takes (diff(sin(pi*n)) was 0 as well).
+_DIFFERENTIATING = ("diff", "Derivative")
+_ANTIDIFFERENTIATING = ("Integral", "integrate")
+
+
+def _refuse_integer_calculus(code: str, local_dict: dict[str, Any], raw: str, rebound: bool) -> None:
+    """Raise ParseError when `code` differentiates, or integrates indefinitely, in a variable
+    `local_dict` declares an integer. `rebound=False` is the as-written reading, which keeps the
+    declared symbols inside the binders: an operation nested in a binder is not judged there (the
+    normal reading judges it with the binder's own variable), so this reading never refuses a text
+    the normal reading reads, and never loses the conditions of one."""
+    if not any(name in code for name in _DIFFERENTIATING + _ANTIDIFFERENTIATING):
+        return
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return                                    # parse_expr reports it
+    nested: set[int] = set()
+    if not rebound:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                    and node.func.id in _POINT_BINDERS + _RANGE_BINDERS:
+                nested.update(id(sub) for arg in node.args for sub in ast.walk(arg))
+    seq = (ast.Tuple, ast.List)
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)) or id(node) in nested:
+            continue
+        if node.func.id in _DIFFERENTIATING:
+            spec = [a.elts[0] if isinstance(a, seq) and a.elts else a for a in node.args[1:]]
+        elif node.func.id in _ANTIDIFFERENTIATING:
+            # an indefinite integral: a bare variable or (variable,); (variable, lower, upper) binds a range
+            spec = [a.elts[0] if isinstance(a, seq) else a for a in node.args[1:]
+                    if not isinstance(a, seq) or len(a.elts) == 1]
+            if len(node.args) > 1 and not spec:
+                continue
+        else:
+            continue
+        if len(node.args) == 1:
+            spec = node.args[:1]
+        for root in spec:
+            for sub in ast.walk(root):
+                v = local_dict.get(sub.id) if isinstance(sub, ast.Name) else None
+                if isinstance(v, Symbol) and v.is_integer is True:
+                    raise ParseError(f"{raw!r} takes {node.func.id} in {v.name!r}, a variable declared an "
+                                     "integer: not read")
+
+
 # Operations SymPy keeps unevaluated: asking an assumption of a bound that holds one rebuilds it, and
 # Sum(k, (k, -1, Sum(k, (k, -1, ...)))) nested four deep took 86 s to parse (audit of V14, 30 Sep 2026).
 _OPERATIONS = (sp.Sum, sp.Product, sp.Integral, sp.Limit, sp.Derivative, sp.Subs)
@@ -1100,6 +1160,7 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     if pointed is not None:
         code, more = pointed
         dummies = dict(dummies, **more)
+    _refuse_integer_calculus(code, dict(local_dict, **dummies), s, rebind)
     if rebound is None and pointed is None:
         out = parse_expr(s, local_dict=local_dict, global_dict=global_dict,
                          transformations=transformations, evaluate=evaluate)

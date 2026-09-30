@@ -326,13 +326,17 @@ def _enumerate_window_of_interval(progs, window: Interval):
     return FiniteSet(*elems)
 
 
+# the names a claimed general solution writes its family parameter with
+_FAMILY_NAMES = ("n", "k", "m")
+
+
 def general_solution_from_claim(claimed, ns) -> Any:
     """Turn a claimed set whose elements contain the integer symbol n/k into ImageSets."""
     if not isinstance(claimed, FiniteSet):
         return claimed
     parts = []
     for e in claimed.args:
-        ints = [s_ for s_ in e.free_symbols if s_.name in ("n", "k", "m")]
+        ints = [s_ for s_ in e.free_symbols if s_.name in _FAMILY_NAMES]
         if ints:
             n = ints[0]
             nn = sp.Symbol("n", integer=True)
@@ -361,10 +365,20 @@ def verify(ir, solution, ctx: Ctx):
             ns2 = ctx.claim_ns(solution)
             for nm in ("n", "k"):
                 ns2.setdefault(nm, sp.Symbol(nm, integer=True))
+            # The family parameter of a general solution runs over ALL the integers
+            # (`general_solution_from_claim`), so the claim is read with it as an integer and nothing
+            # more, whatever the IR declares under that name. With k declared a positive integer,
+            # {Abs(k)*pi} and {sqrt(k**2)*pi} were read as {k*pi} and then spread over every integer:
+            # the nonnegative multiples of pi alone were certified as the solutions of sin x = 0, and
+            # {2*pi*Max(n, 0)} as those of cos x = 1 (V17, DECISIONS §74). An undeclared m stays
+            # undeclared, as before.
+            family = {nm: sp.Symbol(nm, integer=True) for nm in _FAMILY_NAMES
+                      if nm != var.name and (nm in ("n", "k") or isinstance(ns2.get(nm), sp.Symbol))}
+            ns_claim = dict(ns2, **family)
             if ca.kind in ("set", "interval"):
-                claimed = parse_answer(ca.kind, ca.payload, ns2)
+                claimed = parse_answer(ca.kind, ca.payload, ns_claim)
             else:
-                claimed = FiniteSet(parse_answer("value", ca.payload, ns2))
+                claimed = FiniteSet(parse_answer("value", ca.payload, ns_claim))
         except Exception as e:
             return unknown(LAYER, f"parse_error: {e}", flags=["parse_error"])
         window = None
