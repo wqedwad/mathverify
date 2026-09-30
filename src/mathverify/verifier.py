@@ -393,9 +393,12 @@ def _same_structure(a: str, b: str, ctx) -> bool:
         ta, tb = parse_structural(a, ctx.ns), parse_structural(b, ctx.ns)
     except Exception:  # noqa: BLE001
         return False
-    if not getattr(tb, "args", None):
-        return False                        # a bare number or symbol target cannot be restated
-    return sp.srepr(ta) == sp.srepr(tb)
+    try:
+        if not getattr(tb, "args", None):
+            return False                    # a bare number or symbol target cannot be restated
+        return sp.srepr(ta) == sp.srepr(tb)
+    except Exception:  # noqa: BLE001 - InconsistentAssumptions escaped here (third audit, 30 Sep 2026)
+        return False
 
 
 SCOPE_FLAGS = ("answer_level_only", "steps_not_checked", "answer_from_option_letter")

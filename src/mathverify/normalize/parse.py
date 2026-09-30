@@ -422,8 +422,12 @@ class written_domain(sp.Function):  # noqa: N801 - a marker read by certify.doma
     """A call f(a) of an IR function read AS WRITTEN: its body as written with a substituted, and the
     condition the function's declared domain puts on a. Only definedness reads it (the value parse
     never builds it). The declared domain was ignored everywhere: f(x) = x**2 + 1 on x > 0 gave
-    f(-2) = 5 and {-2, 2} for f(x) = 5 (second audit of 29 Sep 2026)."""
+    f(-2) = 5 and {-2, 2} for f(x) = 5 (second audit of 29 Sep 2026). The derivative of a call keeps
+    the condition: without it `diff` of such a call raised and the whole text lost its conditions."""
     nargs = 2
+
+    def _eval_derivative(self, s):
+        return written_domain(self.args[0].diff(s), self.args[1])
 
 
 def _written_call(fn, ns, depth=0):
@@ -930,15 +934,78 @@ _REL_OPS = ["<=", ">=", "!=", "==", "=", "<", ">"]
 _REL_CLASS = {"<=": Le, ">=": Ge, "!=": Ne, "==": Eq, "=": Eq, "<": Lt, ">": Gt}
 
 
+def _kinks(a, v) -> list:
+    """|a| has no derivative where a = 0 and a' != 0: those roots one by one when a = 0 has finitely
+    many (|x**2 - 4| at +-2; |x**3| keeps 0), else the condition itself."""
+    da = sp.diff(a, v)
+    try:
+        roots = sp.solveset(a, v, sp.S.Reals)
+    except Exception:  # noqa: BLE001
+        roots = None
+    if isinstance(roots, sp.FiniteSet) and len(roots) <= 12:
+        out = []
+        for r in roots:
+            z = sp.simplify(da.subs(v, r))
+            if z.is_zero is not True:
+                out.append(sp.Ne(v, r))
+        return out
+    return [sp.Or(sp.Ne(a, 0), sp.Eq(da, 0))]
+
+
+def _differentiability(u, v) -> list:
+    """Where the operand `u` has a derivative in `v`: its own written conditions made strict (a
+    derivative needs a neighbourhood: x*sqrt(x) has none at 0, formal.statement.interior_defined_at)
+    and the kinks and jumps of |a|, sign, Heaviside, Max/Min and floor/ceiling/frac. Without them
+    the derivative of |x - 2| was read as defined on all of R, and f'(0) of x*sqrt(x) was certified
+    (third audit of 30 Sep 2026)."""
+    from ..certify.domain import definedness_conditions
+    out = []
+    for c in definedness_conditions(u, None):
+        if isinstance(c, sp.Ge) and v in c.free_symbols:
+            c = sp.Gt(c.lhs, c.rhs)
+        elif isinstance(c, sp.Le) and v in c.free_symbols:
+            c = sp.Lt(c.lhs, c.rhs)
+        out.append(c)
+    for n in sp.preorder_traversal(u):
+        if not getattr(n, "args", None) or v not in n.free_symbols:
+            continue
+        if isinstance(n, sp.Abs):
+            out += _kinks(n.args[0], v)
+        elif isinstance(n, (sp.sign, sp.Heaviside)):
+            out.append(sp.Ne(n.args[0], 0))
+        elif isinstance(n, (sp.Max, sp.Min)) and len(n.args) == 2:
+            a, b = n.args
+            out.append(sp.Or(sp.Ne(a, b), sp.Eq(sp.diff(a, v), sp.diff(b, v))))
+        elif isinstance(n, (sp.floor, sp.ceiling, sp.frac)):
+            out.append(sp.Ne(sp.sin(sp.pi * n.args[0]), 0))
+    return [c for c in out if c is not sp.true]
+
+
 def _written_diff(e, *args, **kwargs):
     """`diff` read as written. SymPy differentiates with evaluation off into the raw power rule,
     x**3 -> x**3*(0*log(x) + 3/x), whose log and 1/x are conditions the problem never imposed: {1}
     was certified for f'(x) = 0 with f = x**3 - 3x, and (0, 1) for f'(x) < 0 (critic of the V14
-    audit, 29 Sep 2026). The derivative is taken with evaluation on; the operand as written rides
-    along as 0*operand so its own conditions (x**2/x at 0) stay. The tree is for definedness only."""
+    audit, 29 Sep 2026). The derivative is taken with evaluation on, and carries where it exists
+    (`_differentiability`, order by order) as a written_domain condition. The tree is for
+    definedness only."""
+    seq = []
+    rest = list(args)
+    while rest:
+        v = rest.pop(0)
+        n = rest.pop(0) if rest and getattr(rest[0], "is_Integer", False) else 1
+        seq += [v] * int(n)
+    if not seq or kwargs or not all(isinstance(v, sp.Symbol) for v in seq):
+        with sp.evaluate(True):
+            return sp.diff(e, *args, **kwargs)
     with sp.evaluate(True):
-        d = sp.diff(e, *args, **kwargs)
-    return sp.Add(d, sp.Mul(sp.S.Zero, e, evaluate=False), evaluate=False)
+        conds, cur = [], e
+        for v in seq:
+            conds += _differentiability(cur, v)
+            cur = sp.diff(cur, v)
+        cond = sp.And(*conds)
+    if cond is sp.true:
+        return cur
+    return written_domain(cur, cond)
 
 
 def _written_integrate(*args, **kwargs):

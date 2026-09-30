@@ -55,6 +55,11 @@ def definedness_conditions(expr, var) -> list[Any]:
     seen: set = set()
 
     def add(c):
+        if isinstance(c, sp.Basic) and c.has(sp.Function) and any(
+                type(n).__name__ == "written_domain" for n in sp.preorder_traversal(c)):
+            # the marker's own condition is taken where it stands; around it, its body is the value
+            # (1/f(2) for f on x > 2 was read as undecidable, third audit of 30 Sep 2026)
+            c = c.replace(lambda n: type(n).__name__ == "written_domain", lambda n: n.args[0])
         if c is sp.true:
             return
         if c not in seen:

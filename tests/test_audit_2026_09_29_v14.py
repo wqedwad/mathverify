@@ -680,3 +680,41 @@ def test_a_step_about_the_integration_variable_is_read_on_the_interval():
     r = _run(_ir("evaluate", {"expr": "Integral(sqrt(x**2), (x, 0, 2))"}), "2",
              [("eq", "sqrt(x**2) = -x"), ("compute", "Integral(x, (x, 0, 2)) = 2")])
     assert _steps(r)[0] == "refuted"
+
+
+# --- the third audit: the derivative read as written ---------------------------------------------------
+
+@pytest.mark.parametrize("kind,params,functions,wrong,right", [
+    ("solve_equation", {"equation": "diff(f(x), x) = 0", "var": "x"},
+     [{"name": "f", "args": ["x"], "expr": "x**3 - 3*x", "domain": "x > 0"}], "{-1, 1}", "{1}"),
+    ("domain_of", {"expr": "diff(Abs(x - 2), x)", "var": "x"}, [], "(-oo, oo)", "(-oo, 2) U (2, oo)"),
+    ("solve_inequality", {"inequality": "diff(f(x), x) >= 0", "var": "x"},
+     [{"name": "f", "args": ["x"], "expr": "Abs(x**2 - 4)"}], "[-2, 0] U [2, oo)", "(-2, 0] U (2, oo)"),
+    ("solve_equation", {"equation": "diff(x*sqrt(x), x) = 0", "var": "x"}, [], "{0}", "EmptySet"),
+    ("domain_of", {"expr": "diff(x*sqrt(x), x)", "var": "x"}, [], "[0, oo)", "(0, oo)"),
+])
+def test_a_derivative_read_as_written_exists_only_where_the_operand_is_differentiable(kind, params, functions,
+                                                                                    wrong, right):
+    """diff of a function with a declared domain raised (its condition had no derivative) and the
+    text lost every condition; |x - 2| had no kink condition; x*sqrt(x) passed its x >= 0 to the
+    derivative, which needs x > 0."""
+    shape = {"solve_equation": "set", "solve_inequality": "interval", "domain_of": "interval"}[kind]
+    ir = dict(_ir(kind, params, shape=shape), functions=functions)
+    assert _run(ir, wrong, kind=shape).verdict == "INCORRECT"
+    assert _run(ir, right, kind=shape).verdict == "CORRECT"
+
+
+def test_a_smooth_kink_free_derivative_keeps_its_domain():
+    ir = _ir("domain_of", {"expr": "diff(Abs(x**3), x)", "var": "x"}, shape="interval")
+    assert _run(ir, "(-oo, oo)", kind="interval").verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("expr,functions,claim", [
+    ("f(f(2))", [{"name": "f", "args": ["x"], "expr": "(2*x + 3)/(x - 1)", "domain": "x != 1"}], "17/6"),
+    ("1/f(2)", [{"name": "f", "args": ["x"], "expr": "(2*x + 3)/(x - 1)", "domain": "x != 1"}], "1/7"),
+    ("log(f(2))", [{"name": "f", "args": ["x"], "expr": "x + 1", "domain": "x > 0"}], "log(3)"),
+    ("1/limit(sin(3*x)/x, x, 0)", [], "1/3"),
+])
+def test_a_closed_call_or_limit_under_a_partial_operation_is_decided(expr, functions, claim):
+    ir = dict(_ir("evaluate", {"expr": expr}), functions=functions)
+    assert _run(ir, claim).verdict == "CORRECT"
