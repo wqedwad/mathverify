@@ -121,6 +121,15 @@ def test_a_given_reached_through_another_given_is_read():
     assert _run(ir, "{-2, 2, 3}").verdict == "INCORRECT"
 
 
+def test_a_value_in_another_symbol_does_not_pin():
+    """a = b (a variable's own constraint) leaves a as free as b: {0} for x² + a² = 0 holds only
+    at a = 0 and must not be certified."""
+    ir = _eq("x**2 + a**2 = 0", [], vars_=[XA[0], {"name": "a", "domain": "real", "constraints": ["a = b"]},
+                                           {"name": "b", "domain": "real"}])
+    r = _run(ir, "{0}")
+    assert r.verdict != "CORRECT" and _layer(r, "certify.wordproblem").verdict != "pass"
+
+
 @pytest.mark.parametrize("ir,claim", [
     (_eq("x - a = 1", []), "{a + 1}"),
     (_eq("(x - 1)*(x - a) = 0", []), "{1, a}"),
