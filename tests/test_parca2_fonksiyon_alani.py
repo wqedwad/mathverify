@@ -77,6 +77,12 @@ def test_a_symbol_fixed_by_a_given_is_read_with_its_value():
     assert _run(ir, "2", "value").verdict == "UNKNOWN"
     ir = _ir({"expr": "f(1)"}, XA, ["a = 0"], _f("x > a"), kind="evaluate", shape="scalar")
     assert _run(ir, "2", "value").verdict == "CORRECT"
+    # a domain the value makes true everywhere restricts nothing
+    ir = _ir(EQ, XA, ["a = 0"], _f("x**2 >= a"))
+    assert _run(ir, "{-2, 2}").verdict == "CORRECT"
+    # the formal argument is the function's own: a given fixing the problem's x does not reach it
+    ir = _ir({"expr": "f(-1)"}, XR, ["x = 2"], _f("x > 0"), kind="evaluate", shape="scalar")
+    assert _run(ir, "2", "value").verdict == "UNKNOWN"
 
 
 def test_the_comma_domain_no_longer_kills_sandbox_workers():
@@ -113,6 +119,7 @@ def test_a_request_the_worker_cannot_rebuild_is_an_error_not_the_workers_end():
             s.call("mathverify.sandbox.ops:simplify_diff", bad, 0)
         assert s.restarts == 0 and s._proc.pid == pid
         assert s.call("mathverify.sandbox.ops:simplify_diff", 2, 2) == 0
+        assert s.restarts == 0 and s._proc.pid == pid              # the same worker answered
     finally:
         s.close()
 
@@ -180,7 +187,7 @@ def test_read_domain_condition_refuses_what_it_does_not_read():
     y = sp.Symbol("y", real=True)
     ns = dict(_SAFE_NAMES, x=X, y=y)
     for bad in ["R+", "x < 3, 1", "{1, 2}", "(-oo, 0) U (0, oo)", "y > 0", "y in (0, oo)", "x > 0,",
-                "x > 0 && x < 3", "Integers", "positive"]:
+                "x > 0 && x < 3", "Integers", "positive", "x != (0, 1)"]:
         with pytest.raises(ParseError):
             read_domain_condition(bad, [X], ns)
     with pytest.raises(ParseError):                        # a bare set for two arguments names neither
@@ -228,6 +235,14 @@ def test_a_written_condition_on_a_bound_symbol_restricts_the_domain():
     fn = [{"name": "f", "expr": "x**2 + 1 + 0*log(x - a)", "args": ["x"]}]
     ir = _ir(EQ, XA, ["a = 0"], fn)
     assert _run(ir, "{-2, 2}").verdict != "CORRECT"
+    # the variable itself is not replaced by a given that fixes it
+    ir = _ir({"equation": "x**2 + 1 + 0*log(x - a) = 5", "var": "x"}, XA, ["a = 0", "x = 5"])
+    ctx = make_ctx(ProblemIR.from_dict(ir))
+    assert ctx.domain_for(ctx.sym("x")) == sp.Interval.open(0, sp.oo)
+    # with the value the condition holds nowhere: log(-x**2 - 1) has no real point
+    ir = _ir({"equation": "x**2 + 1 + 0*log(-x**2 - a) = 5", "var": "x"}, XA, ["a = 1"])
+    ctx = make_ctx(ProblemIR.from_dict(ir))
+    assert ctx.domain_for(ctx.sym("x")) == sp.S.EmptySet
     # control: with a free the parametric answer is still read (the condition stays on x and a)
     ir = _ir({"equation": "sqrt(x - a) = 2", "var": "x"}, XA)
     assert _run(ir, "{a + 4}").verdict == "CORRECT"
