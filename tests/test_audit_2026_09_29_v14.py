@@ -578,12 +578,15 @@ def test_a_functions_declared_domain_is_applied(kind, params, shape, wrong, righ
     assert build_statement(ev, {"kind": "value", "payload": "5"}) is None
 
 
-def test_a_sum_in_a_function_body_gets_an_integer_index_at_the_call():
+@pytest.mark.parametrize("body,wrong,right", [("Sum(cos(pi*k), (k, 1, 2*n))", "1", "0"),
+                                             ("Sum(sqrt(k**2), (k, 1, n))", "n**2", "n*(n + 1)/2")])
+def test_a_sum_in_a_function_body_gets_an_integer_index_at_the_call(body, wrong, right):
+    """The formal n is real, so the body's index stayed plain and the wrong n**2 was UNKNOWN."""
     ir = dict(_ir("simplify_expression", {"expr": "S(n)"}, KP + [{"name": "n", "domain": "positive_integer"}],
                   shape="expression"),
-              functions=[{"name": "S", "expr": "Sum(cos(pi*k), (k, 1, 2*n))", "args": ["n"]}])
-    assert _run(ir, "1", kind="expression").verdict == "INCORRECT"
-    assert _run(ir, "0", kind="expression").verdict == "CORRECT"
+              functions=[{"name": "S", "expr": body, "args": ["n"]}])
+    assert _run(ir, wrong, kind="expression").verdict == "INCORRECT"
+    assert _run(ir, right, kind="expression").verdict == "CORRECT"
 
 
 def test_a_finite_sum_at_a_sample_point_is_written_out_not_strictly_evaluated():
