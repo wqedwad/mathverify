@@ -9,8 +9,8 @@ items of V16.
     B  a Sum/Product bound that is a constant but not a number (sqrt(1)) escaped the AST check of reversed
        ranges, and floor/ceiling computed the Karr value at once (floor(Σ_{k=3}^{sqrt(1)} k) = -2);
     S  a sum with a symbolic bound whose GIVEN value reverses the range took the Karr value
-       (Σ_{k=1}^{n} k with n = -2 is 1). Open after this part: its place is the definedness of the
-       binder (certify.domain._range_conditions, another part's file), so the S rows stay "BAD";
+       (Σ_{k=1}^{n} k with n = -2 is 1). Open after this part (the S rows were "BAD"); closed later by the
+       range conditions of certify.domain._range_conditions (dfe0271: 8 -> 0);
     G  the gcd/lcm "not a value" check (GCD-10) was skipped for a payload written as a list;
     U  (coverage) more than 300 constant endpoints were not read, rationals included. Kept: the limit also
        bounds the size of a set written as text (SymPy's Union of 350 intervals took 21 s to build), see
