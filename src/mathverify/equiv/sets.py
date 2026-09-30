@@ -5,6 +5,7 @@ Complements that SymPy already evaluates to unions. ImageSet/ConditionSet are NO
 handled here (E1: periodic sets go through certify.trig)."""
 from __future__ import annotations
 
+from functools import cmp_to_key
 from typing import Any
 
 import sympy as sp
@@ -80,7 +81,11 @@ def unify_endpoints(sets) -> list:
     the whole line (V14d). Endpoints proved equal get the first spelling seen; a pair neither proved
     equal nor certainly different raises: the set is not read. Only numerically near pairs are
     compared exactly (every pair was: a 1000-element set took 90 s, audit of V14), and a set with
-    more than _UNIFY_LIMIT such constants is not read."""
+    more than _UNIFY_LIMIT such constants is not read. Rationals count too, although two of them are
+    never compared: the limit also bounds the size of a set written as text, and what follows grows
+    faster than the comparisons (SymPy's Union of 100, 200 and 350 disjoint intervals took 1.4,
+    6.1 and 21 s to build; a claim of 400 points 9.8 s to verify, of 250 points 4.2 s; V16, 30 Sep
+    2026)."""
     from .numeric import exact_equal, has_float, certified_sign
     reps: list = []
     keys: list = []
@@ -144,6 +149,17 @@ def _order(a, b):
     return sg if sg in (-1, 0, 1) else None
 
 
+class _Unordered(Exception):
+    """Two interval starts that `_order` cannot order."""
+
+
+def _inf_cmp(a: Interval, b: Interval) -> int:
+    c = _order(a.inf, b.inf)
+    if c is None:
+        raise _Unordered(f"{a.inf} and {b.inf}")
+    return c
+
+
 def normalize_set(s: sp.Set) -> tuple[list[Interval], list[Any]] | None:
     """Split a set into (sorted disjoint intervals, isolated points). None if unsupported."""
     if s is S.EmptySet:
@@ -171,8 +187,14 @@ def normalize_set(s: sp.Set) -> tuple[list[Interval], list[Any]] | None:
                 return None
             ivs += r[0]
             pts += r[1]
-        # points inside intervals are redundant; intervals sorted by inf
-        ivs = sorted(ivs, key=lambda i: (float(i.inf) if i.inf.is_number and i.inf != -oo else -1e300))
+        # points inside intervals are redundant; intervals sorted by inf, exactly: a float key tied two
+        # starts 1e-40 apart, and the interval listed first swallowed the one before it in the merge
+        # below ([sqrt(2) - 2e-40, sqrt(2) - 1e-40) U (sqrt(2), 5) was (sqrt(2), 5), V16, 30 Sep 2026);
+        # a start that cannot be ordered (a symbol, an undecided constant) was put first as -1e300
+        try:
+            ivs = sorted(ivs, key=cmp_to_key(_inf_cmp))
+        except _Unordered:
+            return None
         pts2 = []
         for p in pts:
             if not any(iv.contains(p) == True for iv in ivs):  # noqa: E712

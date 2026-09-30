@@ -336,7 +336,9 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
         return unknown("intake.claim", f"a {ca.kind} answer written as a list: not read",
                        flags=["parse_error", "claim_unreadable"])
     if not isinstance(ca.payload, str):
-        return None
+        # a set written as a list: its elements are claims too (GCD-10 was skipped: [gcd(84, 120)] for
+        # the roots of x - 12 = 0 was certified, V16, 30 Sep 2026)
+        return _claim_computes_integer_op(solution, ctx) if isinstance(ca.payload, list) else None
     try:
         check_claim_is_value(ca.payload, [f.name for f in ir.functions])
     except ClaimNotAValue as e:
@@ -383,11 +385,17 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
         if target and _same_structure(str(ca.payload), str(target), ctx):
             return unknown("intake.claim", f"claimed answer {ca.payload!r} restates the question",
                            flags=["claim_is_not_a_value"])
-    # A gcd/lcm of numbers is evaluated by the parser, so a claim written as one is a computation the
-    # verifier would do itself (principle 2): for "evaluate gcd(84, 120)" the claims gcd(120, 84),
-    # igcd(84, 120) and \gcd(84, 120) were certified; only the literal restatement was caught (GCD-10,
-    # 30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays.
-    if _INTEGER_OP_TEXT.search(str(ca.payload)):
+    return _claim_computes_integer_op(solution, ctx)
+
+
+def _claim_computes_integer_op(solution: Solution, ctx) -> LayerResult | None:
+    """A gcd/lcm of numbers is evaluated by the parser, so a claim written as one is a computation the
+    verifier would do itself (principle 2): for "evaluate gcd(84, 120)" the claims gcd(120, 84),
+    igcd(84, 120) and \\gcd(84, 120) were certified; only the literal restatement was caught (GCD-10,
+    30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays."""
+    ca = solution.claimed_answer
+    texts = ca.payload if isinstance(ca.payload, list) else [ca.payload]
+    if any(_INTEGER_OP_TEXT.search(str(t)) for t in texts):
         try:
             closed = not getattr(ctx.claimed(solution), "free_symbols", {None})
         except LeakageError:

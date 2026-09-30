@@ -207,7 +207,82 @@ def _set_op(op):
             raise ParseError(f"set endpoints cannot be compared exactly: {e}") from e
         return op(*sets, **kw)
     build.__name__ = op.__name__
+    build.builds_set = True  # type: ignore[attr-defined]
     return build
+
+
+def _names_a_set(obj) -> bool:
+    """A namespace entry that is a set or builds one (Reals, Interval, FiniteSet, Union, S)."""
+    return isinstance(obj, sp.Set) or (isinstance(obj, type) and issubclass(obj, sp.Set)) \
+        or getattr(obj, "builds_set", False) is True or obj is S
+
+
+_UNION_OP, _COMPLEMENT_OP = _set_op(Union), _set_op(Complement)
+
+
+def _as_set(v):
+    """`v` as the operand of a set operation: what SymPy's own `Set.__add__` accepts (a set, or a Python
+    set it converts to a FiniteSet), None otherwise."""
+    if isinstance(v, sp.Set):
+        return v
+    if isinstance(v, (set, frozenset)):
+        return FiniteSet(*[sympify_nontext(e) for e in v])
+    return None
+
+
+def _set_add(a, b):
+    """`a + b`; the union of two sets through `_set_op`, see `_route_set_arithmetic`."""
+    other = _as_set(b) if isinstance(a, sp.Set) else None
+    return _UNION_OP(a, other) if other is not None else a + b
+
+
+def _set_sub(a, b):
+    """`a - b`; the complement of two sets through `_set_op`, see `_route_set_arithmetic`."""
+    other = _as_set(b) if isinstance(a, sp.Set) else None
+    return _COMPLEMENT_OP(a, other) if other is not None else a - b
+
+
+_SET_ARITHMETIC = {"_mv_set_add": _set_add, "_mv_set_sub": _set_sub}
+
+
+def _routed_binop(node):
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
+        fn = ast.copy_location(ast.Name("_mv_set_add" if isinstance(node.op, ast.Add) else "_mv_set_sub",
+                                        ast.Load()), node)
+        return ast.copy_location(ast.Call(fn, [node.left, node.right], []), node)
+    return node
+
+
+def _route_set_arithmetic(code: str, names: dict[str, Any]):
+    """The code compiled with every `+`/`-` a call that routes a set's union and complement through
+    `_set_op`, when it names a set; None otherwise (it is then evaluated as it stands). SymPy's
+    `Set.__add__`/`__sub__` build Union/Complement directly, so the endpoints were not made one spelling
+    first: Interval.open(-oo, R) + Interval.open(3, oo), R = sqrt(11 + 6*sqrt(2)) - sqrt(2) = 3, was the
+    whole line, certified as the domain of x + 1 (V16, 30 Sep 2026). Anything that is not a set is added
+    as before. The walk is iterative and the tree is compiled as it is (`ast.unparse` recursed out at a
+    sum of 500 terms)."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None                               # parse_expr reports it
+    nodes = list(ast.walk(tree))
+    if not any(isinstance(n, ast.BinOp) and isinstance(n.op, (ast.Add, ast.Sub)) for n in nodes) or not any(
+            isinstance(n, ast.Name) and _names_a_set(names.get(n.id)) for n in nodes):
+        return None
+    stack: list = [tree]
+    while stack:
+        node = stack.pop()
+        for field, value in ast.iter_fields(node):
+            if isinstance(value, list):
+                for i, v in enumerate(value):
+                    if isinstance(v, ast.AST):
+                        value[i] = _routed_binop(v)
+                        stack.append(value[i])
+            elif isinstance(value, ast.AST):
+                new = _routed_binop(value)
+                setattr(node, field, new)
+                stack.append(new)
+    return compile(tree, "<expression>", "eval")
 
 
 def _at(e, v, val):
@@ -757,11 +832,37 @@ def _literal_number(node, depth: int = 0) -> Fraction | None:
     return None
 
 
-def _refuse_computed_bounds(code: str, raw: str) -> None:
+def _constant_bound(node, names: dict[str, Any]):
+    """The value of a bound written as a constant that is not a plain number (sqrt(1), exp(0), pi - 2),
+    evaluated on its own in the namespace the whole code is evaluated in (the code is already checked);
+    None when it names a symbol or has no numeric value."""
+    for n in ast.walk(node):
+        if isinstance(n, ast.Name) and (n.id not in names or isinstance(names[n.id], sp.Basic)
+                                        and getattr(names[n.id], "free_symbols", None)):
+            return None
+    try:
+        v = sympify_nontext(eval(compile(ast.Expression(body=node), "<bound>", "eval"),  # noqa: S307
+                                 {"__builtins__": {}}, dict(names)))
+    except Exception:  # noqa: BLE001 - the whole parse reports it
+        return None
+    return v if isinstance(v, sp.Expr) and v.is_number and not v.free_symbols else None
+
+
+def _refuse_constant_range(name: str, lo, hi, raw: str) -> None:
+    """The checks of `_refuse_reversed_ranges` on bounds known before SymPy builds the binder."""
+    if (hi - lo + 1).is_extended_negative is True:
+        raise ParseError(f"{raw!r} has a {name} over a reversed range: not read")
+    span = hi - lo
+    if span.is_number and span.is_finite and span.is_integer is False:
+        raise ParseError(f"{raw!r} has a {name} whose limits are not an integer apart: not read")
+
+
+def _refuse_computed_bounds(code: str, raw: str, names: dict[str, Any] | None = None) -> None:
     """Also the range checks of `_refuse_reversed_ranges` for bounds written with numbers, here, before
     SymPy builds the expression: a function around a Sum computes it at once (floor, ceiling), and
     floor(Sum(k, (k, 3, 1))) = -2 (Karr) was certified past the later refusal (review of V14,
-    30 Sep 2026)."""
+    30 Sep 2026). A bound that is a constant written otherwise (sqrt(1), exp(0)) is evaluated on its own
+    first: floor(Sum(k, (k, 3, sqrt(1)))) = -2 was certified the same way (V16, 30 Sep 2026)."""
     try:
         tree = ast.parse(code, mode="eval")
     except (SyntaxError, ValueError, RecursionError, MemoryError):
@@ -779,6 +880,11 @@ def _refuse_computed_bounds(code: str, raw: str) -> None:
             if node.func.id in ("Sum", "Product") and len(lim.elts) == 3:
                 lo, hi = _literal_number(lim.elts[1]), _literal_number(lim.elts[2])
                 if lo is None or hi is None:
+                    if names is not None:
+                        lo_c, hi_c = [(sp.Rational(v.numerator, v.denominator) if v is not None
+                                       else _constant_bound(b, names)) for v, b in ((lo, lim.elts[1]), (hi, lim.elts[2]))]
+                        if lo_c is not None and hi_c is not None:
+                            _refuse_constant_range(node.func.id, lo_c, hi_c, raw)
                     continue
                 if hi - lo + 1 < 0:
                     raise ParseError(f"{raw!r} has a {node.func.id} over a reversed range: not read")
@@ -1149,7 +1255,7 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     _check_code(code, s, names)
     binds_range = any(b in code for b in _RANGE_BINDERS)
     if binds_range:
-        _refuse_computed_bounds(code, s)
+        _refuse_computed_bounds(code, s, {**global_dict, **local_dict})
     rebound = _rebind_range_dummies(code, local_dict, s) if rebind and binds_range else None
     dummies: dict[str, Any] = {}
     if rebound is not None:
@@ -1161,7 +1267,11 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
         code, more = pointed
         dummies = dict(dummies, **more)
     _refuse_integer_calculus(code, dict(local_dict, **dummies), s, rebind)
-    if rebound is None and pointed is None:
+    # with evaluation off parse_expr builds Add(a, b, evaluate=False) itself: no set operation runs
+    routed = _route_set_arithmetic(code, {**global_dict, **local_dict, **dummies}) if evaluate else None
+    if routed is not None:
+        out = eval(routed, global_dict, {**local_dict, **dummies, **_SET_ARITHMETIC})  # noqa: S307 - checked code
+    elif rebound is None and pointed is None:
         out = parse_expr(s, local_dict=local_dict, global_dict=global_dict,
                          transformations=transformations, evaluate=evaluate)
     else:
@@ -1370,6 +1480,25 @@ def _refuse_latex_ranges(s: str) -> None:
             a, b = int(lo.group(1).replace(" ", "")), int(hi.group(1).replace(" ", ""))
             if b - a + 1 < 0:
                 raise ParseError(f"{s!r} has a sum or product over a reversed range: not read")
+        elif "_" in scripts and "^" in scripts:
+            # a limit that is a constant written otherwise: \lfloor \sum_{k=3}^{\sqrt{1}} k \rfloor = -2 was
+            # certified (V16, 30 Sep 2026)
+            a, b = _latex_constant_limit(scripts["_"]), _latex_constant_limit(scripts["^"])
+            if a is not None and b is not None:
+                _refuse_constant_range("sum or product", a, b, s)
+
+
+def _latex_constant_limit(text: str):
+    """The value of a LaTeX limit (`k=3`, `\\sqrt{1}`) that names no symbol, None otherwise."""
+    text = re.sub(r"^\s*[A-Za-z]\w*\s*=", "", text)
+    m = _LATEX_INT_LIMIT.fullmatch(text)
+    if m:
+        return sp.Integer(int(m.group(1).replace(" ", "")))
+    try:
+        v = _latex2sympy(_exact_latex_decimals(text))
+    except Exception:  # noqa: BLE001 - the whole parse reports it
+        return None
+    return v if isinstance(v, sp.Expr) and not v.free_symbols and v.is_number else None
 
 
 def _refuse_latex_integer_calculus(expr, ns: dict[str, Any], raw: str) -> None:
