@@ -160,6 +160,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ## Ortam tuzakları
 
 - SymPy ≥ 1.13'te `Float(3.0) == 3` False döner; tam sayılığı `sp.Rational(...)` ile kontrol et.
+- SymPy `Limit.subs` bağlı değişkeni de değiştirir (`Limit(Abs(x)/x, x, 0).subs(x, 5)` → `Limit(1, 5, 0)`); `Sum`/`Integral`
+  `.subs` değiştirmez, `xreplace` hepsini değiştirir. `oo.is_nonnegative` False'tur (sonlu demek); sonsuzda `is_extended_*`
+  kullan. SymPy'nin `gcd`/`lcm`'i polinom işlemidir (`sp.lcm(4, 6, 10)` = 12: üçüncü argüman üreteç; `sp.lcm(n, 2)` = 2n);
+  sayıların gcd/lcm'i `normalize.parse`'ın `gcd`/`lcm` sınıflarıdır (sympy 1.14.0'da ölçüldü, DECISIONS §74).
 - Lean yoksa Lean testleri sessizce atlanır; `pytest -rs` ile kontrol et.
 - Sandbox kullanan probe'lar gerçek bir dosyada ve `if __name__ == "__main__":` içinde olmalı
   (sandbox her işletim sisteminde multiprocessing `spawn` kullanır).
