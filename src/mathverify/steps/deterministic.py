@@ -445,6 +445,10 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     d = r.value
     if d == 0:
         sign = 0
+    elif isinstance(d, sp.Rational):
+        # an exact difference has an exact sign, however small: with SymPy's confirmed 0 for
+        # ∫_0^{2π} sin x dx, the step "∫_0^{2π} sin x dx = 10^-40" went undecided below (30 Sep 2026)
+        sign = 1 if d > 0 else -1
     else:
         try:
             dv = to_mp(d, 60)
@@ -630,9 +634,42 @@ def _closed_claim(claim, ctx: Ctx) -> str:
     if h is None:
         if not isinstance(claim, sp.Basic) or not claim.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative):
             h = False if _holds(claim, {}) is False else None
-        elif _integrals_refute(claim, ctx):
+        elif _integrals_refute(claim, ctx) or _limits_refute(claim, ctx):
             h = False
     return "verified" if h is True else "refuted" if h is False else "unknown"
+
+
+def _limits_refute(claim, ctx: Ctx) -> bool:
+    """A closed equation with a limit that does not exist is false, as `_check_compute` rules for a
+    compute step: the eq step "\\lim_{x \\to 2} |x - 2|/(x - 2) = 1" (two-sided: the one-sided limits
+    are 1 and -1) was left unknown and its solution certified CORRECT (third audit of 30 Sep 2026, N3).
+    A limit that exists but is infinite against a finite side, or finite against an infinite one, is
+    false too; `_decide` cannot tell (its difference oo - 5 is no number it compares). Each limit is
+    classified by `classify_limit` (two-sided unless a side is written, both sides corroborated
+    numerically); an undecided classification refutes nothing (principle 5)."""
+    if not isinstance(claim, Eq):
+        return False
+    from ..certify.limits import classify_limit
+    lims = [L for L in claim.atoms(sp.Limit) if not L.free_symbols]
+    for L in lims:
+        e_, v_, p_, d_ = L.args
+        side = None if str(d_) in ("+-", "real") else str(d_)
+        cls = classify_limit(e_, v_, p_, side, timeout=ctx.timeout)
+        if cls.get("kind") == "DNE":
+            return True
+        if L in (claim.lhs, claim.rhs) and cls.get("kind") in ("VAR", "INF") and cls.get("value") is not None:
+            other = claim.rhs if L == claim.lhs else claim.lhs
+            if not other.is_number or other.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative,
+                                                 sp.zoo, sp.nan):
+                continue
+            val = cls["value"]
+            if val in (sp.oo, -sp.oo) and other in (sp.oo, -sp.oo):
+                if val != other:
+                    return True
+            elif (val in (sp.oo, -sp.oo)) != (other in (sp.oo, -sp.oo)) and \
+                    (val in (sp.oo, -sp.oo) or val.is_finite) and (other in (sp.oo, -sp.oo) or other.is_finite):
+                return True
+    return False
 
 
 def _integrals_refute(claim, ctx: Ctx) -> bool:
@@ -644,17 +681,43 @@ def _integrals_refute(claim, ctx: Ctx) -> bool:
     true identities; nor over a sum or product at all (audit of 29 Sep 2026)."""
     if not isinstance(claim, Eq) or claim.has(sp.Sum, sp.Product, sp.Limit, sp.Derivative):
         return False
-    from ..equiv.forms import _numeric
+    import mpmath as mp
+    from ..certify.calculus import definite_integral_numeric, integral_abs_scale
+    from ..equiv.forms import _finite_integral, _numeric
     from ..equiv.numeric import num_equal
-    reps, tol = {}, 1e-25
+    reps, tol, slack = {}, 1e-25, mp.mpf(0)
     for n in claim.atoms(sp.Integral):
         if n.free_symbols:
             return False
-        v = _numeric(n, ctx.timeout)
-        if v is None:
+        if not _finite_integral(n):
+            v = _numeric(n, ctx.timeout)
+            if v is None:
+                return False
+            reps[n], tol = v[0], max(tol, v[1])
+            with mp.workdps(60):
+                slack += mp.mpf(v[1]) * max(abs(mp.mpf(str(v[0]))), 1)
+            continue
+        # A value that cancels is a residue of the size 10^-(dps-10)·∫|f|, and a relative comparison
+        # read it as a difference: the true step "∫_0^3 (x² - 2x) dx = 0" (residue -4.6e-55 at 50
+        # digits) was refuted (third audit of 30 Sep 2026, N2). A difference refutes only beyond the
+        # integrator's error estimate and that residue, as absolute amounts.
+        var, a, b = n.limits[0]
+        val, iev = definite_integral_numeric(n.function, var, a, b, timeout=ctx.timeout)
+        if val is None or not iev.get("converged") or not iev.get("ladder"):
             return False
-        reps[n], tol = v[0], max(tol, v[1])
-    ok, _ = num_equal(claim.lhs.xreplace(reps), claim.rhs.xreplace(reps), rel_tol=max(100 * tol, 1e-15))
+        scale = integral_abs_scale(n.function, var, a, b, iev.get("breakpoints"), timeout=ctx.timeout)
+        if scale is None:
+            return False
+        reps[n], tol = val, max(tol, float(iev.get("rel_err", "1e-18")))
+        last = iev["ladder"][-1]
+        with mp.workdps(60):
+            try:
+                err = abs(mp.mpf(last["err"]))
+            except (TypeError, ValueError):
+                return False
+            slack += 10 * err + mp.mpf(10) ** (-(int(last["dps"]) - 10)) * scale
+    ok, _ = num_equal(claim.lhs.xreplace(reps), claim.rhs.xreplace(reps), rel_tol=max(100 * tol, 1e-15),
+                      abs_tol=float(100 * slack))
     return ok is False
 
 

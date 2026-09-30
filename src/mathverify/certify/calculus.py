@@ -130,6 +130,98 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
     return sp.Float(mp.nstr(v, 60), 60), ev
 
 
+_ZERO_LADDER = (30, 50, 80)
+
+
+def integral_abs_scale(integrand, var, a, b, pts=None, timeout: float = 8.0):
+    """∫|f| over [a, b] (an mpf), or None: the size of the rounding residue a quadrature of f leaves
+    at a given precision. A value that cancels to 0 comes out as that residue, not as 0: ∫_0^3 (x² - 2x) dx
+    gave -4.6e-55 at 50 digits (third audit of 30 Sep 2026, N2). None unless the 20- and 30-digit
+    quadratures agree: on a non-integrable f they grow with the precision (∫_{-1}^{1} |x^-3| came out
+    4e48, then 4e68), and such a "scale" would let any residue pass; SymPy even gives 0 for the
+    divergent ∫_{-1}^{1} x·e^(1/x²) dx (measured 30 Sep 2026)."""
+    a, b = sp.sympify(a), sp.sympify(b)
+    if pts is None:
+        pts = find_breakpoints(integrand, var, a, b, timeout)
+    vals = []
+    for dps in (20, 30):
+        r = sb_run("mathverify.sandbox.ops:quad_breakpoints", sp.Abs(sp.sympify(integrand)), var, a, b, pts, dps,
+                   "tanh-sinh", timeout=timeout)
+        if not r.ok:
+            return None
+        try:
+            s = mp.mpf(r.value[0])
+        except (TypeError, ValueError):
+            return None
+        if not (mp.isfinite(s) and s >= 0):
+            return None
+        vals.append(s)
+    s20, s30 = vals
+    with mp.workdps(40):
+        if abs(s30 - s20) > mp.mpf("1e-3") * s30:
+            return None
+    return s30
+
+
+def definite_integral_is_zero(integrand, var, a, b, timeout: float = 12.0) -> tuple[bool | None, dict[str, Any]]:
+    """Is ∫_a^b f exactly 0, as far as numbers can tell? True, False (certainly not 0) or None.
+
+    A relative tolerance cannot compare anything with an exact 0: every integral whose value is 0 came
+    out as a residue of 1e-51...1e-59, so SymPy's right value 0 was never confirmed, the claim 0 stayed
+    UNKNOWN and a true step "∫_0^3 (x² - 2x) dx = 0" was refuted (third audit of 30 Sep 2026, N2).
+    The residue is measured against the integrand's own scale S = ∫|f| instead, at EVERY rung of the
+    ladder (30, 50, 80 digits): True when |value| and the integrator's error estimate are both at most
+    10^-(dps-10)·S at each rung, i.e. the residue falls with the precision. A value that is not 0 stays
+    where it is: ∫_0^1 10^-40 dx is 1e-40 at every rung, above the 50-digit (1e-40) and far above the
+    80-digit bound (1e-110 here, S being 1e-40), so no value above ~1e-70·S is ever taken for 0.
+    False only when the value stands clear of that bound (and of ten times the error estimate) at the
+    two highest rungs and the two agree: a difference is not called nonzero inside the residue."""
+    ev: dict[str, Any] = {"integrand": str(integrand), "a": str(a), "b": str(b)}
+    if isinstance(integrand, sp.Basic) and integrand.has(sp.Integral, sp.Sum, sp.Product, sp.Limit):
+        ev["error"] = "a form inside the integrand has no confirmed numeric value"
+        return None, ev
+    a, b = sp.sympify(a), sp.sympify(b)
+    if not (a.is_finite and b.is_finite):
+        ev["error"] = "infinite range"
+        return None, ev
+    pts = find_breakpoints(integrand, var, a, b, timeout)
+    scale = integral_abs_scale(integrand, var, a, b, pts, timeout)
+    if scale is None:
+        ev["error"] = "no scale: the integral of |f| failed"
+        return None, ev
+    ev["abs_scale"] = mp.nstr(scale, 5)
+    rungs = []
+    for dps in _ZERO_LADDER:
+        r = sb_run("mathverify.sandbox.ops:quad_breakpoints", sp.sympify(integrand), var, a, b, pts, dps,
+                   "tanh-sinh", timeout=timeout * (2 if dps == 80 else 1))
+        if not r.ok:
+            ev["error"] = r.error
+            ev["flags"] = r.flags
+            return None, ev
+        val_s, err_s = r.value
+        with mp.workdps(dps + 10):
+            try:
+                v = mp.mpf(val_s)
+                err = abs(mp.mpf(err_s)) if err_s not in (None, "None") else mp.inf
+            except (TypeError, ValueError):     # a complex value, or no number at all
+                ev["error"] = f"no real value at {dps} digits: {val_s}"
+                return None, ev
+            bound = mp.mpf(10) ** (-(dps - 10)) * scale
+            rungs.append((dps, v, err, bound))
+        ev.setdefault("ladder", []).append({"dps": dps, "value": mp.nstr(v, 5), "err": mp.nstr(err, 5),
+                                            "bound": mp.nstr(bound, 5)})
+    if all(mp.isfinite(v) and abs(v) <= bound and err <= bound for _, v, err, bound in rungs):
+        ev["decided_by"] = "residue_below_the_scale_bound_at_every_rung"
+        return True, ev
+    (_, v1, e1, b1), (_, v2, e2, b2) = rungs[-2:]
+    if all(mp.isfinite(x_) for x_ in (v1, v2, e1, e2)) and abs(v1) > 10 * (b1 + e1) \
+            and abs(v2) > 10 * (b2 + e2) and abs(v2 - v1) <= 10 * (e1 + e2) + b1:
+        ev["decided_by"] = "value_stable_above_the_residue"
+        return False, ev
+    ev["decided_by"] = "undecided"
+    return None, ev
+
+
 def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0) -> bool | None:
     """Is the integrand, as written or as parsed, undefined on a piece of (a, b) of positive
     length? Isolated points are fine (improper integrals). exp(log(x)) parses to x, and
@@ -538,8 +630,19 @@ def verify(ir, solution, ctx: Ctx):
                     and not rs.value.has(sp.AccumBounds, sp.zoo, sp.nan):
                 exact = rs.value
                 ev["symbolic"] = str(exact)
+            # an exact 0 on either side is no relative comparison: the numbers of an integral whose
+            # value is 0 are a residue of 1e-51...1e-59, and SymPy's right 0 disagreed with them, the
+            # claim 0 was refuted (third audit of 30 Sep 2026, N2). The residue is measured against
+            # the integrand's scale at every rung instead (a nonzero value is never taken for 0).
+            exact_zero = exact is not None and exact == 0
+            claimed_zero = isinstance(claimed, sp.Basic) and claimed.is_Rational and claimed == 0
+            if exact_zero or claimed_zero:
+                zero, zev = definite_integral_is_zero(integrand, var, a, b, timeout=ctx.timeout * 1.5)
+                ev["zero_test"] = zev
+                if claimed_zero:
+                    okN = zero
             if exact is not None:
-                agree, _ = num_equal(exact, val, rel_tol=tol)
+                agree, _ = num_equal(exact, val, rel_tol=tol) if not exact_zero else (zero, None)
                 ev["symbolic_agrees_numeric"] = agree
                 if declared:
                     # a declared tolerance means an approximate answer: compare with the exact value's

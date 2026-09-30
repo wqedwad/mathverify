@@ -11,6 +11,8 @@ A form is CLOSED when it has no free symbol (its variable is bound). Each closed
 first, is replaced by SymPy's value when an independent numeric evaluation of the UNEVALUATED form
 agrees with it: tanh-sinh with breakpoints for an integral of one variable (the certificate's
 integrator), SymPy's numeric summation for a sum, the product of the terms for a finite product.
+SymPy's exact 0 for such an integral is taken when the quadrature's residue stays below the
+integrand's scale ∫|f| at every precision (`certify.calculus.definite_integral_is_zero`).
 Otherwise `UnverifiedForm` is raised and the caller abstains. Forms with a free symbol are left as
 they are: no number can check them here.
 """
@@ -41,6 +43,12 @@ def has_closed_form(e) -> bool:
 def _innermost(e) -> list:
     return [n for n in sp.preorder_traversal(e) if _closed(n)
             and not any(isinstance(m, _FORMS) for a in n.args for m in sp.preorder_traversal(a))]
+
+
+def _finite_integral(n) -> bool:
+    """A closed integral of one variable over a finite range (the certificate's integrator's case)."""
+    return isinstance(n, sp.Integral) and len(n.limits) == 1 and len(n.limits[0]) == 3 \
+        and bool(n.limits[0][1].is_finite) and bool(n.limits[0][2].is_finite)
 
 
 def _numeric(n, timeout: float) -> tuple[Any, float] | None:
@@ -113,6 +121,17 @@ def checked_forms(e, timeout: float = 8.0):
             if not r.ok or not isinstance(r.value, sp.Basic) or r.value.has(*_FORMS) \
                     or r.value.has(sp.nan, sp.zoo) or r.value.free_symbols:
                 raise UnverifiedForm(f"SymPy has no closed value for {n}")
+            if r.value == 0 and _finite_integral(n):
+                # a relative tolerance never confirms an exact 0 against a quadrature residue of
+                # 1e-51...1e-59: SymPy's right 0 for ∫_0^3 (x² - 2x) dx was never taken (third audit of
+                # 30 Sep 2026, N2); the residue is measured against the integrand's scale instead
+                from ..certify.calculus import definite_integral_is_zero
+                var, a, b = n.limits[0]
+                zero, zev = definite_integral_is_zero(n.function, var, a, b, timeout=timeout)
+                if zero is not True:
+                    raise UnverifiedForm(f"{n}: SymPy 0, numbers {zev.get('decided_by') or zev.get('error')}")
+                reps[n] = r.value
+                continue
             num = _numeric(n, timeout)
             if num is None:
                 raise UnverifiedForm(f"no numeric value checks SymPy's value of {n}")

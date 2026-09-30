@@ -271,6 +271,8 @@ def _breakpoints(exprs, sym, dom, timeout: float = 5.0) -> list | None:
 
 _FORMS = (sp.Sum, sp.Product, sp.Integral, sp.Limit)
 _MAX_TERMS = 2000
+_FORM_CHECKS = 2          # points per comparison that may take `forms.checked_forms` (see _exact_counterexample)
+_FORM_TIMEOUT = 4.0
 
 
 def _written_out(e):
@@ -297,17 +299,36 @@ def _written_out(e):
     return None if e.has(*_FORMS) else e
 
 
-def _exact_counterexample(a, b, syms, pt) -> dict[str, Any] | None | bool:
+def _exact_counterexample(a, b, syms, pt, budget: list | None = None) -> dict[str, Any] | None | bool:
     """Is `pt` an EXACT counterexample? dict when it is, False when the two sides are equal
-    there (or both undefined), None when undecided."""
-    from .numeric import certified_sign, exact_equal, real_odd_roots, NONREAL
+    there (or both undefined), None when undecided.
+
+    `budget` (a one-element list, decremented): how many more points may take a closed form that
+    cannot be written out (an integral, a finite sum of more than `_MAX_TERMS` terms) through
+    `forms.checked_forms`, SymPy's value confirmed by numbers. Without it such a point was never
+    decided, and a wrong claim for Integral(t² - 2t, (t, 0, x)) or Σ_{k=1}^{1000n} k stayed UNKNOWN
+    (third audit of 30 Sep 2026, N6). A difference found that way must also stand clear of the
+    numbers' tolerance."""
+    from .numeric import certified_sign, exact_equal, real_odd_roots, to_mp, NONREAL
+    via_forms = False
     try:
         da = real_odd_roots(a.subs(pt, simultaneous=True))
         db = real_odd_roots(b.subs(pt, simultaneous=True))
         if da.has(*_FORMS) or db.has(*_FORMS):
-            da, db = _written_out(da), _written_out(db)
-            if da is None or db is None:
-                return None
+            wa, wb = _written_out(da), _written_out(db)
+            if wa is None or wb is None:
+                if not budget or budget[0] <= 0:
+                    return None
+                budget[0] -= 1
+                from .forms import UnverifiedForm, checked_forms
+                try:
+                    wa, wb = checked_forms(da, _FORM_TIMEOUT), checked_forms(db, _FORM_TIMEOUT)
+                except UnverifiedForm:
+                    return None
+                if wa.has(*_FORMS) or wb.has(*_FORMS):
+                    return None
+                via_forms = True
+            da, db = wa, wb
     except Exception:  # noqa: BLE001
         return None
     und_a = da.has(sp.zoo, sp.nan) or da.has(sp.oo, -sp.oo)
@@ -327,6 +348,17 @@ def _exact_counterexample(a, b, syms, pt) -> dict[str, Any] | None | bool:
         return None
     if eq:
         return False
+    if via_forms:
+        # SymPy's value was confirmed only to the numbers' tolerance (1e-15 or finer): a difference
+        # inside 1e-12 of the larger side (or of 1) is not one the numbers can vouch for
+        try:
+            va, vb = to_mp(da, 30), to_mp(db, 30)
+        except Exception:  # noqa: BLE001
+            return None
+        with mp.workdps(30):
+            if abs(va - vb) <= mp.mpf("1e-12") * max(abs(va), abs(vb), 1):
+                return None
+        return {"point": point, "lhs": str(da), "rhs": str(db), "exact": "values_differ", "via": "checked_forms"}
     return {"point": point, "lhs": str(da), "rhs": str(db), "exact": "values_differ"}
 
 
@@ -582,6 +614,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
         return None
 
     unconfirmed = 0
+    budget = [_FORM_CHECKS]
     for pt in pts:
         d = disagree(pt)
         if d is not None and d[0] == "both_undefined":
@@ -592,7 +625,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
             # (gcd(n, n + 1) = 1 was refuted at n = 109), and "values differ" may be cancellation:
             # arccot(x) = atan(1/x) for x > 0 was refuted with a residue of 2e-31 (audit of
             # 29 Sep 2026)
-            c = _exact_counterexample(a, b, syms, pt)
+            c = _exact_counterexample(a, b, syms, pt, budget)
             if isinstance(c, dict):
                 ev["evaluated"] += 1
                 ev["counterexample"] = c
@@ -663,25 +696,42 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     # all. Measured: 1/(x−1) and 1/(x−1) + e^(−1000) agreed at every point (the gap is
     # 1e-435) and were declared equal. A true identity evaluates to 0, or to a zero with no
     # significant bits ("0.e-167", _prec ≈ 1); a real difference carries ~100 bits.
-    witness = _definite_nonzero_difference(ae - be, syms, pts[:8])
+    witness, unsure = _definite_nonzero_difference(ae - be, syms, pts[:8], a, b, budget)
     if witness is not None:
         ev["counterexample"] = witness
         ev["reason"] = "difference_below_working_precision_but_nonzero"
         return False, ev
+    if unsure:
+        ev["unconfirmed_difference_points"] = unsure
+        ev["reason"] = "difference_below_working_precision_not_confirmed"
+        return None, ev
     if unconfirmed:
         ev["reason"] = "disagreement_not_confirmed_exactly"
         return None, ev
     return True, ev
 
 
-def _definite_nonzero_difference(d, syms, pts) -> dict[str, Any] | None:
+def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None) -> tuple[dict[str, Any] | None, int]:
+    """(witness, number of unconfirmed points): a point where the difference `d` = a - b, evaluated
+    by SymPy's adaptive evalf, carries significant bits, confirmed by the exact values of a and b
+    there (`_exact_counterexample`). Strict evalf is no proof either: it gave 1.6e-35 for
+    Σ_{k=1}^{436} cos(kπ/2), which is 0, and all six full-period trig sums of the third audit were
+    refuted (30 Sep 2026, N4). A point the exact values call equal is no witness; one they cannot
+    decide is counted, and the caller abstains (principle 5)."""
     try:
         d = sp.sympify(d)
     except (sp.SympifyError, TypeError):
-        return None
+        return None, 0
+    unsure = 0
     for pt in pts:
         try:
-            v = sp.N(d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True), 30)
+            dp = d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True)
+            if dp.has(*_FORMS):
+                # a finite sum written out is exact, and its evalf is quick (strict evalf of the sum
+                # itself took seconds per point and returned the residue above)
+                w = _written_out(dp)
+                dp = dp if w is None else w
+            v = sp.N(dp, 30)
         except Exception:  # noqa: BLE001
             continue
         if v == 0 or not getattr(v, "is_number", False):
@@ -692,5 +742,9 @@ def _definite_nonzero_difference(d, syms, pts) -> dict[str, Any] | None:
             prec = min(getattr(re_, "_prec", 0) or 0, getattr(im_, "_prec", 0) or 0) \
                 if re_ != 0 and im_ != 0 else getattr(re_ if re_ != 0 else im_, "_prec", 0)
         if prec and prec >= 50:
-            return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "difference": str(v)}
-    return None
+            c = _exact_counterexample(a, b, syms, pt, budget)
+            if isinstance(c, dict):
+                return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "difference": str(v),
+                        "exact": c["exact"]}, unsure
+            unsure += c is None
+    return None, unsure
