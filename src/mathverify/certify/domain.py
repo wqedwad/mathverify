@@ -119,7 +119,27 @@ def _violations(c, d, region):
             inside = None
         return S.EmptySet if inside is True else None
     bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
-    r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
+    # solved for a variable with the facts of the region (an index is an integer, nonnegative on
+    # [0, oo)): factorial(k) != 0 was left a ConditionSet over Range(0, oo) and the exponential
+    # series undecided. The conditions themselves are read on the plain variable (with an integer
+    # one, 1/sin(pi*k) != 0 would already be false and dropped as naming no variable).
+    facts = {}
+    if region.is_subset(S.Integers) is True:
+        facts["integer"] = True
+        if region.inf.is_nonnegative is True:
+            facts["nonnegative"] = True
+    elif region.is_subset(S.Reals) is True:
+        facts["real"] = True
+    if facts:
+        d2 = sp.Dummy(d.name, **facts)
+        bad = bad.xreplace({d: d2})
+    else:
+        d2 = d
+    if bad is sp.false:
+        return S.EmptySet
+    if bad is sp.true:
+        return region
+    r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d2, region, timeout=_SOLVE_TIMEOUT)
     if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
         return None
     return r.value

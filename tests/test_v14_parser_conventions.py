@@ -686,3 +686,74 @@ def test_a_step_undefined_as_written_is_still_refuted_when_proved_false():
     sol = _sol("4", steps=[_step(1, "compute", "Limit(log(x), x, -1) = I*pi"),
                            _step(2, "compute", "Limit(x + 2, x, 2) = 4")])
     assert verify(ir, sol).verdict == "INCORRECT"
+
+
+# ---------------------------------------------------------------------------- review of the port (30 Sep 2026)
+# Each row was CORRECT (or verified) on the code the review ran against: the adversarial reviewers of
+# the six fix groups reproduced them. KI: k an integer; X: x undeclared.
+KI2 = [{"name": "k", "domain": "integer"}]
+X = [{"name": "x"}]
+
+
+@pytest.mark.parametrize("ir,claim,kind,verdict", [
+    # a rationality SymPy leaves standing is decided by the minimal polynomial: sqrt(2) + sqrt(3) is
+    # not rational, so gcd(x, 2) has no value there
+    (_ir("evaluate", {"expr": "x + gcd(x, 2) - gcd(2, x)"}, X, ["x = sqrt(2) + sqrt(3)"]),
+     "sqrt(2) + sqrt(3)", "value", "NOT_CORRECT"),
+    (_ir("evaluate", {"expr": "x + lcm(x, 2) - lcm(2, x)"}, X, ["x = sqrt(2) + sqrt(3)"]),
+     "sqrt(2) + sqrt(3)", "value", "NOT_CORRECT"),
+    # C(n, r) of the curriculum, like n!
+    (_ir("evaluate", {"expr": "x + C(x, 2) - C(x, 2)"}, X, ["x = -3"]), "-3", "value", "NOT_CORRECT"),
+    (_ir("solve_equation", {"var": "x", "equation": "(x + 3)*(x - 2) = C(x, 2) - C(x, 2)"}, X, shape="set"),
+     "{-3, 2}", "set", "NOT_CORRECT"),
+    # floor/ceiling computed a Sum at once, past the reversed-range refusal
+    (_ir("evaluate", {"expr": "floor(Sum(k, (k, 3, 1)))"}, KI2), "-2", "value", "UNKNOWN"),
+    (_ir("evaluate", {"expr": "ceiling(Sum(k, (k, 3, 1)))"}, KI2), "-2", "value", "UNKNOWN"),
+    (_ir("evaluate", {"expr": "floor(Sum(k, (k, 1, 7/2)))"}, KI2), "7", "value", "UNKNOWN"),
+    (_ir("evaluate", {"expr": r"\lfloor \sum_{k=3}^{1} k \rfloor"}, KI2), "-2", "value", "UNKNOWN"),
+    # a bound written with an operation of numbers (10**3) is the same bound
+    (_ir("evaluate", {"expr": "Sum(k/k, (k, -1, 10**3))"}, KI2), "1002", "value", "UNKNOWN"),
+    (_ir("evaluate", {"expr": r"\sum_{k=-1}^{10^3} \frac{k}{k}"}, KI2), "1002", "value", "UNKNOWN"),
+    # a limit of an expression with an undefined sum in it
+    (_ir("limit", {"expr": "x + Sum(k/k, (k, -1, 1))", "var": "x", "to": "0"}, X + KI2), "3", "value", "UNKNOWN"),
+    (_ir("limit", {"expr": "x + Product(k/k, (k, 0, 2))", "var": "x", "to": "0"}, X + KI2), "1", "value",
+     "UNKNOWN"),
+    # a condition only sufficient on the symbolic body ((-k)**k asks -k > 0) makes nothing undefined:
+    # the empty solution set was certified; the true root is 24
+    (_ir("solve_equation", {"var": "x", "equation": "x + Sum((-k)**k, (k, 1, 3)) = 0"}, X + KI2, shape="set"),
+     "EmptySet", "set", "NOT_CORRECT"),
+    # a LaTeX limit's variable has the facts of its point, not the declaration: x > 0, a = -2
+    (_ir("evaluate", {"expr": r"\lim_{x\to a} \frac{|x|}{x}"}, XPV + [{"name": "a"}], ["a = -2"]),
+     "1", "value", "NOT_CORRECT"),
+    # a defined finite sum stays certified: x > 0 decides every term's condition
+    (_ir("evaluate", {"expr": "Sum(1/((x + k)*(x + k + 1)), (k, 0, 3))"}, XPV + KI2),
+     "1/x - 1/(x + 4)", "expression", "CORRECT"),
+    (_ir("evaluate", {"expr": "Sum(1/cos(pi*k), (k, 0, 5))"}, KI2), "0", "value", "CORRECT"),
+    (_ir("evaluate", {"expr": "Sum(1/factorial(k - 3), (k, 3, 8))"}, KI2), "163/60", "value", "CORRECT"),
+])
+def test_review_of_the_port(ir, claim, kind, verdict):
+    test_audit_verdicts(ir, _sol(claim, kind), verdict)
+
+
+@pytest.mark.parametrize("expr", [
+    "Sum(j*Sum(1/(i + j), (i, 1, 150)), (j, 1, 150))",
+    "Sum(1/(k**40 - 7*k**3 + 11), (k, 1, oo))",
+    "Integral(1/(sin(x) + cos(3*x) - 1/2), (x, 0, 1))",
+    "Sum(1/(sin(k) + cos(3*k) - 1/2), (k, 1, oo))",
+])
+def test_a_binder_body_is_decided_in_bounded_time(expr):
+    import time
+    from mathverify.certify.domain import definedness_conditions
+    ns = _ns(i=sp.Symbol("i", integer=True), j=sp.Symbol("j", integer=True), k=sp.Symbol("k", integer=True),
+             x=XR)
+    t0 = time.perf_counter()
+    definedness_conditions(parse_as_written(expr, ns), None)
+    assert time.perf_counter() - t0 < 60
+
+
+def test_the_minimal_polynomial_decides_rationality():
+    from mathverify.certify.domain import decide_membership
+    assert decide_membership(sp.sqrt(2) + sp.sqrt(3), sp.S.Rationals) is False
+    assert decide_membership((sp.sqrt(2) + 1) ** 2 - 2 * sp.sqrt(2), sp.S.Rationals) is True
+    assert decide_membership((sp.sqrt(2) + 1) ** 2 - 2 * sp.sqrt(2), sp.S.Naturals0) is True
+    assert decide_membership(sp.pi + sp.E, sp.S.Rationals) is None

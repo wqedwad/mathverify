@@ -694,7 +694,41 @@ _BOUND_OPERATIONS = frozenset({"Sum", "Product", "Integral", "integrate", "Limit
                                "Derivative", "Subs", "at"})
 
 
+def _literal_number(node, depth: int = 0):
+    """The exact value of a bound written with numbers only (Integer(3), -Integer(1), 10**3, 7/2),
+    or None. Read from the code, before SymPy builds anything."""
+    if depth > 30:
+        return None
+    if isinstance(node, ast.Constant) and type(node.value) is int:
+        return sp.Integer(node.value)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("Integer", "Rational") \
+            and not node.keywords and 1 <= len(node.args) <= 2:
+        vals = [_literal_number(a, depth + 1) for a in node.args]
+        if any(v is None or not v.is_Integer for v in vals):
+            return None
+        return sp.Rational(*vals)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        v = _literal_number(node.operand, depth + 1)
+        return None if v is None else (-v if isinstance(node.op, ast.USub) else v)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)):
+        a, b = _literal_number(node.left, depth + 1), _literal_number(node.right, depth + 1)
+        if a is None or b is None:
+            return None
+        if isinstance(node.op, ast.Pow):
+            if not b.is_Integer or abs(b) > 64 or abs(a) > 10**6 or (a == 0 and b < 0):
+                return None
+            return a ** b
+        if isinstance(node.op, ast.Div):
+            return None if b == 0 else a / b
+        return a + b if isinstance(node.op, ast.Add) else a - b if isinstance(node.op, ast.Sub) else a * b
+    return None
+
+
 def _refuse_computed_bounds(code: str, raw: str) -> None:
+    """Also the range checks of `_refuse_reversed_ranges` for bounds written with numbers, here, before
+    SymPy builds the expression: a function around a Sum computes it at once (floor, ceiling), and
+    floor(Sum(k, (k, 3, 1))) = -2 (Karr) was certified past the later refusal (review of V14,
+    30 Sep 2026)."""
     try:
         tree = ast.parse(code, mode="eval")
     except (SyntaxError, ValueError, RecursionError, MemoryError):
@@ -709,6 +743,15 @@ def _refuse_computed_bounds(code: str, raw: str) -> None:
                 if any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _BOUND_OPERATIONS
                        for n in ast.walk(b)):
                     raise ParseError(f"{raw!r} has a {node.func.id} whose limit is itself an operation: not read")
+            if node.func.id in ("Sum", "Product") and len(lim.elts) == 3:
+                lo, hi = _literal_number(lim.elts[1]), _literal_number(lim.elts[2])
+                if lo is None or hi is None:
+                    continue
+                if hi - lo + 1 < 0:
+                    raise ParseError(f"{raw!r} has a {node.func.id} over a reversed range: not read")
+                if not (hi - lo).is_Integer:
+                    raise ParseError(f"{raw!r} has a {node.func.id} whose limits are not an integer apart: "
+                                     "not read")
 
 
 def _rebind_range_dummies(code: str, local_dict: dict[str, Any], raw: str) -> tuple[str, dict[str, Any]] | None:
@@ -1021,19 +1064,6 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     if pointed is not None:
         code, more = pointed
         dummies = dict(dummies, **more)
-    if binds_range and evaluate:
-        # A Sum or Product is first built unevaluated and its range checked: evaluated, a function
-        # around it (floor, ceiling) computes it at once, and floor(Sum(k, (k, 3, 1))) = -2 (Karr) was
-        # certified past the reversed-range refusal (review of V14, 30 Sep 2026).
-        with sp.evaluate(False):
-            unevaluated = dict(local_dict, Add=sp.Add, Mul=sp.Mul, Pow=sp.Pow, **dummies)
-            if rebound is None and pointed is None:
-                pre = parse_expr(s, local_dict=unevaluated, global_dict=global_dict,
-                                 transformations=transformations, evaluate=False)
-            else:
-                pre = parse_expr(code, local_dict=unevaluated, global_dict=global_dict,
-                                 transformations=(), evaluate=False)
-        _refuse_reversed_ranges(pre, s)
     if rebound is None and pointed is None:
         out = parse_expr(s, local_dict=local_dict, global_dict=global_dict,
                          transformations=transformations, evaluate=evaluate)
@@ -1176,8 +1206,60 @@ def _latex_limit_variables(expr, ns: dict[str, Any]):
     return expr.replace(lambda n: isinstance(n, sp.Limit), bind)
 
 
+_LATEX_RANGE_BINDER = re.compile(r"\\(?:sum|prod)(?![A-Za-z])")
+_LATEX_OPERATION = re.compile(r"\\(?:sum|prod|int|lim)(?![A-Za-z])")
+_LATEX_INT_LIMIT = re.compile(r"\s*(?:[A-Za-z]\w*\s*=\s*)?(-?\s*\d+)\s*")
+
+
+def _latex_script(s: str, i: int, mark: str) -> tuple[str | None, int]:
+    """The sub- or superscript `mark` ('_' or '^') at s[i:] (after spaces): the text in its braces or
+    its one character, and the index after it; (None, i) when there is none."""
+    j = i
+    while j < len(s) and s[j] == " ":
+        j += 1
+    if j >= len(s) or s[j] != mark:
+        return None, i
+    j += 1
+    while j < len(s) and s[j] == " ":
+        j += 1
+    if j < len(s) and s[j] == "{":
+        depth, k = 0, j
+        while k < len(s):
+            depth += {"{": 1, "}": -1}.get(s[k], 0)
+            if depth == 0:
+                return s[j + 1:k], k + 1
+            k += 1
+        return None, i
+    return (s[j], j + 1) if j < len(s) else (None, i)
+
+
+def _refuse_latex_ranges(s: str) -> None:
+    """The LaTeX counterpart of `_refuse_computed_bounds`: a sum or product whose limit is itself an
+    operation, or whose limits are numbers of a reversed range or not an integer apart, is refused
+    before latex2sympy builds it (a floor around it computed it at once: \\lfloor \\sum_{k=3}^{1} k
+    \\rfloor = -2 was certified; review of V14, 30 Sep 2026)."""
+    for m in _LATEX_RANGE_BINDER.finditer(s):
+        i = m.end()
+        scripts = {}
+        for _ in range(2):
+            for mark in ("_", "^"):
+                if mark not in scripts:
+                    text, j = _latex_script(s, i, mark)
+                    if text is not None:
+                        scripts[mark], i = text, j
+        if any(_LATEX_OPERATION.search(t) for t in scripts.values()):
+            raise ParseError(f"{s!r} has a sum or product whose limit is itself an operation: not read")
+        lo = _LATEX_INT_LIMIT.fullmatch(scripts.get("_", ""))
+        hi = _LATEX_INT_LIMIT.fullmatch(scripts.get("^", ""))
+        if lo and hi:
+            a, b = int(lo.group(1).replace(" ", "")), int(hi.group(1).replace(" ", ""))
+            if b - a + 1 < 0:
+                raise ParseError(f"{s!r} has a sum or product over a reversed range: not read")
+
+
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
+    _refuse_latex_ranges(s)
     expr = _latex2sympy(_exact_latex_decimals(s))
     if isinstance(expr, sp.Basic):
         from sympy.core.function import AppliedUndef
