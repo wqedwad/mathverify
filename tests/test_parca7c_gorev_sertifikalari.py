@@ -133,6 +133,10 @@ FN = {"name": "f", "args": ["x"], "expr": "log(-1) - log(-1) + x"}
     (anti(C0), "2*x", "expression"),
     (anti(X1), "x**2/2", "expression"),
     (anti(TU), "x**2/2", "expression"),
+    # the intake rule (part v-b B) does not read a limit task, so only this certificate stops these
+    # (mutation G02 of this part survived on the combined code without them, 30 Sep 2026)
+    (lim(TU, "0"), "0", "value"),
+    (ext(TU, "max", "[0, 1]"), "1", "value"),
 ])
 def test_a_task_expression_undefined_as_written_is_not_certified(ir, claim, kind):
     r = _run(ir, claim, kind)
@@ -377,3 +381,19 @@ def test_a_free_symbol_in_a_condition_makes_the_extremum_abstain(ir):
 def test_extremum_without_a_cutting_condition_is_unchanged(ir, right, wrong):
     assert _run(ir, right).verdict == "CORRECT"
     assert _run(ir, wrong).verdict == "INCORRECT"
+
+
+def test_the_task_expression_helpers_decide_a_closed_undecided_condition():
+    # direct: the intake rule (part v-b B) runs first on the derivative, tangent, antiderivative and
+    # integral tasks, so the verdict tests alone keep G02 and G04 alive there (combined mutation run)
+    from mathverify.certify.base import make_ctx
+    from mathverify.certify.calculus import _unreadable_task_expression
+    from mathverify.certify.limits import written_undefined_everywhere
+    from mathverify.ir import ProblemIR
+    ctx = make_ctx(ProblemIR.from_dict(lim(TU, "0")))
+    assert written_undefined_everywhere(TU, ctx.ns) is True
+    assert written_undefined_everywhere("x + 2", ctx.ns) is False
+    x = ctx.ns["x"]
+    bad = _unreadable_task_expression(TU, x, x, ctx.ns, 0)
+    assert bad is not None and bad.verdict == "unknown" and bad.evidence.get("reason") == "expression_undefined_as_written"
+    assert _unreadable_task_expression("x + 2", x + 2, x, ctx.ns, 0) is None
