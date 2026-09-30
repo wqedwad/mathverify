@@ -2367,10 +2367,7 @@ def _functions_faithful(obj, ns) -> None:
     """A problem function's body is parsed with simplification (`f(x) = x/x` becomes 1): refuse
     unless its domain as written is exactly its domain as parsed."""
     for fd in obj.functions:
-        if isinstance(getattr(fd, "domain", None), str) and fd.domain.strip():
-            # the templates state the body, not the declared domain: Lean proved f(-2) = 5 for
-            # f(x) = x**2 + 1 on x > 0 (second audit of 29 Sep 2026)
-            raise LeanPrintError(f"function {fd.name}: its declared domain is not stated")
+        declared = isinstance(getattr(fd, "domain", None), str) and bool(fd.domain.strip())
         fn = ns.get(fd.name)
         body, argsyms = getattr(fn, "body", None), getattr(fn, "argsyms", None)
         if body is None or argsyms is None or len(argsyms) != len(fd.args):
@@ -2387,6 +2384,19 @@ def _functions_faithful(obj, ns) -> None:
                 bad = _violation_set(c, v, region)
                 if bad is None or bad != S.EmptySet:
                     raise LeanPrintError(f"function {fd.name}: simplification changed its domain")
+            if declared:
+                # the templates state the body, not the declared domain (Lean proved f(-2) = 5 for
+                # f(x) = x**2 + 1 on x > 0, second audit of 29 Sep 2026): a domain is stated only
+                # when the body's own written conditions already imply it ("x != 1" for (2x+3)/(x-1))
+                rel = getattr(fn, "domain_rel", None)
+                if rel is None:
+                    raise LeanPrintError(f"function {fd.name}: its declared domain cannot be read")
+                for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+                    bad = _violation_set(c, v, dw)
+                    if bad is None or bad != S.EmptySet:
+                        raise LeanPrintError(f"function {fd.name}: its declared domain is not stated")
+        elif declared:
+            raise LeanPrintError(f"function {fd.name}: its declared domain is not stated")
         elif set(map(str, wc)) != set(map(str, pc)):
             raise LeanPrintError(f"function {fd.name}: simplification changed its domain")
 

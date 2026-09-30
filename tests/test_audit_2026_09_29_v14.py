@@ -718,3 +718,13 @@ def test_a_smooth_kink_free_derivative_keeps_its_domain():
 def test_a_closed_call_or_limit_under_a_partial_operation_is_decided(expr, functions, claim):
     ir = dict(_ir("evaluate", {"expr": expr}), functions=functions)
     assert _run(ir, claim).verdict == "CORRECT"
+
+
+def test_a_declared_domain_the_body_implies_keeps_its_lean_statement():
+    """tyt-esf-005: f(x) = (2x + 3)/(x - 1) on x != 1. A blanket refusal of declared domains lost
+    its statement; the domain adds nothing to the body's own condition."""
+    import json
+    from pathlib import Path
+    from mathverify.formal.statement import build_statement
+    it = json.loads((Path(__file__).resolve().parents[1] / "evalset/items/tyt-esf-005.json").read_text(encoding="utf-8"))
+    assert build_statement(it["problem_ir"], it["solution"]["claimed_answer"]) is not None
