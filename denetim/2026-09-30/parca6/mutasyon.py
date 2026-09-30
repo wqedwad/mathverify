@@ -88,6 +88,8 @@ MUTATIONS = [
      "        if False:\n            # a condition on x that names a symbol no given fixes", T),
     ("C08 extremum bağsız koşulda çekimser değil", EXT,
      '        if not p.get("interval") and ctx.unapplied_conditions(var):', "        if False:", T),
+    ("C09 karar verilemeyen aday tamlığı bozmaz", ALG,
+     "            complete = complete and not any(_undecided(why) for _, why in rejected)\n", "", T),
 ]
 
 if __name__ == "__main__":
