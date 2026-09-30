@@ -438,6 +438,17 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> b
     index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
     own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
     and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT."""
+    # the task's interval or point must lie where the variable is declared: with x declared positive
+    # the parse folds |x| to x, and on [-1, 1] the minimum of |x| - x**2 was certified to be -2, the
+    # derivative of x*|x| at -1 too (-2; it is 2); no reading gives these (second audit of 29 Sep 2026)
+    # (the closure for a positive variable: an interval [0, 2] is the common way to write it)
+    decl = Interval(0, oo) if getattr(var, "is_nonnegative", None) else S.Reals
+    try:
+        inside = region.is_subset(decl)
+    except Exception:  # noqa: BLE001
+        inside = None
+    if inside is not True:
+        return True
     conds, nowhere = written_definedness(src, ns)
     if var in nowhere or written_closed_undecided(src, ns):
         return True                    # a closed condition no check proves: the callers abstain

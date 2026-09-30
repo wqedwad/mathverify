@@ -600,3 +600,15 @@ def test_a_finite_sum_at_a_sample_point_is_written_out_not_strictly_evaluated():
     assert _run(ir, "n", kind="expression").verdict == "CORRECT"
     assert time.time() - t < 120
     assert _run(ir, "2*n", kind="expression").verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("kind,params,claim", [
+    ("extremum", {"f": "Abs(x) - x**2", "var": "x", "interval": "[-1, 1]", "which": "min"}, "-2"),
+    ("derivative", {"f": "x*Abs(x)", "var": "x", "at": "-1"}, "-2"),
+])
+def test_an_interval_or_point_outside_the_declared_domain_is_not_certified(kind, params, claim):
+    """x declared positive folds |x| to x; on [-1, 1] the minimum -2 and at -1 the derivative -2
+    were certified, values no reading of the problem gives."""
+    assert _run(_ir(kind, params, XP), claim).verdict != "CORRECT"
+    ok = dict(params, interval="[0, 2]") if kind == "extremum" else dict(params, at="1")
+    assert _run(_ir(kind, ok, XP), "-2" if kind == "extremum" else "2").verdict == "CORRECT"
