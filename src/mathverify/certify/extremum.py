@@ -354,6 +354,11 @@ def verify(ir, solution, ctx: Ctx):
             # "maximum" used to fall through to the argmin branch (audit of 25 Sep 2026)
             return unknown(LAYER, f"unknown_which:{which}")
         var = ctx.sym(p.get("var", "x"))
+        if getattr(var, "is_integer", None):
+            # the certificate ranges over a real interval: with n a positive integer the maximum of
+            # -(n - 3/2)**2 on [0, 3] was certified 0 (the integers give -1/4), 30 Sep 2026
+            return unknown(LAYER, "variable_declared_integer", t.ms, {"var": str(var)},
+                           flags=["variable_declared_integer"])
         f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
         if err:
             return err

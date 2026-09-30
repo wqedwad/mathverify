@@ -68,8 +68,10 @@ def test_the_guard_still_reads_ordinary_mathematics():
     assert parse_expr_str("2*x + 1", ns) == 2 * x + 1
     assert parse_as_written("x >= 3", ns) == sp.Tuple(x, 3)
     # a one-sided limit names its side with a string: that literal is a sign, not code
-    assert parse_expr_str("Limit(Abs(x)/x, x, 0, '+')", ns) == sp.Limit(sp.Abs(x) / x, x, 0, "+")
-    assert parse_expr_str("Limit(1/x, x, 0, '-')", ns) == sp.Limit(1 / x, x, 0, "-")
+    # (the limit's variable is its own bound symbol since V14, 30 Sep 2026: compared by side and value)
+    right, left = parse_expr_str("Limit(Abs(x)/x, x, 0, '+')", ns), parse_expr_str("Limit(1/x, x, 0, '-')", ns)
+    assert str(right.args[3]) == "+" and right.doit() == 1
+    assert str(left.args[3]) == "-" and left.doit() == -sp.oo
     with pytest.raises(ParseError):
         parse_expr_str("Limit(1/x, x, 0, '__import__')", ns)
 

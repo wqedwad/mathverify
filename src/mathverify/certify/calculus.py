@@ -460,6 +460,13 @@ def verify(ir, solution, ctx: Ctx):
     with Timer() as t:
         var = ctx.sym(p.get("var", "x"))
         ev: dict[str, Any] = {}
+        if kind != "definite_integral" and getattr(var, "is_integer", None):
+            # a derivative or antiderivative in a variable declared an integer is no question, and
+            # its assumption folds the function first: with n a positive integer sin(pi*n) was 0, so
+            # "d/dn at 1 is 0" (it is -pi), "y = 0 is the tangent" and "7 is an antiderivative"
+            # were certified (30 Sep 2026)
+            return unknown(LAYER, "variable_declared_integer", t.ms, {"var": str(var)},
+                           flags=["variable_declared_integer"])
         if kind == "antiderivative":
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:

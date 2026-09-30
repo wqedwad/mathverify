@@ -143,6 +143,7 @@ def _step_namespace(ns: dict[str, Any]) -> dict[str, Any]:
         return sp.Integral(*a)
 
     _integral.binds_range = True          # its variable is a dummy (normalize.parse._binds_range)
+    _limit.binds_point = _at.binds_point = True   # likewise (normalize.parse._binds_point)
     out["Limit"] = out["limit"] = _limit
     out["Integral"] = out["integrate"] = _integral
     out["Derivative"] = out["diff"] = lambda *a: sp.Derivative(*a)

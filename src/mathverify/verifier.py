@@ -383,7 +383,25 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
         if target and _same_structure(str(ca.payload), str(target), ctx):
             return unknown("intake.claim", f"claimed answer {ca.payload!r} restates the question",
                            flags=["claim_is_not_a_value"])
+    # A gcd/lcm of numbers is evaluated by the parser, so a claim written as one is a computation the
+    # verifier would do itself (principle 2): for "evaluate gcd(84, 120)" the claims gcd(120, 84),
+    # igcd(84, 120) and \gcd(84, 120) were certified; only the literal restatement was caught (GCD-10,
+    # 30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays.
+    if _INTEGER_OP_TEXT.search(str(ca.payload)):
+        try:
+            closed = not getattr(ctx.claimed(solution), "free_symbols", {None})
+        except LeakageError:
+            raise
+        except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
+            closed = False
+        if closed:
+            return unknown("intake.claim", f"claimed answer {ca.payload!r} computes a gcd/lcm, not a value",
+                           flags=["claim_is_not_a_value"])
     return None
+
+
+_INTEGER_OP_TEXT = re.compile(r"(?<![A-Za-z_])i?(?:gcd|lcm)\s*\(|\\(?:gcd|lcm)(?![A-Za-z])|"
+                              r"\\(?:operatorname|mathrm|text|textrm)\s*\{\s*(?:gcd|lcm)\s*\}")
 
 
 def _same_structure(a: str, b: str, ctx) -> bool:

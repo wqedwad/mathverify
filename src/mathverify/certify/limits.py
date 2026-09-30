@@ -362,6 +362,29 @@ def _probe_agrees(vals: list[str | None], target) -> bool | None:
         return None
 
 
+def declared_side(var, point, side):
+    """The side ('+', '-', None: both) from which the task's limit approaches `point` inside the
+    variable's declared domain, or False when the approach leaves it. The task's variable keeps its
+    declared assumptions (the parse folds sqrt(x**2) to x for x > 0), so with x declared positive
+    lim_{x->-oo} sqrt(x**2)/x was certified to be 1 (it is -1), lim_{x->-1} sqrt(x**2) to be -1 and
+    the left limit of x*log(x) at 0 to be 0; with n declared an integer, sin(pi*n)/(n - 1) folded
+    to 0 and its limit at n = 1 was certified 0 (it is -pi). At the closed end of the declared domain
+    the limit is the one-sided limit from inside it (30 Sep 2026)."""
+    nonneg = getattr(var, "is_nonnegative", None)
+    if getattr(var, "is_integer", None):
+        # a sequence: only an infinite end its values reach
+        return side if point == oo or (point == -oo and not nonneg) else False
+    if not nonneg or point == oo:
+        return side
+    if point == -oo:
+        return False
+    if getattr(point, "is_positive", None):
+        return side
+    if getattr(point, "is_zero", None) and side in (None, "+"):
+        return "+"
+    return False
+
+
 def verify(ir, solution, ctx: Ctx):
     """Task `limit`: params {"expr": str, "var": str, "to": str, "side"?: "+"|"-"}."""
     if ir.task.kind != "limit":
@@ -381,6 +404,12 @@ def verify(ir, solution, ctx: Ctx):
         if side not in (None, "+", "-"):
             # "right", "left", ...: guessing the direction would decide a different question
             return unknown(LAYER, f"unknown_side:{side}")
+        within = declared_side(var, point, side)
+        if within is False:
+            return unknown(LAYER, "approach_outside_declared_domain", t.ms,
+                           {"var": str(var), "to": str(point), "side": str(side)},
+                           flags=["approach_outside_declared_domain"])
+        side = within
         extra = [c for c in written_definedness(p["expr"], ctx.ns)[0]
                  if getattr(c, "free_symbols", set()) == {var}]
         cls = classify_limit(expr, var, point, side, timeout=ctx.timeout,

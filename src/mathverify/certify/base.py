@@ -82,6 +82,12 @@ class Ctx:
         for c in conds:
             if c.free_symbols != {var}:
                 continue                               # several variables: var_constraints only
+            if isinstance(c, sp.Contains):
+                # a gcd/lcm argument must be rational (certify.domain); solveset cannot read the
+                # condition and it was dropped: (x - 1/2)(x - sqrt(2)) = gcd(x, 2) - gcd(2, x) had
+                # its root sqrt(2) certified (30 Sep 2026)
+                dom = sp.Intersection(dom, c.args[1]) if c.args[0] == var else sp.ConditionSet(var, c, dom)
+                continue
             try:
                 sol = sp.solveset(c, var, S.Reals)
             except Exception:  # noqa: BLE001

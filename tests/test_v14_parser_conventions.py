@@ -74,13 +74,17 @@ def test_gcd_lcm_of_a_symbol_has_no_value_until_it_is_substituted(text):
 
 
 def test_gcd_of_non_integers_stays_unevaluated_and_is_not_a_value():
+    # sharp's convention (DECISIONS §72, tests/test_parse_conventions.py): fractions take the school
+    # rule gcd(a/b, c/d) = gcd(a, c)/lcm(b, d); only a number that is not rational has no value
     from mathverify.equiv.numeric import certified_sign, num_equal
     e = parse_expr_str("gcd(1/2, 1/3)", _ns())
-    assert e != sp.Rational(1, 6) and type(e).__name__ == "gcd"
-    assert certified_sign(e) is None                 # was NONREAL: an unevaluated call read as a value
-    assert num_equal(e, sp.Rational(1, 6))[0] is None
+    assert e == sp.Rational(1, 6) and certified_sign(e) == 1 and num_equal(e, sp.Rational(1, 6))[0] is True
     w = parse_as_written("gcd(1/2, 1/3)", _ns())
     assert len(w) == 1 and type(w[0]).__name__ == "gcd"            # was (1,): the written form disagreed
+    p = parse_expr_str("gcd(pi, 2)", _ns())
+    assert type(p).__name__ == "gcd" and certified_sign(p) is None
+    with pytest.raises(ParseError):                 # the integer spelling takes no fraction rule
+        parse_expr_str("igcd(1/2, 1/3)", _ns())
 
 
 def test_random_points_never_refute_a_true_gcd_identity():
@@ -88,7 +92,10 @@ def test_random_points_never_refute_a_true_gcd_identity():
     gcd, lcm = _SAFE_NAMES["gcd"], _SAFE_NAMES["lcm"]
     n, x = sp.Symbol("n", integer=True), sp.Symbol("x", real=True)
     assert random_point_equal(gcd(n, 2) * lcm(n, 2), 2 * sp.Abs(n), n, sp.S.Integers)[0] is not False
-    assert random_point_equal(gcd(x, 2) * lcm(x, 2), 2 * x, x, sp.S.Reals)[0] is None
+    # sharp: gcd/lcm have values on the rationals, where gcd(x, 2)*lcm(x, 2) = 2|x|; 2x is refuted at a
+    # negative rational (a true counterexample), the true identity 2|x| is not
+    assert random_point_equal(gcd(x, 2) * lcm(x, 2), 2 * x, x, sp.S.Reals)[0] is False
+    assert random_point_equal(gcd(x, 2) * lcm(x, 2), 2 * sp.Abs(x), x, sp.S.Reals)[0] is not False
     assert random_point_equal(gcd(n, 2), 1, n, sp.S.Integers)[0] is False      # n = 2 is a counterexample
 
 
@@ -104,7 +111,10 @@ N6 = dict(vars_=[{"name": "n", "domain": "positive_integer"}], givens=["n = 6"])
     (_ir("evaluate", {"expr": "gcd(n, 4)"}, **N6), "1", "INCORRECT"),
     (_ir("evaluate", {"expr": r"\gcd(n, 4)"}, **N6), "1", "INCORRECT"),
     (_ir("evaluate", {"expr": r"\gcd(n, 4)"}, **N6), "2", "CORRECT"),
-    (_ir("evaluate", {"expr": "gcd(1/2, 1/3)"}), "1/6", "UNKNOWN"),
+    (_ir("evaluate", {"expr": "gcd(1/2, 1/3)"}), "1/6", "CORRECT"),      # sharp: the school rule on fractions
+    (_ir("evaluate", {"expr": "lcm(1/2, 1/3)"}), "1/6", "INCORRECT"),    # lcm(1, 1)/gcd(2, 3) = 1
+    (_ir("evaluate", {"expr": "igcd(n, 4)"}, **N6), "2", "CORRECT"),     # igcd of a symbol was unreadable
+    (_ir("evaluate", {"expr": "ilcm(n, 4)"}, **N6), "24", "INCORRECT"),
 ])
 def test_gcd_lcm_verdicts(ir, claim, verdict):
     assert _verdict(ir, _sol(claim)) == verdict
@@ -224,7 +234,9 @@ XPV = [{"name": "x", "domain": "positive_real"}]
     (_ir("limit", {"expr": "sqrt(x**2)/x", "var": "x", "to": "-oo"}, XPV), _sol("-1"), "UNKNOWN"),
     (_ir("limit", {"expr": "x*log(x)", "var": "x", "to": "0"}, XPV), _sol("0"), "CORRECT"),     # from the right
     (_ir("limit", {"expr": "x*log(x)", "var": "x", "to": "0", "side": "-"}, XPV), _sol("0"), "UNKNOWN"),
-    (_ir("definite_integral", {"integrand": "Abs(x)", "var": "x", "a": "-1", "b": "1"}, XPV), _sol("0"), "UNKNOWN"),
+    # sharp's convention: the integral's variable is bound and runs over [a, b], not the declared domain
+    # (DECISIONS §72 (b), test_audit_2026_09_29_v14); the value is 1, so 0 is refuted
+    (_ir("definite_integral", {"integrand": "Abs(x)", "var": "x", "a": "-1", "b": "1"}, XPV), _sol("0"), "INCORRECT"),
     (_ir("definite_integral", {"integrand": "1/sqrt(x)", "var": "x", "a": "0", "b": "1"}, XPV), _sol("2"), "CORRECT"),
     (_ir("derivative", {"f": "sqrt(x**2)", "var": "x", "at": "-1"}, XPV), _sol("1"), "UNKNOWN"),
     (_ir("derivative", {"f": "sin(pi*n)", "var": "n", "at": "1"}, [{"name": "n", "domain": "positive_integer"}]),
@@ -243,6 +255,92 @@ XPV = [{"name": "x", "domain": "positive_real"}]
     (_ir("evaluate", {"expr": "Sum(1/(k - 2), (k, 0, 3))"}, KP), _sol("1/2"), "UNKNOWN"),
 ])
 def test_bound_variable_verdicts(ir, sol, verdict):
+    assert _verdict(ir, sol) == verdict
+
+
+# Limit, limit, at and Subs bind their variable too. Measured on 9ee5df9 (the Limit kept the declared
+# symbol, at() read its body with it): each wrong answer below was CORRECT and each wrong step verified.
+@pytest.mark.parametrize("expr,wrong,right", [
+    ("Limit(sqrt(x**2)/x, x, -oo)", "1", "-1"), ("limit(sqrt(x**2)/x, x, -oo)", "1", "-1"),
+    ("Limit(Abs(x)/x, x, 0, '-')", "1", "-1"), ("at(sqrt(x**2), x, -1)", "-1", "1"),
+    ("at(diff(sqrt(x**2), x), x, -1)", "1", "-1"),
+    ("(Limit)(sqrt(x**2)/x, x, -oo)", "1", "-1"), ("(at)(sqrt(x**2), x, -1)", "-1", "1"),
+])
+def test_a_point_binder_does_not_take_the_declaration_of_its_variable(expr, wrong, right):
+    ir = _ir("evaluate", {"expr": expr}, XPV)
+    assert _verdict(ir, _sol(wrong)) == "INCORRECT"
+    assert _verdict(ir, _sol(right)) == "CORRECT"
+
+
+def _step_statuses(r):
+    return [s["status"] for layer in r.layers if layer.layer == "steps.refute"
+            for s in layer.evidence.get("steps", [])]
+
+
+@pytest.mark.parametrize("claim", ["Limit(sqrt(x**2)/x, x, -oo) = 1", "at(sqrt(x**2), x, -1) = -1",
+                                   "Subs(sqrt(x**2), x, -1) = -1", "Subs(Derivative(sqrt(x**2), x), x, -1) = 1",
+                                   "(Limit)(sqrt(x**2)/x, x, -oo) = 1"])
+def test_a_wrong_point_binder_step_is_refuted(claim):
+    r = verify(_ir("evaluate", {"expr": "x + 1"}, XPV, ["x = 2"]), _sol("3", steps=[_step(1, "compute", claim)]))
+    assert r.verdict == "INCORRECT" and r.first_bad_step == 1
+
+
+def test_a_substitution_does_not_reach_a_limits_variable():
+    # Limit(Abs(x)/x, x, 0).subs(x, 5) is Limit(1, 5, 0): the step was verified at the premises' x = 5
+    r = verify(_ir("solve_equation", {"var": "x"}, [{"name": "x"}], ["x - 5 = 0"], "set"),
+               _sol("{5}", "set", steps=[_step(1, "eq", "x*Limit(Abs(x)/x, x, 0) = x")]))
+    assert _step_statuses(r) and _step_statuses(r)[0] != "verified"
+
+
+def test_point_binder_scopes():
+    ns = _ns(k=K, x=XP)
+    for nested in ("Limit(at(x**2, x, 2)*x, x, 1)", "at(x + Limit(x/(x + 1), x, 5), x, 7)",
+                   "(at)(x + (Limit)(x/(x + 1), x, 5), x, 7)"):
+        with pytest.raises(ParseError):                    # one name bound inside a binder of that name
+            parse_expr_str(nested, ns)
+    # the binder's name in parentheses is the same call (it went past a text prefilter)
+    assert parse_expr_str("(Limit)(sqrt(x**2)/x, x, -oo)", ns).doit() == -1
+    assert parse_expr_str("(at)(sqrt(x**2), x, -1)", ns) == 1
+    assert parse_expr_str("Sum(at(sqrt(x**2), x, k), (k, -2, 2))", ns).doit() == 6   # the point is the sum's k
+    assert parse_expr_str("at(x**2, x, x + 1)", ns) == (XP + 1) ** 2                  # the point is read outside
+    e = parse_expr_str("x + Limit(sqrt(x**2)/x, x, -oo)", ns)
+    assert XP in e.free_symbols and e.doit() == XP - 1
+    assert parse_expr_str("at(sqrt(x**2), x, I)", ns) == sp.I                         # no real fact at I
+    for text in ("Limit(Abs(x)/x, z=x, z0=0)", "Limit(sqrt(x**2)/x, Symbol('x'), -oo)",
+                 "at(sqrt(x**2), -x, -1)", "at(sqrt(x**2), pi, 1)"):
+        with pytest.raises(ParseError):
+            parse_expr_str(text, ns)
+
+
+NPV = [{"name": "n", "domain": "positive_integer"}]
+
+
+@pytest.mark.parametrize("ir,sol,verdict", [
+    # the approach leaves the declared domain: each wrong claim was CORRECT on 9ee5df9
+    (_ir("limit", {"expr": "sqrt(x**2)", "var": "x", "to": "-1"}, XPV), _sol("-1"), "UNKNOWN"),
+    (_ir("limit", {"expr": "sqrt(x**2)/x", "var": "x", "to": "-oo"}, [{"name": "x", "domain": "nonneg_real"}]),
+     _sol("1"), "UNKNOWN"),
+    (_ir("limit", {"expr": "sin(pi*n)/(n - 1)", "var": "n", "to": "1"}, NPV), _sol("0"), "UNKNOWN"),
+    # controls: a sequence limit at oo, a left limit inside the domain, the closed end read from inside
+    (_ir("limit", {"expr": "sin(pi*n)", "var": "n", "to": "oo"}, NPV), _sol("0"), "CORRECT"),
+    (_ir("limit", {"expr": "sqrt(x**2)/x", "var": "x", "to": "2", "side": "-"}, XPV), _sol("1"), "CORRECT"),
+    (_ir("limit", {"expr": "Abs(x)/x", "var": "x", "to": "0"}, XPV), _sol("1"), "CORRECT"),
+    # was INCORRECT: the left side was computed with the positive symbol at negative points
+    (_ir("limit", {"expr": "floor(x)", "var": "x", "to": "0"}, XPV), _sol("0"), "CORRECT"),
+    # a derivative, tangent, antiderivative or extremum in an integer variable: sin(pi*n) folded to 0
+    (_ir("derivative", {"f": "sin(pi*n)", "var": "n", "at": "1"}, [{"name": "n", "domain": "integer"}]),
+     _sol("0"), "UNKNOWN"),
+    (_ir("derivative", {"f": "sin(pi*n)", "var": "n"}, NPV), _sol("0", "expression"), "UNKNOWN"),
+    (_ir("derivative", {"f": "sin(pi*n)", "var": "n"}, NPV), _sol("pi*cos(pi*n)", "expression"), "UNKNOWN"),
+    (_ir("tangent_line", {"f": "sin(pi*n)", "var": "n", "at": "1"}, NPV + [{"name": "y"}]),
+     _sol("y = 0", "equation"), "UNKNOWN"),
+    (_ir("antiderivative", {"integrand": "sin(pi*n)", "var": "n"}, NPV), _sol("7", "expression"), "UNKNOWN"),
+    (_ir("extremum", {"f": "-(n - 3/2)**2", "var": "n", "interval": "[0, 3]", "which": "max"}, NPV),
+     _sol("0"), "UNKNOWN"),
+])
+def test_a_task_variable_keeps_its_declared_domain(ir, sol, verdict):
+    """30 Sep 2026: the task's own variable keeps its declared assumptions, so a limit that
+    approaches outside them, or calculus in a variable declared an integer, is no question."""
     assert _verdict(ir, sol) == verdict
 
 
@@ -409,8 +507,9 @@ NP = [{"name": "n", "domain": "positive_integer"}]
     # LaTeX arguments are exact integers too
     (_ir("evaluate", {"expr": r"\gcd(2^{2}, 6)"}), "4", "INCORRECT"),
     (_ir("evaluate", {"expr": r"\operatorname{lcm}(2^{2}, 6)"}), "12", "CORRECT"),
-    # gcd off the integers has no value: nothing built on it is certified
-    (_ir("evaluate", {"expr": "x + gcd(x, 2) - gcd(2, x)"}, [{"name": "x"}], ["x = 1/2"]), "1/2", "NOT_CORRECT"),
+    # gcd off the RATIONALS has no value: nothing built on it is certified (sharp: at x = 1/2 the
+    # school rule gives gcd(1/2, 2) = 1/2, so the value 1/2 is right; x = sqrt(2) is the case)
+    (_ir("evaluate", {"expr": "x + gcd(x, 2) - gcd(2, x)"}, [{"name": "x"}], ["x = 1/2"]), "1/2", "CORRECT"),
     (_ir("simplify_expression", {"expr": "x"}, [{"name": "x"}], shape="expression"), "x + gcd(x, 2) - gcd(2, x)",
      "NOT_CORRECT"),
     # the question's gcd written back in another form is not a value
@@ -420,9 +519,63 @@ NP = [{"name": "n", "domain": "positive_integer"}]
     (_ir("evaluate", {"expr": "gcd(84, 120)"}), "12", "CORRECT"),
     # arccot is unary
     (_ir("evaluate", {"expr": "pi/2 - atan(2)"}), "acot(2, 9)", "UNKNOWN"),
+    # (30 Sep 2026) gcd of an irrational number: the expression does not exist at x = sqrt(2)
+    (_ir("evaluate", {"expr": "x + gcd(x, 2) - gcd(2, x)"}, [{"name": "x"}], ["x = sqrt(2)"]), "sqrt(2)",
+     "NOT_CORRECT"),
 ])
 def test_notation_audit_verdicts(ir, claim, verdict):
     kind = "expression" if ir["answer_shape"] == "expression" else "value"
+    test_audit_verdicts(ir, _sol(claim, kind), verdict)
+
+
+XV = [{"name": "x"}]
+
+
+@pytest.mark.parametrize("ir,claim,kind,verdict", [
+    # 30 Sep 2026, measured on 9ee5df9: the written form's gcd/lcm (rational arguments) and factorial
+    # (a natural number) gave no definedness condition, so an expression that cancels them was
+    # certified where it does not exist; each NOT_ verdict below was the opposite one before
+    (_ir("solve_equation", {"var": "x", "equation": "(x - 1/2)*(x - sqrt(2)) = gcd(x, 2) - gcd(2, x)"}, XV,
+         shape="set"), "{1/2, sqrt(2)}", "set", "NOT_CORRECT"),
+    (_ir("solve_equation", {"var": "x", "equation": "(x - 1/2)*(x - sqrt(2)) = gcd(x, 2) - gcd(2, x)"}, XV,
+         shape="set"), "{1/2}", "set", "NOT_INCORRECT"),
+    (_ir("solve_inequality", {"var": "x", "inequality": "x + gcd(x, 2) - gcd(2, x) < 1/2"}, XV, shape="set"),
+     "(-oo, 1/2)", "interval", "NOT_CORRECT"),
+    (_ir("simplify_expression", {"expr": "x"}, XV, shape="expression"), "x + gcd(x, 2)*0", "expression",
+     "NOT_CORRECT"),
+    (_ir("evaluate", {"expr": "x + factorial(x) - factorial(x)"}, XV, ["x = -3"]), "-3", "value", "NOT_CORRECT"),
+    (_ir("evaluate", {"expr": "x + factorial(x) - factorial(x)"}, XV, ["x = 1/2"]), "1/2", "value", "NOT_CORRECT"),
+    (_ir("solve_equation", {"var": "x", "equation": "(x + 3)*(x - 2) = factorial(x) - factorial(x)"}, XV,
+         shape="set"), "{-3, 2}", "set", "NOT_CORRECT"),
+    (_ir("solve_equation", {"var": "x", "equation": "(x + 3)*(x - 2) = factorial(x) - factorial(x)"}, XV,
+         shape="set"), "{2}", "set", "NOT_INCORRECT"),
+    (_ir("simplify_expression", {"expr": "x"}, XV, shape="expression"), "x + factorial(x) - factorial(x)",
+     "expression", "NOT_CORRECT"),
+    # controls: where the arguments are in the set, the value stands
+    (_ir("evaluate", {"expr": "x + factorial(x) - factorial(x)"}, XV, ["x = 3"]), "3", "value", "CORRECT"),
+    (_ir("evaluate", {"expr": "gcd(a, b)"}, [{"name": "a"}, {"name": "b"}], ["a = 12", "b = 18"]), "6", "value",
+     "CORRECT"),
+    (_ir("evaluate", {"expr": "gcd(a, b)"}, [{"name": "a"}, {"name": "b"}], ["a = 12", "b = 18"]), "3", "value",
+     "INCORRECT"),
+    (_ir("evaluate", {"expr": "factorial(n)/factorial(n - 3)"}, [{"name": "n"}], ["n = 6"]), "120", "value",
+     "CORRECT"),
+])
+def test_gcd_and_factorial_arguments_are_definedness_conditions(ir, claim, kind, verdict):
+    test_audit_verdicts(ir, _sol(claim, kind), verdict)
+
+
+@pytest.mark.parametrize("ir,claim,kind,verdict", [
+    # a gcd/lcm of numbers in the claim is computed by the parser: the verifier would produce the answer
+    # (principle 2; GCD-10 of the V14 audit: these were CORRECT)
+    (_ir("evaluate", {"expr": "gcd(84, 120)"}), "gcd(84, 120)*1", "value", "UNKNOWN"),
+    (_ir("evaluate", {"expr": "gcd(84, 120)"}), "gcd(84, 120) + 0", "value", "UNKNOWN"),
+    (_ir("evaluate", {"expr": "gcd(84, 120)"}), r"\operatorname{lcm}(4, 3)", "value", "UNKNOWN"),
+    (_ir("evaluate", {"expr": "gcd(n, 4)"}, **N6), "gcd(6, 4)", "value", "UNKNOWN"),
+    # a gcd of the problem's own symbol is a value (tests/test_audit_2026_09_29_v14.py::test_gcd_is_symmetric)
+    (_ir("evaluate", {"expr": "gcd(n, 4)"}, [{"name": "n", "domain": "positive_integer"}], shape="expression"),
+     "gcd(4, n)", "expression", "CORRECT"),
+])
+def test_a_claim_that_computes_a_gcd_is_not_a_value(ir, claim, kind, verdict):
     test_audit_verdicts(ir, _sol(claim, kind), verdict)
 
 

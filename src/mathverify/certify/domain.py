@@ -102,12 +102,57 @@ def definedness_conditions(expr, var) -> list[Any]:
         elif isinstance(node, (sp.asin, sp.acos)):
             add(node.args[0] >= -1)
             add(node.args[0] <= 1)
+        elif type(node).__name__ in ("gcd", "lcm"):
+            # normalize.parse.gcd/lcm have a value only at rational numbers: x + gcd(x, 2) - gcd(2, x)
+            # read as x was certified a simplification of x on all of R, and its value at
+            # x = sqrt(2) was certified (30 Sep 2026). No interval rule decides the condition: the
+            # callers abstain unless a point makes it true or false.
+            for a in node.args:
+                add(sp.Contains(a, S.Rationals))
+        elif isinstance(node, sp.factorial):
+            # n! of the curriculum: n a natural number. x + x! - x! at x = -3 was certified -3, and
+            # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026)
+            add(sp.Contains(node.args[0], S.Naturals0))
+        elif isinstance(node, sp.binomial):
+            # C(n, r) of the curriculum, like n!: C(x, 2) at x = -3 was certified while P(x, 2),
+            # built on factorial, was not (review of 30 Sep 2026)
+            for a in node.args:
+                add(sp.Contains(a, S.Naturals0))
         elif isinstance(node, sp.acosh):
             add(node.args[0] >= 1)
         elif isinstance(node, sp.atanh):
             add(node.args[0] > -1)
             add(node.args[0] < 1)
     return conds
+
+
+_NUMBER_SETS = (S.Rationals, S.Integers, S.Naturals0, S.Naturals)
+
+
+def decide_membership(a, s) -> bool | None:
+    """Membership of the constant `a` in one of the number sets the definedness conditions name.
+    SymPy decides it for sqrt(2) but leaves it standing for sqrt(2) + sqrt(3), and the value
+    x + gcd(x, 2) - gcd(2, x) at that x was certified (review of 30 Sep 2026). An algebraic number is
+    rational exactly when its minimal polynomial is linear; that polynomial then gives its value.
+    Anything else (pi + E) stays undecided."""
+    try:
+        r = s.contains(a)
+    except Exception:  # noqa: BLE001
+        return None
+    if r is sp.true or r is sp.false:
+        return bool(r)
+    if s not in _NUMBER_SETS or not isinstance(a, sp.Expr) or a.free_symbols or a.is_algebraic is not True \
+            or sp.count_ops(a) > 40:
+        return None
+    try:
+        p = sp.minimal_polynomial(a, sp.Dummy("t"), polys=True)
+    except Exception:  # noqa: BLE001
+        return None
+    if p.degree() != 1:
+        return False                                  # irrational: in none of these sets
+    c1, c0 = p.all_coeffs()
+    r = s.contains(sp.Rational(-c0, c1))
+    return bool(r) if r in (sp.true, sp.false) else None
 
 
 def _certified_compare(lhs, rhs) -> int | str | None:
@@ -298,6 +343,16 @@ def relation_holds_at(rel, var, c) -> bool | None:
         return True
     if rel is sp.false:
         return False
+    if isinstance(rel, sp.Contains):
+        # a gcd/lcm or factorial argument's set (definedness_conditions): SymPy decides membership
+        # of an exact number (sqrt(2) is not rational) and leaves it standing when it cannot
+        try:
+            r = rel.subs(var, c)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(r, sp.Contains):
+            return decide_membership(r.args[0], r.args[1])
+        return True if r is sp.true else False if r is sp.false else None
     if not isinstance(rel, sp.core.relational.Relational):
         return None
     # never let `rel.subs` auto-evaluate a numeric Eq/inequality: Float rounding would
@@ -364,6 +419,13 @@ def in_domain(dom: sp.Set, c) -> bool | None:
         r = dom.contains(c)
     except Exception:
         r = None
+    if isinstance(r, sp.Basic) and r.has(sp.Contains):
+        # a domain cut by a gcd/lcm or factorial condition (Ctx.domain_for): decide each membership
+        decided = {m: decide_membership(*m.args) for m in r.atoms(sp.Contains)}
+        try:
+            r = r.xreplace({m: sp.true if d else sp.false for m, d in decided.items() if d is not None})
+        except Exception:  # noqa: BLE001
+            pass
     if r is sp.true:
         return True
     if r is sp.false:
@@ -444,6 +506,8 @@ def closed_condition_undecided(conds) -> bool:
     (audit of 29 Sep 2026). The expression may be undefined everywhere; the caller abstains."""
     from ..equiv.forms import checked_forms, has_closed_form
     for c in conds:
+        if isinstance(c, sp.Contains) and not c.free_symbols:
+            return True                     # a membership SymPy could not decide (closed, left standing)
         if isinstance(c, sp.core.relational.Relational) and not c.free_symbols:
             try:
                 if has_closed_form(c):

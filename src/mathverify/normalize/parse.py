@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import math
 import re
+import threading
 from typing import Any
 
 import sympy as sp
@@ -179,6 +180,19 @@ def _integer_op(cls):
     return call
 
 
+def _integer_only_op(cls, name):
+    """`igcd`/`ilcm`: SymPy's integer-only spellings. SymPy's own refused a symbol, so igcd(n, 2)
+    with n an integer was unreadable (30 Sep 2026); here it is the integer gcd/lcm, still refused
+    for an argument not known to be an integer (no fraction rule under the integer name)."""
+    def call(*args):
+        args = tuple(sympify_nontext(a) for a in args)
+        if any(getattr(a, "is_integer", None) is not True for a in args):
+            raise ValueError(f"{name} takes integers")
+        return cls(*args)
+    call.__name__ = name
+    return call
+
+
 def _set_op(op):
     """Union/Intersection/Complement written in SymPy's own syntax, their arguments' endpoints made
     one spelling first (equiv.sets.unify_endpoints), as for the `U` notation: SymPy merged
@@ -282,7 +296,8 @@ _SAFE_NAMES: dict[str, Any] = {
     "exp": sp.exp, "log": sp.log, "ln": sp.log, "sqrt": sp.sqrt, "cbrt": sp.cbrt, "root": sp.root,
     "Abs": sp.Abs, "abs": sp.Abs, "floor": sp.floor, "ceiling": sp.ceiling, "ceil": sp.ceiling,
     "frac": sp.frac, "sign": sp.sign, "Mod": sp.Mod, "mod": sp.Mod,
-    "gcd": _integer_op(gcd), "lcm": _integer_op(lcm), "igcd": sp.igcd, "ilcm": sp.ilcm,
+    "gcd": _integer_op(gcd), "lcm": _integer_op(lcm), "igcd": _integer_only_op(gcd, "igcd"),
+    "ilcm": _integer_only_op(lcm, "ilcm"),
     "factorial": sp.factorial, "binomial": sp.binomial, "C": sp.binomial, "comb": sp.binomial,
     "P": _perm, "perm": _perm, "deg": _deg,
     "dist": _dist, "slope": _slope, "tri_area": _tri_area, "dot": _dot, "point_line_dist": _point_line_dist,
@@ -625,8 +640,7 @@ def sympify_nontext(v):
 # (`steps.deterministic._with_bound_dummies`) already read it; SymPy sums and integrates such a
 # symbol like the declared one (measured on the common sums and integrals), and an integer
 # assumption would be wrong for limits that are not integers (`Sum(sin(pi*k), (k, 1/2, 5/2))`).
-# A Limit keeps the declared symbol: there the declaration IS the range (an integer n makes
-# n → oo a limit of a sequence: sin(pi*n) → 0, which as a function has no limit).
+# A Limit, at() and Subs bind their variable too: see `_rebind_point_dummies`.
 _RANGE_BINDERS = ("Sum", "Product", "Integral", "integrate")
 
 
@@ -708,6 +722,184 @@ def _rebind_range_dummies(code: str, local_dict: dict[str, Any], raw: str) -> tu
     return b"\n".join(lines).decode("utf-8"), {f: Symbol(v) for f, (_, _, _, v) in zip(fresh, bindings)}
 
 
+# Binders of a POINT: the variable of a limit approaches its point, the variable of at()/Subs is
+# evaluated at it. Read with the IR symbol of the same name, the body took that symbol's declaration
+# before the point was even seen: with x declared positive, sqrt(x**2)/x was 1, so
+# Limit(sqrt(x**2)/x, x, -oo) = 1, Limit(Abs(x)/x, x, 0, '-') = 1 and at(sqrt(x**2), x, -1) = -1
+# were certified CORRECT, and the compute step "at(sqrt(x**2), x, -1) = -1" was verified. The IR
+# symbol as a Limit's variable was also reached by every substitution of it (SymPy's Limit.subs
+# rewrites its variable: Limit(Abs(x)/x, x, 0).subs(x, 5) is Limit(1, 5, 0)), so the eq step
+# "x*Limit(Abs(x)/x, x, 0) = x" was verified at the premises' point x = 5 (V14, 30 Sep 2026).
+# ConditionSet binds its variable over its base set: with x positive, ConditionSet(x, x < 0, Reals)
+# was the empty set.
+_POINT_BINDERS = ("Limit", "limit", "at", "Subs", "ConditionSet")
+# the argument positions of (variable, body, point); a ConditionSet's "point" is its base set
+_POINT_LAYOUT = {"Limit": (1, 0, 2), "limit": (1, 0, 2), "at": (1, 0, 2), "Subs": (1, 0, 2),
+                 "ConditionSet": (0, 1, 2)}
+_LIMIT_SIDE_KEYWORDS = frozenset({"dir", "d"})
+# a point written with one of these is not evaluated to decide the facts of the variable (it would
+# be computed twice, and an unevaluated operation answers an assumption query by recomputing it)
+_NO_FACT_CALLS = frozenset(COMPUTING_OPERATORS) | frozenset(_POINT_BINDERS) | frozenset(_RANGE_BINDERS)
+_POINT_OPERATIONS = (sp.Sum, sp.Product, sp.Integral, sp.Limit, sp.Derivative, sp.Subs)
+_POINT_DUMMIES: dict[tuple[str, frozenset], sp.Dummy] = {}
+_POINT_DUMMIES_LOCK = threading.Lock()
+
+
+def _binds_point(obj) -> bool:
+    """SymPy's point binders, this module's, or a callable that says it builds one (the step
+    namespace's unevaluated `Limit` and `at`)."""
+    return any(obj is b for b in (_Limit, _limit, _at, sp.Limit, sp.limit, sp.Subs, sp.ConditionSet)) \
+        or getattr(obj, "binds_point", False) is True
+
+
+def _point_dummy(name: str, facts: frozenset) -> sp.Dummy:
+    """THE bound variable of this name and these facts: one Dummy per pair, so two readings of one
+    binder are the same expression, and never the IR's Symbol, which a substitution would reach."""
+    key = (name, frozenset(facts))
+    with _POINT_DUMMIES_LOCK:
+        d = _POINT_DUMMIES.get(key)
+        if d is None:
+            d = _POINT_DUMMIES[key] = sp.Dummy(name, **{f: True for f in sorted(key[1])})
+    return d
+
+
+def _point_facts(kind: str, declared, p, side) -> frozenset:
+    """The facts the bound variable has near its point `p` (a value, or None when it was not
+    evaluated). A limit at oo keeps the declaration (an integer n makes it the limit of a sequence:
+    sin(pi*n) -> 0, which as a function has none); at -oo only integrality; at a real point the
+    variable is real, and positive when the point is positive or it is 0 approached from the right.
+    at()/Subs: real at a real point, positive at a positive one (a neighbourhood: a derivative there
+    is two-sided). ConditionSet: real over a set of reals, integer over a set of integers. Anything
+    else: no fact at all, the most general reading."""
+    if p is None or isinstance(p, (str, bytes)):
+        return frozenset()
+    try:
+        with sp.evaluate(True):
+            p = sympify_nontext(p)
+            if p.has(*_POINT_OPERATIONS):
+                return frozenset()
+            if kind == "ConditionSet":
+                if not isinstance(p, sp.Set) or p.is_subset(S.Reals) is not True:
+                    return frozenset()
+                return frozenset({"real", "integer"} if p.is_subset(S.Integers) is True else {"real"})
+            if kind in ("Limit", "limit"):
+                if p == oo:
+                    return frozenset({"real"} | {f for f in ("integer", "positive", "nonnegative")
+                                                 if getattr(declared, f"is_{f}", None) is True})
+                if p == -oo:
+                    return frozenset({"real"} | ({"integer"} if getattr(declared, "is_integer", None) is True
+                                                 else set()))
+                if p.is_real is not True:
+                    return frozenset()
+                right = p.is_positive is True or (p.is_zero is True and side == "+")
+                return frozenset({"real", "positive"} if right else {"real"})
+            if p.is_real is not True:
+                return frozenset()
+            return frozenset({"real", "positive"} if p.is_positive is True else {"real"})
+    except Exception:  # noqa: BLE001 - no decision: the variable then has no fact
+        return frozenset()
+
+
+def _point_var(node):
+    """The Name a point binder's variable is written as (`+x` is x), or None."""
+    while isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.UAdd):
+        node = node.operand
+    return node if isinstance(node, ast.Name) else None
+
+
+def _rebind_point_dummies(code: str, local_dict: dict[str, Any], global_dict: dict[str, Any], raw: str,
+                          names) -> tuple[str, dict[str, Any]] | None:
+    """`code` with the variable of every Limit, limit, at, Subs and ConditionSet renamed, inside its body only, to
+    a fresh name for the bound variable (`_point_dummy`) with the facts of its point; None when there
+    is nothing to rename. The point and the side are read in the enclosing scope. A binder inside
+    another of the same name is refused. A variable that is not written as a name bound to a symbol
+    (`at(x**2, 2*x, 1)`, `Subs(f, (x,), (1,))`, `Limit(f, Symbol('x'), 0)`), or that is passed by
+    keyword, is refused: it would be read as the IR's symbol or as a substitution of an expression."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None                               # parse_expr reports it
+    nodes = list(ast.walk(tree))
+    bindings: list[tuple[ast.Call, ast.Name, str]] = []
+    for node in nodes:
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _POINT_BINDERS
+                and _binds_point(local_dict.get(node.func.id))):
+            continue
+        kind = node.func.id
+        allowed = _LIMIT_SIDE_KEYWORDS if kind in ("Limit", "limit") else frozenset()
+        if any(kw.arg not in allowed for kw in node.keywords):
+            raise ParseError(f"{raw!r} passes an argument of {kind} by keyword: not read")
+        iv, ib, ip = _POINT_LAYOUT[kind]
+        if len(node.args) <= max(iv, ib) or (kind != "ConditionSet" and len(node.args) <= ip):
+            continue                              # SymPy refuses it
+        var = _point_var(node.args[iv])
+        if var is None or not isinstance(local_dict.get(var.id), Symbol):
+            raise ParseError(f"{raw!r}: the variable of {kind} is not written as a variable: not read")
+        bindings.append((node, var, var.id))
+    if not bindings:
+        return None
+    # A binder inside the body of another of the same name is refused, as for the range binders: the
+    # two share one bound variable when their facts agree, and the outer substitution then rewrote
+    # the inner limit's variable (at(x + Limit(x/(x + 1), x, 5), x, 7) read as 7 + Limit(7/8, 7, 5),
+    # review of 30 Sep 2026).
+    calls = {id(c): v for c, _, v in bindings}
+    for call, _, v in bindings:
+        body = call.args[_POINT_LAYOUT[call.func.id][1]]
+        if any(calls.get(id(n)) == v for n in ast.walk(body) if n is not call):
+            raise ParseError(f"{raw!r} binds {v!r} inside a binder of the same name: not read")
+    owner: dict[int, int] = {}                    # id(Name node) -> index of the binding it belongs to
+    for bi in reversed(range(len(bindings))):
+        call, var, v = bindings[bi]
+        body = call.args[_POINT_LAYOUT[call.func.id][1]]
+        for sub in [var] + [n for n in ast.walk(body) if isinstance(n, ast.Name) and n.id == v]:
+            owner.setdefault(id(sub), bi)
+    used = set(local_dict) | set(global_dict) | {n.id for n in nodes if isinstance(n, ast.Name)}
+    fresh: list[str] = []
+    for _, _, v in bindings:
+        i = 0
+        while f"_point_{v}_{i}" in used:
+            i += 1
+        used.add(f"_point_{v}_{i}")
+        fresh.append(f"_point_{v}_{i}")
+    edits = sorted(((n.lineno, n.col_offset, n.end_col_offset, fresh[owner[id(n)]])
+                    for n in nodes if isinstance(n, ast.Name) and id(n) in owner), reverse=True)
+    lines = code.encode("utf-8").split(b"\n")
+    for lineno, start, end, new in edits:          # offsets are UTF-8 byte offsets of the line
+        line = lines[lineno - 1]
+        lines[lineno - 1] = line[:start] + new.encode("ascii") + line[end:]
+    new_code = b"\n".join(lines).decode("utf-8")
+    _check_code(new_code, raw, set(names) | set(fresh))
+    # the same tree with the names replaced: its walk visits the nodes in the same order
+    new_nodes = list(ast.walk(ast.parse(new_code, mode="eval")))
+    if len(new_nodes) != len(nodes):
+        raise ParseError(f"{raw!r}: the bound variables could not be renamed: not read")
+    position = {id(n): i for i, n in enumerate(nodes)}
+    dummies: dict[str, Any] = {}
+    # outer binders first (ast.walk is breadth-first): a point may name an enclosing binder's variable
+    for bi, (call, var, v) in enumerate(bindings):
+        ip = _POINT_LAYOUT[call.func.id][2]
+        point = new_nodes[position[id(call.args[ip])]] if len(call.args) > ip else None
+        side = None
+        if call.func.id in ("Limit", "limit") and len(call.args) > 3 and isinstance(call.args[3], ast.Constant):
+            side = call.args[3].value
+        for kw in call.keywords:
+            if isinstance(kw.value, ast.Constant):
+                side = kw.value.value
+        value = None
+        if point is not None and not any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                                         and n.func.id in _NO_FACT_CALLS for n in ast.walk(point)):
+            try:
+                expr = compile(ast.fix_missing_locations(ast.Expression(body=point)), "<point>", "eval")
+                with sp.evaluate(True):
+                    value = eval(expr, dict(global_dict, __builtins__={}),  # noqa: S307 - checked above
+                                 dict(local_dict, **dummies))
+            except Exception:  # noqa: BLE001 - no decision: the variable then has no fact
+                value = None
+        declared = local_dict[v]                  # a Symbol (checked above), maybe a range dummy
+        dummies[fresh[bi]] = _point_dummy(declared.name, _point_facts(call.func.id, declared, value, side))
+    return new_code, dummies
+
+
 def _integer_indices(expr):
     """The index of a Sum/Product whose limits are integers (or ±oo) runs over integers: the dummy
     becomes an integer symbol there. Without it SymPy no longer closed Σ cos(πk)/k² and the numeric
@@ -761,15 +953,23 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     _check_code(code, s, names)
     rebound = _rebind_range_dummies(code, local_dict, s) \
         if rebind and any(b in code for b in _RANGE_BINDERS) else None
-    if rebound is None:
+    dummies: dict[str, Any] = {}
+    if rebound is not None:
+        code, dummies = rebound
+        _check_code(code, s, names | set(dummies))
+    pointed = _rebind_point_dummies(code, dict(local_dict, **dummies), global_dict, s, names | set(dummies)) \
+        if rebind and any(b in code for b in _POINT_BINDERS) else None
+    if pointed is not None:
+        code, more = pointed
+        dummies = dict(dummies, **more)
+    if rebound is None and pointed is None:
         out = parse_expr(s, local_dict=local_dict, global_dict=global_dict,
                          transformations=transformations, evaluate=evaluate)
     else:
-        code, dummies = rebound
-        _check_code(code, s, names | set(dummies))
         # the code is already transformed: no transformation runs twice on it
         out = parse_expr(code, local_dict=dict(local_dict, **dummies), global_dict=global_dict,
                          transformations=(), evaluate=evaluate)
+    if rebound is not None:
         if evaluate:
             out = _integer_indices(out)
         else:
