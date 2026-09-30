@@ -79,6 +79,12 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
     measured to be off by 5e-3 on the endpoint-singular ln x/sqrt x.
     """
     ev: dict[str, Any] = {"integrand": str(integrand), "a": str(a), "b": str(b)}
+    if isinstance(integrand, sp.Basic) and integrand.has(sp.Integral, sp.Sum, sp.Product, sp.Limit):
+        # a form inside the integrand is evaluated by its own quadrature or summation, whose error
+        # the ladder does not see: the constant ∫|cos t| over [-pi, pi] came out 3.99999920... at 30
+        # and at 50 digits, "converged", and the true value 4 was refuted (audit of 29 Sep 2026)
+        ev["error"] = "a form inside the integrand has no confirmed numeric value"
+        return None, ev
     a, b = sp.sympify(a), sp.sympify(b)
     pts = find_breakpoints(integrand, var, a, b, timeout)
     ev["breakpoints"] = pts
@@ -454,6 +460,13 @@ def verify(ir, solution, ctx: Ctx):
     with Timer() as t:
         var = ctx.sym(p.get("var", "x"))
         ev: dict[str, Any] = {}
+        if kind != "definite_integral" and getattr(var, "is_integer", None):
+            # a derivative or antiderivative in a variable declared an integer is no question, and
+            # its assumption folds the function first: with n a positive integer sin(pi*n) was 0, so
+            # "d/dn at 1 is 0" (it is -pi), "y = 0 is the tangent" and "7 is an antiderivative"
+            # were certified (30 Sep 2026)
+            return unknown(LAYER, "variable_declared_integer", t.ms, {"var": str(var)},
+                           flags=["variable_declared_integer"])
         if kind == "antiderivative":
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:
@@ -482,7 +495,13 @@ def verify(ir, solution, ctx: Ctx):
                                                 F_extra=F_extra)
             conf = 0.99 if ev.get("method") == "symbolic" else 0.97
         elif kind == "definite_integral":
-            integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
+            # the variable of a definite integral runs over [a, b], not over its declared domain (the
+            # rule of normalize.parse for a written Integral): with x declared positive, ∫_{-1}^{1} |x| dx
+            # was read as ∫ x dx = 0 and the claim 0 certified (audit of 29 Sep 2026)
+            from ..normalize.parse import parse_expr_str
+            var = sp.Symbol(var.name, real=True)
+            ns_i = dict(ctx.ns, **{var.name: var})
+            integrand, err = parse_or_unknown(LAYER, parse_expr_str, p["integrand"], ns_i)
             if err:
                 return err
             a, err = parse_or_unknown(LAYER, ctx.expr, str(p["a"]))
@@ -494,7 +513,7 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
-            undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ctx.ns,
+            undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ns_i,
                                                              timeout=ctx.timeout)
             if undefined is not False:
                 return unknown(LAYER, "integrand_undefined_on_the_interval_as_written" if undefined

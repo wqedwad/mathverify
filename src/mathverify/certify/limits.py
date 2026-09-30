@@ -24,7 +24,7 @@ from ..equiv.numeric import to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import definedness_conditions, written_definedness
+from .domain import definedness_conditions, written_closed_undecided, written_definedness
 
 LAYER = "certify.limits"
 
@@ -127,7 +127,7 @@ def _oscillation_risk(expr, var, point, dirs) -> bool:
     return False
 
 
-def _oscillation(expr, var, point, side) -> list[float] | None:
+def _oscillation(expr, var, point, side) -> list[tuple[float, float, float]] | None:
     """Worker: relative spread of the (real) values on shrinking windows approaching the point.
     Evidence of genuine oscillation only: an identity such as sin^2 + cos^2 has spread ~1e-30."""
     f = sp.lambdify(var, expr, "mpmath")
@@ -159,8 +159,17 @@ def _oscillation(expr, var, point, side) -> list[float] | None:
             if len(vals) < 100:
                 return None
             hi, lo = max(vals), min(vals)
-            out.append(float((hi - lo) / max(1, abs(hi), abs(lo))))
+            out.append((float((hi - lo) / max(1, abs(hi), abs(lo))), float(lo) if abs(lo) < 1e300 else float(mp.sign(lo)) * 1e300,
+                        float(hi) if abs(hi) < 1e300 else float(mp.sign(hi)) * 1e300))
     return out
+
+
+def _grows_without_bound(windows) -> bool:
+    """The values on the nearest window stay on one side of 0 and their envelope towards 0 grew a
+    hundredfold from the first window: they tend to ±oo while oscillating, which is no DNE.
+    x(2 + sin x) -> oo was certified as DNE and oo refuted (audit of 29 Sep 2026)."""
+    (_, lo0, hi0), (_, lo1, hi1) = windows[0], windows[-1]
+    return (lo0 > 0 and lo1 >= 100 * lo0) or (hi0 < 0 and hi1 <= 100 * hi0)
 
 
 def _limit_dir(expr, var, point, d):
@@ -195,13 +204,22 @@ def _one_side(expr, var, point, d, timeout) -> tuple[str, Any, dict[str, Any]]:
         if _probe_agrees(vals, v) is False:
             ev["flags"] = ["symbolic_numeric_disagreement"]
             return "UNKNOWN", v, ev
+        if all(x_ is None for x_ in vals):
+            # nothing near the point could be evaluated, so nothing corroborates SymPy, which
+            # substitutes into a function it does not know: lim_{x->0} gcd(x, 4) = 4 was certified
+            # (audit of 29 Sep 2026)
+            ev["flags"] = ["numeric_probe_failed"]
+            return "UNKNOWN", v, ev
     if k != "OSC":
         return k, v, ev
     # AccumBounds only says where the limit points could lie. It is DNE when the values really
     # keep oscillating; an identity in disguise is retried after simplification instead.
     ro = sb_run("mathverify.certify.limits:_oscillation", expr, var, point, d, timeout=timeout)
-    ev["oscillation_spread"] = ro.value if ro.ok else None
-    if ro.ok and ro.value and all(s_ >= 1e-3 for s_ in ro.value):
+    ev["oscillation_spread"] = [w[0] for w in ro.value] if ro.ok and ro.value else None
+    if ro.ok and ro.value and all(w[0] >= 1e-3 for w in ro.value):
+        if _grows_without_bound(ro.value):
+            ev["flags"] = ["oscillates_while_diverging"]
+            return "UNKNOWN", v, ev
         return "DNE", v, ev
     rs = sb_run("mathverify.certify.limits:_limit_simplified", expr, var, point,
                 None if point in (oo, -oo) else d, timeout=timeout)
@@ -344,6 +362,29 @@ def _probe_agrees(vals: list[str | None], target) -> bool | None:
         return None
 
 
+def declared_side(var, point, side):
+    """The side ('+', '-', None: both) from which the task's limit approaches `point` inside the
+    variable's declared domain, or False when the approach leaves it. The task's variable keeps its
+    declared assumptions (the parse folds sqrt(x**2) to x for x > 0), so with x declared positive
+    lim_{x->-oo} sqrt(x**2)/x was certified to be 1 (it is -1), lim_{x->-1} sqrt(x**2) to be -1 and
+    the left limit of x*log(x) at 0 to be 0; with n declared an integer, sin(pi*n)/(n - 1) folded
+    to 0 and its limit at n = 1 was certified 0 (it is -pi). At the closed end of the declared domain
+    the limit is the one-sided limit from inside it (30 Sep 2026)."""
+    nonneg = getattr(var, "is_nonnegative", None)
+    if getattr(var, "is_integer", None):
+        # a sequence: only an infinite end its values reach
+        return side if point == oo or (point == -oo and not nonneg) else False
+    if not nonneg or point == oo:
+        return side
+    if point == -oo:
+        return False
+    if getattr(point, "is_positive", None):
+        return side
+    if getattr(point, "is_zero", None) and side in (None, "+"):
+        return "+"
+    return False
+
+
 def verify(ir, solution, ctx: Ctx):
     """Task `limit`: params {"expr": str, "var": str, "to": str, "side"?: "+"|"-"}."""
     if ir.task.kind != "limit":
@@ -363,8 +404,20 @@ def verify(ir, solution, ctx: Ctx):
         if side not in (None, "+", "-"):
             # "right", "left", ...: guessing the direction would decide a different question
             return unknown(LAYER, f"unknown_side:{side}")
-        extra = [c for c in written_definedness(p["expr"], ctx.ns)[0]
-                 if getattr(c, "free_symbols", set()) == {var}]
+        within = declared_side(var, point, side)
+        if within is False:
+            return unknown(LAYER, "approach_outside_declared_domain", t.ms,
+                           {"var": str(var), "to": str(point), "side": str(side)},
+                           flags=["approach_outside_declared_domain"])
+        side = within
+        written, nowhere = written_definedness(p["expr"], ctx.ns)
+        if nowhere or written_closed_undecided(p["expr"], ctx.ns):
+            # undefined as written for every value (a sum with an undefined term), or a binder whose
+            # body is not proved to exist: lim_{x->0} x + Σ_{k=-1}^{1} k/k = 3 was certified (review
+            # of 30 Sep 2026; the value parse reads k/k as 1)
+            return unknown(LAYER, "expression_undefined_as_written", t.ms, {"expr": p["expr"]},
+                           flags=["expression_undefined_as_written"])
+        extra = [c for c in written if getattr(c, "free_symbols", set()) == {var}]
         cls = classify_limit(expr, var, point, side, timeout=ctx.timeout,
                              conds=limit_conditions(expr, var, extra))
         ev: dict[str, Any] = {"classification": {k: str(v) for k, v in cls.items()}}

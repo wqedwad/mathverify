@@ -1179,15 +1179,19 @@ def _t_equation_of(obj, ns, ca, name) -> LeanStatement | None:
 
 def _t_series_sum(obj, ns, ca, name) -> LeanStatement | None:
     p = obj.task.params
-    var = ns.get(p.get("var", "k"))
-    if not isinstance(var, sp.Symbol):
+    if not isinstance(ns.get(p.get("var", "k")), sp.Symbol):
         return None
+    # the index runs over [lo, hi] (an integer and nothing more, as in certify.series): with k
+    # declared positive, Abs(k) folded to k and "∑_{k=-2}^{2} k = 0" was stated for the wrong claim 0
+    # (audit of 29 Sep 2026)
+    var = sp.Symbol(p.get("var", "k"), integer=True)
+    ns = dict(ns, **{var.name: var})
     lo = parse_expr_str(str(p.get("lo", "1")), ns)
     hi = parse_expr_str(str(p.get("hi", "oo")), ns)
     if hi == sp.oo or lo == -sp.oo or not (lo.is_Integer and hi.is_Integer):
         return None                                   # only finite sums are exactly expressible
-    if int(hi) - int(lo) > 200:
-        return None
+    if int(hi) - int(lo) > 200 or int(hi) < int(lo) - 1:
+        return None                                   # reversed bounds: no convention (certify.series)
     term = parse_expr_str(p["term"], ns)
     claimed = parse_answer(ca["kind"], ca["payload"], ns)
     if isinstance(claimed, sp.Set) or claimed is None:
@@ -2363,20 +2367,36 @@ def _functions_faithful(obj, ns) -> None:
     """A problem function's body is parsed with simplification (`f(x) = x/x` becomes 1): refuse
     unless its domain as written is exactly its domain as parsed."""
     for fd in obj.functions:
-        body = getattr(ns.get(fd.name), "body", None)
-        if body is None:
+        declared = isinstance(getattr(fd, "domain", None), str) and bool(fd.domain.strip())
+        fn = ns.get(fd.name)
+        body, argsyms = getattr(fn, "body", None), getattr(fn, "argsyms", None)
+        if body is None or argsyms is None or len(argsyms) != len(fd.args):
             raise LeanPrintError(f"function {fd.name} has no parsed body")
-        w = _as_written(fd.expr, ns)
+        # read with the function's own arguments, as its body was parsed (parse._make_function)
+        w = _as_written(fd.expr, dict(ns, **dict(zip(fd.args, argsyms))))
         if len(w) != 1:
             raise LeanPrintError(f"function {fd.name} is not one expression")
         wc, pc = _open(_definedness(w[0])), _open(_definedness(body))
-        if len(fd.args) == 1 and isinstance(ns.get(fd.args[0]), sp.Symbol):
-            v = ns[fd.args[0]]
+        if len(fd.args) == 1 and isinstance(argsyms[0], sp.Symbol):
+            v = argsyms[0]
             dw, dp = _solve_region(wc, v), _solve_region(pc, v)
             for c, region in [(c, dw) for c in pc] + [(c, dp) for c in wc]:
                 bad = _violation_set(c, v, region)
                 if bad is None or bad != S.EmptySet:
                     raise LeanPrintError(f"function {fd.name}: simplification changed its domain")
+            if declared:
+                # the templates state the body, not the declared domain (Lean proved f(-2) = 5 for
+                # f(x) = x**2 + 1 on x > 0, second audit of 29 Sep 2026): a domain is stated only
+                # when the body's own written conditions already imply it ("x != 1" for (2x+3)/(x-1))
+                rel = getattr(fn, "domain_rel", None)
+                if rel is None:
+                    raise LeanPrintError(f"function {fd.name}: its declared domain cannot be read")
+                for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+                    bad = _violation_set(c, v, dw)
+                    if bad is None or bad != S.EmptySet:
+                        raise LeanPrintError(f"function {fd.name}: its declared domain is not stated")
+        elif declared:
+            raise LeanPrintError(f"function {fd.name}: its declared domain is not stated")
         elif set(map(str, wc)) != set(map(str, pc)):
             raise LeanPrintError(f"function {fd.name}: simplification changed its domain")
 

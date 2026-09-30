@@ -1,20 +1,19 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 29 Eylül 2026, akşam**, dal `claude/inspiring-cori-xcgjld` (`wqedwad/asd#12` ile `master`a birleşti, yedeksiz: kullanıcı kararı; yeni iş yeni dalda).
-> Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e
-> kadarki 2102 satırlık belge `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri
-> `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
-> **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve
-> BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları günün HANDOFF'una aittir: 26 Eylül öncesininkiler
-> arşive, 26 Eylül'ünkiler o commit'teki `HANDOFF.md`'ye (`git log -p HANDOFF.md`).
+> **Son güncelleme: 30 Eylül 2026, akşam (bulut)**, dal `claude/loving-bardeen-ninmoo` (= `claude/sharp-lamport-f9m2w3` + `--full` raporları; `wqedwad/asd#13` ile `master`a birleşti, yedeksiz: kullanıcı kararı; DECISIONS §74). Sohbetler bulutta (kullanıcı, 30 Eylül). Yeni iş `master`dan yeni dalda (§3).
+> Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
+> `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
+> **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
+> günün HANDOFF'una aittir: 26 Eylül öncesininkiler arşive, 26 Eylül'ünkiler o commit'teki `HANDOFF.md`'ye (`git log -p HANDOFF.md`).
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§71; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§74; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → **1726 passed / 5 skipped** (3 root salt okunur dizin,
-   1 isteğe bağlı indirme, 1 kapsam dışı ifade); sıcak Lean'le ~400 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2169 passed / 5 skipped** (`d68070c`, `--full` içinde)
+   (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade); Windows'ta `d914dbc`: 2064 passed / 106 skipped
+   (+4 yalnız `.git`'siz kopyada düşen kural testi; DECISIONS §73); sıcak Lean'le ~480 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
    atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
 4. §3'teki ilk işe geç. Tekrar denenmeyecekler: arşiv §4.
 
@@ -27,48 +26,46 @@ arşiv §2–§3 ve `docs/ARCHITECTURE.md`'de; kilitli kararlar D1–D6 (`DECISI
 Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `scripts/verify_cli.py`,
 `scripts/check.py`. Değerlendirme seti 280 sentetik öğe (A/B/C/D = %30/%25/%30/%15).
 
-## 2. Durum (28 Eylül 2026)
+## 2. Durum (30 Eylül 2026)
 
-**Kod.** `master` = `wqedwad/asd#12`'nin birleşmesi (öncesi `c0a2caf` = `#11`'in birleşmesi; `#12`, `#9`, `#10` öncesi
+**Kod.** `master` = `wqedwad/asd#13`'ün birleşmesi (öncesi `35af293` = `#12`'nin birleşmesi; `#13`, `#12`, `#9`, `#10` öncesi
 yedeksiz, kullanıcı talimatı; `#11` öncesi `yedek/master-2026-09-28`, §6). `#7`–`#10`: DECISIONS §59–§62 (paralel tarama, `--plan`, bekçi, soğuk Lean, K4 düzeneği).
 `#11` (DECISIONS §63): adım reddedicinin üç haksız reddi (görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin
 bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
 Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
-**Bu dal** (`claude/inspiring-cori-xcgjld`, birleşmedi; DECISIONS §64–§70; anahtar yenileme F3/F4 önkoşulu değil, §64).
-`#11`'in hedefli denetimi: iki yanlış onay açığı kapandı (D çözümü CORRECT alıyordu): (A) öncüllerin aralıkta örneği
-yokken aralık düşürülür, (B) tanım kümesiyle çelişen atama denetlenir; (C) açık değil. V13: serbest sembole değer veren
-atama seçimdir (§68). 558 çözümde değişim 0; mutasyon 17/17. Anahtarlar 86/86 bağımsız doğru (§69). Etiketleme oracle'ı
-farkı tanım kümesinde noktayla kanıtlıyor, sayıları kesin karşılaştırıyor (§70; adversaryal iş akışı 70 gerçek sorun,
-hepsi düzeltildi; 1e-35 toleransı yanlışı "right" yapıyordu); tarama 448 → 457 yanlış varyant, yanlış onay 0.
+`#12` (§64–§70): hedefli denetim, V13, anahtar denetimi, etiketleme oracle'ı. `#13` (DECISIONS §72–§74): V14 ve üç turlu
+adversaryal denetimin bulduğu yanlış onaylar (kapalı `Integral`/`Sum`/`Product`/`Limit` yalnız sayıyla doğrulanan değeriyle, bağlı
+değişkenin koşulu problemin koşulu olmaz, IR fonksiyonu yazıldığı biçimde ve `domain`'iyle, yönsüz limit iki taraflı, yazılı türev
+yalnız türevlenebildiği yerde); `franklin`'in küme uç noktası düzeltmesi ve 144 testi (düşen 41'in 25'i gerçek yanlış onay, 9'u
+gerekçeli gelenek farkı). 558 çözümde karar değişimi 0 (adım 26, doğru adımlar unknown → verified).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
 çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23, 25–26 Eylül (DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `14f4d07` (`#12`'nin son kodu, raporlar `7fbf9ac`), bulutta 29 Eylül 17:59:56–18:23:09 UTC,
-**~23 dk** (ısınma 39 s, pytest 349 s, adversaryal 661 s), 1726 passed / 5 skipped; `--plan` TAMAM (DECISIONS §71). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
+**Son `check.py --full`.** **24/24**, `d68070c` (`#13`'ün son kodu, raporlar `f544c84`), bulutta 30 Eylül 16:32:32–17:08:42 UTC,
+**~36 dk** (soğuk Lean ısınması 452 s, pytest 484 s, adversaryal 813 s), 2169 passed / 5 skipped; `--plan` TAMAM (DECISIONS §74). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
 
-**K4 (Muse Spark 1.3, 280 öğe, koşu 3, `776e5b4`; DECISIONS §63).** 278 çözüm; CORRECT|right 274, INCORRECT|right 4,
-yanlış onay **0**, `undecided` 0; çözücü 278/278 doğru (yakalama gücü bu modelle ölçülemedi). 4 INCORRECT tek soru
-(`tyt-say-*`): çözücü IR'ın `n`'ini başka anlamda kullandı (istem sembolün anlamını vermiyor). Çözümsüz 2 (tek
-soru, `tyt-esf-007/-014`): akış kesildi, sonra Meta 504. Bugünkü harcama ~1.3 $ (önbellek kayıtlarından).
+**K4 (Muse Spark 1.3, 280 öğe, `776e5b4`; DECISIONS §63).** 278 çözüm: CORRECT|right 274, INCORRECT|right 4 (tek soru
+`tyt-say-*`: çözücü `n`'i başka anlamda kullandı), yanlış onay **0**; çözücü 278/278 doğru (yakalama gücü ölçülemedi). Çözümsüz
+2 (`tyt-esf-007/-014`: akış kesildi, sonra Meta 504). Harcama ~1.3 $.
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** yeni dal `master`dan; `master`ın `#12`'nin birleşmesi olduğunu `git fetch origin master && git log
-   --oneline -3 origin/master` ile doğrula; `--plan` koş.
-2. **V14 düzeltmesi** (önerilen, kullanıcı onayıyla; DECISIONS §70): ayrıştırıcıda `gcd`/`lcm` sembolle polinom işlemi
-   olmasın, `Sum`/`Product`'ın bağlı indisi IR değişkeninin varsayımını almasın, `arccot` (0, π) okunsun. Yöntem bu dalın
-   parçalarındaki gibi: sonda, test, 280 + 278 çözümde fark, sağlamlık/adversaryal, mutasyon, tam takım.
-3. **`--full`** son kodda, temiz ağaçta (~27 dk; oturum etkin tutulur, ≤10 dk beklemelerle izlenir); raporlar ve günlük
-   değiştirilmeden commit + push; `--plan` TAMAM olmalı. Beklenen fark: sağlamlık raporunda 448 → 457 yanlış varyant.
-4. **PR** `master`a; birleştirmeden önce kullanıcı yerelde yedek alır (§6 yöntemi: ff-only, etiket, bundle, push etiket),
-   `--plan` hemen önce; birleştirme kullanıcı isteyince.
-5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
-6. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
+1. **Yeni sohbet:** kendi dalı `master`dan; `git fetch origin master && git log --oneline -3 origin/master` ile `master`ın `#13`'ün
+   birleşmesi olduğunu doğrula, `--plan` koş. Push yalnız oturumun kendi dalına (bulut `master`ı ve etiketi push edemez; CLAUDE.md).
+2. **Birleşmeden sonra, yeni dalda (kullanıcı kararı, 30 Eylül):** (a) üçüncü denetimin eleştirmeninin 9 bulgusu (`denetim/2026-09-29/v14/
+   bulgular/tur3_e6712f5.json` → `critic`, DECISIONS §72 Ek): yüksek N1, N2, N3, N8; N4–N7, N9; önce son kodda yeniden koş, sonra
+   sonda + test + mutasyonla kapat. (b) V16 ve V17 (§4.2). (c) `claude/inspiring-franklin-l3cocz`'nin silinmesi kullanıcıya sorulur
+   (kodu bilerek birleşmedi, bilgisi `master`da, DECISIONS §74); silmeden önce U01–U07 mutasyonları (`3b030a4:denetim/2026-09-30/
+   mutasyon_v14.py`) bu dalın listesine ve `karar_farki.py`'nin yetenekleri `fark.py`'ye alınır.
+3. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
+   parametreli belirli integral biçim kalır; "∫₀^a x dx = 2" gibi sorular UNKNOWN olur)?
+4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
+5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
    önce kalibrasyon (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
-7. **İsteğe bağlı / kullanıcı kararı:** yanlış onay direnci için daha zayıf ya da başka aileden çözücü (K4 e); yedek
-   etiketleri (PR #3, #4, #9, #10 öncesi, §6); bulut önyükleyicisi 250 → 275 s (B1–B2); açık kapsama işleri (§4.2, V1–V14).
+6. **İsteğe bağlı / kullanıcı kararı:** yanlış onay direnci için daha zayıf ya da başka aileden çözücü (K4 e); yedek
+   etiketleri (PR #3, #4, #9, #10, #12, #13 öncesi, §6); bulut önyükleyicisi 250 → 275 s (B1–B2); açık kapsama işleri (§4.2, V1–V16).
 
 ## 4. Açık maddeler (tam liste)
 
@@ -77,27 +74,23 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.1 Bulut ve ortam
 
-- **B1. Anlık görüntü bazen kullanılmıyor** (DECISIONS §56 Ek, §59 (e), §61; BULUT §12). 26 Eylül 11:00 sohbeti
-  `new` ile betiği yeniden koşturdu (252 s bekleme); sonraki sohbetler (27 Eylül 09:39, 28 Eylül 16:36 dahil)
-  `resume-cached`: `/opt` 26 Eylül 07:39'daki `setup-only` koşusunun (199 s) görüntüsünden, kanca 2 s. `new`'in
-  nedeni **[DOĞRULANMADI]** (en olası: ağ ayarının değişmesi, §61).
-- **B2. 250 s sınırı aşıldı** (11:00 sohbeti; REPL aşamasında durduruldu, kanca kalanı 42 s'de kurdu). Süre
-  180–250 s arasında oynuyor.
+- **B1. Anlık görüntü bazen kullanılmıyor** (DECISIONS §56 Ek, §59 (e), §61; BULUT §12): 26 Eylül 11:00 sohbeti `new` ile
+  betiği yeniden koşturdu, sonrakiler `resume-cached` (26 Eylül 07:39 `setup-only` görüntüsü); `new`'in nedeni
+  **[DOĞRULANMADI]** (en olası ağ ayarı). **B2.** 250 s sınırı o sohbette aşıldı (kanca kalanı 42 s'de kurdu); süre 180–250 s.
 - **B4.** `raw.githubusercontent.com` dosya indirme yolu kurulum aşamasında hiç koşmadı (yedek; oturum
   içinde 32 s, 5/5 OK; DECISIONS §54). **B5.** "claude.ai ortam değişkenleri kurulum betiğine hiç
   ulaşmıyor mu": kanarya (`MATHVERIFY_SETUP_CANARY=1`) eklenmedi, sınanmadı; düzeni etkilemiyor.
-- **B6. Soğuk Lean açılışı** ~340–470 s (28 Eylül akşam düz `pytest`'te 405 s); `pytest` ve `--full` ilk Lean
+- **B6. Soğuk Lean açılışı** ~340–470 s (28 Eylül akşam düz `pytest`'te 405 s; 30 Eylül `--full` ısınması 452 s); `pytest` ve `--full` ilk Lean
   testinden önce ısınır (DECISIONS §60–§61). Açık: yavaşlığın nedeni (sayfa önbelleği değil; görüntü diskinin ilk
   okunması çıkarım **[DOĞRULANMADI]**).
-- **B7. Belirteç yenileme:** yeni fine-grained belirteç (Contents: read-only, yalnız `wqedwad/asd`)
-  Setup script'in `T='...'` satırına; süresi dolmuşsa çekim düşer, kanca kurar (167–239 s). **B8.**
-  Etiket ve `master` buluttan push edilmez (kural); etiket push'u bulutta hiç denenmedi.
+- **B7.** Belirteç yenileme: yeni fine-grained belirteç (Contents: read-only, yalnız `wqedwad/asd`) Setup script'in
+  `T='...'` satırına. **B8.** Etiket ve `master` buluttan push edilmez; etiket push'u bulutta hiç denenmedi.
 - **B9.** Bulutta `repl` RSS 7.08 GB / PSS 6.78 GB (27 Eylül); `lake env`'in payı ölçülmedi. **B10. Kullanım/maliyet**
   (BULUT §8): bulut kredisinin kaynağı ve abonelik sınırının jeton ağırlığı **[DOĞRULANMADI]**; yerel maliyet ölçülmedi.
 
 ### 4.2 Doğrulayıcı: bilinen sınırlar ve kapsama
 
-V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kaybı) ya da bilinçli sınır.
+Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V17 (tam sayı `diff`). Yanlış onaylar: V1, V15, V16, V17. Ötekiler UNKNOWN (kapsama kaybı), kaçırılan adım (V2, V6) ya da bilinçli sınır.
 
 - **V1. `tyt-prob-018`:** çözüm düzeyindeki tek yanlış onay (doğru ama gerekçesiz adım; kanıtlanmış adım L6
   kritiğini ezer; aynı sınıf: C'deki 12 aritmetiği doğru `compute` adımı, §63). Karar F4 ölçümüne bağlı
@@ -129,8 +122,22 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
   (`ayt-diz-002`'de `n = 21`) tanımsal kalır; sonra çelişilmezse çözüm CORRECT. `#11` öncesi doğrusu da reddediliyordu.
 - **V13. Aynı doğrunun ikinci noktası** (DECISIONS §67–§68): seçim kuralı y-kesişimini kabul eder, ama ardından x-kesişimi
   (`y = 0`) seçilen x = 0 noktasında reddedilir (yanlış ordinattan ayrılamaz; D6); doğru çözüm INCORRECT. Gerçek veride yok.
-- **V14. Ayrıştırıcı gelenekleri** (DECISIONS §70): `gcd`/`lcm` sembollerle polinom gcd/lcm (`lcm(n, 2)` → 2n); `Sum`'ın
-  bağlı indisi aynı adlı IR değişkeninin varsayımını alır; `arccot` = SymPy `acot`. Yapay girdilerde yanlış karar.
+- **V15. V14 denetiminden kalanlar** (DECISIONS §72; V14 kapandı). Yanlış onay (önceden var): parametreli belirli integral,
+  belirsiz `integrate` ve parametreli `limit` ayrıştırmada SymPy'ye bırakılır (F9). Haksız red (önceden var): verilenlerin
+  belirlediği sembollü `compute` adımı özdeşlik gibi denetlenir (S1); tam sayı bildirilmemiş üst sınırlı toplam (R1). Lean:
+  `Mod`/`floor` gövdeli, tam sayı adlı argümanlı fonksiyon reddedilir (L1). Değer doğru: `gcd(120, 84)` "değer" (GCD-10).
+  Mutasyon: R02 ve L07'nin eşdeğerliği kanıtlanmadı. Çok sayıda kapsama kaybı (UNKNOWN), liste §72'de.
+- **V16. Taşıma denetiminden kalanlar** (DECISIONS §73 "Açık kalanlar"; taşımanın açmadığı yanlış onaylar). Yüksek: küme `+`/`-`
+  işleçleri uç eşitlemesini atlıyor (V14d'nin kalan yazımı); bağlayıcı değişkeni ilk döngüde IR bildirimini koruyor, alan dışı
+  aralıkta boş küme onaylanıyor; serbest sembolsüz tanımsız görev ifadesi (limit/türev/teğet/ekstremum). Orta/düşük: bağlayıcılı
+  noktasız türev/ilkel; pozitif ya da negatif olmayan değişkenin 0'daki türevi ve teğeti (§74 (g)); `floor` içinde sayı olmayan sınır; gcd/lcm/n! koşulu limit/türev/integralde
+  yok; π + e; log(−x), x > 0; ters sembolik toplamda Karr; `normalize_set` `float` sıralaması; tanımsız adım öncül noktasında;
+  iki değişkenli sadeleştirme; liste yükünde gcd denetimi. Kapsama: çok değişkenli `Subs`; 300'den çok rasyonel uçlu küme.
+- **V17. Birleşmeyen `franklin`'in denetiminden** (DECISIONS §74; önceden var, `35af293`'te de; veride örneği yok). Yanlış onay: trig
+  genel çözümde IR'ın bildirdiği aile parametresi (k pozitif tam sayıyken sin x = 0 için {|k|π} CORRECT); tam sayı değişkende ifade/adım
+  içi `diff`/`Derivative` (n = 2 iken `diff(sin(pi*n), n)` için 0 CORRECT, doğru π INCORRECT; `diff(cos(pi*n), n)` için iπ CORRECT). Test: `unify_endpoints`'in
+  karar verilemeyen uç reddini hiçbir test sabitlemiyor (U04 mutantı yaşıyor; öldüren girdi §74). Mutasyon: §73 kodunun listesi yok.
+  Öneri: sağlamlık taramasına eşit yazımlı uç varyantı (kalıcı kapı); `karar_farki.py`'nin yetenekleri `fark.py`'ye.
 
 ### 4.3 Kredili ölçüm
 
@@ -170,7 +177,7 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
 6. Başka sağlayıcıyla (GPT/Gemini, `set_client_override`) ölçüm istenir mi?
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
 8. Depo açılacak/paylaşılacak mı? Açılırsa önce anahtarlar yenilenir, `.env` geçmişten temizlenir.
-9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 4)?
+9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 6)?
 
 ### 4.5 Teknik borç
 
@@ -197,37 +204,36 @@ V11 ve V13 dışında hiçbiri doğru cevabı reddetmez; ya UNKNOWN (kapsama kay
 
 ### 4.7 Doğrulanmamış kayıtlar
 
-- §6'da **[DOĞRULANMADI]** işaretli yedekler (`572ef57`, `18fd298` bundle'ları; `ee7b2dd`'nin yerel yedeği): buluttan
-  görülemez. 26 Eylül 01:06 koşusunda düşen testin adı kaydedilmedi (muhtemelen B6'daki Lean testi).
-- Arşiv §4'teki "önce" ölçümlerinden kodu geri almadan üretilemeyenler (7/7, 54 çift, 0.990…) kayıttan; alandaki
-  önyükleyici metninin içeriği (yalnız uzunluk eşleşiyor: 750 + 93 = 843); B1, B6, B10 ve K4'teki işaretli maddeler.
+- §6'da **[DOĞRULANMADI]** yedekler (`572ef57`, `18fd298` bundle'ları; `ee7b2dd`'nin yerel yedeği); 26 Eylül 01:06'da düşen
+  testin adı; arşiv §4'ün kodu geri almadan üretilemeyen "önce" ölçümleri (7/7, 54 çift, 0.990…); alandaki önyükleyici metninin
+  içeriği (yalnız uzunluk: 843); B1, B6, B10, K4'teki işaretliler; 30 Eylül kopya silinmesinin nedeni (DECISIONS §73).
 
-## 5. Son ölçülen sayılar (kapılar, `14f4d07`; aksi yazılmadıkça `3e1805d` ve öncekilerle aynı)
+## 5. Son ölçülen sayılar (kapılar, `d68070c`; aksi yazılmadıkça `14f4d07` ve öncekilerle aynı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri | 1639 passed / 5 skipped | hepsi geçer |
+| Birim testleri (`d68070c` bulut; `d914dbc` Windows) | 2169 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
 | Çözüm düzeyi pozitif precision; D tespiti | 0.994 (1 FP, V1); 0.976 (41/42) | raporlanır |
 | Lean erişilebilir; sertifika; FP; junk | evet; 121/280; 0; 0/33 | —; —; 0; 0 |
 | Adversaryal saldırı başarısı (3 yüzey) | %0 (21 139 saldırı; UNKNOWN'a düşen 2890, önce 2894) | < %2 |
-| Yanlış onay / eşdeğerde red / değer olmayan iddia / adım dönüşümünde red | 0/457 (önce 0/448, §70), 0/214, 0/46, 0/184 | 0 |
+| Yanlış onay / eşdeğerde red / değer olmayan iddia / adım dönüşümünde red | 0/457, 0/214, 0/46, 0/184 | 0 |
 | Nedeni açıklanmayan kaçırılan bozuk adım; adım lokalizasyonu | 0/6; 75/120 (önce 74) | 0; raporlanır |
 
 Raporlar `reports/*.md` (üretilir, elle yazılmaz), kapı günlüğü `reports/check_full.log`.
-Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), Windows'ta 31 dk; hızlı `check.py` ~7 dk (427 s).
+Süre: `--full` bulutta **~25–36 dk** (4 süreçli adversaryal 661–813 s; soğuk Lean'de +452 s ısınma), Windows'ta 31 dk; hızlı `check.py` ~7 dk (427 s).
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (29 Eylül akşam): `master` = `wqedwad/asd#12`'nin birleşmesi (öncesi `c0a2caf`); `claude/inspiring-cori-xcgjld`
-  `wqedwad/asd#12` (birleşti); `claude/busy-bardeen-ckr5bw` `wqedwad/asd#11` (birleşti);
-  `claude/dreamy-meitner-rvrwlj` `60d539c` (`#9`, `#10`), `claude/keen-ramanujan-oqseru` (`wqedwad/asd#8`), `claude/trusting-curie-76slml` `1fddfc6`,
-  `claude/practical-faraday-7a4iy4` `a078a14`, `claude/compassionate-shannon-759r85` `93343c3`,
-  `claude/funny-cray-bey5o1` `51e7651`, `bulut-2026-09-24` `18fd298` (hepsi `master`da);
-  `denetim-2026-09-20` `e2aa08d`, `yerel-kalite-2026-09-23` `23d7c6b` (eski); araç ref'leri
-  `refs/arac/bulut-v1` `c6d0cc1`, `refs/arac/bulut-v2` `f90d5e4` (kullanılan).
+- **Dallar** (30 Eylül akşam, `git merge-base --is-ancestor` ile): `master` = `wqedwad/asd#13`'ün birleşmesi (öncesi `35af293`).
+  **Birleşmeyen tek dal** `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel sürümü; bilerek: parçası ve testleri taşındı,
+  §73, bilgisi §74; silinmesi kullanıcıya sorulacak, §3). Öteki hepsi `master`da: `claude/loving-bardeen-ninmoo` (`#13`),
+  `claude/sharp-lamport-f9m2w3` `d68070c`, `claude/inspiring-cori-xcgjld` (`#12`), `claude/busy-bardeen-ckr5bw` (`#11`),
+  `claude/dreamy-meitner-rvrwlj` `60d539c` (`#9`, `#10`), `claude/keen-ramanujan-oqseru` (`#8`), `claude/trusting-curie-76slml`,
+  `claude/practical-faraday-7a4iy4`, `claude/compassionate-shannon-759r85`, `claude/funny-cray-bey5o1`, `bulut-2026-09-24`,
+  `denetim-2026-09-20`, `yerel-kalite-2026-09-23`. Araç ref'leri `refs/arac/bulut-v1` `c6d0cc1`, `refs/arac/bulut-v2` `f90d5e4` (kullanılan).
 - **Yedek etiketleri** (GitHub'da; bundle'lar yalnız `C:\Users\kullanici\mathverify-yedek\`, geri dönüş
   talimatı orada `OKU.txt`):
 
@@ -246,6 +252,7 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   | yok | `c2e4fdf`, `622a178` (PR #9, #10 öncesi) | alınmadı (kullanıcı kararı, 27 Eylül "yedeğe gerek yok"; 28 Eylül "birleştir") |
   | `yedek/master-2026-09-28` | `2f11c84` (PR #11 öncesi) | `mathverify-master-2f11c84-2026-09-28.bundle` (kullanıcı, 28 Eylül akşam: `bundle verify` "okay", deneme klonu `2f11c84`; etiket buluttan doğrulandı. İlk denemede etiket bayat yerel `master`ı (`5c2f83e`) göstermişti, silinip yeniden kondu) |
   | yok | `c0a2caf` (PR #12 öncesi) | alınmadı (kullanıcı kararı, 29 Eylül "birleştir bu dalı yedeğe gerek yok") |
+  | yok | `35af293` (PR #13 öncesi) | alınmadı (kullanıcı kararı, 30 Eylül "yedeğe gerek yok") |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout `C:\Users\kullanici\mathverify`'da): (0) `git fetch
   origin`, `git checkout master`, `git merge --ff-only origin/master`, `git log -1 --oneline` = beklenen commit (28 Eylül:
@@ -253,25 +260,18 @@ Süre: `--full` bulutta **~25–30 dk** (4 süreçli adversaryal 734–811 s), W
   yedek/master-YYYY-MM-DD[-N] master`; (2) `git bundle create C:/Users/kullanici/mathverify-yedek/mathverify-master-<kısa-hash>-YYYY-MM-DD.bundle
   --all`, `git bundle verify` ve deneme klonu; (3) `git push origin <etiket>`; etiket buluttan `git ls-remote` ile doğrulanır;
   (4) hemen önce `scripts/check.py --plan`. Geri dönüş `git reset --hard <etiket>`. Buluttan `master`/etiket push edilmez.
-- **Yerel checkout** (28 Eylül akşam): `master` `2f11c84`; `#11` ve `#12`den sonra `git pull` gerekir. Stash'te Windows `--full`
-  raporları (`eab80f1`; kullanıcı silebilir), yerel `claude/dreamy-meitner-rvrwlj` eski (`eab80f1`, birleşmiş).
+- **Yerel checkout** (30 Eylül akşam): `master` `35af293`; `#13`'ten sonra `git pull` gerekir (çalışma dalı `claude/sharp-lamport-f9m2w3`). Stash'te
+  Windows `--full` raporları (`eab80f1`; kullanıcı silebilir), yerel `claude/dreamy-meitner-rvrwlj` eski (birleşmiş).
 
 ## 7. Bulut özeti (ölçülmüş)
 
-- Makine: Ubuntu 24.04, 4 CPU, 15 GB RAM, ~30 GB disk, root, checkout `/home/user/asd`; sistem `python3`
-  3.11 (kanca 3.14.6'yı `/opt`'tan, yoksa 3.12/3.13'ü seçer). Ağ (Trusted): açık GitHub, PyPI,
-  `raw.githubusercontent.com`, `api.anthropic.com`; kapalı `releases.lean-lang.org`, `cache.mathlib.org`,
-  `releases.astral.sh` (Lean, Mathlib önbelleği ve Python araç ref'inden gelir); `api.meta.ai` kimlik bilgisiyle açık.
-- Kurulum betiği aşamasında GitHub git vekili yok; özel depoya kimliksiz 401. claude.ai ortam
-  değişkenleri betiğe ulaşmaz; belirteç önyükleyicinin metninde (DECISIONS §53–§54, §56).
-- Kanca (`scripts/cloud/session_start.sh`) 6–15 s; eksikse Lean'i arka planda kurar (167–239 s).
-  Kurulum `/opt`'ta ~10.7 GB. Devam ettirilen sohbet kurulum betiğini hiç koşturmaz; disk korunur.
-- **Konteyner, tur bitince uzun iş sürerken SIGTERM ile kapatılabiliyor** (26 Eylül, ~57 dk'lık
-  `--full` kayboldu): tur bitirilmez, koşu ön planda ≤10 dk'lık beklemelerle izlenir (`CLAUDE.md`).
-- Meta vekil üzerinden (DECISIONS §63): akışsız çağrı ~31 s'de 502; akış çalışır ama bazen `usage`'sız kesilir
-  (istemci yeniden dener); çok uzun `xhigh` akıl yürütmede Meta 504 verir.
-- Stop kancası commit edilmemiş değişiklikte commit + push ister. `ANTHROPIC_BASE_URL` istemcide
-  okunmaz (DECISIONS §48). Bulutta `rsync` yok; alt ajanlara kopya komutu denenerek verilir (CLAUDE.md).
+- Ubuntu 24.04, 4 CPU, 15 GB RAM, ~30 GB disk, root, `/home/user/asd`. Ağ: GitHub, PyPI, `raw.githubusercontent.com`,
+  `api.anthropic.com`, `api.meta.ai` açık; Lean/Mathlib kapalı (araç ref'inden). Kurulum betiğinde git vekili yok (401), ortam
+  değişkenleri ulaşmaz; belirteç önyükleyicide (§53–§56). Kanca 6–15 s, eksikse Lean'i arka planda kurar; `/opt` ~10.7 GB.
+- **Tur bitince uzun iş sürerken konteyner kapatılabiliyor** (26 Eylül `--full` kayboldu; 30 Eylül bir iş akışı): koşu ön
+  planda ≤10 dk'lık beklemelerle izlenir. Alt ajanlar oturum kullanım sınırına takılabilir (30 Eylül). İş akışı aynı anda en çok 2 ajan koşturur (CPU − 2).
+- Meta (DECISIONS §63): akışsız ~31 s'de 502, akış bazen `usage`'sız kesilir, uzun `xhigh`'ta 504. Stop kancası commit +
+  push ister; `ANTHROPIC_BASE_URL` okunmaz (§48); `rsync` yok (CLAUDE.md).
 
 ## 8. Komutlar
 
@@ -295,12 +295,6 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 
 ## 9. Nerede ne var
 
-- **Arşiv** `docs/arsiv/HANDOFF-2026-09-26.md`: §0 bulut tarihçesi ve olaylar (0.9 `master`ın erken
-  birleşmesi, 0.10 WSL diskinin C:'yi doldurması), §1 proje, §2 mimari ve klasör yapısı, §3 kararlar
-  ve reddedilen seçenekler, **§4 denenen ve işe yaramayanlar (tekrar denenmez)**, §8 kritik dosyalar,
-  §9 komutlar ve ortam değişkenleri, §11 tuzaklar (SymPy, ayrıştırıcı, Lean, Windows, bulut).
-- **`DECISIONS.md`:** §1 kilitli kararlar, §7 (34–43) GitHub/bulut, 44–54 bulut ölçümleri, §8 (55)
-  25 Eylül denetimi, §9 (56), §10 (57–58), §11 (59) paralel tarama ve kademeli kontrol, §12 (60–62) soğuk Lean,
-  kalibrasyon, K4 düzeneği ve kısmi koşu, §13 (63) K4'ün tamamlanması, adım reddedici düzeltmeleri, Meta akışı.
-- **`docs/`:** `ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`, `LLM_LAYERS`, `LEAN_SETUP`, `E1-E10-measurement`,
-  `BULUT` (§12, §13), `sartname/`; `reports/arsiv/` (iki F3 JSON'u üretilemez); `denetim/` (ölçüm betikleri).
+Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
+`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §74); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).

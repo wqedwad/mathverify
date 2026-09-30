@@ -7,6 +7,8 @@ conditions of the ORIGINAL expression, and (c) the original relation itself.
 """
 from __future__ import annotations
 
+import itertools
+import threading
 from typing import Any
 
 import sympy as sp
@@ -23,20 +25,406 @@ LAYER = "certify.domain"
 
 
 # ---------------------------------------------------------------------------
+def _outer_nodes(e, var, add):
+    """The nodes of `e` in preorder, a range binder's body excepted: its conditions are taken from
+    `definedness_conditions` of the body, and those on the bound variable are dropped (they hold on
+    the binder's range, not on the problem's variables); its bounds are walked as usual. Walked into,
+    ∫_1^e 1/t dt put t != 0 among the conditions of x > ∫…: the solution set collapsed to EmptySet,
+    which was certified, and with the bound x of Limit(sin(x)/x, x, 0) the root 0 of x**2 = … was
+    dropped (third audit of 30 Sep 2026)."""
+    stack = [e]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, (sp.Integral, sp.Sum, sp.Product)) or isinstance(n, sp.Limit):
+            if isinstance(n, sp.Limit):
+                body, bound, outer = n.args[0], {n.args[1]}, [n.args[2]]
+            else:
+                body, bound = n.function, {lim[0] for lim in n.limits}
+                outer = [x for lim in n.limits for x in lim[1:]]
+            for c in definedness_conditions(body, var):
+                if not (getattr(c, "free_symbols", set()) & bound):
+                    add(c)
+            for c in _binder_conditions(n, var):
+                add(c)
+            stack.extend(reversed(outer))
+            continue
+        yield n
+        if isinstance(n, sp.Basic):
+            stack.extend(reversed(n.args))
+
+
+class definedness_undecided(sp.Function):  # noqa: N801 - a marker read by closed_condition_undecided
+    """The value of a condition no check could decide: see DEFINEDNESS_UNDECIDED."""
+    nargs = 0
+
+
+# A condition that stands for "the body of a binder is not proved to exist over its range": closed and
+# left standing by SymPy, so `closed_condition_undecided` makes every caller abstain, and never
+# false, so no expression is read as undefined (defined NOWHERE) on its account.
+DEFINEDNESS_UNDECIDED = Ne(definedness_undecided(), 0)
+
+
+def is_undecided(c) -> bool:
+    return c == DEFINEDNESS_UNDECIDED
+
+
+# The index values of a Sum/Product checked one by one, and the work one top-level reading may spend
+# on binders (a solveset counts as _SOLVE_COST points): a nested finite sum is checked at every
+# (outer, inner) pair, and 150 x 150 of them held verify() 33 s, three levels over 400 s (review of
+# 30 Sep 2026). Past the budget the body is not proved to exist and the callers abstain.
+_POINTS = 200
+_BUDGET = 400
+_SOLVE_COST = 50
+_SOLVE_TIMEOUT = 4.0
+_BINDER_STATE = threading.local()
+
+
+def _spend(n: int) -> bool:
+    left = getattr(_BINDER_STATE, "left", None)
+    if left is None:
+        return True                                 # outside a reading (a direct call)
+    if left < n:
+        _BINDER_STATE.cut = True                    # this result depends on the budget: not kept
+        return False
+    _BINDER_STATE.left = left - n
+    return True
+
+
+def _evaluated(e):
+    """A bound or a point of the as-written tree, evaluated: 10**3 stays Pow(10, 3) there."""
+    with sp.evaluate(True):
+        return e.func(*[_evaluated(a) for a in e.args]) if isinstance(e, sp.Basic) and e.args else e
+
+
+def _named_conditions(body, bound, var):
+    """The written conditions of a binder's body that name one of its bound variables, read on
+    assumption-free dummies (the as-written parse keeps the declared symbol there, and k declared
+    positive made k != 0 true), with the map to the dummies."""
+    plain = {v: sp.Dummy(v.name) for v in bound}
+    with sp.evaluate(False):
+        b = body.xreplace(plain)
+    dummies = set(plain.values())
+    return [c for c in definedness_conditions(b, var) if getattr(c, "free_symbols", set()) & dummies], plain
+
+
+def _violations(c, d, region):
+    """Where in `region` the condition `c` on `d` fails, computed in the sandbox under a time limit;
+    None when that is not known exactly (solveset over a Range of a transcendental condition did not
+    return, review of 30 Sep 2026)."""
+    if not _spend(_SOLVE_COST):
+        return None
+    if isinstance(c, sp.Contains):
+        # a factorial, binomial or gcd argument's set: the argument's values over the region lie in it
+        # (1/(k - 1)! from k = 1 was undecided: Not(Contains) is no relation solveset takes)
+        try:
+            img = region if c.args[0] == d else sp.imageset(sp.Lambda(d, c.args[0]), region)
+            inside = img.is_subset(c.args[1])
+        except Exception:  # noqa: BLE001
+            inside = None
+        if inside is True:
+            return S.EmptySet
+        if c.args[0] == d:
+            try:
+                out = sp.Complement(region, c.args[1])
+            except Exception:  # noqa: BLE001
+                return None
+            return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
+        return None
+    bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
+    # solved for a variable with the facts of the region (an index is an integer, nonnegative on
+    # [0, oo)): factorial(k) != 0 was left a ConditionSet over Range(0, oo) and the exponential
+    # series undecided. The conditions themselves are read on the plain variable (with an integer
+    # one, 1/sin(pi*k) != 0 would already be false and dropped as naming no variable).
+    facts = {}
+    if region.is_subset(S.Integers) is True:
+        facts["integer"] = True
+        if region.inf.is_positive is True:
+            facts["positive"] = True                # (k - 1)! from k = 1: k - 1 is nonnegative
+        elif region.inf.is_nonnegative is True:
+            facts["nonnegative"] = True
+    elif region.is_subset(S.Reals) is True:
+        facts["real"] = True
+    if facts:
+        d2 = sp.Dummy(d.name, **facts)
+        bad = bad.xreplace({d: d2})
+    else:
+        d2 = d
+    if bad is sp.false:
+        return S.EmptySet
+    if bad is sp.true:
+        return region
+    r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d2, region, timeout=_SOLVE_TIMEOUT)
+    if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+        return None
+    return r.value
+
+
+def _undefined_at(body, index_values: dict, var) -> bool | None:
+    """The term of a Sum/Product at concrete index values, read as written: False when one of its
+    conditions fails there (the term itself is undefined), None otherwise. Only this makes a sum
+    undefined: a condition read on the symbolic body may be merely sufficient (a real power of a
+    symbolic exponent asks base > 0, and (-1)**1 is defined), and turned into `false` it made
+    x + Σ_{k=1}^{3} (-k)**k = 0 "defined nowhere" and its empty solution set certified (review of
+    30 Sep 2026)."""
+    with sp.evaluate(False):
+        term = body.xreplace(index_values)
+    conds = definedness_conditions(term, var)
+    return False if any(c is sp.false for c in conds) else None
+
+
+def _index_region(lo, hi):
+    """The integers a Sum/Product index runs over (exact), or a superset of them when a bound is
+    symbolic and the range cannot be reversed (hi - lo + 1 >= 0 from the declarations: reversed,
+    SymPy's Karr sum runs over indices outside the superset, review of 30 Sep 2026); None otherwise."""
+    lo_i = lo.is_Integer or lo == -oo
+    hi_i = hi.is_Integer or hi == oo
+    if lo_i and hi_i:
+        start = -oo if lo == -oo else int(lo)
+        stop = oo if hi == oo else int(hi) + 1
+        if start == -oo and stop == oo:
+            return S.Integers, True
+        return sp.Range(start, stop), True
+    if (hi - lo + 1).is_nonnegative is not True:
+        return None, False
+    if lo.is_Integer:
+        return sp.Range(int(lo), oo), False
+    if hi.is_Integer:
+        return sp.Range(-oo, int(hi) + 1), False
+    return S.Integers, False
+
+
+def _range_conditions(n, var) -> list[Any]:
+    """Sum/Product: the term, as written, at every index. A finite range of at most _POINTS indices is
+    checked index by index (the term's own conditions there: a failing one makes the sum undefined,
+    those on the problem's symbols are kept, Σ_{k=1}^{3} 1/(k - x) needs x != 1, 2, 3); a longer or
+    infinite range, or a symbolic bound, by solving each condition over the index range, and a
+    violation found there makes the sum undefined only where the term itself is undefined at it.
+    Before 30 Sep 2026 these conditions were dropped (they name the index, not the problem's
+    variables) and Σ_{k=-1}^{1000} k/k = 1002, Σ_{k<=0} 2^k k/k = 2 and Σ_{k=-1}^{n} k/k with n = 3
+    were certified; the first V14 checked only finite sums of at most 200 terms."""
+    limits = n.limits
+    if any(len(lim) != 3 for lim in limits):
+        return [DEFINEDNESS_UNDECIDED]
+    idx = [lim[0] for lim in limits]
+    named, plain = _named_conditions(n.function, idx, var)
+    if not named:
+        return []
+    bounds = [(_evaluated(lim[1]), _evaluated(lim[2])) for lim in limits]
+    if all(lo.is_Integer and hi.is_Integer for lo, hi in bounds):
+        ranges = [range(int(lo), int(hi) + 1) for lo, hi in bounds]
+        count = 1
+        for r in ranges:
+            count *= len(r)
+        if count <= _POINTS:
+            if not _spend(count):
+                return [DEFINEDNESS_UNDECIDED]
+            out: list[Any] = []
+            for point in itertools.product(*ranges):
+                with sp.evaluate(False):
+                    term = n.function.xreplace({v: sp.Integer(i) for v, i in zip(idx, point)})
+                for c in definedness_conditions(term, var):
+                    if c is sp.false:
+                        return [sp.false]
+                    if c not in out:
+                        out.append(c)
+            return out
+    if len(limits) != 1:
+        return [DEFINEDNESS_UNDECIDED]
+    (lo, hi), = bounds
+    region, exact = _index_region(lo, hi)
+    if region is None:
+        return [DEFINEDNESS_UNDECIDED]
+    d = plain[idx[0]]
+    for c in named:
+        if c.free_symbols != {d}:
+            return [DEFINEDNESS_UNDECIDED]          # also names the problem's symbols or another index
+        bad = _violations(c, d, region)
+        if bad is None:
+            return [DEFINEDNESS_UNDECIDED]
+        if bad.is_empty is True:
+            continue
+        if exact and bad.is_finite_set is True:
+            points = list(itertools.islice(iter(bad), 5))
+            if points and _spend(len(points)) and any(
+                    _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var) is False for i in points):
+                return [sp.false]
+        return [DEFINEDNESS_UNDECIDED]
+    return []
+
+
+def _declared_span(v):
+    """(lowest, highest) value a bound may take: itself when it is a real number, from its sign when
+    it is a declared symbol; None otherwise."""
+    if v.is_number:
+        return (v, v) if v.is_real or v in (oo, -oo) else None
+    if v.is_positive or v.is_nonnegative:
+        return (S.Zero, oo)
+    if v.is_negative or v.is_nonpositive:
+        return (-oo, S.Zero)
+    return None
+
+
+def _integral_conditions(n, var) -> list[Any]:
+    """A definite integral: the integrand, as written, exists on [a, b] up to finitely many points (an
+    improper point is the value's business). ∫_{-1}^{1} (√x)² dx = 0 was certified (30 Sep 2026)."""
+    definite = [lim for lim in n.limits if len(lim) == 3]
+    if not definite:
+        return []                                   # an antiderivative: its variable is not bounded
+    if len(n.limits) != 1:
+        named, _ = _named_conditions(n.function, [lim[0] for lim in n.limits], var)
+        return [DEFINEDNESS_UNDECIDED] if named else []
+    x, a, b = n.limits[0]
+    named, plain = _named_conditions(n.function, [x], var)
+    d = plain[x]
+    region = S.Reals
+    a, b = _evaluated(a), _evaluated(b)
+    if not (a.is_number and b.is_number):
+        # a symbolic bound: the integral runs inside the hull of the values the bounds may take by
+        # their declarations (∫_0^x √t dt and ∫_1^x ln t dt with x > 0 lie in [0, oo); read over R
+        # they were undecided, review of 30 Sep 2026)
+        spans = [_declared_span(v) for v in (a, b)]
+        if all(sp_ is not None for sp_ in spans):
+            region = Interval(min(sp_[0] for sp_ in spans), max(sp_[1] for sp_ in spans))
+    if a.is_number and b.is_number:
+        order = certified_sign(b - a) if not (a.has(oo, -oo) or b.has(oo, -oo)) else None
+        if a.has(oo, -oo) or b.has(oo, -oo):
+            region = Interval(min(a, b), max(a, b)) if a != b else S.EmptySet
+        elif order in (-1, 0, 1):
+            region = Interval(b, a) if order == -1 else Interval(a, b)
+        else:
+            return [DEFINEDNESS_UNDECIDED] if named else []
+    for c in named:
+        bad = _violations(c, d, region)
+        if bad is None or not (bad.is_empty is True or bad.is_finite_set is True):
+            return [DEFINEDNESS_UNDECIDED]
+    return []
+
+
+def _limit_conditions(n, var) -> list[Any]:
+    """A limit: its expression, as written, exists on a punctured neighbourhood of the point on the
+    approached side(s), and near ±oo from some point on. lim_{x→-∞} (√x)²/x = 1 was certified
+    (30 Sep 2026). A condition that names the problem's symbols too is solved with them as
+    parameters: the hole of (x² - a²)/(x - a) at x = a is no violation near a."""
+    e, z, z0, direction = n.args
+    named, plain = _named_conditions(e, [z], var)
+    if not named:
+        return []
+    zd = plain[z]
+    z0 = _evaluated(z0)
+    if getattr(z, "is_integer", None) and z0 not in (oo, -oo):
+        return [DEFINEDNESS_UNDECIDED]
+    for c in named:
+        if z0 in (oo, -oo):
+            # a sequence runs over the declared integers (n positive: from 1): 2**n/n! as n -> oo was
+            # undecided over all the integers (review of 30 Sep 2026)
+            if getattr(z, "is_integer", None):
+                over = sp.Range(1, oo) if z.is_positive else sp.Range(0, oo) if z.is_nonnegative else S.Integers
+            else:
+                over = Interval(0, oo) if z.is_nonnegative else S.Reals
+            bad = _violations(c, zd, over)
+            if bad is None:
+                return [DEFINEDNESS_UNDECIDED]
+            if bad.is_empty is not True and (bad.sup if z0 == oo else bad.inf).is_finite is not True:
+                return [DEFINEDNESS_UNDECIDED]
+            continue
+        sides = ("+", "-") if str(direction) == "+-" else (str(direction),)
+        if sides == ("+", "-") and z0 == 0 and getattr(z, "is_nonnegative", None):
+            sides = ("+",)                          # the limit over the declared domain (certify.limits)
+        for side in sides:
+            near = Interval.open(z0, z0 + 1) if side == "+" else Interval.open(z0 - 1, z0)
+            bad = _violations(c, zd, near)
+            if bad is None:
+                return [DEFINEDNESS_UNDECIDED]
+            if bad.is_empty is True:
+                continue
+            try:
+                gap = certified_sign(bad.inf - z0 if side == "+" else z0 - bad.sup)
+            except Exception:  # noqa: BLE001
+                gap = None
+            if gap != 1:
+                return [DEFINEDNESS_UNDECIDED]
+    return []
+
+
+_BINDER_CACHE: dict = {}
+_BINDER_CACHE_LOCK = threading.Lock()
+_BINDER_CACHE_SIZE = 512
+
+
+def _binder_conditions(n, var) -> list[Any]:
+    """The conditions a binder's body puts on its bound variable, decided over the binder's range
+    (see _range_conditions, _integral_conditions, _limit_conditions): `false` when the body is proved
+    undefined there, DEFINEDNESS_UNDECIDED when it is not proved to exist, conditions on the
+    problem's own symbols otherwise. A reading shares one budget and stops at its first undecided
+    binder (the callers abstain on one); a result is kept per binder unless the budget cut it short,
+    because verify() reads one text several times: ten inner limits with a condition solveset cannot
+    decide held it 92 s (review of 30 Sep 2026)."""
+    if getattr(_BINDER_STATE, "undecided", False):
+        return [DEFINEDNESS_UNDECIDED]
+    key = (n, var)
+    with _BINDER_CACHE_LOCK:
+        hit = _BINDER_CACHE.get(key)
+    if hit is not None:
+        out = list(hit)
+    else:
+        cut = getattr(_BINDER_STATE, "cut", False)
+        _BINDER_STATE.cut = False
+        try:
+            if isinstance(n, (sp.Sum, sp.Product)):
+                out = _range_conditions(n, var)
+            elif isinstance(n, sp.Integral):
+                out = _integral_conditions(n, var)
+            elif isinstance(n, sp.Limit):
+                out = _limit_conditions(n, var)
+            else:
+                out = []
+        except Exception:  # noqa: BLE001 - a check that fails proves nothing
+            out = [DEFINEDNESS_UNDECIDED]
+        if not getattr(_BINDER_STATE, "cut", False):
+            with _BINDER_CACHE_LOCK:
+                if len(_BINDER_CACHE) >= _BINDER_CACHE_SIZE:
+                    _BINDER_CACHE.clear()
+                _BINDER_CACHE[key] = tuple(out)
+        _BINDER_STATE.cut = cut or getattr(_BINDER_STATE, "cut", False)
+    if any(is_undecided(c) for c in out):
+        _BINDER_STATE.undecided = True
+    return out
+
+
 def definedness_conditions(expr, var) -> list[Any]:
     """Collect conditions under which `expr` is a well-defined real number."""
+    if getattr(_BINDER_STATE, "left", None) is not None:
+        return _definedness_conditions(expr, var)
+    _BINDER_STATE.left, _BINDER_STATE.undecided, _BINDER_STATE.cut = _BUDGET, False, False
+    try:
+        return _definedness_conditions(expr, var)
+    finally:
+        _BINDER_STATE.left, _BINDER_STATE.undecided, _BINDER_STATE.cut = None, False, False
+
+
+def _definedness_conditions(expr, var) -> list[Any]:
     conds: list[Any] = []
     seen: set = set()
 
     def add(c):
+        if isinstance(c, sp.Basic) and c.has(sp.Function) and any(
+                type(n).__name__ == "written_domain" for n in sp.preorder_traversal(c)):
+            # the marker's own condition is taken where it stands; around it, its body is the value
+            # (1/f(2) for f on x > 2 was read as undecidable, third audit of 30 Sep 2026)
+            c = c.replace(lambda n: type(n).__name__ == "written_domain", lambda n: n.args[0])
         if c is sp.true:
             return
         if c not in seen:
             seen.add(c)
             conds.append(c)
 
-    for node in sp.preorder_traversal(sp.sympify(expr)):
-        if isinstance(node, sp.log):
+    for node in _outer_nodes(sp.sympify(expr), var, add):
+        if type(node).__name__ == "written_domain":
+            # an IR function's declared domain at its call (normalize.parse.written_domain)
+            rel = node.args[1]
+            for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+                add(c)
+        elif isinstance(node, sp.log):
             add(node.args[0] > 0)
             if len(node.args) > 1:
                 add(node.args[1] > 0)
@@ -66,12 +454,70 @@ def definedness_conditions(expr, var) -> list[Any]:
         elif isinstance(node, (sp.asin, sp.acos)):
             add(node.args[0] >= -1)
             add(node.args[0] <= 1)
+        elif type(node).__name__ in ("gcd", "lcm"):
+            # normalize.parse.gcd/lcm have a value only at rational numbers: x + gcd(x, 2) - gcd(2, x)
+            # read as x was certified a simplification of x on all of R, and its value at
+            # x = sqrt(2) was certified (30 Sep 2026). No interval rule decides the condition: the
+            # callers abstain unless a point makes it true or false.
+            for a in node.args:
+                add(sp.Contains(a, S.Rationals))
+        elif isinstance(node, sp.factorial):
+            # n! of the curriculum: n a natural number. x + x! - x! at x = -3 was certified -3, and
+            # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026)
+            add(sp.Contains(node.args[0], S.Naturals0))
+        elif isinstance(node, sp.binomial):
+            # C(n, r) of the curriculum, like n!: C(x, 2) at x = -3 was certified while P(x, 2),
+            # built on factorial, was not (review of 30 Sep 2026)
+            for a in node.args:
+                add(sp.Contains(a, S.Naturals0))
         elif isinstance(node, sp.acosh):
             add(node.args[0] >= 1)
         elif isinstance(node, sp.atanh):
             add(node.args[0] > -1)
             add(node.args[0] < 1)
     return conds
+
+
+_NUMBER_SETS = (S.Rationals, S.Integers, S.Naturals0, S.Naturals)
+
+
+def decide_membership(a, s) -> bool | None:
+    """Membership of the constant `a` in one of the number sets the definedness conditions name.
+    SymPy decides it for sqrt(2) but leaves it standing for sqrt(2) + sqrt(3), and the value
+    x + gcd(x, 2) - gcd(2, x) at that x was certified (review of 30 Sep 2026). An algebraic number is
+    rational exactly when its minimal polynomial is linear; that polynomial then gives its value.
+    Anything else (pi + E) stays undecided."""
+    try:
+        r = s.contains(a)
+    except Exception:  # noqa: BLE001
+        return None
+    if r is sp.true or r is sp.false:
+        return bool(r)
+    if s not in _NUMBER_SETS or not isinstance(a, sp.Expr) or a.free_symbols or a.is_algebraic is not True \
+            or sp.count_ops(a) > 40:
+        return None
+    # in the sandbox, under a time limit: six square roots make a polynomial of degree 64, and a small
+    # claimed root held verify() over 200 s in the calling process (review of 30 Sep 2026)
+    from ..equiv.numeric import _in_sandbox_worker
+    if _in_sandbox_worker():
+        return None                                   # a daemonic worker cannot start one of its own
+    r = sb_run("mathverify.certify.domain:_rational_value", a, timeout=_SOLVE_TIMEOUT)
+    if not r.ok:
+        return None
+    if r.value is False:
+        return False                                  # irrational: in none of these sets
+    got = s.contains(r.value)
+    return bool(got) if got in (sp.true, sp.false) else None
+
+
+def _rational_value(a):
+    """The rational value of the algebraic number `a`, or False when it is irrational (its minimal
+    polynomial is not linear). Run in the sandbox."""
+    p = sp.minimal_polynomial(a, sp.Dummy("t"), polys=True)
+    if p.degree() != 1:
+        return False
+    c1, c0 = p.all_coeffs()
+    return sp.Rational(-c0, c1)
 
 
 def _certified_compare(lhs, rhs) -> int | str | None:
@@ -117,6 +563,14 @@ def _closed_int(e) -> int | None:
     return int(v) if isinstance(v, sp.Integer) else None
 
 
+def _closed_rational(e):
+    try:
+        v = sp.simplify(e)
+    except Exception:  # noqa: BLE001
+        return None
+    return v if isinstance(v, sp.Rational) else None
+
+
 def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
     """`definedness_conditions`, but EXACT or nothing: None when the expression contains an
     operation whose real domain the rules do not describe (factorial/gamma/gcd of a variable,
@@ -132,6 +586,10 @@ def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
         return None
     for node in sp.preorder_traversal(e):
         if node.is_Atom or isinstance(node, (sp.Add, sp.Mul) + _CONTAINERS + _TOTAL_FUNCS + _BOUNDED_FUNCS):
+            continue
+        if type(node).__name__ == "arccot":            # normalize.parse.arccot read as written: total
+            continue
+        if type(node).__name__ == "written_domain":    # its condition is read by definedness_conditions
             continue
         if isinstance(node, sp.Pow):
             base, ex = node.args
@@ -149,11 +607,17 @@ def definedness_conditions_strict(expr, var=None) -> list[Any] | None:
                     continue                      # c**x with c > 0: defined for every real x
             return None                           # 0**x, (-2)**x, x**x, x**y: no interval rule
         name = type(node).__name__
-        if name in ("factorial", "binomial", "gcd", "lcm"):
+        if name in ("factorial", "binomial"):
             if node.free_symbols:
                 return None
             ints = [_closed_int(a) for a in node.args]
             if any(i is None for i in ints) or any(i < 0 for i in ints):
+                return None
+            continue
+        if name in ("gcd", "lcm"):
+            # defined for any rational numbers (normalize.parse.gcd); read as written, lcm(-4, 6)
+            # stays unevaluated and a nonnegative-integer rule refused it (audit of 29 Sep 2026)
+            if node.free_symbols or not all(isinstance(_closed_rational(a), sp.Rational) for a in node.args):
                 return None
             continue
         return None                               # unknown operation: no exact domain
@@ -244,6 +708,16 @@ def relation_holds_at(rel, var, c) -> bool | None:
         return True
     if rel is sp.false:
         return False
+    if isinstance(rel, sp.Contains):
+        # a gcd/lcm or factorial argument's set (definedness_conditions): SymPy decides membership
+        # of an exact number (sqrt(2) is not rational) and leaves it standing when it cannot
+        try:
+            r = rel.subs(var, c)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(r, sp.Contains):
+            return decide_membership(r.args[0], r.args[1])
+        return True if r is sp.true else False if r is sp.false else None
     if not isinstance(rel, sp.core.relational.Relational):
         return None
     # never let `rel.subs` auto-evaluate a numeric Eq/inequality: Float rounding would
@@ -310,6 +784,13 @@ def in_domain(dom: sp.Set, c) -> bool | None:
         r = dom.contains(c)
     except Exception:
         r = None
+    if isinstance(r, sp.Basic) and r.has(sp.Contains):
+        # a domain cut by a gcd/lcm or factorial condition (Ctx.domain_for): decide each membership
+        decided = {m: decide_membership(*m.args) for m in r.atoms(sp.Contains)}
+        try:
+            r = r.xreplace({m: sp.true if d else sp.false for m, d in decided.items() if d is not None})
+        except Exception:  # noqa: BLE001
+            pass
     if r is sp.true:
         return True
     if r is sp.false:
@@ -382,14 +863,63 @@ def written_definedness(src: str, ns: dict[str, Any]) -> tuple[list[Any], set]:
     return conds, nowhere
 
 
+def closed_condition_undecided(conds) -> bool:
+    """Is one of these definedness conditions CLOSED (no free symbol), left standing by SymPy and
+    proved by no exact check? tan(arccot(2) + arccot(1/2)) is tan(pi/2): its condition
+    cos(arccot(2) + arccot(1/2)) != 0 stays symbolic, carries no symbol, and was dropped, so the
+    maximum of x + 0*tan(...) on [0, 1] and the root of x + tan(...) - tan(...) = 1 were certified
+    (audit of 29 Sep 2026). The expression may be undefined everywhere; the caller abstains."""
+    from ..equiv.forms import checked_forms, has_closed_form
+    for c in conds:
+        if isinstance(c, sp.Contains) and not c.free_symbols:
+            return True                     # a membership SymPy could not decide (closed, left standing)
+        if isinstance(c, sp.core.relational.Relational) and not c.free_symbols:
+            try:
+                if has_closed_form(c):
+                    # Limit(sin(2x)/x, x, 0) != 0 is read with the limit's confirmed value
+                    c = checked_forms(c)
+                    if c is sp.true:
+                        continue
+                    if c is sp.false:
+                        return True
+                if relation_holds_at(c, sp.Dummy("_closed"), 0) is not True:
+                    return True
+            except Exception:  # noqa: BLE001 - a check that fails (or a form no number confirms) proves nothing
+                return True
+    return False
+
+
+def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
+    """`closed_condition_undecided` for an IR text read as written (see `written_definedness`)."""
+    from ..normalize.parse import parse_as_written
+    e = parse_as_written(src, ns)
+    if e is None:
+        return False
+    try:
+        return closed_condition_undecided(definedness_conditions(e, None))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> bool | None:
     """Is the expression, AS WRITTEN, undefined somewhere in `region` (a point set, an interval, an
     index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
     own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
     and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT."""
-    conds, nowhere = written_definedness(src, ns)
-    if var in nowhere:
+    # the task's interval or point must lie where the variable is declared: with x declared positive
+    # the parse folds |x| to x, and on [-1, 1] the minimum of |x| - x**2 was certified to be -2, the
+    # derivative of x*|x| at -1 too (-2; it is 2); no reading gives these (second audit of 29 Sep 2026)
+    # (the closure for a positive variable: an interval [0, 2] is the common way to write it)
+    decl = Interval(0, oo) if getattr(var, "is_nonnegative", None) else S.Reals
+    try:
+        inside = region.is_subset(decl)
+    except Exception:  # noqa: BLE001
+        inside = None
+    if inside is not True:
         return True
+    conds, nowhere = written_definedness(src, ns)
+    if var in nowhere or written_closed_undecided(src, ns):
+        return True                    # a closed condition no check proves: the callers abstain
     for c in conds:
         if c.free_symbols - {var}:
             return None
@@ -423,9 +953,43 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
                 return r2.value, ev
             ev["error"] = r.error or r2.error
             return None, ev
+        if _solveset_contradicted(cond, var, r.value):
+            ev["error"] = f"solveset_contradicted_by_exact_check: {cond}"
+            return None, ev
         dom = sp.Intersection(dom, r.value)
     ev["domain"] = str(dom)
     return dom, ev
+
+
+def _solveset_contradicted(cond, var, s) -> bool:
+    """Does an exact check contradict SymPy's solution set of `cond`? Each excluded isolated point must
+    fail the condition, and a point inside each interval piece must meet it (or fail it, outside).
+    solveset reads cos(atan(x) + atan(2)) != 0 as x != -2, where the cosine is 1 (the root is 1/2), and
+    that domain was certified (audit of 29 Sep 2026). Only a contradiction counts: an undecided check
+    leaves SymPy's set as it was."""
+    try:
+        out = sp.Complement(S.Reals, s)
+    except Exception:  # noqa: BLE001
+        return False
+    checks = []
+    for piece, inside in ((s, True), (out, False)):
+        parts = piece.args if isinstance(piece, sp.Union) else (piece,)
+        for p in parts:
+            if isinstance(p, sp.FiniteSet) and len(p) <= 12:
+                # SymPy cannot always tell a closed point is real: -tan(atan(2) + atan(3)) (= 1, the
+                # point it wrongly excludes for 1/sin(arccot(x) + arccot(2) + arccot(3))) has is_real
+                # None, went unchecked, and the true domain R minus {-1} was refuted
+                checks += [(q, inside) for q in p if q.is_real or (q.is_number and q.is_real is None)]
+            elif isinstance(p, sp.Interval) and p.measure.is_positive:
+                lo, hi = p.inf, p.sup
+                q = (lo + hi) / 2 if lo.is_finite and hi.is_finite else (hi - 1 if lo.is_infinite and hi.is_finite
+                                                                         else lo + 1 if lo.is_finite else sp.Integer(0))
+                checks.append((q, inside))
+    for q, inside in checks[:24]:
+        h = relation_holds_at(cond, var, q)
+        if h is not None and h is not inside:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------

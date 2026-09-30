@@ -377,12 +377,40 @@ def certify_series_sum(term, var, lo, hi, claimed, timeout: float = 10.0) -> tup
         ok, cev = num_equal(claimed, num_val, rel_tol=1e-15)
         ev["compare"] = cev
         ev["method"] = "numeric_only"
-        if ok is False:
+        # nsum refutes only a series it sums reliably: terms that never vanish and keep one sign, and
+        # a value that stands at a higher precision too. Σ sin(πk/2)/k came out 263/315 = 0.8349 at
+        # every precision (the zero terms end its extrapolation early), and π/4 was refuted (audit
+        # of 29 Sep 2026).
+        rt = sb_run("mathverify.certify.series:_one_signed_terms", term, var, lo, timeout=timeout)
+        one_signed = bool(rt.ok and rt.value is True)
+        rn2 = sb_run("mathverify.certify.series:_nsum_worker", term, var, lo, hi, 50, timeout=timeout * 2)
+        num2 = sp.Float(rn2.value, 50) if rn2.ok else None
+        converged = num2 is not None and num_equal(num_val, num2, rel_tol=1e-20)[0] is True
+        ev["numeric_reliable"] = one_signed and converged
+        if ok is False and one_signed and converged:
             return False, ev
         ev["reason"] = "numeric_only_no_symbolic_confirmation"
         return None, ev
     ev["reason"] = "summation_failed"
     return None, ev
+
+
+def _one_signed_terms(term, var, lo, n=200) -> bool:
+    """Are the first `n` terms nonzero and of one sign (the series nsum sums reliably)?"""
+    if lo == -oo:
+        return False
+    f = sp.lambdify(var, term, "mpmath")
+    sign = 0
+    with mp.workdps(30):
+        for k in range(int(lo), int(lo) + n):
+            v = f(mp.mpf(k))
+            if isinstance(v, mp.mpc) or not mp.isfinite(v) or abs(v) < mp.mpf(10) ** -25:
+                return False
+            s = 1 if v > 0 else -1
+            if sign and s != sign:
+                return False
+            sign = s
+    return True
 
 
 def _summation_worker(term, var, lo, hi):
@@ -526,6 +554,12 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
+            # an upper bound below lo - 1 is SymPy's Karr convention (Σ_{k=1}^{-2} k = 1) or an empty
+            # sum (0, certified 30 Sep 2026); the curriculum has neither, and the same sum written as
+            # Sum(k, (k, 1, -2)) is not read (normalize.parse._refuse_reversed_ranges)
+            if (hi - lo + 1).is_extended_negative is True:
+                return unknown(LAYER, "reversed_bounds", t.ms, {"lo": str(lo), "hi": str(hi)},
+                               flags=["reversed_bounds"])
             # every term as written must exist: k/k parses to 1, so Σ_{k=-1}^{1} k/k was "3"
             from .domain import written_undefined_in
             if (lo.is_Integer or lo == -oo) and (hi.is_Integer or hi == oo):

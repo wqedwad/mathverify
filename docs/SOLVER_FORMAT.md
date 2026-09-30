@@ -59,6 +59,51 @@ Yardımcı fonksiyonlar: `at(expr, var, value)`, `dist(x1,y1,x2,y2)`, `slope(...
 `tri_area(...)`, `point_line_dist(x0,y0,a,b,c)`, `det`, `trace`, `eigmax`, `eigmin`,
 `gcd`, `lcm`, `binomial`, `P(n,k)`, `deg(x)`.
 
+Gösterim gelenekleri (29 Eylül 2026, DECISIONS §72):
+
+- `gcd`/`lcm` sayıların EBOB/EKOK'udur (kesirde payların EBOB'u / paydaların EKOK'u); bir argüman sayı
+  değilse değerlendirilmez, polinom gcd/lcm'i değildir (`gcd(n, 4)` n = 12'de 4). `\gcd` ve
+  `\operatorname{lcm}` aynı okunur; `gcd([84, 120])` liste biçimi de.
+- `arccot` (ve `acot`, `\operatorname{arccot}`, `\cot^{-1}`) değerleri (0, π) aralığındadır:
+  `arccot(-1) = 3*pi/4`.
+- `Sum`/`Product` indisi ve belirli `Integral`/`integrate` değişkeni bağlayıcının içinde yereldir: IR'da
+  aynı adla bildirilen değişkenin varsayımlarını almaz (k pozitif bildirilmişken
+  `Sum(Abs(k), (k, -2, 2)) = 6`). Aynı ad iç içe ya da bir bağlayıcıda iki kez bağlanamaz; ters toplam
+  aralığı (`Sum(k, (k, 3, 1))`) ve tam sayı olmayan sınır (`Sum(k, (k, 1, 7/2))`) okunmaz. `Limit`
+  bildirilmiş sembolü korur (tam sayı `n` ile dizi limiti). **Düzeltme (30 Eylül 2026, DECISIONS §73 (a), §74):** yalnız
+  +∞'da (dizi limiti dizi kalır). `Limit`/`limit`, `at`, `Subs` ve `ConditionSet` de bağlayıcıdır: değişkenleri gövdede
+  noktanın olgularını taşır (−∞'da gerçel, bildirilmişse tam sayı; sonlu noktada gerçel; pozitif noktada ya da sağdan 0'da
+  pozitif), aynı adlı bildirilmiş değişkenin varsayımını almaz (x pozitifken `Limit(sqrt(x**2)/x, x, -oo)` = −1,
+  `at(sqrt(x**2), x, -1)` = 1). Aynı adlı iç içe nokta bağlayıcısı, anahtar kelimeli argüman ve ad olarak yazılmamış değişken okunmaz.
+- Yönü yazılmamış `Limit`/`limit` her yerde iki taraflıdır (`Limit(Abs(x)/x, x, 0)` yoktur); tek taraf
+  `Limit(e, x, 0, "+")` ile yazılır. Kapalı bir integral, toplam, çarpım ya da limit ancak SymPy'nin
+  değeri sayısal olarak doğrulanınca değer sayılır; doğrulanamayan biçimli iddia UNKNOWN kalır.
+- Köşede türev (`at(diff(Abs(x), x), x, 0)`) okunmaz: türevi olmayan noktada değer yoktur.
+- IR fonksiyonunun argümanı fonksiyonun kendi gerçel değişkenidir: aynı adlı bildirilmiş değişkenin
+  varsayımını almaz (x pozitifken `f(x) = sqrt(x**2) + x` için `f(-1) = 0`). Gövdenin yazılı koşulları
+  her çağrıda uygulanır; `domain` alanı (`"x > 0"`) da bir koşuldur, alanlı fonksiyon Lean'e yazılmaz.
+- Görevin aralığı ya da noktası değişkenin bildirilmiş işaret alanının dışındaysa (x pozitifken
+  [-1, 1]) sertifika karar vermez. **Düzeltme (30 Eylül 2026, DECISIONS §73, §74):** limit, türev, teğet ve ekstremumda;
+  belirli integralin değişkeni bağlıdır ve [a, b]'de okunur (x pozitifken ∫₋₁¹ |x| dx = 1).
+
+Gösterim gelenekleri, ek (30 Eylül 2026, DECISIONS §73; her biri V14 testlerine bağlı):
+
+- `gcd`/`lcm` iki ya da daha çok argüman alır, işaret yok sayılır: `lcm(4, 6, 10)` = 60, `gcd(12, 18, 4)` = 2,
+  `lcm(-4, 6)` = 12. `igcd`/`ilcm` yalnız tam sayıyla okunur (`igcd(1/2, 1/3)` okunmaz).
+- Aralık bağlayıcısının sınırı `(değişken, alt, üst)` ya da `[değişken, alt, üst]`; belirsiz integralde `Integral(f, x)` ya da
+  `(x,)`; `+k` ad sayılır. Değişkeni ad olmayan (`1*k`, `k**1`, `(k,) + (0, 3)`, `at(x**2, 2*x, 1)`), iki ya da dört elemanlı
+  (`(x, 1)`, `(x, 0, 1, 2)`) ya da kendisi işlem olan sınır okunmaz.
+- Toplamın terimi, integrand ve limitin ifadesi aralığında yazıldığı biçimde tanımlı olmalıdır: `Sum(k/k, (k, -1, 1))` değer
+  değildir; karar verilemezse sonuç UNKNOWN.
+- LaTeX'te de yönü yazılmamış limit iki taraflıdır (`\lim_{x\to 0}`); tek yan `0^{+}`/`0^{-}` ile yazılır, `\to 2^{3}` 8
+  noktasıdır. Bildirilmiş alanın kapalı ucunda (x pozitif ya da negatif değilken 0) yönsüz limit alan üzerinden, sağdan
+  okunur (`Limit(x*log(x), x, 0)` = 0).
+- Tam sayı bildirilmiş değişkende türev, teğet, ilkel ve ekstremum görevleri UNKNOWN'dır (ifade içindeki `diff` için henüz
+  değil, HANDOFF V17).
+- Problem fonksiyonunun argümanı `i` gibi bir sabit adı taşısa da fonksiyonun değişkenidir (`h(i) = i**2` için `h(3)` = 9).
+- `evaluate` görevinde sayıların gcd/lcm'ini hesaplayan iddia (`gcd(84, 120)*1`, `\operatorname{lcm}(4, 3)`) değer sayılmaz
+  (UNKNOWN); problemin sembolüyle yazılan `gcd(4, n)` ifadedir.
+
 ## Çözüm (`solution`)
 
 ```json

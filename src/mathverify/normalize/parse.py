@@ -12,7 +12,10 @@ the caller is expected to run parsing inside the sandbox worker for untrusted te
 from __future__ import annotations
 
 import ast
+import math
 import re
+import threading
+from fractions import Fraction
 from typing import Any
 
 import sympy as sp
@@ -91,22 +94,215 @@ def _point_line_dist(x0, y0, a, b, c):
     return sp.Abs(a * x0 + b * y0 + c) / sp.sqrt(a ** 2 + b ** 2)
 
 
+# SymPy's `gcd`/`lcm` are the POLYNOMIAL gcd/lcm: with a symbol, `gcd(n, 4)` is 1 and `lcm(n, 2)` is
+# 2*n, so for "n = 12, gcd(n, 4) = ?" the answer 1 was certified and 4 refuted (V14, 29 Sep 2026).
+# Here they are the gcd/lcm of numbers, left unevaluated until every argument is one. Numbers keep
+# SymPy's reading: integers exactly, fractions by the school rule gcd(a/b, c/d) = gcd(a, c)/lcm(b, d).
+# The class names are `gcd`/`lcm` on purpose: printed, the expression reads back the same, and the
+# Lean printer and the domain rules recognise the operation by that name.
+def _number_args(cls, args) -> bool:
+    if len(args) < 2:
+        raise TypeError(f"{cls.__name__} takes at least two arguments")
+    return all(isinstance(a, sp.Rational) for a in args)
+
+
+def _canonical_order(cls, args):
+    """gcd and lcm are symmetric: the arguments in SymPy's canonical order, so gcd(4, n) is gcd(n, 4)
+    (the two were not recognised as equal; audit of 29 Sep 2026)."""
+    ordered = tuple(sorted(args, key=sp.default_sort_key))
+    return cls(*ordered) if ordered != tuple(args) else None
+
+
+def _numeric_integer_op(op):
+    """The numeric value (lambdify, evalf) of gcd/lcm: exact at integer points, none elsewhere. The
+    random-point check could not evaluate the class at all and read that as "defined on one side
+    only": gcd(n, n + 1) = 1 was refuted at n = 109 (audit of 29 Sep 2026)."""
+    def value(*args):
+        import mpmath
+        ints = []
+        for a in args:
+            v = mpmath.mpf(a)
+            if not mpmath.isint(v):
+                raise ValueError("gcd/lcm of a number that is not an integer has no numeric value here")
+            ints.append(int(v))
+        out = ints[0]
+        for i in ints[1:]:
+            out = op(out, i)
+        return mpmath.mpf(abs(out))
+    return staticmethod(value)
+
+
+class gcd(sp.Function):  # noqa: N801 - the name is the notation
+    _imp_ = _numeric_integer_op(math.gcd)
+
+    @classmethod
+    def eval(cls, *args):
+        if _number_args(cls, args):
+            out = args[0]
+            for a in args[1:]:
+                out = sp.gcd(out, a)
+            return out
+        return _canonical_order(cls, args)
+
+    def _eval_is_integer(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+    def _eval_is_nonnegative(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+
+class lcm(sp.Function):  # noqa: N801 - the name is the notation
+    _imp_ = _numeric_integer_op(math.lcm)
+
+    @classmethod
+    def eval(cls, *args):
+        if _number_args(cls, args):
+            out = args[0]
+            for a in args[1:]:
+                out = sp.lcm(out, a)
+            return out
+        return _canonical_order(cls, args)
+
+    def _eval_is_integer(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+    def _eval_is_nonnegative(self):
+        return True if all(a.is_integer for a in self.args) else None
+
+
+def _integer_op(cls):
+    """The callable the namespace gives for gcd/lcm: SymPy's `gcd([84, 120])` list form stays
+    readable (the class itself takes the numbers as arguments)."""
+    def call(*args):
+        if len(args) == 1 and isinstance(args[0], (list, tuple, sp.Tuple)):
+            args = tuple(args[0])
+        return cls(*args)
+    call.__name__ = cls.__name__
+    return call
+
+
+def _integer_only_op(cls, name):
+    """`igcd`/`ilcm`: SymPy's integer-only spellings. SymPy's own refused a symbol, so igcd(n, 2)
+    with n an integer was unreadable (30 Sep 2026); here it is the integer gcd/lcm, still refused
+    for an argument not known to be an integer (no fraction rule under the integer name)."""
+    def call(*args):
+        args = tuple(sympify_nontext(a) for a in args)
+        if any(getattr(a, "is_integer", None) is not True for a in args):
+            raise ValueError(f"{name} takes integers")
+        return cls(*args)
+    call.__name__ = name
+    return call
+
+
+def _set_op(op):
+    """Union/Intersection/Complement written in SymPy's own syntax, their arguments' endpoints made
+    one spelling first (equiv.sets.unify_endpoints), as for the `U` notation: SymPy merged
+    `Union(Interval.open(-oo, R), Interval.open(3, oo))`, R = sqrt(11 + 6*sqrt(2)) - sqrt(2) = 3,
+    into the whole line before anything could compare R with 3 (V14, 30 Sep 2026)."""
+    def build(*sets, **kw):
+        from ..equiv.sets import EndpointsIncomparable, unify_endpoints
+        try:
+            sets = unify_endpoints(list(sets))
+        except EndpointsIncomparable as e:
+            raise ParseError(f"set endpoints cannot be compared exactly: {e}") from e
+        return op(*sets, **kw)
+    build.__name__ = op.__name__
+    return build
+
+
+def _at(e, v, val):
+    """e at v = val. A derivative at a corner is no derivative: diff(Abs(x), x) is sign(x), and
+    sign(0) = 0 certified "the derivative of |x| at 0 is 0" (audit of 29 Sep 2026). A sign, Heaviside
+    or DiracDelta whose argument vanishes at the point is refused, not read."""
+    e = sp.sympify(e)
+    for n in e.atoms(sp.sign, sp.Heaviside, sp.DiracDelta):
+        if n.args[0].subs(v, val).is_zero:
+            raise ParseError(f"at({e}, {v}, {val}): {n} is taken where its argument is 0")
+    return e.subs(v, val)
+
+
+def _two_sided(p) -> str:
+    return "-" if p == oo else "+" if p == -oo else "+-"
+
+
+def _Limit(e, v, p, d=None):  # noqa: N802 - the name is the notation
+    """A limit written without a direction is two-sided (SOLVER_FORMAT, E6), as in compute steps.
+    SymPy's default is the right side: Limit(Abs(x)/x, x, 0) was 1 and certified (audit of
+    29 Sep 2026)."""
+    return sp.Limit(e, v, p, d if d is not None else _two_sided(p))
+
+
+def _limit(e, v, p, d=None):
+    """`limit` computes, unless the limit is closed: then it stays the form, and a value is taken
+    only when numbers confirm SymPy's (equiv.forms). With n an integer SymPy's limit of n*tan(pi/n)
+    at oo is 0 (the limit is pi), and the parse certified 0 (audit of 29 Sep 2026)."""
+    form = _Limit(e, v, p, d)
+    if isinstance(form, sp.Limit) and not form.free_symbols:
+        return form
+    return sp.limit(e, v, p, d if d is not None else _two_sided(p))
+
+
+def _integrate(*args, **kwargs):
+    """`integrate` computes, unless the integral is definite in every variable and closed: then it
+    stays the form, as `Integral` does, and its value is confirmed by numbers (equiv.forms). SymPy
+    integrates |cos x| over [-1, 1] to 0 (the value is 2 sin 1), and the parse certified 0 (audit
+    of 29 Sep 2026). An antiderivative or an integral with a parameter is computed as before."""
+    form = sp.Integral(*args, **kwargs)
+    if isinstance(form, sp.Integral) and not form.free_symbols and form.limits \
+            and all(len(lim) == 3 for lim in form.limits):
+        return form
+    return sp.integrate(*args, **kwargs)
+
+
+_integrate.binds_range = True  # type: ignore[attr-defined]
+
+
+class arccot(sp.Function):  # noqa: N801 - the name is the notation
+    """arccot with values in (0, pi), the convention of the Turkish curriculum (AYT). SymPy's `acot`
+    takes values in (-pi/2, pi/2]: acot(-1) = -pi/4 where AYT reads 3*pi/4, so the right answer was
+    refuted and -pi/4 certified (V14, 29 Sep 2026). Evaluated, it is pi/2 - atan(x), that function on
+    all of R. Read as written (evaluation off) it stays one node: pi/2 - atan(x) built unevaluated is
+    a nest of Adds that SymPy's sin misreads as a multiple of pi, so 1/sin(arccot(x) + arccot(2)) was
+    "defined nowhere" and the empty domain certified (audit of 29 Sep 2026)."""
+    nargs = 1
+
+    @classmethod
+    def eval(cls, x):
+        return pi / 2 - sp.atan(x)
+
+    def _eval_evalf(self, prec):
+        return (pi / 2 - sp.atan(self.args[0]))._eval_evalf(prec)
+
+    def _eval_rewrite_as_atan(self, x, **kwargs):
+        return pi / 2 - sp.atan(x)
+
+    def fdiff(self, argindex=1):
+        return -1 / (1 + self.args[0] ** 2)
+
+    def _eval_is_extended_real(self):
+        return self.args[0].is_extended_real
+
+    def _eval_is_positive(self):
+        return True if self.args[0].is_extended_real else None
+
+
 _SAFE_NAMES: dict[str, Any] = {
     # constants
     "pi": pi, "E": E, "e": E, "I": I, "i": I, "oo": oo, "inf": oo, "zoo": zoo, "nan": nan,
     # elementary
     "sin": sp.sin, "cos": sp.cos, "tan": sp.tan, "cot": sp.cot, "sec": sp.sec, "csc": sp.csc,
-    "asin": sp.asin, "acos": sp.acos, "atan": sp.atan, "acot": sp.acot, "atan2": sp.atan2,
-    "arcsin": sp.asin, "arccos": sp.acos, "arctan": sp.atan, "arccot": sp.acot,
+    "asin": sp.asin, "acos": sp.acos, "atan": sp.atan, "acot": arccot, "atan2": sp.atan2,
+    "arcsin": sp.asin, "arccos": sp.acos, "arctan": sp.atan, "arccot": arccot,
     "sinh": sp.sinh, "cosh": sp.cosh, "tanh": sp.tanh,
     "exp": sp.exp, "log": sp.log, "ln": sp.log, "sqrt": sp.sqrt, "cbrt": sp.cbrt, "root": sp.root,
     "Abs": sp.Abs, "abs": sp.Abs, "floor": sp.floor, "ceiling": sp.ceiling, "ceil": sp.ceiling,
     "frac": sp.frac, "sign": sp.sign, "Mod": sp.Mod, "mod": sp.Mod,
-    "gcd": sp.gcd, "lcm": sp.lcm, "igcd": sp.igcd, "ilcm": sp.ilcm,
+    "gcd": _integer_op(gcd), "lcm": _integer_op(lcm), "igcd": _integer_only_op(gcd, "igcd"),
+    "ilcm": _integer_only_op(lcm, "ilcm"),
     "factorial": sp.factorial, "binomial": sp.binomial, "C": sp.binomial, "comb": sp.binomial,
     "P": _perm, "perm": _perm, "deg": _deg,
     "dist": _dist, "slope": _slope, "tri_area": _tri_area, "dot": _dot, "point_line_dist": _point_line_dist,
-    "at": lambda e, v, val: sp.sympify(e).subs(v, val),     # at(diff(f(x), x), x, 1)
+    "at": _at,                                               # at(diff(f(x), x), x, 1)
     "eigmax": lambda m: sp.Max(*[k for k in sp.Matrix(m).eigenvals() if k.is_real]),
     "eigmin": lambda m: sp.Min(*[k for k in sp.Matrix(m).eigenvals() if k.is_real]),
     "trace": lambda m: sp.Matrix(m).trace(), "rank": lambda m: sp.Matrix(m).rank(),
@@ -114,15 +310,15 @@ _SAFE_NAMES: dict[str, Any] = {
     "re": sp.re, "im": sp.im, "conjugate": sp.conjugate, "arg": sp.arg,
     # calculus (unevaluated forms allowed in step claims)
     "Sum": sp.Sum, "Product": sp.Product, "Integral": sp.Integral, "Derivative": sp.Derivative,
-    "Limit": sp.Limit, "diff": sp.diff, "integrate": sp.integrate, "limit": sp.limit,
+    "Limit": _Limit, "diff": sp.diff, "integrate": _integrate, "limit": _limit,
     # numbers
     "Rational": Rational, "Integer": Integer, "Float": sp.Float, "S": S, "nsimplify": sp.nsimplify,
     # relations / logic
     "Eq": Eq, "Ne": Ne, "Lt": Lt, "Le": Le, "Gt": Gt, "Ge": Ge, "And": And, "Or": Or, "Not": Not,
     "Piecewise": sp.Piecewise,
     # sets
-    "Interval": Interval, "FiniteSet": FiniteSet, "Union": Union, "Intersection": Intersection,
-    "Complement": Complement, "EmptySet": EmptySet, "Reals": S.Reals, "Integers": S.Integers,
+    "Interval": Interval, "FiniteSet": FiniteSet, "Union": _set_op(Union), "Intersection": _set_op(Intersection),
+    "Complement": _set_op(Complement), "EmptySet": EmptySet, "Reals": S.Reals, "Integers": S.Integers,
     "Naturals": S.Naturals, "Naturals0": S.Naturals0, "Complexes": S.Complexes,
     "Range": sp.Range, "ImageSet": sp.ImageSet, "Lambda": sp.Lambda, "ConditionSet": sp.ConditionSet,
     # linear algebra
@@ -151,7 +347,8 @@ COMPUTING_OPERATORS = frozenset({
     "at", "Symbol", "symbols", "det", "trace", "rank", "eigmax", "eigmin",
     "dist", "slope", "tri_area", "dot", "point_line_dist",
 })
-_LATEX_COMPUTING = re.compile(r"\\(?:int|iint|oint|lim|sum|prod)\b|\\frac\s*\{\s*d\s*\}|\\frac\s*\{\s*\\partial")
+# `\b` does not end `\sum_{k=1}` (the underscore is a word character): subscripted binders passed
+_LATEX_COMPUTING = re.compile(r"\\(?:int|iint|oint|lim|sum|prod)(?![A-Za-z])|\\frac\s*\{\s*d\s*\}|\\frac\s*\{\s*\\partial")
 _CALL_RE = re.compile(r"(?<![\w.])([A-Za-z_]\w*)\s*\(")
 
 
@@ -168,6 +365,10 @@ def claim_namespace(ns: dict[str, Any], function_names=()) -> dict[str, Any]:
 
 def check_claim_is_value(text: Any, function_names=()) -> None:
     """Raise ClaimNotAValue when a payload asks for a computation instead of stating a value."""
+    if isinstance(text, (list, tuple)):
+        for t in text:                    # a set's elements are claims too
+            check_claim_is_value(t, function_names)
+        return
     if text is None or not isinstance(text, str):
         return
     banned = COMPUTING_OPERATORS | set(function_names)
@@ -215,18 +416,71 @@ def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, A
 
 
 def _make_function(fdef, ns):
-    argsyms = [ns[a] for a in fdef.args]
-    body = parse_expr_str(fdef.expr, ns)
+    # A formal argument is the function's own real variable. Taken from the namespace, it carried
+    # the domain of a problem variable with the same name: with x declared positive the body
+    # sqrt(x**2) + x was folded to 2*x, so f(-1) was -2 and the sum of f(k) over -2..2 was 0 (it is
+    # 6; audit of 29 Sep 2026). A call substitutes its argument, whose own assumptions apply then.
+    body_ns = dict(ns)
+    body_ns.update({a: Symbol(a, real=True) for a in fdef.args})
+    argsyms = [body_ns[a] for a in fdef.args]
+    body = parse_expr_str(fdef.expr, body_ns)
 
     def _f(*args):
         if len(args) != len(argsyms):
             raise ParseError(f"function {fdef.name} expects {len(argsyms)} args, got {len(args)}")
-        return body.subs(dict(zip(argsyms, args)), simultaneous=True)
+        # a sum over 1..2n in the body gets an integer index once n is an integer argument (the formal
+        # n is real, so the parse left the index plain; second audit of 29 Sep 2026)
+        return _integer_indices(body.subs(dict(zip(argsyms, args)), simultaneous=True))
 
     _f.__name__ = fdef.name
     _f.body = body            # type: ignore[attr-defined]
     _f.argsyms = argsyms      # type: ignore[attr-defined]
+    _f.fdef = fdef            # type: ignore[attr-defined]
+    _f.body_ns = body_ns      # type: ignore[attr-defined]
+    # the declared domain (`"x > 0"`), a condition on the formal arguments; None when there is none
+    # or it cannot be read (then it is not applied, as before)
+    _f.domain_rel = None      # type: ignore[attr-defined]
+    if isinstance(getattr(fdef, "domain", None), str) and fdef.domain.strip():
+        try:
+            rel = parse_relation(fdef.domain, body_ns)
+            if isinstance(rel, (sp.core.relational.Relational, sp.And)):
+                _f.domain_rel = rel
+        except Exception:  # noqa: BLE001 - an unreadable domain is not applied
+            pass
     return _f
+
+
+class written_domain(sp.Function):  # noqa: N801 - a marker read by certify.domain
+    """A call f(a) of an IR function read AS WRITTEN: its body as written with a substituted, and the
+    condition the function's declared domain puts on a. Only definedness reads it (the value parse
+    never builds it). The declared domain was ignored everywhere: f(x) = x**2 + 1 on x > 0 gave
+    f(-2) = 5 and {-2, 2} for f(x) = 5 (second audit of 29 Sep 2026). The derivative of a call keeps
+    the condition: without it `diff` of such a call raised and the whole text lost its conditions."""
+    nargs = 2
+
+    def _eval_derivative(self, s):
+        return written_domain(self.args[0].diff(s), self.args[1])
+
+
+def _written_call(fn, ns, depth=0):
+    """An IR function called inside a text read as written: its body AS WRITTEN (so its conditions,
+    x**2/x at 0, survive) with the arguments substituted unevaluated, inner calls expanded the same
+    way. The evaluated call folded the body first: the derivative of f(x) = (x - 1)**2/(x - 1) at 1,
+    the minimum on [1, 3], a sum over its terms and g(x) = f(x) + 3 at 1 were certified. A body that
+    cannot be read that way gives the evaluated call, as before."""
+    def call(*args):
+        if len(args) != len(fn.argsyms) or depth > 20:
+            return fn(*args)
+        w = parse_as_written(fn.fdef.expr, dict(ns, **dict(zip(fn.fdef.args, fn.argsyms))), _depth=depth + 1)
+        if w is None or len(w) != 1:
+            return fn(*args)
+        sub = dict(zip(fn.argsyms, args))
+        with sp.evaluate(False):
+            out = w[0].xreplace(sub)
+            if fn.domain_rel is not None:
+                out = written_domain(out, fn.domain_rel.xreplace(sub))
+        return out
+    return call
 
 
 # ----------------------------------------------------------------------------
@@ -378,13 +632,460 @@ def sympify_nontext(v):
     return sp.sympify(v, strict=True)
 
 
+# Binders whose TEXT gives the range of their variable: the index of a Sum or a Product runs over the
+# integers between its limits, the variable of a definite integral over the interval between them.
+# A declaration of the same name in the IR describes the problem's free variable, not this dummy:
+# with k declared positive, `Sum(Abs(k), (k, -2, 2))` was read as Sum(k, ...) = 0 and `0**k` became
+# 0 before the sum was even built, so a wrong answer was certified (V14, 29 Sep 2026). The dummy is
+# read without assumptions, as the LaTeX branch (latex2sympy's own symbol) and an undeclared index
+# (`steps.deterministic._with_bound_dummies`) already read it; SymPy sums and integrates such a
+# symbol like the declared one (measured on the common sums and integrals), and an integer
+# assumption would be wrong for limits that are not integers (`Sum(sin(pi*k), (k, 1/2, 5/2))`).
+# A Limit, at() and Subs bind their variable too: see `_rebind_point_dummies`.
+_RANGE_BINDERS = ("Sum", "Product", "Integral", "integrate")
+
+
+def _binds_range(obj) -> bool:
+    """SymPy's range binders, or a callable that says it builds one: the step namespace keeps an
+    Integral unevaluated through its own function, and `compute` claims were not rebound (audit of
+    29 Sep 2026: the wrong step "Integral(Abs(x), (x, -1, 1)) = 0" stayed verified)."""
+    return any(obj is b for b in (sp.Sum, sp.Product, sp.Integral, sp.integrate)) \
+        or getattr(obj, "binds_range", False) is True
+
+
+def _bare_name(node):
+    """The Name a binder's variable is written as (`+k` is k), or None."""
+    while isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.UAdd):
+        node = node.operand
+    return node if isinstance(node, ast.Name) else None
+
+
+def _limit_var(lim) -> str | None:
+    """The name a limit binds: the k of (k, a, b), [k, a, b], (+k, a, b), (k,) or a bare k."""
+    if isinstance(lim, ast.Name):
+        return lim.id
+    if isinstance(lim, (ast.Tuple, ast.List)) and lim.elts and _bare_name(lim.elts[0]) is not None:
+        return _bare_name(lim.elts[0]).id
+    return None
+
+
+def _check_limit_syntax(call: ast.Call, raw: str) -> None:
+    """A range binder's limits are written (variable, lower, upper), its variable as a name; an
+    integral also takes a bare variable or (variable,) (indefinite). Anything else reached SymPy as a
+    binding the renaming did not see, so the IR's assumptions leaked into it: with k positive,
+    `Sum(0**k, (k,) + (0, 3))` and `Sum(0**k, (1*k, 0, 3))` were 0 (true 1); or it is a notation no
+    school text has: `Integral(f, (x, 1))` is an antiderivative evaluated at 1, `(x, 0, 1, 2)`
+    SymPy's substitution form (audit of V14, 30 Sep 2026). They are not read."""
+    name = call.func.id
+    integral = name in ("Integral", "integrate")
+    for lim in call.args[1:]:
+        if isinstance(lim, ast.Name) and integral:
+            continue
+        if isinstance(lim, (ast.Tuple, ast.List)) and (len(lim.elts) == 3 or (integral and len(lim.elts) == 1)) \
+                and _bare_name(lim.elts[0]) is not None:
+            continue
+        raise ParseError(f"{raw!r}: the limits of {name} must be written (variable, lower, upper): not read")
+
+
+# A bound that is itself an operation: SymPy asks the assumptions of each bound while it builds the
+# binder (and so does every function around it, Abs or floor), and each question re-evaluates the
+# inner operation: Sum(k, (k, -1, Sum(k, (k, -1, ...)))) nested four deep took 86 s to parse and
+# Abs of it three deep 32 s (audit and review of V14, 30 Sep 2026). Refused before anything is built.
+_BOUND_OPERATIONS = frozenset({"Sum", "Product", "Integral", "integrate", "Limit", "limit", "diff",
+                               "Derivative", "Subs", "at"})
+
+
+def _literal_number(node, depth: int = 0) -> Fraction | None:
+    """The exact value of a bound written with numbers only (Integer(3), -Integer(1), 10**3, 7/2),
+    or None. Read from the code, before SymPy builds anything, and in Python's own fractions: the
+    as-written reading runs with SymPy's evaluation off."""
+    if depth > 30:
+        return None
+    if isinstance(node, ast.Constant) and type(node.value) is int:
+        return Fraction(node.value)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("Integer", "Rational") \
+            and not node.keywords and 1 <= len(node.args) <= 2:
+        vals = [_literal_number(a, depth + 1) for a in node.args]
+        if any(v is None or v.denominator != 1 for v in vals) or (len(vals) == 2 and vals[1] == 0):
+            return None
+        return vals[0] if len(vals) == 1 else vals[0] / vals[1]
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        v = _literal_number(node.operand, depth + 1)
+        return None if v is None else (-v if isinstance(node.op, ast.USub) else v)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)):
+        a, b = _literal_number(node.left, depth + 1), _literal_number(node.right, depth + 1)
+        if a is None or b is None:
+            return None
+        if isinstance(node.op, ast.Pow):
+            if b.denominator != 1 or abs(b) > 64 or abs(a) > 10**6 or (a == 0 and b < 0):
+                return None
+            return a ** int(b)
+        if isinstance(node.op, ast.Div):
+            return None if b == 0 else a / b
+        return a + b if isinstance(node.op, ast.Add) else a - b if isinstance(node.op, ast.Sub) else a * b
+    return None
+
+
+def _refuse_computed_bounds(code: str, raw: str) -> None:
+    """Also the range checks of `_refuse_reversed_ranges` for bounds written with numbers, here, before
+    SymPy builds the expression: a function around a Sum computes it at once (floor, ceiling), and
+    floor(Sum(k, (k, 3, 1))) = -2 (Karr) was certified past the later refusal (review of V14,
+    30 Sep 2026)."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return                                    # parse_expr reports it
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _RANGE_BINDERS):
+            continue
+        for lim in node.args[1:]:
+            if not isinstance(lim, (ast.Tuple, ast.List)):
+                continue
+            for b in lim.elts[1:]:
+                if any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _BOUND_OPERATIONS
+                       for n in ast.walk(b)):
+                    raise ParseError(f"{raw!r} has a {node.func.id} whose limit is itself an operation: not read")
+            if node.func.id in ("Sum", "Product") and len(lim.elts) == 3:
+                lo, hi = _literal_number(lim.elts[1]), _literal_number(lim.elts[2])
+                if lo is None or hi is None:
+                    continue
+                if hi - lo + 1 < 0:
+                    raise ParseError(f"{raw!r} has a {node.func.id} over a reversed range: not read")
+                if (hi - lo).denominator != 1:
+                    raise ParseError(f"{raw!r} has a {node.func.id} whose limits are not an integer apart: "
+                                     "not read")
+
+
+def _rebind_range_dummies(code: str, local_dict: dict[str, Any], raw: str) -> tuple[str, dict[str, Any]] | None:
+    """`code` with the variable of every range binder renamed, inside the binder only, to a fresh
+    name for an assumption-free symbol of the same name; None when there is nothing to rename.
+
+    Only a name the namespace reads as a symbol is rebound (`pi`, `E` or `oo` as an index is not
+    mathematics and stays unreadable). A name bound twice, by two limits of one binder or by a binder
+    inside another, is refused: `integrate(x**2, x, (x, 0, 1))` split x between the IR symbol and the
+    dummy (x/3 was certified for 1/12), and SymPy flattens nested sums of one name and evaluates them
+    wrongly (Σ_{k=1}^{2} Σ_{k=-1}^{1} (|k| + 1) = 10 came out 0). The walk is iterative and the names
+    are replaced in the text, so a long sum of terms does not hit the recursion limit."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None                               # parse_expr reports it
+    nodes = list(ast.walk(tree))
+    bindings: list[tuple[ast.Call, int, Any, str]] = []
+    for node in nodes:
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _RANGE_BINDERS
+                and node.args and _binds_range(local_dict.get(node.func.id))):
+            continue
+        _check_limit_syntax(node, raw)
+        limits = node.args[1:]
+        named = [_limit_var(lim) for lim in limits]
+        for m, lim in enumerate(limits):
+            v = named[m]
+            if not (isinstance(lim, (ast.Tuple, ast.List)) and len(lim.elts) == 3 and v is not None
+                    and isinstance(local_dict.get(v), Symbol)):
+                continue
+            if named.count(v) > 1:
+                raise ParseError(f"{raw!r} binds {v!r} twice in one {node.func.id}: not read")
+            bindings.append((node, m, lim, v))
+    if not bindings:
+        return None
+    owner: dict[int, int] = {}                    # id(Name node) -> index of the binding it belongs to
+    for bi, (call, m, lim, v) in enumerate(bindings):
+        limits = call.args[1:]
+        # the variable of limit m binds the body and the bounds of the limits listed before it
+        # (SymPy: the first limit is the innermost), and itself
+        roots = [call.args[0]] + [e for inner in limits[:m] if isinstance(inner, (ast.Tuple, ast.List))
+                                  for e in inner.elts[1:]]
+        mine = [sub for root in roots for sub in ast.walk(root) if isinstance(sub, ast.Name) and sub.id == v]
+        for sub in mine + [_bare_name(lim.elts[0])]:
+            if owner.get(id(sub), bi) != bi:
+                raise ParseError(f"{raw!r} binds {v!r} inside a binder of the same name: not read")
+            owner[id(sub)] = bi
+    used = set(local_dict) | {n.id for n in nodes if isinstance(n, ast.Name)}
+    fresh: list[str] = []
+    for _, _, _, v in bindings:
+        i = 0
+        while f"_bound_{v}_{i}" in used:
+            i += 1
+        used.add(f"_bound_{v}_{i}")
+        fresh.append(f"_bound_{v}_{i}")
+    edits = sorted(((n.lineno, n.col_offset, n.end_col_offset, fresh[owner[id(n)]])
+                    for n in nodes if isinstance(n, ast.Name) and id(n) in owner), reverse=True)
+    lines = code.encode("utf-8").split(b"\n")
+    for lineno, start, end, new in edits:          # offsets are UTF-8 byte offsets of the line
+        line = lines[lineno - 1]
+        lines[lineno - 1] = line[:start] + new.encode("ascii") + line[end:]
+    return b"\n".join(lines).decode("utf-8"), {f: Symbol(v) for f, (_, _, _, v) in zip(fresh, bindings)}
+
+
+# Binders of a POINT: the variable of a limit approaches its point, the variable of at()/Subs is
+# evaluated at it. Read with the IR symbol of the same name, the body took that symbol's declaration
+# before the point was even seen: with x declared positive, sqrt(x**2)/x was 1, so
+# Limit(sqrt(x**2)/x, x, -oo) = 1, Limit(Abs(x)/x, x, 0, '-') = 1 and at(sqrt(x**2), x, -1) = -1
+# were certified CORRECT, and the compute step "at(sqrt(x**2), x, -1) = -1" was verified. The IR
+# symbol as a Limit's variable was also reached by every substitution of it (SymPy's Limit.subs
+# rewrites its variable: Limit(Abs(x)/x, x, 0).subs(x, 5) is Limit(1, 5, 0)), so the eq step
+# "x*Limit(Abs(x)/x, x, 0) = x" was verified at the premises' point x = 5 (V14, 30 Sep 2026).
+# ConditionSet binds its variable over its base set: with x positive, ConditionSet(x, x < 0, Reals)
+# was the empty set.
+_POINT_BINDERS = ("Limit", "limit", "at", "Subs", "ConditionSet")
+# the argument positions of (variable, body, point); a ConditionSet's "point" is its base set
+_POINT_LAYOUT = {"Limit": (1, 0, 2), "limit": (1, 0, 2), "at": (1, 0, 2), "Subs": (1, 0, 2),
+                 "ConditionSet": (0, 1, 2)}
+_LIMIT_SIDE_KEYWORDS = frozenset({"dir", "d"})
+# a point written with one of these is not evaluated to decide the facts of the variable (it would
+# be computed twice, and an unevaluated operation answers an assumption query by recomputing it)
+_NO_FACT_CALLS = frozenset(COMPUTING_OPERATORS) | frozenset(_POINT_BINDERS) | frozenset(_RANGE_BINDERS)
+_POINT_OPERATIONS = (sp.Sum, sp.Product, sp.Integral, sp.Limit, sp.Derivative, sp.Subs)
+_POINT_DUMMIES: dict[tuple[str, frozenset], sp.Dummy] = {}
+_POINT_DUMMIES_LOCK = threading.Lock()
+
+
+def _binds_point(obj) -> bool:
+    """SymPy's point binders, this module's, or a callable that says it builds one (the step
+    namespace's unevaluated `Limit` and `at`)."""
+    return any(obj is b for b in (_Limit, _limit, _at, sp.Limit, sp.limit, sp.Subs, sp.ConditionSet)) \
+        or getattr(obj, "binds_point", False) is True
+
+
+def _point_dummy(name: str, facts: frozenset) -> sp.Dummy:
+    """THE bound variable of this name and these facts: one Dummy per pair, so two readings of one
+    binder are the same expression, and never the IR's Symbol, which a substitution would reach."""
+    key = (name, frozenset(facts))
+    with _POINT_DUMMIES_LOCK:
+        d = _POINT_DUMMIES.get(key)
+        if d is None:
+            d = _POINT_DUMMIES[key] = sp.Dummy(name, **{f: True for f in sorted(key[1])})
+    return d
+
+
+def _point_facts(kind: str, declared, p, side) -> frozenset:
+    """The facts the bound variable has near its point `p` (a value, or None when it was not
+    evaluated). A limit at oo keeps the declaration (an integer n makes it the limit of a sequence:
+    sin(pi*n) -> 0, which as a function has none); at -oo only integrality; at a real point the
+    variable is real, and positive when the point is positive or it is 0 approached from the right.
+    at()/Subs: real at a real point, positive at a positive one (a neighbourhood: a derivative there
+    is two-sided). ConditionSet: real over a set of reals, integer over a set of integers. Anything
+    else: no fact at all, the most general reading."""
+    if p is None or isinstance(p, (str, bytes)):
+        return frozenset()
+    try:
+        with sp.evaluate(True):
+            p = sympify_nontext(p)
+            if p.has(*_POINT_OPERATIONS):
+                return frozenset()
+            if kind == "ConditionSet":
+                if not isinstance(p, sp.Set) or p.is_subset(S.Reals) is not True:
+                    return frozenset()
+                return frozenset({"real", "integer"} if p.is_subset(S.Integers) is True else {"real"})
+            if kind in ("Limit", "limit"):
+                if p == oo:
+                    return frozenset({"real"} | {f for f in ("integer", "positive", "nonnegative")
+                                                 if getattr(declared, f"is_{f}", None) is True})
+                if p == -oo:
+                    return frozenset({"real"} | ({"integer"} if getattr(declared, "is_integer", None) is True
+                                                 else set()))
+                if p.is_real is not True:
+                    return frozenset()
+                # at the closed end 0 of a nonnegative declared variable an undirected limit is the
+                # limit over the domain, as the limit task reads it (`_domain_end_limits`)
+                right = p.is_positive is True or (p.is_zero is True and (side == "+" or (
+                    side in (None, "+-") and getattr(declared, "is_nonnegative", None) is True)))
+                return frozenset({"real", "positive"} if right else {"real"})
+            if p.is_real is not True:
+                return frozenset()
+            return frozenset({"real", "positive"} if p.is_positive is True else {"real"})
+    except Exception:  # noqa: BLE001 - no decision: the variable then has no fact
+        return frozenset()
+
+
+def _rebind_point_dummies(code: str, local_dict: dict[str, Any], global_dict: dict[str, Any], raw: str,
+                          names) -> tuple[str, dict[str, Any]] | None:
+    """`code` with the variable of every Limit, limit, at, Subs and ConditionSet renamed, inside its body only, to
+    a fresh name for the bound variable (`_point_dummy`) with the facts of its point; None when there
+    is nothing to rename. The point and the side are read in the enclosing scope. A binder inside
+    another of the same name is refused. A variable that is not written as a name bound to a symbol
+    (`at(x**2, 2*x, 1)`, `Subs(f, (x,), (1,))`, `Limit(f, Symbol('x'), 0)`), or that is passed by
+    keyword, is refused: it would be read as the IR's symbol or as a substitution of an expression."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None                               # parse_expr reports it
+    nodes = list(ast.walk(tree))
+    bindings: list[tuple[ast.Call, ast.Name, str]] = []
+    for node in nodes:
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _POINT_BINDERS
+                and _binds_point(local_dict.get(node.func.id))):
+            continue
+        kind = node.func.id
+        allowed = _LIMIT_SIDE_KEYWORDS if kind in ("Limit", "limit") else frozenset()
+        if any(kw.arg not in allowed for kw in node.keywords):
+            raise ParseError(f"{raw!r} passes an argument of {kind} by keyword: not read")
+        iv, ib, ip = _POINT_LAYOUT[kind]
+        if len(node.args) <= max(iv, ib) or (kind != "ConditionSet" and len(node.args) <= ip):
+            continue                              # SymPy refuses it
+        var = _bare_name(node.args[iv])
+        if var is None or not isinstance(local_dict.get(var.id), Symbol):
+            raise ParseError(f"{raw!r}: the variable of {kind} is not written as a variable: not read")
+        bindings.append((node, var, var.id))
+    if not bindings:
+        return None
+    # A binder inside the body of another of the same name is refused, as for the range binders: the
+    # two share one bound variable when their facts agree, and the outer substitution then rewrote
+    # the inner limit's variable (at(x + Limit(x/(x + 1), x, 5), x, 7) read as 7 + Limit(7/8, 7, 5),
+    # review of 30 Sep 2026).
+    calls = {id(c): v for c, _, v in bindings}
+    for call, _, v in bindings:
+        body = call.args[_POINT_LAYOUT[call.func.id][1]]
+        if any(calls.get(id(n)) == v for n in ast.walk(body) if n is not call):
+            raise ParseError(f"{raw!r} binds {v!r} inside a binder of the same name: not read")
+    owner: dict[int, int] = {}                    # id(Name node) -> index of the binding it belongs to
+    for bi in reversed(range(len(bindings))):
+        call, var, v = bindings[bi]
+        body = call.args[_POINT_LAYOUT[call.func.id][1]]
+        for sub in [var] + [n for n in ast.walk(body) if isinstance(n, ast.Name) and n.id == v]:
+            owner.setdefault(id(sub), bi)
+    used = set(local_dict) | set(global_dict) | {n.id for n in nodes if isinstance(n, ast.Name)}
+    fresh: list[str] = []
+    for _, _, v in bindings:
+        i = 0
+        while f"_point_{v}_{i}" in used:
+            i += 1
+        used.add(f"_point_{v}_{i}")
+        fresh.append(f"_point_{v}_{i}")
+    edits = sorted(((n.lineno, n.col_offset, n.end_col_offset, fresh[owner[id(n)]])
+                    for n in nodes if isinstance(n, ast.Name) and id(n) in owner), reverse=True)
+    lines = code.encode("utf-8").split(b"\n")
+    for lineno, start, end, new in edits:          # offsets are UTF-8 byte offsets of the line
+        line = lines[lineno - 1]
+        lines[lineno - 1] = line[:start] + new.encode("ascii") + line[end:]
+    new_code = b"\n".join(lines).decode("utf-8")
+    _check_code(new_code, raw, set(names) | set(fresh))
+    # the same tree with the names replaced: its walk visits the nodes in the same order
+    new_nodes = list(ast.walk(ast.parse(new_code, mode="eval")))
+    if len(new_nodes) != len(nodes):
+        raise ParseError(f"{raw!r}: the bound variables could not be renamed: not read")
+    position = {id(n): i for i, n in enumerate(nodes)}
+    dummies: dict[str, Any] = {}
+    # outer binders first (ast.walk is breadth-first): a point may name an enclosing binder's variable
+    for bi, (call, var, v) in enumerate(bindings):
+        ip = _POINT_LAYOUT[call.func.id][2]
+        point = new_nodes[position[id(call.args[ip])]] if len(call.args) > ip else None
+        side = None
+        if call.func.id in ("Limit", "limit") and len(call.args) > 3 and isinstance(call.args[3], ast.Constant):
+            side = call.args[3].value
+        for kw in call.keywords:
+            if isinstance(kw.value, ast.Constant):
+                side = kw.value.value
+        value = None
+        if point is not None and not any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                                         and n.func.id in _NO_FACT_CALLS for n in ast.walk(point)):
+            try:
+                expr = compile(ast.fix_missing_locations(ast.Expression(body=point)), "<point>", "eval")
+                with sp.evaluate(True):
+                    value = eval(expr, dict(global_dict, __builtins__={}),  # noqa: S307 - checked above
+                                 dict(local_dict, **dummies))
+            except Exception:  # noqa: BLE001 - no decision: the variable then has no fact
+                value = None
+        declared = local_dict[v]                  # a Symbol (checked above), maybe a range dummy
+        dummies[fresh[bi]] = _point_dummy(declared.name, _point_facts(call.func.id, declared, value, side))
+    return new_code, dummies
+
+
+# Operations SymPy keeps unevaluated: asking an assumption of a bound that holds one rebuilds it, and
+# Sum(k, (k, -1, Sum(k, (k, -1, ...)))) nested four deep took 86 s to parse (audit of V14, 30 Sep 2026).
+_OPERATIONS = (sp.Sum, sp.Product, sp.Integral, sp.Limit, sp.Derivative, sp.Subs)
+
+
+def _computed_bounds(lim) -> bool:
+    return any(isinstance(b, sp.Basic) and b.has(*_OPERATIONS) for b in lim[1:])
+
+
+def _integer_indices(expr):
+    """The index of a Sum/Product whose limits are integers (or ±oo) runs over integers: the dummy
+    becomes an integer symbol there. Without it SymPy no longer closed Σ cos(πk)/k² and the numeric
+    fallback (Euler-Maclaurin) is wrong for oscillating terms, so -π²/12 was refuted (audit of
+    29 Sep 2026). Limits that are not integers keep the assumption-free dummy (Σ_{k=1/2}^{5/2})."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Sum, sp.Product):
+        return expr
+
+    def upgrade(n):
+        reps = {}
+        for lim in n.limits:
+            if len(lim) != 3 or not isinstance(lim[0], Symbol) \
+                    or lim[0].assumptions0 != Symbol(lim[0].name).assumptions0 or _computed_bounds(lim):
+                continue
+            if all(b.is_integer or b in (sp.oo, -sp.oo) for b in lim[1:]):
+                reps[lim[0]] = Symbol(lim[0].name, integer=True)
+        return n.xreplace(reps) if reps else n
+    return expr.replace(lambda n: isinstance(n, (sp.Sum, sp.Product)), upgrade)
+
+
+def _refuse_reversed_ranges(expr, raw: str) -> None:
+    """A Sum or Product whose upper limit is below its lower limit minus one is not an empty sum in
+    SymPy: Karr's convention makes Σ_{k=3}^{1} k = -2, which was certified (audit of 29 Sep 2026).
+    The school reading (empty, or undefined) differs, so the text is not read. Nor is a binder whose
+    variable is not a symbol (`Sum(k, (Symbol, 1, 3))` built one around the class itself)."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Sum, sp.Product, sp.Integral):
+        return
+    for node in sp.preorder_traversal(expr):
+        if isinstance(node, (sp.Sum, sp.Product, sp.Integral)):
+            for lim in node.limits:
+                if not isinstance(lim[0], Symbol):
+                    raise ParseError(f"{raw!r} binds {lim[0]!r}, which is not a variable: not read")
+                if isinstance(node, (sp.Sum, sp.Product)) and _computed_bounds(lim):
+                    # whether the range is reversed (Karr) is not asked of a bound SymPy computes
+                    raise ParseError(f"{raw!r} has a {type(node).__name__} whose limit is itself an "
+                                     "operation: not read")
+                if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3 \
+                        and (lim[2] - lim[1] + 1).is_extended_negative is True:
+                    raise ParseError(f"{raw!r} has a {type(node).__name__} over a reversed range: not read")
+                span = lim[2] - lim[1] if len(lim) == 3 else None
+                if isinstance(node, (sp.Sum, sp.Product)) and span is not None and span.is_number \
+                        and span.is_finite and span.is_integer is False:
+                    # Σ_{k=1}^{7/2} k is 63/8 in SymPy, 1 + 2 + 3 stepping from the lower limit
+                    raise ParseError(f"{raw!r} has a {type(node).__name__} whose limits are not an "
+                                     "integer apart: not read")
+
+
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
-                       transformations, evaluate: bool = True):
-    """parse_expr, after checking that the code it is about to evaluate is plain arithmetic."""
-    _check_code(stringify_expr(s, local_dict, global_dict, transformations), s,
-                set(local_dict) | set(global_dict))
-    return parse_expr(s, local_dict=local_dict, global_dict=global_dict,
-                      transformations=transformations, evaluate=evaluate)
+                       transformations, evaluate: bool = True, rebind: bool = True):
+    """parse_expr, after checking that the code it is about to evaluate is plain arithmetic.
+    `rebind=False` keeps the declared symbols inside the range binders (the reading of definedness,
+    see `parse_as_written`)."""
+    names = set(local_dict) | set(global_dict)
+    code = stringify_expr(s, local_dict, global_dict, transformations)
+    _check_code(code, s, names)
+    binds_range = any(b in code for b in _RANGE_BINDERS)
+    if binds_range:
+        _refuse_computed_bounds(code, s)
+    rebound = _rebind_range_dummies(code, local_dict, s) if rebind and binds_range else None
+    dummies: dict[str, Any] = {}
+    if rebound is not None:
+        code, dummies = rebound
+        _check_code(code, s, names | set(dummies))
+    pointed = _rebind_point_dummies(code, dict(local_dict, **dummies), global_dict, s, names | set(dummies)) \
+        if rebind and any(b in code for b in _POINT_BINDERS) else None
+    if pointed is not None:
+        code, more = pointed
+        dummies = dict(dummies, **more)
+    if rebound is None and pointed is None:
+        out = parse_expr(s, local_dict=local_dict, global_dict=global_dict,
+                         transformations=transformations, evaluate=evaluate)
+    else:
+        # the code is already transformed: no transformation runs twice on it
+        out = parse_expr(code, local_dict=dict(local_dict, **dummies), global_dict=global_dict,
+                         transformations=(), evaluate=evaluate)
+    if rebound is not None:
+        if evaluate:
+            out = _integer_indices(out)
+        else:
+            with sp.evaluate(False):
+                out = _integer_indices(out)
+    if pointed is not None and evaluate:
+        out = _domain_end_limits(out)
+    _refuse_reversed_ranges(out, s)
+    return out
 
 
 def _check_safe(s: str, ns: dict[str, Any]) -> list[str]:
@@ -455,18 +1156,167 @@ def _exact_latex_decimals(s: str) -> str:
         lambda m: r"\left(\frac{%d}{%d}\right)" % (int(m.group(1) + m.group(2)), 10 ** len(m.group(2))), s)
 
 
+# LaTeX has no \arccot macro; latex2sympy reads \arccot and \cot^{-1} but not the usual spellings
+# (\text{arccot} became the product of a symbol "arccot" and the argument)
+_LATEX_ARCCOT = re.compile(r"\\(?:operatorname\*?|mathrm|text|textrm)\s*\{\s*(?:arccot|acot|arcctg)\s*\}")
+# latex2sympy computes \gcd and \operatorname{lcm} with SymPy's POLYNOMIAL gcd/lcm before anything
+# else sees them (\gcd(n, 4) with n = 12 certified 1) and wraps the result in UnevaluatedExpr, which
+# then kept a closed step "\gcd(84, 120) = 7" from evaluating (it was "verified"; audit of 29 Sep 2026).
+# Written as \mathrm{gcd} they come back as an undefined function, which becomes the integer gcd here.
+_LATEX_GCD = re.compile(r"\\(?:(gcd|lcm)(?![A-Za-z])|operatorname\s*\{\s*(gcd|lcm)\s*\})")
+_LATEX_INTEGER_OPS = {"\\text{gcd}": "gcd", "\\text{lcm}": "lcm"}
+
+
+_LATEX_CONVERTER = None
+
+
+def _latex2sympy(s: str):
+    """latex2sympy (pinned 1.11.0: its `latex2sympy` is this body) with one convention of the
+    canonical parser: a limit written without a side is two-sided (`_Limit`). The library reads
+    `\\lim_{x \\to 0}` from the right, exactly like `0^{+}`, so `\\lim_{x\\to 0} \\frac{|x|}{x}` = 1 was
+    certified and the compute step stating it verified (V14 tests, 30 Sep 2026). The side is read
+    from the tokens of the limit's subscript itself (`x \\to 2^{3}` is the point 8, no side)."""
+    global _LATEX_CONVERTER
+    from latex2sympy2_extended.latex2sympy2 import (ConversionConfig, NormalizationConfig, _Latex2Sympy,
+                                                    normalize_latex)
+    if _LATEX_CONVERTER is None:
+        class _TwoSidedLimits(_Latex2Sympy):
+            def handle_limit(self, func):
+                lim = super().handle_limit(func)
+                sub = func.limit_sub()
+                if isinstance(lim, sp.Limit) and sub.ADD() is None and sub.SUB() is None:
+                    return sp.Limit(lim.args[0], lim.args[1], lim.args[2], _two_sided(lim.args[2]))
+                return lim
+        _LATEX_CONVERTER = _TwoSidedLimits
+    converter = _LATEX_CONVERTER(None, None, False, config=ConversionConfig())
+    return converter.parse(normalize_latex(s, NormalizationConfig()))
+
+
+def _domain_end_limits(expr):
+    """An undirected limit at 0 whose bound variable is positive (`_point_facts`: the declared
+    variable is nonnegative) is the right-hand limit, the limit over the declared domain, as the limit
+    task reads it: with x > 0, Limit(x*log(x), x, 0) = 0 was certified before the point binders and
+    UNKNOWN after them (review of 30 Sep 2026)."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Limit):
+        return expr
+
+    def side(n):
+        e, z, z0, d = n.args
+        if str(d) == "+-" and z0 == 0 and getattr(z, "is_positive", None) is True:
+            return sp.Limit(e, z, z0, "+")
+        return n
+    return expr.replace(lambda n: isinstance(n, sp.Limit), side)
+
+
+def _latex_limit_variables(expr, ns: dict[str, Any]):
+    """Every LaTeX limit's variable bound as the canonical branch binds it (`_point_facts`,
+    `_point_dummy`), before the free symbols are rebound to the IR's. latex2sympy gives the variable an
+    assumption-free symbol, and a Limit is no ExprWithLimits: that substitution reached its variable
+    only when the same name was also free, so with x > 0 `x\\cdot\\lim_{x\\to -\\infty}
+    \\frac{\\sqrt{x^2}}{x}` came out x (it is -x), and alone the variable stayed complex (V14 tests,
+    30 Sep 2026). Keeping the declared symbol unless the point was proved to leave its sign certified
+    lim_{x->a} |x|/x = 1 for x > 0 and a = -2 (review of 30 Sep 2026): the facts come from the point."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Limit):
+        return expr
+
+    def bind(n):
+        body, v, p, d = n.args
+        decl = ns.get(v.name) if isinstance(v, Symbol) else None
+        if not isinstance(decl, Symbol):
+            return n
+        w = _point_dummy(decl.name, _point_facts("Limit", decl, p, str(d)))
+        return _domain_end_limits(sp.Limit(body.xreplace({v: w}), w, p, d))
+    return expr.replace(lambda n: isinstance(n, sp.Limit), bind)
+
+
+_LATEX_RANGE_BINDER = re.compile(r"\\(?:sum|prod)(?![A-Za-z])")
+_LATEX_OPERATION = re.compile(r"\\(?:sum|prod|int|lim)(?![A-Za-z])")
+_LATEX_INT_LIMIT = re.compile(r"\s*(?:[A-Za-z]\w*\s*=\s*)?(-?\s*\d+)\s*")
+
+
+def _latex_script(s: str, i: int, mark: str) -> tuple[str | None, int]:
+    """The sub- or superscript `mark` ('_' or '^') at s[i:] (after spaces): the text in its braces or
+    its one character, and the index after it; (None, i) when there is none."""
+    j = i
+    while j < len(s) and s[j] == " ":
+        j += 1
+    if j >= len(s) or s[j] != mark:
+        return None, i
+    j += 1
+    while j < len(s) and s[j] == " ":
+        j += 1
+    if j < len(s) and s[j] == "{":
+        depth, k = 0, j
+        while k < len(s):
+            depth += {"{": 1, "}": -1}.get(s[k], 0)
+            if depth == 0:
+                return s[j + 1:k], k + 1
+            k += 1
+        return None, i
+    return (s[j], j + 1) if j < len(s) else (None, i)
+
+
+def _refuse_latex_ranges(s: str) -> None:
+    """The LaTeX counterpart of `_refuse_computed_bounds`: a sum or product whose limit is itself an
+    operation, or whose limits are numbers of a reversed range or not an integer apart, is refused
+    before latex2sympy builds it (a floor around it computed it at once: \\lfloor \\sum_{k=3}^{1} k
+    \\rfloor = -2 was certified; review of V14, 30 Sep 2026)."""
+    for m in _LATEX_RANGE_BINDER.finditer(s):
+        i = m.end()
+        scripts = {}
+        for _ in range(2):
+            for mark in ("_", "^"):
+                if mark not in scripts:
+                    text, j = _latex_script(s, i, mark)
+                    if text is not None:
+                        scripts[mark], i = text, j
+        if any(_LATEX_OPERATION.search(t) for t in scripts.values()):
+            raise ParseError(f"{s!r} has a sum or product whose limit is itself an operation: not read")
+        lo = _LATEX_INT_LIMIT.fullmatch(scripts.get("_", ""))
+        hi = _LATEX_INT_LIMIT.fullmatch(scripts.get("^", ""))
+        if lo and hi:
+            a, b = int(lo.group(1).replace(" ", "")), int(hi.group(1).replace(" ", ""))
+            if b - a + 1 < 0:
+                raise ParseError(f"{s!r} has a sum or product over a reversed range: not read")
+
+
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
-    from latex2sympy2_extended import latex2sympy
-    expr = latex2sympy(_exact_latex_decimals(s))
+    s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
+    _refuse_latex_ranges(s)
+    expr = _latex2sympy(_exact_latex_decimals(s))
+    if isinstance(expr, sp.Basic):
+        from sympy.core.function import AppliedUndef
+        ops = {"gcd": gcd, "lcm": lcm}
+
+        def convert(e):
+            e = e.replace(lambda n: isinstance(n, AppliedUndef) and n.func.__name__ in _LATEX_INTEGER_OPS,
+                          lambda n: ops[_LATEX_INTEGER_OPS[n.func.__name__]](*n.args))
+            # the only other UnevaluatedExpr latex2sympy writes is the 1/100 of a percent
+            e = e.replace(lambda n: isinstance(n, sp.UnevaluatedExpr), lambda n: n.args[0])
+            return e.replace(sp.acot, arccot) if e.has(sp.acot) else e   # (0, pi), as in the canonical branch
+        expr = _on_sides(expr, lambda e: _latex_limit_variables(_integer_indices(convert(e)), ns))
+        _refuse_reversed_ranges(expr, s)
     # rebind free symbols to the IR symbols (assumptions)
     reps = {}
     for fs in expr.free_symbols:
         if fs.name in ns and isinstance(ns[fs.name], Symbol):
             reps[fs] = ns[fs.name]
     if reps:
-        expr = expr.subs(reps, simultaneous=True)
+        expr = _on_sides(expr, lambda e: e.subs(reps, simultaneous=True))
     _check_symbols_declared(expr, ns, s)
     return expr
+
+
+def _on_sides(expr, f):
+    """`f` applied to the sides of a relation (or of an And/Or of relations), rebuilt WITHOUT
+    evaluation: replacing inside a closed relation re-evaluated it, so the false LaTeX step
+    "\\cot^{-1}(-1) = -\\frac{\\pi}{4}" collapsed to False and was skipped as not a relation, while
+    the same step written canonically was refuted (audit of 29 Sep 2026)."""
+    if isinstance(expr, sp.core.relational.Relational):
+        return type(expr)(f(expr.lhs), f(expr.rhs), evaluate=False)
+    if isinstance(expr, (And, Or)) and all(isinstance(a, (sp.core.relational.Relational, And, Or)) for a in expr.args):
+        return type(expr)(*[_on_sides(a, f) for a in expr.args], evaluate=False)
+    return f(expr)
 
 
 def _check_symbols_declared(expr, ns: dict[str, Any], raw: str) -> None:
@@ -478,8 +1328,10 @@ def _check_symbols_declared(expr, ns: dict[str, Any], raw: str) -> None:
     that appears nowhere in the problem, while `zzz + 1` was rejected. A solver writing
     `\\frac{ab}{2}` for a single unknown `ab` would have had its claim quietly rewritten.
     So the same rule is enforced on the RESULT: every free symbol must be declared."""
+    # a name the namespace gives to a function or a constant is no symbol either: \text{arccot}(-1)
+    # was the symbol "arccot" times -1 (audit of 29 Sep 2026)
     undeclared = sorted({fs.name for fs in getattr(expr, "free_symbols", ())
-                         if fs.name not in ns}) if hasattr(expr, "free_symbols") else []
+                         if not isinstance(ns.get(fs.name), Symbol)}) if hasattr(expr, "free_symbols") else []
     if undeclared:
         raise UndeclaredSymbolError(f"LaTeX {raw!r} introduces undeclared symbol(s) {undeclared} "
                                     "(declare them in the IR; latex2sympy splits unknown names "
@@ -520,7 +1372,94 @@ _REL_OPS = ["<=", ">=", "!=", "==", "=", "<", ">"]
 _REL_CLASS = {"<=": Le, ">=": Ge, "!=": Ne, "==": Eq, "=": Eq, "<": Lt, ">": Gt}
 
 
-def parse_as_written(s: str, ns: dict[str, Any] | None = None):
+def _kinks(a, v) -> list:
+    """|a| has no derivative where a = 0 and a' != 0: those roots one by one when a = 0 has finitely
+    many (|x**2 - 4| at +-2; |x**3| keeps 0), else the condition itself."""
+    da = sp.diff(a, v)
+    try:
+        roots = sp.solveset(a, v, sp.S.Reals)
+    except Exception:  # noqa: BLE001
+        roots = None
+    if isinstance(roots, sp.FiniteSet) and len(roots) <= 12:
+        out = []
+        for r in roots:
+            z = sp.simplify(da.subs(v, r))
+            if z.is_zero is not True:
+                out.append(sp.Ne(v, r))
+        return out
+    return [sp.Or(sp.Ne(a, 0), sp.Eq(da, 0))]
+
+
+def _differentiability(u, v) -> list:
+    """Where the operand `u` has a derivative in `v`: its own written conditions made strict (a
+    derivative needs a neighbourhood: x*sqrt(x) has none at 0, formal.statement.interior_defined_at)
+    and the kinks and jumps of |a|, sign, Heaviside, Max/Min and floor/ceiling/frac. Without them
+    the derivative of |x - 2| was read as defined on all of R, and f'(0) of x*sqrt(x) was certified
+    (third audit of 30 Sep 2026)."""
+    from ..certify.domain import definedness_conditions
+    out = []
+    for c in definedness_conditions(u, None):
+        if isinstance(c, sp.Ge) and v in c.free_symbols:
+            c = sp.Gt(c.lhs, c.rhs)
+        elif isinstance(c, sp.Le) and v in c.free_symbols:
+            c = sp.Lt(c.lhs, c.rhs)
+        out.append(c)
+    for n in sp.preorder_traversal(u):
+        if not getattr(n, "args", None) or v not in n.free_symbols:
+            continue
+        if isinstance(n, sp.Abs):
+            out += _kinks(n.args[0], v)
+        elif isinstance(n, (sp.sign, sp.Heaviside)):
+            out.append(sp.Ne(n.args[0], 0))
+        elif isinstance(n, (sp.Max, sp.Min)) and len(n.args) == 2:
+            a, b = n.args
+            out.append(sp.Or(sp.Ne(a, b), sp.Eq(sp.diff(a, v), sp.diff(b, v))))
+        elif isinstance(n, (sp.floor, sp.ceiling, sp.frac)):
+            out.append(sp.Ne(sp.sin(sp.pi * n.args[0]), 0))
+    return [c for c in out if c is not sp.true]
+
+
+def _written_diff(e, *args, **kwargs):
+    """`diff` read as written. SymPy differentiates with evaluation off into the raw power rule,
+    x**3 -> x**3*(0*log(x) + 3/x), whose log and 1/x are conditions the problem never imposed: {1}
+    was certified for f'(x) = 0 with f = x**3 - 3x, and (0, 1) for f'(x) < 0 (critic of the V14
+    audit, 29 Sep 2026). The derivative is taken with evaluation on, and carries where it exists
+    (`_differentiability`, order by order) as a written_domain condition. The tree is for
+    definedness only."""
+    seq = []
+    rest = list(args)
+    while rest:
+        v = rest.pop(0)
+        n = rest.pop(0) if rest and getattr(rest[0], "is_Integer", False) else 1
+        seq += [v] * int(n)
+    if not seq or kwargs or not all(isinstance(v, sp.Symbol) for v in seq):
+        with sp.evaluate(True):
+            return sp.diff(e, *args, **kwargs)
+    with sp.evaluate(True):
+        conds, cur = [], e
+        for v in seq:
+            conds += _differentiability(cur, v)
+            cur = sp.diff(cur, v)
+        cond = sp.And(*conds)
+    if cond is sp.true:
+        return cur
+    return written_domain(cur, cond)
+
+
+def _written_integrate(*args, **kwargs):
+    """`integrate` read as written is the form, as `Integral` is: with evaluation off an integral
+    with a parameter bound (x from 0 to y) raised, the reading returned None and every condition
+    of the text was lost (y/y at y = 0 was certified)."""
+    return sp.Integral(*args, **kwargs)
+
+
+# computing helpers of the namespace read as forms (or, for diff, computed with evaluation on)
+# when a text is read as written
+_WRITTEN_COMPUTING = {"diff": (sp.diff, _written_diff), "integrate": (_integrate, _written_integrate),
+                      "limit": (_limit, _Limit)}
+
+
+def parse_as_written(s: str, ns: dict[str, Any] | None = None, _depth: int = 0):
     """The sides of `s` EXACTLY AS WRITTEN, with SymPy's automatic simplification switched off,
     as a Tuple — for reading DEFINEDNESS only, never values. With evaluation on, `x/x` becomes 1,
     `sqrt(x)**2` becomes x and `x**2/x` becomes x before any condition can be read, so the points
@@ -550,14 +1489,25 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None):
         return None
     s = preclean(s)
     local = dict(ns, Add=sp.Add, Mul=sp.Mul, Pow=sp.Pow)
+    for name, (computing, written) in _WRITTEN_COMPUTING.items():
+        if local.get(name) is computing:
+            local[name] = written
+    for name, value in list(local.items()):
+        if callable(value) and getattr(value, "fdef", None) is not None:
+            local[name] = _written_call(value, ns, _depth)
     out = []
     for _, chunk in _split_top_level(s):
         try:
             if _check_safe(chunk, ns):
                 return None
             with sp.evaluate(False):
+                # the declared symbols stay inside the binders here: the conditions of a sum's or an
+                # integral's body are read as conditions on the variable of that name, which is what
+                # a solver's steps about x in an integral over x are checked against (rebinding them
+                # to the dummy left "x**2 + 1 = 0" unchecked and refuted "log(x**2) = 2*log(x)" on
+                # [1, e]; audit of 29 Sep 2026)
                 out.append(guarded_parse_expr(chunk, local_dict=local, global_dict={},
-                                              transformations=_TRANSFORMS, evaluate=False))
+                                              transformations=_TRANSFORMS, evaluate=False, rebind=False))
         except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
             return None
     return sp.Tuple(*out)
@@ -607,8 +1557,12 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
         # LaTeX relations: latex2sympy handles "=" -> Eq
-        expr = _latex_to_sympy(s, ns)
-        return expr
+        try:
+            return _latex_to_sympy(s, ns)
+        except ParseError:
+            raise
+        except Exception as e:  # noqa: BLE001 - latex2sympy raises a bare Exception
+            raise ParseError(f"LaTeX parse failed for {s!r}: {e}") from e
     s2 = preclean(s)
     # explicit And/Or already in sympy syntax
     parts = _split_top_level(s2)
@@ -724,6 +1678,11 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
         i += 1
     parts.append(cur)
     sets = [_parse_single_set(p, ns) for p in parts if p.strip()]
+    from ..equiv.sets import unify_endpoints, EndpointsIncomparable
+    try:
+        sets = unify_endpoints(sets)
+    except EndpointsIncomparable as e:
+        raise ParseError(f"set endpoints cannot be compared exactly: {e}") from e
     return Union(*sets) if len(sets) > 1 else sets[0]
 
 

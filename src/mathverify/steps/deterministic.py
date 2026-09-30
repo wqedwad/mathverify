@@ -139,8 +139,13 @@ def _step_namespace(ns: dict[str, Any]) -> dict[str, Any]:
         e = sp.sympify(e)
         return sp.Subs(e, v, val) if e.has(sp.Derivative) else e.subs(v, val)
 
+    def _integral(*a):
+        return sp.Integral(*a)
+
+    _integral.binds_range = True          # its variable is a dummy (normalize.parse._binds_range)
+    _limit.binds_point = _at.binds_point = True   # likewise (normalize.parse._binds_point)
     out["Limit"] = out["limit"] = _limit
-    out["Integral"] = out["integrate"] = lambda *a: sp.Integral(*a)
+    out["Integral"] = out["integrate"] = _integral
     out["Derivative"] = out["diff"] = lambda *a: sp.Derivative(*a)
     out["at"] = _at
     out["Subs"] = sp.Subs
@@ -157,6 +162,13 @@ def _derivative_points(expr) -> list:
 def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
     ev: dict[str, Any] = {}
     if not isinstance(claim, Eq):
+        if isinstance(claim, (sp.core.relational.Relational, And, Or, sp.logic.boolalg.BooleanAtom)) \
+                and not getattr(claim, "free_symbols", None):
+            # a closed inequality is checkable like a closed equation: "sin(pi/6) < 0" was skipped
+            # and the solution stayed CORRECT (audit of 29 Sep 2026)
+            status = _closed_claim(claim, ctx)
+            if status != "unknown":
+                return status, {"reason": "closed_relation"}
         return "skipped", {"reason": "compute_claim_not_equation"}
     lhs, rhs = claim.lhs, claim.rhs
     if rhs.has(sp.Integral, sp.Limit, sp.Subs) and not lhs.has(sp.Integral, sp.Limit, sp.Subs):
@@ -233,6 +245,16 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
                     and not lhs.has(sp.zoo, sp.nan) and not rhs.has(sp.zoo, sp.nan):
                 return "refuted", ev
             return "unknown", ev
+    from ..equiv.forms import UnverifiedForm, checked_forms
+    try:
+        lhs, rhs = checked_forms(lhs, ctx.timeout), checked_forms(rhs, ctx.timeout)
+    except UnverifiedForm as e:
+        # SymPy's value of a closed integral/sum/product that numbers do not confirm decides
+        # nothing: "Integral(Abs(cos(x)), (x, -1, 1)) = 0" was verified (audit of 29 Sep 2026);
+        # the integrator's own value can still refute it
+        if _integrals_refute(claim, ctx):
+            return "refuted", {**ev, "reason": "integrals_numeric_value_differs"}
+        return "unknown", {**ev, "reason": f"unverified_form: {str(e)[:200]}"}
     r = sb_run("mathverify.steps.deterministic:_doit", lhs, timeout=ctx.timeout)
     if not r.ok:
         return "unknown", {"reason": f"doit_failed: {r.error}"}
@@ -327,7 +349,9 @@ def _fail_set(claim, v, region, ctx: Ctx):
 
 
 def _outside(region, sets, conjunction: bool):
-    inside = sp.Intersection(*sets) if conjunction else sp.Union(*sets)
+    from ..equiv.sets import unify_endpoints
+    region, *sets = unify_endpoints([region, *sets])      # raises when two endpoints are undecided
+    inside =sp.Intersection(*sets) if conjunction else sp.Union(*sets)
     return sp.Complement(region, inside)
 
 
@@ -387,6 +411,11 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
         return None
     if a.free_symbols or b.free_symbols:
         return None
+    from ..equiv.forms import UnverifiedForm, checked_forms
+    try:
+        a, b = checked_forms(a, ctx.timeout), checked_forms(b, ctx.timeout)
+    except UnverifiedForm:
+        return None                       # SymPy's closed form unconfirmed: simplify would trust it
     r = sb_run("mathverify.sandbox.ops:simplify_diff", a, b, timeout=ctx.timeout)
     if not r.ok:
         return None
@@ -445,6 +474,21 @@ def _outside_domain(claim, ctx: Ctx) -> bool:
         if not (e.ok and e.value is True):
             return False
     return True
+
+
+def _nowhere_true(claim, ctx: Ctx) -> dict | None:
+    """A point of the (single) variable's domain where the claim is false, checked exactly."""
+    (v,) = claim.free_symbols
+    dom = ctx.domain_for(v)
+    for c in (0, 1, -1, 2, sp.Rational(1, 2), 10):
+        try:
+            if dom.contains(c) is not sp.true:
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        if _holds(claim, {v: sp.Integer(c) if isinstance(c, int) else c}) is False:
+            return {str(v): str(c)}
+    return None
 
 
 def _point_symbol(claim, ctx: Ctx):
@@ -554,7 +598,46 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     return status, ev
 
 
+def _closed_claim(claim, ctx: Ctx) -> str:
+    """A claim with no free symbol is true or false whatever the premises: decided exactly on its own
+    (`_decide`); a numeric evaluation that tells the sides apart refutes it too. Sent through the
+    premises' set route, a closed relation SymPy could not decide came back "proved": the LaTeX step
+    "\\gcd(84, 120) = 7" and "gcd(pi, 2) != 1" were verified (audit of 29 Sep 2026)."""
+    h = True if claim is sp.true else False if claim is sp.false else _decide(claim, {}, ctx)
+    if h is None:
+        if not isinstance(claim, sp.Basic) or not claim.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative):
+            h = False if _holds(claim, {}) is False else None
+        elif _integrals_refute(claim, ctx):
+            h = False
+    return "verified" if h is True else "refuted" if h is False else "unknown"
+
+
+def _integrals_refute(claim, ctx: Ctx) -> bool:
+    """A closed equation whose only forms are integrals is refuted when each integral's converged
+    numeric value (the certificate's integrator, with its error) makes the sides differ beyond that
+    error: "Integral(Abs(cos(x)), (x, -1, 1)) = 0" stays refuted where SymPy's closed form is wrong.
+    The tolerant `_holds` is not used over forms: its value of a sum (Euler-Maclaurin) is wrong for
+    oscillating terms (Σ cos(πk/4)/k² came out 0.565345, it is 11π²/192 = 0.565446) and refuted
+    true identities; nor over a sum or product at all (audit of 29 Sep 2026)."""
+    if not isinstance(claim, Eq) or claim.has(sp.Sum, sp.Product, sp.Limit, sp.Derivative):
+        return False
+    from ..equiv.forms import _numeric
+    from ..equiv.numeric import num_equal
+    reps, tol = {}, 1e-25
+    for n in claim.atoms(sp.Integral):
+        if n.free_symbols:
+            return False
+        v = _numeric(n, ctx.timeout)
+        if v is None:
+            return False
+        reps[n], tol = v[0], max(tol, v[1])
+    ok, _ = num_equal(claim.lhs.xreplace(reps), claim.rhs.xreplace(reps), rel_tol=max(100 * tol, 1e-15))
+    return ok is False
+
+
 def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:
+    if not getattr(claim, "free_symbols", None):
+        return _closed_claim(claim, ctx), {"n_premises": len(premises), "route": "closed_claim"}
     syms = set(claim.free_symbols)
     prem_syms: set = set()
     for p in premises:
@@ -587,6 +670,15 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
         identity_shaped = (isinstance(claim, Eq) and claim.lhs.free_symbols == claim.rhs.free_symbols
                            and bool(claim.lhs.free_symbols))
         if not identity_shaped:
+            # a "definition" no value of its variable's domain satisfies defines nothing: x**2 + 1 = 0
+            # about the integration variable of an integral over x (third audit of 30 Sep 2026, once
+            # the integrand's conditions no longer reached the problem's variables). Every point is a
+            # counterexample; one is checked and reported.
+            w = _nowhere_true(claim, ctx) if _outside_domain(claim, ctx) else None
+            if w is not None:
+                ev["counterexample"] = w
+                ev["reason"] = "no_value_of_the_domain_satisfies_the_claim"
+                return "refuted", ev
             ev["reason"] = "definitional_claim_introduces_unconstrained_symbols"
             return "skipped", ev
     syms = sorted(syms, key=lambda s_: s_.name)
@@ -719,7 +811,7 @@ def _task_window(ir, ctx: Ctx) -> list:
     iv = p.get("interval")
     v = ctx.ns.get(p.get("var", "x"))
     if not isinstance(iv, str) or not iv.strip() or not isinstance(v, sp.Symbol):
-        return []
+        return _integration_window(ir, ctx)
     try:
         rel = parse_set_str(iv, ctx.ns).as_relational(v)
     except Exception:  # noqa: BLE001 - an interval we cannot read restricts nothing
@@ -728,6 +820,39 @@ def _task_window(ir, ctx: Ctx) -> list:
     if any(r in (sp.true, sp.false) or not _is_relation(r) for r in parts):
         return []
     return parts
+
+
+def _integration_window(ir, ctx: Ctx) -> list:
+    """The interval of the problem's own integral for its variable: [a, b] of a definite_integral
+    task, or of the one closed integral over a declared variable in an evaluate-like task when that
+    variable occurs nowhere else. A solver's step about x there means x in [a, b]: sqrt(x**2) = x
+    in the integral over [0, 2] was refuted with x = -1 (known limit K of the V14 audit), and
+    log(x**2) = 2*log(x) on [1, e] too, once the integrand's conditions no longer reached the
+    problem's variables (third audit of 30 Sep 2026). Like the task interval, it binds nothing."""
+    from ..normalize.parse import parse_as_written
+    p = ir.task.params or {}
+    try:
+        if ir.task.kind == "definite_integral":
+            v = ctx.ns.get(p.get("var", "x"))
+            a, b = ctx.expr(str(p["a"])), ctx.expr(str(p["b"]))
+        else:
+            src = next((p[k] for k in ("expr", "f") if isinstance(p.get(k), str)), None)
+            w = parse_as_written(src, ctx.ns) if src else None
+            if w is None or len(w) != 1:
+                return []
+            ints = [n for n in sp.preorder_traversal(w[0]) if isinstance(n, sp.Integral)]
+            if len(ints) != 1 or len(ints[0].limits) != 1 or len(ints[0].limits[0]) != 3:
+                return []
+            v, a, b = ints[0].limits[0]
+            outside = w[0].xreplace({ints[0]: sp.Dummy()})
+            if ctx.ns.get(getattr(v, "name", "")) != v or v in outside.free_symbols:
+                return []
+        if not (isinstance(v, sp.Symbol) and a.is_real and b.is_real and a.is_number and b.is_number):
+            return []
+        lo, hi = (a, b) if bool(a <= b) else (b, a)
+    except Exception:  # noqa: BLE001 - a window we cannot read restricts nothing
+        return []
+    return [sp.Ge(v, lo, evaluate=False), sp.Le(v, hi, evaluate=False)]
 
 
 def _task_objects(ir, ctx: Ctx) -> list:
@@ -777,6 +902,31 @@ def _states_task_object(claim, objects: list, ctx: Ctx) -> bool:
                 and r.value.is_zero is False:
             return True
     return False
+
+
+def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
+    """Is the claim, read AS WRITTEN, undefined whatever its free symbols are (a closed condition
+    that fails, e.g. a term of a finite sum at one of its indices)? The value parse folds j/j to 1,
+    and the compute step `Sum(j/j, (j, -1, 1)) = 3` was verified (V14 tests, 30 Sep 2026). Undeclared
+    names are read as `_with_bound_dummies` reads them; a text that cannot be read that way adds
+    nothing."""
+    from ..certify.domain import closed_condition_undecided, definedness_conditions
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    try:
+        names = _check_safe(preclean(_strip_invisible(text)), ns)
+    except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
+        names = []
+    if names:
+        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+    try:
+        w = parse_as_written(text, ns)
+        if w is None:
+            return False
+        conds = definedness_conditions(w, None)
+        # a binder whose body is not proved to exist (DEFINEDNESS_UNDECIDED) is not verified either
+        return any(c is sp.false for c in conds) or closed_condition_undecided(conds)
+    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
+        return False
 
 
 def _with_bound_dummies(text: str, ns: dict[str, Any]):
@@ -949,6 +1099,15 @@ def check_steps(ir, solution, ctx: Ctx):
                         chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
+            if status != "refuted" and _undefined_as_written(st.claim, step_ns):
+                # the value SymPy checked is not the value of what was written: neither verified
+                # nor a premise (principle 12). A refutation stands: the checkers refute only a
+                # value they computed, and an undefined claim is no true step either.
+                entry["status"] = "unknown"
+                entry["reason"] = "claim_undefined_as_written"
+                n_unk += 1
+                per_step.append(entry)
+                continue
             entry["status"] = status
             entry["evidence"] = ev
             per_step.append(entry)
