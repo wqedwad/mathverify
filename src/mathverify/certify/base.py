@@ -459,3 +459,18 @@ def parse_or_unknown(layer: str, fn, *args, **kw):
         return None, unknown(layer, f"parse_error: {e}", flags=["parse_error"])
     except Exception as e:  # noqa: BLE001
         return None, unknown(layer, f"parse_error: {type(e).__name__}: {e}", flags=["parse_error"])
+
+
+_OPERATIONS = (sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs)
+
+
+def closed_binding(rel) -> tuple[sp.Symbol, Any] | None:
+    """`s = c` or `c = s`, with `c` a finite real number and no operation left in it: the relation
+    pins the symbol `s` to that one value. None for any other relation (`a**2 = 16`, `a + 1 = 5`)."""
+    if not isinstance(rel, sp.Eq):
+        return None
+    for s_, c in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+        if isinstance(s_, sp.Symbol) and isinstance(c, sp.Expr) and not c.free_symbols \
+                and not c.has(*_OPERATIONS) and c.is_real is True and c.is_finite is True:
+            return s_, c
+    return None

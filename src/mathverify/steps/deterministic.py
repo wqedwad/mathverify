@@ -277,6 +277,29 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
     return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
 
 
+def _pins(claim, premises: list) -> dict | None:
+    """The one value each free symbol of `claim` is pinned to by the premises (`a = 1`, `b = -5`),
+    or None: a symbol no premise pins, or pins to two values not proved equal, or a claim with an
+    operation whose bound variable a substitution could reach. A `compute` claim with the
+    problem's parameters ("f(2) = 2" for f = x³ + ax² + bx) was checked as an identity in them
+    and refuted at a = b = 0, which violates the givens (V15 S1, DECISIONS §72)."""
+    from ..certify.base import closed_binding
+    from ..equiv.numeric import exact_equal
+    syms = getattr(claim, "free_symbols", None)
+    if not isinstance(claim, Eq) or not syms or claim.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs, sp.Lambda):
+        return None
+    vals: dict[Any, list] = {}
+    for p in premises:
+        b = closed_binding(p)
+        if b is not None and b[0] in syms:
+            vals.setdefault(b[0], []).append(b[1])
+    if set(vals) != syms:
+        return None
+    if any(exact_equal(v, vs[0]) is not True for vs in vals.values() for v in vs[1:]):
+        return None
+    return {s_: vs[0] for s_, vs in vals.items()}
+
+
 def _diff_doit(e, var):
     from ..certify.calculus import classical
     return sp.simplify(classical(sp.diff(e, var).doit()))
@@ -992,6 +1015,7 @@ def check_steps(ir, solution, ctx: Ctx):
         n_ref = n_ver = n_unk = n_skip = n_malformed = 0
         case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
         choices: dict[Any, Any] = {}              # symbol -> the solver's latest choice of its value
+        verified: set[str] = set()                # ids of the `eq` claims the premises proved
         from_map: dict[str, list[str]] = {s.id: list(s.from_ids) for s in solution.steps}
 
         def case_closure(sid: str) -> list:
@@ -1077,6 +1101,18 @@ def check_steps(ir, solution, ctx: Ctx):
             try:
                 if st.kind == "compute":
                     status, ev = _check_compute(claim, ctx)
+                    if status == "refuted":
+                        # the identity failed; its counterexample is no instance of the problem when
+                        # the premises pin every symbol of the claim (principle 5)
+                        pins = _pins(claim, list(givens) + list(restrictions)
+                                     + [parsed[k] for k in verified
+                                        if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids])
+                        if pins:
+                            # the sides separately: Eq would evaluate itself on substitution
+                            status, pev = _check_compute(Eq(claim.lhs.xreplace(pins), claim.rhs.xreplace(pins),
+                                                            evaluate=False), ctx)
+                            ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()},
+                                  "identity_refuted": ev}
                 else:
                     # premises: givens + unconditional earlier claims + claims from the same
                     # case branch(es) + the case assumptions themselves
@@ -1127,6 +1163,8 @@ def check_steps(ir, solution, ctx: Ctx):
                 continue
             if status == "verified":
                 n_ver += 1
+                if st.kind == "eq":
+                    verified.add(st.id)
             elif status == "unknown":
                 n_unk += 1
             elif status == "skipped":
