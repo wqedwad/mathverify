@@ -59,9 +59,11 @@ MUTATIONS = [
     ("S04 sabitlenmemiş sembol kalabilir", DET, "    if set(vals) != syms:\n        return None", "    if not vals:\n        return None", TP),
     ("S05 iki farklı değer denetlenmez", DET,
      "    if any(exact_equal(v, vs[0]) is not True for vs in vals.values() for v in vs[1:]):\n        return None\n", "", TP),
+    # retargeted 30 Sep 2026 (part 8): the guard became `_binders_keep_clear_of`, which lets Sums,
+    # Products and definite Integrals through and still keeps a Limit/Derivative out
     ("S06 işlemli iddia da yerine koyulur", DET,
-     "claim.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs, sp.Lambda):",
-     "False:", TP),
+     "    if claim.has(sp.Limit, sp.Derivative, sp.Order):      # they bind without listing bound_symbols\n        return False",
+     "    if False:\n        return False", TP),
 ]
 
 if __name__ == "__main__":
