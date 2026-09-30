@@ -84,6 +84,7 @@ def _spend(n: int) -> bool:
     if left is None:
         return True                                 # outside a reading (a direct call)
     if left < n:
+        _BINDER_STATE.cut = True                    # this result depends on the budget: not kept
         return False
     _BINDER_STATE.left = left - n
     return True
@@ -252,6 +253,15 @@ def _integral_conditions(n, var) -> list[Any]:
     d = plain[x]
     region = S.Reals
     a, b = _evaluated(a), _evaluated(b)
+    if a.is_number != b.is_number:
+        # one symbolic bound: the side of the other it lies on, from its declaration (∫_0^x √t dt with
+        # x > 0 runs over [0, x] ⊆ [0, oo); read over R it was undecided, review of 30 Sep 2026)
+        c = a if a.is_number else b
+        sign = (b - a) if a.is_number else (a - b)
+        if c.is_real and sign.is_nonnegative is True:
+            region = Interval(c, oo)
+        elif c.is_real and sign.is_nonpositive is True:
+            region = Interval(-oo, c)
     if a.is_number and b.is_number:
         order = certified_sign(b - a) if not (a.has(oo, -oo) or b.has(oo, -oo)) else None
         if a.has(oo, -oo) or b.has(oo, -oo):
@@ -288,7 +298,10 @@ def _limit_conditions(n, var) -> list[Any]:
             if bad.is_empty is not True and (bad.sup if z0 == oo else bad.inf).is_finite is not True:
                 return [DEFINEDNESS_UNDECIDED]
             continue
-        for side in (("+", "-") if str(direction) == "+-" else (str(direction),)):
+        sides = ("+", "-") if str(direction) == "+-" else (str(direction),)
+        if sides == ("+", "-") and z0 == 0 and getattr(z, "is_nonnegative", None):
+            sides = ("+",)                          # the limit over the declared domain (certify.limits)
+        for side in sides:
             near = Interval.open(z0, z0 + 1) if side == "+" else Interval.open(z0 - 1, z0)
             bad = _violations(c, zd, near)
             if bad is None:
@@ -304,31 +317,63 @@ def _limit_conditions(n, var) -> list[Any]:
     return []
 
 
+_BINDER_CACHE: dict = {}
+_BINDER_CACHE_LOCK = threading.Lock()
+_BINDER_CACHE_SIZE = 512
+
+
 def _binder_conditions(n, var) -> list[Any]:
     """The conditions a binder's body puts on its bound variable, decided over the binder's range
     (see _range_conditions, _integral_conditions, _limit_conditions): `false` when the body is proved
     undefined there, DEFINEDNESS_UNDECIDED when it is not proved to exist, conditions on the
-    problem's own symbols otherwise. The whole reading shares one budget."""
-    top = getattr(_BINDER_STATE, "left", None) is None
-    if top:
-        _BINDER_STATE.left = _BUDGET
-    try:
-        if isinstance(n, (sp.Sum, sp.Product)):
-            return _range_conditions(n, var)
-        if isinstance(n, sp.Integral):
-            return _integral_conditions(n, var)
-        if isinstance(n, sp.Limit):
-            return _limit_conditions(n, var)
-        return []
-    except Exception:  # noqa: BLE001 - a check that fails proves nothing
+    problem's own symbols otherwise. A reading shares one budget and stops at its first undecided
+    binder (the callers abstain on one); a result is kept per binder unless the budget cut it short,
+    because verify() reads one text several times: ten inner limits with a condition solveset cannot
+    decide held it 92 s (review of 30 Sep 2026)."""
+    if getattr(_BINDER_STATE, "undecided", False):
         return [DEFINEDNESS_UNDECIDED]
-    finally:
-        if top:
-            _BINDER_STATE.left = None
+    key = (n, var)
+    with _BINDER_CACHE_LOCK:
+        hit = _BINDER_CACHE.get(key)
+    if hit is not None:
+        out = list(hit)
+    else:
+        cut = getattr(_BINDER_STATE, "cut", False)
+        _BINDER_STATE.cut = False
+        try:
+            if isinstance(n, (sp.Sum, sp.Product)):
+                out = _range_conditions(n, var)
+            elif isinstance(n, sp.Integral):
+                out = _integral_conditions(n, var)
+            elif isinstance(n, sp.Limit):
+                out = _limit_conditions(n, var)
+            else:
+                out = []
+        except Exception:  # noqa: BLE001 - a check that fails proves nothing
+            out = [DEFINEDNESS_UNDECIDED]
+        if not getattr(_BINDER_STATE, "cut", False):
+            with _BINDER_CACHE_LOCK:
+                if len(_BINDER_CACHE) >= _BINDER_CACHE_SIZE:
+                    _BINDER_CACHE.clear()
+                _BINDER_CACHE[key] = tuple(out)
+        _BINDER_STATE.cut = cut or getattr(_BINDER_STATE, "cut", False)
+    if any(is_undecided(c) for c in out):
+        _BINDER_STATE.undecided = True
+    return out
 
 
 def definedness_conditions(expr, var) -> list[Any]:
     """Collect conditions under which `expr` is a well-defined real number."""
+    if getattr(_BINDER_STATE, "left", None) is not None:
+        return _definedness_conditions(expr, var)
+    _BINDER_STATE.left, _BINDER_STATE.undecided, _BINDER_STATE.cut = _BUDGET, False, False
+    try:
+        return _definedness_conditions(expr, var)
+    finally:
+        _BINDER_STATE.left, _BINDER_STATE.undecided, _BINDER_STATE.cut = None, False, False
+
+
+def _definedness_conditions(expr, var) -> list[Any]:
     conds: list[Any] = []
     seen: set = set()
 

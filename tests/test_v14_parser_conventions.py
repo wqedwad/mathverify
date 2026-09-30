@@ -757,3 +757,34 @@ def test_the_minimal_polynomial_decides_rationality():
     assert decide_membership((sp.sqrt(2) + 1) ** 2 - 2 * sp.sqrt(2), sp.S.Rationals) is True
     assert decide_membership((sp.sqrt(2) + 1) ** 2 - 2 * sp.sqrt(2), sp.S.Naturals0) is True
     assert decide_membership(sp.pi + sp.E, sp.S.Rationals) is None
+
+
+@pytest.mark.parametrize("ir,claim,verdict", [
+    # at the closed end 0 of a declared x > 0 an undirected limit is the limit over the domain, as the
+    # limit task reads it (the point binders had made these UNKNOWN; review of the port)
+    (_ir("evaluate", {"expr": "Limit(x*log(x), x, 0)"}, XPV), "0", "CORRECT"),
+    (_ir("evaluate", {"expr": r"\lim_{x \to 0} x \ln x"}, XPV), "0", "CORRECT"),
+    (_ir("evaluate", {"expr": r"\lim_{x \to 0} x^x"}, XPV), "1", "CORRECT"),
+    (_ir("evaluate", {"expr": "Limit(x*log(x), x, 0)"}, XPV), "1", "INCORRECT"),
+    # an integral up to the declared x > 0 runs over [0, x], inside the integrand's domain
+    (_ir("limit", {"expr": "Integral(sqrt(t), (t, 0, x))/x", "var": "x", "to": "0"}, XPV + [{"name": "t"}]),
+     "0", "CORRECT"),
+])
+def test_a_limit_at_the_end_of_the_declared_domain(ir, claim, verdict):
+    assert _verdict(ir, _sol(claim)) == verdict
+
+
+def test_a_true_limit_step_at_the_end_of_the_declared_domain_is_verified():
+    r = verify(_ir("limit", {"expr": "x*log(x)", "var": "x", "to": "0"}, XPV),
+               _sol("0", steps=[_step(1, "compute", "Limit(x*log(x), x, 0) = 0")]))
+    assert r.verdict == "CORRECT" and _step_statuses(r) == ["verified"]
+
+
+def test_undecided_binders_do_not_multiply_the_time():
+    # ten inner limits whose condition solveset cannot decide: 92 s before one budget per reading,
+    # the first undecided binder ending the reading and a result kept per binder (review of the port)
+    import time
+    expr = "x + " + " + ".join(f"x*Limit(1/(sin(t) + cos(3*t) - 1/{c}), t, x)" for c in range(5, 15))
+    t0 = time.perf_counter()
+    r = verify(_ir("limit", {"expr": expr, "var": "x", "to": "0"}, [{"name": "x"}, {"name": "t"}]), _sol("0"))
+    assert r.verdict == "UNKNOWN" and time.perf_counter() - t0 < 45

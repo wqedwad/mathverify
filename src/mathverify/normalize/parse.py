@@ -887,7 +887,10 @@ def _point_facts(kind: str, declared, p, side) -> frozenset:
                                                  else set()))
                 if p.is_real is not True:
                     return frozenset()
-                right = p.is_positive is True or (p.is_zero is True and side == "+")
+                # at the closed end 0 of a nonnegative declared variable an undirected limit is the
+                # limit over the domain, as the limit task reads it (`_domain_end_limits`)
+                right = p.is_positive is True or (p.is_zero is True and (side == "+" or (
+                    side in (None, "+-") and getattr(declared, "is_nonnegative", None) is True)))
                 return frozenset({"real", "positive"} if right else {"real"})
             if p.is_real is not True:
                 return frozenset()
@@ -1079,6 +1082,8 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
         else:
             with sp.evaluate(False):
                 out = _integer_indices(out)
+    if pointed is not None and evaluate:
+        out = _domain_end_limits(out)
     _refuse_reversed_ranges(out, s)
     return out
 
@@ -1187,6 +1192,22 @@ def _latex2sympy(s: str):
     return converter.parse(normalize_latex(s, NormalizationConfig()))
 
 
+def _domain_end_limits(expr):
+    """An undirected limit at 0 whose bound variable is positive (`_point_facts`: the declared
+    variable is nonnegative) is the right-hand limit, the limit over the declared domain, as the limit
+    task reads it: with x > 0, Limit(x*log(x), x, 0) = 0 was certified before the point binders and
+    UNKNOWN after them (review of 30 Sep 2026)."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Limit):
+        return expr
+
+    def side(n):
+        e, z, z0, d = n.args
+        if str(d) == "+-" and z0 == 0 and getattr(z, "is_positive", None) is True:
+            return sp.Limit(e, z, z0, "+")
+        return n
+    return expr.replace(lambda n: isinstance(n, sp.Limit), side)
+
+
 def _latex_limit_variables(expr, ns: dict[str, Any]):
     """Every LaTeX limit's variable bound as the canonical branch binds it (`_point_facts`,
     `_point_dummy`), before the free symbols are rebound to the IR's. latex2sympy gives the variable an
@@ -1204,7 +1225,7 @@ def _latex_limit_variables(expr, ns: dict[str, Any]):
         if not isinstance(decl, Symbol):
             return n
         w = _point_dummy(decl.name, _point_facts("Limit", decl, p, str(d)))
-        return sp.Limit(body.xreplace({v: w}), w, p, d)
+        return _domain_end_limits(sp.Limit(body.xreplace({v: w}), w, p, d))
     return expr.replace(lambda n: isinstance(n, sp.Limit), bind)
 
 
