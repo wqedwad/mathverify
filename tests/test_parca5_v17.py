@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 import sympy as sp
 
-from mathverify.normalize.parse import ParseError, _SAFE_NAMES, parse_as_written, parse_expr_str
+from mathverify.normalize.parse import ParseError, _SAFE_NAMES, parse_as_written, parse_expr_str, unhold
 from mathverify.verifier import verify
 
 
@@ -153,7 +153,9 @@ def test_calculus_in_a_variable_declared_an_integer_is_not_read(text, n):
     ("at(integrate(sin(pi*n), n), n, 1)", 1 / sp.pi),
 ])
 def test_a_bound_variable_is_differentiated_as_a_real_one(text, value):
-    e = parse_expr_str(text, _ns())
+    # an antiderivative is held unevaluated since part iv (DECISIONS §80: its value at a point is
+    # SymPy's choice of constant); the test computes it here, as an oracle, to see the real dummy
+    e = unhold(parse_expr_str(text, _ns()))
     assert sp.simplify(e.doit() - value) == 0
 
 

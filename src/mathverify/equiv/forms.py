@@ -22,7 +22,9 @@ from typing import Any
 
 import sympy as sp
 
-__all__ = ["UnverifiedForm", "has_closed_form", "checked_forms"]
+from ..normalize.parse import unhold
+
+__all__ = ["UnverifiedForm", "has_closed_form", "has_parametric_form", "checked_forms"]
 
 _FORMS = (sp.Integral, sp.Sum, sp.Product, sp.Limit)
 _MAX_TERMS = 10_000
@@ -89,6 +91,14 @@ def _numeric(n, timeout: float) -> tuple[Any, float] | None:
     return (v, tol) if v.is_finite else None
 
 
+def has_parametric_form(e) -> bool:
+    """Does `e` hold an Integral or a Limit with a free symbol (a parameter, or the variable of an
+    antiderivative)? No number checks SymPy's value of one: agreement at sample points of the
+    parameter is no proof (DECISIONS §80, principle 4)."""
+    return isinstance(e, sp.Basic) and any(isinstance(n, (sp.Integral, sp.Limit)) and n.free_symbols
+                                           for n in sp.preorder_traversal(e))
+
+
 def checked_forms(e, timeout: float = 8.0):
     """`e` with every closed Integral/Sum/Product replaced by SymPy's value confirmed by numbers
     (see the module docstring). Raises UnverifiedForm when SymPy has no value for one or the numbers
@@ -106,7 +116,10 @@ def checked_forms(e, timeout: float = 8.0):
                 raise UnverifiedForm(f"a closed form over open inner forms: {e}")
             return e
         reps = {}
-        for n in inner:
+        for key in inner:
+            # a held form (normalize.parse.HeldIntegral/HeldLimit: written with a parameter that now
+            # has a value) is checked as the plain form; its own doit never computes
+            n = unhold(key)
             if isinstance(n, sp.Limit):
                 # SymPy's limit, corroborated numerically near the point and two-sided unless a side
                 # is written (certify.limits): with n an integer SymPy says lim n·sin(π/n) = 0 (π)
@@ -115,7 +128,7 @@ def checked_forms(e, timeout: float = 8.0):
                 cls = classify_limit(e_, v_, p_, None if str(d_) in ("+-", "real") else str(d_), timeout=timeout)
                 if cls.get("kind") not in ("VAR", "INF") or cls.get("value") is None:
                     raise UnverifiedForm(f"{n}: {cls.get('kind')}")
-                reps[n] = cls["value"]
+                reps[key] = cls["value"]
                 continue
             r = sb_run("mathverify.sandbox.ops:doit_expr", n, timeout=timeout)
             if not r.ok or not isinstance(r.value, sp.Basic) or r.value.has(*_FORMS) \
@@ -130,7 +143,7 @@ def checked_forms(e, timeout: float = 8.0):
                 zero, zev = definite_integral_is_zero(n.function, var, a, b, timeout=timeout)
                 if zero is not True:
                     raise UnverifiedForm(f"{n}: SymPy 0, numbers {zev.get('decided_by') or zev.get('error')}")
-                reps[n] = r.value
+                reps[key] = r.value
                 continue
             num = _numeric(n, timeout)
             if num is None:
@@ -143,7 +156,7 @@ def checked_forms(e, timeout: float = 8.0):
                 ok, _ = num_equal(r.value, val, rel_tol=tol)
                 if ok is not True:
                     raise UnverifiedForm(f"{n}: SymPy {r.value}, numbers {sp.N(val, 20)}")
-            reps[n] = r.value
+            reps[key] = r.value
         e = e.xreplace(reps)
     if has_closed_form(e):
         raise UnverifiedForm(f"too deeply nested: {e}")

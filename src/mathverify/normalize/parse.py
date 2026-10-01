@@ -307,26 +307,108 @@ def _Limit(e, v, p, d=None):  # noqa: N802 - the name is the notation
     return sp.Limit(e, v, p, d if d is not None else _two_sided(p))
 
 
-def _limit(e, v, p, d=None):
-    """`limit` computes, unless the limit is closed: then it stays the form, and a value is taken
-    only when numbers confirm SymPy's (equiv.forms). With n an integer SymPy's limit of n*tan(pi/n)
-    at oo is 0 (the limit is pi), and the parse certified 0 (audit of 29 Sep 2026)."""
-    form = _Limit(e, v, p, d)
-    if isinstance(form, sp.Limit) and not form.free_symbols:
+class HeldIntegral(sp.Integral):
+    """An integral with a parameter (a free symbol) or without a range, held as the form: SymPy's
+    value of it is taken nowhere (DECISIONS §80, F9). SymPy's parametric result is wrong in some
+    regions of the parameter: integrate(1/t, (t, 1, x)) is log(x), so L(-1) = I*pi was certified for
+    L(x) = ∫_1^x dt/t, and an integral computed with a parameter that a given then fixed was taken
+    unconfirmed (∫_{-1}^{1} a|cos x| dx = 0 with a = 1; the value is 2 sin 1; third audit of 30 Sep
+    2026). `doit` (and so `simplify`) leaves it as it is; once its parameters have values it is a
+    closed form, whose value only `equiv.forms.checked_forms` takes, confirmed by numbers."""
+
+    def doit(self, **hints):
+        return self
+
+
+class HeldLimit(sp.Limit):
+    """A limit with a parameter, held as the form (see HeldIntegral): with n an integer SymPy's
+    limit of a*n*sin(pi/n) at oo is 0 (it is a*pi), and the root set of limit(...) = 2*pi was
+    certified empty (third audit of 30 Sep 2026, N8)."""
+
+    def doit(self, **hints):
+        return self
+
+
+HELD_FORMS = (HeldIntegral, HeldLimit)
+# a non-identifier key of the namespace: the values the givens pin symbols to (`given_bindings`),
+# read by `hold_parametric`; no text can name it
+PINS_KEY = "<pins>"
+
+
+def _closed_form(form) -> bool:
+    """A limit, or an integral definite in every variable, with no free symbol."""
+    if form.free_symbols:
+        return False
+    return not isinstance(form, sp.Integral) or (bool(form.limits) and all(len(lim) == 3 for lim in form.limits))
+
+
+def unhold(form):
+    """The plain Integral or Limit of a held form (any other expression unchanged)."""
+    if isinstance(form, HeldIntegral):
+        return sp.Integral(*form.args)
+    if isinstance(form, HeldLimit):
+        return sp.Limit(*form.args)
+    return form
+
+
+def _held(form):
+    """`form` (an Integral or a Limit) held when it is not closed, plain when it is."""
+    if _closed_form(form):
+        return unhold(form)
+    if isinstance(form, sp.Integral):
+        return form if isinstance(form, HeldIntegral) else HeldIntegral(*form.args)
+    return form if isinstance(form, HeldLimit) else HeldLimit(*form.args)
+
+
+def _pinned(form, pins: dict):
+    """`form` with each of its free symbols that a given pins to a number replaced by it. Never a
+    bound variable: an indefinite integral's variable is free in SymPy and is kept, and a Limit is
+    rebuilt from its parts (SymPy's Limit.subs also rewrites the variable it binds)."""
+    if isinstance(form, sp.Integral):
+        sub = {s_: v for s_, v in pins.items() if s_ in form.free_symbols and s_ not in form.variables}
+        return form.subs(sub) if sub else form
+    e, z, z0, d = form.args
+    sub = {s_: v for s_, v in pins.items() if s_ in form.free_symbols and s_ != z}
+    if not sub:
         return form
-    return sp.limit(e, v, p, d if d is not None else _two_sided(p))
+    return type(form)(e.subs(sub), z, z0.subs(sub), d)
+
+
+def hold_parametric(expr, pins: dict | None = None):
+    """`expr` with every Integral and Limit that has a parameter held (HeldIntegral, HeldLimit), after
+    the parameters the givens pin to a number (`pins`) are replaced by it: such a form is then closed
+    and plain, and its value is the one numbers confirm (equiv.forms, DECISIONS §72 (a))."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Integral, sp.Limit):
+        return expr
+    return expr.replace(lambda n: isinstance(n, (sp.Integral, sp.Limit)),
+                        lambda n: _held(_pinned(n, pins) if pins else n))
+
+
+def _hold_value(out, pins):
+    """A value parse's result with its parametric forms held (`hold_parametric`), on each side of a
+    relation (rebuilt unevaluated, `_on_sides`); anything without an Integral or a Limit unchanged."""
+    if not isinstance(out, sp.Basic) or not out.has(sp.Integral, sp.Limit):
+        return out
+    return _on_sides(out, lambda e: hold_parametric(e, pins))
+
+
+def _limit(e, v, p, d=None):
+    """`limit` never computes: a closed limit stays the form, and a value is taken only when numbers
+    confirm SymPy's (equiv.forms). With n an integer SymPy's limit of n*tan(pi/n) at oo is 0 (the
+    limit is pi), and the parse certified 0 (audit of 29 Sep 2026). A limit with a parameter is held
+    (HeldLimit): its parameter pinned by a given makes it closed (`hold_parametric`), otherwise it has
+    no value."""
+    form = _Limit(e, v, p, d)
+    return _held(form) if isinstance(form, sp.Limit) else form
 
 
 def _integrate(*args, **kwargs):
-    """`integrate` computes, unless the integral is definite in every variable and closed: then it
-    stays the form, as `Integral` does, and its value is confirmed by numbers (equiv.forms). SymPy
-    integrates |cos x| over [-1, 1] to 0 (the value is 2 sin 1), and the parse certified 0 (audit
-    of 29 Sep 2026). An antiderivative or an integral with a parameter is computed as before."""
+    """`integrate` never computes: an integral definite in every variable and closed stays the form,
+    as `Integral` does, and its value is confirmed by numbers (equiv.forms). SymPy integrates |cos x|
+    over [-1, 1] to 0 (the value is 2 sin 1), and the parse certified 0 (audit of 29 Sep 2026). An
+    antiderivative or an integral with a parameter is held (HeldIntegral, DECISIONS §80)."""
     form = sp.Integral(*args, **kwargs)
-    if isinstance(form, sp.Integral) and not form.free_symbols and form.limits \
-            and all(len(lim) == 3 for lim in form.limits):
-        return form
-    return sp.integrate(*args, **kwargs)
+    return _held(form) if isinstance(form, sp.Integral) else form
 
 
 _integrate.binds_range = True  # type: ignore[attr-defined]
@@ -483,7 +565,10 @@ def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, A
                 ns.setdefault(p, Symbol(p, real=True))
             for a in f.args:
                 ns.setdefault(a, Symbol(a, real=True))
-        bindings = given_bindings(ir, ns) if any(getattr(f, "domain", None) for f in ir.functions) else {}
+        bindings = given_bindings(ir, ns) if ir.givens else {}
+        if bindings:
+            # an integral or a limit whose parameter a given pins is read at that value (hold_parametric)
+            ns[PINS_KEY] = dict(bindings)
         for f in ir.functions:
             ns[f.name] = _make_function(f, ns, bindings)
     if extra:
@@ -522,6 +607,9 @@ def _make_function(fdef, ns, bindings: dict | None = None):
     # 6; audit of 29 Sep 2026). A call substitutes its argument, whose own assumptions apply then.
     body_ns = dict(ns)
     body_ns.update({a: Symbol(a, real=True) for a in fdef.args})
+    if body_ns.get(PINS_KEY):
+        # a formal argument is no parameter of the problem, whatever a given fixes under its name
+        body_ns[PINS_KEY] = {s_: v for s_, v in body_ns[PINS_KEY].items() if s_.name not in fdef.args}
     argsyms = [body_ns[a] for a in fdef.args]
     body = parse_expr_str(fdef.expr, body_ns)
 
@@ -1287,6 +1375,8 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     if pointed is not None and evaluate:
         out = _domain_end_limits(out)
     _refuse_reversed_ranges(out, s)
+    if evaluate:
+        out = _hold_value(out, local_dict.get(PINS_KEY))
     return out
 
 
@@ -1604,7 +1694,7 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
         try:
-            return _latex_to_sympy(s, ns)
+            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY))
         except Exception as e:  # pragma: no cover - fall through to canonical
             raise ParseError(f"LaTeX parse failed for {raw!r}: {e}") from e
     s = preclean(s)
@@ -1811,7 +1901,7 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     if is_latex(s):
         # LaTeX relations: latex2sympy handles "=" -> Eq
         try:
-            return _latex_to_sympy(s, ns)
+            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY))
         except ParseError:
             raise
         except Exception as e:  # noqa: BLE001 - latex2sympy raises a bare Exception

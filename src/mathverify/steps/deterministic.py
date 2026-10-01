@@ -214,6 +214,12 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
         # replaced by its certified value, wherever it sits in the claim.
         from ..certify.limits import classify_limit
         from ..certify.calculus import derivative_at_point
+        if any(L.free_symbols for L in lims):
+            # a limit with a parameter has no value (DECISIONS §80): with n an integer SymPy gives 0
+            # for the limit of a*n*sin(pi/n) at oo (a*pi), so "... = 0" was verified and "... = pi*a"
+            # refuted (part iv, 1 Oct 2026). Pinned by a given, the parse made it closed.
+            return "unknown", {"reason": "parametric_form",
+                               "forms": [str(L) for L in lims if L.free_symbols][:3]}
         for L in lims:
             e_, v_, p_, d_ = L.args
             side = None if str(d_) in ("+-", "real") else str(d_)
@@ -255,6 +261,21 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
         if _integrals_refute(claim, ctx):
             return "refuted", {**ev, "reason": "integrals_numeric_value_differs"}
         return "unknown", {**ev, "reason": f"unverified_form: {str(e)[:200]}"}
+    from ..equiv.forms import has_parametric_form
+    if has_parametric_form(lhs) or has_parametric_form(rhs):
+        # an integral with a parameter has no value (DECISIONS §80): SymPy's doit of it was the value
+        # ("Integral(x, (x, 0, a)) = a**2/2" verified). Compared as expressions, only an identity
+        # that needs no value, or a counterexample at a value of the parameter (the closed integral
+        # there, confirmed by numbers), decides; a pin of the parameter re-checks it there.
+        free = lhs.free_symbols | rhs.free_symbols
+        dom = {s_: ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals for s_ in free}
+        ok, cev = answers_equivalent(rhs, lhs, shape="expression", domain=dom, seed=ctx.seed)
+        ev["compare"] = cev
+        if ok is True:
+            return "verified", ev
+        if ok is False:
+            return "refuted", ev
+        return "unknown", {**ev, "reason": "parametric_form"}
     r = sb_run("mathverify.steps.deterministic:_doit", lhs, timeout=ctx.timeout)
     if not r.ok:
         return "unknown", {"reason": f"doit_failed: {r.error}"}
@@ -1243,9 +1264,10 @@ def check_steps(ir, solution, ctx: Ctx):
             try:
                 if st.kind == "compute":
                     status, ev = _check_compute(claim, ctx)
-                    if status == "refuted":
+                    if status == "refuted" or (status == "unknown" and ev.get("reason") == "parametric_form"):
                         # the identity failed; its counterexample is no instance of the problem when
-                        # the premises pin every symbol of the claim (principle 5)
+                        # the premises pin every symbol of the claim (principle 5). An integral with a
+                        # parameter has no value until the premises pin it (DECISIONS §80).
                         pins = _pins(claim, list(givens) + list(restrictions)
                                      + [parsed[k] for k in verified
                                         if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids])

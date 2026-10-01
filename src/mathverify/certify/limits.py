@@ -433,6 +433,19 @@ def verify(ir, solution, ctx: Ctx):
         point, err = parse_or_unknown(LAYER, ctx.expr, str(p.get("to", "0")))
         if err:
             return err
+        # a parameter (a symbol other than the variable) is read at the number a given pins it to;
+        # one no given pins leaves the limit without a value (DECISIONS §80): with n an integer
+        # SymPy's limit of a*n*sin(pi/n) at oo is 0 (it is a*pi), and 0 was certified and 2*pi refuted
+        # with a = 2 (part iv, 1 Oct 2026)
+        pins: dict = {}
+        params = (getattr(expr, "free_symbols", set()) | getattr(point, "free_symbols", set())) - {var}
+        if params:
+            pins = {s_: v for s_, v in ctx.bindings().items() if s_ in params}
+            expr, point = expr.xreplace(pins), point.xreplace(pins)
+            left = (getattr(expr, "free_symbols", set()) | getattr(point, "free_symbols", set())) - {var}
+            if left:
+                return unknown(LAYER, "parametric_limit", t.ms, {"parameters": sorted(str(s_) for s_ in left)},
+                               flags=["parametric_limit"])
         side = p.get("side")
         if side in ("", "+-"):
             side = None
@@ -446,6 +459,8 @@ def verify(ir, solution, ctx: Ctx):
                            flags=["approach_outside_declared_domain"])
         side = within
         written, nowhere = written_definedness(p["expr"], ctx.ns)
+        if pins:
+            written = [c.xreplace(pins) if isinstance(c, sp.Basic) else c for c in written]
         if nowhere or written_undefined_everywhere(p["expr"], ctx.ns):
             # undefined as written for every value (a sum with an undefined term), or a binder whose
             # body is not proved to exist: lim_{x->0} x + Σ_{k=-1}^{1} k/k = 3 was certified (review

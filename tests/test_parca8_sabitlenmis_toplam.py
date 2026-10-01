@@ -77,7 +77,12 @@ def test_a_right_step_with_a_binder_in_pinned_symbols_is_verified(ir, payload, s
     assert r.verdict == "CORRECT" and [s["status"] for s in st] == ["verified"] * len(steps), \
         [(s["status"], s.get("reason")) for s in st]
     ev = st[-1]["evidence"]
-    assert ev["pinned_by_premises"] and ev["identity_refuted"]
+    if "Integral" in steps[-1][1]:
+        # part iv (DECISIONS §80): the parse reads an Integral's parameter at the value a given pins it
+        # to, so the claim is closed and checked as written, with no identity to refute first
+        assert "pinned_by_premises" not in ev
+    else:
+        assert ev["pinned_by_premises"] and ev["identity_refuted"]
 
 
 @pytest.mark.parametrize("ir,payload,steps", WRONG)
@@ -103,12 +108,15 @@ def test_a_step_in_symbols_not_pinned_is_still_checked_as_an_identity(ir, steps)
     ([("compute", "a*Limit(x**2, x, 1) = 2")], "refuted"),
     ([("compute", "a + Limit(x, x, 1) = 3")], "refuted"),
     ([("compute", "Derivative(a*x**2, x) = 4*x")], "refuted"),
-    ([("compute", "Limit(a*x, x, 1) = 2")], "unknown"),
-    ([("compute", "Integral(a*x, x) = x**2")], "unknown"),
+    ([("compute", "Limit(a*x, x, 1) = 2")], "verified"),
+    ([("compute", "Integral(a*x, x) = x**2")], "verified"),
 ])
 def test_a_limit_a_derivative_and_an_indefinite_integral_stay_out(steps, status):
     """Measured the same on 8d86e7c: SymPy's Limit.subs replaces the bound variable too, and these are
-    not substituted. The first three are true at a = 2 and stay refuted (a known false rejection)."""
+    not substituted. The first three are true at a = 2 and stay refuted (a known false rejection). The
+    last two were unknown there: since part iv (DECISIONS §80) the parse reads a parameter INSIDE an
+    Integral or a Limit at the value a given pins it to (never the bound variable), so they are
+    checked at a = 2 as written, not by the re-check."""
     st = _steps(_run(_ir("a", [A, X], ["a = 2"]), "2", steps))
     assert st[-1]["status"] == status and "pinned_by_premises" not in (st[-1].get("evidence") or {})
 
