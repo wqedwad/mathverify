@@ -253,7 +253,11 @@ def test_c9_far_difference_in_calculus_claims():
 
 def test_c9_compute_step_with_far_difference_is_refuted():
     st = [_step(1, "compute", "Abs(x - 2025) + Abs(x + 2025) = 4050")]
-    assert _solve("x**2 - 5*x + 6 = 0", "{2, 3}", steps=st) != "CORRECT"
+    # Part 10 (1 Oct 2026): the given x**2 - 5x + 6 = 0 confines x to {2, 3}, where the claim holds (it holds
+    # for |x| <= 2025), so the step is checked there and verified. The far difference is checked where
+    # nothing confines x: a problem without givens.
+    assert _solve("x**2 - 5*x + 6 = 0", "{2, 3}", steps=st) == "CORRECT"
+    assert _v("simplify_expression", {"expr": "(x**2 - 1)/(x - 1)"}, "expression", "x + 1", steps=st) != "CORRECT"
     st = [_step(1, "compute", "floor(x) + floor(-x) = -1")]
     assert _solve("x**2 - 5*x + 6 = 0", "{2, 3}", steps=st) != "CORRECT"
 

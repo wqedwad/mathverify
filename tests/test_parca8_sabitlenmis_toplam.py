@@ -94,27 +94,29 @@ def test_a_wrong_step_with_a_binder_in_pinned_symbols_stays_refuted(ir, payload,
 @pytest.mark.parametrize("ir,steps", [
     (_ir("n*(n + 1)/2", [N], []), [("compute", "Sum(k, (k, 1, n)) = 6")]),
     (_ir("n*(n + 1)/2", [N], ["n > 2"]), [("compute", "Sum(k, (k, 1, n)) = 6")]),
-    (_ir("n*(n + 1)/2", [N], ["n**2 = 9"]), [("compute", "Sum(k, (k, 1, n)) = 6")]),       # no closed binding
     (_ir("n*(n + 1)/2", [N], []), [("eq", "n = 3"), ("compute", "Sum(k, (k, 1, n)) = 6")]),  # solver's own n
     (_ir("a", [A], ["a = 3", "a = 2"]), [("compute", "Sum(a*k, (k, 1, 2)) = 9")]),         # two values
 ])
 def test_a_step_in_symbols_not_pinned_is_still_checked_as_an_identity(ir, steps):
-    """Control: nothing (or two values) pins the symbol, so the identity check stands (as on 8d86e7c)."""
+    """Control: nothing (or two values) pins the symbol, so the identity check stands (as on 8d86e7c). The
+    case n**2 = 9 (no closed binding, n = 3 for a positive integer) was here: since part 10 the premises'
+    finite set is checked point by point and the right step is verified (tests/test_parca10_sonlu_oncul.py)."""
     st = _steps(_run(ir, "6", steps))
     assert st[-1]["status"] == "refuted" and "pinned_by_premises" not in st[-1]["evidence"]
 
 
 @pytest.mark.parametrize("steps,status", [
-    ([("compute", "a*Limit(x**2, x, 1) = 2")], "refuted"),
-    ([("compute", "a + Limit(x, x, 1) = 3")], "refuted"),
-    ([("compute", "Derivative(a*x**2, x) = 4*x")], "refuted"),
+    ([("compute", "a*Limit(x**2, x, 1) = 2")], "verified"),
+    ([("compute", "a + Limit(x, x, 1) = 3")], "verified"),
+    ([("compute", "Derivative(a*x**2, x) = 4*x")], "verified"),
     ([("compute", "Limit(a*x, x, 1) = 2")], "verified"),
     ([("compute", "Integral(a*x, x) = x**2")], "verified"),
 ])
 def test_a_limit_a_derivative_and_an_indefinite_integral_stay_out(steps, status):
     """Measured the same on 8d86e7c: SymPy's Limit.subs replaces the bound variable too, and these are
-    not substituted. The first three are true at a = 2 and stay refuted (a known false rejection). The
-    last two were unknown there: since part iv (DECISIONS §80) the parse reads a parameter INSIDE an
+    not substituted. The first three are true at a = 2 and stayed refuted there (a known false rejection);
+    since part 10 the identity's counterexample, at an a != 2, is no instance, and the claim is compared
+    again with a confined to the premises' region {2}, without substitution. The last two were unknown there: since part iv (DECISIONS §80) the parse reads a parameter INSIDE an
     Integral or a Limit at the value a given pins it to (never the bound variable), so they are
     checked at a = 2 as written, not by the re-check."""
     st = _steps(_run(_ir("a", [A, X], ["a = 2"]), "2", steps))

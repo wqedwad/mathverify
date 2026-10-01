@@ -159,7 +159,13 @@ def _derivative_points(expr) -> list:
             and s_.expr.variables and set(s_.expr.variables) == set(s_.variables)]
 
 
-def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
+def _compare_domains(free, ctx: Ctx, doms: dict | None) -> dict:
+    """The set each free symbol of a `compute` claim is compared on: `doms`' when it gives one (the region
+    the premises leave, `_on_premises`), else the symbol's domain."""
+    return {s_: (doms or {}).get(s_, ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals) for s_ in free}
+
+
+def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict]:
     ev: dict[str, Any] = {}
     if not isinstance(claim, Eq):
         if isinstance(claim, (sp.core.relational.Relational, And, Or, sp.logic.boolalg.BooleanAtom)) \
@@ -199,7 +205,7 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
         ev["derivative_of_difference"] = str(d)
         if d == 0:
             return "verified", ev
-        dom = {s_: ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals for s_ in d.free_symbols}
+        dom = _compare_domains(d.free_symbols, ctx, doms)
         ok, cev = answers_equivalent(d, S.Zero, shape="expression" if d.free_symbols else "scalar",
                                      domain=dom or None, seed=ctx.seed)
         ev["compare"] = cev
@@ -268,7 +274,7 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
         # that needs no value, or a counterexample at a value of the parameter (the closed integral
         # there, confirmed by numbers), decides; a pin of the parameter re-checks it there.
         free = lhs.free_symbols | rhs.free_symbols
-        dom = {s_: ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals for s_ in free}
+        dom = _compare_domains(free, ctx, doms)
         ok, cev = answers_equivalent(rhs, lhs, shape="expression", domain=dom, seed=ctx.seed)
         ev["compare"] = cev
         if ok is True:
@@ -290,7 +296,7 @@ def _check_compute(claim, ctx: Ctx) -> tuple[str, dict]:
         rhs = r2.value
     free = val.free_symbols | rhs.free_symbols
     if free:
-        dom = {s_: ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals for s_ in free}
+        dom = _compare_domains(free, ctx, doms)
         ok, cev = answers_equivalent(rhs, val, shape="expression", domain=dom, seed=ctx.seed)
     else:
         ok, cev = answers_equivalent(rhs, val, shape="scalar")
@@ -338,6 +344,303 @@ def _pins(claim, premises: list) -> dict | None:
     if any(exact_equal(v, vs[0]) is not True for vs in vals.values() for v in vs[1:]):
         return None
     return {s_: vs[0] for s_, vs in vals.items()}
+
+
+# The values a finite premise set may hold for each of them to be checked one by one, and the symbols
+# the premises may link a claim's symbols to.
+_MAX_INSTANCES = 20
+_MAX_LINKED = 4
+
+
+def _premise_parts(premises: list) -> list:
+    """The premises with free symbols, an And split into its parts (a chain 0 < n < 5)."""
+    out: list = []
+    for p in premises:
+        for q in (p.args if isinstance(p, And) else (p,)):
+            if getattr(q, "free_symbols", None):
+                out.append(q)
+    return out
+
+
+def _linked(premises: list, syms) -> tuple[list, set]:
+    """The premises that share a symbol with `syms`, directly or through another such premise, and the
+    symbols they name together with `syms`."""
+    want, out, left = set(syms), [], list(premises)
+    grew = True
+    while grew:
+        grew = False
+        for p in list(left):
+            if p.free_symbols & want:
+                out.append(p)
+                want |= p.free_symbols
+                left.remove(p)
+                grew = True
+    return out, want
+
+
+def _holds_exactly(p, point: dict, ctx: Ctx) -> bool | None:
+    """Truth of a premise at a point: a relation exactly (`_decide`), a membership by `decide_membership`
+    (a Sum/Product range's condition stays undecided where the range runs backwards)."""
+    from ..certify.domain import decide_membership
+    if p is sp.true or p is sp.false:
+        return bool(p)
+    if isinstance(p, sp.Contains):
+        try:
+            return decide_membership(p.args[0].xreplace(point), p.args[1])
+        except Exception:  # noqa: BLE001
+            return None
+    if isinstance(p, (And, Or)):
+        vals = [_holds_exactly(a, point, ctx) for a in p.args]
+        if isinstance(p, And):
+            return False if False in vals else True if all(v_ is True for v_ in vals) else None
+        return True if True in vals else False if all(v_ is False for v_ in vals) else None
+    return _decide(p, point, ctx)
+
+
+def _confined_values(v, rels: list, ctx: Ctx) -> list | None:
+    """The values of `v` its domain (with the points where a range of the problem runs backwards) and the
+    relations `rels` on `v` alone leave, when they are finitely many exact real numbers; None otherwise.
+    A relation solveset cannot solve exactly is left out (the set stays a superset; each point is checked
+    against every premise afterwards)."""
+    region = sp.Union(ctx.domain_for(v), ctx.reversed_region(v))
+    narrowed = False
+    for p in rels:
+        r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
+        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+            continue
+        region = sp.Intersection(region, r.value)
+        narrowed = True
+    if not narrowed:
+        return None
+    if region is S.EmptySet:
+        return []
+    if isinstance(region, sp.Range) and region.is_finite_set is True and region.size <= _MAX_INSTANCES:
+        region = sp.FiniteSet(*region)       # integers between two bounds: 1 <= n <= 5
+    if not isinstance(region, sp.FiniteSet) or len(region) > _MAX_INSTANCES:
+        return None
+    vals = list(region)
+    if any(not isinstance(c, sp.Expr) or c.free_symbols or c.is_real is not True for c in vals):
+        return None
+    return vals
+
+
+def _finite_instances(syms, premises: list, ctx: Ctx) -> tuple[list[dict], list[dict]] | None:
+    """The points the premises allow for `syms` when they confine `syms`, and every symbol a premise links
+    them to, to finitely many exact values: (the points where every premise holds and every symbol is in
+    its domain, the points where that is undecided). A point where a Sum/Product range of the problem runs
+    backwards is undecided (`Ctx.reversed_region`, DECISIONS §80). None when a symbol is not confined to a
+    finite set computed exactly, or the points are too many."""
+    linked, names = _linked(_premise_parts(premises), syms)
+    if not linked or len(names) > _MAX_LINKED or any(ctx.ns.get(q.name) != q for q in names):
+        return None
+    rels = [p for p in linked if isinstance(p, sp.core.relational.Relational)]
+    order = sorted(names, key=lambda q: q.name)
+    points: list[dict] = []
+
+    def expand(pt: dict) -> bool:
+        rest = [q for q in order if q not in pt]
+        if not rest:
+            points.append(pt)
+            return len(points) <= _MAX_INSTANCES
+        for v in rest:
+            own = []
+            for p in rels:
+                q_ = p.xreplace(pt) if pt else p
+                if isinstance(q_, sp.core.relational.Relational) and q_.free_symbols == {v}:
+                    own.append(q_)
+            vals = _confined_values(v, own, ctx) if own else None
+            if vals is not None:
+                return all(expand({**pt, v: c}) for c in vals)
+        return False
+
+    if not expand({}):
+        return None
+    certain: list[dict] = []
+    undecided: list[dict] = []
+    for pt in points:
+        state: bool | None = True
+        for q, c in pt.items():
+            inside = in_domain(ctx.domain_for(q), c)
+            if inside is True:
+                continue
+            if inside is False and in_domain(ctx.reversed_region(q), c) is False:
+                state = False
+                break
+            state = None                     # a reversed range there, or a membership undecided
+        if state is not False:
+            for p in linked:
+                h = _holds_exactly(p, pt, ctx)
+                if h is False:
+                    state = False
+                    break
+                if h is None:
+                    state = None
+        if state is True:
+            certain.append(pt)
+        elif state is None:
+            undecided.append(pt)
+    return certain, undecided
+
+
+def _counterexample_point(ev: dict, syms) -> dict | None:
+    """The point at which the comparison of a `compute` claim found its sides to differ, read back from
+    the evidence (`equiv.random_point`), or None."""
+    from ..normalize.parse import parse_expr_str
+    cx = ((ev.get("compare") or {}).get("random_point") or {}).get("counterexample")
+    pt = cx.get("point") if isinstance(cx, dict) else None
+    if not isinstance(pt, dict) or not pt:
+        return None
+    by_name = {q.name: q for q in syms}
+    out: dict = {}
+    for k, s_ in pt.items():
+        q = by_name.get(k)
+        if q is None:
+            return None
+        try:
+            out[q] = parse_expr_str(str(s_))
+        except Exception:  # noqa: BLE001
+            return None
+    return out
+
+
+def _check_at(claim, text: str, point: dict, ctx: Ctx) -> tuple[str, dict]:
+    """The `compute` claim checked at a point: the sides substituted separately (Eq would evaluate itself
+    on substitution), a Sum/Product range there through the parser's range checks (reversed, or not an
+    integer apart: the claim is not read there)."""
+    pinned = Eq(claim.lhs.xreplace(point), claim.rhs.xreplace(point), evaluate=False)
+    try:
+        _refuse_reversed_ranges(pinned, text)
+    except ParseError as e:
+        return "unknown", {"reason": f"pinned_claim_not_read: {str(e)[:160]}"}
+    return _check_compute(pinned, ctx)
+
+
+def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: dict) -> tuple[str, dict]:
+    """A `compute` claim refuted as an identity (or a parametric form without a value), re-checked where
+    the premises (the givens, the variables' constraints, the `eq` steps proved in the same branch) put
+    its symbols. The identity's counterexample is no instance of the problem when the premises exclude
+    it (principle 5): with n an integer, n**2 = 4 and n > 0, the right step "n**3 = 8" was refuted at
+    n = 48, and with the given x > 0 "Abs(x) = x" at x = -0.00919 (part 10, 1 Oct 2026; `_pins` read only
+    `s = c`).
+
+    * The premises confine the symbols to finitely many exact values (`_finite_instances`): the claim is
+      checked at each. Refuted at one where every premise holds: refuted there. Verified at every point
+      not excluded: verified. Otherwise unknown; a point where a range of the problem runs backwards, or
+      a premise is undecided, decides nothing (DECISIONS §80). No point at all (premises that contradict
+      each other, a = 3 and a = 2): the identity check stands, as before.
+    * Otherwise (a Limit or a Derivative in the claim, a premise linking a symbol that is not confined,
+      too many values) a refutation stands when its point satisfies every premise on the claim's symbols
+      alone. When it does not, the claim is compared again on the region those premises leave each
+      symbol (solved exactly; a symbol confined to a few values at each value alone, `_region_cells`),
+      and the new counterexample must satisfy them; while a point where a range of the problem runs
+      backwards may be in the region, nothing is verified. A premise that also names a symbol outside
+      the claim is not read here (x > 0 from x > y and y > 0 is not derived): that refutation stands."""
+    syms = getattr(claim, "free_symbols", None)
+    if not isinstance(claim, Eq) or not syms or any(ctx.ns.get(q.name) != q for q in syms):
+        return status, ev
+    if _binders_keep_clear_of(claim, syms):
+        inst = _finite_instances(syms, premises, ctx)
+        if inst is not None:
+            if inst[0] or inst[1]:
+                return _check_instances(claim, text, syms, inst, ctx, ev)
+            return status, ev                # no instance at all: nothing to check it at
+    if status != "refuted":
+        return status, ev
+    direct = [p for p in _premise_parts(premises) if p.free_symbols <= syms]
+    if not direct:
+        return status, ev
+    pt = _counterexample_point(ev, syms)
+    if pt is None:
+        return status, ev
+    if all(_holds_exactly(p, pt, ctx) is True for p in direct):
+        return status, {**ev, "counterexample_satisfies_premises": True}
+    region: dict = {}
+    back: list = []
+    for q in syms:
+        dom, rev = ctx.domain_for(q), ctx.reversed_region(q)
+        for p in direct:
+            if p.free_symbols == {q} and isinstance(p, sp.core.relational.Relational):
+                r = sb_run("mathverify.sandbox.ops:solveset_in", p, q, S.Reals, timeout=ctx.timeout)
+                if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet):
+                    dom, rev = sp.Intersection(dom, r.value), sp.Intersection(rev, r.value)
+        if dom != ctx.domain_for(q):
+            region[q] = dom
+        back.append(rev)
+    if any(d is S.EmptySet for d in region.values()):
+        return status, ev                    # no instance at all: nothing to check it at
+    base = {"identity_refuted": ev, "premise_region": {str(k): str(v) for k, v in region.items()}}
+    if not region:
+        return "unknown", {**base, "reason": "identity_counterexample_not_an_instance"}
+    pending = None
+    for doms in _region_cells(region):
+        s2, ev2 = _check_compute(claim, ctx, doms=doms)
+        if s2 == "refuted":
+            pt2 = _counterexample_point(ev2, syms)
+            if pt2 is not None and all(_holds_exactly(p, pt2, ctx) is True for p in direct):
+                return "refuted", {**ev2, **base, "counterexample": {str(k): str(v) for k, v in pt2.items()}}
+            s2 = "unknown"
+            ev2 = {**ev2, "reason": "counterexample_not_proved_an_instance"}
+        if s2 != "verified" and pending is None:
+            pending = (s2, ev2)
+    if pending is not None:
+        return "unknown", {**pending[1], **base, "reason": pending[1].get("reason") or "undecided_on_the_premise_region"}
+    try:
+        reversed_left = any(b.is_empty is not True for b in back)
+    except Exception:  # noqa: BLE001
+        reversed_left = True
+    if reversed_left:
+        # a point where a range of the problem runs backwards may be an instance: no verification
+        return "unknown", {**base, "reason": "reversed_range_points_undecided"}
+    return "verified", base
+
+
+def _region_cells(region: dict) -> list[dict]:
+    """The premise region split so that a symbol confined to a few values is compared at each value alone
+    (a random choice from a finite set may miss one); `region` itself when the cells would be too many."""
+    from itertools import product
+    choices = []
+    for q, d in region.items():
+        if isinstance(d, sp.Range) and d.is_finite_set is True and d.size <= _MAX_INSTANCES:
+            d = sp.FiniteSet(*d)
+        if isinstance(d, sp.FiniteSet) and len(d) <= _MAX_INSTANCES:
+            choices.append([(q, sp.FiniteSet(c)) for c in d])
+        else:
+            choices.append([(q, d)])
+    n = 1
+    for c in choices:
+        n *= len(c)
+    if n > _MAX_INSTANCES:
+        return [region]
+    return [dict(cell) for cell in product(*choices)]
+
+
+def _check_instances(claim, text: str, syms, inst, ctx: Ctx, ev: dict) -> tuple[str, dict]:
+    certain, undecided = inst
+    base = {"identity_refuted": ev, "instances_by_premises": {
+        "certain": [{str(k): str(v) for k, v in pt.items() if k in syms} for pt in certain],
+        "undecided": [{str(k): str(v) for k, v in pt.items() if k in syms} for pt in undecided]}}
+    seen: dict = {}
+
+    def at(pt):
+        key = tuple(sorted(((str(k), sp.srepr(v)) for k, v in pt.items() if k in syms)))
+        if key not in seen:
+            seen[key] = _check_at(claim, text, {k: v for k, v in pt.items() if k in syms}, ctx)
+        return seen[key]
+
+    for pt in certain:
+        s_, e_ = at(pt)
+        if s_ == "refuted":
+            return "refuted", {**e_, **base, "counterexample": {str(k): str(v) for k, v in pt.items() if k in syms}}
+    pending = None
+    for pt in certain + undecided:
+        s_, e_ = at(pt)
+        if s_ != "verified":
+            pending = {"at": {str(k): str(v) for k, v in pt.items() if k in syms}, "status": s_,
+                       "reason": e_.get("reason")}
+            break
+    if pending is None:
+        return "verified", base
+    return "unknown", {**base, "reason": "not_decided_at_every_instance", "undecided_at": pending}
 
 
 def _diff_doit(e, var):
@@ -1268,9 +1571,17 @@ def check_steps(ir, solution, ctx: Ctx):
                         # the identity failed; its counterexample is no instance of the problem when
                         # the premises pin every symbol of the claim (principle 5). An integral with a
                         # parameter has no value until the premises pin it (DECISIONS §80).
-                        pins = _pins(claim, list(givens) + list(restrictions)
-                                     + [parsed[k] for k in verified
-                                        if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids])
+                        pool = list(givens) + list(restrictions) + [
+                            parsed[k] for k in verified
+                            if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids]
+                        pins = _pins(claim, pool)
+                        if not pins:
+                            # the premises confine the symbols to finitely many values, or narrow them;
+                            # a failure there leaves the identity check as it was
+                            try:
+                                status, ev = _on_premises(claim, st.claim, pool, ctx, status, ev)
+                            except Exception as e:  # noqa: BLE001
+                                ev = {**ev, "premise_recheck_failed": f"{type(e).__name__}: {str(e)[:120]}"}
                         if pins:
                             # the sides separately: Eq would evaluate itself on substitution
                             pinned = Eq(claim.lhs.xreplace(pins), claim.rhs.xreplace(pins), evaluate=False)
