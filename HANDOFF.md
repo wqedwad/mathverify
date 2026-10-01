@@ -8,7 +8,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§81; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§82; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2936 passed / 5 skipped** (`d0c48ad`, düz `pytest`, Lean ısınması 414 s, toplam 1015 s)
@@ -57,7 +57,7 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
    yeniden koşuldu (DECISIONS §75, `denetim/2026-09-30/n19/sonda_n19.py`). **Bitti** (§76; birleşik hâlde sonda 84/88, 160 test, fark 0):
    (i) N2 + N4 + N6 + N3'ün eq adımı; (ii) N5; (iii) N7 + V15 S1'in denetçi örnekleri; (vi) başka sembollü kısıt; (v-a) V17; (v-b) V16, V18
    (§76–§78); Karr, sabitlenmiş sembollü toplam (§79); F9 (N1, N8) ve ters aralık (§80–§81; birleşik `65b699e`: 927 test, sonda 88/88,
-   fark 0). **Sürüyor:** parça 10 (sonlu öncüllü adımın haksız reddi, §81), birleşik mutasyon koşusu, tam takım. Sonra `--full`, PR.
+   fark 0); parça 10 (§82). **Sürüyor:** parça 11 (ters aralıkta adım reddi, mutasyon bakımı; §82). Sonra birleşik doğrulama, `--full`, PR.
 3. **F9 ve ters aralık** (DECISIONS §80–§81): kapandı. Açık kapsama: yalnız `vars.constraints` ile sabitlenen parametre UNKNOWN (§81).
 4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
@@ -88,7 +88,7 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.2 Doğrulayıcı: bilinen sınırlar ve kapsama
 
-Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V16 (pinli `Limit` adımı), sonlu öncüllü adım (§81, parça 10). Yanlış onaylar: V1. Ötekiler UNKNOWN (kapsama kaybı), kaçırılan adım (V2, V6) ya da bilinçli sınır.
+Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), ters aralık noktasında adım (§82, parça 11). Yanlış onaylar: V1. Ötekiler UNKNOWN (kapsama kaybı), kaçırılan adım (V2, V6) ya da bilinçli sınır.
 
 - **V1. `tyt-prob-018`:** çözüm düzeyindeki tek yanlış onay (doğru ama gerekçesiz adım; kanıtlanmış adım L6
   kritiğini ezer; aynı sınıf: C'deki 12 aritmetiği doğru `compute` adımı, §63). Karar F4 ölçümüne bağlı
@@ -126,7 +126,7 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V16 (pinli `Limit` adımı),
   fonksiyon reddedilir (L1). (GCD-10 §73'te kapandı.)
   Mutasyon: R02 ve L07'nin eşdeğerliği kanıtlanmadı. Çok sayıda kapsama kaybı (UNKNOWN), liste §72'de.
 - **V16. Taşıma denetiminden kalanlar** (DECISIONS §73; §78–§79'da kapandı). Bilinçli: 300'den çok sabit uçlu küme (§78 A (6)); çok değişkenli
-  `Subs`. Açık (önceden var, §79): pinli `Limit`'li doğru adım reddedilir; özdeşlik denetimi kararsızken pinli yeniden denetim koşmaz.
+  `Subs`. Açık (önceden var, §79): özdeşlik denetimi kararsızken pinli yeniden denetim koşmaz (pinli `Limit` adımı §82'de kapandı).
   Ters aralık §81'de çekimser. Açık öneriler (§74): sağlamlık
   taramasına eşit yazımlı küme ucu varyantı (kalıcı kapı); `franklin`'in `karar_farki.py` yetenekleri `fark.py`'ye.
 
@@ -203,7 +203,7 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V16 (pinli `Limit` adımı),
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri (`d0c48ad` bulut, `--full` dışı; `d914dbc` Windows) | 2936 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
+| Birim testleri (`65b699e` bulut, `--full` dışı; `d914dbc` Windows) | 3096 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
@@ -287,5 +287,5 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 ## 9. Nerede ne var
 
 Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
-`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §81); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §82); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
 `LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).
