@@ -37,8 +37,11 @@ DOM = "src/mathverify/certify/domain.py"
 LIM = "src/mathverify/certify/limits.py"
 CALC = "src/mathverify/certify/calculus.py"
 EXT = "src/mathverify/certify/extremum.py"
-# this part's tests first (the fastest kill), then the V14 files
-T = "tests/test_parca5_v17.py tests/test_v14_parser_conventions.py tests/test_audit_2026_09_29_v14.py"
+# this part's tests first (the fastest kill), then the V14 files; then the parser's binder tests and part
+# 7a's (R01 and R02: since the range condition makes the problem UNKNOWN they are the second defence, held
+# directly by the parse of floor(Sum(k, (k, 3, 1))) and its LaTeX twin, part 11)
+T = ("tests/test_parca5_v17.py tests/test_v14_parser_conventions.py tests/test_audit_2026_09_29_v14.py "
+     "tests/test_parse_conventions.py tests/test_parca7a_kume_ayristirici.py")
 
 MUTATIONS = [
     # --- (a) this part: the trig family parameter
