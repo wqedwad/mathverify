@@ -68,8 +68,9 @@ MUTATIONS = [
     ("M01 kökte karar verilemeyen üyelik içeride", DOM,
      "        if d is None and membership_undecided(domain, c):\n", "        if False:\n", T),
     ("M02 değer yolunda karar verilemeyen üyelik tutulur", ALG,
-     "                        if m is False or (m is None and undecided is not None):\n",
-     "                        if m is False:\n", T),
+     "                        if m is None and undecided is not None:\n                            held = True\n"
+     "                            continue\n",
+     "", T),
     ("M03 karar verilemeyen çözüm düşürülür", ALG,
      "        if undecided:\n            ev[\"membership_undecided\"]", "        if False:\n            ev[\"membership_undecided\"]", T),
     # --- (4) steps and simplifications

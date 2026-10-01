@@ -64,7 +64,7 @@ MUTATIONS = [
      '            if getattr(r2, "free_symbols", set()) - {var}:\n                unbound.append(r)',
      "            if False:\n                unbound.append(r)", T),
     ("B14 denetlenen koşul muafiyeti her koşulu kapsar", BASE,
-     "                if not (isinstance(c, sp.Basic) and c in enforced)]",
+     "                if not (isinstance(c, sp.Basic) and c in enforced and not is_range_span(c))]",
      "                if not isinstance(c, sp.Basic)]", T),
     # --- (C) the certificates
     ("C01 cebir denklemin kendi koşulunu muaf tutmaz", ALG,
