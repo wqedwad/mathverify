@@ -13,8 +13,8 @@ form with a free parameter is undecided: agreement at sample points is no proof 
 counterexample at one value still refutes. The limit task reads a pinned parameter at its value and
 abstains on a free one.
 
-Every case marked "351f901" was measured wrong there (denetim/2026-09-30/parca4/sonda.py: 99 cases,
-33 not as expected before, 0 after).
+Every case marked "351f901" was measured wrong there (denetim/2026-09-30/parca4/sonda.py: 105 cases,
+39 not as expected before, 0 after).
 """
 import pytest
 import sympy as sp
@@ -194,6 +194,20 @@ def test_a_counterexample_at_a_value_of_the_parameter_still_refutes():
 def test_a_compute_step_with_a_parametric_form(ir, sol, status):
     st = _steps(verify(ir, sol))
     assert st[-1]["status"] == status, [(s["status"], s.get("reason")) for s in st]
+
+
+@pytest.mark.parametrize("ir,sol,not_status", [
+    # 351f901: the parse's parametric value refuted the right two and verified the wrong four
+    (_ev(PG, [A, X], ["a = 1"]), _sol("2*sin(1)", [("eq", f"{PG} = 2*sin(1)")]), "refuted"),
+    (_ev(LN, [NP, A], ["a = 2"]), _sol("2*pi", [("eq", f"{LN} = 2*pi")]), "refuted"),
+    (_ev(PG, [A, X], ["a = 1"]), _sol("2*sin(1)", [("eq", f"{PG} = 0")]), "verified"),
+    (_ev(LN, [NP, A], ["a = 2"]), _sol("2*pi", [("eq", f"{LN} = 0")]), "verified"),
+    (_simp(LN, [NP, A]), _sol("pi*a", [("eq", f"{LN} = 0")], kind="expression"), "verified"),
+    (_simp(I0A, [A, X]), _sol("a**2/2", [("eq", f"{I0A} = a**2/2")], kind="expression"), "verified"),
+])
+def test_an_eq_step_with_a_parametric_form(ir, sol, not_status):
+    st = _steps(verify(ir, sol))
+    assert st[-1]["status"] != not_status, [(s["status"], s.get("reason")) for s in st]
 
 
 def test_a_parametric_form_is_held_and_neither_doit_nor_simplify_computes_it():

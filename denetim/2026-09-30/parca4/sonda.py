@@ -191,6 +191,19 @@ def cases_d():
          _sol("x**2", [("compute", "integrate(2*x, x) = x**2")], kind="expression"), NOTNO, {"verified"}),
         ("eq step int_0^a x = a**2/2 then claim, a = 2", _ev(I0a, [A, X], ["a = 2"]),
          _sol("2", [("eq", f"{I0a} = a**2/2"), ("eq", "a**2/2 = 2")]), NOTNO, None),
+        # eq steps: read in the problem's namespace, where the parse computed the form
+        ("eq step a = 1: PG = 0 (wrong)", _ev(PG, [A, X], ["a = 1"]), _sol("2*sin(1)", [("eq", f"{PG} = 0")]),
+         ANY, {"refuted", "unknown"}),
+        ("eq step a = 1: PG = 2*sin(1) (right)", _ev(PG, [A, X], ["a = 1"]),
+         _sol("2*sin(1)", [("eq", f"{PG} = 2*sin(1)")]), NOTNO, {"verified", "unknown", "skipped"}),
+        ("eq step a = 2: LN = 0 (wrong)", _ev(LN, [NP, A], ["a = 2"]), _sol("2*pi", [("eq", f"{LN} = 0")]),
+         ANY, {"refuted", "unknown"}),
+        ("eq step a = 2: LN = 2*pi (right)", _ev(LN, [NP, A], ["a = 2"]), _sol("2*pi", [("eq", f"{LN} = 2*pi")]),
+         NOTNO, {"verified", "unknown", "skipped"}),
+        ("eq step free a: LN = 0 (wrong)", _simp(LN, [NP, A]), _sol("pi*a", [("eq", f"{LN} = 0")], kind="expression"),
+         ANY, NOT_VERIFIED),
+        ("eq step free a: int_0^a x = a**2/2", _simp(I0a, [A, X]),
+         _sol("a**2/2", [("eq", f"{I0a} = a**2/2")], kind="expression"), NOTNO, {"unknown", "skipped"}),
     ]
 
 
