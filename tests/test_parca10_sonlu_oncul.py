@@ -73,6 +73,9 @@ RIGHT = [
     (_ir("x*y", [X, Y], ["x**2 = 4", "y = x + 1", "x > 0"]), "6", _c("x*y = 6")),
     (_ir("y**2", [X, Y], ["x**2 = 4", "y = x + 1", "x > 0"]), "9", _c("y**2 = 9")),
     (_ir("x*y", [X, Y], ["x + y = 5", "x - y = 1"]), "6", [("eq", "x = 3"), ("compute", "x*y = 6")]),
+    # no symbol confined alone: the polynomial system determines both
+    (_ir("x*y", [X, Y], ["x + y = 5", "x - y = 1"]), "6", _c("x*y = 6")),
+    (_ir("x*y", [X, Y], ["x**2 + y**2 = 25", "y = x + 1"]), "12", _c("x*y = 12")),        # (3, 4), (-4, -3)
 ]
 
 
@@ -98,6 +101,8 @@ WRONG = [
     (_ir("x*y", [X, Y], ["x**2 = 4", "y = x + 1"]), "6", _c("y**2 = 9"), {"y": "-1"}),
     (_ir("x*y", [X, Y], ["x + y = 5", "x - y = 1"]), "6", [("eq", "x = 3"), ("compute", "x*y = 7")],
      {"x": "3", "y": "2"}),
+    (_ir("x*y", [X, Y], ["x + y = 5", "x - y = 1"]), "6", _c("x*y = 7"), {"x": "3", "y": "2"}),
+    (_ir("x*y", [X, Y], ["x**2 + y**2 = 25", "y = x + 1"]), "12", _c("x + y = 7"), {"x": "-4", "y": "-3"}),
 ]
 
 
@@ -175,6 +180,25 @@ def test_a_wrong_step_under_narrowing_premises_stays_refuted_at_a_point_they_all
     assert r.verdict == "INCORRECT" and last["status"] == "refuted"
     ev = last["evidence"]
     assert ev.get("counterexample_satisfies_premises") is True or "counterexample" in ev, ev
+
+
+@pytest.mark.parametrize("ir,payload,claim,refuted", [
+    (_ir("y - 2*x", [X, Y], ["y = 2*x + 1"]), "1", "y - 2*x = 2", True),
+    (_ir("x*y", [X, Y], ["x + y = 10"]), "x*(10 - x)", "x*y = 21", True),
+    (_ir("y - 2*x", [X, Y], ["y = 2*x + 1"]), "1", "y - 2*x = 1", False),
+    (_ir("x*y", [X, Y], ["x + y = 10"]), "x*(10 - x)", "x*y = x*(10 - x)", False),
+])
+def test_a_counterexample_is_searched_where_the_premises_hold(ir, payload, claim, refuted):
+    """An equation in two symbols that determines neither (the line y = 2x + 1): the identity's counterexample
+    is off the line, and one on it is searched. 65b699e refuted all four at a point off the line."""
+    r = _run(ir, payload, _c(claim))
+    last = _last(r)
+    if refuted:
+        assert r.verdict == "INCORRECT" and last["status"] == "refuted"
+        ev = last["evidence"]
+        assert ev["premise_region"] == {} and "counterexample" in ev, ev
+    else:
+        assert last["status"] == "unknown" and r.verdict != "INCORRECT"
 
 
 @pytest.mark.parametrize("givens,status", [(["n**2 = 9"], "unknown"), (["n**2 = 9", "n > 0"], "verified")])

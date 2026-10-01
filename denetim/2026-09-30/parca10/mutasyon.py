@@ -36,9 +36,9 @@ MUTATIONS = [
      "    if True:\n        return status, {**ev, \"counterexample", TP),
     ("S05 bölgede ters aralık varken doğrulanır", DET,
      "    if reversed_left:\n", "    if False:\n", TP),
-    ("S06 öncül bağlantısı tek geçiş", DET,
-     "                left.remove(p)\n                grew = True\n",
-     "                left.remove(p)\n                pass\n", TP),
+    ("S06 öncülleri sağlayan karşı örnek aranmaz", DET,
+     "    if _binders_keep_clear_of(claim, syms):\n        found = _counterexample_on_premises(",
+     "    if False:\n        found = _counterexample_on_premises(", TP),
 ]
 
 if __name__ == "__main__":

@@ -94,6 +94,10 @@ def cases_a():
          _sol("6", [("eq", "x = 3"), ("compute", "x*y = 6")]), NOTNO, VER),
         ("n^2=4, eq n > 0 (unproved): n**3 = 8", _ir("n**3", [N], ["n**2 = 4"]),
          _sol("8", [("eq", "n > 0"), ("compute", "n**3 = 8")]), {"INCORRECT", "UNKNOWN"}, None),
+        # a polynomial system determines both symbols, no eq step needed
+        ("x+y=5, x-y=1: x*y = 6", _ir("x*y", [X, Y], ["x + y = 5", "x - y = 1"]), _sol("6", c1("x*y = 6")), NOTNO, VER),
+        ("x^2+y^2=25, y=x+1, x>0: x*y = 12", _ir("x*y", [X, Y], ["x**2 + y**2 = 25", "y = x + 1", "x > 0"]),
+         _sol("12", c1("x*y = 12")), NOTNO, VER),
         # the problem's sign written as a chain (an And premise)
         ("n^2=4, 0 < n < 5: n**3 = 8", _ir("n**3", [N], ["n**2 = 4", "0 < n < 5"]), _sol("8", c1("n**3 = 8")),
          NOTNO, VER),
@@ -120,6 +124,11 @@ def cases_b():
          _sol("6", c1("y**2 = 9")), NO, REF),
         ("x+y=5, x-y=1, eq x = 3: x*y = 7", _ir("x*y", [X, Y], ["x + y = 5", "x - y = 1"]),
          _sol("6", [("eq", "x = 3"), ("compute", "x*y = 7")]), NO, REF),
+        ("x+y=5, x-y=1: x*y = 7", _ir("x*y", [X, Y], ["x + y = 5", "x - y = 1"]), _sol("6", c1("x*y = 7")), NO, REF),
+        ("x^2+y^2=25, y=x+1 (both): x*y = 12 (true at both!)", _ir("x*y", [X, Y], ["x**2 + y**2 = 25", "y = x + 1"]),
+         _sol("12", c1("x*y = 12")), NOTNO, VER),
+        ("x^2+y^2=25, y=x+1 (both): x + y = 7 (false at (-4,-3))", _ir("x*y", [X, Y], ["x**2 + y**2 = 25", "y = x + 1"]),
+         _sol("12", c1("x + y = 7")), NO, REF),
         ("n^2=9, n>0: Product = 7", _ir("factorial(n)", [N], ["n**2 = 9", "n > 0"]),
          _sol("6", c1("Product(k, (k, 1, n)) = 7")), NO, REF),
     ]
@@ -168,6 +177,12 @@ def cases_d():
          NOTNO, NOTREF),
         ("x>y: Abs(x - y) = y - x", _ir("Abs(x - y)", [X, Y], ["x > y"]), _sol("x - y", c1("Abs(x - y) = y - x")),
          {"INCORRECT", "UNKNOWN"}, None),
+        # an equation in two symbols that determines neither: a counterexample searched on the line
+        ("y=2x+1: y - 2*x = 1", _ir("y - 2*x", [X, Y], ["y = 2*x + 1"]), _sol("1", c1("y - 2*x = 1")), NOTNO, NOTREF),
+        ("y=2x+1: y - 2*x = 2", _ir("y - 2*x", [X, Y], ["y = 2*x + 1"]), _sol("1", c1("y - 2*x = 2")), NO, REF),
+        ("x+y=10: x*y = 21", _ir("x*y", [X, Y], ["x + y = 10"]), _sol("x*(10 - x)", c1("x*y = 21")), NO, REF),
+        ("x+y=10: x*y = x*(10 - x)", _ir("x*y", [X, Y], ["x + y = 10"]), _sol("x*(10 - x)", c1("x*y = x*(10 - x)")),
+         NOTNO, NOTREF),
         # known limit: x > 0 follows from x > y > 0, which no premise on x alone says; refuted as before
         ("x>y, y>0: Abs(x) = x (known limit)", _ir("Abs(x) + y", [X, Y], ["x > y", "y > 0"]),
          _sol("x + y", c1("Abs(x) = x")), {"INCORRECT", "UNKNOWN"}, None),
