@@ -90,7 +90,7 @@ MUTATIONS = [
     ("S01 aralık koşulu adsız gövdede atlanır", DOMAIN,
      "    if not named:\n        return spans\n", "    if not named:\n        return []\n", TS),
     ("S02 hi - lo + 1 >= 0 yazılmaz", DOMAIN,
-     "        conds.append(sp.Ge(span, 0))\n", "        pass\n", TS),
+     "        conds.append(sp.Contains(span, FORWARD_SPANS))\n", "        pass\n", TS),
     ("S03 tam sayı aralığı yazılmaz", DOMAIN,
      "            conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, S.Integers))\n",
      "            pass\n", TS),

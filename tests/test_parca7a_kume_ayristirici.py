@@ -250,23 +250,29 @@ def test_a_symbolic_range_the_right_way_round_is_read(ir, claim, verdict):
 
 
 @pytest.mark.parametrize("ir,claim,verdict", [
-    # n = -2 reverses the range and is dropped like any point where the expression is undefined:
-    # the value at n = 2 is the only one (before: two values, 3 and Karr's 1, UNKNOWN)
-    (_ev("Sum(k, (k, 1, n))", ["n**2 = 4"]), "3", "CORRECT"),
-    (_ev("Sum(k, (k, 1, n))", ["n**2 = 4"]), "1", "INCORRECT"),
-    # -4 is a root of Karr's n(n + 1)/2 = 6 only
+    # n = -2 reverses the range. It was first dropped like a point where the expression is undefined, and
+    # 3 was CORRECT, 1 INCORRECT; but the value there is a convention (Karr's 1, the empty sum's 0), so
+    # the solution is neither kept nor dropped (DECISIONS §80; tests/test_parca9_ters_aralik.py)
+    (_ev("Sum(k, (k, 1, n))", ["n**2 = 4"]), "3", "UNKNOWN"),
+    (_ev("Sum(k, (k, 1, n))", ["n**2 = 4"]), "1", "UNKNOWN"),
+    # -4 is a root of Karr's n(n + 1)/2 = 6 only (the empty sum is 0 there)
     (_ir("solve_equation", {"var": "n", "equation": "Sum(k, (k, 1, n)) = 6"}, KN, shape="set"), "{-4, 3}",
-     "INCORRECT"),
+     "UNKNOWN"),
     (_ir("solve_equation", {"var": "n", "equation": "Sum(k, (k, 1, n)) = 0"}, KN, shape="set"), "{-1, 0}",
-     "INCORRECT"),
+     "UNKNOWN"),
 ])
-def test_a_reversed_range_drops_the_solution(ir, claim, verdict):
+def test_a_reversed_range_decides_no_solution(ir, claim, verdict):
     kind = "set" if ir["answer_shape"] == "set" else "value"
     assert verify(ir, _sol(claim, kind)).verdict == verdict
 
 
 def test_the_range_conditions():
-    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED, definedness_conditions
+    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED, FORWARD_SPANS, definedness_conditions
+
+    def fwd(span):
+        # hi - lo + 1 >= 0, undecided where the range is reversed (DECISIONS §80)
+        return sp.Contains(span, FORWARD_SPANS)
+
     n = sp.Symbol("n", integer=True)
     m = sp.Symbol("m", real=True)
     p = sp.Symbol("n", integer=True, positive=True)
@@ -277,17 +283,17 @@ def test_the_range_conditions():
                  sp.Sum(sp.Sum(1, (j, k, 2)), (k, 1, 5)), sp.Sum(sp.Sum(1, (j, 1, k)), (k, 1, 5)),
                  sp.Sum(sp.Sum(1, (j, 1, n - k)), (k, 1, 3))]
     got = [definedness_conditions(e, None) for e in exprs]
-    assert got[0] == [sp.Ge(n, 0)]
+    assert got[0] == [fwd(n)]
     assert got[1] == []
-    assert got[2] == [sp.Ge(m, 0), sp.Contains(m, sp.S.Integers)]
-    assert got[3] == [sp.Ge(n - 2, 0)]
+    assert got[2] == [fwd(m), sp.Contains(m, sp.S.Integers)]
+    assert got[3] == [fwd(n - 2)]
     assert got[4] == []
-    assert got[5] == [sp.Ge(n / 2, 0), sp.Contains(n / 2, sp.S.Integers)]
+    assert got[5] == [fwd(n / 2), sp.Contains(n / 2, sp.S.Integers)]
     assert got[6] == []
     # an inner range an outer index reverses: not read (`false` would make it defined nowhere)
     assert got[7] == [DEFINEDNESS_UNDECIDED] and sp.false not in got[7]
     assert got[8] == []
-    assert got[9] == [sp.Ge(n - 1, 0), sp.Ge(n - 2, 0), sp.Ge(n - 3, 0)]
+    assert got[9] == [fwd(n - 1), fwd(n - 2), fwd(n - 3)]
 
 
 def test_a_nested_range_an_outer_index_reverses_is_not_defined_nowhere():

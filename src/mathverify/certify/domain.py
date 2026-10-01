@@ -78,6 +78,37 @@ def is_undecided(c) -> bool:
     return c == DEFINEDNESS_UNDECIDED
 
 
+class ForwardSpans(sp.Set):
+    """The values hi - lo + 1 of a Sum/Product range that runs forward or is empty: the nonnegative
+    ones. A negative span (the range reversed, hi < lo - 1) is neither in nor out: the value there is a
+    convention (SymPy's Karr sum, the empty sum of the Iverson reading), not the curriculum's, so no
+    point is dropped or kept on its account (DECISIONS §80). As `Contains(span, FORWARD_SPANS)` (see
+    _range_span_conditions) it stays standing at such a point, and `decide_membership` leaves it
+    undecided; read as `span >= 0`, it dropped n = -2 like an undefined point, and with n**2 = 4 the
+    value 3 of Σ_{k=1}^{n} k was certified (1 Oct 2026)."""
+    is_empty = False
+    is_finite_set = False
+
+    def _contains(self, other):
+        if isinstance(other, sp.Expr) and other.is_extended_nonnegative is True:
+            return sp.true
+        return None                                 # negative or open: undecided, never false
+
+    def _eval_is_superset(self, other):
+        try:
+            return True if other.is_subset(Interval(0, oo)) is True else None
+        except Exception:  # noqa: BLE001
+            return None
+
+
+FORWARD_SPANS = ForwardSpans()
+
+
+def is_range_span(c) -> bool:
+    """Is `c` the range condition of a Sum/Product (see ForwardSpans)?"""
+    return isinstance(c, sp.Contains) and c.args[1] == FORWARD_SPANS
+
+
 # The index values of a Sum/Product checked one by one, and the work one top-level reading may spend
 # on binders (a solveset counts as _SOLVE_COST points): a nested finite sum is checked at every
 # (outer, inner) pair, and 150 x 150 of them held verify() 33 s, three levels over 400 s (review of
@@ -216,6 +247,12 @@ def _range_span_conditions(bounds, idx) -> list[Any]:
     at k = 4) is DEFINEDNESS_UNDECIDED, not `false`: its numeric twin is not read, and `false` would
     read the expression as defined nowhere (an empty solution set certified).
 
+    Below the empty range the value is a convention, not undefined: hi - lo + 1 >= 0 is written as
+    `Contains(hi - lo + 1, FORWARD_SPANS)`, which a reversed point leaves undecided (see ForwardSpans).
+    The domain of a variable still keeps only the forward points (`Ctx.domain_for`: an expression is
+    compared where its value is no convention), and a candidate, root or solution where the range runs
+    backwards is neither kept nor dropped (`Ctx.reversed_region`, DECISIONS §80).
+
     SymPy writes a nested sum as one binder, innermost limit first, whose inner bounds may name an
     outer index (Sum(1, (j, k, 2), (k, 1, 5))): such a condition is decided over that index's values
     (_outer_index_conditions); left open, it named the bound index as a problem symbol."""
@@ -286,7 +323,7 @@ def _one_range_conditions(lo, hi) -> list[Any] | None:
     if span.is_extended_nonnegative is not True:
         if span.is_extended_negative is True:
             return None
-        conds.append(sp.Ge(span, 0))
+        conds.append(sp.Contains(span, FORWARD_SPANS))
     if not (lo.has(oo, -oo) or hi.has(oo, -oo)):
         gap = hi - lo
         if gap.is_integer is False:

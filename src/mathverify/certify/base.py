@@ -93,12 +93,17 @@ class Ctx:
         conds, nowhere = self.written_conditions()
         if var in nowhere:
             dom = S.EmptySet
+        from .domain import is_range_span
+        spans: list = []
         for c in conds:
             c = self._with_bound_values(c, var)
             if c is sp.false:
                 dom = S.EmptySet
                 continue
             fs = getattr(c, "free_symbols", None)
+            if is_range_span(c) and fs <= {var}:
+                spans.append(c)                        # see _forward_ranges
+                continue
             if fs != {var}:
                 if fs and var in fs:
                     unapplied.append(c)                # the condition itself: see unapplied_conditions
@@ -115,9 +120,51 @@ class Ctx:
                 continue
             if not isinstance(sol, sp.ConditionSet):
                 dom = sp.Intersection(dom, sol)
+        dom, back = self._forward_ranges(dom, spans, var)
+        if back is not S.EmptySet:
+            unapplied += [c for c in spans if c not in unapplied]
+        self.cache[f"reversed:{var.name}"] = back
         self.cache[f"unapplied:{var.name}"] = unapplied
         self.cache[key] = dom
         return dom
+
+    @staticmethod
+    def _forward_ranges(dom: sp.Set, spans: list, var: sp.Symbol) -> tuple[sp.Set, sp.Set]:
+        """(the points of `dom` where every Sum/Product range of the problem runs forward or is empty,
+        the points where one runs backwards): see `reversed_region`. A span solveset cannot split keeps
+        `dom` as it was (the condition was not applied before either) and makes every point
+        undecided."""
+        if not spans:
+            return dom, S.EmptySet
+        fwd_all, back_all = S.Reals, S.EmptySet
+        for c in spans:
+            try:
+                fwd = sp.solveset(sp.Ge(c.args[0], 0), var, S.Reals)
+                back = sp.solveset(sp.Lt(c.args[0], 0), var, S.Reals)
+            except Exception:  # noqa: BLE001
+                fwd = back = None
+            if fwd is None or back is None or fwd.has(sp.ConditionSet) or back.has(sp.ConditionSet):
+                fwd, back = S.Reals, S.Reals
+            fwd_all = sp.Intersection(fwd_all, fwd)
+            back_all = sp.Union(back_all, back)
+        back = sp.Intersection(dom, back_all)
+        try:
+            empty = back.is_empty
+        except Exception:  # noqa: BLE001
+            empty = None
+        return sp.Intersection(dom, fwd_all), (S.EmptySet if empty is True else back)
+
+    def reversed_region(self, var: sp.Symbol) -> sp.Set:
+        """The points of `var`'s domain (the declarations, constraints, side conditions and written
+        conditions other than the ranges) where a Sum/Product range of the problem runs backwards
+        (hi < lo - 1): Σ_{k=1}^{n} k at n = -2. The value there is a convention (Karr's sum, the empty
+        sum), not undefined: `domain_for` leaves these points out, so an expression is compared where
+        its value is no convention, but a candidate, root or solution there is neither kept nor dropped
+        (DECISIONS §80). Dropped like an undefined point, it made the value 3 of Σ_{k=1}^{n} k with
+        n**2 = 4 certified (1 Oct 2026). While this is not empty the ranges' conditions are listed in
+        `unapplied_conditions`, so a certificate that reads its answer on the domain abstains."""
+        self.domain_for(var)
+        return self.cache.get(f"reversed:{var.name}", S.EmptySet)
 
     def unapplied_conditions(self, var: sp.Symbol, enforced=()) -> list:
         """The conditions on `var` that `domain_for` could not read on `var` alone: a declared
@@ -128,10 +175,12 @@ class Ctx:
         of the third audit, 30 Sep 2026). A certificate whose answer is read on this domain abstains
         while the list is not empty. `enforced`: the written conditions the certificate checks itself,
         with the other symbols left symbolic (guard_roots at each root of √(x − a) = 2, so {a + 4}
-        stays certified)."""
+        stays certified). A range's condition is never enforced that way (`reversed_region`): the
+        domain the certificate checks a root against has already left the reversed points out."""
+        from .domain import is_range_span
         self.domain_for(var)
         return [c for c in self.cache.get(f"unapplied:{var.name}", [])
-                if not (isinstance(c, sp.Basic) and c in enforced)]
+                if not (isinstance(c, sp.Basic) and c in enforced and not is_range_span(c))]
 
     def discourse(self, var: sp.Symbol) -> sp.Set:
         """The domain of discourse for `var` (ℝ when it does not mention var), with each other symbol a

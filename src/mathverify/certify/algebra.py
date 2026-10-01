@@ -463,12 +463,15 @@ def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None)
     """The solutions inside every domain and constraint. One whose membership in a number set no
     check decides (the written condition of a gcd/lcm argument, rational, or of a factorial argument,
     natural, at x = pi + E) is neither kept nor dropped: it goes to `undecided`. The value
-    x + gcd(x, 2) - gcd(2, x) at pi + E was certified (V16, 30 Sep 2026)."""
+    x + gcd(x, 2) - gcd(2, x) at pi + E was certified (V16, 30 Sep 2026). So is one where a Sum/Product
+    range of the problem runs backwards (`Ctx.reversed_region`, DECISIONS §80): with n**2 = 4, n = -2 was
+    dropped and the value 3 of Σ_{k=1}^{n} k certified (1 Oct 2026). A solution some other check
+    drops is dropped."""
     from .domain import decide_membership
     out = []
     cons = ctx.var_constraints()
     for s_ in sols:
-        ok = True
+        ok, held = True, False
         for v in ctx.syms():
             if v in s_:
                 val = s_[v]
@@ -478,6 +481,9 @@ def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None)
                     ok = False
                     break
                 if in_domain(ctx.domain_for(v), val) is False:
+                    if undecided is not None and in_domain(ctx.reversed_region(v), val) is not False:
+                        held = True
+                        continue
                     ok = False
                     break
         if ok:
@@ -489,11 +495,12 @@ def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None)
                         break
                     if isinstance(h, sp.Contains) and not h.free_symbols:
                         m = decide_membership(*h.args)
-                        if m is False or (m is None and undecided is not None):
-                            if m is None:
-                                undecided.append(s_)
+                        if m is False:
                             ok = False
                             break
+                        if m is None and undecided is not None:
+                            held = True
+                            continue
                     if isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
                         hv = relation_holds_at(h, sp.Symbol("_dummy"), 0)
                         if hv is False:
@@ -501,9 +508,31 @@ def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None)
                             break
                 except Exception:
                     pass
-        if ok:
+        if ok and held:
+            undecided.append(s_)
+        elif ok:
             out.append(s_)
     return out
+
+
+def _finite_nonempty(s_: sp.Set) -> bool:
+    try:
+        return s_ is not S.EmptySet and s_.is_finite_set is True and s_.is_empty is False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _meets_inequalities(s_: dict, ineqs: list) -> bool:
+    """Does the solution `s_` leave no given inequality proved false?"""
+    for iq in ineqs:
+        h = iq.subs(s_)
+        if h is sp.false:
+            return False
+        if h is not sp.true and isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
+            from .domain import _num_relation_holds
+            if _num_relation_holds(h, sp.Symbol("_d"), 0) is False:
+                return False
+    return True
 
 
 def _verify_evaluate(ir, solution, ctx: Ctx, t):
@@ -535,6 +564,13 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
                                      rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
         ev["compare"] = cev
         ev["method"] = "direct"
+        # a variable the problem confines to finitely many values where a range runs backwards
+        # (the constraint n**2 = 4 next to Σ_{k=1}^{n} k): those values are candidates, neither kept
+        # nor dropped (_filter_solutions); a formula's variable (n an integer) is compared where the
+        # value is no convention (DECISIONS §80)
+        if ok is True and dom and any(_finite_nonempty(ctx.reversed_region(s_)) for s_ in dom):
+            ev["reversed_range_at"] = {str(s_): str(ctx.reversed_region(s_)) for s_ in dom}
+            return unknown(LAYER, "reversed_range_candidate", 0, ev)
     else:
         rels = ctx.givens()
         syms = [s_ for s_ in ctx.syms() if any(s_ in r.free_symbols for r in rels)]
@@ -551,25 +587,14 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         sols = [s_ for s_ in sols if isinstance(s_, dict)]
         ev["raw_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in sols]
         # keep solutions satisfying inequalities/constraints/domains
-        good, undecided = [], []
+        undecided: list = []
         admissible = _filter_solutions(sols, ctx, undecided)
+        # one a given inequality excludes is no solution either way (n**2 = 4, n > 0)
+        undecided = [s_ for s_ in undecided if _meets_inequalities(s_, ineqs)]
         if undecided:
             ev["membership_undecided"] = [{str(k): str(v) for k, v in s_.items()} for s_ in undecided]
             return unknown(LAYER, "solution_membership_undecided", 0, ev)
-        for s_ in admissible:
-            okall = True
-            for iq in ineqs:
-                h = iq.subs(s_)
-                if h is sp.false:
-                    okall = False
-                    break
-                if h is not sp.true and isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
-                    from .domain import _num_relation_holds
-                    if _num_relation_holds(h, sp.Symbol("_d"), 0) is False:
-                        okall = False
-                        break
-            if okall:
-                good.append(s_)
+        good = [s_ for s_ in admissible if _meets_inequalities(s_, ineqs)]
         ev["admissible_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in good]
         if not good:
             return unknown(LAYER, "ir_inconsistent_no_solution", 0, ev, flags=["ir_inconsistent"])
