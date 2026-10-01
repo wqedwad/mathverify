@@ -11,7 +11,7 @@
 1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§83; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
-3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2936 passed / 5 skipped** (`d0c48ad`, düz `pytest`, Lean ısınması 414 s, toplam 1015 s)
+3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **3212 passed / 5 skipped** (`1775b3f`, `--full` içinde; düz `pytest` soğuk Lean ısınmasıyla ~17–20 dk)
    (3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade); Windows'ta `d914dbc`: 2064 passed / 106 skipped
    (+4 yalnız `.git`'siz kopyada düşen kural testi; DECISIONS §73); sıcak Lean'le ~480 s, soğukta önce 345–470 s ısınma (B6). Lean yüzünden
    atlama = Lean hazır değil; ek `-q` özeti siler. Hangi kontrolün gerektiği: `scripts/check.py --plan`.
@@ -43,8 +43,8 @@ gerekçeli gelenek farkı). 558 çözümde karar değişimi 0 (adım 26, doğru 
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
 çevrimdışı testli, **hiç koşmadı**. Denetimler: 20, 23, 25–26 Eylül (DECISIONS §26–30, §55).
 
-**Son `check.py --full`.** **24/24**, `d68070c` (`#13`'ün son kodu, raporlar `f544c84`), bulutta 30 Eylül 16:32:32–17:08:42 UTC,
-**~36 dk** (soğuk Lean ısınması 452 s, pytest 484 s, adversaryal 813 s), 2169 passed / 5 skipped; `--plan` TAMAM (DECISIONS §74). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
+**Son `check.py --full`.** **24/24**, `1775b3f` (bu dalın son kodu, raporlar `a9434dc`), bulutta 1 Ekim 16:44:01–17:24:08 UTC, **~40 dk**
+(ısınma 14 s, pytest 747 s, adversaryal 1084 s), 3212 passed / 5 skipped; `--plan` TAMAM (DECISIONS §83). Windows'ta son: `eab80f1` 24/24, 31 dk (DECISIONS §61).
 
 **K4 (Muse Spark 1.3, 280 öğe, `776e5b4`; DECISIONS §63).** 278 çözüm: CORRECT|right 274, INCORRECT|right 4 (tek soru
 `tyt-say-*`: çözücü `n`'i başka anlamda kullandı), yanlış onay **0**; çözücü 278/278 doğru (yakalama gücü ölçülemedi). Çözümsüz
@@ -57,7 +57,8 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
    yeniden koşuldu (DECISIONS §75, `denetim/2026-09-30/n19/sonda_n19.py`). **Bitti** (§76; birleşik hâlde sonda 84/88, 160 test, fark 0):
    (i) N2 + N4 + N6 + N3'ün eq adımı; (ii) N5; (iii) N7 + V15 S1'in denetçi örnekleri; (vi) başka sembollü kısıt; (v-a) V17; (v-b) V16, V18
    (§76–§78); Karr, sabitlenmiş sembollü toplam (§79); F9 (N1, N8) ve ters aralık (§80–§81; birleşik `65b699e`: 927 test, sonda 88/88,
-   fark 0); parça 10, 11 (§82–§83; son `5613bef`: 1039 test, sonda 88/88, fark 0). **Sıradaki:** `--full`, sonra kullanıcı onayıyla PR ve birleştirme.
+   fark 0); parça 10, 11 (§82–§83; son `5613bef`: 1039 test, sonda 88/88, fark 0). `--full` 24/24 (`1775b3f`, raporlar `a9434dc`), `--plan`
+   TAMAM. **Sıradaki:** kullanıcı onayıyla PR ve birleştirme (hemen önce `--plan`).
 3. **F9 ve ters aralık** (DECISIONS §80–§81): kapandı. Açık kapsama: yalnız `vars.constraints` ile sabitlenen parametre UNKNOWN (§81).
 4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
@@ -199,11 +200,11 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), (ters aralık noktasında ad
   testin adı; arşiv §4'ün kodu geri almadan üretilemeyen "önce" ölçümleri (7/7, 54 çift, 0.990…); alandaki önyükleyici metninin
   içeriği (yalnız uzunluk: 843); B1, B6, B10, K4'teki işaretliler; 30 Eylül kopya silinmesinin nedeni (DECISIONS §73).
 
-## 5. Son ölçülen sayılar (kapılar, `d68070c`; aksi yazılmadıkça `14f4d07` ve öncekilerle aynı)
+## 5. Son ölçülen sayılar (kapılar, `1775b3f`; aksi yazılmadıkça `d68070c` ve öncekilerle aynı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri (`65b699e` bulut, `--full` dışı; `d914dbc` Windows) | 3096 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
+| Birim testleri (`1775b3f` bulut, `--full`; `d914dbc` Windows) | 3212 passed / 5 skipped; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
@@ -214,7 +215,7 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), (ters aralık noktasında ad
 | Nedeni açıklanmayan kaçırılan bozuk adım; adım lokalizasyonu | 0/6; 75/120 (önce 74) | 0; raporlanır |
 
 Raporlar `reports/*.md` (üretilir, elle yazılmaz), kapı günlüğü `reports/check_full.log`.
-Süre: `--full` bulutta **~25–36 dk** (4 süreçli adversaryal 661–813 s; soğuk Lean'de +452 s ısınma), Windows'ta 31 dk; hızlı `check.py` ~7 dk (427 s).
+Süre: `--full` bulutta **~25–40 dk** (4 süreçli adversaryal 661–1084 s; soğuk Lean'de +452 s ısınma), Windows'ta 31 dk; hızlı `check.py` ~7 dk (427 s).
 
 ## 6. Dallar, etiketler, yedekler
 
