@@ -531,15 +531,78 @@ def _counterexample_point(ev: dict, syms) -> dict | None:
     return out
 
 
+def _range_spans(claim) -> list:
+    """The range conditions of the claim's own Sums and Products that name a symbol: `Contains(hi - lo + 1,
+    FORWARD_SPANS)` (`certify.domain.is_range_span`), which holds where the range runs forward or is empty
+    and is undecided where it runs backwards (hi < lo - 1)."""
+    if not isinstance(claim, sp.Basic) or not claim.has(sp.Sum, sp.Product):
+        return []
+    from ..certify.domain import definedness_conditions, is_range_span
+    try:
+        conds = definedness_conditions(claim, None)
+    except Exception:  # noqa: BLE001 - no conditions read: the claim is refuted as before
+        return []
+    return [c for c in conds if is_range_span(c) and c.free_symbols]
+
+
+def _runs_backwards_at(spans: list, point: dict) -> bool:
+    """Is one of the ranges `spans` (`_range_spans`) not proved to run forward at `point` (symbols matched
+    by name; a symbol the point does not fix leaves it undecided)? There the claim's value is a convention,
+    SymPy's Karr sum (Σ_{k=3}^{1} k = -2) or the empty sum (0), not the curriculum's: the point is no
+    counterexample and verifies nothing (DECISIONS §80). The parser refuses such a range written with
+    numbers; with a symbol, the eq step `Sum(k, (k, 3, n)) = 0` under the given n = 1 was refuted with
+    Karr's -2 and a solution with the right answer was INCORRECT (part 11, 1 Oct 2026)."""
+    from ..certify.domain import decide_membership
+    by_name = {str(k): v for k, v in point.items()}
+    for c in spans:
+        sub = {q: by_name[q.name] for q in c.free_symbols if q.name in by_name}
+        try:
+            held = decide_membership(c.args[0].xreplace(sub), c.args[1])
+        except Exception:  # noqa: BLE001
+            held = None
+        if held is not True:
+            return True
+    return False
+
+
+def _refutation_point(ev: dict, syms) -> dict | None:
+    """The point a refutation was found at, read back from its evidence: the counterexample of the
+    premises' route, the values the premises pin the symbols to, or the comparison's random point."""
+    from ..normalize.parse import parse_expr_str
+    for key in ("counterexample", "pinned_by_premises"):
+        pt = ev.get(key)
+        if isinstance(pt, dict) and pt:
+            try:
+                return {str(k): parse_expr_str(str(v)) for k, v in pt.items()}
+            except Exception:  # noqa: BLE001
+                return None
+    return _counterexample_point(ev, syms)
+
+
+def _refuted_where_backwards(claim, ev: dict) -> bool:
+    """Was the refutation of `claim` found where one of its own ranges runs backwards, or at a point not
+    read back while it has such a range? Every route's point is checked here: the premises' solution set,
+    a value pinned by a given (`floor` evaluated the pinned Sum, so the parser's range check missed it),
+    a random point of the identity check."""
+    spans = _range_spans(claim)
+    if not spans:
+        return False
+    pt = _refutation_point(ev, getattr(claim, "free_symbols", set()))
+    return pt is None or _runs_backwards_at(spans, pt)
+
+
 def _check_at(claim, text: str, point: dict, ctx: Ctx) -> tuple[str, dict]:
     """The `compute` claim checked at a point: the sides substituted separately (Eq would evaluate itself
     on substitution), a Sum/Product range there through the parser's range checks (reversed, or not an
-    integer apart: the claim is not read there)."""
+    integer apart: the claim is not read there). A range that runs backwards at the point decides nothing,
+    also when the substitution evaluated it away (`floor` of a pinned Sum: `_runs_backwards_at`)."""
     pinned = Eq(claim.lhs.xreplace(point), claim.rhs.xreplace(point), evaluate=False)
     try:
         _refuse_reversed_ranges(pinned, text)
     except ParseError as e:
         return "unknown", {"reason": f"pinned_claim_not_read: {str(e)[:160]}"}
+    if _runs_backwards_at(_range_spans(claim), point):
+        return "unknown", {"reason": "a_range_of_the_claim_runs_backwards_at_the_point"}
     return _check_compute(pinned, ctx)
 
 
@@ -822,10 +885,13 @@ def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None
     if fail is S.EmptySet:
         e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
         return None, bool(e.ok and e.value is False), bool(e.ok and e.value is True)
+    spans = _range_spans(claim)
     for pt in _points_of(fail):
         point = {v: pt}
         if not _in_domains(ctx, point):
             continue
+        if _runs_backwards_at(spans, point):
+            continue                         # the claim's value there is a convention (part 11)
         if all(_decide(p, point, ctx) is True for p in premises) and _decide(claim, point, ctx) is False:
             return point, False, False
     return None, False, False
@@ -1260,7 +1326,8 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
             return "unknown", {**ev, "_window_without_instance": True}
         if len(points) < 3 and premises:
             return "unknown", {"reason": "no_premise_satisfying_points", **ev}
-    checked = inside = outside = 0
+    checked = inside = outside = backwards = 0
+    spans = _range_spans(claim)
     for pt in points:
         if not _in_domains(ctx, pt):
             continue
@@ -1270,6 +1337,12 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
             outside += 1
             continue
         inside += 1
+        if _runs_backwards_at(spans, pt):
+            # a range of the claim runs backwards here: its value is a convention, neither a
+            # counterexample nor a check (part 11); another point may still refute it
+            backwards += 1
+            ev["reversed_range_points"] = backwards
+            continue
         h = _holds(claim, pt)
         if h is False:
             # confirm robustly: every premise must hold definitively at this point
@@ -1698,6 +1771,11 @@ def check_steps(ir, solution, ctx: Ctx):
                         chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
+            if status == "refuted" and _refuted_where_backwards(claim, ev):
+                # the counterexample sits where a range of the claim runs backwards: the value SymPy
+                # refuted there is Karr's convention, not the curriculum's (part 11, DECISIONS §80)
+                status, ev = "unknown", {"reason": "counterexample_where_a_range_of_the_claim_runs_backwards",
+                                         "withdrawn": ev}
             why = None
             if status != "refuted":
                 if _undefined_as_written(st.claim, step_ns):
