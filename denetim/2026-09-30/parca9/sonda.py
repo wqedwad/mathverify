@@ -110,6 +110,9 @@ def cases_a():
         # the lower bound fixed by a given: n = 4 is the empty sum (0), n = -4 runs backwards
         ("m = 5, n^2 = 16: Sum(k,(k,m,n)) = 0", ev("Sum(k, (k, m, n))", ["m = 5", "n**2 = 16"],
                                                    KN + [{"name": "m", "domain": "integer"}]), _sol("0"), UNK, None),
+        # other bounds: floor(-2/2) = -1 and (-2)**3 = -8 run backwards
+        ("n^2 = 4: Sum(k,(k,1,floor(n/2))) = 1", ev("Sum(k, (k, 1, floor(n/2)))", ["n**2 = 4"]), _sol("1"), UNK, None),
+        ("n^2 = 4: Sum(k,(k,1,n**3)) = 36", ev("Sum(k, (k, 1, n**3))", ["n**2 = 4"]), _sol("36"), UNK, None),
     ]
 
 
@@ -205,6 +208,9 @@ def cases_d():
         ("undeclared n = 3: Sum = 6", ev(S, ["n = 3"], KU), _sol("6"), OK, None),
         ("n^2 = 4: Sum(k,(k,1,n**2)) = 10 (never reversed)", ev("Sum(k, (k, 1, n**2))", ["n**2 = 4"]), _sol("10"),
          OK, None),
+        ("n^2 = 4: Sum(k,(k,1,Abs(n))) = 3 (never reversed)", ev("Sum(k, (k, 1, Abs(n)))", ["n**2 = 4"]), _sol("3"),
+         OK, None),
+        ("n = 4: Sum(k,(k,1,floor(n/2))) = 3", ev("Sum(k, (k, 1, floor(n/2)))", ["n = 4"]), _sol("3"), OK, None),
         ("n = -5: Sum(k,(k,n,n+2)) = -12", ev("Sum(k, (k, n, n + 2))", ["n = -5"]), _sol("-12"), OK, None),
         ("n(n - 3) = 0: Sum: two values 0 and 6", ev(S, ["n*(n - 3) = 0"]), _sol("6"), UNK, None),
         ("n^2 = 4: n**2 + 1 = 5 (no Sum)", ev("n**2 + 1", ["n**2 = 4"]), _sol("5"), OK, None),

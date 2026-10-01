@@ -83,6 +83,9 @@ def _verdict(ir, claim):
     (_ev(f"x + {S}", ["n = -2", "x = 1"], KN + [{"name": "x"}]), "2"),
     # the lower bound fixed by a given: n = 4 is the empty sum (0), n = -4 runs backwards
     (_ev("Sum(k, (k, m, n))", ["m = 5", "n**2 = 16"], KN + [{"name": "m", "domain": "integer"}]), "0"),
+    # other bounds: floor(-2/2) = -1 and (-2)**3 = -8 run backwards
+    (_ev("Sum(k, (k, 1, floor(n/2)))", ["n**2 = 4"]), "1"),
+    (_ev("Sum(k, (k, 1, n**3))", ["n**2 = 4"]), "36"),
     # constraints that confine n to finitely many values, some reversed: candidates too
     (_ev(S, [], _constrained("n**2 = 4")), "3"),
     (_ev(S, [], _constrained("n**2 = 4")), "n + 1"),
@@ -143,6 +146,8 @@ def test_a_solution_resting_on_a_reversed_range_is_not_certified_through_steps()
     (_ev(S, ["n = 3"], KP), "6", "CORRECT"),
     (_ev(S, ["n = 3"], KU), "6", "CORRECT"),
     (_ev("Sum(k, (k, 1, n**2))", ["n**2 = 4"]), "10", "CORRECT"),
+    (_ev("Sum(k, (k, 1, Abs(n)))", ["n**2 = 4"]), "3", "CORRECT"),
+    (_ev("Sum(k, (k, 1, floor(n/2)))", ["n = 4"]), "3", "CORRECT"),
     (_ev("Sum(k, (k, n, n + 2))", ["n = -5"]), "-12", "CORRECT"),
     (_ev(S, ["n*(n - 3) = 0"]), "6", "UNKNOWN"),               # two forward values, 0 and 6
     (_ev("n**2 + 1", ["n**2 = 4"]), "5", "CORRECT"),
