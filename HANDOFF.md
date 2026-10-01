@@ -8,7 +8,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§79; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§80; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2936 passed / 5 skipped** (`d0c48ad`, düz `pytest`, Lean ısınması 414 s, toplam 1015 s)
@@ -58,8 +58,7 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
    (i) N2 + N4 + N6 + N3'ün eq adımı; (ii) N5; (iii) N7 + V15 S1'in denetçi örnekleri; (vi) başka sembollü kısıt; (v-a) V17; (v-b) V16, V18
    (§76–§78); Karr ve sabitlenmiş sembollü toplam adımı (§79; birleşik 767 test, sonda 85/88, fark 0, mutasyon 188/188). **Kalan:** (iv)
    N8 + N1'in kalanı + F9 (adım 3); tam takım, birleştirmeden önce `--full`. `franklin`'in silinmesi kullanıcıya sorulur (§74).
-3. **V15'ten (§4.2) kullanıcı kararı:** F9 (parametreli integral SymPy'ye güveniliyor, yanlış onay) düzeltilsin mi (seçenek:
-   parametreli belirli integral biçim kalır; "∫₀^a x dx = 2" gibi sorular UNKNOWN olur)?
+3. **F9 ve ters aralık kararları verildi** (DECISIONS §80; matematik kararlarını ajan verir, CLAUDE.md): uygulaması sürüyor (§3 adım 2).
 4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
    önce kalibrasyon (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
@@ -129,7 +128,7 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), V16 (pinli `Limit` adımı).
   Mutasyon: R02 ve L07'nin eşdeğerliği kanıtlanmadı. Çok sayıda kapsama kaybı (UNKNOWN), liste §72'de.
 - **V16. Taşıma denetiminden kalanlar** (DECISIONS §73; §78–§79'da kapandı). Bilinçli: 300'den çok sabit uçlu küme (§78 A (6)); çok değişkenli
   `Subs`. Açık (önceden var, §79): pinli `Limit`'li doğru adım reddedilir; özdeşlik denetimi kararsızken pinli yeniden denetim koşmaz.
-  Karar sorusu (§79): ters aralık tanımsız nokta gibi düşer (n² = 4 → Σ_{k=1}^{n} k = 3 CORRECT). Açık öneriler (§74): sağlamlık
+  Ters aralık (§79): n² = 4 → Σ_{k=1}^{n} k = 3 CORRECT, §80 kararıyla UNKNOWN olacak. Açık öneriler (§74): sağlamlık
   taramasına eşit yazımlı küme ucu varyantı (kalıcı kapı); `franklin`'in `karar_farki.py` yetenekleri `fark.py`'ye.
 
 ### 4.3 Kredili ölçüm
@@ -289,5 +288,5 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 ## 9. Nerede ne var
 
 Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
-`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §79); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §80); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
 `LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).
