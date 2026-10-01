@@ -336,7 +336,9 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
         return unknown("intake.claim", f"a {ca.kind} answer written as a list: not read",
                        flags=["parse_error", "claim_unreadable"])
     if not isinstance(ca.payload, str):
-        return None
+        # a set written as a list: its elements are claims too (GCD-10 was skipped: [gcd(84, 120)] for
+        # the roots of x - 12 = 0 was certified, V16, 30 Sep 2026)
+        return _claim_computes_integer_op(solution, ctx) if isinstance(ca.payload, list) else None
     try:
         check_claim_is_value(ca.payload, [f.name for f in ir.functions])
     except ClaimNotAValue as e:
@@ -383,11 +385,17 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
         if target and _same_structure(str(ca.payload), str(target), ctx):
             return unknown("intake.claim", f"claimed answer {ca.payload!r} restates the question",
                            flags=["claim_is_not_a_value"])
-    # A gcd/lcm of numbers is evaluated by the parser, so a claim written as one is a computation the
-    # verifier would do itself (principle 2): for "evaluate gcd(84, 120)" the claims gcd(120, 84),
-    # igcd(84, 120) and \gcd(84, 120) were certified; only the literal restatement was caught (GCD-10,
-    # 30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays.
-    if _INTEGER_OP_TEXT.search(str(ca.payload)):
+    return _claim_computes_integer_op(solution, ctx)
+
+
+def _claim_computes_integer_op(solution: Solution, ctx) -> LayerResult | None:
+    """A gcd/lcm of numbers is evaluated by the parser, so a claim written as one is a computation the
+    verifier would do itself (principle 2): for "evaluate gcd(84, 120)" the claims gcd(120, 84),
+    igcd(84, 120) and \\gcd(84, 120) were certified; only the literal restatement was caught (GCD-10,
+    30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays."""
+    ca = solution.claimed_answer
+    texts = ca.payload if isinstance(ca.payload, list) else [ca.payload]
+    if any(_INTEGER_OP_TEXT.search(str(t)) for t in texts):
         try:
             closed = not getattr(ctx.claimed(solution), "free_symbols", {None})
         except LeakageError:
@@ -548,6 +556,22 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     if unapplied:
         layers.append(unknown("intake.domain", f"given_not_applied: {unapplied[:3]}",
                               flags=["given_not_applied"]))
+        return layers, clean_flags
+
+    # A function's declared domain that names a symbol no given fixes (f on x > a) is a condition
+    # on that symbol too: the certificates read it on the variable alone and dropped it, so {-2, 2}
+    # was certified for f(x) = 5 with f = x**2 + 1 on x > a (third audit of 30 Sep 2026, N5).
+    unbound = [f"{f.name}: {', '.join(getattr(ctx.ns.get(f.name), 'domain_unbound', ()))}"
+               for f in problem_ir.functions if getattr(ctx.ns.get(f.name), "domain_unbound", ())]
+    if unbound:
+        layers.append(unknown("intake.domain", f"function_domain_not_applied: {unbound[:3]}",
+                              flags=["function_domain_not_applied"]))
+        return layers, clean_flags
+    # the same for a declared constraint that does not read as relations (`(0, oo)`, `x in (0, oo)`)
+    unreadable = ctx.unreadable_constraints()
+    if unreadable:
+        layers.append(unknown("intake.domain", f"constraint_unreadable: {unreadable[:3]}",
+                              flags=["constraint_unreadable"]))
         return layers, clean_flags
 
     # The problem's own expression is undefined as written at a point with nothing left to choose

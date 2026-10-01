@@ -13,7 +13,7 @@ from ..equiv.random_point import sample_points
 from ..equiv.numeric import real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
 LAYER = "certify.algebra"
@@ -119,6 +119,10 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             s1 = {str(c) for c in r1.value}
             s2 = {str(c) for c in r2.value}
             complete = (s1 == s2) or (set(ev["kept"]) <= s1 and set(ev["kept"]) <= s2)
+            # a candidate the guard could not decide may be a root: agreeing solvers say nothing about
+            # it. With a free a, √(x − a) = √(2 − x) had its root a/2 + 1 undecided and ∅ certified,
+            # though it is the answer only for a > 2 (part vi, 30 Sep 2026)
+            complete = complete and not any(_undecided(why) for _, why in rejected)
             ev["completeness_method"] = "solver_agreement"
             ev["complete"] = complete
         else:
@@ -183,19 +187,21 @@ def _verify_identity(rel, var, dom, claimed, ev, ctx, t):
 
 
 def _with_given_inequalities(ctx: Ctx, var, dom, exclude=None):
-    """The domain restricted by every single-variable given that is not an equation
-    (`x > 5` next to `2x = 4`). Ignoring them certified {2} for 2x = 4, x > 5 in the z3 layer
-    while the algebra layer refuted it (audit of 25 Sep 2026). None when one cannot be solved."""
-    for g in ctx.givens():
-        if g is exclude or isinstance(g, Eq) or not isinstance(g, (sp.core.relational.Relational, And)):
-            continue
-        if g.free_symbols != {var}:
-            continue
+    """The domain restricted by every given on `var` other than the equation itself (`x > 5` next
+    to `2x = 4`). Ignoring them certified {2} for 2x = 4, x > 5 in the z3 layer while the algebra
+    layer refuted it (audit of 25 Sep 2026). A given equation restricts too (x³ = 8 next to x² = 4
+    left {-2, 2} certified), and a symbol another given fixes is read as its value (x > b with
+    b = 0); both were dropped (part vi, 30 Sep 2026). Returns (domain, givens that still name another
+    symbol); the domain is None when a given cannot be solved."""
+    rels = [g for g in ctx.givens() if g != exclude and isinstance(g, (sp.core.relational.Relational, And))
+            and var in g.free_symbols]
+    rels, unbound = ctx.on_var(rels, var)
+    for g in rels:
         rr = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(g), var, S.Reals, timeout=ctx.timeout)
         if not rr.ok or isinstance(rr.value, ConditionSet):
-            return None
+            return None, unbound
         dom = sp.Intersection(dom, rr.value)
-    return dom
+    return dom, unbound
 
 
 def _verify_solve_equation(ir, solution, ctx: Ctx, t):
@@ -212,7 +218,11 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     claimed, err = parse_or_unknown(LAYER, _claimed_as_set, ctx, solution)
     if err:
         return err
-    dom = _with_given_inequalities(ctx, var, ctx.domain_for(var), exclude=rel)
+    dom, unbound = _with_given_inequalities(ctx, var, ctx.domain_for(var), exclude=rel)
+    # the equation's own definedness conditions are checked at every root by guard_roots
+    unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions(rel, var)) + unbound
+    if unbound:
+        return condition_not_applied(LAYER, unbound)
     if dom is None:
         return unknown(LAYER, "given_inequality_not_solvable")
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
@@ -384,6 +394,12 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
     p = ir.task.params
     var = ctx.sym(p.get("var", "x"))
     rels = [ctx.rel(p["inequality"])] if p.get("inequality") else ctx.givens()
+    # a symbol a given fixes is read as its value (the given b = 0 itself drops out); a relation or a
+    # condition that still names another symbol cannot be read on var alone (part vi, 30 Sep 2026)
+    rels, unbound = ctx.on_var(rels, var)
+    unbound = ctx.unapplied_conditions(var) + unbound
+    if unbound:
+        return condition_not_applied(LAYER, unbound)
     if not rels:
         return unknown(LAYER, "no_inequality")
     # odd roots are real roots (see equiv.numeric.real_odd_roots); several givens are a system
@@ -443,11 +459,19 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
     return unknown(LAYER, "symbolic_unavailable" if okS else "undecided", 0, ev)
 
 
-def _filter_solutions(sols: list[dict], ctx: Ctx) -> list[dict]:
+def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None) -> list[dict]:
+    """The solutions inside every domain and constraint. One whose membership in a number set no
+    check decides (the written condition of a gcd/lcm argument, rational, or of a factorial argument,
+    natural, at x = pi + E) is neither kept nor dropped: it goes to `undecided`. The value
+    x + gcd(x, 2) - gcd(2, x) at pi + E was certified (V16, 30 Sep 2026). So is one where a Sum/Product
+    range of the problem runs backwards (`Ctx.reversed_region`, DECISIONS §80): with n**2 = 4, n = -2 was
+    dropped and the value 3 of Σ_{k=1}^{n} k certified (1 Oct 2026). A solution some other check
+    drops is dropped."""
+    from .domain import decide_membership
     out = []
     cons = ctx.var_constraints()
     for s_ in sols:
-        ok = True
+        ok, held = True, False
         for v in ctx.syms():
             if v in s_:
                 val = s_[v]
@@ -457,6 +481,9 @@ def _filter_solutions(sols: list[dict], ctx: Ctx) -> list[dict]:
                     ok = False
                     break
                 if in_domain(ctx.domain_for(v), val) is False:
+                    if undecided is not None and in_domain(ctx.reversed_region(v), val) is not False:
+                        held = True
+                        continue
                     ok = False
                     break
         if ok:
@@ -466,6 +493,14 @@ def _filter_solutions(sols: list[dict], ctx: Ctx) -> list[dict]:
                     if h is sp.false:
                         ok = False
                         break
+                    if isinstance(h, sp.Contains) and not h.free_symbols:
+                        m = decide_membership(*h.args)
+                        if m is False:
+                            ok = False
+                            break
+                        if m is None and undecided is not None:
+                            held = True
+                            continue
                     if isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
                         hv = relation_holds_at(h, sp.Symbol("_dummy"), 0)
                         if hv is False:
@@ -473,9 +508,31 @@ def _filter_solutions(sols: list[dict], ctx: Ctx) -> list[dict]:
                             break
                 except Exception:
                     pass
-        if ok:
+        if ok and held:
+            undecided.append(s_)
+        elif ok:
             out.append(s_)
     return out
+
+
+def _finite_nonempty(s_: sp.Set) -> bool:
+    try:
+        return s_ is not S.EmptySet and s_.is_finite_set is True and s_.is_empty is False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _meets_inequalities(s_: dict, ineqs: list) -> bool:
+    """Does the solution `s_` leave no given inequality proved false?"""
+    for iq in ineqs:
+        h = iq.subs(s_)
+        if h is sp.false:
+            return False
+        if h is not sp.true and isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
+            from .domain import _num_relation_holds
+            if _num_relation_holds(h, sp.Symbol("_d"), 0) is False:
+                return False
+    return True
 
 
 def _verify_evaluate(ir, solution, ctx: Ctx, t):
@@ -507,6 +564,13 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
                                      rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
         ev["compare"] = cev
         ev["method"] = "direct"
+        # a variable the problem confines to finitely many values where a range runs backwards
+        # (the constraint n**2 = 4 next to Σ_{k=1}^{n} k): those values are candidates, neither kept
+        # nor dropped (_filter_solutions); a formula's variable (n an integer) is compared where the
+        # value is no convention (DECISIONS §80)
+        if ok is True and dom and any(_finite_nonempty(ctx.reversed_region(s_)) for s_ in dom):
+            ev["reversed_range_at"] = {str(s_): str(ctx.reversed_region(s_)) for s_ in dom}
+            return unknown(LAYER, "reversed_range_candidate", 0, ev)
     else:
         rels = ctx.givens()
         syms = [s_ for s_ in ctx.syms() if any(s_ in r.free_symbols for r in rels)]
@@ -523,21 +587,14 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         sols = [s_ for s_ in sols if isinstance(s_, dict)]
         ev["raw_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in sols]
         # keep solutions satisfying inequalities/constraints/domains
-        good = []
-        for s_ in _filter_solutions(sols, ctx):
-            okall = True
-            for iq in ineqs:
-                h = iq.subs(s_)
-                if h is sp.false:
-                    okall = False
-                    break
-                if h is not sp.true and isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
-                    from .domain import _num_relation_holds
-                    if _num_relation_holds(h, sp.Symbol("_d"), 0) is False:
-                        okall = False
-                        break
-            if okall:
-                good.append(s_)
+        undecided: list = []
+        admissible = _filter_solutions(sols, ctx, undecided)
+        # one a given inequality excludes is no solution either way (n**2 = 4, n > 0)
+        undecided = [s_ for s_ in undecided if _meets_inequalities(s_, ineqs)]
+        if undecided:
+            ev["membership_undecided"] = [{str(k): str(v) for k, v in s_.items()} for s_ in undecided]
+            return unknown(LAYER, "solution_membership_undecided", 0, ev)
+        good = [s_ for s_ in admissible if _meets_inequalities(s_, ineqs)]
         ev["admissible_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in good]
         if not good:
             return unknown(LAYER, "ir_inconsistent_no_solution", 0, ev, flags=["ir_inconsistent"])
@@ -579,6 +636,15 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
         return None, f"claim_not_readable_as_written: {type(e).__name__}"
     if nowhere & set(dom):
         return True, "claim_defined_nowhere"
+    # a problem symbol the claim names only as written (x + log(y) - log(y) folds to x): the problem's
+    # expression, which does not name it, is defined for all its values. Left out of `dom`, the
+    # claim's condition on it was skipped, and x + log(y) - log(y), x + sqrt(y) - sqrt(y),
+    # x + y! - y! and x + gcd(y, 2) - gcd(2, y) were certified simplifications of x (V16, 30 Sep 2026)
+    dom = dict(dom)
+    for c in conds:
+        for s_ in sorted(c.free_symbols - set(dom), key=lambda q: q.name):
+            if ctx.ns.get(s_.name) == s_:
+                dom[s_] = ctx.domain_for(s_)
     for c in conds:
         fs = c.free_symbols & set(dom)
         if not fs:

@@ -207,7 +207,82 @@ def _set_op(op):
             raise ParseError(f"set endpoints cannot be compared exactly: {e}") from e
         return op(*sets, **kw)
     build.__name__ = op.__name__
+    build.builds_set = True  # type: ignore[attr-defined]
     return build
+
+
+def _names_a_set(obj) -> bool:
+    """A namespace entry that is a set or builds one (Reals, Interval, FiniteSet, Union, S)."""
+    return isinstance(obj, sp.Set) or (isinstance(obj, type) and issubclass(obj, sp.Set)) \
+        or getattr(obj, "builds_set", False) is True or obj is S
+
+
+_UNION_OP, _COMPLEMENT_OP = _set_op(Union), _set_op(Complement)
+
+
+def _as_set(v):
+    """`v` as the operand of a set operation: what SymPy's own `Set.__add__` accepts (a set, or a Python
+    set it converts to a FiniteSet), None otherwise."""
+    if isinstance(v, sp.Set):
+        return v
+    if isinstance(v, (set, frozenset)):
+        return FiniteSet(*[sympify_nontext(e) for e in v])
+    return None
+
+
+def _set_add(a, b):
+    """`a + b`; the union of two sets through `_set_op`, see `_route_set_arithmetic`."""
+    other = _as_set(b) if isinstance(a, sp.Set) else None
+    return _UNION_OP(a, other) if other is not None else a + b
+
+
+def _set_sub(a, b):
+    """`a - b`; the complement of two sets through `_set_op`, see `_route_set_arithmetic`."""
+    other = _as_set(b) if isinstance(a, sp.Set) else None
+    return _COMPLEMENT_OP(a, other) if other is not None else a - b
+
+
+_SET_ARITHMETIC = {"_mv_set_add": _set_add, "_mv_set_sub": _set_sub}
+
+
+def _routed_binop(node):
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
+        fn = ast.copy_location(ast.Name("_mv_set_add" if isinstance(node.op, ast.Add) else "_mv_set_sub",
+                                        ast.Load()), node)
+        return ast.copy_location(ast.Call(fn, [node.left, node.right], []), node)
+    return node
+
+
+def _route_set_arithmetic(code: str, names: dict[str, Any]):
+    """The code compiled with every `+`/`-` a call that routes a set's union and complement through
+    `_set_op`, when it names a set; None otherwise (it is then evaluated as it stands). SymPy's
+    `Set.__add__`/`__sub__` build Union/Complement directly, so the endpoints were not made one spelling
+    first: Interval.open(-oo, R) + Interval.open(3, oo), R = sqrt(11 + 6*sqrt(2)) - sqrt(2) = 3, was the
+    whole line, certified as the domain of x + 1 (V16, 30 Sep 2026). Anything that is not a set is added
+    as before. The walk is iterative and the tree is compiled as it is (`ast.unparse` recursed out at a
+    sum of 500 terms)."""
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None                               # parse_expr reports it
+    nodes = list(ast.walk(tree))
+    if not any(isinstance(n, ast.BinOp) and isinstance(n.op, (ast.Add, ast.Sub)) for n in nodes) or not any(
+            isinstance(n, ast.Name) and _names_a_set(names.get(n.id)) for n in nodes):
+        return None
+    stack: list = [tree]
+    while stack:
+        node = stack.pop()
+        for field, value in ast.iter_fields(node):
+            if isinstance(value, list):
+                for i, v in enumerate(value):
+                    if isinstance(v, ast.AST):
+                        value[i] = _routed_binop(v)
+                        stack.append(value[i])
+            elif isinstance(value, ast.AST):
+                new = _routed_binop(value)
+                setattr(node, field, new)
+                stack.append(new)
+    return compile(tree, "<expression>", "eval")
 
 
 def _at(e, v, val):
@@ -232,26 +307,108 @@ def _Limit(e, v, p, d=None):  # noqa: N802 - the name is the notation
     return sp.Limit(e, v, p, d if d is not None else _two_sided(p))
 
 
-def _limit(e, v, p, d=None):
-    """`limit` computes, unless the limit is closed: then it stays the form, and a value is taken
-    only when numbers confirm SymPy's (equiv.forms). With n an integer SymPy's limit of n*tan(pi/n)
-    at oo is 0 (the limit is pi), and the parse certified 0 (audit of 29 Sep 2026)."""
-    form = _Limit(e, v, p, d)
-    if isinstance(form, sp.Limit) and not form.free_symbols:
+class HeldIntegral(sp.Integral):
+    """An integral with a parameter (a free symbol) or without a range, held as the form: SymPy's
+    value of it is taken nowhere (DECISIONS §80, F9). SymPy's parametric result is wrong in some
+    regions of the parameter: integrate(1/t, (t, 1, x)) is log(x), so L(-1) = I*pi was certified for
+    L(x) = ∫_1^x dt/t, and an integral computed with a parameter that a given then fixed was taken
+    unconfirmed (∫_{-1}^{1} a|cos x| dx = 0 with a = 1; the value is 2 sin 1; third audit of 30 Sep
+    2026). `doit` (and so `simplify`) leaves it as it is; once its parameters have values it is a
+    closed form, whose value only `equiv.forms.checked_forms` takes, confirmed by numbers."""
+
+    def doit(self, **hints):
+        return self
+
+
+class HeldLimit(sp.Limit):
+    """A limit with a parameter, held as the form (see HeldIntegral): with n an integer SymPy's
+    limit of a*n*sin(pi/n) at oo is 0 (it is a*pi), and the root set of limit(...) = 2*pi was
+    certified empty (third audit of 30 Sep 2026, N8)."""
+
+    def doit(self, **hints):
+        return self
+
+
+HELD_FORMS = (HeldIntegral, HeldLimit)
+# a non-identifier key of the namespace: the values the givens pin symbols to (`given_bindings`),
+# read by `hold_parametric`; no text can name it
+PINS_KEY = "<pins>"
+
+
+def _closed_form(form) -> bool:
+    """A limit, or an integral definite in every variable, with no free symbol."""
+    if form.free_symbols:
+        return False
+    return not isinstance(form, sp.Integral) or (bool(form.limits) and all(len(lim) == 3 for lim in form.limits))
+
+
+def unhold(form):
+    """The plain Integral or Limit of a held form (any other expression unchanged)."""
+    if isinstance(form, HeldIntegral):
+        return sp.Integral(*form.args)
+    if isinstance(form, HeldLimit):
+        return sp.Limit(*form.args)
+    return form
+
+
+def _held(form):
+    """`form` (an Integral or a Limit) held when it is not closed, plain when it is."""
+    if _closed_form(form):
+        return unhold(form)
+    if isinstance(form, sp.Integral):
+        return form if isinstance(form, HeldIntegral) else HeldIntegral(*form.args)
+    return form if isinstance(form, HeldLimit) else HeldLimit(*form.args)
+
+
+def _pinned(form, pins: dict):
+    """`form` with each of its free symbols that a given pins to a number replaced by it. Never a
+    bound variable: an indefinite integral's variable is free in SymPy and is kept, and a Limit is
+    rebuilt from its parts (SymPy's Limit.subs also rewrites the variable it binds)."""
+    if isinstance(form, sp.Integral):
+        sub = {s_: v for s_, v in pins.items() if s_ in form.free_symbols and s_ not in form.variables}
+        return form.subs(sub) if sub else form
+    e, z, z0, d = form.args
+    sub = {s_: v for s_, v in pins.items() if s_ in form.free_symbols and s_ != z}
+    if not sub:
         return form
-    return sp.limit(e, v, p, d if d is not None else _two_sided(p))
+    return type(form)(e.subs(sub), z, z0.subs(sub), d)
+
+
+def hold_parametric(expr, pins: dict | None = None):
+    """`expr` with every Integral and Limit that has a parameter held (HeldIntegral, HeldLimit), after
+    the parameters the givens pin to a number (`pins`) are replaced by it: such a form is then closed
+    and plain, and its value is the one numbers confirm (equiv.forms, DECISIONS §72 (a))."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Integral, sp.Limit):
+        return expr
+    return expr.replace(lambda n: isinstance(n, (sp.Integral, sp.Limit)),
+                        lambda n: _held(_pinned(n, pins) if pins else n))
+
+
+def _hold_value(out, pins):
+    """A value parse's result with its parametric forms held (`hold_parametric`), on each side of a
+    relation (rebuilt unevaluated, `_on_sides`); anything without an Integral or a Limit unchanged."""
+    if not isinstance(out, sp.Basic) or not out.has(sp.Integral, sp.Limit):
+        return out
+    return _on_sides(out, lambda e: hold_parametric(e, pins))
+
+
+def _limit(e, v, p, d=None):
+    """`limit` never computes: a closed limit stays the form, and a value is taken only when numbers
+    confirm SymPy's (equiv.forms). With n an integer SymPy's limit of n*tan(pi/n) at oo is 0 (the
+    limit is pi), and the parse certified 0 (audit of 29 Sep 2026). A limit with a parameter is held
+    (HeldLimit): its parameter pinned by a given makes it closed (`hold_parametric`), otherwise it has
+    no value."""
+    form = _Limit(e, v, p, d)
+    return _held(form) if isinstance(form, sp.Limit) else form
 
 
 def _integrate(*args, **kwargs):
-    """`integrate` computes, unless the integral is definite in every variable and closed: then it
-    stays the form, as `Integral` does, and its value is confirmed by numbers (equiv.forms). SymPy
-    integrates |cos x| over [-1, 1] to 0 (the value is 2 sin 1), and the parse certified 0 (audit
-    of 29 Sep 2026). An antiderivative or an integral with a parameter is computed as before."""
+    """`integrate` never computes: an integral definite in every variable and closed stays the form,
+    as `Integral` does, and its value is confirmed by numbers (equiv.forms). SymPy integrates |cos x|
+    over [-1, 1] to 0 (the value is 2 sin 1), and the parse certified 0 (audit of 29 Sep 2026). An
+    antiderivative or an integral with a parameter is held (HeldIntegral, DECISIONS §80)."""
     form = sp.Integral(*args, **kwargs)
-    if isinstance(form, sp.Integral) and not form.free_symbols and form.limits \
-            and all(len(lim) == 3 for lim in form.limits):
-        return form
-    return sp.integrate(*args, **kwargs)
+    return _held(form) if isinstance(form, sp.Integral) else form
 
 
 _integrate.binds_range = True  # type: ignore[attr-defined]
@@ -408,20 +565,51 @@ def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, A
                 ns.setdefault(p, Symbol(p, real=True))
             for a in f.args:
                 ns.setdefault(a, Symbol(a, real=True))
+        bindings = given_bindings(ir, ns) if ir.givens else {}
+        if bindings:
+            # an integral or a limit whose parameter a given pins is read at that value (hold_parametric)
+            ns[PINS_KEY] = dict(bindings)
         for f in ir.functions:
-            ns[f.name] = _make_function(f, ns)
+            ns[f.name] = _make_function(f, ns, bindings)
     if extra:
         ns.update(extra)
     return ns
 
 
-def _make_function(fdef, ns):
+def given_bindings(ir, ns: dict[str, Any]) -> dict:
+    """Symbols a given fixes to one real number (`a = 0`), read in the value namespace: a given that
+    computes its value (`a = integrate(...)`) or calls a problem function binds nothing, and a symbol
+    two givens bind to different values is left free."""
+    fnames = [f.name for f in ir.functions]
+    vns = claim_namespace(ns, fnames)
+    found: dict = {}
+    clash: set = set()
+    for g in ir.givens:
+        try:
+            check_claim_is_value(g, fnames)
+            rel = parse_relation(g, vns)
+        except Exception:  # noqa: BLE001 - not a plain binding
+            continue
+        if not isinstance(rel, Eq):
+            continue
+        for s_, v in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+            if isinstance(s_, Symbol) and isinstance(v, sp.Expr) and not v.free_symbols and v.is_real is True:
+                if s_ in found and found[s_] != v:
+                    clash.add(s_)
+                found.setdefault(s_, v)
+    return {s_: v for s_, v in found.items() if s_ not in clash}
+
+
+def _make_function(fdef, ns, bindings: dict | None = None):
     # A formal argument is the function's own real variable. Taken from the namespace, it carried
     # the domain of a problem variable with the same name: with x declared positive the body
     # sqrt(x**2) + x was folded to 2*x, so f(-1) was -2 and the sum of f(k) over -2..2 was 0 (it is
     # 6; audit of 29 Sep 2026). A call substitutes its argument, whose own assumptions apply then.
     body_ns = dict(ns)
     body_ns.update({a: Symbol(a, real=True) for a in fdef.args})
+    if body_ns.get(PINS_KEY):
+        # a formal argument is no parameter of the problem, whatever a given fixes under its name
+        body_ns[PINS_KEY] = {s_: v for s_, v in body_ns[PINS_KEY].items() if s_.name not in fdef.args}
     argsyms = [body_ns[a] for a in fdef.args]
     body = parse_expr_str(fdef.expr, body_ns)
 
@@ -437,16 +625,22 @@ def _make_function(fdef, ns):
     _f.argsyms = argsyms      # type: ignore[attr-defined]
     _f.fdef = fdef            # type: ignore[attr-defined]
     _f.body_ns = body_ns      # type: ignore[attr-defined]
-    # the declared domain (`"x > 0"`), a condition on the formal arguments; None when there is none
-    # or it cannot be read (then it is not applied, as before)
+    # the declared domain (`"x > 0"`), a condition on the formal arguments; None when there is none.
+    # A domain that cannot be read raises (the problem is not verified): it was dropped silently
+    # unless it was one relation, and "(0, oo)", "x in (0, oo)", "x > 0 and x < 3" or "[0, oo)"
+    # certified {-2, 2} for f(x) = 5 with f = x**2 + 1 (third audit of 30 Sep 2026, N5). A symbol
+    # a given fixes (`x > a` with a = 0) is read with its value; one no given fixes is listed in
+    # `domain_unbound` and the verifier abstains (the domain would be read for every a).
     _f.domain_rel = None      # type: ignore[attr-defined]
+    _f.domain_unbound = ()    # type: ignore[attr-defined]
     if isinstance(getattr(fdef, "domain", None), str) and fdef.domain.strip():
-        try:
-            rel = parse_relation(fdef.domain, body_ns)
-            if isinstance(rel, (sp.core.relational.Relational, sp.And)):
-                _f.domain_rel = rel
-        except Exception:  # noqa: BLE001 - an unreadable domain is not applied
-            pass
+        rel = read_domain_condition(fdef.domain, argsyms, body_ns)
+        if rel is not None:
+            rel = _conjunction(rel.xreplace({s_: v for s_, v in (bindings or {}).items()
+                                             if s_.name not in fdef.args}), fdef.domain)
+        _f.domain_rel = rel
+        if rel is not None:
+            _f.domain_unbound = tuple(sorted(s_.name for s_ in rel.free_symbols if s_.name not in fdef.args))
     return _f
 
 
@@ -726,11 +920,37 @@ def _literal_number(node, depth: int = 0) -> Fraction | None:
     return None
 
 
-def _refuse_computed_bounds(code: str, raw: str) -> None:
+def _constant_bound(node, names: dict[str, Any]):
+    """The value of a bound written as a constant that is not a plain number (sqrt(1), exp(0), pi - 2),
+    evaluated on its own in the namespace the whole code is evaluated in (the code is already checked);
+    None when it names a symbol or has no numeric value."""
+    for n in ast.walk(node):
+        if isinstance(n, ast.Name) and (n.id not in names or isinstance(names[n.id], sp.Basic)
+                                        and getattr(names[n.id], "free_symbols", None)):
+            return None
+    try:
+        v = sympify_nontext(eval(compile(ast.Expression(body=node), "<bound>", "eval"),  # noqa: S307
+                                 {"__builtins__": {}}, dict(names)))
+    except Exception:  # noqa: BLE001 - the whole parse reports it
+        return None
+    return v if isinstance(v, sp.Expr) and v.is_number and not v.free_symbols else None
+
+
+def _refuse_constant_range(name: str, lo, hi, raw: str) -> None:
+    """The checks of `_refuse_reversed_ranges` on bounds known before SymPy builds the binder."""
+    if (hi - lo + 1).is_extended_negative is True:
+        raise ParseError(f"{raw!r} has a {name} over a reversed range: not read")
+    span = hi - lo
+    if span.is_number and span.is_finite and span.is_integer is False:
+        raise ParseError(f"{raw!r} has a {name} whose limits are not an integer apart: not read")
+
+
+def _refuse_computed_bounds(code: str, raw: str, names: dict[str, Any] | None = None) -> None:
     """Also the range checks of `_refuse_reversed_ranges` for bounds written with numbers, here, before
     SymPy builds the expression: a function around a Sum computes it at once (floor, ceiling), and
     floor(Sum(k, (k, 3, 1))) = -2 (Karr) was certified past the later refusal (review of V14,
-    30 Sep 2026)."""
+    30 Sep 2026). A bound that is a constant written otherwise (sqrt(1), exp(0)) is evaluated on its own
+    first: floor(Sum(k, (k, 3, sqrt(1)))) = -2 was certified the same way (V16, 30 Sep 2026)."""
     try:
         tree = ast.parse(code, mode="eval")
     except (SyntaxError, ValueError, RecursionError, MemoryError):
@@ -748,6 +968,11 @@ def _refuse_computed_bounds(code: str, raw: str) -> None:
             if node.func.id in ("Sum", "Product") and len(lim.elts) == 3:
                 lo, hi = _literal_number(lim.elts[1]), _literal_number(lim.elts[2])
                 if lo is None or hi is None:
+                    if names is not None:
+                        lo_c, hi_c = [(sp.Rational(v.numerator, v.denominator) if v is not None
+                                       else _constant_bound(b, names)) for v, b in ((lo, lim.elts[1]), (hi, lim.elts[2]))]
+                        if lo_c is not None and hi_c is not None:
+                            _refuse_constant_range(node.func.id, lo_c, hi_c, raw)
                     continue
                 if hi - lo + 1 < 0:
                     raise ParseError(f"{raw!r} has a {node.func.id} over a reversed range: not read")
@@ -992,6 +1217,66 @@ def _rebind_point_dummies(code: str, local_dict: dict[str, Any], global_dict: di
     return new_code, dummies
 
 
+# A derivative or an antiderivative IN a variable declared an integer. SymPy applies the declaration to
+# the function before it differentiates or integrates (sin(pi*n) is 0 and cos(pi*n) is (-1)**n for an
+# integer n): with n a positive integer, diff(sin(pi*n), n) was 0 (the derivative is pi*cos(pi*n), pi at
+# n = 2) and diff(cos(pi*n), n) was I*pi*(-1)**n, so 0 and I*pi were certified at n = 2, pi was refuted,
+# the limit of the "derivative" at oo was 0, the steps "diff(sin(pi*n), n) = 0" and
+# "Integral(sin(pi*n), n) = 7" were verified, and so was the derivative in x of x*diff(sin(pi*n), n)
+# (V17, franklin's completeness audit, DECISIONS §74). A derivative is taken in a real variable; one in
+# a variable declared an integer is no question (the derivative, antiderivative, tangent and extremum
+# certificates abstain on such a task variable, `variable_declared_integer`), and it is not read. at()
+# and Subs bind their variable to a real dummy at a real point (`_point_facts`), a Sum/Integral with
+# limits binds an assumption-free one (`_rebind_range_dummies`): at(diff(sin(pi*n), n), n, 1) stays
+# readable. Checked by name on the code after that rebinding, on every variable argument (diff(f, x, n)
+# differentiates in n too; the order of (x, n) is no variable) and, when none is written, on the body,
+# whose only free symbol SymPy then takes (diff(sin(pi*n)) was 0 as well).
+_DIFFERENTIATING = ("diff", "Derivative")
+_ANTIDIFFERENTIATING = ("Integral", "integrate")
+
+
+def _refuse_integer_calculus(code: str, local_dict: dict[str, Any], raw: str, rebound: bool) -> None:
+    """Raise ParseError when `code` differentiates, or integrates indefinitely, in a variable
+    `local_dict` declares an integer. `rebound=False` is the as-written reading, which keeps the
+    declared symbols inside the binders: an operation nested in a binder is not judged there (the
+    normal reading judges it with the binder's own variable), so this reading never refuses a text
+    the normal reading reads, and never loses the conditions of one."""
+    if not any(name in code for name in _DIFFERENTIATING + _ANTIDIFFERENTIATING):
+        return
+    try:
+        tree = ast.parse(code, mode="eval")
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return                                    # parse_expr reports it
+    nested: set[int] = set()
+    if not rebound:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                    and node.func.id in _POINT_BINDERS + _RANGE_BINDERS:
+                nested.update(id(sub) for arg in node.args for sub in ast.walk(arg))
+    seq = (ast.Tuple, ast.List)
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)) or id(node) in nested:
+            continue
+        if node.func.id in _DIFFERENTIATING:
+            spec = [a.elts[0] if isinstance(a, seq) and a.elts else a for a in node.args[1:]]
+        elif node.func.id in _ANTIDIFFERENTIATING:
+            # an indefinite integral: a bare variable or (variable,); (variable, lower, upper) binds a range
+            spec = [a.elts[0] if isinstance(a, seq) else a for a in node.args[1:]
+                    if not isinstance(a, seq) or len(a.elts) == 1]
+            if len(node.args) > 1 and not spec:
+                continue
+        else:
+            continue
+        if len(node.args) == 1:
+            spec = node.args[:1]
+        for root in spec:
+            for sub in ast.walk(root):
+                v = local_dict.get(sub.id) if isinstance(sub, ast.Name) else None
+                if isinstance(v, Symbol) and v.is_integer is True:
+                    raise ParseError(f"{raw!r} takes {node.func.id} in {v.name!r}, a variable declared an "
+                                     "integer: not read")
+
+
 # Operations SymPy keeps unevaluated: asking an assumption of a bound that holds one rebuilds it, and
 # Sum(k, (k, -1, Sum(k, (k, -1, ...)))) nested four deep took 86 s to parse (audit of V14, 30 Sep 2026).
 _OPERATIONS = (sp.Sum, sp.Product, sp.Integral, sp.Limit, sp.Derivative, sp.Subs)
@@ -1058,7 +1343,7 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     _check_code(code, s, names)
     binds_range = any(b in code for b in _RANGE_BINDERS)
     if binds_range:
-        _refuse_computed_bounds(code, s)
+        _refuse_computed_bounds(code, s, {**global_dict, **local_dict})
     rebound = _rebind_range_dummies(code, local_dict, s) if rebind and binds_range else None
     dummies: dict[str, Any] = {}
     if rebound is not None:
@@ -1069,7 +1354,12 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     if pointed is not None:
         code, more = pointed
         dummies = dict(dummies, **more)
-    if rebound is None and pointed is None:
+    _refuse_integer_calculus(code, dict(local_dict, **dummies), s, rebind)
+    # with evaluation off parse_expr builds Add(a, b, evaluate=False) itself: no set operation runs
+    routed = _route_set_arithmetic(code, {**global_dict, **local_dict, **dummies}) if evaluate else None
+    if routed is not None:
+        out = eval(routed, global_dict, {**local_dict, **dummies, **_SET_ARITHMETIC})  # noqa: S307 - checked code
+    elif rebound is None and pointed is None:
         out = parse_expr(s, local_dict=local_dict, global_dict=global_dict,
                          transformations=transformations, evaluate=evaluate)
     else:
@@ -1085,6 +1375,8 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     if pointed is not None and evaluate:
         out = _domain_end_limits(out)
     _refuse_reversed_ranges(out, s)
+    if evaluate:
+        out = _hold_value(out, local_dict.get(PINS_KEY))
     return out
 
 
@@ -1278,12 +1570,63 @@ def _refuse_latex_ranges(s: str) -> None:
             a, b = int(lo.group(1).replace(" ", "")), int(hi.group(1).replace(" ", ""))
             if b - a + 1 < 0:
                 raise ParseError(f"{s!r} has a sum or product over a reversed range: not read")
+        elif "_" in scripts and "^" in scripts:
+            # a limit that is a constant written otherwise: \lfloor \sum_{k=3}^{\sqrt{1}} k \rfloor = -2 was
+            # certified (V16, 30 Sep 2026)
+            a, b = _latex_constant_limit(scripts["_"]), _latex_constant_limit(scripts["^"])
+            if a is not None and b is not None:
+                _refuse_constant_range("sum or product", a, b, s)
+
+
+def _latex_constant_limit(text: str):
+    """The value of a LaTeX limit (`k=3`, `\\sqrt{1}`) that names no symbol, None otherwise."""
+    text = re.sub(r"^\s*[A-Za-z]\w*\s*=", "", text)
+    m = _LATEX_INT_LIMIT.fullmatch(text)
+    if m:
+        return sp.Integer(int(m.group(1).replace(" ", "")))
+    try:
+        v = _latex2sympy(_exact_latex_decimals(text))
+    except Exception:  # noqa: BLE001 - the whole parse reports it
+        return None
+    return v if isinstance(v, sp.Expr) and not v.free_symbols and v.is_number else None
+
+
+def _refuse_latex_integer_calculus(expr, ns: dict[str, Any], raw: str) -> None:
+    """The LaTeX counterpart of `_refuse_integer_calculus`, judged on latex2sympy's result while its
+    symbols are still assumption-free, by name: a derivative or an indefinite integral in a name the IR
+    declares an integer is not read, whatever binds it. latex2sympy keeps a first derivative
+    unevaluated, as Subs(Derivative(f(n'), n'), n', n), and an indefinite integral too; a later
+    substitution that reaches n' (a limit's variable, a sum's integer index) puts the declaration inside
+    them: with n a positive integer lim_{n->oo} d/dn sin(pi n) was 0 (no limit) and
+    sum_{n=1}^{3} d/dn sin(pi n) was 0 (it is -pi) (V17, parca5). Outside a binder the Subs form came
+    out right; it is refused too, as the canonical diff(f, n) is. \\frac{d^2}{dn^2} is no derivative to
+    latex2sympy (the product of the undeclared names d**2 and 1/dn**2, see `_latex_to_sympy`)."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Derivative, sp.Integral):
+        return
+    for node in sp.preorder_traversal(expr):
+        if isinstance(node, sp.Derivative):
+            names = [v.name for v in node.variables if isinstance(v, Symbol)]
+        elif isinstance(node, sp.Integral):
+            names = [lim[0].name for lim in node.limits if len(lim) == 1 and isinstance(lim[0], Symbol)]
+        else:
+            continue
+        for name in names:
+            declared = ns.get(name)
+            if isinstance(declared, Symbol) and declared.is_integer is True:
+                raise ParseError(f"{raw!r} takes {type(node).__name__} in {name!r}, a variable declared an "
+                                 "integer: not read")
 
 
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
     _refuse_latex_ranges(s)
     expr = _latex2sympy(_exact_latex_decimals(s))
+    # the names are checked before the IR's symbols bring their declarations too (and again after): with
+    # n an integer, latex2sympy's reading of \frac{d^2}{dn^2} (n \sin(\pi n)), the product
+    # d**2*n*sin(pi*n)/dn**2, folded to 0 and took the undeclared d and dn with it, so 0 was read for a
+    # second derivative that is 2*pi*(-1)**n there (V17, parca5)
+    _check_symbols_declared(expr, ns, s)
+    _refuse_latex_integer_calculus(expr, ns, s)
     if isinstance(expr, sp.Basic):
         from sympy.core.function import AppliedUndef
         ops = {"gcd": gcd, "lcm": lcm}
@@ -1351,7 +1694,7 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
         try:
-            return _latex_to_sympy(s, ns)
+            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY))
         except Exception as e:  # pragma: no cover - fall through to canonical
             raise ParseError(f"LaTeX parse failed for {raw!r}: {e}") from e
     s = preclean(s)
@@ -1558,7 +1901,7 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     if is_latex(s):
         # LaTeX relations: latex2sympy handles "=" -> Eq
         try:
-            return _latex_to_sympy(s, ns)
+            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY))
         except ParseError:
             raise
         except Exception as e:  # noqa: BLE001 - latex2sympy raises a bare Exception
@@ -1584,6 +1927,13 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     rels = []
     for k in range(1, len(parts)):
         op = parts[k][0]
+        # An order between things that are not expressions is no relation: "x > 0, x < 3" read as
+        # x > (0, x) and (0, x) < 3, which SymPy cannot evaluate. Built unevaluated it passed as a
+        # relation, and every sandbox worker it was sent to died unpickling it (TypeError; third
+        # audit of 30 Sep 2026, N5).
+        if op in ("<", "<=", ">", ">=") and not (isinstance(exprs[k - 1], sp.Expr) and isinstance(exprs[k], sp.Expr)):
+            raise ParseError(f"{s!r}: an order between non-expressions ({parts[k - 1][1].strip()!r} "
+                             f"{op} {parts[k][1].strip()!r}) is not read")
         # evaluate=False everywhere: a relation on an assumption-carrying symbol (x positive)
         # would otherwise collapse to True/False and silently disappear as a constraint
         rels.append(_REL_CLASS[op](exprs[k - 1], exprs[k], evaluate=False))
@@ -1711,6 +2061,94 @@ def parse_domain(spec: str | None, var, ns: dict[str, Any] | None = None) -> sp.
             dom = Intersection(dom, sp.solveset(rel, var, S.Reals))
         return dom
     return parse_set_str(s, ns)
+
+
+_DOMAIN_JOIN_RE = re.compile(r"\s*(?:,|&|∧)\s*|\s+and\s+")
+_DOMAIN_MEMBER_RE = re.compile(r"^([A-Za-z_]\w*)\s+in\s+(.+)$", re.S)
+_RELATION_OP_RE = re.compile(r"[<>=]")
+
+
+def _conjunction(rel, spec: str):
+    """`rel` as a declared domain: a relation whose two sides are expressions, or an And of them;
+    None for True (no restriction). Anything else raises ParseError: a relation with a tuple side
+    (`x > (0, x)`, how "x > 0, x < 3" read) crashed the sandbox workers that unpickled it."""
+    if rel is sp.true:
+        return None
+    parts = rel.args if isinstance(rel, And) else (rel,)
+    for r in parts:
+        if not (isinstance(r, sp.core.relational.Relational) and isinstance(r.lhs, sp.Expr)
+                and isinstance(r.rhs, sp.Expr)):
+            raise ParseError(f"domain {spec!r} is not read as relations between expressions ({r})")
+    return rel
+
+
+def _interval_conditions(st, v, spec: str) -> list:
+    """A set of reals written as a domain (`(0, oo)`, `[0, 3)`) as relations on `v` (none for ℝ,
+    SymPy's Interval(-oo, oo))."""
+    if not isinstance(st, Interval):
+        raise ParseError(f"domain {spec!r} is not an interval of reals")
+    out = []
+    if st.start != -oo:
+        out.append((Gt if st.left_open else Ge)(v, st.start, evaluate=False))
+    if st.end != oo:
+        out.append((Lt if st.right_open else Le)(v, st.end, evaluate=False))
+    return out
+
+
+def read_domain_condition(spec: str, argsyms: list, ns: dict[str, Any]):
+    """An IR function's declared domain as a condition on its formal arguments `argsyms`: a
+    relation, or an And of relations, each side an expression; None when it restricts nothing.
+    Read: relations (`x > 0`, `0 < x < 3`), several joined by `,`, `&`, `∧` or `and`, and, for a
+    function of one argument, an interval of reals (`(0, oo)`, `x in [0, oo)`). Each relation must
+    name an argument. Anything else raises ParseError; the caller does not drop it."""
+    if is_latex(spec):
+        pieces, latex = [spec], True
+    else:
+        pieces, latex = _split_domain(preclean(strip_presentation(_strip_invisible(spec)))), False
+    conds: list = []
+    for p in pieces:
+        if not p:
+            raise ParseError(f"domain {spec!r} has an empty part")
+        m = None if latex else _DOMAIN_MEMBER_RE.match(p)
+        if m is not None or (not latex and not _RELATION_OP_RE.search(p)):
+            name, set_txt = (m.group(1), m.group(2)) if m is not None else (None, p)
+            if name is None and len(argsyms) != 1:
+                raise ParseError(f"domain {spec!r}: a set names no argument of a function of several")
+            v = argsyms[0] if name is None else next((a for a in argsyms if a.name == name), None)
+            if v is None:
+                raise ParseError(f"domain {spec!r}: {name} is not an argument")
+            found = _interval_conditions(parse_set_str(set_txt, ns), v, spec)
+        else:
+            rel = _conjunction(parse_relation(p, ns), spec)
+            found = [] if rel is None else list(rel.args if isinstance(rel, And) else (rel,))
+        for c in found:
+            if not c.free_symbols & set(argsyms):
+                raise ParseError(f"domain {spec!r}: {c} is not a condition on the arguments")
+            if c not in conds:
+                conds.append(c)
+    if not conds:
+        return None
+    return _conjunction(conds[0] if len(conds) == 1 else And(*conds), spec)
+
+
+def _split_domain(s: str) -> list[str]:
+    """The top-level parts of a domain joined by `,`, `&`, `∧` or `and` (not inside brackets)."""
+    parts, depth, cur, i = [], 0, "", 0
+    while i < len(s):
+        c = s[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        m = _DOMAIN_JOIN_RE.match(s, i) if depth == 0 else None
+        if m is not None and m.end() > i:
+            parts.append(cur.strip())
+            cur, i = "", m.end()
+            continue
+        cur += c
+        i += 1
+    parts.append(cur.strip())
+    return parts
 
 
 # ----------------------------------------------------------------------------

@@ -146,6 +146,10 @@ def test_a_symbolic_sum_from_zero_keeps_its_first_term():
     "Integral(1, y, (y, 0, 1))",
     "Sum(k, (k, 3, 1))",                        # Karr: -2; the school reading differs
     "Product(k, (k, 3, 1))",
+    # floor evaluates the Sum while the text is read: only the check of the written bounds sees the
+    # range (read, it was -2; part 11, 1 Oct 2026)
+    "floor(Sum(k, (k, 3, 1)))",
+    r"\lfloor \sum_{k=3}^{1} k \rfloor",
     "Sum(k, (k, 1, 7/2))",                      # SymPy: 63/8; stepping from 1: 1 + 2 + 3
     "Sum(pi, (pi, 1, 3))",                      # not a variable
     "Sum(k, (S, 1, 3))",
@@ -153,6 +157,20 @@ def test_a_symbolic_sum_from_zero_keeps_its_first_term():
 def test_a_binder_that_cannot_be_read_faithfully_is_refused(src):
     with pytest.raises(ParseError):
         parse_expr_str(src, NS)
+
+
+@pytest.mark.parametrize("claim", ["floor(Sum(k, (k, 3, 1))) = 0", r"\lfloor \sum_{k=3}^{1} k \rfloor = 0"])
+def test_a_step_over_a_written_reversed_range_is_not_refuted(claim):
+    """Read, the step was Karr's floor(-2) = 0 and refuted, though the empty-sum reading makes it true: a
+    right solution was INCORRECT (part 11, 1 Oct 2026). Not read, the step is a malformed claim."""
+    ir = {"task": {"kind": "evaluate", "params": {"expr": "x + 1"}}, "givens": ["x = 5"], "answer_shape": "scalar",
+          "vars": [{"name": "x", "domain": "real"}, {"name": "k", "domain": "integer"}]}
+    sol = {"claimed_answer": {"kind": "value", "payload": "6"},
+           "steps": [{"id": "s1", "kind": "compute", "claim": claim, "from": [], "text": ""}]}
+    r = verify(ir, sol)
+    st = next(la for la in r.layers if la.layer == "steps.refute").evidence["steps"][0]
+    assert st["status"] != "refuted", st
+    assert r.verdict != "INCORRECT", (r.verdict, st)
 
 
 def test_a_long_sum_of_terms_is_rebound_without_recursion():

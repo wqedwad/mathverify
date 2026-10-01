@@ -15,6 +15,11 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
   olmayan bir açık bulunursa aynı turda düzelt.
 - Kullanıcıya dönen özet kısa ve sade olur: önce sonuç, sonra ondan beklenen karar(lar); ayrıntı DECISIONS'ta ve
   HANDOFF'ta, o isterse anlatılır (kullanıcı isteği, 28 Eylül 2026).
+- Amaç ileri matematikte en doğru sonuca en kaliteli biçimde ulaşmak
+  (kullanıcı, 1 Ekim 2026). Matematik ve gelenek kararlarını ajan verir, şu ilkeyle: doğrulayıcı yanlış olabilecek hiçbir
+  cevaba CORRECT demez; sorunun anlamı bir geleneğe bağlıysa ya da kanıtlanamıyorsa karar vermez (UNKNOWN), tahmin etmez.
+  Karar gerekçesiyle `DECISIONS.md`'ye yazılır; kullanıcıya sade dille yalnız sonuç ve teknik olmayan kararlar (birleştirme,
+  silme, kredi) sorulur.
 - Ölçülmüş sayı ver; "testler geçiyor" kanıt değildir. Doğrulanmamış bilgiyi işaretle. Önceki bir
   iddia yanlış çıktıysa bunu açıkça söyle.
 - Şartnamenin kilitli kararları (D1–D6, `DECISIONS.md` §1) yeniden sorulmaz. Şartname:

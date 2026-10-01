@@ -373,12 +373,17 @@ def test_a_closed_integrate_or_limit_is_a_form_not_sympys_value(expr, vars_, wro
     assert isinstance(parsed, (sp.Integral, sp.Limit))
 
 
-def test_an_antiderivative_and_a_limit_with_a_parameter_are_still_computed():
-    from mathverify.normalize.parse import build_namespace, parse_expr_str
+def test_an_antiderivative_and_a_limit_with_a_parameter_are_held_not_computed():
+    """They were computed by SymPy here (this test asserted it); SymPy's parametric value is wrong in
+    some regions of the parameter (lim a*n*sin(pi/n) = 0 with n an integer), so since part iv
+    (DECISIONS §80, 1 Oct 2026) they stay forms that neither doit nor simplify evaluates."""
+    from mathverify.normalize.parse import HeldIntegral, HeldLimit, build_namespace, parse_expr_str
     a, x, n = sp.Symbol("a"), sp.Symbol("x"), sp.Symbol("n", positive=True, integer=True)
     ns = build_namespace(None, {"a": a, "x": x, "n": n})
-    assert sp.simplify(parse_expr_str("integrate(2*x, x)", ns) - x**2) == 0
-    assert parse_expr_str("limit((1 + a/n)**n, n, oo)", ns) == sp.exp(a)
+    anti = parse_expr_str("integrate(2*x, x)", ns)
+    lim = parse_expr_str("limit((1 + a/n)**n, n, oo)", ns)
+    assert isinstance(anti, HeldIntegral) and isinstance(lim, HeldLimit)
+    assert anti.doit() == anti and isinstance(sp.simplify(lim), HeldLimit) and sp.simplify(2*anti).has(HeldIntegral)
 
 
 FP = {"vars": [{"name": "x", "domain": "positive_real"}, {"name": "k", "domain": "positive_integer"}],

@@ -24,7 +24,7 @@ from ..equiv.numeric import to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import definedness_conditions, written_closed_undecided, written_definedness
+from .domain import closed_condition_undecided, definedness_conditions, written_definedness
 
 LAYER = "certify.limits"
 
@@ -362,6 +362,41 @@ def _probe_agrees(vals: list[str | None], target) -> bool | None:
         return None
 
 
+def written_undefined_everywhere(src, ns) -> bool:
+    """Is a task's expression (limit, derivative, tangent line, integral, extremum), AS WRITTEN,
+    defined for no value of its variable? A condition that fails outright (`log(-1)` needs -1 > 0), or
+    a closed one no exact check proves (`closed_condition_undecided`). `written_definedness` records the
+    first only through the expression's free symbols, so an expression with none (log(-1) - log(-1) + 2
+    is 2 after parsing) passed: its limit 2, its derivative 0, the tangent y = 2 and its maximum 2 on
+    [0, 1] were certified, and x + acos(2) - acos(2) had the derivative 1 and the integral 1/2 over
+    [0, 1] (30 Sep 2026)."""
+    from ..normalize.parse import parse_as_written
+    e = parse_as_written(src, ns)
+    if e is None:
+        return False
+    try:
+        conds = definedness_conditions(e, None)
+    except Exception:  # noqa: BLE001 - a failed reading adds no fact
+        return False
+    return any(c is sp.false for c in conds) or closed_condition_undecided(conds)
+
+
+def membership_conditions(src, expr, var, ns) -> list[Any]:
+    """The membership conditions naming `var` (a gcd/lcm argument rational, an n! or C(n, r) argument a
+    natural number: certify.domain) of a task's expression, as written or as parsed. No interval rule
+    reads them, and the limit, derivative and integral certificates dropped them: with x + x! - x!
+    (x after parsing), the limit -3 at -3, the derivative 1 at -3 and the integral -4 over [-3, -1]
+    were certified, although the expression has a value at the natural numbers alone (30 Sep 2026). A
+    variable whose declaration settles the membership (n a positive integer: n! has its value) carries
+    no such condition."""
+    conds = list(written_definedness(src, ns)[0])
+    try:
+        conds += definedness_conditions(expr, var)
+    except Exception:  # noqa: BLE001 - a failed reading adds no fact
+        pass
+    return [c for c in dict.fromkeys(conds) if isinstance(c, sp.Contains) and var in c.free_symbols]
+
+
 def declared_side(var, point, side):
     """The side ('+', '-', None: both) from which the task's limit approaches `point` inside the
     variable's declared domain, or False when the approach leaves it. The task's variable keeps its
@@ -398,6 +433,19 @@ def verify(ir, solution, ctx: Ctx):
         point, err = parse_or_unknown(LAYER, ctx.expr, str(p.get("to", "0")))
         if err:
             return err
+        # a parameter (a symbol other than the variable) is read at the number a given pins it to;
+        # one no given pins leaves the limit without a value (DECISIONS §80): with n an integer
+        # SymPy's limit of a*n*sin(pi/n) at oo is 0 (it is a*pi), and 0 was certified and 2*pi refuted
+        # with a = 2 (part iv, 1 Oct 2026)
+        pins: dict = {}
+        params = (getattr(expr, "free_symbols", set()) | getattr(point, "free_symbols", set())) - {var}
+        if params:
+            pins = {s_: v for s_, v in ctx.bindings().items() if s_ in params}
+            expr, point = expr.xreplace(pins), point.xreplace(pins)
+            left = (getattr(expr, "free_symbols", set()) | getattr(point, "free_symbols", set())) - {var}
+            if left:
+                return unknown(LAYER, "parametric_limit", t.ms, {"parameters": sorted(str(s_) for s_ in left)},
+                               flags=["parametric_limit"])
         side = p.get("side")
         if side in ("", "+-"):
             side = None
@@ -411,12 +459,18 @@ def verify(ir, solution, ctx: Ctx):
                            flags=["approach_outside_declared_domain"])
         side = within
         written, nowhere = written_definedness(p["expr"], ctx.ns)
-        if nowhere or written_closed_undecided(p["expr"], ctx.ns):
+        if pins:
+            written = [c.xreplace(pins) if isinstance(c, sp.Basic) else c for c in written]
+        if nowhere or written_undefined_everywhere(p["expr"], ctx.ns):
             # undefined as written for every value (a sum with an undefined term), or a binder whose
             # body is not proved to exist: lim_{x->0} x + Σ_{k=-1}^{1} k/k = 3 was certified (review
             # of 30 Sep 2026; the value parse reads k/k as 1)
             return unknown(LAYER, "expression_undefined_as_written", t.ms, {"expr": p["expr"]},
                            flags=["expression_undefined_as_written"])
+        members = membership_conditions(p["expr"], expr, var, ctx.ns)
+        if members:
+            return unknown(LAYER, "membership_condition_on_variable", t.ms,
+                           {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
         extra = [c for c in written if getattr(c, "free_symbols", set()) == {var}]
         cls = classify_limit(expr, var, point, side, timeout=ctx.timeout,
                              conds=limit_conditions(expr, var, extra))

@@ -1,0 +1,156 @@
+e6712f5	N1 F^2<0 (-oo,0)	CORRECT	
+e6712f5	N1 F^2=-4/9 {-1}	CORRECT	
+e6712f5	N1 L(-1)=I*pi	CORRECT	no_givens
+e6712f5	N1 A(2)=asin(2)	CORRECT	no_givens
+e6712f5	N1 g {-9}	CORRECT	
+e6712f5	N3 LaTeX lim=1	CORRECT	no_givens
+e6712f5	N3 step compute	CORRECT	no_step_refuted steps=['verified']
+e6712f5	N3 step eq	CORRECT	no_step_refuted steps=['verified']
+e6712f5	N8 tan simplify 0	CORRECT	
+e6712f5	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+e6712f5	N9 integral 10/3	CORRECT	no_givens
+e6712f5	N9 limit 2	CORRECT	no_givens
+e245317	N1 F^2<0 (-oo,0)	CORRECT	
+e245317	N1 F^2=-4/9 {-1}	CORRECT	
+e245317	N1 L(-1)=I*pi	CORRECT	no_givens
+e245317	N1 A(2)=asin(2)	CORRECT	no_givens
+e245317	N1 g {-9}	CORRECT	
+e245317	N3 LaTeX lim=1	CORRECT	no_givens
+e245317	N3 step compute	CORRECT	no_step_refuted steps=['verified']
+e245317	N3 step eq	CORRECT	no_step_refuted steps=['verified']
+e245317	N8 tan simplify 0	CORRECT	
+e245317	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+e245317	N9 integral 10/3	CORRECT	no_givens
+e245317	N9 limit 2	CORRECT	no_givens
+d38da47	N1 F^2<0 (-oo,0)	CORRECT	
+d38da47	N1 F^2=-4/9 {-1}	CORRECT	
+d38da47	N1 L(-1)=I*pi	CORRECT	no_givens
+d38da47	N1 A(2)=asin(2)	CORRECT	no_givens
+d38da47	N1 g {-9}	CORRECT	
+d38da47	N3 LaTeX lim=1	CORRECT	no_givens
+d38da47	N3 step compute	CORRECT	no_step_refuted steps=['verified']
+d38da47	N3 step eq	CORRECT	no_step_refuted steps=['verified']
+d38da47	N8 tan simplify 0	CORRECT	
+d38da47	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+d38da47	N9 integral 10/3	CORRECT	no_givens
+d38da47	N9 limit 2	CORRECT	no_givens
+0ec6126	N1 F^2<0 (-oo,0)	CORRECT	
+0ec6126	N1 F^2=-4/9 {-1}	CORRECT	
+0ec6126	N1 L(-1)=I*pi	CORRECT	no_givens
+0ec6126	N1 A(2)=asin(2)	CORRECT	no_givens
+0ec6126	N1 g {-9}	CORRECT	
+0ec6126	N3 LaTeX lim=1	CORRECT	no_givens
+0ec6126	N3 step compute	CORRECT	no_step_refuted steps=['verified']
+0ec6126	N3 step eq	CORRECT	no_step_refuted steps=['verified']
+0ec6126	N8 tan simplify 0	CORRECT	
+0ec6126	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+0ec6126	N9 integral 10/3	CORRECT	no_givens
+0ec6126	N9 limit 2	CORRECT	no_givens
+7f35e1d	N1 F^2<0 (-oo,0)	CORRECT	
+7f35e1d	N1 F^2=-4/9 {-1}	CORRECT	
+7f35e1d	N1 L(-1)=I*pi	CORRECT	no_givens
+7f35e1d	N1 A(2)=asin(2)	CORRECT	no_givens
+7f35e1d	N1 g {-9}	CORRECT	
+7f35e1d	N3 LaTeX lim=1	CORRECT	no_givens
+7f35e1d	N3 step compute	CORRECT	no_step_refuted steps=['verified']
+7f35e1d	N3 step eq	CORRECT	no_step_refuted steps=['verified']
+7f35e1d	N8 tan simplify 0	CORRECT	
+7f35e1d	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+7f35e1d	N9 integral 10/3	CORRECT	no_givens
+7f35e1d	N9 limit 2	CORRECT	no_givens
+9ee5df9	N1 F^2<0 (-oo,0)	CORRECT	
+9ee5df9	N1 F^2=-4/9 {-1}	CORRECT	
+9ee5df9	N1 L(-1)=I*pi	CORRECT	no_givens
+9ee5df9	N1 A(2)=asin(2)	CORRECT	no_givens
+9ee5df9	N1 g {-9}	CORRECT	
+9ee5df9	N3 LaTeX lim=1	CORRECT	no_givens
+9ee5df9	N3 step compute	CORRECT	no_step_refuted steps=['verified']
+9ee5df9	N3 step eq	CORRECT	no_step_refuted steps=['verified']
+9ee5df9	N8 tan simplify 0	CORRECT	
+9ee5df9	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+9ee5df9	N9 integral 10/3	CORRECT	no_givens
+9ee5df9	N9 limit 2	CORRECT	no_givens
+e0fa455	N1 F^2<0 (-oo,0)	CORRECT	
+e0fa455	N1 F^2=-4/9 {-1}	CORRECT	
+e0fa455	N1 L(-1)=I*pi	CORRECT	no_givens
+e0fa455	N1 A(2)=asin(2)	CORRECT	no_givens
+e0fa455	N1 g {-9}	CORRECT	
+e0fa455	N3 LaTeX lim=1	CORRECT	no_givens
+e0fa455	N3 step compute	CORRECT	no_step_refuted steps=['verified']
+e0fa455	N3 step eq	CORRECT	no_step_refuted steps=['verified']
+e0fa455	N8 tan simplify 0	CORRECT	
+e0fa455	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+e0fa455	N9 integral 10/3	CORRECT	no_givens
+e0fa455	N9 limit 2	CORRECT	no_givens
+6e0323d	N1 F^2<0 (-oo,0)	UNKNOWN	ir_namespace_error: ParseError: cannot parse 'integrate(sqrt
+6e0323d	N1 F^2=-4/9 {-1}	UNKNOWN	ir_namespace_error: ParseError: cannot parse 'integrate(sqrt
+6e0323d	N1 L(-1)=I*pi	UNKNOWN	ir_namespace_error: ParseError: cannot parse 'integrate(1/t,
+6e0323d	N1 A(2)=asin(2)	UNKNOWN	ir_namespace_error: ParseError: cannot parse 'integrate(1/sq
+6e0323d	N1 g {-9}	UNKNOWN	problem_undefined_as_written: ['g(a)**2 = -9']
+6e0323d	N3 LaTeX lim=1	UNKNOWN	no_givens
+6e0323d	N3 step compute	INCORRECT	 steps=['refuted']
+6e0323d	N3 step eq	CORRECT	no_step_refuted steps=['unknown']
+6e0323d	N8 tan simplify 0	CORRECT	
+6e0323d	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+6e0323d	N9 integral 10/3	UNKNOWN	problem_undefined_as_written: ['integrate(f(x), (x, -2, -1))
+6e0323d	N9 limit 2	UNKNOWN	problem_undefined_as_written: ['limit(f(x), x, -1)']
+786c797	N1 F^2<0 (-oo,0)	UNKNOWN	problem_undefined_as_written: ['F(x)**2 < 0']
+786c797	N1 F^2=-4/9 {-1}	UNKNOWN	problem_undefined_as_written: ['F(x)**2 = -4/9']
+786c797	N1 L(-1)=I*pi	CORRECT	no_givens
+786c797	N1 A(2)=asin(2)	UNKNOWN	problem_undefined_as_written: ['A(2)']
+786c797	N1 g {-9}	UNKNOWN	problem_undefined_as_written: ['g(a)**2 = -9']
+786c797	N3 LaTeX lim=1	UNKNOWN	no_givens
+786c797	N3 step compute	INCORRECT	 steps=['refuted']
+786c797	N3 step eq	CORRECT	no_step_refuted steps=['unknown']
+786c797	N8 tan simplify 0	CORRECT	
+786c797	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+786c797	N9 integral 10/3	UNKNOWN	problem_undefined_as_written: ['integrate(f(x), (x, -2, -1))
+786c797	N9 limit 2	UNKNOWN	problem_undefined_as_written: ['limit(f(x), x, -1)']
+f8926cc	N1 F^2<0 (-oo,0)	UNKNOWN	problem_undefined_as_written: ['F(x)**2 < 0']
+f8926cc	N1 F^2=-4/9 {-1}	UNKNOWN	problem_undefined_as_written: ['F(x)**2 = -4/9']
+f8926cc	N1 L(-1)=I*pi	CORRECT	no_givens
+f8926cc	N1 A(2)=asin(2)	UNKNOWN	problem_undefined_as_written: ['A(2)']
+f8926cc	N1 g {-9}	UNKNOWN	problem_undefined_as_written: ['g(a)**2 = -9']
+f8926cc	N3 LaTeX lim=1	UNKNOWN	no_givens
+f8926cc	N3 step compute	INCORRECT	 steps=['refuted']
+f8926cc	N3 step eq	CORRECT	no_step_refuted steps=['unknown']
+f8926cc	N8 tan simplify 0	CORRECT	
+f8926cc	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+f8926cc	N9 integral 10/3	UNKNOWN	problem_undefined_as_written: ['integrate(f(x), (x, -2, -1))
+f8926cc	N9 limit 2	UNKNOWN	problem_undefined_as_written: ['limit(f(x), x, -1)']
+b76ae6c	N1 F^2<0 (-oo,0)	UNKNOWN	problem_undefined_as_written: ['F(x)**2 < 0']
+b76ae6c	N1 F^2=-4/9 {-1}	UNKNOWN	problem_undefined_as_written: ['F(x)**2 = -4/9']
+b76ae6c	N1 L(-1)=I*pi	CORRECT	no_givens
+b76ae6c	N1 A(2)=asin(2)	UNKNOWN	problem_undefined_as_written: ['A(2)']
+b76ae6c	N1 g {-9}	UNKNOWN	problem_undefined_as_written: ['g(a)**2 = -9']
+b76ae6c	N3 LaTeX lim=1	UNKNOWN	no_givens
+b76ae6c	N3 step compute	INCORRECT	 steps=['refuted']
+b76ae6c	N3 step eq	CORRECT	no_step_refuted steps=['unknown']
+b76ae6c	N8 tan simplify 0	CORRECT	
+b76ae6c	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+b76ae6c	N9 integral 10/3	UNKNOWN	problem_undefined_as_written: ['integrate(f(x), (x, -2, -1))
+b76ae6c	N9 limit 2	UNKNOWN	problem_undefined_as_written: ['limit(f(x), x, -1)']
+d914dbc	N1 F^2<0 (-oo,0)	UNKNOWN	problem_undefined_as_written: ['F(x)**2 < 0']
+d914dbc	N1 F^2=-4/9 {-1}	UNKNOWN	problem_undefined_as_written: ['F(x)**2 = -4/9']
+d914dbc	N1 L(-1)=I*pi	CORRECT	no_givens
+d914dbc	N1 A(2)=asin(2)	UNKNOWN	problem_undefined_as_written: ['A(2)']
+d914dbc	N1 g {-9}	UNKNOWN	problem_undefined_as_written: ['g(a)**2 = -9']
+d914dbc	N3 LaTeX lim=1	UNKNOWN	no_givens
+d914dbc	N3 step compute	INCORRECT	 steps=['refuted']
+d914dbc	N3 step eq	CORRECT	no_step_refuted steps=['unknown']
+d914dbc	N8 tan simplify 0	UNKNOWN	problem_undefined_as_written: ['limit(a*n*tan(pi/n), n, oo)'
+d914dbc	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+d914dbc	N9 integral 10/3	UNKNOWN	problem_undefined_as_written: ['integrate(f(x), (x, -2, -1))
+d914dbc	N9 limit 2	UNKNOWN	problem_undefined_as_written: ['limit(f(x), x, -1)']
+aa67b20	N1 F^2<0 (-oo,0)	UNKNOWN	problem_undefined_as_written: ['F(x)**2 < 0']
+aa67b20	N1 F^2=-4/9 {-1}	UNKNOWN	problem_undefined_as_written: ['F(x)**2 = -4/9']
+aa67b20	N1 L(-1)=I*pi	CORRECT	no_givens
+aa67b20	N1 A(2)=asin(2)	UNKNOWN	problem_undefined_as_written: ['A(2)']
+aa67b20	N1 g {-9}	UNKNOWN	problem_undefined_as_written: ['g(a)**2 = -9']
+aa67b20	N3 LaTeX lim=1	UNKNOWN	no_givens
+aa67b20	N3 step compute	INCORRECT	 steps=['refuted']
+aa67b20	N3 step eq	CORRECT	no_step_refuted steps=['unknown']
+aa67b20	N8 tan simplify 0	UNKNOWN	problem_undefined_as_written: ['limit(a*n*tan(pi/n), n, oo)'
+aa67b20	N8 sin eq EmptySet	CORRECT	claimed_set_not_finite
+aa67b20	N9 integral 10/3	UNKNOWN	problem_undefined_as_written: ['integrate(f(x), (x, -2, -1))
+aa67b20	N9 limit 2	UNKNOWN	problem_undefined_as_written: ['limit(f(x), x, -1)']

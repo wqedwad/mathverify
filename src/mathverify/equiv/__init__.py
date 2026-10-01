@@ -200,8 +200,19 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         return None, ev
 
     # expression-shaped: symbolic proof, else domain-aware random points
+    from .forms import has_parametric_form
+    parametric = has_parametric_form(claimed) or has_parametric_form(truth)
+    if parametric:
+        # held, so that no rewrite in the zero test (simplify ends with doit) computes them
+        from ..normalize.parse import hold_parametric
+        claimed, truth = hold_parametric(claimed), hold_parametric(truth)
     okS, sev = sym_equal(claimed, truth)
     ev["symbolic"] = sev
+    if okS is True and parametric and sev.get("method") not in ("structural", "structural_diff", "zero_test_battery"):
+        # an integral or a limit with a parameter has no value here (DECISIONS §80): SymPy's `equals`
+        # decides by evaluating it numerically at sample points
+        okS = None
+        ev["parametric_form"] = "symbolic equality through numbers not taken"
     if okS is True:
         ev["method"] = "symbolic"
         return True, ev
@@ -215,6 +226,11 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         domain = {s_: domain.get(s_, S.Reals) for s_ in syms}
     okR, rev = random_point_equal(claimed, truth, syms, domain, seed=seed)
     ev["random_point"] = rev
+    if okR is True and parametric:
+        # agreement at sample values of a parameter is no proof of a parametric integral's or limit's
+        # value (DECISIONS §80, principle 4); a counterexample at one value still refutes
+        okR = None
+        ev["parametric_form"] = "agreement at sample points not taken"
     ev["method"] = "random_point" if okR is not None else "undecided"
     return okR, ev
 

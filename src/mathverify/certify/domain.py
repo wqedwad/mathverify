@@ -19,7 +19,7 @@ from ..equiv.numeric import (num_equal, to_mp, certified_sign, certified_integer
 from ..equiv.symbolic import sym_equal
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 
 LAYER = "certify.domain"
 
@@ -41,8 +41,18 @@ def _outer_nodes(e, var, add):
             else:
                 body, bound = n.function, {lim[0] for lim in n.limits}
                 outer = [x for lim in n.limits for x in lim[1:]]
-            for c in definedness_conditions(body, var):
-                if not (getattr(c, "free_symbols", set()) & bound):
+            # the body is read on assumption-free symbols for its bound variables: the as-written parse
+            # keeps the declared symbol there, and with x declared positive sqrt(-x) in
+            # ∫_{-1}^{0} sqrt(-x) dx gave the closed condition `false` (-x >= 0), the expression
+            # read as defined nowhere and the empty solution set of y + ∫… = 2/3 certified (V16,
+            # 30 Sep 2026). Conditions on the bound variables are decided by _binder_conditions.
+            # (Symbols, not Dummies: an inner binder of the body keeps one cache key across readings.)
+            plain = {v: sp.Symbol(v.name) for v in bound if isinstance(v, sp.Symbol)}
+            with sp.evaluate(False):
+                body = body.xreplace(plain)
+            hidden = bound | set(plain.values())
+            for c in definedness_conditions(body, plain.get(var, var)):
+                if not (getattr(c, "free_symbols", set()) & hidden):
                     add(c)
             for c in _binder_conditions(n, var):
                 add(c)
@@ -66,6 +76,37 @@ DEFINEDNESS_UNDECIDED = Ne(definedness_undecided(), 0)
 
 def is_undecided(c) -> bool:
     return c == DEFINEDNESS_UNDECIDED
+
+
+class ForwardSpans(sp.Set):
+    """The values hi - lo + 1 of a Sum/Product range that runs forward or is empty: the nonnegative
+    ones. A negative span (the range reversed, hi < lo - 1) is neither in nor out: the value there is a
+    convention (SymPy's Karr sum, the empty sum of the Iverson reading), not the curriculum's, so no
+    point is dropped or kept on its account (DECISIONS §80). As `Contains(span, FORWARD_SPANS)` (see
+    _range_span_conditions) it stays standing at such a point, and `decide_membership` leaves it
+    undecided; read as `span >= 0`, it dropped n = -2 like an undefined point, and with n**2 = 4 the
+    value 3 of Σ_{k=1}^{n} k was certified (1 Oct 2026)."""
+    is_empty = False
+    is_finite_set = False
+
+    def _contains(self, other):
+        if isinstance(other, sp.Expr) and other.is_extended_nonnegative is True:
+            return sp.true
+        return None                                 # negative or open: undecided, never false
+
+    def _eval_is_superset(self, other):
+        try:
+            return True if other.is_subset(Interval(0, oo)) is True else None
+        except Exception:  # noqa: BLE001
+            return None
+
+
+FORWARD_SPANS = ForwardSpans()
+
+
+def is_range_span(c) -> bool:
+    """Is `c` the range condition of a Sum/Product (see ForwardSpans)?"""
+    return isinstance(c, sp.Contains) and c.args[1] == FORWARD_SPANS
 
 
 # The index values of a Sum/Product checked one by one, and the work one top-level reading may spend
@@ -193,6 +234,113 @@ def _index_region(lo, hi):
     return S.Integers, False
 
 
+def _range_span_conditions(bounds, idx) -> list[Any]:
+    """The range of a Sum/Product as written, for each (lo, hi): hi - lo + 1 >= 0 and, for finite
+    bounds, hi - lo an integer. hi = lo - 1 is the empty sum (0) or product (1), as
+    `normalize.parse._refuse_reversed_ranges` and `series_sum` read it; below that SymPy's Karr
+    convention gives a value the curriculum does not have (Σ_{k=1}^{-2} k = 1, Π_{k=3}^{0} k = 1/2), and
+    bounds not an integer apart step from the lower one (Σ_{k=1}^{7/2} k = 63/8). The parse does not
+    read such a range written with numbers; a symbolic bound took the value of its given: Σ_{k=1}^{n} k
+    with n = -2 was 1 and Σ_{k=1}^{n/2} k with n = 7 was 63/8, CORRECT (V16, 30 Sep 2026). Open on the
+    problem's symbols, the conditions drop such a value like any undefined point. A range reversed or
+    not an integer apart for certain (an outer index put into an inner bound: Σ_{k=1}^{5} Σ_{j=k}^{2} 1
+    at k = 4) is DEFINEDNESS_UNDECIDED, not `false`: its numeric twin is not read, and `false` would
+    read the expression as defined nowhere (an empty solution set certified).
+
+    Below the empty range the value is a convention, not undefined: hi - lo + 1 >= 0 is written as
+    `Contains(hi - lo + 1, FORWARD_SPANS)`, which a reversed point leaves undecided (see ForwardSpans).
+    The domain of a variable still keeps only the forward points (`Ctx.domain_for`: an expression is
+    compared where its value is no convention), and a candidate, root or solution where the range runs
+    backwards is neither kept nor dropped (`Ctx.reversed_region`, DECISIONS §80).
+
+    SymPy writes a nested sum as one binder, innermost limit first, whose inner bounds may name an
+    outer index (Sum(1, (j, k, 2), (k, 1, 5))): such a condition is decided over that index's values
+    (_outer_index_conditions); left open, it named the bound index as a problem symbol."""
+    out: list[Any] = []
+    for i, (lo, hi) in enumerate(bounds):
+        try:
+            with sp.evaluate(True):
+                conds = _one_range_conditions(lo, hi)
+                if conds is not None:
+                    conds = _outer_index_conditions(conds, i, bounds, idx)
+        except Exception:  # noqa: BLE001 - a range no relation reads is not proved to run forward
+            conds = None
+        if conds is None:
+            return [DEFINEDNESS_UNDECIDED]
+        out += [c for c in conds if c not in out]
+    return out
+
+
+def _outer_index_conditions(conds, i, bounds, idx) -> list[Any] | None:
+    """The range conditions of limit `i` with the outer indices they name decided over those indices'
+    values: at each point when the outer bounds are integers (at most _POINTS points), over the index
+    range otherwise (one index, a condition on it alone); None when that is not decided, or when one
+    fails at some point (the inner range is reversed there for certain)."""
+    out: list[Any] = []
+    for c in conds:
+        named = c.free_symbols & set(idx)
+        if not named:
+            out.append(c)
+            continue
+        pos = sorted(idx.index(v) for v in named)
+        if pos[0] <= i:
+            return None                             # a bound naming its own or an inner index
+        if all(bounds[p][0].is_Integer and bounds[p][1].is_Integer for p in pos):
+            ranges = [range(int(bounds[p][0]), int(bounds[p][1]) + 1) for p in pos]
+            count = 1
+            for r in ranges:
+                count *= len(r)
+            if count > _POINTS or not _spend(count):
+                return None
+            for point in itertools.product(*ranges):
+                v = c.xreplace({idx[p]: sp.Integer(x) for p, x in zip(pos, point)})
+                if v is sp.true:
+                    continue
+                if v is sp.false or not v.free_symbols or v.free_symbols & set(idx):
+                    return None
+                if v not in out:
+                    out.append(v)
+            continue
+        if len(pos) != 1 or c.free_symbols != named:
+            return None
+        lo, hi = bounds[pos[0]]
+        region = (sp.Range(int(lo), oo) if lo.is_Integer else sp.Range(-oo, int(hi) + 1) if hi.is_Integer
+                  else S.Integers)
+        # a superset of the index values: when the outer range is reversed its own condition fails
+        bad = _violations(c, idx[pos[0]], region)
+        if bad is None or bad.is_empty is not True:
+            return None
+    return out
+
+
+def _one_range_conditions(lo, hi) -> list[Any] | None:
+    """The open conditions of one range (see _range_span_conditions); None when it is reversed or
+    not an integer apart for certain, or not read."""
+    span = hi - lo + 1
+    if span.has(sp.nan, sp.zoo) or span.is_extended_real is False:
+        return None
+    conds = []
+    if span.is_extended_nonnegative is not True:
+        if span.is_extended_negative is True:
+            return None
+        conds.append(sp.Contains(span, FORWARD_SPANS))
+    if not (lo.has(oo, -oo) or hi.has(oo, -oo)):
+        gap = hi - lo
+        if gap.is_integer is False:
+            return None
+        if gap.is_integer is not True:
+            # on the bound itself when the other one is an integer: a domain reads Contains(n, Z)
+            conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, S.Integers))
+    out = []
+    for c in conds:
+        if c is sp.true:
+            continue
+        if c is sp.false or not c.free_symbols:
+            return None
+        out.append(c)
+    return out
+
+
 def _range_conditions(n, var) -> list[Any]:
     """Sum/Product: the term, as written, at every index. A finite range of at most _POINTS indices is
     checked index by index (the term's own conditions there: a failing one makes the sum undefined,
@@ -201,15 +349,20 @@ def _range_conditions(n, var) -> list[Any]:
     violation found there makes the sum undefined only where the term itself is undefined at it.
     Before 30 Sep 2026 these conditions were dropped (they name the index, not the problem's
     variables) and Σ_{k=-1}^{1000} k/k = 1002, Σ_{k<=0} 2^k k/k = 2 and Σ_{k=-1}^{n} k/k with n = 3
-    were certified; the first V14 checked only finite sums of at most 200 terms."""
+    were certified; the first V14 checked only finite sums of at most 200 terms.
+
+    The range itself comes first: see _range_span_conditions."""
     limits = n.limits
     if any(len(lim) != 3 for lim in limits):
         return [DEFINEDNESS_UNDECIDED]
+    bounds = [(_evaluated(lim[1]), _evaluated(lim[2])) for lim in limits]
     idx = [lim[0] for lim in limits]
+    spans = _range_span_conditions(bounds, idx)
+    if any(is_undecided(c) for c in spans):
+        return spans
     named, plain = _named_conditions(n.function, idx, var)
     if not named:
-        return []
-    bounds = [(_evaluated(lim[1]), _evaluated(lim[2])) for lim in limits]
+        return spans
     if all(lo.is_Integer and hi.is_Integer for lo, hi in bounds):
         ranges = [range(int(lo), int(hi) + 1) for lo, hi in bounds]
         count = 1
@@ -249,7 +402,7 @@ def _range_conditions(n, var) -> list[Any]:
                     _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var) is False for i in points):
                 return [sp.false]
         return [DEFINEDNESS_UNDECIDED]
-    return []
+    return spans
 
 
 def _declared_span(v):
@@ -262,6 +415,31 @@ def _declared_span(v):
     if v.is_negative or v.is_nonpositive:
         return (-oo, S.Zero)
     return None
+
+
+def _reachable(a, b):
+    """The points [a, b] can cover when a bound is symbolic: the hull of the values the bounds may
+    take, open at 0 when only a strict sign reaches it (x > 0 never makes 0 a bound); R when a
+    bound has no declared sign."""
+    parts = []
+    for v in (a, b):
+        if v.is_number:
+            if not (v.is_real or v in (oo, -oo)):
+                return S.Reals
+            parts.append(sp.FiniteSet(v) if v not in (oo, -oo) else S.EmptySet)
+        elif v.is_positive:
+            parts.append(Interval.open(0, oo))
+        elif v.is_nonnegative:
+            parts.append(Interval(0, oo))
+        elif v.is_negative:
+            parts.append(Interval.open(-oo, 0))
+        elif v.is_nonpositive:
+            parts.append(Interval(-oo, 0))
+        else:
+            return S.Reals
+    u = sp.Union(*parts)
+    lo, hi = u.inf, u.sup
+    return Interval(lo, hi, left_open=u.contains(lo) is not sp.true, right_open=u.contains(hi) is not sp.true)
 
 
 def _integral_conditions(n, var) -> list[Any]:
@@ -293,10 +471,20 @@ def _integral_conditions(n, var) -> list[Any]:
             region = Interval(b, a) if order == -1 else Interval(a, b)
         else:
             return [DEFINEDNESS_UNDECIDED] if named else []
+    symbolic = not (a.is_number and b.is_number)
     for c in named:
         bad = _violations(c, d, region)
         if bad is None or not (bad.is_empty is True or bad.is_finite_set is True):
             return [DEFINEDNESS_UNDECIDED]
+        if symbolic and bad.is_empty is not True:
+            # an improper point is the value's business only when a value is computed: with a
+            # symbolic bound the value is SymPy's parametric integral, and a derivative of it is
+            # taken by the fundamental theorem without it. diff(∫_1^x dt/t, x) = -1 had {-1}
+            # certified (∫_1^{-1} dt/t does not exist), and diff(∫_0^x dt/t, x) = 1 with x > 0 had
+            # {1} (V16, 30 Sep 2026). A point the bounds may reach leaves the integral undecided.
+            reach = _reachable(a, b)
+            if any(reach.contains(p) is not sp.false for p in bad):
+                return [DEFINEDNESS_UNDECIDED]
     return []
 
 
@@ -807,6 +995,21 @@ def in_domain(dom: sp.Set, c) -> bool | None:
         return None
 
 
+def membership_undecided(dom: sp.Set, c) -> bool:
+    """Does the membership of the constant `c` in `dom` rest on a number-set membership no check
+    decides: a gcd/lcm argument rational, a factorial argument natural (Ctx.domain_for cuts the domain
+    by them), at pi + E? `in_domain` then says None, which the callers read as inside, and the value
+    x + gcd(x, 2) - gcd(2, x) at x = pi + E was certified, and so was the root pi + E of
+    (x - pi - E)(x - 1/2) = gcd(x, 2) - gcd(2, x) (V16, 30 Sep 2026)."""
+    try:
+        r = dom.contains(c)
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(r, sp.Basic) or r is sp.true or r is sp.false:
+        return False
+    return any(decide_membership(*m.args) is None for m in r.atoms(sp.Contains))
+
+
 def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, list[tuple[Any, str]]]:
     """Return (kept, rejected[(candidate, reason)]) for candidate roots of `rel`."""
     conds = definedness_conditions(rel, var)
@@ -819,6 +1022,9 @@ def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, l
         d = in_domain(domain, c)
         if d is False:
             rejected.append((c, "outside_domain_of_discourse"))
+            continue
+        if d is None and membership_undecided(domain, c):
+            rejected.append((c, "definedness_undecided: membership in the domain"))
             continue
         bad = None
         for cond in conds:
@@ -1015,6 +1221,12 @@ def verify(ir, solution, ctx: Ctx):
             return unknown(LAYER, "domain_undecidable", 0, {"error": "definedness_unknown_as_written"},
                            flags=["cas_failed"])
         base = ctx.domain_for(var)
+        # the expression's own conditions are what domain_of_expression solves ([a, oo) for √(x − a))
+        unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions_strict(expr, var) or ())
+        if unbound:
+            # a condition on x that names a symbol no given fixes (x > b): read on ℝ, [-2, 2] was
+            # certified as the domain of √(4 − x²) under x > b (part vi, 30 Sep 2026)
+            return condition_not_applied(LAYER, unbound, t.ms)
         truth, ev = domain_of_expression(expr, var, base, ctx.timeout)
         if truth is None:
             return unknown(LAYER, "domain_undecidable", 0, ev, flags=["cas_failed"])

@@ -12,7 +12,7 @@ import sympy as sp
 from sympy import S, Eq, Ne, FiniteSet
 
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, closed_binding
 from .domain import definedness_conditions
 
 LAYER = "certify.wordproblem"
@@ -143,6 +143,39 @@ def _discourse_constraints(ctx: Ctx) -> list:
     return out
 
 
+class _GivenSystem(ValueError):
+    pass
+
+
+def _equation_givens(ctx: Ctx, rel, var, seeds: set, others: list) -> tuple[list, set]:
+    """The givens that constrain the equation, and every symbol the equation is tied to: a given
+    or a constraint (`others`: the variables' constraints, the domain of discourse) joins when it
+    shares a symbol with the equation, the claim (`seeds`) or one that joined (`a = 4` next to
+    x² = a; `x > 5` next to 2x = 4; `b = 0` next to the constraint x > b). Only the
+    single-variable inequalities in `var` were used before, so z3 read every other symbol of the
+    equation as free: the model {x: 0, a: 0} made the right {-2, 2} of x² = a with a = 4 "miss a
+    root", and x² + a² = 0 with a = 4 had {0} certified (third audit of 30 Sep 2026, N7). A second
+    equation in `var` makes a system, which this certificate does not solve (`_GivenSystem`)."""
+    rest = [(g, True) for g in ctx.givens() if g != rel] + [(c, False) for c in others]
+    syms = set(rel.free_symbols) | {var} | set(seeds)
+    used: list = []
+    grew = True
+    while grew:
+        grew = False
+        for item in list(rest):
+            fs = getattr(item[0], "free_symbols", set())
+            if fs & syms:
+                rest.remove(item)
+                if item[1]:
+                    used.append(item[0])
+                syms |= fs
+                grew = True
+    for g in used:
+        if isinstance(g, Eq) and var in g.free_symbols:
+            raise _GivenSystem(str(g))
+    return used, syms
+
+
 def _constraints(ctx: Ctx, extra_rels=None) -> list:
     rels = ctx.givens() + ctx.var_constraints() + _discourse_constraints(ctx) + list(extra_rels or [])
     # definedness of every expression appearing in the givens (sqrt radicand >= 0, denominators != 0)
@@ -211,14 +244,32 @@ def verify(ir, solution, ctx: Ctx):
             if var.name not in syms_info:
                 syms_info[var.name] = "real"
             try:
-                # the other single-variable givens that are not equations (x > 5 next to 2x = 4)
-                # restrict the solutions too; the algebra layer uses them the same way
-                extra = [g for g in ctx.givens() if not isinstance(g, Eq) and g.free_symbols == {var}]
-                cons = [rel] + extra + ctx.var_constraints() + _discourse_constraints(ctx)
+                # the givens restrict the solutions (x > 5 next to 2x = 4) and fix the parameters
+                # (a = 4 next to x² = a)
+                others = ctx.var_constraints() + _discourse_constraints(ctx)
+                extra, tied = _equation_givens(ctx, rel, var, claimed.free_symbols, others)
+                cons = [rel] + extra + others
             except _DomainUntranslatable as e:
                 return unknown(LAYER, f"domain_of_discourse_not_translatable: {e}")
+            except _GivenSystem as e:
+                return unknown(LAYER, f"given_equation_in_the_variable: {e}")
             for c in definedness_conditions(rel, var):
                 cons.append(c)
+            params = [g for g in extra if var not in g.free_symbols]
+            if params:
+                # contradictory givens (a = 4 and a = 9) leave no instance of the problem: a root
+                # z3 then finds "unsatisfiable" is no evidence against the claim
+                st, m = _check(params + others, syms_info, [], 4000)
+                if st == "unsupported":
+                    return unknown(LAYER, f"z3_unsupported: {m}", flags=["z3_unsupported"])
+                if st != "sat":
+                    return unknown(LAYER, f"givens_without_an_instance: {st}")
+            # A claimed root is checked for SOME value of the parameters (sat), the other roots for
+            # every value (unsat). The claim is the answer only where the givens pin each parameter
+            # to one value: with `a` free, {0} for x² + a² = 0 and {-√a, √a, 2} for x² = a were
+            # certified, true only at a = 0 and a = 4; so was {-2, 2} for x² = 4 under x > b.
+            pinned = {b[0] for b in map(closed_binding, extra + others) if b is not None}
+            free_params = sorted(s_.name for s_ in tied - pinned - {var})
             # exclude non-rational claimed roots (z3 works over exact rationals/algebraics)
             roots = list(claimed.args)
             cert: dict[str, Any] = {"roots": {}, "status": "unknown"}
@@ -239,7 +290,9 @@ def verify(ir, solution, ctx: Ctx):
                 cert["others"] = st
                 cert["other_model"] = m
                 if st == "unsat" and all_sat:
-                    cert["status"] = "certified"
+                    cert["status"] = "certified" if not free_params else "parameters_not_pinned"
+                    if free_params:
+                        cert["free_parameters"] = free_params
                 elif st == "sat":
                     cert["status"] = "missing_root"
                     cert["status_detail"] = m
@@ -258,4 +311,6 @@ def verify(ir, solution, ctx: Ctx):
         return unknown(LAYER, "ir_inconsistent_no_option_sat", t.ms, ev, flags=["ir_inconsistent"])
     if st == "not_unique":
         return unknown(LAYER, "target_not_unique", t.ms, ev, flags=["ir_incomplete"])
+    if st == "parameters_not_pinned":
+        return unknown(LAYER, "parameters_not_pinned_by_the_givens", t.ms, ev)
     return unknown(LAYER, "z3_undecided", t.ms, ev)
