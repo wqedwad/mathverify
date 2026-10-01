@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 30 Eylül 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` (`wqedwad/asd#13` birleşti, yedeksiz; dal `master` `aa67b20`'den yeniden başladı, birleşmedi; N1–N9, V16–V18, F9 kapandı, §76–§81). Sohbetler bulutta. Sıradaki iş parça parça (§3 adım 2).
+> **Son güncelleme: 30 Eylül 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` (`wqedwad/asd#13` birleşti, yedeksiz; dal `master` `aa67b20`'den yeniden başladı, birleşmedi; N1–N9, V16–V18, F9 kapandı, §76–§83; birleşmedi). Sohbetler bulutta. Sıradaki iş parça parça (§3 adım 2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -8,7 +8,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§82; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§83; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch
    origin master` (yerel `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **2936 passed / 5 skipped** (`d0c48ad`, düz `pytest`, Lean ısınması 414 s, toplam 1015 s)
@@ -57,7 +57,7 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
    yeniden koşuldu (DECISIONS §75, `denetim/2026-09-30/n19/sonda_n19.py`). **Bitti** (§76; birleşik hâlde sonda 84/88, 160 test, fark 0):
    (i) N2 + N4 + N6 + N3'ün eq adımı; (ii) N5; (iii) N7 + V15 S1'in denetçi örnekleri; (vi) başka sembollü kısıt; (v-a) V17; (v-b) V16, V18
    (§76–§78); Karr, sabitlenmiş sembollü toplam (§79); F9 (N1, N8) ve ters aralık (§80–§81; birleşik `65b699e`: 927 test, sonda 88/88,
-   fark 0); parça 10 (§82). **Sürüyor:** parça 11 (ters aralıkta adım reddi, mutasyon bakımı; §82). Sonra birleşik doğrulama, `--full`, PR.
+   fark 0); parça 10, 11 (§82–§83; son `5613bef`: 1039 test, sonda 88/88, fark 0). **Sıradaki:** `--full`, sonra kullanıcı onayıyla PR ve birleştirme.
 3. **F9 ve ters aralık** (DECISIONS §80–§81): kapandı. Açık kapsama: yalnız `vars.constraints` ile sabitlenen parametre UNKNOWN (§81).
 4. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 5. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
@@ -88,7 +88,7 @@ kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.2 Doğrulayıcı: bilinen sınırlar ve kapsama
 
-Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), ters aralık noktasında adım (§82, parça 11). Yanlış onaylar: V1. Ötekiler UNKNOWN (kapsama kaybı), kaçırılan adım (V2, V6) ya da bilinçli sınır.
+Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), (ters aralık noktasında adım §83'te kapandı). Yanlış onaylar: V1. Ötekiler UNKNOWN (kapsama kaybı), kaçırılan adım (V2, V6) ya da bilinçli sınır.
 
 - **V1. `tyt-prob-018`:** çözüm düzeyindeki tek yanlış onay (doğru ama gerekçesiz adım; kanıtlanmış adım L6
   kritiğini ezer; aynı sınıf: C'deki 12 aritmetiği doğru `compute` adımı, §63). Karar F4 ölçümüne bağlı
@@ -287,5 +287,5 @@ değişkenlerinin tam tablosu arşiv §9 ve `docs/BULUT.md` §5.
 ## 9. Nerede ne var
 
 Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
-`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §82); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`DECISIONS.md` (§1 kilitli kararlar, §7–§15 tarih sırasıyla, son §83); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
 `LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).
