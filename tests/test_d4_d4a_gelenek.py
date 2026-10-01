@@ -314,6 +314,67 @@ def test_convention_sets_are_never_false():
     assert convention_split(sp.Contains(x - 1, ZERO_POWER_BASE), x)[1] == sp.FiniteSet(1)
 
 
+def test_convention_split_closed_and_domain_of_expression():
+    from mathverify.certify.domain import MOD_DIVISOR, ODD_ROOT_BASE, convention_split, domain_of_expression
+    x = sp.Symbol("x", real=True)
+    assert convention_split(sp.Contains(sp.Integer(-5), MOD_DIVISOR), x) == (sp.S.EmptySet, sp.S.Reals)
+    assert convention_split(sp.Contains(sp.Integer(5), MOD_DIVISOR, evaluate=False), x) == (sp.S.Reals, sp.S.EmptySet)
+    assert convention_split(sp.Contains(sp.Integer(2), ODD_ROOT_BASE, evaluate=False), x) == (sp.S.Reals, sp.S.EmptySet)
+    dom, ev_ = domain_of_expression(x ** sp.Rational(1, 3), x)
+    assert dom is None and ev_.get("error") == "convention_dependent_domain"
+
+
+def test_convention_mode_of_the_equation_certificate():
+    # x**0·(x - 1)·x = 0: {0, 1} if 0**0 = 1, {1} if undefined; x**0 + x = 1: {0} or no solution
+    assert verdict(solve("x**0*(x - 1)*x = 0"), sol("{1}", kind="set")) == "UNKNOWN"
+    assert verdict(solve("x**0*(x - 1)*x = 0"), sol("{0, 1}", kind="set")) == "UNKNOWN"
+    assert verdict(solve("x**0*(x - 1)*x = 0"), sol("{0}", kind="set")) == "INCORRECT"   # misses 1
+    assert verdict(solve("x**0 + x = 1"), sol("{}", kind="set")) == "UNKNOWN"
+
+
+def test_odd_root_candidates_of_an_evaluation():
+    # x**(1/3) = x, x != 0: x = 1 (principal) or x in {-1, 1} (real root)
+    assert verdict(ev("x", [X], ["x**(1/3) = x", "x != 0"]), sol("1")) == "UNKNOWN"
+    assert verdict(ev("x", [X], ["x**(1/3) = x", "x != 0"]), sol("-1")) == "UNKNOWN"
+    _, st = step_statuses(ev("x**2", [X], ["x**(1/3) = x", "x != 0"]), sol("1", [("eq", "x >= 0")]))
+    assert st != ["verified"]
+
+
+def test_a_definitional_assignment_at_a_convention_point_is_not_refuted():
+    _, st = step_statuses(ev("x**0 + y", [X, {"name": "y", "domain": "real"}], ["y = 1"]),
+                          sol("2", [("eq", "x = 0")]))
+    assert st != ["refuted"]
+
+
+def test_set_claims_with_an_odd_root_of_a_negative_number():
+    q = {"task": {"kind": "solve_equation", "params": {"equation": "x**3 = -8", "var": "x"}}, "vars": [X],
+         "givens": [], "answer_shape": "set"}
+    assert verdict(q, sol("{(-8)**(1/3)}", kind="set")) == "UNKNOWN"     # was INCORRECT ("not real")
+    assert verdict(q, sol("{cbrt(-8)}", kind="set")) == "CORRECT"
+
+
+def test_comparison_engine_reads_odd_roots_both_ways():
+    from mathverify.equiv import answers_equivalent, scalar_equal
+    x = sp.Symbol("x", real=True)
+    c = 2 * (-1) ** sp.Rational(1, 3)
+    assert scalar_equal(c, -2) is None and scalar_equal(c, 1 + sp.sqrt(3) * sp.I) is None
+    assert scalar_equal(c, 5) is False
+    assert answers_equivalent(x ** sp.Rational(1, 3), sp.sign(x) * sp.Abs(x) ** sp.Rational(1, 3),
+                              shape="expression", domain={x: sp.S.Reals})[0] is None
+    assert answers_equivalent(x ** sp.Rational(1, 3), sp.sign(x) * sp.Abs(x) ** sp.Rational(1, 3),
+                              shape="expression", domain={x: sp.Interval(0, sp.oo)})[0] is True
+    der = {"task": {"kind": "derivative", "params": {"f": "cbrt(x)", "var": "x"}}, "vars": [X], "givens": [],
+           "answer_shape": "expression"}
+    assert verdict(der, sol("x**(-2/3)/3", kind="expression")) == "UNKNOWN"
+
+
+def test_z3_reads_integrality_inside_an_intersection():
+    from mathverify.certify.wordproblem import _set_as_relation
+    x = sp.Symbol("x", real=True)
+    rel = _set_as_relation(sp.Intersection(sp.S.Integers, sp.Interval(-10, 10), evaluate=False), x)
+    assert rel.has(sp.Contains)
+
+
 def test_lean_statement_refuses_conventions():
     from mathverify.formal.statement import build_statement
     assert build_statement(ev("0**0"), {"kind": "value", "payload": "1"}) is None

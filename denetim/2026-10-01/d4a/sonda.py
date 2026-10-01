@@ -472,6 +472,12 @@ def cases_s():
         ("evaluate -2, claim (-8)**(1/3)", ev("-2"), sol("(-8)**(1/3)"), UNK, None),
         ("evaluate -2, claim cbrt(-8)", ev("-2"), sol("cbrt(-8)"), OK, None),
         ("evaluate 3, claim (-8)**(1/3)", ev("3"), sol("(-8)**(1/3)"), NO, None),
+        ("solve x**3 = -8 -> {(-8)**(1/3)}", solve("x**3 = -8"), sset("{(-8)**(1/3)}"), UNK, None),
+        ("solve x**3 = -8 -> {cbrt(-8)}", solve("x**3 = -8"), sset("{cbrt(-8)}"), OK, None),
+        ("derivative of cbrt(x) -> x**(-2/3)/3", kind("derivative", {"f": "cbrt(x)", "var": "x"}, shape="expression"),
+         sol("x**(-2/3)/3", kind="expression"), UNK, None),
+        ("x**0*(x-1)*x = 0 -> {1}", solve("x**0*(x - 1)*x = 0"), sset("{1}"), UNK, None),
+        ("x**0*(x-1)*x = 0 -> {0}", solve("x**0*(x - 1)*x = 0"), sset("{0}"), NO, None),
         ("x = -2 given: x, claim (-8)**(1/3)", ev("x", [X], ["x = -2"]), sol("(-8)**(1/3)"), UNK, None),
         # x**0 is 1 wherever it is defined under either reading (like x/x): the simplification stands
         ("simplify x**0 -> 1", simp("x**0"), sol("1", kind="expression"), NOTNO, None),

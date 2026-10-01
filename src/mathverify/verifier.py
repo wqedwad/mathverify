@@ -324,10 +324,11 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     return flags
 
 
-def _claim_convention(solution: Solution, ctx) -> list[str]:
+def _claim_convention(solution: Solution, ctx, task_kind: str = "") -> list[str]:
     """The texts of the claimed answer that, read as written, hold a closed operation whose value is a
-    convention (`certify.domain.Convention` other than an odd root, which the comparison reads both
-    ways)."""
+    convention (`certify.domain.Convention`). An odd root of a negative number is compared under both
+    readings by the evaluate and simplify certificates (equiv.conventions); anywhere else it is read
+    one way: the root (-8)**(1/3) of x**3 = -8 was "not real" and {(-8)**(1/3)} INCORRECT (part d4a)."""
     from .certify.domain import Convention, definedness_conditions
     from .normalize.parse import parse_as_written
     payload = solution.claimed_answer.payload
@@ -344,8 +345,9 @@ def _claim_convention(solution: Solution, ctx) -> list[str]:
             conds = definedness_conditions(w, None) if w is not None else []
         except Exception:  # noqa: BLE001 - not read as written: the certificates read it
             continue
-        if any(isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and c.args[1].kind != "odd_root"
-               and not c.free_symbols for c in conds):
+        both_ways = task_kind in ("evaluate", "simplify_expression")
+        if any(isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and not c.free_symbols
+               and not (both_ways and c.args[1].kind == "odd_root") for c in conds):
             out.append(txt)
     return out
 
@@ -694,7 +696,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     # The claim itself, read as written, holds a value that is a convention (0**0, C(2, 5), Mod(7, -5)):
     # the parse computed it SymPy's way, and "0**0" for 5**0 was certified like 1 (part d4a). An odd
     # root of a negative number is compared under both readings instead (equiv.conventions).
-    conv = _claim_convention(solution, ctx)
+    conv = _claim_convention(solution, ctx, problem_ir.task.kind)
     if conv:
         layers.append(unknown("intake.definedness", f"claim_value_is_a_convention: {conv[:3]}",
                               flags=["claim_convention"]))

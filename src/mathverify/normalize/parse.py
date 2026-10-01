@@ -2092,9 +2092,6 @@ def parse_domain(spec: str | None, var, ns: dict[str, Any] | None = None) -> sp.
         return S.Reals
     s = preclean(str(spec))
     s = re.sub(r"^\s*" + re.escape(str(var)) + r"\s+in\s+", "", s)
-    named = number_set_named(s)
-    if named is not None:
-        return named
     # relational spec like "x > 0 and x != 1"
     if any(op in s for op in ("<", ">", "!=")) and not s.startswith(("Interval", "Union", "(", "[")):
         conds = re.split(r"\s+and\s+|\s*&\s*|\s*∧\s*", s)

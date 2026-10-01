@@ -110,12 +110,14 @@ MUTATIONS = [
     ("P02 root esas değer", PARSE, '"root": _real_root,', '"root": sp.root,', T),
     ("P03 LaTeX kök esas değer", PARSE, "                if func.FUNC_SQRT() and func.root:", "                if False:", T),
     ("P04 ∛ okunmaz", PARSE, '"∛": "cbrt", ', "", T),
-    ("P05 ℕ⁺ okunmaz", PARSE, "    named = number_set_named(s)\n    if named is not None:\n        return named\n    # relational",
-     "    named = None\n    if named is not None:\n        return named\n    # relational", T),
+    ("P05 ℕ⁺ okunmaz", PARSE, "    named = number_set_named(s)\n    if named is not None:\n        return named\n    if s.startswith",
+     "    named = None\n    if named is not None:\n        return named\n    if s.startswith", T),
     # the verifier
     ("V01 ℕ tek okunur", VER, "    if zero is None:\n        return layers, flags", "    if True:\n        return layers, flags", T),
     ("V02 okumalar ayrışınca da karar", VER, "    if v_pos == v_zero:", "    if True:", T),
     ("V03 çıplak N yeniden yazılmaz", VER, "        if prev_ok and next_ok:", "        if False:", T),
+    ("V05 kümede tek kök tek okunur", VER, "               and not (both_ways and c.args[1].kind == \"odd_root\") for c in conds):",
+     "               and c.args[1].kind != \"odd_root\" for c in conds):", T),
     ("V04 iddianın kapalı geleneği okunmaz", VER, "    if conv:\n        layers.append(", "    if False:\n        layers.append(", T),
     # Lean
     ("L01 Lean deyimi gelenekte kurulur", LEAN, "        _conventions_gate(obj, claimed_answer, ns)\n", "", T),
