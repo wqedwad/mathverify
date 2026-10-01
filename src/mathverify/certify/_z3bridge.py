@@ -89,6 +89,12 @@ class _Tr:
                 return z3.RealVal(1) / r
             if isinstance(ex, sp.Rational):
                 p, q = int(ex.p), int(ex.q)
+                if q % 2 == 1 and base.is_extended_nonnegative is not True:
+                    # t**q == base**p is the real root; at a negative base the power is also read as
+                    # the principal complex value, a convention (certify.domain.Convention, part d4a).
+                    # A symbol's base reaches here only past the written condition, which z3 does
+                    # not read either.
+                    raise Unsupported(f"odd root of a base that may be negative: {e}")
                 t = self._fresh_real("root")
                 # t^q == base^p, t >= 0 for even q (principal root)
                 bp = self.tr(base ** p) if p > 0 else z3.RealVal(1) / self.tr(base ** (-p))
@@ -117,6 +123,10 @@ class _Tr:
                 r = z3.If(a < r, a, r)
             return r
         if isinstance(e, sp.Mod):
+            if e.args[1].is_positive is not True:
+                # z3's % is Euclidean, SymPy's Mod floored: they agree only for a positive divisor; with
+                # Mod(7, m) and m fixed at -5 by other givens z3 certified 2 where SymPy reads -3 (CAP-M1)
+                raise Unsupported(f"Mod with a divisor not proved positive: {e}")
             a, b = self.tr(e.args[0]), self.tr(e.args[1])
             if not (z3.is_int(a) and z3.is_int(b)):
                 raise Unsupported("Mod on non-integers")
@@ -164,9 +174,21 @@ class _Tr:
             return z3.Or(*[self.tr(a) for a in e.args])
         if isinstance(e, sp.Not):
             return z3.Not(self.tr(e.args[0]))
+        if isinstance(e, sp.Contains) and e.args[1] in (sp.S.Integers, sp.S.Naturals, sp.S.Naturals0):
+            # integrality, from a domain of discourse (certify.wordproblem._set_as_relation): dropped
+            # before, so over ℤ z3 solved floor(x) + x = 5/2 on the reals and certified 3/2 (CAP-D1)
+            a = self.tr(e.args[0])
+            isint = z3.BoolVal(True) if z3.is_int(a) else z3.IsInt(a)
+            if e.args[1] == sp.S.Integers:
+                return isint
+            return z3.And(isint, a >= (1 if e.args[1] == sp.S.Naturals else 0))
         if isinstance(e, sp.factorial) and e.args[0].is_Integer:
             return z3.IntVal(int(e))
         if isinstance(e, sp.binomial) and all(a.is_Integer for a in e.args):
+            n_, r_ = (int(a) for a in e.args)
+            if not 0 <= r_ <= n_:
+                # C(-2, 2) = 3 and C(2, 5) = 0 are extensions, not the curriculum's (part d4a)
+                raise Unsupported(f"binomial outside 0 <= r <= n: {e}")
             return z3.IntVal(int(e))
         if e.is_number:
             # an exact rational written another way. `nsimplify(rational=True)` alone is a

@@ -77,20 +77,29 @@ def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_va
         # 3a + 5b = 41 over positive integers allows a + b ∈ {9, 11, 13}; with options
         # {9, 10, 12} only 9 was satisfiable and "a + b = 9" was certified CORRECT. The claim is
         # certified only when every other value is also excluded (other_unsat).
-        if out["claim_sat"] is True and out["other_unsat"] is True:
-            out["status"] = "certified"
-        elif out["claim_sat"] is True and out["other_unsat"] is False:
-            out["status"] = "not_unique"
-        elif out["claim_sat"] is False:
-            out["status"] = "refuted"
+        out["status"] = _claim_status(out)
         return out
-    if out["claim_sat"] is True and out["other_unsat"] is True:
-        out["status"] = "certified"
-    elif out["claim_sat"] is False:
-        out["status"] = "refuted"
-    elif out["claim_sat"] is True and out["other_unsat"] is False:
-        out["status"] = "not_unique"
+    out["status"] = _claim_status(out)
     return out
+
+
+def _claim_status(out: dict[str, Any]) -> str:
+    """The claim's status from sat(givens ∧ target = claim) and unsat(givens ∧ target ≠ claim). An
+    unsatisfiable claim refutes only when the givens have an instance (the second check found one):
+    with no instance at all (x = 1 and x = 2; x² = 4 and x > 2; a translation the parse read as
+    False) every claim was "refuted" and the payload INCORRECT, while the same answer by its option
+    letter was UNKNOWN (fourth audit of 1 Oct 2026, CAP-Z1). Hypotheses that hold nowhere refute
+    nothing (principle 5): the IR is inconsistent."""
+    if out["claim_sat"] is True and out["other_unsat"] is True:
+        return "certified"
+    if out["claim_sat"] is True and out["other_unsat"] is False:
+        return "not_unique"
+    if out["claim_sat"] is False:
+        if out["other_unsat"] is True:
+            return "ir_inconsistent"
+        if out["other_unsat"] is False:
+            return "refuted"
+    return out.get("status", "unknown")
 
 
 class _DomainUntranslatable(ValueError):
@@ -98,7 +107,22 @@ class _DomainUntranslatable(ValueError):
 
 
 def _set_as_relation(dom, v):
-    """A domain set as a z3-translatable relation in v (finite bounds only)."""
+    """A domain set as a z3-translatable relation in v (finite bounds only). The integers, ℕ and ℕ₀ are
+    the membership `Contains(v, set)`, which the bridge states with IsInt: read as `true` (and dropped
+    from an Intersection), the integrality of the domain of discourse never reached z3, and over ℤ the
+    real solution 3/2 of floor(x) + x = 5/2 was certified (fourth audit of 1 Oct 2026, CAP-D1)."""
+    if dom in (S.Integers, S.Naturals, S.Naturals0):
+        return sp.Contains(v, dom, evaluate=False)
+    if isinstance(dom, sp.Range):
+        if dom.step not in (1, -1):
+            raise _DomainUntranslatable(str(dom))
+        lo, hi = (dom.inf, dom.sup)
+        parts = [sp.Contains(v, S.Integers, evaluate=False)]
+        if lo != -sp.oo:
+            parts.append(sp.Ge(v, lo, evaluate=False))
+        if hi != sp.oo:
+            parts.append(sp.Le(v, hi, evaluate=False))
+        return sp.And(*parts)
     if dom == S.Reals:
         return sp.true
     if dom is S.EmptySet:
@@ -115,12 +139,10 @@ def _set_as_relation(dom, v):
     if isinstance(dom, sp.Union):
         return sp.Or(*[_set_as_relation(a, v) for a in dom.args])
     if isinstance(dom, sp.Intersection):
-        return sp.And(*[_set_as_relation(a, v) for a in dom.args if a not in (S.Integers,)])
+        return sp.And(*[_set_as_relation(a, v) for a in dom.args])
     if isinstance(dom, sp.Complement) and isinstance(dom.args[1], sp.FiniteSet):
         return sp.And(_set_as_relation(dom.args[0], v),
                       *[sp.Ne(v, p, evaluate=False) for p in dom.args[1].args])
-    if dom in (S.Integers,):
-        return sp.true
     raise _DomainUntranslatable(str(dom))
 
 
@@ -210,6 +232,11 @@ def verify(ir, solution, ctx: Ctx):
                 return err
             if isinstance(claimed, sp.Set) or (hasattr(claimed, "free_symbols") and claimed.free_symbols):
                 return unknown(LAYER, "claimed_not_scalar")
+            from ..equiv.conventions import odd_root_powers
+            if odd_root_powers(claimed):
+                # (-8)**(1/3): the real root or the principal value. SymPy reads Eq(x, 2*(-1)**(1/3))
+                # as False for a real x before z3 sees it, and the real root -2 was refuted (part d4a)
+                return unknown(LAYER, "claimed_value_is_a_convention")
             options = None
             if ir.options:
                 options = {}
@@ -218,6 +245,8 @@ def verify(ir, solution, ctx: Ctx):
                         options[letter] = ctx.option_value(letter)
                     except Exception:
                         options[letter] = None
+                    if options[letter] is not None and odd_root_powers(options[letter]):
+                        options[letter] = None          # a convention: not read (see the claim above)
             try:
                 cons = _constraints(ctx)
             except _DomainUntranslatable as e:
@@ -308,7 +337,9 @@ def verify(ir, solution, ctx: Ctx):
     if st == "ir_incomplete":
         return unknown(LAYER, "ir_incomplete_multiple_options_sat", t.ms, ev, flags=["ir_incomplete"])
     if st == "ir_inconsistent":
-        return unknown(LAYER, "ir_inconsistent_no_option_sat", t.ms, ev, flags=["ir_inconsistent"])
+        why = "ir_inconsistent_no_option_sat" if ev["z3"].get("sat_options") == [] and ir.options \
+            else "ir_inconsistent_givens_without_an_instance"
+        return unknown(LAYER, why, t.ms, ev, flags=["ir_inconsistent"])
     if st == "not_unique":
         return unknown(LAYER, "target_not_unique", t.ms, ev, flags=["ir_incomplete"])
     if st == "parameters_not_pinned":

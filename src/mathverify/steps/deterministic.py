@@ -109,6 +109,17 @@ def _holds(rel, point: dict) -> bool | None:
     return None
 
 
+def _at_convention(point: dict, ctx: Ctx) -> bool:
+    """Is a coordinate of the point outside its symbol's domain only because a value of the problem is a
+    convention there (`Ctx.convention_region`)?"""
+    for s_, v in point.items():
+        if not isinstance(s_, sp.Symbol) or v.free_symbols or ctx.ns.get(s_.name) != s_:
+            continue
+        if in_domain(ctx.domain_for(s_), v) is False and in_domain(ctx.convention_region(s_), v) is not False:
+            return True
+    return False
+
+
 def _in_domains(ctx: Ctx, point: dict) -> bool:
     for s_, v in point.items():
         if v.free_symbols:
@@ -163,6 +174,31 @@ def _compare_domains(free, ctx: Ctx, doms: dict | None) -> dict:
     """The set each free symbol of a `compute` claim is compared on: `doms`' when it gives one (the region
     the premises leave, `_on_premises`), else the symbol's domain."""
     return {s_: (doms or {}).get(s_, ctx.domain_for(s_) if s_.name in ctx.ns else S.Reals) for s_ in free}
+
+
+def _verified_where_conventions(claim, ctx: Ctx, status: str, ev: dict) -> tuple[str, dict]:
+    """A `compute` claim verified as an identity on its symbols' domains, which leave out the points where
+    the value of a problem expression is a convention (`Ctx.convention_region`): an instance of the problem
+    may lie there. Under the given x**(1/3) = x the real root makes x = -1 an instance, and "Abs(x) = x",
+    verified on [0, oo), was a verified step (fourth audit, D4-ADIM-K). Checked again with those points;
+    verified only when it holds there too."""
+    doms: dict = {}
+    for s_ in getattr(claim, "free_symbols", set()):
+        if ctx.ns.get(s_.name) != s_:
+            continue
+        reg = ctx.convention_region(s_)
+        try:
+            empty = reg.is_empty
+        except Exception:  # noqa: BLE001
+            empty = None
+        if empty is not True:
+            doms[s_] = sp.Union(ctx.domain_for(s_), reg)
+    if not doms:
+        return status, ev
+    s2, ev2 = _check_compute(claim, ctx, doms=doms)
+    if s2 == "verified":
+        return status, ev
+    return "unknown", {**ev, "reason": "not_verified_where_a_value_is_a_convention", "recheck": ev2}
 
 
 def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict]:
@@ -397,6 +433,22 @@ def _holds_exactly(p, point: dict, ctx: Ctx) -> bool | None:
     return _decide(p, point, ctx)
 
 
+def _solved_both_readings(p, v, ctx: Ctx) -> sp.Set | None:
+    """The solution set over ℝ of the relation `p` on `v`, under both readings of an odd root written as a
+    power (SymPy solves on the principal branch, the curriculum reads the real root: x**(1/3) = x is
+    {0, 1} and {-1, 0, 1}), their union; None when one is not solved exactly. The principal branch alone
+    left out -1, and "Abs(x) = x" was verified under x**(1/3) = x (fourth audit, D4-ADIM-K); a point there
+    is a convention (`Ctx.convention_region`) and decides nothing."""
+    from ..equiv.numeric import real_odd_roots
+    out = None
+    for q in dict.fromkeys([p, real_odd_roots(p)]):
+        r = sb_run("mathverify.sandbox.ops:solveset_in", q, v, S.Reals, timeout=ctx.timeout)
+        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+            return None
+        out = r.value if out is None else sp.Union(out, r.value)
+    return out
+
+
 def _confined_values(v, rels: list, ctx: Ctx) -> list | None:
     """The values of `v` its domain (with the points where a range of the problem runs backwards) and the
     relations `rels` on `v` alone leave, when they are finitely many exact real numbers; None otherwise.
@@ -405,10 +457,10 @@ def _confined_values(v, rels: list, ctx: Ctx) -> list | None:
     region = sp.Union(ctx.domain_for(v), ctx.reversed_region(v))
     narrowed = False
     for p in rels:
-        r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
-        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+        sol = _solved_both_readings(p, v, ctx)
+        if sol is None:
             continue
-        region = sp.Intersection(region, r.value)
+        region = sp.Intersection(region, sol)
         narrowed = True
     if not narrowed:
         return None
@@ -532,17 +584,21 @@ def _counterexample_point(ev: dict, syms) -> dict | None:
 
 
 def _range_spans(claim) -> list:
-    """The range conditions of the claim's own Sums and Products that name a symbol: `Contains(hi - lo + 1,
-    FORWARD_SPANS)` (`certify.domain.is_range_span`), which holds where the range runs forward or is empty
-    and is undecided where it runs backwards (hi < lo - 1)."""
-    if not isinstance(claim, sp.Basic) or not claim.has(sp.Sum, sp.Product):
+    """The convention conditions of the claim that name a symbol (`certify.domain.is_convention`): the
+    range of its own Sums and Products, `Contains(hi - lo + 1, FORWARD_SPANS)`, which holds where the range
+    runs forward or is empty and is undecided where it runs backwards (hi < lo - 1); and the base of an
+    odd root written as a power, of b**0, the arguments of C(n, r) and the divisor of Mod
+    (`certify.domain.Convention`, part d4a), undecided where the value is a convention."""
+    if not isinstance(claim, sp.Basic) or not claim.has(sp.Sum, sp.Product, sp.Pow, sp.binomial, sp.Mod):
         return []
-    from ..certify.domain import definedness_conditions, is_range_span
+    from ..certify.domain import definedness_conditions, is_value_convention
     try:
         conds = definedness_conditions(claim, None)
     except Exception:  # noqa: BLE001 - no conditions read: the claim is refuted as before
         return []
-    return [c for c in conds if is_range_span(c) and c.free_symbols]
+    # a closed one is left standing only where it is undecided (Mod(7, -5) = 2): no point decides it.
+    # Where the other reading is "undefined" (0**0, C(2, 5)) a refutation stands (is_value_convention)
+    return [c for c in conds if is_value_convention(c)]
 
 
 def _runs_backwards_at(spans: list, point: dict) -> bool:
@@ -653,9 +709,9 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
         dom, rev = ctx.domain_for(q), ctx.reversed_region(q)
         for p in direct:
             if p.free_symbols == {q} and isinstance(p, sp.core.relational.Relational):
-                r = sb_run("mathverify.sandbox.ops:solveset_in", p, q, S.Reals, timeout=ctx.timeout)
-                if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet):
-                    dom, rev = sp.Intersection(dom, r.value), sp.Intersection(rev, r.value)
+                sol = _solved_both_readings(p, q, ctx)
+                if sol is not None:
+                    dom, rev = sp.Intersection(dom, sol), sp.Intersection(rev, sol)
         if dom != ctx.domain_for(q):
             region[q] = dom
         back.append(rev)
@@ -874,15 +930,25 @@ def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None
     if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
         return None, False, False
     region = ctx.domain_for(v) if v.name in ctx.ns else S.Reals
+    # the points where a value of the problem is a convention: an instance there (x = -1 of
+    # x**(1/3) = x under the real root) is neither in nor out, so nothing is proved while one may exist
+    conv = ctx.convention_region(v) if v.name in ctx.ns else S.EmptySet
     for p in premises:
-        r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
-        if not r.ok or r.value.has(sp.ConditionSet):
+        sol = _solved_both_readings(p, v, ctx)
+        if sol is None:
             return None, False, False
-        region = sp.Intersection(region, r.value)
+        region = sp.Intersection(region, sol)
+        conv = sp.Intersection(conv, sol)
     fail = _fail_set(claim, v, region, ctx)
     if fail is None:
         return None, False, False
     if fail is S.EmptySet:
+        try:
+            clear = conv.is_empty is True
+        except Exception:  # noqa: BLE001
+            clear = False
+        if not clear:
+            return None, False, False
         e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
         return None, bool(e.ok and e.value is False), bool(e.ok and e.value is True)
     spans = _range_spans(claim)
@@ -981,7 +1047,8 @@ def _outside_domain(claim, ctx: Ctx) -> bool:
     (v,) = claim.free_symbols
     if ctx.ns.get(v.name) != v:
         return False
-    dom = ctx.domain_for(v)
+    # a point where a value of the problem is a convention (x = 0 next to x**0) is not outside it
+    dom = sp.Union(ctx.domain_for(v), ctx.convention_region(v))
     for part in (claim.args if isinstance(claim, Or) else (claim,)):
         r = sb_run("mathverify.sandbox.ops:solveset_in", part, v, dom, timeout=ctx.timeout)
         if not r.ok or r.value.has(sp.ConditionSet):
@@ -1326,10 +1393,13 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
             return "unknown", {**ev, "_window_without_instance": True}
         if len(points) < 3 and premises:
             return "unknown", {"reason": "no_premise_satisfying_points", **ev}
-    checked = inside = outside = backwards = 0
+    checked = inside = outside = backwards = at_convention = 0
     spans = _range_spans(claim)
     for pt in points:
         if not _in_domains(ctx, pt):
+            # a solution where a value of the problem is a convention (n = -2 of n**2 = 4 next to
+            # C(n, 2)) is neither an instance nor excluded: nothing is verified while one exists
+            at_convention += _at_convention(pt, ctx)
             continue
         if any(_holds(p, pt) is False for p in others):
             continue
@@ -1355,8 +1425,10 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
         return "unknown", {**ev, "_window_without_instance": True}
     ev["points_checked"] = checked
     if checked and checked == len([p for p in points if _in_domains(ctx, p)]):
-        if exhaustive:
+        if exhaustive and not at_convention:
             return "verified", ev
+        if at_convention:
+            ev["convention_points"] = at_convention
         ev["reason"] = "no_counterexample_at_sampled_points"
     return "unknown", ev
 
@@ -1507,6 +1579,28 @@ def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
         conds = definedness_conditions(w, None)
         # a binder whose body is not proved to exist (DEFINEDNESS_UNDECIDED) is not verified either
         return any(c is sp.false for c in conds) or closed_condition_undecided(conds)
+    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
+        return False
+
+
+def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
+    """Does the claim, read AS WRITTEN, hold a closed operation whose value is a convention with another
+    value (`certify.domain.is_value_convention`: Mod(7, -5), (-8)**(1/3)) left standing? The value parse
+    computed it SymPy's way before any check saw it. 0**0 and C(2, 5) are 1 and 0 or undefined: a claim
+    refuted with SymPy's value is not true under the other reading either."""
+    from ..certify.domain import definedness_conditions, is_value_convention
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    try:
+        names = _check_safe(preclean(_strip_invisible(text)), ns)
+    except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
+        names = []
+    if names:
+        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+    try:
+        w = parse_as_written(text, ns)
+        if w is None:
+            return False
+        return any(is_value_convention(c) and not c.free_symbols for c in definedness_conditions(w, None))
     except Exception:  # noqa: BLE001 - no reading as written: nothing is added
         return False
 
@@ -1720,6 +1814,8 @@ def check_steps(ir, solution, ctx: Ctx):
             try:
                 if st.kind == "compute":
                     status, ev = _check_compute(claim, ctx)
+                    if status == "verified":
+                        status, ev = _verified_where_conventions(claim, ctx, status, ev)
                     if status == "refuted" or (status == "unknown" and ev.get("reason") == "parametric_form"):
                         # the identity failed; its counterexample is no instance of the problem when
                         # the premises pin every symbol of the claim (principle 5). An integral with a
@@ -1771,6 +1867,10 @@ def check_steps(ir, solution, ctx: Ctx):
                         chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
             except Exception as e:  # noqa: BLE001
                 status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
+            if status == "refuted" and _convention_as_written(st.claim, step_ns):
+                # a closed value of the claim is a convention (Mod(7, -5): -3 floored, 2 Euclidean);
+                # SymPy's reading refutes nothing (part d4a, DECISIONS §80)
+                status, ev = "unknown", {"reason": "claim_value_is_a_convention", "withdrawn": ev}
             if status == "refuted" and _refuted_where_backwards(claim, ev):
                 # the counterexample sits where a range of the claim runs backwards: the value SymPy
                 # refuted there is Karr's convention, not the curriculum's (part 11, DECISIONS §80)

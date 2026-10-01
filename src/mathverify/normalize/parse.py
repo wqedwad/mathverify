@@ -443,6 +443,24 @@ class arccot(sp.Function):  # noqa: N801 - the name is the notation
         return True if self.args[0].is_extended_real else None
 
 
+def _real_root(b, n=3, *k, **_kw):
+    """A root WRITTEN as a root (`cbrt`, `root(b, n)`, `real_root`, `\\sqrt[n]{b}`, ∛) of odd index n: the
+    real root, sign(b)·|b|^(1/n) (∛(-8) = -2), the curriculum's reading. SymPy's cbrt and root are the
+    principal complex value, which is also what b**(1/3) is: (-8)**(1/3), cbrt(-8) and root(-8, 3) were
+    one expression read under two conventions, and both -2 and 1 + √3 i were certified (fourth audit of
+    1 Oct 2026, CAP-C1). The power notation b**(p/q) keeps its own node: at a negative base its value is a
+    convention (certify.domain.Convention). An even index (√ itself) or a branch index `k` is SymPy's root."""
+    n = sp.sympify(n)
+    ni = int(n) if isinstance(n, Integer) else None        # Python ints: read as written, n > 1 is a Gt
+    if not k and ni is not None and ni > 1 and ni % 2 == 1:
+        return sp.sign(b) * sp.Abs(b) ** Rational(1, ni)
+    return sp.root(b, n, *k)
+
+
+def _cbrt(b, **_kw):           # `evaluate=False` is passed by a parse as written
+    return _real_root(b, 3)
+
+
 _SAFE_NAMES: dict[str, Any] = {
     # constants
     "pi": pi, "E": E, "e": E, "I": I, "i": I, "oo": oo, "inf": oo, "zoo": zoo, "nan": nan,
@@ -451,7 +469,8 @@ _SAFE_NAMES: dict[str, Any] = {
     "asin": sp.asin, "acos": sp.acos, "atan": sp.atan, "acot": arccot, "atan2": sp.atan2,
     "arcsin": sp.asin, "arccos": sp.acos, "arctan": sp.atan, "arccot": arccot,
     "sinh": sp.sinh, "cosh": sp.cosh, "tanh": sp.tanh,
-    "exp": sp.exp, "log": sp.log, "ln": sp.log, "sqrt": sp.sqrt, "cbrt": sp.cbrt, "root": sp.root,
+    "exp": sp.exp, "log": sp.log, "ln": sp.log, "sqrt": sp.sqrt, "cbrt": _cbrt, "root": _real_root,
+    "real_root": _real_root,
     "Abs": sp.Abs, "abs": sp.Abs, "floor": sp.floor, "ceiling": sp.ceiling, "ceil": sp.ceiling,
     "frac": sp.frac, "sign": sp.sign, "Mod": sp.Mod, "mod": sp.Mod,
     "gcd": _integer_op(gcd), "lcm": _integer_op(lcm), "igcd": _integer_only_op(gcd, "igcd"),
@@ -682,7 +701,7 @@ def _written_call(fn, ns, depth=0):
 # ----------------------------------------------------------------------------
 _UNICODE_MAP = {
     "π": "pi", "∞": "oo", "·": "*", "×": "*", "÷": "/", "−": "-", "–": "-", "—": "-",
-    "≤": "<=", "≥": ">=", "≠": "!=", "√": "sqrt", "∅": "EmptySet", "∪": " U ", "∩": " N ",
+    "≤": "<=", "≥": ">=", "≠": "!=", "√": "sqrt", "∛": "cbrt", "∅": "EmptySet", "∪": " U ", "∩": " N ",
     "²": "**2", "³": "**3", "⁴": "**4", "½": "(1/2)", "¼": "(1/4)", "¾": "(3/4)", "⅓": "(1/3)",
     "ℝ": "Reals", "ℤ": "Integers", "ℕ": "Naturals", "∈": " in ",
 }
@@ -691,11 +710,11 @@ _UNICODE_MAP = {
 # globally (it would silently read `zzz` as `z*z*z`). So the product is made explicit only
 # where a digit or a closing bracket meets a unicode VALUE symbol, which is never anything but
 # a product. Measured: 4 of 5 recovered trig answer sets were unparseable for exactly this.
-_UNI_VALUE_RE = re.compile(r"([0-9)\]])\s*([π∞√ℝℤℕ∅])")
+_UNI_VALUE_RE = re.compile(r"([0-9)\]])\s*([π∞√∛ℝℤℕ∅])")
 _DEG_NUM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:°|\bderece\b|\bdeg\b)")
 _DEG_PAREN_RE = re.compile(r"\(([^()]*)\)\s*°")
 _PCT_RE = re.compile(r"%\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*%")
-_SQRT_BARE_RE = re.compile(r"sqrt\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)(?![\w(])")
+_SQRT_BARE_RE = re.compile(r"(sqrt|cbrt)\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)(?![\w(])")
 
 
 def _strip_invisible(s: str) -> str:
@@ -738,7 +757,7 @@ def preclean(s: str) -> str:
     s = _DEG_PAREN_RE.sub(r"((\1)*pi/180)", s)
     s = _DEG_NUM_RE.sub(r"((\1)*pi/180)", s)
     s = _PCT_RE.sub(lambda m: f"(({m.group(1) or m.group(2)})/100)", s)
-    s = _SQRT_BARE_RE.sub(r"sqrt(\1)", s)           # "sqrt 3" -> sqrt(3)
+    s = _SQRT_BARE_RE.sub(r"\1(\2)", s)            # "sqrt 3" -> sqrt(3), "∛8" -> cbrt(8)
     s = re.sub(r"\bln\s*\(", "log(", s)
     s = s.replace("^", "**")
     return s
@@ -1473,6 +1492,14 @@ def _latex2sympy(s: str):
                                                     normalize_latex)
     if _LATEX_CONVERTER is None:
         class _TwoSidedLimits(_Latex2Sympy):
+            def convert_func(self, func):
+                # \sqrt[3]{b}: a root written as a root is the real root (_real_root, part d4a)
+                if func.FUNC_SQRT() and func.root:
+                    r = self.convert_expr(func.root)
+                    if isinstance(r, Integer) and int(r) > 1 and int(r) % 2 == 1:
+                        return _real_root(self.convert_expr(func.base), r)
+                return super().convert_func(func)
+
             def handle_limit(self, func):
                 lim = super().handle_limit(func)
                 sub = func.limit_sub()
@@ -1946,16 +1973,37 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
 _INTERVAL_RE = re.compile(r"^\s*([\(\[])\s*(.+?)\s*[,;]\s*(.+?)\s*([\)\]])\s*$")
 
 
+_NUMBER_SET_NAMES = {
+    "R": S.Reals, "Reals": S.Reals, "Z": S.Integers, "Integers": S.Integers,
+    # ℕ, N and Naturals: {1, 2, ...} here; whether 0 belongs is a convention (the Turkish curriculum and
+    # ISO 80000-2 include it), so the verifier reads a problem that writes them both ways and decides
+    # only when the two verdicts agree (verifier._naturals_zero_reading, part d4a)
+    "N": S.Naturals, "Naturals": S.Naturals,
+    "N+": S.Naturals, "Naturals+": S.Naturals, "Z+": S.Naturals, "Integers+": S.Naturals, "N*": S.Naturals,
+    "Naturals*": S.Naturals,
+    "N0": S.Naturals0, "Naturals0": S.Naturals0,
+}
+
+
+def number_set_named(s: str):
+    """The number set a name denotes (`Reals`, `Z`, `ℕ⁺`, `N+`, `Z+`, `ℕ0`, `N_0`, `\\mathbb{N}`; after
+    `preclean`), or None. ℕ⁺ and N+ raised a ParseError that surfaced as a layer exception (CAP-N1)."""
+    t = re.sub(r"\s+", "", str(s))
+    t = re.sub(r"^S\.", "", t)
+    t = re.sub(r"^\\mathbb\{?([A-Z])\}?", r"\1", t)
+    for a, b in (("ℕ", "Naturals"), ("ℤ", "Integers"), ("ℝ", "Reals"), ("⁺", "+"), ("₀", "0"), ("^{+}", "+"), ("^+", "+"), ("_{+}", "+"), ("_+", "+"),
+                 ("_{0}", "0"), ("_0", "0"), ("^{*}", "*"), ("^*", "*")):
+        t = t.replace(a, b)
+    return _NUMBER_SET_NAMES.get(t)
+
+
 def _parse_single_set(s: str, ns):
     s = s.strip()
     if s in ("EmptySet", "{}", "S.EmptySet", "∅"):
         return S.EmptySet
-    if s in ("Reals", "R", "S.Reals"):
-        return S.Reals
-    if s in ("Integers", "Z", "S.Integers"):
-        return S.Integers
-    if s in ("Naturals", "N", "S.Naturals", "Z+"):
-        return S.Naturals
+    named = number_set_named(s)
+    if named is not None:
+        return named
     if s.startswith("{") and s.endswith("}"):
         inner = s[1:-1].strip()
         if not inner:
@@ -2044,14 +2092,9 @@ def parse_domain(spec: str | None, var, ns: dict[str, Any] | None = None) -> sp.
         return S.Reals
     s = preclean(str(spec))
     s = re.sub(r"^\s*" + re.escape(str(var)) + r"\s+in\s+", "", s)
-    if s in ("Reals", "R"):
-        return S.Reals
-    if s in ("Integers", "Z"):
-        return S.Integers
-    if s in ("Naturals", "Z+", "N"):
-        return S.Naturals
-    if s in ("Naturals0", "N0"):
-        return S.Naturals0
+    named = number_set_named(s)
+    if named is not None:
+        return named
     # relational spec like "x > 0 and x != 1"
     if any(op in s for op in ("<", ">", "!=")) and not s.startswith(("Interval", "Union", "(", "[")):
         conds = re.split(r"\s+and\s+|\s*&\s*|\s*∧\s*", s)

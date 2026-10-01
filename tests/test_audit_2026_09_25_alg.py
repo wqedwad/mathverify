@@ -128,7 +128,10 @@ def test_c10_real_cube_root():
     assert _solve("x**(1/3) + 2 = 0", "{}") != "CORRECT"
     assert _eval("cbrt(-8)", "-2") == "CORRECT"
     assert _eval("root(-27, 3)", "-3") == "CORRECT"
-    assert _ineq("x**(1/3) < 1", "(-oo, 1)") == "CORRECT"
+    # fourth audit, part d4a (1 Oct 2026): the power notation at a negative base is a convention (real
+    # root or principal value), so the part of (-oo, 1) below 0 decides nothing; cbrt is the real root
+    assert _ineq("x**(1/3) < 1", "(-oo, 1)") == "UNKNOWN"
+    assert _ineq("cbrt(x) < 1", "(-oo, 1)") == "CORRECT"
     assert _ineq("x**(1/3) < 1", "[0, 1)") != "CORRECT"
     assert _ineq("cbrt(x) < -1", "(-oo, -1)") != "INCORRECT"
 
