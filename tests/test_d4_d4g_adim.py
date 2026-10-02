@@ -131,9 +131,9 @@ def test_backward_point_where_both_readings_refute():
     r = _run(_ir("x + 1", [X, K, N], ["n < 0"]), "x + 1", [("compute", "Sum(0, (k, 1, n)) + x = x + 1")],
              kind="expression")
     assert _step(r)["status"] == "refuted"
-    # pinned to n = -3 the parser does not read the reversed range: unknown, as before
+    # pinned to n = -3: Sum(0, ...) is read as 0 under every reading (`_neutralized`), 1 = 2 is refuted
     r = _run(_ir("x + 1", [X, K, N], ["x = 5", "n = -3"]), "6", [("compute", "Sum(0, (k, 1, n)) + 1 = 2")])
-    assert _step(r)["status"] == "unknown"
+    assert _step(r)["status"] == "refuted"
 
 
 def test_empty_reading_and_span_state():
@@ -349,3 +349,95 @@ def test_region_cells_of_one_value_are_evaluated_not_sampled():
     # cell {3} is one value, not a sample
     ir = _ir("Sum(k, (k, 1, n))", [N, K, X], ["n**2 = 9", "n > 0"])
     assert _step(_run(ir, "6", [("compute", "n*Limit(x, x, 1) = 3")]))["status"] == "verified"
+
+
+# --- review round (2 Oct 2026): the independent review's findings ------------------------------------------
+
+def _cased(ir, payload, kind, claim):
+    sol = {"claimed_answer": {"kind": "value", "payload": payload},
+           "steps": [{"id": "c1", "kind": "case", "claim": "x < 0", "from": [], "text": ""},
+                     {"id": "s1", "kind": kind, "claim": claim, "from": ["c1"], "text": ""}]}
+    return verify(ir, sol)
+
+
+def test_case_assumption_is_a_premise_of_compute_steps():
+    # ad50fbc: refuted at x > 0, outside the case x < 0, and the right solution was INCORRECT (review Z2)
+    r = _cased(_ir("2 + 2", [X]), "4", "compute", "Abs(x) = -x")
+    assert _step(r)["status"] != "refuted" and r.verdict != "INCORRECT"
+    # a counterexample inside the case still refutes
+    assert _step(_cased(_ir("2 + 2", [X]), "4", "compute", "Abs(x) = x"))["status"] == "refuted"
+
+
+def test_case_vacuous_on_the_task_interval_drops_the_interval():
+    # review Z1: the case x < 0 leaves the interval [0, 2] no instance; the interval is dropped as for eq steps
+    r = _cased(DI, "2", "compute", "Abs(x) = -x")
+    assert _step(r)["status"] != "refuted" and r.verdict != "INCORRECT"
+
+
+def test_one_valued_symbols_need_an_exact_proof():
+    # review S1: 1 + log(1 + exp(-exp(30))) and 1 agree to far more than 30 digits, and differ
+    ir = _ir("2 + 2", [{"name": "x", "domain": "real", "constraints": ["x >= 3", "x <= 3"]}])
+    assert _status(ir, "4", "compute", "1 + log(1 + exp(-exp(10*x))) = 1") != "verified"
+
+
+@pytest.mark.parametrize("vars_, claim", [
+    ([M, K, J], "55 + Sum(Sum(0, (j, 1, k)), (k, 1, m)) = 56"),                                       # review B1
+    ([M, {"name": "p", "domain": "integer"}, {"name": "q", "domain": "integer"}, K, J, {"name": "i", "domain": "integer"}],
+     "55 + Sum(0, (k, 1, m)) + Sum(0, (j, 1, p)) + Sum(0, (i, 1, q)) = 56"),                          # review B14
+    ([M, J, {"name": "i", "domain": "integer"}], "55*Product(Product(1, (i, 1, j)), (j, 1, m)) = 56"),  # review B5
+])
+def test_sums_worth_zero_under_every_reading_refute(vars_, claim):
+    r = _run(_ir("Sum(k, (k, 1, 10))", vars_), "55", [("compute", claim)])
+    assert _step(r)["status"] == "refuted" and r.verdict == "INCORRECT"
+
+
+def test_claim_worth_the_same_under_both_readings_refutes():
+    # review B2: with m < 0 every point runs the ranges backwards; 55 + m - m (Karr) and 55 + 0 - 0 agree
+    r = _run(_ir("Sum(k, (k, 1, 10))", [M, K, J], ["m < 0"]), "55",
+             [("compute", "55 + Sum(1, (k, 1, m)) - Sum(1, (j, 1, m)) = 56")])
+    assert _step(r)["status"] == "refuted"
+
+
+def test_product_of_ones_is_read_as_one():
+    # review B4: Product(1, (j, 1, m)) kept the comparison from evaluating the wrong identity
+    r = _run(_ir("2 + 2", [X, M, J]), "4", [("compute", "(x + 1)**2 = (x**2 + 1)*Product(1, (j, 1, m))")])
+    assert _step(r)["status"] == "refuted"
+
+
+def test_comparison_is_bounded_in_time(monkeypatch):
+    # review U1: the numerics of (1 + t)**2 against 1 + 2t with t = exp(-exp(exp(x))) ran for minutes in-process
+    monkeypatch.setattr(D, "_COMPARE_TIMEOUT", 3.0)
+    t = time.time()
+    st = _status(_ir("2 + 2", [X], ["x > 3", "x < 4"]), "4", "compute",
+                 "(1 + exp(-exp(exp(x))))**2 = 1 + 2*exp(-exp(exp(x)))")
+    assert st != "verified" and time.time() - t < 60
+
+
+def test_eq_route_is_bounded_in_time():
+    # review S12: the eq route evaluated the sides in-process (relation_holds_at) for 400 s and more
+    t = time.time()
+    st = _step(_run(_ir("2 + 2", [X], ["x > 3"]), "4",
+                    [("eq", "(1 + exp(-exp(exp(x))))**2 = 1 + 2*exp(-exp(exp(x)))")]))["status"]
+    assert st != "verified" and time.time() - t < 150
+
+
+def test_solution_budget_leaves_the_rest_unchecked(monkeypatch):
+    monkeypatch.setattr(D, "_SOLUTION_BUDGET", -1.0)
+    st = _step(_run(_ir("2 + 2", [X]), "4", [("compute", "(x + 1)**2 = x**2 + 1")]))
+    assert st["status"] == "unknown" and st["reason"] == "solution_time_budget_exceeded"
+
+
+@pytest.mark.parametrize("givens, claim", [
+    (["x**2 + y**2 = 0"], "x/x = 1"),            # review Q7: the one real point has x = 0
+    (["x**2 + y**2 = 0"], "y + x/x = 1 + y"),    # review Q6
+    (["x**2 + y**2 = 1"], "x/x = 1"),            # x = 0 is on the circle
+])
+def test_premises_read_over_the_reals(givens, claim):
+    st = _step(_run(_ir("2 + 2", [X, Y], givens), "4", [("compute", claim)]))
+    assert st["status"] == "unknown" and st["reason"] == "claim_undefined_at_the_premises_point"
+
+
+def test_condition_proved_through_the_premise_system():
+    # y = x**2 with x > 0: the condition y >= 0 of sqrt(y) holds at each solution (y = x**2 >= 0)
+    st = _step(_run(_ir("2 + 2", [X, Y], ["y = x**2", "x > 0"]), "4", [("eq", "sqrt(y) = x")]))
+    assert st["status"] != "refuted" and st.get("reason") != "claim_undefined_at_the_premises_point"
