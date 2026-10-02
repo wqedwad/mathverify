@@ -434,3 +434,103 @@ def test_p1_step_and_controls():
     assert _run(ev, "4", "value").verdict == "INCORRECT"
     ok = _ir("evaluate", {"expr": "Integral(a*t, (t, 0, 1))"}, ["a = 2"], [T_, A], shape="scalar")
     assert _run(ok, "1", "value").verdict == "CORRECT"
+
+
+# --- review of d4d (2 Oct 2026) ------------------------------------------------------------------------------
+@pytest.mark.parametrize("given", ["x != 6, x < 1 or x > 5", "x < 3, x < 1 or x > 5", "x < 3, (x < 1) | (x > 5)",
+                                   "x != 6 and x < 1 or x > 5", "x < 1 or x > 5 and x != 6", "x < 3 & x < 1 | x > 5"])
+def test_review_b1_and_or_at_one_level_is_not_read(given):
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import ParseError, build_namespace, read_condition
+    ns = build_namespace(ProblemIR.from_dict(_roots("x**2 - 36", [given])))
+    with pytest.raises(ParseError):
+        read_condition(given, ns)
+    for claim in ("1", "2"):
+        r = _run(_roots("x**2 - 36", [given]), claim, "count")
+        assert r.verdict == "UNKNOWN" and "given_not_applied" in _flags(r)
+
+
+def test_review_b1_grouped_forms_are_read():
+    assert _run(_roots("x**2 - 36", ["x < 3, Or(x < 1, x > 5)"]), "1", "count").verdict == "CORRECT"
+    assert _run(_roots("x**2 - 36", ["And(x < 3, Or(x < 1, x > 5))"]), "2", "count").verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("given,wrong,right", [(r"x \notin (-3, 3)", "{-2, 2}", "{}"),
+                                               (r"x \notin \{2\}", "{-2, 2}", "{-2}"),
+                                               ("x not in (-3, 3)", "{-2, 2}", "{}")])
+def test_review_b2_notin_is_read(given, wrong, right):
+    q = _eq("x**2 = 4", [given])
+    assert _run(q, wrong).verdict == "INCORRECT"
+    # the algebra layer reads it; the z3 layer (Ctx.givens) does not read the membership and abstains
+    assert _run(q, right).verdict != "INCORRECT"
+
+
+def test_review_b2_collapsed_text_and_congruence_are_not_read():
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import ParseError, build_namespace, not_collapsed, read_condition
+    ns = build_namespace(ProblemIR.from_dict(_eq("x**2 = 4", [])))
+    with pytest.raises(ParseError):
+        not_collapsed(sp.true, "x = x", ns)
+    assert not_collapsed(sp.false, "pi < 3", ns) is sp.false
+    with pytest.raises(ParseError):
+        read_condition(r"x \equiv 2 \mod 5", ns)
+    XI = [{"name": "x", "domain": "integer"}]
+    ce = _ir("count_integers", {"var": "x"}, ["0 <= x <= 20", r"x \equiv 2 \mod 5"], XI, shape="count")
+    assert _run(ce, "1", "count").verdict == "UNKNOWN"
+    ci = _ir("count_integers", {"var": "x"}, ["0 <= x <= 5", r"x \notin \{1, 2\}"], XI, shape="count")
+    assert _run(ci, "6", "count").verdict != "CORRECT"
+
+
+@pytest.mark.parametrize("given", ["x in (2,)", "x in {(2, 3)}", "x in {(2,)}", "x in [2]"])
+def test_review_b3_membership_in_no_set_of_reals(given):
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import ParseError, build_namespace, read_condition
+    ns = build_namespace(ProblemIR.from_dict(_eq("x**2 = 4", [])))
+    with pytest.raises(ParseError):
+        read_condition(given, ns)
+    r = _run(_eq("x**2 = 4", [given]), "{}")
+    assert r.verdict == "UNKNOWN" and "given_not_applied" in _flags(r)
+
+
+def test_review_b4_parameter_condition_on_the_given_region():
+    L = "x + log(a) - log(a)"
+    for q in (_eq(L + " = 2", ["a < 0"], XA), _eq(L + " = 2", [], [X, {"name": "a", "constraints": ["a < 0"]}])):
+        r = _run(q, "{2}")
+        assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+    assert _run(_roots("x - 2 + log(a) - log(a)", ["a < 0"], XA), "1", "count").verdict == "UNKNOWN"
+    assert _run(_eq(L + " = 2", ["a > 0"], XA), "{2}").verdict == "CORRECT"
+    assert _run(_eq(L + " = 2", [], [X, {"name": "a", "domain": "positive_real"}]), "{2}").verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("eq", ["x + log(a) - log(a) = 2", "x + a/a = 3", "x*sqrt(a)/sqrt(a) = 2"])
+def test_review_6a_free_parameter_condition_not_proved(eq):
+    r = _run(_eq(eq, [], XA), "{2}")
+    assert r.verdict == "UNKNOWN" and "parameter_condition_not_proved" in _flags(r)
+
+
+@pytest.mark.parametrize("q,claim,kind", [
+    (_eq("x**2 = 4", ["x > 1", "x < 0"]), "{}", "set"),
+    (_roots("x**2 - 4", ["x > 1", "x < 0"]), "0", "count"),
+    (_eq("x**2 = 4", ["x < 0"], [{"name": "x", "domain": "positive_real"}]), "{}", "set"),
+    (_eq("x**2 = 4", [], [{"name": "x", "constraints": ["x > 1", "x < 0"]}]), "{}", "set"),
+])
+def test_review_6b_no_common_region_is_inconsistent(q, claim, kind):
+    r = _run(q, claim, kind)
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in _flags(r)
+
+
+def test_review_6b_a_system_that_is_the_task_keeps_its_empty_answer():
+    q = _ir("solve_inequality", {"var": "x"}, ["x > 1", "x < 0"])
+    assert "ir_inconsistent" not in _flags(_run(q, "{}"))
+
+
+def test_review_small_items():
+    r = _run(_eq("x**2 = 4", ["x > a", "a = gcd(0, 0) + 1"], XA), "{2}")
+    assert r.verdict == "UNKNOWN"
+    assert _run(_eq("x**2 = 4", ["x > a", "a = 1", "a = log(4)/log(2) - 1"], XA), "{2}").verdict == "CORRECT"
+    K = {"name": "k", "domain": "nonneg_integer"}
+    ss = _ir("series_sum", {"term": "1/2**k", "var": "k", "from": "0", "to": "oo"}, ["k = 1"], [K], shape="scalar")
+    r = _run(ss, "2", "value")
+    assert r.verdict == "UNKNOWN" and "given_binds_a_bound_variable" in _flags(r)
+    ev = _ir("evaluate", {"expr": "diff(sin(pi*n), n)"}, ["n = 2"], [{"name": "n", "domain": "real"}], shape="scalar")
+    assert _run(ev, "pi", "value").verdict == "CORRECT"
