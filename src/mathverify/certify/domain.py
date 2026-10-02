@@ -1306,7 +1306,10 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> b
         except Exception:  # noqa: BLE001
             return None
         if isinstance(s, sp.ConditionSet) or s.has(sp.ConditionSet):
-            return None
+            # no proof that the condition holds on the whole region is no proof of definedness: the
+            # callers abstain only on True, and the maximum 0 of -(x - pi)**2 + (x + 1)Q/((x + 1)Q) - 1 on
+            # [2, 4] (undefined at pi) was certified (review of 2 Oct 2026, B5)
+            return True if at_risk(bad, var) else None
         if s != S.EmptySet:
             return True
     return False
