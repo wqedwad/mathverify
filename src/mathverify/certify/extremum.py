@@ -23,6 +23,7 @@ from ..equiv import answers_equivalent
 from ..equiv.numeric import num_equal, to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
+from ..sandbox.exactsets import at_risk, exact_solveset
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 
 LAYER = "certify.extremum"
@@ -342,14 +343,17 @@ def certify_local_extremum(f, var, domain: sp.Set, which: str, claimed, timeout:
     return ok, ev
 
 
-def _conditions_on(ctx: Ctx, var, with_interval: bool) -> tuple[list[sp.Set] | None, list]:
+def _conditions_on(ctx: Ctx, var, with_interval: bool, region=None) -> tuple[list[sp.Set] | None, list]:
     """What the problem says of `var` besides the task, as sets that cut the region the extremum is
     taken over: the given relations that name it and, when the task writes its own interval, the
     variable's declared constraints and the domain of discourse (`Ctx.domain_for` holds these two
     otherwise). An explicit interval was read alone: the maximum 3 of x on [-2, 3] was certified with
     x < 1 as a constraint, a given or the domain of discourse (V18, 30 Sep 2026). A symbol a given fixes
     is read as its value (`Ctx.on_var`); the second item lists what still names a free symbol (the
-    certificate abstains, part vi). None instead of the sets when a relation cannot be solved exactly."""
+    certificate abstains, part vi). None instead of the sets when a relation cannot be solved exactly.
+    A relation with a trigonometric function is solved on `region` (the task's interval), not on ℝ,
+    where SymPy returned one period: sin(x) > 0 was (0, pi), and the maximum 0 of -(x - 7)**2 under it
+    was refuted (fourth audit G2, sandbox.exactsets)."""
     from ..normalize.parse import UndeclaredSymbolError, parse_relation
     srcs = list(ctx.ir.givens)
     if with_interval:
@@ -383,7 +387,7 @@ def _conditions_on(ctx: Ctx, var, with_interval: bool) -> tuple[list[sp.Set] | N
             sets.append(ds)
     for r in kept:
         try:
-            sol = sp.solveset(r, var, S.Reals)
+            sol = exact_solveset(r, var, region if region is not None and at_risk(r, var) else S.Reals)
         except Exception:  # noqa: BLE001
             return None, unbound + unread
         if isinstance(sol, ConditionSet) or sol.has(ConditionSet):
@@ -426,7 +430,7 @@ def verify(ir, solution, ctx: Ctx):
         if not p.get("interval") and ctx.unapplied_conditions(var):
             # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)
             return condition_not_applied(LAYER, ctx.unapplied_conditions(var), t.ms)
-        cut, unbound = _conditions_on(ctx, var, bool(p.get("interval")))
+        cut, unbound = _conditions_on(ctx, var, bool(p.get("interval")), iv if isinstance(iv, sp.Set) else None)
         if unbound:
             return condition_not_applied(LAYER, unbound, t.ms)
         if cut is None:

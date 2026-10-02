@@ -82,7 +82,10 @@ def solveset_in(rel, var, domain=S.Reals):
     # it (certify.domain.DEFINEDNESS_UNDECIDED, and cos(acot(2) + acot(1/2)) != 0; 30 Sep 2026)
     if isinstance(rel, sp.core.relational.Relational) and not rel.free_symbols:
         return sp.ConditionSet(var, rel, domain)
-    return sp.solveset(rel, var, domain)
+    # a relation with a trigonometric function: SymPy's set may be one period only, or lose roots
+    # (sandbox.exactsets); the guarded set is rebuilt and checked, or left a ConditionSet
+    from .exactsets import exact_solveset
+    return exact_solveset(rel, var, domain)
 
 
 def solve_system(rels, syms, dict_=True):
@@ -185,6 +188,14 @@ def breakpoints_of(expr, var, a, b):
 
 def continuous_domain(expr, var, domain=S.Reals):
     from sympy.calculus.util import continuous_domain as cd
+    from .exactsets import continuity_set, oscillates
+    if oscillates(expr, var):
+        # SymPy solves the conditions of a trigonometric expression on one period, both ways wrong
+        # (sandbox.exactsets.continuity_set): rebuilt and checked, or refused
+        out = continuity_set(expr, var, domain)
+        if out is None:
+            raise ValueError("continuous domain of a trigonometric expression not trusted")
+        return out
     return cd(expr, var, domain)
 
 
@@ -192,7 +203,8 @@ def critical_points(expr, var, interval):
     d = sp.diff(expr, var)
     cps = []
     try:
-        for c in sp.solveset(d, var, interval):
+        from .exactsets import exact_solveset
+        for c in exact_solveset(d, var, interval):     # a ConditionSet does not iterate: no candidate
             if c.is_number:
                 cps.append(c)
     except Exception:
@@ -210,7 +222,8 @@ def critical_points(expr, var, interval):
 
 def emptiness_of_superlevel(expr, var, interval, bound, strict=True):
     rel = expr > bound if strict else expr >= bound
-    return sp.solveset(rel, var, interval)
+    from .exactsets import exact_solveset
+    return exact_solveset(rel, var, interval)
 
 
 # ----------------------------------------------------------------------------

@@ -22,6 +22,7 @@ import sympy as sp
 from sympy import S
 
 from ..intake.structured import load_problem_ir
+from ..sandbox.exactsets import exact_solveset
 from ..normalize.parse import (ParseError, build_namespace, parse_relation, parse_expr_str,
                                parse_answer, parse_set_str, preclean, strip_presentation,
                                _TRANSFORMS)
@@ -250,7 +251,9 @@ def _violation_set(c, var, region):
     else:
         return None
     try:
-        s = sp.solveset(bad, var, region)
+        # guarded: SymPy reads a trigonometric relation on one period of ℝ (sandbox.exactsets), and the
+        # violations of sin(x) >= 0 on [10, 12] were empty: a junk value would have been certified
+        s = exact_solveset(bad, var, region)
     except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError):
         return None
     if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):
@@ -659,7 +662,7 @@ def _solve_region(conds, var) -> sp.Set:
         if c.free_symbols - {var}:
             raise LeanPrintError(f"condition {c} is not in {var} alone")
         try:
-            s = sp.solveset(c, var, S.Reals)
+            s = exact_solveset(c, var, S.Reals)        # one period is no region (sandbox.exactsets)
         except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError) as e:
             raise LeanPrintError(f"cannot solve {c}") from e
         if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):

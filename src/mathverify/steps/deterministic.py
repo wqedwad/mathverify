@@ -874,11 +874,12 @@ def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None
     if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
         return None, False, False
     region = ctx.domain_for(v) if v.name in ctx.ns else S.Reals
-    for p in premises:
-        r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
-        if not r.ok or r.value.has(sp.ConditionSet):
-            return None, False, False
-        region = sp.Intersection(region, r.value)
+    # a premise with a trigonometric function is solved on what the others leave (Ctx.cut_by): on ℝ
+    # SymPy reads it on one period (sandbox.exactsets), and the written cos(x) != 0 of tan x = sqrt(3)
+    # on [0, pi) then left no exact set at all
+    region = ctx.cut_by(v, region, premises)
+    if region is None:
+        return None, False, False
     fail = _fail_set(claim, v, region, ctx)
     if fail is None:
         return None, False, False

@@ -24,6 +24,7 @@ from ..equiv.numeric import (certified_sign, certified_floor, certified_integer,
                              NONREAL)
 from ..equiv.sets import normalize_set
 from ..sandbox import run as sb_run
+from ..sandbox.exactsets import at_risk
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
 
 LAYER = "certify.counting"
@@ -297,7 +298,10 @@ def _count_integers(ctx: Ctx, var, ev: dict) -> tuple[int | None, str | None]:
     # one relation at a time: solveset does not accept a conjunction
     for rel in rels_r:
         r = sb_run("mathverify.sandbox.ops:solveset_in", rel, var, S.Reals, timeout=ctx.timeout)
-        if not r.ok or isinstance(r.value, sp.ConditionSet):
+        # a trigonometric relation on ℝ stays a ConditionSet (sandbox.exactsets: SymPy's set was one
+        # period, and 3 was certified for the integers of [0, 10] with sin x > 0, fourth audit G2):
+        # it bounds no candidate, and each candidate's membership is decided at the point
+        if not r.ok or (isinstance(r.value, sp.ConditionSet) and not at_risk(rel, var)):
             return None, "solveset_failed"
         pieces.append(r.value)
     ev["solution_sets"] = [str(p_) for p_ in pieces]
@@ -527,6 +531,12 @@ def verify(ir, solution, ctx: Ctx):
                     return unknown(LAYER, f"non_integer_bounds_for_{v.name}", 0, ev)
                 bounds[v.name] = (lo_b, hi_b)
             rels = ctx.var_constraints() + ctx.givens()
+            nowhere = ctx.written_conditions()[1] & set(syms)
+            if nowhere:
+                # an expression of the problem defined nowhere as written in a variable (sqrt(-x) with
+                # x a positive integer folds away as sqrt(-x) - sqrt(-x)): no tuple counts. The closed
+                # condition never reached var_constraints, and 3 was certified (fourth audit TAN-08)
+                rels = rels + [sp.false]
             # the domain of discourse restricts each variable it mentions; it was not read here, so
             # x + y = 4 on x > 2 counted all 5 pairs of 0..4 (part vi, 30 Sep 2026)
             doms = {s_: d for s_ in syms if (d := ctx.discourse(s_)) != S.Reals}

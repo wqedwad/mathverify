@@ -2056,9 +2056,12 @@ def parse_domain(spec: str | None, var, ns: dict[str, Any] | None = None) -> sp.
     if any(op in s for op in ("<", ">", "!=")) and not s.startswith(("Interval", "Union", "(", "[")):
         conds = re.split(r"\s+and\s+|\s*&\s*|\s*∧\s*", s)
         dom = S.Reals
+        from ..sandbox.exactsets import exact_solveset
         for c in conds:
             rel = parse_relation(c, ns)
-            dom = Intersection(dom, sp.solveset(rel, var, S.Reals))
+            # guarded: a trigonometric relation is no single period of the line (sandbox.exactsets);
+            # unsolved it stays a ConditionSet, which Ctx.domain_for solves on what the rest leaves
+            dom = Intersection(dom, exact_solveset(rel, var, S.Reals))
         return dom
     return parse_set_str(s, ns)
 

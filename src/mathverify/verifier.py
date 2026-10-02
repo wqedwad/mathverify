@@ -551,6 +551,9 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     try:
         tvar = (problem_ir.task.params or {}).get("var")
         unapplied = ctx.side_conditions(ctx.sym(tvar))[1] if isinstance(tvar, str) else []
+        if isinstance(tvar, str):
+            # one with a trigonometric function that stays unsolved on the domain the rest leaves
+            unapplied = unapplied + [str(r) for r in ctx.unsolved_side_conditions(ctx.sym(tvar))]
     except Exception:  # noqa: BLE001 - a failed probe adds no fact
         unapplied = []
     if unapplied:
