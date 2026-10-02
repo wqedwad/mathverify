@@ -333,6 +333,15 @@ HELD_FORMS = (HeldIntegral, HeldLimit)
 # a non-identifier key of the namespace: the values the givens pin symbols to (`given_bindings`),
 # read by `hold_parametric`; no text can name it
 PINS_KEY = "<pins>"
+# the names a pin never replaces (the task's own variable, `build_namespace`): F(x) = ∫_0^x t² dt with the
+# given x = 2 was parsed as the constant 8/3, and F'(2) = 0 was certified (fourth audit P1)
+PROTECTED_KEY = "<pins-protected>"
+
+
+class PinnedBoundVariable(ParseError):
+    """A symbol a given pins occurs inside an Integral or a Limit where an enclosing operator binds it
+    (d/da, a Sum's index) or where it is the task's own variable: whether the value goes in before or
+    after the operator is the reading of the problem, and the parse does not choose one (part d4d)."""
 
 
 def _closed_form(form) -> bool:
@@ -374,22 +383,84 @@ def _pinned(form, pins: dict):
     return type(form)(e.subs(sub), z, z0.subs(sub), d)
 
 
-def hold_parametric(expr, pins: dict | None = None):
+def binder_variables(e) -> set:
+    """The variables the operator `e` binds in its arguments: d/dx's x, a Sum's or an Integral's index,
+    a Limit's variable, a Subs' or a Lambda's variables (empty for anything else)."""
+    if isinstance(e, sp.Derivative):
+        return set(e.variables)
+    if isinstance(e, (sp.Sum, sp.Product, sp.Integral)):
+        return {lim[0] for lim in e.limits}
+    if isinstance(e, sp.Limit):
+        return {e.args[1]}
+    if isinstance(e, (sp.Subs, sp.Lambda)):
+        return set(e.variables)
+    return set()
+
+
+def substitute_free(expr, mapping: dict):
+    """`expr` with the FREE occurrences of the symbols of `mapping` replaced: never a variable an
+    enclosing operator binds (`binder_variables`), whose own range or point is still substituted.
+    `xreplace` rewrites bound variables too (Sum(k**2, (k, 1, n)) with k = 5 became a sum over 5), and
+    Limit.subs rewrites its own variable. Evaluation follows the caller's `sp.evaluate` setting."""
+    if not mapping or not isinstance(expr, sp.Basic):
+        return expr
+
+    def walk(e, sub):
+        if not sub or not isinstance(e, sp.Basic) or not (e.free_symbols & set(sub)):
+            return e
+        if e in sub:
+            return sub[e]
+        if not e.args:
+            return e
+        bound = binder_variables(e)
+        inner = {s_: v for s_, v in sub.items() if s_ not in bound} if bound else sub
+        args = [walk(a, inner) for a in e.args]
+        return e.func(*args) if any(a is not b for a, b in zip(args, e.args)) else e
+
+    return walk(expr, dict(mapping))
+
+
+def hold_parametric(expr, pins: dict | None = None, protected=()):
     """`expr` with every Integral and Limit that has a parameter held (HeldIntegral, HeldLimit), after
     the parameters the givens pin to a number (`pins`) are replaced by it: such a form is then closed
-    and plain, and its value is the one numbers confirm (equiv.forms, DECISIONS §72 (a))."""
+    and plain, and its value is the one numbers confirm (equiv.forms, DECISIONS §72 (a)).
+
+    A pin never reaches a variable an enclosing operator binds, nor a name in `protected` (the task's
+    own variable): d/da ∫_0^1 a·t dt with a = 2 became d/da of the constant 1, and F(x) = ∫_0^x t² dt
+    with the given x = 2 the constant 8/3, so 0 was certified for both (fourth audit P1). Such a form
+    raises PinnedBoundVariable: whether the value goes in before or after the operator is a reading
+    of the problem, and the verifier abstains on it (part d4d)."""
     if not isinstance(expr, sp.Basic) or not expr.has(sp.Integral, sp.Limit):
         return expr
-    return expr.replace(lambda n: isinstance(n, (sp.Integral, sp.Limit)),
-                        lambda n: _held(_pinned(n, pins) if pins else n))
+    pins = pins or {}
+    protected = frozenset(protected or ())
+
+    def walk(e, bound):
+        if not isinstance(e, sp.Basic) or not e.has(sp.Integral, sp.Limit):
+            return e
+        inner = bound | binder_variables(e)
+        args = [walk(a, inner) for a in e.args]
+        if any(a is not b for a, b in zip(args, e.args)):
+            e = e.func(*args)
+        if isinstance(e, (sp.Integral, sp.Limit)):
+            own = binder_variables(e)
+            blocked = sorted(str(s_) for s_ in pins if s_ in e.free_symbols and s_ not in own
+                             and (s_ in bound or s_.name in protected))
+            if blocked:
+                raise PinnedBoundVariable(f"a given pins {blocked} inside {e}, where an enclosing operator or "
+                                          "the task binds it: not read")
+            e = _held(_pinned(e, pins) if pins else e)
+        return e
+
+    return walk(expr, frozenset())
 
 
-def _hold_value(out, pins):
+def _hold_value(out, pins, protected=()):
     """A value parse's result with its parametric forms held (`hold_parametric`), on each side of a
     relation (rebuilt unevaluated, `_on_sides`); anything without an Integral or a Limit unchanged."""
     if not isinstance(out, sp.Basic) or not out.has(sp.Integral, sp.Limit):
         return out
-    return _on_sides(out, lambda e: hold_parametric(e, pins))
+    return _on_sides(out, lambda e: hold_parametric(e, pins, protected))
 
 
 def _limit(e, v, p, d=None):
@@ -586,8 +657,10 @@ def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, A
                 ns.setdefault(a, Symbol(a, real=True))
         bindings = given_bindings(ir, ns) if ir.givens else {}
         if bindings:
-            # an integral or a limit whose parameter a given pins is read at that value (hold_parametric)
+            # an integral or a limit whose parameter a given pins is read at that value (hold_parametric);
+            # never the task's own variable (part d4d, P1)
             ns[PINS_KEY] = dict(bindings)
+            ns[PROTECTED_KEY] = frozenset(task_variables(ir))
         for f in ir.functions:
             ns[f.name] = _make_function(f, ns, bindings)
     if extra:
@@ -595,14 +668,39 @@ def build_namespace(ir=None, extra: dict[str, Any] | None = None) -> dict[str, A
     return ns
 
 
+# the task's own variable when params name none: the certificates' defaults (certify.series reads n or k)
+_TASK_VAR_DEFAULT = {"series_sum": "k", "recurrence_term": "n", "closed_form": "n"}
+_TASK_VAR_KINDS = {"solve_equation", "solve_inequality", "count_roots", "count_integers", "count_solutions",
+                   "domain_of", "limit", "antiderivative", "definite_integral", "derivative", "tangent_line",
+                   "extremum", "trig_solve", "series_sum", "recurrence_term", "closed_form"}
+
+
+def task_variables(ir) -> set[str]:
+    """The name of the variable the task itself is about (`params["var"]`, or the certificate's default):
+    the unknown of an equation, the variable of a derivative, a limit or an integral, a series' index."""
+    kind = ir.task.kind
+    v = (ir.task.params or {}).get("var")
+    if isinstance(v, str) and v.strip():
+        return {v.strip()}
+    return {_TASK_VAR_DEFAULT.get(kind, "x")} if kind in _TASK_VAR_KINDS else set()
+
+
 def given_bindings(ir, ns: dict[str, Any]) -> dict:
     """Symbols a given fixes to one real number (`a = 0`), read in the value namespace: a given that
     computes its value (`a = integrate(...)`) or calls a problem function binds nothing, and a symbol
-    two givens bind to different values is left free."""
+    two givens bind to different values is left free (see `given_binding_report`)."""
+    return given_binding_report(ir, ns)[0]
+
+
+def given_binding_report(ir, ns: dict[str, Any]) -> tuple[dict, dict, dict]:
+    """(`given_bindings`, the symbols two givens bind to different values with those values, the givens
+    each symbol is bound by). A binding is only read here: whether it agrees with the rest of the
+    problem is `certify.base.Ctx.binding_issues`'s question."""
     fnames = [f.name for f in ir.functions]
     vns = claim_namespace(ns, fnames)
     found: dict = {}
-    clash: set = set()
+    clash: dict = {}
+    sources: dict = {}
     for g in ir.givens:
         try:
             check_claim_is_value(g, fnames)
@@ -614,9 +712,10 @@ def given_bindings(ir, ns: dict[str, Any]) -> dict:
         for s_, v in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
             if isinstance(s_, Symbol) and isinstance(v, sp.Expr) and not v.free_symbols and v.is_real is True:
                 if s_ in found and found[s_] != v:
-                    clash.add(s_)
+                    clash.setdefault(s_, [found[s_]]).append(v)
                 found.setdefault(s_, v)
-    return {s_: v for s_, v in found.items() if s_ not in clash}
+                sources.setdefault(s_, []).append(g)
+    return {s_: v for s_, v in found.items() if s_ not in clash}, clash, sources
 
 
 def _make_function(fdef, ns, bindings: dict | None = None):
@@ -629,6 +728,7 @@ def _make_function(fdef, ns, bindings: dict | None = None):
     if body_ns.get(PINS_KEY):
         # a formal argument is no parameter of the problem, whatever a given fixes under its name
         body_ns[PINS_KEY] = {s_: v for s_, v in body_ns[PINS_KEY].items() if s_.name not in fdef.args}
+        body_ns[PROTECTED_KEY] = frozenset(n for n in body_ns.get(PROTECTED_KEY, ()) if n not in fdef.args)
     argsyms = [body_ns[a] for a in fdef.args]
     body = parse_expr_str(fdef.expr, body_ns)
 
@@ -1395,7 +1495,7 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
         out = _domain_end_limits(out)
     _refuse_reversed_ranges(out, s)
     if evaluate:
-        out = _hold_value(out, local_dict.get(PINS_KEY))
+        out = _hold_value(out, local_dict.get(PINS_KEY), local_dict.get(PROTECTED_KEY, ()))
     return out
 
 
@@ -1721,7 +1821,7 @@ def parse_expr_str(s: str, ns: dict[str, Any] | None = None, *, rational: bool =
     s = strip_presentation(_strip_invisible(s))
     if is_latex(s):
         try:
-            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY))
+            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY), ns.get(PROTECTED_KEY, ()))
         except Exception as e:  # pragma: no cover - fall through to canonical
             raise ParseError(f"LaTeX parse failed for {raw!r}: {e}") from e
     s = preclean(s)
@@ -1928,7 +2028,7 @@ def parse_relation(s: str, ns: dict[str, Any] | None = None):
     if is_latex(s):
         # LaTeX relations: latex2sympy handles "=" -> Eq
         try:
-            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY))
+            return _hold_value(_latex_to_sympy(s, ns), ns.get(PINS_KEY), ns.get(PROTECTED_KEY, ()))
         except ParseError:
             raise
         except Exception as e:  # noqa: BLE001 - latex2sympy raises a bare Exception
@@ -2175,6 +2275,82 @@ def read_domain_condition(spec: str, argsyms: list, ns: dict[str, Any]):
     if not conds:
         return None
     return _conjunction(conds[0] if len(conds) == 1 else And(*conds), spec)
+
+
+_OR_JOIN_RE = re.compile(r"\s+or\s+|\s*∨\s*|\s*\|\|\s*|(?<=\))\s*\|\s*(?=\()")
+
+
+def _condition_atom(c, spec: str):
+    """One part of a condition: a relation between expressions, a membership of a symbol in a set of
+    reals, or an And/Or of those; anything else raises ParseError."""
+    if c is sp.true or c is sp.false:
+        return c
+    if isinstance(c, (And, Or)):
+        return type(c)(*[_condition_atom(a, spec) for a in c.args])
+    if isinstance(c, Eq) and isinstance(c.lhs, Symbol) and isinstance(c.rhs, sp.Set):
+        return sp.Contains(c.lhs, c.rhs, evaluate=False)  # LaTeX `x \in (0, 3)` reads as Eq(x, set)
+    if isinstance(c, sp.Contains) and isinstance(c.args[1], sp.Set):
+        return c
+    if isinstance(c, sp.core.relational.Relational) and isinstance(c.lhs, sp.Expr) and isinstance(c.rhs, sp.Expr):
+        return c
+    raise ParseError(f"{spec!r} is not read as a condition on real numbers ({c})")
+
+
+def read_condition(spec: str, ns: dict[str, Any]):
+    """A given read as a CONDITION: a relation, a chain (`0 < x < 3`), relations joined by `and`, `,`,
+    `&`, `∧` (all of them hold) or by `or`, `∨`, `|` between brackets (one of them holds), And(...) and
+    Or(...), and the membership of a variable in a set of reals (`x in (0, 3)`, `x ∈ [0, oo)`). The
+    result is a relation, a Contains, an And/Or of those, or true/false. Anything else raises
+    ParseError: such a given is never dropped (Ctx.side_conditions abstains, `given_not_applied`).
+    Only the relations were read before, so the given `0 < x < 3`, `x > 0 and x < 3` or
+    Or(x < -3, x > 1) next to x² < 4 or x² − 4 was dropped and (−2, 2) or the count 2 certified
+    (fourth audit G1)."""
+    if not isinstance(spec, str):
+        raise ParseError(f"not a condition: {type(spec).__name__}")
+    try:
+        return _condition_atom(parse_relation(spec, ns), spec)
+    except UndeclaredSymbolError:
+        raise
+    except ParseError:
+        if is_latex(spec):
+            raise
+    s = preclean(strip_presentation(_strip_invisible(spec)))
+    disjuncts = []
+    for d in _split_top(s, _OR_JOIN_RE):
+        conj = []
+        for p in _split_domain(d):
+            if not p:
+                raise ParseError(f"condition {spec!r} has an empty part")
+            m = _DOMAIN_MEMBER_RE.match(p)
+            if m is not None:
+                v = ns.get(m.group(1))
+                if not isinstance(v, Symbol):
+                    raise ParseError(f"condition {spec!r}: {m.group(1)} is not a variable")
+                conj.append(sp.Contains(v, parse_set_str(m.group(2), ns), evaluate=False))
+            else:
+                conj.append(_condition_atom(parse_relation(p, ns), spec))
+        disjuncts.append(conj[0] if len(conj) == 1 else And(*conj))
+    return disjuncts[0] if len(disjuncts) == 1 else Or(*disjuncts)
+
+
+def _split_top(s: str, join_re) -> list[str]:
+    """The top-level parts of `s` joined by `join_re` (not inside brackets)."""
+    parts, depth, cur, i = [], 0, "", 0
+    while i < len(s):
+        c = s[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        m = join_re.match(s, i) if depth == 0 else None
+        if m is not None and m.end() > i:
+            parts.append(cur.strip())
+            cur, i = "", m.end()
+            continue
+        cur += c
+        i += 1
+    parts.append(cur.strip())
+    return parts
 
 
 def _split_domain(s: str) -> list[str]:

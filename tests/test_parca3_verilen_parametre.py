@@ -87,7 +87,6 @@ def test_a_wrong_set_is_refuted_by_the_given_not_by_a_model_that_violates_it():
 
 @pytest.mark.parametrize("ir,claim", [
     (_eq("x**2 = a", ["a**2 = 16"]), "{-2, 2}"),                        # a = -4 leaves no real root
-    (_eq("x**2 = a", ["a = 4", "a = 9"]), "{-2, 2}"),                   # no instance of the problem
     (_eq("x**2 + a**2 = 0", []), "{0}"),                                # a root only at a = 0
     (_eq("x**2 + a**2 = 0", ["a >= 0"]), "{0}"),
     (_eq("x**2 = a", []), "{-sqrt(a), sqrt(a), 2}"),                    # 2 is a root only at a = 4
@@ -108,8 +107,11 @@ def test_what_the_z3_layer_cannot_use_makes_it_abstain_not_refute():
     assert wp.verdict == "unknown" and wp.evidence["reason"] == "parameters_not_pinned_by_the_givens"
     wp = _layer(_run(_eq("x**2 = 4", ["x = 2"], vars_=XA[:1]), "{-2, 2}"), "certify.wordproblem")
     assert wp.verdict == "unknown" and wp.evidence["reason"].startswith("given_equation_in_the_variable")
-    wp = _layer(_run(_eq("x**2 = a", ["a = 4", "a = 9"]), "{-2, 2}"), "certify.wordproblem")
-    assert wp.verdict == "unknown" and wp.evidence["reason"].startswith("givens_without_an_instance")
+    # no instance (a = 4 and a = 9): since part d4d (fourth audit G7/TAN-04) the verifier abstains on the
+    # problem itself before any certificate
+    r = _run(_eq("x**2 = a", ["a = 4", "a = 9"]), "{-2, 2}")
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in r.flags
+    assert not any(layer.layer == "certify.wordproblem" for layer in r.layers)
 
 
 def test_a_given_reached_through_another_given_is_read():

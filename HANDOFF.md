@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 1 Ekim 2026, gece (bulut)**, dal `claude/loving-bardeen-ninmoo` = `master` (`wqedwad/asd#14`'ün birleşmesi) + DECISIONS §84 Ek ve `denetim/2026-10-01/fark_parca.py` (birleşmedi). Yeni sohbet bu dalı alır (§3 adım 1).
+> **Son güncelleme: 2 Ekim 2026, sabah (bulut)**, dal `claude/trusting-lovelace-vp1boa` (birleşmedi): `master` (`#14`) + §84 Ek + dördüncü denetim ve düzeltme parçaları d4a, d4b, d4c, d4g (DECISIONS §85, sürüyor). Yeni sohbet bu dalı alır (§3 adım 1).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -52,16 +52,18 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** bu dalı al: `git fetch origin claude/loving-bardeen-ninmoo && git merge --ff-only FETCH_HEAD` (oturumun dalına;
-   `master` `#14`'ün birleşmesi, bu dal ona §84 Ek'i ve `fark_parca.py`'yi ekler); `--plan` koş. Push yalnız oturumun dalına.
-   Bağlam sınırlı: iş parça parça, ağır iş worktree'li ajanlarda; her parçadan sonra commit + push; beklemeler ≤5 dk (platform
-   konteyneri SIGTERM ile yeniden başlatabiliyor, §79; ajan `SendMessage` ile sürdürülür). Karar dökümü 5 parçada (`fark_parca.py`).
-2. **Sıradaki iş (kullanıcı, 1 Ekim: "önce kontrol, sonra yerel kalite"):** (a) **Dördüncü bağımsız adversaryal denetim** `#14`'ün
-   kodunda (~11 bin satır; parça i–xi, DECISIONS §75–§84): açılar ayrıştırıcı/bağlayıcılar, tanımlılık/alan, görev sertifikaları,
-   adım reddedici (`_pins`, `_on_premises`, ters aralık), kesin sıfır ve tutulan biçimler (F9); her bulgu bağımsız yeniden üretilir,
-   sonda + test + mutasyonla kapatılır, `fark.py` 0. (b) **Yerel kalite:** V15 S1 (dolaylı sabitlenen sembol), R1, L1; V16'nın kalanı
-   (özdeşlik kararsızken pinli yeniden denetim). (c) V19 (kapsama kayıpları, §84) kullanıcı "sonra" dedi. Birleştirmeden önce `--full`,
-   birleştirme kullanıcı onayıyla. `franklin`'in silinmesi kullanıcıya sorulur (§74; buluttan silinemez).
+1. **Yeni sohbet:** bu dalı al: `git fetch origin claude/trusting-lovelace-vp1boa && git merge --ff-only FETCH_HEAD` (oturumun dalına);
+   `--plan` koş. Push yalnız oturumun dalına. İş parça parça, ağır iş worktree'li ajanlarda, aynı anda en çok 3 ajan (kullanıcı token
+   uyarısı, 2 Ekim; oturum sınırı birkaç kez doldu, ajanlar `SendMessage` ile sürdürüldü); her parçadan sonra commit + push; beklemeler ≤5 dk.
+   Karar dökümü 5 parçada (`fark_parca.py`), taban 158c220 (src = 1df0558) dökümüyle karşılaştırılır.
+2. **Sıradaki iş:** (a) **Dördüncü denetimin düzeltmeleri** (DECISIONS §85; bulgular `denetim/2026-10-01/d4/`). Yöntem: düzeltici ajan
+   bulguyu yeniden üretir ve matematik kararını yazar (ana oturum denetler), sonra parçanın diff'ine bağımsız saldırgan gözden geçirici,
+   bulduğu açık aynı parçada kapanır; ajanların ortak kuralları `denetim/2026-10-01/d4/duzeltme_kurallari.txt`, koşu kaydı `kosular.txt`. Bitenler (tur 1–2):
+   d4a, d4b (kapsama geri kazanımı sürüyor), d4c (kesin aralık zarfı sürüyor), d4g (saldırganın 6 açığı sürüyor). Sırada: d4d verilen
+   bağlama, d4e görev sertifikalarının koşul okuması, d4f tanımlılık, d4h ayrıştırıcı, d4i füzyon (CAP-K1); A05 mutasyonu; sonra
+   birleşik hâle tamlık eleştirmeni. (b) **Yerel kalite:** V15 S1 (dolaylı sabitlenen sembol), R1, L1; V16'nın kalanı. (c) V19
+   (kapsama kayıpları, §84) kullanıcı "sonra" dedi. Birleştirmeden önce `--full`, birleştirme kullanıcı onayıyla. `franklin`'in silinmesi
+   kullanıcıya sorulur (§74).
 3. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 4. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
    önce kalibrasyon (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.

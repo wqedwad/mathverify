@@ -11,7 +11,7 @@ from sympy import S
 from ..ir import ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
-                               claim_namespace, given_bindings)
+                               claim_namespace, given_bindings, substitute_free, task_variables)
 from ..sandbox.exactsets import at_risk, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
@@ -78,6 +78,23 @@ class Ctx:
                 for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
                     try:
                         r = self._with_bound_values(r, var)
+                        if r is sp.false:
+                            # the values the givens fix contradict it (x < a with a = 0 and x positive): no
+                            # point is left. It was dropped, and {2} was certified for x² = 4 (fourth audit G8);
+                            # Ctx.binding_issues abstains on the problem before any certificate reads this
+                            dom = S.EmptySet
+                            continue
+                        if r is sp.true:
+                            continue
+                        if not r.free_symbols:
+                            # closed: decided exactly, never dropped
+                            from .domain import relation_holds_at
+                            h = relation_holds_at(r, var, 0)
+                            if h is False:
+                                dom = S.EmptySet
+                            elif h is None:
+                                unapplied.append(c)
+                            continue
                         if r.free_symbols == {var} and at_risk(r, var):
                             deferred.append(r)
                         elif r.free_symbols == {var}:
@@ -209,6 +226,47 @@ class Ctx:
                 dom = rr.value if risky else sp.Intersection(dom, rr.value)
         return dom
 
+    @staticmethod
+    def condition_set(cond, var: sp.Symbol) -> sp.Set | None:
+        """The reals where a condition on `var` alone holds (`normalize.parse.read_condition`): an And is
+        the intersection of its parts, an Or their union, a membership of `var` its set, a relation its
+        exact solution set (odd roots real). A closed part is decided exactly. None when a part cannot be
+        solved exactly, is undecided, or has a trigonometric function (SymPy reads it on one period)."""
+        from ..equiv.numeric import real_odd_roots
+        from .domain import relation_holds_at
+        if cond is sp.true:
+            return S.Reals
+        if cond is sp.false:
+            return S.EmptySet
+        if isinstance(cond, (sp.And, sp.Or)):
+            parts = [Ctx.condition_set(a, var) for a in cond.args]
+            if any(p is None for p in parts):
+                return None
+            return sp.Intersection(*parts) if isinstance(cond, sp.And) else sp.Union(*parts)
+        if not getattr(cond, "free_symbols", None):
+            try:
+                h = relation_holds_at(cond, sp.Dummy("_closed"), 0)
+            except Exception:  # noqa: BLE001
+                return None
+            return None if h is None else (S.Reals if h else S.EmptySet)
+        if cond.free_symbols != {var}:
+            return None
+        if isinstance(cond, sp.Contains):
+            st = cond.args[1]
+            return sp.Intersection(st, S.Reals) if cond.args[0] == var and not st.free_symbols else None
+        if not isinstance(cond, sp.core.relational.Relational):
+            return None
+        r = real_odd_roots(cond)
+        if at_risk(r, var):
+            return None
+        try:
+            sol = sp.solveset(r, var, S.Reals)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(sol, sp.ConditionSet) or sol.has(sp.ConditionSet):
+            return None
+        return sol
+
     def unsolved_side_conditions(self, var: sp.Symbol) -> list:
         """The side conditions (`side_conditions`) among `unsolved_conditions`: a given like sin(x) > 0
         next to the task's own relation that no bounded domain lets `domain_for` solve. The verifier
@@ -301,6 +359,223 @@ class Ctx:
         ns = dict(self.ns)
         ns.update({s_.name: v for s_, v in self.bindings().items() if s_ != var})
         return parse_domain(self.ir.domain_of_discourse, var, ns)
+
+    def parameter_pins(self) -> dict:
+        """`bindings` without the task's own variable (`normalize.parse.task_variables`)."""
+        names = task_variables(self.ir)
+        return {s_: v for s_, v in self.bindings().items() if s_.name not in names}
+
+    _DECLARED_SETS = {"integer": S.Integers, "positive_integer": S.Naturals, "natural": S.Naturals,
+                      "nonneg_integer": S.Naturals0, "positive_real": sp.Interval.open(0, sp.oo),
+                      "nonneg_real": sp.Interval(0, sp.oo)}
+
+    def binding_issues(self) -> tuple[str, list[str]] | None:
+        """Why the values the givens fix (`bindings`, and a declared constraint `a = c`) cannot be used,
+        or None. Each binding was used unchecked (fourth audit G7, G8, G9, TAN-01, TAN-03, TAN-04, P1):
+        x² < 4 with x > a, a = 1 and a < 0 had (1, 2) certified; a = 0 with a declared positive, a > 1 or
+        a − 1 = 0 next to it had {2} certified for x² = 4 under x > a; x < a with a = 0 and x positive
+        was dropped from the domain; x + log(a) − log(a) = 2 had {2} certified with a = −1, and so did
+        every task with log(a), √a, acos(a), a/a, tan(a), a!, C(a, 2), gcd(a, 2) or a Σ_{k=1}^{a} at a
+        value where it is undefined, a convention or a reversed range; d/dx F(x) for F(x) = ∫_0^x t² dt
+        with the given x = 2 was 0. The verifier abstains (UNKNOWN) with the first reason found:
+
+          ir_inconsistent               a given or a constraint is false at the values (or closed and false
+                                        with no value at all: `pi < 3`), a value is outside
+                                        its symbol's declaration or domain, two givens fix one symbol to
+                                        two values: the problem has no instance
+          problem_undefined_as_written  an expression of the problem, read as written, is undefined at the
+                                        values (the value a given writes, log(−1) or 0**0, too)
+          given_binds_a_bound_variable  a given fixes a symbol inside an Integral or a Limit where an
+                                        enclosing operator binds it (d/da, a Sum's index) or where it is
+                                        the task's own variable (`normalize.parse.hold_parametric`)
+          given_binding_undecided       one of those checks is not decided exactly (a convention value
+                                        such as a reversed range or 0**0, an undecided comparison)"""
+        key = "binding_issues"
+        if key not in self.cache:
+            try:
+                self.cache[key] = self._binding_issues()
+            except Exception as e:  # noqa: BLE001 - a binding no check reads is not used
+                self.cache[key] = ("given_binding_undecided", [f"check failed: {type(e).__name__}"])
+        return self.cache[key]
+
+    def _constraint_bindings(self) -> tuple[dict, list]:
+        """Declared constraints of the form `a = c` (c a closed real number), and the texts."""
+        found: dict = {}
+        texts: list = []
+        for v in self.ir.vars:
+            for c in v.constraints:
+                try:
+                    rel = parse_relation(c, self.ns)
+                except Exception:  # noqa: BLE001 - unreadable_constraints abstains on it
+                    continue
+                if not isinstance(rel, sp.Eq):
+                    continue
+                for s_, val in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+                    if isinstance(s_, sp.Symbol) and isinstance(val, sp.Expr) and not val.free_symbols \
+                            and val.is_real is True and s_ not in found:
+                        found[s_] = val
+                        texts.append(c)
+        return found, texts
+
+    def _implied_values(self, known: dict) -> dict:
+        """Symbols a given `s = expr` fixes once the symbols of expr have their values in `known`, repeated
+        until nothing new comes (b = 2 and a = b - 3 give a = -1)."""
+        out: dict = {}
+        rels = []
+        for g in self.ir.givens:
+            try:
+                rel = parse_relation(g, self.ns)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(rel, sp.Eq):
+                rels.append(rel)
+        for _ in range(len(rels)):
+            have = {**known, **out}
+            grew = False
+            for rel in rels:
+                for s_, val in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+                    if not isinstance(s_, sp.Symbol) or s_ in have or not isinstance(val, sp.Expr) \
+                            or not val.free_symbols or not val.free_symbols <= set(have):
+                        continue
+                    v = val.xreplace(have)
+                    if not v.free_symbols and v.is_real is True:
+                        out[s_] = have[s_] = v
+                        grew = True
+            if not grew:
+                break
+        return out
+
+    def _binding_issues(self) -> tuple[str, list[str]] | None:
+        from ..normalize.parse import (PinnedBoundVariable, given_binding_report, hold_parametric,
+                                       parse_as_written, read_condition)
+        from .domain import _certified_compare, definedness_conditions, in_domain, relation_holds_at
+        bind, clash, _sources = given_binding_report(self.ir, self.ns)
+        cbind, _ctexts = self._constraint_bindings()
+        allb = dict(cbind)
+        for s_, v in bind.items():
+            if s_ in allb and _certified_compare(allb[s_], v) != 0:
+                clash.setdefault(s_, [allb[s_]]).append(v)
+            allb[s_] = v
+        # a value the givens imply through other values (b = 2, a = b - 3): checked like the others, never a
+        # pin (x + log(a) - log(a) = 2 with a = b - 3, b = 2 is undefined as written all the same)
+        implied = self._implied_values(allb)
+        allb.update(implied)
+        found: dict[str, list[str]] = {}
+
+        def note(reason, what):
+            found.setdefault(reason, [])
+            if str(what) not in found[reason]:
+                found[reason].append(str(what))
+
+        def closed_verdict(c):
+            """True/False/None for a closed condition, decided exactly."""
+            if c is sp.true or c is sp.false:
+                return bool(c)
+            try:
+                return relation_holds_at(c, sp.Dummy("_closed"), 0)
+            except Exception:  # noqa: BLE001
+                return None
+
+        # (1) one symbol, two values
+        for s_, vals in clash.items():
+            diff = [_certified_compare(vals[0], w) for w in vals[1:]]
+            note("ir_inconsistent" if any(d not in (0, None) for d in diff) else "given_binding_undecided",
+                 f"{s_} = {', '.join(str(w) for w in vals)}")
+        # (2) each value in its symbol's declaration and domain of discourse
+        for s_, v in allb.items():
+            vd = next((d for d in self.ir.vars if d.name == s_.name), None)
+            dset = self._DECLARED_SETS.get(vd.domain) if vd is not None else None
+            if dset is not None:
+                d = in_domain(dset, v)
+                if d is not True:
+                    note("ir_inconsistent" if d is False else "given_binding_undecided",
+                         f"{s_} = {v} (declared {vd.domain})")
+            if self._dod_mentions(s_):
+                try:
+                    ds = self.discourse(s_)
+                    # a domain of discourse that only names s_ as a parameter of another variable (x > b) is
+                    # a condition (3) reads at the values, not a set of values for s_
+                    d = True if ds.free_symbols - {s_} else in_domain(ds, v)
+                except Exception:  # noqa: BLE001 - the domain itself is the certificates' question
+                    d = True
+                if d is not True:
+                    note("ir_inconsistent" if d is False else "given_binding_undecided",
+                         f"{s_} = {v} (domain of discourse {self.ir.domain_of_discourse})")
+        # (3) every given and constraint at the values
+        texts = list(self.ir.givens) + [c for v in self.ir.vars for c in v.constraints]
+        dod = self.ir.domain_of_discourse
+        for t in texts + ([dod] if isinstance(dod, str) and dod.strip() else []):
+            try:
+                rel = read_condition(t, self.ns)
+            except Exception:  # noqa: BLE001 - side_conditions / unreadable_constraints abstain on it
+                continue
+            if rel is sp.false:
+                note("ir_inconsistent", t)
+                continue
+            fs = getattr(rel, "free_symbols", set())
+            if fs and not fs & set(allb):
+                continue                        # a closed one is decided too: `pi < 3` is no instance
+            try:
+                # evaluated: SymPy's assumptions (x < 0 with x declared positive is false)
+                if substitute_free(rel, allb) is sp.false:
+                    note("ir_inconsistent", t)
+                    continue
+                with sp.evaluate(False):
+                    r2 = substitute_free(rel, allb)
+            except Exception:  # noqa: BLE001
+                note("given_binding_undecided", t)
+                continue
+            if getattr(r2, "free_symbols", None):
+                continue
+            h = closed_verdict(r2)
+            if h is not True:
+                note("ir_inconsistent" if h is False else "given_binding_undecided", t)
+        if not allb:
+            return self._first_issue(found)
+        # (4) every expression of the problem, as written, at the values (never the task's own variable)
+        tv = task_variables(self.ir)
+        pins = {s_: v for s_, v in allb.items() if s_.name not in tv}
+        params = self.ir.task.params or {}
+        srcs = texts + [v for k, v in params.items() if isinstance(v, str) and k != "var"]
+        conflicts: list = []
+        for src in srcs:
+            e = parse_as_written(src, self.ns)
+            if e is None:
+                continue
+            try:
+                with sp.evaluate(False):
+                    hold_parametric(e, bind, tv)
+            except PinnedBoundVariable:
+                conflicts.append(src)
+            except Exception:  # noqa: BLE001 - the value parse reports it
+                pass
+            try:
+                with sp.evaluate(False):
+                    e2 = substitute_free(e, pins)
+                conds = definedness_conditions(e2, None)
+            except Exception:  # noqa: BLE001 - not read as written: the old reading
+                continue
+            for c in conds:
+                if getattr(c, "free_symbols", None):
+                    continue
+                h = closed_verdict(c)
+                if h is not True:
+                    note("problem_undefined_as_written" if h is False else "given_binding_undecided", src)
+                    break
+        # an IR function's call is read with its body as written (parse_as_written), so its conditions and its
+        # Integrals/Limits are among the above; a body that leaks a pin fails at the namespace already
+        # (5) a value a pin would put where an operator or the task binds the symbol
+        for c in conflicts:
+            note("given_binds_a_bound_variable", c)
+        return self._first_issue(found)
+
+    @staticmethod
+    def _first_issue(found: dict) -> tuple[str, list[str]] | None:
+        for reason in ("ir_inconsistent", "problem_undefined_as_written", "given_binds_a_bound_variable",
+                       "given_binding_undecided"):
+            if reason in found:
+                return reason, found[reason]
+        return None
 
     def bindings(self) -> dict:
         """The symbols the givens fix to one real number (`normalize.parse.given_bindings`)."""
@@ -399,29 +674,37 @@ class Ctx:
         pk = self._MAIN_RELATION.get(self.ir.task.kind)
         if pk and isinstance(params.get(pk), str):
             from ..equiv.numeric import real_odd_roots
-            from ..normalize.parse import UndeclaredSymbolError
+            from ..normalize.parse import read_condition
             try:
                 main = parse_relation(params[pk], self.ns)
             except Exception:  # noqa: BLE001 - the certificate reports it
                 main = None
             for g in self.ir.givens:
+                # a chain, an And/Or, `and`/`,`/`or`, a membership `x in (0, 3)` are read too, and a given
+                # that reads as no condition is never dropped: it was, and (−2, 2) was certified for
+                # x² < 4 next to 0 < x < 3 (fourth audit G1)
                 try:
-                    rel = parse_relation(g, self.ns)
-                except UndeclaredSymbolError:
+                    rel = read_condition(g, self.ns)
+                except Exception:  # noqa: BLE001 - UndeclaredSymbolError, ParseError: not applied
                     unapplied.append(g)
                     continue
-                except Exception:  # noqa: BLE001 - not a relation: nothing to restrict
-                    continue
-                if not isinstance(rel, sp.core.relational.Relational) or var not in rel.free_symbols \
-                        or rel == main:
+                if var not in getattr(rel, "free_symbols", set()) or rel == main:
                     continue
                 rel = self._with_bound_values(rel, var)
                 if rel is sp.false:                     # the values the givens fix contradict it
                     sets.append(S.EmptySet)
                     continue
-                if not isinstance(rel, sp.core.relational.Relational) or rel.free_symbols != {var}:
-                    if var in getattr(rel, "free_symbols", set()):
-                        unbound.append(g)
+                if rel is sp.true:
+                    continue
+                if rel.free_symbols != {var}:
+                    unbound.append(g)
+                    continue
+                if not isinstance(rel, sp.core.relational.Relational):
+                    sol = self.condition_set(rel, var)
+                    if sol is None:
+                        unapplied.append(g)
+                    else:
+                        sets.append(sol)
                     continue
                 rel_r = real_odd_roots(rel)
                 if at_risk(rel_r, var):
@@ -463,8 +746,11 @@ class Ctx:
         conds: list[Any] = []
         nowhere: set = set()
         undefined: list[str] = []
+        # a value a given fixes is put in before the conditions are read (x**a with a = 2 is x**2, defined
+        # everywhere; TAN-09); never the task's own variable, which a given only restricts
+        pins = self.parameter_pins()
         for s_ in srcs:
-            cs, nw = written_definedness(s_, self.ns)
+            cs, nw = written_definedness(s_, self.ns, pins)
             nowhere |= nw
             conds += [c for c in cs if c not in conds]
             if self._undefined_constant(s_):

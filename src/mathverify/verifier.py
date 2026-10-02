@@ -698,6 +698,15 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
                               flags=["constraint_unreadable"]))
         return layers, clean_flags
 
+    # A value a given fixes (`a = 0`) that the rest of the problem contradicts, that leaves one of its
+    # expressions undefined as written, that a bound or the task's own variable receives, or that no
+    # exact check decides: every certificate read it unchecked (fourth audit G7-G9, TAN-01/03/04, P1).
+    issue = ctx.binding_issues()
+    if issue is not None:
+        reason, what = issue
+        layers.append(unknown("intake.givens", f"{reason}: {what[:3]}", flags=[reason]))
+        return layers, clean_flags
+
     # The problem's own expression is undefined as written at a point with nothing left to choose
     # (`f(-1)` for f(x) = log(x) − log(x) + x). SymPy simplified it to a value, and that value was
     # certified. There is no answer to check against.

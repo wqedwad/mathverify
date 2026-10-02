@@ -354,28 +354,38 @@ def _conditions_on(ctx: Ctx, var, with_interval: bool, region=None) -> tuple[lis
     A relation with a trigonometric function is solved on `region` (the task's interval), not on ℝ,
     where SymPy returned one period: sin(x) > 0 was (0, pi), and the maximum 0 of -(x - 7)**2 under it
     was refuted (fourth audit G2, sandbox.exactsets)."""
-    from ..normalize.parse import UndeclaredSymbolError, parse_relation
+    from ..normalize.parse import read_condition
     srcs = list(ctx.ir.givens)
     if with_interval:
         vd = next((v for v in ctx.ir.vars if v.name == var.name), None)
         srcs = (list(vd.constraints) if vd is not None else []) + srcs
     rels: list = []
+    compound: list = []
     unread: list = []
     for s_ in srcs:
+        # an Or, `x < -3 or x > 1`, `x in (0, 3)`, `x > 0 and x < 3` are read too, and a given read as no
+        # condition is not dropped: Or(x < -3, x > 1) was, and the maximum 0 of -x² on [-5, 5] was
+        # certified (its supremum -1 is not attained; fourth audit G1)
         try:
-            rel = parse_relation(s_, ctx.ns)
-        except UndeclaredSymbolError:
+            rel = read_condition(s_, ctx.ns)
+        except Exception:  # noqa: BLE001 - UndeclaredSymbolError, ParseError: the certificate abstains
             unread.append(s_)
-            continue
-        except Exception:  # noqa: BLE001 - not a relation: nothing to cut (as Ctx.side_conditions)
             continue
         for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
             # parse_relation leaves relations unevaluated: x < 0 with x declared positive is solved to
             # the empty set below
-            if isinstance(r, sp.core.relational.Relational) and var in r.free_symbols:
-                rels.append(r)
+            if var not in getattr(r, "free_symbols", set()):
+                continue
+            (rels if isinstance(r, sp.core.relational.Relational) else compound).append(r)
     kept, unbound = ctx.on_var(rels, var)
     sets: list[sp.Set] = []
+    ckept, cunbound = ctx.on_var(compound, var)
+    unbound += cunbound
+    for r in ckept:
+        sol = ctx.condition_set(r, var)
+        if sol is None:
+            return None, unbound + unread
+        sets.append(sol)
     if with_interval:
         try:
             ds = ctx.discourse(var)
