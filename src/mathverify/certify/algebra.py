@@ -649,9 +649,16 @@ def _complete_solutions(eqs, ineqs, syms, sols, ctx: Ctx) -> tuple[list | None, 
         # the exact classes only (sandbox.exactsets.class_solveset): a rational equation, one trigonometric
         # function or a same-frequency sin/cos combination of a linear argument, one strictly monotone
         # function (exp, a**x, log, sinh, atan) of a linear argument, and products of these
-        rr = sb_run("mathverify.sandbox.exactsets:class_solveset", er, v, window, timeout=ctx.timeout)
-        if rr.ok and (rr.value is S.EmptySet or isinstance(rr.value, FiniteSet)):
-            found = (e, list(rr.value))
+        # On all of ℝ first: a finite set there leaves every point to `_filter_solutions`, which knows the
+        # candidates a convention decides (a reversed range: with n**2 = 4, n < 3 the hull of n's domain
+        # is [0, 2] and n = -2 was dropped there, so the value 3 of Σ_{k=1}^{n} k was certified); the
+        # hull only for a set that is infinite on ℝ (a periodic equation)
+        for w in ([S.Reals, window] if window != S.Reals else [S.Reals]):
+            rr = sb_run("mathverify.sandbox.exactsets:class_solveset", er, v, w, timeout=ctx.timeout)
+            if rr.ok and (rr.value is S.EmptySet or isinstance(rr.value, FiniteSet)):
+                found = (e, list(rr.value))
+                break
+        if found is not None:
             break
     if found is None:
         return None, f"no_equation_with_a_finite_proved_solution_set_on {window}"
