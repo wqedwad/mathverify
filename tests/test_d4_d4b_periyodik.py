@@ -897,6 +897,7 @@ def test_a_written_odd_root_of_a_negative_number_is_a_convention(rel):
     (_eq("sqrt(log(x)**2) = 1"), "{E}", "set", "INCORRECT"),
     (_eq("sqrt(log(x)**2) = 1"), "{E, exp(-1)}", "set", "CORRECT"),
     (_eq("Max(log(x), 0) = 0"), "{1}", "set", "INCORRECT"),
+    (_eq("Max(sinh(x), 0) = 0"), "{0}", "set", "INCORRECT"),      # (-oo, 0]: measure oo, not "positive"
 ])
 def test_review_of_round5_verdicts(ir, claim, kind, want):
     assert _run(ir, claim, kind).verdict == want
