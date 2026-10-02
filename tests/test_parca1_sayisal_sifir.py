@@ -140,20 +140,21 @@ def test_a_divergent_odd_integral_is_not_zero(make, f):
 
 
 def test_the_zero_test_itself():
-    from mathverify.certify.calculus import definite_integral_is_zero
+    """Since the fourth audit (1 Oct 2026, S1) the zero is a symbolic certificate
+    (`zero_integral_certificate`): numbers only bound a value, they never show it is 0."""
+    from mathverify.certify.calculus import zero_integral_certificate
     x = sp.Symbol("x", real=True)
     for f, a, b in [(x**2 - 2*x, 0, 3), (sp.cos(x), 0, sp.pi), (sp.log(x) + 1, 0, 1), (sp.tan(x), -1, 1),
                     (sp.Abs(x) - sp.Rational(1, 2), -1, 1)]:
-        assert definite_integral_is_zero(f, x, a, b)[0] is True, f
-    assert definite_integral_is_zero(sp.Rational(1, 10**40), x, 0, 1)[0] is False
-    assert definite_integral_is_zero(x, x, 0, 1)[0] is False
+        assert zero_integral_certificate(f, x, a, b)[0] is True, f
+    assert zero_integral_certificate(sp.Rational(1, 10**40), x, 0, 1)[0] is None
+    assert zero_integral_certificate(x, x, 0, 1)[0] is None
     for f in (sp.sin(x) + sp.Rational(1, 10**40), sp.sin(x) + sp.Rational(1, 10**60)):
-        assert definite_integral_is_zero(f, x, 0, 2 * sp.pi)[0] is not True, f
+        assert zero_integral_certificate(f, x, 0, 2 * sp.pi)[0] is None, f
     for f in (x * sp.exp(x**-2), 1 / x**5, 1 / x):
-        assert definite_integral_is_zero(f, x, -1, 1)[0] is None, f
-    # 0 by symmetry at every rung, but the integrator's own error estimate stays above the bound
-    # at 80 digits (2e-42): an unconverged quadrature decides nothing
-    assert definite_integral_is_zero(sp.sign(x) / sp.sqrt(sp.Abs(x)), x, -1, 1)[0] is None
+        assert zero_integral_certificate(f, x, -1, 1)[0] is None, f
+    # odd and absolutely integrable (|f| <= |x|^(-1/2)): 0 by symmetry, which no quadrature showed
+    assert zero_integral_certificate(sp.sign(x) / sp.sqrt(sp.Abs(x)), x, -1, 1)[0] is True
 
 
 def test_checked_forms_takes_an_exact_zero_only_when_confirmed():

@@ -119,6 +119,21 @@ def integrate_symbolic(expr, var, a=None, b=None):
     return sp.integrate(expr, (var, a, b))
 
 
+def antiderivatives(expr, var):
+    """SymPy's antiderivatives of `expr`: the default one and the manual (rule-based) one, without
+    unevaluated integrals. The manual one is the textbook form where the default is a Meijer-G
+    Piecewise (ln x/√x). Each is a CAS answer to be checked by differentiation."""
+    out = []
+    for kw in ({}, {"manual": True}):
+        try:
+            F = sp.integrate(expr, var, **kw)
+        except Exception:  # noqa: BLE001
+            continue
+        if not F.has(sp.Integral) and not any(F == G for G in out):
+            out.append(F)
+    return out
+
+
 def limit_two_sided(expr, var, point):
     plus = sp.limit(expr, var, point, "+")
     minus = sp.limit(expr, var, point, "-")
@@ -133,8 +148,14 @@ def quad_breakpoints(expr, var, a, b, points, dps=30, method="tanh-sinh"):
     """mpmath quad with explicit interior breakpoints; returns (value_str, error_str)."""
     mp.mp.dps = dps
     f = sp.lambdify(var, expr, "mpmath")
-    pts = [mp.mpf(str(sp.N(a, dps + 5)))] + [mp.mpf(str(sp.N(p, dps + 5))) for p in points] \
-        + [mp.mpf(str(sp.N(b, dps + 5)))]
+
+    def end(e):
+        e = sp.sympify(e)
+        if e in (oo, -oo):
+            return mp.inf if e is oo else -mp.inf      # mpmath maps an infinite range itself
+        return mp.mpf(str(sp.N(e, dps + 5)))
+
+    pts = [end(a)] + [mp.mpf(str(sp.N(p, dps + 5))) for p in points] + [end(b)]
     # sort/dedupe within (a,b)
     lo, hi = pts[0], pts[-1]
     inner = sorted({p for p in pts[1:-1] if lo < p < hi})
@@ -247,6 +268,17 @@ def numeric_value(expr, dps=30):
     mp.mp.dps = dps
     v = sp.N(expr, dps)
     return str(v)
+
+
+def numeric_value_bits(expr, dps=30):
+    """(str(value), significant bits) of SymPy's evalf, or None when it gives no number. evalf
+    reports its own accuracy in the result's precision: the Dirichlet integral came out '-0.e+0'
+    with 1 bit and ∫_0^oo sin²x/x² as '1.6' with 9 bits, each read before as a 40-digit value."""
+    mp.mp.dps = dps
+    v = sp.N(expr, dps)
+    if not isinstance(v, sp.Float):
+        return (str(v), None) if v.is_Integer else None
+    return str(v), int(v._prec)
 
 
 # ----------------------------------------------------------------------------
