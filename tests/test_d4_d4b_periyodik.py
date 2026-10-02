@@ -172,6 +172,7 @@ def test_the_work_of_one_call_is_bounded():
     from mathverify.sandbox.exactsets import exact_solveset
     t0 = time.time()
     assert isinstance(exact_solveset(sp.sin(1000 * x) > 0, x, sp.Interval(0, 30)), sp.ConditionSet)
+    assert isinstance(exact_solveset(sp.Eq(sp.sin(100000 * x), 0), x, sp.Interval(0, 30)), sp.ConditionSet)
     assert isinstance(exact_solveset(Q ** 2 + sp.sin(x) ** 2 > 0, x, sp.Interval(0, 7)), sp.ConditionSet)
     assert time.time() - t0 < 30
 

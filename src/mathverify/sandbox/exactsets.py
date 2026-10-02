@@ -257,8 +257,6 @@ def _on(progs, lo, hi) -> list:
         for c in cand:
             if _certified(c - lo) >= 0 and _certified(hi - c) >= 0:
                 out.append(c)
-        if len(out) > LIMIT:
-            raise _Unsolved("too many points on the window")
     return out
 
 
