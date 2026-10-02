@@ -17,6 +17,8 @@ Outcomes per step: verified | refuted | unknown | skipped. The layer result is `
 from __future__ import annotations
 
 import re
+import time
+from contextvars import ContextVar
 from typing import Any
 
 import sympy as sp
@@ -32,6 +34,80 @@ from ..sandbox import run as sb_run
 LAYER = "steps.refute"
 
 _IN_SET = re.compile(r"^\s*([A-Za-z_]\w*)\s+in\s+(\{.*\})\s*$")
+
+# Seconds one step may spend re-checking itself on the premises (solving them, sampling their region,
+# searching a counterexample there). A step over a cubic premise with three real roots spent 120-390 s
+# sampling a set of radicals in-process (fourth audit, D4-ADIM-F). Checked between the expensive calls;
+# past it the step is unknown (`step_time_budget_exceeded`).
+_STEP_BUDGET = 60.0
+_deadline: ContextVar[float | None] = ContextVar("mathverify_step_deadline", default=None)
+
+
+class _OutOfTime(BaseException):
+    """The step's time budget ran out. A BaseException, so that no `except Exception` on the way, which
+    keeps the identity check's refutation when a re-check fails, turns it into a refutation."""
+
+
+def _tick() -> None:
+    d = _deadline.get()
+    if d is not None and time.monotonic() > d:
+        raise _OutOfTime()
+
+
+# Heads under which an expression is analytic on the complex plane minus a discrete set: entire functions,
+# meromorphic ones, sums, products, integer powers, powers of a positive constant. The class is closed
+# under composition, and minus a discrete set the plane stays connected, so two such expressions that
+# agree on a set with an accumulation point agree wherever both are defined (identity theorem); a nonzero
+# difference vanishes only on a discrete set, which random points miss. Agreement of anything else at
+# sample points proves nothing: asin(sin(x)) = x on 0 < x < 1.58, log(x**2) = 2*log(x) on x > -1/1000
+# (fourth audit, D4-ADIM-A). A whitelist, not the comparison's list of non-smooth functions.
+_ENTIRE = (sp.exp, sp.sin, sp.cos, sp.sinh, sp.cosh)
+_MEROMORPHIC = (sp.tan, sp.cot, sp.sec, sp.csc, sp.tanh, sp.coth, sp.sech, sp.csch)
+
+
+def _analytic_off_discrete(e) -> bool:
+    if isinstance(e, (sp.Symbol, sp.Number, sp.NumberSymbol)) or e is S.ImaginaryUnit:
+        return e.is_finite is not False
+    if isinstance(e, (sp.Add, sp.Mul)):
+        return all(_analytic_off_discrete(a) for a in e.args)
+    if isinstance(e, sp.Pow):
+        b, x = e.args
+        if isinstance(x, sp.Integer):
+            return _analytic_off_discrete(b)
+        if b.is_number and not b.free_symbols and b.is_positive is True and b.is_finite is True:
+            return _analytic_off_discrete(x)
+        return False
+    if isinstance(e, _ENTIRE + _MEROMORPHIC) and len(e.args) == 1:
+        return _analytic_off_discrete(e.args[0])
+    return False
+
+
+def _has_interior(dom) -> bool:
+    """Does the set hold an interval of positive length (so random points of it accumulate)? A set of
+    integers or a finite set does not: binomial(n, 200) vanishes at every integer 0..199, and agreement
+    with 0 at sample integers proved nothing (D4-ADIM-A)."""
+    try:
+        if dom.is_subset(S.Integers) is not False:
+            return False
+        m = dom.measure
+        return bool(m.is_positive) or m == sp.oo
+    except Exception:  # noqa: BLE001 - a set whose measure is not known: no interior proved
+        return False
+
+
+def _agreement_proves(a, b, dom: dict, cev: dict) -> bool:
+    """Is the comparison's True (`answers_equivalent`) a proof? A symbolic proof, or the comparison's own
+    proof for a non-smooth expression (cells between breakpoints, a period checked), is. Agreement at random
+    points is only for two expressions analytic off a discrete set (`_analytic_off_discrete`) compared on
+    sets with interior; otherwise it decides nothing."""
+    if cev.get("method") != "random_point":
+        return True
+    proof = (cev.get("random_point") or {}).get("nonsmooth_proof")
+    if isinstance(proof, str) and (proof.startswith("cells_proved") or proof.startswith("period_")):
+        return True
+    if not (_analytic_off_discrete(sp.sympify(a)) and _analytic_off_discrete(sp.sympify(b))):
+        return False
+    return all(_has_interior(d) for d in dom.values())
 
 
 def _parse_claim(claim: str, ns: dict[str, Any]):
@@ -224,7 +300,9 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
         if lhs == integ and not rhs.has(sp.Integral, sp.Limit, sp.Derivative, sp.Subs):
             # indefinite integral: derivative certificate on rhs
             F = rhs.subs(sp.Symbol("C"), 0)
-            dom = ctx.domain_for(var) if var.name in ctx.ns else S.Reals
+            # on the region the premises leave (`_on_premises`): an antiderivative of |x| on the task's
+            # [0, 2] is x**2/2 (fourth audit, D4-ADIM-E)
+            dom = (doms or {}).get(var, ctx.domain_for(var) if var.name in ctx.ns else S.Reals)
             ok, cev = antiderivative_certificate(F, integ.function, var, timeout=ctx.timeout, discourse=dom)
             ev["antiderivative"] = cev
             return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
@@ -313,8 +391,10 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
         dom = _compare_domains(free, ctx, doms)
         ok, cev = answers_equivalent(rhs, lhs, shape="expression", domain=dom, seed=ctx.seed)
         ev["compare"] = cev
+        if ok is True and not _agreement_proves(rhs, lhs, dom, cev):
+            return "unknown", {**ev, "reason": "sample_agreement_is_no_proof_here"}
         if ok is True:
-            return "verified", ev
+            return _forward_ranges_only(claim, ctx, doms, ev)
         if ok is False:
             return "refuted", ev
         return "unknown", {**ev, "reason": "parametric_form"}
@@ -334,10 +414,15 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
     if free:
         dom = _compare_domains(free, ctx, doms)
         ok, cev = answers_equivalent(rhs, val, shape="expression", domain=dom, seed=ctx.seed)
+        if ok is True and not _agreement_proves(rhs, val, dom, cev):
+            ev["compare"] = cev
+            return "unknown", {**ev, "reason": "sample_agreement_is_no_proof_here"}
     else:
         ok, cev = answers_equivalent(rhs, val, shape="scalar")
     ev["compare"] = cev
-    return ("verified" if ok is True else "refuted" if ok is False else "unknown"), ev
+    if ok is True:
+        return _forward_ranges_only(claim, ctx, doms, ev)
+    return ("refuted" if ok is False else "unknown"), ev
 
 
 def _binders_keep_clear_of(claim, syms) -> bool:
@@ -491,6 +576,7 @@ def _finite_instances(syms, premises: list, ctx: Ctx) -> tuple[list[dict], list[
     points: list[dict] = []
 
     def expand(pt: dict) -> bool:
+        _tick()
         rest = [q for q in order if q not in pt]
         if not rest:
             points.append(pt)
@@ -567,6 +653,11 @@ def _counterexample_point(ev: dict, syms) -> dict | None:
     the evidence (`equiv.random_point`), or None."""
     from ..normalize.parse import parse_expr_str
     cx = ((ev.get("compare") or {}).get("random_point") or {}).get("counterexample")
+    if cx is None:
+        # an antiderivative certificate compares F' with the integrand on its own domain: its point
+        # (D4-ADIM-E: Integral(Abs(x), x) = x**2/2 refuted at x < 0 on the task's [0, 2])
+        cx = (((ev.get("antiderivative") or {}).get("random_point") or {}).get("counterexample")
+              if isinstance(ev.get("antiderivative"), dict) else None)
     pt = cx.get("point") if isinstance(cx, dict) else None
     if not isinstance(pt, dict) or not pt:
         return None
@@ -635,23 +726,268 @@ def _refutation_point(ev: dict, syms) -> dict | None:
     return _counterexample_point(ev, syms)
 
 
-def _refuted_where_backwards(claim, ev: dict) -> bool:
-    """Was the refutation of `claim` found where one of its own ranges runs backwards, or at a point not
-    read back while it has such a range? Every route's point is checked here: the premises' solution set,
-    a value pinned by a given (`floor` evaluated the pinned Sum, so the parser's range check missed it),
-    a random point of the identity check."""
+def _symbolic_range_nodes(claim) -> list | None:
+    """The Sums and Products of `claim` whose range names a free symbol of the claim (no bound variable of
+    an enclosing binder), or None when one of them has several limits or a range that also names a bound
+    variable (its empty reading is not built here)."""
+    free = getattr(claim, "free_symbols", set())
+    out = []
+    for node in sp.preorder_traversal(claim):
+        if not isinstance(node, (sp.Sum, sp.Product)):
+            continue
+        if any(len(lim) == 3 and (lim[2] - lim[1]).free_symbols for lim in node.limits):
+            if len(node.limits) != 1 or not (node.limits[0][2] - node.limits[0][1]).free_symbols <= free:
+                return None
+            out.append(node)
+    return out
+
+
+def _named(point: dict, ctx: Ctx) -> dict | None:
+    """A point read back from evidence (keys are names or symbols) with the problem's symbols as keys."""
+    out = {}
+    for k, v in point.items():
+        q = ctx.ns.get(str(k))
+        if not isinstance(q, sp.Symbol):
+            return None
+        out[q] = v
+    return out
+
+
+def _span_state(ranges: list, point: dict) -> str | None:
+    """'forward' when every range (`Contains(hi - lo + 1, FORWARD_SPANS)`) runs forward or is empty at the
+    point, 'backward' when one runs backwards there (hi < lo - 1), None when that is not decided."""
+    from ..certify.domain import decide_membership
+    state = "forward"
+    for c in ranges:
+        span = c.args[0].xreplace(point)
+        if span.free_symbols:
+            state = None
+            continue
+        if span.is_integer is True and span.is_negative is True:
+            return "backward"
+        try:
+            held = decide_membership(span, c.args[1])
+        except Exception:  # noqa: BLE001
+            held = None
+        if held is not True:
+            state = None
+    return state
+
+
+def _empty_reading(claim, nodes: list, point: dict | None = None):
+    """`claim` with every Sum/Product of `nodes` that runs backwards at `point` (each of them, without a
+    point) read as the empty sum (0) or product (1), the reading other than Karr's (DECISIONS §80); None
+    when the direction of one is not decided at the point."""
+    rep = {}
+    for node in nodes:
+        _, lo, hi = node.limits[0]
+        if point is not None:
+            span = (hi - lo + 1).xreplace(point)
+            if span.free_symbols or span.is_integer is not True:
+                return None
+            if span.is_negative is not True:
+                continue
+        rep[node] = S.Zero if isinstance(node, sp.Sum) else S.One
+    return claim.xreplace(rep)
+
+
+_KARR_ONLY = "verified_only_with_karr_where_a_range_runs_backwards"
+
+
+def _forward_ranges_only(claim, ctx: Ctx, doms: dict | None, ev: dict) -> tuple[str, dict]:
+    """A `compute` claim found equal on the compared sets, checked where one of its own Sum/Product ranges
+    runs backwards there: SymPy's value at such a point is Karr's convention, and with the empty sum
+    (§80's other reading) "Sum(k, (k, 1, n)) = n*(n + 1)/2" is false at n = -2 (0 != 1). Verified only when
+    no compared point runs a range backwards, or the claim with those ranges read as empty (0, or 1 for a
+    Product) is verified on those points too; otherwise unknown (`_KARR_ONLY`, fourth audit, D4-ADIM-H).
+    The backward points are solved for a range on one symbol; with ranges on several symbols, or ranges
+    whose backward sets differ, the claim is unknown."""
+    from ..certify.domain import is_range_span
+    ranges = [c for c in _range_spans(claim) if is_range_span(c) and c.free_symbols]
+    if not ranges:
+        return "verified", ev
+    syms = set().union(*(c.free_symbols for c in ranges))
+    nodes = _symbolic_range_nodes(claim)
+    if len(syms) != 1 or nodes is None or any(ctx.ns.get(q.name) != q for q in syms):
+        return "unknown", {**ev, "reason": _KARR_ONLY}
+    (v,) = syms
+    region = (doms or {}).get(v, ctx.domain_for(v))
+    backs = []
+    for c in ranges:
+        _tick()
+        r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Lt(c.args[0], 0), v, region, timeout=ctx.timeout)
+        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+            return "unknown", {**ev, "reason": _KARR_ONLY}
+        backs.append(r.value)
+    try:
+        empty = sp.Union(*backs).is_empty
+    except Exception:  # noqa: BLE001
+        empty = None
+    if empty is True:
+        return "verified", ev
+    if len(set(backs)) != 1:
+        return "unknown", {**ev, "reason": _KARR_ONLY}
+    s2, ev2 = _check_compute(_empty_reading(claim, nodes), ctx, doms={**(doms or {}), v: backs[0]})
+    if s2 == "verified":
+        return "verified", {**ev, "empty_reading_where_a_range_runs_backwards": "verified"}
+    return "unknown", {**ev, "reason": _KARR_ONLY, "empty_reading": {"status": s2, "reason": ev2.get("reason")}}
+
+
+def _substituted(claim, point: dict):
+    """The relation with `point` substituted, each side separately (Eq would evaluate itself)."""
+    if isinstance(claim, sp.core.relational.Relational):
+        return type(claim)(claim.lhs.xreplace(point), claim.rhs.xreplace(point), evaluate=False)
+    return claim.xreplace(point)
+
+
+_RANGE_PROBES = list(range(-8, 13)) + [20, 50]
+
+
+def _binds_none_of(claim, syms) -> bool:
+    """Does no operation of `claim` bind one of `syms` (a Sum/Product/Integral variable, a Limit's or a
+    Derivative's variable, any other binder's)? Then `xreplace` of `syms` reaches only their free
+    occurrences."""
+    for node in sp.preorder_traversal(claim):
+        if isinstance(node, (sp.Sum, sp.Product, sp.Integral)):
+            bound = {lim[0] for lim in node.limits}
+        elif isinstance(node, sp.Limit):
+            bound = {node.args[1]}
+        elif isinstance(node, sp.Derivative):
+            bound = set(node.variables)
+        else:
+            bound = set(getattr(node, "bound_symbols", ()) or ())
+        if bound & set(syms):
+            return False
+    return True
+
+
+def _reading_free(nodes: list, point: dict, ctx: Ctx) -> bool:
+    """Is the value of every Sum/Product of `nodes` that runs backwards at `point` the same under both
+    readings, Karr's (SymPy's) and the empty sum (0) or product (1)? Then the claim's value there is no
+    convention (Sum(0, (k, 1, n)) at n = -3); otherwise it is one, and the point decides nothing (part 11:
+    floor(Σ_{k=3}^{1} k) is -2 or 0)."""
+    if nodes is None:
+        return False
+    for node in nodes:
+        _, lo, hi = node.limits[0]
+        span = (hi - lo + 1).xreplace(point)
+        if span.free_symbols or span.is_integer is not True:
+            return False
+        if span.is_negative is not True:
+            continue
+        empty = S.Zero if isinstance(node, sp.Sum) else S.One
+        r = sb_run("mathverify.steps.deterministic:_doit", node.xreplace(point), timeout=ctx.timeout)
+        if not r.ok or not isinstance(r.value, sp.Expr) or r.value.has(sp.Sum, sp.Product):
+            return False
+        d = sb_run("mathverify.sandbox.ops:simplify_diff", r.value, empty, timeout=ctx.timeout)
+        if not d.ok or d.value != 0:
+            return False
+    return True
+
+
+def _refuted_in_both_readings(claim, ranges: list, nodes, ctx: Ctx, premises: list, recheck) -> bool:
+    """Is `claim` refuted, re-checked (`recheck`, the step's own check) at values of its ranges' symbols the
+    premises allow, at a point where its value is no convention: where every range runs forward (both
+    readings agree there), or where the ranges running backwards have the same value under both readings
+    (`_reading_free`)? Values of at most two such symbols are probed; a premise that links them to another
+    symbol leaves the question open (False)."""
+    from itertools import product
+    rsyms = set().union(*(c.free_symbols for c in ranges))
+    if nodes is None or len(rsyms) > 2 or any(ctx.ns.get(q.name) != q for q in rsyms) \
+            or not _binds_none_of(claim, rsyms):
+        return False
+    on = [p for p in _premise_parts(premises) if p.free_symbols & rsyms]
+    if any(not p.free_symbols <= rsyms for p in on):
+        return False
+    order = sorted(rsyms, key=lambda q: q.name)
+    fwd: list[dict] = []
+    bwd: list[dict] = []
+    for combo in product(_RANGE_PROBES, repeat=len(order)):
+        pt = {q: sp.Integer(c) for q, c in zip(order, combo)}
+        if any(in_domain(ctx.domain_for(q), v) is not True for q, v in pt.items()):
+            continue
+        if any(_holds_exactly(p, pt, ctx) is not True for p in on):
+            continue
+        st = _span_state(ranges, pt)
+        if st == "forward" and len(fwd) < 3:
+            fwd.append(pt)
+        elif st == "backward" and len(bwd) < 3:
+            bwd.append(pt)
+    for pt in fwd:
+        _tick()
+        if recheck(_substituted(claim, pt)) == "refuted":
+            return True
+    for pt in bwd:
+        _tick()
+        if _reading_free(nodes, pt, ctx) and recheck(_substituted(claim, pt)) == "refuted":
+            return True
+    return False
+
+
+def _refuted_where_backwards(claim, ev: dict, ctx: Ctx | None = None, premises: list = (),
+                             recheck=None) -> bool:
+    """Does the refutation of `claim` rest on a convention of one of its own operations (DECISIONS §80), so
+    that it is withdrawn? Every route's point is checked here: the premises' solution set, a value pinned
+    by a given (`floor` evaluated the pinned Sum, so the parser's range check missed it), a random point of
+    the identity check.
+
+    * A value convention other than a range (odd root, Mod divisor, part d4a): withdrawn when the point is
+      not read back or does not decide it.
+    * A Sum/Product range: the refutation stands where every range runs forward at the point. Where one
+      runs backwards it stands only when the value there is the same under both readings, Karr's and the
+      empty sum (`_reading_free`). Where the point is not read back or does not fix the range's symbols (a
+      closed comparison after SymPy folded Sum(0, (k, 1, n - 5)) away, an antiderivative certificate, a
+      random point of x alone), the claim is re-checked at values of those symbols
+      (`_refuted_in_both_readings`): withdrawn unless refuted at such a point. Withdrawn before for any
+      such point, a wrong step padded with a sum that is 0 under every reading was hidden (fourth audit,
+      D4-ADIM-B)."""
     spans = _range_spans(claim)
     if not spans:
         return False
+    from ..certify.domain import is_range_span
     pt = _refutation_point(ev, getattr(claim, "free_symbols", set()))
-    return pt is None or _runs_backwards_at(spans, pt)
+    others = [c for c in spans if not is_range_span(c)]
+    ranges = [c for c in spans if is_range_span(c)]
+    if others and (pt is None or _runs_backwards_at(others, pt)):
+        return True
+    if not ranges:
+        return False
+    if ctx is None or recheck is None:
+        return pt is None or _runs_backwards_at(ranges, pt)
+    point = _named(pt, ctx) if pt is not None else None
+    state = _span_state(ranges, point) if point is not None else None
+    nodes = _symbolic_range_nodes(claim)
+    if state == "forward":
+        return False
+    if state == "backward":
+        return not _reading_free(nodes, point, ctx)
+    return not _refuted_in_both_readings(claim, ranges, nodes, ctx, list(premises), recheck)
 
 
-def _check_at(claim, text: str, point: dict, ctx: Ctx) -> tuple[str, dict]:
+def _undefined_at(conds, point: dict, ctx: Ctx) -> bool:
+    """Is one of the claim's written conditions (`_written_relations`) false at the point (symbols matched
+    by name)? There the claim, read as written, has no value (principle 12): the point neither refutes nor
+    verifies it. A condition the point does not decide does not count."""
+    by_name = {str(k): v for k, v in point.items()}
+    for c in conds:
+        sub = {q: by_name[q.name] for q in c.free_symbols if q.name in by_name}
+        if len(sub) != len(c.free_symbols):
+            continue
+        if _decide(c, sub, ctx) is False:
+            return True
+    return False
+
+
+def _check_at(claim, text: str, point: dict, ctx: Ctx, conds=()) -> tuple[str, dict]:
     """The `compute` claim checked at a point: the sides substituted separately (Eq would evaluate itself
     on substitution), a Sum/Product range there through the parser's range checks (reversed, or not an
     integer apart: the claim is not read there). A range that runs backwards at the point decides nothing,
-    also when the substitution evaluated it away (`floor` of a pinned Sum: `_runs_backwards_at`)."""
+    also when the substitution evaluated it away (`floor` of a pinned Sum: `_runs_backwards_at`). Nor does
+    a point where the claim, read as written, is undefined (`conds`): sqrt(x**3) = x*sqrt(x) at x = -2,
+    where neither side is real, was refuted (fourth audit, D4-ADIM-J)."""
+    _tick()
+    if _undefined_at(conds, point, ctx):
+        return "unknown", {"reason": "claim_undefined_at_the_point"}
     pinned = Eq(claim.lhs.xreplace(point), claim.rhs.xreplace(point), evaluate=False)
     try:
         _refuse_reversed_ranges(pinned, text)
@@ -662,7 +998,23 @@ def _check_at(claim, text: str, point: dict, ctx: Ctx) -> tuple[str, dict]:
     return _check_compute(pinned, ctx)
 
 
-def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: dict) -> tuple[str, dict]:
+def _closed_form_set(d) -> bool:
+    """Is `d` a set the comparison can sample without deciding memberships in SymPy: an interval or a union
+    of them, the integers or naturals, a Range, a finite set of real numbers, such a set minus finitely many
+    points?"""
+    if d in (S.Reals, S.Integers, S.Naturals, S.Naturals0) or isinstance(d, (sp.Interval, sp.Range)):
+        return True
+    if isinstance(d, sp.FiniteSet):
+        return all(isinstance(c, sp.Expr) and not c.free_symbols and c.is_real is True for c in d)
+    if isinstance(d, sp.Union):
+        return all(_closed_form_set(a) for a in d.args)
+    if isinstance(d, sp.Complement):
+        return _closed_form_set(d.args[0]) and isinstance(d.args[1], sp.FiniteSet)
+    return False
+
+
+def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: dict,
+                 conds=()) -> tuple[str, dict]:
     """A `compute` claim refuted as an identity (or a parametric form without a value), re-checked where
     the premises (the givens, the variables' constraints, the `eq` steps proved in the same branch) put
     its symbols. The identity's counterexample is no instance of the problem when the premises exclude
@@ -683,47 +1035,102 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
       backwards may be in the region, nothing is verified. Without such a counterexample one is searched
       where the premises hold (`_counterexample_on_premises`: on their equations' solutions, y = 2x + 1,
       or by sampling, x > y). A premise that also names a symbol outside the claim is not read here
-      (x > 0 from x > y and y > 0 is not derived): that refutation stands."""
+      (x > 0 from x > y and y > 0 is not derived): that refutation stands.
+    * `conds`, the claim's own written conditions (`_written_relations`), sort out its counterexamples too:
+      a point where the claim has no value is none (D4-ADIM-J). They narrow the region a counterexample is
+      searched in, never the region a refuted identity is verified on (verified only where the claim is
+      defined, it is unknown).
+    * The point of an antiderivative certificate is read back too (`_counterexample_point`, D4-ADIM-E); a
+      refutation that names no point still stands.
+    * A claim verified only with Karr's value of a range that may run backwards (`_KARR_ONLY`) is checked
+      again on the region: the premises may leave no such point (n > 0)."""
     syms = getattr(claim, "free_symbols", None)
     if not isinstance(claim, Eq) or not syms or any(ctx.ns.get(q.name) != q for q in syms):
         return status, ev
     if _binders_keep_clear_of(claim, syms):
+        _tick()
         inst = _finite_instances(syms, premises, ctx)
         if inst is not None:
             if inst[0] or inst[1]:
-                return _check_instances(claim, text, syms, inst, ctx, ev)
+                return _check_instances(claim, text, syms, inst, ctx, ev, conds)
             return status, ev                # no instance at all: nothing to check it at
-    if status != "refuted":
+    if status != "refuted" and ev.get("reason") != _KARR_ONLY:
         return status, ev
     direct = [p for p in _premise_parts(premises) if p.free_symbols <= syms]
-    if not direct:
+    own = [c for c in conds if c.free_symbols <= syms and c not in direct]
+    if not direct and not own:
         return status, ev
-    pt = _counterexample_point(ev, syms)
-    if pt is None:
-        return status, ev
-    if all(_holds_exactly(p, pt, ctx) is True for p in direct):
+    pt = _counterexample_point(ev, syms) if status == "refuted" else None
+    if status == "refuted" and pt is None:
+        return status, ev                    # no point read back: the refutation stands, as before
+    if pt is not None and set(pt) == syms and all(_holds_exactly(p, pt, ctx) is True for p in direct) \
+            and not _undefined_at(own, pt, ctx):
         return status, {**ev, "counterexample_satisfies_premises": True}
+    # the region the premises leave each symbol alone (solved exactly), and within it the part where the
+    # claim is defined as written; `solved`: the symbols every premise on them alone was solved for
     region: dict = {}
+    narrowed = False
     back: list = []
+    solved: set = set()
     for q in syms:
         dom, rev = ctx.domain_for(q), ctx.reversed_region(q)
-        for p in direct:
-            if p.free_symbols == {q} and isinstance(p, sp.core.relational.Relational):
+        ok = True
+        for part in (direct, own):
+            before = dom
+            for p in part:
+                if p.free_symbols != {q} or not isinstance(p, sp.core.relational.Relational):
+                    continue
+                _tick()
                 sol = _solved_both_readings(p, q, ctx)
                 if sol is not None:
                     dom, rev = sp.Intersection(dom, sol), sp.Intersection(rev, sol)
+                elif part is direct:
+                    ok = False
+            if part is own and dom != before:
+                narrowed = True
+        if ok:
+            solved.add(q)
         if dom != ctx.domain_for(q):
             region[q] = dom
         back.append(rev)
     if any(d is S.EmptySet for d in region.values()):
         return status, ev                    # no instance at all: nothing to check it at
+
+    def instance(p_):
+        """Is the counterexample `p_` an instance? A symbol it does not fix was compared away (SymPy folded
+        Sum(0, (k, 1, n - 5)), an antiderivative's derivative lost the constant): the refutation holds for
+        each of its values, so the premises on it alone need only leave it one (D4-ADIM-B, -E)."""
+        fixed = set(p_)
+        for p in direct:
+            if p.free_symbols <= fixed:
+                if _holds_exactly(p, p_, ctx) is not True:
+                    return False
+            elif p.free_symbols & fixed or len(p.free_symbols) != 1:
+                return False
+        for q in syms - fixed:
+            try:
+                if q not in solved or region.get(q, ctx.domain_for(q)).is_empty is not False:
+                    return False
+            except Exception:  # noqa: BLE001
+                return False
+        return not _undefined_at(own, p_, ctx)
+
+    if pt is not None and set(pt) != syms and instance(pt):
+        return status, {**ev, "counterexample_satisfies_premises": True}
     base = {"identity_refuted": ev, "premise_region": {str(k): str(v) for k, v in region.items()}}
     pending = None
     for doms in (_region_cells(region) if region else []):
+        _tick()
+        if not all(_closed_form_set(d) for d in doms.values()):
+            # a set SymPy left unevaluated (the real roots of a cubic as an Intersection of radicals):
+            # sampling it decides each membership in SymPy and took minutes (D4-ADIM-F)
+            if pending is None:
+                pending = ("unknown", {"reason": "premise_region_not_in_closed_form"})
+            continue
         s2, ev2 = _check_compute(claim, ctx, doms=doms)
         if s2 == "refuted":
             pt2 = _counterexample_point(ev2, syms)
-            if pt2 is not None and all(_holds_exactly(p, pt2, ctx) is True for p in direct):
+            if pt2 is not None and instance(pt2):
                 return "refuted", {**ev2, **base, "counterexample": {str(k): str(v) for k, v in pt2.items()}}
             s2 = "unknown"
             ev2 = {**ev2, "reason": "counterexample_not_proved_an_instance"}
@@ -737,10 +1144,14 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
         if reversed_left:
             # a point where a range of the problem runs backwards may be an instance: no verification
             return "unknown", {**base, "reason": "reversed_range_points_undecided"}
+        if narrowed and status == "refuted":
+            # verified only where the claim is defined as written, a part of what the premises allow:
+            # outside it the claim has no value, which verifies nothing either
+            return "unknown", {**base, "reason": "verified_only_where_the_claim_is_defined"}
         return "verified", base
     # no counterexample the premises allow yet: one is searched where they put the symbols
     if _binders_keep_clear_of(claim, syms):
-        found = _counterexample_on_premises(claim, text, direct, syms, ctx, region)
+        found = _counterexample_on_premises(claim, text, direct, syms, ctx, region, own)
         if found is not None:
             return "refuted", {**found[1], **base, "counterexample": {str(k): str(v) for k, v in found[0].items()}}
     if pending is None:
@@ -751,15 +1162,18 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
 _MAX_TRIES = 6                       # premise-satisfying points the claim is checked at in the search
 
 
-def _counterexample_on_premises(claim, text: str, direct: list, syms, ctx: Ctx, region: dict):
+def _counterexample_on_premises(claim, text: str, direct: list, syms, ctx: Ctx, region: dict, own=()):
     """(a point every premise in `direct` holds at, where the claim is refuted, the evidence), or None:
     searched on the solutions of the premises' equations (a parametric solution sampled: y = 2x + 1) or,
-    without equations, among sample points of the region (x > y). At most _MAX_TRIES points are checked."""
+    without equations, among sample points of the region (x > y). At most _MAX_TRIES points are checked.
+    A point where the claim is undefined as written (`own`) is none (`_check_at`); a region not in closed
+    form (`_closed_form_set`) is not sampled."""
     order = sorted(syms, key=lambda q: q.name)
     doms = {q: region.get(q, ctx.domain_for(q)) for q in order}
     eqs = [p for p in direct if isinstance(p, Eq)]
     cands: list[dict] = []
     if eqs:
+        _tick()
         r = sb_run("mathverify.sandbox.ops:solve_system", eqs, order, True, timeout=ctx.timeout)
         for s_ in (r.value if r.ok and isinstance(r.value, list) else []):
             if not isinstance(s_, dict):
@@ -770,14 +1184,17 @@ def _counterexample_on_premises(claim, text: str, direct: list, syms, ctx: Ctx, 
             if rem - set(order):
                 continue
             rdoms = {q: doms[q] for q in sorted(rem, key=lambda q: q.name)}
+            if rem and not all(_closed_form_set(d) for d in rdoms.values()):
+                continue
             for pt in (sample_points(rdoms, 12, ctx.seed) + _small_integer_grid(rdoms)[:12] if rem else [{}]):
                 full = {k: v.xreplace(pt) for k, v in s_.items()}
                 full.update(pt)
                 cands.append(full)
-    else:
+    elif all(_closed_form_set(d) for d in doms.values()):
         cands = sample_points(doms, 30, ctx.seed) + _small_integer_grid(doms)[:30]
     tried = 0
     for pt in cands:
+        _tick()
         if set(pt) != set(order) or any(getattr(v, "free_symbols", True) for v in pt.values()):
             continue
         if not _in_domains(ctx, pt) or any(_holds(p, pt) is not True for p in direct):
@@ -785,7 +1202,7 @@ def _counterexample_on_premises(claim, text: str, direct: list, syms, ctx: Ctx, 
         if any(_holds_exactly(p, pt, ctx) is not True for p in direct):
             continue
         tried += 1
-        s_, e_ = _check_at(claim, text, pt, ctx)
+        s_, e_ = _check_at(claim, text, pt, ctx, own)
         if s_ == "refuted":
             return pt, e_
         if tried >= _MAX_TRIES:
@@ -813,7 +1230,7 @@ def _region_cells(region: dict) -> list[dict]:
     return [dict(cell) for cell in product(*choices)]
 
 
-def _check_instances(claim, text: str, syms, inst, ctx: Ctx, ev: dict) -> tuple[str, dict]:
+def _check_instances(claim, text: str, syms, inst, ctx: Ctx, ev: dict, conds=()) -> tuple[str, dict]:
     certain, undecided = inst
     base = {"identity_refuted": ev, "instances_by_premises": {
         "certain": [{str(k): str(v) for k, v in pt.items() if k in syms} for pt in certain],
@@ -823,7 +1240,7 @@ def _check_instances(claim, text: str, syms, inst, ctx: Ctx, ev: dict) -> tuple[
     def at(pt):
         key = tuple(sorted(((str(k), sp.srepr(v)) for k, v in pt.items() if k in syms)))
         if key not in seen:
-            seen[key] = _check_at(claim, text, {k: v for k, v in pt.items() if k in syms}, ctx)
+            seen[key] = _check_at(claim, text, {k: v for k, v in pt.items() if k in syms}, ctx, conds)
         return seen[key]
 
     for pt in certain:
@@ -1583,6 +2000,27 @@ def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
         return False
 
 
+def _written_relations(text: str, ns: dict[str, Any]) -> list:
+    """The conditions on the claim's free symbols under which it, read AS WRITTEN, has a value: relations
+    (x != 0 for x/x, x >= 0 for sqrt(x)), not the range or convention memberships. A point where one is
+    false is no instance of the claim (principle 12): it neither refutes nor verifies it."""
+    from ..certify.domain import definedness_conditions
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    try:
+        names = _check_safe(preclean(_strip_invisible(text)), ns)
+    except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
+        names = []
+    if names:
+        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+    try:
+        w = parse_as_written(text, ns)
+        conds = definedness_conditions(w, None) if w is not None else []
+    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
+        return []
+    return [c for c in conds if isinstance(c, (sp.core.relational.Relational, And, Or))
+            and getattr(c, "free_symbols", None)]
+
+
 def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
     """Does the claim, read AS WRITTEN, hold a closed operation whose value is a convention with another
     value (`certify.domain.is_value_convention`: Mod(7, -5), (-8)**(1/3)) left standing? The value parse
@@ -1605,15 +2043,80 @@ def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
         return False
 
 
+_MAX_DEFINED_POINTS = 200            # points of the premises' sets a claim's definedness is checked at one by one
+
+
+def _finite_values(s) -> list | None:
+    """The elements of `s` when it is a finite set (a Range included) of at most _MAX_DEFINED_POINTS exact
+    real numbers; None otherwise."""
+    if isinstance(s, sp.Range) and s.is_finite_set is True and s.size <= _MAX_DEFINED_POINTS:
+        s = sp.FiniteSet(*s)
+    if not isinstance(s, sp.FiniteSet) or len(s) > _MAX_DEFINED_POINTS:
+        return None
+    vals = list(s)
+    if any(not isinstance(c, sp.Expr) or c.free_symbols or c.is_real is not True for c in vals):
+        return None
+    return vals
+
+
+def _held_at(c, point: dict, ctx: Ctx) -> bool | None:
+    from ..certify.domain import decide_membership
+    if c is sp.true or c is sp.false:
+        return bool(c)
+    if isinstance(c, sp.Contains):
+        try:
+            return decide_membership(c.args[0].xreplace(point), c.args[1])
+        except Exception:  # noqa: BLE001
+            return None
+    return _decide(c, point, ctx)
+
+
+def _holds_on(c, v, region, ctx: Ctx) -> bool:
+    """Is the condition `c` on the one symbol `v` proved to hold on all of `region` (its negation solved
+    there is empty)? A range's condition is read as `span >= 0`; a value convention is left to its own
+    rules (`_range_spans`); a membership holds when the region lies in the set."""
+    from ..certify.domain import is_convention, FORWARD_SPANS
+    if isinstance(c, sp.Contains):
+        if c.args[1] == FORWARD_SPANS:
+            c = sp.Ge(c.args[0], 0)
+        elif is_convention(c):
+            return True
+        else:
+            try:
+                return c.args[0] == v and region.is_subset(c.args[1]) is True
+            except Exception:  # noqa: BLE001
+                return False
+    if not isinstance(c, sp.core.relational.Relational):
+        return False
+    _tick()
+    r = sb_run("mathverify.sandbox.ops:solveset_in", c.negated, v, region, timeout=ctx.timeout)
+    if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+        return False
+    try:
+        return r.value.is_empty is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: Ctx) -> bool:
-    """Is the claim, read AS WRITTEN, not proved defined at a point the premises allow, when they
-    allow finitely many (a premise pins a symbol, `x = 0`, or the premises on one symbol have a finite
-    solution set, x**2 = 4)? `_undefined_as_written` looks at closed conditions only, and the value
-    parse folds the rest away: the eq step "x/x = 1" was verified under x = 0, "sqrt(x - 3)**2 = x - 3"
-    under x = 2, "x + gcd(x, 2) - gcd(2, x) = pi + E" under x = pi + E and "sqrt(x)**2 = x" under
-    x**2 = 4 (V16, 30 Sep 2026)."""
+    """Is the claim, read AS WRITTEN, not proved defined at a point the premises allow? `_undefined_as_written`
+    looks at closed conditions only, and the value parse folds the rest away: the eq step "x/x = 1" was
+    verified under x = 0, "sqrt(x - 3)**2 = x - 3" under x = 2, "x + gcd(x, 2) - gcd(2, x) = pi + E" under
+    x = pi + E and "sqrt(x)**2 = x" under x**2 = 4 (V16, 30 Sep 2026).
+
+    Each condition (`certify.domain.definedness_conditions`) is read on the set the premises leave its
+    symbols: a value a premise pins the symbol to, or the solution of the premises on that symbol alone,
+    each symbol on its own (x**2 = 4 and y**2 = 1), and the points of a system the premises solve together
+    (`_finite_instances`). On a finite set (a Range of integers too, up to _MAX_DEFINED_POINTS points) it
+    must hold at every point; on a larger one, for a condition left on one symbol, it is proved by solving
+    its negation there. Not proved: True. Before, only one symbol, or every symbol pinned, and at most 12
+    points were read: "x/x = 1" for an integer -1 <= x <= 10, "sqrt(x)**2 + sqrt(y)**2 = x + y" under
+    x**2 = 4, y**2 = 1 and "x/x + sqrt(y) - sqrt(y) = 1" under x = 0 with y free were verified (fourth
+    audit, D4-ADIM-D, TAN-11). A symbol no premise narrows is not read: the claim is an identity where it
+    is defined."""
+    from itertools import product
     from ..certify.base import closed_binding
-    from ..certify.domain import decide_membership, definedness_conditions
+    from ..certify.domain import definedness_conditions
     from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
     try:
         names = _check_safe(preclean(_strip_invisible(text)), ns)
@@ -1629,38 +2132,66 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
     if not conds:
         return False
     syms = set().union(*(c.free_symbols for c in conds))
-    pins: dict = {}
-    for p in premises:
-        b = closed_binding(p)
-        if b is not None and b[0] in syms:
-            pins.setdefault(b[0], b[1])
-    points: list[dict] = []
-    if set(pins) == syms:
-        points = [pins]
-    elif len(syms) == 1:
-        (v,) = syms
-        own = [p for p in premises if isinstance(p, sp.core.relational.Relational) and p.free_symbols == {v}]
-        if not own or ctx.ns.get(v.name) != v:
-            return False
+    sets: dict = {}
+    for v in syms:
+        if ctx.ns.get(v.name) != v:
+            continue
+        pinned = [b[1] for b in (closed_binding(p) for p in premises) if b is not None and b[0] == v]
+        if pinned:
+            sets[v] = sp.FiniteSet(pinned[0])
+            continue
+        own = [p for p in _premise_parts(premises)
+               if isinstance(p, sp.core.relational.Relational) and p.free_symbols == {v}]
+        if not own:
+            continue
         region = ctx.domain_for(v)
         for p in own:
+            _tick()
             r = sb_run("mathverify.sandbox.ops:solveset_in", p, v, S.Reals, timeout=ctx.timeout)
-            if not r.ok or r.value.has(sp.ConditionSet):
-                return False
+            if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+                region = None                # a premise not solved: the symbol is read as not narrowed
+                break
             region = sp.Intersection(region, r.value)
-        if not isinstance(region, sp.FiniteSet) or len(region) > 12:
-            return False
-        points = [{v: q} for q in region]
-    for point in points:
-        for c in conds:
-            if isinstance(c, sp.Contains):
-                try:
-                    held = decide_membership(c.args[0].xreplace(point), c.args[1])
-                except Exception:  # noqa: BLE001
-                    held = None
-            else:
-                held = _decide(c, point, ctx)
-            if held is not True:
+        if region is not None:
+            sets[v] = region
+    # a system the premises solve together (x + y = 5, x - y = 1): its points
+    linked = {v for v in syms if ctx.ns.get(v.name) == v and v not in sets}
+    if linked:
+        _tick()
+        inst = _finite_instances(linked, premises, ctx)
+        for pt in ((inst[0] + inst[1]) if inst is not None else []):
+            for c in conds:
+                if c.free_symbols <= set(pt) and _held_at(c, pt, ctx) is not True:
+                    return True
+    for c in conds:
+        narrowed = sorted((v for v in c.free_symbols if v in sets), key=lambda q: q.name)
+        if not narrowed:
+            continue
+        values = {v: _finite_values(sets[v]) for v in narrowed}
+        fin = [v for v in narrowed if values[v] is not None]
+        count = 1
+        for v in fin:
+            count *= len(values[v])
+        if count > _MAX_DEFINED_POINTS:
+            fin = []
+        for combo in product(*(values[v] for v in fin)):
+            _tick()
+            assign = dict(zip(fin, combo))
+            c2 = c.xreplace(assign) if assign else c
+            rem = c2.free_symbols if isinstance(c2, sp.Basic) else set()
+            if not rem:
+                if _held_at(c2, {}, ctx) is not True:
+                    return True
+                continue
+            if rem - set(narrowed):
+                # a symbol no premise narrows is left: undefined only if the condition fails for all of it
+                if c2 is sp.false:
+                    return True
+                continue
+            if len(rem) != 1:
+                return True                  # several symbols on infinite sets: not proved
+            (u,) = rem
+            if not _holds_on(c2, u, sets[u], ctx):
                 return True
     return False
 
@@ -1710,6 +2241,52 @@ def _with_sequence_terms(ir, ctx: Ctx, text: str, ns: dict[str, Any]):
         return None
     out = rel.xreplace({c: terms[int(c.args[0])] for c in calls})
     return None if out.atoms(AppliedUndef) else out
+
+
+def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[str, dict]:
+    """A `compute` claim checked as an identity (`_check_compute`), then where the premises `pool` put its
+    symbols when the identity failed: its counterexample is no instance of the problem when the premises
+    pin every symbol of the claim (principle 5), or exclude it (`_on_premises`). An integral with a
+    parameter has no value until the premises pin it (DECISIONS §80); a claim verified only with Karr's
+    value of its own range may be verified where the premises leave no backward point. `conds`: the claim's
+    written conditions; at a pinned point where one fails the claim has no value (D4-ADIM-J)."""
+    status, ev = _check_compute(claim, ctx)
+    if status == "verified":
+        status, ev = _verified_where_conventions(claim, ctx, status, ev)
+    if status == "refuted" or (status == "unknown" and ev.get("reason") in ("parametric_form", _KARR_ONLY)):
+        pins = _pins(claim, pool)
+        if not pins:
+            # the premises confine the symbols to finitely many values, or narrow them; a failure there
+            # leaves the identity check as it was
+            try:
+                status, ev = _on_premises(claim, text, pool, ctx, status, ev, conds)
+            except Exception as e:  # noqa: BLE001
+                ev = {**ev, "premise_recheck_failed": f"{type(e).__name__}: {str(e)[:120]}"}
+        if pins:
+            # the sides separately: Eq would evaluate itself on substitution
+            pinned = Eq(claim.lhs.xreplace(pins), claim.rhs.xreplace(pins), evaluate=False)
+            if _undefined_at(conds, pins, ctx):
+                status, pev = "unknown", {"reason": "claim_undefined_at_the_point"}
+            else:
+                try:
+                    # a pinned limit of a Sum or Product must pass the parser's range checks (reversed, or
+                    # not an integer apart), or the claim is not read there
+                    _refuse_reversed_ranges(pinned, text)
+                except ParseError as e:
+                    status, pev = "unknown", {"reason": f"pinned_claim_not_read: {str(e)[:160]}"}
+                else:
+                    status, pev = _check_compute(pinned, ctx)
+            ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()}, "identity_refuted": ev}
+    return status, ev
+
+
+def _counterexample_where_undefined(claim, ev: dict, conds, ctx: Ctx) -> bool:
+    """Is the point a refutation was found at (`_refutation_point`) one where the claim, read as written,
+    has no value (`_undefined_at`)? Then it is no counterexample (principle 12, D4-ADIM-J)."""
+    if not conds:
+        return False
+    pt = _refutation_point(ev, getattr(claim, "free_symbols", set()))
+    return pt is not None and _undefined_at(conds, pt, ctx)
 
 
 def check_steps(ir, solution, ctx: Ctx):
@@ -1811,78 +2388,74 @@ def check_steps(ir, solution, ctx: Ctx):
                 per_step.append(entry)
                 continue
             chosen = False
+            conds: list = []
+            token = _deadline.set(time.monotonic() + _STEP_BUDGET)
             try:
-                if st.kind == "compute":
-                    status, ev = _check_compute(claim, ctx)
-                    if status == "verified":
-                        status, ev = _verified_where_conventions(claim, ctx, status, ev)
-                    if status == "refuted" or (status == "unknown" and ev.get("reason") == "parametric_form"):
-                        # the identity failed; its counterexample is no instance of the problem when
-                        # the premises pin every symbol of the claim (principle 5). An integral with a
-                        # parameter has no value until the premises pin it (DECISIONS §80).
-                        # (laid out as before part 10: part 3's mutations name these lines)
-                        pool = (list(givens) + list(restrictions)
-                                     + [parsed[k] for k in verified
-                                        if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids])
-                        pins = _pins(claim, pool)
-                        if not pins:
-                            # the premises confine the symbols to finitely many values, or narrow them;
-                            # a failure there leaves the identity check as it was
-                            try:
-                                status, ev = _on_premises(claim, st.claim, pool, ctx, status, ev)
-                            except Exception as e:  # noqa: BLE001
-                                ev = {**ev, "premise_recheck_failed": f"{type(e).__name__}: {str(e)[:120]}"}
-                        if pins:
-                            # the sides separately: Eq would evaluate itself on substitution
-                            pinned = Eq(claim.lhs.xreplace(pins), claim.rhs.xreplace(pins), evaluate=False)
-                            try:
-                                # a pinned limit of a Sum or Product must pass the parser's range checks
-                                # (reversed, or not an integer apart), or the claim is not read there
-                                _refuse_reversed_ranges(pinned, st.claim)
-                            except ParseError as e:
-                                status, pev = "unknown", {"reason": f"pinned_claim_not_read: {str(e)[:160]}"}
-                            else:
-                                status, pev = _check_compute(pinned, ctx)
-                            ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()},
-                                  "identity_refuted": ev}
-                else:
-                    # premises: givens + unconditional earlier claims + claims from the same
-                    # case branch(es) + the case assumptions themselves
-                    premises = list(givens) + [parsed[k] for k in parsed
-                                               if k != st.id and parsed_cases.get(k, frozenset()) <= my_case_ids]
-                    premises += my_cases
-                    # a point assignment ("x = 0") is checked with the solver's latest choices of the
-                    # OTHER symbols: "y = -1" after the choice "x = 0" is a fact about that point
-                    point = _point_symbol(claim, ctx)
-                    extra = [c for s_, c in choices.items() if s_ != point] if point is not None else []
-                    status, ev = _check_eq(claim, premises + extra, ctx, restrictions, window)
-                    if point is not None and status == "refuted":
-                        w = _free_choice(claim, point, premises + extra + list(restrictions), ctx)
-                        if w is not None:
-                            status, chosen = "skipped", True
-                            ev = {"reason": "choice_of_a_free_symbol", "witness": {str(k): str(v) for k, v in w.items()}}
-                    elif point is not None and extra and status != "skipped":
-                        # decided only thanks to a choice: a fact about the chosen point, not a
-                        # premise for the general relations that follow
-                        chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
-            except Exception as e:  # noqa: BLE001
-                status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
-            if status == "refuted" and _convention_as_written(st.claim, step_ns):
-                # a closed value of the claim is a convention (Mod(7, -5): -3 floored, 2 Euclidean);
-                # SymPy's reading refutes nothing (part d4a, DECISIONS §80)
-                status, ev = "unknown", {"reason": "claim_value_is_a_convention", "withdrawn": ev}
-            if status == "refuted" and _refuted_where_backwards(claim, ev):
-                # the counterexample sits where a range of the claim runs backwards: the value SymPy
-                # refuted there is Karr's convention, not the curriculum's (part 11, DECISIONS §80)
-                status, ev = "unknown", {"reason": "counterexample_where_a_range_of_the_claim_runs_backwards",
-                                         "withdrawn": ev}
-            why = None
-            if status != "refuted":
-                if _undefined_as_written(st.claim, step_ns):
-                    why = "claim_undefined_as_written"
-                elif _undefined_at_premises(st.claim, step_ns, list(givens) + [
-                        parsed[k] for k in parsed if parsed_cases.get(k, frozenset()) <= my_case_ids] + my_cases, ctx):
-                    why = "claim_undefined_at_the_premises_point"
+                try:
+                    conds = _written_relations(st.claim, step_ns)
+                    if st.kind == "compute":
+                        # the premises: the givens, the variables' constraints, the `eq` claims proved in
+                        # this branch and the task's own interval (it binds nothing but bounds the region:
+                        # outside it a point is no instance, D4-ADIM-E)
+                        pool = (list(givens) + list(restrictions) + list(window)
+                                + [parsed[k] for k in verified
+                                   if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids])
+                        status, ev = _compute_status(claim, st.claim, pool, ctx, conds)
+                        range_premises = pool
+
+                        def recheck(c, pool=pool, conds=conds, text=st.claim):
+                            return _compute_status(c, text, pool, ctx, conds)[0]
+                    else:
+                        # premises: givens + unconditional earlier claims + claims from the same
+                        # case branch(es) + the case assumptions themselves
+                        premises = list(givens) + [parsed[k] for k in parsed
+                                                   if k != st.id and parsed_cases.get(k, frozenset()) <= my_case_ids]
+                        premises += my_cases
+                        # a point assignment ("x = 0") is checked with the solver's latest choices of the
+                        # OTHER symbols: "y = -1" after the choice "x = 0" is a fact about that point
+                        point = _point_symbol(claim, ctx)
+                        extra = [c for s_, c in choices.items() if s_ != point] if point is not None else []
+                        status, ev = _check_eq(claim, premises + extra, ctx, restrictions, window)
+                        range_premises = premises + extra + list(restrictions)
+
+                        def recheck(c, prem=premises + extra):
+                            return _check_eq(c, prem, ctx, restrictions, window)[0]
+                        if point is not None and status == "refuted":
+                            w = _free_choice(claim, point, premises + extra + list(restrictions), ctx)
+                            if w is not None:
+                                status, chosen = "skipped", True
+                                ev = {"reason": "choice_of_a_free_symbol", "witness": {str(k): str(v) for k, v in w.items()}}
+                        elif point is not None and extra and status != "skipped":
+                            # decided only thanks to a choice: a fact about the chosen point, not a
+                            # premise for the general relations that follow
+                            chosen = _check_eq(claim, premises, ctx, restrictions, window)[0] == "refuted"
+                except Exception as e:  # noqa: BLE001
+                    status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
+                    range_premises, recheck = [], None
+                if status == "refuted" and _convention_as_written(st.claim, step_ns):
+                    # a closed value of the claim is a convention (Mod(7, -5): -3 floored, 2 Euclidean);
+                    # SymPy's reading refutes nothing (part d4a, DECISIONS §80)
+                    status, ev = "unknown", {"reason": "claim_value_is_a_convention", "withdrawn": ev}
+                if status == "refuted" and _refuted_where_backwards(claim, ev, ctx, range_premises, recheck):
+                    # the refutation rests on the reading of a range of the claim that runs backwards:
+                    # Karr's value or the empty sum, a convention (part 11, D4-ADIM-B, DECISIONS §80)
+                    status, ev = "unknown", {"reason": "counterexample_where_a_range_of_the_claim_runs_backwards",
+                                             "withdrawn": ev}
+                if status == "refuted" and _counterexample_where_undefined(claim, ev, conds, ctx):
+                    # the claim, read as written, has no value at the counterexample (principle 12): sqrt(x**3)
+                    # = x*sqrt(x) at x = -2, where neither side is real (D4-ADIM-J)
+                    status, ev = "unknown", {"reason": "counterexample_where_the_claim_is_undefined", "withdrawn": ev}
+                why = None
+                if status != "refuted":
+                    if _undefined_as_written(st.claim, step_ns):
+                        why = "claim_undefined_as_written"
+                    elif _undefined_at_premises(st.claim, step_ns, list(givens) + [
+                            parsed[k] for k in parsed if parsed_cases.get(k, frozenset()) <= my_case_ids] + my_cases, ctx):
+                        why = "claim_undefined_at_the_premises_point"
+            except _OutOfTime:
+                status, ev, why, chosen = "unknown", {"reason": "step_time_budget_exceeded"}, None, False
+            finally:
+                _deadline.reset(token)
             if why is not None:
                 # the value SymPy checked is not the value of what was written: neither verified
                 # nor a premise (principle 12). A refutation stands: the checkers refute only a
