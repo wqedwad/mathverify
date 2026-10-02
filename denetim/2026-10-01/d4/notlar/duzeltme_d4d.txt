@@ -1,0 +1,53 @@
+# d4d NOTLAR (verilen bağlama ve koşullar)
+
+## Matematik kararları
+
+- **G1** (Boolean/okunamayan verilen). Zincir `0<x<3`, `And`, `and`, `,`, `&`, `∧` hepsinin kesişimi; `x in (0,3)`/`x ∈ (0,3)`
+  aralık üyeliği; `Or`/`or`/`∨` birleşim. x²<4 ∧ 0<x<3 → (0,2) (x=-1: 1<4 ama 0<-1 değil; (−2,2) yanlış).
+  x²−4 kökleri ±2, Or(x<−3, x>1) altında yalnız 2 → 1. √(4−x²) ∩ (0,3) → (0,2]. −x²'nin [−5,−3)∪(1,5]'te sup'ı −1
+  (x→1⁺), erişilmez: maksimum yok, 0 hiç değer değil. Okunamayan (`x>0 ve x<3`, `x>0; x<3`) ya da çözülemeyen verilen
+  sessizce düşmez: `given_not_applied` (UNKNOWN).
+- **G7, TAN-04** (bağlama doğrulanmadan). a=1 ∧ a<0, a=0 ∧ a>1, a=0 ∧ a positive, a=1/2 ∧ a integer, a=1 ∧ kısıt a>5: örnek
+  yok → `ir_inconsistent` UNKNOWN. Tutarlılık kararsızsa (öteki verilen yalnız sabit sembolleri anıyor ama kesin karar
+  verilemiyor) UNKNOWN. `a = 4+log(−1)−log(−1)`, `a = sqrt(−4)**2`, `a = 4+acos(2)−acos(2)`: verilen yazıldığı biçimde
+  tanımsız (log(−1), √−4, acos 2 gerçel değil) → UNKNOWN; `a = 0**0`: 0⁰ gelenek → UNKNOWN.
+- **G8** (bağlamayla False kısıt). x>0 bildirimi, kısıt x<a, a=0 → x<0 ∧ x>0: boş bölge, problemin örneği yok →
+  `ir_inconsistent` UNKNOWN ({2} de {} de onaylanmaz). Aynısı False olan yan koşul verileni için.
+- **G9, TAN-03** (yalnız parametreyi anan yazılı koşul). log(a) a=−1, √a a=−1, acos(a) a=2, a/a a=0, tan(a) a=π/2,
+  log(a−1) a=1/2, a! a=−1 ya da 1/2, C(a,2) a=−1, gcd(a,2) a=√2 ya da π: ifade a'nın verilen değerinde yazıldığı biçimde
+  tanımsız → `problem_undefined_as_written` UNKNOWN. Koşul kesin kararsızsa UNKNOWN.
+- **G10** (kararsız üyelik). T=atan1+atan2+atan3: tan(atan2+atan3)=(2+3)/(1−6)=−1, toplam (π/2,π)'de → 3π/4; T=π tam.
+  x>π sağlanmaz. Adayın verilen eşitsizliği/aralığı sağlayıp sağlamadığı kesin kararsızsa aday ne tutulur ne düşer:
+  kabulü ona bağlı karar UNKNOWN (§80). solve_equation x−T=0, x>π: doğru cevap {} ama doğrulayıcı kanıtlayamıyorsa
+  UNKNOWN; {T} asla CORRECT değil.
+- **TAN-01** (bağlamadan sonra ters/kesirli aralık). Σ_{k=1}^{−3} k: Karr 3, boş-toplam 0, müfredatta tanımsız → kabulü
+  ona bağlı karar UNKNOWN (§80). Σ_{k=1}^{7/2} k: SymPy 63/8, tamsayı okumada 6 → kesirli üst sınır müfredat dışı →
+  UNKNOWN. Süre sınırlı (60 s altında).
+- **TAN-09** (x**a, a=2). Bağlamadan sonra x**2 her gerçel x'te tanımlı: x²<4 → (−2,2) doğru, x²=4 → {−2,2} doğru,
+  x^(−2)=1/4 → {−2,2}, x³=−8 → {−2}. "Taban>0" kuralı yalnız üs sembolikken (bağlama yokken) yeterli temkinli koşul.
+- **P1** (pins bağlı değişkene sızıyor). F(x)=∫₀ˣ t² dt ⇒ F'(x)=x², F'(2)=4; d/da ∫₀¹ a t dt = 1/2; Σ_{k=1}^{2} k²/2 = 5/2.
+  Verilen x=2 görev değişkenini, d/da'nın a'sını, toplam indisi k'yı sabitliyorsa "önce mi sonra mı yerine konur"
+  okuması belirsiz → çakışma, UNKNOWN. Bağlı/görev değişkeni hiçbir zaman yerine konmaz.
+
+## İlerleme
+- 195e183'e ff yapıldı.
+- Sonda (önce): 158c220 177/240 beklenmeyen; 195e183 158 (E/G10-T ve F/TAN-01 d4b/d4c ile kapanmıştı; T7 yeni sabit).
+- Commit 48aa418 (düzeltme + sonda + test). Sonda sonrası 0.
+- P1 kararı daraltıldı: çakışma yalnız pinin Integral/Limit içinde bağlı/görev değişkenine ulaşacağı yerde
+  (parse PinnedBoundVariable + kapı). diff(sin(pi*n), n), n = 2 -> pi CORRECT (§73 e, test_parca5_v17) korunur.
+- test_parca10 kontrolü (a = 3, a = 2) güncellendi: artık ir_inconsistent UNKNOWN, adım okunmaz.
+- Sıradaki: tam test (y2), mutasyon (39), fark, d4a/b/c/g sondaları.
+- 63bfa58: dod (x > b) bağlanan sembolün kümesi sayılmaz; türetilen değerler (b = 2, a = b - 3); test_parca3/6/8 güncel.
+- 88a6421: mutasyon turu (M22/M39 gereksiz kod çıkarıldı, 4 test). Son commit: M11 testi. Mutasyon 37/37.
+- Son ölçümler: sonda 275 vaka, 158c220 189, 195e183 168, HEAD 0 (en uzun 4.5 s). Test dosyası 73 test: eskide 70 düşer.
+  Tam test (Lean'siz) 3443 geçti, 93 atlandı, 0 düştü. Diğer sondalar d4a 316/d4b 184/d4c 138/d4g 229: 0.
+  fark (63bfa58): karar 0, ilk kötü adım 0, adım 4 (k4 uni-001/006/010/018 s7), K4 etiket 0. Son HEAD'de yeniden koşuluyor.
+
+## Gözden geçirme turu (d540add üstüne)
+- B1 and/or aynı düzeyde -> okunmaz; B2 not_collapsed + \notin/not in + denklik okunmaz; B3 gerçel küme; B4/6a parametre
+  koşulu bölgede ((6), düz semboller, count_solutions hariç); 6b boş ortak bölge (7); gcd(0,0); same_value; operatör türü
+  görev değişkeni sabitlenince given_binds_a_bound_variable (series_sum k=1). Kapı written_undefined'dan sonra.
+- Eski gelenek korunan: kapalı koşul (değer taşımayan metin) kapının değil (hiçbir yerde tanımsız denklem -> ∅).
+- test_parca7b: x + sqrt(-y) - sqrt(-y) = 1, y pozitif: {} artık UNKNOWN (B4 bildirim).
+- Ölçüm: sonda 340 vaka HEAD 0 (d540 L 42/65); saldırgan c1-c10 d540 72 BAD -> HEAD 9 (3 beklenti hatası, 5 kapsama,
+  root(-8,3) gerçel kök). Test 111 (d540'ta 23 düşer). Mutasyon 54/54. fark karar 0, adım 4. pytest 3521/93s/0.
