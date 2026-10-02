@@ -230,6 +230,14 @@ def test_g9_other_tasks_and_sources():
     assert _run(d, "Interval(0, oo)", "interval").verdict == "UNKNOWN"
 
 
+def test_g9_values_implied_through_other_values():
+    VB = [X, A, {"name": "b"}]
+    r = _run(_eq("x + log(a) - log(a) = 2", ["a = b - 3", "b = 2"], VB), "{2}")
+    assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+    r = _run(_eq("x**2 = 4", ["x > a", "a = b - 3", "b = 2", "a > 0"], VB), "{2}")
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in _flags(r)
+
+
 def test_g9_controls_keep_their_verdicts():
     assert _run(_eq("x + log(a) - log(a) = 2", ["a = 1"], XA), "{2}").verdict == "CORRECT"
     assert _run(_eq("x**2 = a", ["a = 4"], XA), "{-2, 2}").verdict == "CORRECT"

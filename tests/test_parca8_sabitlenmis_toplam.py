@@ -95,7 +95,6 @@ def test_a_wrong_step_with_a_binder_in_pinned_symbols_stays_refuted(ir, payload,
     (_ir("n*(n + 1)/2", [N], []), [("compute", "Sum(k, (k, 1, n)) = 6")]),
     (_ir("n*(n + 1)/2", [N], ["n > 2"]), [("compute", "Sum(k, (k, 1, n)) = 6")]),
     (_ir("n*(n + 1)/2", [N], []), [("eq", "n = 3"), ("compute", "Sum(k, (k, 1, n)) = 6")]),  # solver's own n
-    (_ir("a", [A], ["a = 3", "a = 2"]), [("compute", "Sum(a*k, (k, 1, 2)) = 9")]),         # two values
 ])
 def test_a_step_in_symbols_not_pinned_is_still_checked_as_an_identity(ir, steps):
     """Control: nothing (or two values) pins the symbol, so the identity check stands (as on 8d86e7c). The
@@ -103,6 +102,14 @@ def test_a_step_in_symbols_not_pinned_is_still_checked_as_an_identity(ir, steps)
     finite set is checked point by point and the right step is verified (tests/test_parca10_sonlu_oncul.py)."""
     st = _steps(_run(ir, "6", steps))
     assert st[-1]["status"] == "refuted" and "pinned_by_premises" not in st[-1]["evidence"]
+
+
+def test_two_values_for_one_symbol_is_no_instance():
+    """a = 3 and a = 2 (the two-values control above until part d4d): the problem has no instance, and the
+    verifier abstains on it (ir_inconsistent, fourth audit G7/TAN-04) before any step is read."""
+    r = _run(_ir("a", [A], ["a = 3", "a = 2"]), "6", [("compute", "Sum(a*k, (k, 1, 2)) = 9")])
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in r.flags
+    assert not any(la.layer == "steps.refute" for la in r.layers)
 
 
 @pytest.mark.parametrize("steps,status", [

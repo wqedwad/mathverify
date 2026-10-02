@@ -251,6 +251,13 @@ def cases_d():
                 ir("series_sum", {"term": "1/k**2 + log(a) - log(a)", "index": "k", "start": "1"}, g,
                    [{"name": "k", "domain": "positive_integer"}, {"name": "a"}], shape="scalar"),
                 sol("pi**2/6", "value"), NOTOK, None))
+    VB = [{"name": "x"}, {"name": "a"}, {"name": "b"}]
+    out.append(("eq x + log(a) - log(a) = 2, a = b - 3, b = 2 (implied a = -1): {2}",
+                eqn("x + log(a) - log(a) = 2", ["a = b - 3", "b = 2"], VB), sol("{2}"), NOTOK, None))
+    out.append(("ctl: eq x + log(a) - log(a) = 2, a = b + 3, b = 2: {2}",
+                eqn("x + log(a) - log(a) = 2", ["a = b + 3", "b = 2"], VB), sol("{2}"), NOTNO, None))
+    out.append(("eq x**2 = 4, x > a, a = b - 3, b = 2, a > 0 (implied a = -1): {2}",
+                eqn("x**2 = 4", ["x > a", "a = b - 3", "b = 2", "a > 0"], VB), sol("{2}"), NOTOK, None))
     out.append(("evaluate chain b = log(a) - log(a), a=-1, x = b: 0",
                 ir("evaluate", {"expr": "x"}, ["a = -1", "b = log(a) - log(a)", "x = b"], V + [{"name": "b"}],
                    shape="scalar"), sol("0", "value"), NOTOK, None))

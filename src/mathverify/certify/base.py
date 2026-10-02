@@ -417,6 +417,34 @@ class Ctx:
                         texts.append(c)
         return found, texts
 
+    def _implied_values(self, known: dict) -> dict:
+        """Symbols a given `s = expr` fixes once the symbols of expr have their values in `known`, repeated
+        until nothing new comes (b = 2 and a = b - 3 give a = -1)."""
+        out: dict = {}
+        rels = []
+        for g in self.ir.givens:
+            try:
+                rel = parse_relation(g, self.ns)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(rel, sp.Eq):
+                rels.append(rel)
+        for _ in range(len(rels)):
+            have = {**known, **out}
+            grew = False
+            for rel in rels:
+                for s_, val in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+                    if not isinstance(s_, sp.Symbol) or s_ in have or not isinstance(val, sp.Expr) \
+                            or not val.free_symbols or not val.free_symbols <= set(have):
+                        continue
+                    v = val.xreplace(have)
+                    if not v.free_symbols and v.is_real is True:
+                        out[s_] = have[s_] = v
+                        grew = True
+            if not grew:
+                break
+        return out
+
     def _binding_issues(self) -> tuple[str, list[str]] | None:
         from ..normalize.parse import (PinnedBoundVariable, given_binding_report, hold_parametric,
                                        parse_as_written, read_condition)
@@ -428,6 +456,10 @@ class Ctx:
             if s_ in allb and _certified_compare(allb[s_], v) != 0:
                 clash.setdefault(s_, [allb[s_]]).append(v)
             allb[s_] = v
+        # a value the givens imply through other values (b = 2, a = b - 3): checked like the others, never a
+        # pin (x + log(a) - log(a) = 2 with a = b - 3, b = 2 is undefined as written all the same)
+        implied = self._implied_values(allb)
+        allb.update(implied)
         found: dict[str, list[str]] = {}
 
         def note(reason, what):
@@ -460,7 +492,10 @@ class Ctx:
                          f"{s_} = {v} (declared {vd.domain})")
             if self._dod_mentions(s_):
                 try:
-                    d = in_domain(self.discourse(s_), v)
+                    ds = self.discourse(s_)
+                    # a domain of discourse that only names s_ as a parameter of another variable (x > b) is
+                    # a condition (3) reads at the values, not a set of values for s_
+                    d = True if ds.free_symbols - {s_} else in_domain(ds, v)
                 except Exception:  # noqa: BLE001 - the domain itself is the certificates' question
                     d = True
                 if d is not True:
