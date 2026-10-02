@@ -203,8 +203,7 @@ def critical_points(expr, var, interval):
     d = sp.diff(expr, var)
     cps = []
     try:
-        from .exactsets import exact_solveset
-        for c in exact_solveset(d, var, interval):     # a ConditionSet does not iterate: no candidate
+        for c in sp.solveset(d, var, interval):
             if c.is_number:
                 cps.append(c)
     except Exception:
@@ -222,8 +221,7 @@ def critical_points(expr, var, interval):
 
 def emptiness_of_superlevel(expr, var, interval, bound, strict=True):
     rel = expr > bound if strict else expr >= bound
-    from .exactsets import exact_solveset
-    return exact_solveset(rel, var, interval)
+    return sp.solveset(rel, var, interval)
 
 
 # ----------------------------------------------------------------------------

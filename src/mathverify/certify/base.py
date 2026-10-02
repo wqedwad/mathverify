@@ -227,8 +227,8 @@ class Ctx:
         fwd_all, back_all = S.Reals, S.EmptySet
         for c in spans:
             try:
-                fwd = exact_solveset(sp.Ge(c.args[0], 0), var, S.Reals)
-                back = exact_solveset(sp.Lt(c.args[0], 0), var, S.Reals)
+                fwd = sp.solveset(sp.Ge(c.args[0], 0), var, S.Reals)
+                back = sp.solveset(sp.Lt(c.args[0], 0), var, S.Reals)
             except Exception:  # noqa: BLE001
                 fwd = back = None
             if fwd is None or back is None or fwd.has(sp.ConditionSet) or back.has(sp.ConditionSet):

@@ -386,3 +386,29 @@ def test_trig_solve_controls():
     assert _run(_trig(["cos(2*x) = 1/2"], "[0, 2*pi)"), ALL4).verdict == "CORRECT"
     assert _run(_trig(["tan(x) = 1"]), "{pi/4 + n*pi}").verdict == "CORRECT"
     assert _run(_trig(["tan(x) = 1"]), "{pi/4 + 2*n*pi}").verdict == "INCORRECT"
+
+
+def test_steps_under_a_periodic_premise_on_a_bounded_window():
+    """0 < x < 10 with sin x > 0 is (0, pi) ∪ (2*pi, 3*pi): x < 3*pi holds on all of it, x < 4 does not."""
+    ir = _ir("evaluate", {"expr": "x**2"}, [X], ["x > 0", "x < 10", "sin(x) > 0"])
+    for claim, status in (("x < 3*pi", "verified"), ("x < 4", "refuted")):
+        r = _run(ir, "1", "value", [("eq", claim)])
+        layer = next(la for la in r.layers if la.layer == "steps.refute")
+        assert layer.evidence["steps"][-1]["status"] == status, claim
+
+
+def test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain():
+    """The domain of discourse sin(x) > 0 is solved on what the constraints leave; on ℝ it is unsolved and
+    the certificate abstains (condition_unsolved)."""
+    ir = _ir("domain_of", {"expr": "x", "var": "x"}, [V("x", "real", ["x > 0", "x < 10"])], (), "set",
+             dod="sin(x) > 0")
+    assert _run(ir, "Union(Interval.open(0, pi), Interval.open(2*pi, 3*pi))", "interval").verdict == "CORRECT"
+    r = _run(_ir("domain_of", {"expr": "x", "var": "x"}, [V("x", "real", ["sin(x) > 0"])], (), "set"),
+             "Interval.open(0, pi)", "interval")
+    assert r.verdict == "UNKNOWN" and "condition_unsolved" in r.flags
+
+
+def test_limit_side_of_a_periodic_condition_is_not_solved():
+    """sqrt(sin x) is not real on a whole neighbourhood of oo: one period read it as defined there."""
+    from mathverify.certify.limits import _side_status
+    assert _side_status([sp.sin(x) >= 0], x, sp.oo, None) is None
