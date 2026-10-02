@@ -95,19 +95,78 @@ def _has_interior(dom) -> bool:
         return False
 
 
-def _agreement_proves(a, b, dom: dict, cev: dict) -> bool:
+def _agreement_proves(a, b, dom: dict, cev: dict, ctx=None) -> bool:
     """Is the comparison's True (`answers_equivalent`) a proof? A symbolic proof, or the comparison's own
     proof for a non-smooth expression (cells between breakpoints, a period checked), is. Agreement at random
     points is only for two expressions analytic off a discrete set (`_analytic_off_discrete`) compared on
-    sets with interior; otherwise it decides nothing."""
+    sets with interior, or analytic near the one interval they are compared on (`_analytic_on_interval`);
+    otherwise it decides nothing."""
     if cev.get("method") != "random_point":
         return True
     proof = (cev.get("random_point") or {}).get("nonsmooth_proof")
     if isinstance(proof, str) and (proof.startswith("cells_proved") or proof.startswith("period_")):
         return True
     if not (_analytic_off_discrete(sp.sympify(a)) and _analytic_off_discrete(sp.sympify(b))):
-        return False
+        return _analytic_on_interval(sp.sympify(a), sp.sympify(b), dom, ctx)
     return all(_has_interior(d) for d in dom.values())
+
+
+def _proved_empty(rel, v, iv, ctx) -> bool:
+    if ctx is None:
+        return False
+    _tick()
+    r = sb_run("mathverify.sandbox.ops:solveset_in", rel, v, iv, timeout=ctx.timeout)
+    try:
+        return r.ok and isinstance(r.value, sp.Set) and r.value.is_empty is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _analytic_on_interval(a, b, dom: dict, ctx) -> bool:
+    """Are both sides analytic on a complex neighbourhood of the one real interval they are compared on? A
+    branch function is, where its argument stays off its cut: log(u) and a fractional power of u where u > 0
+    on the interval, asin/acos(u) where |u| < 1, atan(u) everywhere, with u a rational function of the
+    variable whose denominator does not vanish there (each proved by solving the negation on the interval).
+    Agreement at random points of a connected interval then proves the identity there (identity theorem):
+    log(x - 1) + log(x - 3) = log((x - 1)*(x - 3)) for x > 3, while log(x**2) = 2*log(x) on x > -1/1000 is
+    not proved (the argument of log(x) is not positive there)."""
+    if len(dom) != 1:
+        return False
+    (v, iv), = dom.items()
+    if not isinstance(iv, sp.Interval) and iv != S.Reals or not _has_interior(iv):
+        return False
+
+    def arg_ok(u) -> bool:
+        if not u.free_symbols <= {v}:
+            return False
+        num, den = sp.fraction(sp.together(u))
+        if not (num.is_polynomial(v) and den.is_polynomial(v)):
+            return False
+        return den.free_symbols == set() or _proved_empty(Eq(den, 0), v, iv, ctx)
+
+    def ok(e) -> bool:
+        if isinstance(e, (sp.Symbol, sp.Number, sp.NumberSymbol)):
+            return e.is_finite is not False
+        if isinstance(e, (sp.Add, sp.Mul)):
+            return all(ok(t) for t in e.args)
+        if isinstance(e, sp.Pow):
+            base_, ex = e.args
+            if isinstance(ex, sp.Integer) or (base_.is_number and base_.is_positive is True and not base_.free_symbols):
+                return ok(base_) and ok(ex)
+            if isinstance(ex, sp.Rational):
+                return arg_ok(base_) and _proved_empty(sp.Le(base_, 0), v, iv, ctx)
+            return False
+        if isinstance(e, _ENTIRE + _MEROMORPHIC) and len(e.args) == 1:
+            return ok(e.args[0])
+        if isinstance(e, sp.log) and len(e.args) == 1:
+            return arg_ok(e.args[0]) and _proved_empty(sp.Le(e.args[0], 0), v, iv, ctx)
+        if isinstance(e, (sp.asin, sp.acos)):
+            return arg_ok(e.args[0]) and _proved_empty(sp.Ge(sp.Abs(e.args[0]), 1), v, iv, ctx)
+        if isinstance(e, sp.atan):
+            return arg_ok(e.args[0])
+        return False
+
+    return ok(a) and ok(b)
 
 
 def _parse_claim(claim: str, ns: dict[str, Any]):
@@ -391,7 +450,7 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
         dom = _compare_domains(free, ctx, doms)
         ok, cev = answers_equivalent(rhs, lhs, shape="expression", domain=dom, seed=ctx.seed)
         ev["compare"] = cev
-        if ok is True and not _agreement_proves(rhs, lhs, dom, cev):
+        if ok is True and not _agreement_proves(rhs, lhs, dom, cev, ctx):
             return "unknown", {**ev, "reason": "sample_agreement_is_no_proof_here"}
         if ok is True:
             return _forward_ranges_only(claim, ctx, doms, ev)
@@ -414,7 +473,7 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
     if free:
         dom = _compare_domains(free, ctx, doms)
         ok, cev = answers_equivalent(rhs, val, shape="expression", domain=dom, seed=ctx.seed)
-        if ok is True and not _agreement_proves(rhs, val, dom, cev):
+        if ok is True and not _agreement_proves(rhs, val, dom, cev, ctx):
             ev["compare"] = cev
             return "unknown", {**ev, "reason": "sample_agreement_is_no_proof_here"}
     else:
@@ -998,6 +1057,26 @@ def _check_at(claim, text: str, point: dict, ctx: Ctx, conds=()) -> tuple[str, d
     return _check_compute(pinned, ctx)
 
 
+def _antiderivative_on_region(claim, ctx: Ctx, doms: dict) -> tuple[str, dict]:
+    """An antiderivative claim `Integral(f, x) = F` checked on the region `doms` as F' = f: the certificate
+    compares on its own domain, and its counterexample outside the region (x < 0 for the task's [0, 1])
+    was no instance; a point of the region where F' != f is one (uni-010: the wrong antiderivative
+    2*sqrt(x)*log(x) - 2*sqrt(x) of log(x)/sqrt(x) stays refuted under the task's interval)."""
+    if not isinstance(claim, Eq):
+        return "unknown", {}
+    lhs, rhs = claim.lhs, claim.rhs
+    if isinstance(rhs, sp.Integral) and not isinstance(lhs, sp.Integral):
+        lhs, rhs = rhs, lhs
+    if not isinstance(lhs, sp.Integral) or len(lhs.limits) != 1 or len(lhs.limits[0]) != 1 \
+            or rhs.has(sp.Integral, sp.Limit, sp.Derivative, sp.Subs, sp.Sum, sp.Product):
+        return "unknown", {}
+    var = lhs.limits[0][0]
+    r = sb_run("mathverify.steps.deterministic:_diff_doit", rhs.subs(sp.Symbol("C"), 0), var, timeout=ctx.timeout)
+    if not r.ok:
+        return "unknown", {}
+    return _check_compute(Eq(r.value, lhs.function, evaluate=False), ctx, doms=doms)
+
+
 def _closed_form_set(d) -> bool:
     """Is `d` a set the comparison can sample without deciding memberships in SymPy: an interval or a union
     of them, the integers or naturals, a Range, a finite set of real numbers, such a set minus finitely many
@@ -1121,6 +1200,10 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
             pt2 = _counterexample_point(ev2, syms)
             if pt2 is not None and instance(pt2):
                 return "refuted", {**ev2, **base, "counterexample": {str(k): str(v) for k, v in pt2.items()}}
+            s3, ev3 = _antiderivative_on_region(claim, ctx, doms)
+            pt3 = _counterexample_point(ev3, syms) if s3 == "refuted" else None
+            if pt3 is not None and instance(pt3):
+                return "refuted", {**ev3, **base, "counterexample": {str(k): str(v) for k, v in pt3.items()}}
             s2 = "unknown"
             ev2 = {**ev2, "reason": "counterexample_not_proved_an_instance"}
         if s2 != "verified" and pending is None:
@@ -2156,7 +2239,12 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
                 region = None                # a premise not solved: the symbol is read as not narrowed
                 break
             region = sp.Intersection(region, r.value)
-        if region is not None:
+        try:
+            whole = region is not None and ctx.domain_for(v).is_subset(region) is True
+        except Exception:  # noqa: BLE001
+            whole = False
+        if region is not None and not whole:
+            # a premise that leaves the whole domain (x*log(x) = log(x)/(1/x), an identity) narrows nothing
             sets[v] = region
     # a system the premises solve together (x + y = 5, x - y = 1): its points
     linked = {v for v in syms if ctx.ns.get(v.name) == v and v not in sets}

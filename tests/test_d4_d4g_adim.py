@@ -299,3 +299,19 @@ def test_identity_verified_only_where_defined_is_unknown():
     # value Abs(x) = x, written with log(x): refuted at x < 0, where the claim has no value; on x > 0 it holds,
     # but only where the claim is defined: unknown, not verified
     assert _status(_ir("x", [X]), "x", "compute", "Abs(x) = x + log(x) - log(x)") == "unknown"
+
+
+def test_branch_functions_analytic_on_the_interval():
+    # log's arguments are positive on x > 3: agreement on the interval proves the identity there (K4 tyt-den)
+    assert _status(_ir("2 + 2", [{"name": "x", "domain": "real", "constraints": ["x > 3"]}]), "4", "compute",
+                   "log(x - 1) + log(x - 3) = log((x - 1)*(x - 3))") == "verified"
+    # not on x > -1/1000, where x and x**2 reach 0
+    assert _status(_ir("2 + 2", [{"name": "x", "domain": "real", "constraints": ["x > -1/1000"]}]), "4", "compute",
+                   "log(x**2) = 2*log(x)") != "verified"
+
+
+def test_readable_backward_point_with_a_reading_free_range_refutes():
+    # every n < -1 runs the range backwards; Sum(0, ...) is 0 under both readings: the random point refutes
+    ir = _ir("2 + 2", [{"name": "n", "domain": "integer", "constraints": ["n < -1"]}, K])
+    st = _step(_run(ir, "4", [("compute", "Sum(0, (k, 1, n)) + n**2 = n**2 + 1")]))
+    assert st["status"] == "refuted"

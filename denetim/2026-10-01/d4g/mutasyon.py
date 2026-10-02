@@ -23,8 +23,13 @@ T = "tests/test_d4_d4g_adim.py"
 MUTATIONS = [
     # D4-ADIM-A: sample agreement
     ("A01 analitik olmayan baş da kanıt", DET,
-     "    if not (_analytic_off_discrete(sp.sympify(a)) and _analytic_off_discrete(sp.sympify(b))):\n        return False\n",
-     "", T),
+     "    if not (_analytic_off_discrete(sp.sympify(a)) and _analytic_off_discrete(sp.sympify(b))):\n"
+     "        return _analytic_on_interval(",
+     "    if False:\n        return _analytic_on_interval(", T),
+    ("A07 log argümanının pozitifliği sınanmaz", DET,
+     "            return arg_ok(e.args[0]) and _proved_empty(sp.Le(e.args[0], 0), v, iv, ctx)",
+     "            return arg_ok(e.args[0])", T),
+    ("A08 aralıkta analitiklik okunmaz", DET, "    return ok(a) and ok(b)", "    return False", T),
     ("A02 ayrık küme de kanıt", DET, "    return all(_has_interior(d) for d in dom.values())", "    return True", T),
     ("A03 hücre ispatı kabul edilmez", DET,
      '    if isinstance(proof, str) and (proof.startswith("cells_proved") or proof.startswith("period_")):\n        return True\n',
