@@ -117,6 +117,9 @@ def test_odd_root_equations_and_inequalities():
     assert verdict(solve("cbrt(x) < 1", kind="solve_inequality"), sol("Interval.open(-oo, 1)", kind="interval")) \
         != "INCORRECT"
     assert verdict(solve("cbrt(x) = x"), sol("{0, 1}", kind="set")) == "INCORRECT"
+    # z3 reads the written root, sign(x)·|x|**(1/3), and certifies the completeness the algebra cannot
+    assert verdict(solve("cbrt(x) = -2"), sol("{-8}", kind="set")) == "CORRECT"
+    assert verdict(solve("cbrt(x) = x"), sol("{-1, 0, 1}", kind="set")) == "CORRECT"
 
 
 # ---------------------------------------------------------------------------- the step layer (D4-ADIM-K)

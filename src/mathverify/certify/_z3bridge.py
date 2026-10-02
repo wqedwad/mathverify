@@ -110,6 +110,11 @@ class _Tr:
         if isinstance(e, sp.Abs):
             a = self.tr(e.args[0])
             return z3.If(a >= 0, a, -a)
+        if isinstance(e, sp.sign):
+            # a written root is sign(b)·|b|**(1/q) (normalize.parse._real_root): cbrt(x) = -2 was read by
+            # z3 as x**(1/3) before part d4a
+            a = self.tr(e.args[0])
+            return z3.If(a > 0, z3.IntVal(1), z3.If(a < 0, z3.IntVal(-1), z3.IntVal(0)))
         if isinstance(e, sp.Max):
             args = [self.tr(a) for a in e.args]
             r = args[0]

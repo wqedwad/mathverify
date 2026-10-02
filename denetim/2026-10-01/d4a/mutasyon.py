@@ -82,6 +82,7 @@ MUTATIONS = [
      "            if False:", T),
     ("Z07 köprü IsInt'i düşürür", Z3, "            isint = z3.BoolVal(True) if z3.is_int(a) else z3.IsInt(a)",
      "            isint = z3.BoolVal(True)", T),
+    ("Z08 köprü sign'ı çevirmez", Z3, "        if isinstance(e, sp.sign):\n", "        if False:\n", T),
     # the step layer
     ("S01 öncül yalnız esas dalda çözülür", DET, "    for q in dict.fromkeys([p, real_odd_roots(p)]):",
      "    for q in [p]:", T),
