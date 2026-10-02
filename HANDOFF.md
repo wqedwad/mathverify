@@ -58,7 +58,7 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
    Karar dökümü 5 parçada (`fark_parca.py`), taban 158c220 (src = 1df0558) dökümüyle karşılaştırılır.
 2. **Sıradaki iş:** (a) **Dördüncü denetimin düzeltmeleri** (DECISIONS §85; bulgular `denetim/2026-10-01/d4/`). Yöntem: düzeltici ajan
    bulguyu yeniden üretir ve matematik kararını yazar (ana oturum denetler), sonra parçanın diff'ine bağımsız saldırgan gözden geçirici,
-   bulduğu açık aynı parçada kapanır; ortak kurallar scratchpad'deki `DUZELTME_KURALLARI.md`'den §85'e taşındı. Bitenler (tur 1–2):
+   bulduğu açık aynı parçada kapanır; ajanların ortak kuralları `denetim/2026-10-01/d4/duzeltme_kurallari.txt`, koşu kaydı `kosular.txt`. Bitenler (tur 1–2):
    d4a, d4b (kapsama geri kazanımı sürüyor), d4c (kesin aralık zarfı sürüyor), d4g (saldırganın 6 açığı sürüyor). Sırada: d4d verilen
    bağlama, d4e görev sertifikalarının koşul okuması, d4f tanımlılık, d4h ayrıştırıcı, d4i füzyon (CAP-K1); A05 mutasyonu; sonra
    birleşik hâle tamlık eleştirmeni. (b) **Yerel kalite:** V15 S1 (dolaylı sabitlenen sembol), R1, L1; V16'nın kalanı. (c) V19

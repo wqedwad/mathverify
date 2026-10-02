@@ -1,0 +1,67 @@
+# Dördüncü denetimin düzeltme parçaları: ortak kurallar (her düzeltme ajanı okur)
+
+Bağlam: mathverify, `wqedwad/asd`. Dördüncü bağımsız adversaryal denetim (`denetim/2026-10-01/d4/`) bulguları
+ve iki bağımsız doğrulamanın sonuçları `denetim/2026-10-01/d4/dogrulama.json` (anahtar `key`/`id`; alanlar
+`finding` (bulucu), `A` (yeniden üretici), `B` (şüpheci)) ve scratchpad'deki güncel hâli
+`$SP/d4/dogrulama.json` (SP=/tmp/claude-0/-home-user-asd/fce620cb-7571-5f23-8c9b-4899ea468c22/scratchpad;
+yeni doğrulamalar oraya geliyor: `$SP/d4/topla.py -q` ile yenilenir). Doğrulayıcıların sondaları
+`$SP/d4/v/<açı>-<id>-{A,B,C}/sonda/`, bulucularınki `$SP/d4/<açı>/sonda/` altında: yeniden kullan.
+
+Sen bir git worktree'sinde çalışıyorsun (Agent isolation). Ana checkout `/home/user/asd`'ye YAZMA; orada
+commit/checkout/stash/reset YASAK. Commit'lerin kendi worktree dalında kalır; ana oturum cherry-pick eder.
+Commit kimliği: `git -c user.name="$(git log -1 --format=%an)" -c user.email="$(git log -1 --format=%ae)" commit ...`.
+Commit başlığı Türkçe `alan: özet`, gövdede ne ölçüldü; son satırlar:
+```
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_GIZLI
+```
+Push ETME. CLAUDE.md'nin değişmez ilkeleri (özellikle 2, 4, 5, 8, 12, 13) ve "Ortam tuzakları" geçerli.
+
+Python: `/home/user/asd/.venv/bin/python`, ortam `PYTHONUTF8=1 PYTHONPATH=<worktree>/src:<worktree>
+MATHVERIFY_LEAN_REPL=/nonexistent` (Lean'e dokunma; ancak parçan Lean'i açıkça içeriyorsa
+`source /etc/profile.d/mathverify.sh` ve komutu `flock -w 3600 $SP/d4/lean.lock ...` ile sar). Her python
+komutunu `timeout` ile sınırla. Konteyner yeniden başlayabilir: ilerlemeni `<worktree>/../NOTLAR-<parça>.md`
+yerine `$SP/d4/duzeltme/<parça>/NOTLAR.md`'ye yaz; başlarken varsa oku ve sürdür.
+
+## Matematik kararı ilkesi (CLAUDE.md, DECISIONS §80)
+Doğrulayıcı yanlış olabilecek hiçbir cevaba CORRECT demez; anlam bir geleneğe bağlıysa ya da kanıtlanamıyorsa
+UNKNOWN. Doğru cevabın haksız reddi (INCORRECT) de hatadır; emin değilsen UNKNOWN. Kapsama kaybı (doğru
+cevabın UNKNOWN'a düşmesi) kabul edilir ama en dar biçimde: yalnız gerçekten karar verilemeyen durumda abstain
+et; ölç ve raporla. Bir geleneği sessizce seçme. Ana oturumun parça için verdiği kararlar promptta yazılı;
+promptta olmayan yeni bir anlam kararı gerekirse en temkinli olanı seç (UNKNOWN) ve raporla.
+
+## Teslim edilecekler (her parça)
+1. Kök neden düzeltmesi (`src/`), belirtiyi değil mekanizmayı kapat. Aynı mekanizmanın başka yollarını da ara.
+2. Sonda: `denetim/2026-10-01/<parça>/sonda.py` (biçim: `denetim/2026-09-30/parca11/sonda.py`; gruplar,
+   beklenen karar kümeleri, `out.json`; `if __name__ == "__main__":`). Bulgulardaki her repro ve doğrulayıcıların
+   varyantları + kontroller (kararı değişmemesi gerekenler). Düzeltme öncesi (taban 158c220) ve sonrası
+   beklenmeyen karar sayısını ölç: önce N → sonra 0.
+3. Testler: `tests/test_d4_<parça>.py`; kaçı düzeltmesiz kodda düşüyor, ölç (`git stash` YOK: düzeltmesiz
+   kod için `git -C /home/user/asd archive 158c220 | tar -x -C <geçici>` kopyasında testi koş).
+4. Mutasyon: `denetim/2026-10-01/<parça>/mutasyon.py` (düzenek: `denetim/2026-09-30/parca11/mutasyon.py`
+   gibi `2026-09-26/mutasyon.py`'yi kullanır; her korumayı kaldıran mutasyon; hepsi ölmeli; düzenek
+   commit edilmiş HEAD'in kopyasında koşar, yani önce commit et). Yaşayan mutasyon = eksik test ya da
+   gereksiz kod: düzelt.
+5. Karar farkı: `denetim/2026-10-01/fark_parca.py` ile 5 parçada döküm (0-112, 112-224, 224-336, 336-448,
+   448-558; her biri <5 dk, ikişer paralel), `merge`, sonra
+   `python denetim/2026-09-29/v14/fark.py compare $SP/fark_taban/taban.json <sonra.json>`: karar değişimi
+   **0** olmalı (adım durumu değişimleri raporlanır, her biri gerekçelendirilir). Worktree kökünden, PYTHONPATH
+   worktree. Taban (158c220 = 1df0558 src) hazır: `$SP/fark_taban/taban.json`.
+6. İlgili test dosyaları (Lean'siz: `pytest -q -p no:cacheprovider tests/<ilgili> ...`), en azından
+   değiştirdiğin modülleri içe aktaran testler; ayrıca `tests/test_parca*.py` hepsi. pyflakes temiz
+   (`.venv/bin/python -m pyflakes src tests`).
+7. Son rapor (ajan çıktın): commit hash'leri, değişen davranışın özeti (Türkçe), sonda önce/sonra, test
+   sayıları (kaçı eskide düşer), mutasyon x/y, fark.py özeti, kapsama kayıpları (doğru cevabın UNKNOWN'a düştüğü
+   durumlar, örnekleriyle), açık kalanlar ve kapsam dışı yeni bulgular. DECISIONS/HANDOFF'a YAZMA (ana oturum yazar).
+
+## Ek (23:20 UTC): yeni düzen ve tasarruf
+- Bulgularının özeti: `$SP/d4/ozet/<parça>.json` (bulucu + varsa doğrulayıcı notları). Büyük `dogrulama.json`'u
+  bütünüyle okuma.
+- `status` "DOGRULANDI" değilse bulgu bağımsız doğrulanmadı: düzeltmeden önce SEN yeniden üret ve matematiğini
+  bağımsız hesapla. Yeniden üretilemeyen ya da beklentisi matematikçe yanlış bulguyu düzeltme, raporla.
+- Kod yazmadan önce `$SP/d4/duzeltme/<parça>/NOTLAR.md`'nin başına "## Matematik kararları" bölümü yaz: her
+  bulgu için doğru karar ve gerekçesi (2-4 satır). Ana oturum bunu denetler.
+- Bağlamı yalın tut: sondaları toplu koş, çıktıya yalnız özet/sayım yazdır; büyük dosyaları bütün okuma
+  (grep + ilgili satır aralığı).
+- Düzeltmeden sonra bağımsız bir saldırgan gözden geçirici senin diff'ini kırmaya çalışacak: korumayı tek yazıma
+  değil mekanizmaya koy, kardeş yolları (aynı kalıbın başka çağrı yerleri) da kapat.
