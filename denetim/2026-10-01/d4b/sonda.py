@@ -24,6 +24,8 @@ Kept out of pyflakes and pytest like the rest of denetim/.
 from __future__ import annotations
 
 import json
+import os
+import signal
 import sys
 import time
 
@@ -356,6 +358,18 @@ def cases_e():
     ]
 
 
+class _Slow(Exception):
+    pass
+
+
+def _on_alarm(signum, frame):
+    raise _Slow()
+
+
+# one verify past this (seconds) is a hang, counted as not expected (0ed77e2: over 20 minutes for B6)
+CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
+signal.signal(signal.SIGALRM, _on_alarm)
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e}
 
 
@@ -370,6 +384,7 @@ def main(out_path=None, groups="ABCDE"):
     for g in groups:
         for label, ir, sol, verdicts, statuses in GROUPS[g]():
             t = time.time()
+            signal.alarm(CASE_TIMEOUT)
             try:
                 r = verify(ir, sol)
                 verdict = r.verdict
@@ -379,8 +394,11 @@ def main(out_path=None, groups="ABCDE"):
                 cert = [f"{la.layer}:{la.verdict}:{(la.evidence or {}).get('reason', '')}"[:120]
                         for la in r.layers if la.layer.startswith("certify") and la.verdict != "unknown"
                         or (la.layer.startswith("certify") and (la.evidence or {}).get("reason", "") not in ("not_applicable",))]
+            except _Slow:
+                verdict, status, cert = f"TIMEOUT {CASE_TIMEOUT} s", None, []
             except Exception as e:  # noqa: BLE001
                 verdict, status, cert = f"EXC {type(e).__name__}: {e}", None, []
+            signal.alarm(0)
             ok = verdict in verdicts and (statuses is None or status in statuses)
             bad += not ok
             rows.append({"group": g, "label": label, "verdict": verdict, "status": status, "ok": ok,
