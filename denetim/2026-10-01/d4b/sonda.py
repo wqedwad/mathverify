@@ -15,6 +15,9 @@ others leave, `Ctx.cut_by`, the completeness rule of `algebra._complete_solution
        count_solutions with a condition defined nowhere
     D  controls whose verdict must not change (no periodic condition, or one solved exactly)
     E  the review of d4b (2 Oct 2026): no exact class, multiple roots, slowness; controls of the classes
+    F  round 4 (2 Oct 2026): the classes (iv) one strictly monotone function, (v) a same-frequency sin/cos
+       combination, (vi) their products, right and wrong claims and the edges (a root out of the range,
+       base 1, log's domain); a rational system in several unknowns (completeness proved or not)
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/d4b/sonda.py [out.json] [groups]
@@ -324,8 +327,14 @@ def cases_e():
         ("B1 eq Q/x=0 [1,2pi]: {pi/3}", eq(f"{Q}/x = 0", ["x >= 1", "x <= 2*pi"]), _sol("{pi/3}", S_), NOTOK, None),
         ("B1 eq (x-10)Q(2x)=0 [0,4]: {pi/6}", eq("(x - 10)*(sqrt(3)*sin(2*x) - cos(2*x) - 1) = 0", ["x >= 0", "x <= 4"]),
          _sol("{pi/6}", S_), NOTOK, None),
-        ("B1 eq Q*sin(sqrt2 x)=0 [0,2]: {pi/3}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 2"]), _sol("{0, pi/3}", S_),
+        # on [0, 2] the zeros are 0 and pi/3 (pi > 2, pi/sqrt(2) = 2.22 > 2): {0, pi/3} is right. Round 3 expected
+        # "not CORRECT" here, a wrong expectation (0ed77e2's CORRECT was right; corrected in round 4)
+        ("B1 eq Q*sin(sqrt2 x)=0 [0,2]: {0,pi/3}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 2"]), _sol("{0, pi/3}", S_),
+         NOTNO, None),
+        ("B1 eq Q*sin(sqrt2 x)=0 [0,2]: {pi/3}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 2"]), _sol("{pi/3}", S_),
          NOTOK, None),
+        ("B1 eq Q*sin(sqrt2 x)=0 [0,4]: {0,pi/3,pi}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 4"]),
+         _sol("{0, pi/3, pi}", S_), NOTOK, None),
         ("B1 croots x*Q on [0,2pi]: 2", croots(f"x*{Q}", W2), _sol("2", "count"), NOTOK, None),
         ("B2 eq Q^3=0 [0,7]: {pi/3}", eq(f"{Q}**3 = 0", W7), _sol("{pi/3}", S_), NOTOK, None),
         ("B2 ineq Q^3>0 [0,7]: {}", ineq(f"{Q}**3 > 0", W7), _sol("{}", S_), NOTOK, None),
@@ -358,6 +367,69 @@ def cases_e():
     ]
 
 
+Y = V("y")
+
+
+def cases_f():
+    return [
+        # (iv) one strictly monotone function of a linear argument
+        ("F4 eq exp(x)=2: {log 2}", eq("exp(x) = 2"), _sol("{log(2)}", S_), OK, None),
+        ("F4 eq exp(x)=2: {log 2, -log 2}", eq("exp(x) = 2"), _sol("{log(2), -log(2)}", S_), NO, None),
+        ("F4 eval exp(x)=2: log 2", ev("x", ["exp(x) = 2"]), _sol("log(2)"), OK, None),
+        ("F4 eval exp(x)=2: log 3", ev("x", ["exp(x) = 2"]), _sol("log(3)"), NO, None),
+        ("F4 eq 4^x-3*2^x+2=0: {0,1}", eq("4**x - 3*2**x + 2 = 0"), _sol("{0, 1}", S_), OK, None),
+        ("F4 eq 4^x-3*2^x+2=0: {1}", eq("4**x - 3*2**x + 2 = 0"), _sol("{1}", S_), NO, None),
+        ("F4 eq 2^(2x)-3*2^x+2=0: {0,1}", eq("2**(2*x) - 3*2**x + 2 = 0"), _sol("{0, 1}", S_), OK, None),
+        ("F4 eval 4^x-3*2^x+2=0, x>0: 1", ev("x", ["4**x - 3*2**x + 2 = 0", "x > 0"]), _sol("1"), OK, None),
+        ("F4 eq (1/2)^x=4: {-2}", eq("(1/2)**x = 4"), _sol("{-2}", S_), OK, None),
+        ("F4 edge exp root out of range: {log 2}", eq("exp(2*x) - exp(x) - 2 = 0"), _sol("{log(2)}", S_), OK, None),
+        ("F4 edge exp root out of range: {}", eq("exp(2*x) - exp(x) - 2 = 0"), _sol("{}", S_), NO, None),
+        ("F4 edge atan(x)=2: {}", eq("atan(x) = 2"), _sol("{}", S_), OK, None),
+        ("F4 edge atan(x)=2: {tan 2}", eq("atan(x) = 2"), _sol("{tan(2)}", S_), NO, None),
+        ("F4 eq atan(x)=1: {tan 1}", eq("atan(x) = 1"), _sol("{tan(1)}", S_), OK, None),
+        ("F4 eq sinh(x)=1: {log(1+sqrt2)}", eq("sinh(x) = 1"), _sol("{log(1 + sqrt(2))}", S_), OK, None),
+        ("F4 edge log domain log^2=log: {1,E}", eq("log(x)**2 - log(x) = 0"), _sol("{1, E}", S_), OK, None),
+        ("F4 edge log domain log^2=log: {0,1,E}", eq("log(x)**2 - log(x) = 0"), _sol("{0, 1, E}", S_), NO, None),
+        ("F4 edge log domain ineq log x<1", ineq("log(x) < 1"), _sol("Interval.open(0, E)", "interval"), OK, None),
+        ("F4 edge log domain ineq log x<1 wrong", ineq("log(x) < 1"), _sol("Interval.open(-oo, E)", "interval"), NO, None),
+        ("F4 ineq exp(x)>2", ineq("exp(x) > 2"), _sol("Interval.open(log(2), oo)", "interval"), OK, None),
+        ("F4 croots exp(2x)-3exp(x)+2: 2 (count_roots: rational only)", croots("exp(2*x) - 3*exp(x) + 2"), _sol("2", "count"), NOTNO, None),
+        ("F4 croots exp(2x)-3exp(x)+2: 1", croots("exp(2*x) - 3*exp(x) + 2"), _sol("1", "count"), NOTOK, None),
+        ("F4 edge base 1: eval x | 1**x=1: 0", ev("x", ["1**x = 1"]), _sol("0"), NOTOK, None),
+        ("F4 out of class 3^x=2^x: {0}", eq("3**x = 2**x"), _sol("{0}", S_), NOTNO, None),
+        ("F4 out of class eval exp(x)=3x, x<1: W0", ev("x", ["exp(x) = 3*x", "x < 1"]), _sol("-LambertW(-1/3)"), NOTOK, None),
+        # (v) a same-frequency sin/cos combination
+        ("F5 eq sin=cos [0,2pi]: {pi/4,5pi/4}", eq("sin(x) = cos(x)", W2), _sol("{pi/4, 5*pi/4}", S_), OK, None),
+        ("F5 eq sin=cos [0,2pi]: {pi/4}", eq("sin(x) = cos(x)", W2), _sol("{pi/4}", S_), NO, None),
+        ("F5 eq sqrt3 sin-cos=1 [0,2pi]: {pi/3,pi}", eq("sqrt(3)*sin(x) - cos(x) = 1", W2), _sol("{pi/3, pi}", S_), OK, None),
+        ("F5 eq sqrt3 sin-cos=1 [0,2pi]: {pi/3}", eq("sqrt(3)*sin(x) - cos(x) = 1", W2), _sol("{pi/3}", S_), NO, None),
+        ("F5 trig sqrt3 sin-cos=1 [0,2pi): {pi/3,pi}", trig(["sqrt(3)*sin(x) - cos(x) = 1"], "[0, 2*pi)"),
+         _sol("{pi/3, pi}", S_), OK, None),
+        ("F5 eq sin2x+cos2x=1 [0,2pi]", eq("sin(2*x) + cos(2*x) = 1", W2), _sol("{0, pi/4, pi, 5*pi/4, 2*pi}", S_), OK, None),
+        ("F5 eq sin-cos=2: {}", eq("sin(x) - cos(x) = 2"), _sol("{}", S_), OK, None),
+        ("F5 ineq sin+cos>1 [0,2pi]", ineq("sin(x) + cos(x) > 1", W2), _sol("Interval.open(0, pi/2)", "interval"), OK, None),
+        ("F5 eval sin=cos, 0<x<2: pi/4", ev("x", ["sin(x) = cos(x)", "x > 0", "x < 2"]), _sol("pi/4"), OK, None),
+        ("F5 eval sin=cos, 0<x<4: pi/4", ev("x", ["sin(x) = cos(x)", "x > 0", "x < 4"]), _sol("pi/4"), NOTOK, None),
+        # (vi) products of the classes
+        ("F6 eq x(sin-cos)=0 [0,2pi]", eq("x*(sin(x) - cos(x)) = 0", W2), _sol("{0, pi/4, 5*pi/4}", S_), OK, None),
+        ("F6 eq (exp(x)-2) sin x=0 [0,4]", eq("(exp(x) - 2)*sin(x) = 0", ["x >= 0", "x <= 4"]), _sol("{0, log(2), pi}", S_), OK, None),
+        ("F6 eq (exp(x)-2) sin x=0 [0,4]: {0,pi}", eq("(exp(x) - 2)*sin(x) = 0", ["x >= 0", "x <= 4"]), _sol("{0, pi}", S_), NO, None),
+        ("F6 eq log(x)*Q=0 [0,2pi]", eq(f"log(x)*{Q} = 0", W2), _sol("{1, pi/3, pi}", S_), OK, None),
+        ("F6 eval x | (x+1)Q=0, 0<x<2: pi/3", ev("x", [f"(x + 1)*{Q} = 0", "x > 0", "x < 2"]), _sol("pi/3"), OK, None),
+        ("F6 eq x*Q=0 [0,2pi]: {0,pi/3,pi}", eq(f"x*{Q} = 0", W2), _sol("{0, pi/3, pi}", S_), OK, None),
+        ("F6 eq Q^3=0 [0,7]: {pi/3,pi}", eq(f"{Q}**3 = 0", W7), _sol("{pi/3, pi}", S_), OK, None),
+        # a rational system in several unknowns
+        ("FS eval xy | x+y=5, x^2+y^2=13: 6", ev("x*y", ["x + y = 5", "x**2 + y**2 = 13"], [X, Y]), _sol("6"), OK, None),
+        ("FS eval xy | x+y=5, x^2+y^2=13: 5", ev("x*y", ["x + y = 5", "x**2 + y**2 = 13"], [X, Y]), _sol("5"), NO, None),
+        ("FS eval x | x+y=5, xy=6, x>y: 3", ev("x", ["x + y = 5", "x*y = 6", "x > y"], [X, Y]), _sol("3"), OK, None),
+        ("FS eval x | x+y=5, xy=6: 3", ev("x", ["x + y = 5", "x*y = 6"], [X, Y]), _sol("3"), NOTOK, None),
+        ("FS eval x | x^2=y, y^2=x, x>0: 1", ev("x", ["x**2 = y", "y**2 = x", "x > 0"], [X, Y]), _sol("1"), OK, None),
+        ("FS eval x+y | 1/x+1/y=1, xy=4: 4", ev("x + y", ["1/x + 1/y = 1", "x*y = 4"], [X, Y]), _sol("4"), OK, None),
+        ("FS eval x+y | x^2+y^2=2, xy=1: 2", ev("x + y", ["x**2 + y**2 = 2", "x*y = 1"], [X, Y]), _sol("2"), NOTOK, None),
+        ("FS eval x+y | xy=1 (a curve): 2", ev("x + y", ["x*y = 1"], [X, Y]), _sol("2"), NOTOK, None),
+    ]
+
+
 class _Slow(Exception):
     pass
 
@@ -370,10 +442,10 @@ def _on_alarm(signum, frame):
 CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e}
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f}
 
 
-def main(out_path=None, groups="ABCDE"):
+def main(out_path=None, groups="ABCDEF"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -414,5 +486,5 @@ def main(out_path=None, groups="ABCDE"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDE"
+    grp = args[1] if len(args) > 1 else "ABCDEF"
     sys.exit(1 if main(out, grp) else 0)

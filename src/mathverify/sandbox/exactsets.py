@@ -1,5 +1,5 @@
-"""Solution sets of relations with a trigonometric function, exact or unsolved (a CAS primitive: no decision
-logic).
+"""Solution sets of relations with a trigonometric function, and of the exact classes below, exact or
+unsolved (a CAS primitive: no decision logic).
 
 SymPy 1.14 solves an inequality or a `!=` whose expression is periodic on ONE period and returns that
 as the answer, also on a bounded domain (it solves on ℝ, cuts the line to [0, P), then intersects):
@@ -16,8 +16,17 @@ So a set is exact only for an expression whose zeros and poles are known in clos
   (ii)  a polynomial in ONE trigonometric function of a linear argument, g(f(a*x + b)) with g a
         polynomial: the real roots r of g, then the closed general solution of f(u) = r; the poles of
         tan, cot, sec, csc likewise;
-  (iii) a product or quotient whose factors (as written, `together` then `fraction`) are each (i) or
-        (ii), with integer powers.
+  (iii) a product or quotient whose factors (as written, `together` then `fraction`) are each (i), (ii),
+        (iv) or (v), with integer powers;
+  (iv)  a polynomial in ONE strictly monotone function of a linear argument, g(h(a*x + b)) with h one of
+        exp (with the constant powers c**x, c > 0, c != 1: c**(k*x) = (c**x)**k, all powers of one base
+        read as powers of one generator), log, sinh, atan: the real roots r of g in the range of h, then
+        the one solution of h(u) = r; log is undefined at and below its zero (no relation holds there);
+  (v)   a same-frequency combination A*sin(u) + B*cos(u) + D (A, B, D exact numbers, u linear), read as
+        R*sin(u + phi) + D with R = sqrt(A**2 + B**2), phi = atan2(B, A), then as (ii).
+The readings of (iv) and (v) are checked symbolically (the rewritten expression minus the original is 0),
+or the factor is no class. `class_solveset` gives these sets for any relation (round 4 of part d4b,
+2 Oct 2026: exp(x) = 2, 4**x - 3*2**x + 2 = 0, sin x = cos x, sqrt(3) sin x - cos x = 1).
 Everything else is returned as a ConditionSet: the membership of each point is still decided exactly,
 the set is not known. On a bounded domain the zeros and the poles of lhs - rhs cut the hull into cells,
 and the sign is certified (`certified_sign`) on each cell and at each point; on an unbounded domain an
@@ -84,6 +93,20 @@ def exact_solveset(rel, var, domain=S.Reals):
         except Exception:  # noqa: BLE001 - not exact (a class it is not, too many points, ...): unsolved
             exact = None
     return exact if exact is not None else sp.ConditionSet(var, rel, domain)
+
+
+def class_solveset(rel, var, domain=S.Reals):
+    """The exact set of `rel` when it is of the classes in the module doc, whether it has a trigonometric
+    function or not (exp(x) = 2, 4**x - 3*2**x + 2 = 0, log(x)**2 = log(x)); None otherwise. For the
+    completeness of a solution list (certify.algebra): SymPy's own finite set is no proof."""
+    if isinstance(rel, sp.Expr):
+        rel = sp.Eq(rel, 0)
+    if not isinstance(rel, sp.core.relational.Relational):
+        return None
+    try:
+        return _rebuilt(rel, var, domain)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _hull(domain):
@@ -194,29 +217,158 @@ def _u_solutions(f, r) -> list[tuple]:
     return [(u0, 2 * pi), (-u0, 2 * pi)]
 
 
-def _factor_sets(base, var):
-    """(zeros, poles) of one factor as progressions in `var`, or raise _Unsolved."""
-    roots = _poly_roots(base, var)
-    if roots is not None:
-        return [(r_, S.Zero) for r_ in roots], []
-    parts = _trig_parts(base, var)
-    if parts is None:
-        raise _Unsolved(f"not an exact class: {base}")
-    f, a, b, g = parts
+def _linear(arg, var):
+    """(a, b) with arg = a*var + b, a != 0, exact numbers; or None."""
+    try:
+        p = sp.Poly(arg, var)
+    except sp.PolynomialError:
+        return None
+    if p.degree() != 1 or not p.domain.is_Exact or p.free_symbols_in_domain:
+        return None
+    return p.coeff_monomial(var), p.coeff_monomial(1)
+
+
+def _combo_parts(base, var):
+    """(v): A*sin(u) + B*cos(u) + D with one linear u (A, B, D exact numbers, A and B not 0), read as
+    R*sin(u + phi) + D with R = sqrt(A**2 + B**2), phi = atan2(B, A): (sin, a, b + phi, g) as in (ii).
+    The rewriting is checked symbolically. sin x = cos x and sqrt(3) sin x - cos x = 1 are this class."""
+    atoms = {n for n in base.atoms(TrigonometricFunction) if var in n.free_symbols}
+    if not atoms or any(type(n) not in (sp.sin, sp.cos) for n in atoms) or len({n.args[0] for n in atoms}) != 1:
+        return None
+    u = next(iter(atoms)).args[0]
+    ab = _linear(u, var)
+    if ab is None:
+        return None
+    sv, cv = sp.Dummy("s"), sp.Dummy("c")
+    bt = sp.expand(base.xreplace({sp.sin(u): sv, sp.cos(u): cv}))
+    if not bt.free_symbols <= {sv, cv}:
+        return None
+    try:
+        q = sp.Poly(bt, sv, cv)
+    except sp.PolynomialError:
+        return None
+    if q.total_degree() != 1 or not q.domain.is_Exact or q.free_symbols_in_domain:
+        return None
+    A, B, D = q.coeff_monomial(sv), q.coeff_monomial(cv), q.coeff_monomial(1)
+    if A == 0 or B == 0:
+        return None
+    R, phi = sp.sqrt(A ** 2 + B ** 2), sp.atan2(B, A)
+    if sp.simplify(sp.expand_trig(R * sp.sin(u + phi) + D) - base) != 0:
+        return None
+    t = sp.Dummy("t")
+    return sp.sin, ab[0], ab[1] + phi, sp.Poly(R * t + D, t)
+
+
+_MONO = (sp.exp, sp.log, sp.sinh, sp.atan)
+
+
+def _mono_parts(base, var):
+    """(iv): g(h(a*x + b)) with h strictly monotone (exp and constant powers a**x, log, sinh, atan),
+    g a polynomial: (h, a, b, g). Powers of one base (4**x, 2**(2x), exp(3x)) are read as powers of one
+    generator t = exp(c*x) (a negative power is cleared by t**m > 0, which changes no zero or sign); the
+    rewriting is checked symbolically."""
+    nodes = [n for n in sp.preorder_traversal(base)
+             if var in n.free_symbols and (isinstance(n, _MONO) or (isinstance(n, sp.Pow) and var in n.exp.free_symbols))]
+    if not nodes:
+        return None
+    t = sp.Dummy("t", positive=True)
+    kinds = {type(n) for n in nodes}
+    if kinds <= {sp.exp, sp.Pow}:
+        exps = {}
+        for n in nodes:
+            if isinstance(n, sp.Pow):
+                if not (n.base.is_number and n.base.is_positive is True and n.base != 1):
+                    return None
+                ex = n.exp * sp.log(n.base)
+            else:
+                ex = n.args[0]
+            ab = _linear(sp.expand(ex), var)
+            if ab is None:
+                return None
+            exps[n] = ab
+        c1 = next(iter(exps.values()))[0]
+        ratios = {}
+        for n, (c, _) in exps.items():
+            q = sp.simplify(sp.expand_log(c / c1, force=True))
+            if not isinstance(q, sp.Rational):
+                return None
+            ratios[n] = q
+        L = sp.ilcm(*[q.q for q in ratios.values()]) if len(ratios) > 1 else ratios[next(iter(ratios))].q
+        c0 = c1 / L
+        ks = {n: int(ratios[n] * L) for n in exps}
+        m = max(0, -min(ks.values()))
+        bt = sp.expand(base.xreplace({n: sp.exp(exps[n][1]) * t ** ks[n] for n in exps}) * t ** m)
+        if bt.free_symbols != {t}:
+            return None
+        g = sp.Poly(bt, t)
+        back = bt.subs(t, sp.exp(c0 * var)) - base * sp.exp(m * c0 * var)
+        if sp.simplify(sp.expand(sp.powsimp(back.rewrite(sp.exp)))) != 0:
+            return None
+        return sp.exp, c0, S.Zero, g
+    if len(kinds) != 1 or len(set(nodes)) != 1:
+        return None
+    (h,) = kinds
+    if h is sp.Pow:
+        return None
+    n = nodes[0]
+    ab = _linear(n.args[0], var)
+    if ab is None:
+        return None
+    bt = base.xreplace({n: t})
+    if bt.free_symbols != {t}:
+        return None
+    return h, ab[0], ab[1], sp.Poly(bt, t)
+
+
+def _mono_zeros(h, a, b, g):
+    """The zeros (points) of g(h(a*x + b)) and the points where it is undefined (log of 0)."""
     zeros = []
     for r_ in _real_roots(g):
-        zeros += [((u0 - b) / a, step / abs(a)) for u0, step in _u_solutions(f, r_)]
-    poles = []
-    if f in (sp.tan, sp.sec):
-        poles = [((sp.pi / 2 - b) / a, sp.pi / abs(a))]
-    elif f in (sp.cot, sp.csc):
-        poles = [((-b) / a, sp.pi / abs(a))]
+        if h is sp.exp:
+            if _certified(r_) <= 0:
+                continue                       # exp takes no value <= 0
+            u = sp.log(r_)
+        elif h is sp.log:
+            u = sp.exp(r_)
+        elif h is sp.sinh:
+            u = sp.asinh(r_)
+        else:                                  # atan: values in (-pi/2, pi/2)
+            if _certified(sp.pi / 2 - abs(r_)) <= 0:
+                continue
+            u = sp.tan(r_)
+        zeros.append(((u - b) / a, S.Zero))
+    poles = [((-b) / a, S.Zero)] if h is sp.log else []
     return zeros, poles
+
+
+def _factor_sets(base, var):
+    """(zeros, poles, period) of one factor: zeros and poles as progressions in `var`, the period None
+    when the factor is not periodic; or raise _Unsolved."""
+    roots = _poly_roots(base, var)
+    if roots is not None:
+        return [(r_, S.Zero) for r_ in roots], [], None
+    parts = _trig_parts(base, var) or _combo_parts(base, var)
+    if parts is not None:
+        f, a, b, g = parts
+        zeros = []
+        for r_ in _real_roots(g):
+            zeros += [((u0 - b) / a, step / abs(a)) for u0, step in _u_solutions(f, r_)]
+        poles = []
+        if f in (sp.tan, sp.sec):
+            poles = [((sp.pi / 2 - b) / a, sp.pi / abs(a))]
+        elif f in (sp.cot, sp.csc):
+            poles = [((-b) / a, sp.pi / abs(a))]
+        return zeros, poles, (sp.pi if f in (sp.tan, sp.cot) else 2 * sp.pi) / abs(a)
+    mono = _mono_parts(base, var)
+    if mono is not None:
+        return (*_mono_zeros(*mono), None)
+    raise _Unsolved(f"not an exact class: {base}")
 
 
 def _structure(e, var):
     """(zeros, poles, periods) of e as progressions: e = (product of factors) / (product of factors),
-    each factor an integer power of a class (i) or (ii) base; raise _Unsolved otherwise. `periods` is
+    each factor an integer power of a base of the classes (i), (ii), (iv), (v); raise _Unsolved otherwise.
+    `periods` is
     None when a factor that depends on `var` is not periodic."""
     num, den = sp.fraction(sp.together(e))
     zeros, poles, periods = [], [], []
@@ -228,16 +380,14 @@ def _structure(e, var):
                 continue
             base, ex = arg.as_base_exp()
             if not (ex.is_Integer and ex > 0):
-                raise _Unsolved(f"not an integer power: {arg}")
-            z, p = _factor_sets(base, var)
+                base = arg                     # exp(x) or 2**x as a factor: classified whole
+            z, p, per = _factor_sets(base, var)
             (zeros if is_num else poles).extend(z)
             poles.extend(p)
-            parts = _trig_parts(base, var)
-            if parts is None:
+            if per is None:
                 periods = None
             elif periods is not None:
-                f, a, _, _ = parts
-                periods.append((sp.pi if f in (sp.tan, sp.cot) else 2 * sp.pi) / abs(a))
+                periods.append(per)
     return zeros, poles, periods
 
 
@@ -248,6 +398,8 @@ def _on(progs, lo, hi) -> list:
     for p0, step in progs:
         if step == 0:
             cand = [p0]
+        elif not (lo.is_finite and hi.is_finite):
+            raise _Unsolved("a progression on an unbounded window")
         else:
             fp, fs = float(sp.N(p0, 30)), float(sp.N(step, 30))
             n0, n1 = math.floor((flo - fp) / fs) - 1, math.ceil((fhi - fp) / fs) + 1
@@ -255,7 +407,7 @@ def _on(progs, lo, hi) -> list:
                 raise _Unsolved("too many points on the window")
             cand = [p0 + step * k for k in range(n0, n1 + 1)]
         for c in cand:
-            if _certified(c - lo) >= 0 and _certified(hi - c) >= 0:
+            if (lo == -sp.oo or _certified(c - lo) >= 0) and (hi == sp.oo or _certified(hi - c) >= 0):
                 out.append(c)
     return out
 
@@ -270,6 +422,28 @@ def _sorted_unique(pts):
             continue
         out.append((k, p))
     return [p for _, p in out]
+
+
+def _real_sign(e):
+    """The certified sign of a real number; raise _Unsolved when undecided or not real (the cells where
+    a log is not real are cut off by `_log_outside` first: a sign read at one point says nothing there,
+    log(x)**2 is the real -pi**2 at x = -1 and not real at x = -2)."""
+    from ..equiv.numeric import NONREAL, certified_sign
+    s_ = certified_sign(e)
+    if s_ is None or s_ == NONREAL:
+        raise _Unsolved(f"sign undecided or not real: {e}")
+    return s_
+
+
+def _log_outside(e, var):
+    """A test of a point: is it outside the real domain of a log in `e` (its argument <= 0)? The classes
+    have only logs of linear arguments, whose zero is a pole and so an edge of every cell: the sign of
+    the argument at one point of a cell is its sign on the whole cell."""
+    args = [n.args[0] for n in e.atoms(sp.log) if var in n.free_symbols]
+
+    def outside(pt) -> bool:
+        return any(_certified(a.subs(var, pt)) <= 0 for a in args)
+    return outside
 
 
 def _holds(op, s) -> bool:
@@ -289,22 +463,29 @@ def _on_window(rel, var, lo, hi):
     e = rel.lhs - rel.rhs
     zp, pp, _ = _structure(e, var)
     poles = _sorted_unique(_on(pp, lo, hi))
-    zeros = [z for z in _sorted_unique(_on(zp, lo, hi)) if not _same(z, poles)]
+    outside = _log_outside(e, var)
+    zeros = [z for z in _sorted_unique(_on(zp, lo, hi)) if not _same(z, poles) and not outside(z)]
     op = type(rel)
     if op is sp.Equality:
         return sp.FiniteSet(*zeros), zeros, poles
-    edges = _sorted_unique([lo, hi] + zeros + poles)
+    ends = [q for q in (lo, hi) if q.is_finite]
+    edges = _sorted_unique(ends + zeros + poles)
+    edges = ([lo] if not lo.is_finite else []) + edges + ([hi] if not hi.is_finite else [])
     pieces: list = []
     for a, b in zip(edges[:-1], edges[1:]):
-        s_ = _certified(e.subs(var, (a + b) / 2))
+        mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+        if outside(mid):
+            continue                                    # a log is not real on this cell: nothing holds
+        s_ = _real_sign(e.subs(var, mid))
         if s_ == 0:
             raise _Unsolved("a zero inside a cell")       # cannot happen with the classes: refuse
         if _holds(op, s_):
             pieces.append(sp.Interval.open(a, b))
     for p in edges:
-        if _same(p, poles):
+        if not p.is_finite or _same(p, poles) or outside(p):
             continue
-        if _holds(op, 0 if _same(p, zeros) else _certified(e.subs(var, p))):
+        s_ = 0 if _same(p, zeros) else _real_sign(e.subs(var, p))
+        if _holds(op, s_):
             pieces.append(sp.FiniteSet(p))
     return (sp.Union(*pieces) if pieces else S.EmptySet), zeros, poles
 
@@ -335,6 +516,13 @@ def _rebuilt(rel, var, domain):
             return discrete
     if isinstance(rel, sp.Equality):
         zp, pp, _ = _structure(e, var)
+        if any(var in g.free_symbols for g in e.atoms(sp.log)):
+            # a zero where a log is not real is no zero ((x + 1)*log(x) = 0 at x = -1); a progression
+            # crosses that region, so only points are cut here
+            if any(step != 0 for _, step in zp + pp):
+                raise _Unsolved("a progression with a log factor on an unbounded domain")
+            outside = _log_outside(e, var)
+            zp = [(p0, step) for p0, step in zp if not outside(p0)]
         n = sp.Dummy("n", integer=True)
 
         def union(progs):
@@ -343,7 +531,8 @@ def _rebuilt(rel, var, domain):
         zs = union(zp)
         return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)
     if P is None:
-        return None
+        # not periodic: with finitely many zeros and poles, the cells cover the whole line
+        return sp.Intersection(_on_window(rel, var, S.NegativeInfinity, S.Infinity)[0], domain)
     # an inequality or `!=` on an unbounded domain: its set on one whole period decides only "nowhere"
     # and "everywhere" (sin(x) > 2, cos(x) + 2 != 0); anything else is a union over all periods, and
     # ℝ minus progressions is a set no sampler draws from: the ConditionSet decides each point exactly
