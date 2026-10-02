@@ -479,9 +479,7 @@ class Ctx:
 
         # (1) one symbol, two values
         for s_, vals in clash.items():
-            diff = [0 if same_value(vals[0], w) else _certified_compare(vals[0], w) for w in vals[1:]]
-            if all(d == 0 for d in diff):
-                continue                        # a = 3 and a = log(8)/log(2): one value written twice
+            diff = [_certified_compare(vals[0], w) for w in vals[1:]]
             note("ir_inconsistent" if any(d not in (0, None) for d in diff) else "given_binding_undecided",
                  f"{s_} = {', '.join(str(w) for w in vals)}")
         # (2) each value in its symbol's declaration and domain of discourse

@@ -544,3 +544,31 @@ def test_review_constraint_and_given_write_one_value_twice():
 def test_review_closed_condition_with_no_value():
     r = _run(_eq("x**2 = 4", ["x > 1 + 0*log(-1)"]), "{}")
     assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+
+
+# (x - 1)(x - T7) = 0: two solutions proved distinct (1 and pi), so the evaluate path reaches the filters
+R2 = f"(x - 1)*(x - ({T7})) = 0"
+
+
+@pytest.mark.parametrize("givens,vars_,target,payload", [
+    # x <= pi holds at both (T7 = pi) but no check proves it at T7: dropping T7 leaves y = 2 alone
+    ([R2, "y = x + 1", "x <= pi"], [X, {"name": "y"}], "y", "2"),
+    # the chain pi <= x <= pi: at T7 both parts are undecided (an And that stays an And)
+    ([R2, "y = x + 1", "pi <= x <= pi"], [X, {"name": "y"}], "y", f"1 + ({T7})"),
+    # a constraint on two symbols, undecided at (T7, T7 + 1), false at (1, 2)
+    ([R2, "z = x + 1"], [{"name": "x", "constraints": ["x*z > pi*(pi + 1)"]}, {"name": "z"}], "z", f"1 + ({T7})"),
+])
+def test_g10_evaluate_filters_after_complete_solutions(givens, vars_, target, payload):
+    r = _run(_ir("evaluate", {"expr": target}, givens, vars_, shape="scalar"), payload, "value")
+    assert r.verdict == "UNKNOWN"
+
+
+def test_g10_evaluate_domain_of_discourse_filter():
+    q = _ir("evaluate", {"expr": "y"}, [R2, "y = x + 1"], [X, {"name": "y"}], shape="scalar", dod="x > pi")
+    assert _run(q, f"1 + ({T7})", "value").verdict == "UNKNOWN"
+
+
+def test_review_constraint_binding_meets_the_givens():
+    V = [X, {"name": "a", "domain": "real", "constraints": ["a = 1"]}]
+    r = _run(_eq("x**2 = 4", ["a < 0"], V), "{-2, 2}")
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in _flags(r)
