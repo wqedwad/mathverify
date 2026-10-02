@@ -978,7 +978,17 @@ def _in_set_certified(dom, c) -> bool | None:
 def in_domain(dom: sp.Set, c) -> bool | None:
     """Membership of a constant in a domain set. SymPy's own `contains` first; where it cannot
     decide, every comparison is certified (see _certified_compare) — the old fallback compared
-    40-digit values, and returned False for any part that was not an Interval."""
+    40-digit values, and returned False for any part that was not an Interval. A domain with a
+    condition no solver could turn into a set (a ConditionSet, Ctx.domain_for) is decided by the
+    certified comparisons only: SymPy reads the condition at the point uncertified, and took
+    cos(arccot(1/2) + arccot(2)) != 0 for true (the cosine is cos(pi/2) = 0; measured 2 Oct 2026)."""
+    if isinstance(dom, sp.Set) and dom.has(sp.ConditionSet):
+        try:
+            if certified_sign(c) == NONREAL:
+                return False
+            return _in_set_certified(dom, c)
+        except Exception:  # noqa: BLE001
+            return None
     try:
         r = dom.contains(c)
     except Exception:

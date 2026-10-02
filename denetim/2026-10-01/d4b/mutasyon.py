@@ -66,6 +66,9 @@ MUTATIONS = [
     ("P14 SymPy'nin sıfır noktası doğrulanmaz", EX,
      "        return None                           # a point SymPy gives that is no zero", "        pass",
      T + "test_a_period_and_the_zeros_are_confirmed"),
+    ("P15 SymPy'nin periyodik olmayan sıfırı doğrulanmaz", EX,
+     "        if isinstance(z, sp.FiniteSet) and any(certified_sign(u.subs(var, p)) != 0 for p in z):\n            return False\n",
+     "", T + "test_a_wrong_zero_of_a_non_periodic_condition_is_not_trusted"),
     ("P12 sürekli alan korumasız", OPS, "    if oscillates(expr, var):\n        # SymPy solves the conditions",
      "    if False:\n        # SymPy solves the conditions", T + "test_continuous_domain_of_a_trigonometric_expression"),
     # --- certify.domain
@@ -80,6 +83,8 @@ MUTATIONS = [
      "    if False:\n        # a condition Ctx.domain_for", T + "test_membership_in_an_unsolved_condition"),
     ("D05 domain_of çözülmemiş koşulda çekimser değil", DOM, "        if ctx.unsolved_conditions(var):\n            # the domain is cut",
      "        if False:\n            # the domain is cut", T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
+    ("D08 ConditionSet üyeliği SymPy'ye sorulur", DOM, "    if isinstance(dom, sp.Set) and dom.has(sp.ConditionSet):\n        try:\n            if certified_sign(c) == NONREAL:",
+     "    if False:\n        try:\n            if certified_sign(c) == NONREAL:", T + "test_a_wrong_zero_of_a_non_periodic_condition_is_not_trusted"),
     ("D07 çelişki denetimi ℝ'de tümleyen alır", DOM, "        out = sp.Complement(within, s)", "        out = sp.Complement(S.Reals, s)",
      T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
     ("D06 domain_of koşulu tabanda çözülmez", DOM, "        within = base if at_risk(cond, var) and _hull(base) is not None else S.Reals\n",

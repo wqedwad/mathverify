@@ -168,6 +168,9 @@ def cases_a():
          _sol("{1, 2, 3, 7, 8, 9}", S_), NOTNO, None),
         ("eq x^2+log(sin)-log(sin)=49: {}", eq("x**2 + log(sin(x)) - log(sin(x)) = 49"), _sol("{}", S_), NOTOK, None),
         ("eq x^2+log(sin)-log(sin)=49: {7}", eq("x**2 + log(sin(x)) - log(sin(x)) = 49"), _sol("{7}", S_), NOTNO, None),
+        # not periodic: SymPy reads cos(atan(x) + atan(2)) = 0 as x = -2 (the zero is 1/2, a pole of the tan)
+        ("eq x+tan(acot..)-tan(acot..)=1/2: {1/2}", eq("x + tan(acot(x) + acot(2)) - tan(acot(x) + acot(2)) = 1/2"), _sol("{1/2}", S_), NOTOK, None),
+        ("eq x+tan(acot..)-tan(acot..)=1/2: {}", eq("x + tan(acot(x) + acot(2)) - tan(acot(x) + acot(2)) = 1/2"), _sol("{}", S_), NOTNO, None),
         # D4-ADIM-G: the step layer read x on one period of tan's domain
         ("ADIM-G simplify tan*cos, step Abs(x)=x", _ir("simplify_expression", {"expr": "tan(x)*cos(x)"}, [X], (), "expression"),
          _sol("sin(x)", "expression", [("compute", "Abs(x) = x")]), NOTOK, NOTVER),

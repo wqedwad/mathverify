@@ -254,6 +254,16 @@ def test_written_conditions_of_tan_and_log_sin():
     assert _run(_eq("x + log(sin(x)) - log(sin(x)) = 7"), "{7}").verdict == "CORRECT"
 
 
+def test_a_wrong_zero_of_a_non_periodic_condition_is_not_trusted():
+    """SymPy reads cos(atan(x) + atan(2)) = 0 as x = -2 (the cosine is 1 there; the zero is 1/2, where
+    acot(1/2) + acot(2) = pi/2 makes the tan undefined). Its set is not used, and membership in the
+    unsolved condition is decided by certified comparisons (SymPy's own contains took 1/2 for inside).
+    158c220: {1/2} CORRECT, {} INCORRECT."""
+    ir = _eq("x + tan(acot(x) + acot(2)) - tan(acot(x) + acot(2)) = 1/2")
+    assert _run(ir, "{1/2}").verdict == "INCORRECT"
+    assert _run(ir, "{}").verdict == "CORRECT"
+
+
 def test_tan_on_a_bounded_window_is_not_refuted():
     """The right answer was INCORRECT (9*pi/4 outside one period of tan's domain) on 158c220."""
     ir = _eq("tan(x) = 1", ["x >= 0", "x < 10"])

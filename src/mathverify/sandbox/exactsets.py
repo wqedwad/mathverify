@@ -204,15 +204,21 @@ def _on_window(rel, var, lo, hi, period=None):
 
 
 def _finite_critical_points(e, var) -> bool:
-    """Are the zeros of `e` and of what makes it undefined finitely many on ℝ (no progression)? With
-    a progression among them SymPy's inequality solver keeps only the finite part: Ne(x*cos(x), 0)
-    was (-oo, 0) ∪ (0, oo)."""
+    """Are the zeros of `e` and of what makes it undefined finitely many on ℝ (no progression), and is
+    each one SymPy gives a zero? With a progression among them SymPy's inequality solver keeps only the
+    finite part: Ne(x*cos(x), 0) was (-oo, 0) ∪ (0, oo). And it reads cos(atan(x) + atan(2)) = 0 as
+    x = -2, where the cosine is 1 (the zero is 1/2): {1/2} was certified for x + tan(acot(x) + acot(2))
+    - tan(acot(x) + acot(2)) = 1/2, whose one candidate is a pole (measured 2 Oct 2026, before and
+    after this module)."""
+    from ..equiv.numeric import certified_sign
     for u in [e] + _poles(e, var) + [d for d in _denominators(e, var)]:
         try:
             z = sp.solveset(sp.Eq(u, 0), var, S.Reals)
         except Exception:  # noqa: BLE001
             return False
         if z.has(sp.ImageSet) or isinstance(z, sp.ConditionSet) or z.has(sp.ConditionSet):
+            return False
+        if isinstance(z, sp.FiniteSet) and any(certified_sign(u.subs(var, p)) != 0 for p in z):
             return False
     return True
 
