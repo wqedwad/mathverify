@@ -49,8 +49,8 @@ MUTATIONS = [
     ("P05 sınırlı alanda yeniden kurulmaz", EX, "    hull = _hull(domain)\n    if hull is not None:\n        w = _on_window",
      "    hull = None\n    if hull is not None:\n        w = _on_window", T + "test_a_bounded_domain_is_rebuilt_on_every_period"),
     ("P06 kutup noktası kümeye girer", EX, "        if any(sp.simplify(p - q) == 0 for q in poles):\n            continue\n"
-     "        if _holds(type(rel), _sign(e, var, p)):\n            pieces.append",
-     "        if _holds(type(rel), _sign(e, var, p)):\n            pieces.append",
+     "        if _holds(op, _sign(e, var, p)):\n            pieces.append",
+     "        if _holds(op, _sign(e, var, p)):\n            pieces.append",
      T + "test_a_bounded_domain_is_rebuilt_on_every_period"),
     ("P07 sınırsızda hiçbir yer / her yer okunmaz", EX, "        if w[0] is S.EmptySet:\n            return S.EmptySet\n"
      "        if w[0] == sp.Interval(0, P):\n            return domain\n", "", T + "test_equations_keep_their_exact_sets"),
@@ -60,8 +60,11 @@ MUTATIONS = [
      "        keep = None\n", T + "test_equations_keep_their_exact_sets"),
     ("P10 boşluk tek periyotta okunmaz", EX, "    periods = set_periods(s_)\n    L = _common_period(periods) if periods else None",
      "    L = None", T + "test_a_set_of_points_repeating_with_a_period"),
-    ("P11 ConditionSet içinden gövde okunmaz", EX, "        lo, hi = _bounds(domain)\n", "        lo, hi = domain.inf, domain.sup\n",
-     T + "test_steps_on_tan_with_its_window_stay_verified"),
+    ("P13 periyot sayısal doğrulanmaz", EX, "    return P if checked >= 6 else None", "    return P",
+     T + "test_a_period_and_the_zeros_are_confirmed"),
+    ("P14 SymPy'nin sıfır noktası doğrulanmaz", EX,
+     "        return None                           # a point SymPy gives that is no zero", "        pass",
+     T + "test_a_period_and_the_zeros_are_confirmed"),
     ("P12 sürekli alan korumasız", OPS, "    if oscillates(expr, var):\n        # SymPy solves the conditions",
      "    if False:\n        # SymPy solves the conditions", T + "test_continuous_domain_of_a_trigonometric_expression"),
     # --- certify.domain
@@ -76,6 +79,8 @@ MUTATIONS = [
      "    if False:\n        # a condition Ctx.domain_for", T + "test_membership_in_an_unsolved_condition"),
     ("D05 domain_of çözülmemiş koşulda çekimser değil", DOM, "        if ctx.unsolved_conditions(var):\n            # the domain is cut",
      "        if False:\n            # the domain is cut", T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
+    ("D07 çelişki denetimi ℝ'de tümleyen alır", DOM, "        out = sp.Complement(within, s)", "        out = sp.Complement(S.Reals, s)",
+     T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
     ("D06 domain_of koşulu tabanda çözülmez", DOM, "base if at_risk(cond, var) else S.Reals,",
      "S.Reals,", T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
     # --- Ctx

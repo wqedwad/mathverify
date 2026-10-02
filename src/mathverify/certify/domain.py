@@ -1165,8 +1165,8 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
     dom = base
     for cond in conds:
         # a trigonometric condition on the base itself (sandbox.exactsets rebuilds it on a bounded one)
-        r = sb_run("mathverify.sandbox.ops:solveset_in", cond, var, base if at_risk(cond, var) else S.Reals,
-                   timeout=timeout)
+        within = base if at_risk(cond, var) else S.Reals
+        r = sb_run("mathverify.sandbox.ops:solveset_in", cond, var, within, timeout=timeout)
         if not r.ok or isinstance(r.value, sp.ConditionSet):
             ev["fallback"] = "continuous_domain"
             r2 = sb_run("mathverify.sandbox.ops:continuous_domain", expr, var, base, timeout=timeout)
@@ -1174,7 +1174,7 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
                 return r2.value, ev
             ev["error"] = r.error or r2.error
             return None, ev
-        if _solveset_contradicted(cond, var, r.value):
+        if _solveset_contradicted(cond, var, r.value, within):
             ev["error"] = f"solveset_contradicted_by_exact_check: {cond}"
             return None, ev
         dom = sp.Intersection(dom, r.value)
@@ -1197,14 +1197,14 @@ def _probe_points(iv) -> list:
     return [sp.Integer(0)] + [sp.Integer(d) for d in steps] + [-sp.Integer(d) for d in steps]
 
 
-def _solveset_contradicted(cond, var, s) -> bool:
+def _solveset_contradicted(cond, var, s, within=S.Reals) -> bool:
     """Does an exact check contradict SymPy's solution set of `cond`? Each excluded isolated point must
     fail the condition, and a point inside each interval piece must meet it (or fail it, outside).
     solveset reads cos(atan(x) + atan(2)) != 0 as x != -2, where the cosine is 1 (the root is 1/2), and
     that domain was certified (audit of 29 Sep 2026). Only a contradiction counts: an undecided check
-    leaves SymPy's set as it was."""
+    leaves SymPy's set as it was. `within`: the set `s` was solved on (its complement is taken there)."""
     try:
-        out = sp.Complement(S.Reals, s)
+        out = sp.Complement(within, s)
     except Exception:  # noqa: BLE001
         return False
     checks = []

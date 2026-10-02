@@ -76,31 +76,11 @@ def exact_solveset(rel, var, domain=S.Reals):
     return exact if exact is not None else sp.ConditionSet(var, rel, domain)
 
 
-def _bounds(s_):
-    """(lower, upper) bounds of a set, -oo/oo when not known: SymPy's inf/sup raise on a ConditionSet,
-    which the domain carries for a condition it could not solve, so the parts are read one by one."""
-    if isinstance(s_, sp.ConditionSet):
-        return _bounds(s_.base_set)
-    if isinstance(s_, sp.Complement):
-        return _bounds(s_.args[0])
-    if isinstance(s_, sp.Intersection):
-        bs = [_bounds(a) for a in s_.args]
-        return max((b[0] for b in bs), key=lambda v: sp.N(v, 30)), min((b[1] for b in bs), key=lambda v: sp.N(v, 30))
-    if isinstance(s_, sp.Union):
-        bs = [_bounds(a) for a in s_.args]
-        return min((b[0] for b in bs), key=lambda v: sp.N(v, 30)), max((b[1] for b in bs), key=lambda v: sp.N(v, 30))
-    try:
-        lo, hi = s_.inf, s_.sup
-    except Exception:  # noqa: BLE001
-        return S.NegativeInfinity, S.Infinity
-    ok = lo.is_number and hi.is_number and lo.is_extended_real and hi.is_extended_real
-    return (lo, hi) if ok else (S.NegativeInfinity, S.Infinity)
-
-
 def _hull(domain):
-    """The closed bounded interval [lo, hi] that holds `domain`, as (lo, hi), or None."""
+    """The closed bounded interval [lo, hi] that holds `domain`, as (lo, hi), or None (SymPy's inf and sup
+    raise on a ConditionSet: no hull)."""
     try:
-        lo, hi = _bounds(domain)
+        lo, hi = domain.inf, domain.sup
     except Exception:  # noqa: BLE001
         return None
     if lo.is_number and hi.is_number and lo.is_finite and hi.is_finite and (hi - lo).is_positive is True:
@@ -149,6 +129,9 @@ def _zeros_on(u, var, lo, hi, period=None):
     pts = [p for p in s if p.is_number]
     if len(pts) != len(s):
         return None
+    from ..equiv.numeric import certified_sign
+    if any(certified_sign(u.subs(var, p)) != 0 for p in pts):
+        return None                           # a point SymPy gives that is no zero
     n = 4000
     if period is not None:
         n = min(20000, max(n, int(400 * float((hi - lo) / period))))
@@ -242,15 +225,38 @@ def _denominators(e, var) -> list:
         return []
 
 
-def _rebuilt(rel, var, domain):
+def period(e, var):
+    """A period of `e` in `var` from SymPy's `periodicity`, confirmed numerically (e(x + P) = e(x) at
+    points spread over a few periods, where e is finite), or None. Everything built on one period
+    (progressions, the emptiness of a set on [0, P)) takes it on trust otherwise."""
     from sympy.calculus.util import periodicity
-    e = rel.lhs - rel.rhs
     try:
         P = periodicity(e, var)
     except Exception:  # noqa: BLE001
-        P = None
-    if P is not None and not (P.is_number and P.is_positive is True):
-        P = None
+        return None
+    if P is None or not (P.is_number and P.is_positive is True):
+        return None
+    f = sp.lambdify(var, e, "mpmath")
+    checked = 0
+    with mp.workdps(30):
+        Pm = mp.mpf(str(sp.N(P, 40)))
+        for k in range(1, 12):
+            t = mp.mpf(k) * Pm * mp.mpf("0.6180339887") - 3 * Pm
+            try:
+                a, b = f(t), f(t + Pm)
+            except Exception:  # noqa: BLE001 - a pole: another point
+                continue
+            if not (mp.isfinite(a) and mp.isfinite(b)):
+                continue
+            if abs(a - b) > mp.mpf(10) ** -20 * max(1, abs(a)):
+                return None
+            checked += 1
+    return P if checked >= 6 else None
+
+
+def _rebuilt(rel, var, domain):
+    e = rel.lhs - rel.rhs
+    P = period(e, var)
     if isinstance(domain, sp.FiniteSet) and all(p.is_number for p in domain):
         keep = _on_points(rel, var, domain)            # point by point
         if keep is not None:
@@ -326,7 +332,6 @@ def _common_period(steps) -> sp.Expr | None:
 def set_periods(s_) -> list | None:
     """The periods of a set built from ℝ, progressions over the integers and conditions with a period
     (by Union, Intersection, Complement), or None when a part has none (an interval, the integers)."""
-    from sympy.calculus.util import periodicity
     if s_ is S.Reals or s_ is S.EmptySet:
         return []
     if isinstance(s_, sp.ImageSet):
@@ -344,9 +349,9 @@ def set_periods(s_) -> list | None:
         c = s_.condition
         if not isinstance(c, sp.core.relational.Relational):
             return None
-        Pc = periodicity(c.lhs - c.rhs, s_.sym)
+        Pc = period(c.lhs - c.rhs, s_.sym)
         rest = set_periods(s_.base_set)
-        if Pc is None or rest is None or not (Pc.is_number and Pc.is_positive is True):
+        if Pc is None or rest is None:
             return None
         return [Pc] + rest
     if isinstance(s_, (sp.Union, sp.Intersection, sp.Complement)):

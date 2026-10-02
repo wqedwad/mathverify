@@ -122,6 +122,8 @@ def test_equations_keep_their_exact_sets():
     assert exact_solveset(sp.Ne(sp.sin(sp.acot(x) + sp.acot(2)), 0), x, S.Reals) == sp.Complement(S.Reals, {-2})
     # point by point, a pole is no point
     assert exact_solveset(sp.Ne(sp.tan(x), 1), x, sp.FiniteSet(0, sp.pi / 4, sp.pi / 2)) == sp.FiniteSet(0)
+    assert exact_solveset(sp.sin(x) > 0, x, sp.FiniteSet(7)) == sp.FiniteSet(7)
+    assert exact_solveset(sp.Ne(sp.tan(x), 1), x, sp.FiniteSet(sp.pi / 2)) is S.EmptySet
 
 
 def test_a_set_of_points_repeating_with_a_period():
@@ -134,6 +136,20 @@ def test_a_set_of_points_repeating_with_a_period():
     zs = exact_solveset(sp.Eq(sp.sin(x), 0), x, S.Reals)
     assert set_is_empty(sp.Complement(zc, exact_solveset(sp.Eq(sp.cos(2 * x), -1), x, S.Reals))) is True
     assert set_is_empty(sp.Complement(zs, zc)) is False
+
+
+def test_a_period_and_the_zeros_are_confirmed(monkeypatch):
+    """What SymPy returns is checked: a wrong period (pi for sin x) and a point that is no zero are not
+    used (the guard against a wrong `periodicity` or `solveset`, simulated here)."""
+    import sympy.calculus.util as su
+    from mathverify.sandbox import exactsets
+    assert exactsets.period(sp.tan(x) - 1, x) == sp.pi
+    monkeypatch.setattr(su, "periodicity", lambda e, v: sp.pi)
+    assert exactsets.period(sp.sin(x), x) is None
+    monkeypatch.undo()
+    real = sp.solveset
+    monkeypatch.setattr(sp, "solveset", lambda r, v, d: sp.FiniteSet(sp.pi, 1) if r == sp.Eq(sp.sin(x), 0) else real(r, v, d))
+    assert exactsets._zeros_on(sp.sin(x), x, 0, 4) is None
 
 
 def test_continuous_domain_of_a_trigonometric_expression():
@@ -402,6 +418,8 @@ def test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain():
     the certificate abstains (condition_unsolved)."""
     ir = _ir("domain_of", {"expr": "x", "var": "x"}, [V("x", "real", ["x > 0", "x < 10"])], (), "set",
              dod="sin(x) > 0")
+    assert _run(ir, "Union(Interval.open(0, pi), Interval.open(2*pi, 3*pi))", "interval").verdict == "CORRECT"
+    ir = _ir("domain_of", {"expr": "log(sin(x))", "var": "x"}, [V("x", "real", ["x > 0", "x < 10"])], (), "set")
     assert _run(ir, "Union(Interval.open(0, pi), Interval.open(2*pi, 3*pi))", "interval").verdict == "CORRECT"
     r = _run(_ir("domain_of", {"expr": "x", "var": "x"}, [V("x", "real", ["sin(x) > 0"])], (), "set"),
              "Interval.open(0, pi)", "interval")
