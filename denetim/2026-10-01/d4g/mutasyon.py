@@ -23,7 +23,7 @@ T = "tests/test_d4_d4g_adim.py"
 MUTATIONS = [
     # D4-ADIM-A: sample agreement
     ("A01 analitik olmayan baş da kanıt", DET,
-     "    if not (_analytic_off_discrete(sp.sympify(a)) and _analytic_off_discrete(sp.sympify(b))):\n"
+     "    if not (_analytic_off_discrete(a) and _analytic_off_discrete(b)):\n"
      "        return _analytic_on_interval(",
      "    if False:\n        return _analytic_on_interval(", T),
     ("A07 log argümanının pozitifliği sınanmaz", DET,
