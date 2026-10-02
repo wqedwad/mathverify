@@ -492,8 +492,9 @@ QS = "(sqrt(3)*sin(x) - cos(x) - 1)"
     ("sqrt(3)*x*sin(x) - x*cos(x) = x", "{0, pi/3}"), (f"{QS}**3 = 0", "{pi/3}"), (f"{QS} = 0", "{pi/3}"),
 ])
 def test_an_incomplete_set_of_a_non_class_equation_is_not_certified(e, claim):
-    """Review of 2 Oct 2026, B1/B2 (0ed77e2: CORRECT for the first five; pi is a root too)."""
-    assert _run(_eq(e, ["x >= 0", "x <= 2*pi"]), claim).verdict != "CORRECT"
+    """Review of 2 Oct 2026, B1/B2 (0ed77e2: CORRECT for the first five; pi is a root too). 3872bcd left
+    them UNKNOWN (no class); with class (v) (round 4) the missing pi is found: INCORRECT."""
+    assert _run(_eq(e, ["x >= 0", "x <= 2*pi"]), claim).verdict == "INCORRECT"
 
 
 def test_review_b3_b4_b5():
@@ -540,6 +541,11 @@ def test_a_fast_oscillating_side_condition_is_neither_slow_nor_a_rejection():
     (sp.exp(2 * x) - 3 * sp.exp(x) + 2 < 0, sp.Interval.open(0, sp.log(2))),
     (sp.log(x) < 1, sp.Interval.open(0, sp.E)),             # log's domain x > 0: nothing at x <= 0
     (sp.log(x) ** 2 >= 0, sp.Interval.open(0, sp.oo)),
+    (sp.log(x) > 0, sp.Interval.open(1, sp.oo)),
+    # log(x)**2 is the real -pi**2 at x = -1 (not real at x = -2): a sign read at one point of x < 0 says
+    # nothing; the log is cut off there by its argument (round 4, found by mutation K20)
+    (sp.log(x) ** 2 <= 0, sp.FiniteSet(1)),
+    (sp.Eq((x + 1) * sp.log(x), 0), sp.FiniteSet(1)),                 # x = -1: log(-1) is not real
     (sp.Eq(sp.sin(x) - sp.cos(x), 0), None),
 ])
 def test_monotone_class_sets(rel, want):
@@ -681,3 +687,31 @@ def test_solve_guarded_uses_the_classes_on_the_reals():
     assert _run(_eq("(1/2)**x = 4"), "{-2}").verdict == "CORRECT"
     assert _run(_eq("(1/2)**x = 4"), "{2}").verdict == "INCORRECT"
     assert _run(_eq("sin(x) - cos(x) = 2"), "{}").verdict == "CORRECT"
+
+
+def test_mono_zeros_keep_to_the_range():
+    """exp takes no value <= 0, atan none outside (-pi/2, pi/2): such a root of g gives no zero."""
+    from mathverify.sandbox.exactsets import _mono_zeros
+    t = sp.Symbol("t")
+    zeros, poles = _mono_zeros(sp.exp, 1, 0, sp.Poly(t ** 2 - t - 2, t))
+    assert zeros == [(sp.log(2), 0)] and poles == []
+    zeros, _ = _mono_zeros(sp.atan, 1, 0, sp.Poly((t - 1) * (t - 2), t))
+    assert zeros == [(sp.tan(1), 0)]
+    zeros, poles = _mono_zeros(sp.log, 1, 0, sp.Poly(t + 1, t))
+    assert zeros == [(sp.exp(-1), 0)] and poles == [(0, 0)]
+
+
+def test_a_definedness_condition_out_of_the_classes_is_not_taken_as_defined():
+    """B5 with R = sin x + cos 2x (two frequencies, no class): undefined at pi/2, where the maximum 0 of
+    -(x - pi/2)**2 + R/R - 1 on [1, 2] would be."""
+    R = "(sin(x) + cos(2*x))"
+    ir = _ir("extremum", {"f": f"-(x - pi/2)**2 + {R}/{R} - 1", "var": "x", "which": "max", "interval": "[1, 2]"})
+    assert _run(ir, "0", "value").verdict != "CORRECT"
+
+
+def test_a_log_factor_with_a_progression_on_the_reals():
+    """log(x)*sin(x) = 0 on the reals: the zeros k*pi with k <= 0 are no zeros (log not real there); the
+    union of the progressions is no answer, the set stays unsolved; on a window it is exact."""
+    from mathverify.sandbox.exactsets import class_solveset
+    assert class_solveset(sp.Eq(sp.log(x) * sp.sin(x), 0), x, S.Reals) is None
+    assert class_solveset(sp.Eq(sp.log(x) * sp.sin(x), 0), x, sp.Interval(-4, 4)) == sp.FiniteSet(1, sp.pi)

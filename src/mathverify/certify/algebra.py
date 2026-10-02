@@ -92,19 +92,8 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             cands += [c for c in r1p.value if not isinstance(c, dict)]
     complete: bool | None = None
     window_set = None
-    window_how = "guarded_solveset_on_bounded_hull"
+    window_how = None
     hull = _bounded_hull(domain)
-    if hull is not None and at_risk(rel_r, var):
-        # a trigonometric equation on a bounded domain: its roots on the hull, from the guarded
-        # solveset (sandbox.exactsets: a finite set only for the classes whose zeros are known in closed
-        # form, never from a numeric search), are all of them.
-        # On ℝ the solvers give the principal roots and an ImageSet, so the right {pi/4, 5*pi/4,
-        # 9*pi/4} of tan x = 1 on [0, 10) was refuted before (fourth audit G2)
-        rw = sb_run("mathverify.sandbox.ops:solveset_in", rel_r, var, sp.Interval(*hull), timeout=timeout)
-        if rw.ok and (rw.value is S.EmptySet or isinstance(rw.value, FiniteSet)):
-            window_set = list(rw.value)
-            cands += window_set
-            ev["solveset_on_hull"] = [str(c) for c in window_set]
     poly_roots: list = []
     try:
         d = sp.together(rel_r.lhs - rel_r.rhs)
@@ -125,11 +114,14 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             poly_roots = list(rr.value)
             cands += poly_roots
             ev["numerator_real_roots"] = [str(r) for r in poly_roots]
-    if window_set is None and p is None:
-        # not rational: an equation of the exact classes (sandbox.exactsets.class_solveset: one strictly
-        # monotone function or a same-frequency sin/cos combination of a linear argument, products) has
-        # its set in closed form; (1/2)**x = 4 was left to the two solvers, whose -2 and -log(4)/log(2)
-        # did not agree as written, and sin x - cos x = 2 to their complex roots (round 4 of part d4b)
+    if p is None:
+        # not rational: an equation of the exact classes (sandbox.exactsets.class_solveset: one
+        # trigonometric function, one strictly monotone function or a same-frequency sin/cos combination,
+        # of a linear argument; products) has its set in closed form, on the bounded hull of the domain
+        # when there is one, never from a numeric search. On ℝ the solvers give the principal roots and
+        # an ImageSet, so the right {pi/4, 5*pi/4, 9*pi/4} of tan x = 1 on [0, 10) was refuted before
+        # (fourth audit G2); (1/2)**x = 4 was left to the two solvers, whose -2 and -log(4)/log(2) did not
+        # agree as written, and sin x - cos x = 2 to their complex roots (round 4 of part d4b)
         rc = sb_run("mathverify.sandbox.exactsets:class_solveset", rel_r, var,
                     sp.Interval(*hull) if hull is not None else S.Reals, timeout=timeout)
         if rc.ok and (rc.value is S.EmptySet or isinstance(rc.value, FiniteSet)):
@@ -745,15 +737,13 @@ def _polynomial_system_worker(eqs, syms):
     G = sp.groebner(polys, *plain, order="lex")
     if list(G.exprs) == [1]:
         return [], "inconsistent_system"
-    if not G.is_zero_dimensional:
-        return None, "system_not_zero_dimensional"
-    extra = []
+    extra = []                  # each unknown has a polynomial in it alone iff the ideal is zero-dimensional
     for j, x in enumerate(plain):
         order = plain[:j] + plain[j + 1:] + [x]
         Gj = sp.groebner(polys, *order, order="lex")
         elim = [g for g in Gj.exprs if g.free_symbols <= {x}]
         if not elim:
-            return None, f"no_elimination_polynomial_in {back[x]}"
+            return None, f"system_not_zero_dimensional: no polynomial in {back[x]} alone"
         extra.append(sp.sqf_part(elim[0], x))
     R = sp.groebner(polys + [sp.Poly(q, *plain) for q in extra], *plain, order="lex")
     lms = [p.monoms(order="lex")[0] for p in R.polys]

@@ -327,8 +327,14 @@ def cases_e():
         ("B1 eq Q/x=0 [1,2pi]: {pi/3}", eq(f"{Q}/x = 0", ["x >= 1", "x <= 2*pi"]), _sol("{pi/3}", S_), NOTOK, None),
         ("B1 eq (x-10)Q(2x)=0 [0,4]: {pi/6}", eq("(x - 10)*(sqrt(3)*sin(2*x) - cos(2*x) - 1) = 0", ["x >= 0", "x <= 4"]),
          _sol("{pi/6}", S_), NOTOK, None),
-        ("B1 eq Q*sin(sqrt2 x)=0 [0,2]: {pi/3}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 2"]), _sol("{0, pi/3}", S_),
+        # on [0, 2] the zeros are 0 and pi/3 (pi > 2, pi/sqrt(2) = 2.22 > 2): {0, pi/3} is right. Round 3 expected
+        # "not CORRECT" here, a wrong expectation (0ed77e2's CORRECT was right; corrected in round 4)
+        ("B1 eq Q*sin(sqrt2 x)=0 [0,2]: {0,pi/3}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 2"]), _sol("{0, pi/3}", S_),
+         NOTNO, None),
+        ("B1 eq Q*sin(sqrt2 x)=0 [0,2]: {pi/3}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 2"]), _sol("{pi/3}", S_),
          NOTOK, None),
+        ("B1 eq Q*sin(sqrt2 x)=0 [0,4]: {0,pi/3,pi}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 4"]),
+         _sol("{0, pi/3, pi}", S_), NOTOK, None),
         ("B1 croots x*Q on [0,2pi]: 2", croots(f"x*{Q}", W2), _sol("2", "count"), NOTOK, None),
         ("B2 eq Q^3=0 [0,7]: {pi/3}", eq(f"{Q}**3 = 0", W7), _sol("{pi/3}", S_), NOTOK, None),
         ("B2 ineq Q^3>0 [0,7]: {}", ineq(f"{Q}**3 > 0", W7), _sol("{}", S_), NOTOK, None),

@@ -425,13 +425,25 @@ def _sorted_unique(pts):
 
 
 def _real_sign(e):
-    """The certified sign of a number, or None when it is not real (the log of a negative number: no
-    relation holds there); raise _Unsolved when undecided."""
+    """The certified sign of a real number; raise _Unsolved when undecided or not real (the cells where
+    a log is not real are cut off by `_log_outside` first: a sign read at one point says nothing there,
+    log(x)**2 is the real -pi**2 at x = -1 and not real at x = -2)."""
     from ..equiv.numeric import NONREAL, certified_sign
     s_ = certified_sign(e)
-    if s_ is None:
-        raise _Unsolved(f"sign undecided: {e}")
-    return None if s_ == NONREAL else s_
+    if s_ is None or s_ == NONREAL:
+        raise _Unsolved(f"sign undecided or not real: {e}")
+    return s_
+
+
+def _log_outside(e, var):
+    """A test of a point: is it outside the real domain of a log in `e` (its argument <= 0)? The classes
+    have only logs of linear arguments, whose zero is a pole and so an edge of every cell: the sign of
+    the argument at one point of a cell is its sign on the whole cell."""
+    args = [n.args[0] for n in e.atoms(sp.log) if var in n.free_symbols]
+
+    def outside(pt) -> bool:
+        return any(_certified(a.subs(var, pt)) <= 0 for a in args)
+    return outside
 
 
 def _holds(op, s) -> bool:
@@ -451,7 +463,8 @@ def _on_window(rel, var, lo, hi):
     e = rel.lhs - rel.rhs
     zp, pp, _ = _structure(e, var)
     poles = _sorted_unique(_on(pp, lo, hi))
-    zeros = [z for z in _sorted_unique(_on(zp, lo, hi)) if not _same(z, poles)]
+    outside = _log_outside(e, var)
+    zeros = [z for z in _sorted_unique(_on(zp, lo, hi)) if not _same(z, poles) and not outside(z)]
     op = type(rel)
     if op is sp.Equality:
         return sp.FiniteSet(*zeros), zeros, poles
@@ -461,16 +474,18 @@ def _on_window(rel, var, lo, hi):
     pieces: list = []
     for a, b in zip(edges[:-1], edges[1:]):
         mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+        if outside(mid):
+            continue                                    # a log is not real on this cell: nothing holds
         s_ = _real_sign(e.subs(var, mid))
         if s_ == 0:
             raise _Unsolved("a zero inside a cell")       # cannot happen with the classes: refuse
-        if s_ is not None and _holds(op, s_):
+        if _holds(op, s_):
             pieces.append(sp.Interval.open(a, b))
     for p in edges:
-        if not p.is_finite or _same(p, poles):
+        if not p.is_finite or _same(p, poles) or outside(p):
             continue
         s_ = 0 if _same(p, zeros) else _real_sign(e.subs(var, p))
-        if s_ is not None and _holds(op, s_):
+        if _holds(op, s_):
             pieces.append(sp.FiniteSet(p))
     return (sp.Union(*pieces) if pieces else S.EmptySet), zeros, poles
 
@@ -501,6 +516,13 @@ def _rebuilt(rel, var, domain):
             return discrete
     if isinstance(rel, sp.Equality):
         zp, pp, _ = _structure(e, var)
+        if any(var in g.free_symbols for g in e.atoms(sp.log)):
+            # a zero where a log is not real is no zero ((x + 1)*log(x) = 0 at x = -1); a progression
+            # crosses that region, so only points are cut here
+            if any(step != 0 for _, step in zp + pp):
+                raise _Unsolved("a progression with a log factor on an unbounded domain")
+            outside = _log_outside(e, var)
+            zp = [(p0, step) for p0, step in zp if not outside(p0)]
         n = sp.Dummy("n", integer=True)
 
         def union(progs):
