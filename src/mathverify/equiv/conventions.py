@@ -80,7 +80,9 @@ def open_odd_root_bases(items, domain: dict[Any, sp.Set] | None) -> list:
                 dom = domain.get(v) if isinstance(domain, dict) else None
                 if dom is not None:
                     try:
-                        neg = sp.solveset(sp.Lt(b, 0), v, dom)
+                        from ..sandbox.exactsets import exact_solveset
+                        # guarded: sin(x) < 0 read on one period of ℝ is empty on [7, 12] (it is not)
+                        neg = exact_solveset(sp.Lt(b, 0), v, dom)
                         if neg.is_empty is True:
                             continue
                     except Exception:  # noqa: BLE001

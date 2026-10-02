@@ -1350,12 +1350,27 @@ def _set_counterexample(claim, premises: list, v, ctx: Ctx) -> tuple[dict | None
     # the points where a value of the problem is a convention: an instance there (x = -1 of
     # x**(1/3) = x under the real root) is neither in nor out, so nothing is proved while one may exist
     conv = ctx.convention_region(v) if v.name in ctx.ns else S.EmptySet
+    from ..equiv.numeric import real_odd_roots
+    from ..sandbox.exactsets import at_risk
+    periodic = []
     for p in premises:
+        if at_risk(p, v) and real_odd_roots(p) == p:
+            periodic.append(p)
+            continue
         sol = _solved_both_readings(p, v, ctx)
         if sol is None:
             return None, False, False
         region = sp.Intersection(region, sol)
         conv = sp.Intersection(conv, sol)
+    if periodic:
+        # a premise with a trigonometric function is solved on what the others leave (Ctx.cut_by): on ℝ
+        # SymPy reads it on one period (sandbox.exactsets), and the written cos(x) != 0 of tan x = sqrt(3)
+        # on [0, pi) then left no exact set at all
+        region = ctx.cut_by(v, region, periodic)
+        if region is None:
+            return None, False, False
+        if conv is not S.EmptySet:
+            conv = sp.Intersection(conv, *[sp.ConditionSet(v, p, S.Reals) for p in periodic])
     fail = _fail_set(claim, v, region, ctx)
     if fail is None:
         return None, False, False

@@ -19,7 +19,8 @@ from ..equiv.numeric import (num_equal, to_mp, certified_sign, certified_integer
 from ..equiv.symbolic import sym_equal
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
+from ..sandbox.exactsets import _hull, at_risk, exact_solveset
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 
 LAYER = "certify.domain"
 
@@ -194,22 +195,25 @@ def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
     fixes, read as its value) holds everywhere or nowhere."""
     e, s = c.args
     kind = "range" if s == FORWARD_SPANS else s.kind
+    # guarded (sandbox.exactsets): a trigonometric base (sin(x)**(1/3)) read on one period of ℝ split the
+    # line wrongly; unsolved, it stays a ConditionSet and every point is undecided below
+    solveset = exact_solveset
     try:
         if var not in e.free_symbols:
             held = sp.Contains(e, s)
             return (S.Reals, S.EmptySet) if held is sp.true else (S.EmptySet, S.Reals)
         if kind in ("range", "odd_root"):
-            fwd, back = sp.solveset(sp.Ge(e, 0), var, S.Reals), sp.solveset(sp.Lt(e, 0), var, S.Reals)
+            fwd, back = solveset(sp.Ge(e, 0), var, S.Reals), solveset(sp.Lt(e, 0), var, S.Reals)
         elif kind == "mod_divisor":
-            fwd, back = sp.solveset(sp.Gt(e, 0), var, S.Reals), sp.solveset(sp.Le(e, 0), var, S.Reals)
+            fwd, back = solveset(sp.Gt(e, 0), var, S.Reals), solveset(sp.Le(e, 0), var, S.Reals)
         elif kind == "zero_power":
-            fwd, back = sp.solveset(Ne(e, 0), var, S.Reals), sp.solveset(Eq(e, 0), var, S.Reals)
+            fwd, back = solveset(Ne(e, 0), var, S.Reals), solveset(Eq(e, 0), var, S.Reals)
         elif kind == "binomial":
             # e = ±var + k with k an integer: an integer exactly where var is one
             k = e - var if (e - var).free_symbols == set() else e + var
             if k.free_symbols or k.is_integer is not True:
                 return S.Reals, S.Reals
-            fwd = sp.Intersection(sp.solveset(sp.Ge(e, 0), var, S.Reals), S.Integers)
+            fwd = sp.Intersection(solveset(sp.Ge(e, 0), var, S.Reals), S.Integers)
             back = sp.Complement(S.Reals, fwd)
         else:
             return S.Reals, S.Reals
@@ -1106,13 +1110,33 @@ def _in_set_certified(dom, c) -> bool | None:
         if is_int is None:
             return None
         return bool(dom.contains(k)) if is_int else False
+    if isinstance(dom, sp.ConditionSet):
+        # a condition Ctx.domain_for could not solve (one with a trigonometric function on ℝ): decided
+        # at the point, with the certified comparisons
+        base = _in_set_certified(dom.base_set, c)
+        if base is False:
+            return False
+        h = relation_holds_at(dom.condition, dom.sym, c)
+        if h is False:
+            return False
+        return True if (base is True and h is True) else None
     return None
 
 
 def in_domain(dom: sp.Set, c) -> bool | None:
     """Membership of a constant in a domain set. SymPy's own `contains` first; where it cannot
     decide, every comparison is certified (see _certified_compare) — the old fallback compared
-    40-digit values, and returned False for any part that was not an Interval."""
+    40-digit values, and returned False for any part that was not an Interval. A domain with a
+    condition no solver could turn into a set (a ConditionSet, Ctx.domain_for) is decided by the
+    certified comparisons only: SymPy reads the condition at the point uncertified, and took
+    cos(arccot(1/2) + arccot(2)) != 0 for true (the cosine is cos(pi/2) = 0; measured 2 Oct 2026)."""
+    if isinstance(dom, sp.Set) and dom.has(sp.ConditionSet):
+        try:
+            if certified_sign(c) == NONREAL:
+                return False
+            return _in_set_certified(dom, c)
+        except Exception:  # noqa: BLE001
+            return None
     try:
         r = dom.contains(c)
     except Exception:
@@ -1276,10 +1300,12 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> b
             return None
         bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
         try:
-            s = sp.solveset(bad, var, region)
+            # a trigonometric condition is read on the region itself, not on one period of ℝ: the
+            # violations of sin(x) >= 0 on [10, 12] were empty (sandbox.exactsets)
+            s = exact_solveset(bad, var, region)
         except Exception:  # noqa: BLE001
             return None
-        if isinstance(s, sp.ConditionSet):
+        if isinstance(s, sp.ConditionSet) or s.has(sp.ConditionSet):
             return None
         if s != S.EmptySet:
             return True
@@ -1301,7 +1327,11 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
         return None, ev
     dom = base
     for cond in conds:
-        r = sb_run("mathverify.sandbox.ops:solveset_in", cond, var, S.Reals, timeout=timeout)
+        # a trigonometric condition on a bounded base is solved on it (sandbox.exactsets rebuilds and
+        # checks it there); otherwise on ℝ, where the exact check below reads SymPy's own set (the base
+        # may carry SymPy's mistake: cos(arccot(x) + arccot(2)) != 0 read as x != -2)
+        within = base if at_risk(cond, var) and _hull(base) is not None else S.Reals
+        r = sb_run("mathverify.sandbox.ops:solveset_in", cond, var, within, timeout=timeout)
         if not r.ok or isinstance(r.value, sp.ConditionSet):
             ev["fallback"] = "continuous_domain"
             r2 = sb_run("mathverify.sandbox.ops:continuous_domain", expr, var, base, timeout=timeout)
@@ -1309,7 +1339,7 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
                 return r2.value, ev
             ev["error"] = r.error or r2.error
             return None, ev
-        if _solveset_contradicted(cond, var, r.value):
+        if _solveset_contradicted(cond, var, r.value, within):
             ev["error"] = f"solveset_contradicted_by_exact_check: {cond}"
             return None, ev
         dom = sp.Intersection(dom, r.value)
@@ -1317,14 +1347,29 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
     return dom, ev
 
 
-def _solveset_contradicted(cond, var, s) -> bool:
+def _probe_points(iv) -> list:
+    """Points inside an interval piece: several, spread over it, and far out on an unbounded side.
+    One point per piece missed a set cut to one period: (0, pi) for sin(x) > 0 left [pi, oo), whose
+    probe pi + 1 fails the condition as it should, though 2*pi + 1 meets it (fourth audit G2)."""
+    lo, hi = iv.inf, iv.sup
+    if lo.is_finite and hi.is_finite:
+        return [lo + (hi - lo) * sp.Rational(k, 8) for k in (1, 3, 4, 5, 7)]
+    steps = (1, 2, 3, 5, 8, 13, 21)
+    if lo.is_finite:
+        return [lo + d for d in steps]
+    if hi.is_finite:
+        return [hi - d for d in steps]
+    return [sp.Integer(0)] + [sp.Integer(d) for d in steps] + [-sp.Integer(d) for d in steps]
+
+
+def _solveset_contradicted(cond, var, s, within=S.Reals) -> bool:
     """Does an exact check contradict SymPy's solution set of `cond`? Each excluded isolated point must
     fail the condition, and a point inside each interval piece must meet it (or fail it, outside).
     solveset reads cos(atan(x) + atan(2)) != 0 as x != -2, where the cosine is 1 (the root is 1/2), and
     that domain was certified (audit of 29 Sep 2026). Only a contradiction counts: an undecided check
-    leaves SymPy's set as it was."""
+    leaves SymPy's set as it was. `within`: the set `s` was solved on (its complement is taken there)."""
     try:
-        out = sp.Complement(S.Reals, s)
+        out = sp.Complement(within, s)
     except Exception:  # noqa: BLE001
         return False
     checks = []
@@ -1336,12 +1381,11 @@ def _solveset_contradicted(cond, var, s) -> bool:
                 # point it wrongly excludes for 1/sin(arccot(x) + arccot(2) + arccot(3))) has is_real
                 # None, went unchecked, and the true domain R minus {-1} was refuted
                 checks += [(q, inside) for q in p if q.is_real or (q.is_number and q.is_real is None)]
-            elif isinstance(p, sp.Interval) and p.measure.is_positive:
-                lo, hi = p.inf, p.sup
-                q = (lo + hi) / 2 if lo.is_finite and hi.is_finite else (hi - 1 if lo.is_infinite and hi.is_finite
-                                                                         else lo + 1 if lo.is_finite else sp.Integer(0))
-                checks.append((q, inside))
-    for q, inside in checks[:24]:
+            elif isinstance(p, sp.Interval) and p.measure.is_extended_positive:
+                # extended: oo.is_positive is False (sympy >= 1.13), and an unbounded piece was
+                # never probed at all
+                checks += [(q, inside) for q in _probe_points(p)]
+    for q, inside in checks[:48]:
         h = relation_holds_at(cond, var, q)
         if h is not None and h is not inside:
             return True
@@ -1371,6 +1415,10 @@ def verify(ir, solution, ctx: Ctx):
             return unknown(LAYER, "domain_undecidable", 0, {"error": "definedness_unknown_as_written"},
                            flags=["cas_failed"])
         base = ctx.domain_for(var)
+        if ctx.unsolved_conditions(var):
+            # the domain is cut by a condition with no closed form on ℝ (sin(x) > 0 given): the
+            # expression's domain within it is no set the comparison can read (fourth audit G2)
+            return condition_unsolved(LAYER, ctx.unsolved_conditions(var), t.ms)
         # the expression's own conditions are what domain_of_expression solves ([a, oo) for √(x − a))
         unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions_strict(expr, var) or ())
         if unbound:
