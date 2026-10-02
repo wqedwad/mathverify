@@ -269,3 +269,33 @@ def test_pinned_symbol_where_defined_is_not_flagged():
     # x = 2 pinned, y free: x/x is defined there (the eq route leaves the step unknown, before too)
     st = _step(_run(_ir("x + 1", [{"name": "x"}, {"name": "y"}], ["x = 2"]), "3", [("eq", "x/x + y = 1 + y")]))
     assert st["status"] != "refuted" and st.get("reason") != "claim_undefined_at_the_premises_point"
+
+
+def test_defined_on_finite_points_of_two_symbols():
+    # x*y + 3 >= 1 at each of the four points: read point by point, not as a condition on two symbols
+    ir = _ir("x", [X, Y], ["x**2 = 4", "y**2 = 1"])
+    assert _step(_run(ir, "1", [("eq", "(x*y + 3)/(x*y + 3) = 1")]))["status"] == "verified"
+
+
+def test_value_convention_condition_left_to_its_rules():
+    # Mod's divisor condition is a convention (part d4a), not proved on the infinite set n > 1 here
+    assert _step(_run(_ir("n", [N], ["n > 1"]), "n", [("eq", "Mod(n, n) = 0")]))["status"] == "verified"
+
+
+def test_reading_dependent_backward_points_refute_nothing():
+    # n < -1: every range runs backwards; Sum(1, (j, 1, n)) is n (Karr) or 0 (empty): no refutation, while
+    # at the forward n = 0, which the premise excludes, the claim is false
+    st = _step(_run(_ir("2 + 2", [N, J], ["n < -1"]), "4", [("compute", "2 + Sum(1, (j, 1, n)) - n = 3")]))
+    assert st["status"] != "refuted"
+
+
+def test_undefined_instance_skipped_defined_one_refutes():
+    # instances -2 (both sides non-real) and 3 (3*sqrt(3) != 3*sqrt(3) + 1): refuted at 3
+    r = _run(_ir("x", [X], ["(x + 2)*(x - 3) = 0"]), "x", [("compute", "sqrt(x**3) = x*sqrt(x) + 1")])
+    assert _step(r)["status"] == "refuted"
+
+
+def test_identity_verified_only_where_defined_is_unknown():
+    # value Abs(x) = x, written with log(x): refuted at x < 0, where the claim has no value; on x > 0 it holds,
+    # but only where the claim is defined: unknown, not verified
+    assert _status(_ir("x", [X]), "x", "compute", "Abs(x) = x + log(x) - log(x)") == "unknown"

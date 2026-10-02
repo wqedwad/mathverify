@@ -1067,14 +1067,12 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
             and not _undefined_at(own, pt, ctx):
         return status, {**ev, "counterexample_satisfies_premises": True}
     # the region the premises leave each symbol alone (solved exactly), and within it the part where the
-    # claim is defined as written; `solved`: the symbols every premise on them alone was solved for
+    # claim is defined as written
     region: dict = {}
     narrowed = False
     back: list = []
-    solved: set = set()
     for q in syms:
         dom, rev = ctx.domain_for(q), ctx.reversed_region(q)
-        ok = True
         for part in (direct, own):
             before = dom
             for p in part:
@@ -1084,12 +1082,8 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
                 sol = _solved_both_readings(p, q, ctx)
                 if sol is not None:
                     dom, rev = sp.Intersection(dom, sol), sp.Intersection(rev, sol)
-                elif part is direct:
-                    ok = False
             if part is own and dom != before:
                 narrowed = True
-        if ok:
-            solved.add(q)
         if dom != ctx.domain_for(q):
             region[q] = dom
         back.append(rev)
@@ -1099,19 +1093,14 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
     def instance(p_):
         """Is the counterexample `p_` an instance? A symbol it does not fix was compared away (SymPy folded
         Sum(0, (k, 1, n - 5)), an antiderivative's derivative lost the constant): the refutation holds for
-        each of its values, so the premises on it alone need only leave it one (D4-ADIM-B, -E)."""
+        each of its values, so a premise on such a symbol alone does not exclude it (D4-ADIM-B, -E); one
+        that links it to a fixed symbol is not decided."""
         fixed = set(p_)
         for p in direct:
             if p.free_symbols <= fixed:
                 if _holds_exactly(p, p_, ctx) is not True:
                     return False
-            elif p.free_symbols & fixed or len(p.free_symbols) != 1:
-                return False
-        for q in syms - fixed:
-            try:
-                if q not in solved or region.get(q, ctx.domain_for(q)).is_empty is not False:
-                    return False
-            except Exception:  # noqa: BLE001
+            elif p.free_symbols & fixed:
                 return False
         return not _undefined_at(own, p_, ctx)
 
@@ -2199,10 +2188,7 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
                     return True
                 continue
             if rem - set(narrowed):
-                # a symbol no premise narrows is left: undefined only if the condition fails for all of it
-                if c2 is sp.false:
-                    return True
-                continue
+                continue                     # a symbol no premise narrows is left: not read
             if len(rem) != 1:
                 return True                  # several symbols on infinite sets: not proved
             (u,) = rem
@@ -2264,7 +2250,7 @@ def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[s
     pin every symbol of the claim (principle 5), or exclude it (`_on_premises`). An integral with a
     parameter has no value until the premises pin it (DECISIONS §80); a claim verified only with Karr's
     value of its own range may be verified where the premises leave no backward point. `conds`: the claim's
-    written conditions; at a pinned point where one fails the claim has no value (D4-ADIM-J)."""
+    written conditions (D4-ADIM-J; a pinned point where one fails is sorted out by `check_steps`)."""
     status, ev = _check_compute(claim, ctx)
     if status == "verified":
         status, ev = _verified_where_conventions(claim, ctx, status, ev)
@@ -2280,17 +2266,14 @@ def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[s
         if pins:
             # the sides separately: Eq would evaluate itself on substitution
             pinned = Eq(claim.lhs.xreplace(pins), claim.rhs.xreplace(pins), evaluate=False)
-            if _undefined_at(conds, pins, ctx):
-                status, pev = "unknown", {"reason": "claim_undefined_at_the_point"}
+            try:
+                # a pinned limit of a Sum or Product must pass the parser's range checks (reversed, or not
+                # an integer apart), or the claim is not read there
+                _refuse_reversed_ranges(pinned, text)
+            except ParseError as e:
+                status, pev = "unknown", {"reason": f"pinned_claim_not_read: {str(e)[:160]}"}
             else:
-                try:
-                    # a pinned limit of a Sum or Product must pass the parser's range checks (reversed, or
-                    # not an integer apart), or the claim is not read there
-                    _refuse_reversed_ranges(pinned, text)
-                except ParseError as e:
-                    status, pev = "unknown", {"reason": f"pinned_claim_not_read: {str(e)[:160]}"}
-                else:
-                    status, pev = _check_compute(pinned, ctx)
+                status, pev = _check_compute(pinned, ctx)
             ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()}, "identity_refuted": ev}
     return status, ev
 
