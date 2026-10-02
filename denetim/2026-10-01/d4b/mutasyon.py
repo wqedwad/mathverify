@@ -34,6 +34,10 @@ PARSE = "src/mathverify/normalize/parse.py"
 DET = "src/mathverify/steps/deterministic.py"
 VER = "src/mathverify/verifier.py"
 T = "tests/test_d4_d4b_periyodik.py::"
+_RATIO_MID = ("\n        else:\n            return None\n    L = sp.expand(L)\n"
+              "    if var in sp.diff(L, var, 2).free_symbols or sp.diff(L, var, 2) != 0:\n"
+              "        return None                                  # not linear in var\n"
+              "    sign = 1 if c > 0 else -1\n")
 _MONO_MID = ("\n        m = max(0, -min(ks.values()))\n"
              "        bt = sp.expand(base.xreplace({n: sp.exp(exps[n][1]) * t ** ks[n] for n in exps}) * t ** m)\n"
              "        if bt.free_symbols != {t}:\n            return None\n        g = sp.Poly(bt, t)\n"
@@ -53,8 +57,8 @@ MUTATIONS = [
     ("P10 boşluk tek periyotta okunmaz", EX, "    periods = set_periods(s_)\n    L = _common_period(periods) if periods else None",
      "    L = None", T + "test_a_set_of_points_repeating_with_a_period"),
     # --- the exact classes (review of 2 Oct 2026)
-    ("K01 hücreler SymPy'nin kümesinden", EX, "    zp, pp, _ = _structure(e, var)\n    poles = _sorted_unique",
-     "    zp, pp = [(z, S.Zero) for z in sp.solveset(sp.Eq(e, 0), var, sp.Interval(lo, hi))], []\n    poles = _sorted_unique",
+    ("K01 hücreler SymPy'nin kümesinden", EX, "    else:\n        zp, pp, _ = _structure(e, var)\n    pp = pp + _written_poles",
+     "    else:\n        zp, pp = [(z, S.Zero) for z in sp.solveset(sp.Eq(e, 0), var, sp.Interval(lo, hi))], []\n    pp = pp + _written_poles",
      T + "test_only_the_exact_classes_give_a_set"),
     ("K02 nokta sınırı yok", EX, "            if n1 - n0 > LIMIT:\n                raise _Unsolved", "            if False:\n                raise _Unsolved",
      T + "test_the_work_of_one_call_is_bounded"),
@@ -109,7 +113,7 @@ MUTATIONS = [
      "            if False:\n                raise _Unsolved", T + "test_a_log_factor_with_a_progression_on_the_reals"),
     ("K22 log'un gerçel olmadığı sıfır", EX, " if not _same(z, poles) and not outside(z)]", " if not _same(z, poles)]",
      T + "test_a_log_factor_with_a_progression_on_the_reals"),
-    ("K21 solve_guarded sınıfları okumaz", ALG, "    if p is None:\n        # not rational",
+    ("K21 solve_guarded sınıfları okumaz", ALG, "    if \"numerator_real_roots\" not in ev:\n        # not rational",
      "    if False:\n        # not rational", T + "test_solve_guarded_uses_the_classes_on_the_reals"),
     ("K25 tamlık önce gövdede (ters aralık adayı düşer)", ALG,
      "        for w in ([S.Reals, window] if window != S.Reals else [S.Reals]):", "        for w in [window]:",
@@ -133,6 +137,43 @@ MUTATIONS = [
      '    if all(_algebraic(e, syms) for e in eqs) and len(syms) > 1:\n',
      '    if all(_algebraic(e, syms) for e in eqs) and len(syms) > 1:\n        return sols, "mutated"\n',
      T + "test_complete_solutions_does_not_take_the_solver_list"),
+    # --- round 5: no complete set out of the classes; the classes (vii)-(xi), identities as written
+    ("R01 iki çözücünün uyuşması tamlık sayılır", ALG,
+     '        ev["complete"] = None\n        ev["completeness_method"] = ("none (odd roots read as real roots)" if odd_rewritten',
+     '        ev["complete"] = not odd_rewritten and r1.ok and r2.ok and isinstance(r2.value, FiniteSet)\n'
+     '        ev["completeness_method"] = ("none (odd roots read as real roots)" if odd_rewritten',
+     T + "test_round5_solve_equation"),
+    ("R02 sınıf dışında SymPy kümesi", EX, '    if var not in getattr(rel, "free_symbols", set()):\n        return sp.solveset(rel, var, domain)',
+     '    if var not in getattr(rel, "free_symbols", set()) or not at_risk(rel, var):\n        return sp.solveset(rel, var, domain)',
+     T + "test_out_of_the_classes_no_set"),
+    ("R03 aynı işaretli iki üstel sıfırlanır", EX, "    if s1 == s2:\n        return []", "    if False:\n        return []",
+     T + "test_ratio_of_two_positive_terms_has_no_zero"),
+    ("R04 üssün logaritması yanlış (denetimli)", EX, "            L += f.exp * sp.log(f.base)", "            L += f.exp",
+     T + "test_round5_class_sets"),
+    ("R05 üssün logaritması yanlış, denetim yok", EX,
+     "            L += f.exp * sp.log(f.base)" + _RATIO_MID + "    if sp.simplify((term - sign * sp.exp(L)).rewrite(sp.exp)) != 0:",
+     "            L += f.exp" + _RATIO_MID + "    if False:", T + "test_round5_class_sets"),
+    ("R06 Abs hücresinde işaret okunmaz", EX,
+     "            sub[at] = sg * at.args[0] if isinstance(at, sp.Abs) else sp.Integer(sg)",
+     "            sub[at] = at.args[0] if isinstance(at, sp.Abs) else sp.Integer(1)", T + "test_round5_class_sets"),
+    ("R07 kök adayı denetlenmez", EX, "        if _certified(base.subs(var, c)) == 0:\n            zeros.append((c, S.Zero))",
+     "        if True:\n            zeros.append((c, S.Zero))", T + "test_round5_class_sets"),
+    ("R08 özdeşliğin yazıldığı kutupları yok", EX,
+     "    pp = pp + _written_poles(e, var)\n    poles = _sorted_unique(_on(pp, lo, hi))",
+     "    poles = _sorted_unique(_on(pp, lo, hi))", T + "test_an_identity_keeps_its_written_poles"),
+    ("R09 özdeşlik tanınmaz", EX, "    ident = _identity(e, var)              # x**2", "    ident = False              # x**2",
+     T + "test_round5_class_sets"),
+    ("R10 SymPy'nin False ilişkisi okunmaz", EX, "    if rel is sp.false:\n        # SymPy decided",
+     "    if False:\n        # SymPy decided", T + "test_round5_solve_equation"),
+    ("R11 count_roots sınıfı okumaz", CNT, '        if not distinct:\n            return None, "not_a_rational_function_of_var: multiplicities"',
+     '        if True:\n            return None, "not_a_rational_function_of_var: multiplicities"', T + "test_count_roots_of_a_class"),
+    ("R12 adım katmanı solve listesine güvenir", DET,
+     '    r = sb_run("mathverify.certify.algebra:_polynomial_system_worker", eqs, order, timeout=ctx.timeout)\n'
+     '    if not r.ok or not isinstance(r.value, tuple) or r.value[0] is None:\n        return None\n    pts = r.value[0]',
+     '    r = sb_run("mathverify.sandbox.ops:solve_system", eqs, order, True, timeout=ctx.timeout)\n'
+     '    if not r.ok:\n        return None\n    pts = r.value', T + "test_step_completeness_needs_a_proof"),
+    ("R13 açık tanım okunmaz", DET, "    if set(defs) == set(order):\n        sols = [defs]", "    if False:\n        sols = [defs]",
+     T + "test_step_completeness_needs_a_proof"),
     ("P12 sürekli alan korumasız", OPS, "    if oscillates(expr, var):\n        # SymPy solves the conditions",
      "    if False:\n        # SymPy solves the conditions", T + "test_continuous_domain_of_a_trigonometric_expression"),
     # --- certify.domain

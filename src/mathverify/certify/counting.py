@@ -94,17 +94,30 @@ def _count_roots(expr, var, lo, hi, distinct: bool, ctx: Ctx, ev: dict) -> tuple
         pn = sp.Poly(num, var)
         pd = sp.Poly(den, var)
     except sp.PolynomialError:
-        return None, "not_a_rational_function_of_var"
-    if not (pn.domain.is_Exact and pd.domain.is_Exact):
-        return None, "inexact_coefficients"
-    if pn.is_zero:
-        # identically zero wherever defined: infinitely many roots unless the domain is finite
-        ev["identically_zero"] = True
-        return None, "identically_zero_expression_infinitely_many_roots"
-    r = sb_run("mathverify.certify.counting:_poly_real_roots", num, var, timeout=ctx.timeout)
-    if not r.ok:
-        return None, f"root_isolation_failed: {r.error}"
-    roots = list(r.value)
+        pn = None
+    if pn is None:
+        # not rational: the exact classes (sandbox.exactsets.class_solveset) give the set of distinct
+        # roots in closed form, exp(2x) - 3e^x + 2 → {0, log 2}; their multiplicities they do not give
+        # (round 5 of part d4b, 2 Oct 2026)
+        if not distinct:
+            return None, "not_a_rational_function_of_var: multiplicities"
+        rc = sb_run("mathverify.sandbox.exactsets:class_solveset", sp.Eq(expr, 0), var,
+                    sp.Interval(lo, hi), timeout=ctx.timeout)
+        if not rc.ok or not (rc.value is S.EmptySet or isinstance(rc.value, sp.FiniteSet)):
+            return None, "not_a_rational_function_of_var"
+        roots = list(rc.value)
+        ev["method_roots"] = "exact_class"
+    else:
+        if not (pn.domain.is_Exact and pd.domain.is_Exact):
+            return None, "inexact_coefficients"
+        if pn.is_zero:
+            # identically zero wherever defined: infinitely many roots unless the domain is finite
+            ev["identically_zero"] = True
+            return None, "identically_zero_expression_infinitely_many_roots"
+        r = sb_run("mathverify.certify.counting:_poly_real_roots", num, var, timeout=ctx.timeout)
+        if not r.ok:
+            return None, f"root_isolation_failed: {r.error}"
+        roots = list(r.value)
     conds = list(definedness_conditions(expr, var))
     conds += [c for c in conds_w if c.free_symbols <= {var} and c not in conds]
     kept: list = []

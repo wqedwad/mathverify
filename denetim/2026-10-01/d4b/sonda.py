@@ -18,6 +18,9 @@ others leave, `Ctx.cut_by`, the completeness rule of `algebra._complete_solution
     F  round 4 (2 Oct 2026): the classes (iv) one strictly monotone function, (v) a same-frequency sin/cos
        combination, (vi) their products, right and wrong claims and the edges (a root out of the range,
        base 1, log's domain); a rational system in several unknowns (completeness proved or not)
+    G  round 5 (2 Oct 2026): no complete set out of the classes (two solvers agreeing is no proof): a full
+       claim of a non-class equation UNKNOWN, a missing or extra root INCORRECT only when proved; the new
+       classes (vii) exponent ratio, (viii) Abs/sign piecewise, (ix) one radical, (x) a sum of logs
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/d4b/sonda.py [out.json] [groups]
@@ -393,10 +396,10 @@ def cases_f():
         ("F4 edge log domain ineq log x<1", ineq("log(x) < 1"), _sol("Interval.open(0, E)", "interval"), OK, None),
         ("F4 edge log domain ineq log x<1 wrong", ineq("log(x) < 1"), _sol("Interval.open(-oo, E)", "interval"), NO, None),
         ("F4 ineq exp(x)>2", ineq("exp(x) > 2"), _sol("Interval.open(log(2), oo)", "interval"), OK, None),
-        ("F4 croots exp(2x)-3exp(x)+2: 2 (count_roots: rational only)", croots("exp(2*x) - 3*exp(x) + 2"), _sol("2", "count"), NOTNO, None),
-        ("F4 croots exp(2x)-3exp(x)+2: 1", croots("exp(2*x) - 3*exp(x) + 2"), _sol("1", "count"), NOTOK, None),
+        ("F4 croots exp(2x)-3exp(x)+2: 2", croots("exp(2*x) - 3*exp(x) + 2"), _sol("2", "count"), OK, None),
+        ("F4 croots exp(2x)-3exp(x)+2: 1", croots("exp(2*x) - 3*exp(x) + 2"), _sol("1", "count"), NO, None),
         ("F4 edge base 1: eval x | 1**x=1: 0", ev("x", ["1**x = 1"]), _sol("0"), NOTOK, None),
-        ("F4 out of class 3^x=2^x: {0}", eq("3**x = 2**x"), _sol("{0}", S_), NOTNO, None),
+        ("F4 3^x=2^x: {0} (class vii since round 5)", eq("3**x = 2**x"), _sol("{0}", S_), OK, None),
         ("F4 out of class eval exp(x)=3x, x<1: W0", ev("x", ["exp(x) = 3*x", "x < 1"]), _sol("-LambertW(-1/3)"), NOTOK, None),
         # (v) a same-frequency sin/cos combination
         ("F5 eq sin=cos [0,2pi]: {pi/4,5pi/4}", eq("sin(x) = cos(x)", W2), _sol("{pi/4, 5*pi/4}", S_), OK, None),
@@ -430,6 +433,58 @@ def cases_f():
     ]
 
 
+def cases_g():
+    return [
+        # out of the classes: a full claim is not certified, a wrong one is refuted only with a proof
+        ("G0 eq exp(x)+x=1: {0} (only root, no class)", eq("exp(x) + x = 1"), _sol("{0}", S_), UNK, None),
+        ("G0 eq exp(x)+x=1: {1} (no root)", eq("exp(x) + x = 1"), _sol("{1}", S_), NO, None),
+        ("G0 eq log(x)=x-1: {1}", eq("log(x) = x - 1"), _sol("{1}", S_), UNK, None),
+        ("G0 eq log(x)=x-1: {2}", eq("log(x) = x - 1"), _sol("{2}", S_), NO, None),
+        ("G0 eq x^x=4: {2}", eq("x**x = 4", ["x > 0"]), _sol("{2}", S_), UNK, None),
+        ("G0 eq exp(x)=3x: {}", eq("exp(x) = 3*x"), _sol("{}", S_), NOTOK, None),
+        ("G0 eq 2^x=x^2: {2,4} (third root missing)", eq("2**x = x**2"), _sol("{2, 4}", S_), NOTOK, None),
+        ("G0 eq 2^x=x^2: {2,4,5}", eq("2**x = x**2"), _sol("{2, 4, 5}", S_), NO, None),
+        ("G0 ineq exp(x)>x+1: x!=0", ineq("exp(x) > x + 1"), _sol("Union(Interval.open(-oo, 0), Interval.open(0, oo))", "interval"),
+         UNK, None),
+        ("G0 eval x | exp(x)+x=1: 0", ev("x", ["exp(x) + x = 1"]), _sol("0"), NOTOK, None),
+        ("G0 eq floor(x)=2: [2,3)", eq("floor(x) = 2"), _sol("Interval.Ropen(2, 3)", "interval"), NOTNO, None),
+        # (vii) the ratio of two exponentials: log of both sides is linear
+        ("G7 eq 3^x=2^x: {0}", eq("3**x = 2**x"), _sol("{0}", S_), OK, None),
+        ("G7 eq 3^x=2^x: {0,1}", eq("3**x = 2**x"), _sol("{0, 1}", S_), NO, None),
+        ("G7 eq 3^x=2^x: {}", eq("3**x = 2**x"), _sol("{}", S_), NO, None),
+        ("G7 eq 3^(2x+1)=2^(x-1)", eq("3**(2*x + 1) = 2**(x - 1)"), _sol("{-log(6)/log(9/2)}", S_), NOTNO, None),
+        ("G7 ineq 3^x>2^x", ineq("3**x > 2**x"), _sol("Interval.open(0, oo)", "interval"), OK, None),
+        ("G7 eq 3^x=-2^x: {}", eq("3**x + 2**x = 0"), _sol("{}", S_), OK, None),
+        ("G7 eq 4^x=2^(2x) (identity): {0}", eq("4**x = 2**(2*x)"), _sol("{0}", S_), NOTOK, None),
+        # (viii) Abs and sign: piecewise on the cells of their arguments
+        ("G8 eq |2x-3|=5: {-1,4}", eq("Abs(2*x - 3) = 5"), _sol("{-1, 4}", S_), OK, None),
+        ("G8 eq |2x-3|=5: {4}", eq("Abs(2*x - 3) = 5"), _sol("{4}", S_), NO, None),
+        ("G8 ineq |x-3|<2", ineq("Abs(x - 3) < 2"), _sol("Interval.open(1, 5)", "interval"), OK, None),
+        ("G8 cint |x-3|<2: 3", cint(["Abs(x - 3) < 2"], [V("x", "integer")]), _sol("3", "count"), OK, None),
+        ("G8 cint |x-3|<2: 5", cint(["Abs(x - 3) < 2"], [V("x", "integer")]), _sol("5", "count"), NO, None),
+        ("G8 eq |x^2-4|=3x: {1,4}", eq("Abs(x**2 - 4) = 3*x"), _sol("{1, 4}", S_), OK, None),
+        ("G8 eq |x|+|x-1|=1: [0,1]", eq("Abs(x) + Abs(x - 1) = 1"), _sol("Interval(0, 1)", "interval"), NOTNO, None),
+        # (ix) one radical: eliminate it, check every candidate
+        ("G9 eq sqrt(x+4)=x-2: {5}", eq("sqrt(x + 4) = x - 2"), _sol("{5}", S_), OK, None),
+        ("G9 eq sqrt(x+4)=x-2: {0,5}", eq("sqrt(x + 4) = x - 2"), _sol("{0, 5}", S_), NO, None),
+        ("G9 ineq sqrt(x+4)>x-2", ineq("sqrt(x + 4) > x - 2"), _sol("Interval.Ropen(-4, 5)", "interval"), OK, None),
+        ("G9 eq sqrt(x)=-1: {}", eq("sqrt(x) = -1"), _sol("{}", S_), OK, None),
+        ("G9 eq sqrt(x)=-1: {1}", eq("sqrt(x) = -1"), _sol("{1}", S_), NO, None),
+        # (x) a sum of logs of polynomials
+        ("G10 eq log(x-1)+log(x-3)=log3: {4}", eq("log(x - 1) + log(x - 3) = log(3)"), _sol("{4}", S_), OK, None),
+        ("G10 eq log(x-1)+log(x-3)=log3: {0,4}", eq("log(x - 1) + log(x - 3) = log(3)"), _sol("{0, 4}", S_), NO, None),
+        ("G10 ineq log(x-1)+log(x-3)<log3", ineq("log(x - 1) + log(x - 3) < log(3)"), _sol("Interval.open(3, 4)", "interval"),
+         OK, None),
+        ("G10 eq log(x^2)=log4: {-2,2}", eq("log(x**2) = log(4)"), _sol("{-2, 2}", S_), OK, None),
+        ("G10 eq 2log(x)=log4: {2}", eq("2*log(x) = log(4)"), _sol("{2}", S_), OK, None),
+        ("G10 eq 2log(x)=log4: {-2,2}", eq("2*log(x) = log(4)"), _sol("{-2, 2}", S_), NO, None),
+        # count_roots of a class
+        ("G croots exp(2x)-3exp(x)+2: 2", croots("exp(2*x) - 3*exp(x) + 2"), _sol("2", "count"), OK, None),
+        ("G croots exp(2x)-3exp(x)+2: 1", croots("exp(2*x) - 3*exp(x) + 2"), _sol("1", "count"), NO, None),
+        ("G croots exp(x)-3x: 2 (no class)", croots("exp(x) - 3*x"), _sol("2", "count"), UNK, None),
+    ]
+
+
 class _Slow(Exception):
     pass
 
@@ -442,10 +497,10 @@ def _on_alarm(signum, frame):
 CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f}
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g}
 
 
-def main(out_path=None, groups="ABCDEF"):
+def main(out_path=None, groups="ABCDEFG"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -486,5 +541,5 @@ def main(out_path=None, groups="ABCDEF"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEF"
+    grp = args[1] if len(args) > 1 else "ABCDEFG"
     sys.exit(1 if main(out, grp) else 0)

@@ -67,8 +67,9 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
     hull: x³ = x on x > 0 was never complete and the right answer {1} ended INCORRECT. A
     numerator that is identically 0 is an identity (every point of the domain solves it) and is
     reported as such — before, (x + 1)² = x² + 2x + 1 was "complete with no root" and ∅ was
-    certified. Otherwise the two solvers must agree; never when an odd root was read as a real
-    root (the solvers work on the principal branch)."""
+    certified. Otherwise the equation must be of an exact class (sandbox.exactsets.class_solveset);
+    two solvers agreeing was taken for completeness until round 5 of part d4b (2 Oct 2026) and is no
+    proof: they share blind spots."""
     rel = _as_equation(rel)
     rel_r = real_odd_roots(rel)
     odd_rewritten = rel_r != rel
@@ -114,8 +115,9 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             poly_roots = list(rr.value)
             cands += poly_roots
             ev["numerator_real_roots"] = [str(r) for r in poly_roots]
-    if p is None:
-        # not rational: an equation of the exact classes (sandbox.exactsets.class_solveset: one
+    if "numerator_real_roots" not in ev:
+        # not rational (2**x + 3**x is a "polynomial" in the generator 2**x for Poly, whose real roots it
+        # cannot isolate): an equation of the exact classes (sandbox.exactsets.class_solveset: one
         # trigonometric function, one strictly monotone function or a same-frequency sin/cos combination,
         # of a linear argument; products) has its set in closed form, on the bounded hull of the domain
         # when there is one, never from a numeric search. On ℝ the solvers give the principal roots and
@@ -148,23 +150,14 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
         complete = not undecided
         ev["completeness_method"] = "exact_real_roots_of_numerator"
         ev["complete"] = complete
-    elif not odd_rewritten:
-        both = r1.ok and r2.ok and isinstance(r2.value, FiniteSet) and not isinstance(r2.value, ConditionSet)
-        if both:
-            s1 = {str(c) for c in r1.value}
-            s2 = {str(c) for c in r2.value}
-            complete = (s1 == s2) or (set(ev["kept"]) <= s1 and set(ev["kept"]) <= s2)
-            # a candidate the guard could not decide may be a root: agreeing solvers say nothing about
-            # it. With a free a, √(x − a) = √(2 − x) had its root a/2 + 1 undecided and ∅ certified,
-            # though it is the answer only for a > 2 (part vi, 30 Sep 2026)
-            complete = complete and not any(_undecided(why) for _, why in rejected)
-            ev["completeness_method"] = "solver_agreement"
-            ev["complete"] = complete
-        else:
-            ev["complete"] = None
     else:
+        # no exact class: the solvers' roots are candidates only. Two solvers agreeing is no proof of
+        # completeness either (they share blind spots: 3**x = 2**x was certified {0} from solve and
+        # solveset agreeing; round 5 of part d4b, 2 Oct 2026). Before, √(x − a) = √(2 − x) with a free
+        # had its root a/2 + 1 undecided and ∅ certified that way (part vi, 30 Sep 2026)
         ev["complete"] = None
-        ev["completeness_method"] = "none (odd roots read as real roots)"
+        ev["completeness_method"] = ("none (odd roots read as real roots)" if odd_rewritten
+                                     else "none (no exact class)")
     return kept, ev
 
 

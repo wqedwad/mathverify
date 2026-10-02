@@ -27,6 +27,18 @@ So a set is exact only for an expression whose zeros and poles are known in clos
 The readings of (iv) and (v) are checked symbolically (the rewritten expression minus the original is 0),
 or the factor is no class. `class_solveset` gives these sets for any relation (round 4 of part d4b,
 2 Oct 2026: exp(x) = 2, 4**x - 3*2**x + 2 = 0, sin x = cos x, sqrt(3) sin x - cos x = 1).
+Round 5 (same day): SymPy's own set is no proof for a relation without a trigonometric function either
+(solve and solveset agreeing certified 3**x = 2**x), so every relation in `var` goes through the classes,
+which grew by
+  (vii) A*c1**L1 - B*c2**L2 (positive constants, linear exponents): the logs give a linear equation;
+  (viii) Abs and sign of polynomials: on the closed cells between the roots of their arguments they are
+        +-P and +-1 (`_piecewise`);
+  (ix)  a polynomial in var and ONE radical P**(1/n): the resultant eliminates it, each candidate is
+        checked (`_sqrt_zeros`);
+  (x)   a sum of c_j*log(P_j) and a constant: exponentiated where every P_j > 0 (`_logsum_sets`);
+and an identity (numerator 0 over one denominator) holds wherever it is defined AS WRITTEN (the poles
+of every written denominator, `_written_poles`). A log argument <= 0 or a negative radicand is outside
+the domain on the whole cell (`_log_outside`).
 Everything else is returned as a ConditionSet: the membership of each point is still decided exactly,
 the set is not known. On a bounded domain the zeros and the poles of lhs - rhs cut the hull into cells,
 and the sign is certified (`certified_sign`) on each cell and at each point; on an unbounded domain an
@@ -80,10 +92,17 @@ def at_risk(rel, var) -> bool:
 
 
 def exact_solveset(rel, var, domain=S.Reals):
-    """`sp.solveset(rel, var, domain)` when `rel` has no trigonometric function of `var`; otherwise the
-    exact set of the classes in the module doc, or a ConditionSet."""
-    if not at_risk(rel, var):
+    """The exact set of the classes in the module doc, or a ConditionSet: SymPy's own set of a relation
+    out of the classes is no proof (solveset and solve agreeing on 3**x = 2**x proved nothing; round 5
+    of part d4b, 2 Oct 2026). A relation with no `var` in it, or a conjunction, is left to SymPy only
+    when it has no trigonometric function (`at_risk`): its truth does not depend on a solved set."""
+    if var not in getattr(rel, "free_symbols", set()):
         return sp.solveset(rel, var, domain)
+    if isinstance(rel, (sp.And, sp.Or)):
+        parts = [exact_solveset(a, var, domain) for a in rel.args]
+        if any(isinstance(q, sp.ConditionSet) or q.has(sp.ConditionSet) for q in parts):
+            return sp.ConditionSet(var, rel, domain)
+        return sp.Intersection(*parts) if isinstance(rel, sp.And) else sp.Union(*parts)
     if isinstance(rel, sp.Expr):
         rel = sp.Eq(rel, 0)
     exact = None
@@ -101,6 +120,10 @@ def class_solveset(rel, var, domain=S.Reals):
     completeness of a solution list (certify.algebra): SymPy's own finite set is no proof."""
     if isinstance(rel, sp.Expr):
         rel = sp.Eq(rel, 0)
+    if rel is sp.false:
+        # SymPy decided the relation itself (Eq(3**x + 2**x, 0): a sum of positive terms), also when
+        # it was rebuilt in the sandbox worker: no point holds it
+        return S.EmptySet
     if not isinstance(rel, sp.core.relational.Relational):
         return None
     try:
@@ -320,6 +343,59 @@ def _mono_parts(base, var):
     return h, ab[0], ab[1], sp.Poly(bt, t)
 
 
+def _log_of_term(term, var):
+    """(sign, L) with term = sign*exp(L), L linear in `var` with exact coefficients, for a product of a
+    rational number, positive constants and powers c**(a*x + b) (c > 0 constant, exp included); or
+    None. The reading is checked symbolically."""
+    c, rest = term.as_coeff_Mul()
+    if not isinstance(c, sp.Rational) or c == 0:
+        return None
+    L = sp.log(abs(c))
+    for f in sp.Mul.make_args(rest):
+        if var not in f.free_symbols:
+            if not (f.is_number and f.is_positive is True):
+                return None
+            L += sp.log(f)
+        elif isinstance(f, sp.exp):
+            L += f.args[0]
+        elif isinstance(f, sp.Pow) and f.base.is_number and f.base.is_positive is True and var not in f.base.free_symbols:
+            L += f.exp * sp.log(f.base)
+        else:
+            return None
+    L = sp.expand(L)
+    if var in sp.diff(L, var, 2).free_symbols or sp.diff(L, var, 2) != 0:
+        return None                                  # not linear in var
+    sign = 1 if c > 0 else -1
+    if sp.simplify((term - sign * sp.exp(L)).rewrite(sp.exp)) != 0:
+        return None
+    return sign, L
+
+
+def _ratio_zeros(base, var):
+    """(vii) two terms, each a constant times powers of positive constants with linear exponents:
+    A*c1**(a*x + b) - B*c2**(c*x + d). Where both terms have one sign the zeros are those of the
+    logarithms' difference, a linear function (log is strictly increasing): 3**x = 2**x at x = 0 only.
+    With the same sign the sum has none. None when not this class; raise _Unsolved for an identity."""
+    terms = sp.Add.make_args(base)
+    if len(terms) != 2 or not any(var in t.free_symbols for t in terms):
+        return None
+    parts = [_log_of_term(t, var) for t in terms]
+    if any(p_ is None for p_ in parts):
+        return None
+    (s1, L1), (s2, L2) = parts
+    if s1 == s2:
+        return []                                    # two positive (or two negative) terms: no zero
+    d = sp.expand(L1 - L2)
+    a, b = sp.diff(d, var), d.subs(var, 0)
+    if var in a.free_symbols or sp.expand(d - (a * var + b)) != 0:
+        return None
+    if _certified(a) == 0:                           # log(4)*x - 2*log(2)*x: no x after all
+        if _certified(b) == 0:
+            raise _Unsolved(f"an identity: {base}")
+        return []
+    return [(-b / a, S.Zero)]
+
+
 def _mono_zeros(h, a, b, g):
     """The zeros (points) of g(h(a*x + b)) and the points where it is undefined (log of 0)."""
     zeros = []
@@ -362,7 +438,157 @@ def _factor_sets(base, var):
     mono = _mono_parts(base, var)
     if mono is not None:
         return (*_mono_zeros(*mono), None)
+    ratio = _ratio_zeros(base, var)
+    if ratio is not None:
+        return ratio, [], None
+    for fn in (_abs_zeros, _sqrt_zeros, _logsum_sets):
+        got = fn(base, var)
+        if got is not None:
+            return got[0], got[1], None
     raise _Unsolved(f"not an exact class: {base}")
+
+
+def _poly_of(e, var):
+    """Poly of e in var with exact coefficients and no other symbol, or None."""
+    if e.free_symbols - {var}:
+        return None
+    try:
+        q = sp.Poly(e, var)
+    except sp.PolynomialError:
+        return None
+    if not q.domain.is_Exact or q.free_symbols_in_domain:
+        return None
+    return q
+
+
+def _in_open(c, a, b) -> bool:
+    return (a == -sp.oo or _certified(c - a) > 0) and (b == sp.oo or _certified(b - c) > 0)
+
+
+def _abs_zeros(base, var):
+    """(viii) a polynomial in var and in |P_k| (P_k polynomials): between consecutive real roots of the
+    P_k each |P_k| is +P_k or -P_k (its sign at one point of the cell), so base is a polynomial there,
+    whose real roots in the open cell are exact; the roots of the P_k are checked one by one.
+    (zeros, []) or None; raise _Unsolved when base vanishes on a whole cell."""
+    atoms = sorted({n for n in base.atoms(sp.Abs) if var in n.free_symbols}, key=sp.default_sort_key)
+    if not atoms:
+        return None
+    ds = [sp.Dummy(f"a{i}") for i in range(len(atoms))]
+    bt = base.xreplace(dict(zip(atoms, ds)))
+    if bt.free_symbols - set(ds) - {var}:
+        return None
+    try:
+        q = sp.Poly(bt, var, *ds)
+    except sp.PolynomialError:
+        return None
+    if not q.domain.is_Exact or q.free_symbols_in_domain:
+        return None
+    args = [_poly_of(a.args[0], var) for a in atoms]
+    if any(a is None for a in args):
+        return None
+    cuts = _sorted_unique([r_ for a in args for r_ in _real_roots(a)])
+    edges = [S.NegativeInfinity] + cuts + [S.Infinity]
+    zeros = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+        signs = [_certified(at.args[0].subs(var, mid)) for at in atoms]
+        cell = sp.expand(bt.xreplace({d: sg * at.args[0] for d, sg, at in zip(ds, signs, atoms)}))
+        pc = _poly_of(cell, var)
+        if pc is None:
+            return None
+        if pc.is_zero:
+            raise _Unsolved(f"zero on a whole cell: {base}")
+        zeros += [r_ for r_ in _real_roots(pc) if _in_open(r_, a, b)]
+    zeros += [c for c in cuts if _certified(base.subs(var, c)) == 0]
+    return [(z, S.Zero) for z in zeros], []
+
+
+def _roots_of(e, var):
+    return [n for n in sp.preorder_traversal(e) if isinstance(n, sp.Pow) and var in n.base.free_symbols
+            and n.exp.is_Rational and not n.exp.is_Integer]
+
+
+def _sqrt_zeros(base, var):
+    """(ix) a polynomial in var and in r = P**(1/n) for ONE polynomial radicand P (r**n = P): every
+    zero is a root of the resultant of base(r) and r**n - P in r (eliminating r loses none); each
+    candidate is kept only when P >= 0 there (the root real, as written) and base is certified 0 there.
+    sqrt(x + 4) = x - 2 → {5}. (zeros, []) or None."""
+    rad = _roots_of(base, var)
+    if not rad:
+        return None
+    Ps = {n.base for n in rad}
+    if len(Ps) != 1 or any(n.exp < 0 for n in rad):
+        return None
+    (P,) = Ps
+    if _poly_of(P, var) is None:
+        return None
+    n_ = sp.ilcm(*[n.exp.q for n in rad]) if len(rad) > 1 else rad[0].exp.q
+    r = sp.Dummy("r")
+    bt = base.xreplace({n: r ** int(n.exp * n_) for n in rad})
+    if bt.free_symbols - {r, var}:
+        return None
+    try:
+        q = sp.Poly(bt, r, var)
+    except sp.PolynomialError:
+        return None
+    if not q.domain.is_Exact or q.free_symbols_in_domain:
+        return None
+    if sp.simplify(bt.subs(r, P ** sp.Rational(1, n_)) - base) != 0:
+        return None
+    res = sp.resultant(sp.Poly(bt, r), sp.Poly(r ** n_ - P, r))
+    cand = _poly_of(sp.expand(res), var)
+    if cand is None:
+        return None
+    if cand.is_zero:
+        raise _Unsolved(f"eliminated to an identity: {base}")
+    zeros = []
+    for c in _real_roots(cand):
+        if _certified(P.subs(var, c)) < 0:
+            continue
+        if _certified(base.subs(var, c)) == 0:
+            zeros.append((c, S.Zero))
+    return zeros, []
+
+
+def _logsum_sets(base, var):
+    """(x) sum of c_j*log(P_j) (c_j rational, P_j polynomials) and a constant R: where every P_j > 0
+    it is (1/q)*log(N/D) + R with N/D the product of the P_j**(q*c_j), so its zeros there are the roots
+    of N - exp(-q*R)*D (log is one-to-one); the roots of the P_j are poles (log of 0). (zeros, poles) or
+    None. log(x - 1) + log(x - 3) = log(3): x = 4 (x = 0 is outside)."""
+    logs, R = [], S.Zero
+    for t in sp.Add.make_args(base):
+        if var not in t.free_symbols:
+            R += t
+            continue
+        c, rest = t.as_coeff_Mul()
+        if not (isinstance(rest, sp.log) and isinstance(c, sp.Rational)):
+            return None
+        pj = _poly_of(rest.args[0], var)
+        if pj is None:
+            return None
+        logs.append((c, rest.args[0]))
+    if not logs:
+        return None
+    qd = sp.ilcm(*[c.q for c, _ in logs]) if len(logs) > 1 else logs[0][0].q
+    N, D = S.One, S.One
+    for c, Pj in logs:
+        m = int(c * qd)
+        if m > 0:
+            N *= Pj ** m
+        else:
+            D *= Pj ** (-m)
+    T = sp.exp(-qd * R)
+    if _certified(T) <= 0:
+        return None
+    cand = _poly_of(sp.expand(N - T * D), var)
+    if cand is None:
+        return None
+    if cand.is_zero:
+        raise _Unsolved(f"an identity where defined: {base}")
+    # a root where a P_j <= 0 is no zero: `_log_outside` cuts it (and every cell there) wherever zeros are read
+    zeros = [(c, S.Zero) for c in _real_roots(cand)]
+    poles = [(r_, S.Zero) for _, Pj in logs for r_ in _real_roots(_poly_of(Pj, var))]
+    return zeros, poles
 
 
 def _structure(e, var):
@@ -436,14 +662,98 @@ def _real_sign(e):
 
 
 def _log_outside(e, var):
-    """A test of a point: is it outside the real domain of a log in `e` (its argument <= 0)? The classes
-    have only logs of linear arguments, whose zero is a pole and so an edge of every cell: the sign of
-    the argument at one point of a cell is its sign on the whole cell."""
+    """A test of a point: is it outside the real domain of `e`, a log argument <= 0 or an even root's
+    radicand < 0 there? The classes have only polynomial arguments and radicands, whose real roots are
+    edges of every cell (`_breaks`): the sign at one point of a cell is the sign on the whole cell."""
     args = [n.args[0] for n in e.atoms(sp.log) if var in n.free_symbols]
+    rads = [n.base for n in _roots_of(e, var)]
 
     def outside(pt) -> bool:
-        return any(_certified(a.subs(var, pt)) <= 0 for a in args)
+        return any(_certified(a.subs(var, pt)) <= 0 for a in args) or any(
+            _certified(r_.subs(var, pt)) < 0 for r_ in rads)
     return outside
+
+
+def _restricted(e, var) -> bool:
+    """Has `e` points where it is not real (a log, an even root of `var`)?"""
+    return any(var in n.free_symbols for n in e.atoms(sp.log)) or bool(_roots_of(e, var))
+
+
+def _breaks(e, var) -> list:
+    """The points where the formula of `e` changes or its domain ends: the real roots of the arguments
+    of Abs and log and of the even roots' radicands (polynomials, or raise _Unsolved)."""
+    out = []
+    for a in ([n.args[0] for n in e.atoms(sp.Abs, sp.sign, sp.log) if var in n.free_symbols]
+              + [n.base for n in _roots_of(e, var)]):
+        q = _poly_of(a, var)
+        if q is None:
+            raise _Unsolved(f"a cut that is no polynomial: {a}")
+        out += _real_roots(q)
+    return out
+
+
+def _piecewise(rel, var, lo, hi):
+    """(xi) Abs and sign of polynomials: between consecutive real roots of their arguments each |P| is
+    +P or -P and sign(P) is +1 or -1 (the sign at one point of the cell), and on the CLOSED cell the
+    expression equals the one with them replaced (at a root both sides are 0, or the cell's own sign
+    where the root is a window end); its set there is solved as any other. |2x - 3| = 5 → {-1, 4};
+    |2x - 3| = 2x - 3 → [3/2, oo); the real cube root sign(x)*|x|**(1/3). None when `rel` has neither."""
+    e = rel.lhs - rel.rhs
+    atoms = sorted({n for n in e.atoms(sp.Abs, sp.sign) if var in n.free_symbols}, key=sp.default_sort_key)
+    if not atoms:
+        return None
+    cuts = []
+    for at in atoms:
+        q = _poly_of(at.args[0], var)
+        if q is None:
+            raise _Unsolved(f"Abs or sign of no polynomial: {at}")
+        cuts += _real_roots(q)
+    inner = [c for c in _sorted_unique(_on([(c, S.Zero) for c in cuts], lo, hi)) if c != lo and c != hi]
+    edges = [lo] + inner + [hi]
+    pieces = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+        sub = {}
+        for at in atoms:
+            sg = _certified(at.args[0].subs(var, mid))
+            sub[at] = sg * at.args[0] if isinstance(at, sp.Abs) else sp.Integer(sg)
+        cell = type(rel)(e.xreplace(sub), 0)
+        if cell is sp.true:
+            got = sp.Interval(a, b)
+        elif cell is sp.false:
+            got = S.EmptySet
+        else:
+            got = _on_window(cell, var, a, b)[0]
+        pieces.append(sp.Intersection(got, sp.Interval(a, b)))
+    return sp.Union(*pieces) if pieces else S.EmptySet
+
+
+def _identity(e, var) -> bool:
+    """Is e identically 0 where it is defined (its numerator, written over one denominator, is 0)?"""
+    try:
+        return sp.expand(sp.fraction(sp.together(e))[0]) == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _den_poles(e, var) -> list:
+    """The poles of an identity: the zeros of its denominator (of the classes, or raise _Unsolved)."""
+    den = sp.fraction(sp.together(e))[1]
+    if var not in den.free_symbols:
+        return []
+    return _structure(den, var)[0]
+
+
+def _written_poles(e, var) -> list:
+    """The points where a denominator AS WRITTEN vanishes or is undefined: the zeros and poles of the base
+    of every negative power. Combining the terms may cancel them: (2*x**2 + 1)/(x**2 - 5) -
+    (2 + 1/x**2)/(1 - 5/x**2) is 0 over one denominator, but undefined at 0 and +-sqrt(5)."""
+    out = []
+    for n in sp.preorder_traversal(e):
+        if isinstance(n, sp.Pow) and n.exp.is_number and n.exp.is_negative and var in n.base.free_symbols:
+            z, p_, _ = _structure(n.base, var)
+            out += z + p_
+    return out
 
 
 def _holds(op, s) -> bool:
@@ -461,30 +771,39 @@ def _on_window(rel, var, lo, hi):
     """(the points of [lo, hi] where `rel` holds, as a set; the zeros; the poles) for a relation of the
     exact classes, or raise _Unsolved."""
     e = rel.lhs - rel.rhs
-    zp, pp, _ = _structure(e, var)
+    pw = _piecewise(rel, var, lo, hi)
+    if pw is not None:
+        return pw, [], []
+    ident = _identity(e, var)              # x**2 - 5*x - 14 = (x - 7)*(x + 2): every defined point
+    if ident:
+        zp, pp = [], _den_poles(e, var)
+    else:
+        zp, pp, _ = _structure(e, var)
+    pp = pp + _written_poles(e, var)
     poles = _sorted_unique(_on(pp, lo, hi))
     outside = _log_outside(e, var)
     zeros = [z for z in _sorted_unique(_on(zp, lo, hi)) if not _same(z, poles) and not outside(z)]
     op = type(rel)
-    if op is sp.Equality:
+    if op is sp.Equality and not ident:
         return sp.FiniteSet(*zeros), zeros, poles
+    cuts = _on([(c, S.Zero) for c in _breaks(e, var)], lo, hi)
     ends = [q for q in (lo, hi) if q.is_finite]
-    edges = _sorted_unique(ends + zeros + poles)
+    edges = _sorted_unique(ends + zeros + poles + cuts)
     edges = ([lo] if not lo.is_finite else []) + edges + ([hi] if not hi.is_finite else [])
     pieces: list = []
     for a, b in zip(edges[:-1], edges[1:]):
         mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
         if outside(mid):
             continue                                    # a log is not real on this cell: nothing holds
-        s_ = _real_sign(e.subs(var, mid))
-        if s_ == 0:
+        s_ = 0 if ident else _real_sign(e.subs(var, mid))
+        if s_ == 0 and not ident:
             raise _Unsolved("a zero inside a cell")       # cannot happen with the classes: refuse
         if _holds(op, s_):
             pieces.append(sp.Interval.open(a, b))
     for p in edges:
         if not p.is_finite or _same(p, poles) or outside(p):
             continue
-        s_ = 0 if _same(p, zeros) else _real_sign(e.subs(var, p))
+        s_ = 0 if ident or _same(p, zeros) else _real_sign(e.subs(var, p))
         if _holds(op, s_):
             pieces.append(sp.FiniteSet(p))
     return (sp.Union(*pieces) if pieces else S.EmptySet), zeros, poles
@@ -514,11 +833,14 @@ def _rebuilt(rel, var, domain):
         discrete = _on_periodic_points(rel, var, domain, P)
         if discrete is not None:
             return discrete
+    if (_identity(e, var) or e.has(sp.Abs, sp.sign)) and P is None:
+        return sp.Intersection(_on_window(rel, var, S.NegativeInfinity, S.Infinity)[0], domain)
     if isinstance(rel, sp.Equality):
         zp, pp, _ = _structure(e, var)
-        if any(var in g.free_symbols for g in e.atoms(sp.log)):
-            # a zero where a log is not real is no zero ((x + 1)*log(x) = 0 at x = -1); a progression
-            # crosses that region, so only points are cut here
+        pp = pp + _written_poles(e, var)
+        if _restricted(e, var):
+            # a zero where a log or an even root is not real is no zero ((x + 1)*log(x) = 0 at x = -1);
+            # a progression crosses that region, so only points are cut here
             if any(step != 0 for _, step in zp + pp):
                 raise _Unsolved("a progression with a log factor on an unbounded domain")
             outside = _log_outside(e, var)
