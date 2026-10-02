@@ -49,7 +49,7 @@ MUTATIONS = [
      "    return sp.solveset(rel, var, domain)\n", T + "test_an_inequality_on_the_reals_is_not_one_period"),
     ("P02 trigonometri riski görülmez", EX, "    if isinstance(rel, sp.Expr):\n        return oscillates(rel, var)\n"
      "    return any(oscillates(r.lhs - r.rhs, var) for r in _relations(rel))",
-     "    return False", T + "test_a_bounded_domain_is_rebuilt_on_every_period"),
+     "    return False", T + "test_a_definedness_condition_out_of_the_classes_is_not_taken_as_defined"),
     ("P08 periyodik nokta kümesi okunmaz", EX, "    discrete = _on_periodic_points(rel, var, domain, P)\n",
      "    discrete = None\n", T + "test_a_set_of_points_repeating_with_a_period"),
     ("P09 noktasal sonlu küme yolu yok", EX, "        keep = _on_points(rel, var, domain)            # point by point\n",
@@ -57,8 +57,8 @@ MUTATIONS = [
     ("P10 boşluk tek periyotta okunmaz", EX, "    periods = set_periods(s_)\n    L = _common_period(periods) if periods else None",
      "    L = None", T + "test_a_set_of_points_repeating_with_a_period"),
     # --- the exact classes (review of 2 Oct 2026)
-    ("K01 hücreler SymPy'nin kümesinden", EX, "    else:\n        zp, pp, _ = _structure(e, var)\n    pp = pp + _written_poles",
-     "    else:\n        zp, pp = [(z, S.Zero) for z in sp.solveset(sp.Eq(e, 0), var, sp.Interval(lo, hi))], []\n    pp = pp + _written_poles",
+    ("K01 hücreler SymPy'nin kümesinden", EX, "    else:\n        zp, pp, _ = _structure(e, var)     # `together`",
+     "    else:\n        zp, pp = [(z, S.Zero) for z in sp.solveset(sp.Eq(e, 0), var, sp.Interval(lo, hi))], []     # `together`",
      T + "test_only_the_exact_classes_give_a_set"),
     ("K02 nokta sınırı yok", EX, "            if n1 - n0 > LIMIT:\n                raise _Unsolved", "            if False:\n                raise _Unsolved",
      T + "test_the_work_of_one_call_is_bounded"),
@@ -102,8 +102,6 @@ MUTATIONS = [
      "            if False:\n                continue", T + "test_mono_zeros_keep_to_the_range"),
     ("K18 atan'ın değer kümesi dışı kök", EX, "            if _certified(sp.pi / 2 - abs(r_)) <= 0:\n                continue",
      "            if False:\n                continue", T + "test_monotone_class_sets"),
-    ("K19 log'un tanımsız noktası yok", EX, "    poles = [((-b) / a, S.Zero)] if h is sp.log else []",
-     "    poles = []", T + "test_monotone_class_sets"),
     ("K20 log'un gerçel olmadığı hücre tek noktadan okunur", EX,
      "        if outside(mid):\n            continue", "        if False:\n            continue", T + "test_monotone_class_sets"),
     ("K23 sınırsız eşitlikte log'un gerçel olmadığı sıfır", EX,
@@ -138,9 +136,9 @@ MUTATIONS = [
      '    if all(_algebraic(e, syms) for e in eqs) and len(syms) > 1:\n        return sols, "mutated"\n',
      T + "test_complete_solutions_does_not_take_the_solver_list"),
     # --- round 5: no complete set out of the classes; the classes (vii)-(xi), identities as written
-    ("R01 iki çözücünün uyuşması tamlık sayılır", ALG,
+    ("R01 solve listesi tamlık sayılır", ALG,
      '        ev["complete"] = None\n        ev["completeness_method"] = ("none (odd roots read as real roots)" if odd_rewritten',
-     '        ev["complete"] = not odd_rewritten and r1.ok and r2.ok and isinstance(r2.value, FiniteSet)\n'
+     '        ev["complete"] = not odd_rewritten and r1.ok and bool(r1.value)\n'
      '        ev["completeness_method"] = ("none (odd roots read as real roots)" if odd_rewritten',
      T + "test_round5_solve_equation"),
     ("R02 sınıf dışında SymPy kümesi", EX, '    if var not in getattr(rel, "free_symbols", set()):\n        return sp.solveset(rel, var, domain)',
@@ -159,8 +157,7 @@ MUTATIONS = [
     ("R07 kök adayı denetlenmez", EX, "        if _certified(base.subs(var, c)) == 0:\n            zeros.append((c, S.Zero))",
      "        if True:\n            zeros.append((c, S.Zero))", T + "test_round5_class_sets"),
     ("R08 özdeşliğin yazıldığı kutupları yok", EX,
-     "    pp = pp + _written_poles(e, var)\n    poles = _sorted_unique(_on(pp, lo, hi))",
-     "    poles = _sorted_unique(_on(pp, lo, hi))", T + "test_an_identity_keeps_its_written_poles"),
+     "        zp, pp = [], _written_poles(e, var)", "        zp, pp = [], []", T + "test_an_identity_keeps_its_written_poles"),
     ("R09 özdeşlik tanınmaz", EX, "    ident = _identity(e, var)              # x**2", "    ident = False              # x**2",
      T + "test_round5_class_sets"),
     ("R10 SymPy'nin False ilişkisi okunmaz", EX, "    if rel is sp.false:\n        # SymPy decided",
@@ -214,8 +211,8 @@ MUTATIONS = [
     ("B08 tanım evreni tek periyot", PARSE, "            dom = Intersection(dom, exact_solveset(rel, var, S.Reals))",
      "            dom = Intersection(dom, sp.solveset(rel, var, S.Reals))", T + "test_a_domain_of_discourse_with_a_period"),
     # --- algebra
-    ("A01 verilenler ℝ'de tek periyot", ALG, "    dom = ctx.cut_by(var, dom, [real_odd_roots(g) for g in rels])",
-     "    dom = ctx.cut_by(var, dom, [])\n    for g in rels:\n        dom = sp.Intersection(dom, sp.solveset(real_odd_roots(g), var, S.Reals))",
+    ("A01 verilenler ℝ'de tek periyot", ALG, "    dom = ctx.cut_by(var, dom, [real_odd_roots(a) for a in plain])",
+     "    dom = ctx.cut_by(var, dom, [])\n    for g in plain:\n        dom = sp.Intersection(dom, sp.solveset(real_odd_roots(g), var, S.Reals))",
      T + "test_an_equation_given_with_a_periodic_given"),
     ("A02 eşitsizlik çözülmemiş alanda çekimser değil", ALG, "    if ctx.unsolved_conditions(var):\n        # the domain is cut",
      "    if False:\n        # the domain is cut", T + "test_an_inequality_under_an_unsolved_domain_abstains"),

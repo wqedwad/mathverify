@@ -698,7 +698,7 @@ def test_mono_zeros_keep_to_the_range():
     zeros, _ = _mono_zeros(sp.atan, 1, 0, sp.Poly((t - 1) * (t - 2), t))
     assert zeros == [(sp.tan(1), 0)]
     zeros, poles = _mono_zeros(sp.log, 1, 0, sp.Poly(t + 1, t))
-    assert zeros == [(sp.exp(-1), 0)] and poles == [(0, 0)]
+    assert zeros == [(sp.exp(-1), 0)] and poles == []      # log(0): an edge from `_breaks` (round 5)
 
 
 def test_a_definedness_condition_out_of_the_classes_is_not_taken_as_defined():

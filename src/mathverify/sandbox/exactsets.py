@@ -413,7 +413,7 @@ def _mono_zeros(h, a, b, g):
                 continue
             u = sp.tan(r_)
         zeros.append(((u - b) / a, S.Zero))
-    poles = [((-b) / a, S.Zero)] if h is sp.log else []
+    poles = []          # log of 0: `_breaks` makes it an edge, `_log_outside` leaves it out of the set
     return zeros, poles
 
 
@@ -736,14 +736,6 @@ def _identity(e, var) -> bool:
         return False
 
 
-def _den_poles(e, var) -> list:
-    """The poles of an identity: the zeros of its denominator (of the classes, or raise _Unsolved)."""
-    den = sp.fraction(sp.together(e))[1]
-    if var not in den.free_symbols:
-        return []
-    return _structure(den, var)[0]
-
-
 def _written_poles(e, var) -> list:
     """The points where a denominator AS WRITTEN vanishes or is undefined: the zeros and poles of the base
     of every negative power. Combining the terms may cancel them: (2*x**2 + 1)/(x**2 - 5) -
@@ -776,10 +768,10 @@ def _on_window(rel, var, lo, hi):
         return pw, [], []
     ident = _identity(e, var)              # x**2 - 5*x - 14 = (x - 7)*(x + 2): every defined point
     if ident:
-        zp, pp = [], _den_poles(e, var)
+        # over one denominator an identity is 0/1: its poles are those of the denominators as written
+        zp, pp = [], _written_poles(e, var)
     else:
-        zp, pp, _ = _structure(e, var)
-    pp = pp + _written_poles(e, var)
+        zp, pp, _ = _structure(e, var)     # `together` keeps every denominator (it cancels nothing)
     poles = _sorted_unique(_on(pp, lo, hi))
     outside = _log_outside(e, var)
     zeros = [z for z in _sorted_unique(_on(zp, lo, hi)) if not _same(z, poles) and not outside(z)]
@@ -819,8 +811,101 @@ def period(e, var):
     return _common_period(periods) if periods else None
 
 
+def _parametric(rel, var, domain):
+    """(xii) a polynomial in `var` whose coefficients hold other symbols (parameters) and whose leading
+    coefficient is a nonzero number: an equation's set is its roots (`roots`, all of them: multiplicities
+    summing to the degree), each real by the symbols' assumptions or dropped when certainly not real; an
+    inequality or `!=` only of degree 1 (one root, the side read from the leading coefficient's sign).
+    x - a = 1 → {a + 1}; (x - 1)(x - a) = 0 → {1, a}; x**2 = a, a >= 0 → {-sqrt(a), sqrt(a)}; x > b →
+    (b, oo). Raise _Unsolved otherwise (a root whose realness depends on the parameter, degree 2
+    inequalities, a leading coefficient that may vanish)."""
+    e = sp.expand(rel.lhs - rel.rhs)
+    if _roots_of(e, var) and isinstance(rel, sp.Equality):
+        return _parametric_radical(e, var, domain)
+    try:
+        q = sp.Poly(e, var)
+    except sp.PolynomialError:
+        raise _Unsolved(f"not a polynomial in {var}: {e}")
+    if q.degree() < 1 or var in q.LC().free_symbols:
+        raise _Unsolved(f"no degree in {var}: {e}")
+    lc = q.LC()
+    if lc.free_symbols or _certified(lc) == 0:
+        raise _Unsolved(f"a leading coefficient that may vanish: {lc}")
+    op = type(rel)
+    if op is sp.Equality:
+        rs = sp.roots(q)
+        if sum(rs.values()) != q.degree():
+            raise _Unsolved(f"roots not all found: {e}")
+        keep = []
+        for r_ in rs:
+            if r_.is_real is True:
+                keep.append(r_)
+            elif r_.is_real is not False:
+                raise _Unsolved(f"realness depends on the parameters: {r_}")
+        return sp.Intersection(sp.FiniteSet(*keep), domain)
+    if q.degree() != 1:
+        raise _Unsolved(f"a parametric inequality of degree {q.degree()}")
+    r0 = -q.coeff_monomial(1) / lc
+    if r0.is_real is not True:
+        raise _Unsolved(f"a root whose realness is not known: {r0}")
+    pos = _certified(lc) > 0
+    if op is sp.Unequality:
+        out = sp.Union(sp.Interval.open(-sp.oo, r0), sp.Interval.open(r0, sp.oo))
+    elif op in (sp.StrictGreaterThan, sp.GreaterThan):
+        out = (sp.Interval(r0, sp.oo, op is sp.StrictGreaterThan, True) if pos
+               else sp.Interval(-sp.oo, r0, True, op is sp.StrictGreaterThan))
+    else:
+        out = (sp.Interval(-sp.oo, r0, True, op is sp.StrictLessThan) if pos
+               else sp.Interval(r0, sp.oo, op is sp.StrictLessThan, True))
+    return sp.Intersection(out, domain)
+
+
+def _parametric_radical(e, var, domain):
+    """(xii) with ONE radical P**(1/n) of a polynomial in `var` (parameters allowed): eliminating it
+    gives a polynomial whose roots hold every zero; a candidate is kept only when, for every value of
+    the parameters, it is real, the radicand is >= 0 and e vanishes there (simplified to 0); dropped when
+    one of these certainly fails; otherwise raise _Unsolved. sqrt(x - a) = 2 → {a + 4}."""
+    rad = _roots_of(e, var)
+    Ps = {n.base for n in rad}
+    if len(Ps) != 1 or any(n.exp < 0 for n in rad):
+        raise _Unsolved(f"not one radical: {e}")
+    (P,) = Ps
+    n_ = sp.ilcm(*[n.exp.q for n in rad]) if len(rad) > 1 else rad[0].exp.q
+    r = sp.Dummy("r")
+    bt = e.xreplace({n: r ** int(n.exp * n_) for n in rad})
+    try:
+        sp.Poly(bt, r, var)
+        sp.Poly(P, var)
+    except sp.PolynomialError:
+        raise _Unsolved(f"not polynomial around the radical: {e}")
+    if sp.simplify(bt.subs(r, P ** sp.Rational(1, n_)) - e) != 0:
+        raise _Unsolved(f"the radical's reading does not check: {e}")
+    q = sp.Poly(sp.expand(sp.resultant(sp.Poly(bt, r), sp.Poly(r ** n_ - P, r))), var)
+    lc = q.LC() if q.degree() >= 1 else S.Zero
+    if q.degree() < 1 or lc.free_symbols or _certified(lc) == 0:
+        raise _Unsolved(f"an eliminated polynomial with no fixed degree: {q}")
+    rs = sp.roots(q)
+    if sum(rs.values()) != q.degree():
+        raise _Unsolved(f"roots not all found: {q}")
+    keep = []
+    for c in rs:
+        rad_c = sp.simplify(P.subs(var, c))
+        val = sp.simplify(e.subs(var, c))
+        if c.is_real is False or rad_c.is_negative is True:
+            continue
+        if c.is_real is not True or rad_c.is_nonnegative is not True:
+            raise _Unsolved(f"undecided for some parameter value: {c}")
+        if val == 0:
+            keep.append(c)
+        elif not (val.is_number and _certified(val) != 0):
+            raise _Unsolved(f"a candidate that may be a zero: {c}")
+    return sp.Intersection(sp.FiniteSet(*keep), domain)
+
+
 def _rebuilt(rel, var, domain):
     e = rel.lhs - rel.rhs
+    if e.free_symbols - {var}:
+        return _parametric(rel, var, domain)
     if isinstance(domain, sp.FiniteSet) and all(p.is_number for p in domain):
         keep = _on_points(rel, var, domain)            # point by point
         if keep is not None:
@@ -837,7 +922,6 @@ def _rebuilt(rel, var, domain):
         return sp.Intersection(_on_window(rel, var, S.NegativeInfinity, S.Infinity)[0], domain)
     if isinstance(rel, sp.Equality):
         zp, pp, _ = _structure(e, var)
-        pp = pp + _written_poles(e, var)
         if _restricted(e, var):
             # a zero where a log or an even root is not real is no zero ((x + 1)*log(x) = 0 at x = -1);
             # a progression crosses that region, so only points are cut here
