@@ -137,10 +137,9 @@ MUTATIONS = [
      "        s = sp.solveset(bad, var, region)\n", T + "test_lean_regions_and_violations_of_a_periodic_condition"),
     ("F02 Lean bölgesi tek periyot", FORM, "            s = exact_solveset(c, var, S.Reals)        # one period",
      "            s = sp.solveset(c, var, S.Reals)        # one period", T + "test_lean_regions_and_violations_of_a_periodic_condition"),
-    ("S02 adım öncülleri eski yol", DET, "    region = ctx.cut_by(v, region, premises)\n    if region is None:\n        return None, False, False\n",
-     "    for p in premises:\n        r = sb_run(\"mathverify.sandbox.ops:solveset_in\", p, v, S.Reals, timeout=ctx.timeout)\n"
-     "        if not r.ok or r.value.has(sp.ConditionSet):\n            return None, False, False\n"
-     "        region = sp.Intersection(region, r.value)\n", T + "test_steps_on_tan_with_its_window_stay_verified"),
+    ("S02 adım öncüllerinde periyodik olan çözülmez", DET,
+     "        region = ctx.cut_by(v, region, periodic)\n", "        return None, False, False\n",
+     T + "test_steps_on_tan_with_its_window_stay_verified"),
     # --- trig_solve
     ("T01 öteki verilenler okunmaz", TRIG, "            if var in r.free_symbols:\n                rels.append(r)\n",
      "            pass\n", T + "test_trig_solve_applies_the_other_conditions"),
