@@ -11,6 +11,12 @@ Audit of 25 Sep 2026 (each item was measured as a false verdict before the chang
   * a definite integral with an exact value is compared exactly (a 1e-25 tolerance accepted
     e^(π√163) - 1 ≈ 262537412640768743), and a numeric value that did not converge never refutes;
   * SymPy's distributional derivative (DiracDelta, Heaviside) is read classically.
+
+Fourth audit of 1 Oct 2026: numbers never ACCEPT a definite integral. An exact value is SymPy's,
+confirmed by the quadrature, or one proved symbolically (`certified_integral_value`: the integrand is
+0, odd about the midpoint and absolutely integrable, or an antiderivative checked by differentiation
+and continuous on the range); SymPy's 0 counts only when proved. Numbers alone only REFUTE, and only
+when two methods at two precisions agree (`integral_enclosure`).
 """
 from __future__ import annotations
 
@@ -24,7 +30,7 @@ from sympy.functions.elementary.hyperbolic import HyperbolicFunction
 from sympy.functions.elementary.trigonometric import TrigonometricFunction
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import num_equal, to_mp
+from ..equiv.numeric import certified_sign, num_equal, to_mp
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
@@ -132,9 +138,6 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
     return sp.Float(mp.nstr(v, 60), 60), ev
 
 
-_ZERO_LADDER = (30, 50, 80)
-
-
 def integral_abs_scale(integrand, var, a, b, pts=None, timeout: float = 8.0):
     """∫|f| over [a, b] (an mpf), or None: the size of the rounding residue a quadrature of f leaves
     at a given precision. A value that cancels to 0 comes out as that residue, not as 0: ∫_0^3 (x² - 2x) dx
@@ -165,63 +168,372 @@ def integral_abs_scale(integrand, var, a, b, pts=None, timeout: float = 8.0):
     return s30
 
 
-def definite_integral_is_zero(integrand, var, a, b, timeout: float = 12.0) -> tuple[bool | None, dict[str, Any]]:
-    """Is ∫_a^b f exactly 0, as far as numbers can tell? True, False (certainly not 0) or None.
+# ---------------------------------------------------------------------------
+# An exact 0 for a definite integral (fourth audit of 1 Oct 2026, S1/S6). No number proves that an
+# integral is 0: ∫_0^{2π} e^(cos x)·cos 50x dx = 2π·I_50(1) = 1.8e-79 sat below 10^-70·∫|f| at every
+# rung of the old residue test and the claim 0 was certified, as was SymPy's wrong 0 for
+# ∫_{-1}^{1} (x + |cos x|/10^80) dx. The residue test only BOUNDS the value; 0 is taken with a symbolic
+# certificate: the integrand is 0, the integral is odd about the midpoint of the range and absolutely
+# convergent, or an antiderivative checked by differentiation is continuous on the range and takes
+# the same value at both ends (the fundamental theorem of calculus).
+_JUMPY = (sp.floor, sp.ceiling, sp.frac, sp.Piecewise, sp.Heaviside, sp.DiracDelta, sp.Mod)
+# a primitive that jumps: SymPy's acot jumps from -π/2 to π/2 at 0
+_PRIMITIVE_JUMPS = _JUMPY + (sp.sign, sp.acot)
+_LOCAL_EXPONENTS = (S.Zero, S.Half, sp.Rational(2, 3), sp.Rational(3, 4), sp.Rational(4, 5), sp.Rational(9, 10))
+_TAIL_EXPONENTS = (sp.Integer(2), sp.Rational(3, 2), sp.Rational(6, 5))
 
-    A relative tolerance cannot compare anything with an exact 0: every integral whose value is 0 came
-    out as a residue of 1e-51...1e-59, so SymPy's right value 0 was never confirmed, the claim 0 stayed
-    UNKNOWN and a true step "∫_0^3 (x² - 2x) dx = 0" was refuted (third audit of 30 Sep 2026, N2).
-    The residue is measured against the integrand's own scale S = ∫|f| instead, at EVERY rung of the
-    ladder (30, 50, 80 digits): True when |value| and the integrator's error estimate are both at most
-    10^-(dps-10)·S at each rung, i.e. the residue falls with the precision. A value that is not 0 stays
-    where it is: ∫_0^1 10^-40 dx is 1e-40 at every rung, above the 50-digit (1e-40) and far above the
-    80-digit bound (1e-110 here, S being 1e-40), so no value above ~1e-70·S is ever taken for 0.
-    False only when the value stands clear of that bound (and of ten times the error estimate) at the
-    two highest rungs and the two agree: a difference is not called nonzero inside the residue."""
+
+def _exact_conditions(e, var) -> list | None:
+    """The conditions for `e` to be a real number, EXACT or None (`definedness_conditions_strict`),
+    with a fractional power read as real only for a base >= 0 (> 0 when the exponent is negative):
+    SymPy's x**(1/3) is complex for x < 0, and no condition said so."""
+    from .domain import definedness_conditions_strict
+    conds = definedness_conditions_strict(e, var)
+    if conds is None:
+        return None
+    out: list = []
+    for c in conds:
+        if c is sp.true:
+            continue
+        if not getattr(c, "free_symbols", None):
+            return None                               # a constant condition: no rule decides it here
+        if c.free_symbols != {var} or not isinstance(c, sp.core.relational.Relational):
+            return None
+        out.append(c)
+    for node in sp.preorder_traversal(e):
+        if isinstance(node, sp.Pow) and node.base.has(var):
+            ex = node.exp
+            if not ex.is_number:
+                return None
+            if ex.is_Rational and not ex.is_Integer:
+                c = node.base >= 0 if ex > 0 else node.base > 0
+                if c is sp.false:
+                    return None
+                if c is not sp.true and c not in out:
+                    out.append(c)
+    return out
+
+
+def _bad_points(e, var, lo, hi, timeout) -> list | None:
+    """The points of [lo, hi] where `e` is not a real number: a finite list, or None (not computable,
+    or a piece of positive length)."""
+    conds = _exact_conditions(e, var)
+    if conds is None:
+        return None
+    region = sp.Interval(lo, hi)
+    pts: list = []
+    for c in conds:
+        neg = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else c.negated
+        r = sb_run("mathverify.sandbox.ops:solveset_in", neg, var, region, timeout=timeout)
+        if not r.ok or not isinstance(r.value, (sp.FiniteSet, type(S.EmptySet))):
+            return None
+        for p in r.value:
+            if not (getattr(p, "is_number", False) and p.is_real):
+                return None
+            if not any(p == q for q in pts):
+                pts.append(p)
+    return pts
+
+
+def _switch_points(e, var, lo, hi, timeout) -> list | None:
+    """Points of (lo, hi) where Abs/sign/Max/Min in `e` can change branch (finite), or None."""
+    from ..equiv.random_point import _nonsmooth
+    eqs = []
+    for n in _nonsmooth(e):
+        if isinstance(n, (sp.Abs, sp.sign)):
+            eqs.append(n.args[0])
+        elif isinstance(n, (sp.Max, sp.Min)):
+            args = list(n.args)
+            eqs += [args[i] - args[j] for i in range(len(args)) for j in range(i + 1, len(args))]
+        else:
+            return None
+    pts: list = []
+    for g in eqs:
+        if not g.has(var):
+            continue
+        r = sb_run("mathverify.sandbox.ops:solveset_in", Eq(g, 0), var, sp.Interval.open(lo, hi), timeout=timeout)
+        if not r.ok or not isinstance(r.value, (sp.FiniteSet, type(S.EmptySet))):
+            return None
+        for p in r.value:
+            if not (getattr(p, "is_number", False) and p.is_real):
+                return None
+            if not any(p == q for q in pts):
+                pts.append(p)
+    try:
+        return sorted(pts, key=lambda p: float(p))
+    except (TypeError, ValueError):
+        return None
+
+
+def deep_probe(expr, var, point, side, dps: int = 100) -> list[str | None]:
+    """Sandbox worker: expr at point ± 10^-k (or at ±10^k for an infinite point), k = 15, 30, 45, 60."""
+    f = sp.lambdify(var, expr, "mpmath")
+    out: list[str | None] = []
+    with mp.workdps(dps):
+        if point in (sp.oo, -sp.oo):
+            xs = [mp.mpf(10) ** k * (1 if point == sp.oo else -1) for k in (15, 30, 45, 60)]
+        else:
+            p = mp.mpf(str(sp.N(point, dps + 5)))
+            xs = [p + (1 if side == "+" else -1) * mp.mpf(10) ** (-k) for k in (15, 30, 45, 60)]
+        for xv in xs:
+            try:
+                v = mp.mpmathify(f(xv))
+                out.append(None if isinstance(v, mp.mpc) or not mp.isfinite(v) else mp.nstr(v, 30))
+            except Exception:  # noqa: BLE001
+                out.append(None)
+    return out
+
+
+def _finite_limit(e, var, point, side, timeout):
+    """SymPy's one-sided limit, corroborated numerically (`classify_limit`), when it is finite. A limit
+    approached slowly (√x·ln x at 0 is -5.5e-5 at x = 10^-12, beyond `classify_limit`'s probe) is
+    corroborated further in: at 10^-15 ... 10^-60 its distance to SymPy's value must shrink to 10^-8."""
+    from .limits import classify_limit
+    inf = point in (sp.oo, -sp.oo)
+    cls = classify_limit(e, var, point, None if inf else side, timeout=timeout)
+    v = cls.get("value")
+    if cls.get("kind") == "VAR" and v is not None and _real_finite(v) is True:
+        return v
+    if cls.get("kind") != "UNKNOWN" or "symbolic_numeric_disagreement" not in (cls.get("flags") or []):
+        return None
+    v = cls.get("right") if (side == "+" if not inf else point == -sp.oo) else cls.get("left")
+    if v is None or _real_finite(v) is not True:
+        return None
+    r = sb_run("mathverify.certify.calculus:deep_probe", e, var, point, side, timeout=timeout)
+    if not r.ok or any(x_ is None for x_ in r.value):
+        return None
+    with mp.workdps(40):
+        target = to_mp(v, 40)
+        gaps = [abs(mp.mpf(x_) - target) for x_ in r.value]
+        if all(g2 <= g1 for g1, g2 in zip(gaps, gaps[1:])) and gaps[-1] <= mp.mpf("1e-8") * max(1, abs(target)):
+            return v
+    return None
+
+
+def _absolutely_integrable(f, var, lo, hi, timeout) -> bool:
+    """Is ∫_lo^hi |f| finite? f is real and continuous off finitely many points of [lo, hi] (up to the
+    bounded jumps of sign), and near each such point p, |f|·|x - p|^β has a finite limit for some
+    β < 1 (at an infinite end, |f|·|x|^β for some β > 1): then |f| <= C·|x - p|^(-β) there."""
+    if f.has(*_JUMPY):
+        return False
+    pts = _bad_points(f, var, lo, hi, timeout)
+    if pts is None:
+        return False
+    for p in pts:
+        for side in ("+", "-"):
+            if (side == "+" and p == hi) or (side == "-" and p == lo):
+                continue
+            if not any(_finite_limit(sp.Abs(f) * sp.Abs(var - p) ** beta, var, p, side, timeout) is not None
+                       for beta in _LOCAL_EXPONENTS):
+                return False
+    for end in (lo, hi):
+        if end in (sp.oo, -sp.oo) and not any(
+                _finite_limit(sp.Abs(f) * sp.Abs(var) ** beta, var, end, None, timeout) is not None
+                for beta in _TAIL_EXPONENTS):
+            return False
+    return True
+
+
+def _primitive_difference(g, var, p, q, timeout):
+    """F(q) - F(p) for SymPy's antiderivative F of a SMOOTH g on [p, q], or None. Taken only when
+    F' - g is 0 symbolically, F is real and continuous on [p, q] (its conditions fail at most at an
+    end, where its one-sided limit is finite), and g and F' fail at finitely many points: F is then
+    continuous on [p, q] and differentiable off a finite set with F' = g, so ∫_p^q g = F(q) - F(p).
+    SymPy's default antiderivative of ln x/√x is a Meijer-G Piecewise; its manual one, 2√x·ln x - 4√x,
+    is tried too."""
+    r = sb_run("mathverify.sandbox.ops:antiderivatives", g, var, timeout=timeout)
+    if not r.ok or not isinstance(r.value, list):
+        return None
+    for F in r.value[:2]:
+        v = _checked_difference(F, g, var, p, q, timeout)
+        if v is not None:
+            return v
+    return None
+
+
+def _checked_difference(F, g, var, p, q, timeout):
+    """F(q) - F(p) when F is an antiderivative of g continuous on [p, q] (`_primitive_difference`)."""
+    if not isinstance(F, sp.Basic):
+        return None
+    if F.has(sp.Integral) or F.has(*_PRIMITIVE_JUMPS) or F.has(sp.Abs, sp.Max, sp.Min) \
+            or F.free_symbols - {var} or F.has(sp.zoo, sp.nan, sp.I):
+        return None
+    rd = sb_run("mathverify.sandbox.ops:diff_expr", F, var, 1, timeout=timeout)
+    if not rd.ok:
+        return None
+    dF = rd.value
+    rs = sb_run("mathverify.sandbox.ops:simplify_diff", dF, g, timeout=timeout)
+    if not rs.ok or rs.value != 0:
+        return None
+    bad_F = _bad_points(F, var, p, q, timeout)
+    if bad_F is None or any(x_ != p and x_ != q for x_ in bad_F):
+        return None
+    if _bad_points(g, var, p, q, timeout) is None or _bad_points(dF, var, p, q, timeout) is None:
+        return None
+    vals = []
+    for end, side in ((p, "+"), (q, "-")):
+        v = None
+        if end not in (sp.oo, -sp.oo) and not any(end == x_ for x_ in bad_F):
+            v = F.subs(var, end)
+            v = v if _real_finite(v) is True else None
+        if v is None:
+            # an end where F has no value (0 for a positive variable): its one-sided limit
+            v = _finite_limit(F, var, end, side, timeout)
+        if v is None:
+            return None
+        vals.append(v)
+    return vals[1] - vals[0]
+
+
+def _fundamental_theorem_value(f, var, lo, hi, timeout):
+    """∫_lo^hi f by the fundamental theorem of calculus, split where Abs/sign/Max/Min switch branch
+    (on each piece f is the analytic branch it takes there), or None."""
+    from ..equiv.random_point import _nonsmooth, _smooth_on_cell
+    cuts = _switch_points(f, var, lo, hi, timeout) if _nonsmooth(f) else []
+    if cuts is None or len(cuts) > 12:
+        return None
+    ends = [lo] + cuts + [hi]
+    total = S.Zero
+    for p, q in zip(ends, ends[1:]):
+        g = f
+        if _nonsmooth(f):
+            mid = (p + q) / 2 if p.is_finite and q.is_finite else (q - 1 if p == -sp.oo else p + 1)
+            if mid in (sp.oo, -sp.oo):
+                mid = S.Zero
+            g = _smooth_on_cell(f, var, mid)
+            if g is None:
+                return None
+        v = _primitive_difference(g, var, p, q, timeout)
+        if v is None:
+            return None
+        total += v
+    return total
+
+
+def certified_integral_value(integrand, var, a, b, timeout: float = 8.0) -> tuple[Any, dict[str, Any]]:
+    """(value, evidence): ∫_a^b f PROVED symbolically, or (None, evidence). 0 when the integrand is 0
+    or odd about the midpoint of the range and absolutely integrable; otherwise F(b) - F(a) for an
+    antiderivative F checked by differentiation and continuous on the range (the fundamental theorem
+    of calculus). See the comment above `_exact_conditions`."""
     ev: dict[str, Any] = {"integrand": str(integrand), "a": str(a), "b": str(b)}
-    if isinstance(integrand, sp.Basic) and integrand.has(sp.Integral, sp.Sum, sp.Product, sp.Limit):
-        ev["error"] = "a form inside the integrand has no confirmed numeric value"
+    try:
+        f, a, b = sp.sympify(integrand), sp.sympify(a), sp.sympify(b)
+    except (sp.SympifyError, TypeError):
         return None, ev
-    a, b = sp.sympify(a), sp.sympify(b)
-    if not (a.is_finite and b.is_finite):
-        ev["error"] = "infinite range"
+    if f.has(sp.Integral, sp.Sum, sp.Product, sp.Limit) or f.free_symbols - {var} \
+            or (a.free_symbols | b.free_symbols) or a.has(sp.zoo, sp.nan) or b.has(sp.zoo, sp.nan):
+        ev["reason"] = "not_a_closed_integral_of_one_variable"
         return None, ev
-    pts = find_breakpoints(integrand, var, a, b, timeout)
-    scale = integral_abs_scale(integrand, var, a, b, pts, timeout)
+    if f == 0 or a == b:
+        ev["certificate"] = "identically_zero"
+        return S.Zero, ev
+    if not (a.is_comparable and b.is_comparable):
+        ev["reason"] = "range_not_comparable"
+        return None, ev
+    sign = 1
+    if bool(a > b):
+        a, b, sign = b, a, -1
+    rz = sb_run("mathverify.sandbox.ops:simplify_diff", f, S.Zero, timeout=timeout)
+    if rz.ok and rz.value == 0:
+        ev["certificate"] = "identically_zero"
+        return S.Zero, ev
+    # odd about the midpoint: f(a + b - x) = -f(x) (f(-x) = -f(x) on the whole line)
+    mirror = -var if (a, b) == (-sp.oo, sp.oo) else (a + b - var if a.is_finite and b.is_finite else None)
+    if mirror is not None:
+        rs = sb_run("mathverify.sandbox.ops:simplify_diff", f.xreplace({var: mirror}), -f, timeout=timeout)
+        if rs.ok and rs.value == 0:
+            if _absolutely_integrable(f, var, a, b, timeout):
+                ev["certificate"] = "odd_about_the_midpoint_and_absolutely_integrable"
+                return S.Zero, ev
+            ev["odd"] = "absolute_convergence_not_proved"
+    v = _fundamental_theorem_value(f, var, a, b, timeout)
+    if v is not None:
+        ev["certificate"] = "fundamental_theorem_of_calculus"
+        ev["value"] = str(sign * v)
+        return sign * v, ev
+    ev["reason"] = ev.get("odd") or "no_certificate"
+    return None, ev
+
+
+def zero_integral_certificate(integrand, var, a, b, timeout: float = 8.0) -> tuple[bool | None, dict[str, Any]]:
+    """True when ∫_a^b f = 0 is PROVED symbolically (`certified_integral_value`), else None (never
+    False: the absence of a proof says nothing about the value)."""
+    v, ev = certified_integral_value(integrand, var, a, b, timeout)
+    if v is not None and certified_sign(v, timeout=timeout) == 0:
+        return True, ev
+    return None, ev
+
+
+# ---------------------------------------------------------------------------
+# A numeric value refutes a claim only with a trustworthy error (fourth audit of 1 Oct 2026, S2):
+# tanh-sinh missed the peak e^(-10^8 (x - 1/3)^2) at every level, reported an error of 0, and
+# "∫_0^1 (1 + peak·e^(cos x)) dx = 1" (it is 1.000456) was certified. Neither method proves a value,
+# and none is accepted from numbers alone; a claim is REFUTED only when tanh-sinh and Gauss-Legendre
+# (split at the breakpoints), each at 30 and 50 digits, agree with each other and all four stand
+# 10^3 times their error estimate (plus the residue scale 10^-(dps-10)·∫|f|) away from it. An error
+# estimate of 0 (the levels saw nothing new) or methods that disagree refute nothing.
+_ENCLOSURE_RUNS = ((30, "tanh-sinh"), (30, "gauss-legendre"), (50, "tanh-sinh"), (50, "gauss-legendre"))
+_REFUTE_MARGIN = 1000
+
+
+def integral_enclosure(integrand, var, a, b, timeout: float = 8.0) -> tuple[Any, Any, dict[str, Any]] | None:
+    """(value, width, evidence): ∫_a^b f lies within `width` of `value` as far as two independent
+    quadratures at two precisions can tell, `width` being 10^3 times the largest error estimate plus
+    residue; None when they cannot tell (see the comment above)."""
+    try:
+        f, a, b = sp.sympify(integrand), sp.sympify(a), sp.sympify(b)
+    except (sp.SympifyError, TypeError):
+        return None
+    if f.has(sp.Integral, sp.Sum, sp.Product, sp.Limit) or f.free_symbols - {var} or a.free_symbols \
+            or b.free_symbols:
+        return None
+    pts = find_breakpoints(f, var, a, b, timeout) if a.is_finite and b.is_finite else []
+    scale = integral_abs_scale(f, var, a, b, pts, timeout)
     if scale is None:
-        ev["error"] = "no scale: the integral of |f| failed"
-        return None, ev
-    ev["abs_scale"] = mp.nstr(scale, 5)
-    rungs = []
-    for dps in _ZERO_LADDER:
-        r = sb_run("mathverify.sandbox.ops:quad_breakpoints", sp.sympify(integrand), var, a, b, pts, dps,
-                   "tanh-sinh", timeout=timeout * (2 if dps == 80 else 1))
+        return None
+    runs = {}
+    for dps, method in _ENCLOSURE_RUNS:
+        r = sb_run("mathverify.sandbox.ops:quad_breakpoints", f, var, a, b, pts, dps, method, timeout=timeout)
         if not r.ok:
-            ev["error"] = r.error
-            ev["flags"] = r.flags
-            return None, ev
-        val_s, err_s = r.value
+            return None
         with mp.workdps(dps + 10):
             try:
-                v = mp.mpf(val_s)
-                err = abs(mp.mpf(err_s)) if err_s not in (None, "None") else mp.inf
-            except (TypeError, ValueError):     # a complex value, or no number at all
-                ev["error"] = f"no real value at {dps} digits: {val_s}"
-                return None, ev
-            bound = mp.mpf(10) ** (-(dps - 10)) * scale
-            rungs.append((dps, v, err, bound))
-        ev.setdefault("ladder", []).append({"dps": dps, "value": mp.nstr(v, 5), "err": mp.nstr(err, 5),
-                                            "bound": mp.nstr(bound, 5)})
-    if all(mp.isfinite(v) and abs(v) <= bound and err <= bound for _, v, err, bound in rungs):
-        ev["decided_by"] = "residue_below_the_scale_bound_at_every_rung"
-        return True, ev
-    (_, v1, e1, b1), (_, v2, e2, b2) = rungs[-2:]
-    if all(mp.isfinite(x_) for x_ in (v1, v2, e1, e2)) and abs(v1) > 10 * (b1 + e1) \
-            and abs(v2) > 10 * (b2 + e2) and abs(v2 - v1) <= 10 * (e1 + e2) + b1:
-        ev["decided_by"] = "value_stable_above_the_residue"
+                v, err = mp.mpf(r.value[0]), abs(mp.mpf(r.value[1]))
+            except (TypeError, ValueError):
+                return None                      # a complex value, or no number at all
+            if not (mp.isfinite(v) and mp.isfinite(err)) or err == 0:
+                return None
+            runs[(dps, method)] = (v, err + mp.mpf(10) ** (-(dps - 10)) * scale)
+    ev = {"runs": {f"{m}@{d}": [mp.nstr(v, 8), mp.nstr(e, 3)] for (d, m), (v, e) in runs.items()},
+          "abs_scale": mp.nstr(scale, 5)}
+    with mp.workdps(70):
+        for dps in (30, 50):
+            (v1, e1), (v2, e2) = runs[(dps, "tanh-sinh")], runs[(dps, "gauss-legendre")]
+            if abs(v1 - v2) > 10 * (e1 + e2):
+                return None
+        value = runs[(50, "tanh-sinh")][0]
+        width = _REFUTE_MARGIN * max(e for _, e in runs.values()) \
+            + max(abs(v - value) for v, _ in runs.values())
+    return value, width, ev
+
+
+def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0) -> tuple[bool, dict[str, Any]]:
+    """Is the claimed number certainly not ∫_a^b f (see `integral_enclosure`)?"""
+    enc = integral_enclosure(integrand, var, a, b, timeout)
+    if enc is None:
+        return False, {"enclosure": None}
+    value, width, ev = enc
+    try:
+        c = sp.sympify(claimed)
+        if c in (sp.oo, -sp.oo):
+            return True, ev                      # a finite enclosure excludes an infinite value
+        cv = to_mp(c, 70)
+    except Exception:  # noqa: BLE001
         return False, ev
-    ev["decided_by"] = "undecided"
-    return None, ev
+    if isinstance(cv, mp.mpc):
+        return False, ev
+    with mp.workdps(70):
+        return bool(abs(cv - value) > width), ev
 
 
 def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0) -> bool | None:
@@ -254,9 +566,6 @@ def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: floa
 
 
 # ---------------------------------------------------------------------------
-_JUMPY = (sp.floor, sp.ceiling, sp.frac, sp.Piecewise, sp.Heaviside, sp.DiracDelta, sp.Mod)
-
-
 def _normal_condition(c):
     """`|u| > 0` and `u**2 > 0` say `u != 0`; spell them that way so they match the integrand's."""
     if isinstance(c, sp.StrictGreaterThan) and c.rhs == 0:
@@ -654,15 +963,11 @@ def verify(ir, solution, ctx: Ctx):
                                else "integrand_domain_undecided", t.ms, {"integrand": p["integrand"]},
                                flags=["written_domain"] if undefined else [])
             val, ev = definite_integral_numeric(integrand, var, a, b, timeout=ctx.timeout * 1.5)
-            if val is None:
-                return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
             ev["claimed"] = str(claimed)
             declared = float(p.get("rel_tol") or 0.0)
             tol = max(declared, float(ev.get("rel_err", "1e-25")))
             ev["rel_tol_used"] = tol
-            converged = bool(ev.get("converged", False))
-            okN, cev = num_equal(claimed, val, rel_tol=tol)
-            ev["compare"] = cev
+            converged = val is not None and bool(ev.get("converged", False))
             # an exact value, when SymPy has one, is what the claim is compared with: a numeric
             # tolerance of 1e-25 accepted 262537412640768743 for ∫_0^{π√163} e^x dx, whose value
             # is e^(π√163) - 1 = 262537412640768742.99999999999925… (audit of 25 Sep 2026)
@@ -672,19 +977,41 @@ def verify(ir, solution, ctx: Ctx):
                     and not rs.value.has(sp.AccumBounds, sp.zoo, sp.nan):
                 exact = rs.value
                 ev["symbolic"] = str(exact)
-            # an exact 0 on either side is no relative comparison: the numbers of an integral whose
-            # value is 0 are a residue of 1e-51...1e-59, and SymPy's right 0 disagreed with them, the
-            # claim 0 was refuted (third audit of 30 Sep 2026, N2). The residue is measured against
-            # the integrand's scale at every rung instead (a nonzero value is never taken for 0).
-            exact_zero = exact is not None and exact == 0
+            # an exact 0, SymPy's or the claim's, is taken only with a symbolic certificate: numbers
+            # bound a value, they never show it is 0 (2π·I_50(1) = 1.8e-79 was certified 0), and SymPy
+            # integrates |cos x| over [-1, 1] to 0 (fourth audit of 1 Oct 2026, S1). Without SymPy's
+            # value, the certificate's own (an antiderivative checked by differentiation) is the exact
+            # value: numbers alone never accept (S2)
             claimed_zero = isinstance(claimed, sp.Basic) and claimed.is_Rational and claimed == 0
-            if exact_zero or claimed_zero:
-                zero, zev = definite_integral_is_zero(integrand, var, a, b, timeout=ctx.timeout * 1.5)
-                ev["zero_test"] = zev
-                if claimed_zero:
-                    okN = zero
+            proved = zero = False
+            if claimed_zero or exact is None or exact == 0:
+                cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)
+                ev["certificate"] = cev
+                if cval is not None:
+                    exact, proved = cval, True
+                    zero = certified_sign(cval, timeout=ctx.timeout) == 0
+                elif exact is not None and exact == 0:
+                    ev["symbolic_zero_uncertified"] = True
+                    exact = None
+
+            def excluded() -> bool:
+                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5)
+                ev["enclosure"] = xev
+                return no
+
             if exact is not None:
-                agree, _ = num_equal(exact, val, rel_tol=tol) if not exact_zero else (zero, None)
+                if zero:
+                    agree = True                   # a proof; the numbers are a residue around 0
+                elif proved:
+                    # a proof too, but a numeric value that contradicts it means something is wrong
+                    agree = not converged or num_equal(exact, val, rel_tol=tol)[0] is not False
+                    if not agree:
+                        return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
+                                       flags=["symbolic_numeric_disagreement"])
+                elif val is None:
+                    return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
+                else:
+                    agree, _ = num_equal(exact, val, rel_tol=tol)
                 ev["symbolic_agrees_numeric"] = agree
                 if declared:
                     # a declared tolerance means an approximate answer: compare with the exact value's
@@ -693,19 +1020,21 @@ def verify(ir, solution, ctx: Ctx):
                 else:
                     okS, sev = answers_equivalent(claimed, exact, shape="scalar")
                 ev["compare_exact"] = sev
-                if converged and agree is True:
-                    ok = okS if okS is not None else (False if okN is False else None)
-                elif okS is False and okN is False:
+                if proved or (converged and agree is True):
+                    ok = okS
+                elif okS is False and excluded():
                     ok = False                     # two independent computations reject the claim
                 else:
                     # a numeric value that did not converge (x^(-999/1000) on [0,1]: 176.5 instead
                     # of 1000) or that contradicts SymPy never decides alone
                     reason = "numeric_not_converged" if not converged else "symbolic_numeric_disagreement"
                     return unknown(LAYER, reason, t.ms, ev, flags=[reason])
-            elif converged:
-                ok = okN
+            elif excluded():
+                ok = False
             else:
-                return unknown(LAYER, "numeric_not_converged", t.ms, ev, flags=["numeric_not_converged"])
+                # no exact value: a quadrature alone never accepts (it can miss a narrow peak at every
+                # level and report an error of 0: S2), and this one does not refute
+                return unknown(LAYER, "no_exact_value", t.ms, ev, flags=["no_exact_value"])
             conf = 0.99
         elif kind == "derivative":
             f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])

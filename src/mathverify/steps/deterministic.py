@@ -1162,52 +1162,46 @@ def _limits_refute(claim, ctx: Ctx) -> bool:
 
 
 def _integrals_refute(claim, ctx: Ctx) -> bool:
-    """A closed equation whose only forms are integrals is refuted when each integral's converged
-    numeric value (the certificate's integrator, with its error) makes the sides differ beyond that
-    error: "Integral(Abs(cos(x)), (x, -1, 1)) = 0" stays refuted where SymPy's closed form is wrong.
-    The tolerant `_holds` is not used over forms: its value of a sum (Euler-Maclaurin) is wrong for
-    oscillating terms (Σ cos(πk/4)/k² came out 0.565345, it is 11π²/192 = 0.565446) and refuted
-    true identities; nor over a sum or product at all (audit of 29 Sep 2026)."""
+    """A closed equation whose only forms are integrals is refuted when, over every corner of each
+    integral's enclosure (`certify.calculus.integral_enclosure`: tanh-sinh and Gauss-Legendre at 30
+    and 50 digits agreeing, 10^3 times their error estimate), the sides keep the same strict order:
+    "Integral(Abs(cos(x)), (x, -1, 1)) = 0" stays refuted where SymPy's closed form is wrong. A value
+    without such an enclosure refutes nothing: SymPy's evalf of the Dirichlet integral, '-0.e+0' with
+    no significant bit, was read as a 40-digit 0 and refuted "∫_0^oo sin x/x dx = π/2" (fourth audit of
+    1 Oct 2026, S3). The tolerant `_holds` is not used over forms: its value of a sum (Euler-Maclaurin)
+    is wrong for oscillating terms (Σ cos(πk/4)/k² came out 0.565345, it is 11π²/192 = 0.565446) and
+    refuted true identities; nor over a sum or product at all (audit of 29 Sep 2026)."""
     if not isinstance(claim, Eq) or claim.has(sp.Sum, sp.Product, sp.Limit, sp.Derivative):
         return False
+    import itertools
     import mpmath as mp
-    from ..certify.calculus import definite_integral_numeric, integral_abs_scale
-    from ..equiv.forms import _finite_integral, _numeric
-    from ..equiv.numeric import num_equal
-    reps, tol, slack = {}, 1e-25, mp.mpf(0)
-    for n in claim.atoms(sp.Integral):
-        if n.free_symbols:
+    from ..certify.calculus import integral_enclosure
+    from ..equiv.numeric import to_mp
+    forms = list(claim.atoms(sp.Integral))
+    if not forms or len(forms) > 3:
+        return False
+    boxes = []
+    for n in forms:
+        if n.free_symbols or len(n.limits) != 1 or len(n.limits[0]) != 3:
             return False
-        if not _finite_integral(n):
-            v = _numeric(n, ctx.timeout)
-            if v is None:
-                return False
-            reps[n], tol = v[0], max(tol, v[1])
-            with mp.workdps(60):
-                slack += mp.mpf(v[1]) * max(abs(mp.mpf(str(v[0]))), 1)
-            continue
-        # A value that cancels is a residue of the size 10^-(dps-10)·∫|f|, and a relative comparison
-        # read it as a difference: the true step "∫_0^3 (x² - 2x) dx = 0" (residue -4.6e-55 at 50
-        # digits) was refuted (third audit of 30 Sep 2026, N2). A difference refutes only beyond the
-        # integrator's error estimate and that residue, as absolute amounts.
         var, a, b = n.limits[0]
-        val, iev = definite_integral_numeric(n.function, var, a, b, timeout=ctx.timeout)
-        if val is None or not iev.get("converged") or not iev.get("ladder"):
+        enc = integral_enclosure(n.function, var, a, b, timeout=ctx.timeout)
+        if enc is None:
             return False
-        scale = integral_abs_scale(n.function, var, a, b, iev.get("breakpoints"), timeout=ctx.timeout)
-        if scale is None:
-            return False
-        reps[n], tol = val, max(tol, float(iev.get("rel_err", "1e-18")))
-        last = iev["ladder"][-1]
-        with mp.workdps(60):
+        boxes.append(enc[:2])
+    d = claim.lhs - claim.rhs
+    signs = set()
+    with mp.workdps(70):
+        for corner in itertools.product((-1, 0, 1), repeat=len(forms)):
+            reps = {n: sp.Float(mp.nstr(v + c * w, 65), 65) for n, (v, w), c in zip(forms, boxes, corner)}
             try:
-                err = abs(mp.mpf(last["err"]))
-            except (TypeError, ValueError):
+                dv = to_mp(d.xreplace(reps), 60)
+            except Exception:  # noqa: BLE001
                 return False
-            slack += 10 * err + mp.mpf(10) ** (-(int(last["dps"]) - 10)) * scale
-    ok, _ = num_equal(claim.lhs.xreplace(reps), claim.rhs.xreplace(reps), rel_tol=max(100 * tol, 1e-15),
-                      abs_tol=float(100 * slack))
-    return ok is False
+            if isinstance(dv, mp.mpc) or not mp.isfinite(dv) or dv == 0:
+                return False
+            signs.add(dv > 0)
+    return len(signs) == 1
 
 
 def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:

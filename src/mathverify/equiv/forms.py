@@ -11,8 +11,9 @@ A form is CLOSED when it has no free symbol (its variable is bound). Each closed
 first, is replaced by SymPy's value when an independent numeric evaluation of the UNEVALUATED form
 agrees with it: tanh-sinh with breakpoints for an integral of one variable (the certificate's
 integrator), SymPy's numeric summation for a sum, the product of the terms for a finite product.
-SymPy's exact 0 for such an integral is taken when the quadrature's residue stays below the
-integrand's scale ∫|f| at every precision (`certify.calculus.definite_integral_is_zero`).
+SymPy's exact 0 for such an integral, and a 0 it has no value for, is taken only with a symbolic
+certificate (`certify.calculus.certified_integral_value`): numbers never show that a value is 0.
+An evalf value is taken only with the significant bits evalf itself vouches for.
 Otherwise `UnverifiedForm` is raised and the caller abstains. Forms with a free symbol are left as
 they are: no number can check them here.
 """
@@ -28,6 +29,7 @@ __all__ = ["UnverifiedForm", "has_closed_form", "has_parametric_form", "checked_
 
 _FORMS = (sp.Integral, sp.Sum, sp.Product, sp.Limit)
 _MAX_TERMS = 10_000
+_MIN_BITS = 100            # significant bits evalf must vouch for (40 digits asked: 136)
 
 
 class UnverifiedForm(ValueError):
@@ -68,7 +70,7 @@ def _numeric(n, timeout: float) -> tuple[Any, float] | None:
             return val, max(float(ev.get("rel_err", "1e-18")), 1e-25)
         # an infinite range: mpmath's own quadrature through evalf (the certificate's integrator
         # takes finite limits); a value it misses disagrees with SymPy's and nothing is decided
-        r = sb_run("mathverify.sandbox.ops:numeric_value", n, 40, timeout=timeout)
+        r = sb_run("mathverify.sandbox.ops:numeric_value_bits", n, 40, timeout=timeout)
         tol = 1e-15
     elif isinstance(n, sp.Product):
         if len(n.limits) != 1:
@@ -77,15 +79,21 @@ def _numeric(n, timeout: float) -> tuple[Any, float] | None:
         if not (lo.is_Integer and hi.is_Integer) or hi - lo + 1 > _MAX_TERMS:
             return None
         terms = [n.function.subs(k, i) for i in range(int(lo), int(hi) + 1)]
-        r = sb_run("mathverify.sandbox.ops:numeric_value", sp.Mul(*terms, evaluate=False), 40, timeout=timeout)
+        r = sb_run("mathverify.sandbox.ops:numeric_value_bits", sp.Mul(*terms, evaluate=False), 40, timeout=timeout)
         tol = 1e-25
     else:
-        r = sb_run("mathverify.sandbox.ops:numeric_value", n, 40, timeout=timeout)
+        r = sb_run("mathverify.sandbox.ops:numeric_value_bits", n, 40, timeout=timeout)
         tol = 1e-25
-    if not r.ok or not isinstance(r.value, str):
+    if not r.ok or not isinstance(r.value, tuple):
+        return None
+    # evalf's own accuracy: the Dirichlet integral came out '-0.e+0' (1 bit) and ∫_0^oo sin²x/x² as '1.6'
+    # (9 bits), each read as a 40-digit value with tolerance 1e-15, and true steps "∫_0^oo sin x/x dx = π/2"
+    # were refuted (fourth audit of 1 Oct 2026, S3). No bits (None): an exact number.
+    s_, bits = r.value
+    if bits is not None and bits < _MIN_BITS:
         return None
     try:
-        v = sp.Float(r.value, 40)            # the op prints a number; anything else is no value
+        v = sp.Float(s_, 40)                 # the op prints a number; anything else is no value
     except (TypeError, ValueError):
         return None
     return (v, tol) if v.is_finite else None
@@ -131,20 +139,24 @@ def checked_forms(e, timeout: float = 8.0):
                 reps[key] = cls["value"]
                 continue
             r = sb_run("mathverify.sandbox.ops:doit_expr", n, timeout=timeout)
-            if not r.ok or not isinstance(r.value, sp.Basic) or r.value.has(*_FORMS) \
-                    or r.value.has(sp.nan, sp.zoo) or r.value.free_symbols:
-                raise UnverifiedForm(f"SymPy has no closed value for {n}")
-            if r.value == 0 and _finite_integral(n):
-                # a relative tolerance never confirms an exact 0 against a quadrature residue of
-                # 1e-51...1e-59: SymPy's right 0 for ∫_0^3 (x² - 2x) dx was never taken (third audit of
-                # 30 Sep 2026, N2); the residue is measured against the integrand's scale instead
-                from ..certify.calculus import definite_integral_is_zero
+            closed = r.ok and isinstance(r.value, sp.Basic) and not r.value.has(*_FORMS) \
+                and not r.value.has(sp.nan, sp.zoo) and not r.value.free_symbols
+            if isinstance(n, sp.Integral) and len(n.limits) == 1 and len(n.limits[0]) == 3 \
+                    and (not closed or r.value == 0):
+                # an exact 0 needs a symbolic certificate: no number shows a value is 0 (2π·I_50(1) =
+                # 1.8e-79 passed the residue test) and SymPy's 0 for ∫_{-1}^{1} (x + |cos x|/10^80) dx
+                # is wrong (fourth audit of 1 Oct 2026, S1); the certificate also finds a value SymPy
+                # has none for (∫_0^{2π} sin(sin x) dx = 0, odd about π)
+                from ..certify.calculus import certified_integral_value
                 var, a, b = n.limits[0]
-                zero, zev = definite_integral_is_zero(n.function, var, a, b, timeout=timeout)
-                if zero is not True:
-                    raise UnverifiedForm(f"{n}: SymPy 0, numbers {zev.get('decided_by') or zev.get('error')}")
-                reps[key] = r.value
-                continue
+                cval, cev = certified_integral_value(n.function, var, a, b, timeout=timeout)
+                if cval is not None:
+                    reps[key] = cval
+                    continue
+                if closed:
+                    raise UnverifiedForm(f"{n}: SymPy 0 without a certificate ({cev.get('reason')})")
+            if not closed:
+                raise UnverifiedForm(f"SymPy has no closed value for {n}")
             num = _numeric(n, timeout)
             if num is None:
                 raise UnverifiedForm(f"no numeric value checks SymPy's value of {n}")

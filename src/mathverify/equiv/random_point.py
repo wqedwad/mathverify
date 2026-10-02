@@ -12,6 +12,7 @@ evidence and the caller lowers confidence). Too few evaluable points => None.
 from __future__ import annotations
 
 import random
+import time
 from typing import Any
 
 import mpmath as mp
@@ -273,6 +274,26 @@ _FORMS = (sp.Sum, sp.Product, sp.Integral, sp.Limit)
 _MAX_TERMS = 2000
 _FORM_CHECKS = 2          # points per comparison that may take `forms.checked_forms` (see _exact_counterexample)
 _FORM_TIMEOUT = 4.0
+_EVAL_TERMS = 200_000        # terms of finite sums/products lambdify may run through at one point
+_EVAL_BUDGET = 20.0          # seconds of point evaluations per comparison (in this process)
+
+
+def _terms_at(e, syms, pt) -> int:
+    """How many terms the finite Sums/Products of `e` run through at `pt` (nested ones multiply;
+    a range that is not a pair of integers there counts as one term)."""
+    total = 1
+    for n in sp.preorder_traversal(e):
+        if isinstance(n, (sp.Sum, sp.Product)):
+            for lim in n.limits:
+                if len(lim) != 3:
+                    continue
+                try:
+                    lo, hi = (sp.sympify(x_).subs({s_: pt[s_] for s_ in syms}, simultaneous=True) for x_ in lim[1:])
+                except Exception:  # noqa: BLE001
+                    continue
+                if getattr(lo, "is_Integer", False) and getattr(hi, "is_Integer", False) and hi >= lo:
+                    total *= int(hi - lo + 1)
+    return total
 
 
 def _written_out(e):
@@ -597,8 +618,18 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
         return None, ev
     tol = mp.mpf(10) ** (-(dps - 10))
 
+    spent = [0.0]
+
     def disagree(pt) -> tuple[str, dict] | None:
-        va, vb = _eval(fa, syms, pt, dps), _eval(fb, syms, pt, dps)
+        if _terms_at(a, syms, pt) > _EVAL_TERMS or _terms_at(b, syms, pt) > _EVAL_TERMS:
+            # lambdify runs a finite sum term by term in this process: Σ_{k=0}^{100000} x^k/k! held
+            # the verifier for minutes (fourth audit of 1 Oct 2026, S4). Not evaluated, not counted.
+            return "both_undefined", {}
+        t0 = time.monotonic()
+        try:
+            va, vb = _eval(fa, syms, pt, dps), _eval(fb, syms, pt, dps)
+        finally:
+            spent[0] += time.monotonic() - t0
         if va is None and vb is None:
             return "both_undefined", {}
         point = {s_.name: str(pt[s_]) for s_ in syms}
@@ -616,6 +647,9 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     unconfirmed = 0
     budget = [_FORM_CHECKS]
     for pt in pts:
+        if spent[0] > _EVAL_BUDGET:
+            ev["evaluation_time_budget"] = True    # the points left are not evaluated
+            break
         d = disagree(pt)
         if d is not None and d[0] == "both_undefined":
             continue                      # both undefined here: uninformative
@@ -663,6 +697,10 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
             probes.append(pt)
     ev["probes"] = len(probes)
     for pt in probes:
+        if spent[0] > _EVAL_BUDGET:
+            ev["evaluation_time_budget"] = True
+            ev["reason"] = "probes_not_evaluated_in_time"
+            return None, ev
         d = disagree(pt)
         if d is None or d[0] == "both_undefined":
             continue
@@ -712,12 +750,17 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
 
 
 def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None) -> tuple[dict[str, Any] | None, int]:
-    """(witness, number of unconfirmed points): a point where the difference `d` = a - b, evaluated
-    by SymPy's adaptive evalf, carries significant bits, confirmed by the exact values of a and b
-    there (`_exact_counterexample`). Strict evalf is no proof either: it gave 1.6e-35 for
-    Σ_{k=1}^{436} cos(kπ/2), which is 0, and all six full-period trig sums of the third audit were
-    refuted (30 Sep 2026, N4). A point the exact values call equal is no witness; one they cannot
-    decide is counted, and the caller abstains (principle 5)."""
+    """(witness, number of unconfirmed points): a point where a and b differ, decided by their EXACT
+    values there (`_exact_counterexample`). No evalf of the difference decides anything. Strict evalf
+    gave 1.6e-35 for Σ_{k=1}^{436} cos(kπ/2), which is 0, and all six full-period trig sums of the third
+    audit were refuted (30 Sep 2026, N4). A zero with no significant bits ('0.e-168') is no proof of
+    equality: evalf follows a cancellation only so far, and 1 - tanh(100x) at x = 15 (2e-1303) and
+    Σ_{k=0}^{5000} a^k - 1/(1 - a) came out that way, so tanh(100x) -> 1 and the infinite series' value
+    were certified (fourth audit of 1 Oct 2026, S5); evalf even returns an exact 0 for log(1 + 15/10^600),
+    which rounds to log(1). And evalf of a sum it cannot write out held the verifier for minutes in its
+    own process (S4); the exact check takes such a sum only through `forms.checked_forms`, in the
+    sandbox. A point the exact values call equal is no witness; one they cannot decide is counted, and
+    the caller abstains (principle 5)."""
     try:
         d = sp.sympify(d)
     except (sp.SympifyError, TypeError):
@@ -727,24 +770,15 @@ def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None)
         try:
             dp = d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True)
             if dp.has(*_FORMS):
-                # a finite sum written out is exact, and its evalf is quick (strict evalf of the sum
-                # itself took seconds per point and returned the residue above)
                 w = _written_out(dp)
                 dp = dp if w is None else w
-            v = sp.N(dp, 30)
         except Exception:  # noqa: BLE001
+            unsure += 1
             continue
-        if v == 0 or not getattr(v, "is_number", False):
-            continue
-        prec = getattr(v, "_prec", None)
-        if prec is None:
-            re_, im_ = v.as_real_imag()
-            prec = min(getattr(re_, "_prec", 0) or 0, getattr(im_, "_prec", 0) or 0) \
-                if re_ != 0 and im_ != 0 else getattr(re_ if re_ != 0 else im_, "_prec", 0)
-        if prec and prec >= 50:
-            c = _exact_counterexample(a, b, syms, pt, budget)
-            if isinstance(c, dict):
-                return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "difference": str(v),
-                        "exact": c["exact"]}, unsure
-            unsure += c is None
+        if dp == 0:
+            continue                          # exactly 0 at this point
+        c = _exact_counterexample(a, b, syms, pt, budget)
+        if isinstance(c, dict):
+            return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "exact": c["exact"]}, unsure
+        unsure += c is None
     return None, unsure

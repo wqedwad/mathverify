@@ -241,8 +241,11 @@ def test_checked_forms_takes_a_closed_held_form_by_numbers():
     from mathverify.normalize.parse import HeldIntegral
     x = sp.Symbol("x", real=True)
     assert checked_forms(HeldIntegral(x, (x, 0, 2))) == 2
-    with pytest.raises(UnverifiedForm):        # SymPy's 0 for ∫_{-1}^{1} |cos x| dx: numbers say 2 sin 1
-        checked_forms(HeldIntegral(sp.Abs(sp.cos(x)), (x, -1, 1)))
+    # SymPy's 0 for ∫_{-1}^{1} |cos x| dx is not taken; since the fourth audit (1 Oct 2026, d4c) the
+    # antiderivative certificate gives the true value 2 sin 1 (cos x > 0 there: |cos x| = cos x)
+    assert checked_forms(HeldIntegral(sp.Abs(sp.cos(x)), (x, -1, 1))) == 2 * sp.sin(1)
+    with pytest.raises(UnverifiedForm):        # SymPy's wrong 0 and no certificate (not odd, no antiderivative)
+        checked_forms(HeldIntegral(sp.exp(sp.cos(x)) * sp.Abs(sp.cos(x)) + x, (x, -1, 1)))
 
 
 def test_agreement_at_sample_points_is_no_proof_for_a_parametric_form():
