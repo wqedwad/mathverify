@@ -174,7 +174,8 @@ def test_g7_inconsistent_binding(givens, vars_):
                                         ("a = 0**0 + 3", "given_binding_undecided")])
 def test_g7_binding_value_undefined_or_convention(given, flag):
     r = _run(_eq("x**2 = a", [given], XA), "{-2, 2}")
-    assert r.verdict == "UNKNOWN" and flag in _flags(r)
+    # since the review of d4d the written_undefined intake runs first and may name the convention value
+    assert r.verdict == "UNKNOWN" and {flag, "problem_undefined_as_written"} & _flags(r)
 
 
 def test_g7_limit_binding_checked():
@@ -541,8 +542,16 @@ def test_review_constraint_and_given_write_one_value_twice():
     assert _run(_eq("x**2 = 4", ["x > a", "a = log(8)/log(2)"], V), "{}").verdict == "CORRECT"
 
 
-def test_review_closed_condition_with_no_value():
-    r = _run(_eq("x**2 = 4", ["x > 1 + 0*log(-1)"]), "{}")
+def test_review_closed_condition_without_a_value_is_not_the_gates():
+    """Defined nowhere with no value fixed: the tradition of 30 Sep 2026 (no solution) stands."""
+    for q in (_eq("x**2 = 4", ["x > 1 + 0*log(-1)"]), _eq("x + log(-1 - x**2) - log(-1 - x**2) = 2", [])):
+        r = _run(q, "{}")
+        assert not any(la.layer == "intake.givens" for la in r.layers)
+
+
+def test_review_b4_declared_region():
+    V = [X, {"name": "y", "domain": "positive_real"}]
+    r = _run(_eq("x + sqrt(-y) - sqrt(-y) = 1", [], V), "{}")
     assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
 
 

@@ -151,10 +151,9 @@ MUTATIONS = [
      "            if reg is not None and (reg is S.EmptySet or reg.is_empty is True):", "            if False:", T),
     ("N14 yan koşullar bölgeye girmez", BAS, "        if side:\n            sets, unapplied", "        if False:\n            sets, unapplied", T),
     ("N15 gcd(0, 0) tanımlı", DOM, '            if type(node).__name__ == "gcd":', "            if False:", T),
-    ("N16 kapalı koşullar bağlamasız okunmaz", BAS,
-     "        # closed conditions with no value too (`a = root(-8, 3)`: an odd root of a negative number)\n",
-     "        # closed conditions with no value too (`a = root(-8, 3)`: an odd root of a negative number)\n"
-     "        if not allb and not self.ir.vars[1:]:\n            return self._first_issue(found)\n", T),
+    ("N16 değerle kapanan koşul okunmaz", BAS, "                if not pinned_here:\n                    continue",
+     "                if True:\n                    continue", T),
+    ("N17 bildirim SymPy'ye bırakılır", BAS, "            ew = parse_as_written(src, pns)", "            ew = parse_as_written(src, self.ns)", T),
 ]
 
 if __name__ == "__main__":

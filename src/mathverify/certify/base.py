@@ -450,6 +450,8 @@ class Ctx:
         from ..normalize.parse import (PinnedBoundVariable, given_binding_report, hold_parametric,
                                        parse_as_written, read_condition)
         from .domain import _certified_compare, definedness_conditions, in_domain, relation_holds_at
+        if (self.ir.domain_of_discourse or "").strip().lower() in ("complex", "complexes", "c", "ℂ"):
+            return None                          # the conditions are the real ones (written_undefined too)
         bind, clash, _sources = given_binding_report(self.ir, self.ns)
         cbind, _ctexts = self._constraint_bindings()
         allb = dict(cbind)
@@ -531,34 +533,44 @@ class Ctx:
             h = closed_verdict(r2)
             if h is not True:
                 note("ir_inconsistent" if h is False else "given_binding_undecided", t)
-        # (4) every expression of the problem, as written, at the values (never the task's own variable); its
-        # closed conditions with no value too (`a = root(-8, 3)`: an odd root of a negative number)
+        # (4) every expression of the problem, as written, at the values (never the task's own variable). The
+        # symbols are read as plain reals here: a declaration (y positive) is the parameter's region in (6),
+        # not a fact SymPy folds into its condition. A closed condition counts where the text holds a value a
+        # given fixes (`a = 4 + log(-1) - log(-1)`, x + log(a) - log(a) with a = -1); any other is the
+        # certificates' and `written_undefined`'s (an equation defined nowhere has no solution, 30 Sep 2026)
         tv = task_variables(self.ir)
-        pins = {s_: v for s_, v in allb.items() if s_.name not in tv}
+        plain = {v.name: sp.Symbol(v.name, real=True) for v in self.ir.vars}
+        pns = dict(self.ns, **plain)
+        pins = {plain.get(s_.name, s_): v for s_, v in allb.items() if s_.name not in tv}
         params = self.ir.task.params or {}
         srcs = texts + [v for k, v in params.items() if isinstance(v, str) and k != "var"]
         conflicts: list = []
         open_conds: list = []
         for src in srcs:
             e = parse_as_written(src, self.ns)
-            if e is None:
+            if e is not None:
+                try:
+                    with sp.evaluate(False):
+                        hold_parametric(e, bind, tv)
+                except PinnedBoundVariable:
+                    conflicts.append(src)
+                except Exception:  # noqa: BLE001 - the value parse reports it
+                    pass
+            ew = parse_as_written(src, pns)
+            if ew is None:
                 continue
             try:
+                pinned_here = bool(ew.free_symbols & set(pins))
                 with sp.evaluate(False):
-                    hold_parametric(e, bind, tv)
-            except PinnedBoundVariable:
-                conflicts.append(src)
-            except Exception:  # noqa: BLE001 - the value parse reports it
-                pass
-            try:
-                with sp.evaluate(False):
-                    e2 = substitute_free(e, pins)
+                    e2 = substitute_free(ew, pins)
                 conds = definedness_conditions(e2, None)
             except Exception:  # noqa: BLE001 - not read as written: the old reading
                 continue
             for c in conds:
                 if getattr(c, "free_symbols", None):
                     open_conds.append((c, src))
+                    continue
+                if not pinned_here:
                     continue
                 h = closed_verdict(c)
                 if h is not True:
@@ -574,9 +586,9 @@ class Ctx:
             note("given_binds_a_bound_variable", f"task variable {sorted({s_.name for s_ in bind} & tv)}")
         # (6) a written condition on the parameters alone (no task variable), read on the region the
         # declarations, the domain of discourse, the constraints and the givens leave them
-        if tv:
+        if tv and self.ir.task.kind not in ("count_solutions",):     # there every variable is an unknown
             for c, src in open_conds:
-                if c.free_symbols & {self.sym(n) for n in tv}:
+                if {s_.name for s_ in c.free_symbols} & tv:
                     continue
                 verdict = self._parameter_condition(c)
                 if verdict is not True:
@@ -646,8 +658,10 @@ class Ctx:
         fs = c.free_symbols
         if len(fs) != 1:
             return None
-        (p,) = fs
-        reg = self._declared_region(p, givens=True)
+        (p,) = fs                                # a plain real symbol (see (4) of `_binding_issues`)
+        if not any(v.name == p.name for v in self.ir.vars):
+            return None
+        reg = self._declared_region(self.sym(p.name), givens=True)
         cut = self.condition_set(c, p)
         if reg is None or cut is None:
             return None
