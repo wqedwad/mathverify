@@ -102,12 +102,15 @@ def test_a_progression_dropped_by_the_inequality_solver():
     assert b.contains(sp.pi / 2) is sp.false and b.contains(0) is sp.false and b.contains(1) is sp.true
 
 
-def test_a_root_solveset_loses_makes_the_set_unsolved():
-    """sqrt(3) sin x - cos x = 1 has x = pi too; SymPy gives {pi/3} on [0, 2*pi] (158c220: {pi/3})."""
+def test_a_root_solveset_loses_is_found_by_the_combination_class():
+    """sqrt(3) sin x - cos x = 1 has x = pi too; SymPy gives {pi/3} on [0, 2*pi] (158c220: {pi/3}).
+    Class (v): 2 sin(x - pi/6) = 1, both progressions (round 4)."""
     from mathverify.sandbox.exactsets import exact_solveset
-    for dom in (sp.Interval(0, 2 * sp.pi), S.Reals):
-        s_ = exact_solveset(sp.Eq(sp.sqrt(3) * sp.sin(x) - sp.cos(x), 1), x, dom)
-        assert isinstance(s_, sp.ConditionSet), s_
+    s_ = exact_solveset(sp.Eq(sp.sqrt(3) * sp.sin(x) - sp.cos(x), 1), x, sp.Interval(0, 2 * sp.pi))
+    assert s_ == sp.FiniteSet(sp.pi / 3, sp.pi), s_
+    r = exact_solveset(sp.Eq(sp.sqrt(3) * sp.sin(x) - sp.cos(x), 1), x, S.Reals)
+    assert r.contains(sp.pi) is sp.true and r.contains(sp.pi / 3 + 2 * sp.pi) is sp.true
+    assert r.contains(-sp.pi) is sp.true and r.contains(0) is not sp.true
 
 
 def test_equations_keep_their_exact_sets():
@@ -143,14 +146,25 @@ Q = sp.sqrt(3) * sp.sin(x) - sp.cos(x) - 1            # its zeros on [0, 7]: pi/
 
 def test_only_the_exact_classes_give_a_set():
     """A set is exact only when its zeros and poles are known in closed form (a polynomial, a polynomial
-    in one trigonometric function of a linear argument, products and quotients of these). SymPy's set
-    of Q = 0 misses pi, of x*Q = 0 too, and a numeric root search misses the triple root of Q**3: none of
-    them is a set (review of 2 Oct 2026, B1, B2: {0, pi/3} and {pi/3} were CORRECT on 0ed77e2)."""
+    in one trigonometric function or in a same-frequency sin/cos combination or in one strictly monotone
+    function, of a linear argument; products and quotients of these). SymPy's set of Q = 0 misses pi, of
+    x*Q = 0 too, and a numeric root search misses the triple root of Q**3 (review of 2 Oct 2026, B1, B2:
+    {0, pi/3} and {pi/3} were CORRECT on 0ed77e2; on 3872bcd they were unsolved, now class (v), with pi)."""
     from mathverify.sandbox.exactsets import exact_solveset, period
     W = sp.Interval(0, 7)
-    for e in (Q, x * Q, (x + 1) * Q, sp.exp(x) * Q, Q ** 3, Q / x, Q * sp.sin(sp.sqrt(2) * x)):
+    both = sp.FiniteSet(sp.pi / 3, sp.pi)
+    for e in ((x + 1) * Q, sp.exp(x) * Q, Q ** 3, Q / x):
+        assert exact_solveset(sp.Eq(e, 0), x, W) == both, e
+    assert exact_solveset(sp.Eq(x * Q, 0), x, W) == sp.FiniteSet(0, sp.pi / 3, sp.pi)
+    r2 = sp.sqrt(2) * sp.pi / 2
+    assert exact_solveset(sp.Eq(Q * sp.sin(sp.sqrt(2) * x), 0), x, W) == sp.FiniteSet(
+        0, sp.pi / 3, sp.pi, r2, 2 * r2, 3 * r2)
+    assert exact_solveset(Q ** 3 > 0, x, W) == sp.Interval.open(sp.pi / 3, sp.pi)
+    # not a class: a sum of a polynomial and a trigonometric function, two frequencies, sin*cos, exp and
+    # a polynomial, a root
+    for e in (sp.sin(x) + x, sp.sin(x) + sp.cos(2 * x), sp.sin(x) * sp.cos(x) - sp.Rational(1, 4),
+              sp.exp(x) - 3 * x, sp.sqrt(x) - 1 + sp.sin(x)):
         assert isinstance(exact_solveset(sp.Eq(e, 0), x, W), sp.ConditionSet), e
-    assert isinstance(exact_solveset(Q ** 3 > 0, x, W), sp.ConditionSet)
     # the classes
     assert exact_solveset(sp.Eq(x * sp.sin(x), 0), x, W) == sp.FiniteSet(0, sp.pi, 2 * sp.pi)
     assert exact_solveset(sp.Eq((x - 1) ** 3 * sp.cos(x) ** 3, 0), x, W) == sp.FiniteSet(
@@ -158,7 +172,7 @@ def test_only_the_exact_classes_give_a_set():
     assert exact_solveset(sp.sin(x) ** 3 > 0, x, W) == sp.Union(sp.Interval.open(0, sp.pi), sp.Interval.Lopen(2 * sp.pi, 7))
     assert exact_solveset(sp.Eq(4 * sp.sin(x) ** 2, 1), x, sp.Interval.Ropen(0, 2 * sp.pi)) == sp.FiniteSet(
         sp.pi / 6, 5 * sp.pi / 6, 7 * sp.pi / 6, 11 * sp.pi / 6)
-    assert period(sp.tan(x) - 1, x) == sp.pi and period(Q, x) is None and period(x * sp.sin(x), x) is None
+    assert period(sp.tan(x) - 1, x) == sp.pi and period(Q, x) == 2 * sp.pi and period(x * sp.sin(x), x) is None
     # no real solution of sin(x) = +-2; the zeros of a denominator and the poles of tan are no zeros
     assert exact_solveset(sp.Eq(sp.sin(x) ** 2, 4), x, W) is S.EmptySet
     assert exact_solveset(sp.Eq(sp.sin(x) / (x - sp.pi), 0), x, W) == sp.FiniteSet(0, 2 * sp.pi)
@@ -367,8 +381,10 @@ def test_evaluate_with_a_proved_complete_set():
     assert _run(_ev("x", ["sin(x) = 0", "x > 4", "x < 7"]), "2*pi", "value").verdict == "CORRECT"
     assert _run(_ev("x", ["sin(x) = 1/2", "x > 6", "x < 7"]), "13*pi/6", "value").verdict == "CORRECT"
     assert _run(_ev("x", ["x + y = 5", "x - y = 1"], [X, V("y")]), "3", "value").verdict == "CORRECT"
-    # exp(x) = 2 is no exact class: SymPy's {log(2)} is no proof of completeness (coverage given up)
-    assert _run(_ev("x", ["exp(x) = 2"]), "log(2)", "value").verdict == "UNKNOWN"
+    # exp(x) = 2 is class (iv) (round 4; UNKNOWN on 3872bcd), a non-class equation is not
+    assert _run(_ev("x", ["exp(x) = 2"]), "log(2)", "value").verdict == "CORRECT"
+    assert _run(_ev("x", ["exp(x) = 2"]), "log(3)", "value").verdict == "INCORRECT"
+    assert _run(_ev("x", ["exp(x) = 3*x", "x < 1"]), "LambertW(-1/3)*(-1)", "value").verdict == "UNKNOWN"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -502,3 +518,166 @@ def test_a_fast_oscillating_side_condition_is_neither_slow_nor_a_rejection():
     t0 = time.time()
     r = _run(_eq("x**2 = 4", ["sin(1000*x) > 0", "x >= 0", "x <= 30"]), "{2}")
     assert r.verdict != "INCORRECT" and time.time() - t0 < 60
+
+
+# ------------------------------------------------------------------------------------------------
+# Round 4: the classes (iv) one strictly monotone function, (v) a same-frequency sin/cos combination,
+# (vi) their products; a rational system in several unknowns only with a proof of completeness
+# ------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("rel,want", [
+    (sp.Eq(sp.exp(x), 2), sp.FiniteSet(sp.log(2))),
+    (sp.Eq(4 ** x - 3 * 2 ** x + 2, 0), sp.FiniteSet(0, 1)),
+    (sp.Eq(2 ** (2 * x) - 3 * 2 ** x + 2, 0), sp.FiniteSet(0, 1)),
+    (sp.Eq(sp.exp(x) + sp.exp(-x), 2), sp.FiniteSet(0)),
+    (sp.Eq(sp.log(x) ** 2 - sp.log(x), 0), sp.FiniteSet(1, sp.E)),
+    (sp.Eq(sp.log(x - 1), 0), sp.FiniteSet(2)),
+    (sp.Eq(sp.atan(x), 1), sp.FiniteSet(sp.tan(1))),
+    (sp.Eq(sp.atan(x), 2), S.EmptySet),                      # 2 > pi/2: out of the range of atan
+    (sp.Eq(sp.exp(2 * x) - sp.exp(x) - 2, 0), sp.FiniteSet(sp.log(2))),   # the root -1 of t**2 - t - 2: exp > 0
+    (sp.Eq(sp.sinh(x), 1), sp.FiniteSet(sp.asinh(1))),
+    (sp.Eq((x - 1) * sp.exp(x), 0), sp.FiniteSet(1)),
+    (sp.exp(x) > 2, sp.Interval.open(sp.log(2), sp.oo)),
+    (sp.exp(2 * x) - 3 * sp.exp(x) + 2 < 0, sp.Interval.open(0, sp.log(2))),
+    (sp.log(x) < 1, sp.Interval.open(0, sp.E)),             # log's domain x > 0: nothing at x <= 0
+    (sp.log(x) ** 2 >= 0, sp.Interval.open(0, sp.oo)),
+    (sp.Eq(sp.sin(x) - sp.cos(x), 0), None),
+])
+def test_monotone_class_sets(rel, want):
+    """SymPy's own sets of these were no proof (3872bcd: unsolved); each is a closed-form inverse."""
+    from mathverify.sandbox.exactsets import class_solveset
+    got = class_solveset(rel, x, S.Reals)
+    if want is None:                                         # periodic: on a window
+        got = class_solveset(rel, x, sp.Interval(0, 7))
+        want = sp.FiniteSet(sp.pi / 4, 5 * sp.pi / 4)
+    assert got == want, (rel, got)
+
+
+def test_the_classes_reject_what_they_cannot_prove():
+    """a**x with a = 1 or a < 0, x**x, two bases with an irrational log ratio, a non-linear argument,
+    sin x cos x: no set."""
+    from mathverify.sandbox.exactsets import class_solveset, _mono_parts, _combo_parts
+    assert class_solveset(sp.Eq(3 ** x, 2 ** x), x) is None
+    assert class_solveset(sp.Eq(x ** x, 2), x) is None
+    assert class_solveset(sp.Eq(sp.exp(x ** 2), 2), x) is None
+    assert class_solveset(sp.Eq(sp.exp(x) - 3 * x, 0), x) is None
+    assert _mono_parts(sp.Pow(-2, x, evaluate=False) - 4, x) is None
+    assert _mono_parts(sp.Pow(1, x, evaluate=False) - 1, x) is None
+    assert _combo_parts(sp.sin(x) * sp.cos(x) - sp.Rational(1, 4), x) is None
+    assert _combo_parts(sp.sin(x) + sp.cos(2 * x), x) is None
+
+
+def test_the_combination_reading_is_checked():
+    """R sin(u + phi) + D must equal the expression: phi = atan2(B, A), not atan(B/A) (A < 0)."""
+    from mathverify.sandbox.exactsets import _combo_parts
+    f, a, b, g = _combo_parts(-sp.sin(x) - sp.cos(x), x)
+    t = g.gens[0]
+    back = g.as_expr().subs(t, f(a * x + b))
+    assert sp.simplify(sp.expand_trig(back) + sp.sin(x) + sp.cos(x)) == 0
+    from mathverify.sandbox.exactsets import class_solveset
+    assert class_solveset(sp.Eq(-sp.sin(x) - sp.cos(x), 1), x, sp.Interval(0, 7)) == sp.FiniteSet(
+        sp.pi, 3 * sp.pi / 2)
+
+
+@pytest.mark.parametrize("e,good,bad", [
+    ("sin(x) = cos(x)", "{pi/4, 5*pi/4}", "{pi/4}"),
+    ("sqrt(3)*sin(x) - cos(x) = 1", "{pi/3, pi}", "{pi/3}"),
+    (f"x*{QS} = 0", "{0, pi/3, pi}", "{0, pi/3}"),
+    (f"{QS}**3 = 0", "{pi/3, pi}", "{pi/3}"),
+    ("4**x - 3*2**x + 2 = 0", "{0, 1}", "{1}"),
+    ("log(x)**2 - log(x) = 0", "{1, E}", "{0, 1, E}"),
+    ("exp(2*x) - exp(x) - 2 = 0", "{log(2)}", "{log(2), I*pi}"),
+    ("atan(x) = 2", "{}", "{tan(2)}"),
+])
+def test_solve_equation_in_the_new_classes(e, good, bad):
+    ir = _eq(e, ["x >= 0", "x <= 2*pi"])
+    assert _run(ir, good).verdict == "CORRECT", e
+    assert _run(ir, bad).verdict == "INCORRECT", e
+
+
+def test_the_reviewed_cases_are_now_decided():
+    """B3/B4 of the review (2 Oct 2026): on 3872bcd unsolved, now class (v)."""
+    ir = _eq("x**2 = 4", [f"{QS}**3 > 0", "x >= 0", "x <= 7"])
+    assert _run(ir, "{}").verdict == "INCORRECT" and _run(ir, "{2}").verdict == "CORRECT"
+    ev = _ev("x", [f"(x + 1)*{QS} = 0", "x > 0", "x < 2"])
+    assert _run(ev, "pi/3", "value").verdict == "CORRECT"
+    ev = _ev("x", [f"(x + 1)*{QS} = 0", "x > 0", "x < 4"])
+    assert _run(ev, "pi/3", "value").verdict != "CORRECT"          # pi is a solution too
+
+
+def test_polynomial_system_completeness():
+    """`solve`'s list of a system in several unknowns is accepted only with a proof (zero-dimensional
+    ideal, as many distinct solutions as its radical's quotient dimension)."""
+    from mathverify.certify.algebra import _polynomial_system_worker as W
+    y = sp.Symbol("y", real=True)
+    assert W([sp.Eq(x + y, 5), sp.Eq(x * y, 6)], [x, y])[0] == [{x: 2, y: 3}, {x: 3, y: 2}]
+    assert W([sp.Eq((x - 1) ** 2, 0), sp.Eq(y, 2)], [x, y])[0] == [{x: 1, y: 2}]       # a double root
+    assert W([sp.Eq(x ** 2, y), sp.Eq(y ** 2, x)], [x, y])[0] == [{x: 0, y: 0}, {x: 1, y: 1}]   # 2 non-real
+    assert W([sp.Eq(1 / x + 1 / y, 1), sp.Eq(x * y, 4)], [x, y])[0] == [{x: 2, y: 2}]
+    assert W([sp.Eq(x ** 2 - 1, 0), sp.Eq(y * (x - 1), 1)], [x, y])[0] == [{x: -1, y: -sp.Rational(1, 2)}]
+    assert W([sp.Eq(x * y, 1)], [x, y])[0] is None                                     # a curve
+    assert W([sp.Eq(x ** 2 + y ** 2, 0)], [x, y])[0] is None
+    assert W([sp.Eq(x + y, 1), sp.Eq(2 * x + 2 * y, 3)], [x, y]) == ([], "linear_system")
+
+
+def test_polynomial_system_with_solutions_solve_misses_is_not_certified(monkeypatch):
+    """A list `solve` gives without one of the solutions must not be accepted."""
+    from mathverify.certify import algebra
+    y = sp.Symbol("y", real=True)
+    real_solve = sp.solve
+    monkeypatch.setattr(sp, "solve", lambda *a, **k: real_solve(*a, **k)[:1])
+    out, how = algebra._polynomial_system_worker([sp.Eq(x + y, 5), sp.Eq(x * y, 6)], [x, y])
+    assert out is None and how.startswith("solve_found_1_of_2"), how
+
+
+def test_evaluate_on_a_polynomial_system():
+    y = V("y")
+    assert _run(_ev("x*y", ["x + y = 5", "x**2 + y**2 = 13"], [X, y]), "6", "value").verdict == "CORRECT"
+    assert _run(_ev("x", ["x + y = 5", "x*y = 6", "x > y"], [X, y]), "3", "value").verdict == "CORRECT"
+    assert _run(_ev("x", ["x + y = 5", "x*y = 6"], [X, y]), "3", "value").verdict != "CORRECT"
+    assert _run(_ev("x + y", ["x*y = 1"], [X, y]), "2", "value").verdict != "CORRECT"
+
+
+def test_polynomial_system_solve_list_with_a_repeated_or_false_point(monkeypatch):
+    """A repeated point must not stand in for a missing one, a point that is no solution must not count."""
+    from mathverify.certify import algebra
+    y = sp.Symbol("y", real=True)
+    real_solve = sp.solve
+    monkeypatch.setattr(sp, "solve", lambda *a, **k: real_solve(*a, **k)[:1] * 2)
+    assert algebra._polynomial_system_worker([sp.Eq(x + y, 5), sp.Eq(x * y, 6)], [x, y])[0] is None
+
+    def fake(*a, **k):
+        s_ = real_solve(*a, **k)
+        k0 = list(s_[0])
+        return s_[:1] + [{k0[0]: sp.Integer(7), k0[1]: sp.Integer(-2)}]
+    monkeypatch.setattr(sp, "solve", fake)
+    assert algebra._polynomial_system_worker([sp.Eq(x + y, 5), sp.Eq(x * y, 6)], [x, y])[0] is None
+
+
+def test_complete_solutions_does_not_take_the_solver_list():
+    """`_complete_solutions` proves its own list; the solver's (here missing (3, 2), or the principal
+    roots of a non-class equation) is not taken."""
+    from mathverify.certify.algebra import _complete_solutions
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    ctx = make_ctx(ProblemIR.from_dict(_ev("x", ["x + y = 5", "x*y = 6"], [X, V("y")])))
+    xs, ys = ctx.sym("x"), ctx.sym("y")
+    out, how = _complete_solutions([sp.Eq(xs + ys, 5), sp.Eq(xs * ys, 6)], [], [xs, ys], [{xs: 2, ys: 3}], ctx)
+    assert out is not None and len(out) == 2, (out, how)
+    ctx = make_ctx(ProblemIR.from_dict(_ev("x", ["sin(2*x) = sin(x)"])))
+    xs = ctx.sym("x")
+    out, how = _complete_solutions([sp.Eq(sp.sin(2 * xs), sp.sin(xs))], [], [xs], [{xs: sp.pi / 3}], ctx)
+    assert out is None, (out, how)
+
+
+def test_evaluate_with_a_non_class_equation_keeps_unknown():
+    """sin 2x = sin x on (1/2, 7/2): pi/3 and pi; `solve` gives 0, -pi/3, pi/3 (no pi)."""
+    ir = _ev("x", ["sin(2*x) = sin(x)", "x > 1/2", "x < 7/2"])
+    assert _run(ir, "pi/3", "value").verdict == "UNKNOWN"
+
+
+def test_solve_guarded_uses_the_classes_on_the_reals():
+    """(1/2)**x = 4: the solvers' -2 and -log(4)/log(2) did not agree as written (UNKNOWN on 3872bcd);
+    sin x - cos x = 2 has no real solution (the solvers gave two complex ones)."""
+    assert _run(_eq("(1/2)**x = 4"), "{-2}").verdict == "CORRECT"
+    assert _run(_eq("(1/2)**x = 4"), "{2}").verdict == "INCORRECT"
+    assert _run(_eq("sin(x) - cos(x) = 2"), "{}").verdict == "CORRECT"

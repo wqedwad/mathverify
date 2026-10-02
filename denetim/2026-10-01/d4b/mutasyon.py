@@ -34,6 +34,10 @@ PARSE = "src/mathverify/normalize/parse.py"
 DET = "src/mathverify/steps/deterministic.py"
 VER = "src/mathverify/verifier.py"
 T = "tests/test_d4_d4b_periyodik.py::"
+_MONO_MID = ("\n        m = max(0, -min(ks.values()))\n"
+             "        bt = sp.expand(base.xreplace({n: sp.exp(exps[n][1]) * t ** ks[n] for n in exps}) * t ** m)\n"
+             "        if bt.free_symbols != {t}:\n            return None\n        g = sp.Poly(bt, t)\n"
+             "        back = bt.subs(t, sp.exp(c0 * var)) - base * sp.exp(m * c0 * var)\n")
 
 MUTATIONS = [
     # --- sandbox.exactsets / ops
@@ -72,12 +76,54 @@ MUTATIONS = [
      T + "test_steps_on_tan_with_its_window_stay_verified"),
     ("K10 çözülmemiş trig tanımlılığı tanımlı sayılır", DOM, "            return True if at_risk(bad, var) else None",
      "            return None", T + "test_review_b3_b4_b5"),
-    ("K11 tamlık sınıfı aranmaz", ALG, "        if not (_algebraic(er, [v]) or at_risk(er, v)):\n            continue",
-     "        if False:\n            continue", T + "test_evaluate_with_a_proved_complete_set"),
+    ("K11 sınıf dışında solve listesi tam sayılır", ALG,
+     '        return None, f"no_equation_with_a_finite_proved_solution_set_on {window}"',
+     '        return sols, "mutated"', T + "test_evaluate_with_a_non_class_equation_keeps_unknown"),
     ("K12 parantezli tanım evreni küme okunur", PARSE,
      '    if any(op in s for op in ("<", ">", "!=")) and not s.startswith(("Interval", "Union")):',
      '    if any(op in s for op in ("<", ">", "!=")) and not s.startswith(("Interval", "Union", "(", "[")):',
      T + "test_review_b3_b4_b5"),
+    # --- round 4: the classes (iv) monotone, (v) sin/cos combination, (vi) products; polynomial systems
+    ("K13 φ atan(B/A) (denetimli)", EX, "    R, phi = sp.sqrt(A ** 2 + B ** 2), sp.atan2(B, A)\n",
+     "    R, phi = sp.sqrt(A ** 2 + B ** 2), sp.atan(B / A)\n", T + "test_the_combination_reading_is_checked"),
+    ("K14 φ atan(B/A), birleşim denetimi yok", EX,
+     "    R, phi = sp.sqrt(A ** 2 + B ** 2), sp.atan2(B, A)\n    if sp.simplify(sp.expand_trig(R * sp.sin(u + phi) + D) - base) != 0:",
+     "    R, phi = sp.sqrt(A ** 2 + B ** 2), sp.atan(B / A)\n    if False:", T + "test_the_combination_reading_is_checked"),
+    ("K15 üsler tek üreteçte yanlış (denetimli)", EX, "        ks = {n: int(ratios[n] * L) for n in exps}",
+     "        ks = {n: 1 for n in exps}", T + "test_monotone_class_sets"),
+    ("K16 üsler yanlış, monoton denetim yok", EX,
+     "        ks = {n: int(ratios[n] * L) for n in exps}" + _MONO_MID + "        if sp.simplify(sp.expand(sp.powsimp(back.rewrite(sp.exp)))) != 0:",
+     "        ks = {n: 1 for n in exps}" + _MONO_MID + "        if False:", T + "test_monotone_class_sets"),
+    ("K17 exp'in değer kümesi dışı kök", EX, "            if _certified(r_) <= 0:\n                continue",
+     "            if False:\n                continue", T + "test_monotone_class_sets"),
+    ("K18 atan'ın değer kümesi dışı kök", EX, "            if _certified(sp.pi / 2 - abs(r_)) <= 0:\n                continue",
+     "            if False:\n                continue", T + "test_monotone_class_sets"),
+    ("K19 log'un tanımsız noktası yok", EX, "    poles = [((-b) / a, S.Zero)] if h is sp.log else []",
+     "    poles = []", T + "test_monotone_class_sets"),
+    ("K20 gerçel olmayan hücre sayılır", EX,
+     "        if s_ is not None and _holds(op, s_):\n            pieces.append(sp.Interval.open(a, b))",
+     "        if _holds(op, 1 if s_ is None else s_):\n            pieces.append(sp.Interval.open(a, b))", T + "test_monotone_class_sets"),
+    ("K21 solve_guarded sınıfları okumaz", ALG, "    if window_set is None and p is None:",
+     "    if False:", T + "test_solve_guarded_uses_the_classes_on_the_reals"),
+    ("G01 çözüm sayısı boyutla karşılaştırılmaz", ALG, "    if len(found) != dim:", "    if False:",
+     T + "test_polynomial_system_with_solutions_solve_misses_is_not_certified"),
+    ("G02 radikal yerine ideal (katlı kök)", ALG,
+     '    R = sp.groebner(polys + [sp.Poly(q, *plain) for q in extra], *plain, order="lex")', "    R = G",
+     T + "test_polynomial_system_completeness"),
+    ("G03 sıfır boyut denetimi yok", ALG, '    if not G.is_zero_dimensional:\n        return None, "system_not_zero_dimensional"\n', "",
+     T + "test_polynomial_system_completeness"),
+    ("G04 gerçel olmayan çözüm kalır", ALG, "        if not all(real):\n            continue", "        if False:\n            continue",
+     T + "test_polynomial_system_completeness"),
+    ("G05 tekrarlanan nokta ayrı sayılır", ALG, "            if all(eq_):", "            if False:",
+     T + "test_polynomial_system_solve_list_with_a_repeated_or_false_point"),
+    ("G06 çözüm olmayan nokta sayılır", ALG, "            if z is not True:\n", "            if z is False and z:\n",
+     T + "test_polynomial_system_solve_list_with_a_repeated_or_false_point"),
+    ("G07 doğrusal olmayan sistem doğrusal sayılır", ALG, "    if all(p.total_degree() <= 1 for p in polys)", "    if True",
+     T + "test_polynomial_system_with_solutions_solve_misses_is_not_certified"),
+    ("G08 çok değişkende solve listesi alınır", ALG,
+     '    if all(_algebraic(e, syms) for e in eqs) and len(syms) > 1:\n',
+     '    if all(_algebraic(e, syms) for e in eqs) and len(syms) > 1:\n        return sols, "mutated"\n',
+     T + "test_complete_solutions_does_not_take_the_solver_list"),
     ("P12 sürekli alan korumasız", OPS, "    if oscillates(expr, var):\n        # SymPy solves the conditions",
      "    if False:\n        # SymPy solves the conditions", T + "test_continuous_domain_of_a_trigonometric_expression"),
     # --- certify.domain

@@ -92,6 +92,7 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             cands += [c for c in r1p.value if not isinstance(c, dict)]
     complete: bool | None = None
     window_set = None
+    window_how = "guarded_solveset_on_bounded_hull"
     hull = _bounded_hull(domain)
     if hull is not None and at_risk(rel_r, var):
         # a trigonometric equation on a bounded domain: its roots on the hull, from the guarded
@@ -124,6 +125,18 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             poly_roots = list(rr.value)
             cands += poly_roots
             ev["numerator_real_roots"] = [str(r) for r in poly_roots]
+    if window_set is None and p is None:
+        # not rational: an equation of the exact classes (sandbox.exactsets.class_solveset: one strictly
+        # monotone function or a same-frequency sin/cos combination of a linear argument, products) has
+        # its set in closed form; (1/2)**x = 4 was left to the two solvers, whose -2 and -log(4)/log(2)
+        # did not agree as written, and sin x - cos x = 2 to their complex roots (round 4 of part d4b)
+        rc = sb_run("mathverify.sandbox.exactsets:class_solveset", rel_r, var,
+                    sp.Interval(*hull) if hull is not None else S.Reals, timeout=timeout)
+        if rc.ok and (rc.value is S.EmptySet or isinstance(rc.value, FiniteSet)):
+            window_set = list(rc.value)
+            cands += window_set
+            window_how = "exact_class" if hull is None else "exact_class_on_bounded_hull"
+            ev["class_set"] = [str(c) for c in window_set]
     # de-duplicate: exactly equal only (an undecided pair stays two candidates; the guard
     # decides each). Exact real roots first, so they are the representatives kept.
     uniq: list = []
@@ -136,7 +149,7 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
     if window_set is not None:
         complete = not any(_undecided(why) for _, why in rejected) and all(
             any(scalar_equal(k, w) is True for w in window_set) for k in kept)
-        ev["completeness_method"] = "guarded_solveset_on_bounded_hull"
+        ev["completeness_method"] = window_how
         ev["complete"] = complete
     elif p is not None and poly_roots is not None and (p.domain.is_Exact and "numerator_real_roots" in ev):
         undecided = [c for c, why in rejected if _undecided(why)]
@@ -613,13 +626,18 @@ def _complete_solutions(eqs, ineqs, syms, sols, ctx: Ctx) -> tuple[list | None, 
     gives both LambertW branches but nothing says so. A system of rational equations keeps `solve`'s
     list (it solves those completely). One unknown: the solution set of an equation, on the bounded
     hull of the region the other givens and the domain leave when there is one, must be a finite set of
-    an equation whose class proves it complete: a rational one (SymPy's real roots), or a trigonometric
-    one the guarded solveset solves exactly (sandbox.exactsets). SymPy's finite set of any other equation
-    is no proof: exp(x) = 3*x is W0 and W-1, sqrt and Abs equations go through branches (review of
-    2 Oct 2026: (x + 1)*Q = 0 with 0 < x < 4 gave pi/3 CORRECT, pi is a root too). The other equations
-    are then checked at each of its points."""
-    if all(_algebraic(e, syms) for e in eqs):
-        return sols, "rational_system"
+    an equation whose class proves it complete (sandbox.exactsets.class_solveset: rational, one
+    trigonometric function or same-frequency sin/cos combination, one strictly monotone function, of a
+    linear argument, and products of these). SymPy's finite set of any other equation is no proof:
+    exp(x) = 3*x is W0 and W-1, sqrt and Abs equations go through branches (review of 2 Oct 2026:
+    (x + 1)*Q = 0 with 0 < x < 4 gave pi/3 CORRECT, pi is a root too). The other equations are then
+    checked at each of its points. Several unknowns: a rational system (`_polynomial_system_worker`)."""
+    if all(_algebraic(e, syms) for e in eqs) and len(syms) > 1:
+        r = sb_run("mathverify.certify.algebra:_polynomial_system_worker", eqs, syms, timeout=ctx.timeout)
+        if not r.ok:
+            return None, f"system_completeness_failed: {r.error}"
+        out, how = r.value
+        return out, how
     if len(syms) != 1:
         return None, "transcendental_system_in_several_unknowns"
     v = syms[0]
@@ -636,9 +654,10 @@ def _complete_solutions(eqs, ineqs, syms, sols, ctx: Ctx) -> tuple[list | None, 
     found = None
     for e in eqs:
         er = real_odd_roots(e)
-        if not (_algebraic(er, [v]) or at_risk(er, v)):
-            continue                           # a class that proves no completeness
-        rr = sb_run("mathverify.sandbox.ops:solveset_in", er, v, window, timeout=ctx.timeout)
+        # the exact classes only (sandbox.exactsets.class_solveset): a rational equation, one trigonometric
+        # function or a same-frequency sin/cos combination of a linear argument, one strictly monotone
+        # function (exp, a**x, log, sinh, atan) of a linear argument, and products of these
+        rr = sb_run("mathverify.sandbox.exactsets:class_solveset", er, v, window, timeout=ctx.timeout)
         if rr.ok and (rr.value is S.EmptySet or isinstance(rr.value, FiniteSet)):
             found = (e, list(rr.value))
             break
@@ -652,6 +671,137 @@ def _complete_solutions(eqs, ineqs, syms, sols, ctx: Ctx) -> tuple[list | None, 
         if all(holds):
             out.append({v: c})
     return out, f"solveset_on {window}"
+
+
+_MAX_STANDARD_MONOMIALS = 20000
+
+
+def _is_zero_algebraic(z) -> bool | None:
+    """Is the algebraic number z zero? Its minimal polynomial decides it (that of 0 is the variable
+    itself); None when it is not computed (z not algebraic, or too hard)."""
+    if z == 0:
+        return True
+    try:
+        t = sp.Dummy("t")
+        return sp.minimal_polynomial(z, t) == t
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _is_real_algebraic(v) -> bool | None:
+    """Is the algebraic number v real? v is one root of its minimal polynomial m; the roots of m are
+    isolated exactly (CRootOf, which knows whether each is real), and v's value to 50 digits must lie
+    nearer to one of them than a tenth of their least separation: that root is v. No sign is read off
+    a rounded imaginary part (Cardano's form of a real root has one). None when undecided."""
+    try:
+        t = sp.Dummy("t")
+        m = sp.Poly(sp.minimal_polynomial(v, t), t)
+        if m.degree() == 1:
+            return True
+        roots = m.all_roots()
+        approx = [complex(sp.N(r_, 50)) for r_ in roots]
+        sep = min(abs(a - b) for i, a in enumerate(approx) for b in approx[i + 1:])
+        x = complex(sp.N(v, 50))
+        near = [r_ for r_, a in zip(roots, approx) if abs(a - x) < sep / 10]
+        if len(near) != 1:
+            return None
+        return bool(near[0].is_real)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _polynomial_system_worker(eqs, syms):
+    """Worker: (the real solutions of a rational system in several unknowns, how), the list None unless
+    it is PROVED complete. `solve`'s list for such a system is no proof by itself, so:
+    - a linear system (constant denominators): `solve` solves it completely, parametric when
+      underdetermined (Gaussian elimination);
+    - otherwise the numerators must span a zero-dimensional ideal I (lex Gröbner basis). For each unknown
+      the ideal holds a polynomial in that unknown alone (the elimination polynomial); I plus their
+      square-free parts is the radical of I (Seidenberg's lemma), and the dimension of the quotient by
+      it (its standard monomials) is the number of distinct complex solutions. `solve` (over the
+      complex numbers) must give as many points, each proved a solution and proved distinct from the
+      others (minimal polynomials of algebraic numbers): then none is missing.
+    The non-real points and those where a denominator vanishes are dropped; a point whose realness or
+    denominator no check decides leaves the list unproved."""
+    plain = [sp.Dummy(str(v)) for v in syms]
+    back = dict(zip(plain, syms))
+    nums, dens = [], []
+    for e in eqs:
+        n, d = sp.fraction(sp.together((e.lhs - e.rhs).xreplace(dict(zip(syms, plain)))))
+        nums.append(sp.expand(n))
+        dens.append(d)
+    polys = [sp.Poly(n, *plain) for n in nums if n != 0]
+    if not polys:
+        return None, "identity_system"
+    if all(p.total_degree() <= 1 for p in polys) and all(not (d.free_symbols & set(plain)) for d in dens):
+        out = []
+        for s_ in sp.solve(nums, plain, dict=True):
+            real = [_is_real_algebraic(v) for v in s_.values() if not v.free_symbols]
+            if any(r_ is None for r_ in real):
+                return None, "realness_undecided"
+            if all(real):
+                out.append({back[k]: v.xreplace(back) for k, v in s_.items()})
+        return out, "linear_system"
+    G = sp.groebner(polys, *plain, order="lex")
+    if list(G.exprs) == [1]:
+        return [], "inconsistent_system"
+    if not G.is_zero_dimensional:
+        return None, "system_not_zero_dimensional"
+    extra = []
+    for j, x in enumerate(plain):
+        order = plain[:j] + plain[j + 1:] + [x]
+        Gj = sp.groebner(polys, *order, order="lex")
+        elim = [g for g in Gj.exprs if g.free_symbols <= {x}]
+        if not elim:
+            return None, f"no_elimination_polynomial_in {back[x]}"
+        extra.append(sp.sqf_part(elim[0], x))
+    R = sp.groebner(polys + [sp.Poly(q, *plain) for q in extra], *plain, order="lex")
+    lms = [p.monoms(order="lex")[0] for p in R.polys]
+    bounds = []
+    for j in range(len(plain)):
+        pure = [m[j] for m in lms if all(k == 0 for i, k in enumerate(m) if i != j)]
+        bounds.append(min(pure))
+    total = 1
+    for b in bounds:
+        total *= b
+    if total > _MAX_STANDARD_MONOMIALS:
+        return None, "quotient_too_large"
+    import itertools
+    dim = sum(1 for m in itertools.product(*[range(b) for b in bounds])
+              if not any(all(m[i] >= l_[i] for i in range(len(plain))) for l_ in lms))
+    found = []
+    for s_ in sp.solve(nums, plain, dict=True):
+        if set(s_) != set(plain) or any(v.free_symbols for v in s_.values()):
+            return None, "solve_gave_a_non_point"
+        for n in nums:
+            z = _is_zero_algebraic(sp.expand(n.xreplace(s_)))
+            if z is not True:
+                return None, "solve_point_not_proved_a_solution"
+        same = False
+        for u in found:
+            eq_ = [_is_zero_algebraic(s_[x] - u[x]) for x in plain]
+            if any(q is None for q in eq_):
+                return None, "solve_points_not_proved_distinct"
+            if all(eq_):
+                same = True
+                break
+        if not same:
+            found.append(s_)
+    if len(found) != dim:
+        return None, f"solve_found_{len(found)}_of_{dim}_solutions"
+    out = []
+    for s_ in found:
+        real = [_is_real_algebraic(s_[x]) for x in plain]
+        if any(r_ is None for r_ in real):
+            return None, "realness_undecided"
+        if not all(real):
+            continue
+        zero = [_is_zero_algebraic(sp.expand(d.xreplace(s_))) for d in dens if d.free_symbols & set(plain)]
+        if any(z is None for z in zero):
+            return None, "denominator_undecided"
+        if not any(zero):
+            out.append({back[x]: s_[x] for x in plain})
+    return out, f"zero_dimensional_ideal_{dim}_solutions"
 
 
 def _verify_evaluate(ir, solution, ctx: Ctx, t):
