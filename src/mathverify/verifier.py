@@ -529,12 +529,14 @@ def _bare_n_as_set(s: str) -> str:
     return "".join(out) + s[last:]
 
 
-def _naturals_zero_reading(problem_ir: dict, solution: dict) -> tuple[dict, dict] | None:
+def _naturals_zero_reading(problem_ir: dict, solution: dict) -> tuple[dict, dict] | str | None:
     """The problem and the solution with every ℕ written without a mark read as {0, 1, 2, ...}, or None
     when they write none. ℕ, `Naturals` (also SymPy's `S.Naturals`) and \\mathbb{N} anywhere; a bare `N`
-    where a set is read (the domain of discourse, a constraint, a claimed answer, an option), unless the
-    problem declares a variable N."""
+    where a set is read (the domain of discourse, a constraint, a claimed answer, an option). When the
+    problem also declares a variable N such a bare `N` is either one: "clash" (the verifier abstains; read
+    once, the dod "N" next to a variable N certified {3} for x² − 3x = 0, attack of part d4a)."""
     names = {str((v or {}).get("name")) for v in problem_ir.get("vars") or [] if isinstance(v, dict)}
+    clash = []
 
     def every(s: str) -> str:
         s = _NAT_UNICODE.sub("ℕ0", s)
@@ -544,7 +546,13 @@ def _naturals_zero_reading(problem_ir: dict, solution: dict) -> tuple[dict, dict
     def walk(o, set_text: bool):
         if isinstance(o, str):
             o = every(o)
-            return _bare_n_as_set(o) if set_text and "N" not in names else o
+            if not set_text:
+                return o
+            if "N" in names:
+                if _bare_n_as_set(o) != o:
+                    clash.append(o)
+                return o
+            return _bare_n_as_set(o)
         if isinstance(o, dict):
             return {k: walk(v, set_text or k in ("domain_of_discourse", "constraints", "payload", "options"))
                     for k, v in o.items()}
@@ -553,6 +561,8 @@ def _naturals_zero_reading(problem_ir: dict, solution: dict) -> tuple[dict, dict
         return o
 
     ir2, sol2 = walk(problem_ir, False), walk(solution, False)
+    if clash:
+        return "clash"
     if ir2 == problem_ir and sol2 == solution:
         return None
     return ir2, sol2
@@ -571,6 +581,9 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
         raise
     except Exception:  # noqa: BLE001 - not readable as dicts: the reading below reports it
         zero = None
+    if zero == "clash":
+        return [unknown("intake.naturals", "naturals_convention: N is a declared variable and a set here",
+                        flags=["naturals_convention"])], []
     layers, flags = _verify_layers(problem_ir, solution, seed, timeout, run_steps)
     if zero is None:
         return layers, flags

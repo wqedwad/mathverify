@@ -402,3 +402,58 @@ def test_lean_statement_refuses_conventions():
            "answer_shape": "set"}
     assert build_statement(dom, {"kind": "interval", "payload": "Reals"}) is None
     assert build_statement(ev("binomial(5, 2)"), {"kind": "value", "payload": "10"}) is not None
+
+
+# ---------------------------------------------------------------------------- review of part d4a (attack A)
+def simp(e, vars_=(X,)):
+    return {"task": {"kind": "simplify_expression", "params": {"expr": e}}, "vars": list(vars_), "givens": [],
+            "answer_shape": "expression"}
+
+
+@pytest.mark.parametrize("e,claim", [("(x**3)**(1/3)", "Abs(x)"), ("x**(1/3)", "Abs(x)**(1/3)"),
+                                     ("(x**5)**(1/5)", "Abs(x)"), ("((x - 1)**3)**(1/3)", "Abs(x - 1)"),
+                                     ("x**(1/3)*x**(2/3)", "Abs(x)"), ("x**(1/3) + cbrt(x)", "2*Abs(x)**(1/3)"),
+                                     (r"x^{\frac{1}{3}}", "Abs(x)**(1/3)")])
+def test_a_claim_true_on_the_nonnegative_side_only_is_refuted(e, claim):
+    # wrong at x = -2 under both readings (real root -2, principal value 2·e^{iπ/3}, against 2)
+    assert verdict(simp(e), sol(claim, kind="expression")) == "INCORRECT"
+
+
+def test_evaluate_without_givens_reads_the_convention_points():
+    assert verdict(ev("(a**3)**(1/3)", [{"name": "a", "domain": "real"}]), sol("Abs(a)", kind="expression")) \
+        == "INCORRECT"
+
+
+@pytest.mark.parametrize("e,claim", [("x**(1/3)", "cbrt(x)"), ("x**(2/3)", "cbrt(x)**2"), ("(x**3)**(2/3)", "x**2"),
+                                     ("x**(1/3)*x**(2/3)", "x"), ("(x**3)**(1/3) + x", "2*x"),
+                                     ("x**(2/3)", "Abs(x)**(2/3)")])
+def test_a_claim_true_under_one_reading_only_decides_nothing(e, claim):
+    assert verdict(simp(e), sol(claim, kind="expression")) == "UNKNOWN"
+
+
+def test_no_value_convention_keeps_the_verdict():
+    assert verdict(simp("x**(1/3)*x**(2/3)", [XP]), sol("x", kind="expression")) == "CORRECT"
+    assert verdict(simp("cbrt(x)**3"), sol("x", kind="expression")) == "CORRECT"
+    assert verdict(simp("x**0"), sol("1", kind="expression")) == "CORRECT"
+
+
+def test_convention_counterexample_helper():
+    from mathverify.certify.base import convention_counterexample, make_ctx
+    from mathverify.ir import ProblemIR
+    ctx = make_ctx(ProblemIR.from_dict(simp("(x**3)**(1/3)")))
+    x = ctx.sym("x")
+    t = (x ** 3) ** sp.Rational(1, 3)
+    present, pt = convention_counterexample(ctx, sp.Abs(x), t, [x])
+    assert present and pt is not None and sp.sympify(pt["x"]) < 0
+    present, pt = convention_counterexample(ctx, x, t, [x])
+    assert present and pt is None
+    assert ctx.value_convention_region(x) == sp.Interval.open(-sp.oo, 0)
+    ctx2 = make_ctx(ProblemIR.from_dict(simp("x**0")))
+    assert convention_counterexample(ctx2, sp.Integer(1), sp.Integer(1), [ctx2.sym("x")]) == (False, None)
+
+
+def test_a_variable_named_n_next_to_the_set_n():
+    q = {**solve("x**2 - 3*x = 0", dod="N"), "vars": [X, {"name": "N", "domain": "real"}]}
+    r = verify(q, sol("{3}", kind="set"))
+    assert r.verdict == "UNKNOWN" and "naturals_convention" in r.flags
+    assert verdict(ev("N", [{"name": "N", "domain": "real"}], ["N = 3"]), sol("3")) == "CORRECT"

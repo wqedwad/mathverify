@@ -588,6 +588,8 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
                                      rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
         ev["compare"] = cev
         ev["method"] = "direct"
+        if dom and ok is not False:
+            ok = _beyond_value_conventions(ctx, claimed, target, sorted(dom, key=lambda s_: s_.name), ok, ev)
         # a variable the problem confines to finitely many values where a range runs backwards
         # (the constraint n**2 = 4 next to Σ_{k=1}^{n} k): those values are candidates, neither kept
         # nor dropped (_filter_solutions); a formula's variable (n an integer) is compared where the
@@ -651,6 +653,24 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
     if ok is False:
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
     return unknown(LAYER, "undecided", 0, ev)
+
+
+def _beyond_value_conventions(ctx: Ctx, claimed, truth, syms, ok, ev: dict):
+    """The comparison's verdict once the points `domain_for` left out because a value of the problem is
+    another value there under the other convention are read too (`convention_counterexample`): refuted
+    where both readings differ, otherwise never certified (part d4a, attack A: Abs(x) for (x**3)**(1/3)
+    was CORRECT, it is wrong at x = -2 under both readings; cbrt(x) for x**(1/3) holds under one)."""
+    from .base import convention_counterexample
+    present, pt = convention_counterexample(ctx, claimed, truth, syms)
+    if not present:
+        return ok
+    if pt is not None:
+        ev["reason"] = "differs_where_a_value_is_a_convention"
+        ev["counterexample_both_readings"] = pt
+        return False
+    ev["value_convention_region"] = {str(s_): str(ctx.value_convention_region(s_)) for s_ in syms
+                                     if ctx.ns.get(s_.name) == s_}
+    return None
 
 
 def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[bool | None, str]:
@@ -735,6 +755,8 @@ def _verify_simplify(ir, solution, ctx: Ctx, t):
         return unknown(LAYER, f"claim_as_written_undecided: {why}", 0, {"expr": str(expr), "claimed": str(claimed)})
     ok, cev = answers_equivalent(claimed, expr, shape="expression", domain=dom)
     ev = {"expr": str(expr), "claimed": str(claimed), "compare": cev, "domain": {str(k): str(v) for k, v in dom.items()}}
+    if ok is not False:
+        ok = _beyond_value_conventions(ctx, claimed, expr, syms, ok, ev)
     if ok is True:
         return result(LAYER, "pass", 0.99 if cev.get("method") == "symbolic" else 0.97, True, ev, t.ms, primary=True)
     if ok is False:

@@ -93,7 +93,7 @@ class Ctx:
         conds, nowhere = self.written_conditions()
         if var in nowhere:
             dom = S.EmptySet
-        from .domain import is_convention
+        from .domain import is_convention, is_range_span
         spans: list = []
         for c in conds:
             c = self._with_bound_values(c, var)
@@ -120,6 +120,12 @@ class Ctx:
                 continue
             if not isinstance(sol, sp.ConditionSet):
                 dom = sp.Intersection(dom, sol)
+        from .domain import is_value_convention
+        # the points where a value of the problem is ANOTHER value under the other reading (an odd root:
+        # the principal value; Mod: Euclidean): see value_convention_region
+        _, vback = self._forward_ranges(dom, [c for c in spans if is_value_convention(c)
+                                              and not is_range_span(c)], var)
+        self.cache[f"valueconv:{var.name}"] = vback
         dom, back = self._forward_ranges(dom, spans, var)
         if back is not S.EmptySet:
             unapplied += [c for c in spans if c not in unapplied]
@@ -157,6 +163,15 @@ class Ctx:
         0 <= r <= n, Mod with a divisor that is not positive, a Sum/Product range that runs backwards.
         `domain_for` leaves them out, and a candidate there is neither kept nor dropped."""
         return self.reversed_region(var)
+
+    def value_convention_region(self, var: sp.Symbol) -> sp.Set:
+        """The part of `convention_region` where the other reading gives ANOTHER value, not "undefined":
+        an odd root of a negative base (real root or principal value), Mod by a divisor that is not
+        positive (floored or Euclidean). There a comparison made on `domain_for` alone decides nothing:
+        (x**3)**(1/3) agrees with Abs(x) on x >= 0 and Abs(x) was certified (part d4a, attack A). See
+        `convention_counterexample`. A Sum range that runs backwards is left to §80's own rules."""
+        self.domain_for(var)
+        return self.cache.get(f"valueconv:{var.name}", S.EmptySet)
 
     def reversed_region(self, var: sp.Symbol) -> sp.Set:
         """The points of `var`'s domain (the declarations, constraints, side conditions and written
@@ -622,6 +637,63 @@ def unknown(layer: str, reason: str, ms: float = 0.0, evidence: dict | None = No
     ev = dict(evidence or {})
     ev["reason"] = reason
     return result(layer, "unknown", 0.0, False, ev, ms, flags=flags)
+
+
+def convention_counterexample(ctx: Ctx, claimed, truth, syms, n: int = 12) -> tuple[bool, dict | None]:
+    """(whether a symbol of the comparison has points where a value of the problem is another value under
+    the other convention (`Ctx.value_convention_region`), a point there where the two sides differ under
+    BOTH readings or None). The comparisons read the sides on `domain_for`, which leaves those points
+    out, so agreement there certifies nothing: a claim equal to the problem's expression on x >= 0 only
+    (Abs(x) for (x**3)**(1/3)) was CORRECT (part d4a, attack A). A point where the readings differ on
+    whether the sides agree (cbrt(x) for x**(1/3) at -8) decides nothing; one where both readings
+    differ (Abs(-2) = 2 against -2 and 1 + √3 i) refutes the claim."""
+    from ..equiv.random_point import sample_points
+    from ..equiv.sets import scalar_equal
+    regions = {}
+    for s_ in syms:
+        if self_ok(ctx, s_):
+            r = ctx.value_convention_region(s_)
+            try:
+                empty = r.is_empty
+            except Exception:  # noqa: BLE001
+                empty = None
+            if empty is not True:
+                regions[s_] = r
+    if not regions:
+        return False, None
+    doms = {s_: regions.get(s_, ctx.domain_for(s_) if self_ok(ctx, s_) else S.Reals) for s_ in syms}
+    pts: list[dict] = []
+    for v, r in regions.items():
+        for c in (-1, -2, -8, sp.Rational(-1, 2), -27, -3, 1, 2):
+            try:
+                if r.contains(c) is sp.true:
+                    pts.append({v: sp.Integer(c) if isinstance(c, int) else c})
+            except Exception:  # noqa: BLE001
+                continue
+    try:
+        pts += sample_points(doms, n, ctx.seed)
+    except Exception:  # noqa: BLE001
+        pass
+    for pt in pts:
+        full = dict(pt)
+        for s_ in syms:
+            if s_ not in full:
+                full[s_] = sp.Integer(1) if doms[s_].contains(1) is sp.true else None
+        if any(v is None for v in full.values()):
+            continue
+        try:
+            a, b = sp.sympify(claimed).xreplace(full), sp.sympify(truth).xreplace(full)
+            if a.free_symbols or b.free_symbols or a.has(sp.nan, sp.zoo) or b.has(sp.nan, sp.zoo):
+                continue
+            if scalar_equal(a, b) is False:
+                return True, {str(k): str(v) for k, v in full.items()}
+        except Exception:  # noqa: BLE001
+            continue
+    return True, None
+
+
+def self_ok(ctx: Ctx, s_) -> bool:
+    return isinstance(s_, sp.Symbol) and ctx.ns.get(s_.name) == s_
 
 
 def condition_not_applied(layer: str, conds, ms: float = 0.0, evidence: dict | None = None) -> LayerResult:

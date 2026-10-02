@@ -458,12 +458,12 @@ def cases_s():
         ("domain_of cbrt(x) -> [0, oo)", dom_of("cbrt(x)"), ival("Interval(0, oo)"), NOTOK, None),
         ("derivative of x**(1/3) at -8 -> 1/12", kind("derivative", {"f": "x**(1/3)", "var": "x", "at": "-8"}),
          sol("1/12"), UNK, None),
-        ("limit x**(1/3) at -8 -> -2", kind("limit", {"expr": "x**(1/3)", "var": "x", "point": "-8"}), sol("-2"),
+        ("limit x**(1/3) at -8 -> -2", kind("limit", {"expr": "x**(1/3)", "var": "x", "to": "-8"}), sol("-2"),
          UNK, None),
-        ("limit cbrt(x) at -8 -> 1+sqrt3 I", kind("limit", {"expr": "cbrt(x)", "var": "x", "point": "-8"}),
+        ("limit cbrt(x) at -8 -> 1+sqrt3 I", kind("limit", {"expr": "cbrt(x)", "var": "x", "to": "-8"}),
          sol(CPLX), NOTOK, None),
         ("min of x**(1/3) on [-8, 8] -> -2", kind("extremum", {"f": "x**(1/3)", "var": "x", "interval": "[-8, 8]",
-                                                              "type": "min"}), sol("-2"), UNK, None),
+                                                              "which": "min"}), sol("-2"), UNK, None),
         # the claim's own value is a convention
         ("evaluate 5**0, claim 0**0", ev("5**0"), sol("0**0"), UNK, None),
         ("evaluate cos(0), claim 0**0", ev("cos(0)"), sol("0**0"), UNK, None),
@@ -529,7 +529,57 @@ def cases_s():
     ]
 
 
-GROUPS = {"C": cases_c, "N": cases_n, "B": cases_b, "O": cases_o, "M": cases_m, "D": cases_d, "Z": cases_z,
+def cases_a():
+    """The review of part d4a (attack A): a comparison read on `domain_for`, which leaves out the points
+    where an odd root written as a power has a negative base, certified a claim true on x >= 0 only.
+    Both readings refute Abs(x) for (x**3)**(1/3) at x = -2 (-2, or 2·e^{iπ/3}, against 2); a claim that
+    holds under one reading only (cbrt(x) for x**(1/3)) decides nothing. Also a variable N next to the set N."""
+    A_ = {"name": "a", "domain": "real"}
+
+    def k(kind_, params, shape="scalar", vars_=(X,)):
+        return {"task": {"kind": kind_, "params": params}, "vars": list(vars_), "givens": [], "answer_shape": shape}
+    ex = lambda p: sol(p, kind="expression")  # noqa: E731
+    return [
+        ("simplify (x**3)**(1/3) -> Abs(x)", simp("(x**3)**(1/3)"), ex("Abs(x)"), NO, None),
+        ("simplify x**(1/3) -> Abs(x)**(1/3)", simp("x**(1/3)"), ex("Abs(x)**(1/3)"), NO, None),
+        ("simplify (x**5)**(1/5) -> Abs(x)", simp("(x**5)**(1/5)"), ex("Abs(x)"), NO, None),
+        ("simplify ((x-1)**3)**(1/3) -> Abs(x-1)", simp("((x - 1)**3)**(1/3)"), ex("Abs(x - 1)"), NO, None),
+        ("simplify x**(1/3)*x**(2/3) -> Abs(x)", simp("x**(1/3)*x**(2/3)"), ex("Abs(x)"), NO, None),
+        ("simplify x**(1/3) + cbrt(x) -> 2*Abs(x)**(1/3)", simp("x**(1/3) + cbrt(x)"), ex("2*Abs(x)**(1/3)"),
+         NO, None),
+        ("simplify LaTeX x^{1/3} -> Abs(x)**(1/3)", simp(r"x^{\frac{1}{3}}"), ex("Abs(x)**(1/3)"), NO, None),
+        ("evaluate (a**3)**(1/3) -> Abs(a)", ev("(a**3)**(1/3)", [A_]), ex("Abs(a)"), NO, None),
+        ("options: simplify (x**3)**(1/3), A = Abs(x)", {**simp("(x**3)**(1/3)"), "options": {"A": "Abs(x)", "B": "-x"}},
+         sol(None, kind="expression", option="A"), NOTOK, None),
+        # one reading only
+        ("simplify x**(1/3) -> cbrt(x)", simp("x**(1/3)"), ex("cbrt(x)"), UNK, None),
+        ("simplify x**(2/3) -> cbrt(x)**2", simp("x**(2/3)"), ex("cbrt(x)**2"), UNK, None),
+        ("simplify (x**3)**(2/3) -> x**2", simp("(x**3)**(2/3)"), ex("x**2"), UNK, None),
+        ("simplify x**(1/3)*x**(2/3) -> x", simp("x**(1/3)*x**(2/3)"), ex("x"), UNK, None),
+        ("simplify (x**3)**(1/3) + x -> 2*x", simp("(x**3)**(1/3) + x"), ex("2*x"), UNK, None),
+        ("simplify x**(2/3) -> Abs(x)**(2/3)", simp("x**(2/3)"), ex("Abs(x)**(2/3)"), UNK, None),
+        ("derivative (x**3)**(1/3) -> sign(x)", k("derivative", {"f": "(x**3)**(1/3)", "var": "x"}, "expression"),
+         ex("sign(x)"), NOTOK, None),
+        ("antiderivative (x**3)**(1/3) -> x*Abs(x)/2", k("antiderivative", {"integrand": "(x**3)**(1/3)", "var": "x"},
+                                                         "expression"), ex("x*Abs(x)/2 + C"), NOTOK, None),
+        ("limit (x**3)**(1/3) at -2 -> 2", k("limit", {"expr": "(x**3)**(1/3)", "var": "x", "to": "-2"}), sol("2"),
+         NOTOK, None),
+        ("min of (x**3)**(1/3) on [-2, 1] -> 0", k("extremum", {"f": "(x**3)**(1/3)", "var": "x", "interval": "[-2, 1]",
+                                                               "which": "min"}), sol("0"), NOTOK, None),
+        # controls: no value convention
+        ("simplify positive x**(1/3)*x**(2/3) -> x", simp("x**(1/3)*x**(2/3)", [XP]), ex("x"), OK, None),
+        ("simplify cbrt(x)**3 -> x", simp("cbrt(x)**3"), ex("x"), OK, None),
+        ("simplify x**0 -> 1 (0**0: 1 or undefined)", simp("x**0"), ex("1"), OK, None),
+        ("limit cbrt(x) at -8 -> -2", k("limit", {"expr": "cbrt(x)", "var": "x", "to": "-8"}), sol("-2"), OK, None),
+        ("min of cbrt(x) on [-8, 1] -> -2", k("extremum", {"f": "cbrt(x)", "var": "x", "interval": "[-8, 1]",
+                                                           "which": "min"}), sol("-2"), NOTNO, None),
+        # a variable N and the set N
+        ("vars x, N; dod N: x^2-3x=0 -> {3}", {**solve("x**2 - 3*x = 0", dod="N"),
+                                              "vars": [X, {"name": "N", "domain": "real"}]}, sset("{3}"), UNK, None),
+    ]
+
+
+GROUPS = {"A": cases_a, "C": cases_c, "N": cases_n, "B": cases_b, "O": cases_o, "M": cases_m, "D": cases_d, "Z": cases_z,
           "K": cases_k, "S": cases_s}
 
 
@@ -541,7 +591,7 @@ def _statuses_ok(want, got):
     return all(g in want for g in got)
 
 
-def main(out_path=None, groups="CNBOMDZSK"):
+def main(out_path=None, groups="ACNBOMDZSK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -579,5 +629,5 @@ def main(out_path=None, groups="CNBOMDZSK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "CNBOMDZSK"
+    grp = args[1] if len(args) > 1 else "ACNBOMDZSK"
     sys.exit(1 if main(out, grp) else 0)
