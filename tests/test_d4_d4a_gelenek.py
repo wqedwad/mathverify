@@ -457,3 +457,11 @@ def test_a_variable_named_n_next_to_the_set_n():
     r = verify(q, sol("{3}", kind="set"))
     assert r.verdict == "UNKNOWN" and "naturals_convention" in r.flags
     assert verdict(ev("N", [{"name": "N", "domain": "real"}], ["N = 3"]), sol("3")) == "CORRECT"
+
+
+def test_z3_reads_the_written_real_root():
+    """The z3 layer itself certifies cbrt(x) = -2 → {-8}: it reads sign(x)·|x|**(1/3). Since round 5 of
+    part d4b the algebra layer proves it too (the cells of sign and Abs), so the verdict alone no longer
+    shows the bridge (mutation Z08 survived)."""
+    r = verify(solve("cbrt(x) = -2"), sol("{-8}", kind="set"))
+    assert next(la for la in r.layers if la.layer == "certify.wordproblem").verdict == "pass"
