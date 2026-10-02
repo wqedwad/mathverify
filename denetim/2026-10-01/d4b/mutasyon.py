@@ -82,7 +82,7 @@ MUTATIONS = [
      "        if False:\n            # the domain is cut", T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
     ("D07 çelişki denetimi ℝ'de tümleyen alır", DOM, "        out = sp.Complement(within, s)", "        out = sp.Complement(S.Reals, s)",
      T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
-    ("D06 domain_of koşulu tabanda çözülmez", DOM, "        within = base if at_risk(cond, var) else S.Reals\n",
+    ("D06 domain_of koşulu tabanda çözülmez", DOM, "        within = base if at_risk(cond, var) and _hull(base) is not None else S.Reals\n",
      "        within = S.Reals\n", T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
     # --- Ctx
     ("B01 kısıt ertelenmez", BASE, "                        if r.free_symbols == {var} and at_risk(r, var):",

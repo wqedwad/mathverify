@@ -19,7 +19,7 @@ from ..equiv.numeric import (num_equal, to_mp, certified_sign, certified_integer
 from ..equiv.symbolic import sym_equal
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run
-from ..sandbox.exactsets import at_risk, exact_solveset
+from ..sandbox.exactsets import _hull, at_risk, exact_solveset
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 
 LAYER = "certify.domain"
@@ -1164,8 +1164,10 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
     ev: dict[str, Any] = {"conditions": [str(c) for c in conds]}
     dom = base
     for cond in conds:
-        # a trigonometric condition on the base itself (sandbox.exactsets rebuilds it on a bounded one)
-        within = base if at_risk(cond, var) else S.Reals
+        # a trigonometric condition on a bounded base is solved on it (sandbox.exactsets rebuilds and
+        # checks it there); otherwise on ℝ, where the exact check below reads SymPy's own set (the base
+        # may carry SymPy's mistake: cos(arccot(x) + arccot(2)) != 0 read as x != -2)
+        within = base if at_risk(cond, var) and _hull(base) is not None else S.Reals
         r = sb_run("mathverify.sandbox.ops:solveset_in", cond, var, within, timeout=timeout)
         if not r.ok or isinstance(r.value, sp.ConditionSet):
             ev["fallback"] = "continuous_domain"
