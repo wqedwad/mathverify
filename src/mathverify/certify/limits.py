@@ -459,7 +459,8 @@ def verify(ir, solution, ctx: Ctx):
                            {"var": str(var), "to": str(point), "side": str(side)},
                            flags=["approach_outside_declared_domain"])
         side = within
-        written, nowhere = written_definedness(p["expr"], ctx.ns)
+        # the pinned values go in before the conditions are read: x**a has x > 0 only while a is free (TAN-09)
+        written, nowhere = written_definedness(p["expr"], ctx.ns, pins)
         if pins:
             written = [c.xreplace(pins) if isinstance(c, sp.Basic) else c for c in written]
         if nowhere or written_undefined_everywhere(p["expr"], ctx.ns):

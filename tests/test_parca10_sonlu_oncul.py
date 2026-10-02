@@ -235,7 +235,9 @@ def test_a_limit_or_a_derivative_is_compared_at_each_value_without_substitution(
     (_ir("n*(n + 1)/2", [NP], ["n = 3"]), "6", _c(f"{S} = 6"), "CORRECT", "verified"),      # part 8
     (_ir("n*(n + 1)/2", [NP], ["n = 3"]), "6", _c(f"{S} = 7"), "INCORRECT", "refuted"),
     (_ir("n*(n + 1)/2", [NP], ["n > 2"]), "6", _c(f"{S} = 6"), "INCORRECT", "refuted"),
-    (_ir("a", [A], ["a = 3", "a = 2"]), "6", _c("Sum(a*k, (k, 1, 2)) = 9"), None, "refuted"),  # no instance
+    # no instance: since part d4d (fourth audit G7/TAN-04) the verifier abstains on the problem itself
+    # (ir_inconsistent) before any step is read
+    (_ir("a", [A], ["a = 3", "a = 2"]), "6", _c("Sum(a*k, (k, 1, 2)) = 9"), "UNKNOWN", None),
     (_ir("n**3", [N], ["n**2 = 4", "n > 0"]), "9", _c("n**3 = 8"), "INCORRECT", "verified"),  # wrong answer
     # an eq step that is not proved does not confine n: n = -2 is still an instance
     (_ir("n**3", [N], ["n**2 = 4"]), "8", [("eq", "n > 0"), ("compute", "n**3 = 8")], "INCORRECT", "refuted"),
@@ -244,6 +246,9 @@ def test_a_limit_or_a_derivative_is_compared_at_each_value_without_substitution(
 ])
 def test_controls(ir, payload, steps, verdict, status):
     r = _run(ir, payload, steps)
+    if status is None:
+        assert r.verdict == verdict and not any(la.layer == "steps.refute" for la in r.layers)
+        return
     assert _last(r)["status"] == status and (verdict is None or r.verdict == verdict), \
         (r.verdict, _last(r)["status"], _last(r).get("evidence"))
 
