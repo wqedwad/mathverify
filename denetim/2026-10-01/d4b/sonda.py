@@ -14,6 +14,7 @@ others leave, `Ctx.cut_by`, the completeness rule of `algebra._complete_solution
     C  G3 / TAN-08: trig_solve with other conditions on the variable, an equation defined nowhere,
        count_solutions with a condition defined nowhere
     D  controls whose verdict must not change (no periodic condition, or one solved exactly)
+    E  the review of d4b (2 Oct 2026): no exact class, multiple roots, slowness; controls of the classes
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/d4b/sonda.py [out.json] [groups]
@@ -291,11 +292,12 @@ def cases_d():
          _sol("cos(x)", "expression"), NO, None),
         ("ctl eval x+y=5, x-y=1: 3", ev("x", ["x + y = 5", "x - y = 1"], [X, V("y")]), _sol("3"), OK, None),
         ("ctl eval x^2=49, sin>0: 7", ev("x", ["x**2 = 49", "sin(x) > 0"]), _sol("7"), NOTNO, None),
-        ("ctl eval exp(x)=2: log 2", ev("x", ["exp(x) = 2"]), _sol("log(2)"), OK, None),
-        ("ctl eval Abs(x-1)=2, x>0: 3", ev("x", ["Abs(x - 1) = 2", "x > 0"]), _sol("3"), OK, None),
+        # no exact class: SymPy's finite set is no proof of completeness (coverage given up, review of d4b)
+        ("ctl eval exp(x)=2: log 2", ev("x", ["exp(x) = 2"]), _sol("log(2)"), NOTNO, None),
+        ("ctl eval Abs(x-1)=2, x>0: 3", ev("x", ["Abs(x - 1) = 2", "x > 0"]), _sol("3"), NOTNO, None),
         ("ctl eval x^5-x=0, x>1/2: 1", ev("x", ["x**5 - x = 0", "x > 1/2"]), _sol("1"), OK, None),
         ("ctl eval floor(x)=2, 2x=5: 5/2", ev("x", ["floor(x) = 2", "2*x = 5"]), _sol("5/2"), NOTNO, None),
-        ("ctl eval sqrt(x)=2: 4", ev("x", ["sqrt(x) = 2"]), _sol("4"), OK, None),
+        ("ctl eval sqrt(x)=2: 4", ev("x", ["sqrt(x) = 2"]), _sol("4"), NOTNO, None),
         ("ctl croots x^2-4: 2", croots("x**2 - 4"), _sol("2", "count"), OK, None),
         ("ctl count_solutions x+y=4 1..3: 3",
          _ir("count_solutions", {"bounds": {"x": ["1", "3"], "y": ["1", "3"]}}, [V("x", "positive_integer"), V("y", "positive_integer")],
@@ -303,10 +305,61 @@ def cases_d():
     ]
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d}
+Q = "(sqrt(3)*sin(x) - cos(x) - 1)"          # its zeros on [0, 7]: pi/3 and pi
+W2 = ["x >= 0", "x <= 2*pi"]
+W7 = ["x >= 0", "x <= 7"]
 
 
-def main(out_path=None, groups="ABCD"):
+def cases_e():
+    """The review of d4b (2 Oct 2026): sets of equations with no exact class (B1), a multiple root a numeric
+    search misses (B2), the same as a side condition (B3), evaluate (B4), definedness (B5), slowness (B6)."""
+    return [
+        ("B1 eq x*Q=0 [0,2pi]: {0,pi/3}", eq(f"x*{Q} = 0", W2), _sol("{0, pi/3}", S_), NOTOK, None),
+        ("B1 eq x*Q=0 [0,2pi]: {0,pi/3,pi}", eq(f"x*{Q} = 0", W2), _sol("{0, pi/3, pi}", S_), NOTNO, None),
+        ("B1 eq (x+1)*Q=0 [0,2pi]: {pi/3}", eq(f"(x + 1)*{Q} = 0", W2), _sol("{pi/3}", S_), NOTOK, None),
+        ("B1 eq exp(x)*Q=0 [0,2pi]: {pi/3}", eq(f"exp(x)*{Q} = 0", W2), _sol("{pi/3}", S_), NOTOK, None),
+        ("B1 eq expanded x Q: {0,pi/3}", eq("sqrt(3)*x*sin(x) - x*cos(x) = x", W2), _sol("{0, pi/3}", S_), NOTOK, None),
+        ("B1 eq Q/x=0 [1,2pi]: {pi/3}", eq(f"{Q}/x = 0", ["x >= 1", "x <= 2*pi"]), _sol("{pi/3}", S_), NOTOK, None),
+        ("B1 eq (x-10)Q(2x)=0 [0,4]: {pi/6}", eq("(x - 10)*(sqrt(3)*sin(2*x) - cos(2*x) - 1) = 0", ["x >= 0", "x <= 4"]),
+         _sol("{pi/6}", S_), NOTOK, None),
+        ("B1 eq Q*sin(sqrt2 x)=0 [0,2]: {pi/3}", eq(f"{Q}*sin(sqrt(2)*x) = 0", ["x >= 0", "x <= 2"]), _sol("{0, pi/3}", S_),
+         NOTOK, None),
+        ("B1 croots x*Q on [0,2pi]: 2", croots(f"x*{Q}", W2), _sol("2", "count"), NOTOK, None),
+        ("B2 eq Q^3=0 [0,7]: {pi/3}", eq(f"{Q}**3 = 0", W7), _sol("{pi/3}", S_), NOTOK, None),
+        ("B2 ineq Q^3>0 [0,7]: {}", ineq(f"{Q}**3 > 0", W7), _sol("{}", S_), NOTOK, None),
+        ("B3 eq x^2=4 given Q^3>0 [0,7]: {}", eq("x**2 = 4", [f"{Q}**3 > 0"] + W7), _sol("{}", S_), NOTOK, None),
+        ("B3 eq x^2=4 given Q^3>0 [0,7]: {2}", eq("x**2 = 4", [f"{Q}**3 > 0"] + W7), _sol("{2}", S_), NOTNO, None),
+        ("B3 eq x^2=4 dod Q^3>0 [0,7]: {}", eq("x**2 = 4", W7, dod=f"{Q}**3 > 0"), _sol("{}", S_), NOTOK, None),
+        ("B3 eq x^2=4 cons Q^3>0 [0,7]: {}", eq("x**2 = 4", W7, vars_=[V("x", "real", [f"{Q}**3 > 0"])]), _sol("{}", S_),
+         NOTOK, None),
+        ("B3 croots x^2-4 given Q^3>0: 0", croots("x**2 - 4", [f"{Q}**3 > 0"] + W7), _sol("0", "count"), NOTOK, None),
+        ("B3 trig Q^3=0 [0,7]: {pi/3}", trig([f"{Q}**3 = 0"], "[0, 7]"), _sol("{pi/3}", S_), NOTOK, None),
+        ("B4 eval x | (x+1)Q=0, 0<x<4: pi/3", ev("x", [f"(x + 1)*{Q} = 0", "x > 0", "x < 4"]), _sol("pi/3"), NOTOK, None),
+        ("B4 eval x | Q^3=0, 0<x<4: pi/3", ev("x", [f"{Q}**3 = 0", "x > 0", "x < 4"]), _sol("pi/3"), NOTOK, None),
+        ("B4 eval x | exp(x)=3x: W0", ev("x", ["exp(x) = 3*x"]), _sol("-LambertW(-1/3)"), NOTOK, None),
+        ("B5 ext max on [2,4] undefined at pi", ext(f"-(x - pi)**2 + (x + 1)*{Q}/((x + 1)*{Q}) - 1", "max", "[2, 4]"),
+         _sol("0"), NOTOK, None),
+        ("B6 eq x^2=4 given sin(1000x)>0 [0,30]: {2}", eq("x**2 = 4", ["sin(1000*x) > 0", "x >= 0", "x <= 30"]),
+         _sol("{2}", S_), NOTNO, None),
+        ("B6 eq x^2=4 given Q^2+sin^2>0 [0,7]: {2}", eq("x**2 = 4", [f"{Q}**2 + sin(x)**2 > 0"] + W7), _sol("{2}", S_),
+         NOTNO, None),
+        # controls: the exact classes keep their verdicts
+        ("E ctl eq x*sin(x)=0 [0,7]: {0,pi,2pi}", eq("x*sin(x) = 0", W7), _sol("{0, pi, 2*pi}", S_), OK, None),
+        ("E ctl eq x*sin(x)=0 [0,7]: {0,pi}", eq("x*sin(x) = 0", W7), _sol("{0, pi}", S_), NO, None),
+        ("E ctl eq (x-1)^3 cos^3=0 [0,7]", eq("(x - 1)**3*cos(x)**3 = 0", W7), _sol("{1, pi/2, 3*pi/2}", S_), OK, None),
+        ("E ctl ineq sin^3>0 [0,7]", ineq("sin(x)**3 > 0", W7), _sol("Union(Interval.open(0, pi), Interval.Lopen(2*pi, 7))", "interval"),
+         OK, None),
+        ("E ctl eq 4sin^2=1 [0,2pi)", eq("4*sin(x)**2 = 1", ["x >= 0", "x < 2*pi"]),
+         _sol("{pi/6, 5*pi/6, 7*pi/6, 11*pi/6}", S_), OK, None),
+        ("E ctl cint -10..10 tan>0: 10", cint(["x >= -10", "x <= 10", "tan(x) > 0"], [V("x", "integer")]), _sol("10", "count"),
+         NOTNO, None),
+    ]
+
+
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e}
+
+
+def main(out_path=None, groups="ABCDE"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -343,5 +396,5 @@ def main(out_path=None, groups="ABCD"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCD"
+    grp = args[1] if len(args) > 1 else "ABCDE"
     sys.exit(1 if main(out, grp) else 0)

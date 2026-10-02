@@ -2093,7 +2093,10 @@ def parse_domain(spec: str | None, var, ns: dict[str, Any] | None = None) -> sp.
     s = preclean(str(spec))
     s = re.sub(r"^\s*" + re.escape(str(var)) + r"\s+in\s+", "", s)
     # relational spec like "x > 0 and x != 1"
-    if any(op in s for op in ("<", ">", "!=")) and not s.startswith(("Interval", "Union", "(", "[")):
+    # a relation that opens with a bracket, "(sqrt(3)*sin(x) - cos(x) - 1)**3 > 0", is a relation too: read as
+    # a set it was {that relation}, a domain no real number is in, and {} was certified for x**2 = 4 under it
+    # (review of d4b, 2 Oct 2026); an interval or set literal has no comparison in it
+    if any(op in s for op in ("<", ">", "!=")) and not s.startswith(("Interval", "Union")):
         conds = re.split(r"\s+and\s+|\s*&\s*|\s*∧\s*", s)
         dom = S.Reals
         from ..sandbox.exactsets import exact_solveset

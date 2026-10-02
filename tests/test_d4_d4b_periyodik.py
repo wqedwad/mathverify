@@ -118,8 +118,8 @@ def test_equations_keep_their_exact_sets():
     assert z.contains(2 * sp.pi) is sp.true and z.contains(1) is not sp.true
     assert exact_solveset(sp.sin(x) > 2, x, S.Reals) is S.EmptySet
     assert exact_solveset(sp.Ne(sp.cos(x) + 2, 0), x, S.Reals) == S.Reals
-    # not periodic, finitely many zeros and poles: SymPy's own set
-    assert exact_solveset(sp.Ne(sp.sin(sp.acot(x) + sp.acot(2)), 0), x, S.Reals) == sp.Complement(S.Reals, {-2})
+    # not one of the exact classes (the argument is not linear): unsolved, SymPy's own set is no proof
+    assert isinstance(exact_solveset(sp.Ne(sp.sin(sp.acot(x) + sp.acot(2)), 0), x, S.Reals), sp.ConditionSet)
     # point by point, a pole is no point
     assert exact_solveset(sp.Ne(sp.tan(x), 1), x, sp.FiniteSet(0, sp.pi / 4, sp.pi / 2)) == sp.FiniteSet(0)
     assert exact_solveset(sp.sin(x) > 0, x, sp.FiniteSet(7)) == sp.FiniteSet(7)
@@ -138,18 +138,42 @@ def test_a_set_of_points_repeating_with_a_period():
     assert set_is_empty(sp.Complement(zs, zc)) is False
 
 
-def test_a_period_and_the_zeros_are_confirmed(monkeypatch):
-    """What SymPy returns is checked: a wrong period (pi for sin x) and a point that is no zero are not
-    used (the guard against a wrong `periodicity` or `solveset`, simulated here)."""
-    import sympy.calculus.util as su
-    from mathverify.sandbox import exactsets
-    assert exactsets.period(sp.tan(x) - 1, x) == sp.pi
-    monkeypatch.setattr(su, "periodicity", lambda e, v: sp.pi)
-    assert exactsets.period(sp.sin(x), x) is None
-    monkeypatch.undo()
-    real = sp.solveset
-    monkeypatch.setattr(sp, "solveset", lambda r, v, d: sp.FiniteSet(sp.pi, 1) if r == sp.Eq(sp.sin(x), 0) else real(r, v, d))
-    assert exactsets._zeros_on(sp.sin(x), x, sp.Rational(1, 2), 4) is None
+Q = sp.sqrt(3) * sp.sin(x) - sp.cos(x) - 1            # its zeros on [0, 7]: pi/3 and pi
+
+
+def test_only_the_exact_classes_give_a_set():
+    """A set is exact only when its zeros and poles are known in closed form (a polynomial, a polynomial
+    in one trigonometric function of a linear argument, products and quotients of these). SymPy's set
+    of Q = 0 misses pi, of x*Q = 0 too, and a numeric root search misses the triple root of Q**3: none of
+    them is a set (review of 2 Oct 2026, B1, B2: {0, pi/3} and {pi/3} were CORRECT on 0ed77e2)."""
+    from mathverify.sandbox.exactsets import exact_solveset, period
+    W = sp.Interval(0, 7)
+    for e in (Q, x * Q, (x + 1) * Q, sp.exp(x) * Q, Q ** 3, Q / x, Q * sp.sin(sp.sqrt(2) * x)):
+        assert isinstance(exact_solveset(sp.Eq(e, 0), x, W), sp.ConditionSet), e
+    assert isinstance(exact_solveset(Q ** 3 > 0, x, W), sp.ConditionSet)
+    # the classes
+    assert exact_solveset(sp.Eq(x * sp.sin(x), 0), x, W) == sp.FiniteSet(0, sp.pi, 2 * sp.pi)
+    assert exact_solveset(sp.Eq((x - 1) ** 3 * sp.cos(x) ** 3, 0), x, W) == sp.FiniteSet(
+        1, sp.pi / 2, 3 * sp.pi / 2)
+    assert exact_solveset(sp.sin(x) ** 3 > 0, x, W) == sp.Union(sp.Interval.open(0, sp.pi), sp.Interval.Lopen(2 * sp.pi, 7))
+    assert exact_solveset(sp.Eq(4 * sp.sin(x) ** 2, 1), x, sp.Interval.Ropen(0, 2 * sp.pi)) == sp.FiniteSet(
+        sp.pi / 6, 5 * sp.pi / 6, 7 * sp.pi / 6, 11 * sp.pi / 6)
+    assert period(sp.tan(x) - 1, x) == sp.pi and period(Q, x) is None and period(x * sp.sin(x), x) is None
+    # no real solution of sin(x) = +-2; the zeros of a denominator and the poles of tan are no zeros
+    assert exact_solveset(sp.Eq(sp.sin(x) ** 2, 4), x, W) is S.EmptySet
+    assert exact_solveset(sp.Eq(sp.sin(x) / (x - sp.pi), 0), x, W) == sp.FiniteSet(0, 2 * sp.pi)
+    tc = exact_solveset(sp.Eq(sp.tan(x) * sp.cos(x), 0), x, S.Reals)
+    assert tc.contains(sp.pi) is sp.true and tc.contains(sp.pi / 2) is not sp.true
+
+
+def test_the_work_of_one_call_is_bounded():
+    """sin(1000x) > 0 on [0, 30] (9549 zeros) took over 20 minutes in one call (B6): now unsolved."""
+    import time
+    from mathverify.sandbox.exactsets import exact_solveset
+    t0 = time.time()
+    assert isinstance(exact_solveset(sp.sin(1000 * x) > 0, x, sp.Interval(0, 30)), sp.ConditionSet)
+    assert isinstance(exact_solveset(Q ** 2 + sp.sin(x) ** 2 > 0, x, sp.Interval(0, 7)), sp.ConditionSet)
+    assert time.time() - t0 < 30
 
 
 def test_continuous_domain_of_a_trigonometric_expression():
@@ -342,7 +366,8 @@ def test_evaluate_with_a_proved_complete_set():
     assert _run(_ev("x", ["sin(x) = 0", "x > 4", "x < 7"]), "2*pi", "value").verdict == "CORRECT"
     assert _run(_ev("x", ["sin(x) = 1/2", "x > 6", "x < 7"]), "13*pi/6", "value").verdict == "CORRECT"
     assert _run(_ev("x", ["x + y = 5", "x - y = 1"], [X, V("y")]), "3", "value").verdict == "CORRECT"
-    assert _run(_ev("x", ["exp(x) = 2"]), "log(2)", "value").verdict == "CORRECT"
+    # exp(x) = 2 is no exact class: SymPy's {log(2)} is no proof of completeness (coverage given up)
+    assert _run(_ev("x", ["exp(x) = 2"]), "log(2)", "value").verdict == "UNKNOWN"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -440,3 +465,39 @@ def test_limit_side_of_a_periodic_condition_is_not_solved():
     """sqrt(sin x) is not real on a whole neighbourhood of oo: one period read it as defined there."""
     from mathverify.certify.limits import _side_status
     assert _side_status([sp.sin(x) >= 0], x, sp.oo, None) is None
+
+
+QS = "(sqrt(3)*sin(x) - cos(x) - 1)"
+
+
+@pytest.mark.parametrize("e,claim", [
+    (f"x*{QS} = 0", "{0, pi/3}"), (f"(x + 1)*{QS} = 0", "{pi/3}"), (f"exp(x)*{QS} = 0", "{pi/3}"),
+    ("sqrt(3)*x*sin(x) - x*cos(x) = x", "{0, pi/3}"), (f"{QS}**3 = 0", "{pi/3}"), (f"{QS} = 0", "{pi/3}"),
+])
+def test_an_incomplete_set_of_a_non_class_equation_is_not_certified(e, claim):
+    """Review of 2 Oct 2026, B1/B2 (0ed77e2: CORRECT for the first five; pi is a root too)."""
+    assert _run(_eq(e, ["x >= 0", "x <= 2*pi"]), claim).verdict != "CORRECT"
+
+
+def test_review_b3_b4_b5():
+    """B3: x**2 = 4 with Q**3 > 0 on [0, 7] ({} was CORRECT, {2} INCORRECT; Q(2) > 0); trig_solve Q**3 = 0
+    gave {pi/3}; B4: x with (x + 1)Q = 0, 0 < x < 4 gave pi/3; B5: the maximum 0 of -(x - pi)**2 +
+    (x + 1)Q/((x + 1)Q) - 1 on [2, 4], undefined at pi."""
+    ir = _eq("x**2 = 4", [f"{QS}**3 > 0", "x >= 0", "x <= 7"])
+    assert _run(ir, "{}").verdict != "CORRECT" and _run(ir, "{2}").verdict != "INCORRECT"
+    # a domain of discourse that opens with a bracket is a relation, not the set {relation}
+    ir = _eq("x**2 = 4", ["x >= 0", "x <= 7"], dod=f"{QS}**3 > 0")
+    assert _run(ir, "{}").verdict == "INCORRECT" and _run(ir, "{2}").verdict == "CORRECT"
+    assert _run(_trig([f"{QS}**3 = 0"], "[0, 7]"), "{pi/3}").verdict != "CORRECT"
+    assert _run(_ev("x", [f"(x + 1)*{QS} = 0", "x > 0", "x < 4"]), "pi/3", "value").verdict != "CORRECT"
+    ir = _ir("extremum", {"f": f"-(x - pi)**2 + (x + 1)*{QS}/((x + 1)*{QS}) - 1", "var": "x", "which": "max",
+                          "interval": "[2, 4]"})
+    assert _run(ir, "0", "value").verdict != "CORRECT"
+
+
+def test_a_fast_oscillating_side_condition_is_neither_slow_nor_a_rejection():
+    """x**2 = 4 with sin(1000x) > 0 on [0, 30]: over 20 minutes on 0ed77e2; never INCORRECT (sin 2000 > 0)."""
+    import time
+    t0 = time.time()
+    r = _run(_eq("x**2 = 4", ["sin(1000*x) > 0", "x >= 0", "x <= 30"]), "{2}")
+    assert r.verdict != "INCORRECT" and time.time() - t0 < 60
