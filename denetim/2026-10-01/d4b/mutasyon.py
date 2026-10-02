@@ -108,7 +108,7 @@ MUTATIONS = [
      "            if any(step != 0 for _, step in zp + pp):\n                raise _Unsolved",
      "            if False:\n                raise _Unsolved", T + "test_a_log_factor_with_a_progression_on_the_reals"),
     ("K22 log'un gerçel olmadığı sıfır", EX, " if not _same(z, poles) and not outside(z)]", " if not _same(z, poles)]",
-     T + "test_monotone_class_sets"),
+     T + "test_a_log_factor_with_a_progression_on_the_reals"),
     ("K21 solve_guarded sınıfları okumaz", ALG, "    if p is None:\n        # not rational",
      "    if False:\n        # not rational", T + "test_solve_guarded_uses_the_classes_on_the_reals"),
     ("G01 çözüm sayısı boyutla karşılaştırılmaz", ALG, "    if len(found) != dim:", "    if False:",

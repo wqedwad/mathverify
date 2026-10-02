@@ -715,3 +715,5 @@ def test_a_log_factor_with_a_progression_on_the_reals():
     from mathverify.sandbox.exactsets import class_solveset
     assert class_solveset(sp.Eq(sp.log(x) * sp.sin(x), 0), x, S.Reals) is None
     assert class_solveset(sp.Eq(sp.log(x) * sp.sin(x), 0), x, sp.Interval(-4, 4)) == sp.FiniteSet(1, sp.pi)
+    # on a window too: x = -1 is no zero of (x + 1)*log(x)
+    assert class_solveset(sp.Eq((x + 1) * sp.log(x), 0), x, sp.Interval(-3, 3)) == sp.FiniteSet(1)
