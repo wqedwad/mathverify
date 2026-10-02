@@ -534,3 +534,13 @@ def test_review_small_items():
     assert r.verdict == "UNKNOWN" and "given_binds_a_bound_variable" in _flags(r)
     ev = _ir("evaluate", {"expr": "diff(sin(pi*n), n)"}, ["n = 2"], [{"name": "n", "domain": "real"}], shape="scalar")
     assert _run(ev, "pi", "value").verdict == "CORRECT"
+
+
+def test_review_constraint_and_given_write_one_value_twice():
+    V = [X, {"name": "a", "domain": "real", "constraints": ["a = 3"]}]
+    assert _run(_eq("x**2 = 4", ["x > a", "a = log(8)/log(2)"], V), "{}").verdict == "CORRECT"
+
+
+def test_review_closed_condition_with_no_value():
+    r = _run(_eq("x**2 = 4", ["x > 1 + 0*log(-1)"]), "{}")
+    assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
