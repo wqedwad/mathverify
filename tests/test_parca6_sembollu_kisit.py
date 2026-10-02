@@ -144,7 +144,6 @@ def test_a_free_parameter_of_a_constraint_abstains(kind, params, shape, claims, 
     (_ir("count_roots", {"expr": "x**2 - 4 + 0*log(x - a)", "var": "x"}, [X, A], [], "count"), 2, "count"),
     (_ir("solve_equation", EQ, XB + [{"name": "c", "domain": "real"}], ["x > b - c", "b = 1"]), "{-2, 2}", "set"),
     (_ir("solve_equation", EQ, XB, ["b < x < 3"]), "{-2, 2}", "set"),
-    (_ir("solve_equation", EQ, XB, ["x > b", "b = 0", "b = -5"]), "{-2, 2}", "set"),   # two values: not pinned
     (_ir("solve_equation", {"var": "x"}, XB, ["x**2 = 4", "x > b"]), "{-2, 2}", "set"),
     (_ir("solve_inequality", {"inequality": "x**2 < a", "var": "x"}, [X, A], [], "interval"), "(-2, 2)", "interval"),
     (_ir("count_integers", {"var": "x"}, [{"name": "x", "domain": "integer", "constraints": ["x > b"]}, B],
@@ -182,11 +181,15 @@ def test_a_given_equation_on_the_variable_restricts_it(ir, right, wrong):
 
 
 def test_a_side_condition_the_pinned_values_make_false_leaves_no_solution():
-    """b·x > 1 with b = 0 holds for no x: the domain is empty (it was dropped as one on two symbols)."""
-    ir = _ir("solve_equation", EQ, XB, ["b*x > 1", "b = 0"])
-    assert _run(ir, "{}").verdict == "CORRECT"
-    assert _run(ir, "{-2, 2}").verdict == "INCORRECT"
-    assert _run(_ir("solve_inequality", INEQ, XB, ["b*x > 1", "b = 0"], "interval"), "{}").verdict == "CORRECT"
+    """b·x > 1 with b = 0 holds for no x (it was dropped as one on two symbols). Since part d4d (fourth audit
+    G8) a given or constraint false at the values is a problem with no instance: the verifier abstains
+    (ir_inconsistent) instead of certifying the empty set. Two values for b (b = 0, b = -5) the same."""
+    for ir, claims in [(_ir("solve_equation", EQ, XB, ["b*x > 1", "b = 0"]), ("{}", "{-2, 2}")),
+                       (_ir("solve_inequality", INEQ, XB, ["b*x > 1", "b = 0"], "interval"), ("{}",)),
+                       (_ir("solve_equation", EQ, XB, ["x > b", "b = 0", "b = -5"]), ("{-2, 2}", "{2}"))]:
+        for claim in claims:
+            r = _run(ir, claim, "set")
+            assert r.verdict == "UNKNOWN" and "ir_inconsistent" in r.flags
 
 
 def test_the_task_equation_repeated_among_the_givens_is_no_side_condition():

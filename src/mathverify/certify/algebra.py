@@ -221,10 +221,29 @@ def _with_given_inequalities(ctx: Ctx, var, dom, exclude=None):
     left {-2, 2} certified), and a symbol another given fixes is read as its value (x > b with
     b = 0); both were dropped (part vi, 30 Sep 2026). Returns (domain, givens that still name another
     symbol); the domain is None when a given cannot be solved."""
-    rels = [g for g in ctx.givens() if g != exclude and isinstance(g, (sp.core.relational.Relational, And))
-            and var in g.free_symbols]
+    from ..equiv.forms import has_closed_form
+    from ..normalize.parse import ParseError, parse_relation, read_condition
+    rels: list = []
+    for src in ctx.ir.givens:
+        # `x > 0 and x < 3`, `x in (0, 3)`, `x < -3 or x > 1`: read as a condition, never dropped; one read
+        # as no condition raises and the certificate abstains (fourth audit G1). A text that reads as a
+        # relation is read as before (`Ctx.rel`, its closed forms confirmed by numbers)
+        g = read_condition(src, ctx.ns)
+        try:
+            parse_relation(src, ctx.ns)
+            g = ctx.rel(src)
+        except ParseError:
+            if has_closed_form(g):
+                raise ParseError(f"a closed form in the condition {src!r}: not confirmed here") from None
+        if g != exclude and var in getattr(g, "free_symbols", set()):
+            rels.append(g)
     rels, unbound = ctx.on_var(rels, var)
-    dom = ctx.cut_by(var, dom, [real_odd_roots(g) for g in rels])
+    # a chain or an And: each relation alone (solveset reads no conjunction, and the chain 0 < x < 3 left
+    # the domain unsolved). An Or or a membership is a side condition `Ctx.domain_for` has applied (or the
+    # verifier abstained on it: given_not_applied)
+    plain = [a for g in rels for a in (g.args if isinstance(g, And) else (g,))
+             if isinstance(a, sp.core.relational.Relational)]
+    dom = ctx.cut_by(var, dom, [real_odd_roots(a) for a in plain])
     return dom, unbound
 
 
@@ -536,7 +555,13 @@ def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None)
                 if val.is_real is False:
                     ok = False
                     break
-                if in_domain(ctx.domain_for(v), val) is False:
+                d = in_domain(ctx.domain_for(v), val)
+                if d is None:
+                    # no exact check decides the membership (x = 2*(atan(1/3) + ...) = pi against x > pi):
+                    # neither kept nor dropped (fourth audit G10); kept, a contradicted IR was certified
+                    held = True
+                    continue
+                if d is False:
                     if undecided is not None and in_domain(ctx.reversed_region(v), val) is not False:
                         held = True
                         continue
@@ -557,14 +582,18 @@ def _filter_solutions(sols: list[dict], ctx: Ctx, undecided: list | None = None)
                         if m is None and undecided is not None:
                             held = True
                             continue
-                    if isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
+                    if isinstance(h, (sp.core.relational.Relational, sp.And, sp.Or)) and not h.free_symbols:
                         hv = relation_holds_at(h, sp.Symbol("_dummy"), 0)
                         if hv is False:
                             ok = False
                             break
+                        if hv is None:
+                            held = True
                 except Exception:
-                    pass
+                    held = True                         # a constraint no check reads at the solution
         if ok and held:
+            if undecided is None:
+                continue                                # neither kept nor dropped: not a solution here
             undecided.append(s_)
         elif ok:
             out.append(s_)
@@ -578,17 +607,24 @@ def _finite_nonempty(s_: sp.Set) -> bool:
         return False
 
 
-def _meets_inequalities(s_: dict, ineqs: list) -> bool:
-    """Does the solution `s_` leave no given inequality proved false?"""
+def _meets_inequalities(s_: dict, ineqs: list) -> bool | None:
+    """Does the solution `s_` satisfy every given inequality? False when one is proved false, None when
+    one is decided by no exact check (a chain or an Or too): the solution is then neither kept nor
+    dropped. An undecided one counted as satisfied, and with x = 2*(atan(1/3) + ...) (= pi exactly) and
+    the given x > pi the value 7 of y = 7 was certified (fourth audit G10)."""
+    out: bool | None = True
     for iq in ineqs:
         h = iq.subs(s_)
         if h is sp.false:
             return False
-        if h is not sp.true and isinstance(h, sp.core.relational.Relational) and not h.free_symbols:
-            from .domain import _num_relation_holds
-            if _num_relation_holds(h, sp.Symbol("_d"), 0) is False:
-                return False
-    return True
+        if h is sp.true or getattr(h, "free_symbols", None):
+            continue
+        hv = relation_holds_at(h, sp.Symbol("_d"), 0)
+        if hv is False:
+            return False
+        if hv is None:
+            out = None
+    return out
 
 
 def _algebraic(eq, syms) -> bool:
@@ -864,11 +900,12 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         undecided: list = []
         admissible = _filter_solutions(sols, ctx, undecided)
         # one a given inequality excludes is no solution either way (n**2 = 4, n > 0)
-        undecided = [s_ for s_ in undecided if _meets_inequalities(s_, ineqs)]
+        undecided = [s_ for s_ in undecided if _meets_inequalities(s_, ineqs) is not False]
+        undecided += [s_ for s_ in admissible if _meets_inequalities(s_, ineqs) is None]
         if undecided:
             ev["membership_undecided"] = [{str(k): str(v) for k, v in s_.items()} for s_ in undecided]
             return unknown(LAYER, "solution_membership_undecided", 0, ev)
-        good = [s_ for s_ in admissible if _meets_inequalities(s_, ineqs)]
+        good = [s_ for s_ in admissible if _meets_inequalities(s_, ineqs) is True]
         ev["admissible_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in good]
         if not good:
             return unknown(LAYER, "ir_inconsistent_no_solution", 0, ev, flags=["ir_inconsistent"])
