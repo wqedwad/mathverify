@@ -99,10 +99,11 @@ def _enumerate_on_window(progs, W) -> FiniteSet | None:
 def _true_solutions(rel, var, window, conds, timeout, region=S.Reals) -> tuple[Any, dict[str, Any]]:
     """The equation's solution set on a bounded window, as a FiniteSet, or None.
 
-    SymPy's set is filtered: every condition of the equation's definedness (as written and as
-    parsed) must hold and both sides must be real there. It is then cross-checked: each element
-    must satisfy the equation, and a numeric root search on the window must find no root that
-    SymPy's set lacks (measured: solveset loses x = pi of sqrt(3) sin x - cos x = 1). A root outside
+    The set is the guarded solveset's (sandbox.exactsets): exact only for the classes whose zeros are
+    known in closed form, a ConditionSet otherwise (SymPy's own set loses x = pi of sqrt(3) sin x -
+    cos x = 1, and a numeric root search misses the multiple root of its cube: no proof either).
+    It is filtered: every condition of the equation's definedness (as written and as parsed) must hold
+    and both sides must be real there; each element must satisfy the equation. A root outside
     `region` (what the problem says of the variable besides the equation, `_region`) is dropped; one
     whose membership is undecided makes the set unknown."""
     ev: dict[str, Any] = {}
@@ -146,20 +147,6 @@ def _true_solutions(rel, var, window, conds, timeout, region=S.Reals) -> tuple[A
             ev.setdefault("dropped", []).append(str(e))
         else:
             kept.append(e)
-    lo, hi = window.inf, window.sup
-    if lo.is_finite and hi.is_finite:
-        rn = sb_run("mathverify.sandbox.exactsets:numeric_roots", rel.lhs - rel.rhs, var,
-                    sp.N(lo, 30), sp.N(hi, 30), timeout=timeout * 2)
-        if not rn.ok:
-            ev["error"] = "numeric root search failed"
-            return None, ev
-        missed = [q for q in rn.value
-                  if not any(abs(mp.mpf(q) - to_mp(e, 30)) < mp.mpf("1e-6") for e in raw)
-                  and window.contains(sp.Float(q, 25)) is sp.true]
-        ev["numeric_roots"] = rn.value
-        if missed:
-            ev["error"] = f"solveset missed numeric root(s) {missed}"
-            return None, ev
     return FiniteSet(*kept), ev
 
 
