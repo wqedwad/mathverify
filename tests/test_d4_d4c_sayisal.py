@@ -106,6 +106,8 @@ def test_a_quadrature_alone_never_accepts():
     assert _run(_dint(f"1 + {PEAK}*exp(cos(x))", 0, 1), "1").verdict != "CORRECT"
     assert _run(_dint(f"sin(x**5)*exp(cos(x)) + {PEAK}", -1, 1), "0").verdict != "CORRECT"
     assert _run(_dint("sin(x**5)*exp(cos(x)) + 1", -1, 1), "2 + 10**(-40)").verdict != "CORRECT"
+    # 30 digits of ∫_0^1 e^(cos x) dx: the quadrature agrees, no enclosure is that narrow, no exact value
+    assert _run(_dint("exp(cos(x))", 0, 1), "2341574841713053164922975186216/10**30").verdict == "UNKNOWN"
 
 
 SECH = "x**2 + 10**4/cosh(10**4*(x - 1/3))**2"                     # a peak of width 1e-4 at 1/3
@@ -141,6 +143,12 @@ def test_an_end_that_is_not_a_binary_number_is_enclosed():
     x = sp.Symbol("x", real=True)
     assert integral_excludes(sp.Integer(10)**40, x, 0, sp.pi, 10**40 * sp.pi)[0] is False
     assert integral_excludes(sp.Integer(10)**40, x, sp.pi, 4, 10**40 * (4 - sp.pi))[0] is False
+    # a number between the ends of π's own interval: without that piece the enclosure would end at π's
+    # lower end and refute it, though it may be the value
+    from mathverify.certify.enclosure import constant_interval
+    lo, hi = constant_interval(sp.pi)
+    mid = sum(sp.Integer(int(e.man)) * sp.Integer(2)**int(e.exp) for e in (lo, hi)) / 2     # exact binary ends
+    assert integral_excludes(sp.Integer(10)**40, x, 0, sp.pi, 10**40 * mid)[0] is False
 
 
 def test_sympys_value_refutes_only_with_a_proof_or_an_enclosure(monkeypatch):
