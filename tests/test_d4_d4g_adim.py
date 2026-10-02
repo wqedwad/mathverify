@@ -464,3 +464,10 @@ def test_sum_of_squares_gives_the_real_point():
     # x**2 + y**2 = 0 leaves x = y = 0 over the reals, where sqrt(x) is defined
     st = _step(_run(_ir("2 + 2", [X, Y], ["x**2 + y**2 = 0"]), "4", [("compute", "sqrt(x)*sqrt(x) + y = x + y")]))
     assert st.get("reason") != "claim_undefined_at_the_premises_point" and st["status"] != "refuted"
+
+
+def test_readable_backward_point_with_a_claim_worth_the_same_under_both_readings():
+    # the identity check's point has n < -1 (both ranges backwards); Karr's -3 - (-3) and the empty 0 - 0 agree
+    ir = _ir("2 + 2", [{"name": "n", "domain": "integer", "constraints": ["n < -1"]}, K, J])
+    st = _step(_run(ir, "4", [("compute", "Sum(1, (k, 1, n)) - Sum(1, (j, 1, n)) + n**2 = n**2 + 1")]))
+    assert st["status"] == "refuted"
