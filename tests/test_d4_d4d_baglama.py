@@ -572,3 +572,33 @@ def test_review_constraint_binding_meets_the_givens():
     V = [X, {"name": "a", "domain": "real", "constraints": ["a = 1"]}]
     r = _run(_eq("x**2 = 4", ["a < 0"], V), "{-2, 2}")
     assert r.verdict == "UNKNOWN" and "ir_inconsistent" in _flags(r)
+
+
+
+# Since part d4b `_complete_solutions` proves solutions distinct only when they are algebraic, so a transcendental
+# T7 no longer reaches the filters through verify(); the filter stage itself is checked with the solution set
+# taken as complete (the membership of an algebraic number is always decided).
+@pytest.fixture
+def complete_as_given(monkeypatch):
+    from mathverify.certify import algebra
+    monkeypatch.setattr(algebra, "_complete_solutions", lambda eqs, ineqs, syms, sols, ctx: (sols, "test"))
+
+
+@pytest.mark.parametrize("givens,vars_,target,payload,dod", [
+    ([R2, "y = x + 1", "x <= pi"], [X, {"name": "y"}], "y", "2", None),
+    ([R2, "y = x + 1", "pi <= x <= pi"], [X, {"name": "y"}], "y", f"1 + ({T7})", None),
+    ([R2, "z = x + 1"], [{"name": "x", "constraints": ["x*z > pi*(pi + 1)"]}, {"name": "z"}], "z", f"1 + ({T7})", None),
+    ([R2, "y = x + 1"], [X, {"name": "y"}], "y", f"1 + ({T7})", "x > pi"),
+])
+def test_g10_filter_stage_neither_keeps_nor_drops(complete_as_given, givens, vars_, target, payload, dod):
+    r = _run(_ir("evaluate", {"expr": target}, givens, vars_, shape="scalar", dod=dod), payload, "value")
+    layer = next(la for la in r.layers if la.layer == "certify.algebra")
+    assert r.verdict == "UNKNOWN" and layer.evidence.get("reason") == "solution_membership_undecided", layer.evidence
+
+
+def test_g10_meets_inequalities_and_of_undecided_parts():
+    from mathverify.certify.algebra import _meets_inequalities
+    from mathverify.normalize.parse import build_namespace, parse_expr_str
+    t7 = parse_expr_str(T7, build_namespace())
+    x = sp.Symbol("x", real=True)
+    assert _meets_inequalities({x: t7}, [sp.And(sp.Ge(x, sp.pi), sp.Le(x, sp.pi), evaluate=False)]) is None
