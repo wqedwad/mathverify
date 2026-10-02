@@ -54,6 +54,34 @@ def _tick() -> None:
         raise _OutOfTime()
 
 
+# A solution's steps together get this many seconds; past it the remaining steps are unknown without a check
+# (`solution_time_budget_exceeded`). A comparison of two sides runs in the sandbox for at most
+# _COMPARE_TIMEOUT seconds (and never past the step's budget): its numerics (adaptive evalf of
+# 1 + 2*exp(-exp(exp(x))) against (1 + exp(-exp(exp(x))))**2) held the GIL for 400 s and more in one call,
+# which no check between calls can stop (d4g review S8, S11, S12).
+_SOLUTION_BUDGET = 300.0
+_COMPARE_TIMEOUT = 40.0
+
+
+def _sandboxed_equivalent(a, b, shape, domain, seed):
+    """`answers_equivalent` in the sandbox's worker. Its own CAS calls run inline there (the worker is a
+    daemon and starts no worker of its own); the caller's timeout bounds them all."""
+    import os
+    os.environ["MATHVERIFY_SANDBOX"] = "inline"
+    return answers_equivalent(a, b, shape=shape, domain=domain, seed=seed)
+
+
+def _equivalent(a, b, ctx: Ctx, shape: str, domain=None) -> tuple[bool | None, dict]:
+    _tick()
+    d = _deadline.get()
+    timeout = _COMPARE_TIMEOUT if d is None else max(1.0, min(_COMPARE_TIMEOUT, d - time.monotonic()))
+    r = sb_run("mathverify.steps.deterministic:_sandboxed_equivalent", a, b, shape, domain, ctx.seed,
+               timeout=timeout)
+    if not r.ok:
+        return None, {"error": f"comparison_not_finished: {str(r.error)[:160]}"}
+    return r.value
+
+
 # Heads under which an expression is analytic on the complex plane minus a discrete set: entire functions,
 # meromorphic ones, sums, products, integer powers, powers of a positive constant. The class is closed
 # under composition, and minus a discrete set the plane stays connected, so two such expressions that
@@ -111,6 +139,8 @@ def _agreement_proves(a, b, dom: dict, cev: dict, ctx=None) -> bool:
     a, b = sp.sympify(a).xreplace(one), sp.sympify(b).xreplace(one)
     dom = {q: d for q, d in dom.items() if q not in one}
     if not dom:
+        # every symbol has one value: the comparison decided the constants exactly (random_point counts no
+        # numeric agreement as equality since part d4c; 1 + log(1 + exp(-exp(30))) = 1 is not, review S1)
         return True
     if not (_analytic_off_discrete(a) and _analytic_off_discrete(b)):
         return _analytic_on_interval(a, b, dom, ctx)
@@ -238,7 +268,13 @@ def _holds(rel, point: dict) -> bool | None:
         if lhs.free_symbols or rhs.free_symbols:
             return None
         d = sp.Symbol("_d")
-        return relation_holds_at(type(rel)(lhs, rhs, evaluate=False), d, 0)
+        if lhs.is_Number and rhs.is_Number:
+            return relation_holds_at(type(rel)(lhs, rhs, evaluate=False), d, 0)
+        # evaluated in the sandbox, bounded in time (d4g review S12: one evaluation of a side with
+        # exp(-exp(exp(x))) held the GIL for minutes)
+        r = sb_run("mathverify.steps.deterministic:_inline_call", "mathverify.certify.domain:relation_holds_at",
+                   type(rel)(lhs, rhs, evaluate=False), d, 0, timeout=_bounded(10.0))
+        return r.value if r.ok else None
     try:
         sub = rel.subs(point, simultaneous=True)
     except Exception:
@@ -385,8 +421,8 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
         if d == 0:
             return "verified", ev
         dom = _compare_domains(d.free_symbols, ctx, doms)
-        ok, cev = answers_equivalent(d, S.Zero, shape="expression" if d.free_symbols else "scalar",
-                                     domain=dom or None, seed=ctx.seed)
+        ok, cev = _equivalent(d, S.Zero, ctx, "expression" if d.free_symbols else "scalar",
+                              dom or None)
         ev["compare"] = cev
         return ("refuted" if ok is False else "unknown"), ev
     subst: dict[Any, Any] = {}
@@ -454,7 +490,7 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
         # there, confirmed by numbers), decides; a pin of the parameter re-checks it there.
         free = lhs.free_symbols | rhs.free_symbols
         dom = _compare_domains(free, ctx, doms)
-        ok, cev = answers_equivalent(rhs, lhs, shape="expression", domain=dom, seed=ctx.seed)
+        ok, cev = _equivalent(rhs, lhs, ctx, "expression", dom)
         ev["compare"] = cev
         if ok is True and not _agreement_proves(rhs, lhs, dom, cev, ctx):
             return "unknown", {**ev, "reason": "sample_agreement_is_no_proof_here"}
@@ -478,12 +514,12 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
     free = val.free_symbols | rhs.free_symbols
     if free:
         dom = _compare_domains(free, ctx, doms)
-        ok, cev = answers_equivalent(rhs, val, shape="expression", domain=dom, seed=ctx.seed)
+        ok, cev = _equivalent(rhs, val, ctx, "expression", dom)
         if ok is True and not _agreement_proves(rhs, val, dom, cev, ctx):
             ev["compare"] = cev
             return "unknown", {**ev, "reason": "sample_agreement_is_no_proof_here"}
     else:
-        ok, cev = answers_equivalent(rhs, val, shape="scalar")
+        ok, cev = _equivalent(rhs, val, ctx, "scalar")
     ev["compare"] = cev
     if ok is True:
         return _forward_ranges_only(claim, ctx, doms, ev)
@@ -950,6 +986,52 @@ def _reading_free(nodes: list, point: dict, ctx: Ctx) -> bool:
     return True
 
 
+def _claim_reading_free(claim, nodes, point: dict, ctx: Ctx) -> bool:
+    """Is each side of `claim` worth the same at `point` under both readings of its ranges that run
+    backwards there, though a range's own value is not (55 + Sum(1, (k, 1, m)) - Sum(1, (j, 1, m)) is 55
+    at m = -3 with Karr's -3 - (-3) and with the empty 0 - 0, d4g review B2)? `_reading_free` per side."""
+    if nodes is None or not isinstance(claim, sp.core.relational.Relational):
+        return False
+    rep = {}
+    for node in nodes:
+        _, lo, hi = node.limits[0]
+        span = (hi - lo + 1).xreplace(point)
+        if span.free_symbols or span.is_integer is not True:
+            return False
+        if span.is_negative is True:
+            rep[node] = S.Zero if isinstance(node, sp.Sum) else S.One
+    for side in (claim.lhs, claim.rhs):
+        r1 = sb_run("mathverify.steps.deterministic:_doit", side.xreplace(point), timeout=ctx.timeout)
+        r2 = sb_run("mathverify.steps.deterministic:_doit", side.xreplace(rep).xreplace(point), timeout=ctx.timeout)
+        if not (r1.ok and r2.ok) or any(not isinstance(r.value, sp.Basic) or r.value.has(sp.Sum, sp.Product)
+                                         for r in (r1, r2)):
+            return False
+        d = sb_run("mathverify.sandbox.ops:simplify_diff", r1.value, r2.value, timeout=ctx.timeout)
+        if not d.ok or d.value != 0:
+            return False
+    return True
+
+
+def _neutralized(claim):
+    """`claim` with every Sum/Product whose summand is identically 0 (a factor identically 1), inner ones
+    first, replaced by that value: it is 0 (1) under every reading of its range, Karr's and the empty one,
+    nested or not (Sum(Sum(0, (j, 1, k)), (k, 1, m)), Product(Product(1, ...), ...), d4g review B1, B5,
+    B14-B16)."""
+    if not isinstance(claim, sp.Basic) or not claim.has(sp.Sum, sp.Product):
+        return claim
+    rep: dict = {}
+    for node in sp.postorder_traversal(claim):
+        if isinstance(node, (sp.Sum, sp.Product)):
+            neutral = S.Zero if isinstance(node, sp.Sum) else S.One
+            body = node.function.xreplace(rep)
+            try:
+                if sp.expand(body - neutral) == 0:
+                    rep[node] = neutral
+            except Exception:  # noqa: BLE001
+                continue
+    return claim.xreplace(rep) if rep else claim
+
+
 def _refuted_in_both_readings(claim, ranges: list, nodes, ctx: Ctx, premises: list, recheck) -> bool:
     """Is `claim` refuted, re-checked (`recheck`, the step's own check) at values of its ranges' symbols the
     premises allow, at a point where its value is no convention: where every range runs forward (both
@@ -984,7 +1066,7 @@ def _refuted_in_both_readings(claim, ranges: list, nodes, ctx: Ctx, premises: li
             return True
     for pt in bwd:
         _tick()
-        if _reading_free(nodes, pt, ctx) and recheck(_substituted(claim, pt)) == "refuted":
+        if (_reading_free(nodes, pt, ctx) or _claim_reading_free(claim, nodes, pt, ctx)) and recheck(_substituted(claim, pt)) == "refuted":
             return True
     return False
 
@@ -1019,13 +1101,18 @@ def _refuted_where_backwards(claim, ev: dict, ctx: Ctx | None = None, premises: 
         return False
     if ctx is None or recheck is None:
         return pt is None or _runs_backwards_at(ranges, pt)
+    # a Sum/Product that is 0 (1) under every reading takes no part (nested ones too, d4g review)
+    claim = _neutralized(claim)
+    ranges = [c for c in _range_spans(claim) if is_range_span(c)]
+    if not ranges:
+        return False
     point = _named(pt, ctx) if pt is not None else None
     state = _span_state(ranges, point) if point is not None else None
     nodes = _symbolic_range_nodes(claim)
     if state == "forward":
         return False
     if state == "backward":
-        return not _reading_free(nodes, point, ctx)
+        return not (_reading_free(nodes, point, ctx) or _claim_reading_free(claim, nodes, point, ctx))
     return not _refuted_in_both_readings(claim, ranges, nodes, ctx, list(premises), recheck)
 
 
@@ -1138,7 +1225,7 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
         if inst is not None:
             if inst[0] or inst[1]:
                 return _check_instances(claim, text, syms, inst, ctx, ev, conds)
-            return status, ev                # no instance at all: nothing to check it at
+            return status, {**ev, "no_premise_instance": True}   # no instance at all: nothing to check it at
     if status != "refuted" and ev.get("reason") != _KARR_ONLY:
         return status, ev
     direct = [p for p in _premise_parts(premises) if p.free_symbols <= syms]
@@ -1173,7 +1260,7 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
             region[q] = dom
         back.append(rev)
     if any(d is S.EmptySet for d in region.values()):
-        return status, ev                    # no instance at all: nothing to check it at
+        return status, {**ev, "no_premise_instance": True}   # no instance: nothing to check it at
 
     def instance(p_):
         """Is the counterexample `p_` an instance? A symbol it does not fix was compared away (SymPy folded
@@ -1484,8 +1571,6 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     simplified first, and a numeric sign is only trusted when it is far from zero. `_holds`
     compares tolerantly, which misreads x^2 - 2x - 1 >= 0 at x = 1 - sqrt(2) (measured; on 28 Sep 2026
     `_holds` read it right, and agreed with this function on every boundary point tried)."""
-    from ..equiv.numeric import to_mp
-    import mpmath as mp
     if isinstance(rel, (And, Or)):
         vals = [_decide(a, point, ctx) for a in rel.args]
         if isinstance(rel, And):
@@ -1515,17 +1600,14 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
         # ∫_0^{2π} sin x dx, the step "∫_0^{2π} sin x dx = 10^-40" went undecided below (30 Sep 2026)
         sign = 1 if d > 0 else -1
     else:
-        try:
-            dv = to_mp(d, 60)
-            av, bv = to_mp(a, 60), to_mp(b, 60)
-        except Exception:  # noqa: BLE001
+        # evaluated in the sandbox, bounded in time: one in-process evaluation held the GIL for minutes
+        # (d4g review S8-S12)
+        r = sb_run("mathverify.steps.deterministic:_numeric_sign", d, a, b, timeout=_bounded(ctx.timeout))
+        if not r.ok or r.value is None or r.value == "small":
             return None
-        if isinstance(dv, mp.mpc) or isinstance(av, mp.mpc) or isinstance(bv, mp.mpc):
+        if r.value == "complex":
             return None if isinstance(rel, (Eq, sp.Ne)) else False
-        scale = max(abs(av), abs(bv), mp.mpf(1))
-        if abs(dv) <= mp.mpf(10) ** -40 * scale:
-            return None
-        sign = 1 if dv > 0 else -1
+        sign = r.value
     if isinstance(rel, Eq):
         return sign == 0
     if isinstance(rel, sp.Ne):
@@ -1539,6 +1621,38 @@ def _decide(rel, point: dict, ctx: Ctx) -> bool | None:
     if isinstance(rel, sp.GreaterThan):
         return sign >= 0
     return None
+
+
+def _numeric_sign(d, a, b):
+    """The sign of the difference `d` of `a` and `b` at 60 digits, trusted only far from zero: 1 or -1,
+    "small" (within 1e-40 of the larger side), "complex", or None (not evaluated). Run in the sandbox."""
+    from ..equiv.numeric import to_mp
+    import mpmath as mp
+    try:
+        dv = to_mp(d, 60)
+        av, bv = to_mp(a, 60), to_mp(b, 60)
+    except Exception:  # noqa: BLE001
+        return None
+    if isinstance(dv, mp.mpc) or isinstance(av, mp.mpc) or isinstance(bv, mp.mpc):
+        return "complex"
+    scale = max(abs(av), abs(bv), mp.mpf(1))
+    if abs(dv) <= mp.mpf(10) ** -40 * scale:
+        return "small"
+    return 1 if dv > 0 else -1
+
+
+def _inline_call(fn_path: str, *args):
+    """`fn_path(*args)` in the sandbox's worker, its own CAS calls inline there (see _sandboxed_equivalent)."""
+    import os
+    from ..sandbox.pool import _resolve
+    os.environ["MATHVERIFY_SANDBOX"] = "inline"
+    return _resolve(fn_path)(*args)
+
+
+def _bounded(t: float) -> float:
+    """A sandbox timeout of at most `t` seconds that does not run past the step's budget."""
+    d = _deadline.get()
+    return t if d is None else max(1.0, min(t, d - time.monotonic()))
 
 
 def _is_assignment(claim) -> bool:
@@ -2185,6 +2299,69 @@ def _holds_on(c, v, region, ctx: Ctx) -> bool:
         return False
 
 
+def _split_nonnegative_sums(premises: list, ctx: Ctx) -> list:
+    """The premises with an equation `a1 + a2 + ... = 0` whose terms are each nonnegative for real symbols
+    (x**2 + y**2 = 0, Abs(x) + (y - 1)**2 = 0) read as `a1 = 0, a2 = 0, ...`: its real solutions. SymPy
+    solves it over the complex numbers (x = ±I*y), and "x/x = 1" was verified under x**2 + y**2 = 0, whose
+    one real point has x = 0 (d4g review Q4-Q10)."""
+    out: list = []
+    for p in _premise_parts(premises):
+        if isinstance(p, Eq):
+            d = p.lhs - p.rhs
+            syms_ = d.free_symbols
+            try:
+                real = all(ctx.domain_for(q).is_subset(S.Reals) is True for q in syms_ if ctx.ns.get(q.name) == q) \
+                    and all(ctx.ns.get(q.name) == q for q in syms_)
+            except Exception:  # noqa: BLE001
+                real = False
+            if real and isinstance(d, sp.Add) and len(d.args) > 1:
+                reps = {q: sp.Dummy(q.name, real=True) for q in syms_}
+                if all(a.xreplace(reps).is_nonnegative is True for a in d.args):
+                    out.extend(Eq(a, 0) for a in d.args)
+                    continue
+        out.append(p)
+    return out
+
+
+def _proved_on_system(c, multi: list, sets: dict, ctx: Ctx) -> bool:
+    """Is the condition `c` proved where the premises `multi` (each on several symbols) hold: on its one
+    symbol's set alone, or at each explicit real solution of their equations (y = x**2: y >= 0 becomes
+    x**2 >= 0, proved on x's set)? A non-real solution (x = I*y) leaves a condition
+    the reals do not prove (its negation solved over the reals is not empty): not proved."""
+    cs = c.free_symbols
+    if len(cs) == 1:
+        (u,) = cs
+        if _holds_on(c, u, sets.get(u, ctx.domain_for(u)), ctx):
+            return True
+    eqs = [p for p in multi if isinstance(p, Eq) and p.free_symbols & cs]
+    if not eqs:
+        return False
+    # solved for the condition's own symbols, in terms of the others
+    order = sorted(set().union(*(p.free_symbols for p in eqs)) & cs, key=lambda q: q.name)
+    _tick()
+    r = sb_run("mathverify.sandbox.ops:solve_system", eqs, order, True, timeout=ctx.timeout)
+    if not r.ok or not isinstance(r.value, list) or not r.value:
+        return False
+    for sol in r.value:
+        if not isinstance(sol, dict) or any(not isinstance(v, sp.Expr) for v in sol.values()):
+            return False
+        try:
+            c2 = c.xreplace(sol)
+        except Exception:  # noqa: BLE001 - an order relation between non-real values
+            return False
+        rem = c2.free_symbols if isinstance(c2, sp.Basic) else set()
+        if not rem:
+            if _held_at(c2, {}, ctx) is not True:
+                return False
+            continue
+        if len(rem) != 1:
+            return False
+        (u,) = rem
+        if not _holds_on(c2, u, sets.get(u, ctx.domain_for(u)), ctx):
+            return False
+    return True
+
+
 def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: Ctx) -> bool:
     """Is the claim, read AS WRITTEN, not proved defined at a point the premises allow? `_undefined_as_written`
     looks at closed conditions only, and the value parse folds the rest away: the eq step "x/x = 1" was
@@ -2217,12 +2394,13 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
         return False
     if not conds:
         return False
+    premises = _split_nonnegative_sums(premises, ctx)
     syms = set().union(*(c.free_symbols for c in conds))
     sets: dict = {}
     for v in syms:
         if ctx.ns.get(v.name) != v:
             continue
-        own =[p for p in _premise_parts(premises)
+        own = [p for p in _premise_parts(premises)
                if isinstance(p, sp.core.relational.Relational) and p.free_symbols == {v}]
         if not own:
             continue
@@ -2249,6 +2427,15 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
         for pt in ((inst[0] + inst[1]) if inst is not None else []):
             for c in conds:
                 if c.free_symbols <= set(pt) and _held_at(c, pt, ctx) is not True:
+                    return True
+        if inst is None:
+            # symbols a premise on several symbols links (y = x**2, x**2 + y**2 = 1) whose real solution set
+            # was not read: a condition on them must be proved on that set (`_proved_on_system`)
+            multi = [p for p in _premise_parts(premises)
+                     if isinstance(p, sp.core.relational.Relational) and len(p.free_symbols) > 1]
+            unresolved = {v for v in linked if any(v in p.free_symbols for p in multi)}
+            for c in conds:
+                if c.free_symbols & unresolved and not _proved_on_system(c, multi, sets, ctx):
                     return True
     for c in conds:
         narrowed = sorted((v for v in c.free_symbols if v in sets), key=lambda q: q.name)
@@ -2383,6 +2570,7 @@ def check_steps(ir, solution, ctx: Ctx):
         window = _task_window(ir, ctx)
         objects = _task_objects(ir, ctx)
         first_bad = None
+        started = time.monotonic()
         n_ref = n_ver = n_unk = n_skip = n_malformed = 0
         case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
         choices: dict[Any, Any] = {}              # symbol -> the solver's latest choice of its value
@@ -2468,9 +2656,17 @@ def check_steps(ir, solution, ctx: Ctx):
                 n_skip += 1
                 per_step.append(entry)
                 continue
+            left = _SOLUTION_BUDGET - (time.monotonic() - started)
+            if left <= 0:
+                # the solution's budget is spent: this step is not checked (and joins no premise pool)
+                entry["status"] = "unknown"
+                entry["reason"] = "solution_time_budget_exceeded"
+                n_unk += 1
+                per_step.append(entry)
+                continue
             chosen = False
             conds: list = []
-            token = _deadline.set(time.monotonic() + _STEP_BUDGET)
+            token = _deadline.set(time.monotonic() + min(_STEP_BUDGET, left))
             try:
                 try:
                     conds = _written_relations(st.claim, step_ns)
@@ -2478,10 +2674,22 @@ def check_steps(ir, solution, ctx: Ctx):
                         # the premises: the givens, the variables' constraints, the `eq` claims proved in
                         # this branch and the task's own interval (it binds nothing but bounds the region:
                         # outside it a point is no instance, D4-ADIM-E)
+                        # a Sum/Product worth 0 (1) under every reading is that value (Product(1, (j, 1, m))
+                        # kept the comparison from evaluating a wrong identity, d4g review B4)
+                        claim = _neutralized(claim)
+                        # and the case assumptions the step depends on (a case bounds the region like the
+                        # interval: under case x < 0 "Abs(x) = -x" was refuted at x > 0, d4g review Z1-Z4)
                         pool = (list(givens) + list(restrictions) + list(window)
                                 + [parsed[k] for k in verified
-                                   if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids])
+                                   if k in parsed and parsed_cases.get(k, frozenset()) <= my_case_ids]
+                                + list(my_cases))
                         status, ev = _compute_status(claim, st.claim, pool, ctx, conds)
+                        if status == "refuted" and window and ev.get("no_premise_instance"):
+                            # the task's interval leaves the premises no instance (a case x < 0 on [0, 2]):
+                            # like the eq steps' window, it is dropped and the step checked without it
+                            pool = [p for p in pool if p not in window]
+                            status, ev = _compute_status(claim, st.claim, pool, ctx, conds)
+                            ev = {**ev, "window_dropped": "no_premise_instance_inside_the_task_interval"}
                         range_premises = pool
 
                         def recheck(c, pool=pool, conds=conds, text=st.claim):
@@ -2530,9 +2738,15 @@ def check_steps(ir, solution, ctx: Ctx):
                 if status != "refuted":
                     if _undefined_as_written(st.claim, step_ns):
                         why = "claim_undefined_as_written"
-                    elif _undefined_at_premises(st.claim, step_ns, list(givens) + [
-                            parsed[k] for k in parsed if parsed_cases.get(k, frozenset()) <= my_case_ids] + my_cases, ctx):
-                        why = "claim_undefined_at_the_premises_point"
+                    else:
+                        try:
+                            undefined = _undefined_at_premises(st.claim, step_ns, list(givens) + [
+                                parsed[k] for k in parsed if parsed_cases.get(k, frozenset()) <= my_case_ids]
+                                + my_cases, ctx)
+                        except Exception:  # noqa: BLE001 - not proved defined
+                            undefined = True
+                        if undefined:
+                            why = "claim_undefined_at_the_premises_point"
             except _OutOfTime:
                 status, ev, why, chosen = "unknown", {"reason": "step_time_budget_exceeded"}, None, False
             finally:

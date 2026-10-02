@@ -15,6 +15,10 @@ Findings (denetim/2026-10-01/d4/, adim and tanimlilik), reproduced on 21c1698 be
     G  D4-ADIM-D, TAN-11  a step undefined at a point the premises allow (a Range, two symbols, one symbol
                   pinned and another free) verified.
     K  controls whose decision must not change.
+    w r b t o s u v z q p  the independent review's groups (saldiri_vakalar.py): a case assumption is a premise
+                  of compute steps (z), sums worth 0 under every reading, nested or on three symbols (b, u), a
+                  sum of squares read over the reals (q, p), a step's comparison bounded in time (s, u), and
+                  the review's controls (r).
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> .venv/bin/python denetim/2026-10-01/d4g/sonda.py [out.json] [groups]
 
@@ -138,10 +142,10 @@ def cases_b():
          _sol("-1", eq("Sum(k, (k, 1, n)) = 0")), NOTNO, NOTREF),
         ("part 11: n = 1, compute floor(Sum(k,(k,3,n))) = 7", _ir("x + 1", [X, K, N], ["x = 5", "n = 1"]),
          _sol("6", cp("floor(Sum(k, (k, 3, n))) = 7")), NOTNO, UNKS),
-        # pinned to n = -3 the claim has a numerically reversed range, which the parser does not read
-        # (`_refuse_reversed_ranges`, part 11): unknown before and after, never refuted with Karr's value
+        # Sum(0, ...) is 0 under every reading: read as 0 before any check (review round, `_neutralized`), and
+        # 1 = 2 is refuted whatever n is (before that round the pinned reversed range was not read: unknown)
         ("n = -3, Sum(0,(k,1,n)) + 1 = 2 (both readings 0)", _ir("x + 1", [X, K, N], ["x = 5", "n = -3"]),
-         _sol("6", cp("Sum(0, (k, 1, n)) + 1 = 2")), NOTNO, NOTREF),
+         _sol("6", cp("Sum(0, (k, 1, n)) + 1 = 2")), NO, REF),
         # a random point of the identity check where the range runs backwards (n given only as n < 0):
         # Sum(0, ...) has the same value under both readings, so the refutation stands
         ("n < 0: compute Sum(0,(k,1,n)) + x = x + 1", _ir("x + 1", [X, K, N], ["n < 0"]),
@@ -264,7 +268,22 @@ GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, 
           "K": cases_k}
 
 
-def main(out_path=None, groups="ABCDEFGK"):
+def _review_groups():
+    """The independent review's cases (saldiri_vakalar.py) as lower-case groups; with them the case vacuous
+    under the task's interval, the reading-free nested sums, the sum of squares and the time bound."""
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("saldiri_vakalar", Path(__file__).with_name("saldiri_vakalar.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return {g.lower(): f for g, f in m.GROUPS.items()}
+
+
+GROUPS.update(_review_groups())
+ALL = "ABCDEFGK" + "wrbtosuvzqp"
+
+
+def main(out_path=None, groups=ALL):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -308,5 +327,5 @@ def main(out_path=None, groups="ABCDEFGK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGK"
+    grp = args[1] if len(args) > 1 else ALL
     sys.exit(1 if main(out, grp) else 0)
