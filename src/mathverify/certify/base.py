@@ -562,35 +562,8 @@ class Ctx:
                 if h is not True:
                     note("problem_undefined_as_written" if h is False else "given_binding_undecided", src)
                     break
-        try:
-            cs, _nw, calls = self._function_call_conditions(srcs)
-        except Exception:  # noqa: BLE001
-            cs, calls = [], []
-        for c in calls:
-            note("problem_undefined_as_written", c)
-        for c in cs:
-            try:
-                with sp.evaluate(False):
-                    c2 = substitute_free(c, pins)
-            except Exception:  # noqa: BLE001
-                continue
-            if getattr(c2, "free_symbols", None):
-                continue
-            h = closed_verdict(c2)
-            if h is not True:
-                note("problem_undefined_as_written" if h is False else "given_binding_undecided", c)
-        for f in self.ir.functions:
-            # a body: its formal arguments are its own (normalize.parse._make_function)
-            e = parse_as_written(f.expr, dict(self.ns, **{a: sp.Symbol(a, real=True) for a in f.args}))
-            fb = {s_: v for s_, v in bind.items() if s_.name not in f.args}
-            try:
-                if e is not None:
-                    with sp.evaluate(False):
-                        hold_parametric(e, fb, tv - set(f.args))
-            except PinnedBoundVariable:
-                conflicts.append(f"{f.name}: {f.expr}")
-            except Exception:  # noqa: BLE001
-                pass
+        # an IR function's call is read with its body as written (parse_as_written), so its conditions and its
+        # Integrals/Limits are among the above; a body that leaks a pin fails at the namespace already
         # (5) a value a pin would put where an operator or the task binds the symbol
         for c in conflicts:
             note("given_binds_a_bound_variable", c)

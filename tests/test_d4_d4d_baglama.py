@@ -131,6 +131,20 @@ def test_g1_extremum_unreadable_given_abstains():
     assert _run(e2, "0", "value").verdict != "CORRECT"
 
 
+def test_g1_extremum_reads_textual_conjunction():
+    e = _ir("extremum", {"f": "x", "var": "x", "which": "max", "interval": "[-5, 5]"}, ["x >= 1 and x <= 3"],
+            shape="scalar")
+    assert _run(e, "3", "value").verdict == "CORRECT"
+    assert _run(e, "5", "value").verdict == "INCORRECT"
+
+
+def test_g1_equation_layer_reads_textual_conjunction():
+    r = _run(_eq("x**2 = 4", ["x > 0 and x < 3"]), "{2}")
+    assert next(la for la in r.layers if la.layer == "certify.algebra").verdict == "pass"
+    r = _run(_eq("x**2 = 4", ["x in (0, 3)"]), "{-2, 2}")
+    assert r.verdict == "INCORRECT"
+
+
 def test_g1_evaluate_chain_or_undecided_inequality():
     ev = _ir("evaluate", {"expr": "y"}, ["x**2 = 4", "y = x + 1", "Or(x < -3, x > 1)"], [X, {"name": "y"}],
              shape="scalar")
@@ -290,11 +304,20 @@ def test_g10_evaluate_undecided_membership():
     # x <= pi holds at T7 = pi, but no check decides it: dropping T7 leaves 1 - T7 alone
     ([f"x**2 = ({T7})**2", "y = x + 1", "x <= pi"], [X, {"name": "y"}], f"1 - ({T7})"),
     ([f"x**2 = ({T7})**2", "y = x + 1", "x > pi"], [X, {"name": "y"}], f"1 + ({T7})"),
+    # a chain: the And at T7 is undecided too (it holds, but no check proves it)
+    ([f"x**2 = ({T7})**2", "y = x + 1", "0 < x <= pi"], [X, {"name": "y"}], f"1 + ({T7})"),
 ])
 def test_g10_evaluate_solutions_neither_kept_nor_dropped(givens, vars_, payload):
     target = "z" if any(v["name"] == "z" for v in vars_) else "y"
     r = _run(_ir("evaluate", {"expr": target}, givens, vars_, shape="scalar"), payload, "value")
     assert r.verdict == "UNKNOWN"
+
+
+def test_g10_evaluate_domain_of_discourse_undecided():
+    """x > pi only as the domain of discourse: no constraint repeats it, the domain alone decides."""
+    q = _ir("evaluate", {"expr": "y"}, [f"x**2 = ({T7})**2", "y = x + 1"], [X, {"name": "y"}], shape="scalar",
+            dod="x > pi")
+    assert _run(q, f"1 + ({T7})", "value").verdict == "UNKNOWN"
 
 
 def test_g10_filter_and_inequalities_tri_state():

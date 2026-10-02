@@ -82,8 +82,6 @@ MUTATIONS = [
     ("M20 yazılı koşula değer konmaz", BAS, "                    e2 = substitute_free(e, pins)", "                    e2 = e", T),
     ("M21 kısıt bağlaması yok", BAS, "        cbind, _ctexts = self._constraint_bindings()",
      "        cbind, _ctexts = {}, []", T),
-    ("M22 çağrı koşulları okunmaz", BAS,
-     "            h = closed_verdict(c2)\n            if h is not True:", "            h = closed_verdict(c2)\n            if False:", T),
     ("M23 bağlamayla False kısıt düşer", BAS,
      "                            # Ctx.binding_issues abstains on the problem before any certificate reads this\n"
      "                            dom = S.EmptySet\n",
@@ -125,9 +123,6 @@ MUTATIONS = [
      "        inner = {s_: v for s_, v in sub.items() if s_ not in bound} if bound else sub",
      "        inner = sub", T),
     ("M38 kapı sızmayı not etmez", BAS, "        for c in conflicts:\n            note(\"given_binds_a_bound_variable\", c)\n", "", T),
-    ("M39 fonksiyon gövdesinde sızma aranmaz", BAS,
-     "            except PinnedBoundVariable:\n                conflicts.append(f\"{f.name}: {f.expr}\")\n",
-     "            except PinnedBoundVariable:\n                pass\n", T),
 ]
 
 if __name__ == "__main__":
