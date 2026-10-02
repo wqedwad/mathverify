@@ -149,7 +149,7 @@ def test_a_period_and_the_zeros_are_confirmed(monkeypatch):
     monkeypatch.undo()
     real = sp.solveset
     monkeypatch.setattr(sp, "solveset", lambda r, v, d: sp.FiniteSet(sp.pi, 1) if r == sp.Eq(sp.sin(x), 0) else real(r, v, d))
-    assert exactsets._zeros_on(sp.sin(x), x, 0, 4) is None
+    assert exactsets._zeros_on(sp.sin(x), x, sp.Rational(1, 2), 4) is None
 
 
 def test_continuous_domain_of_a_trigonometric_expression():
