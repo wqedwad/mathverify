@@ -106,8 +106,14 @@ def _agreement_proves(a, b, dom: dict, cev: dict, ctx=None) -> bool:
     proof = (cev.get("random_point") or {}).get("nonsmooth_proof")
     if isinstance(proof, str) and (proof.startswith("cells_proved") or proof.startswith("period_")):
         return True
-    if not (_analytic_off_discrete(sp.sympify(a)) and _analytic_off_discrete(sp.sympify(b))):
-        return _analytic_on_interval(sp.sympify(a), sp.sympify(b), dom, ctx)
+    # a symbol compared on one value (a cell of the premises' region, n = 3) is evaluated there, not sampled
+    one = {q: next(iter(d)) for q, d in dom.items() if isinstance(d, sp.FiniteSet) and len(d) == 1}
+    a, b = sp.sympify(a).xreplace(one), sp.sympify(b).xreplace(one)
+    dom = {q: d for q, d in dom.items() if q not in one}
+    if not dom:
+        return True
+    if not (_analytic_off_discrete(a) and _analytic_off_discrete(b)):
+        return _analytic_on_interval(a, b, dom, ctx)
     return all(_has_interior(d) for d in dom.values())
 
 

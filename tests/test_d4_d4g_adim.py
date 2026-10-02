@@ -334,3 +334,18 @@ def test_premise_leaving_the_whole_domain_narrows_nothing():
     ir = _ir(None, [{"name": "x"}], kind="limit", params={"expr": "x*log(x)", "var": "x", "to": "0", "side": "+"})
     r = _run(ir, "0", [("eq", "x*log(x) = log(x)/(1/x)"), ("compute", "diff(log(x), x) = 1/x")])
     assert _step(r)["status"] == "verified"
+
+
+def test_counterexample_at_an_undefined_point_is_replaced_by_one_where_defined():
+    # value Abs(x) + Max(x - 1, 0) = x, written with log(x) (defined for x > 0): the identity check disagrees
+    # first at a small x < 0, where the claim has no value; on x > 0 it is false for x > 1
+    r = _run(_ir("x", [X]), "x", [("compute", "Abs(x) + Max(x - 1, 0) = x + log(x) - log(x)")])
+    st = _step(r)
+    assert st["status"] == "refuted" and "premise_region" in st["evidence"], st.get("evidence")
+
+
+def test_region_cells_of_one_value_are_evaluated_not_sampled():
+    # part 10: n**2 = 9, n > 0 leaves n = 3; a Limit keeps the claim out of the finite route, and the region
+    # cell {3} is one value, not a sample
+    ir = _ir("Sum(k, (k, 1, n))", [N, K, X], ["n**2 = 9", "n > 0"])
+    assert _step(_run(ir, "6", [("compute", "n*Limit(x, x, 1) = 3")]))["status"] == "verified"
