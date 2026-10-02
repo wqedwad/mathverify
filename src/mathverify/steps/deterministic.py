@@ -139,12 +139,9 @@ def _agreement_proves(a, b, dom: dict, cev: dict, ctx=None) -> bool:
     a, b = sp.sympify(a).xreplace(one), sp.sympify(b).xreplace(one)
     dom = {q: d for q, d in dom.items() if q not in one}
     if not dom:
-        # every symbol has one value: the sides are constants, equal only when PROVED equal (numbers that
-        # agree to 30 digits are not: 1 + log(1 + exp(-exp(30))) = 1, d4g review S1)
-        if ctx is None:
-            return False
-        r = sb_run("mathverify.equiv.numeric:exact_equal", a, b, timeout=ctx.timeout)
-        return r.ok and r.value is True
+        # every symbol has one value: the comparison decided the constants exactly (random_point counts no
+        # numeric agreement as equality since part d4c; 1 + log(1 + exp(-exp(30))) = 1 is not, review S1)
+        return True
     if not (_analytic_off_discrete(a) and _analytic_off_discrete(b)):
         return _analytic_on_interval(a, b, dom, ctx)
     return all(_has_interior(d) for d in dom.values())

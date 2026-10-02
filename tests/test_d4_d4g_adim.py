@@ -183,7 +183,8 @@ def test_cubic_premise_is_quick():
     # 21c1698: 120 s here (166-390 s measured by the audit)
     t = time.time()
     st = _status(_ir("x**3 - 3*x", [X], ["x**3 - 3*x + 1 = 0"]), "-1", "compute", "x**3 - 3*x = -1")
-    assert st in ("verified", "unknown") and time.time() - t < 60
+    # 5 s measured; sampling the unevaluated set of radicals runs into the 40 s comparison limit
+    assert st in ("verified", "unknown") and time.time() - t < 30
 
 
 def test_step_budget_makes_the_step_unknown(monkeypatch):
@@ -441,3 +442,25 @@ def test_condition_proved_through_the_premise_system():
     # y = x**2 with x > 0: the condition y >= 0 of sqrt(y) holds at each solution (y = x**2 >= 0)
     st = _step(_run(_ir("2 + 2", [X, Y], ["y = x**2", "x > 0"]), "4", [("eq", "sqrt(y) = x")]))
     assert st["status"] != "refuted" and st.get("reason") != "claim_undefined_at_the_premises_point"
+
+
+def test_counterexample_not_fixing_a_symbol_is_an_instance():
+    # the antiderivative's point fixes x only: the refutation holds for every n, and n > 0 leaves n values
+    r = _run(_ir("2 + 3", [X, NP, K]), "5", [("compute", "Integral(cos(x), x) = -sin(x) + Sum(1, (k, 1, n)) - n")])
+    assert _step(r)["status"] == "refuted"
+
+
+def test_case_vacuous_on_the_interval_through_the_region_route():
+    # review Z4: a Derivative keeps the claim out of the finite route; the region of case and interval is empty
+    sol = {"claimed_answer": {"kind": "value", "payload": "12"},
+           "steps": [{"id": "c1", "kind": "case", "claim": "x < 0", "from": [], "text": ""},
+                     {"id": "s1", "kind": "compute", "claim": "diff(Abs(x) + x**2, x) = -1 + 2*x", "from": ["c1"],
+                      "text": ""}]}
+    st = _step(verify(EX, sol))
+    assert st["status"] != "refuted" and st["evidence"].get("window_dropped"), st.get("evidence")
+
+
+def test_sum_of_squares_gives_the_real_point():
+    # x**2 + y**2 = 0 leaves x = y = 0 over the reals, where sqrt(x) is defined
+    st = _step(_run(_ir("2 + 2", [X, Y], ["x**2 + y**2 = 0"]), "4", [("compute", "sqrt(x)*sqrt(x) + y = x + y")]))
+    assert st.get("reason") != "claim_undefined_at_the_premises_point" and st["status"] != "refuted"
