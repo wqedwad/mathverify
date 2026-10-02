@@ -74,6 +74,8 @@ def exact_zero_test(d) -> bool | None:
         return bool(sp.expand(m - t) == 0)
     except Exception:  # noqa: BLE001 - NotAlgebraic, …: try the rewrites
         pass
+    if _angle_sum_is_zero(d) or _exp_generator_is_zero(d):
+        return True
     for fn in (sp.radsimp, sp.simplify, lambda e: sp.expand_log(e, force=False), sp.logcombine,
                sp.trigsimp, lambda e: sp.simplify(e.rewrite(sp.exp)), sp.expand_complex):
         try:
@@ -83,6 +85,79 @@ def exact_zero_test(d) -> bool | None:
         if r == 0 or (getattr(r, "is_number", False) and r.is_zero is True):
             return True
     return None
+
+
+def _unit(theta):
+    """e^(iθ) for θ = atan/asin/acos of a real algebraic number (an algebraic number), or None."""
+    if theta is sp.pi:
+        return sp.Integer(-1)
+    if not isinstance(theta, (sp.atan, sp.asin, sp.acos)) or len(theta.args) != 1:
+        return None
+    a = theta.args[0]
+    if not (a.is_number and a.is_real is True and a.is_algebraic is True):
+        return None
+    if isinstance(theta, sp.atan):
+        return (1 + sp.I * a) / sp.sqrt(1 + a**2)
+    if (a**2 - 1).is_nonpositive is not True:      # asin/acos of a number outside [-1, 1]
+        return None
+    c = sp.sqrt(1 - a**2)
+    return c + sp.I * a if isinstance(theta, sp.asin) else a + sp.I * c
+
+
+def _angle_sum_is_zero(d) -> bool:
+    """Is d = Σ c_k·θ_k exactly 0, θ_k = π or atan/asin/acos of real algebraic numbers, c_k rational?
+    With N the common denominator, e^(iNd) = Π (e^(iθ_k))^(N c_k) is algebraic: when it is exactly 1
+    (minimal polynomial), Nd is a multiple of 2π, and |Nd| < 1 (each θ_k to 40 digits) leaves only 0.
+    atan(3/7) + atan(7/3) - π/2 was undecided, and random points had read evalf's '0.e-160' as 0."""
+    try:
+        d = sp.expand(d.replace(lambda n: type(n).__name__ == "arccot", lambda n: sp.pi / 2 - sp.atan(n.args[0]))
+                      .replace(lambda n: isinstance(n, sp.acot), lambda n: sp.atan(1 / n.args[0])))
+        terms = sp.Add.make_args(d)
+        if not 1 <= len(terms) <= 6:
+            return False
+        coeffs, units = [], []
+        for term in terms:
+            c, rest = term.as_coeff_Mul()
+            u = _unit(rest)
+            if not isinstance(c, sp.Rational) or u is None:
+                return False
+            coeffs.append(c)
+            units.append(u)
+        n = sp.ilcm(*[c.q for c in coeffs])
+        powers = [int(c * n) for c in coeffs]
+        if max(abs(k) for k in powers) > 24:
+            return False
+        z = sp.Mul(*[u**k for u, k in zip(units, powers)])
+        t = sp.Dummy("t")
+        if sp.expand(sp.minimal_polynomial(z, t) - (t - 1)) != 0:
+            return False
+        with mp.workdps(40):
+            total = sum(mp.mpf(str(sp.N(term, 45))) for term in terms)
+            return bool(abs(n * total) < 1)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _exp_generator_is_zero(d) -> bool:
+    """Is d exactly 0 as a rational function of one exponential? Every e^r (r rational, after writing
+    the hyperbolic functions with exp) is g^k for g = e^(r0), r0 the gcd of the r's: tanh(c) and
+    (e^(2c) - 1)/(e^(2c) + 1) at c = 123/1000 are then the same rational function of g. An identity of
+    rational functions holds wherever both sides are defined."""
+    try:
+        e = d.rewrite(sp.exp)
+        if e == 0:
+            return True
+        args = {a.args[0] for a in e.atoms(sp.exp)}
+        if not args or not all(isinstance(r, sp.Rational) for r in args) or len(args) > 8:
+            return False
+        r0 = sp.Rational(sp.igcd(*[r.p for r in args]), sp.ilcm(*[r.q for r in args]))
+        if any(abs(r / r0) > 64 for r in args):
+            return False
+        g = sp.Dummy("g", positive=True)
+        e = e.xreplace({sp.exp(r): g ** int(r / r0) for r in args})
+        return sp.cancel(sp.together(e)) == 0
+    except Exception:  # noqa: BLE001
+        return False
 
 
 _MIN_BITS = 20

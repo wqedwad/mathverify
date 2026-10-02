@@ -439,6 +439,7 @@ def certified_integral_value(integrand, var, a, b, timeout: float = 8.0) -> tupl
         return S.Zero, ev
     # odd about the midpoint: f(a + b - x) = -f(x) (f(-x) = -f(x) on the whole line)
     mirror = -var if (a, b) == (-sp.oo, sp.oo) else (a + b - var if a.is_finite and b.is_finite else None)
+    even = None
     if mirror is not None:
         rs = sb_run("mathverify.sandbox.ops:simplify_diff", f.xreplace({var: mirror}), -f, timeout=timeout)
         if rs.ok and rs.value == 0:
@@ -446,7 +447,17 @@ def certified_integral_value(integrand, var, a, b, timeout: float = 8.0) -> tupl
                 ev["certificate"] = "odd_about_the_midpoint_and_absolutely_integrable"
                 return S.Zero, ev
             ev["odd"] = "absolute_convergence_not_proved"
+        elif rs.ok and isinstance(rs.value, sp.Basic) and not rs.value.has(sp.zoo, sp.nan):
+            even = rs.value / 2                  # (f(x) + f(a + b - x))/2, the part about the midpoint
     v = _fundamental_theorem_value(f, var, a, b, timeout)
+    if v is None and even is not None and (a, b) != (-sp.oo, sp.oo):
+        # ∫_a^b f = ∫_a^b (f(x) + f(a + b - x))/2 for an absolutely integrable f: the odd part of
+        # sin(x^5)·e^(cos x) + 1 on [-1, 1] has no antiderivative, the even part is 1
+        v = _fundamental_theorem_value(even, var, a, b, timeout)
+        if v is not None and not _absolutely_integrable(f, var, a, b, timeout):
+            v = None
+        if v is not None:
+            ev["symmetrized"] = str(even)
     if v is not None:
         ev["certificate"] = "fundamental_theorem_of_calculus"
         ev["value"] = str(sign * v)

@@ -24,6 +24,7 @@ FRM = "src/mathverify/equiv/forms.py"
 DET = "src/mathverify/steps/deterministic.py"
 RP = "src/mathverify/equiv/random_point.py"
 OPS = "src/mathverify/sandbox/ops.py"
+NUM = "src/mathverify/equiv/numeric.py"
 T = "tests/test_d4_d4c_sayisal.py"
 T4 = "tests/test_parca4_parametreli_bicim.py"
 
@@ -94,6 +95,15 @@ MUTATIONS = [
      "            elif excluded():\n                ok = False\n",
      "            elif claimed_zero and converged and abs(val) < 1e-60:\n                ok = True\n"
      "            elif excluded():\n                ok = False\n", T),
+    ("Z24 simetrikleştirilmiş integralde mutlak integrallenebilirlik aranmaz", CAL,
+     "        if v is not None and not _absolutely_integrable(f, var, a, b, timeout):\n",
+     "        if False:\n", T),
+    ("Z25 açı toplamında |Nd| < 1 aranmaz", NUM,
+     "            return bool(abs(n * total) < 1)\n", "            return True\n", T),
+    ("Z26 açı toplamı kesin sıfır sınamasında yok", NUM,
+     "    if _angle_sum_is_zero(d) or _exp_generator_is_zero(d):\n", "    if _exp_generator_is_zero(d):\n", T),
+    ("Z27 üstel üreteç kesin sıfır sınamasında yok", NUM,
+     "    if _angle_sum_is_zero(d) or _exp_generator_is_zero(d):\n", "    if _angle_sum_is_zero(d):\n", T),
 ]
 
 if __name__ == "__main__":

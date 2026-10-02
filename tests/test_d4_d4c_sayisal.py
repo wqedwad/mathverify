@@ -88,6 +88,10 @@ def test_the_zero_certificate():
     assert certified_integral_value(x**2, x, 1, 0)[0] == sp.Rational(-1, 3)              # reversed range
     assert certified_integral_value(sp.Abs(x), x, -1, 2)[0] == sp.Rational(5, 2)          # split at 0
     assert certified_integral_value(1 / x**2, x, -1, 1)[0] is None      # F = -1/x jumps inside: divergent
+    # the odd part has no antiderivative; the part even about the midpoint does
+    v, ev = certified_integral_value(sp.sin(x**5) * sp.exp(sp.cos(x)) + 1, x, -1, 1)
+    assert v == 2 and ev["symmetrized"] == "1"
+    assert certified_integral_value(1 / x + 1, x, -1, 1)[0] is None      # even part 1, odd part not integrable
     from mathverify.certify.calculus import _checked_difference
     assert _checked_difference(x**3, x**2, x, sp.S.Zero, sp.S.One, 8.0) is None          # F' != g
     assert _checked_difference(x**3 / 3, x**2, x, sp.S.Zero, sp.S.One, 8.0) == sp.Rational(1, 3)
@@ -123,6 +127,66 @@ def test_a_step_is_refuted_only_outside_the_enclosure():
     # 30 digits of the value: inside the enclosure (width ~2e-17), so not refuted
     r = _run(X1, "2", [("compute", "Integral(exp(cos(x)), (x, 0, 1)) = 2341574841713053164922975186216/10**30")])
     assert _steps(r) != ["refuted"]
+
+
+def test_methods_that_disagree_give_no_enclosure(monkeypatch):
+    """Gauss-Legendre's error estimates were honest in every case measured, so the guard is exercised with
+    made-up quadratures: two methods that disagree beyond their estimates enclose nothing."""
+    from mathverify.certify import calculus
+    from mathverify.sandbox import CasResult
+
+    def fake(fn, *args, **kw):
+        if fn.endswith(":breakpoints_of"):
+            return CasResult(ok=True, value=[])
+        if fn.endswith(":quad_breakpoints"):
+            return CasResult(ok=True, value=("1.0" if args[6] == "tanh-sinh" else "1.5", "1e-30"))
+        raise AssertionError(fn)
+
+    monkeypatch.setattr(calculus, "sb_run", fake)
+    x = sp.Symbol("x", real=True)
+    assert calculus.integral_enclosure(sp.exp(sp.cos(x)), x, 0, 1) is None
+
+
+def test_sympys_zero_without_a_certificate_is_no_exact_value(monkeypatch):
+    """A SymPy 0 nothing proves (here made up for ∫_0^1 e^(cos x) dx = 2.3416) is dropped: the claim 0
+    is then refuted by the two quadratures, not left UNKNOWN by a 'symbolic-numeric disagreement'."""
+    from mathverify.certify import calculus
+    real = calculus.sb_run
+
+    def fake(fn, *args, **kw):
+        if fn.endswith(":integrate_symbolic") and len(args) == 4:
+            from mathverify.sandbox import CasResult
+            return CasResult(ok=True, value=sp.S.Zero)
+        return real(fn, *args, **kw)
+
+    monkeypatch.setattr(calculus, "sb_run", fake)
+    r = _run(_dint("exp(cos(x))", 0, 1), "0")
+    assert r.verdict == "INCORRECT"
+
+
+def test_checked_forms_takes_no_uncertified_zero(monkeypatch):
+    """SymPy's 0 (made up here for ∫_0^1 e^(cos x) dx) with no certificate is no value of the form."""
+    import mathverify.sandbox as sandbox
+    from mathverify.equiv.forms import UnverifiedForm, checked_forms
+    real = sandbox.run
+
+    def fake(fn, *args, **kw):
+        if fn.endswith(":doit_expr"):
+            from mathverify.sandbox import CasResult
+            return CasResult(ok=True, value=sp.S.Zero)
+        return real(fn, *args, **kw)
+
+    monkeypatch.setattr(sandbox, "run", fake)
+    x = sp.Symbol("x", real=True)
+    with pytest.raises(UnverifiedForm):
+        checked_forms(sp.Integral(sp.exp(sp.cos(x)), (x, 0, 1)))
+    assert checked_forms(sp.Integral(sp.sin(sp.sin(x)), (x, 0, 2 * sp.pi))) == 0     # certified: odd about pi
+
+
+def test_an_odd_singular_integrand_without_antiderivative_needs_the_power_bound():
+    """sign(x)·|x|^(-2/3)·e^(cos x): no antiderivative, odd, |f|·|x|^(2/3) -> e at 0."""
+    assert _run(_dint("sign(x)*Abs(x)**(-2/3)*exp(cos(x))", -1, 1), "0").verdict == "CORRECT"
+    assert _run(_dint("sign(x)*Abs(x)**(-1)*exp(cos(x))", -1, 1), "0").verdict != "CORRECT"   # divergent
 
 
 # --- S3 / D4-ADIM-C ---------------------------------------------------------------------------------
@@ -193,6 +257,31 @@ def test_the_difference_check_itself():
     w, unsure = _definite_nonzero_difference(sp.sin(x)**2 + sp.cos(x)**2 - 1, [x], pts,
                                              sp.sin(x)**2 + sp.cos(x)**2, sp.S.One)
     assert w is None and unsure == 0           # equal at each point: proved there, not read off evalf
+
+
+def test_exact_zeros_of_angle_sums_and_exponentials():
+    """With evalf's zero no longer a proof, a point is decided by exact methods; these two keep the
+    textbook identities that only random points had decided (atan x + atan(1/x) = π/2 for x > 0, ...)."""
+    from mathverify.sandbox import run as sb_run
+
+    def zero(d):          # in the sandbox, as the verifier runs it: the rewrites of a nonzero d can take long
+        r = sb_run("mathverify.equiv.numeric:exact_zero_test", d, timeout=10.0)
+        return r.ok and r.value is True
+
+    r = sp.Rational
+    assert zero(sp.atan(r(3, 7)) + sp.atan(r(7, 3)) - sp.pi / 2)
+    assert zero(4 * sp.atan(r(1, 5)) - sp.atan(r(1, 239)) - sp.pi / 4)      # Machin
+    assert zero(sp.asin(r(1, 3)) + sp.acos(r(1, 3)) - sp.pi / 2)
+    assert not zero(sp.atan(r(1, 2)) + sp.atan(r(1, 3)) - sp.pi / 4 - 2 * sp.pi)   # e^(iNd) = 1 only
+    assert not zero(sp.atan(r(3, 7)) + sp.atan(r(7, 3)) - sp.pi / 2 + r(1, 10**50))
+    c = r(123456, 1000)
+    assert zero(sp.tanh(c) - (sp.exp(2 * c) - 1) / (sp.exp(2 * c) + 1))
+    assert not zero(sp.tanh(c) - (sp.exp(2 * c) - 1) / (sp.exp(2 * c) + 1) + sp.exp(-1000))
+    XP = {"name": "x", "domain": "real", "constraints": ["x > 0"]}
+    for expr, claim, v in [("atan(x) + atan(1/x)", "pi/2", XP), ("tanh(x)", "(exp(2*x) - 1)/(exp(2*x) + 1)", X),
+                           ("atan(x) - atan(x/2)", "atan(x/(2 + x**2))", X)]:
+        ir = _task("simplify_expression", {"expr": expr}, [v], shape="expression")
+        assert _run(ir, claim, kind="expression").verdict == "CORRECT", expr
 
 
 def test_controls_keep_their_verdicts():

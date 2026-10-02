@@ -40,6 +40,8 @@ K = {"name": "k", "domain": "positive_integer"}
 N = {"name": "n", "domain": "positive_integer"}
 A_HALF = {"name": "a", "domain": "real", "constraints": ["a > -1/2", "a < 1/2"]}
 X_10_20 = {"name": "x", "domain": "real", "constraints": ["x > 10", "x < 20"]}
+X_POS = {"name": "x", "domain": "real", "constraints": ["x > 0"]}
+X_11 = {"name": "x", "domain": "real", "constraints": ["x > -1", "x < 1"]}
 
 
 def _task(kind, params, vars_, givens=(), shape="scalar"):
@@ -245,6 +247,18 @@ def cases_g():
         ("sin^2 x + cos^2 x -> 1", simp("sin(x)**2 + cos(x)**2", [X]), _sol("1", kind="expression"), OK, None),
         ("1/(x-1) + e^-1000 -> 1/(x-1) (gap 1e-435)", simp("1/(x - 1) + exp(-1000)", [X]), _sol("1/(x - 1)", kind="expression"), NO, None),
         ("Sum cos(k pi/2), k=1..4n -> 0", simp("Sum(cos(k*pi/2), (k, 1, 4*n))", [N, K]), _sol("0", kind="expression"), NOTNO, None),
+        # identities that only random points decided: evalf's zero is no proof now, an exact one is
+        ("atan(x) + atan(1/x) -> pi/2 (x > 0)", simp("atan(x) + atan(1/x)", [X_POS]), _sol("pi/2", kind="expression"), OK, None),
+        ("asin(x) + acos(x) -> pi/2 on (-1,1)", simp("asin(x) + acos(x)", [X_11]), _sol("pi/2", kind="expression"), OK, None),
+        ("atan(2x/(1-x^2)) -> 2 atan(x) on (-1,1)", simp("atan(2*x/(1 - x**2))", [X_11]), _sol("2*atan(x)", kind="expression"), OK, None),
+        ("atan(x) - atan(x/2) -> atan(x/(2+x^2))", simp("atan(x) - atan(x/2)", [X]), _sol("atan(x/(2 + x**2))", kind="expression"), OK, None),
+        ("tanh(x) -> (e^2x - 1)/(e^2x + 1)", simp("tanh(x)", [X]), _sol("(exp(2*x) - 1)/(exp(2*x) + 1)", kind="expression"), OK, None),
+        ("tan(x/2) -> sin x/(1 + cos x) on (-1,1)", simp("tan(x/2)", [X_11]), _sol("sin(x)/(1 + cos(x))", kind="expression"), OK, None),
+        ("atan(x) + atan(1/x) -> pi/2, x free (counterexample)", simp("atan(x) + atan(1/x)", [X]), _sol("pi/2", kind="expression"), NO, None),
+        ("odd + 1 [-1,1] claim 2 (even part 1)", dint("sin(x**5)*exp(cos(x)) + 1", -1, 1), _sol("2"), OK, None),
+        ("odd + 1 [-1,1] claim 3", dint("sin(x**5)*exp(cos(x)) + 1", -1, 1), _sol("3"), NO, None),
+        ("sign(x)|x|^(-2/3) e^cos x [-1,1] claim 0 (no antiderivative)", dint("sign(x)*Abs(x)**(-2/3)*exp(cos(x))", -1, 1), _sol("0"), OK, None),
+        ("log x/sqrt x [0,1] step = -4 (manual antiderivative)", X1, _sol("2", eqs("Integral(log(x)/sqrt(x), (x, 0, 1)) = -4")), OK, VER),
     ]
 
 
