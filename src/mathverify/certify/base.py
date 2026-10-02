@@ -12,6 +12,7 @@ from ..ir import ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
                                claim_namespace, given_bindings)
+from ..sandbox.exactsets import at_risk, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
 
@@ -50,7 +51,10 @@ class Ctx:
         # conditions on var that name a symbol no given fixes: dropped here, listed for the
         # certificates (unapplied_conditions)
         unapplied: list = []
-        dom = self.discourse(var)
+        # relations with a trigonometric function: solved last, on the domain the others leave
+        # (sandbox.exactsets: SymPy reads them on one period only)
+        deferred: list = []
+        dom = self._periodic_parts(self.discourse(var), var, deferred)
         if dom.free_symbols - {var}:
             unapplied.append(str(self.ir.domain_of_discourse))
         vd = next((v for v in self.ir.vars if v.name == var.name), None)
@@ -74,7 +78,9 @@ class Ctx:
                 for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
                     try:
                         r = self._with_bound_values(r, var)
-                        if r.free_symbols == {var}:
+                        if r.free_symbols == {var} and at_risk(r, var):
+                            deferred.append(r)
+                        elif r.free_symbols == {var}:
                             dom = sp.Intersection(dom, sp.solveset(r, var, S.Reals))
                         elif var in r.free_symbols:
                             unapplied.append(c)
@@ -86,14 +92,19 @@ class Ctx:
         # the relation itself is a given, the algebra certificates solve the givens as a system.
         # Odd roots are real roots (equiv.numeric.real_odd_roots), as everywhere else.
         rs, _ = self.side_conditions(var)
+        side: list = []
         for sol in rs:
-            dom = sp.Intersection(dom, sol)
+            if isinstance(sol, sp.ConditionSet) and sol.sym == var and at_risk(sol.condition, var):
+                deferred.append(sol.condition)
+                side.append(sol.condition)
+            else:
+                dom = sp.Intersection(dom, sol)
         unapplied += self.cache.get(f"side_unbound:{var.name}", [])
         # the problem's own expressions must be defined, as written (see written_conditions)
         conds, nowhere = self.written_conditions()
         if var in nowhere:
             dom = S.EmptySet
-        from .domain import is_range_span
+        from .domain import is_convention, is_range_span
         spans: list = []
         for c in conds:
             c = self._with_bound_values(c, var)
@@ -101,7 +112,7 @@ class Ctx:
                 dom = S.EmptySet
                 continue
             fs = getattr(c, "free_symbols", None)
-            if is_range_span(c) and fs <= {var}:
+            if is_convention(c) and fs <= {var}:
                 spans.append(c)                        # see _forward_ranges
                 continue
             if fs != {var}:
@@ -114,37 +125,118 @@ class Ctx:
                 # its root sqrt(2) certified (30 Sep 2026)
                 dom = sp.Intersection(dom, c.args[1]) if c.args[0] == var else sp.ConditionSet(var, c, dom)
                 continue
+            if at_risk(c, var):
+                deferred.append(c)
+                continue
             try:
                 sol = sp.solveset(c, var, S.Reals)
             except Exception:  # noqa: BLE001
                 continue
             if not isinstance(sol, sp.ConditionSet):
                 dom = sp.Intersection(dom, sol)
+        # the trigonometric conditions before the convention regions: a convention point is one of the
+        # domain, and sin(x) > 0 cuts the negative bases of x**(1/3) too
+        dom, unsolved = self._periodic_conditions(dom, deferred, var)
+        self.cache[f"unsolved:{var.name}"] = unsolved
+        from .domain import is_value_convention
+        # the points where a value of the problem is ANOTHER value under the other reading (an odd root:
+        # the principal value; Mod: Euclidean): see value_convention_region
+        _, vback = self._forward_ranges(dom, [c for c in spans if is_value_convention(c)
+                                              and not is_range_span(c)], var)
+        self.cache[f"valueconv:{var.name}"] = vback
         dom, back = self._forward_ranges(dom, spans, var)
         if back is not S.EmptySet:
             unapplied += [c for c in spans if c not in unapplied]
+        self.cache[f"unsolved_side:{var.name}"] = [r for r in unsolved if r in side]
         self.cache[f"reversed:{var.name}"] = back
         self.cache[f"unapplied:{var.name}"] = unapplied
         self.cache[key] = dom
         return dom
 
     @staticmethod
+    def _periodic_parts(dom: sp.Set, var: sp.Symbol, deferred: list) -> sp.Set:
+        """`dom` without its unsolved trigonometric conditions (a domain of discourse `sin(x) > 0`
+        reads as ConditionSet(x, sin(x) > 0, Reals), normalize.parse.parse_domain), which go to
+        `deferred`: they are solved with the others, on what the rest leaves."""
+        if isinstance(dom, sp.ConditionSet) and dom.sym == var and at_risk(dom.condition, var):
+            deferred.append(dom.condition)
+            return Ctx._periodic_parts(dom.base_set, var, deferred)
+        if isinstance(dom, sp.Intersection):
+            return sp.Intersection(*[Ctx._periodic_parts(a, var, deferred) for a in dom.args])
+        return dom
+
+    @staticmethod
+    def _periodic_conditions(dom: sp.Set, rels: list, var: sp.Symbol) -> tuple[sp.Set, list]:
+        """`dom` cut by relations with a trigonometric function, each solved on the domain the others
+        leave (`sandbox.exactsets.exact_solveset`): on a bounded domain the set is rebuilt and checked;
+        `cos(x) != 0` on ℝ is ℝ minus the progressions pi/2 + n*pi. SymPy solved them on ℝ and returned
+        ONE period: (0, pi) was the domain of log(sin x), so {} was certified for x**2 = 49 with
+        sin(x) > 0 and the domain of tan(x) was [0, 2*pi) minus two points (fourth audit G2, 1 Oct 2026).
+        One that stays unsolved (sin(x) > 0 on ℝ) cuts `dom` as a ConditionSet: membership of a point
+        is still decided, the set is not known in closed form; it is listed (`unsolved_conditions`)."""
+        unsolved: list = []
+        for r in rels:
+            try:
+                s_ = exact_solveset(r, var, dom)
+            except Exception:  # noqa: BLE001 - unsolved, as below
+                s_ = sp.ConditionSet(var, r, dom)
+            if isinstance(s_, sp.ConditionSet) or s_.has(sp.ConditionSet):
+                unsolved.append(r)
+                dom = sp.Intersection(dom, sp.ConditionSet(var, r, S.Reals))
+            else:
+                dom = s_
+        return dom, unsolved
+
+    def cut_by(self, var: sp.Symbol, dom: sp.Set, rels) -> sp.Set | None:
+        """`dom` cut by the relations on `var` alone, or None when one cannot be solved. A relation with
+        a trigonometric function is solved last, on the domain the others leave (sandbox.exactsets: on
+        ℝ SymPy gave ONE period, (0, pi) for sin(x) > 0, and {} was certified for x**2 = 49 with that
+        given, fourth audit G2); one that stays unsolved there cuts `dom` as a ConditionSet, which
+        decides the membership of each point exactly and nothing more."""
+        from ..sandbox import run as sb_run
+        late = [g for g in rels if at_risk(g, var)]
+        for g in [g for g in rels if not at_risk(g, var)] + late:
+            risky = at_risk(g, var)
+            rr = sb_run("mathverify.sandbox.ops:solveset_in", g, var, dom if risky else S.Reals,
+                        timeout=self.timeout)
+            if not rr.ok:
+                return None
+            if isinstance(rr.value, sp.ConditionSet) or rr.value.has(sp.ConditionSet):
+                if not risky:
+                    return None
+                dom = sp.Intersection(dom, sp.ConditionSet(var, g, S.Reals))
+            else:
+                dom = rr.value if risky else sp.Intersection(dom, rr.value)
+        return dom
+
+    def unsolved_side_conditions(self, var: sp.Symbol) -> list:
+        """The side conditions (`side_conditions`) among `unsolved_conditions`: a given like sin(x) > 0
+        next to the task's own relation that no bounded domain lets `domain_for` solve. The verifier
+        abstains on it as on any side condition it cannot solve (`given_not_applied`)."""
+        self.domain_for(var)
+        return list(self.cache.get(f"unsolved_side:{var.name}", []))
+
+    def unsolved_conditions(self, var: sp.Symbol) -> list:
+        """The relations on `var` with a trigonometric function that cut its domain unsolved (as a
+        ConditionSet, see `_periodic_conditions`). A certificate that reads the domain as a solved set
+        (compares it, enumerates it, takes its ends) abstains while this is not empty
+        (`condition_unsolved`); one that only decides the membership of points reads it as it is."""
+        self.domain_for(var)
+        return list(self.cache.get(f"unsolved:{var.name}", []))
+
+    @staticmethod
     def _forward_ranges(dom: sp.Set, spans: list, var: sp.Symbol) -> tuple[sp.Set, sp.Set]:
-        """(the points of `dom` where every Sum/Product range of the problem runs forward or is empty,
-        the points where one runs backwards): see `reversed_region`. A span solveset cannot split keeps
-        `dom` as it was (the condition was not applied before either) and makes every point
-        undecided."""
+        """(the points of `dom` where every convention condition of the problem holds (a Sum/Product
+        range runs forward or is empty, an odd root's base is not negative, ...: `certify.domain.
+        Convention`), the points where one does not): see `convention_region`. A condition solveset
+        cannot split keeps `dom` as it was (the condition was not applied before either) and makes
+        every point undecided."""
+        from .domain import convention_split
         if not spans:
             return dom, S.EmptySet
         fwd_all, back_all = S.Reals, S.EmptySet
         for c in spans:
-            try:
-                fwd = sp.solveset(sp.Ge(c.args[0], 0), var, S.Reals)
-                back = sp.solveset(sp.Lt(c.args[0], 0), var, S.Reals)
-            except Exception:  # noqa: BLE001
-                fwd = back = None
-            if fwd is None or back is None or fwd.has(sp.ConditionSet) or back.has(sp.ConditionSet):
-                fwd, back = S.Reals, S.Reals
+            fwd, back = convention_split(c, var)
             fwd_all = sp.Intersection(fwd_all, fwd)
             back_all = sp.Union(back_all, back)
         back = sp.Intersection(dom, back_all)
@@ -154,6 +246,23 @@ class Ctx:
             empty = None
         return sp.Intersection(dom, fwd_all), (S.EmptySet if empty is True else back)
 
+    def convention_region(self, var: sp.Symbol) -> sp.Set:
+        """The points of `var`'s domain where the value of one of the problem's expressions is a
+        convention, not the curriculum's (`reversed_region` for every `certify.domain.Convention`, part
+        d4a): an odd root of a negative base (x**(1/3) at x = -8: -2 or 1 + √3 i), 0**0, C(n, r) outside
+        0 <= r <= n, Mod with a divisor that is not positive, a Sum/Product range that runs backwards.
+        `domain_for` leaves them out, and a candidate there is neither kept nor dropped."""
+        return self.reversed_region(var)
+
+    def value_convention_region(self, var: sp.Symbol) -> sp.Set:
+        """The part of `convention_region` where the other reading gives ANOTHER value, not "undefined":
+        an odd root of a negative base (real root or principal value), Mod by a divisor that is not
+        positive (floored or Euclidean). There a comparison made on `domain_for` alone decides nothing:
+        (x**3)**(1/3) agrees with Abs(x) on x >= 0 and Abs(x) was certified (part d4a, attack A). See
+        `convention_counterexample`. A Sum range that runs backwards is left to §80's own rules."""
+        self.domain_for(var)
+        return self.cache.get(f"valueconv:{var.name}", S.EmptySet)
+
     def reversed_region(self, var: sp.Symbol) -> sp.Set:
         """The points of `var`'s domain (the declarations, constraints, side conditions and written
         conditions other than the ranges) where a Sum/Product range of the problem runs backwards
@@ -162,7 +271,8 @@ class Ctx:
         its value is no convention, but a candidate, root or solution there is neither kept nor dropped
         (DECISIONS §80). Dropped like an undefined point, it made the value 3 of Σ_{k=1}^{n} k with
         n**2 = 4 certified (1 Oct 2026). While this is not empty the ranges' conditions are listed in
-        `unapplied_conditions`, so a certificate that reads its answer on the domain abstains."""
+        `unapplied_conditions`, so a certificate that reads its answer on the domain abstains. The same
+        region holds the points of every other convention (`convention_region`, part d4a)."""
         self.domain_for(var)
         return self.cache.get(f"reversed:{var.name}", S.EmptySet)
 
@@ -177,10 +287,10 @@ class Ctx:
         with the other symbols left symbolic (guard_roots at each root of √(x − a) = 2, so {a + 4}
         stays certified). A range's condition is never enforced that way (`reversed_region`): the
         domain the certificate checks a root against has already left the reversed points out."""
-        from .domain import is_range_span
+        from .domain import is_convention
         self.domain_for(var)
         return [c for c in self.cache.get(f"unapplied:{var.name}", [])
-                if not (isinstance(c, sp.Basic) and c in enforced and not is_range_span(c))]
+                if not (isinstance(c, sp.Basic) and c in enforced and not is_convention(c))]
 
     def discourse(self, var: sp.Symbol) -> sp.Set:
         """The domain of discourse for `var` (ℝ when it does not mention var), with each other symbol a
@@ -313,8 +423,13 @@ class Ctx:
                     if var in getattr(rel, "free_symbols", set()):
                         unbound.append(g)
                     continue
+                rel_r = real_odd_roots(rel)
+                if at_risk(rel_r, var):
+                    # solved by domain_for on the domain the other conditions leave (one period otherwise)
+                    sets.append(sp.ConditionSet(var, rel_r, S.Reals))
+                    continue
                 try:
-                    sol = sp.solveset(real_odd_roots(rel), var, S.Reals)
+                    sol = sp.solveset(rel_r, var, S.Reals)
                 except Exception:  # noqa: BLE001
                     sol = None
                 if sol is None or isinstance(sol, sp.ConditionSet) or sol.has(sp.ConditionSet):
@@ -617,6 +732,71 @@ def unknown(layer: str, reason: str, ms: float = 0.0, evidence: dict | None = No
     ev = dict(evidence or {})
     ev["reason"] = reason
     return result(layer, "unknown", 0.0, False, ev, ms, flags=flags)
+
+
+def condition_unsolved(layer: str, conds, ms: float = 0.0, evidence: dict | None = None) -> LayerResult:
+    """The certificate abstains: a condition on the variable (one with a trigonometric function, see
+    Ctx.unsolved_conditions) cuts its domain in no closed form, and the certificate reads that domain
+    as a solved set."""
+    return unknown(layer, f"condition_unsolved: {[str(c) for c in conds][:3]}", ms, evidence,
+                   flags=["condition_unsolved"])
+
+
+def convention_counterexample(ctx: Ctx, claimed, truth, syms, n: int = 12) -> tuple[bool, dict | None]:
+    """(whether a symbol of the comparison has points where a value of the problem is another value under
+    the other convention (`Ctx.value_convention_region`), a point there where the two sides differ under
+    BOTH readings or None). The comparisons read the sides on `domain_for`, which leaves those points
+    out, so agreement there certifies nothing: a claim equal to the problem's expression on x >= 0 only
+    (Abs(x) for (x**3)**(1/3)) was CORRECT (part d4a, attack A). A point where the readings differ on
+    whether the sides agree (cbrt(x) for x**(1/3) at -8) decides nothing; one where both readings
+    differ (Abs(-2) = 2 against -2 and 1 + √3 i) refutes the claim."""
+    from ..equiv.random_point import sample_points
+    from ..equiv.sets import scalar_equal
+    regions = {}
+    for s_ in syms:
+        if self_ok(ctx, s_):
+            r = ctx.value_convention_region(s_)
+            try:
+                empty = r.is_empty
+            except Exception:  # noqa: BLE001
+                empty = None
+            if empty is not True:
+                regions[s_] = r
+    if not regions:
+        return False, None
+    doms = {s_: regions.get(s_, ctx.domain_for(s_) if self_ok(ctx, s_) else S.Reals) for s_ in syms}
+    pts: list[dict] = []
+    for v, r in regions.items():
+        for c in (-1, -2, -8, sp.Rational(-1, 2), -27, -3, 1, 2):
+            try:
+                if r.contains(c) is sp.true:
+                    pts.append({v: sp.Integer(c) if isinstance(c, int) else c})
+            except Exception:  # noqa: BLE001
+                continue
+    try:
+        pts += sample_points(doms, n, ctx.seed)
+    except Exception:  # noqa: BLE001
+        pass
+    for pt in pts:
+        full = dict(pt)
+        for s_ in syms:
+            if s_ not in full:
+                full[s_] = sp.Integer(1) if doms[s_].contains(1) is sp.true else None
+        if any(v is None for v in full.values()):
+            continue
+        try:
+            a, b = sp.sympify(claimed).xreplace(full), sp.sympify(truth).xreplace(full)
+            if a.free_symbols or b.free_symbols or a.has(sp.nan, sp.zoo) or b.has(sp.nan, sp.zoo):
+                continue
+            if scalar_equal(a, b) is False:
+                return True, {str(k): str(v) for k, v in full.items()}
+        except Exception:  # noqa: BLE001
+            continue
+    return True, None
+
+
+def self_ok(ctx: Ctx, s_) -> bool:
+    return isinstance(s_, sp.Symbol) and ctx.ns.get(s_.name) == s_
 
 
 def condition_not_applied(layer: str, conds, ms: float = 0.0, evidence: dict | None = None) -> LayerResult:

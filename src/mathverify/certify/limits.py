@@ -17,12 +17,12 @@ import mpmath as mp
 import sympy as sp
 from sympy import oo, zoo, nan, AccumBounds, S, Interval
 from sympy.functions.elementary.hyperbolic import HyperbolicFunction
-from sympy.functions.elementary.trigonometric import TrigonometricFunction
 
 from ..equiv import answers_equivalent
 from ..equiv.numeric import to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
+from ..sandbox.exactsets import at_risk
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
 from .domain import closed_condition_undecided, definedness_conditions, written_definedness
 
@@ -77,7 +77,8 @@ def _side_status(conds, var, point, side):
     ("full"), on none of it ("empty"), or neither / undecidable (None)? Only algebraic
     conditions are solved: solveset on periodic conditions is not trusted (it returns a single
     period for `1 + cos(x) != 0`, measured 25 Sep 2026)."""
-    if any(c.has(TrigonometricFunction, HyperbolicFunction) for c in conds):
+    # (the trigonometric part of this rule is sandbox.exactsets.at_risk, shared with every solveset)
+    if any(at_risk(c, var) or c.has(HyperbolicFunction) for c in conds):
         return None
     bad = S.EmptySet
     good = S.Reals

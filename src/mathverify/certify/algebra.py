@@ -13,7 +13,8 @@ from ..equiv.random_point import sample_points
 from ..equiv.numeric import real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
+from ..sandbox.exactsets import at_risk, set_is_empty
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
 LAYER = "certify.algebra"
@@ -37,6 +38,17 @@ def _poly_in(expr, var):
 def _real_roots_worker(num, var):
     """Sandbox worker: every real root of a polynomial, exactly (rationals / radicals / CRootOf)."""
     return list(sp.Poly(num, var).real_roots())
+
+
+def _bounded_hull(dom):
+    """(inf, sup) of a domain when both are finite numbers, else None."""
+    try:
+        lo, hi = dom.inf, dom.sup
+    except Exception:  # noqa: BLE001 - an unsolved condition (ConditionSet) has no hull
+        return None
+    if lo.is_number and hi.is_number and lo.is_finite and hi.is_finite:
+        return lo, hi
+    return None
 
 
 def _undecided(why: str) -> bool:
@@ -79,6 +91,18 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
         if r1p.ok:
             cands += [c for c in r1p.value if not isinstance(c, dict)]
     complete: bool | None = None
+    window_set = None
+    hull = _bounded_hull(domain)
+    if hull is not None and at_risk(rel_r, var):
+        # a trigonometric equation on a bounded domain: its roots on the hull, from the guarded
+        # solveset (sandbox.exactsets: confirmed by a numeric root search there), are all of them.
+        # On ℝ the solvers give the principal roots and an ImageSet, so the right {pi/4, 5*pi/4,
+        # 9*pi/4} of tan x = 1 on [0, 10) was refuted before (fourth audit G2)
+        rw = sb_run("mathverify.sandbox.ops:solveset_in", rel_r, var, sp.Interval(*hull), timeout=timeout)
+        if rw.ok and (rw.value is S.EmptySet or isinstance(rw.value, FiniteSet)):
+            window_set = list(rw.value)
+            cands += window_set
+            ev["solveset_on_hull"] = [str(c) for c in window_set]
     poly_roots: list = []
     try:
         d = sp.together(rel_r.lhs - rel_r.rhs)
@@ -108,7 +132,12 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
     kept, rejected = guard_roots(rel, var, uniq, domain)
     ev["rejected"] = [(str(c), why) for c, why in rejected]
     ev["kept"] = [str(c) for c in kept]
-    if p is not None and poly_roots is not None and (p.domain.is_Exact and "numerator_real_roots" in ev):
+    if window_set is not None:
+        complete = not any(_undecided(why) for _, why in rejected) and all(
+            any(scalar_equal(k, w) is True for w in window_set) for k in kept)
+        ev["completeness_method"] = "guarded_solveset_on_bounded_hull"
+        ev["complete"] = complete
+    elif p is not None and poly_roots is not None and (p.domain.is_Exact and "numerator_real_roots" in ev):
         undecided = [c for c, why in rejected if _undecided(why)]
         complete = not undecided
         ev["completeness_method"] = "exact_real_roots_of_numerator"
@@ -196,11 +225,7 @@ def _with_given_inequalities(ctx: Ctx, var, dom, exclude=None):
     rels = [g for g in ctx.givens() if g != exclude and isinstance(g, (sp.core.relational.Relational, And))
             and var in g.free_symbols]
     rels, unbound = ctx.on_var(rels, var)
-    for g in rels:
-        rr = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(g), var, S.Reals, timeout=ctx.timeout)
-        if not rr.ok or isinstance(rr.value, ConditionSet):
-            return None, unbound
-        dom = sp.Intersection(dom, rr.value)
+    dom = ctx.cut_by(var, dom, [real_odd_roots(g) for g in rels])
     return dom, unbound
 
 
@@ -221,37 +246,57 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     dom, unbound = _with_given_inequalities(ctx, var, ctx.domain_for(var), exclude=rel)
     # the equation's own definedness conditions are checked at every root by guard_roots
     unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions(rel, var)) + unbound
+    # where the value of the problem's expressions is a convention (an odd root of a negative base,
+    # 0**0, C(n, r) outside 0 <= r <= n, Mod by a non-positive divisor, a reversed Sum range): a root
+    # there is neither kept nor dropped, a root of the rest of the domain missing from the claim still
+    # refutes it, and nothing is certified complete (DECISIONS §80; part d4a: C(n, 2) = 3 was UNKNOWN
+    # for {-2} and the empty set, which miss the root 3 under every reading)
+    from .domain import is_convention
+    conv = [c for c in unbound if isinstance(c, sp.Basic) and is_convention(c) and c.free_symbols <= {var}]
+    unbound = [c for c in unbound if not any(c is k for k in conv)]
     if unbound:
         return condition_not_applied(LAYER, unbound)
     if dom is None:
         return unknown(LAYER, "given_inequality_not_solvable")
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
+    region = ctx.convention_region(var) if conv else S.EmptySet
+    if conv:
+        ev["convention_region"] = str(region)
     if not isinstance(claimed, FiniteSet):
         roots, sev = solve_guarded(rel, var, dom, ctx.timeout)
         ev["solve_guarded"] = sev
         if sev.get("identity"):
+            if conv:
+                return unknown(LAYER, "convention_region_candidates", 0, ev)
             return _verify_identity(rel, var, dom, claimed, ev, ctx, t)
         if claimed is S.EmptySet:
             if roots:
                 ev["reason"] = "solutions_exist"
                 return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
-            if sev.get("complete"):
+            if sev.get("complete") and not conv:
                 return result(LAYER, "pass", 0.99, True, ev, t.ms, primary=True)
-            return unknown(LAYER, "completeness_unknown", 0, ev)
+            return unknown(LAYER, "convention_region_candidates" if conv else "completeness_unknown", 0, ev)
         return unknown(LAYER, "claimed_set_not_finite", 0, ev)
     # (1) every claimed root must satisfy the original relation + definedness + domain
     kept, rejected = guard_roots(rel, var, list(claimed.args), dom)
+    if conv:
+        # a claimed root where the value is a convention: undecided, not outside the domain
+        rejected = [(c, "definedness_undecided: convention" if w == "outside_domain_of_discourse"
+                     and in_domain(region, c) is not False else w) for c, w in rejected]
     ev["claimed_check"] = {"kept": [str(k) for k in kept], "rejected": [(str(c), w) for c, w in rejected]}
     hard_bad = [(c, w) for c, w in rejected if not _undecided(w)]
     if hard_bad:
         ev["reason"] = f"claimed_root_invalid: {hard_bad[0][1]}"
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
-    if rejected:
+    if rejected and not conv:
         return unknown(LAYER, "claimed_root_undecided", 0, ev)
-    # (2) completeness: are there true roots missing from the claim?
+    # (2) completeness: are there true roots missing from the claim? (with a claimed root where the
+    # value is a convention too: a root of the rest of the domain the claim misses refutes it)
     roots, sev = solve_guarded(rel, var, dom, ctx.timeout)
     ev["solve_guarded"] = sev
     if sev.get("identity"):
+        if conv:
+            return unknown(LAYER, "convention_region_candidates", 0, ev)
         return _verify_identity(rel, var, dom, claimed, ev, ctx, t)
     # a root is missing only when it is PROVED different from every claimed root; an undecided
     # comparison is not evidence either way
@@ -265,6 +310,10 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     if missing:
         ev["reason"] = "missing_root"
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
+    if rejected:
+        return unknown(LAYER, "claimed_root_undecided", 0, ev)
+    if conv:
+        return unknown(LAYER, "convention_region_candidates", 0, ev)
     if undecided:
         ev["undecided_roots"] = [str(u) for u in undecided]
         return unknown(LAYER, "root_comparison_undecided", 0, ev)
@@ -423,12 +472,20 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
     # (2) symbolic solution set, validated by sampling before it is trusted. One relation at a
     # time: solveset does not accept a conjunction, so every system of two or more givens was
     # UNKNOWN before (x > 1, x < 5 → (1, 5) included).
+    if ctx.unsolved_conditions(var):
+        # the domain is cut by a trigonometric condition with no closed form on ℝ (the written
+        # cos(x) != 0 of tan x): the solution set is no set the comparison reads (fourth audit G2)
+        return condition_unsolved(LAYER, ctx.unsolved_conditions(var), 0, ev)
     truth, r = dom, None
     flat: list = []
     for one in rels:
         flat.extend(one.args if isinstance(one, And) else [one])     # a chained 1 < x < 5
+    # a relation with a trigonometric function last, on the set the others leave: on ℝ SymPy reads it
+    # on one period (sandbox.exactsets), on a bounded set it is rebuilt and checked
+    flat = [o for o in flat if not at_risk(o, var)] + [o for o in flat if at_risk(o, var)]
     for one in flat:
-        r = sb_run("mathverify.sandbox.ops:solveset_in", one, var, dom, timeout=ctx.timeout)
+        r = sb_run("mathverify.sandbox.ops:solveset_in", one, var, truth if at_risk(one, var) else dom,
+                   timeout=ctx.timeout)
         if not r.ok or isinstance(r.value, ConditionSet):
             exact_set = _rational_inequality_set(one, var, ctx.timeout)
             if exact_set is None:
@@ -535,6 +592,61 @@ def _meets_inequalities(s_: dict, ineqs: list) -> bool:
     return True
 
 
+def _algebraic(eq, syms) -> bool:
+    """Is lhs - rhs a rational function of `syms` (exact coefficients)?"""
+    try:
+        num, den = sp.fraction(sp.together(eq.lhs - eq.rhs))
+        pn, pd = sp.Poly(num, *syms), sp.Poly(den, *syms)
+    except Exception:  # noqa: BLE001
+        return False
+    return pn.domain.is_Exact and pd.domain.is_Exact and not pn.free_symbols_in_domain & set(syms) \
+        and not pd.free_symbols_in_domain & set(syms)
+
+
+def _complete_solutions(eqs, ineqs, syms, sols, ctx: Ctx) -> tuple[list | None, str]:
+    """The solutions of the given equations, when the list is PROVED complete; None otherwise.
+
+    `solve`'s list is no proof: on a periodic equation it gives the principal solutions only (sin x = 0
+    → [0, pi]), so with 3 < x < 7 the value -1 of cos x was certified though x = 2*pi gives 1, and
+    pi/4 for x with tan x = 1, 0 < x < 4 though 5*pi/4 < 4 (fourth audit G5); on x*exp(x) = -1/5 it
+    gives both LambertW branches but nothing says so. A system of rational equations keeps `solve`'s
+    list (it solves those completely). One unknown: the solution set of an equation, on the bounded
+    hull of the region the other givens and the domain leave when there is one, must be a finite set
+    from the guarded solveset (sandbox.exactsets: confirmed by a numeric root search on a bounded hull);
+    the other equations are then checked at each of its points."""
+    if all(_algebraic(e, syms) for e in eqs):
+        return sols, "rational_system"
+    if len(syms) != 1:
+        return None, "transcendental_system_in_several_unknowns"
+    v = syms[0]
+    region = ctx.cut_by(v, ctx.domain_for(v), [real_odd_roots(g) for g in ineqs
+                                                 if getattr(g, "free_symbols", set()) == {v}])
+    window = S.Reals
+    if region is not None:
+        try:
+            lo, hi = region.inf, region.sup
+            if lo.is_finite and hi.is_finite and lo.is_number and hi.is_number:
+                window = sp.Interval(lo, hi)
+        except Exception:  # noqa: BLE001 - an unsolved condition: no hull
+            pass
+    found = None
+    for e in eqs:
+        rr = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(e), v, window, timeout=ctx.timeout)
+        if rr.ok and (rr.value is S.EmptySet or isinstance(rr.value, FiniteSet)):
+            found = (e, list(rr.value))
+            break
+    if found is None:
+        return None, f"no_equation_with_a_finite_proved_solution_set_on {window}"
+    out = []
+    for c in found[1]:
+        holds = [relation_holds_at(e, v, c) for e in eqs if e is not found[0]]
+        if any(h is None for h in holds):
+            return None, f"equation_undecided_at {c}"
+        if all(holds):
+            out.append({v: c})
+    return out, f"solveset_on {window}"
+
+
 def _verify_evaluate(ir, solution, ctx: Ctx, t):
     p = ir.task.params
     expr_src = p.get("expr") or ir.unknown_of_interest
@@ -564,6 +676,8 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
                                      rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
         ev["compare"] = cev
         ev["method"] = "direct"
+        if dom and ok is not False:
+            ok = _beyond_value_conventions(ctx, claimed, target, sorted(dom, key=lambda s_: s_.name), ok, ev)
         # a variable the problem confines to finitely many values where a range runs backwards
         # (the constraint n**2 = 4 next to Σ_{k=1}^{n} k): those values are candidates, neither kept
         # nor dropped (_filter_solutions); a formula's variable (n an integer) is compared where the
@@ -585,7 +699,20 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
             return unknown(LAYER, f"solve_failed: {r.error}", 0, ev, flags=r.flags)
         sols = r.value if isinstance(r.value, list) else [r.value]
         sols = [s_ for s_ in sols if isinstance(s_, dict)]
+        if any(real_odd_roots(e) != e for e in eqs) and any(
+                ctx.convention_region(s_).is_empty is not True for s_ in syms):
+            # an odd root written as a power where its base may be negative: SymPy solves on the
+            # principal branch, the real root has other solutions (x**(1/3) = x, x != 0: {1} and
+            # {-1, 1}), and `solve` misses them in sign(x)·|x|**(1/3) form too. With candidates where
+            # the value is a convention not all known, no value is unique (part d4a)
+            ev["raw_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in sols]
+            return unknown(LAYER, "odd_root_convention_candidates", 0, ev)
         ev["raw_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in sols]
+        sols, how = _complete_solutions(eqs, ineqs, syms, sols, ctx)
+        ev["completeness"] = how
+        if sols is None:
+            return unknown(LAYER, f"solution_set_not_proved_complete: {how}", 0, ev,
+                           flags=["completeness_uncertified"])
         # keep solutions satisfying inequalities/constraints/domains
         undecided: list = []
         admissible = _filter_solutions(sols, ctx, undecided)
@@ -619,6 +746,24 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
     if ok is False:
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
     return unknown(LAYER, "undecided", 0, ev)
+
+
+def _beyond_value_conventions(ctx: Ctx, claimed, truth, syms, ok, ev: dict):
+    """The comparison's verdict once the points `domain_for` left out because a value of the problem is
+    another value there under the other convention are read too (`convention_counterexample`): refuted
+    where both readings differ, otherwise never certified (part d4a, attack A: Abs(x) for (x**3)**(1/3)
+    was CORRECT, it is wrong at x = -2 under both readings; cbrt(x) for x**(1/3) holds under one)."""
+    from .base import convention_counterexample
+    present, pt = convention_counterexample(ctx, claimed, truth, syms)
+    if not present:
+        return ok
+    if pt is not None:
+        ev["reason"] = "differs_where_a_value_is_a_convention"
+        ev["counterexample_both_readings"] = pt
+        return False
+    ev["value_convention_region"] = {str(s_): str(ctx.value_convention_region(s_)) for s_ in syms
+                                     if ctx.ns.get(s_.name) == s_}
+    return None
 
 
 def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[bool | None, str]:
@@ -656,7 +801,11 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
         rr = sb_run("mathverify.sandbox.ops:solveset_in", bad, v, dom[v], timeout=ctx.timeout)
         if not rr.ok or isinstance(rr.value, ConditionSet):
             return None, f"claim_condition_undecided: {c}"
-        if rr.value is not S.EmptySet:
+        empty = set_is_empty(rr.value)
+        if empty is None:
+            # a set of progressions SymPy cannot decide (sandbox.exactsets): no proof either way
+            return None, f"claim_condition_undecided: {c} on {rr.value}"
+        if not empty:
             return True, f"claim_undefined_on {rr.value} (condition {c})"
     return False, "claim_defined_on_expression_domain"
 
@@ -703,6 +852,8 @@ def _verify_simplify(ir, solution, ctx: Ctx, t):
         return unknown(LAYER, f"claim_as_written_undecided: {why}", 0, {"expr": str(expr), "claimed": str(claimed)})
     ok, cev = answers_equivalent(claimed, expr, shape="expression", domain=dom)
     ev = {"expr": str(expr), "claimed": str(claimed), "compare": cev, "domain": {str(k): str(v) for k, v in dom.items()}}
+    if ok is not False:
+        ok = _beyond_value_conventions(ctx, claimed, expr, syms, ok, ev)
     if ok is True:
         return result(LAYER, "pass", 0.99 if cev.get("method") == "symbolic" else 0.97, True, ev, t.ms, primary=True)
     if ok is False:

@@ -234,8 +234,9 @@ XPV = [{"name": "x", "domain": "positive_real"}]
 
 
 @pytest.mark.parametrize("ir,sol,verdict", [
-    (_ir("evaluate", {"expr": "Sum(0**k, (k, 0, 3))"}, KP), _sol("0"), "INCORRECT"),
-    (_ir("evaluate", {"expr": "Sum(0**k, (k, 0, 3))"}, KP), _sol("1"), "CORRECT"),
+    # 0**0 at k = 0 is a convention (fourth audit, part d4a, G13): no value is certified
+    (_ir("evaluate", {"expr": "Sum(0**k, (k, 0, 3))"}, KP), _sol("0"), "UNKNOWN"),
+    (_ir("evaluate", {"expr": "Sum(0**k, (k, 0, 3))"}, KP), _sol("1"), "UNKNOWN"),
     # a task on the problem's own variable keeps its declared domain: leaving it is no question
     (_ir("limit", {"expr": "sqrt(x**2)/x", "var": "x", "to": "-oo"}, XPV), _sol("1"), "UNKNOWN"),
     (_ir("limit", {"expr": "sqrt(x**2)/x", "var": "x", "to": "-oo"}, XPV), _sol("-1"), "UNKNOWN"),
@@ -624,8 +625,10 @@ def test_a_sum_over_undefined_terms_is_not_certified():
 
 def test_a_binder_variable_written_with_a_plus_is_bound_in_verdicts():
     # sharp before this change: "0" was CORRECT and "1" INCORRECT (0**k read with the IR's k > 0)
+    # (fourth audit, part d4a: 0**0 at k = 0 is a convention, so neither value is certified; "0" is
+    # not certified either, as it was with k > 0)
     ir = _ir("evaluate", {"expr": "Sum(0**k, (+k, 0, 3))"}, KP)
-    assert _verdict(ir, _sol("1")) == "CORRECT" and _verdict(ir, _sol("0")) == "INCORRECT"
+    assert _verdict(ir, _sol("1")) == "UNKNOWN" and _verdict(ir, _sol("0")) == "UNKNOWN"
 
 
 def test_a_closed_undecided_condition_is_not_an_empty_solution_set():

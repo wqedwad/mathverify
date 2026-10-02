@@ -22,6 +22,7 @@ import sympy as sp
 from sympy import S
 
 from ..intake.structured import load_problem_ir
+from ..sandbox.exactsets import exact_solveset
 from ..normalize.parse import (ParseError, build_namespace, parse_relation, parse_expr_str,
                                parse_answer, parse_set_str, preclean, strip_presentation,
                                _TRANSFORMS)
@@ -250,7 +251,9 @@ def _violation_set(c, var, region):
     else:
         return None
     try:
-        s = sp.solveset(bad, var, region)
+        # guarded: SymPy reads a trigonometric relation on one period of ℝ (sandbox.exactsets), and the
+        # violations of sin(x) >= 0 on [10, 12] were empty: a junk value would have been certified
+        s = exact_solveset(bad, var, region)
     except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError):
         return None
     if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):
@@ -659,7 +662,7 @@ def _solve_region(conds, var) -> sp.Set:
         if c.free_symbols - {var}:
             raise LeanPrintError(f"condition {c} is not in {var} alone")
         try:
-            s = sp.solveset(c, var, S.Reals)
+            s = exact_solveset(c, var, S.Reals)        # one period is no region (sandbox.exactsets)
         except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError) as e:
             raise LeanPrintError(f"cannot solve {c}") from e
         if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):
@@ -2454,6 +2457,41 @@ def is_trivial(stmt: LeanStatement) -> bool:
     return False
 
 
+def _conventions_gate(obj, ca, ns) -> None:
+    """No statement when a text of the problem or the claim, read as written, holds an operation whose
+    value somewhere is a convention (`certify.domain.Convention`): an odd root written as a power
+    (Lean's rpow gives a junk value at a negative base), b**0 (Lean's 0 ^ 0 = 1), C(n, r) outside
+    0 <= r <= n (Nat.choose 2 5 = 0) or Mod by a divisor that is not positive. The deterministic layer
+    abstains on the value there (DECISIONS §80, part d4a); a template reads the evaluated form, where
+    x**0 is already 1, and would prove the convention."""
+    from ..certify.domain import Convention, definedness_conditions
+    from ..normalize.parse import parse_as_written
+    texts: list = list(obj.givens) + [c for v in obj.vars for c in v.constraints]
+    texts += [f.expr for f in obj.functions]
+    stack: list = [obj.task.params or {}]
+    while stack:
+        o = stack.pop()
+        if isinstance(o, str):
+            texts.append(o)
+        elif isinstance(o, dict):
+            stack.extend(o.values())
+        elif isinstance(o, (list, tuple)):
+            stack.extend(o)
+    payload = ca.get("payload")
+    texts += payload if isinstance(payload, list) else [payload]
+    for txt in texts:
+        if not isinstance(txt, str):
+            continue
+        try:
+            w = parse_as_written(strip_presentation(txt), ns)
+            conds = definedness_conditions(w, None) if w is not None else []
+        except Exception:  # noqa: BLE001 - not read as written: the templates' own checks decide
+            continue
+        # (a Sum range that may run backwards is the series templates' own business: certify.series)
+        if any(isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) for c in conds):
+            raise LeanPrintError(f"{txt!r} has a value that is a convention somewhere")
+
+
 def build_statement(ir: dict[str, Any], claimed_answer: dict[str, Any], name: str = "mv_claim"
                     ) -> LeanStatement | None:
     """Deterministic statement for the claim, or None when the shape is out of F5 scope or the
@@ -2477,6 +2515,7 @@ def build_statement(ir: dict[str, Any], claimed_answer: dict[str, Any], name: st
         _restrictions_gate(obj)
         _functions_faithful(obj, ns)
         _claim_written_ok(obj, claimed_answer, ns)
+        _conventions_gate(obj, claimed_answer, ns)
         st = fn(obj, ns, claimed_answer, name)
     except LeanPrintError:
         return None

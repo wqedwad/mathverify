@@ -198,9 +198,11 @@ def test_a_bound_variable_decides_the_answer():
     ir = _ir("Sum(Abs(k), (k, -2, 2))", [("k", "positive_integer")])
     assert _verdict(ir, "6").verdict == "CORRECT"          # was INCORRECT
     assert _verdict(ir, "0").verdict == "INCORRECT"        # was CORRECT
+    # 0**0 at k = 0 is 1 or undefined: a convention (fourth audit, part d4a, G13); the bound index is
+    # still read over the range (not k > 0, which made "0" CORRECT before)
     ir = _ir("Sum(0**k, (k, 0, 5))", [("k", "positive_integer")])
-    assert _verdict(ir, "1").verdict == "CORRECT"
-    assert _verdict(ir, "0").verdict == "INCORRECT"
+    assert _verdict(ir, "1").verdict == "UNKNOWN"
+    assert _verdict(ir, "0").verdict != "CORRECT"
 
 
 def test_a_wrong_step_over_a_bound_index_is_refuted():

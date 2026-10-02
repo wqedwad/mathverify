@@ -32,6 +32,7 @@ from ..equiv import answers_equivalent
 from ..equiv.numeric import num_equal
 from ..normalize.parse import parse_relation, parse_expr_str, ParseError
 from ..sandbox import run as sb_run
+from ..sandbox.exactsets import exact_solveset
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
 
 LAYER = "certify.series"
@@ -210,7 +211,8 @@ def _bad_indices(conds, lo) -> bool | None:
         v = next(iter(syms))
         bad = sp.Eq(c.lhs, c.rhs) if isinstance(c, sp.Ne) else sp.Not(c)
         try:
-            s = sp.solveset(bad, v, sp.S.Reals)
+            # guarded: SymPy reads a trigonometric relation on ℝ on one period (sandbox.exactsets)
+            s = exact_solveset(bad, v, sp.S.Reals)
             s = sp.Intersection(s, sp.Range(lo, oo))
         except Exception:  # noqa: BLE001
             return None
