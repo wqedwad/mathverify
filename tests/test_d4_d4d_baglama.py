@@ -174,7 +174,8 @@ def test_g7_inconsistent_binding(givens, vars_):
                                         ("a = 0**0 + 3", "given_binding_undecided")])
 def test_g7_binding_value_undefined_or_convention(given, flag):
     r = _run(_eq("x**2 = a", [given], XA), "{-2, 2}")
-    assert r.verdict == "UNKNOWN" and flag in _flags(r)
+    # since the review of d4d the written_undefined intake runs first and may name the convention value
+    assert r.verdict == "UNKNOWN" and {flag, "problem_undefined_as_written"} & _flags(r)
 
 
 def test_g7_limit_binding_checked():
@@ -434,3 +435,179 @@ def test_p1_step_and_controls():
     assert _run(ev, "4", "value").verdict == "INCORRECT"
     ok = _ir("evaluate", {"expr": "Integral(a*t, (t, 0, 1))"}, ["a = 2"], [T_, A], shape="scalar")
     assert _run(ok, "1", "value").verdict == "CORRECT"
+
+
+# --- review of d4d (2 Oct 2026) ------------------------------------------------------------------------------
+@pytest.mark.parametrize("given", ["x != 6, x < 1 or x > 5", "x < 3, x < 1 or x > 5", "x < 3, (x < 1) | (x > 5)",
+                                   "x != 6 and x < 1 or x > 5", "x < 1 or x > 5 and x != 6", "x < 3 & x < 1 | x > 5"])
+def test_review_b1_and_or_at_one_level_is_not_read(given):
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import ParseError, build_namespace, read_condition
+    ns = build_namespace(ProblemIR.from_dict(_roots("x**2 - 36", [given])))
+    with pytest.raises(ParseError):
+        read_condition(given, ns)
+    for claim in ("1", "2"):
+        r = _run(_roots("x**2 - 36", [given]), claim, "count")
+        assert r.verdict == "UNKNOWN" and "given_not_applied" in _flags(r)
+
+
+def test_review_b1_grouped_forms_are_read():
+    assert _run(_roots("x**2 - 36", ["x < 3, Or(x < 1, x > 5)"]), "1", "count").verdict == "CORRECT"
+    assert _run(_roots("x**2 - 36", ["And(x < 3, Or(x < 1, x > 5))"]), "2", "count").verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("given,wrong,right", [(r"x \notin (-3, 3)", "{-2, 2}", "{}"),
+                                               (r"x \notin \{2\}", "{-2, 2}", "{-2}"),
+                                               ("x not in (-3, 3)", "{-2, 2}", "{}")])
+def test_review_b2_notin_is_read(given, wrong, right):
+    q = _eq("x**2 = 4", [given])
+    assert _run(q, wrong).verdict == "INCORRECT"
+    # the algebra layer reads it; the z3 layer (Ctx.givens) does not read the membership and abstains
+    assert _run(q, right).verdict != "INCORRECT"
+
+
+def test_review_b2_collapsed_text_and_congruence_are_not_read():
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import ParseError, build_namespace, not_collapsed, read_condition
+    ns = build_namespace(ProblemIR.from_dict(_eq("x**2 = 4", [])))
+    with pytest.raises(ParseError):
+        not_collapsed(sp.true, "x = x", ns)
+    assert not_collapsed(sp.false, "pi < 3", ns) is sp.false
+    with pytest.raises(ParseError):
+        read_condition(r"x \equiv 2 \mod 5", ns)
+    XI = [{"name": "x", "domain": "integer"}]
+    ce = _ir("count_integers", {"var": "x"}, ["0 <= x <= 20", r"x \equiv 2 \mod 5"], XI, shape="count")
+    assert _run(ce, "1", "count").verdict == "UNKNOWN"
+    ci = _ir("count_integers", {"var": "x"}, ["0 <= x <= 5", r"x \notin \{1, 2\}"], XI, shape="count")
+    assert _run(ci, "6", "count").verdict != "CORRECT"
+
+
+@pytest.mark.parametrize("given", ["x in (2,)", "x in {(2, 3)}", "x in {(2,)}", "x in [2]"])
+def test_review_b3_membership_in_no_set_of_reals(given):
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import ParseError, build_namespace, read_condition
+    ns = build_namespace(ProblemIR.from_dict(_eq("x**2 = 4", [])))
+    with pytest.raises(ParseError):
+        read_condition(given, ns)
+    r = _run(_eq("x**2 = 4", [given]), "{}")
+    assert r.verdict == "UNKNOWN" and "given_not_applied" in _flags(r)
+
+
+def test_review_b4_parameter_condition_on_the_given_region():
+    L = "x + log(a) - log(a)"
+    for q in (_eq(L + " = 2", ["a < 0"], XA), _eq(L + " = 2", [], [X, {"name": "a", "constraints": ["a < 0"]}])):
+        r = _run(q, "{2}")
+        assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+    assert _run(_roots("x - 2 + log(a) - log(a)", ["a < 0"], XA), "1", "count").verdict == "UNKNOWN"
+    assert _run(_eq(L + " = 2", ["a > 0"], XA), "{2}").verdict == "CORRECT"
+    assert _run(_eq(L + " = 2", [], [X, {"name": "a", "domain": "positive_real"}]), "{2}").verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("eq", ["x + log(a) - log(a) = 2", "x + a/a = 3", "x*sqrt(a)/sqrt(a) = 2"])
+def test_review_6a_free_parameter_condition_not_proved(eq):
+    r = _run(_eq(eq, [], XA), "{2}")
+    assert r.verdict == "UNKNOWN" and "parameter_condition_not_proved" in _flags(r)
+
+
+@pytest.mark.parametrize("q,claim,kind", [
+    (_eq("x**2 = 4", ["x > 1", "x < 0"]), "{}", "set"),
+    (_roots("x**2 - 4", ["x > 1", "x < 0"]), "0", "count"),
+    (_eq("x**2 = 4", ["x < 0"], [{"name": "x", "domain": "positive_real"}]), "{}", "set"),
+    (_eq("x**2 = 4", [], [{"name": "x", "constraints": ["x > 1", "x < 0"]}]), "{}", "set"),
+])
+def test_review_6b_no_common_region_is_inconsistent(q, claim, kind):
+    r = _run(q, claim, kind)
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in _flags(r)
+
+
+def test_review_6b_a_system_that_is_the_task_keeps_its_empty_answer():
+    q = _ir("solve_inequality", {"var": "x"}, ["x > 1", "x < 0"])
+    assert "ir_inconsistent" not in _flags(_run(q, "{}"))
+
+
+def test_review_small_items():
+    r = _run(_eq("x**2 = 4", ["x > a", "a = gcd(0, 0) + 1"], XA), "{2}")
+    assert r.verdict == "UNKNOWN"
+    assert _run(_eq("x**2 = 4", ["x > a", "a = 1", "a = log(4)/log(2) - 1"], XA), "{2}").verdict == "CORRECT"
+    K = {"name": "k", "domain": "nonneg_integer"}
+    ss = _ir("series_sum", {"term": "1/2**k", "var": "k", "from": "0", "to": "oo"}, ["k = 1"], [K], shape="scalar")
+    r = _run(ss, "2", "value")
+    assert r.verdict == "UNKNOWN" and "given_binds_a_bound_variable" in _flags(r)
+    ev = _ir("evaluate", {"expr": "diff(sin(pi*n), n)"}, ["n = 2"], [{"name": "n", "domain": "real"}], shape="scalar")
+    assert _run(ev, "pi", "value").verdict == "CORRECT"
+
+
+def test_review_constraint_and_given_write_one_value_twice():
+    V = [X, {"name": "a", "domain": "real", "constraints": ["a = 3"]}]
+    assert _run(_eq("x**2 = 4", ["x > a", "a = log(8)/log(2)"], V), "{}").verdict == "CORRECT"
+
+
+def test_review_closed_condition_without_a_value_is_not_the_gates():
+    """Defined nowhere with no value fixed: the tradition of 30 Sep 2026 (no solution) stands."""
+    for q in (_eq("x**2 = 4", ["x > 1 + 0*log(-1)"]), _eq("x + log(-1 - x**2) - log(-1 - x**2) = 2", [])):
+        r = _run(q, "{}")
+        assert not any(la.layer == "intake.givens" for la in r.layers)
+
+
+def test_review_b4_declared_region():
+    V = [X, {"name": "y", "domain": "positive_real"}]
+    r = _run(_eq("x + sqrt(-y) - sqrt(-y) = 1", [], V), "{}")
+    assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+
+
+# (x - 1)(x - T7) = 0: two solutions proved distinct (1 and pi), so the evaluate path reaches the filters
+R2 = f"(x - 1)*(x - ({T7})) = 0"
+
+
+@pytest.mark.parametrize("givens,vars_,target,payload", [
+    # x <= pi holds at both (T7 = pi) but no check proves it at T7: dropping T7 leaves y = 2 alone
+    ([R2, "y = x + 1", "x <= pi"], [X, {"name": "y"}], "y", "2"),
+    # the chain pi <= x <= pi: at T7 both parts are undecided (an And that stays an And)
+    ([R2, "y = x + 1", "pi <= x <= pi"], [X, {"name": "y"}], "y", f"1 + ({T7})"),
+    # a constraint on two symbols, undecided at (T7, T7 + 1), false at (1, 2)
+    ([R2, "z = x + 1"], [{"name": "x", "constraints": ["x*z > pi*(pi + 1)"]}, {"name": "z"}], "z", f"1 + ({T7})"),
+])
+def test_g10_evaluate_filters_after_complete_solutions(givens, vars_, target, payload):
+    r = _run(_ir("evaluate", {"expr": target}, givens, vars_, shape="scalar"), payload, "value")
+    assert r.verdict == "UNKNOWN"
+
+
+def test_g10_evaluate_domain_of_discourse_filter():
+    q = _ir("evaluate", {"expr": "y"}, [R2, "y = x + 1"], [X, {"name": "y"}], shape="scalar", dod="x > pi")
+    assert _run(q, f"1 + ({T7})", "value").verdict == "UNKNOWN"
+
+
+def test_review_constraint_binding_meets_the_givens():
+    V = [X, {"name": "a", "domain": "real", "constraints": ["a = 1"]}]
+    r = _run(_eq("x**2 = 4", ["a < 0"], V), "{-2, 2}")
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in _flags(r)
+
+
+
+# Since part d4b `_complete_solutions` proves solutions distinct only when they are algebraic, so a transcendental
+# T7 no longer reaches the filters through verify(); the filter stage itself is checked with the solution set
+# taken as complete (the membership of an algebraic number is always decided).
+@pytest.fixture
+def complete_as_given(monkeypatch):
+    from mathverify.certify import algebra
+    monkeypatch.setattr(algebra, "_complete_solutions", lambda eqs, ineqs, syms, sols, ctx: (sols, "test"))
+
+
+@pytest.mark.parametrize("givens,vars_,target,payload,dod", [
+    ([R2, "y = x + 1", "x <= pi"], [X, {"name": "y"}], "y", "2", None),
+    ([R2, "y = x + 1", "pi <= x <= pi"], [X, {"name": "y"}], "y", f"1 + ({T7})", None),
+    ([R2, "z = x + 1"], [{"name": "x", "constraints": ["x*z > pi*(pi + 1)"]}, {"name": "z"}], "z", f"1 + ({T7})", None),
+    ([R2, "y = x + 1"], [X, {"name": "y"}], "y", f"1 + ({T7})", "x > pi"),
+])
+def test_g10_filter_stage_neither_keeps_nor_drops(complete_as_given, givens, vars_, target, payload, dod):
+    r = _run(_ir("evaluate", {"expr": target}, givens, vars_, shape="scalar", dod=dod), payload, "value")
+    layer = next(la for la in r.layers if la.layer == "certify.algebra")
+    assert r.verdict == "UNKNOWN" and layer.evidence.get("reason") == "solution_membership_undecided", layer.evidence
+
+
+def test_g10_meets_inequalities_and_of_undecided_parts():
+    from mathverify.certify.algebra import _meets_inequalities
+    from mathverify.normalize.parse import build_namespace, parse_expr_str
+    t7 = parse_expr_str(T7, build_namespace())
+    x = sp.Symbol("x", real=True)
+    assert _meets_inequalities({x: t7}, [sp.And(sp.Ge(x, sp.pi), sp.Le(x, sp.pi), evaluate=False)]) is None

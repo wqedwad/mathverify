@@ -11,7 +11,8 @@ from sympy import S
 from ..ir import ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
-                               claim_namespace, given_bindings, substitute_free, task_variables)
+                               claim_namespace, given_bindings, not_collapsed, same_value,
+                               substitute_free, task_variables)
 from ..sandbox.exactsets import at_risk, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
@@ -449,11 +450,13 @@ class Ctx:
         from ..normalize.parse import (PinnedBoundVariable, given_binding_report, hold_parametric,
                                        parse_as_written, read_condition)
         from .domain import _certified_compare, definedness_conditions, in_domain, relation_holds_at
+        if (self.ir.domain_of_discourse or "").strip().lower() in ("complex", "complexes", "c", "ℂ"):
+            return None                          # the conditions are the real ones (written_undefined too)
         bind, clash, _sources = given_binding_report(self.ir, self.ns)
         cbind, _ctexts = self._constraint_bindings()
         allb = dict(cbind)
         for s_, v in bind.items():
-            if s_ in allb and _certified_compare(allb[s_], v) != 0:
+            if s_ in allb and not same_value(allb[s_], v):
                 clash.setdefault(s_, [allb[s_]]).append(v)
             allb[s_] = v
         # a value the givens imply through other values (b = 2, a = b - 3): checked like the others, never a
@@ -530,33 +533,44 @@ class Ctx:
             h = closed_verdict(r2)
             if h is not True:
                 note("ir_inconsistent" if h is False else "given_binding_undecided", t)
-        if not allb:
-            return self._first_issue(found)
-        # (4) every expression of the problem, as written, at the values (never the task's own variable)
+        # (4) every expression of the problem, as written, at the values (never the task's own variable). The
+        # symbols are read as plain reals here: a declaration (y positive) is the parameter's region in (6),
+        # not a fact SymPy folds into its condition. A closed condition counts where the text holds a value a
+        # given fixes (`a = 4 + log(-1) - log(-1)`, x + log(a) - log(a) with a = -1); any other is the
+        # certificates' and `written_undefined`'s (an equation defined nowhere has no solution, 30 Sep 2026)
         tv = task_variables(self.ir)
-        pins = {s_: v for s_, v in allb.items() if s_.name not in tv}
+        plain = {v.name: sp.Symbol(v.name, real=True) for v in self.ir.vars}
+        pns = dict(self.ns, **plain)
+        pins = {plain.get(s_.name, s_): v for s_, v in allb.items() if s_.name not in tv}
         params = self.ir.task.params or {}
         srcs = texts + [v for k, v in params.items() if isinstance(v, str) and k != "var"]
         conflicts: list = []
+        open_conds: list = []
         for src in srcs:
             e = parse_as_written(src, self.ns)
-            if e is None:
+            if e is not None:
+                try:
+                    with sp.evaluate(False):
+                        hold_parametric(e, bind, tv)
+                except PinnedBoundVariable:
+                    conflicts.append(src)
+                except Exception:  # noqa: BLE001 - the value parse reports it
+                    pass
+            ew = parse_as_written(src, pns)
+            if ew is None:
                 continue
             try:
+                pinned_here = bool(ew.free_symbols & set(pins))
                 with sp.evaluate(False):
-                    hold_parametric(e, bind, tv)
-            except PinnedBoundVariable:
-                conflicts.append(src)
-            except Exception:  # noqa: BLE001 - the value parse reports it
-                pass
-            try:
-                with sp.evaluate(False):
-                    e2 = substitute_free(e, pins)
+                    e2 = substitute_free(ew, pins)
                 conds = definedness_conditions(e2, None)
             except Exception:  # noqa: BLE001 - not read as written: the old reading
                 continue
             for c in conds:
                 if getattr(c, "free_symbols", None):
+                    open_conds.append((c, src))
+                    continue
+                if not pinned_here:
                     continue
                 h = closed_verdict(c)
                 if h is not True:
@@ -564,15 +578,106 @@ class Ctx:
                     break
         # an IR function's call is read with its body as written (parse_as_written), so its conditions and its
         # Integrals/Limits are among the above; a body that leaks a pin fails at the namespace already
-        # (5) a value a pin would put where an operator or the task binds the symbol
+        # (5) a value a pin would put where an operator or the task binds the symbol, or a value for the
+        # variable the task's operator binds (d/dx at x, the index of a series: fourth audit P1)
         for c in conflicts:
             note("given_binds_a_bound_variable", c)
+        if self.ir.task.kind in self._OPERATOR_VAR_KINDS and {s_.name for s_ in bind} & tv:
+            note("given_binds_a_bound_variable", f"task variable {sorted({s_.name for s_ in bind} & tv)}")
+        # (6) a written condition on the parameters alone (no task variable), read on the region the
+        # declarations, the domain of discourse, the constraints and the givens leave them
+        if tv and self.ir.task.kind not in ("count_solutions",):     # there every variable is an unknown
+            for c, src in open_conds:
+                if {s_.name for s_ in c.free_symbols} & tv:
+                    continue
+                verdict = self._parameter_condition(c)
+                if verdict is not True:
+                    note("problem_undefined_as_written" if verdict is False else "parameter_condition_not_proved",
+                         f"{c} ({src})")
+        # (7) a variable no point is left for by its declaration, the domain of discourse, its constraints and
+        # (the task's variable) the side conditions: no instance, with a value fixed or not (review of d4d, 6b)
+        for v in self.ir.vars:
+            reg = self._declared_region(self.sym(v.name), side=v.name in tv)
+            if reg is not None and (reg is S.EmptySet or reg.is_empty is True):
+                note("ir_inconsistent", f"no value of {v.name} is left")
         return self._first_issue(found)
+
+    # the kinds whose own variable an operator binds (d/dx, lim x->, an integral's dx, a series' index): a given
+    # that fixes it is no side condition (fourth audit P1)
+    _OPERATOR_VAR_KINDS = {"limit", "antiderivative", "definite_integral", "derivative", "tangent_line",
+                           "extremum", "series_sum", "recurrence_term", "closed_form"}
+
+    def _declared_region(self, p: sp.Symbol, side: bool = False, givens: bool = False):
+        """The reals the declaration, the domain of discourse (a set of numbers), the constraints and, with
+        `side`, the side conditions (`side_conditions`), with `givens`, every given on `p` alone leave `p`, each
+        other value a given fixes read as its value; None when one of them cannot be solved exactly."""
+        from ..normalize.parse import read_condition
+        vd = next((d for d in self.ir.vars if d.name == p.name), None)
+        reg = self._DECLARED_SETS.get(vd.domain, S.Reals) if vd is not None else S.Reals
+        if self._dod_mentions(p):
+            try:
+                ds = self.discourse(p)
+            except Exception:  # noqa: BLE001
+                return None
+            if ds.free_symbols - {p}:
+                return None
+            reg = sp.Intersection(reg, ds)
+        cons = list(vd.constraints) if vd is not None else []
+        texts = cons + (list(self.ir.givens) if givens else [])
+        bind = {s_: v for s_, v in self.bindings().items() if s_ != p}
+        for t in texts:
+            try:
+                cond = read_condition(t, self.ns)
+            except Exception:  # noqa: BLE001
+                return None
+            cond = cond.xreplace(bind) if bind else cond
+            fs = getattr(cond, "free_symbols", set())
+            if p not in fs:
+                continue
+            if fs != {p}:
+                if t in cons:
+                    return None
+                continue                         # a given on several symbols says nothing of p alone
+            cut = self.condition_set(cond, p)
+            if cut is None:
+                return None
+            reg = sp.Intersection(reg, cut)
+        if side:
+            sets, unapplied = self.side_conditions(p)
+            if unapplied:
+                return None
+            for st in sets:
+                reg = sp.Intersection(reg, st)
+        return reg
+
+    def _parameter_condition(self, c) -> bool | None:
+        """Does the definedness condition `c` on parameters hold at every point their region leaves (True),
+        at none (False), or neither / undecided (None)? x + log(a) - log(a) = 2 had {2} certified with the
+        given a < 0, where the equation is defined nowhere, and with a free, where the answer is the empty set
+        for a <= 0 (review of d4d, B4 and 6a)."""
+        fs = c.free_symbols
+        if len(fs) != 1:
+            return None
+        (p,) = fs                                # a plain real symbol (see (4) of `_binding_issues`)
+        if not any(v.name == p.name for v in self.ir.vars):
+            return None
+        reg = self._declared_region(self.sym(p.name), givens=True)
+        cut = self.condition_set(c, p)
+        if reg is None or cut is None:
+            return None
+        try:
+            if reg.is_subset(cut) is True:
+                return True
+            if sp.Intersection(reg, cut).is_empty is True:
+                return False
+        except Exception:  # noqa: BLE001
+            return None
+        return None
 
     @staticmethod
     def _first_issue(found: dict) -> tuple[str, list[str]] | None:
         for reason in ("ir_inconsistent", "problem_undefined_as_written", "given_binds_a_bound_variable",
-                       "given_binding_undecided"):
+                       "given_binding_undecided", "parameter_condition_not_proved"):
             if reason in found:
                 return reason, found[reason]
         return None
@@ -912,6 +1017,13 @@ class Ctx:
 
     # ---- parsing ------------------------------------------------------------
     def rel(self, s: str):
+        """A relation of the problem. A text with a variable that reads as plain true or false, or a LaTeX
+        congruence, raises ParseError (`normalize.parse.not_collapsed`, review of d4d B2): `x \\notin (-3, 3)`
+        read as True and dropped out of the givens."""
+        from ..normalize.parse import refuse_congruence
+        if isinstance(s, str):
+            refuse_congruence(s)
+            return self._confirmed(s, not_collapsed(parse_relation(s, self.ns), s, self.ns))
         return self._confirmed(s, parse_relation(s, self.ns))
 
     def expr(self, s: str):

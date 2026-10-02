@@ -12,6 +12,10 @@ G10 of the `gorev` angle, TAN-01, TAN-03, TAN-04, TAN-09 of the `tanimlilik` ang
     F  TAN-01  a Sum range that the binding makes backwards or fractional
     G  TAN-09  x**a with a bound: the conditions are read after the binding
     H  P1      a pinned value never reaches a variable bound by an enclosing operator or the task's variable
+    L  the review of d4d: `and` and `or` at one level (B1), a text that collapses to true/false and a congruence
+       (B2), a membership in a set that is not one of reals (B3), a parameter's written condition on the
+       region its givens leave (B4), a free parameter's condition (6a), no common region (6b), gcd(0, 0),
+       one value written twice, the index of a series fixed by a given
     K  controls whose verdict must not change
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
@@ -464,11 +468,79 @@ def cases_k():
     return out
 
 
+def cases_l():
+    out = []
+    for g in ["x != 6, x < 1 or x > 5", "x < 3, x < 1 or x > 5", "x < 3, (x < 1) | (x > 5)", "x != 6 and x < 1 or x > 5",
+              "x < 1 or x > 5 and x != 6", "x in (-oo, 3), x < 1 or x > 5", "x < 3 & x < 1 | x > 5"]:
+        r = roots("x**2 - 36", [g])
+        out.append((f"B1 roots x**2-36, {g!r}: 2", r, sol("2", "count"), UNK, None))
+        out.append((f"B1 roots x**2-36, {g!r}: 1", r, sol("1", "count"), UNK, None))
+        out.append((f"B1 ineq x**2<49, {g!r}: (-7,1) U (5,7)", ineq("x**2 < 49", [g]),
+                    sol("Union(Interval.open(-7, 1), Interval.open(5, 7))", "set"), UNK, None))
+    for g in ["x < 3, Or(x < 1, x > 5)", "And(x < 3, Or(x < 1, x > 5))", "x < 1 or x > 5"]:
+        out.append((f"B1 ctl roots x**2-36, {g!r}: 2 wrong", roots("x**2 - 36", [g]), sol("2", "count"),
+                    NOTOK if "x < 3" in g else NOTNO, None))
+    out.append(("B1 ctl roots x**2-36, 'x < 1 or x > 5' + 'x != 6': 1", roots("x**2 - 36", ["x < 1 or x > 5", "x != 6"]),
+                sol("1", "count"), OK, None))
+    for g, wrong in [(r"x \notin (-3, 3)", "{-2, 2}"), (r"x \notin \{2\}", "{-2, 2}"), ("x not in (-3, 3)", "{-2, 2}")]:
+        out.append((f"B2 eq x**2=4, {g!r}: {wrong}", eqn("x**2 = 4", [g]), sol(wrong), NOTOK, None))
+    out.append((r"B2 eq x**2=4, 'x \notin (-3, 3)': {}", eqn("x**2 = 4", [r"x \notin (-3, 3)"]), sol("{}"), NOTNO, None))
+    out.append((r"B2 ineq x**2<9, 'x \notin (-1, 1)': (-3, 3)", ineq("x**2 < 9", [r"x \notin (-1, 1)"]),
+                sol("Interval.open(-3, 3)", "interval"), NOTOK, None))
+    XI = [{"name": "x", "domain": "integer"}]
+    ci = ir("count_integers", {"var": "x"}, ["0 <= x <= 5", r"x \notin \{1, 2\}"], XI, shape="count")
+    out.append((r"B2 count_integers 0<=x<=5, x \notin {1,2}: 6", ci, sol("6", "count"), NOTOK, None))
+    ce = ir("count_integers", {"var": "x"}, ["0 <= x <= 20", r"x \equiv 2 \mod 5"], XI, shape="count")
+    out.append((r"B2 count_integers x \equiv 2 \mod 5: 1", ce, sol("1", "count"), NOTOK, None))
+    out.append((r"B2 eq x**2=4, x>a, a=1, a \notin (0, 2): {2}", eqn("x**2 = 4", ["x > a", "a = 1", r"a \notin (0, 2)"], XA),
+                sol("{2}"), NOTOK, None))
+    for g in ["x in (2,)", "x in {(2, 3)}", "x in {(2,)}", "x in [2]"]:
+        for a in ("{}", "{2}"):
+            out.append((f"B3 eq x**2=4, {g!r}: {a}", eqn("x**2 = 4", [g]), sol(a), NOTOK, None))
+    L = "x + log(a) - log(a)"
+    out.append(("B4 eq x + log(a) - log(a) = 2, given a < 0: {2}", eqn(L + " = 2", ["a < 0"], XA), sol("{2}"), NOTOK, None))
+    out.append(("B4 eq ..., constraint a < 0: {2}", eqn(L + " = 2", [], [X, {"name": "a", "constraints": ["a < 0"]}]),
+                sol("{2}"), NOTOK, None))
+    out.append(("B4 ineq x + log(a) - log(a) > 2, given a < 0: (2, oo)", ineq(L + " > 2", ["a < 0"], XA),
+                sol("Interval.open(2, oo)", "interval"), NOTOK, None))
+    out.append(("B4 roots x - 2 + log(a) - log(a), given a < 0: 1", roots("x - 2 + log(a) - log(a)", ["a < 0"], XA),
+                sol("1", "count"), NOTOK, None))
+    out.append(("B4 ctl eq ..., given a > 0: {2}", eqn(L + " = 2", ["a > 0"], XA), sol("{2}"), OK, None))
+    out.append(("B4 ctl eq ..., a positive_real: {2}", eqn(L + " = 2", [], [X, {"name": "a", "domain": "positive_real"}]),
+                sol("{2}"), OK, None))
+    for e in ["x + log(a) - log(a) = 2", "x + a/a = 3", "x*sqrt(a)/sqrt(a) = 2"]:
+        out.append((f"6a eq {e}, a free: {{2}}", eqn(e, [], XA), sol("{2}"), UNK, None))
+    for e in ["x + log(-a**2 - 1) - log(-a**2 - 1) = 2", "x + acos(a**2 + 2) - acos(a**2 + 2) = 2"]:
+        out.append((f"6a eq {e}, a free: {{2}} (nowhere defined)", eqn(e, [], XA), sol("{2}"), NOTOK, None))
+    for q, a in [(eqn("x**2 = 4", ["x > 1", "x < 0"]), "{}"), (roots("x**2 - 4", ["x > 1", "x < 0"]), "0"),
+                 (ineq("x**2 < 4", ["x > 1", "x < 0"]), "{}"), (eqn("x**2 = 4", ["x > 1 and x < 0"]), "{}"),
+                 (eqn("x**2 = 4", ["x < 0"], [{"name": "x", "domain": "positive_real"}]), "{}"),
+                 (eqn("x**2 = 4", ["x in (3, 0)"]), "{}"),
+                 (eqn("x**2 = 4", [], [{"name": "x", "constraints": ["x > 1", "x < 0"]}]), "{}")]:
+        kind = "count" if a == "0" else "set"
+        out.append((f"6b {q['task']['kind']} {q['givens']} {q['vars']}: {a}", q, sol(a, kind), UNK, None))
+    out.append(("6b ctl solve_inequality system x > 1, x < 0 (the task's own relations): {}",
+                ir("solve_inequality", {"var": "x"}, ["x > 1", "x < 0"]), sol("{}"), NOTNO, None))
+    out.append(("gcd(0, 0): eq x**2=4, x>a, a = gcd(0, 0) + 1: {2}", eqn("x**2 = 4", ["x > a", "a = gcd(0, 0) + 1"], XA),
+                sol("{2}"), UNK, None))
+    out.append(("same value: eq x**2=4, x>a, a = 1, a = log(4)/log(2) - 1: {2}",
+                eqn("x**2 = 4", ["x > a", "a = 1", "a = log(4)/log(2) - 1"], XA), sol("{2}"), OK, None))
+    out.append(("same value: a = 3, a = log(8)/log(2), x>a: {}",
+                eqn("x**2 = 4", ["x > a", "a = 3", "a = log(8)/log(2)"], XA), sol("{}"), OK, None))
+    K = {"name": "k", "domain": "nonneg_integer"}
+    ss = ir("series_sum", {"term": "1/2**k", "var": "k", "from": "0", "to": "oo"}, ["k = 1"], [K], shape="scalar")
+    out.append(("P1 series_sum 1/2**k, given k = 1: 2", ss, sol("2", "value"), UNK, None))
+    out.append(("ctl evaluate diff(sin(pi*n), n), n = 2: pi (DECISIONS 73 e)",
+                ir("evaluate", {"expr": "diff(sin(pi*n), n)"}, ["n = 2"], [{"name": "n", "domain": "real"}], shape="scalar"),
+                sol("pi", "value"), OK, None))
+    return out
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "K": cases_k}
+          "H": cases_h, "L": cases_l, "K": cases_k}
 
 
-def main(out_path=None, groups="ABCDEFGHK"):
+def main(out_path=None, groups="ABCDEFGHLK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -504,5 +576,5 @@ def main(out_path=None, groups="ABCDEFGHK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHLK"
     sys.exit(1 if main(out, grp) else 0)
