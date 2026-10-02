@@ -143,12 +143,11 @@ def test_an_end_that_is_not_a_binary_number_is_enclosed():
     x = sp.Symbol("x", real=True)
     assert integral_excludes(sp.Integer(10)**40, x, 0, sp.pi, 10**40 * sp.pi)[0] is False
     assert integral_excludes(sp.Integer(10)**40, x, sp.pi, 4, 10**40 * (4 - sp.pi))[0] is False
-    # a number between the ends of π's own interval: without that piece the enclosure would end at π's
-    # lower end and refute it, though it may be the value
-    from mathverify.certify.enclosure import constant_interval
-    lo, hi = constant_interval(sp.pi)
-    mid = sum(sp.Integer(int(e.man)) * sp.Integer(2)**int(e.exp) for e in (lo, hi)) / 2     # exact binary ends
-    assert integral_excludes(sp.Integer(10)**40, x, 0, sp.pi, 10**40 * mid)[0] is False
+    # ends 10^20·π - 1 and 10^20·π are intervals ~1e-10 wide at 30 digits: ∫ 1 over the range is exactly 1,
+    # and without the end pieces the enclosure would stop 1e-10 short of it and refute it
+    E = sp.pi * 10**20
+    assert integral_excludes(sp.Integer(1), x, E - 1, E, 1)[0] is False
+    assert integral_excludes(sp.Integer(1), x, E - 1, E, 1 + sp.Rational(1, 10**6))[0] is True
 
 
 def test_sympys_value_refutes_only_with_a_proof_or_an_enclosure(monkeypatch):
