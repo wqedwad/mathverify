@@ -88,6 +88,14 @@ def solveset_in(rel, var, domain=S.Reals):
     return exact_solveset(rel, var, domain)
 
 
+def solveset_principal(rel, var, domain=S.Reals):
+    """`solveset_in` under the principal reading of an odd root (sandbox.exactsets.principal_solveset)."""
+    if isinstance(rel, sp.core.relational.Relational) and not rel.free_symbols:
+        return sp.ConditionSet(var, rel, domain)
+    from .exactsets import principal_solveset
+    return principal_solveset(rel, var, domain)
+
+
 def solve_system(rels, syms, dict_=True):
     return sp.solve(rels, syms, dict=dict_)
 

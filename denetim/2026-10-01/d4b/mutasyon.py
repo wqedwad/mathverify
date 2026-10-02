@@ -34,6 +34,8 @@ PARSE = "src/mathverify/normalize/parse.py"
 DET = "src/mathverify/steps/deterministic.py"
 VER = "src/mathverify/verifier.py"
 T = "tests/test_d4_d4b_periyodik.py::"
+_B01_MID = ("\n    bt = base.xreplace({n: tl})\n    if bt.free_symbols != {tl}:\n        return None\n    try:\n"
+            "        g = sp.Poly(bt, tl)\n    except sp.PolynomialError:\n        return None\n")
 _RATIO_MID = ("\n        else:\n            return None\n    L = sp.expand(L)\n"
               "    if var in sp.diff(L, var, 2).free_symbols or sp.diff(L, var, 2) != 0:\n"
               "        return None                                  # not linear in var\n"
@@ -103,7 +105,8 @@ MUTATIONS = [
     ("K18 atan'ın değer kümesi dışı kök", EX, "            if _certified(sp.pi / 2 - abs(r_)) <= 0:\n                continue",
      "            if False:\n                continue", T + "test_monotone_class_sets"),
     ("K20 log'un gerçel olmadığı hücre tek noktadan okunur", EX,
-     "        if outside(mid):\n            continue", "        if False:\n            continue", T + "test_monotone_class_sets"),
+     "        if outside(mid):\n            continue                                    # a log",
+     "        if False:\n            continue                                    # a log", T + "test_monotone_class_sets"),
     ("K23 sınırsız eşitlikte log'un gerçel olmadığı sıfır", EX,
      "            zp = [(p0, step) for p0, step in zp if not outside(p0)]", "            pass", T + "test_monotone_class_sets"),
     ("K24 sınırsız eşitlikte log'lu ilerleme", EX,
@@ -171,6 +174,32 @@ MUTATIONS = [
      '    if not r.ok:\n        return None\n    pts = r.value', T + "test_step_completeness_needs_a_proof"),
     ("R13 açık tanım okunmaz", DET, "    if set(defs) == set(order):\n        sols = [defs]", "    if False:\n        sols = [defs]",
      T + "test_step_completeness_needs_a_proof"),
+    # --- the review of round 5 (B1-B3) and the odd-root convention
+    ("B01 log'un üreteci pozitif, geri koyma denetimi yok", EX,
+     '    tl = sp.Dummy("t")' + _B01_MID + "    if not g.domain.is_Exact or g.free_symbols_in_domain or sp.simplify(g.as_expr().subs(tl, n) - base) != 0:",
+     '    tl = sp.Dummy("t", positive=True)' + _B01_MID + "    if not g.domain.is_Exact or g.free_symbols_in_domain:",
+     T + "test_the_generator_of_log_carries_no_sign"),
+    ("B02 hücre kapalı", EX, "        if cell is sp.true:\n            got = sp.Interval.open(a, b)",
+     "        if cell is sp.true:\n            got = sp.Interval(a, b)", T + "test_review_of_round5_sets"),
+    ("B03 kesim noktaları okunmaz", EX, "        if _holds(type(rel), _real_sign(val)):\n            pieces.append(sp.FiniteSet(p_))",
+     "        if False:\n            pieces.append(sp.FiniteSet(p_))", T + "test_review_of_round5_sets"),
+    ("B04 yazılmış tanımsız noktalar kesilmez", EX, "    bad = _undefined_points(e, var, lo, hi)", "    bad = []",
+     T + "test_a_folded_cell_keeps_out_the_poles_of_tan"),
+    ("B05 parçalı hücrede tanım dışı okunmaz", EX, "        if outside(mid):\n            continue\n        sub = {}",
+     "        sub = {}", T + "test_review_of_round5_sets"),
+    ("B06 Max/Min kolu ters", EX, "                sub[at] = at.args[0] if (sg > 0) == isinstance(at, sp.Max) else at.args[1]",
+     "                sub[at] = at.args[1] if (sg > 0) == isinstance(at, sp.Max) else at.args[0]", T + "test_review_of_round5_sets"),
+    ("B07 sqrt(A**2) |A| okunmaz", EX, "                  and n.base.exp == 2 and var in n.free_symbols, lambda n: sp.Abs(n.base.base))",
+     "                  and n.base.exp == 2 and var in n.free_symbols and False, lambda n: sp.Abs(n.base.base))",
+     T + "test_review_of_round5_sets"),
+    ("C01 tek kök geleneği denetlenmez", EX, "    if not odd or _PRINCIPAL[0]:\n        return", "    if True:\n        return",
+     T + "test_a_written_odd_root_of_a_negative_number_is_a_convention"),
+    ("C02 esas okuma bayrağı kurulmaz", EX, "    _PRINCIPAL[0] = True\n    try:", "    _PRINCIPAL[0] = False\n    try:",
+     "tests/test_d4_d4a_gelenek.py::test_solved_both_readings_helper"),
+    ("I01 sonsuz sınıf kümesi sonlu iddiayı çürütmez", ALG, '    if sev.get("class_set_infinite") and not conv:',
+     '    if False and not conv:', T + "test_review_of_round5_verdicts"),
+    ("I02 ölçü oo pozitif sayılmaz", ALG, "            if m is not None and m.is_extended_positive is True:",
+     "            if m is not None and m.is_positive is True:", T + "test_review_of_round5_verdicts"),
     ("P12 sürekli alan korumasız", OPS, "    if oscillates(expr, var):\n        # SymPy solves the conditions",
      "    if False:\n        # SymPy solves the conditions", T + "test_continuous_domain_of_a_trigonometric_expression"),
     # --- certify.domain
