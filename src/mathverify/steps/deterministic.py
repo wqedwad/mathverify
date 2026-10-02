@@ -2329,8 +2329,8 @@ def _split_nonnegative_sums(premises: list, ctx: Ctx) -> list:
 def _proved_on_system(c, multi: list, sets: dict, ctx: Ctx) -> bool:
     """Is the condition `c` proved where the premises `multi` (each on several symbols) hold: on its one
     symbol's set alone, or at each explicit real solution of their equations (y = x**2: y >= 0 becomes
-    x**2 >= 0, proved on x's set)? A solution with a non-real coefficient (x = I*y) leaves the real
-    solution set unread: not proved."""
+    x**2 >= 0, proved on x's set)? A non-real solution (x = I*y) leaves a condition
+    the reals do not prove (its negation solved over the reals is not empty): not proved."""
     cs = c.free_symbols
     if len(cs) == 1:
         (u,) = cs
@@ -2346,9 +2346,12 @@ def _proved_on_system(c, multi: list, sets: dict, ctx: Ctx) -> bool:
     if not r.ok or not isinstance(r.value, list) or not r.value:
         return False
     for sol in r.value:
-        if not isinstance(sol, dict) or any(not isinstance(v, sp.Expr) or v.has(sp.I) for v in sol.values()):
+        if not isinstance(sol, dict) or any(not isinstance(v, sp.Expr) for v in sol.values()):
             return False
-        c2 = c.xreplace(sol)
+        try:
+            c2 = c.xreplace(sol)
+        except Exception:  # noqa: BLE001 - an order relation between non-real values
+            return False
         rem = c2.free_symbols if isinstance(c2, sp.Basic) else set()
         if not rem:
             if _held_at(c2, {}, ctx) is not True:
@@ -2738,9 +2741,15 @@ def check_steps(ir, solution, ctx: Ctx):
                 if status != "refuted":
                     if _undefined_as_written(st.claim, step_ns):
                         why = "claim_undefined_as_written"
-                    elif _undefined_at_premises(st.claim, step_ns, list(givens) + [
-                            parsed[k] for k in parsed if parsed_cases.get(k, frozenset()) <= my_case_ids] + my_cases, ctx):
-                        why = "claim_undefined_at_the_premises_point"
+                    else:
+                        try:
+                            undefined = _undefined_at_premises(st.claim, step_ns, list(givens) + [
+                                parsed[k] for k in parsed if parsed_cases.get(k, frozenset()) <= my_case_ids]
+                                + my_cases, ctx)
+                        except Exception:  # noqa: BLE001 - not proved defined
+                            undefined = True
+                        if undefined:
+                            why = "claim_undefined_at_the_premises_point"
             except _OutOfTime:
                 status, ev, why, chosen = "unknown", {"reason": "step_time_budget_exceeded"}, None, False
             finally:
