@@ -304,8 +304,8 @@ def test_g10_evaluate_undecided_membership():
     # x <= pi holds at T7 = pi, but no check decides it: dropping T7 leaves 1 - T7 alone
     ([f"x**2 = ({T7})**2", "y = x + 1", "x <= pi"], [X, {"name": "y"}], f"1 - ({T7})"),
     ([f"x**2 = ({T7})**2", "y = x + 1", "x > pi"], [X, {"name": "y"}], f"1 + ({T7})"),
-    # a chain: the And at T7 is undecided too (it holds, but no check proves it)
-    ([f"x**2 = ({T7})**2", "y = x + 1", "0 < x <= pi"], [X, {"name": "y"}], f"1 + ({T7})"),
+    # a chain: the And at T7 is undecided too (it holds, but no check proves either part)
+    ([f"x**2 = ({T7})**2", "y = x + 1", "pi <= x <= pi"], [X, {"name": "y"}], f"1 + ({T7})"),
 ])
 def test_g10_evaluate_solutions_neither_kept_nor_dropped(givens, vars_, payload):
     target = "z" if any(v["name"] == "z" for v in vars_) else "y"
