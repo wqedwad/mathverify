@@ -1192,7 +1192,10 @@ def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, l
         if d is False:
             rejected.append((c, "outside_domain_of_discourse"))
             continue
-        if d is None and membership_undecided(domain, c):
+        if d is None:
+            # no exact check decides it (a number-set membership at pi + E, membership_undecided, or a
+            # comparison: x = 2*(atan(1/3) + ...), pi exactly, against x > pi): the root is neither kept
+            # nor dropped. Kept, {T} was certified and the right {} refuted (fourth audit G10, review B)
             rejected.append((c, "definedness_undecided: membership in the domain"))
             continue
         bad = None
@@ -1217,14 +1220,24 @@ def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, l
     return kept, rejected
 
 
-def written_definedness(src: str, ns: dict[str, Any]) -> tuple[list[Any], set]:
+def written_definedness(src: str, ns: dict[str, Any], pins: dict | None = None) -> tuple[list[Any], set]:
     """Definedness of an IR expression or relation AS WRITTEN (see `parse_as_written`): the open
     conditions, and the symbols of an expression that is defined NOWHERE (a closed condition
-    that fails, e.g. `1/(x - x)`). Empty when the text cannot be read that way."""
-    from ..normalize.parse import parse_as_written
+    that fails, e.g. `1/(x - x)`). Empty when the text cannot be read that way.
+
+    `pins`: symbols a given fixes, put in the written text (unevaluated, never a bound variable) BEFORE
+    its conditions are read. A condition can depend on the value itself: x**a has the condition x > 0
+    while a is free, none once a = 2, and the right (−2, 2) for x**a < 4 was refuted with a = 2 (TAN-09)."""
+    from ..normalize.parse import parse_as_written, substitute_free
     e = parse_as_written(src, ns)
     if e is None:
         return [], set()
+    if pins:
+        try:
+            with sp.evaluate(False):
+                e = substitute_free(e, pins)
+        except Exception:  # noqa: BLE001 - read without the values (the old reading)
+            pass
     conds, nowhere = [], set()
     try:
         found = definedness_conditions(e, None)
