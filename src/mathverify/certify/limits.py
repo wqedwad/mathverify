@@ -19,11 +19,11 @@ from sympy import oo, zoo, nan, AccumBounds, S, Interval
 from sympy.functions.elementary.hyperbolic import HyperbolicFunction
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import to_mp
+from ..equiv.numeric import certified_sign, to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 from .domain import closed_condition_undecided, definedness_conditions, written_definedness
 
 LAYER = "certify.limits"
@@ -421,6 +421,83 @@ def declared_side(var, point, side):
     return False
 
 
+def _near(region, point, d) -> str | None:
+    """Does `region` hold a whole one-sided neighbourhood of `point` ("full": (p, p + e) for d = '+',
+    (p - e, p) for '-', (M, oo) at oo, (-oo, M) at -oo), none of it ("empty"), or neither / undecided
+    (None)? A point the region does not reach on that side is not approached from it."""
+    if point == oo:
+        win = Interval.open(0, oo) if region.inf is S.NegativeInfinity else Interval.open(region.inf, oo)
+    elif point == -oo:
+        win = Interval.open(-oo, 0) if region.sup is S.Infinity else Interval.open(-oo, region.sup)
+    else:
+        win = Interval.open(point, point + 1) if d == "+" else Interval.open(point - 1, point)
+    bad = sp.Complement(win, region)
+    good = sp.Intersection(win, region)
+    if bad.has(sp.Complement, sp.ConditionSet) or good.has(sp.Complement, sp.ConditionSet):
+        return None
+
+    def apart(s_) -> bool:
+        # every point of s_ stays away from the point on this side
+        if s_.is_empty is True:
+            return True
+        if point == oo:
+            return s_.sup.is_finite is True
+        if point == -oo:
+            return s_.inf.is_finite is True
+        try:
+            gap = certified_sign(s_.inf - point if d == "+" else point - s_.sup)
+        except Exception:  # noqa: BLE001
+            return False
+        return gap == 1
+
+    if apart(bad):
+        return "full"
+    if apart(good):
+        return "empty"
+    return None
+
+
+UNDECIDED = "undecided"
+
+
+def region_side(ctx: Ctx, var, point, side):
+    """The side ('+', '-', None: both) from which the limit approaches `point` inside the variable's
+    region (`Ctx.domain_for`: its declaration, constraints, givens and domain of discourse, with the
+    values the givens fix), False when the point is not approached from inside it, UNDECIDED when that
+    is not decided. Only the declaration was read (`declared_side`): with x > 0 as a constraint, a given
+    or the domain of discourse, lim_{x->0} |x|/x was certified DNE and 1 refuted, while the declaration
+    gave 1; the limit of x at 0 under x > 1 was certified 0 and the limit of x at -oo under x > 0 -oo
+    (fourth audit G6). At an end of the region the limit is the one-sided limit from inside it, the
+    rule of a declared domain's closed end (30 Sep 2026); an isolated point or a point outside the
+    region is not approached."""
+    region = ctx.domain_for(var)
+    if getattr(var, "is_integer", None):
+        # a sequence: only an infinite end its values reach
+        if point not in (oo, -oo):
+            return False
+        try:
+            end = region.sup if point == oo else region.inf
+        except Exception:  # noqa: BLE001
+            return UNDECIDED
+        return side if end == point else False if getattr(end, "is_finite", None) is True else UNDECIDED
+    if region == S.Reals:
+        return side
+    sides = ["-"] if point == oo else ["+"] if point == -oo else ["+", "-"]
+    try:
+        status = {d: _near(region, point, d) for d in sides}
+    except Exception:  # noqa: BLE001 - a region SymPy cannot cut decides nothing
+        return UNDECIDED
+    want = sides if side is None or point in (oo, -oo) else [side]
+    if any(status[d] is None for d in want):
+        return UNDECIDED
+    full = [d for d in want if status[d] == "full"]
+    if not full:
+        return False
+    if point in (oo, -oo) or len(full) == 2:
+        return side
+    return full[0]
+
+
 def verify(ir, solution, ctx: Ctx):
     """Task `limit`: params {"expr": str, "var": str, "to": str, "side"?: "+"|"-"}."""
     if ir.task.kind != "limit":
@@ -458,6 +535,19 @@ def verify(ir, solution, ctx: Ctx):
             return unknown(LAYER, "approach_outside_declared_domain", t.ms,
                            {"var": str(var), "to": str(point), "side": str(side)},
                            flags=["approach_outside_declared_domain"])
+        # the conditions on the variable however they are written: one naming a symbol no given fixes
+        # (x > b, b free) leaves the region unknown, and so does a trigonometric one left unsolved
+        unapplied = ctx.unapplied_conditions(var)
+        if unapplied:
+            return condition_not_applied(LAYER, unapplied, t.ms)
+        if ctx.unsolved_conditions(var):
+            return condition_unsolved(LAYER, ctx.unsolved_conditions(var), t.ms)
+        within = region_side(ctx, var, point, within)
+        if within is False or within == UNDECIDED:
+            return unknown(LAYER, "approach_outside_declared_domain" if within is False else "region_near_point_undecided",
+                           t.ms, {"var": str(var), "to": str(point), "side": str(side),
+                                  "region": str(ctx.domain_for(var))},
+                           flags=["approach_outside_declared_domain"] if within is False else [])
         side = within
         # the pinned values go in before the conditions are read: x**a has x > 0 only while a is free (TAN-09)
         written, nowhere = written_definedness(p["expr"], ctx.ns, pins)

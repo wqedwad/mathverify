@@ -688,6 +688,15 @@ class Ctx:
             self.cache["bindings"] = given_bindings(self.ir, self.ns)
         return self.cache["bindings"]
 
+    def pinned_values(self, var: sp.Symbol | None = None) -> dict:
+        """The value of each symbol other than `var` that a given (`bindings`) or a declared constraint
+        `a = c` fixes; `binding_issues` has checked them (the verifier abstains before any certificate
+        otherwise). The extremum certificate read neither: with b = 3 the maximum 0 of x on [0, b] and
+        with a = 3 the maximum 0 of a*x on [0, 1] were certified (fourth audit G4, TAN-02)."""
+        out = dict(self._constraint_bindings()[0])
+        out.update(self.bindings())
+        return {s_: v for s_, v in out.items() if s_ != var}
+
     def on_var(self, rels, var: sp.Symbol) -> tuple[list, list]:
         """The relations `rels` read on `var` alone, each other symbol a given fixes read as its value
         (`x > b` with b = 0 is x > 0). A relation that then always holds is left out: the binding
@@ -756,8 +765,14 @@ class Ctx:
     # the task's own relation or expression, in params: a given next to it is a side condition.
     # count_roots and domain_of read no given at all before, so `x > 0` next to x² − 4 left the count
     # at 2 and the domain of √(4 − x²) at [-2, 2] (part vi, 30 Sep 2026)
+    # The calculus kinds read a given on their variable as a region too: a limit, a derivative, a tangent
+    # line and an antiderivative are taken on the variable's region, and the same condition gave one
+    # verdict as a declaration and another as a given (fourth audit G6, G12): with the given x > 0,
+    # lim_{x->0} |x|/x was certified DNE and the derivative of |x| at 0 under x >= 0 DNE, and log(-x)
+    # was refuted as an antiderivative of 1/x under the given x < 0.
     _MAIN_RELATION = {"solve_equation": "equation", "solve_inequality": "inequality", "count_roots": "expr",
-                      "domain_of": "expr"}
+                      "domain_of": "expr", "limit": "expr", "derivative": "f", "tangent_line": "f",
+                      "antiderivative": "integrand"}
 
     def side_conditions(self, var: sp.Symbol) -> tuple[list[sp.Set], list[str]]:
         """Solution sets of the given relations on `var` that are SIDE conditions (the task's own
@@ -916,9 +931,27 @@ class Ctx:
             return False
         try:
             conds = definedness_conditions(e, None)
-            return any(c is sp.false for c in conds) or self._undefined_term(e) or closed_condition_undecided(conds)
+            return any(c is sp.false for c in conds) or self._undefined_term(e) or closed_condition_undecided(conds) \
+                or self._open_conditions_empty(conds)
         except Exception:  # noqa: BLE001 - a failed probe adds no fact
             return False
+
+    def _open_conditions_empty(self, conds) -> bool:
+        """Do the open written conditions on one symbol hold nowhere together? x + log(x) - log(x) +
+        log(-x) - log(-x) needs x > 0 and -x > 0: each alone has points, so no condition failed above, and
+        its derivative 1, the antiderivative x of 1 + ... and the simplification x were certified (fourth
+        audit TAN-06). Only an exact empty set counts (`sandbox.exactsets`)."""
+        from ..sandbox import run as sb_run
+        by_sym: dict = {}
+        for c in conds:
+            fs = getattr(c, "free_symbols", set())
+            if isinstance(c, sp.core.relational.Relational) and len(fs) == 1:
+                by_sym.setdefault(next(iter(fs)), []).append(c)
+        for s_, cs in by_sym.items():
+            r = sb_run("mathverify.sandbox.ops:solveset_in", sp.And(*cs), s_, S.Reals, timeout=self.timeout)
+            if r.ok and r.value is S.EmptySet:
+                return True
+        return False
 
     @staticmethod
     def _undefined_term(e) -> bool:

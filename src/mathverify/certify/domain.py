@@ -553,13 +553,18 @@ def _declared_span(v):
 def _reachable(a, b):
     """The points [a, b] can cover when a bound is symbolic: the hull of the values the bounds may
     take, open at 0 when only a strict sign reaches it (x > 0 never makes 0 a bound); R when a
-    bound has no declared sign."""
+    bound has no declared sign. An infinite bound reaches out to its end: it counted as no point at all,
+    so ∫_{-oo}^{x} dt/t with x > 0 was read as running inside (0, oo), its point 0 never reached, and
+    the derivative 1/x of that integral, which exists for no x, was certified (fourth audit TAN-07)."""
     parts = []
+    ends = set()
     for v in (a, b):
-        if v.is_number:
-            if not (v.is_real or v in (oo, -oo)):
+        if v in (oo, -oo):
+            ends.add(v)
+        elif v.is_number:
+            if not v.is_real:
                 return S.Reals
-            parts.append(sp.FiniteSet(v) if v not in (oo, -oo) else S.EmptySet)
+            parts.append(sp.FiniteSet(v))
         elif v.is_positive:
             parts.append(Interval.open(0, oo))
         elif v.is_nonnegative:
@@ -570,9 +575,44 @@ def _reachable(a, b):
             parts.append(Interval(-oo, 0))
         else:
             return S.Reals
+    if not parts:
+        return S.Reals
     u = sp.Union(*parts)
-    lo, hi = u.inf, u.sup
+    lo = -oo if -oo in ends else u.inf
+    hi = oo if oo in ends else u.sup
     return Interval(lo, hi, left_open=u.contains(lo) is not sp.true, right_open=u.contains(hi) is not sp.true)
+
+
+def decays_at(g, t, end) -> bool:
+    """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1, read off a finite real limit of
+    |t|**p * g(t) (p = 2, 3/2, 11/10)? Then ∫ g converges absolutely at that end. False when no such
+    limit is found (a divergent integral, or one this test cannot prove: sin(t)/t)."""
+    for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
+        lim = sp.limit(sp.Abs(t) ** p * g, t, end)
+        if isinstance(lim, sp.Expr) and lim.is_number and lim.is_finite is True and lim.is_real is True \
+                and not lim.has(sp.AccumBounds):
+            return True
+    return False
+
+
+def _converges_at(body, x, d, end) -> bool:
+    """Is the integral of `body` (as written, in its bound variable `x`) proved to converge at `end`?"""
+    if not _spend(_SOLVE_COST):
+        return False
+    t = sp.Dummy(d.name, real=True)
+    try:
+        with sp.evaluate(False):
+            g = body.xreplace({x: t})
+        g = _evaluated(g)
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(g, sp.Expr) or g.free_symbols - {t} or any(
+            type(m).__name__ == "written_domain" for m in sp.preorder_traversal(g)):
+        return False
+    if t not in g.free_symbols:
+        return g.is_zero is True                     # a constant converges at an infinite end only if 0
+    r = sb_run("mathverify.certify.domain:decays_at", g, t, end, timeout=_SOLVE_TIMEOUT)
+    return bool(r.ok and r.value is True)
 
 
 def _integral_conditions(n, var) -> list[Any]:
@@ -583,13 +623,22 @@ def _integral_conditions(n, var) -> list[Any]:
         return []                                   # an antiderivative: its variable is not bounded
     if len(n.limits) != 1:
         named, _ = _named_conditions(n.function, [lim[0] for lim in n.limits], var)
-        return [DEFINEDNESS_UNDECIDED] if named else []
+        improper = any(len(lim) == 3 and {_evaluated(lim[1]), _evaluated(lim[2])} & {oo, -oo}
+                       and not (_evaluated(lim[1]).is_number and _evaluated(lim[2]).is_number) for lim in n.limits)
+        return [DEFINEDNESS_UNDECIDED] if named or improper else []
     x, a, b = n.limits[0]
     named, plain = _named_conditions(n.function, [x], var)
     d = plain[x]
     region = S.Reals
     a, b = _evaluated(a), _evaluated(b)
     if not (a.is_number and b.is_number):
+        # an infinite bound next to a symbolic one: no value is computed, and a derivative of the integral
+        # is taken by the fundamental theorem, so the integral must be proved to converge at that end.
+        # The derivative -1/(x + 1) of ∫_x^oo dt/(t + 1), which diverges for every x, was certified
+        # (fourth audit TAN-07)
+        for end in (a, b):
+            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):
+                return [DEFINEDNESS_UNDECIDED]
         # a symbolic bound: the integral runs inside the hull of the values the bounds may take by
         # their declarations (∫_0^x √t dt and ∫_1^x ln t dt with x > 0 lie in [0, oo); read over R
         # they were undecided, review of 30 Sep 2026)
