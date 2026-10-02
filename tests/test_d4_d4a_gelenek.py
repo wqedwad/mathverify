@@ -340,6 +340,18 @@ def test_odd_root_candidates_of_an_evaluation():
     assert st != ["verified"]
 
 
+def test_a_premise_set_reaching_a_convention_point_proves_nothing():
+    # x(x - 1) = 0 next to x**0: x = 0 is an instance if 0**0 = 1, and "x >= 1" fails there
+    v, st = step_statuses(ev("x**0 + x", [X], ["x*(x - 1) = 0"]), sol("2", [("eq", "x >= 1")]))
+    assert st != ["verified"] and v == "UNKNOWN"
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    from mathverify.steps.deterministic import _set_counterexample
+    ctx = make_ctx(ProblemIR.from_dict(ev("x**0 + x", [X], ["x*(x - 1) = 0"])))
+    x = ctx.sym("x")
+    assert _set_counterexample(x >= 1, [sp.Eq(x * (x - 1), 0)], x, ctx) == (None, False, False)
+
+
 def test_a_definitional_assignment_at_a_convention_point_is_not_refuted():
     _, st = step_statuses(ev("x**0 + y", [X, {"name": "y", "domain": "real"}], ["y = 1"]),
                           sol("2", [("eq", "x = 0")]))
@@ -363,6 +375,10 @@ def test_comparison_engine_reads_odd_roots_both_ways():
                               shape="expression", domain={x: sp.S.Reals})[0] is None
     assert answers_equivalent(x ** sp.Rational(1, 3), sp.sign(x) * sp.Abs(x) ** sp.Rational(1, 3),
                               shape="expression", domain={x: sp.Interval(0, sp.oo)})[0] is True
+    # equal under the real root everywhere, not under the principal value: random points read the real root
+    r = sp.Rational(1, 3)
+    assert answers_equivalent(x ** r, -(-x) ** r, shape="expression", domain={x: sp.Interval(0, sp.oo)})[0] is None
+    assert answers_equivalent((x ** 3) ** r, x, shape="expression", domain={x: sp.S.Reals})[0] is None
     der = {"task": {"kind": "derivative", "params": {"f": "cbrt(x)", "var": "x"}}, "vars": [X], "givens": [],
            "answer_shape": "expression"}
     assert verdict(der, sol("x**(-2/3)/3", kind="expression")) == "UNKNOWN"
