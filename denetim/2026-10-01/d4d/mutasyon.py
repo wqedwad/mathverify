@@ -79,7 +79,7 @@ MUTATIONS = [
     ("M18 kapalı verilen bağlamasız atlanır", BAS, "            if fs and not fs & set(allb):", "            if not fs & set(allb):", T),
     ("M19 yazılı koşul değerde okunmaz", BAS,
      "                h = closed_verdict(c)\n                if h is not True:", "                h = closed_verdict(c)\n                if False:", T),
-    ("M20 yazılı koşula değer konmaz", BAS, "                    e2 = substitute_free(e, pins)", "                    e2 = e", T),
+    ("M20 yazılı koşula değer konmaz", BAS, "                    e2 = substitute_free(ew, pins)", "                    e2 = ew", T),
     ("M21 kısıt bağlaması yok", BAS, "        cbind, _ctexts = self._constraint_bindings()",
      "        cbind, _ctexts = {}, []", T),
     ("M23 bağlamayla False kısıt düşer", BAS,
