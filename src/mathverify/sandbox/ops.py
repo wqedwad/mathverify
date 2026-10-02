@@ -148,14 +148,8 @@ def quad_breakpoints(expr, var, a, b, points, dps=30, method="tanh-sinh"):
     """mpmath quad with explicit interior breakpoints; returns (value_str, error_str)."""
     mp.mp.dps = dps
     f = sp.lambdify(var, expr, "mpmath")
-
-    def end(e):
-        e = sp.sympify(e)
-        if e in (oo, -oo):
-            return mp.inf if e is oo else -mp.inf      # mpmath maps an infinite range itself
-        return mp.mpf(str(sp.N(e, dps + 5)))
-
-    pts = [end(a)] + [mp.mpf(str(sp.N(p, dps + 5))) for p in points] + [end(b)]
+    pts = [mp.mpf(str(sp.N(a, dps + 5)))] + [mp.mpf(str(sp.N(p, dps + 5))) for p in points] \
+        + [mp.mpf(str(sp.N(b, dps + 5)))]
     # sort/dedupe within (a,b)
     lo, hi = pts[0], pts[-1]
     inner = sorted({p for p in pts[1:-1] if lo < p < hi})

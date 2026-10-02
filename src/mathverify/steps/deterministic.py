@@ -1739,46 +1739,49 @@ def _limits_refute(claim, ctx: Ctx) -> bool:
 
 
 def _integrals_refute(claim, ctx: Ctx) -> bool:
-    """A closed equation whose only forms are integrals is refuted when, over every corner of each
-    integral's enclosure (`certify.calculus.integral_enclosure`: tanh-sinh and Gauss-Legendre at 30
-    and 50 digits agreeing, 10^3 times their error estimate), the sides keep the same strict order:
-    "Integral(Abs(cos(x)), (x, -1, 1)) = 0" stays refuted where SymPy's closed form is wrong. A value
-    without such an enclosure refutes nothing: SymPy's evalf of the Dirichlet integral, '-0.e+0' with
-    no significant bit, was read as a 40-digit 0 and refuted "∫_0^oo sin x/x dx = π/2" (fourth audit of
-    1 Oct 2026, S3). The tolerant `_holds` is not used over forms: its value of a sum (Euler-Maclaurin)
-    is wrong for oscillating terms (Σ cos(πk/4)/k² came out 0.565345, it is 11π²/192 = 0.565446) and
-    refuted true identities; nor over a sum or product at all (audit of 29 Sep 2026)."""
+    """A closed equation whose only forms are integrals over finite ranges is refuted when, with each
+    integral replaced by a RIGOROUS enclosure (`certify.calculus.rigorous_integral`, interval
+    arithmetic), the interval value of lhs - rhs excludes 0: "Integral(Abs(cos(x)), (x, -1, 1)) = 0"
+    stays refuted where SymPy's closed form is wrong. A quadrature's error estimate is no enclosure:
+    tanh-sinh and Gauss-Legendre missed a narrow sech² peak together and refuted a true value (review
+    of d4c, 2 Oct 2026), and SymPy's evalf of the Dirichlet integral, '-0.e+0', refuted
+    "∫_0^oo sin x/x dx = π/2" (S3); an infinite range refutes nothing. The tolerant `_holds` is not used
+    over forms: its value of a sum (Euler-Maclaurin) is wrong for oscillating terms (Σ cos(πk/4)/k² came
+    out 0.565345, it is 11π²/192 = 0.565446) and refuted true identities; nor over a sum or product at
+    all (audit of 29 Sep 2026)."""
     if not isinstance(claim, Eq) or claim.has(sp.Sum, sp.Product, sp.Limit, sp.Derivative):
         return False
-    import itertools
     import mpmath as mp
-    from ..certify.calculus import integral_enclosure
-    from ..equiv.numeric import to_mp
+    from ..certify.calculus import integral_excludes, rigorous_integral
+    from ..certify.enclosure import Unsupported, iv_eval
     forms = list(claim.atoms(sp.Integral))
     if not forms or len(forms) > 3:
         return False
-    boxes = []
     for n in forms:
         if n.free_symbols or len(n.limits) != 1 or len(n.limits[0]) != 3:
             return False
+    if len(forms) == 1 and forms[0] in (claim.lhs, claim.rhs):
+        # one integral equated with a number: refine the enclosure against that number
+        n = forms[0]
+        other = claim.rhs if n == claim.lhs else claim.lhs
         var, a, b = n.limits[0]
-        enc = integral_enclosure(n.function, var, a, b, timeout=ctx.timeout)
-        if enc is None:
+        return integral_excludes(n.function, var, a, b, other, timeout=ctx.timeout)[0]
+    env = {}
+    for n in forms:
+        var, a, b = n.limits[0]
+        enc = rigorous_integral(n.function, var, a, b, timeout=ctx.timeout)
+        if enc is None or not (mp.isfinite(enc[0]) and mp.isfinite(enc[1])):
             return False
-        boxes.append(enc[:2])
-    d = claim.lhs - claim.rhs
-    signs = set()
-    with mp.workdps(70):
-        for corner in itertools.product((-1, 0, 1), repeat=len(forms)):
-            reps = {n: sp.Float(mp.nstr(v + c * w, 65), 65) for n, (v, w), c in zip(forms, boxes, corner)}
-            try:
-                dv = to_mp(d.xreplace(reps), 60)
-            except Exception:  # noqa: BLE001
-                return False
-            if isinstance(dv, mp.mpc) or not mp.isfinite(dv) or dv == 0:
-                return False
-            signs.add(dv > 0)
-    return len(signs) == 1
+        env[n] = mp.iv.mpf([enc[0], enc[1]])
+    reps = {n: sp.Dummy(f"I{k}") for k, n in enumerate(forms)}
+    try:
+        mp.iv.dps = 30
+        d = iv_eval((claim.lhs - claim.rhs).xreplace(reps), {reps[n]: env[n] for n in forms})
+        lo, hi = d._mpi_
+        lo, hi = mp.make_mpf(lo), mp.make_mpf(hi)
+    except (Unsupported, ArithmeticError, ValueError, TypeError):
+        return False
+    return bool(not (mp.isnan(lo) or mp.isnan(hi)) and (lo > 0 or hi < 0))
 
 
 def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:

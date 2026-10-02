@@ -108,48 +108,92 @@ def test_a_quadrature_alone_never_accepts():
     assert _run(_dint("sin(x**5)*exp(cos(x)) + 1", -1, 1), "2 + 10**(-40)").verdict != "CORRECT"
 
 
-def test_a_numeric_refutation_needs_two_methods_and_a_nonzero_error():
-    from mathverify.certify.calculus import integral_enclosure, integral_excludes
+SECH = "x**2 + 10**4/cosh(10**4*(x - 1/3))**2"                     # a peak of width 1e-4 at 1/3
+SECH_TRUE = "1/3 + tanh(20000/3) + tanh(10000/3)"
+
+
+def test_a_numeric_refutation_needs_a_rigorous_enclosure():
+    """Review of d4c (2 Oct 2026): tanh-sinh and Gauss-Legendre missed a narrow peak together, with an
+    error estimate small but not 0, and refuted true values. The interval enclosure cannot miss it."""
+    import mpmath as mp
+    from mathverify.certify.calculus import integral_excludes, rigorous_integral
     x = sp.Symbol("x", real=True)
     peak = 1 + sp.exp(-10**8 * (x - sp.Rational(1, 3))**2) * sp.exp(sp.cos(x))
-    assert integral_excludes(peak, x, 0, 1, sp.Rational(1000456, 10**6))[0] is False   # an error estimate of 0
-    assert integral_enclosure(x**sp.Rational(-999, 1000), x, 0, 1) is None             # the methods disagree
-    # Gauss-Legendre's own error (0.1) widens the enclosure of an end-singular integrand: nothing refuted
-    assert integral_excludes(sp.log(x) / sp.sqrt(x), x, 0, 1, -3)[0] is False
-    no, _ = integral_excludes(sp.Abs(sp.cos(x)), x, -1, 1, 0)
-    assert no is True
+    assert integral_excludes(peak, x, 0, 1, 1)[0] is True               # the quadratures said 1
+    true = sp.Rational(1000455999664210, 10**15)                         # mpmath with the peak split off
+    assert integral_excludes(peak, x, 0, 1, true)[0] is False
+    f = sp.sympify(SECH, locals={"x": x})
+    assert integral_excludes(f, x, 0, 1, sp.sympify(SECH_TRUE))[0] is False
+    assert integral_excludes(f, x, 0, 1, sp.Rational(1, 3))[0] is True
+    lo, hi = rigorous_integral(sp.exp(sp.cos(x)), x, 0, 1)
+    assert lo <= mp.mpf("2.341574841713053164922975186216") <= hi and hi - lo < 1e-9
+    assert rigorous_integral(sp.erf(x), x, 0, 1) is None                 # no interval extension
+    assert rigorous_integral(sp.exp(-x), x, 0, sp.oo) is None            # no infinite range
+    lo, hi = rigorous_integral(1 / x, x, -1, 1)                          # a singularity: unbounded
+    assert not (mp.isfinite(lo) and mp.isfinite(hi))
+    assert integral_excludes(1 / x, x, -1, 1, 0)[0] is False
+    assert integral_excludes(sp.Abs(sp.cos(x)), x, -1, 1, 0)[0] is True
+
+
+def test_an_end_that_is_not_a_binary_number_is_enclosed():
+    """π as an end is an interval; the piece between it and the binary cells counts (here 10^40 per unit)."""
+    from mathverify.certify.calculus import integral_excludes
+    x = sp.Symbol("x", real=True)
+    assert integral_excludes(sp.Integer(10)**40, x, 0, sp.pi, 10**40 * sp.pi)[0] is False
+    assert integral_excludes(sp.Integer(10)**40, x, sp.pi, 4, 10**40 * (4 - sp.pi))[0] is False
+
+
+def test_sympys_value_refutes_only_with_a_proof_or_an_enclosure(monkeypatch):
+    """A claim SymPy's exact value contradicts is refuted by a value proved symbolically (e^x has the
+    antiderivative e^x) or by a rigorous enclosure. Without a proof (taken away here) a difference of
+    10^-40 from SymPy's sin(1) decides nothing; one of 10^-3 is outside the enclosure."""
+    assert _run(_dint("exp(x)", "0", "pi*sqrt(163)"), "262537412640768743").verdict == "INCORRECT"
+    from mathverify.certify import calculus
+    monkeypatch.setattr(calculus, "certified_integral_value", lambda *a, **k: (None, {}))
+    assert _run(_dint("cos(x)", "0", "1"), "sin(1) + 10**(-40)").verdict == "UNKNOWN"
+    assert _run(_dint("cos(x)", "0", "1"), "sin(1) + 10**(-3)").verdict == "INCORRECT"
+    assert _run(_dint("cos(x)", "0", "1"), "sin(1)").verdict == "CORRECT"
+
+
+def test_a_true_value_with_a_narrow_peak_is_not_refuted():
+    assert _run(_dint(SECH, 0, 1), SECH_TRUE).verdict != "INCORRECT"
+    assert _run(_dint(SECH, 0, 1), "1/3").verdict == "INCORRECT"
+    r = _run(X1, "2", [("compute", f"Integral({SECH}, (x, 0, 1)) = {SECH_TRUE}")])
+    assert r.verdict == "CORRECT" and _steps(r) != ["refuted"]
+    r = _run(X1, "2", [("compute", f"Integral({SECH}, (x, 0, 1)) = 1/3")])
+    assert r.verdict == "INCORRECT" and _steps(r) == ["refuted"]
+
+
+def test_a_declared_tolerance_is_decided_by_the_enclosure():
+    """SymPy has no value for ∫_0^1 sin(sin x) dx = 0.4306061031...: the tolerance window holds a
+    rigorous enclosure (accepted) or misses it (refuted)."""
+    def di(tol):
+        ir = _dint("sin(sin(x))", 0, 1)
+        ir["task"]["params"]["rel_tol"] = tol
+        return ir
+    assert _run(di("1e-3"), "0.4306").verdict == "CORRECT"
+    assert _run(di("1e-3"), "0.5").verdict == "INCORRECT"
+    assert _run(_dint("sin(sin(x))", 0, 1), "0.4306").verdict == "INCORRECT"      # no tolerance: exact claim
 
 
 def test_a_step_is_refuted_only_outside_the_enclosure():
-    """SymPy has no value for ∫_0^1 e^(cos x) dx = 2.34157484171305316492...: both methods, both precisions."""
+    """SymPy has no value for ∫_0^1 e^(cos x) dx = 2.34157484171305316492..."""
     r = _run(X1, "2", [("compute", "Integral(exp(cos(x)), (x, 0, 1)) = 2")])
     assert r.verdict == "INCORRECT" and _steps(r) == ["refuted"]
-    # 30 digits of the value: inside the enclosure (width ~2e-17), so not refuted
+    # 30 digits of the value: no enclosure is that narrow, so not refuted
     r = _run(X1, "2", [("compute", "Integral(exp(cos(x)), (x, 0, 1)) = 2341574841713053164922975186216/10**30")])
     assert _steps(r) != ["refuted"]
-
-
-def test_methods_that_disagree_give_no_enclosure(monkeypatch):
-    """Gauss-Legendre's error estimates were honest in every case measured, so the guard is exercised with
-    made-up quadratures: two methods that disagree beyond their estimates enclose nothing."""
-    from mathverify.certify import calculus
-    from mathverify.sandbox import CasResult
-
-    def fake(fn, *args, **kw):
-        if fn.endswith(":breakpoints_of"):
-            return CasResult(ok=True, value=[])
-        if fn.endswith(":quad_breakpoints"):
-            return CasResult(ok=True, value=("1.0" if args[6] == "tanh-sinh" else "1.5", "1e-30"))
-        raise AssertionError(fn)
-
-    monkeypatch.setattr(calculus, "sb_run", fake)
-    x = sp.Symbol("x", real=True)
-    assert calculus.integral_enclosure(sp.exp(sp.cos(x)), x, 0, 1) is None
+    # two integrals: lhs - rhs evaluated with both enclosures
+    r = _run(X1, "2", [("compute", "Integral(exp(cos(x)), (x, 0, 1)) + Integral(x, (x, 0, 1)) = 3")])
+    assert _steps(r) == ["refuted"]
+    r = _run(X1, "2", [("compute", "Integral(exp(cos(x)), (x, 0, 1)) + Integral(x, (x, 0, 1)) = "
+                                   "2841574841713053164922975186216/10**30")])
+    assert _steps(r) != ["refuted"]
 
 
 def test_sympys_zero_without_a_certificate_is_no_exact_value(monkeypatch):
     """A SymPy 0 nothing proves (here made up for ∫_0^1 e^(cos x) dx = 2.3416) is dropped: the claim 0
-    is then refuted by the two quadratures, not left UNKNOWN by a 'symbolic-numeric disagreement'."""
+    is then refuted by the rigorous enclosure, not left UNKNOWN by a 'symbolic-numeric disagreement'."""
     from mathverify.certify import calculus
     real = calculus.sb_run
 
@@ -209,10 +253,11 @@ def test_evalf_without_significant_digits_is_no_value():
     assert abs(v - 1) < 1e-30
 
 
-def test_an_infinite_range_has_a_numeric_value_now():
-    """The quadrature takes an infinite end (it raised before), so SymPy's exact value is confirmed."""
-    assert _run(_dint("exp(-x)", 0, "oo"), "1").verdict == "CORRECT"
-    assert _run(_dint("exp(-x)", 0, "oo"), "2").verdict == "INCORRECT"
+def test_an_infinite_range_is_never_refuted_by_numbers():
+    """No rigorous enclosure over an infinite range: the quadratures missed a peak there too (review)."""
+    assert _run(_dint("exp(-x) + 10**4/cosh(10**4*(x - 1/3))**2", 0, "oo"), "2 + tanh(10**4/3)").verdict != "INCORRECT"
+    r = _run(X1, "2", [("compute", "Integral(exp(-(x - 100)**2), (x, -oo, oo)) = sqrt(pi)")])
+    assert r.verdict != "INCORRECT" and _steps(r) != ["refuted"]
 
 
 def test_a_wrong_infinite_range_step_is_still_refuted():
