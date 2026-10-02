@@ -2192,7 +2192,7 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
     x = pi + E and "sqrt(x)**2 = x" under x**2 = 4 (V16, 30 Sep 2026).
 
     Each condition (`certify.domain.definedness_conditions`) is read on the set the premises leave its
-    symbols: a value a premise pins the symbol to, or the solution of the premises on that symbol alone,
+    symbols: the solution of the premises on that symbol alone (a pinned value x = 0 among them),
     each symbol on its own (x**2 = 4 and y**2 = 1), and the points of a system the premises solve together
     (`_finite_instances`). On a finite set (a Range of integers too, up to _MAX_DEFINED_POINTS points) it
     must hold at every point; on a larger one, for a condition left on one symbol, it is proved by solving
@@ -2202,7 +2202,6 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
     audit, D4-ADIM-D, TAN-11). A symbol no premise narrows is not read: the claim is an identity where it
     is defined."""
     from itertools import product
-    from ..certify.base import closed_binding
     from ..certify.domain import definedness_conditions
     from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
     try:
@@ -2223,11 +2222,7 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
     for v in syms:
         if ctx.ns.get(v.name) != v:
             continue
-        pinned = [b[1] for b in (closed_binding(p) for p in premises) if b is not None and b[0] == v]
-        if pinned:
-            sets[v] = sp.FiniteSet(pinned[0])
-            continue
-        own = [p for p in _premise_parts(premises)
+        own =[p for p in _premise_parts(premises)
                if isinstance(p, sp.core.relational.Relational) and p.free_symbols == {v}]
         if not own:
             continue

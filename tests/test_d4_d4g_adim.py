@@ -315,3 +315,22 @@ def test_readable_backward_point_with_a_reading_free_range_refutes():
     ir = _ir("2 + 2", [{"name": "n", "domain": "integer", "constraints": ["n < -1"]}, K])
     st = _step(_run(ir, "4", [("compute", "Sum(0, (k, 1, n)) + n**2 = n**2 + 1")]))
     assert st["status"] == "refuted"
+
+
+def test_counterexample_searched_where_the_claim_is_defined():
+    # the identity check's point x < 0 leaves both sides non-real; on x >= 0 the claim is false
+    assert _status(_ir("x", [X]), "x", "compute", "sqrt(x**3) = x*sqrt(x) + 1") == "refuted"
+
+
+def test_condition_on_two_symbols_over_infinite_sets_not_proved():
+    # x > 0, y > 0 allow x < y, where sqrt(x - y) is not real
+    st = _step(_run(_ir("x", [X, Y], ["x > 0", "y > 0"]), "1", [("eq", "sqrt(x - y)**2 = x - y")]))
+    assert st["status"] == "unknown" and st["reason"] == "claim_undefined_at_the_premises_point"
+
+
+def test_premise_leaving_the_whole_domain_narrows_nothing():
+    # K4 ayt-lim-006: the proved eq step x*log(x) = log(x)/(1/x) holds on all of R as SymPy reads it; it does
+    # not narrow x, and diff(log(x), x) = 1/x stays verified
+    ir = _ir(None, [{"name": "x"}], kind="limit", params={"expr": "x*log(x)", "var": "x", "to": "0", "side": "+"})
+    r = _run(ir, "0", [("eq", "x*log(x) = log(x)/(1/x)"), ("compute", "diff(log(x), x) = 1/x")])
+    assert _step(r)["status"] == "verified"
