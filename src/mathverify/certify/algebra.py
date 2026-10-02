@@ -95,7 +95,8 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
     hull = _bounded_hull(domain)
     if hull is not None and at_risk(rel_r, var):
         # a trigonometric equation on a bounded domain: its roots on the hull, from the guarded
-        # solveset (sandbox.exactsets: confirmed by a numeric root search there), are all of them.
+        # solveset (sandbox.exactsets: a finite set only for the classes whose zeros are known in closed
+        # form, never from a numeric search), are all of them.
         # On ℝ the solvers give the principal roots and an ImageSet, so the right {pi/4, 5*pi/4,
         # 9*pi/4} of tan x = 1 on [0, 10) was refuted before (fourth audit G2)
         rw = sb_run("mathverify.sandbox.ops:solveset_in", rel_r, var, sp.Interval(*hull), timeout=timeout)
@@ -611,9 +612,12 @@ def _complete_solutions(eqs, ineqs, syms, sols, ctx: Ctx) -> tuple[list | None, 
     pi/4 for x with tan x = 1, 0 < x < 4 though 5*pi/4 < 4 (fourth audit G5); on x*exp(x) = -1/5 it
     gives both LambertW branches but nothing says so. A system of rational equations keeps `solve`'s
     list (it solves those completely). One unknown: the solution set of an equation, on the bounded
-    hull of the region the other givens and the domain leave when there is one, must be a finite set
-    from the guarded solveset (sandbox.exactsets: confirmed by a numeric root search on a bounded hull);
-    the other equations are then checked at each of its points."""
+    hull of the region the other givens and the domain leave when there is one, must be a finite set of
+    an equation whose class proves it complete: a rational one (SymPy's real roots), or a trigonometric
+    one the guarded solveset solves exactly (sandbox.exactsets). SymPy's finite set of any other equation
+    is no proof: exp(x) = 3*x is W0 and W-1, sqrt and Abs equations go through branches (review of
+    2 Oct 2026: (x + 1)*Q = 0 with 0 < x < 4 gave pi/3 CORRECT, pi is a root too). The other equations
+    are then checked at each of its points."""
     if all(_algebraic(e, syms) for e in eqs):
         return sols, "rational_system"
     if len(syms) != 1:
@@ -631,7 +635,10 @@ def _complete_solutions(eqs, ineqs, syms, sols, ctx: Ctx) -> tuple[list | None, 
             pass
     found = None
     for e in eqs:
-        rr = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(e), v, window, timeout=ctx.timeout)
+        er = real_odd_roots(e)
+        if not (_algebraic(er, [v]) or at_risk(er, v)):
+            continue                           # a class that proves no completeness
+        rr = sb_run("mathverify.sandbox.ops:solveset_in", er, v, window, timeout=ctx.timeout)
         if rr.ok and (rr.value is S.EmptySet or isinstance(rr.value, FiniteSet)):
             found = (e, list(rr.value))
             break
