@@ -177,6 +177,28 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
 
     claimed, truth = sp.sympify(claimed), sp.sympify(truth)
     free = claimed.free_symbols | truth.free_symbols
+    # an odd root of a negative number written as a power: the real root or the principal value
+    # (equiv.conventions); compared under both readings, decided only when they agree
+    from .conventions import closed_readings, open_odd_root_bases
+    readings = closed_readings(claimed, truth)
+    if readings is False:
+        ev["method"] = "odd_root_convention_undecided"
+        return None, ev
+    if readings is not None:
+        (c1, t1), (c2, t2) = readings
+        r1, ev1 = answers_equivalent(c1, t1, shape, domain, var, rel_tol, abs_tol, seed)
+        r2, ev2 = answers_equivalent(c2, t2, shape, domain, var, rel_tol, abs_tol, seed)
+        ev.update({"method": "odd_root_convention", "real_root": ev1, "principal_value": ev2})
+        return (r1 if r1 == r2 else None), ev
+    if free:
+        dom_map = domain if isinstance(domain, dict) else (
+            None if domain is None else {s_: domain for s_ in free})
+        open_bases = open_odd_root_bases((claimed, truth), dom_map)
+        if open_bases:
+            # a base that may be negative where the sides are compared: the value there is a convention
+            ev["method"] = "odd_root_convention_on_the_domain"
+            ev["bases"] = [str(b) for b in open_bases]
+            return None, ev
     if not free:
         okS, sev = sym_equal(claimed, truth)
         ev["symbolic"] = sev

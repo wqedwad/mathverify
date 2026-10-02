@@ -324,6 +324,34 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     return flags
 
 
+def _claim_convention(solution: Solution, ctx, task_kind: str = "") -> list[str]:
+    """The texts of the claimed answer that, read as written, hold a closed operation whose value is a
+    convention (`certify.domain.Convention`). An odd root of a negative number is compared under both
+    readings by the evaluate and simplify certificates (equiv.conventions); anywhere else it is read
+    one way: the root (-8)**(1/3) of x**3 = -8 was "not real" and {(-8)**(1/3)} INCORRECT (part d4a)."""
+    from .certify.domain import Convention, definedness_conditions
+    from .normalize.parse import parse_as_written
+    payload = solution.claimed_answer.payload
+    out: list[str] = []
+    try:
+        ns = ctx.claim_ns()
+    except Exception:  # noqa: BLE001
+        return out
+    for txt in (payload if isinstance(payload, list) else [payload]):
+        if not isinstance(txt, str):
+            continue
+        try:
+            w = parse_as_written(txt, ns)
+            conds = definedness_conditions(w, None) if w is not None else []
+        except Exception:  # noqa: BLE001 - not read as written: the certificates read it
+            continue
+        both_ways = task_kind in ("evaluate", "simplify_expression")
+        if any(isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and not c.free_symbols
+               and not (both_ways and c.args[1].kind == "odd_root") for c in conds):
+            out.append(txt)
+    return out
+
+
 def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     from .normalize.parse import ClaimNotAValue, check_claim_is_value
     ca = solution.claimed_answer
@@ -474,9 +502,102 @@ def fuse_layers(layers: list[LayerResult], extra_flags: list[str] | None = None,
                               decision_trace=trace, versions=versions, flags=all_flags)
 
 
+# ℕ written without a mark: {1, 2, ...} or {0, 1, 2, ...}. The Turkish curriculum (and ISO 80000-2) puts 0
+# in ℕ, other texts do not; the parser read ℕ, N and Naturals as {1, 2, ...} and certified {3} for
+# x² − 3x = 0 over ℕ and refuted {0, 3} (fourth audit of 1 Oct 2026, CAP-N1). A problem or solution that
+# writes it is verified under both readings and decided only when the verdicts agree. ℕ⁺, N+, Z+, ℕ0, N0,
+# Naturals0 and the IR keywords (`natural` >= 1, `nonneg_integer`) are unambiguous and not rewritten.
+_NAT_UNICODE = re.compile(r"ℕ(?!\s*(?:[⁺+₀0*]|_\{?[0+]|\^\{?[+*]))")
+_NAT_NAME = re.compile(r"(?<![\w.])((?:S\.)?Naturals)(?![\w+*⁺₀])")
+_NAT_LATEX = re.compile(r"\\mathbb\s*(?:\{\s*N\s*\}|N)(?!\s*(?:[⁺+₀0*]|_\{?[0+]|\^\{?[+*]))")
+_NAT_BARE = re.compile(r"(?<![\w.])N(?![\w(⁺+₀0*_^])")
+
+
+def _bare_n_as_set(s: str) -> str:
+    """`s` with each bare `N` that stands for a set (`x in N`, `N`, `N U {-1}`) written `N0`; an `N`
+    between two set operands is the intersection keyword (`A N B`, from ∩) and stays."""
+    out, last = [], 0
+    for m in _NAT_BARE.finditer(s):
+        before, after = s[:m.start()].rstrip(), s[m.end():].lstrip()
+        if re.search(r"\\mathbb\s*\{?$", before):
+            continue                                   # \mathbb{N}: read by _NAT_LATEX
+        prev_ok = before == "" or before.endswith(("(", ",", "∈", "∪", "{")) or re.search(r"(?:\bin|\bU)$", before)
+        next_ok = after == "" or after.startswith((")", ",", "∪", "}")) or re.match(r"U\b", after)
+        if prev_ok and next_ok:
+            out.append(s[last:m.start()] + "N0")
+            last = m.end()
+    return "".join(out) + s[last:]
+
+
+def _naturals_zero_reading(problem_ir: dict, solution: dict) -> tuple[dict, dict] | str | None:
+    """The problem and the solution with every ℕ written without a mark read as {0, 1, 2, ...}, or None
+    when they write none. ℕ, `Naturals` (also SymPy's `S.Naturals`) and \\mathbb{N} anywhere; a bare `N`
+    where a set is read (the domain of discourse, a constraint, a claimed answer, an option). When the
+    problem also declares a variable N such a bare `N` is either one: "clash" (the verifier abstains; read
+    once, the dod "N" next to a variable N certified {3} for x² − 3x = 0, attack of part d4a)."""
+    names = {str((v or {}).get("name")) for v in problem_ir.get("vars") or [] if isinstance(v, dict)}
+    clash = []
+
+    def every(s: str) -> str:
+        s = _NAT_UNICODE.sub("ℕ0", s)
+        s = _NAT_NAME.sub(lambda m: m.group(1) + "0", s)
+        return _NAT_LATEX.sub("Naturals0", s)
+
+    def walk(o, set_text: bool):
+        if isinstance(o, str):
+            o = every(o)
+            if not set_text:
+                return o
+            if "N" in names:
+                if _bare_n_as_set(o) != o:
+                    clash.append(o)
+                return o
+            return _bare_n_as_set(o)
+        if isinstance(o, dict):
+            return {k: walk(v, set_text or k in ("domain_of_discourse", "constraints", "payload", "options"))
+                    for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return type(o)(walk(v, set_text) for v in o)
+        return o
+
+    ir2, sol2 = walk(problem_ir, False), walk(solution, False)
+    if clash:
+        return "clash"
+    if ir2 == problem_ir and sol2 == solution:
+        return None
+    return ir2, sol2
+
+
 def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
                   timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
-    """Run the deterministic layers and return (layers, flags) without fusing."""
+    """Run the deterministic layers and return (layers, flags) without fusing. A problem that writes ℕ
+    without a mark is read both ways (see _naturals_zero_reading)."""
+    import copy
+    try:
+        ir_d = problem_ir if isinstance(problem_ir, dict) else problem_ir.to_dict()
+        sol_d = solution if isinstance(solution, dict) else solution.to_dict()
+        zero = _naturals_zero_reading(copy.deepcopy(ir_d), copy.deepcopy(sol_d))
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not readable as dicts: the reading below reports it
+        zero = None
+    if zero == "clash":
+        return [unknown("intake.naturals", "naturals_convention: N is a declared variable and a set here",
+                        flags=["naturals_convention"])], []
+    layers, flags = _verify_layers(problem_ir, solution, seed, timeout, run_steps)
+    if zero is None:
+        return layers, flags
+    layers0, flags0 = _verify_layers(zero[0], zero[1], seed, timeout, run_steps)
+    v_pos = fuse(layers, extra_flags=flags)["verdict"]
+    v_zero = fuse(layers0, extra_flags=flags0)["verdict"]
+    if v_pos == v_zero:
+        return layers, flags + ["naturals_readings_agree"]
+    return [unknown("intake.naturals", f"naturals_convention: with ℕ = {{1, 2, ...}} {v_pos}, with ℕ = "
+                    f"{{0, 1, 2, ...}} {v_zero}", flags=["naturals_convention"])], flags
+
+
+def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
+                   timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
     layers: list[LayerResult] = []
     if isinstance(problem_ir, dict):
         try:
@@ -587,6 +708,14 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     if undefined:
         layers.append(unknown("intake.definedness", f"problem_undefined_as_written: {undefined[:3]}",
                               flags=["problem_undefined_as_written"]))
+        return layers, clean_flags
+    # The claim itself, read as written, holds a value that is a convention (0**0, C(2, 5), Mod(7, -5)):
+    # the parse computed it SymPy's way, and "0**0" for 5**0 was certified like 1 (part d4a). An odd
+    # root of a negative number is compared under both readings instead (equiv.conventions).
+    conv = _claim_convention(solution, ctx, problem_ir.task.kind)
+    if conv:
+        layers.append(unknown("intake.definedness", f"claim_value_is_a_convention: {conv[:3]}",
+                              flags=["claim_convention"]))
         return layers, clean_flags
 
     # A claimed answer must be a VALUE. A computation (`integrate(…)`, `limit(…)`) or the

@@ -246,37 +246,57 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     dom, unbound = _with_given_inequalities(ctx, var, ctx.domain_for(var), exclude=rel)
     # the equation's own definedness conditions are checked at every root by guard_roots
     unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions(rel, var)) + unbound
+    # where the value of the problem's expressions is a convention (an odd root of a negative base,
+    # 0**0, C(n, r) outside 0 <= r <= n, Mod by a non-positive divisor, a reversed Sum range): a root
+    # there is neither kept nor dropped, a root of the rest of the domain missing from the claim still
+    # refutes it, and nothing is certified complete (DECISIONS §80; part d4a: C(n, 2) = 3 was UNKNOWN
+    # for {-2} and the empty set, which miss the root 3 under every reading)
+    from .domain import is_convention
+    conv = [c for c in unbound if isinstance(c, sp.Basic) and is_convention(c) and c.free_symbols <= {var}]
+    unbound = [c for c in unbound if not any(c is k for k in conv)]
     if unbound:
         return condition_not_applied(LAYER, unbound)
     if dom is None:
         return unknown(LAYER, "given_inequality_not_solvable")
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
+    region = ctx.convention_region(var) if conv else S.EmptySet
+    if conv:
+        ev["convention_region"] = str(region)
     if not isinstance(claimed, FiniteSet):
         roots, sev = solve_guarded(rel, var, dom, ctx.timeout)
         ev["solve_guarded"] = sev
         if sev.get("identity"):
+            if conv:
+                return unknown(LAYER, "convention_region_candidates", 0, ev)
             return _verify_identity(rel, var, dom, claimed, ev, ctx, t)
         if claimed is S.EmptySet:
             if roots:
                 ev["reason"] = "solutions_exist"
                 return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
-            if sev.get("complete"):
+            if sev.get("complete") and not conv:
                 return result(LAYER, "pass", 0.99, True, ev, t.ms, primary=True)
-            return unknown(LAYER, "completeness_unknown", 0, ev)
+            return unknown(LAYER, "convention_region_candidates" if conv else "completeness_unknown", 0, ev)
         return unknown(LAYER, "claimed_set_not_finite", 0, ev)
     # (1) every claimed root must satisfy the original relation + definedness + domain
     kept, rejected = guard_roots(rel, var, list(claimed.args), dom)
+    if conv:
+        # a claimed root where the value is a convention: undecided, not outside the domain
+        rejected = [(c, "definedness_undecided: convention" if w == "outside_domain_of_discourse"
+                     and in_domain(region, c) is not False else w) for c, w in rejected]
     ev["claimed_check"] = {"kept": [str(k) for k in kept], "rejected": [(str(c), w) for c, w in rejected]}
     hard_bad = [(c, w) for c, w in rejected if not _undecided(w)]
     if hard_bad:
         ev["reason"] = f"claimed_root_invalid: {hard_bad[0][1]}"
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
-    if rejected:
+    if rejected and not conv:
         return unknown(LAYER, "claimed_root_undecided", 0, ev)
-    # (2) completeness: are there true roots missing from the claim?
+    # (2) completeness: are there true roots missing from the claim? (with a claimed root where the
+    # value is a convention too: a root of the rest of the domain the claim misses refutes it)
     roots, sev = solve_guarded(rel, var, dom, ctx.timeout)
     ev["solve_guarded"] = sev
     if sev.get("identity"):
+        if conv:
+            return unknown(LAYER, "convention_region_candidates", 0, ev)
         return _verify_identity(rel, var, dom, claimed, ev, ctx, t)
     # a root is missing only when it is PROVED different from every claimed root; an undecided
     # comparison is not evidence either way
@@ -290,6 +310,10 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
     if missing:
         ev["reason"] = "missing_root"
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
+    if rejected:
+        return unknown(LAYER, "claimed_root_undecided", 0, ev)
+    if conv:
+        return unknown(LAYER, "convention_region_candidates", 0, ev)
     if undecided:
         ev["undecided_roots"] = [str(u) for u in undecided]
         return unknown(LAYER, "root_comparison_undecided", 0, ev)
@@ -652,6 +676,8 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
                                      rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
         ev["compare"] = cev
         ev["method"] = "direct"
+        if dom and ok is not False:
+            ok = _beyond_value_conventions(ctx, claimed, target, sorted(dom, key=lambda s_: s_.name), ok, ev)
         # a variable the problem confines to finitely many values where a range runs backwards
         # (the constraint n**2 = 4 next to Σ_{k=1}^{n} k): those values are candidates, neither kept
         # nor dropped (_filter_solutions); a formula's variable (n an integer) is compared where the
@@ -673,6 +699,14 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
             return unknown(LAYER, f"solve_failed: {r.error}", 0, ev, flags=r.flags)
         sols = r.value if isinstance(r.value, list) else [r.value]
         sols = [s_ for s_ in sols if isinstance(s_, dict)]
+        if any(real_odd_roots(e) != e for e in eqs) and any(
+                ctx.convention_region(s_).is_empty is not True for s_ in syms):
+            # an odd root written as a power where its base may be negative: SymPy solves on the
+            # principal branch, the real root has other solutions (x**(1/3) = x, x != 0: {1} and
+            # {-1, 1}), and `solve` misses them in sign(x)·|x|**(1/3) form too. With candidates where
+            # the value is a convention not all known, no value is unique (part d4a)
+            ev["raw_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in sols]
+            return unknown(LAYER, "odd_root_convention_candidates", 0, ev)
         ev["raw_solutions"] = [{str(k): str(v) for k, v in s_.items()} for s_ in sols]
         sols, how = _complete_solutions(eqs, ineqs, syms, sols, ctx)
         ev["completeness"] = how
@@ -712,6 +746,24 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
     if ok is False:
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
     return unknown(LAYER, "undecided", 0, ev)
+
+
+def _beyond_value_conventions(ctx: Ctx, claimed, truth, syms, ok, ev: dict):
+    """The comparison's verdict once the points `domain_for` left out because a value of the problem is
+    another value there under the other convention are read too (`convention_counterexample`): refuted
+    where both readings differ, otherwise never certified (part d4a, attack A: Abs(x) for (x**3)**(1/3)
+    was CORRECT, it is wrong at x = -2 under both readings; cbrt(x) for x**(1/3) holds under one)."""
+    from .base import convention_counterexample
+    present, pt = convention_counterexample(ctx, claimed, truth, syms)
+    if not present:
+        return ok
+    if pt is not None:
+        ev["reason"] = "differs_where_a_value_is_a_convention"
+        ev["counterexample_both_readings"] = pt
+        return False
+    ev["value_convention_region"] = {str(s_): str(ctx.value_convention_region(s_)) for s_ in syms
+                                     if ctx.ns.get(s_.name) == s_}
+    return None
 
 
 def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[bool | None, str]:
@@ -800,6 +852,8 @@ def _verify_simplify(ir, solution, ctx: Ctx, t):
         return unknown(LAYER, f"claim_as_written_undecided: {why}", 0, {"expr": str(expr), "claimed": str(claimed)})
     ok, cev = answers_equivalent(claimed, expr, shape="expression", domain=dom)
     ev = {"expr": str(expr), "claimed": str(claimed), "compare": cev, "domain": {str(k): str(v) for k, v in dom.items()}}
+    if ok is not False:
+        ok = _beyond_value_conventions(ctx, claimed, expr, syms, ok, ev)
     if ok is True:
         return result(LAYER, "pass", 0.99 if cev.get("method") == "symbolic" else 0.97, True, ev, t.ms, primary=True)
     if ok is False:

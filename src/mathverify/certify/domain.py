@@ -110,6 +110,120 @@ def is_range_span(c) -> bool:
     return isinstance(c, sp.Contains) and c.args[1] == FORWARD_SPANS
 
 
+class Convention(sp.Set):
+    """The values of an operand where a written operation has the curriculum's one value; elsewhere its
+    value is a convention, not the curriculum's, and such a point is neither in nor out, like a reversed
+    Sum range (ForwardSpans, DECISIONS §80; fourth audit of 1 Oct 2026, part d4a):
+
+    * `odd_root`: the base of b**(p/q), q odd, is >= 0. At a negative base the power is the real root
+      (∛(-8) = -2) or the principal complex value (1 + √3 i); (-8)**(1/3) was certified both ways. The
+      written roots (`cbrt`, `root(·, 3)`, `real_root`, `\\sqrt[3]{}`, ∛) are real roots and parse to
+      sign(b)·|b|**(1/q) (normalize.parse), whose base is never negative.
+    * `zero_power`: the base of b**0 is not 0 (0**0 is 1 or undefined).
+    * `binomial`: r and n - r of C(n, r) are natural numbers with 0 (0 <= r <= n integers); outside, the
+      generalized binomial (C(-2, 2) = 3) and the 0 above n are extensions the curriculum does not have.
+    * `mod_divisor`: the divisor of Mod is positive; below it floored, truncated and Euclidean
+      remainders differ (Mod(7, -5) is -3, 2 or 2).
+
+    As `Contains(operand, CONVENTION)` the condition holds where the operand is proved inside and is
+    left standing (undecided) elsewhere, never false: `decide_membership` and `relation_holds_at` leave
+    it undecided at such a point, `closed_condition_undecided` makes every caller abstain on a closed
+    one, and `Ctx.domain_for` keeps only the points where every one holds while `Ctx.convention_region`
+    lists the others, where a candidate is neither kept nor dropped."""
+    is_empty = False
+    is_finite_set = False
+
+    def __new__(cls, kind):
+        return sp.Basic.__new__(cls, kind if isinstance(kind, sp.core.symbol.Str) else sp.core.symbol.Str(kind))
+
+    @property
+    def kind(self) -> str:
+        return str(self.args[0])
+
+    def _contains(self, other):
+        if not isinstance(other, sp.Expr):
+            return None
+        k = self.kind
+        if k == "odd_root":
+            ok = other.is_extended_nonnegative
+        elif k == "zero_power":
+            ok = other.is_zero is False
+        elif k == "binomial":
+            ok = other.is_integer is True and other.is_nonnegative is True
+        elif k == "mod_divisor":
+            ok = other.is_extended_positive
+        else:
+            ok = None
+        return sp.true if ok is True else None      # undecided, never false
+
+    def _eval_is_superset(self, other):
+        inside = {"odd_root": Interval(0, oo), "binomial": S.Naturals0, "mod_divisor": Interval.open(0, oo),
+                  "zero_power": sp.Union(Interval.open(-oo, 0), Interval.open(0, oo))}.get(self.kind)
+        try:
+            return True if inside is not None and other.is_subset(inside) is True else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _sympystr(self, printer):
+        return f"Convention({self.kind})"
+
+
+ODD_ROOT_BASE = Convention("odd_root")
+ZERO_POWER_BASE = Convention("zero_power")
+BINOMIAL_ARGUMENT = Convention("binomial")
+MOD_DIVISOR = Convention("mod_divisor")
+
+
+def is_convention(c) -> bool:
+    """Is `c` a condition whose failure makes the value a convention rather than undefined: a Sum/Product
+    range (ForwardSpans) or one of the Convention sets?"""
+    return isinstance(c, sp.Contains) and (c.args[1] == FORWARD_SPANS or isinstance(c.args[1], Convention))
+
+
+def is_value_convention(c) -> bool:
+    """Is `c` a convention condition whose other reading is ANOTHER VALUE (a Sum range: Karr's sum or the
+    empty one; an odd root: the real root or the principal value; Mod: floored or Euclidean), not
+    "undefined" (0**0, C(n, r) outside 0 <= r <= n)? A claim refuted with SymPy's value at such a point
+    may be true under the other reading; where the other reading is "undefined" the claim is not true
+    either, so a refutation stands (an undefined claim is no true step, `steps.deterministic`)."""
+    return is_convention(c) and (c.args[1] == FORWARD_SPANS or c.args[1].kind in ("odd_root", "mod_divisor"))
+
+
+def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
+    """(the values of `var` where the convention condition `c` holds, those where it does not), over ℝ.
+    A condition this cannot split gives (ℝ, ℝ): every point is undecided. A closed one (a symbol a given
+    fixes, read as its value) holds everywhere or nowhere."""
+    e, s = c.args
+    kind = "range" if s == FORWARD_SPANS else s.kind
+    # guarded (sandbox.exactsets): a trigonometric base (sin(x)**(1/3)) read on one period of ℝ split the
+    # line wrongly; unsolved, it stays a ConditionSet and every point is undecided below
+    solveset = exact_solveset
+    try:
+        if var not in e.free_symbols:
+            held = sp.Contains(e, s)
+            return (S.Reals, S.EmptySet) if held is sp.true else (S.EmptySet, S.Reals)
+        if kind in ("range", "odd_root"):
+            fwd, back = solveset(sp.Ge(e, 0), var, S.Reals), solveset(sp.Lt(e, 0), var, S.Reals)
+        elif kind == "mod_divisor":
+            fwd, back = solveset(sp.Gt(e, 0), var, S.Reals), solveset(sp.Le(e, 0), var, S.Reals)
+        elif kind == "zero_power":
+            fwd, back = solveset(Ne(e, 0), var, S.Reals), solveset(Eq(e, 0), var, S.Reals)
+        elif kind == "binomial":
+            # e = ±var + k with k an integer: an integer exactly where var is one
+            k = e - var if (e - var).free_symbols == set() else e + var
+            if k.free_symbols or k.is_integer is not True:
+                return S.Reals, S.Reals
+            fwd = sp.Intersection(solveset(sp.Ge(e, 0), var, S.Reals), S.Integers)
+            back = sp.Complement(S.Reals, fwd)
+        else:
+            return S.Reals, S.Reals
+    except Exception:  # noqa: BLE001
+        return S.Reals, S.Reals
+    if fwd.has(sp.ConditionSet) or back.has(sp.ConditionSet):
+        return S.Reals, S.Reals
+    return fwd, back
+
+
 # The index values of a Sum/Product checked one by one, and the work one top-level reading may spend
 # on binders (a solveset counts as _SOLVE_COST points): a nested finite sum is checked at every
 # (outer, inner) pair, and 150 x 150 of them held verify() 33 s, three levels over 400 s (review of
@@ -155,6 +269,24 @@ def _violations(c, d, region):
     return, review of 30 Sep 2026)."""
     if not _spend(_SOLVE_COST):
         return None
+    if isinstance(c, sp.Contains) and isinstance(c.args[1], Convention):
+        # where the value is a convention over the region (C(n, k) with k past n): the binder is
+        # then undecided, never undefined (_range_conditions reads only a failing term as undefined)
+        e, kind = c.args[0], c.args[1].kind
+        if kind == "binomial":
+            # over integers an argument ±d + k (k an integer) is an integer: only its sign is asked
+            k = e - d if (e - d).free_symbols == set() else e + d
+            if k.free_symbols or k.is_integer is not True or region.is_subset(S.Integers) is not True:
+                return None
+            bad = sp.Lt(e, 0)
+        else:
+            bad = {"odd_root": sp.Lt(e, 0), "zero_power": Eq(e, 0), "mod_divisor": sp.Le(e, 0)}.get(kind)
+        if bad is None:
+            return None
+        r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
+        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+            return None
+        return r.value
     if isinstance(c, sp.Contains):
         # a factorial, binomial or gcd argument's set: the argument's values over the region lie in it
         # (1/(k - 1)! from k = 1 was undecided: Not(Contains) is no relation solveset takes)
@@ -624,14 +756,24 @@ def _definedness_conditions(expr, var) -> list[Any]:
             if isinstance(ex, sp.Rational) and not ex.is_Integer:
                 if ex.q % 2 == 0:
                     add(base >= 0 if ex > 0 else base > 0)
-                elif ex < 0:
-                    add(Ne(base, 0))
+                else:
+                    if ex < 0:
+                        add(Ne(base, 0))
+                    # a negative base: the real root or the principal value (Convention); a base that
+                    # is not real has the principal value only
+                    if base.is_extended_real is not False:
+                        add(sp.Contains(base, ODD_ROOT_BASE))
             elif ex.is_Integer and ex < 0:
                 add(Ne(base, 0))
+            elif ex.is_zero is True:
+                add(sp.Contains(base, ZERO_POWER_BASE))     # 0**0: 1 or undefined (Convention)
             elif ex.is_number and not ex.is_rational:
                 add(base > 0)
             elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
                 add(base > 0)          # x^y style real power (var None: every symbol counts)
+            elif not ex.is_number and base.is_zero is not False:
+                # 0**k at k = 0 (a Sum's term at its first index): 1 or undefined (Convention, part d4a)
+                add(sp.Contains(ex, ZERO_POWER_BASE))
         elif isinstance(node, sp.tan):
             add(Ne(sp.cos(node.args[0]), 0))
         elif isinstance(node, sp.sec):
@@ -655,10 +797,16 @@ def _definedness_conditions(expr, var) -> list[Any]:
             # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026)
             add(sp.Contains(node.args[0], S.Naturals0))
         elif isinstance(node, sp.binomial):
-            # C(n, r) of the curriculum, like n!: C(x, 2) at x = -3 was certified while P(x, 2),
-            # built on factorial, was not (review of 30 Sep 2026)
-            for a in node.args:
-                add(sp.Contains(a, S.Naturals0))
+            # C(n, r) of the curriculum: 0 <= r <= n integers. C(x, 2) at x = -3 was certified while
+            # P(x, 2), built on factorial, was not (review of 30 Sep 2026); read as undefined there, the
+            # root -2 of C(n, 2) = 3 was dropped and {-2, 3} refuted, while the generalized binomial
+            # (C(-2, 2) = 3) and the 0 above n are conventions (Convention, part d4a)
+            n_, r_ = node.args
+            add(sp.Contains(r_, BINOMIAL_ARGUMENT))
+            add(sp.Contains(n_ - r_, BINOMIAL_ARGUMENT))
+        elif isinstance(node, sp.Mod):
+            # a divisor that is not positive: floored, truncated or Euclidean (Convention, part d4a)
+            add(sp.Contains(node.args[1], MOD_DIVISOR))
         elif isinstance(node, sp.acosh):
             add(node.args[0] >= 1)
         elif isinstance(node, sp.atanh):
@@ -1172,6 +1320,11 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
         # no domain rather than ℝ (measured 25 Sep 2026: "the domain of factorial(x) is ℝ" CORRECT)
         return None, {"error": "definedness_unknown", "expr": str(expr)}
     ev: dict[str, Any] = {"conditions": [str(c) for c in conds]}
+    if any(is_convention(c) for c in conds):
+        # a point where the value is a convention (x**(1/3) below 0, (x - 1)**0 at 1) is neither in nor
+        # out of the domain; solveset does not read the condition and continuous_domain would decide it
+        ev["error"] = "convention_dependent_domain"
+        return None, ev
     dom = base
     for cond in conds:
         # a trigonometric condition on a bounded base is solved on it (sandbox.exactsets rebuilds and
