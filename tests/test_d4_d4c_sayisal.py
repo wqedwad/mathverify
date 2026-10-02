@@ -155,6 +155,22 @@ def test_sympys_value_refutes_only_with_a_proof_or_an_enclosure(monkeypatch):
     assert _run(_dint("cos(x)", "0", "1"), "sin(1)").verdict == "CORRECT"
 
 
+def test_a_proved_value_overrides_a_wrong_sympy_value(monkeypatch):
+    """SymPy's value (made up wrong here: sin 1 + 1 for ∫_0^1 cos x dx) loses to the antiderivative's."""
+    from mathverify.certify import calculus
+    from mathverify.sandbox import CasResult
+    real = calculus.sb_run
+
+    def fake(fn, *args, **kw):
+        if fn.endswith(":integrate_symbolic") and len(args) == 4:
+            return CasResult(ok=True, value=sp.sin(1) + 1)
+        return real(fn, *args, **kw)
+
+    monkeypatch.setattr(calculus, "sb_run", fake)
+    assert _run(_dint("cos(x)", "0", "1"), "sin(1)").verdict == "CORRECT"
+    assert _run(_dint("cos(x)", "0", "1"), "sin(1) + 1").verdict == "INCORRECT"
+
+
 def test_a_true_value_with_a_narrow_peak_is_not_refuted():
     assert _run(_dint(SECH, 0, 1), SECH_TRUE).verdict != "INCORRECT"
     assert _run(_dint(SECH, 0, 1), "1/3").verdict == "INCORRECT"
@@ -319,11 +335,18 @@ def test_exact_zeros_of_angle_sums_and_exponentials():
     assert zero(sp.asin(r(1, 3)) + sp.acos(r(1, 3)) - sp.pi / 2)
     assert not zero(sp.atan(r(1, 2)) + sp.atan(r(1, 3)) - sp.pi / 4 - 2 * sp.pi)   # e^(iNd) = 1 only
     assert not zero(sp.atan(r(3, 7)) + sp.atan(r(7, 3)) - sp.pi / 2 + r(1, 10**50))
+    e = r(37, 10)                    # angles of numbers algebraic in e^(1/10): the Gudermann identities
+    assert zero(sp.atan(sp.exp(e)) + sp.atan(sp.exp(-e)) - sp.pi / 2)
+    assert zero(sp.asin(sp.tanh(e)) - sp.atan(sp.sinh(e)))
+    assert zero(2 * sp.atan(sp.tanh(e / 2)) - sp.atan(sp.sinh(e)))
+    assert not zero(sp.asin(sp.tanh(e)) - sp.atan(sp.sinh(e)) + sp.pi)
+    assert not zero(sp.atan(sp.exp(e)) - sp.atan(sp.exp(-e)))
     c = r(123456, 1000)
     assert zero(sp.tanh(c) - (sp.exp(2 * c) - 1) / (sp.exp(2 * c) + 1))
     assert not zero(sp.tanh(c) - (sp.exp(2 * c) - 1) / (sp.exp(2 * c) + 1) + sp.exp(-1000))
     XP = {"name": "x", "domain": "real", "constraints": ["x > 0"]}
     for expr, claim, v in [("atan(x) + atan(1/x)", "pi/2", XP), ("tanh(x)", "(exp(2*x) - 1)/(exp(2*x) + 1)", X),
+                           ("atan(exp(x)) + atan(exp(-x))", "pi/2", XP), ("asin(tanh(x))", "atan(sinh(x))", XP),
                            ("atan(x) - atan(x/2)", "atan(x/(2 + x**2))", X)]:
         ir = _task("simplify_expression", {"expr": expr}, [v], shape="expression")
         assert _run(ir, claim, kind="expression").verdict == "CORRECT", expr

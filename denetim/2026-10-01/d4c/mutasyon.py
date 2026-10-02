@@ -114,12 +114,18 @@ MUTATIONS = [
      "        return integral_excludes(n.function, var, a, b, other, timeout=ctx.timeout)[0]\n",
      "        return True\n", T),
     ("R08 SymPy değeri kanıt ya da zarf olmadan reddeder", CAL,
-     "                elif okS is False and ((okC := by_certificate()) is not None or excluded()):\n",
-     "                elif okS is False and ((okC := by_certificate()) is not None or True):\n", T),
+     "                elif okS is False and excluded():\n",
+     "                elif okS is False:\n", T),
     ("R09 iki integralli adımda aralık değeri yerine orta nokta", DET,
      "        env[n] = mp.iv.mpf([enc[0], enc[1]])\n", "        env[n] = mp.iv.mpf((enc[0] + enc[1]) / 2)\n", T),
     ("R10 SymPy'nin farklı değeri sertifikayla kabul edilmez", CAL,
-     "                    ok = okC if okC is not None else False\n", "                    ok = False\n", T),
+     "                    ok = okC                       # a value proved symbolically decides\n",
+     "                    ok = None if okC else okC\n", T),
+    ("Z28 aşkın sayıların açı toplamı denenmez", NUM,
+     "        elif not _one_in_an_exponential(z):\n            return False\n", "        else:\n            return False\n", T),
+    ("Z29 kök içi çarpanlarına ayrılmaz", NUM,
+     "                         lambda n: sp.factor(sp.together(n.base)) ** n.exp)\n",
+     "                         lambda n: n)\n", T),
 ]
 
 if __name__ == "__main__":

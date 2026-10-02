@@ -1034,14 +1034,14 @@ def verify(ir, solution, ctx: Ctx):
                 else:
                     okS, sev = answers_equivalent(claimed, exact, shape="scalar")
                 ev["compare_exact"] = sev
-                okC = None
                 if proved or (converged and agree is True and okS is not False):
                     ok = okS
-                elif okS is False and ((okC := by_certificate()) is not None or excluded()):
+                elif (okC := by_certificate()) is not None:
+                    ok = okC                       # a value proved symbolically decides
+                elif okS is False and excluded():
                     # SymPy's value is no proof, and a quadrature that agrees with it may share its blind
-                    # spot (a narrow peak): a claim is refuted only by a value proved symbolically or
-                    # outside a rigorous enclosure
-                    ok = okC if okC is not None else False
+                    # spot (a narrow peak): a claim is refuted only outside a rigorous enclosure
+                    ok = False
                 else:
                     # a numeric value that did not converge (x^(-999/1000) on [0,1]: 176.5 instead
                     # of 1000) or that contradicts SymPy never decides alone
