@@ -148,6 +148,17 @@ def test_limit_condition_naming_a_free_parameter():
     assert _v(_lim("x", "0", [], XB, "x > b"), "0") == "UNKNOWN"
     q = _lim("Abs(x)/x", "0", ["x > b", "b = 0"], XB)
     assert _v(q, "1") == "CORRECT"
+    # a trigonometric condition left unsolved: the side is not decided (never two-sided)
+    assert _dne(_lim("Abs(x)/x", "0", [], [xc("sin(x) > 0")])) != "CORRECT"
+
+
+def test_limit_of_a_sequence_reads_its_region():
+    N = {"name": "n", "domain": "positive_integer"}
+    q = _ir("limit", {"expr": "1/n", "var": "n", "to": "oo"}, [], [N])
+    assert _v(q, "0") == "CORRECT"
+    q = _ir("limit", {"expr": "1/n", "var": "n", "to": "oo"}, [], [{"name": "n", "domain": "integer",
+                                                                   "constraints": ["n < 10"]}])
+    assert _v(q, "0") == "UNKNOWN"
 
 
 def test_controls_of_the_limit():
@@ -176,6 +187,7 @@ def test_derivative_and_tangent_at_an_end_of_the_region():
 def test_derivative_expression_on_the_region():
     assert _v(_der("Abs(x)", None, ["x > 0"]), "1", "expression") == "CORRECT"
     assert _v(_der("Abs(x)", None, ["x > 0"]), "-1", "expression") == "INCORRECT"
+    assert _v(_der("Abs(x)", None, ["x > b"], XB), "1", "expression") == "UNKNOWN"
     # no interior: the derivative function has nowhere to live
     assert _v(_der("x**2", None, ["x = 2"]), "4", "expression") == "UNKNOWN"
     assert _v(_der("x**2", None, ["x = 2"]), "2*x", "expression") == "UNKNOWN"
@@ -261,6 +273,7 @@ def test_antiderivative_one_constant_over_the_pieces():
     for F in ("log(Abs(x)) + atan(1/x) + atan(x)", "log(x**2)/2 + 2*atan(1/x) + 2*atan(x)"):
         assert _v(_anti("1/x"), F, "expression") == "UNKNOWN"
     assert _v(_anti("1/x"), "log(Abs(x)) + 5", "expression") == "CORRECT"
+    assert _v(_anti("1/x"), "log(x**2)/2", "expression") == "CORRECT"
 
 
 def test_comparison_on_a_restricted_region_keeps_its_proofs():
@@ -368,14 +381,19 @@ def test_parameter_fixed_by_a_given_or_a_constraint_in_calculus():
         assert _v(_der("a*x**2", None, g, v), "2*a*x", "expression") == "CORRECT"
         assert _v(_der("a*x**2", None, g, v), "2*x", "expression") == "INCORRECT"
         assert _v(_der("a*x**2", "1", g, v), "6") == "CORRECT"
+        assert _v(_der("a*x**2", "1", g, v), "2*a") == "CORRECT"
         assert _v(_der("x**3", "a", g, v), "27") == "CORRECT"
         assert _v(_tan("a*x**2", "1", g, v), "y = 6*x - 3", "equation") == "CORRECT"
+        assert _v(_tan("a*x**2", "1", g, v), "y = 2*a*x - a", "equation") == "CORRECT"
         assert _v(_anti("a*x", g, v), "3*x**2/2", "expression") == "CORRECT"
         assert _v(_anti("a*x", g, v), "x**2/2", "expression") == "INCORRECT"
+        assert _v(_anti("a*x", g, v), "a*x**2/2", "expression") == "CORRECT"
         assert _v(_lim("a*x", "1", g, v), "3") == "CORRECT"
         assert _v(_lim("a*x", "1", g, v), "a") == "CORRECT"
         q = _ir("definite_integral", {"integrand": "a*x", "var": "x", "a": "0", "b": "1"}, g, v)
         assert _v(q, "3/2") == "CORRECT" and _v(q, "1/2") == "INCORRECT"
+        q = _ir("definite_integral", {"integrand": "x", "var": "x", "a": "0", "b": "a"}, g, v)
+        assert _v(q, "9/2") == "CORRECT" and _v(q, "a**2/2") == "CORRECT"
 
 
 def test_written_condition_naming_a_parameter():

@@ -23,7 +23,7 @@ from ..equiv.numeric import certified_sign, to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 from .domain import closed_condition_undecided, definedness_conditions, open_conditions_empty, written_definedness
 
 LAYER = "certify.limits"
@@ -473,17 +473,13 @@ def region_side(ctx: Ctx, var, point, side):
     rule of a declared domain's closed end (30 Sep 2026); an isolated point or a point outside the
     region is not approached."""
     region = ctx.domain_for(var)
-    if getattr(var, "is_integer", None):
-        # a sequence: only an infinite end its values reach
-        if point not in (oo, -oo):
-            return False
+    if getattr(var, "is_integer", None) and point in (oo, -oo):
+        # a sequence (`declared_side` refuses a finite point): only an infinite end its values reach
         try:
             end = region.sup if point == oo else region.inf
         except Exception:  # noqa: BLE001
             return UNDECIDED
         return side if end == point else False if getattr(end, "is_finite", None) is True else UNDECIDED
-    if region == S.Reals:
-        return side
     sides = ["-"] if point == oo else ["+"] if point == -oo else ["+", "-"]
     try:
         status = {d: _near(region, point, d) for d in sides}
@@ -543,12 +539,11 @@ def verify(ir, solution, ctx: Ctx):
                            {"var": str(var), "to": str(point), "side": str(side)},
                            flags=["approach_outside_declared_domain"])
         # the conditions on the variable however they are written: one naming a symbol no given fixes
-        # (x > b, b free) leaves the region unknown, and so does a trigonometric one left unsolved
+        # (x > b, b free) leaves the region unknown; a trigonometric one left unsolved leaves it undecided
+        # near the point (`region_side`)
         unapplied = ctx.unapplied_conditions(var)
         if unapplied:
             return condition_not_applied(LAYER, unapplied, t.ms)
-        if ctx.unsolved_conditions(var):
-            return condition_unsolved(LAYER, ctx.unsolved_conditions(var), t.ms)
         within = region_side(ctx, var, point, within)
         if within is False or within == UNDECIDED:
             outside = within is False

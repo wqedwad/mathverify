@@ -575,8 +575,6 @@ def _reachable(a, b):
             parts.append(Interval(-oo, 0))
         else:
             return S.Reals
-    if not parts:
-        return S.Reals
     u = sp.Union(*parts)
     lo = -oo if -oo in ends else u.inf
     hi = oo if oo in ends else u.sup
@@ -1349,10 +1347,12 @@ def hold_nowhere(cs, s_) -> bool:
             periods.append(p_)
     if not periodic:
         return False
-    period = lcim(periods) if len(periods) > 1 else periods[0]
-    if period is None or period.is_positive is not True:
+    try:
+        # lcim: None when two periods have no common multiple (2*pi and 1), and then no proof
+        period = lcim(periods) if len(periods) > 1 else periods[0]
+        return exact_solveset(sp.And(*periodic), s_, Interval.Ropen(0, period)) is S.EmptySet
+    except Exception:  # noqa: BLE001
         return False
-    return exact_solveset(sp.And(*periodic), s_, Interval.Ropen(0, period)) is S.EmptySet
 
 
 def open_conditions_empty(conds, timeout: float = 8.0) -> bool:

@@ -32,7 +32,7 @@ from ..equiv.numeric import certified_sign, num_equal, to_mp
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 from .domain import (definedness_conditions, written_definedness, written_undefined_in, relation_holds_at,
                      in_domain)
 from .limits import membership_conditions, written_undefined_everywhere
@@ -1004,12 +1004,13 @@ def _open_condition(c):
     return c
 
 
-def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list[str], bool]:
+def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list[str]]:
     """(the written definedness conditions of the task's function on `var`, with the values `pins` holds put in;
-    the symbols other than `var` the others name; whether it is defined nowhere). A membership (n!, gcd) is
-    `_unreadable_task_expression`'s business. A condition naming a parameter was dropped, so the derivative 1
-    of x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e)."""
-    conds, nowhere = written_definedness(src, ctx.ns, pins)
+    the symbols other than `var` the others name). A membership (n!, gcd) is `_unreadable_task_expression`'s
+    business, and so is a function defined nowhere (a closed condition that fails, with or without the values:
+    `Ctx.binding_issues`). A condition naming a parameter was dropped, so the derivative 1 of
+    x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e)."""
+    conds, _ = written_definedness(src, ctx.ns, pins)
     on_var: list = []
     other: set = set()
     for c in conds:
@@ -1018,7 +1019,7 @@ def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list[str], bool]:
             other |= {str(s_) for s_ in fs - {var}}
         elif var in fs and not isinstance(c, sp.Contains):
             on_var.append(c)
-    return on_var, sorted(other), var in nowhere
+    return on_var, sorted(other)
 
 
 def task_region(ctx: Ctx, conds, var, window=None, region=None) -> tuple[sp.Set, list]:
@@ -1090,10 +1091,10 @@ def _point_not_interior(ctx: Ctx, src, var, at, pins, ms):
     unapplied = ctx.unapplied_conditions(var)
     if unapplied:
         return condition_not_applied(LAYER, unapplied, ms)
-    conds, other, nowhere = task_conditions(ctx, src, var, pins)
+    conds, other = task_conditions(ctx, src, var, pins)
     if other:
         return condition_not_applied(LAYER, other, ms)
-    if nowhere or interior_at(ctx, conds, var, at) is not True:
+    if interior_at(ctx, conds, var, at) is not True:
         return unknown(LAYER, "point_not_interior_to_the_domain", ms,
                        {"at": str(at), "domain": str(ctx.domain_for(var)), "conditions": [str(c) for c in conds]},
                        flags=["point_not_interior"])
@@ -1158,14 +1159,13 @@ def verify(ir, solution, ctx: Ctx):
             unapplied = ctx.unapplied_conditions(var)
             if unapplied:
                 return condition_not_applied(LAYER, unapplied, t.ms)
-            if ctx.unsolved_conditions(var):
-                return condition_unsolved(LAYER, ctx.unsolved_conditions(var), t.ms)
-            f_extra, other, nowhere = task_conditions(ctx, p["integrand"], var, pins)
+            f_extra, other = task_conditions(ctx, p["integrand"], var, pins)
             if other:
                 return condition_not_applied(LAYER, other, t.ms)
             conds = f_extra + [c for c in definedness_conditions(integrand, var) if c not in f_extra
                                and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
-            if nowhere or interior_point(ctx, conds, var, task_region(ctx, conds, var)[0]) is None:
+            # (a trigonometric condition on the variable left unsolved leaves no interior point proved)
+            if interior_point(ctx, conds, var, task_region(ctx, conds, var)[0]) is None:
                 return unknown(LAYER, "region_without_interior", t.ms, {"region": str(region)},
                                flags=["point_not_interior"])
             claim_conds, claim_nowhere = written_definedness(payload, ns2, pins)
@@ -1365,13 +1365,13 @@ def verify(ir, solution, ctx: Ctx):
                 unapplied = ctx.unapplied_conditions(var)
                 if unapplied:
                     return condition_not_applied(LAYER, unapplied, t.ms)
-                conds, other, nowhere = task_conditions(ctx, p["f"], var, pins)
+                conds, other = task_conditions(ctx, p["f"], var, pins)
                 if other:
                     return condition_not_applied(LAYER, other, t.ms)
                 conds += [c for c in definedness_conditions(f, var) if c not in conds
                           and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
                 dom, loose = task_region(ctx, conds, var)
-                if nowhere or interior_point(ctx, conds, var, dom) is None:
+                if interior_point(ctx, conds, var, dom) is None:
                     return unknown(LAYER, "region_without_interior", t.ms, {"region": str(dom)},
                                    flags=["point_not_interior"])
                 dom = comparison_region(dom, loose, var)
