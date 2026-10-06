@@ -792,6 +792,10 @@ def _definedness_conditions(expr, var) -> list[Any]:
             # callers abstain unless a point makes it true or false.
             for a in node.args:
                 add(sp.Contains(a, S.Rationals))
+            if type(node).__name__ == "gcd":
+                # gcd(0, 0) has no value in the curriculum (the greatest common divisor of numbers not all 0):
+                # the binding a = gcd(0, 0) + 1 read as a = 1 (review of d4d)
+                add(Ne(sp.Add(*[sp.Abs(a) for a in node.args]), 0))
         elif isinstance(node, sp.factorial):
             # n! of the curriculum: n a natural number. x + x! - x! at x = -3 was certified -3, and
             # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026)

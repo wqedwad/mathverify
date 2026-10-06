@@ -562,7 +562,7 @@ def test_the_classes_reject_what_they_cannot_prove():
     """a**x with a = 1 or a < 0, x**x, two bases with an irrational log ratio, a non-linear argument,
     sin x cos x: no set."""
     from mathverify.sandbox.exactsets import class_solveset, _mono_parts, _combo_parts
-    assert class_solveset(sp.Eq(3 ** x, 2 ** x), x) is None
+    assert class_solveset(sp.Eq(3 ** x, x), x) is None                # (round 5: 3**x = 2**x is class (vii))
     assert class_solveset(sp.Eq(x ** x, 2), x) is None
     assert class_solveset(sp.Eq(sp.exp(x ** 2), 2), x) is None
     assert class_solveset(sp.Eq(sp.exp(x) - 3 * x, 0), x) is None
@@ -698,7 +698,7 @@ def test_mono_zeros_keep_to_the_range():
     zeros, _ = _mono_zeros(sp.atan, 1, 0, sp.Poly((t - 1) * (t - 2), t))
     assert zeros == [(sp.tan(1), 0)]
     zeros, poles = _mono_zeros(sp.log, 1, 0, sp.Poly(t + 1, t))
-    assert zeros == [(sp.exp(-1), 0)] and poles == [(0, 0)]
+    assert zeros == [(sp.exp(-1), 0)] and poles == []      # log(0): an edge from `_breaks` (round 5)
 
 
 def test_a_definedness_condition_out_of_the_classes_is_not_taken_as_defined():
@@ -717,3 +717,118 @@ def test_a_log_factor_with_a_progression_on_the_reals():
     assert class_solveset(sp.Eq(sp.log(x) * sp.sin(x), 0), x, sp.Interval(-4, 4)) == sp.FiniteSet(1, sp.pi)
     # on a window too: x = -1 is no zero of (x + 1)*log(x)
     assert class_solveset(sp.Eq((x + 1) * sp.log(x), 0), x, sp.Interval(-3, 3)) == sp.FiniteSet(1)
+
+
+
+# ------------------------------------------------------------------------------------------------
+# Round 5: no complete set out of the classes (two solvers agreeing is no proof); the classes (vii)
+# exponent ratio, (viii) Abs/sign piecewise, (ix) one radical, (x) a sum of logs, identities as written
+# ------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("rel,want", [
+    (sp.Eq(3 ** x, 2 ** x), sp.FiniteSet(0)),
+    (sp.Eq(2 * 3 ** x, 5 * 2 ** x), sp.FiniteSet(sp.log(sp.Rational(5, 2)) / sp.log(sp.Rational(3, 2)))),
+    (3 ** x > 2 ** x, sp.Interval.open(0, sp.oo)),
+    (sp.Eq(sp.Abs(2 * x - 3), 5), sp.FiniteSet(-1, 4)),
+    (sp.Abs(x - 3) < 2, sp.Interval.open(1, 5)),
+    (sp.Eq(sp.Abs(2 * x - 3), 2 * x - 3), sp.Interval(sp.Rational(3, 2), sp.oo)),
+    (sp.Eq(sp.Abs(x) + sp.Abs(x - 1), 1), sp.Interval(0, 1)),
+    (sp.Eq(sp.Abs(x ** 2 - 4), 3 * x), sp.FiniteSet(1, 4)),
+    (sp.Eq(sp.sign(x) * sp.Abs(x) ** sp.Rational(1, 3), x), sp.FiniteSet(-1, 0, 1)),   # the real cube root
+    (sp.Eq(sp.sqrt(x + 4), x - 2), sp.FiniteSet(5)),
+    (sp.sqrt(x + 4) > x - 2, sp.Interval.Ropen(-4, 5)),
+    (sp.Eq(sp.sqrt(x), -1), S.EmptySet),
+    (sp.Eq(sp.log(x - 1) + sp.log(x - 3), sp.log(3)), sp.FiniteSet(4)),               # x = 0 is outside
+    (sp.log(x - 1) + sp.log(x - 3) < sp.log(3), sp.Interval.open(3, 4)),
+    (sp.Eq(sp.log(x ** 2), sp.log(4)), sp.FiniteSet(-2, 2)),
+    (sp.Eq(x ** 2 - 5 * x - 14, (x - 7) * (x + 2)), S.Reals),
+    (sp.Eq((sp.sqrt(x) - 1) / (x - 1), 1 / (sp.sqrt(x) + 1)),
+     sp.Union(sp.Interval.Ropen(0, 1), sp.Interval.open(1, sp.oo))),
+])
+def test_round5_class_sets(rel, want):
+    from mathverify.sandbox.exactsets import exact_solveset
+    got = exact_solveset(rel, x, S.Reals)
+    if isinstance(want, sp.FiniteSet) and isinstance(got, sp.FiniteSet) and len(got) == len(want) == 1:
+        assert sp.simplify(sp.expand_log(got.args[0] - want.args[0], force=True)) == 0, (rel, got)
+    else:
+        assert got == want, (rel, got)
+
+
+def test_an_identity_keeps_its_written_poles():
+    """(2x**2 + 1)/(x**2 - 5) = (2 + 1/x**2)/(1 - 5/x**2) is 0 = 0 over one denominator; as written it is
+    undefined at 0 and +-sqrt(5)."""
+    from mathverify.sandbox.exactsets import exact_solveset
+    got = exact_solveset(sp.Eq((2 * x ** 2 + 1) / (x ** 2 - 5), (2 + 1 / x ** 2) / (1 - 5 / x ** 2)), x, S.Reals)
+    assert got.contains(0) is sp.false and got.contains(sp.sqrt(5)) is sp.false and got.contains(1) is sp.true
+
+
+@pytest.mark.parametrize("rel", [
+    sp.Eq(sp.exp(x), 3 * x), sp.Eq(sp.floor(x), 2), sp.Eq(x ** x, 4), sp.Eq(sp.log(x), x - 1),
+    sp.exp(x) > x + 1, sp.Eq(2 ** x, x ** 2), sp.Eq(sp.Abs(sp.Abs(x) - 1), 1 + x ** 3 * sp.exp(x)),
+])
+def test_out_of_the_classes_no_set(rel):
+    """SymPy's own set is no proof: out of the classes, a ConditionSet."""
+    from mathverify.sandbox.exactsets import exact_solveset
+    assert isinstance(exact_solveset(rel, x, S.Reals), sp.ConditionSet)
+
+
+@pytest.mark.parametrize("e,claim,want", [
+    ("3**x = 2**x", "{0}", "CORRECT"),
+    ("3**x = 2**x", "{0, 1}", "INCORRECT"),
+    ("exp(x) + x = 1", "{0}", "UNKNOWN"),            # x = 0 is the only root, but no class proves it
+    ("exp(x) + x = 1", "{1}", "INCORRECT"),          # 1 is no root
+    ("log(x) = x - 1", "{1}", "UNKNOWN"),
+    ("x**x = 4", "{2}", "UNKNOWN"),
+    ("exp(x) = 3*x", "{}", "UNKNOWN"),               # roots exist (LambertW), none proved one by one here
+    ("2**x = x**2", "{2, 4}", "UNKNOWN"),            # the third root -2*LambertW(log(2)/2)/log(2), unproved
+    ("2**x = x**2", "{2, 4, 5}", "INCORRECT"),       # 5 is no root
+    ("sqrt(x + 4) = x - 2", "{5}", "CORRECT"),
+    ("sqrt(x + 4) = x - 2", "{0, 5}", "INCORRECT"),
+    ("Abs(2*x - 3) = 5", "{-1, 4}", "CORRECT"),
+    ("Abs(2*x - 3) = 5", "{4}", "INCORRECT"),
+    ("log(x - 1) + log(x - 3) = log(3)", "{4}", "CORRECT"),
+    ("log(x - 1) + log(x - 3) = log(3)", "{0, 4}", "INCORRECT"),
+    ("3**x + 2**x = 0", "{}", "CORRECT"),            # SymPy's relation is False in the sandbox worker
+])
+def test_round5_solve_equation(e, claim, want):
+    assert _run(_eq(e), claim).verdict == want, e
+
+
+def test_solver_agreement_is_no_completeness():
+    """`solve_guarded` gives no complete list out of the classes, also when solve and solveset agree."""
+    from mathverify.certify.algebra import solve_guarded
+    kept, ev = solve_guarded(sp.Eq(sp.exp(x) + x, 1), x)
+    assert ev["complete"] is None and ev["completeness_method"].startswith("none")
+    kept, ev = solve_guarded(sp.Eq(3 ** x, 2 ** x), x)
+    assert ev["complete"] is True and ev["completeness_method"] == "exact_class"
+
+
+def test_count_roots_of_a_class():
+    ir = _ir("count_roots", {"expr": "exp(2*x) - 3*exp(x) + 2", "var": "x"}, shape="count")
+    assert _run(ir, "2", "count").verdict == "CORRECT"
+    assert _run(ir, "1", "count").verdict == "INCORRECT"
+    ir = _ir("count_roots", {"expr": "exp(x) - 3*x", "var": "x"}, shape="count")
+    assert _run(ir, "2", "count").verdict == "UNKNOWN"
+
+
+def test_step_completeness_needs_a_proof(monkeypatch):
+    """`_proved_points` takes no list `solve` gives; `_proved_on_system` reads explicit definitions or a
+    proved complete system only."""
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    from mathverify.steps import deterministic as det
+    ctx = make_ctx(ProblemIR.from_dict(_ev("x", ["x + y = 5", "x*y = 6"], [X, V("y")])))
+    xs, ys = ctx.sym("x"), ctx.sym("y")
+    pts = det._proved_points([sp.Eq(xs + ys, 5), sp.Eq(xs * ys, 6)], [xs, ys], ctx)
+    assert pts is not None and len(pts) == 2
+    assert det._proved_points([sp.Eq(xs * ys, 1)], [xs, ys], ctx) is None
+    # `solve` gives no point of x**5 - x - 1 = 0, y = x**2 (one real solution): no proof, no list
+    assert det._proved_points([sp.Eq(xs ** 5 - xs - 1, 0), sp.Eq(ys, xs ** 2)], [xs, ys], ctx) is None
+    # y = x**2: y >= 0 at the explicit definition
+    assert det._proved_on_system(ys >= 0, [sp.Eq(ys, xs ** 2)], {}, ctx) is True
+    assert det._proved_on_system(ys >= 1, [sp.Eq(ys, xs ** 2)], {}, ctx) is False
+
+
+def test_ratio_of_two_positive_terms_has_no_zero():
+    from mathverify.sandbox.exactsets import _ratio_zeros
+    assert _ratio_zeros(3 ** x + 2 ** x, x) == []
+    assert _ratio_zeros(3 ** x - 2 ** x, x) == [(0, 0)]

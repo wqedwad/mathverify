@@ -692,6 +692,17 @@ def given_bindings(ir, ns: dict[str, Any]) -> dict:
     return given_binding_report(ir, ns)[0]
 
 
+def same_value(a, b) -> bool:
+    """Are the closed numbers a and b PROVED equal: the same expression, or an exact difference that
+    simplifies to 0 (3 and log(8)/log(2)). Anything else counts as two values."""
+    if a == b:
+        return True
+    try:
+        return sp.simplify(sp.expand_log(sp.sympify(a) - sp.sympify(b), force=False)) == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def given_binding_report(ir, ns: dict[str, Any]) -> tuple[dict, dict, dict]:
     """(`given_bindings`, the symbols two givens bind to different values with those values, the givens
     each symbol is bound by). A binding is only read here: whether it agrees with the rest of the
@@ -711,7 +722,7 @@ def given_binding_report(ir, ns: dict[str, Any]) -> tuple[dict, dict, dict]:
             continue
         for s_, v in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
             if isinstance(s_, Symbol) and isinstance(v, sp.Expr) and not v.free_symbols and v.is_real is True:
-                if s_ in found and found[s_] != v:
+                if s_ in found and not same_value(found[s_], v):
                     clash.setdefault(s_, [found[s_]]).append(v)
                 found.setdefault(s_, v)
                 sources.setdefault(s_, []).append(g)
@@ -2280,6 +2291,23 @@ def read_domain_condition(spec: str, argsyms: list, ns: dict[str, Any]):
 _OR_JOIN_RE = re.compile(r"\s+or\s+|\s*∨\s*|\s*\|\|\s*|(?<=\))\s*\|\s*(?=\()")
 
 
+def _reals_set(st, spec: str):
+    """`st` when it is a set of real numbers, else ParseError: `x in {(2, 3)}` or `x in (2,)` read as a set of
+    tuples, which meets the reals nowhere, and the empty set was certified for x² = 4 (review of d4d, B3)."""
+    if not isinstance(st, sp.Set) or st.is_subset(S.Reals) is not True:
+        raise ParseError(f"{spec!r}: {st} is not a set of real numbers")
+    return st
+
+
+def _set_text(txt: str, ns: dict[str, Any], spec: str):
+    try:
+        return _reals_set(parse_set_str(txt, ns), spec)
+    except ParseError:
+        raise
+    except Exception as e:  # noqa: BLE001 - `[2]` raised AttributeError
+        raise ParseError(f"{spec!r}: the set {txt!r} is not read ({type(e).__name__})") from e
+
+
 def _condition_atom(c, spec: str):
     """One part of a condition: a relation between expressions, a membership of a symbol in a set of
     reals, or an And/Or of those; anything else raises ParseError."""
@@ -2288,47 +2316,96 @@ def _condition_atom(c, spec: str):
     if isinstance(c, (And, Or)):
         return type(c)(*[_condition_atom(a, spec) for a in c.args])
     if isinstance(c, Eq) and isinstance(c.lhs, Symbol) and isinstance(c.rhs, sp.Set):
-        return sp.Contains(c.lhs, c.rhs, evaluate=False)  # LaTeX `x \in (0, 3)` reads as Eq(x, set)
+        # LaTeX `x \in (0, 3)` reads as Eq(x, set)
+        return sp.Contains(c.lhs, _reals_set(c.rhs, spec), evaluate=False)
     if isinstance(c, sp.Contains) and isinstance(c.args[1], sp.Set):
-        return c
+        return sp.Contains(c.args[0], _reals_set(c.args[1], spec), evaluate=False)
     if isinstance(c, sp.core.relational.Relational) and isinstance(c.lhs, sp.Expr) and isinstance(c.rhs, sp.Expr):
         return c
     raise ParseError(f"{spec!r} is not read as a condition on real numbers ({c})")
 
 
+_LATEX_NOTIN_RE = re.compile(r"^\s*([A-Za-z_]\w*)\s*\\notin\s*(.+?)\s*$", re.S)
+_NOT_IN_RE = re.compile(r"^([A-Za-z_]\w*)\s+not\s+in\s+(.+)$", re.S)
+# a congruence (x \equiv 2 \mod 5) is no equation: latex2sympy read it as x = Mod(2, 5), i.e. x = 2
+_LATEX_CONGRUENCE_RE = re.compile(r"\\(equiv|pmod|bmod|mod)(?![A-Za-z])")
+
+
+def refuse_congruence(spec: str) -> None:
+    """ParseError for a LaTeX congruence (`x \\equiv 2 \\mod 5`), which no relation between reals states."""
+    if is_latex(spec) and _LATEX_CONGRUENCE_RE.search(spec):
+        raise ParseError(f"{spec!r} is a congruence, not a relation between real numbers: not read")
+
+
+def _mentions_variable(spec: str, ns: dict[str, Any]) -> bool:
+    return any(isinstance(ns.get(t), Symbol) for t in re.findall(r"[A-Za-z_]\w*", spec))
+
+
+def not_collapsed(rel, spec: str, ns: dict[str, Any]):
+    """`rel` unless the text names a variable and still read as plain true or false: LaTeX `x \\notin (-3, 3)`
+    read as True, and {-2, 2} was certified for x² = 4 next to it (review of d4d, B2). Such a text is not
+    read (ParseError); a closed one (`pi < 3`) keeps its truth value."""
+    if (rel is sp.true or rel is sp.false) and _mentions_variable(spec, ns):
+        raise ParseError(f"{spec!r} names a variable but reads as {rel}: not read")
+    return rel
+
+
+def _not_in(name: str, txt: str, ns: dict[str, Any], spec: str):
+    v = ns.get(name)
+    if not isinstance(v, Symbol):
+        raise ParseError(f"condition {spec!r}: {name} is not a variable")
+    return sp.Contains(v, sp.Complement(S.Reals, _set_text(txt, ns, spec)), evaluate=False)
+
+
 def read_condition(spec: str, ns: dict[str, Any]):
     """A given read as a CONDITION: a relation, a chain (`0 < x < 3`), relations joined by `and`, `,`,
     `&`, `∧` (all of them hold) or by `or`, `∨`, `|` between brackets (one of them holds), And(...) and
-    Or(...), and the membership of a variable in a set of reals (`x in (0, 3)`, `x ∈ [0, oo)`). The
-    result is a relation, a Contains, an And/Or of those, or true/false. Anything else raises
-    ParseError: such a given is never dropped (Ctx.side_conditions abstains, `given_not_applied`).
-    Only the relations were read before, so the given `0 < x < 3`, `x > 0 and x < 3` or
-    Or(x < -3, x > 1) next to x² < 4 or x² − 4 was dropped and (−2, 2) or the count 2 certified
-    (fourth audit G1)."""
+    Or(...), the membership of a variable in a set of reals (`x in (0, 3)`, `x ∈ [0, oo)`) and its
+    negation (`x not in S`, LaTeX `x \\notin S`). The result is a relation, a Contains, an And/Or of those,
+    or true/false. Anything else raises ParseError: such a given is never dropped (Ctx.side_conditions
+    abstains, `given_not_applied`). Only the relations were read before, so the given `0 < x < 3`,
+    `x > 0 and x < 3` or Or(x < -3, x > 1) next to x² < 4 or x² − 4 was dropped and (−2, 2) or the count 2
+    certified (fourth audit G1).
+
+    Not read (ParseError), so never guessed: a text that joins parts with both kinds of separator at its top
+    level (`x != 6, x < 1 or x > 5`, `x < 3 and x < 1 or x > 5`: which binds first is a convention; read with
+    `or` first, the count 2 of x² − 36 was certified, review of d4d B1), a congruence, a set that is not one
+    of real numbers, and a text with a variable that collapses to true or false (`not_collapsed`)."""
     if not isinstance(spec, str):
         raise ParseError(f"not a condition: {type(spec).__name__}")
+    if is_latex(spec):
+        refuse_congruence(spec)
+        m = _LATEX_NOTIN_RE.match(spec)
+        if m is not None:
+            return _not_in(m.group(1), m.group(2), ns, spec)
+        return not_collapsed(_condition_atom(parse_relation(spec, ns), spec), spec, ns)
     try:
-        return _condition_atom(parse_relation(spec, ns), spec)
+        return not_collapsed(_condition_atom(parse_relation(spec, ns), spec), spec, ns)
     except UndeclaredSymbolError:
         raise
     except ParseError:
-        if is_latex(spec):
-            raise
+        pass
     s = preclean(strip_presentation(_strip_invisible(spec)))
+    parts = [_split_domain(d) for d in _split_top(s, _OR_JOIN_RE)]
+    if len(parts) > 1 and any(len(c) > 1 for c in parts):
+        raise ParseError(f"condition {spec!r} joins parts with both `and` and `or` at the same level: not read")
     disjuncts = []
-    for d in _split_top(s, _OR_JOIN_RE):
+    for pieces in parts:
         conj = []
-        for p in _split_domain(d):
+        for p in pieces:
             if not p:
                 raise ParseError(f"condition {spec!r} has an empty part")
             m = _DOMAIN_MEMBER_RE.match(p)
-            if m is not None:
+            n = _NOT_IN_RE.match(p)
+            if n is not None:
+                conj.append(_not_in(n.group(1), n.group(2), ns, spec))
+            elif m is not None:
                 v = ns.get(m.group(1))
                 if not isinstance(v, Symbol):
                     raise ParseError(f"condition {spec!r}: {m.group(1)} is not a variable")
-                conj.append(sp.Contains(v, parse_set_str(m.group(2), ns), evaluate=False))
+                conj.append(sp.Contains(v, _set_text(m.group(2), ns, spec), evaluate=False))
             else:
-                conj.append(_condition_atom(parse_relation(p, ns), spec))
+                conj.append(not_collapsed(_condition_atom(parse_relation(p, ns), spec), p, ns))
         disjuncts.append(conj[0] if len(conj) == 1 else And(*conj))
     return disjuncts[0] if len(disjuncts) == 1 else Or(*disjuncts)
 

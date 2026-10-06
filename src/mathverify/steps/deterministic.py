@@ -725,18 +725,32 @@ def _finite_instances(syms, premises: list, ctx: Ctx) -> tuple[list[dict], list[
     return certain, undecided
 
 
+def _proved_points(eqs: list, order: list, ctx: Ctx) -> list[dict] | None:
+    """The real solutions of polynomial equations in the symbols `order`, when their list is PROVED
+    complete (`certify.algebra._polynomial_system_worker`: a linear system, or a zero-dimensional ideal
+    with as many proved distinct solutions as its radical's quotient dimension); None otherwise.
+    `solve`'s list is no proof (round 5 of part d4b, 2 Oct 2026)."""
+    r = sb_run("mathverify.certify.algebra:_polynomial_system_worker", eqs, order, timeout=ctx.timeout)
+    if not r.ok or not isinstance(r.value, tuple) or r.value[0] is None:
+        return None
+    pts = r.value[0]
+    if any(not isinstance(v, sp.Expr) or v.free_symbols for s_ in pts for v in s_.values()):
+        return None
+    return [dict(s_) for s_ in pts]
+
+
 def _system_points(rels: list, order: list, ctx: Ctx) -> list[dict] | None:
     """The real solutions of the premises' equations when they are polynomial and determine every symbol
-    in `order` (finitely many points, each exact); None otherwise. The solution set of such a system is
-    complete (as `_check_eq_in` relies on: route 1, `exhaustive`)."""
+    in `order` (finitely many points, each exact) and their list is proved complete (`_proved_points`);
+    None otherwise. `_check_eq_in` relies on that completeness (route 1, `exhaustive`)."""
     eqs = [p for p in rels if isinstance(p, Eq)]
     if not eqs or not all(_is_polynomial(p, order) for p in eqs):
         return None
-    r = sb_run("mathverify.sandbox.ops:solve_system", eqs, order, True, timeout=ctx.timeout)
-    if not r.ok or not isinstance(r.value, list):
+    pts = _proved_points(eqs, order, ctx)
+    if pts is None:
         return None
     out: list[dict] = []
-    for s_ in r.value:
+    for s_ in pts:
         if not isinstance(s_, dict) or set(s_) != set(order):
             return None
         if any(not isinstance(v, sp.Expr) or v.free_symbols for v in s_.values()):
@@ -1981,7 +1995,12 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
             ev["solutions"] = len(sols)
             if not sols:
                 return "unknown", {"reason": "premises_inconsistent_or_unsolved", **ev}
-            exhaustive = all(_is_polynomial(p, syms) for p in eqs)
+            # complete only when proved so (`_proved_points`): `solve`'s list of a polynomial system is no
+            # proof (round 5 of part d4b, 2 Oct 2026)
+            proved = _proved_points(eqs, syms, ctx) if all(_is_polynomial(p, syms) for p in eqs) else None
+            exhaustive = bool(proved)              # no real solution: nothing is proved by it
+            if exhaustive:
+                sols = proved
             for s_ in sols:
                 # parametric solution: sample the remaining free symbols
                 rem = set()
@@ -2342,10 +2361,24 @@ def _proved_on_system(c, multi: list, sets: dict, ctx: Ctx) -> bool:
     # solved for the condition's own symbols, in terms of the others
     order = sorted(set().union(*(p.free_symbols for p in eqs)) & cs, key=lambda q: q.name)
     _tick()
-    r = sb_run("mathverify.sandbox.ops:solve_system", eqs, order, True, timeout=ctx.timeout)
-    if not r.ok or not isinstance(r.value, list) or not r.value:
+    # only a solution PROVED complete proves anything at its points (`solve`'s list is no proof: round 5
+    # of part d4b, 2 Oct 2026): each symbol defined explicitly by an equation (y = x**2), or the points of
+    # a system in these symbols alone whose completeness is proved (`_proved_points`)
+    defs: dict = {}
+    for p in eqs:
+        for a, b in ((p.lhs, p.rhs), (p.rhs, p.lhs)):
+            if a in order and a not in defs and not (b.free_symbols & set(order)):
+                defs[a] = b
+                break
+    if set(defs) == set(order):
+        sols = [defs]
+    elif set().union(*(p.free_symbols for p in eqs)) <= set(order):
+        sols = _proved_points(eqs, order, ctx)
+        if not sols:
+            return False
+    else:
         return False
-    for sol in r.value:
+    for sol in sols:
         if not isinstance(sol, dict) or any(not isinstance(v, sp.Expr) for v in sol.values()):
             return False
         try:

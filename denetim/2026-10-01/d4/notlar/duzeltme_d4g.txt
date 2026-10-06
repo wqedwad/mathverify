@@ -1,0 +1,93 @@
+# d4g (adım reddedici) — notlar
+
+## Matematik kararları
+
+Yeniden üretim (21c1698, 2 Ekim): A 4/4 verified; B padded/antiderivative unknown (plain refuted); D range ve
+two_symbols verified; E compute türev ve compute |x| = x refuted (eq unknown); F 120.3 s (bulucu 166-390 s);
+H verified; J refuted {x: -2}; TAN-11 'x/x + sqrt(y) - sqrt(y) = 1' verified. Hepsinin matematiği bağımsız
+denetlendi (asin(sin 1.575) = 1.5666; C(200,200) = 1; Π_{k=1}^{20}(21-k) = 20!; Σ_{k=1}^{-2} k Karr 1 / boş 0;
+√(-8) ve -2√(-2) gerçel değil; 0/0 tanımsız).
+
+- **A** Rastgele nokta uyumu yalnız iki taraf da "C'de ayrık bir küme dışında analitik" sınıfındaysa (beyaz liste:
+  Add, Mul, tam sayı üslü Pow, pozitif sabit tabanlı Pow, exp/sin/cos/sinh/cosh, tan/cot/sec/csc ve hiperbolik
+  eşleri; bileşke kapalı) ve karşılaştırılan her sembolün kümesi ayrık değilse (tam sayı alt kümesi ya da sonlu
+  küme değilse) kanıt sayılır (özdeşlik teoremi: C eksi ayrık küme bağlantılı; sıfırları ayrık, rastgele
+  noktada ölçü sıfır). Analitik olmayan baş için hücre/periyot ispatı (random_point'in kendi ispatı) kanıttır.
+  Bunun dışında rastgele uyum verified vermez: unknown. Tam sayı kümesinde (Range(6, oo), 21 noktalı küme)
+  örnek uyumu hiçbir zaman kanıt değildir (binomial(n, 200) 0..199'da sıfır): yalnız sembolik ispat ya da
+  her noktada kesin denetim. Kapı `_check_compute`'un rastgele noktaya dayanan her verified'ında (özdeşlik ve
+  bölge yolu, parametrik yol) uygulanır: tek mekanizma.
+- **B** Ret, noktası okunup aralık sembolünü ileri bir değerde sabitliyorsa durur, geri değerde geri çekilir
+  (eski kural). Nokta okunamıyor ya da aralık sembolünü sabitlemiyorsa: aralık sembollerinin ileri (her aralık
+  ileri) değerlerinde öncülleri sağlayan noktada adım yeniden sınanır; orada çürüyorsa iki gelenekte de çürür
+  (ileri noktada Karr = boş toplam): ret kalır. Geri noktada (okunmuş ya da sınanan) ret yalnız geri koşan her
+  Sum/Product'ın değeri iki okumada aynıysa (Karr değeri = 0/1; Sum(0, ...), Sum(j - j, ...)) sayılır: iddianın
+  değeri o noktada gelenekten bağımsızdır. Değer okumaya bağlıysa (floor(Σ_{k=3}^{1} k): Karr -2, boş 0) iki
+  okumada da yanlış olsa bile geri çekilir: üçüncü okuma "tanımsız" (parça 11'in kararı, §80) — "değeri ters
+  aralığa bağlıysa geri çekilir" cümlesinin dar okuması; en temkinli seçenek (ret yerine unknown). Sum(0, (k, 1,
+  n - 5)) her n'de 0: ileri n'de 55 = 56 çürür, ret kalır.
+- **D / TAN-11** Öncüllerin bir sembole izin verdiği küme (sabitleme, tek sembollü öncüllerin çözümü; birden çok
+  sembolde her biri; sistemler `_finite_instances`) üzerinde yazıldığı biçimin her tanımlılık koşulu
+  kanıtlanmalı: sonlu küme (Range dahil, 200 noktaya kadar) noktadan noktaya; daha büyük ya da sonsuz kısıtlı
+  küme tek sembolde solveset ile (koşulun olumsuzu ∩ küme = ∅); kanıt yoksa verified yok (unknown). Hiçbir
+  öncülün daraltmadığı sembol eskisi gibi okunmaz (özdeşlik "tanımlı olduğu yerde"; aksi bütün x/x, log x
+  adımlarını düşürürdü). Sabitlenen sembolün yerine konmasıyla koşul kapalı ya da yalnız serbest sembolde kalıp
+  özdeş yanlışsa (0 ≠ 0) tanımsız.
+- **E** Görevin aralığı (extremum/trig_solve `interval`, definite_integral [a, b]) compute adımının öncül havuzuna
+  girer (bağlamaz, bölgeyi sınırlar): aralık dışı nokta karşı örnek değil; bölgede yeniden sınanır, aralık
+  içinde somut karşı örnek yine çürütür. Noktasız ret (ilkel sertifikası) de öncül varken bölgede yeniden
+  sınanır (ilkel sertifikası bölgeyi evren olarak alır).
+- **F** Adım başına süre bütçesi (öncül çözme, bölge örnekleme, karşı örnek arama); aşımda unknown
+  (`step_time_budget_exceeded`). Ayrıca kapalı biçimde değerlenmemiş (Intersection(Reals, FiniteSet(radikal)),
+  ConditionSet, ImageSet) bölge kümesi örneklenmez: o hücre karar vermez.
+- **H** Sembollü aralıklı Sum/Product içeren compute adımı, karşılaştırma kümesinde bir aralığın geri koştuğu
+  nokta varken (n tam sayı, kısıtsız; n < 0) yalnız iki okumada da doğrulanırsa verified: ileri bölgede iddia,
+  geri bölgede boş okuma (Sum 0, Product 1) ayrıca doğrulanmalı. Tek sembollü aralık koşulunda geri bölge
+  solveset ile; çok sembollü aralıkta geri nokta olabileceği varsayılır (unknown). n < 0, n > -4 altında
+  Σ_{k=1}^{n} k = n(n+1)/2 unknown; n ≥ 1'de verified kalır.
+- **J** Karşı örnek noktasında iddia yazıldığı biçimde (ilke 12) tanımsızsa (bir tanımlılık koşulu orada kesin
+  yanlış) o nokta karşı örnek değil: ret geri çekilir (unknown). Koşul karara bağlanamıyorsa ret durur (değer
+  hesaplandı; tanımsızlık kanıtlanmadı) — temkinli tercih, raporlanır.
+
+## İlerleme
+- (2 Eki) src düzeltmesi yazıldı (deterministic.py): beyaz liste kapısı, B yeniden sınama (_reading_free), H
+  (_forward_ranges_only), E (window havuzda, antiderivative noktası okunuyor, eksik sembol `instance`), F (bütçe
+  _STEP_BUDGET=60, _closed_form_set), J (_written_relations, _check_at/_undefined_at, post-check), D/TAN-11
+  (_undefined_at_premises yeniden). Sonda 158c220: 43/84 beklenmeyen (D: 132.7 s + 243.2 s); sonra 0/85.
+- Koordinatör: bitince `git merge 0ed77e2` (d4b), birleşikte yeniden ölç (d4a, d4b sondaları, testler, mutasyon,
+  fark, tam pytest). Raporda birleşik HEAD.
+- Commitler: 07deafd (düzeltme), 98775e1 (merge 0ed77e2, çakışmasız), 2e545ed (sadeleştirme+testler+mutasyon).
+  Birleşikte sondalar (98775e1): d4g 0/85, d4a 0/316, d4b 0/155. Mutasyon ve fark 2e545ed'de koşuyor.
+- 59c31d2: fark(2e545ed) 0 karar, 1 ilk kötü adım (uni-010), 10 adım değişimi → onarıldı (_antiderivative_on_region,
+  alanı daraltmayan öncül, _analytic_on_interval). fark ve mutasyon 59c31d2'de yeniden koşuyor. Sonra: tam pytest,
+  eski kodda test sayımı (taban21c ve taban158), sondalar birleşikte yeniden.
+- fark(59c31d2): 0/0/0/0. Eski kod (21c1698) test: 33/53 düşer. Mutasyon(59c31d2) 29/33 → 04c2547'de J03/D03 testleri,
+  D04 gereksiz kod çıktı. 04c2547: mutasyon + fark + sondalar koşuyor; sonra tam pytest.
+- c30e134: tek değerli hücre düzeltmesi (tam pytest 04c2547'de 8 eski test düşürmüştü: parca8/parca10). Son tur:
+  tam pytest, mutasyon, fark, sondalar c30e134'te koşuyor. Eski kod: 34/56 (21c1698) — 58 testle yeniden say.
+- SON (84673a3): tam pytest c30e134 3309 geçti / 93 atlandı (Lean) / 0 düştü; d4g mutasyon 34/34; d4b 49/49; d4a 50/51
+  (A05 0ed77e2'de de yaşıyor); fark 0/0/0/0; sondalar d4g 0/85 (önce 41/85 hem 158c220 hem 21c1698), d4a 0/316, d4b 0/155;
+  eski kodda (21c1698) 35/58 test düşer. Rapor verildi.
+
+## Tur 2 (saldırgan bulguları, oturum dalı ad50fbc = 84673a3 + d4c)
+Merge ad50fbc çakışmasız (HEAD ad50fbc, ff). Kararlar (koordinatör):
+1. vaka varsayımı compute öncülü (my_cases havuza). 2. tek değerli hücre: kesin karşılaştırma, yoksa unknown.
+3. A kapısı: noktalarda KESİN uyum; nümerik 0 kararsız → verified yok. 4. okumaya bağımlılık iç içe/çok sembollü
+genel (okumadan bağımsız düğümler nötr değerle değiştirilir, kalan yoksa ret kalır). 5. sert zaman sınırı (ağır
+sayısal değerlendirme) + çözüm başına toplam bütçe. 6. öncüllerin gerçel çözüm kümesi ℝ'de (x²+y²=0).
+Saldırgan vakaları: saldiri_kos.py (alt süreç, zaman sınırlı), ad50fbc ölçümü saldiri_ad50.{log,json}.
+- ad50fbc ölçümü: 144 vakada 20 beklenmeyen (B1,B2,B4,B5,B14-16; S8,S11,S12,U1,U3 zaman aşımı 150 s; Z1,Z2,Z4; Q4,Q6-8,Q10).
+  S1/S3/S4/S6, U4 ad50fbc'de (d4c ile) zaten kapalı.
+- Uygulandı (commit edilmedi, tur 2): my_cases havuzda + pencere düşürme (no_premise_instance), _neutralized,
+  _claim_reading_free, _equivalent (sandbox, 40 s) + _SOLUTION_BUDGET 300 s, tek değerli hücre exact_equal,
+  _split_nonnegative_sums + _proved_on_system. DİKKAT: splice.py başlangıç deseni benzersiz olmalı (bir kez
+  872-1075 silindi, git checkout ile geri alınıp yeniden uygulandı).
+- 39c3683 (tur 2 düzeltmesi), 1a4cb77 (mutasyon listesi R01-R12, A10; sertleştirme). sonda 229/0 (39c3683);
+  fark(39c3683) karar 0, ilk kötü 0, adım 4 (uni s7, beklenen). ad50fbc önce: sonda A-K 1/85 + saldırgan 20/144.
+  1a4cb77'de: mutasyon + tam pytest koşuyor; sonra fark + d4a/b/c/g sondaları yeniden; eski kod test sayımı (tabanad5).
+- (konteyner yeniden başladı) mutasyon(1a4cb77) 38/47, yaşayanlar kapatıldı. merge b87b625 → 4f8692b (çakışmasız).
+  bf65226: A10 kodu çıktı, testler (E03,F02,R03,R10). bf65226'da mutasyon + tam pytest koşuyor; sonra fark + 4 sonda;
+  eski kod test sayımı tabanad5 (ad50fbc) üzerinde.
+- SON TUR 2 (HEAD 0120211): tam pytest (bf65226) 3371/93 atlandı/0; mutasyon 46/46 (bf65226'da 44 + 0120211'de B01,R12);
+  fark karar 0, ilk kötü 0, adım 4 (uni s7 beklenen); sondalar d4g 0/229, d4a 0/316, d4b 0/184, d4c 0/138;
+  eski kod (ad50fbc) 15/18 yeni tur testi düşer; saldırgan vakaları ad50fbc 20/144 → 0.

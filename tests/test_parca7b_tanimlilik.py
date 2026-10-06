@@ -334,5 +334,8 @@ def test_simplification_controls(ir, claim, verdict):
 
 
 def test_an_equation_defined_nowhere_has_no_solution():
+    """Since the review of part d4d (decision B4, 2 Oct 2026) the parameter y's written condition -y >= 0 is read
+    on the region its declaration leaves (y > 0): no point, so the problem is undefined as written (UNKNOWN),
+    as with the given y > 0 or the constraint y > 0; the empty set was CORRECT before."""
     ir = _ir("solve_equation", {"equation": "x + sqrt(-y) - sqrt(-y) = 1", "var": "x"}, XYP, shape="set")
-    assert _v(ir, _sol("{}", "set")) == "CORRECT"
+    assert _v(ir, _sol("{}", "set")) == "UNKNOWN"

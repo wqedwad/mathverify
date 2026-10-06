@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 2 Ekim 2026, sabah (bulut)**, dal `claude/trusting-lovelace-vp1boa` (birleşmedi): `master` (`#14`) + §84 Ek + dördüncü denetim ve düzeltme parçaları d4a, d4b, d4c, d4g (DECISIONS §85, sürüyor). Yeni sohbet bu dalı alır (§3 adım 1).
+> **Son güncelleme: 2 Ekim 2026, akşam (bulut; haftalık kullanım sınırında kesildi)**, dal `claude/trusting-lovelace-vp1boa` `782431c`'nin üstündeki belge commit'i (birleşmedi): `master` (`#14`) + dördüncü denetimin düzeltmeleri d4a, d4b (tur 5'e kadar), d4c (tur 1), d4d, d4g; yarım işler bundle'da (§3 adım 1, DECISIONS §85 Ek).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -28,16 +28,11 @@ Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `sc
 
 ## 2. Durum (30 Eylül 2026)
 
-**Kod.** `master` = `wqedwad/asd#14`'ün birleşmesi (öncesi `aa67b20` = `#13`'ün birleşmesi; `#14`, `#13`, `#12`, `#9`, `#10` öncesi
-yedeksiz, kullanıcı talimatı; `#11` öncesi `yedek/master-2026-09-28`, §6). `#7`–`#10`: DECISIONS §59–§62 (paralel tarama, `--plan`, bekçi, soğuk Lean, K4 düzeneği).
-`#11` (DECISIONS §63): adım reddedicinin üç haksız reddi (görevin aralığı öncül ama bağlamaz; yalnız tanım kümesinin
-bağladığı atama tanımsal; teğetin eğrisi ve `equation_of`'un verilen nesneleri öncül değil), "verified" yalnız kanıtta,
-Meta istemcisi akışla, K4 etiketleyicisi, aynı isteğe kilit; 42/42 mutasyon (`denetim/2026-09-28/mutasyon.py`).
-`#12` (§64–§70): hedefli denetim, V13, anahtar denetimi, etiketleme oracle'ı. `#13` (DECISIONS §72–§74): V14 ve üç turlu
-adversaryal denetimin bulduğu yanlış onaylar (kapalı `Integral`/`Sum`/`Product`/`Limit` yalnız sayıyla doğrulanan değeriyle, bağlı
-değişkenin koşulu problemin koşulu olmaz, IR fonksiyonu yazıldığı biçimde ve `domain`'iyle, yönsüz limit iki taraflı, yazılı türev
-yalnız türevlenebildiği yerde); `franklin`'in küme uç noktası düzeltmesi ve 144 testi (düşen 41'in 25'i gerçek yanlış onay, 9'u
-gerekçeli gelenek farkı). 558 çözümde karar değişimi 0 (adım 26, doğru adımlar unknown → verified).
+**Kod.** `master` = `wqedwad/asd#14`'ün birleşmesi (öncesi `aa67b20` = `#13`; `#9`, `#10`, `#12`–`#14` öncesi yedeksiz, kullanıcı talimatı;
+`#11` öncesi `yedek/master-2026-09-28`, §6). Geçmiş PR'ların içeriği DECISIONS §59–§84'te (`#11` §63, `#12` §64–§70, `#13` §72–§74,
+`#14` §75–§84). **Oturum dalı** `claude/trusting-lovelace-vp1boa` (birleşmedi, DECISIONS §85): dördüncü bağımsız denetimin 60 aday bulgusu
+ve düzeltme parçaları; birleşik `782431c`'de 558 çözümde karar farkı 0. **Dalda kapanmamış yanlış onay var** (d4b tur 5'in saldırgan bulguları:
+sign(x) = 0 için {} CORRECT, Max(log x, 0) = 0 için {1} CORRECT); düzeltmesi `wip/d4b-tur6`'da, birleştirmeden önce alınmalı (§3).
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -52,18 +47,21 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** bu dalı al: `git fetch origin claude/trusting-lovelace-vp1boa && git merge --ff-only FETCH_HEAD` (oturumun dalına);
-   `--plan` koş. Push yalnız oturumun dalına. İş parça parça, ağır iş worktree'li ajanlarda, aynı anda en çok 3 ajan (kullanıcı token
-   uyarısı, 2 Ekim; oturum sınırı birkaç kez doldu, ajanlar `SendMessage` ile sürdürüldü); her parçadan sonra commit + push; beklemeler ≤5 dk.
-   Karar dökümü 5 parçada (`fark_parca.py`), taban 158c220 (src = 1df0558) dökümüyle karşılaştırılır.
-2. **Sıradaki iş:** (a) **Dördüncü denetimin düzeltmeleri** (DECISIONS §85; bulgular `denetim/2026-10-01/d4/`). Yöntem: düzeltici ajan
-   bulguyu yeniden üretir ve matematik kararını yazar (ana oturum denetler), sonra parçanın diff'ine bağımsız saldırgan gözden geçirici,
-   bulduğu açık aynı parçada kapanır; ajanların ortak kuralları `denetim/2026-10-01/d4/duzeltme_kurallari.txt`, koşu kaydı `kosular.txt`. Bitenler (tur 1–2):
-   d4a, d4b (kapsama geri kazanımı sürüyor), d4c (kesin aralık zarfı sürüyor), d4g (saldırganın 6 açığı sürüyor). Sırada: d4d verilen
-   bağlama, d4e görev sertifikalarının koşul okuması, d4f tanımlılık, d4h ayrıştırıcı, d4i füzyon (CAP-K1); A05 mutasyonu; sonra
-   birleşik hâle tamlık eleştirmeni. (b) **Yerel kalite:** V15 S1 (dolaylı sabitlenen sembol), R1, L1; V16'nın kalanı. (c) V19
-   (kapsama kayıpları, §84) kullanıcı "sonra" dedi. Birleştirmeden önce `--full`, birleştirme kullanıcı onayıyla. `franklin`'in silinmesi
-   kullanıcıya sorulur (§74).
+1. **Yeni sohbet:** `git fetch origin claude/trusting-lovelace-vp1boa && git merge --ff-only FETCH_HEAD` (oturumun dalına; push yalnız oturumun
+   dalına). Yarım işleri geri yükle: `git fetch denetim/2026-10-01/d4/wip/wip-2026-10-02.bundle 'refs/heads/wip/*:refs/remotes/wip/*'`
+   (üç dal: `wip/d4b-tur6`, `wip/d4c-tur2`, `wip/d4e-yarim`; önkoşulları dalda). Ajan notları, sondalar, bulgu özetleri (`d4/ozet/*.json`),
+   karar dökümü tabanı ve birleşik ölçüm betiği: `tar -xzf denetim/2026-10-01/d4/wip/scratch-2026-10-02.tar.gz -C <scratchpad>` (taban ayrıca
+   `denetim/2026-10-01/d4/fark_taban_158c220.json`). Notların okunur kopyaları `denetim/2026-10-01/d4/notlar/`. `--plan` koş.
+   Haftalık kullanım sınırı 7 Ekim 07:00 UTC'de sıfırlanır; oturum sınırı ~4–5 saatte bir doluyor, ajanlar `SendMessage` ile sürdürülür.
+2. **Sıradaki iş (dördüncü denetimin düzeltmeleri, DECISIONS §85):** yöntem ve ajan kuralları `denetim/2026-10-01/d4/duzeltme_kurallari.txt`
+   (düzeltici ajan yeniden üretir ve matematik kararını yazar, ana oturum denetler; her parçaya bağımsız saldırgan gözden geçirici; aynı anda
+   en çok 3 ajan, worktree'li; her birleşimde 5 parçalı karar dökümü `fark_parca.py` karar 0 ve parça sondaları 0). Sıra:
+   (i) `wip/d4b-tur6`: mutasyon, `fark.py`, tam takım, oturum dalıyla birleşme (dalda iki yanlış onay sınıfı var, önce bu);
+   (ii) `wip/d4c-tur2`: son mutasyon koşusu, birleşme, saldırgan turu (kesin aralık zarfı yeni); (iii) `wip/d4e-yarim`: tamamla (kararlar
+   `notlar/duzeltme_d4e.txt`), saldırgan; (iv) d4f tanımlılık (CAP-F1, TAN-10, C1, B1, TAN-12, G14), d4h ayrıştırıcı (F1, H1, D1, D2, I2,
+   CAP-G1, G11), d4i füzyon (CAP-K1); d4a mutasyonu A05; (v) birleşik hâle tamlık eleştirmeni; (vi) **yerel kalite:** V15 S1 (dolaylı
+   sabitlenen sembol), R1, L1; V16'nın kalanı; (vii) `--full`, belgeler, `--plan`; birleştirme kullanıcı onayıyla. V19 (kapsama kayıpları)
+   kullanıcı "sonra" dedi. `franklin`'in silinmesi kullanıcıya sorulur (§74).
 3. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 4. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir):
    önce kalibrasyon (`run_f3 --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
@@ -138,6 +136,10 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), (ters aralık noktasında ad
   ya da geleneğe bağlı durumda CORRECT yerine UNKNOWN (§80). Başlıcaları: serbest parametreli integral/limit, iç içe kapalı integral,
   yalnız `vars.constraints` ile sabitlenen parametre, tam sayı değişkende doğru türev, kısıt ucunda türev, gerçel değişkende gcd/n!'li
   kalkülüs, ters aralığa düşen değerler. Veri setinde etkisi 0. Yalnız kanıtlı yolla geri kazanılır.
+- **V20. Dördüncü denetimin kalanları** (DECISIONS §85 Ek; §3 adım 2): d4b tur 6, d4c tur 2, d4e yarım; d4f, d4h, d4i başlamadı; A05; birleşik `782431c`'de 1 test düşer
+  (`test_d4_d4d_baglama::test_review_constraint_and_given_write_one_value_twice`, kapsama etkileşimi, §85 Ek);
+  küçük açıklar: `relation_holds_at(Ne)` sayısal eşitliği kanıt sayıyor, wordproblem `ctx.givens()` bileşik metni okuyamıyor, x**a = 4 (a = 2
+  verilen) yeniden yazılmıyor, d4g süre bütçesi işbirlikçi. Bulgu listesi ve doğrulamalar `denetim/2026-10-01/d4/`.
 
 ### 4.3 Kredili ölçüm
 
@@ -251,9 +253,7 @@ Süre: `--full` bulutta **~25–40 dk** (4 süreçli adversaryal 661–1084 s; s
   | `yedek/master-2026-09-27` | `5c2f83e` (PR #8 öncesi) | `mathverify-master-5c2f83e-2026-09-27.bundle` (kullanıcının betiği "YEDEK TAMAM" yazdı: `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
   | yok | `c2e4fdf`, `622a178` (PR #9, #10 öncesi) | alınmadı (kullanıcı kararı, 27 Eylül "yedeğe gerek yok"; 28 Eylül "birleştir") |
   | `yedek/master-2026-09-28` | `2f11c84` (PR #11 öncesi) | `mathverify-master-2f11c84-2026-09-28.bundle` (kullanıcı, 28 Eylül akşam: `bundle verify` "okay", deneme klonu `2f11c84`; etiket buluttan doğrulandı. İlk denemede etiket bayat yerel `master`ı (`5c2f83e`) göstermişti, silinip yeniden kondu) |
-  | yok | `c0a2caf` (PR #12 öncesi) | alınmadı (kullanıcı kararı, 29 Eylül "birleştir bu dalı yedeğe gerek yok") |
-  | yok | `35af293` (PR #13 öncesi) | alınmadı (kullanıcı kararı, 30 Eylül "yedeğe gerek yok") |
-  | yok | `aa67b20` (PR #14 öncesi) | alınmadı (kullanıcı onayı, 1 Ekim: "yedeksiz, PR ile" önerisine "dalı birleştir") |
+  | yok | `c0a2caf`, `35af293`, `aa67b20` (PR #12, #13, #14 öncesi) | alınmadı (kullanıcı kararları: 29 Eylül "yedeğe gerek yok", 30 Eylül "yedeğe gerek yok", 1 Ekim "yedeksiz, PR ile" → "dalı birleştir") |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout `C:\Users\kullanici\mathverify`'da): (0) `git fetch
   origin`, `git checkout master`, `git merge --ff-only origin/master`, `git log -1 --oneline` = beklenen commit (28 Eylül:
