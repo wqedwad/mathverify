@@ -36,6 +36,11 @@ def _outer_nodes(e, var, add):
     stack = [e]
     while stack:
         n = stack.pop()
+        if isinstance(n, (list, tuple)):
+            # a bracketed text ("[1/(1/0), 1]") is a Python list inside the as-written Tuple: its elements
+            # are expressions too (fourth audit, CAP-F1)
+            stack.extend(reversed(n))
+            continue
         if isinstance(n, (sp.Integral, sp.Sum, sp.Product)) or isinstance(n, sp.Limit):
             if isinstance(n, sp.Limit):
                 body, bound, outer = n.args[0], {n.args[1]}, [n.args[2]]
@@ -77,6 +82,39 @@ DEFINEDNESS_UNDECIDED = Ne(definedness_undecided(), 0)
 
 def is_undecided(c) -> bool:
     return c == DEFINEDNESS_UNDECIDED
+
+
+class value_missing(sp.Function):  # noqa: N801 - a marker read by is_no_value
+    """The value of a closed operation that has none as written: see NO_VALUE."""
+    nargs = 0
+
+
+# A condition that stands for "a closed operation of the expression has no value as written": n! off the
+# natural numbers ((-1)!, (1/2)!), a pole of Γ, SymPy's zoo or nan written out. It comes with `false` (the
+# expression is undefined) and says more: an enclosing operation may still be given a value by a reading
+# the curriculum does not have (1/Γ is entire, so 1/(-1)! = 0; P(2, 3) = 2!/(-1)! = 0 counts nothing; SymPy
+# folds 1/zoo to 0), so the expression is not "defined nowhere" either (no solution, an empty domain): the
+# problem is undefined as written and every caller abstains (`Ctx.written_undefined`). Read as a plain
+# `false`, x + 1/(-1)! = 2 would have its empty solution set certified, and the right answer under 1/Γ is
+# {2} (fourth audit, CAP-F1). Closed and left standing by SymPy, like DEFINEDNESS_UNDECIDED.
+NO_VALUE = Ne(value_missing(), 0)
+
+
+def is_no_value(c) -> bool:
+    return c == NO_VALUE
+
+
+def tree_free_symbols(e) -> set:
+    """The free symbols of an as-written tree, whose Tuple may hold a Python list (a bracketed text)."""
+    if isinstance(e, (list, tuple)):
+        return set().union(*(tree_free_symbols(a) for a in e))
+    if isinstance(e, sp.Tuple):
+        return set().union(*(tree_free_symbols(a) for a in e.args))
+    return set(getattr(e, "free_symbols", None) or ())
+
+
+# Γ(z) of a real z has a value off its poles 0, -1, -2, ... (latex2sympy reads \Gamma and \gamma as Γ)
+_GAMMA_DOMAIN = sp.Complement(S.Reals, sp.Range(-oo, 1))
 
 
 class ForwardSpans(sp.Set):
@@ -303,6 +341,18 @@ def _violations(c, d, region):
             except Exception:  # noqa: BLE001
                 return None
             return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
+        # over integers an argument ±d + k (k an integer) is an integer: only its sign is asked. (x - 2)!
+        # over the positive integers fails at x = 1 alone, and its limit at oo reads only the tail (G14)
+        e, s = c.args
+        if s in (S.Naturals0, S.Naturals, S.Integers) and region.is_subset(S.Integers) is True:
+            k = e - d if not (e - d).free_symbols else e + d if not (e + d).free_symbols else None
+            if k is not None and k.is_integer is True:
+                if s == S.Integers:
+                    return S.EmptySet
+                bad = sp.Lt(e, 0 if s == S.Naturals0 else 1)
+                r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
+                if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet):
+                    return r.value
         return None
     bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
     # solved for a variable with the facts of the region (an index is an integer, nonnegative on
@@ -333,17 +383,24 @@ def _violations(c, d, region):
     return r.value
 
 
-def _undefined_at(body, index_values: dict, var) -> bool | None:
-    """The term of a Sum/Product at concrete index values, read as written: False when one of its
-    conditions fails there (the term itself is undefined), None otherwise. Only this makes a sum
-    undefined: a condition read on the symbolic body may be merely sufficient (a real power of a
-    symbolic exponent asks base > 0, and (-1)**1 is defined), and turned into `false` it made
-    x + Σ_{k=1}^{3} (-k)**k = 0 "defined nowhere" and its empty solution set certified (review of
+def _undefined_at(body, index_values: dict, var) -> list[Any] | None:
+    """The term of a Sum/Product at concrete index values, read as written: the conditions of a binder
+    whose term is undefined there (`_undefined_sum`) when one of its conditions fails, None otherwise.
+    Only this makes a sum undefined: a condition read on the symbolic body may be merely sufficient (a
+    real power of a symbolic exponent asks base > 0, and (-1)**1 is defined), and turned into `false` it
+    made x + Σ_{k=1}^{3} (-k)**k = 0 "defined nowhere" and its empty solution set certified (review of
     30 Sep 2026)."""
     with sp.evaluate(False):
         term = body.xreplace(index_values)
     conds = definedness_conditions(term, var)
-    return False if any(c is sp.false for c in conds) else None
+    return _undefined_sum(conds) if any(c is sp.false for c in conds) else None
+
+
+def _undefined_sum(term_conds) -> list[Any]:
+    """The conditions of a Sum/Product with a term undefined at some index: `false`, and NO_VALUE when the
+    term has a closed operation with no value there (Σ_{k=1}^{4} 1/(k - 3)! is 2 under 1/Γ: not "defined
+    nowhere" either, CAP-F1)."""
+    return [sp.false] + ([NO_VALUE] if any(is_no_value(c) for c in term_conds) else [])
 
 
 def _index_region(lo, hi):
@@ -447,8 +504,14 @@ def _outer_index_conditions(conds, i, bounds, idx) -> list[Any] | None:
 
 
 def _one_range_conditions(lo, hi) -> list[Any] | None:
-    """The open conditions of one range (see _range_span_conditions); None when it is reversed or
-    not an integer apart for certain, or not read."""
+    """The open conditions of one range (see _range_span_conditions); None when it is reversed, not an
+    integer apart or not on the integers for certain, or not read.
+
+    The finite bounds themselves are integers: bounds an integer apart that are not (Σ_{k=1/2}^{5/2} k)
+    step from the lower one in SymPy (1/2 + 3/2 + 5/2 = 9/2) and run over the integers between them in
+    the index reading (1 + 2 = 3). The value is a convention, and with a = 1/2 the sum Σ_{k=a}^{a+2} k
+    was certified 9/2 and 3 refuted (fourth audit, TAN-10/C1). An open bound is held to the integers like
+    a gap: Contains(n, Z) on one of them (the gap ties the other)."""
     span = hi - lo + 1
     if span.has(sp.nan, sp.zoo) or span.is_extended_real is False:
         return None
@@ -457,20 +520,28 @@ def _one_range_conditions(lo, hi) -> list[Any] | None:
         if span.is_extended_negative is True:
             return None
         conds.append(sp.Contains(span, FORWARD_SPANS))
-    if not (lo.has(oo, -oo) or hi.has(oo, -oo)):
+    finite = [b for b in (lo, hi) if not b.has(oo, -oo)]
+    if len(finite) == 2:
         gap = hi - lo
         if gap.is_integer is False:
             return None
         if gap.is_integer is not True:
             # on the bound itself when the other one is an integer: a domain reads Contains(n, Z)
             conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, S.Integers))
+    whole = [b.is_integer for b in finite]
+    if False in whole:
+        return None
+    if finite and True not in whole:
+        b = next((b for b in finite if isinstance(b, sp.Symbol)), finite[0])
+        conds.append(sp.Contains(b, S.Integers))
     out = []
     for c in conds:
         if c is sp.true:
             continue
         if c is sp.false or not c.free_symbols:
             return None
-        out.append(c)
+        if c not in out:
+            out.append(c)
     return out
 
 
@@ -508,11 +579,10 @@ def _range_conditions(n, var) -> list[Any]:
             for point in itertools.product(*ranges):
                 with sp.evaluate(False):
                     term = n.function.xreplace({v: sp.Integer(i) for v, i in zip(idx, point)})
-                for c in definedness_conditions(term, var):
-                    if c is sp.false:
-                        return [sp.false]
-                    if c not in out:
-                        out.append(c)
+                term_conds = definedness_conditions(term, var)
+                if any(c is sp.false for c in term_conds):
+                    return _undefined_sum(term_conds)
+                out += [c for c in term_conds if c not in out]
             return out
     if len(limits) != 1:
         return [DEFINEDNESS_UNDECIDED]
@@ -531,9 +601,11 @@ def _range_conditions(n, var) -> list[Any]:
             continue
         if exact and bad.is_finite_set is True:
             points = list(itertools.islice(iter(bad), 5))
-            if points and _spend(len(points)) and any(
-                    _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var) is False for i in points):
-                return [sp.false]
+            if points and _spend(len(points)):
+                for i in points:
+                    failed = _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var)
+                    if failed is not None:
+                        return failed
         return [DEFINEDNESS_UNDECIDED]
     return spans
 
@@ -713,7 +785,8 @@ def _binder_conditions(n, var) -> list[Any]:
 
 
 def definedness_conditions(expr, var) -> list[Any]:
-    """Collect conditions under which `expr` is a well-defined real number."""
+    """Collect conditions under which `expr` is a well-defined real number. Never raises: a reading that
+    fails proves nothing and gives DEFINEDNESS_UNDECIDED (see `_definedness_conditions`)."""
     if getattr(_BINDER_STATE, "left", None) is not None:
         return _definedness_conditions(expr, var)
     _BINDER_STATE.left, _BINDER_STATE.undecided, _BINDER_STATE.cut = _BUDGET, False, False
@@ -739,84 +812,135 @@ def _definedness_conditions(expr, var) -> list[Any]:
             seen.add(c)
             conds.append(c)
 
-    for node in _outer_nodes(sp.sympify(expr), var, add):
-        if type(node).__name__ == "written_domain":
-            # an IR function's declared domain at its call (normalize.parse.written_domain)
-            rel = node.args[1]
-            for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
-                add(c)
-        elif isinstance(node, sp.log):
-            add(node.args[0] > 0)
-            if len(node.args) > 1:
-                add(node.args[1] > 0)
-                add(Ne(node.args[1], 1))
-        elif isinstance(node, sp.Pow):
-            base, ex = node.args
-            ex = _numeric_exponent(ex)
-            if isinstance(ex, sp.Rational) and not ex.is_Integer:
-                if ex.q % 2 == 0:
-                    add(base >= 0 if ex > 0 else base > 0)
-                else:
-                    if ex < 0:
-                        add(Ne(base, 0))
-                    # a negative base: the real root or the principal value (Convention); a base that
-                    # is not real has the principal value only
-                    if base.is_extended_real is not False:
-                        add(sp.Contains(base, ODD_ROOT_BASE))
-            elif ex.is_Integer and ex < 0:
-                add(Ne(base, 0))
-            elif ex.is_zero is True:
-                add(sp.Contains(base, ZERO_POWER_BASE))     # 0**0: 1 or undefined (Convention)
-            elif ex.is_number and not ex.is_rational:
-                add(base > 0)
-            elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
-                add(base > 0)          # x^y style real power (var None: every symbol counts)
-            elif not ex.is_number and base.is_zero is not False:
-                # 0**k at k = 0 (a Sum's term at its first index): 1 or undefined (Convention, part d4a)
-                add(sp.Contains(ex, ZERO_POWER_BASE))
-        elif isinstance(node, sp.tan):
-            add(Ne(sp.cos(node.args[0]), 0))
-        elif isinstance(node, sp.sec):
-            add(Ne(sp.cos(node.args[0]), 0))
-        elif isinstance(node, sp.cot):
-            add(Ne(sp.sin(node.args[0]), 0))
-        elif isinstance(node, sp.csc):
-            add(Ne(sp.sin(node.args[0]), 0))
-        elif isinstance(node, (sp.asin, sp.acos)):
-            add(node.args[0] >= -1)
-            add(node.args[0] <= 1)
-        elif type(node).__name__ in ("gcd", "lcm"):
-            # normalize.parse.gcd/lcm have a value only at rational numbers: x + gcd(x, 2) - gcd(2, x)
-            # read as x was certified a simplification of x on all of R, and its value at
-            # x = sqrt(2) was certified (30 Sep 2026). No interval rule decides the condition: the
-            # callers abstain unless a point makes it true or false.
-            for a in node.args:
-                add(sp.Contains(a, S.Rationals))
-            if type(node).__name__ == "gcd":
-                # gcd(0, 0) has no value in the curriculum (the greatest common divisor of numbers not all 0):
-                # the binding a = gcd(0, 0) + 1 read as a = 1 (review of d4d)
-                add(Ne(sp.Add(*[sp.Abs(a) for a in node.args]), 0))
-        elif isinstance(node, sp.factorial):
-            # n! of the curriculum: n a natural number. x + x! - x! at x = -3 was certified -3, and
-            # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026)
-            add(sp.Contains(node.args[0], S.Naturals0))
-        elif isinstance(node, sp.binomial):
-            # C(n, r) of the curriculum: 0 <= r <= n integers. C(x, 2) at x = -3 was certified while
-            # P(x, 2), built on factorial, was not (review of 30 Sep 2026); read as undefined there, the
-            # root -2 of C(n, 2) = 3 was dropped and {-2, 3} refuted, while the generalized binomial
-            # (C(-2, 2) = 3) and the 0 above n are conventions (Convention, part d4a)
-            n_, r_ = node.args
-            add(sp.Contains(r_, BINOMIAL_ARGUMENT))
-            add(sp.Contains(n_ - r_, BINOMIAL_ARGUMENT))
-        elif isinstance(node, sp.Mod):
-            # a divisor that is not positive: floored, truncated or Euclidean (Convention, part d4a)
-            add(sp.Contains(node.args[1], MOD_DIVISOR))
-        elif isinstance(node, sp.acosh):
-            add(node.args[0] >= 1)
-        elif isinstance(node, sp.atanh):
-            add(node.args[0] > -1)
-            add(node.args[0] < 1)
+    # A rule that fails while it builds its condition proves nothing: SymPy evaluates Ne((-1)!, 0) and
+    # mpmath raises "gamma function pole", and the callers read the exception as "no condition", so
+    # 1/(-1)! = 0 (SymPy's 1/zoo) was certified and the step "1/factorial(-1) = 0" verified (fourth audit,
+    # CAP-F1). Each failure is DEFINEDNESS_UNDECIDED, never "defined", and the walk goes on: the pole's own
+    # rule (n!: a natural number) then reads the operation as undefined.
+    try:
+        nodes = _outer_nodes(sp.sympify(expr), var, add)
+        while True:
+            try:
+                node = next(nodes)
+            except StopIteration:
+                break
+            try:
+                _node_conditions(node, var, add)
+            except Exception:  # noqa: BLE001 - see above
+                add(DEFINEDNESS_UNDECIDED)
+    except Exception:  # noqa: BLE001 - the walk itself failed: nothing is proved
+        add(DEFINEDNESS_UNDECIDED)
     return conds
+
+
+def _no_value_off(add, c):
+    """The condition `c` of an operation that has no value where it fails; a closed operation off it
+    (`c` false) is NO_VALUE too."""
+    add(c)
+    if c is sp.false:
+        add(NO_VALUE)
+
+
+def _node_conditions(node, var, add) -> None:
+    """The definedness conditions of one node of the as-written tree (see `_definedness_conditions`)."""
+    if node is S.ComplexInfinity or node is S.NaN:
+        # SymPy's zoo and nan, written out (`zoo` is in the namespace): no real number, and 1/zoo is
+        # SymPy's 0 (CAP-F1)
+        add(sp.false)
+        add(NO_VALUE)
+    elif type(node).__name__ == "written_domain":
+        # an IR function's declared domain at its call (normalize.parse.written_domain)
+        rel = node.args[1]
+        for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+            add(c)
+    elif isinstance(node, sp.log):
+        add(node.args[0] > 0)
+        if len(node.args) > 1:
+            add(node.args[1] > 0)
+            add(Ne(node.args[1], 1))
+    elif isinstance(node, sp.Pow):
+        base, ex = node.args
+        ex = _numeric_exponent(ex)
+        if isinstance(ex, sp.Rational) and not ex.is_Integer:
+            if ex.q % 2 == 0:
+                add(base >= 0 if ex > 0 else base > 0)
+            else:
+                if ex < 0:
+                    add(Ne(base, 0))
+                # a negative base: the real root or the principal value (Convention); a base that
+                # is not real has the principal value only
+                if base.is_extended_real is not False:
+                    add(sp.Contains(base, ODD_ROOT_BASE))
+        elif ex.is_Integer and ex < 0:
+            add(Ne(base, 0))
+        elif ex.is_zero is True:
+            add(sp.Contains(base, ZERO_POWER_BASE))     # 0**0: 1 or undefined (Convention)
+        elif ex.is_number and not ex.is_rational:
+            add(base > 0)
+        elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
+            add(base > 0)          # x^y style real power (var None: every symbol counts)
+        elif not ex.is_number and base.is_zero is not False:
+            # 0**k at k = 0 (a Sum's term at its first index): 1 or undefined (Convention, part d4a)
+            add(sp.Contains(ex, ZERO_POWER_BASE))
+    elif isinstance(node, sp.tan):
+        add(Ne(sp.cos(node.args[0]), 0))
+    elif isinstance(node, sp.sec):
+        add(Ne(sp.cos(node.args[0]), 0))
+    elif isinstance(node, sp.cot):
+        add(Ne(sp.sin(node.args[0]), 0))
+    elif isinstance(node, sp.csc):
+        add(Ne(sp.sin(node.args[0]), 0))
+    elif isinstance(node, (sp.asin, sp.acos)):
+        add(node.args[0] >= -1)
+        add(node.args[0] <= 1)
+    elif type(node).__name__ in ("gcd", "lcm"):
+        # normalize.parse.gcd/lcm have a value only at rational numbers: x + gcd(x, 2) - gcd(2, x)
+        # read as x was certified a simplification of x on all of R, and its value at
+        # x = sqrt(2) was certified (30 Sep 2026). No interval rule decides the condition: the
+        # callers abstain unless a point makes it true or false.
+        for a in node.args:
+            add(sp.Contains(a, S.Rationals))
+        if type(node).__name__ == "gcd":
+            # gcd(0, 0) has no value in the curriculum (the greatest common divisor of numbers not all 0):
+            # the binding a = gcd(0, 0) + 1 read as a = 1 (review of d4d)
+            add(Ne(sp.Add(*[sp.Abs(a) for a in node.args]), 0))
+    elif isinstance(node, (sp.factorial, sp.factorial2, sp.subfactorial)):
+        # n! of the curriculum: n a natural number. x + x! - x! at x = -3 was certified -3, and
+        # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026). A closed one off them has no
+        # value: (-1)! is a pole of Γ, and 1/(-1)! is 0 only under 1/Γ or SymPy's 1/zoo (CAP-F1). n!! and
+        # !n (SymPy's own, no notation of the parse reads them) are held to the same numbers.
+        _no_value_off(add, sp.Contains(node.args[0], S.Naturals0))
+    elif isinstance(node, sp.gamma):
+        # Γ (LaTeX \Gamma, \gamma): a value off its poles 0, -1, -2, ...; 1/Γ(0) = 0 was certified (CAP-F1)
+        _no_value_off(add, sp.Contains(node.args[0], _GAMMA_DOMAIN))
+    elif isinstance(node, (sp.RisingFactorial, sp.FallingFactorial)):
+        # a polynomial in x when k is a natural number; otherwise a quotient of Γ values with poles
+        _no_value_off(add, sp.Contains(node.args[1], S.Naturals0))
+    elif isinstance(node, sp.binomial):
+        # C(n, r) of the curriculum: 0 <= r <= n integers. C(x, 2) at x = -3 was certified while
+        # P(x, 2), built on factorial, was not (review of 30 Sep 2026); read as undefined there, the
+        # root -2 of C(n, 2) = 3 was dropped and {-2, 3} refuted, while the generalized binomial
+        # (C(-2, 2) = 3) and the 0 above n are conventions (Convention, part d4a)
+        n_, r_ = node.args
+        conds = [sp.Contains(r_, BINOMIAL_ARGUMENT), sp.Contains(n_ - r_, BINOMIAL_ARGUMENT)]
+        for c in conds:
+            add(c)
+        if not node.free_symbols and not all(c is sp.true for c in conds):
+            # outside them the generalized binomial may be a pole of Γ (binomial(-1, 1/2) is zoo): no
+            # value under either reading (CAP-F1)
+            with sp.evaluate(True):
+                v = sp.binomial(_evaluated(n_), _evaluated(r_))
+            if v.has(S.ComplexInfinity, S.NaN, oo, -oo):
+                add(sp.false)
+                add(NO_VALUE)
+    elif isinstance(node, sp.Mod):
+        # a divisor that is not positive: floored, truncated or Euclidean (Convention, part d4a)
+        add(sp.Contains(node.args[1], MOD_DIVISOR))
+    elif isinstance(node, sp.acosh):
+        add(node.args[0] >= 1)
+    elif isinstance(node, sp.atanh):
+        add(node.args[0] > -1)
+        add(node.args[0] < 1)
 
 
 _NUMBER_SETS = (S.Rationals, S.Integers, S.Naturals0, S.Naturals)

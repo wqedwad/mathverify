@@ -142,8 +142,9 @@ def test_a_task_expression_undefined_as_written_is_not_certified(ir, claim, kind
     r = _run(ir, claim, kind)
     assert r.verdict == "UNKNOWN"
     # the certificate's own reason, or the intake's (part v-b B reads the task expression as written
-    # before any certificate runs: tests/test_parca7b_tanimlilik.py)
-    assert "problem_undefined_as_written" in r.flags or any(
+    # before any certificate runs: tests/test_parca7b_tanimlilik.py); a closed condition no check proves
+    # (tan(arccot(2) + arccot(1/2))) is "problem_definedness_undecided" there since part d4f (TAN-12)
+    assert {"problem_undefined_as_written", "problem_definedness_undecided"} & set(r.flags) or any(
         l.evidence.get("reason") in ("expression_undefined_as_written", "f_undefined_as_written",
                                      "f_undefined_at_point_as_written") for l in r.layers)
 

@@ -24,7 +24,7 @@ from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import closed_condition_undecided, definedness_conditions, written_definedness
+from .domain import _violations, closed_condition_undecided, definedness_conditions, written_definedness
 
 LAYER = "certify.limits"
 
@@ -398,6 +398,27 @@ def membership_conditions(src, expr, var, ns) -> list[Any]:
     return [c for c in dict.fromkeys(conds) if isinstance(c, sp.Contains) and var in c.free_symbols]
 
 
+def holds_on_the_tail(c, var, point) -> bool:
+    """Does the membership condition `c` (see `membership_conditions`) hold at every value of the
+    sequence `var` from some point on, toward the infinite `point`? A limit there reads only that tail:
+    with x a positive integer (x - 2)! has its value from x = 2 on, and lim_{x->oo} (x - 2)!/x^x = 0 was
+    UNKNOWN (fourth audit G14). Over the reals a natural-number condition holds on no tail (it fails
+    between the integers); a violation set no exact check finds is no proof either."""
+    if point not in (oo, -oo) or not getattr(var, "is_integer", None):
+        return False
+    over = sp.Range(1, oo) if var.is_positive else sp.Range(0, oo) if var.is_nonnegative else S.Integers
+    try:
+        bad = _violations(c, var, over)
+    except Exception:  # noqa: BLE001 - not decided
+        return False
+    if bad is None:
+        return False
+    if bad.is_empty is True:
+        return True
+    end = bad.sup if point == oo else bad.inf
+    return getattr(end, "is_finite", None) is True
+
+
 def declared_side(var, point, side):
     """The side ('+', '-', None: both) from which the task's limit approaches `point` inside the
     variable's declared domain, or False when the approach leaves it. The task's variable keeps its
@@ -469,7 +490,8 @@ def verify(ir, solution, ctx: Ctx):
             # of 30 Sep 2026; the value parse reads k/k as 1)
             return unknown(LAYER, "expression_undefined_as_written", t.ms, {"expr": p["expr"]},
                            flags=["expression_undefined_as_written"])
-        members = membership_conditions(p["expr"], expr, var, ctx.ns)
+        members = [c for c in membership_conditions(p["expr"], expr, var, ctx.ns)
+                   if not holds_on_the_tail(c, var, point)]
         if members:
             return unknown(LAYER, "membership_condition_on_variable", t.ms,
                            {"conditions": [str(c) for c in members]}, flags=["membership_condition"])

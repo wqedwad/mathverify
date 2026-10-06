@@ -1067,12 +1067,25 @@ def _constant_bound(node, names: dict[str, Any]):
 
 
 def _refuse_constant_range(name: str, lo, hi, raw: str) -> None:
-    """The checks of `_refuse_reversed_ranges` on bounds known before SymPy builds the binder."""
-    if (hi - lo + 1).is_extended_negative is True:
-        raise ParseError(f"{raw!r} has a {name} over a reversed range: not read")
-    span = hi - lo
-    if span.is_number and span.is_finite and span.is_integer is False:
-        raise ParseError(f"{raw!r} has a {name} whose limits are not an integer apart: not read")
+    """The checks of `_refuse_reversed_ranges` on bounds known before SymPy builds the binder. Computed with
+    SymPy's evaluation on: read as written (evaluation off), 1 - 3 + 1 stayed a sum of unknown sign and the
+    reversed range \\sum_{j_{0}=3}^{1} was not refused there."""
+    with sp.evaluate(True):
+        if (hi - lo + 1).is_extended_negative is True:
+            raise ParseError(f"{raw!r} has a {name} over a reversed range: not read")
+        span = hi - lo
+        if span.is_number and span.is_finite and span.is_integer is False:
+            raise ParseError(f"{raw!r} has a {name} whose limits are not an integer apart: not read")
+        if any(_not_an_integer(b) for b in (lo, hi)):
+            raise ParseError(f"{raw!r} has a {name} whose limits are not integers: not read")
+
+
+def _not_an_integer(b) -> bool:
+    """Is the finite number `b` certainly not an integer? A Sum/Product with such a limit has no index
+    reading: Σ_{k=1/2}^{5/2} k is 9/2 stepping from the lower limit (SymPy) and 1 + 2 = 3 over the integers
+    between the limits; 9/2 was certified and 3 refuted (fourth audit TAN-10/C1). A limit it cannot decide
+    is the domain's (`certify.domain._one_range_conditions`)."""
+    return isinstance(b, sp.Expr) and b.is_number is True and b.is_finite is True and b.is_integer is False
 
 
 def _refuse_computed_bounds(code: str, raw: str, names: dict[str, Any] | None = None) -> None:
@@ -1109,6 +1122,8 @@ def _refuse_computed_bounds(code: str, raw: str, names: dict[str, Any] | None = 
                 if (hi - lo).denominator != 1:
                     raise ParseError(f"{raw!r} has a {node.func.id} whose limits are not an integer apart: "
                                      "not read")
+                if lo.denominator != 1 or hi.denominator != 1:
+                    raise ParseError(f"{raw!r} has a {node.func.id} whose limits are not integers: not read")
 
 
 def _rebind_range_dummies(code: str, local_dict: dict[str, Any], raw: str) -> tuple[str, dict[str, Any]] | None:
@@ -1461,6 +1476,11 @@ def _refuse_reversed_ranges(expr, raw: str) -> None:
                     # Σ_{k=1}^{7/2} k is 63/8 in SymPy, 1 + 2 + 3 stepping from the lower limit
                     raise ParseError(f"{raw!r} has a {type(node).__name__} whose limits are not an "
                                      "integer apart: not read")
+                if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3 \
+                        and any(_not_an_integer(b) for b in lim[1:]):
+                    # Σ_{k=1/2}^{5/2} k: 9/2 stepping from the lower limit, 3 over the integers (TAN-10/C1)
+                    raise ParseError(f"{raw!r} has a {type(node).__name__} whose limits are not integers: "
+                                     "not read")
 
 
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
@@ -1660,73 +1680,43 @@ def _latex_limit_variables(expr, ns: dict[str, Any]):
 
 
 _LATEX_RANGE_BINDER = re.compile(r"\\(?:sum|prod)(?![A-Za-z])")
-_LATEX_OPERATION = re.compile(r"\\(?:sum|prod|int|lim)(?![A-Za-z])")
-_LATEX_INT_LIMIT = re.compile(r"\s*(?:[A-Za-z]\w*\s*=\s*)?(-?\s*\d+)\s*")
 
 
-def _latex_script(s: str, i: int, mark: str) -> tuple[str | None, int]:
-    """The sub- or superscript `mark` ('_' or '^') at s[i:] (after spaces): the text in its braces or
-    its one character, and the index after it; (None, i) when there is none."""
-    j = i
-    while j < len(s) and s[j] == " ":
-        j += 1
-    if j >= len(s) or s[j] != mark:
-        return None, i
-    j += 1
-    while j < len(s) and s[j] == " ":
-        j += 1
-    if j < len(s) and s[j] == "{":
-        depth, k = 0, j
-        while k < len(s):
-            depth += {"{": 1, "}": -1}.get(s[k], 0)
-            if depth == 0:
-                return s[j + 1:k], k + 1
-            k += 1
-        return None, i
-    return (s[j], j + 1) if j < len(s) else (None, i)
+def _evaluated_bound(e):
+    """A limit of the as-written tree, evaluated: \\sqrt{1} is Pow(1, 1/2) there."""
+    with sp.evaluate(True):
+        return e.func(*[_evaluated_bound(a) for a in e.args]) if isinstance(e, sp.Basic) and e.args else e
 
 
 def _refuse_latex_ranges(s: str) -> None:
-    """The LaTeX counterpart of `_refuse_computed_bounds`: a sum or product whose limit is itself an
-    operation, or whose limits are numbers of a reversed range or not an integer apart, is refused
-    before latex2sympy builds it (a floor around it computed it at once: \\lfloor \\sum_{k=3}^{1} k
-    \\rfloor = -2 was certified; review of V14, 30 Sep 2026)."""
-    for m in _LATEX_RANGE_BINDER.finditer(s):
-        i = m.end()
-        scripts = {}
-        for _ in range(2):
-            for mark in ("_", "^"):
-                if mark not in scripts:
-                    text, j = _latex_script(s, i, mark)
-                    if text is not None:
-                        scripts[mark], i = text, j
-        if any(_LATEX_OPERATION.search(t) for t in scripts.values()):
-            raise ParseError(f"{s!r} has a sum or product whose limit is itself an operation: not read")
-        lo = _LATEX_INT_LIMIT.fullmatch(scripts.get("_", ""))
-        hi = _LATEX_INT_LIMIT.fullmatch(scripts.get("^", ""))
-        if lo and hi:
-            a, b = int(lo.group(1).replace(" ", "")), int(hi.group(1).replace(" ", ""))
-            if b - a + 1 < 0:
-                raise ParseError(f"{s!r} has a sum or product over a reversed range: not read")
-        elif "_" in scripts and "^" in scripts:
-            # a limit that is a constant written otherwise: \lfloor \sum_{k=3}^{\sqrt{1}} k \rfloor = -2 was
-            # certified (V16, 30 Sep 2026)
-            a, b = _latex_constant_limit(scripts["_"]), _latex_constant_limit(scripts["^"])
-            if a is not None and b is not None:
-                _refuse_constant_range("sum or product", a, b, s)
-
-
-def _latex_constant_limit(text: str):
-    """The value of a LaTeX limit (`k=3`, `\\sqrt{1}`) that names no symbol, None otherwise."""
-    text = re.sub(r"^\s*[A-Za-z]\w*\s*=", "", text)
-    m = _LATEX_INT_LIMIT.fullmatch(text)
-    if m:
-        return sp.Integer(int(m.group(1).replace(" ", "")))
+    """The LaTeX counterpart of `_refuse_computed_bounds` and `_refuse_reversed_ranges`, read on the TREE
+    latex2sympy builds with SymPy's evaluation off, before anything computes the sum: a function around it
+    does at once (a floor, once the index is an integer), and \\lfloor \\sum_{k=3}^{1} k \\rfloor = -2 (Karr)
+    was certified (review of V14, 30 Sep 2026). A sum or product whose limit is itself an operation, or
+    whose limits are a reversed range, not an integer apart or not integers, is not read. This check read
+    the limits from the text, with the index written [A-Za-z]\\w* and nothing around the `=`: an index
+    \\alpha, k_{1} or \\mathrm{k}, or k\\,=\\,3, left \\lfloor \\sum_{\\alpha=3}^{\\sqrt{1}} \\alpha \\rfloor = -2
+    certified (fourth audit B1)."""
+    if not _LATEX_RANGE_BINDER.search(s):
+        return
     try:
-        v = _latex2sympy(_exact_latex_decimals(text))
-    except Exception:  # noqa: BLE001 - the whole parse reports it
-        return None
-    return v if isinstance(v, sp.Expr) and not v.free_symbols and v.is_number else None
+        with sp.evaluate(False):
+            held = _latex2sympy(_exact_latex_decimals(s))
+    except Exception as e:  # noqa: BLE001 - its ranges cannot be checked: not read
+        raise ParseError(f"{s!r}: its sums and products are not read without evaluation: {e}") from e
+    if not isinstance(held, sp.Basic):
+        return
+    for node in sp.preorder_traversal(held):
+        if not isinstance(node, (sp.Sum, sp.Product)):
+            continue
+        for lim in node.limits:
+            if not isinstance(lim[0], Symbol):
+                raise ParseError(f"{s!r} binds {lim[0]!r}, which is not a variable: not read")
+            if len(lim) != 3:
+                continue
+            if any(isinstance(b, sp.Basic) and b.has(*_OPERATIONS) for b in lim[1:]):
+                raise ParseError(f"{s!r} has a sum or product whose limit is itself an operation: not read")
+            _refuse_constant_range("sum or product", _evaluated_bound(lim[1]), _evaluated_bound(lim[2]), s)
 
 
 def _refuse_latex_integer_calculus(expr, ns: dict[str, Any], raw: str) -> None:
