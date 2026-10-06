@@ -283,6 +283,15 @@ def test_an_infinite_range_is_never_refuted_by_numbers():
     assert r.verdict != "INCORRECT" and _steps(r) != ["refuted"]
 
 
+def test_an_infinite_range_value_proved_symbolically_still_decides():
+    """No numeric value on an infinite range, but the fundamental theorem with its end limits proves the
+    value: it decides (coverage lost in the review of d4c, given back 6 Oct 2026)."""
+    assert _run(_dint("exp(-x)", 0, "oo"), "1").verdict == "CORRECT"
+    assert _run(_dint("exp(-x)", 0, "oo"), "2").verdict == "INCORRECT"
+    assert _run(_dint("1/(1 + x**2)", "-oo", "oo"), "pi").verdict == "CORRECT"
+    assert _run(_dint("exp(-x**2)", "-oo", "oo"), "sqrt(pi)").verdict != "INCORRECT"
+
+
 def test_a_wrong_infinite_range_step_is_still_refuted():
     r = _run(X1, "2", [("compute", "Integral(exp(-x), (x, 0, oo)) = 2")])
     assert r.verdict == "INCORRECT" and _steps(r) == ["refuted"]

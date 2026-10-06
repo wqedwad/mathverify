@@ -1313,7 +1313,12 @@ def verify(ir, solution, ctx: Ctx):
                         return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
                                        flags=["symbolic_numeric_disagreement"])
                 elif val is None:
-                    return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
+                    # no numeric value (an infinite range has no quadrature here): a value proved
+                    # symbolically still decides, ∫_0^oo e^-x dx = 1 by the fundamental theorem with
+                    # its end limits (coverage lost in the review of d4c, given back 6 Oct 2026)
+                    if (okC := by_certificate()) is None:
+                        return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
+                    agree = None
                 else:
                     agree, _ = num_equal(exact, val, rel_tol=tol)
                 ev["symbolic_agrees_numeric"] = agree
@@ -1326,7 +1331,7 @@ def verify(ir, solution, ctx: Ctx):
                 ev["compare_exact"] = sev
                 if proved or (converged and agree is True and okS is not False):
                     ok = okS
-                elif (okC := by_certificate()) is not None:
+                elif val is None or (okC := by_certificate()) is not None:
                     ok = okC                       # a value proved symbolically decides
                 elif okS is False and excluded():
                     # SymPy's value is no proof, and a quadrature that agrees with it may share its blind

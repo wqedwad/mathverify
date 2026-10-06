@@ -132,6 +132,9 @@ MUTATIONS = [
      '        ev["method"] = "numeric_only"\n',
      '        ev["method"] = "numeric_only"\n'
      "        if num_equal(claimed, num_val, rel_tol=1e-15)[0] is False:\n            return False, ev\n", T),
+    ("R11 sayısal değer yokken sertifika denenmez", CAL,
+     "                    if (okC := by_certificate()) is None:\n",
+     "                    if True:\n", T),
 ]
 
 if __name__ == "__main__":

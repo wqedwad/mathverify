@@ -14,6 +14,7 @@ the `sifir` angle and D4-ADIM-C of the `adim` angle, `denetim/2026-10-01/d4/`).
        only by a rigorous (interval) enclosure, and wrong values outside it still refuted
     I  sibling paths (6 Oct 2026): nsum's value alone refuted a series (a term far out never seen); SymPy's
        value confirmed by nsum still decides
+    J  coverage given back (6 Oct 2026): on an infinite range a value the fundamental theorem proves decides
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4c/sonda.py [out.json] [groups]
@@ -373,8 +374,23 @@ def cases_i():
     ]
 
 
+def cases_j():
+    """Coverage given back (6 Oct 2026): an infinite range has no numeric value, but a value the fundamental
+    theorem proves with its end limits still decides (it was UNKNOWN after the review of d4c)."""
+    return [
+        ("inf cert: e^-x [0,oo) = 1", dint("exp(-x)", 0, "oo"), _sol("1"), OK, None),
+        ("inf cert: e^-x [0,oo) = 2 (wrong)", dint("exp(-x)", 0, "oo"), _sol("2"), NO, None),
+        ("inf cert: x e^-x [0,oo) = 1", dint("x*exp(-x)", 0, "oo"), _sol("1"), OK, None),
+        ("inf cert: 1/(1+x^2) on R = pi", dint("1/(1 + x**2)", "-oo", "oo"), _sol("pi"), OK, None),
+        ("inf cert: 1/x^2 [1,oo) = 1", dint("1/x**2", 1, "oo"), _sol("1"), OK, None),
+        ("inf cert: 1/x^2 [1,oo) = 1/2 (wrong)", dint("1/x**2", 1, "oo"), _sol("1/2"), NO, None),
+        ("inf no cert: e^-x^2 on R = sqrt(pi)", dint("exp(-x**2)", "-oo", "oo"), _sol("sqrt(pi)"), NOTNO, None),
+        ("inf no cert: e^-x^2 on R = 2 (wrong, undecided)", dint("exp(-x**2)", "-oo", "oo"), _sol("2"), NOTOK, None),
+    ]
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "I": cases_i}
+          "H": cases_h, "I": cases_i, "J": cases_j}
 SLOW = 60.0           # group D: every verify returns within this many seconds
 CASE_LIMIT = 240      # seconds before a case is abandoned (SIGALRM; the unfixed tree hangs on group D)
 
@@ -387,7 +403,7 @@ def _alarm(signum, frame):
     raise CaseTimeout(f"no verdict within {CASE_LIMIT} s")
 
 
-def main(out_path=None, groups="ABCDEFGHI"):
+def main(out_path=None, groups="ABCDEFGHIJ"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -434,5 +450,5 @@ def main(out_path=None, groups="ABCDEFGHI"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHI"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJ"
     sys.exit(1 if main(out, grp) else 0)
