@@ -778,6 +778,16 @@ def cases_m():
     out.append((f"derivative {S0} at 0, b = 1: 1 [right]", der(S0, "0", ["b = 1"], BB), sol("1"), NOTNO, None))
     out.append((f"derivative {S0} at 0, b = 0 (end): 1", der(S0, "0", ["b = 0"], BB), sol("1"), UNK, None))
     out.append((f"tangent {S0} at 0, b free: y = x", tan(S0, "0", [], BB), sol("y = x", "equation"), UNK, None))
+    # bounded from one side only, the side the region leaves open: a half-line for every value of a
+    XA = [X, A_]
+    out.append(("derivative sqrt(x - a) (expr), a free: 1/(2 sqrt(x - a)) [right]", der("sqrt(x - a)", None, [], XA),
+                sol("1/(2*sqrt(x - a))", "expression"), OK, None))
+    out.append(("derivative sqrt(a - x) (expr), a free: -1/(2 sqrt(a - x)) [right]", der("sqrt(a - x)", None, [], XA),
+                sol("-1/(2*sqrt(a - x))", "expression"), OK, None))
+    out.append(("derivative sqrt(x - a) (expr), a free: 1/sqrt(x - a) [wrong]", der("sqrt(x - a)", None, [], XA),
+                sol("1/sqrt(x - a)", "expression"), NO, None))
+    out.append(("derivative x + 0*sqrt(x - a) + 0*sqrt(5 - x) (expr), a free: 1 [empty for a > 5]",
+                der("x + 0*sqrt(x - a) + 0*sqrt(5 - x)", None, [], XA), sol("1", "expression"), UNK, None))
     # the tangent's own dependent variable is never pinned
     out.append(("tangent x**2 at 1, given y = 1: y = 2x - 1 [right]", tan("x**2", "1", ["y = 1"]),
                 sol("y = 2*x - 1", "equation"), NOTNO, None))

@@ -410,6 +410,11 @@ def test_written_condition_naming_a_parameter():
     assert _v(_lim(S0, "0", [], XB), "0") == "UNKNOWN"
     assert _v(_lim(S0, "0", ["b = -1"], XB), "0") != "CORRECT"
     assert _v(_der(S1, None, [], XB), "1", "expression") == "UNKNOWN"
+    # bounded from one side only, the side the region leaves open: a half-line for every value of a
+    assert _v(_der("sqrt(x - a)", None, [], XA), "1/(2*sqrt(x - a))", "expression") == "CORRECT"
+    assert _v(_der("sqrt(a - x)", None, [], XA), "-1/(2*sqrt(a - x))", "expression") == "CORRECT"
+    assert _v(_der("sqrt(x - a)", None, [], XA), "1/sqrt(x - a)", "expression") == "INCORRECT"
+    assert _v(_der("x + 0*sqrt(x - a) + 0*sqrt(5 - x)", None, [], XA), "1", "expression") == "UNKNOWN"
     assert _v(_der(S1, None, ["b = 2"], XB), "1", "expression") == "UNKNOWN"
     assert _v(_der(S1, "2", ["b = 2"], XB), "1") == "UNKNOWN"
     assert _v(_anti("1 + 0*sqrt(b - x) + 0*sqrt(x - b)", [], XB), "x", "expression") == "UNKNOWN"

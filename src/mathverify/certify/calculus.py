@@ -25,7 +25,7 @@ from typing import Any
 
 import mpmath as mp
 import sympy as sp
-from sympy import S, Eq, Ne, Interval
+from sympy import S, Eq, Ne, Interval, oo
 
 from ..equiv import answers_equivalent
 from ..equiv.numeric import certified_sign, num_equal, to_mp
@@ -1004,22 +1004,58 @@ def _open_condition(c):
     return c
 
 
-def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list[str]]:
+def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list]:
     """(the written definedness conditions of the task's function on `var`, with the values `pins` holds put in;
-    the symbols other than `var` the others name). A membership (n!, gcd) is `_unreadable_task_expression`'s
-    business, and so is a function defined nowhere (a closed condition that fails, with or without the values:
+    the ones that name another symbol). A membership (n!, gcd) is `_unreadable_task_expression`'s business, and
+    so is a function defined nowhere (a closed condition that fails, with or without the values:
     `Ctx.binding_issues`). A condition naming a parameter was dropped, so the derivative 1 of
     x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e)."""
     conds, _ = written_definedness(src, ctx.ns, pins)
     on_var: list = []
-    other: set = set()
+    other: list = []
     for c in conds:
         fs = getattr(c, "free_symbols", set())
         if fs - {var}:
-            other |= {str(s_) for s_ in fs - {var}}
+            other.append(c)
         elif var in fs and not isinstance(c, sp.Contains):
             on_var.append(c)
-    return on_var, sorted(other)
+    return on_var, other
+
+
+def _names(conds, var) -> list[str]:
+    return sorted({str(s_) for c in conds for s_ in getattr(c, "free_symbols", set()) - {var}})
+
+
+def _half_line_for_every_value(ctx: Ctx, conds, other, var) -> bool:
+    """Do the written conditions naming another symbol (`other`) bound `var` from one side only, the side the
+    variable's region cut by its own conditions (`conds`) leaves unbounded? Each must read k*var + q >= 0, > 0
+    or != 0 with k a nonzero number (q may name the parameters). The points where all hold then hold a
+    half-line for EVERY value of the parameters, so a derivative function has an open set to live on: the
+    derivative 1/(2*sqrt(x - a)) of sqrt(x - a) stays certified with a free, as before the review of d4e.
+    Bounded on both sides (x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone) it is not."""
+    sides = set()
+    for c in other:
+        if isinstance(c, Ne):
+            continue                                   # a point
+        if isinstance(c, (sp.GreaterThan, sp.StrictGreaterThan)):
+            u = c.lhs - c.rhs
+        elif isinstance(c, (sp.LessThan, sp.StrictLessThan)):
+            u = c.rhs - c.lhs
+        else:
+            return False
+        k = sp.diff(u, var)
+        if not (k.is_number and k.is_zero is False and k.is_real is True) or sp.diff(u, var, 2) != 0:
+            return False
+        sides.add(k.is_positive)
+    if len(sides) != 1:
+        return not sides                               # points only: the region's own interior decides
+    region, loose = task_region(ctx, conds, var)
+    if loose:
+        return False
+    upward = sides.pop()
+    parts = list(region.args) if isinstance(region, sp.Union) else [region]
+    end = oo if upward else -oo
+    return any(isinstance(part, Interval) and (part.sup if upward else part.inf) == end for part in parts)
 
 
 def task_region(ctx: Ctx, conds, var, window=None, region=None) -> tuple[sp.Set, list]:
@@ -1093,7 +1129,7 @@ def _point_not_interior(ctx: Ctx, src, var, at, pins, ms):
         return condition_not_applied(LAYER, unapplied, ms)
     conds, other = task_conditions(ctx, src, var, pins)
     if other:
-        return condition_not_applied(LAYER, other, ms)
+        return condition_not_applied(LAYER, _names(other, var), ms)
     if interior_at(ctx, conds, var, at) is not True:
         return unknown(LAYER, "point_not_interior_to_the_domain", ms,
                        {"at": str(at), "domain": str(ctx.domain_for(var)), "conditions": [str(c) for c in conds]},
@@ -1161,7 +1197,7 @@ def verify(ir, solution, ctx: Ctx):
                 return condition_not_applied(LAYER, unapplied, t.ms)
             f_extra, other = task_conditions(ctx, p["integrand"], var, pins)
             if other:
-                return condition_not_applied(LAYER, other, t.ms)
+                return condition_not_applied(LAYER, _names(other, var), t.ms)
             conds = f_extra + [c for c in definedness_conditions(integrand, var) if c not in f_extra
                                and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
             # (a trigonometric condition on the variable left unsolved leaves no interior point proved)
@@ -1366,8 +1402,8 @@ def verify(ir, solution, ctx: Ctx):
                 if unapplied:
                     return condition_not_applied(LAYER, unapplied, t.ms)
                 conds, other = task_conditions(ctx, p["f"], var, pins)
-                if other:
-                    return condition_not_applied(LAYER, other, t.ms)
+                if other and not _half_line_for_every_value(ctx, conds, other, var):
+                    return condition_not_applied(LAYER, _names(other, var), t.ms)
                 conds += [c for c in definedness_conditions(f, var) if c not in conds
                           and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
                 dom, loose = task_region(ctx, conds, var)
