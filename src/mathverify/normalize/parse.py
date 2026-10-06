@@ -1484,10 +1484,12 @@ def _refuse_reversed_ranges(expr, raw: str) -> None:
 
 
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
-                       transformations, evaluate: bool = True, rebind: bool = True):
+                       transformations, evaluate: bool = True, rebind: bool = True,
+                       rebind_points: bool | None = None):
     """parse_expr, after checking that the code it is about to evaluate is plain arithmetic.
     `rebind=False` keeps the declared symbols inside the range binders (the reading of definedness,
-    see `parse_as_written`)."""
+    see `parse_as_written`); `rebind_points` (default: `rebind`) binds the variable of a point binder
+    (Limit, at, Subs, ConditionSet) to its own symbol all the same."""
     names = set(local_dict) | set(global_dict)
     code = stringify_expr(s, local_dict, global_dict, transformations)
     _check_code(code, s, names)
@@ -1499,8 +1501,10 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     if rebound is not None:
         code, dummies = rebound
         _check_code(code, s, names | set(dummies))
+    if rebind_points is None:
+        rebind_points = rebind
     pointed = _rebind_point_dummies(code, dict(local_dict, **dummies), global_dict, s, names | set(dummies)) \
-        if rebind and any(b in code for b in _POINT_BINDERS) else None
+        if rebind_points and any(b in code for b in _POINT_BINDERS) else None
     if pointed is not None:
         code, more = pointed
         dummies = dict(dummies, **more)
@@ -1971,9 +1975,14 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None, _depth: int = 0):
                 # integral's body are read as conditions on the variable of that name, which is what
                 # a solver's steps about x in an integral over x are checked against (rebinding them
                 # to the dummy left "x**2 + 1 = 0" unchecked and refuted "log(x**2) = 2*log(x)" on
-                # [1, e]; audit of 29 Sep 2026)
+                # [1, e]; audit of 29 Sep 2026). The variable of a POINT binder is bound all the same:
+                # read as the declared symbol, with x positive at(diff(sqrt(-x), x), x, -1) was undefined
+                # (-x > 0 is false for x > 0) and the empty solution set of y + at(...) = -1/2 was
+                # certified, and Limit(sqrt(x)**2/x, x, -oo) took its region from x's declaration
+                # (fourth audit TAN-05)
                 out.append(guarded_parse_expr(chunk, local_dict=local, global_dict={},
-                                              transformations=_TRANSFORMS, evaluate=False, rebind=False))
+                                              transformations=_TRANSFORMS, evaluate=False, rebind=False,
+                                              rebind_points=True))
         except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
             return None
     return sp.Tuple(*out)

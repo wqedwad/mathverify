@@ -688,6 +688,32 @@ class Ctx:
             self.cache["bindings"] = given_bindings(self.ir, self.ns)
         return self.cache["bindings"]
 
+    def pinned_values(self, var: sp.Symbol | None = None) -> dict:
+        """The value of each symbol other than `var` that a given (`bindings`) or a declared constraint
+        `a = c` fixes; `binding_issues` has checked them (the verifier abstains before any certificate
+        otherwise). The extremum certificate read neither: with b = 3 the maximum 0 of x on [0, b] and
+        with a = 3 the maximum 0 of a*x on [0, 1] were certified (fourth audit G4, TAN-02)."""
+        out = dict(self._constraint_bindings()[0])
+        out.update(self.bindings())
+        return {s_: v for s_, v in out.items() if s_ != var}
+
+    def task_pins(self, var: sp.Symbol, *keep: str) -> dict:
+        """`pinned_values(var)` without the symbols named in `keep` (a tangent line's dependent variable): the
+        values a task certificate puts in its function, its point, its interval and the claim. The calculus
+        certificates read none: with a = 3 the derivative 6*x of a*x**2 was refuted (it was compared with
+        2*a*x), and the written conditions of x + 0*sqrt(b - x) were dropped, so with b = 1/2 its maximum 1
+        on [0, 1] and its integral 1/2 over [0, 1] were certified (fourth audit TAN-02, review of d4e)."""
+        return {s_: v for s_, v in self.pinned_values(var).items() if s_.name not in keep}
+
+    def with_pins(self, e, pins: dict):
+        """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
+        forms this makes (Σ_{k=1}^{n} k with n = 3: 6) by values numbers confirm (`_confirmed`, ParseError
+        otherwise), as `expr` reads the problem's own: left a form, the maximum 6 of x*Σ_{k=1}^{n} k on [0, 1]
+        with n = 3 was left undecided."""
+        if not pins or not isinstance(e, sp.Basic) or not (e.free_symbols & set(pins)):
+            return e
+        return self._confirmed(None, substitute_free(e, pins))
+
     def on_var(self, rels, var: sp.Symbol) -> tuple[list, list]:
         """The relations `rels` read on `var` alone, each other symbol a given fixes read as its value
         (`x > b` with b = 0 is x > 0). A relation that then always holds is left out: the binding
@@ -756,8 +782,14 @@ class Ctx:
     # the task's own relation or expression, in params: a given next to it is a side condition.
     # count_roots and domain_of read no given at all before, so `x > 0` next to x² − 4 left the count
     # at 2 and the domain of √(4 − x²) at [-2, 2] (part vi, 30 Sep 2026)
+    # The calculus kinds read a given on their variable as a region too: a limit, a derivative, a tangent
+    # line and an antiderivative are taken on the variable's region, and the same condition gave one
+    # verdict as a declaration and another as a given (fourth audit G6, G12): with the given x > 0,
+    # lim_{x->0} |x|/x was certified DNE and the derivative of |x| at 0 under x >= 0 DNE, and log(-x)
+    # was refuted as an antiderivative of 1/x under the given x < 0.
     _MAIN_RELATION = {"solve_equation": "equation", "solve_inequality": "inequality", "count_roots": "expr",
-                      "domain_of": "expr"}
+                      "domain_of": "expr", "limit": "expr", "derivative": "f", "tangent_line": "f",
+                      "antiderivative": "integrand"}
 
     def side_conditions(self, var: sp.Symbol) -> tuple[list[sp.Set], list[str]]:
         """Solution sets of the given relations on `var` that are SIDE conditions (the task's own
@@ -950,7 +982,7 @@ class Ctx:
         integral is read as a plain real symbol: it runs over [a, b], not over its declared domain
         (certify.calculus)."""
         from ..normalize.parse import parse_as_written
-        from .domain import closed_condition_undecided, definedness_conditions
+        from .domain import closed_condition_undecided, definedness_conditions, open_conditions_empty
         ns = self.ns
         v = (self.ir.task.params or {}).get("var", "x")
         if kind == "definite_integral" and isinstance(v, str) and isinstance(ns.get(v), sp.Symbol):
@@ -959,7 +991,10 @@ class Ctx:
         if e is None:
             return None
         conds = definedness_conditions(e, None)
-        if any(c is sp.false for c in conds) or self._undefined_term(e):    # NO_VALUE comes with `false`
+        # open conditions that hold nowhere together (x > 0 and -x > 0) too: the simplification x of
+        # x + log(x) - log(x) + log(-x) - log(-x) was certified (fourth audit TAN-06)
+        if any(c is sp.false for c in conds) or self._undefined_term(e) \
+                or open_conditions_empty(conds, timeout=self.timeout):          # NO_VALUE comes with `false`
             return "undefined"
         return "undecided" if closed_condition_undecided(conds) else None
 
