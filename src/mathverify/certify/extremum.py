@@ -477,6 +477,9 @@ def verify(ir, solution, ctx: Ctx):
         claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
         if err:
             return err
+        claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)    # `a` for a*x on [0, 1], a = 3
+        if err:
+            return err
         if isinstance(claimed, sp.Set) or not getattr(claimed, "is_number", False):
             return unknown(LAYER, "claim_is_not_a_number", t.ms)
         # f as written must be defined on the whole interval: x/x − x² parses to 1 − x², whose

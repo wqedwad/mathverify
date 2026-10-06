@@ -64,6 +64,9 @@ MUTATIONS = [
      "        err = None\n", T + "test_extremum_parameter_of_f_fixed_by_a_given_or_a_constraint"),
     ("P07 ekstremum aralığı sabitlenmez", EXT, "        iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)\n",
      "        err = None\n", T + "test_extremum_interval_end_fixed_by_a_given_or_a_constraint"),
+    ("P18 ekstremum iddiası sabitlenmez", EXT,
+     "        claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)    # `a` for a*x on [0, 1], a = 3\n",
+     "        err = None\n", T + "test_extremum_parameter_of_f_fixed_by_a_given_or_a_constraint"),
     ("P08 ilkelde integrand sabitlenmez", CAL,
      "                return bad\n            integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)\n"
      "            if err:\n                return err\n            from ..normalize.parse import parse_expr_str",

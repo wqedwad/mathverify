@@ -210,7 +210,7 @@ def test_extremum_interval_end_fixed_by_a_given_or_a_constraint():
 
 def test_extremum_parameter_of_f_fixed_by_a_given_or_a_constraint():
     q = _ext("a*x", "max", "[0, 1]", ["a = 3"], XA)
-    assert _v(q, "0") == "INCORRECT" and _v(q, "3") == "CORRECT"
+    assert _v(q, "0") == "INCORRECT" and _v(q, "3") == "CORRECT" and _v(q, "a") == "CORRECT"
     q = _ext("a*x", "argmax", "[0, 1]", ["a = 3"], XA)
     assert _v(q, "0") == "INCORRECT" and _v(q, "1") == "CORRECT"
     q = _ext("a*x", "max", "[0, 1]", [], [X, AC])
