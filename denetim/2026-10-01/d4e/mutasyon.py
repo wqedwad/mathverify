@@ -1,0 +1,214 @@
+"""Mutation check of part d4e of the fourth audit's fixes (6 Oct 2026): how the task certificates read the
+conditions on their variable and the written domain of their function. Each mutation removes one guard (the
+limit's region, the two-sided point, the pins, the written conditions naming a parameter, the empty and
+periodic domains, the antiderivative's reality and single constant, the infinite bound, the point binder); the
+test it names must then fail. The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
+the one of denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
+
+    .venv/bin/python denetim/2026-10-01/d4e/mutasyon.py [-j N] [--list] [name ...]
+
+Kept out of pyflakes and pytest like the rest of denetim/. No string here may name a document.
+"""
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+_spec = importlib.util.spec_from_file_location("mutasyon_0926", HERE.parents[1] / "2026-09-26" / "mutasyon.py")
+base = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(base)
+
+BASE = "src/mathverify/certify/base.py"
+DOM = "src/mathverify/certify/domain.py"
+LIM = "src/mathverify/certify/limits.py"
+EXT = "src/mathverify/certify/extremum.py"
+CAL = "src/mathverify/certify/calculus.py"
+PARSE = "src/mathverify/normalize/parse.py"
+T = "tests/test_d4_d4e_gorev.py::"
+
+MUTATIONS = [
+    # --- the variable's region: givens as side conditions, the limit's side
+    ("R01 limitte verilen yan koşul değil", BASE, '"domain_of": "expr", "limit": "expr", ', '"domain_of": "expr", ',
+     T + "test_limit_reads_the_condition_however_it_is_written"),
+    ("R02 türev/teğette verilen yan koşul değil", BASE, '"derivative": "f", "tangent_line": "f",\n', '\n',
+     T + "test_derivative_and_tangent_at_an_end_of_the_region"),
+    ("R03 ilkelde verilen yan koşul değil", BASE, '                      "antiderivative": "integrand"}',
+     '                      }', T + "test_antiderivative_on_the_region_however_it_is_written"),
+    ("R04 limit bölgesi okunmaz", LIM, "        within = region_side(ctx, var, point, within)\n", "",
+     T + "test_limit_reads_the_condition_however_it_is_written"),
+    ("R05 bölge ucunda iki yanlı", LIM, "    if point in (oo, -oo) or len(full) == 2:\n        return side\n    return full[0]",
+     "    return side", T + "test_limit_reads_the_condition_however_it_is_written"),
+    ("R06 karar verilemeyen yan iki yanlı sayılır", LIM, "    if any(status[d] is None for d in want):\n        return UNDECIDED",
+     "    if any(status[d] is None for d in want):\n        return side", T + "test_limit_condition_naming_a_free_parameter"),
+    ("R07 dizinin ucu okunmaz", LIM, '    if getattr(var, "is_integer", None) and point in (oo, -oo):',
+     "    if False:", T + "test_limit_of_a_sequence_reads_its_region"),
+    ("R08 limitte serbest parametreli koşul", LIM,
+     "        unapplied = ctx.unapplied_conditions(var)\n        if unapplied:\n            return condition_not_applied(LAYER, unapplied, t.ms)\n",
+     "", T + "test_limit_condition_naming_a_free_parameter"),
+    # --- pins: given and constraint values, in every task certificate
+    ("P01 kısıt bağlaması okunmaz", BASE, "        out = dict(self._constraint_bindings()[0])\n", "        out = {}\n",
+     T + "test_extremum_parameter_of_f_fixed_by_a_given_or_a_constraint"),
+    ("P02 teğetin bağımlı değişkeni de sabitlenir", BASE,
+     "        return {s_: v for s_, v in self.pinned_values(var).items() if s_.name not in keep}",
+     "        return dict(self.pinned_values(var))", T + "test_tangent_dependent_variable_is_never_pinned"),
+    ("P03 sabitlemenin kapalı biçimi doğrulanmaz", BASE, "        return self._confirmed(None, substitute_free(e, pins))",
+     "        return substitute_free(e, pins)", T + "test_extremum_closed_form_a_pin_makes_is_confirmed"),
+    ("P04 limit kısıt bağlamasını okumaz", LIM, "        pins = ctx.task_pins(var)\n",
+     "        pins = {s_: v for s_, v in ctx.bindings().items() if s_ != var}\n",
+     T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P05 limit iddiası sabitlenmez", LIM, "            claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)\n",
+     "", T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P06 ekstremumda f sabitlenmez", EXT, "        f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)\n",
+     "        err = None\n", T + "test_extremum_parameter_of_f_fixed_by_a_given_or_a_constraint"),
+    ("P07 ekstremum aralığı sabitlenmez", EXT, "        iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)\n",
+     "        err = None\n", T + "test_extremum_interval_end_fixed_by_a_given_or_a_constraint"),
+    ("P08 ilkelde integrand sabitlenmez", CAL,
+     "                return bad\n            integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)\n"
+     "            if err:\n                return err\n            from ..normalize.parse import parse_expr_str",
+     "                return bad\n            from ..normalize.parse import parse_expr_str",
+     T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P09 ilkel iddiası sabitlenmez", CAL, "            F_full, err = parse_or_unknown(LAYER, ctx.with_pins, F_full, pins)\n",
+     "            err = None\n", T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P10 belirli integralde integrand sabitlenmez", CAL,
+     "            integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)\n            if err:\n"
+     "                return err\n            a, err = parse_or_unknown(LAYER, ctx.expr, str(p[\"a\"]))",
+     "            a, err = parse_or_unknown(LAYER, ctx.expr, str(p[\"a\"]))",
+     T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P11 belirli integralde sınır ve iddia sabitlenmez", CAL,
+     "lambda es: tuple(ctx.with_pins(e, pins) for e in es)", "lambda es: es",
+     T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P12 türevde f sabitlenmez", CAL,
+     "            f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)\n            if err:\n                return err\n"
+     "            try:\n                order",
+     "            try:\n                order", T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P13 türev noktası sabitlenmez", CAL,
+     "                at, err = parse_or_unknown(LAYER, ctx.with_pins, at, pins)\n                if err:\n"
+     "                    return err\n                # x²/x",
+     "                # x²/x", T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P14 noktadaki türevin iddiası sabitlenmez", CAL,
+     "                    claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)\n                    if err:\n"
+     "                        return err\n                    if st == \"value\":",
+     "                    if st == \"value\":", T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P15 türev ifadesinin iddiası sabitlenmez", CAL,
+     "                claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)\n                if err:\n"
+     "                    return err\n                # the derivative function lives",
+     "                # the derivative function lives", T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P16 teğette f sabitlenmez", CAL,
+     "            f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)\n            if err:\n                return err\n"
+     "            at, err = parse_or_unknown(LAYER, ctx.with_pins, at, pins)",
+     "            at, err = parse_or_unknown(LAYER, ctx.with_pins, at, pins)",
+     T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    ("P17 teğet iddiası sabitlenmez", CAL,
+     "                claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)\n                if err:\n"
+     "                    return err\n                if not isinstance(claimed, sp.Equality):",
+     "                if not isinstance(claimed, sp.Equality):",
+     T + "test_parameter_fixed_by_a_given_or_a_constraint_in_calculus"),
+    # --- written conditions naming a parameter
+    ("W01 limit yazılı koşulundaki parametre", LIM, "        if unpinned:\n", "        if False:\n",
+     T + "test_written_condition_naming_a_parameter"),
+    ("W02 ekstremum yazılı koşulları okumaz", EXT, "        written = written_definedness(p[\"f\"], ctx.ns, pins)[0]\n",
+     "        written = []\n", T + "test_written_condition_naming_a_parameter"),
+    ("W03 written_undefined_in sabitleri okumaz", DOM,
+     "    conds, nowhere = written_definedness(src, ns, pins)\n    if var in nowhere or written_closed_undecided",
+     "    conds, nowhere = written_definedness(src, ns)\n    if var in nowhere or written_closed_undecided",
+     T + "test_written_condition_naming_a_parameter"),
+    ("W04 ekstremum written_undefined_in'e sabit vermez", EXT,
+     "written_undefined_in(p[\"f\"], ctx.ns, var, iv, pins)", "written_undefined_in(p[\"f\"], ctx.ns, var, iv)",
+     T + "test_written_condition_naming_a_parameter"),
+    ("W05 ekstremum serbest sembolde çekimser değil", EXT, "        if free:\n", "        if False:\n",
+     T + "test_extremum_parameter_of_f_fixed_by_a_given_or_a_constraint"),
+    ("W06 belirli integral parametreli koşulu atar", CAL, "if isinstance(c, ineq) and var in c.free_symbols]",
+     "if isinstance(c, ineq) and c.free_symbols == {var}]", T + "test_written_condition_naming_a_parameter"),
+    ("W07 türev noktasında parametreli koşul", CAL,
+     "    if other:\n        return condition_not_applied(LAYER, other, ms)\n", "",
+     T + "test_written_condition_naming_a_parameter"),
+    ("W08 türev ifadesinde parametreli koşul", CAL,
+     "                if other:\n                    return condition_not_applied(LAYER, other, t.ms)\n", "",
+     T + "test_written_condition_naming_a_parameter"),
+    ("W09 ilkelde parametreli koşul", CAL,
+     "            if other:\n                return condition_not_applied(LAYER, other, t.ms)\n", "",
+     T + "test_written_condition_naming_a_parameter"),
+    # --- the two-sided point, the interior, the comparison region
+    ("I01 nokta: koşul uygulanmaz", CAL,
+     "    unapplied = ctx.unapplied_conditions(var)\n    if unapplied:\n        return condition_not_applied(LAYER, unapplied, ms)\n",
+     "", T + "test_derivative_and_tangent_at_an_end_of_the_region"),
+    ("I02 nokta iç nokta değil", CAL, "    if interior_at(ctx, conds, var, at) is not True:", "    if False:",
+     T + "test_derivative_at_an_end_or_isolated_point_of_the_written_domain"),
+    ("I03 iç nokta ℝ'de çözülür", CAL, "        region, loose = task_region(ctx, conds, var, Interval(p - 1, p + 1))",
+     "        region, loose = task_region(ctx, conds, var)", T + "test_trigonometric_derivatives_stay_decided"),
+    ("I04 türev ifadesi: koşul uygulanmaz", CAL,
+     "                unapplied = ctx.unapplied_conditions(var)\n                if unapplied:\n"
+     "                    return condition_not_applied(LAYER, unapplied, t.ms)\n                conds, other",
+     "                conds, other", T + "test_derivative_expression_on_the_region"),
+    ("I05 türev ifadesi: iç nokta aranmaz", CAL, "                if interior_point(ctx, conds, var, dom) is None:",
+     "                if False:", T + "test_function_defined_nowhere_or_without_interior"),
+    ("I06 türev ifadesi uçta karşılaştırılır", CAL, "                dom = comparison_region(dom, loose, var)\n", "",
+     T + "test_function_defined_nowhere_or_without_interior"),
+    ("I07 karşılaştırma iç kısımda değil", CAL,
+     "        inner = region.interior\n        if isinstance(inner, sp.Set) and not inner.has(sp.Complement):\n"
+     "            region = inner\n", "        pass\n", T + "test_function_defined_nowhere_or_without_interior"),
+    ("I08 çözülmemiş koşul örneklemede yok", CAL,
+     "    if loose:\n        region = sp.ConditionSet(var, sp.And(*[_open_condition(c) for c in loose]), region)\n", "",
+     T + "test_periodic_written_domain"),
+    ("I09 açık kısım kapalı kalır", CAL, "    if isinstance(c, sp.GreaterThan):\n        return sp.StrictGreaterThan(c.lhs, c.rhs)\n",
+     "", T + "test_periodic_written_domain"),
+    ("I10 türev ifadesi geniş bölge yedeği yok", CAL, "                if ok is None and ctx.domain_for(var) != S.Reals:",
+     "                if False:", T + "test_comparison_on_a_restricted_region_keeps_its_proofs"),
+    ("I11 ilkel: koşul uygulanmaz", CAL,
+     "            unapplied = ctx.unapplied_conditions(var)\n            if unapplied:\n"
+     "                return condition_not_applied(LAYER, unapplied, t.ms)\n            f_extra, other",
+     "            f_extra, other", T + "test_antiderivative_on_the_region_however_it_is_written"),
+    ("I12 ilkel: iç nokta aranmaz", CAL,
+     "            if interior_point(ctx, conds, var, task_region(ctx, conds, var)[0]) is None:", "            if False:",
+     T + "test_function_defined_nowhere_or_without_interior"),
+    # --- the antiderivative: region, reality, one constant
+    ("A01 ilkel ℝ'de karşılaştırılır", CAL, "            domain = sp.Intersection(discourse, wide)\n",
+     "            domain = wide\n", T + "test_antiderivative_on_the_region_however_it_is_written"),
+    ("A02 ilkel geniş bölge yedeği yok", CAL, "        if ok is None and wide is not None and discourse != S.Reals:",
+     "        if False:", T + "test_comparison_on_a_restricted_region_keeps_its_proofs"),
+    ("A03 kapalı koşul okunmaz", CAL, "    if closed:\n", "    if False:\n", T + "test_antiderivative_must_be_real"),
+    ("A04 gerçel olmayan ilkel", CAL, "            if sg == NONREAL:\n", "            if False:\n",
+     T + "test_antiderivative_must_be_real"),
+    ("A05 gerçellik denenmeden geçer", CAL, "    if not checked:\n", "    if False:\n",
+     T + "test_antiderivative_must_be_real"),
+    ("A06 tek sabit denetlenmez", CAL, "    one, oev = _one_constant(F, f, var, df, timeout)\n", "    one, oev = True, {}\n",
+     T + "test_antiderivative_one_constant_over_the_pieces"),
+    ("A07 gerçel kısım referansı yok", CAL, "    for ref in (r.value, sp.re(r.value)):", "    for ref in (r.value,):",
+     T + "test_antiderivative_one_constant_over_the_pieces"),
+    ("A08 parça boşlukları karşılaştırılmaz", CAL,
+     "        if all(s_ == 0 for s_ in signs):\n            ev[\"reference\"] = str(ref)\n            return True, ev\n", "",
+     T + "test_antiderivative_one_constant_over_the_pieces"),
+    # --- empty and periodic domains
+    ("D01 _undefined_function açık koşul boşluğunu okumaz", BASE, "                or open_conditions_empty(conds, timeout=self.timeout)",
+     "                or False", T + "test_function_defined_nowhere_or_without_interior"),
+    ("D02 limit açık koşul boşluğunu okumaz", LIM, " or open_conditions_empty(conds)\n", "\n",
+     T + "test_limit_of_a_function_defined_nowhere"),
+    ("D03 boşluk ℝ'de denenmez", DOM, "    if rel is sp.false or exact_solveset(rel, s_, S.Reals) is S.EmptySet:",
+     "    if rel is sp.false:", T + "test_function_defined_nowhere_or_without_interior"),
+    ("D04 periyodik koşullar tek periyotta okunmaz", DOM, "    if not periodic:\n        return False\n",
+     "    if True:\n        return False\n", T + "test_periodic_written_domain"),
+    ("D05 ortak periyot yerine ilk periyot", DOM, "        period = lcim(periods) if len(periods) > 1 else periods[0]",
+     "        period = periods[0]", T + "test_periodic_written_domain"),
+    ("D06 ekstremumda karşılaştırılamayan aday atılır", EXT, "    if any(v[2] is None for v in vals):",
+     "    if False:", T + "test_extremum_candidate_value_that_is_no_number_is_never_dropped"),
+    # --- the infinite bound
+    ("H01 sonsuz sınır bölgeye uzanmaz", DOM,
+     "    lo = -oo if -oo in ends else u.inf\n    hi = oo if oo in ends else u.sup\n", "    lo, hi = u.inf, u.sup\n",
+     T + "test_infinite_bound_reaches_its_end_and_must_converge"),
+    ("H02 sonsuz uçta yakınsaklık aranmaz", DOM, "            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):",
+     "            if False:", T + "test_infinite_bound_reaches_its_end_and_must_converge"),
+    ("H03 sönüm üssü 1'den büyük değil", DOM, "    for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):",
+     "    for p in (S(0),):", T + "test_infinite_bound_reaches_its_end_and_must_converge"),
+    ("H04 çok sınırlı uygunsuz integral", DOM, "        return [DEFINEDNESS_UNDECIDED] if named or improper else []",
+     "        return [DEFINEDNESS_UNDECIDED] if named else []", T + "test_infinite_bound_reaches_its_end_and_must_converge"),
+    # --- the point binder
+    ("B01 nokta bağlayıcısı yazılı okumada yeniden bağlanmaz", PARSE, "                                              rebind_points=True))",
+     "                                              rebind_points=False))",
+     T + "test_point_binder_variable_carries_no_declaration"),
+]
+
+if __name__ == "__main__":
+    base.MUTATIONS = MUTATIONS
+    sys.exit(base.main())
