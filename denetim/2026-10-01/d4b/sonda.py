@@ -21,6 +21,9 @@ others leave, `Ctx.cut_by`, the completeness rule of `algebra._complete_solution
     G  round 5 (2 Oct 2026): no complete set out of the classes (two solvers agreeing is no proof): a full
        claim of a non-class equation UNKNOWN, a missing or extra root INCORRECT only when proved; the new
        classes (vii) exponent ratio, (viii) Abs/sign piecewise, (ix) one radical, (x) a sum of logs
+    H  the review of round 5 (2 Oct 2026): B1 a positive generator for log/sinh/atan (Max(log x, 0) = 0,
+       sqrt(log(x)**2) = 1), B2 sign(0) lost on closed cells, B3 a folded cell keeping undefined points,
+       the odd-root convention of part d4a in the guarded solveset; controls
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/d4b/sonda.py [out.json] [groups]
@@ -485,6 +488,90 @@ def cases_g():
     ]
 
 
+def cases_h():
+    return [
+        # B1
+        ("H1 eq Max(log x,0)=0: {1}", eq("Max(log(x), 0) = 0"), _sol("{1}", S_), NO, None),
+        ("H1 eq Max(log x,0)=0: (0,1]", eq("Max(log(x), 0) = 0"), _sol("Interval.Lopen(0, 1)", "interval"), NOTNO, None),
+        ("H1 eq Max(sinh x,0)=0: {0}", eq("Max(sinh(x), 0) = 0"), _sol("{0}", S_), NO, None),
+        ("H1 croots Max(log x,0): 1", croots("Max(log(x), 0)"), _sol("1", "count"), NOTOK, None),
+        ("H1 eq sqrt(log^2)=1: {E}", eq("sqrt(log(x)**2) = 1"), _sol("{E}", S_), NO, None),
+        ("H1 eq sqrt(log^2)=1: {E,1/E}", eq("sqrt(log(x)**2) = 1"), _sol("{E, exp(-1)}", S_), OK, None),
+        ("H1 eq |log x|=1: {E}", eq("Abs(log(x)) = 1"), _sol("{E}", S_), NO, None),
+        ("H1 eq |log x|=1: {E,1/E}", eq("Abs(log(x)) = 1"), _sol("{E, exp(-1)}", S_), OK, None),
+        ("H1 croots sqrt(log^2)-1: 2", croots("sqrt(log(x)**2) - 1"), _sol("2", "count"), OK, None),
+        ("H1 croots sqrt(log^2)-1: 1", croots("sqrt(log(x)**2) - 1"), _sol("1", "count"), NO, None),
+        ("H1 eval x | sqrt(log^2)=1, x>0: E", ev("x", ["sqrt(log(x)**2) = 1", "x > 0"]), _sol("E"), NOTOK, None),
+        ("H1 eval x | sqrt(log^2)=1, x>1: E", ev("x", ["sqrt(log(x)**2) = 1", "x > 1"]), _sol("E"), OK, None),
+        ("H1 domof log(Max(x,0)): (0,oo)", domof("log(Max(x, 0))"), _sol("Interval.open(0, oo)", "interval"), OK, None),
+        # B2
+        ("H2 eq sign(x)=0: {}", eq("sign(x) = 0"), _sol("{}", S_), NO, None),
+        ("H2 eq sign(x)=0: {0}", eq("sign(x) = 0"), _sol("{0}", S_), OK, None),
+        ("H2 eq sign(x^2-4)=0: {}", eq("sign(x**2 - 4) = 0"), _sol("{}", S_), NO, None),
+        ("H2 croots sign(x): 0", croots("sign(x)"), _sol("0", "count"), NO, None),
+        ("H2 croots sign(x): 1", croots("sign(x)"), _sol("1", "count"), OK, None),
+        ("H2 eq sign(x)+|x|=0: {-1}", eq("sign(x) + Abs(x) = 0"), _sol("{-1}", S_), NO, None),
+        ("H2 eq sign(x)+|x|=0: {-1,0}", eq("sign(x) + Abs(x) = 0"), _sol("{-1, 0}", S_), OK, None),
+        ("H2 cint sign(x)=0 [-3,3]: 0", cint(["sign(x) = 0", "x >= -3", "x <= 3"], [V("x", "integer")]), _sol("0", "count"), NO, None),
+        ("H2 cint sign(x)=0 [-3,3]: 1", cint(["sign(x) = 0", "x >= -3", "x <= 3"], [V("x", "integer")]), _sol("1", "count"), OK, None),
+        ("H2 ineq sign(x)>=1: (0,oo)", ineq("sign(x) >= 1"), _sol("Interval.open(0, oo)", "interval"), OK, None),
+        ("H2 ineq sign(x)>=1: [0,oo)", ineq("sign(x) >= 1"), _sol("Interval(0, oo)", "interval"), NO, None),
+        ("H2 domof 1/sign(x): R", domof("1/sign(x)"), _sol("Reals", "interval"), NO, None),
+        ("H2 step sign(x)=0 => x=0 verified", ev("x", ["sign(x) = 0"]), _sol("0", steps=[("eq", "x = 0")]), OK, {"verified"}),
+        # B3
+        ("H3 eq |x|/x=1: (0,oo)", eq("Abs(x)/x = 1"), _sol("Interval.open(0, oo)", "interval"), NOTNO, None),
+        ("H3 eq |x|/x=1: [0,oo)", eq("Abs(x)/x = 1"), _sol("Interval(0, oo)", "interval"), NOTOK, None),
+        ("H3 ineq |x|/x>=-1: R", ineq("Abs(x)/x >= -1"), _sol("Reals", "interval"), NO, None),
+        ("H3 ineq |x|/x>=-1: R-{0}", ineq("Abs(x)/x >= -1"), _sol("Union(Interval.open(-oo, 0), Interval.open(0, oo))", "interval"),
+         OK, None),
+        ("H3 croots |x|/x+x-1: 0", croots("Abs(x)/x + x - 1"), _sol("0", "count"), OK, None),
+        ("H3 croots |x|/x+x-1: 1", croots("Abs(x)/x + x - 1"), _sol("1", "count"), NO, None),
+        # the odd-root convention (part d4a): no reading is picked in the guarded solveset
+        ("H4 eq x^(2/3)=1: {1}", eq("x**(2/3) = 1"), _sol("{1}", S_), UNK, None),
+        ("H4 eq x^(2/3)=1: {-1,1}", eq("x**(2/3) = 1"), _sol("{-1, 1}", S_), UNK, None),
+        ("H4 eq x^(2/3)=1, x>0: {1}", eq("x**(2/3) = 1", ["x > 0"]), _sol("{1}", S_), OK, None),
+        ("H4 eq cbrt(x)=x: {-1,0,1}", eq("cbrt(x) = x"), _sol("{-1, 0, 1}", S_), OK, None),
+        ("H4 croots x^(1/3)-x: 3", croots("x**(1/3) - x"), _sol("3", "count"), NOTOK, None),
+        # controls
+        ("H5 ctl eq |2x-3|=5: {-1,4}", eq("Abs(2*x - 3) = 5"), _sol("{-1, 4}", S_), OK, None),
+        ("H5 ctl eq Max(x,2)=3: {3}", eq("Max(x, 2) = 3"), _sol("{3}", S_), OK, None),
+        ("H5 ctl eq Min(x,2)=2: [2,oo)", eq("Min(x, 2) = 2"), _sol("{2}", S_), NO, None),
+        ("H5 ctl eq |sinh x|=1", eq("Abs(sinh(x)) = 1"), _sol("{log(1 + sqrt(2)), -log(1 + sqrt(2))}", S_), OK, None),
+    ]
+
+
+L8 = "log(8)/log(2)"           # = 3 exactly (log 8 = 3 log 2)
+
+
+def cases_i():
+    """Round 6 (6 Oct 2026): one interval end written two ways (the solved set's 3, the given's log(8)/log(2));
+    SymPy's Intersection raised TypeError and the certificate died. CORRECT/INCORRECT come back only where the
+    two are PROVED equal."""
+    XA = (X, V("a"))
+    return [
+        ("I1 eq x^2=4, x>L8: {}", eq("x**2 = 4", [f"x > {L8}"]), _sol("{}", S_), OK, None),
+        ("I1 eq x^2=4, x>L8: {2}", eq("x**2 = 4", [f"x > {L8}"]), _sol("{2}", S_), NO, None),
+        ("I1 eq x^2=9, x>=L8: {3}", eq("x**2 = 9", [f"x >= {L8}"]), _sol("{3}", S_), OK, None),
+        ("I1 eq x^2=9, x>=L8: {-3,3}", eq("x**2 = 9", [f"x >= {L8}"]), _sol("{-3, 3}", S_), NO, None),
+        ("I1 eq x^2=9, x>L8: {3}", eq("x**2 = 9", [f"x > {L8}"]), _sol("{3}", S_), NO, None),
+        ("I1 eq x^2=9, x>L8: {}", eq("x**2 = 9", [f"x > {L8}"]), _sol("{}", S_), OK, None),
+        ("I2 eq x^2=4, x>a, a=L8: {}", eq("x**2 = 4", ["x > a", f"a = {L8}"], XA), _sol("{}", S_), OK, None),
+        ("I2 eq x^2=4, x>a, a=L8 (a=3 kısıt): {}",
+         eq("x**2 = 4", ["x > a", f"a = {L8}"], (X, V("a", cons=["a = 3"]))), _sol("{}", S_), OK, None),
+        ("I2 eq x^2=9, x>=a, a=L8: {3}", eq("x**2 = 9", ["x >= a", f"a = {L8}"], XA), _sol("{3}", S_), OK, None),
+        ("I3 eq log(x-L8)=0: {4}", eq(f"log(x - {L8}) = 0", [f"x > {L8}"]), _sol("{4}", S_), OK, None),
+        ("I3 eq sqrt(x-L8)=1: {4}", eq(f"sqrt(x - {L8}) = 1", [f"x >= {L8}"]), _sol("{4}", S_), OK, None),
+        # 3 is no root (sqrt(0) = 0), but the radicand 3 - log(8)/log(2) is an exact 0 the root check does not
+        # decide (claimed_root_undecided; the same at 76d0c87): anything but a false acceptance
+        ("I3 eq sqrt(x-L8)=1: {3,4}", eq(f"sqrt(x - {L8}) = 1", [f"x >= {L8}"]), _sol("{3, 4}", S_), NOTOK, None),
+        # a tiny difference is no equality: 3 + e^(-e^10) is not 3, nothing is written one way
+        ("I4 eq x^2=9, x>L8+e^-e^10: {3}", eq("x**2 = 9", [f"x > {L8} + exp(-exp(10))"]), _sol("{3}", S_), NOTOK, None),
+        ("I4 eq x^2=9, x>L8-e^-e^10: {}", eq("x**2 = 9", [f"x > {L8} - exp(-exp(10))"]), _sol("{}", S_), NOTOK, None),
+        ("I4 eq x^2=9, x>L8-e^-e^10: {3}", eq("x**2 = 9", [f"x > {L8} - exp(-exp(10))"]), _sol("{3}", S_), NOTNO, None),
+        ("I5 ctl eq x^2=9, x>=3: {3}", eq("x**2 = 9", ["x >= 3"]), _sol("{3}", S_), OK, None),
+    ]
+
+
 class _Slow(Exception):
     pass
 
@@ -497,10 +584,11 @@ def _on_alarm(signum, frame):
 CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g}
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "H": cases_h,
+          "I": cases_i}
 
 
-def main(out_path=None, groups="ABCDEFG"):
+def main(out_path=None, groups="ABCDEFGHI"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -541,5 +629,5 @@ def main(out_path=None, groups="ABCDEFG"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFG"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHI"
     sys.exit(1 if main(out, grp) else 0)

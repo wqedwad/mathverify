@@ -294,8 +294,8 @@ def _mono_parts(base, var):
              if var in n.free_symbols and (isinstance(n, _MONO) or (isinstance(n, sp.Pow) and var in n.exp.free_symbols))]
     if not nodes:
         return None
-    t = sp.Dummy("t", positive=True)
     kinds = {type(n) for n in nodes}
+    t = sp.Dummy("t", positive=True)           # exp and c**x take positive values only
     if kinds <= {sp.exp, sp.Pow}:
         exps = {}
         for n in nodes:
@@ -337,10 +337,20 @@ def _mono_parts(base, var):
     ab = _linear(n.args[0], var)
     if ab is None:
         return None
-    bt = base.xreplace({n: t})
-    if bt.free_symbols != {t}:
+    # for log, sinh, atan the generator carries no assumption, and the reading is checked by substituting
+    # back: a positive t made Max(t, 0) -> t and sqrt(t**2) -> t, so Max(log x, 0) = 0 gave {1} (the truth
+    # is (0, 1]) and sqrt(log(x)**2) = 1 gave {e} (review of round 5, B1)
+    tl = sp.Dummy("t")
+    bt = base.xreplace({n: tl})
+    if bt.free_symbols != {tl}:
         return None
-    return h, ab[0], ab[1], sp.Poly(bt, t)
+    try:
+        g = sp.Poly(bt, tl)
+    except sp.PolynomialError:
+        return None
+    if not g.domain.is_Exact or g.free_symbols_in_domain or sp.simplify(g.as_expr().subs(tl, n) - base) != 0:
+        return None
+    return h, ab[0], ab[1], g
 
 
 def _log_of_term(term, var):
@@ -544,6 +554,8 @@ def _sqrt_zeros(base, var):
     zeros = []
     for c in _real_roots(cand):
         if _certified(P.subs(var, c)) < 0:
+            # not real (even index), or a convention (odd index, part d4a): a window holding it is cut
+            # off or left unsolved by `_log_outside`, so it is no zero of this reading
             continue
         if _certified(base.subs(var, c)) == 0:
             zeros.append((c, S.Zero))
@@ -666,12 +678,53 @@ def _log_outside(e, var):
     radicand < 0 there? The classes have only polynomial arguments and radicands, whose real roots are
     edges of every cell (`_breaks`): the sign at one point of a cell is the sign on the whole cell."""
     args = [n.args[0] for n in e.atoms(sp.log) if var in n.free_symbols]
-    rads = [n.base for n in _roots_of(e, var)]
+    rads = [n.base for n in _roots_of(e, var) if n.exp.q % 2 == 0]
+    odd = [n.base for n in _roots_of(e, var) if n.exp.q % 2 == 1]
+
+    if _PRINCIPAL[0]:
+        rads = rads + odd
+
+    # an odd root of a negative number as written is a convention (part d4a): `_convention_free` leaves
+    # such a window unsolved before any cell is read (under `principal_solveset` it is not real)
 
     def outside(pt) -> bool:
         return any(_certified(a.subs(var, pt)) <= 0 for a in args) or any(
             _certified(r_.subs(var, pt)) < 0 for r_ in rads)
     return outside
+
+
+_PRINCIPAL = [False]       # set by `principal_solveset`: an odd root of a negative number is not real
+
+
+def principal_solveset(rel, var, domain=S.Reals):
+    """`exact_solveset` under the principal reading of a written odd root: x**(1/3) at x < 0 is not real
+    (SymPy's own reading). For a caller that takes both readings itself (steps._solved_both_readings);
+    every other caller gets no set where the reading is a convention."""
+    _PRINCIPAL[0] = True
+    try:
+        return exact_solveset(rel, var, domain)
+    finally:
+        _PRINCIPAL[0] = False
+
+
+def _convention_free(e, var, lo, hi) -> None:
+    """Raise _Unsolved when a written odd root of `e` has a negative radicand somewhere on [lo, hi]:
+    its value there is a convention (principal or real root, part d4a), so no set is exact. x**(2/3) = 1
+    is {1} on x >= 0 and no set on the reals."""
+    odd = [n.base for n in _roots_of(e, var) if n.exp.q % 2 == 1]
+    if not odd or _PRINCIPAL[0]:
+        return
+    for r_ in odd:
+        q = _poly_of(r_, var)
+        if q is None:
+            raise _Unsolved(f"an odd root of no polynomial: {r_}")
+        inner = [c for c in _sorted_unique(_on([(c, S.Zero) for c in _real_roots(q)], lo, hi)) if c != lo and c != hi]
+        edges = [lo] + inner + [hi]
+        pts = [p_ for p_ in edges if p_.is_finite] + [
+            (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+            for a, b in zip(edges[:-1], edges[1:])]
+        if any(_certified(r_.subs(var, p_)) < 0 for p_ in pts):
+            raise _Unsolved("an odd root of a negative number: a convention (part d4a)")
 
 
 def _restricted(e, var) -> bool:
@@ -699,33 +752,69 @@ def _piecewise(rel, var, lo, hi):
     where the root is a window end); its set there is solved as any other. |2x - 3| = 5 → {-1, 4};
     |2x - 3| = 2x - 3 → [3/2, oo); the real cube root sign(x)*|x|**(1/3). None when `rel` has neither."""
     e = rel.lhs - rel.rhs
-    atoms = sorted({n for n in e.atoms(sp.Abs, sp.sign) if var in n.free_symbols}, key=sp.default_sort_key)
+    # sqrt(A**2) is |A| wherever A is real; where it is not (log of a negative number) the cell is outside
+    e = e.replace(lambda n: isinstance(n, sp.Pow) and n.exp == S.Half and isinstance(n.base, sp.Pow)
+                  and n.base.exp == 2 and var in n.free_symbols, lambda n: sp.Abs(n.base.base))
+    atoms = sorted({n for n in e.atoms(sp.Abs, sp.sign, sp.Max, sp.Min) if var in n.free_symbols},
+                   key=sp.default_sort_key)
     if not atoms:
         return None
+    if any(isinstance(at, (sp.Max, sp.Min)) and len(at.args) != 2 for at in atoms):
+        raise _Unsolved("Max or Min of more than two")
+    rel = type(rel)(e, 0)
     cuts = []
     for at in atoms:
-        q = _poly_of(at.args[0], var)
-        if q is None:
-            raise _Unsolved(f"Abs or sign of no polynomial: {at}")
-        cuts += _real_roots(q)
-    inner = [c for c in _sorted_unique(_on([(c, S.Zero) for c in cuts], lo, hi)) if c != lo and c != hi]
+        arg = at.args[0] if isinstance(at, (sp.Abs, sp.sign)) else at.args[0] - at.args[1]
+        q = _poly_of(arg, var)
+        if q is not None:
+            cuts += [(r_, S.Zero) for r_ in _real_roots(q)]
+        else:                                  # |log x|: the zeros, poles and domain edges of the argument
+            z, p_, _ = _structure(arg, var)
+            cuts += z + p_ + [(c, S.Zero) for c in _breaks(arg, var)]
+    outside = _log_outside(e, var)
+    bad = _undefined_points(e, var, lo, hi)
+    inner = [c for c in _sorted_unique(_on(cuts, lo, hi) + bad) if c != lo and c != hi]
     edges = [lo] + inner + [hi]
     pieces = []
     for a, b in zip(edges[:-1], edges[1:]):
         mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+        if outside(mid):
+            continue
         sub = {}
         for at in atoms:
+            if isinstance(at, (sp.Max, sp.Min)):  # Max(A, B) is A where A > B on the cell
+                sg = _certified((at.args[0] - at.args[1]).subs(var, mid))
+                sub[at] = at.args[0] if (sg > 0) == isinstance(at, sp.Max) else at.args[1]
+                continue
             sg = _certified(at.args[0].subs(var, mid))
             sub[at] = sg * at.args[0] if isinstance(at, sp.Abs) else sp.Integer(sg)
+        # on the OPEN cell the arguments keep their sign: sign(P) is +-1 there only (sign(0) = 0, review
+        # of round 5, B2: sign(x) = 0 gave {}); the relation with them replaced may fold to True or False,
+        # and then it no longer shows where the written expression is undefined (B3: |x|/x = 1 gave
+        # [0, oo), |x|tan x = x tan x on [0, 3] held pi/2): those points are cut out of every cell
         cell = type(rel)(e.xreplace(sub), 0)
         if cell is sp.true:
-            got = sp.Interval(a, b)
+            got = sp.Interval.open(a, b)
         elif cell is sp.false:
             got = S.EmptySet
         else:
-            got = _on_window(cell, var, a, b)[0]
-        pieces.append(sp.Intersection(got, sp.Interval(a, b)))
+            got = sp.Intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))
+        pieces.append(got)
+    for p_ in edges:                           # each cut point and window end on `rel` as written
+        if not p_.is_finite or _same(p_, bad) or outside(p_):
+            continue
+        val = e.subs(var, p_)
+        if val.has(sp.zoo, sp.nan, sp.oo, -sp.oo):
+            continue
+        if _holds(type(rel), _real_sign(val)):
+            pieces.append(sp.FiniteSet(p_))
     return sp.Union(*pieces) if pieces else S.EmptySet
+
+
+def _undefined_points(e, var, lo, hi) -> list:
+    """The points of [lo, hi] where `e` AS WRITTEN is undefined: a written denominator's zeros and poles,
+    the poles of tan, cot, sec, csc (of the classes, or raise _Unsolved)."""
+    return _sorted_unique(_on(_written_poles(e, var), lo, hi))
 
 
 def _identity(e, var) -> bool:
@@ -745,6 +834,10 @@ def _written_poles(e, var) -> list:
         if isinstance(n, sp.Pow) and n.exp.is_number and n.exp.is_negative and var in n.base.free_symbols:
             z, p_, _ = _structure(n.base, var)
             out += z + p_
+    for n in e.atoms(sp.tan, sp.cot, sp.sec, sp.csc):         # and the poles of these, as written
+        if var in n.free_symbols:
+            f = sp.cos if isinstance(n, (sp.tan, sp.sec)) else sp.sin
+            out += _structure(f(n.args[0]), var)[0]
     return out
 
 
@@ -776,6 +869,7 @@ def _on_window(rel, var, lo, hi):
     outside = _log_outside(e, var)
     zeros = [z for z in _sorted_unique(_on(zp, lo, hi)) if not _same(z, poles) and not outside(z)]
     op = type(rel)
+    _convention_free(e, var, lo, hi)
     if op is sp.Equality and not ident:
         return sp.FiniteSet(*zeros), zeros, poles
     cuts = _on([(c, S.Zero) for c in _breaks(e, var)], lo, hi)
@@ -918,10 +1012,17 @@ def _rebuilt(rel, var, domain):
         discrete = _on_periodic_points(rel, var, domain, P)
         if discrete is not None:
             return discrete
-    if (_identity(e, var) or e.has(sp.Abs, sp.sign)) and P is None:
+    if (_identity(e, var) or e.has(sp.Abs, sp.sign, sp.Max, sp.Min) or any(
+            isinstance(n, sp.Pow) and n.exp == S.Half and isinstance(n.base, sp.Pow) and n.base.exp == 2
+            for n in sp.preorder_traversal(e))) and P is None:
         return sp.Intersection(_on_window(rel, var, S.NegativeInfinity, S.Infinity)[0], domain)
     if isinstance(rel, sp.Equality):
         zp, pp, _ = _structure(e, var)
+        try:
+            dlo, dhi = domain.inf, domain.sup
+        except Exception:  # noqa: BLE001
+            dlo, dhi = S.NegativeInfinity, S.Infinity
+        _convention_free(e, var, dlo, dhi)
         if _restricted(e, var):
             # a zero where a log or an even root is not real is no zero ((x + 1)*log(x) = 0 at x = -1);
             # a progression crosses that region, so only points are cut here

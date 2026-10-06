@@ -628,7 +628,9 @@ def _solved_both_readings(p, v, ctx: Ctx) -> sp.Set | None:
     from ..equiv.numeric import real_odd_roots
     out = None
     for q in dict.fromkeys([p, real_odd_roots(p)]):
-        r = sb_run("mathverify.sandbox.ops:solveset_in", q, v, S.Reals, timeout=ctx.timeout)
+        # the written power read on the principal branch (a negative radicand: not real); the guarded
+        # solveset alone leaves no set where the reading is a convention
+        r = sb_run("mathverify.sandbox.ops:solveset_principal", q, v, S.Reals, timeout=ctx.timeout)
         if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
             return None
         out = r.value if out is None else sp.Union(out, r.value)

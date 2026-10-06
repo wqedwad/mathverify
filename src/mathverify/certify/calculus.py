@@ -26,12 +26,10 @@ from typing import Any
 
 import mpmath as mp
 import sympy as sp
-from sympy import S, Eq, Ne
-from sympy.functions.elementary.hyperbolic import HyperbolicFunction
-from sympy.functions.elementary.trigonometric import TrigonometricFunction
+from sympy import S, Eq, Ne, Interval, oo
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import certified_sign, num_equal, to_mp
+from ..equiv.numeric import NONREAL, certified_sign, num_equal, to_mp
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
@@ -536,13 +534,17 @@ def tolerance_window(claimed, rel_tol):
         return c[0] - t * abs(c[0]), c[1] + t * abs(c[1])
 
 
-def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0) -> bool | None:
+def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0,
+                                         pins: dict | None = None) -> bool | None:
     """Is the integrand, as written or as parsed, undefined on a piece of (a, b) of positive
     length? Isolated points are fine (improper integrals). exp(log(x)) parses to x, and
-    "∫_{-2}^{-1} exp(log x) dx = -3/2" was certified (audit of 25 Sep 2026)."""
+    "∫_{-2}^{-1} exp(log x) dx = -3/2" was certified (audit of 25 Sep 2026). The written conditions are
+    read with the values `pins` holds; one that still names another symbol leaves it undecided (None)."""
     ineq = (sp.StrictLessThan, sp.LessThan, sp.StrictGreaterThan, sp.GreaterThan)
-    conds = [c for c in list(written_definedness(src, ns)[0]) + list(definedness_conditions(expr, var))
-             if isinstance(c, ineq) and c.free_symbols == {var}]
+    conds = [c for c in list(written_definedness(src, ns, pins)[0]) + list(definedness_conditions(expr, var))
+             if isinstance(c, ineq) and var in c.free_symbols]
+    if any(c.free_symbols != {var} for c in conds):
+        return None
     if not conds:
         return False
     lo, hi = sp.Min(a, b), sp.Max(a, b)
@@ -629,21 +631,110 @@ def _defined_at(expr, conds, var, p) -> bool | None:
     return _real_finite(sp.sympify(expr).subs(var, p))
 
 
+def _integrand_region(cf, var, discourse, timeout):
+    """The points of `discourse` where the integrand's conditions `cf` hold, or None when no exact set is
+    found (a relation SymPy reads on one period only is solved by `sandbox.exactsets`)."""
+    region = discourse
+    for cc in cf:
+        rr = sb_run("mathverify.sandbox.ops:solveset_in", cc, var, discourse, timeout=timeout)
+        if not rr.ok or not isinstance(rr.value, sp.Set) or rr.value.has(sp.ConditionSet):
+            return None
+        region = sp.Intersection(region, rr.value)
+    return region
+
+
+def _pieces(region) -> list | None:
+    """The intervals `region` is the disjoint union of, or None when it is not a finite union of them."""
+    if isinstance(region, sp.Interval):
+        return [region]
+    if isinstance(region, sp.Union) and all(isinstance(a, sp.Interval) for a in region.args):
+        return list(region.args)
+    return None
+
+
+def _reality(v):
+    """NONREAL, a sign (-1, 0, 1) when `v` is real, or None. A symbol left in it (the constant C of F + C, a
+    parameter) is a real constant: its sign does not matter, SymPy's `is_real` does."""
+    others = getattr(v, "free_symbols", set())
+    if not others:
+        return certified_sign(v)
+    v = v.xreplace({s_: sp.Dummy(s_.name, real=True) for s_ in others})
+    return NONREAL if v.is_real is False else 0 if v.is_real is True else None
+
+
+def _one_constant(F, f, var, region, timeout) -> tuple[bool | None, dict[str, Any]]:
+    """On a region of several pieces (1/x on x != 0), F' = f says F differs from a reference primitive by a
+    constant on EACH piece. The curriculum's F + C has one constant; different constants on the pieces
+    (log|x| + sign(x)) are a convention, never certified (fourth audit G12, decision of 2 Oct 2026). True
+    when F minus SymPy's primitive (or its real part: log(x) is log|x| + i*pi on x < 0) is one constant,
+    None otherwise."""
+    ev: dict[str, Any] = {}
+    pieces = _pieces(region) if region is not None else None
+    if pieces is not None and len(pieces) <= 1:
+        return True, ev
+    r = sb_run("mathverify.sandbox.ops:integrate_symbolic", f, var, timeout=timeout)
+    if not r.ok or not isinstance(r.value, sp.Expr) or r.value.has(sp.Integral, *_PRIMITIVE_JUMPS):
+        ev["reason"] = "antiderivative_pieces_undecided"
+        return None, ev
+    differs = False
+    for ref in (r.value, sp.re(r.value)):
+        if ref.has(sp.re, sp.im):
+            continue
+        rs = sb_run("mathverify.sandbox.ops:simplify_diff", F, ref, timeout=timeout)
+        if rs.ok and isinstance(rs.value, sp.Expr) and var not in rs.value.free_symbols:
+            ev["reference"] = str(ref)
+            return True, ev
+        if pieces is None:
+            continue
+        gaps = []
+        for piece in pieces:
+            pts = _points_of(piece, 1)
+            if not pts:
+                break
+            gaps.append(sp.sympify(F - ref).subs(var, pts[0]))
+        if len(gaps) != len(pieces):
+            continue
+        signs = [certified_sign(g - gaps[0]) for g in gaps[1:]]
+        if all(s_ == 0 for s_ in signs):
+            ev["reference"] = str(ref)
+            return True, ev
+        differs = differs or any(s_ in (1, -1) for s_ in signs)
+    ev["reason"] = "constant_differs_between_pieces" if differs else "antiderivative_pieces_undecided"
+    return None, ev
+
+
 def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extra=(),
                                 timeout: float = 8.0) -> tuple[bool | None, dict[str, Any]]:
     """F' = f is not enough: F must be real and continuous at every point where f is defined.
-    False comes with a witness point (f defined there, F not / F jumps there); True needs a proof
-    (the offending set is empty, or it misses the domain of f); otherwise None. Periodic domains
-    are not solved as sets: solveset returns ONE period for `1 + cos(x) != 0` (measured)."""
+    False comes with a witness point (f defined there, F not / F jumps there / F not real there);
+    True needs a proof (the offending set is empty, or it misses the domain of f, and F is one
+    primitive plus one constant over the pieces of that domain); otherwise None. Periodic domains
+    are solved by `sandbox.exactsets` (SymPy returns ONE period for `1 + cos(x) != 0`)."""
     ev: dict[str, Any] = {}
     F, f = sp.sympify(F), sp.sympify(f)
     if F.has(*_JUMPY):
         ev["reason"] = "discontinuous_primitive_in_antiderivative"
         return None, ev
+    # a closed condition of F that fails: F has no real value anywhere. x positive folds log(-x)'s
+    # -x > 0 to false, which named no variable and was dropped, so log(-x) was certified for 1/x
+    # (fourth audit G12); with x > 0 as a constraint the same claim was refuted
+    closed = [c for c in list(definedness_conditions(F, var)) + list(F_extra)
+              if not getattr(c, "free_symbols", set()) and c is not sp.true]
     cf = _conditions(f, var, f_extra)
     cF = _conditions(F, var, F_extra)
     if cf is None or cF is None:
         ev["reason"] = "conditions_involve_parameters"
+        return None, ev
+    df = None
+    if closed:
+        df = _integrand_region(cf, var, discourse, timeout)
+        if any(c is sp.false for c in closed) and df is not None:
+            for p_ in _points_of(df):
+                if _defined_at(f, cf, var, p_) is True:
+                    ev["reason"] = "antiderivative_undefined_everywhere_as_written"
+                    ev["witness"] = {"x": str(p_)}
+                    return False, ev
+        ev["reason"] = "antiderivative_condition_undecided"
         return None, ev
     for s_ in F.atoms(sp.sign):                   # sign(u) jumps where u changes sign
         if s_.args[0].has(var):
@@ -652,7 +743,6 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
                 cF.append(c)
     todo = [c for c in cF if c not in cf]
     ev["checked_conditions"] = [str(c) for c in todo]
-    df = None
     for c in todo:
         neg = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else c.negated
         r = sb_run("mathverify.sandbox.ops:solveset_in", neg, var, discourse, timeout=timeout)
@@ -668,16 +758,10 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
                 ev["witness"] = {"x": str(p_), "condition": str(c)}
                 return False, ev
         if df is None:
-            if any(cc.has(TrigonometricFunction, HyperbolicFunction) for cc in cf):
-                ev["reason"] = f"undecided (periodic domain): {c}"
+            df = _integrand_region(cf, var, discourse, timeout)
+            if df is None:
+                ev["reason"] = f"undecided domain: {c}"
                 return None, ev
-            df = discourse
-            for cc in cf:
-                rr = sb_run("mathverify.sandbox.ops:solveset_in", cc, var, S.Reals, timeout=timeout)
-                if not rr.ok or rr.value.has(sp.ConditionSet):
-                    ev["reason"] = f"undecided domain: {cc}"
-                    return None, ev
-                df = sp.Intersection(df, rr.value)
         inter = sp.Intersection(bad, df)
         if inter is S.EmptySet:
             continue
@@ -688,7 +772,35 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
                 return False, ev
         ev["reason"] = f"undecided: {c} on {inter}"
         return None, ev
-    return True, ev
+    if df is None:
+        df = _integrand_region(cf, var, discourse, timeout)
+    # F real where f is: a complex constant (x + I for 1, log(x) + I*pi for 1/x) is no real primitive. Its
+    # imaginary part is constant on each piece (F' = f is real); `_one_constant` compares the pieces
+    checked = 0
+    for batch in (_points_of(df if df is not None else discourse), _INTERIOR_PROBES):
+        for p_ in batch:
+            if discourse.contains(p_) is not sp.true or any(relation_holds_at(c, var, p_) is not True for c in cf):
+                continue
+            try:
+                fv = sp.sympify(f).subs(var, p_)
+                if not (_reality(fv) in (-1, 0, 1) if fv.free_symbols else _real_finite(fv) is True):
+                    continue                           # f has no real value there
+                sg = _reality(F.subs(var, p_))
+            except Exception:  # noqa: BLE001
+                sg = None
+            if sg == NONREAL:
+                ev["reason"] = "antiderivative_not_real_where_integrand_is"
+                ev["witness"] = {"x": str(p_)}
+                return False, ev
+            checked += sg in (-1, 0, 1)
+        if checked:
+            break
+    if not checked:
+        ev["reason"] = "antiderivative_reality_undecided"
+        return None, ev
+    one, oev = _one_constant(F, f, var, df, timeout)
+    ev.update(oev)
+    return one, ev
 
 
 def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 8.0,
@@ -718,18 +830,28 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
         ev["residual"] = None
         ev["flags"] = rs.flags
     if ok is None:
-        # domain-aware numeric equality of dF and integrand
+        # domain-aware numeric equality of dF and integrand, on the variable's region: read on all of R,
+        # x - |x| refuted x**2/2 as a primitive of |x| under the constraint x > 0 (fourth audit G12)
+        wide = None
         if domain is None:
-            dom = S.Reals
+            wide = S.Reals
             for c in definedness_conditions(integrand, var) + definedness_conditions(F, var):
                 rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, S.Reals, timeout=timeout)
                 if rr.ok and not isinstance(rr.value, sp.ConditionSet):
-                    dom = sp.Intersection(dom, rr.value)
-            domain = dom
+                    wide = sp.Intersection(wide, rr.value)
+            domain = sp.Intersection(discourse, wide)
         ev["domain"] = str(domain)
         ok, rev = random_point_equal(dF, integrand, var, domain, seed=0, n=40)
         ev["random_point"] = rev
         ev["method"] = "random_point"
+        if ok is None and wide is not None and discourse != S.Reals:
+            # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not inside, and
+            # log|x| was left undecided for 1/x under x > 1. Agreement where both are defined is agreement on
+            # the region too; a disagreement there may lie outside it and refutes nothing
+            okw, wev = random_point_equal(dF, integrand, var, wide, seed=0, n=40)
+            ev["random_point_wide"] = wev
+            if okw is True:
+                ok = True
     if ok is True:
         okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
         ev["domain_check"] = dev
@@ -868,23 +990,151 @@ def _unreadable_task_expression(src, expr, var, ns, ms):
     return None
 
 
-def _point_not_interior(ctx: Ctx, var, at, ms):
-    """UNKNOWN unless `at` is an interior point of the variable's domain (`Ctx.domain_for`): a derivative
-    and a tangent line are two-sided (a one-sided derivative is no derivative in the curriculum). With x
-    declared positive the parse folds |x| and sqrt(x**2) to x, and with x declared nonnegative 0 is the
-    closed end: there the derivative 1 and the tangent y = x of |x| at 0 were certified (30 Sep 2026).
-    A condition naming a symbol no given fixes (x >= b, b free) leaves the domain unknown: the
-    certificate abstains (part vi). None when the point is interior."""
+# points tried for an interior point of a function's domain after the ones its solved part offers
+_INTERIOR_PROBES = (S.Half, S(3) / 2, -S.Half, S.One / 3, S(2), S(-2), S(5), S(-5), S.One / 10, -S(3) / 2)
+
+
+def _open_condition(c):
+    """The open part of a definedness condition: u >= 0 read as u > 0 (where u = 0 the function has, at best, a
+    one-sided neighbourhood). A comparison is drawn there only: sign(0) = 0 refuted the derivative 1 of
+    |x| + sqrt(x) - sqrt(x), which needs x >= 0, at its end 0 (fourth audit TAN-06)."""
+    if isinstance(c, sp.GreaterThan):
+        return sp.StrictGreaterThan(c.lhs, c.rhs)
+    if isinstance(c, sp.LessThan):
+        return sp.StrictLessThan(c.lhs, c.rhs)
+    return c
+
+
+def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list]:
+    """(the written definedness conditions of the task's function on `var`, with the values `pins` holds put in;
+    the ones that name another symbol). A membership (n!, gcd) is `_unreadable_task_expression`'s business, and
+    so is a function defined nowhere (a closed condition that fails, with or without the values:
+    `Ctx.binding_issues`). A condition naming a parameter was dropped, so the derivative 1 of
+    x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e)."""
+    conds, _ = written_definedness(src, ctx.ns, pins)
+    on_var: list = []
+    other: list = []
+    for c in conds:
+        fs = getattr(c, "free_symbols", set())
+        if fs - {var}:
+            other.append(c)
+        elif var in fs and not isinstance(c, sp.Contains):
+            on_var.append(c)
+    return on_var, other
+
+
+def _names(conds, var) -> list[str]:
+    return sorted({str(s_) for c in conds for s_ in getattr(c, "free_symbols", set()) - {var}})
+
+
+def _half_line_for_every_value(ctx: Ctx, conds, other, var) -> bool:
+    """Do the written conditions naming another symbol (`other`) bound `var` from one side only, the side the
+    variable's region cut by its own conditions (`conds`) leaves unbounded? Each must read k*var + q >= 0, > 0
+    or != 0 with k a nonzero number (q may name the parameters). The points where all hold then hold a
+    half-line for EVERY value of the parameters, so a derivative function has an open set to live on: the
+    derivative 1/(2*sqrt(x - a)) of sqrt(x - a) stays certified with a free, as before the review of d4e.
+    Bounded on both sides (x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone) it is not."""
+    sides = set()
+    for c in other:
+        if isinstance(c, Ne):
+            continue                                   # a point
+        if isinstance(c, (sp.GreaterThan, sp.StrictGreaterThan)):
+            u = c.lhs - c.rhs
+        elif isinstance(c, (sp.LessThan, sp.StrictLessThan)):
+            u = c.rhs - c.lhs
+        else:
+            return False
+        k = sp.diff(u, var)
+        if not (k.is_number and k.is_zero is False and k.is_real is True) or sp.diff(u, var, 2) != 0:
+            return False
+        sides.add(k.is_positive)
+    if len(sides) != 1:
+        return not sides                               # points only: the region's own interior decides
+    region, loose = task_region(ctx, conds, var)
+    if loose:
+        return False
+    upward = sides.pop()
+    parts = list(region.args) if isinstance(region, sp.Union) else [region]
+    end = oo if upward else -oo
+    return any(isinstance(part, Interval) and (part.sup if upward else part.inf) == end for part in parts)
+
+
+def task_region(ctx: Ctx, conds, var, window=None, region=None) -> tuple[sp.Set, list]:
+    """(the points of `region` (`var`'s region, `Ctx.domain_for`, by default) within `window` where the conditions
+    `conds` hold, each solved exactly on the window (ℝ without one); the conditions left unsolved). On a bounded
+    window `sandbox.exactsets` solves a periodic condition exactly; on ℝ cos(x) != 0 stays a ConditionSet."""
+    base = S.Reals if window is None else window
+    region = ctx.domain_for(var) if region is None else region
+    region = region if window is None else sp.Intersection(region, window)
+    loose: list = []
+    for c in conds:
+        r = sb_run("mathverify.sandbox.ops:solveset_in", c, var, base, timeout=ctx.timeout)
+        if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet):
+            region = sp.Intersection(region, r.value)
+        else:
+            loose.append(c)
+    return region, loose
+
+
+def interior_at(ctx: Ctx, conds, var, p) -> bool | None:
+    """Is `p` PROVED an interior point of the points of `var`'s region where `conds` hold? Read on
+    [p - 1, p + 1] (`task_region`); None when that is not decided."""
+    try:
+        if getattr(p, "is_real", None) is not True or p.is_finite is not True:
+            return None
+        region, loose = task_region(ctx, conds, var, Interval(p - 1, p + 1))
+        if loose:
+            return None
+        return in_domain(region.interior, p)
+    except Exception:  # noqa: BLE001 - an interior SymPy cannot form is no proof
+        return None
+
+
+def interior_point(ctx: Ctx, conds, var, region):
+    """A point PROVED interior to the points of `var`'s region where `conds` hold (`interior_at`): a point of
+    `region` (their solved part) or a fixed probe. None when none is found, and then a derivative function or
+    a primitive has no open set to live on, as for a function defined at 0 alone or nowhere: the derivative
+    1 and the primitive x of such functions were certified (fourth audit TAN-06, G6)."""
+    for p_ in list(_points_of(region)) + list(_INTERIOR_PROBES):
+        if interior_at(ctx, conds, var, p_) is True:
+            return p_
+    return None
+
+
+def comparison_region(region, loose, var):
+    """Where a derivative or a primitive is compared with the claim: the interior of `region` (two-sided), cut
+    by the open part of each condition `task_region` left unsolved (sampled by rejection: cos(x) != 0)."""
+    try:
+        inner = region.interior
+        if isinstance(inner, sp.Set) and not inner.has(sp.Complement):
+            region = inner
+    except Exception:  # noqa: BLE001 - the region as it is
+        pass
+    if loose:
+        region = sp.ConditionSet(var, sp.And(*[_open_condition(c) for c in loose]), region)
+    return region
+
+
+def _point_not_interior(ctx: Ctx, src, var, at, pins, ms):
+    """UNKNOWN unless `at` is an interior point of the variable's region (`Ctx.domain_for`: declaration,
+    constraints, givens, domain of discourse) cut by the written domain of the task's function
+    (`task_conditions`): a derivative and a tangent line are two-sided (a one-sided derivative is no
+    derivative in the curriculum). With x declared positive the parse folds |x| and sqrt(x**2) to x, and with
+    x declared nonnegative 0 is the closed end: there the derivative 1 and the tangent y = x of |x| at 0 were
+    certified (30 Sep 2026); with x >= 0 as a given it was refuted (fourth audit G6), and the derivative 1 of
+    sqrt(x)**2 and of x + acos(x) - acos(x) at their ends 0 and 1 was certified (TAN-06). A condition naming
+    a symbol nothing fixes (x >= b, sqrt(x - b) with b free) leaves the domain unknown: the certificate
+    abstains (part vi). None when the point is interior."""
     unapplied = ctx.unapplied_conditions(var)
     if unapplied:
         return condition_not_applied(LAYER, unapplied, ms)
-    try:
-        inside = in_domain(ctx.domain_for(var).interior, at)
-    except Exception:  # noqa: BLE001 - an interior SymPy cannot form is no proof
-        inside = None
-    if inside is not True:
+    conds, other = task_conditions(ctx, src, var, pins)
+    if other:
+        return condition_not_applied(LAYER, _names(other, var), ms)
+    if interior_at(ctx, conds, var, at) is not True:
         return unknown(LAYER, "point_not_interior_to_the_domain", ms,
-                       {"at": str(at), "domain": str(ctx.domain_for(var))}, flags=["point_not_interior"])
+                       {"at": str(at), "domain": str(ctx.domain_for(var)), "conditions": [str(c) for c in conds]},
+                       flags=["point_not_interior"])
     return None
 
 
@@ -905,12 +1155,18 @@ def verify(ir, solution, ctx: Ctx):
             return unknown(LAYER, "variable_declared_integer", t.ms, {"var": str(var)},
                            flags=["variable_declared_integer"])
         if kind == "antiderivative":
+            # a symbol a given or a declared constraint fixes is read as its value in the integrand and in the
+            # claim (`Ctx.task_pins`): the primitive 3*x**2/2 of a*x with a = 3 was left undecided
+            pins = ctx.task_pins(var)
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:
                 return err
             bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms)
             if bad is not None:
                 return bad
+            integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)
+            if err:
+                return err
             from ..normalize.parse import parse_expr_str
             payload = _TRAILING_C.sub("", str(solution.claimed_answer.payload))
             C = sp.Symbol("C")
@@ -918,6 +1174,9 @@ def verify(ir, solution, ctx: Ctx):
             if err:
                 return err
             F_full, err = parse_or_unknown(LAYER, parse_expr_str, payload, ns2)
+            if err:
+                return err
+            F_full, err = parse_or_unknown(LAYER, ctx.with_pins, F_full, pins)
             if err:
                 return err
             if F_full.has(C):
@@ -928,10 +1187,29 @@ def verify(ir, solution, ctx: Ctx):
                         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
                     return unknown(LAYER, "constant_C_undecided", t.ms, ev)
             F = F_full.subs(C, 0)
-            f_extra = written_definedness(p["integrand"], ctx.ns)[0]
-            F_extra = [c for c in written_definedness(payload, ns2)[0] if not c.has(C)]
+            # the primitive lives on the variable's region (declaration, constraints, givens, domain of
+            # discourse: `Ctx.domain_for`) where the integrand is defined: the given x < 0 was not read, so
+            # log(-x) was refuted for 1/x, and under the constraint x > 0 x**2/2 was refuted for |x| (fourth
+            # audit G12); on a region without interior (1 + sqrt(x) - sqrt(x) + sqrt(-x) - sqrt(-x), defined
+            # at 0 alone, or a function defined nowhere) x was certified (TAN-06)
+            region = ctx.domain_for(var)
+            unapplied = ctx.unapplied_conditions(var)
+            if unapplied:
+                return condition_not_applied(LAYER, unapplied, t.ms)
+            f_extra, other = task_conditions(ctx, p["integrand"], var, pins)
+            if other:
+                return condition_not_applied(LAYER, _names(other, var), t.ms)
+            conds = f_extra + [c for c in definedness_conditions(integrand, var) if c not in f_extra
+                               and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
+            # (a trigonometric condition on the variable left unsolved leaves no interior point proved)
+            if interior_point(ctx, conds, var, task_region(ctx, conds, var)[0]) is None:
+                return unknown(LAYER, "region_without_interior", t.ms, {"region": str(region)},
+                               flags=["point_not_interior"])
+            claim_conds, claim_nowhere = written_definedness(payload, ns2, pins)
+            # a claim defined nowhere as written (x**2 + 0*log(-x) with x positive) carries `false`
+            F_extra = [c for c in claim_conds if not c.has(C)] + ([sp.false] if claim_nowhere else [])
             ok, ev = antiderivative_certificate(F, integrand, var, timeout=ctx.timeout,
-                                                discourse=ctx.domain_for(var), f_extra=f_extra,
+                                                discourse=region, f_extra=f_extra,
                                                 F_extra=F_extra)
             conf = 0.99 if ev.get("method") == "symbolic" else 0.97
         elif kind == "definite_integral":
@@ -939,6 +1217,7 @@ def verify(ir, solution, ctx: Ctx):
             # rule of normalize.parse for a written Integral): with x declared positive, ∫_{-1}^{1} |x| dx
             # was read as ∫ x dx = 0 and the claim 0 certified (audit of 29 Sep 2026)
             from ..normalize.parse import parse_expr_str
+            pins = ctx.task_pins(var)
             var = sp.Symbol(var.name, real=True)
             ns_i = dict(ctx.ns, **{var.name: var})
             integrand, err = parse_or_unknown(LAYER, parse_expr_str, p["integrand"], ns_i)
@@ -947,6 +1226,13 @@ def verify(ir, solution, ctx: Ctx):
             bad = _unreadable_task_expression(p["integrand"], integrand, var, ns_i, t.ms)
             if bad is not None:
                 return bad
+            # a symbol a given or a declared constraint fixes is read as its value in the integrand, the
+            # bounds and the claim (`Ctx.task_pins`), in its written conditions too: x + 0*sqrt(b - x) is x
+            # after parsing, and with b = 1/2 (or b free) its integral 1/2 over [0, 1] was certified (review
+            # of d4e)
+            integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)
+            if err:
+                return err
             a, err = parse_or_unknown(LAYER, ctx.expr, str(p["a"]))
             if err:
                 return err
@@ -956,8 +1242,12 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
+            (a, b, claimed), err = parse_or_unknown(LAYER, lambda es: tuple(ctx.with_pins(e, pins) for e in es),
+                                                    (a, b, claimed))
+            if err:
+                return err
             undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ns_i,
-                                                             timeout=ctx.timeout)
+                                                             timeout=ctx.timeout, pins=pins)
             if undefined is not False:
                 return unknown(LAYER, "integrand_undefined_on_the_interval_as_written" if undefined
                                else "integrand_domain_undecided", t.ms, {"integrand": p["integrand"]},
@@ -1059,12 +1349,18 @@ def verify(ir, solution, ctx: Ctx):
                 return unknown(LAYER, "no_exact_value", t.ms, ev, flags=["no_exact_value"])
             conf = 0.99
         elif kind == "derivative":
+            # a symbol a given or a declared constraint fixes is read as its value in f, the point and the
+            # claim (`Ctx.task_pins`): with a = 3 the derivative 6*x of a*x**2 was refuted
+            pins = ctx.task_pins(var)
             f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
             if err:
                 return err
             bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms)
             if bad is not None:
                 return bad
+            f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
+            if err:
+                return err
             try:
                 order = int(p.get("order", 1))
             except (TypeError, ValueError):
@@ -1076,13 +1372,16 @@ def verify(ir, solution, ctx: Ctx):
                 at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
                 if err:
                     return err
-                bad = _point_not_interior(ctx, var, at, t.ms)
-                if bad is not None:
-                    return bad
+                at, err = parse_or_unknown(LAYER, ctx.with_pins, at, pins)
+                if err:
+                    return err
                 # x²/x is x after parsing, but it has no value (so no derivative) at 0
-                if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at)) is True:
+                if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at), pins) is True:
                     return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
                                    {"f": p["f"], "at": str(at)}, flags=["written_domain"])
+                bad = _point_not_interior(ctx, p["f"], var, at, pins, t.ms)
+                if bad is not None:
+                    return bad
                 dap = derivative_at_point(f, var, order, at, timeout=ctx.timeout)
                 ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
                 st = dap["status"]
@@ -1092,6 +1391,9 @@ def verify(ir, solution, ctx: Ctx):
                     cev = {"method": "differentiability", "status": st}
                 else:
                     claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+                    if err:
+                        return err
+                    claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)
                     if err:
                         return err
                     if st == "value":
@@ -1112,30 +1414,64 @@ def verify(ir, solution, ctx: Ctx):
                 claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
                 if err:
                     return err
-                dom = ctx.domain_for(var)
-                for c in definedness_conditions(f, var) + [c for c in written_definedness(p["f"], ctx.ns)[0]
-                                                           if c.free_symbols == {var}]:
-                    rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, S.Reals, timeout=ctx.timeout)
-                    if rr.ok and not isinstance(rr.value, sp.ConditionSet):
-                        dom = sp.Intersection(dom, rr.value)
+                claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)
+                if err:
+                    return err
+                # the derivative function lives on the open part of the variable's region (`Ctx.domain_for`)
+                # where f is defined, and is compared there: on all of ℝ the derivative 1 of |x| under the
+                # given x > 0 and of |x| + sqrt(x) - sqrt(x) was refuted (sign(0) = 0 at the end 0), and a
+                # function defined at 0 alone or nowhere had both 1 and 0 certified (fourth audit G6, TAN-06)
+                unapplied = ctx.unapplied_conditions(var)
+                if unapplied:
+                    return condition_not_applied(LAYER, unapplied, t.ms)
+                conds, other = task_conditions(ctx, p["f"], var, pins)
+                if other and not _half_line_for_every_value(ctx, conds, other, var):
+                    return condition_not_applied(LAYER, _names(other, var), t.ms)
+                conds += [c for c in definedness_conditions(f, var) if c not in conds
+                          and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
+                dom, loose = task_region(ctx, conds, var)
+                if interior_point(ctx, conds, var, dom) is None:
+                    return unknown(LAYER, "region_without_interior", t.ms, {"region": str(dom)},
+                                   flags=["point_not_interior"])
+                dom = comparison_region(dom, loose, var)
                 ok, cev = answers_equivalent(claimed, truth, shape="expression", domain=dom, var=var)
+                if ok is None and ctx.domain_for(var) != S.Reals:
+                    # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not
+                    # inside, and 1/x was left undecided under x > 1. Agreement where f is defined is agreement
+                    # on the region too; a disagreement may lie outside it and refutes nothing
+                    wide, wloose = task_region(ctx, conds, var, region=S.Reals)
+                    okw, wev = answers_equivalent(claimed, truth, shape="expression",
+                                                  domain=comparison_region(wide, wloose, var), var=var)
+                    cev["wide"] = wev
+                    if okw is True:
+                        ok = True
             ev["compare"] = cev
             conf = 0.99 if cev.get("method") in ("symbolic", "numeric", "differentiability",
                                                  "not_differentiable", "finite_derivative") else 0.97
         else:  # tangent_line
+            # the values the givens fix, never the line's own dependent variable (`Ctx.task_pins`)
+            pins = ctx.task_pins(var, str(p.get("dep", "y")))
             f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
             if err:
                 return err
             at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
             if err:
                 return err
-            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms) \
-                or _point_not_interior(ctx, var, at, t.ms)
+            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms)
             if bad is not None:
                 return bad
-            if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at)) is True:
+            f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
+            if err:
+                return err
+            at, err = parse_or_unknown(LAYER, ctx.with_pins, at, pins)
+            if err:
+                return err
+            if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at), pins) is True:
                 return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
                                {"f": p["f"], "at": str(at)}, flags=["written_domain"])
+            bad = _point_not_interior(ctx, p["f"], var, at, pins, t.ms)
+            if bad is not None:
+                return bad
             y = ctx.sym(p.get("dep", "y"))
             dap = derivative_at_point(f, var, 1, at, timeout=ctx.timeout)
             ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
@@ -1145,6 +1481,9 @@ def verify(ir, solution, ctx: Ctx):
                 ok = True if st in ("corner", "discontinuous") else False if st in ("value", "infinite") else None
             else:
                 claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+                if err:
+                    return err
+                claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)
                 if err:
                     return err
                 if not isinstance(claimed, sp.Equality):

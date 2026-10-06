@@ -832,3 +832,103 @@ def test_ratio_of_two_positive_terms_has_no_zero():
     from mathverify.sandbox.exactsets import _ratio_zeros
     assert _ratio_zeros(3 ** x + 2 ** x, x) == []
     assert _ratio_zeros(3 ** x - 2 ** x, x) == [(0, 0)]
+
+
+
+# ------------------------------------------------------------------------------------------------
+# The review of round 5 (2 Oct 2026): B1 a positive generator for log/sinh/atan, B2 sign(0) lost on
+# closed cells, B3 a folded cell keeping the undefined points; the odd-root convention of part d4a
+# ------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("rel,want", [
+    (sp.Eq(sp.Max(sp.log(x), 0), 0), sp.Interval.Lopen(0, 1)),                      # B1: was {1}
+    (sp.Eq(sp.Max(sp.sinh(x), 0), 0), sp.Interval(-sp.oo, 0)),                      # B1: was {0}
+    (sp.Eq(sp.sqrt(sp.log(x) ** 2), 1), sp.FiniteSet(sp.E, sp.exp(-1))),             # B1: was {E}
+    (sp.Eq(sp.Abs(sp.log(x)), 1), sp.FiniteSet(sp.E, sp.exp(-1))),
+    (sp.Eq(sp.Min(sp.sinh(x), 0), -1), sp.FiniteSet(-sp.asinh(1))),
+    (sp.Eq(sp.sign(x), 0), sp.FiniteSet(0)),                                         # B2: was {}
+    (sp.Eq(sp.sign(x ** 2 - 4), 0), sp.FiniteSet(-2, 2)),
+    (sp.Eq(sp.sign(x) + sp.Abs(x), 0), sp.FiniteSet(-1, 0)),                          # B2: was {-1}
+    (sp.Eq(sp.sign(x), 1), sp.Interval.open(0, sp.oo)),                              # was [0, oo)
+    (sp.sign(x) + 1 > 0, sp.Interval(0, sp.oo)),
+    (sp.Eq(sp.Abs(x) / x, 1), sp.Interval.open(0, sp.oo)),                           # B3: was [0, oo)
+    (sp.Eq(sp.Abs(x) * sp.log(x), x * sp.log(x)), sp.Interval.open(0, sp.oo)),       # B3: was [0, oo)
+])
+def test_review_of_round5_sets(rel, want):
+    from mathverify.sandbox.exactsets import exact_solveset
+    got = exact_solveset(rel, x, S.Reals)
+    if isinstance(want, sp.FiniteSet) and isinstance(got, sp.FiniteSet):
+        assert len(got) == len(want) and all(any(sp.simplify(g - w) == 0 for w in want) for g in got), (rel, got)
+    else:
+        assert got == want, (rel, got)
+
+
+def test_a_folded_cell_keeps_out_the_poles_of_tan():
+    """B3: |x| tan x = x tan x on [0, 3] holds where tan is defined only (pi/2 is no point of the set)."""
+    from mathverify.sandbox.exactsets import exact_solveset
+    got = exact_solveset(sp.Eq(sp.Abs(x) * sp.tan(x), x * sp.tan(x)), x, sp.Interval(0, 3))
+    assert got.contains(sp.pi / 2) is sp.false and got.contains(1) is sp.true and got.contains(0) is sp.true
+
+
+def test_the_generator_of_log_carries_no_sign():
+    """B1: the reading of log/sinh/atan is a polynomial in a generator with no assumption, checked by
+    substituting back; Max(t, 0) and sqrt(t**2) are no polynomials."""
+    from mathverify.sandbox.exactsets import _mono_parts
+    assert _mono_parts(sp.Max(sp.log(x), 0), x) is None
+    assert _mono_parts(sp.sqrt(sp.log(x) ** 2) - 1, x) is None
+    assert _mono_parts(sp.log(x) ** 2 - 1, x) is not None
+
+
+@pytest.mark.parametrize("rel", [
+    sp.Eq(x ** sp.Rational(2, 3), 1), sp.Eq(x ** sp.Rational(1, 3), x), x ** sp.Rational(1, 3) > x,
+])
+def test_a_written_odd_root_of_a_negative_number_is_a_convention(rel):
+    """x**(2/3) = 1: {1} reads the principal root, {-1, 1} the real one (part d4a): no set."""
+    from mathverify.sandbox.exactsets import exact_solveset
+    assert isinstance(exact_solveset(rel, x, S.Reals), sp.ConditionSet)
+    # on x >= 0 there is no convention
+    assert not isinstance(exact_solveset(rel, x, sp.Interval(0, 5)), sp.ConditionSet)
+
+
+@pytest.mark.parametrize("ir,claim,kind,want", [
+    (_eq("sign(x) = 0"), "{}", "set", "INCORRECT"),
+    (_eq("sign(x) = 0"), "{0}", "set", "CORRECT"),
+    (_ir("count_roots", {"expr": "sign(x)", "var": "x"}, shape="count"), "0", "count", "INCORRECT"),
+    (_ir("count_roots", {"expr": "Max(log(x), 0)", "var": "x"}, shape="count"), "1", "count", "UNKNOWN"),
+    (_eq("sqrt(log(x)**2) = 1"), "{E}", "set", "INCORRECT"),
+    (_eq("sqrt(log(x)**2) = 1"), "{E, exp(-1)}", "set", "CORRECT"),
+    (_eq("Max(log(x), 0) = 0"), "{1}", "set", "INCORRECT"),
+    (_eq("Max(sinh(x), 0) = 0"), "{0}", "set", "INCORRECT"),      # (-oo, 0]: measure oo, not "positive"
+])
+def test_review_of_round5_verdicts(ir, claim, kind, want):
+    assert _run(ir, claim, kind).verdict == want
+
+
+# ------------------------------------------------------------------------------------------------
+# Round 6 (6 Oct 2026): one number written two ways at an interval's end. The polynomial class reads
+# x > log(8)/log(2) as (3, oo) (sp.Poly writes log(8) as 3*log(2)); `Ctx.domain_for` keeps the given as
+# written, (log(8)/log(2), oo); SymPy's Intersection cannot order 3 and log(8)/log(2) and raised TypeError,
+# so the certificate died (UNKNOWN) where the merge with part d4d expected CORRECT
+# ------------------------------------------------------------------------------------------------
+L8 = "log(8)/log(2)"
+
+
+@pytest.mark.parametrize("ir,claim,want", [
+    (_eq("x**2 = 4", [f"x > {L8}"]), "{}", "CORRECT"),
+    (_eq("x**2 = 9", [f"x >= {L8}"]), "{3}", "CORRECT"),
+    (_eq("x**2 = 9", [f"x >= {L8}"]), "{-3, 3}", "INCORRECT"),
+    (_eq("x**2 = 4", ["x > a", f"a = {L8}"], (X, V("a"))), "{}", "CORRECT"),
+    (_eq(f"log(x - {L8}) = 0", [f"x > {L8}"]), "{4}", "CORRECT"),
+    (_eq(f"sqrt(x - {L8}) = 1", [f"x >= {L8}"]), "{4}", "CORRECT"),
+])
+def test_one_endpoint_written_two_ways(ir, claim, want):
+    assert _run(ir, claim).verdict == want
+
+
+def test_exact_intersection_writes_one_way_only_what_is_proved_equal():
+    from mathverify.certify.base import exact_intersection
+    L = sp.log(8) / sp.log(2)
+    assert exact_intersection(sp.Interval.open(L, sp.oo), sp.Interval.open(3, sp.oo)) == sp.Interval.open(3, sp.oo)
+    assert exact_intersection(sp.Interval(L, 5), sp.Interval(3, 4)) == sp.Interval(3, 4)
+    # 3 + e^(-e^10) is no 3: SymPy cannot order them, and no proof writes them one way
+    with pytest.raises(TypeError):
+        exact_intersection(sp.Interval.open(L + sp.exp(-sp.exp(10)), sp.oo), sp.Interval.open(3, sp.oo))

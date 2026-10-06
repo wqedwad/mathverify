@@ -131,6 +131,14 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             cands += window_set
             window_how = "exact_class" if hull is None else "exact_class_on_bounded_hull"
             ev["class_set"] = [str(c) for c in window_set]
+        elif rc.ok and isinstance(rc.value, sp.Set) and not rc.value.has(ConditionSet):
+            # an exact set with an interval in it (Max(log x, 0) = 0 on (0, 1]): no finite claim is it
+            try:
+                m = sp.Intersection(rc.value, domain).measure
+            except Exception:  # noqa: BLE001
+                m = None
+            if m is not None and m.is_extended_positive is True:      # oo.is_positive is False
+                ev["class_set_infinite"] = str(rc.value)
     # de-duplicate: exactly equal only (an undecided pair stays two candidates; the guard
     # decides each). Exact real roots first, so they are the representatives kept.
     uniq: list = []
@@ -288,7 +296,7 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
                 return unknown(LAYER, "convention_region_candidates", 0, ev)
             return _verify_identity(rel, var, dom, claimed, ev, ctx, t)
         if claimed is S.EmptySet:
-            if roots:
+            if roots or sev.get("class_set_infinite"):
                 ev["reason"] = "solutions_exist"
                 return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
             if sev.get("complete") and not conv:
@@ -316,6 +324,9 @@ def _verify_solve_equation(ir, solution, ctx: Ctx, t):
         if conv:
             return unknown(LAYER, "convention_region_candidates", 0, ev)
         return _verify_identity(rel, var, dom, claimed, ev, ctx, t)
+    if sev.get("class_set_infinite") and not conv:
+        ev["reason"] = "solution_set_infinite"
+        return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
     # a root is missing only when it is PROVED different from every claimed root; an undecided
     # comparison is not evidence either way
     missing, undecided = [], []

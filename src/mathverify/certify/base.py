@@ -224,7 +224,7 @@ class Ctx:
                     return None
                 dom = sp.Intersection(dom, sp.ConditionSet(var, g, S.Reals))
             else:
-                dom = rr.value if risky else sp.Intersection(dom, rr.value)
+                dom = rr.value if risky else exact_intersection(dom, rr.value)
         return dom
 
     @staticmethod
@@ -688,6 +688,32 @@ class Ctx:
             self.cache["bindings"] = given_bindings(self.ir, self.ns)
         return self.cache["bindings"]
 
+    def pinned_values(self, var: sp.Symbol | None = None) -> dict:
+        """The value of each symbol other than `var` that a given (`bindings`) or a declared constraint
+        `a = c` fixes; `binding_issues` has checked them (the verifier abstains before any certificate
+        otherwise). The extremum certificate read neither: with b = 3 the maximum 0 of x on [0, b] and
+        with a = 3 the maximum 0 of a*x on [0, 1] were certified (fourth audit G4, TAN-02)."""
+        out = dict(self._constraint_bindings()[0])
+        out.update(self.bindings())
+        return {s_: v for s_, v in out.items() if s_ != var}
+
+    def task_pins(self, var: sp.Symbol, *keep: str) -> dict:
+        """`pinned_values(var)` without the symbols named in `keep` (a tangent line's dependent variable): the
+        values a task certificate puts in its function, its point, its interval and the claim. The calculus
+        certificates read none: with a = 3 the derivative 6*x of a*x**2 was refuted (it was compared with
+        2*a*x), and the written conditions of x + 0*sqrt(b - x) were dropped, so with b = 1/2 its maximum 1
+        on [0, 1] and its integral 1/2 over [0, 1] were certified (fourth audit TAN-02, review of d4e)."""
+        return {s_: v for s_, v in self.pinned_values(var).items() if s_.name not in keep}
+
+    def with_pins(self, e, pins: dict):
+        """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
+        forms this makes (Σ_{k=1}^{n} k with n = 3: 6) by values numbers confirm (`_confirmed`, ParseError
+        otherwise), as `expr` reads the problem's own: left a form, the maximum 6 of x*Σ_{k=1}^{n} k on [0, 1]
+        with n = 3 was left undecided."""
+        if not pins or not isinstance(e, sp.Basic) or not (e.free_symbols & set(pins)):
+            return e
+        return self._confirmed(None, substitute_free(e, pins))
+
     def on_var(self, rels, var: sp.Symbol) -> tuple[list, list]:
         """The relations `rels` read on `var` alone, each other symbol a given fixes read as its value
         (`x > b` with b = 0 is x > 0). A relation that then always holds is left out: the binding
@@ -756,8 +782,14 @@ class Ctx:
     # the task's own relation or expression, in params: a given next to it is a side condition.
     # count_roots and domain_of read no given at all before, so `x > 0` next to x² − 4 left the count
     # at 2 and the domain of √(4 − x²) at [-2, 2] (part vi, 30 Sep 2026)
+    # The calculus kinds read a given on their variable as a region too: a limit, a derivative, a tangent
+    # line and an antiderivative are taken on the variable's region, and the same condition gave one
+    # verdict as a declaration and another as a given (fourth audit G6, G12): with the given x > 0,
+    # lim_{x->0} |x|/x was certified DNE and the derivative of |x| at 0 under x >= 0 DNE, and log(-x)
+    # was refuted as an antiderivative of 1/x under the given x < 0.
     _MAIN_RELATION = {"solve_equation": "equation", "solve_inequality": "inequality", "count_roots": "expr",
-                      "domain_of": "expr"}
+                      "domain_of": "expr", "limit": "expr", "derivative": "f", "tangent_line": "f",
+                      "antiderivative": "integrand"}
 
     def side_conditions(self, var: sp.Symbol) -> tuple[list[sp.Set], list[str]]:
         """Solution sets of the given relations on `var` that are SIDE conditions (the task's own
@@ -906,7 +938,7 @@ class Ctx:
         undecided through a closed condition? The variable of a definite integral is read as a plain
         real symbol: it runs over [a, b], not over its declared domain (certify.calculus)."""
         from ..normalize.parse import parse_as_written
-        from .domain import closed_condition_undecided, definedness_conditions
+        from .domain import closed_condition_undecided, definedness_conditions, open_conditions_empty
         ns = self.ns
         v = (self.ir.task.params or {}).get("var", "x")
         if kind == "definite_integral" and isinstance(v, str) and isinstance(ns.get(v), sp.Symbol):
@@ -916,7 +948,10 @@ class Ctx:
             return False
         try:
             conds = definedness_conditions(e, None)
-            return any(c is sp.false for c in conds) or self._undefined_term(e) or closed_condition_undecided(conds)
+            # open conditions that hold nowhere together (x > 0 and -x > 0) too: the simplification x of
+            # x + log(x) - log(x) + log(-x) - log(-x) was certified (fourth audit TAN-06)
+            return any(c is sp.false for c in conds) or self._undefined_term(e) or closed_condition_undecided(conds) \
+                or open_conditions_empty(conds, timeout=self.timeout)
         except Exception:  # noqa: BLE001 - a failed probe adds no fact
             return False
 
@@ -1097,6 +1132,43 @@ class Ctx:
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:
     return Ctx(ir=ir, ns=build_namespace(ir), seed=seed, timeout=timeout)
+
+
+def exact_intersection(*sets) -> sp.Set:
+    """sp.Intersection of `sets`. SymPy raises TypeError when it cannot order two endpoints that are one
+    number written two ways: a given read as written (x > log(8)/log(2)) and its set from `exact_solveset`,
+    whose polynomial class reads log(8) as 3*log(2), so (3, oo) met (log(8)/log(2), oo) and the certificate
+    died (round 6 of part d4b: x**2 = 4 with x > a, a = log(8)/log(2) gave UNKNOWN for {}). The endpoints
+    PROVED equal (`same_value`, an exact difference that simplifies to 0; numbers only pick the pairs to
+    try) are written one way, the shortest, and the intersection is taken again; the TypeError stands when
+    no such pair exists or SymPy still cannot order them (the caller abstains)."""
+    try:
+        return sp.Intersection(*sets)
+    except TypeError as err:
+        first = err
+    pts: list = []
+    for s_ in sets:
+        for n in sp.preorder_traversal(s_):
+            ends = (n.start, n.end) if isinstance(n, sp.Interval) else n.args if isinstance(n, sp.FiniteSet) else ()
+            pts += [p_ for p_ in ends if p_ not in pts and getattr(p_, "is_number", False) and p_.is_finite is True
+                    and p_.is_real is True]
+    pts.sort(key=lambda p_: (sp.count_ops(p_), sp.default_sort_key(p_)))
+    rep: dict = {}
+    for i, p_ in enumerate(pts):
+        if p_ in rep:
+            continue
+        for q in pts[i + 1:]:
+            if q in rep:
+                continue
+            try:
+                near = bool(abs(sp.N(p_ - q, 30)) < sp.Float("1e-20"))
+            except Exception:  # noqa: BLE001 - not compared: not written one way
+                near = False
+            if near and same_value(p_, q):
+                rep[q] = p_
+    if not rep:
+        raise first
+    return sp.Intersection(*[s_.xreplace(rep) for s_ in sets])
 
 
 class Timer:

@@ -140,8 +140,14 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
     for c in cands:
         fc = sp.simplify(f.subs(var, c))
         vals.append((c, fc, _num(fc)))
-    vals = [v for v in vals if v[2] is not None]
     ev["candidates"] = [(str(c), str(fc)) for c, fc, _ in vals]
+    if any(v[2] is None for v in vals):
+        # a candidate whose value is no real number (a symbol a given fixes, b in [0, b], or a*1 with a
+        # free) was dropped, and the rest called the candidate set complete: the maximum 0 of x on
+        # [0, b] with b = 3 was certified and 3 refuted (fourth audit G4, TAN-02). It decides nothing.
+        ev["reason"] = "candidate_value_not_comparable"
+        ev["not_comparable"] = [str(c) for c, _, n in vals if n is None]
+        return None, ev
 
     # the value the claim stands for
     if which in ("max", "min"):
@@ -426,6 +432,14 @@ def verify(ir, solution, ctx: Ctx):
         f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
         if err:
             return err
+        # a symbol a given or a declared constraint fixes is read as its value, in f and in the interval
+        # (`Ctx.task_pins`, checked by `Ctx.binding_issues`); one nothing fixes leaves the extremum
+        # without a value: with a = 3 the maximum 0 of a*x on [0, 1], with b = 3 the maximum 0 of x on
+        # [0, b] were certified (fourth audit TAN-02, G4)
+        pins = ctx.task_pins(var)
+        f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
+        if err:
+            return err
         from .limits import membership_conditions, written_undefined_everywhere
         if written_undefined_everywhere(p["f"], ctx.ns):
             # log(-1) - log(-1) + 2 is 2 after parsing: its maximum 2 on [0, 1] was certified
@@ -437,6 +451,17 @@ def verify(ir, solution, ctx: Ctx):
                            {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
         from ..normalize.parse import parse_set_str
         iv = parse_set_str(p.get("interval", "Reals"), ctx.ns) if p.get("interval") else ctx.domain_for(var)
+        iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)
+        if err:
+            return err
+        from .domain import written_definedness
+        written = written_definedness(p["f"], ctx.ns, pins)[0]
+        free = sorted({str(s_) for e in [f, iv] + list(written) for s_ in getattr(e, "free_symbols", set())}
+                      - {str(var)})
+        if free:
+            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare; nor in a
+            # written condition, x + 0*sqrt(b - x) being x after parsing (review of d4e)
+            return condition_not_applied(LAYER, free, t.ms)
         if not p.get("interval") and ctx.unapplied_conditions(var):
             # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)
             return condition_not_applied(LAYER, ctx.unapplied_conditions(var), t.ms)
@@ -452,12 +477,15 @@ def verify(ir, solution, ctx: Ctx):
         claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
         if err:
             return err
+        claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)    # `a` for a*x on [0, 1], a = 3
+        if err:
+            return err
         if isinstance(claimed, sp.Set) or not getattr(claimed, "is_number", False):
             return unknown(LAYER, "claim_is_not_a_number", t.ms)
         # f as written must be defined on the whole interval: x/x − x² parses to 1 − x², whose
         # maximum 1 sits exactly at the point x/x excludes (measured: certified CORRECT)
         from .domain import written_undefined_in
-        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv) is True:
+        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv, pins) is True:
             return unknown(LAYER, "f_undefined_on_interval_as_written", t.ms, {"f": p["f"]},
                            flags=["written_domain"])
         if which.startswith("local_"):
