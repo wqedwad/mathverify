@@ -14,7 +14,8 @@ from ..equiv.numeric import real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk, set_is_empty
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
+from .base import (Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved,
+                   exact_complement, exact_intersection)
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
 LAYER = "certify.algebra"
@@ -132,13 +133,21 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
             window_how = "exact_class" if hull is None else "exact_class_on_bounded_hull"
             ev["class_set"] = [str(c) for c in window_set]
         elif rc.ok and isinstance(rc.value, sp.Set) and not rc.value.has(ConditionSet):
-            # an exact set with an interval in it (Max(log x, 0) = 0 on (0, 1]): no finite claim is it
-            try:
-                m = sp.Intersection(rc.value, domain).measure
-            except Exception:  # noqa: BLE001
-                m = None
-            if m is not None and m.is_extended_positive is True:      # oo.is_positive is False
-                ev["class_set_infinite"] = str(rc.value)
+            # an exact set with an interval in it (Max(log x, 0) = 0 on (0, 1]): no finite claim is it,
+            # unless the domain leaves finitely many of its points (on the integers, {1}): those are the set
+            on_dom = _finite_points(rc.value, domain)
+            if on_dom is not None:
+                window_set = on_dom
+                cands += window_set
+                window_how = "exact_class_met_with_the_domain"
+                ev["class_set"] = [str(c) for c in window_set]
+            else:
+                try:                           # oo.is_positive is False; a finite set's measure is a Python 0
+                    infinite = sp.Intersection(rc.value, domain).measure.is_extended_positive is True
+                except Exception:  # noqa: BLE001
+                    infinite = False
+                if infinite:
+                    ev["class_set_infinite"] = str(rc.value)
     # de-duplicate: exactly equal only (an undecided pair stays two candidates; the guard
     # decides each). Exact real roots first, so they are the representatives kept.
     uniq: list = []
@@ -167,6 +176,22 @@ def solve_guarded(rel, var, domain: sp.Set = S.Reals, timeout: float = 8.0) -> t
         ev["completeness_method"] = ("none (odd roots read as real roots)" if odd_rewritten
                                      else "none (no exact class)")
     return kept, ev
+
+
+def _finite_points(exact: sp.Set, domain: sp.Set) -> list | None:
+    """The points of an exact set the domain leaves, when they are finitely many (at most 400) and listed
+    exactly: (0, 1] on the integers is [1]. None otherwise (also when SymPy cannot meet the two)."""
+    try:
+        on = exact_intersection(exact, domain)
+        if isinstance(on, sp.Range) and on.size.is_finite and on.size <= 400:
+            on = FiniteSet(*on)
+    except Exception:  # noqa: BLE001
+        return None
+    if on is S.EmptySet:
+        return []
+    if isinstance(on, FiniteSet) and all(getattr(p, "is_number", False) for p in on):
+        return list(on)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -377,8 +402,9 @@ def _sample_inequality(rel, var, claimed_set: sp.Set, dom: sp.Set, seed: int, n:
     """Inside the claimed set the relation must hold; in dom \\ claimed it must fail.
     Endpoints are checked explicitly (continuous sampling never hits them)."""
     ev: dict[str, Any] = {}
-    inside = [pt[var] for pt in sample_points({var: sp.Intersection(claimed_set, dom)}, n, seed, special=True)]
-    outside_set = sp.Complement(dom, claimed_set)
+    # the endpoints proved equal written one way (round 7, RK6: (3, 4) against dom (log(8)/log(2), oo))
+    inside = [pt[var] for pt in sample_points({var: exact_intersection(claimed_set, dom)}, n, seed, special=True)]
+    outside_set = exact_complement(dom, claimed_set)
     outside = [pt[var] for pt in sample_points({var: outside_set}, n, seed + 1, special=True)]
     members, non = _endpoints(claimed_set)
     inside += [m for m in members if in_domain(dom, m) is not False]

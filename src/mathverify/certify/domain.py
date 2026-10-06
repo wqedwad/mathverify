@@ -1482,8 +1482,10 @@ def _solveset_contradicted(cond, var, s, within=S.Reals) -> bool:
     solveset reads cos(atan(x) + atan(2)) != 0 as x != -2, where the cosine is 1 (the root is 1/2), and
     that domain was certified (audit of 29 Sep 2026). Only a contradiction counts: an undecided check
     leaves SymPy's set as it was. `within`: the set `s` was solved on (its complement is taken there)."""
+    from ..sandbox.exactsets import sign_range
     try:
-        out = sp.Complement(within, s)
+        # the set lies in the reals the variable's sign leaves (a positive x: 0 is no point of it)
+        out = sp.Complement(sp.Intersection(within, sign_range(var)), s)
     except Exception:  # noqa: BLE001
         return False
     checks = []

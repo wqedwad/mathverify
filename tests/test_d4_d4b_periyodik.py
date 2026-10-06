@@ -893,14 +893,16 @@ def test_a_written_odd_root_of_a_negative_number_is_a_convention(rel):
     (_eq("sign(x) = 0"), "{}", "set", "INCORRECT"),
     (_eq("sign(x) = 0"), "{0}", "set", "CORRECT"),
     (_ir("count_roots", {"expr": "sign(x)", "var": "x"}, shape="count"), "0", "count", "INCORRECT"),
-    (_ir("count_roots", {"expr": "Max(log(x), 0)", "var": "x"}, shape="count"), "1", "count", "UNKNOWN"),
+    # (0, 1]: "1" is wrong; INCORRECT is no false rejection (round 7, RK5)
+    (_ir("count_roots", {"expr": "Max(log(x), 0)", "var": "x"}, shape="count"), "1", "count", {"INCORRECT", "UNKNOWN"}),
     (_eq("sqrt(log(x)**2) = 1"), "{E}", "set", "INCORRECT"),
     (_eq("sqrt(log(x)**2) = 1"), "{E, exp(-1)}", "set", "CORRECT"),
     (_eq("Max(log(x), 0) = 0"), "{1}", "set", "INCORRECT"),
     (_eq("Max(sinh(x), 0) = 0"), "{0}", "set", "INCORRECT"),      # (-oo, 0]: measure oo, not "positive"
 ])
 def test_review_of_round5_verdicts(ir, claim, kind, want):
-    assert _run(ir, claim, kind).verdict == want
+    v = _run(ir, claim, kind).verdict
+    assert v == want if isinstance(want, str) else v in want
 
 
 # ------------------------------------------------------------------------------------------------
@@ -932,3 +934,141 @@ def test_exact_intersection_writes_one_way_only_what_is_proved_equal():
     # 3 + e^(-e^10) is no 3: SymPy cannot order them, and no proof writes them one way
     with pytest.raises(TypeError):
         exact_intersection(sp.Interval.open(L + sp.exp(-sp.exp(10)), sp.oo), sp.Interval.open(3, sp.oo))
+
+
+
+# ------------------------------------------------------------------------------------------------
+# Round 7 (6 Oct 2026), the review of round 6: a cell of `_piecewise` was dropped whole when its MIDPOINT
+# was outside the domain of a log or an even root (YO-1, RK1); a cell folded to True kept a written odd root
+# of a negative number (YO-2); the measure of a finite set was a Python 0 (RK2); a one-sided domain was
+# solved on the whole line (RK3); a denominator with Abs or sign in it left the whole set unsolved (RK4); the
+# sampler of solve_inequality met two writings of one endpoint (RK6)
+# ------------------------------------------------------------------------------------------------
+_A, _L, _R = sp.Abs, sp.log, sp.sqrt
+_Q = sp.Rational
+
+
+@pytest.mark.parametrize("rel,dom,want", [
+    (sp.Eq(_A(x) * _L(x - 1), 0), S.Reals, sp.FiniteSet(2)),                                 # was {}
+    (sp.Eq(_R(x - 2) + _A(x), 4), S.Reals, sp.FiniteSet(3)),                                 # was {}
+    (sp.Eq(_A(x ** 2 - 4 * x) * _L(x - 2), 0), S.Reals, sp.FiniteSet(3, 4)),                 # was {4}
+    (sp.Eq((_A(x) - x) * _L(x - 1), 0), S.Reals, sp.Interval.open(1, sp.oo)),                # was {}
+    (_A(x) * _L(x - 1) >= 0, S.Reals, sp.Interval(2, sp.oo)),
+    (sp.Eq(_A(x), _R(2 * x + 1)), S.Reals, sp.FiniteSet(1 - sp.sqrt(2), 1 + sp.sqrt(2))),     # was {1 + sqrt(2)}
+    (_A(x - 2) * _L(x - 1) < 0, S.Reals, sp.Interval.open(1, 2)),                            # was {}
+    (sp.Eq((_A(x - 3) - _Q(1, 2)) * _L(x - 2), 0), S.Reals, sp.FiniteSet(_Q(5, 2), 3, _Q(7, 2))),
+    (sp.Eq((_A(x) + _A(x - 10) - 10) * _L(x - 6), 0), S.Reals, sp.Interval.Lopen(6, 10)),
+    (sp.Eq(_L(_A(x) - 1), 0), S.Reals, sp.FiniteSet(-2, 2)),                                 # an argument with |x|
+    (sp.Eq(x / sp.sign(x), 2), S.Reals, sp.FiniteSet(-2, 2)),                                 # RK4
+    (sp.Eq(1 / (x - _A(x)), -_Q(1, 2)), S.Reals, sp.FiniteSet(-1)),                           # RK4
+    (sp.Eq(_A(x) / sp.sign(x - 1), 2), S.Reals, sp.FiniteSet(2)),
+    (sp.Eq(x / sp.sign(x), 0), S.Reals, S.EmptySet),                                          # 0 is no root
+    (sp.Eq(x / _A(x), 1), S.Reals, sp.Interval.open(0, sp.oo)),
+    (1 / (x - _A(x)) < 0, S.Reals, sp.Interval.open(-sp.oo, 0)),                             # undefined on [0, oo)
+    (x ** _Q(1, 3) < 1, sp.Interval.open(0, sp.oo), sp.Interval.open(0, 1)),                 # RK3
+    (x ** _Q(1, 3) >= 2, sp.Interval.open(0, sp.oo), sp.Interval(8, sp.oo)),
+    (x ** _Q(2, 3) <= 4, sp.Interval.open(0, sp.oo), sp.Interval.Lopen(0, 8)),
+    (sp.Eq((x + _A(x)) * x ** _Q(1, 3), 0), sp.Interval(0, 5), sp.FiniteSet(0)),             # no x < 0 there
+])
+def test_round7_sets(rel, dom, want):
+    from mathverify.sandbox.exactsets import exact_solveset
+    got = exact_solveset(rel, x, dom)
+    if isinstance(want, sp.FiniteSet) and isinstance(got, sp.FiniteSet):
+        assert len(got) == len(want) and all(any(sp.simplify(g - w) == 0 for w in want) for g in got), (rel, got)
+    else:
+        assert got == want, (rel, got)
+
+
+@pytest.mark.parametrize("rel,dom", [
+    (sp.Eq(_A(x) + _L(x ** 2 - 1), 0), S.Reals),                     # two irrational roots: out of the classes
+    (sp.Eq(_A(x) * _A(x + 5) * _L(sp.sin(x)), 0), sp.Interval(-5, 0)),  # an argument that is no polynomial
+    (sp.Eq((x + _A(x)) * x ** _Q(1, 3), 0), S.Reals),                  # YO-2: (-oo, 0] or {0} by the reading
+    (sp.Eq(sp.Max(x, 0) * x ** _Q(1, 3), 0), S.Reals),
+    (sp.Eq((sp.sign(x) + 1) * x ** _Q(1, 3), 0), S.Reals),
+    ((x + _A(x)) * x ** _Q(1, 3) >= 0, S.Reals),
+    (x ** _Q(1, 3) < 1, S.Reals),                                     # x < 0 is there: a convention
+])
+def test_round7_no_set(rel, dom):
+    from mathverify.sandbox.exactsets import exact_solveset
+    assert isinstance(exact_solveset(rel, x, dom), sp.ConditionSet)
+
+
+def test_round7_principal_reading_of_a_folded_cell():
+    from mathverify.sandbox.exactsets import principal_solveset
+    assert principal_solveset(sp.Eq((x + _A(x)) * x ** _Q(1, 3), 0), x) == sp.FiniteSet(0)
+
+
+def test_round7_the_sign_of_the_variable_bounds_its_window():
+    """A positive integer x of count_integers: x**(1/3) < 2 has no convention there (was left unsolved)."""
+    from mathverify.sandbox.exactsets import exact_solveset
+    n = sp.Symbol("x", integer=True, positive=True)
+    assert exact_solveset(n ** _Q(1, 3) < 2, n, S.Reals) == sp.Interval.open(0, 8)
+
+
+def _croots(e, givens=()):
+    return _ir("count_roots", {"expr": e, "var": "x"}, (X,), givens, "count")
+
+
+def _cint(givens, vars_=(X,)):
+    return _ir("count_integers", {"var": "x"}, vars_, givens, "count")
+
+
+def _ineq(e, givens=(), vars_=(X,)):
+    return _ir("solve_inequality", {"inequality": e, "var": "x"}, vars_, givens, "set")
+
+
+XP = V("x", "positive_real")
+R7 = "Abs(x**2 - 4*x)*log(x - 2) = 0"
+C7 = "(Abs(x) + Abs(x - 10) - 10)*log(x - 6) = 0"
+
+
+@pytest.mark.parametrize("ir,claim,kind,want", [
+    # YO-1 / RK1
+    (_croots("Abs(x)*log(x - 1)"), "1", "count", "CORRECT"),
+    (_croots("Abs(x)*log(x - 1)"), "0", "count", "INCORRECT"),
+    (_croots("sqrt(x - 2) + Abs(x) - 4"), "0", "count", "INCORRECT"),
+    (_eq("x**2 = 9", ["Abs(x)*log(x - 1) >= 0"]), "{3}", "set", "CORRECT"),
+    (_eq("x**2 = 9", ["Abs(x)*log(x - 1) >= 0"]), "{}", "set", "INCORRECT"),
+    (_ev("x**2", [R7]), "16", "value", "UNKNOWN"),                       # x**2 is 9 or 16
+    (_eq("Abs(x) + log(x**2 - 1) = 0"), "{}", "set", {"INCORRECT", "UNKNOWN"}),
+    (_eq("(Abs(x) - x)*log(x - 1) = 0"), "{}", "set", "INCORRECT"),
+    (_croots("Abs(x) - sqrt(2*x + 1)"), "2", "count", "CORRECT"),
+    (_croots("Abs(x) - sqrt(2*x + 1)"), "1", "count", "INCORRECT"),
+    (_croots("(Abs(x - 3) - 1/2)*log(x - 2)"), "3", "count", "CORRECT"),
+    (_ineq("Abs(x - 2)*log(x - 1) < 0"), "Interval.open(1, 2)", "interval", "CORRECT"),
+    (_ev("x", ["Abs(x) = sqrt(2*x + 1)", "x < 0"]), "1 - sqrt(2)", "value", "CORRECT"),
+    (_cint([C7], [V("x", "integer")]), "4", "count", "CORRECT"),
+    (_cint([C7], [V("x", "integer")]), "1", "count", "INCORRECT"),
+    (_eq(C7), "{10}", "set", "INCORRECT"),
+    # YO-2: the reading of a written odd root decides
+    (_eq("(x + Abs(x))*x**(1/3) = 0"), "{0}", "set", "UNKNOWN"),
+    # RK2: no layer_exception
+    (_eq("Abs(x - 3) = 3 - x", ["x >= 3"]), "{3}", "set", "CORRECT"),
+    (_eq("Abs(x) = x", ["x <= 0"]), "{0}", "set", "CORRECT"),
+    (_eq("Max(x, 2) = 2", ["x >= 2"]), "{2}", "set", "CORRECT"),
+    (_eq("Abs(x - 1) + Abs(x + 1) = 2", ["x >= 1"]), "{1}", "set", "CORRECT"),
+    # RK3: x > 0, no convention
+    (_ineq("x**(1/3) < 1", vars_=(XP,)), "Interval.open(0, 1)", "interval", "CORRECT"),
+    (_ineq("x**(1/3) >= 2", vars_=(XP,)), "Interval(8, oo)", "interval", "CORRECT"),
+    (_cint(["x**(1/3) < 2"], [V("x", "positive_integer")]), "7", "count", "CORRECT"),
+    (_cint(["x**(1/3) < 2"], [V("x", "positive_integer")]), "8", "count", "INCORRECT"),
+    (_ineq("x**(1/3) < 1"), "Interval.open(0, 1)", "interval", {"INCORRECT", "UNKNOWN"}),
+    # RK4
+    (_croots("x/sign(x) - 2"), "2", "count", "CORRECT"),
+    (_croots("1/(x - Abs(x)) + 1/2"), "1", "count", "CORRECT"),
+    # RK6
+    (_ineq("x**2 < 16", ["x > log(8)/log(2)"]), "Interval.open(3, 4)", "interval", "CORRECT"),
+    (_ineq("x**2 < 16", ["x > log(8)/log(2)"]), "Interval.Lopen(3, 4)", "interval", "INCORRECT"),
+    # an exact set the integers meet in finitely many points
+    (_eq("Max(log(x), 0) = 0", ["x >= -5"], (V("x", "integer"),)), "{1}", "set", "CORRECT"),
+])
+def test_round7_verdicts(ir, claim, kind, want):
+    v = _run(ir, claim, kind).verdict
+    assert v == want if isinstance(want, str) else v in want
+
+
+def test_round7_a_step_that_picks_one_of_two_roots():
+    """x**2 - 7x + 12 = 0 with |x**2 - 4x| log(x - 2) = 0: both 3 and 4 are left, `x = 4` is no step."""
+    r = _run(_eq("x**2 - 7*x + 12 = 0", [R7]), "{3, 4}", steps=[("eq", "x = 4")])
+    layer = next(la for la in r.layers if la.layer == "steps.refute")
+    assert [st["status"] for st in layer.evidence["steps"]] != ["verified"]
