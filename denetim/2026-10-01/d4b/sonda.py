@@ -195,32 +195,32 @@ def cases_a():
 
 def cases_b():
     return [
-        ("eval x | sin=0, 3<x<7: pi", ev("x", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("pi"), NOTOK, None),
-        ("eval x | sin=0, 3<x<7: 2pi", ev("x", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("2*pi"), NOTOK, None),
+        ("eval x | sin=0, 3<x<7: pi", ev("x", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("pi"), UNK, None),
+        ("eval x | sin=0, 3<x<7: 2pi", ev("x", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("2*pi"), UNK, None),
         ("eval x | sin=0, 4<x<7: 2pi", ev("x", ["sin(x) = 0", "x > 4", "x < 7"]), _sol("2*pi"), NOTNO, None),
-        ("eval x | tan=1, 0<x<4: pi/4", ev("x", ["tan(x) = 1", "x > 0", "x < 4"]), _sol("pi/4"), NOTOK, None),
-        ("eval x | tan=1, 0<x<4: 5pi/4", ev("x", ["tan(x) = 1", "x > 0", "x < 4"]), _sol("5*pi/4"), NOTOK, None),
-        ("eval x | cos=1, 1<x<13: 2pi", ev("x", ["cos(x) = 1", "x > 1", "x < 13"]), _sol("2*pi"), NOTOK, None),
-        ("eval x | cos=0, 0<x<5: pi/2", ev("x", ["cos(x) = 0", "x > 0", "x < 5"]), _sol("pi/2"), NOTOK, None),
-        ("eval x | sin=1/2, 0<x<3: pi/6", ev("x", ["sin(x) = 1/2", "x > 0", "x < 3"]), _sol("pi/6"), NOTOK, None),
+        ("eval x | tan=1, 0<x<4: pi/4", ev("x", ["tan(x) = 1", "x > 0", "x < 4"]), _sol("pi/4"), UNK, None),
+        ("eval x | tan=1, 0<x<4: 5pi/4", ev("x", ["tan(x) = 1", "x > 0", "x < 4"]), _sol("5*pi/4"), UNK, None),
+        ("eval x | cos=1, 1<x<13: 2pi", ev("x", ["cos(x) = 1", "x > 1", "x < 13"]), _sol("2*pi"), UNK, None),
+        ("eval x | cos=0, 0<x<5: pi/2", ev("x", ["cos(x) = 0", "x > 0", "x < 5"]), _sol("pi/2"), UNK, None),
+        ("eval x | sin=1/2, 0<x<3: pi/6", ev("x", ["sin(x) = 1/2", "x > 0", "x < 3"]), _sol("pi/6"), UNK, None),
         ("eval x | sin=1/2, 2<x<3: 5pi/6", ev("x", ["sin(x) = 1/2", "x > 2", "x < 3"]), _sol("5*pi/6"), NOTNO, None),
         ("eval x | sin=1/2, 6<x<7: 13pi/6", ev("x", ["sin(x) = 1/2", "x > 6", "x < 7"]), _sol("13*pi/6"), NOTNO, None),
-        ("eval x**2 | sin=0, 3<x<7: pi^2", ev("x**2", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("pi**2"), NOTOK, None),
-        ("eval cos x | sin=0, 3<x<7: -1", ev("cos(x)", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("-1"), NOTOK, None),
-        ("eval cos x | sin=0, 3<x<7: 1", ev("cos(x)", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("1"), NOTOK, None),
-        ("eval cos x | sin=0 cons 3<x<7: -1", ev("cos(x)", ["sin(x) = 0"], [V("x", "real", ["x > 3", "x < 7"])]), _sol("-1"), NOTOK, None),
-        ("eval x | sin=0 dod (3,7): pi", ev("x", ["sin(x) = 0"], dod="(3, 7)"), _sol("pi"), NOTOK, None),
-        ("eval x | sin(pi x)=0, 0<x<3: 1", ev("x", ["sin(pi*x) = 0", "x > 0", "x < 3"]), _sol("1"), NOTOK, None),
-        ("eval x^2 | sin(pi x)=0, 0<x<3: 1", ev("x**2", ["sin(pi*x) = 0", "x > 0", "x < 3"]), _sol("1"), NOTOK, None),
-        ("eval sin x | tan=1: sqrt2/2", ev("sin(x)", ["tan(x) = 1"]), _sol("sqrt(2)/2"), NOTOK, None),
-        ("eval sin x | tan=1: -sqrt2/2", ev("sin(x)", ["tan(x) = 1"]), _sol("-sqrt(2)/2"), NOTOK, None),
-        ("eval sin x | cos=1/2, 4<x<8: -sqrt3/2", ev("sin(x)", ["cos(x) = 1/2", "x > 4", "x < 8"]), _sol("-sqrt(3)/2"), NOTOK, None),
-        ("eval x | cos 2x=1, 1<x<7: pi", ev("x", ["cos(2*x) = 1", "x > 1", "x < 7"]), _sol("pi"), NOTOK, None),
-        ("eval sin x | sin^2=1/4, 3<x<7: -1/2", ev("sin(x)", ["sin(x)**2 = 1/4", "x > 3", "x < 7"]), _sol("-1/2"), NOTOK, None),
-        ("eval x | x*exp(x)=-1/5: W0", ev("x", ["x*exp(x) = -1/5"]), _sol("LambertW(-1/5)"), NOTOK, None),
-        ("eval x | 2^x=x^2, x>0: 2", ev("x", ["2**x = x**2", "x > 0"]), _sol("2"), NOTOK, None),
+        ("eval x**2 | sin=0, 3<x<7: pi^2", ev("x**2", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("pi**2"), UNK, None),
+        ("eval cos x | sin=0, 3<x<7: -1", ev("cos(x)", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("-1"), UNK, None),
+        ("eval cos x | sin=0, 3<x<7: 1", ev("cos(x)", ["sin(x) = 0", "x > 3", "x < 7"]), _sol("1"), UNK, None),
+        ("eval cos x | sin=0 cons 3<x<7: -1", ev("cos(x)", ["sin(x) = 0"], [V("x", "real", ["x > 3", "x < 7"])]), _sol("-1"), UNK, None),
+        ("eval x | sin=0 dod (3,7): pi", ev("x", ["sin(x) = 0"], dod="(3, 7)"), _sol("pi"), UNK, None),
+        ("eval x | sin(pi x)=0, 0<x<3: 1", ev("x", ["sin(pi*x) = 0", "x > 0", "x < 3"]), _sol("1"), UNK, None),
+        ("eval x^2 | sin(pi x)=0, 0<x<3: 1", ev("x**2", ["sin(pi*x) = 0", "x > 0", "x < 3"]), _sol("1"), UNK, None),
+        ("eval sin x | tan=1: sqrt2/2", ev("sin(x)", ["tan(x) = 1"]), _sol("sqrt(2)/2"), UNK, None),
+        ("eval sin x | tan=1: -sqrt2/2", ev("sin(x)", ["tan(x) = 1"]), _sol("-sqrt(2)/2"), UNK, None),
+        ("eval sin x | cos=1/2, 4<x<8: -sqrt3/2", ev("sin(x)", ["cos(x) = 1/2", "x > 4", "x < 8"]), _sol("-sqrt(3)/2"), UNK, None),
+        ("eval x | cos 2x=1, 1<x<7: pi", ev("x", ["cos(2*x) = 1", "x > 1", "x < 7"]), _sol("pi"), UNK, None),
+        ("eval sin x | sin^2=1/4, 3<x<7: -1/2", ev("sin(x)", ["sin(x)**2 = 1/4", "x > 3", "x < 7"]), _sol("-1/2"), UNK, None),
+        ("eval x | x*exp(x)=-1/5: W0", ev("x", ["x*exp(x) = -1/5"]), _sol("LambertW(-1/5)"), UNK, None),
+        ("eval x | 2^x=x^2, x>0: 2", ev("x", ["2**x = x**2", "x > 0"]), _sol("2"), UNK, None),
         ("eval x | sin x = x/2, x>0", ev("x", ["sin(x) = x/2", "x > 0"]), _sol("1.895494267"), NOTOK, None),
-        ("eval x | Abs(x-1)=2: 3", ev("x", ["Abs(x - 1) = 2"]), _sol("3"), NOTOK, None),
+        ("eval x | Abs(x-1)=2: 3", ev("x", ["Abs(x - 1) = 2"]), _sol("3"), UNK, None),
     ]
 
 
@@ -351,9 +351,9 @@ def cases_e():
          NOTOK, None),
         ("B3 croots x^2-4 given Q^3>0: 0", croots("x**2 - 4", [f"{Q}**3 > 0"] + W7), _sol("0", "count"), NOTOK, None),
         ("B3 trig Q^3=0 [0,7]: {pi/3}", trig([f"{Q}**3 = 0"], "[0, 7]"), _sol("{pi/3}", S_), NOTOK, None),
-        ("B4 eval x | (x+1)Q=0, 0<x<4: pi/3", ev("x", [f"(x + 1)*{Q} = 0", "x > 0", "x < 4"]), _sol("pi/3"), NOTOK, None),
-        ("B4 eval x | Q^3=0, 0<x<4: pi/3", ev("x", [f"{Q}**3 = 0", "x > 0", "x < 4"]), _sol("pi/3"), NOTOK, None),
-        ("B4 eval x | exp(x)=3x: W0", ev("x", ["exp(x) = 3*x"]), _sol("-LambertW(-1/3)"), NOTOK, None),
+        ("B4 eval x | (x+1)Q=0, 0<x<4: pi/3", ev("x", [f"(x + 1)*{Q} = 0", "x > 0", "x < 4"]), _sol("pi/3"), UNK, None),
+        ("B4 eval x | Q^3=0, 0<x<4: pi/3", ev("x", [f"{Q}**3 = 0", "x > 0", "x < 4"]), _sol("pi/3"), UNK, None),
+        ("B4 eval x | exp(x)=3x: W0", ev("x", ["exp(x) = 3*x"]), _sol("-LambertW(-1/3)"), UNK, None),
         ("B5 ext max on [2,4] undefined at pi", ext(f"-(x - pi)**2 + (x + 1)*{Q}/((x + 1)*{Q}) - 1", "max", "[2, 4]"),
          _sol("0"), NOTOK, None),
         ("B6 eq x^2=4 given sin(1000x)>0 [0,30]: {2}", eq("x**2 = 4", ["sin(1000*x) > 0", "x >= 0", "x <= 30"]),
@@ -401,9 +401,9 @@ def cases_f():
         ("F4 ineq exp(x)>2", ineq("exp(x) > 2"), _sol("Interval.open(log(2), oo)", "interval"), OK, None),
         ("F4 croots exp(2x)-3exp(x)+2: 2", croots("exp(2*x) - 3*exp(x) + 2"), _sol("2", "count"), OK, None),
         ("F4 croots exp(2x)-3exp(x)+2: 1", croots("exp(2*x) - 3*exp(x) + 2"), _sol("1", "count"), NO, None),
-        ("F4 edge base 1: eval x | 1**x=1: 0", ev("x", ["1**x = 1"]), _sol("0"), NOTOK, None),
+        ("F4 edge base 1: eval x | 1**x=1: 0", ev("x", ["1**x = 1"]), _sol("0"), UNK, None),
         ("F4 3^x=2^x: {0} (class vii since round 5)", eq("3**x = 2**x"), _sol("{0}", S_), OK, None),
-        ("F4 out of class eval exp(x)=3x, x<1: W0", ev("x", ["exp(x) = 3*x", "x < 1"]), _sol("-LambertW(-1/3)"), NOTOK, None),
+        ("F4 out of class eval exp(x)=3x, x<1: W0", ev("x", ["exp(x) = 3*x", "x < 1"]), _sol("-LambertW(-1/3)"), NOTNO, None),
         # (v) a same-frequency sin/cos combination
         ("F5 eq sin=cos [0,2pi]: {pi/4,5pi/4}", eq("sin(x) = cos(x)", W2), _sol("{pi/4, 5*pi/4}", S_), OK, None),
         ("F5 eq sin=cos [0,2pi]: {pi/4}", eq("sin(x) = cos(x)", W2), _sol("{pi/4}", S_), NO, None),
@@ -415,7 +415,7 @@ def cases_f():
         ("F5 eq sin-cos=2: {}", eq("sin(x) - cos(x) = 2"), _sol("{}", S_), OK, None),
         ("F5 ineq sin+cos>1 [0,2pi]", ineq("sin(x) + cos(x) > 1", W2), _sol("Interval.open(0, pi/2)", "interval"), OK, None),
         ("F5 eval sin=cos, 0<x<2: pi/4", ev("x", ["sin(x) = cos(x)", "x > 0", "x < 2"]), _sol("pi/4"), OK, None),
-        ("F5 eval sin=cos, 0<x<4: pi/4", ev("x", ["sin(x) = cos(x)", "x > 0", "x < 4"]), _sol("pi/4"), NOTOK, None),
+        ("F5 eval sin=cos, 0<x<4: pi/4", ev("x", ["sin(x) = cos(x)", "x > 0", "x < 4"]), _sol("pi/4"), UNK, None),
         # (vi) products of the classes
         ("F6 eq x(sin-cos)=0 [0,2pi]", eq("x*(sin(x) - cos(x)) = 0", W2), _sol("{0, pi/4, 5*pi/4}", S_), OK, None),
         ("F6 eq (exp(x)-2) sin x=0 [0,4]", eq("(exp(x) - 2)*sin(x) = 0", ["x >= 0", "x <= 4"]), _sol("{0, log(2), pi}", S_), OK, None),
@@ -428,11 +428,11 @@ def cases_f():
         ("FS eval xy | x+y=5, x^2+y^2=13: 6", ev("x*y", ["x + y = 5", "x**2 + y**2 = 13"], [X, Y]), _sol("6"), OK, None),
         ("FS eval xy | x+y=5, x^2+y^2=13: 5", ev("x*y", ["x + y = 5", "x**2 + y**2 = 13"], [X, Y]), _sol("5"), NO, None),
         ("FS eval x | x+y=5, xy=6, x>y: 3", ev("x", ["x + y = 5", "x*y = 6", "x > y"], [X, Y]), _sol("3"), OK, None),
-        ("FS eval x | x+y=5, xy=6: 3", ev("x", ["x + y = 5", "x*y = 6"], [X, Y]), _sol("3"), NOTOK, None),
+        ("FS eval x | x+y=5, xy=6: 3", ev("x", ["x + y = 5", "x*y = 6"], [X, Y]), _sol("3"), UNK, None),
         ("FS eval x | x^2=y, y^2=x, x>0: 1", ev("x", ["x**2 = y", "y**2 = x", "x > 0"], [X, Y]), _sol("1"), OK, None),
         ("FS eval x+y | 1/x+1/y=1, xy=4: 4", ev("x + y", ["1/x + 1/y = 1", "x*y = 4"], [X, Y]), _sol("4"), OK, None),
-        ("FS eval x+y | x^2+y^2=2, xy=1: 2", ev("x + y", ["x**2 + y**2 = 2", "x*y = 1"], [X, Y]), _sol("2"), NOTOK, None),
-        ("FS eval x+y | xy=1 (a curve): 2", ev("x + y", ["x*y = 1"], [X, Y]), _sol("2"), NOTOK, None),
+        ("FS eval x+y | x^2+y^2=2, xy=1: 2", ev("x + y", ["x**2 + y**2 = 2", "x*y = 1"], [X, Y]), _sol("2"), UNK, None),
+        ("FS eval x+y | xy=1 (a curve): 2", ev("x + y", ["x*y = 1"], [X, Y]), _sol("2"), UNK, None),
     ]
 
 
@@ -449,7 +449,7 @@ def cases_g():
         ("G0 eq 2^x=x^2: {2,4,5}", eq("2**x = x**2"), _sol("{2, 4, 5}", S_), NO, None),
         ("G0 ineq exp(x)>x+1: x!=0", ineq("exp(x) > x + 1"), _sol("Union(Interval.open(-oo, 0), Interval.open(0, oo))", "interval"),
          UNK, None),
-        ("G0 eval x | exp(x)+x=1: 0", ev("x", ["exp(x) + x = 1"]), _sol("0"), NOTOK, None),
+        ("G0 eval x | exp(x)+x=1: 0", ev("x", ["exp(x) + x = 1"]), _sol("0"), NOTNO, None),
         ("G0 eq floor(x)=2: [2,3)", eq("floor(x) = 2"), _sol("Interval.Ropen(2, 3)", "interval"), NOTNO, None),
         # (vii) the ratio of two exponentials: log of both sides is linear
         ("G7 eq 3^x=2^x: {0}", eq("3**x = 2**x"), _sol("{0}", S_), OK, None),
@@ -501,7 +501,7 @@ def cases_h():
         ("H1 eq |log x|=1: {E,1/E}", eq("Abs(log(x)) = 1"), _sol("{E, exp(-1)}", S_), OK, None),
         ("H1 croots sqrt(log^2)-1: 2", croots("sqrt(log(x)**2) - 1"), _sol("2", "count"), OK, None),
         ("H1 croots sqrt(log^2)-1: 1", croots("sqrt(log(x)**2) - 1"), _sol("1", "count"), NO, None),
-        ("H1 eval x | sqrt(log^2)=1, x>0: E", ev("x", ["sqrt(log(x)**2) = 1", "x > 0"]), _sol("E"), NOTOK, None),
+        ("H1 eval x | sqrt(log^2)=1, x>0: E", ev("x", ["sqrt(log(x)**2) = 1", "x > 0"]), _sol("E"), UNK, None),
         ("H1 eval x | sqrt(log^2)=1, x>1: E", ev("x", ["sqrt(log(x)**2) = 1", "x > 1"]), _sol("E"), OK, None),
         ("H1 domof log(Max(x,0)): (0,oo)", domof("log(Max(x, 0))"), _sol("Interval.open(0, oo)", "interval"), OK, None),
         # B2
@@ -531,7 +531,7 @@ def cases_h():
         ("H4 eq x^(2/3)=1: {-1,1}", eq("x**(2/3) = 1"), _sol("{-1, 1}", S_), UNK, None),
         ("H4 eq x^(2/3)=1, x>0: {1}", eq("x**(2/3) = 1", ["x > 0"]), _sol("{1}", S_), OK, None),
         ("H4 eq cbrt(x)=x: {-1,0,1}", eq("cbrt(x) = x"), _sol("{-1, 0, 1}", S_), OK, None),
-        ("H4 croots x^(1/3)-x: 3", croots("x**(1/3) - x"), _sol("3", "count"), NOTOK, None),
+        ("H4 croots x^(1/3)-x: 3", croots("x**(1/3) - x"), _sol("3", "count"), UNK, None),
         # controls
         ("H5 ctl eq |2x-3|=5: {-1,4}", eq("Abs(2*x - 3) = 5"), _sol("{-1, 4}", S_), OK, None),
         ("H5 ctl eq Max(x,2)=3: {3}", eq("Max(x, 2) = 3"), _sol("{3}", S_), OK, None),
@@ -572,6 +572,97 @@ def cases_i():
     ]
 
 
+def cases_j():
+    """Round 7 (6 Oct 2026), the review of round 6: a cell dropped whole for its midpoint (YO-1, RK1), a folded
+    cell with a written odd root (YO-2), a Python 0 for a measure (RK2), a one-sided domain solved on the whole
+    line (RK3), a denominator with Abs/sign in it (RK4), two writings of one endpoint in the sampler (RK6)."""
+    XP = V("x", "positive_real")
+    XI = V("x", "integer")
+    R = "Abs(x**2 - 4*x)*log(x - 2) = 0"
+    C = "(Abs(x) + Abs(x - 10) - 10)*log(x - 6) = 0"
+    I_ = "interval"
+    return [
+        # YO-1 / RK1
+        ("J1 croots |x|ln(x-1): 1", croots("Abs(x)*log(x - 1)"), _sol("1", "count"), OK, None),
+        ("J1 croots |x|ln(x-1): 0", croots("Abs(x)*log(x - 1)"), _sol("0", "count"), NO, None),
+        ("J1 croots sqrt(x-2)+|x|-4: 1", croots("sqrt(x - 2) + Abs(x) - 4"), _sol("1", "count"), OK, None),
+        ("J1 croots sqrt(x-2)+|x|-4: 0", croots("sqrt(x - 2) + Abs(x) - 4"), _sol("0", "count"), NO, None),
+        ("J1 croots |x+10|ln x: 1", croots("Abs(x + 10)*log(x)"), _sol("1", "count"), OK, None),
+        ("J1 croots |x|sqrt(x-3): 1", croots("Abs(x)*sqrt(x - 3)"), _sol("1", "count"), OK, None),
+        ("J1 eq x^2=9 | |x|ln(x-1)>=0: {3}", eq("x**2 = 9", ["Abs(x)*log(x - 1) >= 0"]), _sol("{3}", S_), OK, None),
+        ("J1 eq x^2=9 | |x|ln(x-1)>=0: {}", eq("x**2 = 9", ["Abs(x)*log(x - 1) >= 0"]), _sol("{}", S_), NO, None),
+        ("J1 eq x^2=9 | Max(x,0)ln(x-1)>=0: {}", eq("x**2 = 9", ["Max(x, 0)*log(x - 1) >= 0"]), _sol("{}", S_), NO, None),
+        ("J1 eq x^2=1 | |x+10|ln x=0: {1}", eq("x**2 = 1", ["Abs(x + 10)*log(x) = 0"]), _sol("{1}", S_), OK, None),
+        ("J1 eval x^2 | R: 16", ev("x**2", [R]), _sol("16"), UNK, None),
+        ("J1 eval x^2 | R: 9", ev("x**2", [R]), _sol("9"), UNK, None),
+        ("J1 step x^2-7x+12=0 | R => x=4", eq("x**2 - 7*x + 12 = 0", [R]), _sol("{3, 4}", S_, steps=[("eq", "x = 4")]),
+         NOTNO | NO, NOTVER),
+        ("J1 eq R: {3,4}", eq(R), _sol("{3, 4}", S_), OK, None),
+        ("J1 eq R: {4}", eq(R), _sol("{4}", S_), NO, None),
+        ("J1 eq |x|+ln(x^2-1)=0: {}", eq("Abs(x) + log(x**2 - 1) = 0"), _sol("{}", S_), NOTOK, None),
+        ("J1 eq (|x|-x)ln(x-1)=0: (1,oo)", eq("(Abs(x) - x)*log(x - 1) = 0"), _sol("Interval.open(1, oo)", I_), NOTNO, None),
+        ("J1 eq (|x|-x)ln(x-1)=0: {}", eq("(Abs(x) - x)*log(x - 1) = 0"), _sol("{}", S_), NO, None),
+        ("J1 cint |x|ln(x-1)>0 [-5,5]: 3", cint(["Abs(x)*log(x - 1) > 0", "x >= -5", "x <= 5"], [XI]), _sol("3", "count"), OK, None),
+        ("J1 cint |x|ln(x-1)>0 [-5,5]: 0", cint(["Abs(x)*log(x - 1) > 0", "x >= -5", "x <= 5"], [XI]), _sol("0", "count"), NO, None),
+        ("J1 trig |x||x+5|ln(sin x)=0 [-5,0]: {-5}", trig(["Abs(x)*Abs(x + 5)*log(sin(x)) = 0"], "[-5, 0]"),
+         _sol("{-5}", S_), NOTOK, None),
+        ("J2 croots |x|-sqrt(2x+1): 2", croots("Abs(x) - sqrt(2*x + 1)"), _sol("2", "count"), OK, None),
+        ("J2 croots |x|-sqrt(2x+1): 1", croots("Abs(x) - sqrt(2*x + 1)"), _sol("1", "count"), NO, None),
+        ("J2 croots (|x-3|-1/2)ln(x-2): 3", croots("(Abs(x - 3) - 1/2)*log(x - 2)"), _sol("3", "count"), OK, None),
+        ("J2 croots (|x-3|-1/2)ln(x-2): 2", croots("(Abs(x - 3) - 1/2)*log(x - 2)"), _sol("2", "count"), NO, None),
+        ("J2 ineq |x-2|ln(x-1)<0: (1,2)", ineq("Abs(x - 2)*log(x - 1) < 0"), _sol("Interval.open(1, 2)", I_), OK, None),
+        ("J2 eval x | |x|=sqrt(2x+1), x<0: 1-sqrt2", ev("x", ["Abs(x) = sqrt(2*x + 1)", "x < 0"]), _sol("1 - sqrt(2)"), OK, None),
+        ("J2 eval x | |x|=sqrt(2x+1): 1-sqrt2", ev("x", ["Abs(x) = sqrt(2*x + 1)"]), _sol("1 - sqrt(2)"), UNK, None),
+        ("J2 cint C: 4", cint([C], [XI]), _sol("4", "count"), OK, None),
+        ("J2 cint C: 1", cint([C], [XI]), _sol("1", "count"), NO, None),
+        ("J2 eq C: {10}", eq(C), _sol("{10}", S_), NO, None),
+        ("J2 croots C: 1", croots(C.replace(" = 0", "")), _sol("1", "count"), NOTOK, None),
+        # YO-2: the reading of a written odd root decides
+        ("J3 eq (x+|x|)x^(1/3)=0: {0}", eq("(x + Abs(x))*x**(1/3) = 0"), _sol("{0}", S_), UNK, None),
+        ("J3 eq (x+|x|)x^(1/3)=0: (-oo,0]", eq("(x + Abs(x))*x**(1/3) = 0"), _sol("Interval(-oo, 0)", I_), UNK, None),
+        ("J3 eq Max(x,0)x^(1/3)=0: {0}", eq("Max(x, 0)*x**(1/3) = 0"), _sol("{0}", S_), UNK, None),
+        ("J3 cint Max(x,0)x^(1/3)=0 [-5,5]: 6", cint(["Max(x, 0)*x**(1/3) = 0", "x >= -5", "x <= 5"], [XI]),
+         _sol("6", "count"), UNK, None),
+        # RK2
+        ("J4 eq |x-3|=3-x, x>=3: {3}", eq("Abs(x - 3) = 3 - x", ["x >= 3"]), _sol("{3}", S_), OK, None),
+        ("J4 eq |x|=x, x<=0: {0}", eq("Abs(x) = x", ["x <= 0"]), _sol("{0}", S_), OK, None),
+        ("J4 eq |x|=-x, x>=0: {0}", eq("Abs(x) = -x", ["x >= 0"]), _sol("{0}", S_), OK, None),
+        ("J4 eq Max(x,2)=2, x>=2: {2}", eq("Max(x, 2) = 2", ["x >= 2"]), _sol("{2}", S_), OK, None),
+        ("J4 eq |x-1|+|x+1|=2, x>=1: {1}", eq("Abs(x - 1) + Abs(x + 1) = 2", ["x >= 1"]), _sol("{1}", S_), OK, None),
+        ("J4 eq |x-1|+|x+1|=2, x>1: {}", eq("Abs(x - 1) + Abs(x + 1) = 2", ["x > 1"]), _sol("{}", S_), NOTNO, None),
+        ("J4 eq |x-3|=3-x, x>=3: {}", eq("Abs(x - 3) = 3 - x", ["x >= 3"]), _sol("{}", S_), NO, None),
+        ("J4 eq Max(log x,0)=0 int x>=-5: {1}", eq("Max(log(x), 0) = 0", ["x >= -5"], [XI]), _sol("{1}", S_), OK, None),
+        # RK3
+        ("J5 ineq pos x^(1/3)<1: (0,1)", ineq("x**(1/3) < 1", vars_=(XP,)), _sol("Interval.open(0, 1)", I_), OK, None),
+        ("J5 ineq pos x^(1/3)>=2: [8,oo)", ineq("x**(1/3) >= 2", vars_=(XP,)), _sol("Interval(8, oo)", I_), OK, None),
+        ("J5 ineq pos x^(2/3)<=4: (0,8]", ineq("x**(2/3) <= 4", vars_=(XP,)), _sol("Interval.Lopen(0, 8)", I_), OK, None),
+        ("J5 ineq pos x^(1/3)<x: (1,oo)", ineq("x**(1/3) < x", vars_=(XP,)), _sol("Interval.open(1, oo)", I_), OK, None),
+        ("J5 ineq pos x^(1/3)<1: (0,2)", ineq("x**(1/3) < 1", vars_=(XP,)), _sol("Interval.open(0, 2)", I_), NO, None),
+        ("J5 cint posint x^(1/3)<2: 7", cint(["x**(1/3) < 2"], [V("x", "positive_integer")]), _sol("7", "count"), OK, None),
+        ("J5 cint posint x^(1/3)<2: 8", cint(["x**(1/3) < 2"], [V("x", "positive_integer")]), _sol("8", "count"), NO, None),
+        ("J5 domof pos log(2-x^(1/3)): (0,8)", domof("log(2 - x**(1/3))", vars_=(XP,)), _sol("Interval.open(0, 8)", I_), OK, None),
+        ("J5 ineq real x^(1/3)<1: (0,1)", ineq("x**(1/3) < 1"), _sol("Interval.open(0, 1)", I_), NOTOK, None),
+        ("J5 ineq real x^(1/3)<1: (-oo,1)", ineq("x**(1/3) < 1"), _sol("Interval.open(-oo, 1)", I_), UNK, None),
+        # RK4
+        ("J6 croots x/sign(x)-2: 2", croots("x/sign(x) - 2"), _sol("2", "count"), OK, None),
+        ("J6 croots 1/(x-|x|)+1/2: 1", croots("1/(x - Abs(x)) + 1/2"), _sol("1", "count"), OK, None),
+        ("J6 eq x/sign(x)=2: {-2,2}", eq("x/sign(x) = 2"), _sol("{-2, 2}", S_), OK, None),
+        ("J6 eq x/sign(x)=0: {0}", eq("x/sign(x) = 0"), _sol("{0}", S_), NO, None),
+        ("J6 eq x/|x|=1: [0,oo)", eq("x/Abs(x) = 1"), _sol("Interval(0, oo)", I_), NOTOK, None),   # an infinite claim: H3
+        ("J6 eq 1/(x+|x|)=1/4: {2}", eq("1/(x + Abs(x)) = 1/4"), _sol("{2}", S_), OK, None),
+        ("J6 eq (x-1)/(|x|-1)=1: [0,1)U(1,oo)", eq("(x - 1)/(Abs(x) - 1) = 1"),
+         _sol("Union(Interval.Ropen(0, 1), Interval.open(1, oo))", I_), NOTNO, None),
+        ("J6 eq (x-1)/(|x|-1)=1: [0,oo)", eq("(x - 1)/(Abs(x) - 1) = 1"), _sol("Interval(0, oo)", I_), NOTOK, None),
+        # RK6
+        ("J7 ineq x^2<16, x>L8: (3,4)", ineq("x**2 < 16", ["x > log(8)/log(2)"]), _sol("Interval.open(3, 4)", I_), OK, None),
+        ("J7 ineq x^2<16, x>L8: (3,4]", ineq("x**2 < 16", ["x > log(8)/log(2)"]), _sol("Interval.Lopen(3, 4)", I_), NO, None),
+        # controls
+        ("J8 ctl eq |2x-3|=5: {-1,4}", eq("Abs(2*x - 3) = 5"), _sol("{-1, 4}", S_), OK, None),
+        ("J8 ctl eq log(|x|-1)=0: {-2,2}", eq("log(Abs(x) - 1) = 0"), _sol("{-2, 2}", S_), OK, None),
+        ("J8 ctl eq cbrt(x)=x: {-1,0,1}", eq("cbrt(x) = x"), _sol("{-1, 0, 1}", S_), OK, None),
+    ]
+
+
 class _Slow(Exception):
     pass
 
@@ -585,10 +676,10 @@ CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "H": cases_h,
-          "I": cases_i}
+          "I": cases_i, "J": cases_j}
 
 
-def main(out_path=None, groups="ABCDEFGHI"):
+def main(out_path=None, groups="ABCDEFGHIJ"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -629,5 +720,5 @@ def main(out_path=None, groups="ABCDEFGHI"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHI"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJ"
     sys.exit(1 if main(out, grp) else 0)
