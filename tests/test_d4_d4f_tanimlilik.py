@@ -96,6 +96,10 @@ def test_cap_f1_a_closed_pole_is_undefined_as_written(expr, value):
     (_ir("definite_integral", {"integrand": "1", "var": "x", "a": "1/factorial(-1)", "b": "1"}), "1", "value"),
     (_ir("series_sum", {"term": "k", "var": "k", "lo": "1 + 1/factorial(-1)", "hi": "3"}, vars_=[K]), "6", "value"),
     (_ir("extremum", {"f": "x", "var": "x", "interval": "[1/(1/0), 1]", "which": "min"}), "0", "value"),
+    (_ir("extremum", {"f": "x", "var": "x", "interval": "[1/(1/0), 1)", "which": "min"}), "0", "value"),
+    (_ir("extremum", {"f": "x", "var": "x", "interval": "Interval(1/factorial(-1), 1)", "which": "min"}), "0", "value"),
+    (dict(_ir("solve_equation", {"var": "x", "equation": "x**2 = 4"}, shape="set"),
+          domain_of_discourse="Interval.open(1/factorial(-1), oo)"), "{2}", "set"),
     (_ir("solve_equation", {"var": "x", "equation": "x**2 = 4"}, vars_=[{"name": "x", "constraints": ["x > 1/factorial(-1)"]}],
          shape="set"), "{2}", "set"),
 ])
@@ -108,6 +112,24 @@ def test_cap_f1_every_path_abstains(ir, payload, kind):
 def test_cap_f1_a_claim_without_value_is_never_correct(claim):
     r = _run(_ev("0"), claim)
     assert r.verdict == "UNKNOWN" and "claim_is_not_a_value" in _flags(r)
+
+
+@pytest.mark.parametrize("claim", ["Interval(1/factorial(-1), 2)", "[1/factorial(-1), 2]",
+                                   "Union(Interval(1/zoo, 1), Interval(1, 2))", "[1/(1/0), 1] U [1, 2]"])
+def test_cap_f1_a_set_claim_with_an_end_without_value_is_never_correct(claim):
+    q = _ir("solve_inequality", {"inequality": "x*(x - 2) <= 0", "var": "x"}, shape="interval")
+    r = _run(q, claim, "interval")
+    assert r.verdict == "UNKNOWN" and "claim_is_not_a_value" in _flags(r)
+    assert _run(q, "Interval(0, 2)", "interval").verdict == "CORRECT"
+    assert _run(q, "[0, 2]", "interval").verdict == "CORRECT"
+
+
+def test_cap_f1_a_set_text_is_read_by_its_parts():
+    from mathverify.certify.domain import NO_VALUE
+    from mathverify.normalize.parse import parse_set_as_written
+    for t in ("(1/factorial(-1), 2]", "Interval.Lopen(1/factorial(-1), 2)", "{1, 2} U (1/zoo, 3)"):
+        assert NO_VALUE in definedness_conditions(parse_set_as_written(t), None), t
+    assert definedness_conditions(parse_set_as_written("(-oo, 0) U [2, oo)"), None) == []
 
 
 def test_cap_f1_a_claim_without_value_is_still_refuted_where_every_reading_refutes_it():
@@ -263,13 +285,15 @@ def _lim(expr, to="oo", v=XP):
 
 
 @pytest.mark.parametrize("expr,v,value", [("factorial(x - 2)/x**x", XP, "0"), ("factorial(x - 2)/factorial(x)", XP, "0"),
-                                          ("binomial(x, 3)/x**3", XP, "1/6"), ("factorial(x - 2)/x**x", XI, "0")])
+                                          ("binomial(x, 3)/x**3", XP, "1/6"), ("factorial(x - 2)/x**x", XI, "0"),
+                                          ("factorial(2*x - 3)/x**(2*x)", XP, "0")])
 def test_g14_a_sequence_limit_reads_the_tail(expr, v, value):
     assert _run(_lim(expr, v=v), value).verdict == "CORRECT"
     assert _run(_lim(expr, v=v), "1").verdict == "INCORRECT"
 
 
-@pytest.mark.parametrize("expr,to,v", [("factorial(x - 2)/x**x", "oo", X), ("factorial(x + 2)/x**x", "-oo", XI)])
+@pytest.mark.parametrize("expr,to,v", [("factorial(x - 2)/x**x", "oo", X), ("factorial(x + 2)/x**x", "-oo", XI),
+                                        ("factorial(x/2)/x**x", "oo", XP)])     # (x/2)! at every odd x
 def test_g14_no_tail_no_value(expr, to, v):
     r = _run(_lim(expr, to, v), "0")
     assert r.verdict == "UNKNOWN" and "membership_condition" in _flags(r)

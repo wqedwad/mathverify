@@ -2143,18 +2143,8 @@ def _split_commas(s: str) -> list[str]:
     return out
 
 
-def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
-    """Parse set notation: {a, b}, (a, b], [a,b) U (c, d), EmptySet, Reals, sympy Set syntax."""
-    if ns is None:
-        ns = dict(_SAFE_NAMES)
-    if not isinstance(s, str):
-        try:
-            val = sympify_nontext(s)                # see parse_expr_str: containers are refused
-        except (sp.SympifyError, TypeError) as e:
-            raise ParseError(f"not a set: {type(s).__name__}") from e
-        return val if isinstance(val, sp.Set) else FiniteSet(val)
-    s2 = preclean(s)
-    # union split at top level on " U " / "∪" (already mapped to " U ")
+def _union_parts(s2: str) -> list[str]:
+    """`s2` (precleaned) split at top level on " U " ("∪" is already mapped to it)."""
     parts, depth, cur = [], 0, ""
     i = 0
     while i < len(s2):
@@ -2171,7 +2161,70 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
         cur += c
         i += 1
     parts.append(cur)
-    sets = [_parse_single_set(p, ns) for p in parts if p.strip()]
+    return parts
+
+
+class _WrittenInterval:
+    """`Interval` read for definedness only (`parse_set_as_written`): its arguments as written, in a Tuple.
+    SymPy's Interval compares its ends when it is built, and an end with no value ((-1)!) failed the whole
+    reading, so the claim Interval(1/factorial(-1), 2) was compared as [0, 2] and certified (fourth audit,
+    CAP-F1)."""
+    def __new__(cls, *args, **_kw):
+        return sp.Tuple(*args)
+
+    @staticmethod
+    def open(*args, **_kw):
+        return sp.Tuple(*args)
+
+    Lopen = Ropen = open
+
+
+def _written_set_args(*args, **_kw):
+    return sp.Tuple(*args)
+
+
+_WRITTEN_SETS = {"Interval": _WrittenInterval, "Union": _written_set_args, "Intersection": _written_set_args,
+                 "Complement": _written_set_args}
+
+
+def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
+    """A text that may be set notation, read AS WRITTEN for definedness only (see `parse_as_written`): the set
+    constructors hold their arguments as a Tuple, and a text the whole reading cannot take is cut the way
+    `parse_set_str` reads it (the parts of A U B, the ends of (a, b], the elements of {a, b}), each part read
+    as written. None when no part is read."""
+    if ns is None:
+        ns = dict(_SAFE_NAMES)
+    if not isinstance(s, str):
+        return None
+    wns = dict(ns, **_WRITTEN_SETS)
+    whole = parse_as_written(s, wns)
+    if whole is not None:
+        return whole
+    pieces: list[str] = []
+    for part in _union_parts(preclean(strip_presentation(_strip_invisible(s)))):
+        part = part.strip()
+        m = _INTERVAL_RE.match(part)
+        if part.startswith("{") and part.endswith("}"):
+            pieces += _split_commas(part[1:-1])
+        elif m:
+            pieces += [m.group(2), m.group(3)]
+        elif part:
+            pieces.append(part)
+    read = [w for w in (parse_as_written(p, wns) for p in pieces if p.strip()) if w is not None]
+    return sp.Tuple(*[a for w in read for a in w.args]) if read else None
+
+
+def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
+    """Parse set notation: {a, b}, (a, b], [a,b) U (c, d), EmptySet, Reals, sympy Set syntax."""
+    if ns is None:
+        ns = dict(_SAFE_NAMES)
+    if not isinstance(s, str):
+        try:
+            val = sympify_nontext(s)                # see parse_expr_str: containers are refused
+        except (sp.SympifyError, TypeError) as e:
+            raise ParseError(f"not a set: {type(s).__name__}") from e
+        return val if isinstance(val, sp.Set) else FiniteSet(val)
+    sets = [_parse_single_set(p, ns) for p in _union_parts(preclean(s)) if p.strip()]
     from ..equiv.sets import unify_endpoints, EndpointsIncomparable
     try:
         sets = unify_endpoints(sets)

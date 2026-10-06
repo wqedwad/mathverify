@@ -341,18 +341,18 @@ def _violations(c, d, region):
             except Exception:  # noqa: BLE001
                 return None
             return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
-        # over integers an argument ±d + k (k an integer) is an integer: only its sign is asked. (x - 2)!
-        # over the positive integers fails at x = 1 alone, and its limit at oo reads only the tail (G14)
+        # over integers a polynomial in d with integer coefficients (x - 2, 2x - 3) is an integer: only its
+        # sign is asked. (x - 2)! over the positive integers fails at x = 1 alone, and its limit at oo reads
+        # only the tail (G14)
         e, s = c.args
-        if s in (S.Naturals0, S.Naturals, S.Integers) and region.is_subset(S.Integers) is True:
-            k = e - d if not (e - d).free_symbols else e + d if not (e + d).free_symbols else None
-            if k is not None and k.is_integer is True:
-                if s == S.Integers:
-                    return S.EmptySet
-                bad = sp.Lt(e, 0 if s == S.Naturals0 else 1)
-                r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
-                if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet):
-                    return r.value
+        if s in (S.Naturals0, S.Naturals, S.Integers) and region.is_subset(S.Integers) is True \
+                and _integer_valued(e, d):
+            if s == S.Integers:
+                return S.EmptySet
+            bad = sp.Lt(e, 0 if s == S.Naturals0 else 1)
+            r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
+            if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet):
+                return r.value
         return None
     bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
     # solved for a variable with the facts of the region (an index is an integer, nonnegative on
@@ -381,6 +381,16 @@ def _violations(c, d, region):
     if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
         return None
     return r.value
+
+
+def _integer_valued(e, d) -> bool:
+    """Is `e` a polynomial in `d` alone with integer coefficients, an integer at every integer `d`?"""
+    if e.free_symbols != {d}:
+        return False
+    try:
+        return all(a.is_integer is True for a in sp.Poly(e, d).all_coeffs())
+    except Exception:  # noqa: BLE001 - not a polynomial in d
+        return False
 
 
 def _undefined_at(body, index_values: dict, var) -> list[Any] | None:

@@ -967,10 +967,11 @@ class Ctx:
         """Any other text of the problem, read as written: "undefined" when it holds a closed operation
         with no value (NO_VALUE) or is closed and undefined, "undecided" when it is closed and a condition
         no exact check decides stands; None otherwise (open conditions are the certificates')."""
-        from ..normalize.parse import parse_as_written
+        from ..normalize.parse import parse_set_as_written
         from .domain import closed_condition_undecided, definedness_conditions, is_no_value, tree_free_symbols
         try:
-            e = self._pinned(parse_as_written(src, self.ns), pins)
+            # an interval's ends too: Interval.open(1/(-1)!, oo), [1/(1/0), 1)
+            e = self._pinned(parse_set_as_written(src, self.ns), pins)
             if e is None:
                 return None
             conds = definedness_conditions(e, None)

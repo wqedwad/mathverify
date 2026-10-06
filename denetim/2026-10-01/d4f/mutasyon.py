@@ -102,8 +102,14 @@ MUTATIONS = [
     ("M32 gerçel değişkende kuyruk", LIM, '    if point not in (oo, -oo) or not getattr(var, "is_integer", None):',
      "    if point not in (oo, -oo):", T),
     ("M33 kaydırılmış üyelik işaret sorusu değil", DOM,
-     "        if s in (S.Naturals0, S.Naturals, S.Integers) and region.is_subset(S.Integers) is True:",
-     "        if False:", T),
+     "        if s in (S.Naturals0, S.Naturals, S.Integers) and region.is_subset(S.Integers) is True \\\n"
+     "                and _integer_valued(e, d):", "        if False:", T),
+    ("M35 küme metni parçalara bölünmez", PAR,
+     "    read = [w for w in (parse_as_written(p, wns) for p in pieces if p.strip()) if w is not None]",
+     "    read = []", T),
+    ("M36 küme kurucuları tutulmaz", PAR, "    wns = dict(ns, **_WRITTEN_SETS)", "    wns = dict(ns)", T),
+    ("M34 tam sayı katsayısı sorulmaz", DOM,
+     "        return all(a.is_integer is True for a in sp.Poly(e, d).all_coeffs())", "        return True", T),
 ]
 
 if __name__ == "__main__":

@@ -359,7 +359,7 @@ def _claim_without_value(solution: Solution, ctx) -> list[str]:
     1/factorial(-1) for 0 was certified (SymPy's 1/zoo, fourth audit CAP-F1). A convention value (0**0,
     an odd root of a negative number) is `_claim_convention`'s."""
     from .certify.domain import closed_condition_undecided, definedness_conditions, is_convention
-    from .normalize.parse import parse_as_written
+    from .normalize.parse import parse_set_as_written
     payload = solution.claimed_answer.payload
     out: list[str] = []
     try:
@@ -369,7 +369,7 @@ def _claim_without_value(solution: Solution, ctx) -> list[str]:
     for txt in (payload if isinstance(payload, list) else [payload]):
         if not isinstance(txt, str):
             continue
-        w = parse_as_written(txt, ns)
+        w = parse_set_as_written(txt, ns)          # an interval's ends too: Interval(1/(-1)!, 2), (1/(-1)!, 2]
         if w is None:
             continue
         conds = [c for c in definedness_conditions(w, None) if not is_convention(c)]
