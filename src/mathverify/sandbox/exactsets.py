@@ -745,6 +745,34 @@ def _breaks(e, var) -> list:
     return out
 
 
+def _mid(a, b):
+    return (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+
+
+def _cell_sub(atoms, var, mid) -> dict:
+    """Each Abs, sign, Max, Min of `atoms` as its formula on the open cell holding `mid` (their arguments keep
+    their sign there: the cells are cut at their roots)."""
+    sub = {}
+    for at in atoms:
+        if isinstance(at, (sp.Max, sp.Min)):  # Max(A, B) is A where A > B on the cell
+            sg = _certified((at.args[0] - at.args[1]).subs(var, mid))
+            sub[at] = at.args[0] if (sg > 0) == isinstance(at, sp.Max) else at.args[1]
+            continue
+        sg = _certified(at.args[0].subs(var, mid))
+        sub[at] = sg * at.args[0] if isinstance(at, sp.Abs) else sp.Integer(sg)
+    return sub
+
+
+def _on_cell(f, sub):
+    """`f` with every atom of `sub` replaced, nested ones too (|x - |x||)."""
+    for _ in range(8):
+        g = f.xreplace(sub)
+        if g == f:
+            return g
+        f = g
+    return f
+
+
 def _piecewise(rel, var, lo, hi):
     """(xi) Abs and sign of polynomials: between consecutive real roots of their arguments each |P| is
     +P or -P and sign(P) is +1 or -1 (the sign at one point of the cell), and on the CLOSED cell the
@@ -771,23 +799,62 @@ def _piecewise(rel, var, lo, hi):
         else:                                  # |log x|: the zeros, poles and domain edges of the argument
             z, p_, _ = _structure(arg, var)
             cuts += z + p_ + [(c, S.Zero) for c in _breaks(arg, var)]
+    # The cells are cut where the domain ends too: at the roots of every log argument and radicand (round 7:
+    # a cell whose MIDPOINT was outside was dropped whole, |x|*log(x - 1) = 0 lost x = 2 on (0, oo) and
+    # |x| = sqrt(2x + 1) lost 1 - sqrt(2) on (-oo, 0)), and at the written poles. An argument, radicand or
+    # denominator with Abs/sign/Max/Min in it is read on each cell, where it is of the classes (sign(x) is
+    # +-1 there; x - |x| is 0 on [0, oo), undefined on that whole cell: 1/(x - |x|) = -1/2 → {-1})
+    dep_cuts = []
+    for a in [n.args[0] for n in e.atoms(sp.log) if var in n.free_symbols] + [n.base for n in _roots_of(e, var)]:
+        if a.has(*atoms):
+            dep_cuts.append(a)
+            continue
+        q = _poly_of(a, var)
+        if q is None:
+            raise _Unsolved(f"a cut that is no polynomial: {a}")
+        cuts += [(r_, S.Zero) for r_ in _real_roots(q)]
+    dep_dens = list(dict.fromkeys(n.base for n in sp.preorder_traversal(e) if isinstance(n, sp.Pow)
+                                  and n.exp.is_number and n.exp.is_negative and n.base.has(*atoms)))
     outside = _log_outside(e, var)
-    bad = _undefined_points(e, var, lo, hi)
+    bad = _sorted_unique(_on(_written_poles(e, var, skip=atoms), lo, hi))
     inner = [c for c in _sorted_unique(_on(cuts, lo, hi) + bad) if c != lo and c != hi]
     edges = [lo] + inner + [hi]
+    if dep_cuts or dep_dens:
+        more, more_bad = [], []
+        for a, b in zip(edges[:-1], edges[1:]):
+            sub = _cell_sub(atoms, var, _mid(a, b))
+            for f in dep_cuts:
+                q = _poly_of(_on_cell(f, sub), var)
+                if q is None:
+                    raise _Unsolved(f"a cut that is no polynomial on a cell: {f}")
+                if not q.is_zero:
+                    more += [r_ for r_ in _real_roots(q) if _in_open(r_, a, b)]
+            for f in dep_dens:
+                fc = _on_cell(f, sub)
+                if _identity(fc, var):
+                    continue                   # 0 on the whole cell: the cell is dropped below
+                z, p_, _ = _structure(fc, var)
+                more_bad += [c for c in _on(z + p_, a, b) if _in_open(c, a, b)]
+        bad = _sorted_unique(bad + more_bad)
+        inner = [c for c in _sorted_unique(inner + more + more_bad) if c != lo and c != hi]
+        edges = [lo] + inner + [hi]
+    cells = list(zip(edges[:-1], edges[1:]))
+    # a written odd root of a negative number: its value is a convention (part d4a), on a cell whose relation
+    # folds to True or False too ((x + |x|)*x**(1/3) = 0 is (-oo, 0] read with the real root, {0} on the
+    # principal branch; round 7, YO-2). Every radicand keeps its sign on each open cell (cut at its roots)
+    odd = [n.base for n in _roots_of(e, var) if n.exp.q % 2 == 1]
+    if odd and not _PRINCIPAL[0]:
+        pts = [p_ for p_ in edges if p_.is_finite] + [_mid(a, b) for a, b in cells]
+        if any(_certified(r_.subs(var, p_)) < 0 for r_ in odd for p_ in pts):
+            raise _Unsolved("an odd root of a negative number: a convention (part d4a)")
     pieces = []
-    for a, b in zip(edges[:-1], edges[1:]):
-        mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
+    for a, b in cells:
+        mid = _mid(a, b)
         if outside(mid):
             continue
-        sub = {}
-        for at in atoms:
-            if isinstance(at, (sp.Max, sp.Min)):  # Max(A, B) is A where A > B on the cell
-                sg = _certified((at.args[0] - at.args[1]).subs(var, mid))
-                sub[at] = at.args[0] if (sg > 0) == isinstance(at, sp.Max) else at.args[1]
-                continue
-            sg = _certified(at.args[0].subs(var, mid))
-            sub[at] = sg * at.args[0] if isinstance(at, sp.Abs) else sp.Integer(sg)
+        sub = _cell_sub(atoms, var, mid)
+        if any(_identity(_on_cell(f, sub), var) for f in dep_dens):
+            continue                           # a written denominator 0 on the whole cell: undefined there
         # on the OPEN cell the arguments keep their sign: sign(P) is +-1 there only (sign(0) = 0, review
         # of round 5, B2: sign(x) = 0 gave {}); the relation with them replaced may fold to True or False,
         # and then it no longer shows where the written expression is undefined (B3: |x|/x = 1 gave
@@ -804,17 +871,12 @@ def _piecewise(rel, var, lo, hi):
         if not p_.is_finite or _same(p_, bad) or outside(p_):
             continue
         val = e.subs(var, p_)
+        # a written denominator 0 there (sign(0) in x/sign(x)) is zoo or nan as written: no point
         if val.has(sp.zoo, sp.nan, sp.oo, -sp.oo):
             continue
         if _holds(type(rel), _real_sign(val)):
             pieces.append(sp.FiniteSet(p_))
     return sp.Union(*pieces) if pieces else S.EmptySet
-
-
-def _undefined_points(e, var, lo, hi) -> list:
-    """The points of [lo, hi] where `e` AS WRITTEN is undefined: a written denominator's zeros and poles,
-    the poles of tan, cot, sec, csc (of the classes, or raise _Unsolved)."""
-    return _sorted_unique(_on(_written_poles(e, var), lo, hi))
 
 
 def _identity(e, var) -> bool:
@@ -825,13 +887,16 @@ def _identity(e, var) -> bool:
         return False
 
 
-def _written_poles(e, var) -> list:
+def _written_poles(e, var, skip=()) -> list:
     """The points where a denominator AS WRITTEN vanishes or is undefined: the zeros and poles of the base
     of every negative power. Combining the terms may cancel them: (2*x**2 + 1)/(x**2 - 5) -
-    (2 + 1/x**2)/(1 - 5/x**2) is 0 over one denominator, but undefined at 0 and +-sqrt(5)."""
+    (2 + 1/x**2)/(1 - 5/x**2) is 0 over one denominator, but undefined at 0 and +-sqrt(5). A base with one
+    of `skip` in it (Abs, sign, Max, Min) is left to `_piecewise`, which reads it on each cell."""
     out = []
     for n in sp.preorder_traversal(e):
         if isinstance(n, sp.Pow) and n.exp.is_number and n.exp.is_negative and var in n.base.free_symbols:
+            if skip and n.base.has(*skip):
+                continue
             z, p_, _ = _structure(n.base, var)
             out += z + p_
     for n in e.atoms(sp.tan, sp.cot, sp.sec, sp.csc):         # and the poles of these, as written
@@ -996,6 +1061,20 @@ def _parametric_radical(e, var, domain):
     return sp.Intersection(sp.FiniteSet(*keep), domain)
 
 
+def sign_range(var) -> sp.Set:
+    """The reals the sign assumptions of `var` leave it: (0, oo) for a positive symbol, ℝ for a plain one. The
+    sets of `exact_solveset` lie in it (round 7); a caller that takes their complement takes it there."""
+    if var.is_positive:
+        return sp.Interval.open(0, S.Infinity)
+    if var.is_nonnegative:
+        return sp.Interval(0, S.Infinity)
+    if var.is_negative:
+        return sp.Interval.open(S.NegativeInfinity, 0)
+    if var.is_nonpositive:
+        return sp.Interval(S.NegativeInfinity, 0)
+    return S.Reals
+
+
 def _rebuilt(rel, var, domain):
     e = rel.lhs - rel.rhs
     if e.free_symbols - {var}:
@@ -1004,9 +1083,23 @@ def _rebuilt(rel, var, domain):
         keep = _on_points(rel, var, domain)            # point by point
         if keep is not None:
             return sp.FiniteSet(*keep)
+    # the sign the variable itself carries (a positive integer of count_integers) bounds its domain: no point
+    # outside it is a value of the variable, and x**(1/3) < 2 was left unsolved for its x < 0 (round 7)
+    signed = sign_range(var)
+    if signed is not S.Reals:
+        domain = sp.Intersection(domain, signed)
     hull = _hull(domain)
     if hull is not None:
         return sp.Intersection(_on_window(rel, var, hull[0], hull[1])[0], domain)
+    # the window of a domain bounded on one side is its own (inf, sup), not the whole line: on x > 0 no odd
+    # root of x has a negative radicand, and x**(1/3) < 1 was left unsolved for its x < 0 (round 7, RK3)
+    try:
+        wlo, whi = domain.inf, domain.sup
+    except Exception:  # noqa: BLE001 - no bounds (a ConditionSet): the whole line
+        wlo, whi = S.NegativeInfinity, S.Infinity
+    if not (wlo.is_number and whi.is_number and (wlo.is_finite or wlo == S.NegativeInfinity)
+            and (whi.is_finite or whi == S.Infinity)):
+        wlo, whi = S.NegativeInfinity, S.Infinity
     P = period(e, var)
     if P is not None:
         discrete = _on_periodic_points(rel, var, domain, P)
@@ -1015,7 +1108,7 @@ def _rebuilt(rel, var, domain):
     if (_identity(e, var) or e.has(sp.Abs, sp.sign, sp.Max, sp.Min) or any(
             isinstance(n, sp.Pow) and n.exp == S.Half and isinstance(n.base, sp.Pow) and n.base.exp == 2
             for n in sp.preorder_traversal(e))) and P is None:
-        return sp.Intersection(_on_window(rel, var, S.NegativeInfinity, S.Infinity)[0], domain)
+        return sp.Intersection(_on_window(rel, var, wlo, whi)[0], domain)
     if isinstance(rel, sp.Equality):
         zp, pp, _ = _structure(e, var)
         try:
@@ -1039,7 +1132,7 @@ def _rebuilt(rel, var, domain):
         return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)
     if P is None:
         # not periodic: with finitely many zeros and poles, the cells cover the whole line
-        return sp.Intersection(_on_window(rel, var, S.NegativeInfinity, S.Infinity)[0], domain)
+        return sp.Intersection(_on_window(rel, var, wlo, whi)[0], domain)
     # an inequality or `!=` on an unbounded domain: its set on one whole period decides only "nowhere"
     # and "everywhere" (sin(x) > 2, cos(x) + 2 != 0); anything else is a union over all periods, and
     # ℝ minus progressions is a set no sampler draws from: the ConditionSet decides each point exactly
