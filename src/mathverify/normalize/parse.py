@@ -1699,19 +1699,14 @@ def _refuse_latex_ranges(s: str) -> None:
     certified (fourth audit B1)."""
     if not _LATEX_RANGE_BINDER.search(s):
         return
-    try:
-        with sp.evaluate(False):
-            held = _latex2sympy(_exact_latex_decimals(s))
-    except Exception as e:  # noqa: BLE001 - its ranges cannot be checked: not read
-        raise ParseError(f"{s!r}: its sums and products are not read without evaluation: {e}") from e
+    with sp.evaluate(False):
+        held = _latex2sympy(_exact_latex_decimals(s))      # a text latex2sympy cannot read fails here already
     if not isinstance(held, sp.Basic):
         return
     for node in sp.preorder_traversal(held):
         if not isinstance(node, (sp.Sum, sp.Product)):
             continue
         for lim in node.limits:
-            if not isinstance(lim[0], Symbol):
-                raise ParseError(f"{s!r} binds {lim[0]!r}, which is not a variable: not read")
             if len(lim) != 3:
                 continue
             if any(isinstance(b, sp.Basic) and b.has(*_OPERATIONS) for b in lim[1:]):

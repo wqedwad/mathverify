@@ -85,6 +85,7 @@ def test_cap_f1_a_closed_pole_is_undefined_as_written(expr, value):
      "interval"),
     (_ir("simplify_expression", {"expr": "x + 1/factorial(-1)"}, shape="expression"), "x", "expression"),
     (_ir("count_roots", {"expr": "x**2 - 1 + 1/factorial(-1)", "var": "x"}, shape="count"), 2, "count"),
+    (_ir("derivative", {"f": "x**2 + 1/factorial(-1)", "var": "x", "at": "1"}), "2", "value"),
     (_ir("limit", {"expr": "x + 1/factorial(-1)", "var": "x", "to": "2"}), "2", "value"),
     (_ir("solve_equation", {"var": "x", "equation": "x + Sum(1/factorial(k - 3), (k, 1, 4)) = 2"}, vars_=[X, K],
          shape="set"), "EmptySet", "set"),
@@ -111,6 +112,11 @@ def test_cap_f1_a_claim_without_value_is_never_correct(claim):
 
 def test_cap_f1_a_claim_without_value_is_still_refuted_where_every_reading_refutes_it():
     assert _run(_ev("5"), "1/factorial(-1)").verdict == "INCORRECT"
+
+
+def test_cap_f1_a_claim_whose_convention_values_agree_is_not_a_claim_without_value():
+    # an odd root of a negative number is read both ways (part d4a): 4 under each reading
+    assert _run(_ev("4"), "(-8)**(2/3) - (-8)**(2/3) + 4").verdict == "CORRECT"
 
 
 @pytest.mark.parametrize("claim,kind", [("1/factorial(-1) = 0", "compute"), ("4/factorial(-2) = 0", "compute"),
@@ -143,6 +149,22 @@ def test_cap_f1_a_bracketed_text_is_walked(src):
     assert sp.false in definedness_conditions(parse_as_written(src), None)
 
 
+def test_cap_f1_the_factorial_family_has_its_poles():
+    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED, NO_VALUE
+    half = sp.Rational(1, 2)
+    with sp.evaluate(False):
+        poles = [sp.factorial(-1), sp.factorial2(-2), sp.subfactorial(-1), sp.gamma(0), sp.gamma(-3),
+                 sp.RisingFactorial(1, -2), sp.FallingFactorial(1, -2), sp.binomial(-1, half)]
+        values = [sp.factorial(3), sp.factorial2(5), sp.subfactorial(3), sp.gamma(half), sp.gamma(5),
+                  sp.RisingFactorial(-3, 2), sp.FallingFactorial(half, 2)]
+    for e in poles:
+        assert NO_VALUE in definedness_conditions(e, None), e
+    for e in values:
+        assert definedness_conditions(e, None) == [], e
+    # a text no walk reads proves nothing
+    assert definedness_conditions(object(), None) == [DEFINEDNESS_UNDECIDED]
+
+
 @pytest.mark.parametrize("expr,value", [("1/factorial(2)", "1/2"), (r"\Gamma(5)", "24"), ("P(5, 2)", "20"),
                                         ("Sum(1/factorial(k), (k, 0, oo))", "E")])
 def test_cap_f1_values_off_the_poles_stay(expr, value):
@@ -159,10 +181,11 @@ def test_cap_f1_an_equation_defined_nowhere_keeps_its_empty_answer():
 @pytest.mark.parametrize("expr", ["Sum(k, (k, 1/2, 5/2))", r"\sum_{k=1/2}^{5/2} k", r"\sum_{k=0.5}^{2.5} k",
                                   "Sum(k, (k, 0.5, 2.5))", "Product(k, (k, 1/2, 5/2))", "Sum(k, (k, pi, pi + 1))",
                                   "Sum(k**2, (k, sqrt(2), sqrt(2) + 1))", "floor(Sum(k, (k, 1/2, 5/2)))",
-                                  "Sum(1/k**2, (k, 1/2, oo))"])
+                                  "Sum(1/k**2, (k, 1/2, oo))", "floor(Sum(k, (k, pi, pi + 1)))",
+                                  "Sum(k, (k, 1/2 + 0*x, 5/2 + 0*x))"])
 def test_tan10_limits_that_are_not_integers_are_not_read(expr):
     with pytest.raises(ParseError):
-        parse_expr_str(expr, dict(_SAFE_NAMES, k=sp.Symbol("k", integer=True)))
+        parse_expr_str(expr, dict(_SAFE_NAMES, k=sp.Symbol("k", integer=True), x=sp.Symbol("x", real=True)))
 
 
 @pytest.mark.parametrize("ir,payload", [
@@ -190,6 +213,7 @@ def test_tan10_an_open_bound_is_held_to_the_integers():
     assert _one_range_conditions(n, n + 2) == [sp.Contains(n, sp.S.Integers)]
     assert _one_range_conditions(sp.Rational(1, 2), sp.Rational(5, 2)) is None
     assert _one_range_conditions(sp.Rational(1, 2), sp.oo) is None
+    assert _one_range_conditions(sp.Rational(1, 2), n) is None
     assert _one_range_conditions(sp.Integer(1), sp.Integer(3)) == []
 
 
@@ -199,7 +223,7 @@ def test_tan10_an_open_bound_is_held_to_the_integers():
     r"\lfloor \sum_{\alpha=3}^{\sqrt{1}} \alpha \rfloor", r"\lfloor \sum_{k_{1}=3}^{\sqrt{1}} k_{1} \rfloor",
     r"\lfloor \sum_{\mathrm{k}=3}^{\sqrt{1}} \mathrm{k} \rfloor", r"\lfloor \sum_{k\,=\,3}^{\sqrt{1}} k \rfloor",
     r"\lceil \sum_{\theta=\sqrt{9}}^{1} \theta \rceil", r"\left| \prod_{\theta=3}^{\sqrt{1}} \theta \right|",
-    r"\lfloor \sum_{j_{0}=3}^{1} j_{0} \rfloor",
+    r"\lfloor \sum_{j_{0}=3}^{1} j_{0} \rfloor", r"\lfloor \sum_{k=3}^{\sum_{j=1}^{1} j} k \rfloor",
 ])
 def test_b1_a_latex_reversed_range_is_refused_whatever_the_index(expr):
     r = _run(_ev(expr), "-2")
@@ -249,3 +273,11 @@ def test_g14_a_sequence_limit_reads_the_tail(expr, v, value):
 def test_g14_no_tail_no_value(expr, to, v):
     r = _run(_lim(expr, to, v), "0")
     assert r.verdict == "UNKNOWN" and "membership_condition" in _flags(r)
+
+
+def test_the_undecided_flag_blocks_a_positive_verdict():
+    from mathverify.certify.base import result, unknown
+    from mathverify.fuse.rules import fuse
+    layers = [unknown("intake.definedness", "x", flags=["problem_definedness_undecided"]),
+              result("certify.x", "pass", 0.99, True, {}, 0.0, primary=True)]
+    assert fuse(layers)["verdict"] != "CORRECT"

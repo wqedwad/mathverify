@@ -449,7 +449,7 @@ class Ctx:
     def _binding_issues(self) -> tuple[str, list[str]] | None:
         from ..normalize.parse import (PinnedBoundVariable, given_binding_report, hold_parametric,
                                        parse_as_written, read_condition)
-        from .domain import _certified_compare, definedness_conditions, in_domain, is_no_value, relation_holds_at
+        from .domain import _certified_compare, definedness_conditions, in_domain, relation_holds_at
         if (self.ir.domain_of_discourse or "").strip().lower() in ("complex", "complexes", "c", "ℂ"):
             return None                          # the conditions are the real ones (written_undefined too)
         bind, clash, _sources = given_binding_report(self.ir, self.ns)
@@ -566,18 +566,16 @@ class Ctx:
                 conds = definedness_conditions(e2, None)
             except Exception:  # noqa: BLE001 - not read as written: the old reading
                 continue
-            verdicts = []
             for c in conds:
                 if getattr(c, "free_symbols", None):
                     open_conds.append((c, src))
-                elif pinned_here:
-                    verdicts.append(False if is_no_value(c) else closed_verdict(c))
-            # a condition proved false decides it, whatever else stands undecided next to it (1/a! at a = -1:
-            # the reciprocal's own condition is undecided, the factorial's false)
-            if False in verdicts:
-                note("problem_undefined_as_written", src)
-            elif any(h is not True for h in verdicts):
-                note("given_binding_undecided", src)
+                    continue
+                if not pinned_here:
+                    continue
+                h = closed_verdict(c)
+                if h is not True:
+                    note("problem_undefined_as_written" if h is False else "given_binding_undecided", src)
+                    break
         # an IR function's call is read with its body as written (parse_as_written), so its conditions and its
         # Integrals/Limits are among the above; a body that leaks a pin fails at the namespace already
         # (5) a value a pin would put where an operator or the task binds the symbol, or a value for the
@@ -931,14 +929,14 @@ class Ctx:
         operation with none (NO_VALUE), or a condition that fails with no symbol left; "undecided" when a
         closed condition no exact check decides stands; None otherwise."""
         from ..normalize.parse import parse_as_written
-        from .domain import closed_condition_undecided, definedness_conditions, is_no_value, tree_free_symbols
+        from .domain import closed_condition_undecided, definedness_conditions, is_no_value
         e = self._pinned(parse_as_written(src, self.ns), pins)
         if e is None:
             return None
         conds = definedness_conditions(e, None)
         if any(is_no_value(c) for c in conds):
             return "undefined"
-        if not tree_free_symbols(e) and (any(c is sp.false for c in conds) or self._undefined_term(e)):
+        if not e.free_symbols and (any(c is sp.false for c in conds) or self._undefined_term(e)):
             return "undefined"
         # a closed condition SymPy left standing is one it could not decide: it counts only when it
         # is proved. tan(arccot(2) + arccot(1/2)) is tan(pi/2); its condition cos(...) != 0 stayed
@@ -952,7 +950,7 @@ class Ctx:
         integral is read as a plain real symbol: it runs over [a, b], not over its declared domain
         (certify.calculus)."""
         from ..normalize.parse import parse_as_written
-        from .domain import closed_condition_undecided, definedness_conditions, is_no_value
+        from .domain import closed_condition_undecided, definedness_conditions
         ns = self.ns
         v = (self.ir.task.params or {}).get("var", "x")
         if kind == "definite_integral" and isinstance(v, str) and isinstance(ns.get(v), sp.Symbol):
@@ -961,7 +959,7 @@ class Ctx:
         if e is None:
             return None
         conds = definedness_conditions(e, None)
-        if any(c is sp.false or is_no_value(c) for c in conds) or self._undefined_term(e):
+        if any(c is sp.false for c in conds) or self._undefined_term(e):    # NO_VALUE comes with `false`
             return "undefined"
         return "undecided" if closed_condition_undecided(conds) else None
 

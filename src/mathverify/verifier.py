@@ -358,7 +358,7 @@ def _claim_without_value(solution: Solution, ctx) -> list[str]:
     (1/(x - x)), or a closed one no exact check proves. The value parse folds them first: the claim
     1/factorial(-1) for 0 was certified (SymPy's 1/zoo, fourth audit CAP-F1). A convention value (0**0,
     an odd root of a negative number) is `_claim_convention`'s."""
-    from .certify.domain import closed_condition_undecided, definedness_conditions, is_convention, is_no_value
+    from .certify.domain import closed_condition_undecided, definedness_conditions, is_convention
     from .normalize.parse import parse_as_written
     payload = solution.claimed_answer.payload
     out: list[str] = []
@@ -373,7 +373,7 @@ def _claim_without_value(solution: Solution, ctx) -> list[str]:
         if w is None:
             continue
         conds = [c for c in definedness_conditions(w, None) if not is_convention(c)]
-        if any(c is sp.false or is_no_value(c) for c in conds) or closed_condition_undecided(conds):
+        if sp.false in conds or closed_condition_undecided(conds):         # NO_VALUE comes with `false`
             out.append(txt)
     return out
 
