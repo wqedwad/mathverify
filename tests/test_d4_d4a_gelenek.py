@@ -465,3 +465,14 @@ def test_z3_reads_the_written_real_root():
     shows the bridge (mutation Z08 survived)."""
     r = verify(solve("cbrt(x) = -2"), sol("{-8}", kind="set"))
     assert next(la for la in r.layers if la.layer == "certify.wordproblem").verdict == "pass"
+
+
+def test_evaluate_with_a_root_only_the_principal_reading_has():
+    """(x - 8)(x**(2/3) - x**(1/3) + 1) = 0: the real root reads t**2 - t + 1 > 0, so x = 8 alone; on the
+    principal branch x = -1 is a root too ((-1)**(1/3) = e^{iπ/3}, e^{2iπ/3} - e^{iπ/3} + 1 = 0). The
+    candidates of the real reading leave -1 out, so `_filter_solutions` never sees it: the guard of
+    `_verify_evaluate` on a written odd root (mutation A05) is what keeps 8 from being certified (round 6
+    of part d4b, 6 Oct 2026: without it 8 was CORRECT)."""
+    g = ["(x - 8)*(x**(2/3) - x**(1/3) + 1) = 0"]
+    assert verdict(ev("x", [X], g), sol("8")) == "UNKNOWN"
+    assert verdict(ev("x**2", [X], g), sol("64")) == "UNKNOWN"
