@@ -1,0 +1,12 @@
+# d4a saldırı notları
+- kurulum tamam (yeni=5c64867, eski=158c220)
+- sonda/s1.py: ilk toplu saldırı (C,N,B,O,M,D,Z)
+- s1 yeni bitti (194 vaka). Şüpheliler: simplify (x**3)**(1/3) -> x VE -> Abs(x) ikisi CORRECT; simplify x**(2/3)->cbrt(x)**2 CORRECT;
+  limit cbrt(x)/x x->oo -> 0 INCORRECT; step binomial(-2,2)=0 refuted -> INCORRECT; dod 'x in N and x<10' {3},{0,3} ikisi INCORRECT;
+  dod N + var N declared -> {3} CORRECT; çeşitli layer_exception (givens 'x in N', dod Intersection(N,..), 'Integers ∩ [0,10]'...). eski koşuyor.
+- BULGU A (d4a): simplify_expression odd-root tabanı semboliksa karşılaştırma alanı [0,oo) (gelenek bölgesi "dışarı" sayılıyor): x**(1/3)->Abs(x)**(1/3), (x**3)**(1/3)->Abs(x), (x**5)**(1/5)->Abs(x) vb. CORRECT (eski INCORRECT).
+- limit IR anahtarı "to" (point değil); extremum "which" (type değil) -> düzelticinin sonda'sındaki limit/extremum vakaları yanlış noktayı sınıyor.
+- s3 (evaluate/ineq/extremum/limit/Sum gelenek bölgesi) koşuyor.
+- BULGU A kapsamı (s4): evaluate (verilensiz, serbest sembol) ve simplify, seçenek harfiyle de; eski INCORRECT -> yeni CORRECT. Kök neden: algebra._verify_evaluate saf yol ve _verify_simplify karşılaştırmayı ctx.domain_for (gelenek bölgesi hariç) üzerinde yapıyor, unapplied/convention_region bakılmıyor; open_odd_root_bases aynı daraltılmış alanı alıyor.
+- s3: evaluate/ineq/count/extremum/limit/Sum gelenek bölgesi doğru (yalnız kapsama kaybı). limit/extremum sorunsuz.
+- repro_A.py doğrulandı (yeni CORRECT x5, eski INCORRECT x5). s5 (kök yazımları), s6 (boş alan) temiz. BİTTİ: rapor gönderiliyor.

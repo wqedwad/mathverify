@@ -1,0 +1,69 @@
+## Matematik kararları
+- G2 (doğrulandı): sin x > 0, cos x ≠ 0, tan x > 1 gibi koşulların ℝ'deki çözümü bütün periyotlardır
+  (log(sin x) tanım kümesi ∪_k (2kπ,(2k+1)π); sin 7 = 0.657 > 0). Tek periyotluk küme tanım/çözüm kümesi
+  sayılmaz: (0,π) INCORRECT ya da UNKNOWN; x²=49, sin x>0 → {7} doğru ({} INCORRECT/UNKNOWN); [0,10]'da
+  sin k>0 tam sayıları 1,2,3,7,8,9 → 6; tan x=1, 0≤x<10 → {π/4,5π/4,9π/4} doğru (INCORRECT olamaz).
+- D4-ADIM-G (kendim yeniden ürettim, baseline'da CORRECT/verified): tan'ın tanım kümesi ℝ∖{π/2+kπ}; x=−1
+  bu kümede (cos(−1)=0.5403) ve |−1|=1≠−1 → 'Abs(x) = x' adımı yanlış: verified olamaz (refuted ya da unknown).
+  log(sin x) için (0,π) yanlış (2π+1/2 kümede, sin=0.479).
+- G5 (doğrulandı): sin x=0, 3<x<7 → x∈{π,2π}, cos x∈{−1,1}: hedef tek değere inmez → UNKNOWN (−1 CORRECT olamaz).
+  tan x=1, 0<x<4 → {π/4, 5π/4} → UNKNOWN. sp.solve listesi tamlık kanıtı değil.
+- G3 (doğrulandı): trig_solve'da ek verilen/kısıt/dod/bildirim çözüm kümesini keser: cos2x=1/2, [0,2π), x>π →
+  {7π/6, 11π/6}; dört kök INCORRECT ya da UNKNOWN; doğru küme CORRECT ya da UNKNOWN. Genel çözümde (pencere yok)
+  periyodik olmayan kısıt (x>0, 0<x<4) varsa {nπ} gibi aile iddiası UNKNOWN (condition_not_applied); sınırlı
+  bölgede sonlu iddia ({π}) bölgede kesin karşılaştırılabilir.
+- TAN-08 (kendim yeniden ürettim): log(−1−x²) hiçbir gerçel x'te tanımlı değil (−1−x² ≤ −1) → denklem hiçbir yerde
+  tanımlı değil, çözüm kümesi ∅: {0,π} ve {nπ} INCORRECT (en az UNKNOWN). count_solutions: x≥1 için sqrt(−x)
+  tanımsız → sayım 0; 3 INCORRECT (en az UNKNOWN).
+- Ek ölçüm (ana oturumun "ImageSet zaten tam" varsayımına düzeltme): solveset(√3 sin x − cos x = 1, x, ℝ) =
+  2nπ+π/3, [0,2π]'de {π/3}: x=π kayıp. ImageSet tamlık kanıtı değil; eşitlik kümeleri de sayısal kök
+  aramasıyla doğrulanmalı (trig.py bunu zaten yapıyordu).
+- 4. tur (2 Ekim): Q = √3 sin x − cos x − 1 = 2 sin(x − π/6) − 1; sıfırları π/3 + 2kπ ve π + 2kπ. [0,2]'de
+  Q·sin(√2x) = 0 → {0, π/3} (π > 2, π/√2 ≈ 2.22 > 2): 3. turdaki sonda beklentisi "CORRECT olamaz" YANLIŞTI,
+  0ed77e2'nin CORRECT'i doğruydu; düzeltildi. [0,4]'te {0, π/3, π, π/√2}.
+- (iv) exp(x)=2 → {log 2}; 4^x − 3·2^x + 2 = 0 → t = 2^x, (t−1)(t−2) → {0, 1}; e^{2x} − e^x − 2 = 0 → t = −1 değer
+  kümesi dışı → {log 2}; atan x = 2 → 2 > π/2 → ∅; log²x = log x → {1, e} (x > 0); log x < 1 → (0, e);
+  sinh x = 1 → {asinh 1 = log(1+√2)}; (1/2)^x = 4 → {−2}. 3^x = 2^x (log3/log2 irrasyonel oran) sınıf dışı.
+- (v) sin x = cos x → √2 sin(x − π/4) = 0 → [0,2π]'de {π/4, 5π/4}; sin2x + cos2x = 1 → [0,2π]'de {0, π/4, π, 5π/4, 2π};
+  sin x − cos x = 2 → R = √2 < 2 → ∅; sin x + cos x > 1, [0,2π] → (0, π/2). −sin x − cos x: φ = atan2(−1,−1) = −3π/4
+  (atan(B/A) = π/4 yanlış olurdu); [0,7]'de −sin x − cos x = 1 → {π, 3π/2}.
+- Çok değişkenli rasyonel sistem: tamlık ancak kanıtla (doğrusal sistem; ya da sıfır boyutlu ideal + Seidenberg radikali
+  boyutu = kanıtlanmış farklı çözüm sayısı). x+y=5, x²+y²=13 → xy = 6 (CORRECT); x+y=5, xy=6 → x ∈ {2,3} (tek değer
+  yok); xy = 1 eğri → karar yok.
+- cbrt/real_root sınıfı eklenmedi: tek kökün okunuşu (principal ya da gerçel kök) d4a'nın gelenek kararına bağlı
+  (x**(1/3) = x: {1} mi {−1,0,1} mi); sınıf bu kararı atlayamaz → ConditionSet/UNKNOWN kalır.
+
+# d4b NOTLAR
+- worktree /home/user/asd/.claude/worktrees/agent-aaed36d58e0f5ae79, ff 1df0558 -> 158c220 yapildi.
+- Mekanizma (olculdu, sympy 1.14): solve_univariate_inequality periodicity!=None ise [0,period)'a kirpar,
+  sinirli alan verilse de (once R'de cozer sonra kesisir). Ne(x*cos x,0) -> (-oo,0)u(0,oo) (solvify ImageSet'i atar).
+- Plan: guarded exact_solveset (sandbox/exactsets.py), ops.solveset_in onu cagirir; Ne -> periyot penceresi;
+  sinirli govde -> isaret tablosu; aksi ConditionSet. Bes yer + trig_solve kosullari + evaluate tamlik.
+- Baseline probe sonuclari: $SP/d4/duzeltme/d4b/once/ (p21 28/37, p27 5/13, p06 20/21, p04 8/24 beklenmeyen).
+- Calisma kurali: python komutlarinda degisken yok, literal yol (izolasyon kancasi).
+- [ilerleme] src degisiklikleri yapildi (exactsets, ops, base domain_for/cut_by/unsolved, domain, algebra G5+cut,
+  counting, extremum, limits, trig region, formal/statement, geometry, series, parse_domain, steps _set_counterexample).
+  Sonda denetim/2026-10-01/d4b/sonda.py: once 99/153 beklenmeyen (A48 B13 C38 D0), sonra 0.
+  fark sonra2: karar 0, ilk kotu adim 0, adim durumu 0, K4 etiket 0.
+- Siradaki: tests/test_d4_d4b_periyodik.py, ilgili testler, commit, mutasyon.py, rapor.
+- [ilerleme 2] commitler 89b896e, 7abf15f, 967aa77, 573505f, + mutasyon desen commit'i. Test 47 (44'u tabanda duser beklenir,
+  yeniden olc). Mutasyon ilk tur 41/45 (P06 desen, P09/P11/D06 yasadi -> duzeltildi; P11 _bounds geri alindi).
+  final.sh (mutasyon tam, sonda, fark, pytest) arka planda: final.log.
+- [ilerleme 3] 8786f13 (domain_of within yalniz sinirli taban; v14 gerilemesi duzeldi), ad9ee56 (acot kardes yolu:
+  _finite_critical_points sifir dogrulama + in_domain ConditionSet sertifikali). final3 kosuyor (final3.log).
+  final2 sonuclari: mutasyon 47/47, sonda 0, fark 0/0/0/0, pytest 3170 gecti 93 atlandi 1 dustu (staged_check, taban).
+- [BITTI] HEAD ad9ee56. final3: mutasyon 49/49, sonda once 101/155 -> sonra 0, fark 0/0/0/0, pytest 3171 gecti/93 atlandi/1 dustu
+  (staged_check, taban kaynakli). Yeni test 48, 45'i tabanda duser. taban kopyasi silindi. Rapor ana oturuma verildi.
+- [birlesme] b9518f6 = ad9ee56 + 21c1698 merge; final4.sh olcumleri kosuyor (final4.log)
+- [birlesme bitti] HEAD 0ed77e2. mut d4b 49/49 (S02 uyarlandi, ayrica olduruldu), d4a 50/51 (A05 yasadi: _complete_solutions kapsiyor), sonda d4a 0/316, d4b 0/155, fark 0 (taban ve 21c1698'e gore), pytest 3251 gecti 93 atlandi 0 dustu.
+- [saldiri turu] exactsets sinif tabanli yeniden yazildi (i poly, ii tek trig dogrusal arg polinomu, iii carpim/bolum; LIMIT=400; numeric_roots kaldirildi), trig detect_period sinif, _complete_solutions yalniz sinif, written_undefined_in trig cozulmemis->True. Saldiri sondalari kosuyor: saldiri.log
+- [saldiri turu commit] cf3d87a; final5.sh kosuyor (final5.log)
+- [saldiri turu] 3872bcd. 0ed77e2'ye gore: sonda 16/184 -> 0; yeni test dosyasi 10 test 0ed77e2'de duser; mut5 d4b 52/53 (K02 duzeltildi), d4a 50/51 (A05); fark 0; pytest v14 arccot 4 -> uyarlandi. final6 kosuyor.
+- [BITTI saldiri turu] HEAD 3872bcd: sonda 0/184, d4a 0/316, mut d4b 53/53, d4a 50/51 (A05), fark 0/0, pytest 3260/93/0, saldiri c1-c4 tek 'BAD' yanlis beklenti (tan>0 sayisi 10), fuzz 2 uyusmazlik tan kutbu yanlis alarmi.
+- [4. tur] b87b625 birlesti; 7c0473a: siniflar (iv) monoton, (v) sin/cos birlesimi, (vi) carpimlar; _complete_solutions
+  class_solveset; cok degiskenli Groebner+Seidenberg; solve_guarded exact_class. final7 kosuyor (final7.log).
+  Kapsama (kapsama.sh): 0ed77e2'de dogru karar verip 3872bcd'de UNKNOWN'a dusen 15 sonda vakasi HEAD'de geri geldi;
+  arccot 4 vaka (argumani dogrusal degil) gelmedi.
+- [4. tur devam] 7c0473a mutasyon 65/70 (K10 K17 K20 G03 A06 yasadi): K20 gercek hata (log hucresi tek noktadan; log(x)^2<=0, (x+1)log x=0 R'de {-1,1}) -> 593dd7e. A06/G03 esdeger -> tekrarli kod kaldirildi. Konteyner yeniden basladi; final7 yeniden kosuluyor.
+- [BITTI 4. tur] HEAD 5aa94e9 (7c0473a, 593dd7e, 30f60a4, 5aa94e9). sonda d4b 236: b87b625 19 -> 0; d4a 0/316, d4c 0/138, d4g 0/85; mut d4b 74/74, d4a 50/51 (A05); fark karar 0 (4 uni s7 unknown->verified); pytest 3393 gecti/93 atlandi/0 dustu; yeni test dosyasi 97 testin 42'si b87b625'te duser. Kapsama: 0ed77e2'de dogru olup 3872bcd'de UNKNOWN'a dusen 16 sonda vakasinin 16'si geri geldi; arccot 4 gelmedi.
+- [BITTI 5. tur] HEAD 9628439 (7ecb28a + merge d540add c7978cb + 9628439). Kural kaldirma olcumu (r5a, yalniz kural+oran sinifi): karar 7 (CORRECT->UNKNOWN), adim 111, sonda d4a 1 d4c 11 BAD. Siniflar (Abs/sign parcali, tek kok, log toplami, ozdeslik, parametreli) sonrasi: fark karar 0, adim 82 unknown->verified (5aa94e9'a gore), sondalar d4a 0/316 d4b 0/275 (d540add'de 6) d4c 0/138 d4g 0/229 d4d 0/275; mut d4b 86/86, d4a 50/51 (A05); pytest 3529/93/0.

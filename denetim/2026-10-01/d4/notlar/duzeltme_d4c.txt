@@ -1,0 +1,83 @@
+# d4c NOTLAR (sayısal kanıt ve kesin sıfır)
+
+## Matematik kararları
+
+- **S1** (yeniden üretildi, 1df0558): ∫₀^{2π} e^{cos x}cos 50x dx = 2π·I₅₀(1) = 1.8439e-79 ≠ 0 (mpmath besseli,
+  90 basamak; seri terimleri pozitif). 0 iddiası CORRECT olamaz. Sembolik sıfır sertifikası yok (SymPy kapalı
+  biçim yok, [0,2π]'de orta noktaya göre çift: f(2π−x) = f(x)), sayı 0'dan ayrılamıyor → **UNKNOWN**.
+  ∫₋₁¹ (x + |cos x|/10⁸⁰) = 2 sin 1/10⁸⁰ ≠ 0: SymPy'nin 0'ı sertifikasız (f(−x)+f(x) = 2|cos x|/10⁸⁰ ≠ 0;
+  ilkel doğrulanmıyor) → 0 iddiası/“= 0” adımı **UNKNOWN/unknown**; doğru değer 2 sin 1/10⁸⁰ reddedilmez
+  (fark kalıntı ölçeğinin altında) → **UNKNOWN/unknown** (CORRECT için kanıt yok: SymPy'nin değeri yanlış).
+- **S2** (yeniden üretildi): ∫₀¹ (1 + e^{−10⁸(x−1/3)²}e^{cos x}) = 1.000455999664… ≠ 1 (kırılmalı mpmath).
+  SymPy kesin değer vermiyor → karelemeyle kabul yok (karar 2) → 1 iddiası **UNKNOWN** (ret için iki bağımsız
+  yöntem gerekir; ikisi de tepeyi kaçırırsa ret de yok). 'sin(x⁵)e^{cos x} + tepe' [−1,1] iddia 0 → **UNKNOWN**
+  (tek değil: tepe simetriyi bozuyor). 'sin(x⁵)e^{cos x} + 1' [−1,1], iddia 2 + 10⁻⁴⁰ → **UNKNOWN** (değer
+  kesin 2 ama SymPy bunu vermiyor; kesin olmayan sayı 10⁻⁴⁰ farkı ayıramaz). Aynı integrandda iddia 0 için
+  tek kısım simetri sertifikası ancak bütün integrand tekse geçerli: burada değil.
+- **S3 / D4-ADIM-C** (yeniden üretildi): Dirichlet ∫₀^∞ sin x/x = π/2, Fresnel ∫₀^∞ sin x² = √(2π)/4,
+  Laplace ∫₀^∞ cos x/(1+x²) = π/(2e), ∫₀^∞ sin³x/x = π/4 (mpmath quadosc 30 basamakta aynı). sp.N'in
+  anlamlı basamaksız çıktısı ('-0.e+0', '1.6') değer değildir: ne onay ne ret → adımlar **unknown**, doğru
+  çözüm INCORRECT olmaz (SymPy'nin kapalı değeri sayıyla onaylanamıyor; onay için ayrı bir kanıt yok).
+- **S4** (yeniden üretildi: 100 s'de dönmedi): Σ_{k=0}^{3000} x^k/k! bir polinom, e^x değil → doğru karar
+  INCORRECT ya da UNKNOWN; takılma olmamalı → süre sınırlı değerlendirme, aşımda o nokta karar vermez.
+- **S5** (yeniden üretildi): Σ_{k=0}^{5000} a^k − 1/(1−a) = −a^{5001}/(1−a) ≠ 0; 1 − tanh(100x) =
+  2e^{−200x}/(1+e^{−200x}) > 0; (tanh 100x)' = 100 sech²(100x) > 0. evalf'in '0.e-168'i sıfır kanıtı değil:
+  o nokta ancak kesin eşitlik (CAS ile 0) ya da kesin fark (tanık) ile karar verir; ikisi de yoksa nokta
+  "emin değil" → **UNKNOWN** (kesin tanık bulunursa INCORRECT; toplam için kapalı biçim kesin rasyonel fark verir).
+- **S6** (yeniden üretildi; A doğrulayıcısı kapsama gerilemesi diyor): sign(x)/√|x| ve sign(x)|x|^{−2/3}
+  [−1,1]'de tek ve mutlak integrallenebilir (∫|f| = 4 ve 6) → integral tam 0 → simetri sertifikasıyla
+  **CORRECT**. Mutlak integrallenebilirlik kanıtı: tanımsız nokta sonlu ve her birinde
+  |f|·|x−p|^β → sonlu (β < 1) karşılaştırması.
+
+İlke (ana oturum kararları 1–4): sıfırın kabulü yalnız sembolik sertifikayla (özdeş 0; orta noktaya göre
+tek simetri + mutlak integrallenebilirlik; doğrulanmış ilkel + süreklilik ile kalkülüsün temel teoremi);
+sıfır olmayan değerin kabulü yalnız SymPy'nin kesin değeri + sayısal onayla (§72 a); sayısal ret yalnız iki
+bağımsız yöntem (tanh-sinh, Gauss-Legendre) × iki hassasiyet, fark ≥ 10³ × hata tahmini, tahmin > 0 ve
+yöntemler uyumlu.
+
+## İlerleme
+- [x] repro'lar 1df0558'de: hepsi yeniden üretildi (repro_*.base.out)
+- [x] worktree 158c220'e ff (ana oturum notu); src değişiklikleri commit edilmedi henüz
+- [x] kod: calculus (certified_integral_value / zero_integral_certificate: özdeş 0, orta noktaya göre tek +
+  mutlak integrallenebilirlik (β-sınırı), FTC parçalı (antiderivatives: default+manual, pozitif değişken,
+  uç limitleri classify_limit + deep_probe); integral_enclosure/integral_excludes (TS+GL × 30/50, hata>0,
+  10³ marj); verify yeniden), forms (checked_forms sertifika; _numeric bit okuma), deterministic
+  (_integrals_refute köşe kutusu), random_point (_definite_nonzero_difference sandbox+bit yok→kesin
+  kontrol; _terms_at + 20 s değerlendirme bütçesi), ops (quad sonsuz uç, numeric_value_bits,
+  difference_bits, antiderivatives)
+- [x] repro v1: hepsi beklenen; tests3 v1: yalnız test_c09_controls (log x/√x) → FTC manual+deep_probe ile düzeldi
+- [ ] sonda base/yeni, testler, mutasyon, fark
+## Ek matematik kararı (yorum)
+- Karar 3'teki "hata tahmini 0": tam 0 okunuyor (mpmath '0.0'). Tepe örneğinde ga30 hata 0.0 → ret yok.
+- FTC değeri (doğrulanmış ilkel) kesin değer sayılıyor (SymPy belirli integrali vermese de): ispat, sayı değil.
+- [x] commit 86361fe (src+testler+sonda+mutasyon). sonda: base 79/127 beklenmeyen, yeni 0 (E yeniden).
+- [x] testler v3: ilgili 2040 test geçti. parca1 test_the_zero_test_itself yeni API'ye; parca4 |cos| beklentisi
+  (artık sertifika 2 sin 1 veriyor, doğru) güncellendi.
+- random_point: evalf'in kendi 0'ı da kanıt değil (log(1+15/10^600) → evalf tam 0) → her nokta kesin
+  _exact_counterexample; difference_bits op kaldırıldı.
+- [ ] fark (bif7y9tht), base test sayımı (bkxh7bq5s), mutasyon
+- [x] fark v1 (86361fe): karar değişimi 0; adım 4 (k4/uni-001,006,010,018 s7 '∫₀¹ ln x/√x = −4' unknown→verified, FTC manual).
+- [x] mutasyon tur 1 (86361fe): 19/23; yaşayan Z01,Z04,Z06,Z14 → testler eklendi.
+- kapsama: random_point'ta evalf sıfırı kanıt değil → ters trig özdeşlikleri UNKNOWN'a düşmüştü → numeric.py'ye
+  _angle_sum_is_zero ve _exp_generator_is_zero; kapsama sondası (kapsama.py, 28 durum) 158c220 ile aynı.
+- [x] commit 7e2f08d. [ ] fark v2, sonda yeni2, testler v4, mutasyon tur 2, base test sayımı (son test dosyası)
+- [x] 7e2f08d: fark v2 karar 0 / adım 4 (aynı); sonda yeni2 138/0; testler v4 2045 geçti; base test 27/35 düşer;
+  base sonda 81/138 (A-F eski koşu 78 + G 3).
+- [ ] mutasyon tur 2 (Z01,Z04,Z06,Z14,Z24-27) → sonra `git merge 0ed77e2` (ana oturum), birleşik ölçümler
+- [x] mutasyon tur 2: 8/8 (toplam 27/27 d4c).
+- [x] merge 0ed77e2 → fa4adb8 (çakışmasız). Birleşik: pytest tam Lean'siz 3286 geçti/93 atlandı/0 düştü;
+  sonda d4c 138/0, d4a 316/0, d4b 155/0; fark karar 0, adım 4 (aynı uni s7).
+- [ ] üç mutasyon listesi birleşik HEAD'de (mut3.sh, bhyp2ldik)
+- [x] birleşik fa4adb8 mutasyonlar: d4c 27/27, d4b 49/49, d4a 50/51 (A05 yaşadı; 0ed77e2'nin kendisinde de yaşıyor, d4c kaynaklı değil).
+- RAPOR verildi. Kopyalar (.env içeren base/s0ed/merged) silindi.
+- e2579c3 (sertifika önceliği, Gudermann), merge b87b625 → 1dd6a91. Ölçümler: fulltests full3, sonda son2,
+  batch3.sh (base ad50fbc sonda/test, d4a/b/g, fark), mutasyon 33. base3 (ad50fbc) sonda: 21/179 beklenmeyen.
+- 1dd6a91 ölçümleri: tam pytest 3356 geçti/93 atlandı/1 düştü (v14 limit testi yük altında; tek başına geçiyor),
+  d4c sonda 183/0 (ad50fbc: 24/183), d4a 316/0, d4b 184/0, d4g 85/0, fark karar 0 adım 4, base test 7/39 düşer.
+  kiyas.py: kaybedilen ret 16 (hepsi doğru değerin haksız reddi), kazanılan ret 12. ret.sh (ret gücü) ve mutasyon (mut4) koşuyor.
+- ret.sh: 15 yanlış iddiadan 5'i artık UNKNOWN (sonsuz aralık 2, sin x/x dint 1 (kaldırılabilir tekillik), x^x 2); 10 hâlâ ret.
+- mut4 (1dd6a91): 32/34; Z02, R03 için test eklendi → f921bdc; mut5 (Z02,R03) + d4c test dosyası koşuyor.
+- f921bdc/cdbacdd: Z02 ve R03 testleri; mut5/mut6 ile ikisi de öldü. base ad50fbc: d4c testleri 8/39 düşer.
+- merge d540add → 31eb67b. Son ölçümler: full4, sonda son3, batch4 (d4a/b/d/g + fark), mut7 (34).
+- 31eb67b: d4c sonda 183/0; d4a 316/0, d4b 236/0, d4d 275/0, d4g 229/0; fark karar 0 adım 4; pytest tek başına
+  3486 geçti/93 atlandı/1 düştü (test_cloud_scripts zaman sınırı; tek başına geçiyor). mut7 (34) koşuyor.

@@ -1,0 +1,19 @@
+# d4b saldiri NOTLAR (2 Eki 2026)
+- kurulum yeni=0ed77e2, eski=21c1698; harness sonda/h.py, vakalar c1.py c2.py; loglar c*.{yeni,eski}.log
+- BULGU 1 (d4b getirdi, FP): x*Q=0, (x+1)*Q=0, exp(x)*Q=0, Q/x=0, (x-10)*Q(2x)=0, Q*sin(sqrt2 x)=0 (Q=sqrt3 sin x - cos x - 1)
+  bounded pencerede eksik kume CORRECT (eski UNKNOWN). Kok neden: exactsets._rebuilt P None & Equality -> ham sp.solveset,
+  algebra.solve_guarded window_set -> complete=True.
+- BULGU 2 (d4b'nin G5 tamlik kapisi kapatmadi, onceden de FP): ev x | (x+1)Q=0, 0<x<4: pi/3 CORRECT; ev x | Q^3=0, 0<x<4: pi/3 CORRECT.
+- BULGU 3 (Q^3>0 [0,7] -> EmptySet): numeric_roots ucuncu dereceden koku (pi) bulamiyor, SymPy {pi/3}; hucre orta noktasi yakalamaz.
+  eq x^2=4 given Q^3>0 [0,7]: {} CORRECT, {2} INCORRECT (eski de ayni; d4b duzeltmedi). cint/domof d4b ile duzeldi.
+- ext max -(x-pi)^2 + (x+1)Q/((x+1)Q) - 1 on [2,4]: 0 CORRECT (eski de) -> written_undefined_in ham solveset (Eq dali).
+- takilma: exact_solveset q^2+sin^2=0 [0,2pi] 227 s; q*sin x>0 [0,7] >400 s; sin(1000x)=0 [0,30] 740 s (surec ici cagrilar!)
+- c4: eq Q^3=0 [0,7]: {pi/3} CORRECT (d4b getirdi; eski UNKNOWN); trig Q^3=0 [0,7] {pi/3} CORRECT (eski de); x^2=4 cons/dod Q^3>0: {} CORRECT (eski de);
+  croots x^2-4 given Q^3>0: 0 CORRECT (eski de). numeric_roots katli kok (q^2, q^3, (x-1)^3) bulamiyor (isaret degisse de).
+  [0,2pi] penceresinde pi izgara noktasi oldugu icin yakalaniyor -> ayni soru [0,2pi]'de UNKNOWN, [0,7]'de CORRECT (tutarsizlik).
+- c3 takilma: yeni 'x^2=4 given Q^2+sin^2>0 [0,7]' >=120 s (eski 55 s); 'x^2=4 given sin(1000x)>0 [0,30]' >=120 s (eski 0.2 s, ama eski INCORRECT = haksiz red).
+- certified_sign 1e-60, sin(pi/6+1e-80)-1/2, Ramanujan sabiti: dogru.
+- fuzz.py (rastgele carpimlar, sinirli pencere, mpmath ile isaret karsilastirma) kosuyor.
+- fuzz: 6 tohum x ~47 iliski; ConditionSet ~%48; uyusmazlik 2 gercek (fuzz.5: x^3 Q^3 (sin+cos-1)^3 <= 0 [-8,-3] -pi kacti;
+  (exp(x)-3)*Q(2x)^3 < 0 [-1,4] pi/2 kacti), 1 yanlis alarm (tan kutbu). exact_solveset tek cagri 257 s, 284 s; cok sayida >60 s.
+- c3b: yeni 'x^2=4 given Q^2+sin^2>0 [0,7]' 351.6 s (eski 54.8 s). c3c: 'x^2=4 given sin(1000x)>0 [0,30]' >1263 s, oldurdum (eski 0.2 s).

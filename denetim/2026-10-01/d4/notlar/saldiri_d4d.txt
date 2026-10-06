@@ -1,0 +1,17 @@
+# d4d saldırı NOTLAR
+- sonda/ altında: run.py (koşucu), h.py, c1..c6 vaka dosyaları, out_* çıktılar.
+- B1 (yanlış onay, d4d kısmen): virgül + or karışımı `x != 6, x < 1 or x > 5` -> Or(And(x!=6,x<1), x>5); roots x**2-36: 2 CORRECT, 1 INCORRECT;
+  ineq/domain_of'ta yeni yanlış onay (eski INCORRECT/given düşüyordu). and/or karışımı da gelenek (and önce) ile okunuyor, çekimser değil.
+- B2 (yanlış onay, önceden var): LaTeX `x \notin S` parse_relation -> True; read_condition true'yu geçiriyor. ineq x**2<9, x\notin(-1,1): (-3,3) CORRECT.
+- Açık maddeler (6) ölçüldü: a/a, log(a)-log(a), sqrt(a)/sqrt(a) serbest a: {2} CORRECT; x>1,x<0 -> {} / 0 / {} CORRECT
+  (x positive_real bildirimi + x<0 de {} CORRECT; oysa G8 bağlamalı benzeri ir_inconsistent).
+- Kapsama: a = 3, a = log(8)/log(2) -> given_binding_undecided (eşit değerler kararsız sayılıyor).
+- B3 (yanlış onay, d4d): `x in {(2, 3)}`, `x in (2,)`, `x in {(2,)}` -> condition_set Reals ile kesişim = boş -> eq x**2=4 {} CORRECT, roots 0 CORRECT.
+- B4 (yanlış onay, önceden var): verilen a < 0 + x + log(a) - log(a) = 2 -> {2} CORRECT (her örnekte tanımsız); kısıt olarak a<0 UNKNOWN.
+- Sağlam: pin sızıntısı (Sum/Integral/Limit/Derivative/Lambda/at/Subs/fonksiyon argümanı), G10 (T7), 1e-60 yakın karşılaştırmalar,
+  dolaylı bağlamalar (a-1=0, 2a=2, a=b,b=1), bildirim çelişkileri, float tutarlılığı (0.1*3=0.3), 0**0/binomial(-1,2)/asin(2) bağlamaları.
+- Kontrol: resmi sonda.py yeni kopyada koşuldu.
+- Resmi sonda yeni kopyada: 275 vaka, 0 beklenmeyen, 34 s.
+- Not: gcd(0, 0) + 1 bağlaması a = 1 okunuyor (eski de); gcd(0,0) geleneği DECISIONS'ta yok.
+- Kapsama: `a = 3`, `a = log(8)/log(2)` eşit değerler given_binding_undecided.
+- Rapor gönderildi.
