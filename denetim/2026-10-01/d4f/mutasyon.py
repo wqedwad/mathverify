@@ -85,8 +85,8 @@ MUTATIONS = [
      '        if any(c is sp.false for c in conds):\n            return "undefined"\n        return "undecided"',
      '        return "undecided"', T),
     ("M24 görev ifadesinde false sayılmaz", BAS,
-     "        if any(c is sp.false for c in conds) or self._undefined_term(e):    # NO_VALUE comes with `false`",
-     "        if self._undefined_term(e):    # NO_VALUE comes with `false`", T),
+     "        if any(c is sp.false for c in conds) or self._undefined_term(e) \\\n",
+     "        if self._undefined_term(e) \\\n", T),
     ("M25 kararsız alım kapısı yok", VER, "    if undecided:\n", "    if False:\n", T),
     ("M26 kararsız bayrağı engellemez", FUS, '                         "problem_definedness_undecided",\n', "", T),
     # --- the claim
