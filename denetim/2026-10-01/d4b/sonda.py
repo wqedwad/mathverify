@@ -540,6 +540,38 @@ def cases_h():
     ]
 
 
+L8 = "log(8)/log(2)"           # = 3 exactly (log 8 = 3 log 2)
+
+
+def cases_i():
+    """Round 6 (6 Oct 2026): one interval end written two ways (the solved set's 3, the given's log(8)/log(2));
+    SymPy's Intersection raised TypeError and the certificate died. CORRECT/INCORRECT come back only where the
+    two are PROVED equal."""
+    XA = (X, V("a"))
+    return [
+        ("I1 eq x^2=4, x>L8: {}", eq("x**2 = 4", [f"x > {L8}"]), _sol("{}", S_), OK, None),
+        ("I1 eq x^2=4, x>L8: {2}", eq("x**2 = 4", [f"x > {L8}"]), _sol("{2}", S_), NO, None),
+        ("I1 eq x^2=9, x>=L8: {3}", eq("x**2 = 9", [f"x >= {L8}"]), _sol("{3}", S_), OK, None),
+        ("I1 eq x^2=9, x>=L8: {-3,3}", eq("x**2 = 9", [f"x >= {L8}"]), _sol("{-3, 3}", S_), NO, None),
+        ("I1 eq x^2=9, x>L8: {3}", eq("x**2 = 9", [f"x > {L8}"]), _sol("{3}", S_), NO, None),
+        ("I1 eq x^2=9, x>L8: {}", eq("x**2 = 9", [f"x > {L8}"]), _sol("{}", S_), OK, None),
+        ("I2 eq x^2=4, x>a, a=L8: {}", eq("x**2 = 4", ["x > a", f"a = {L8}"], XA), _sol("{}", S_), OK, None),
+        ("I2 eq x^2=4, x>a, a=L8 (a=3 kısıt): {}",
+         eq("x**2 = 4", ["x > a", f"a = {L8}"], (X, V("a", cons=["a = 3"]))), _sol("{}", S_), OK, None),
+        ("I2 eq x^2=9, x>=a, a=L8: {3}", eq("x**2 = 9", ["x >= a", f"a = {L8}"], XA), _sol("{3}", S_), OK, None),
+        ("I3 eq log(x-L8)=0: {4}", eq(f"log(x - {L8}) = 0", [f"x > {L8}"]), _sol("{4}", S_), OK, None),
+        ("I3 eq sqrt(x-L8)=1: {4}", eq(f"sqrt(x - {L8}) = 1", [f"x >= {L8}"]), _sol("{4}", S_), OK, None),
+        # 3 is no root (sqrt(0) = 0), but the radicand 3 - log(8)/log(2) is an exact 0 the root check does not
+        # decide (claimed_root_undecided; the same at 76d0c87): anything but a false acceptance
+        ("I3 eq sqrt(x-L8)=1: {3,4}", eq(f"sqrt(x - {L8}) = 1", [f"x >= {L8}"]), _sol("{3, 4}", S_), NOTOK, None),
+        # a tiny difference is no equality: 3 + e^(-e^10) is not 3, nothing is written one way
+        ("I4 eq x^2=9, x>L8+e^-e^10: {3}", eq("x**2 = 9", [f"x > {L8} + exp(-exp(10))"]), _sol("{3}", S_), NOTOK, None),
+        ("I4 eq x^2=9, x>L8-e^-e^10: {}", eq("x**2 = 9", [f"x > {L8} - exp(-exp(10))"]), _sol("{}", S_), NOTOK, None),
+        ("I4 eq x^2=9, x>L8-e^-e^10: {3}", eq("x**2 = 9", [f"x > {L8} - exp(-exp(10))"]), _sol("{3}", S_), NOTNO, None),
+        ("I5 ctl eq x^2=9, x>=3: {3}", eq("x**2 = 9", ["x >= 3"]), _sol("{3}", S_), OK, None),
+    ]
+
+
 class _Slow(Exception):
     pass
 
@@ -552,10 +584,11 @@ def _on_alarm(signum, frame):
 CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "H": cases_h}
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "H": cases_h,
+          "I": cases_i}
 
 
-def main(out_path=None, groups="ABCDEFGH"):
+def main(out_path=None, groups="ABCDEFGHI"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -596,5 +629,5 @@ def main(out_path=None, groups="ABCDEFGH"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGH"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHI"
     sys.exit(1 if main(out, grp) else 0)
