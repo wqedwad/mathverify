@@ -707,8 +707,9 @@ class Ctx:
 
     def with_pins(self, e, pins: dict):
         """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
-        forms this makes (Σ_{k=1}^{n} k with n = 3) by values numbers confirm (`_confirmed`, ParseError
-        otherwise)."""
+        forms this makes (Σ_{k=1}^{n} k with n = 3: 6) by values numbers confirm (`_confirmed`, ParseError
+        otherwise), as `expr` reads the problem's own: left a form, the maximum 6 of x*Σ_{k=1}^{n} k on [0, 1]
+        with n = 3 was left undecided."""
         if not pins or not isinstance(e, sp.Basic) or not (e.free_symbols & set(pins)):
             return e
         return self._confirmed(None, substitute_free(e, pins))

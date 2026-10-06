@@ -229,11 +229,14 @@ def test_extremum_candidate_value_that_is_no_number_is_never_dropped():
     assert _v(_ext("x + x*pi**I", "max", "[0, 1]"), "0") == "UNKNOWN"
 
 
-def test_extremum_closed_form_a_pin_makes_is_confirmed():
+def test_closed_form_a_pin_makes_is_read_by_numbers():
     # ∫_{-1}^{1} |cos t| dt = 2 sin 1; SymPy's own value is 0
     q = _ext("x*Integral(Abs(cos(t)), (t, -a, a))", "max", "[0, 1]", ["a = 1"], [X, A, T_])
     assert _v(q, "0") == "INCORRECT"
     assert _v(q, "2*sin(1)") == "CORRECT"
+    assert _v(_lim("x*Integral(Abs(cos(t)), (t, -a, a))", "1", ["a = 1"], [X, A, T_]), "0") == "INCORRECT"
+    q = _der("x*Integral(Abs(cos(t)), (t, -a, a))", None, ["a = 1"], [X, A, T_])
+    assert _v(q, "0", "expression") == "INCORRECT"
 
 
 # --- G12: the antiderivative on the region, real ---------------------------------------------------------------
@@ -364,9 +367,9 @@ def test_infinite_bound_reaches_its_end_and_must_converge():
                  ("Integral(1/(t + 1), (t, x, oo))", "-1/(x + 1)"), ("Integral(1, (t, x, oo))", "-1"),
                  ("Integral(t, (t, -oo, x))", "x")):
         assert _v(_ir("derivative", {"f": f, "var": "x"}, [], V, "expression"), c, "expression") == "UNKNOWN"
-    q = _ir("derivative", {"f": "Integral(1/t, (t, -oo, x), (s, 0, 1))", "var": "x"}, [],
-            V + [{"name": "s", "domain": "real"}], "expression")
-    assert _v(q, "1/x", "expression") == "UNKNOWN"
+    for f, c in (("Integral(1/t, (t, -oo, x), (s, 0, 1))", "1/x"), ("Integral(1, (t, -oo, x), (s, 0, 1))", "1")):
+        q = _ir("derivative", {"f": f, "var": "x"}, [], V + [{"name": "s", "domain": "real"}], "expression")
+        assert _v(q, c, "expression") == "UNKNOWN"
     for f, c in (("Integral(exp(-t), (t, x, oo))", "-exp(-x)"), ("Integral(exp(t), (t, -oo, x))", "exp(x)"),
                  ("Integral(1/t**2, (t, x, oo))", "-1/x**2"), ("Integral(1/(t**2 + 1), (t, -oo, x))", "1/(x**2 + 1)")):
         assert _v(_ir("derivative", {"f": f, "var": "x"}, [], V, "expression"), c, "expression") == "CORRECT"
