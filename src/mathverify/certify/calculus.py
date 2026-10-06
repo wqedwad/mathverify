@@ -28,7 +28,7 @@ import sympy as sp
 from sympy import S, Eq, Ne, Interval, oo
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import certified_sign, num_equal, to_mp
+from ..equiv.numeric import NONREAL, certified_sign, num_equal, to_mp
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
@@ -663,6 +663,16 @@ def _pieces(region) -> list | None:
     return None
 
 
+def _reality(v):
+    """NONREAL, a sign (-1, 0, 1) when `v` is real, or None. A symbol left in it (the constant C of F + C, a
+    parameter) is a real constant: its sign does not matter, SymPy's `is_real` does."""
+    others = getattr(v, "free_symbols", set())
+    if not others:
+        return certified_sign(v)
+    v = v.xreplace({s_: sp.Dummy(s_.name, real=True) for s_ in others})
+    return NONREAL if v.is_real is False else 0 if v.is_real is True else None
+
+
 def _one_constant(F, f, var, region, timeout) -> tuple[bool | None, dict[str, Any]]:
     """On a region of several pieces (1/x on x != 0), F' = f says F differs from a reference primitive by a
     constant on EACH piece. The curriculum's F + C has one constant; different constants on the pieces
@@ -777,14 +787,16 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
         df = _integrand_region(cf, var, discourse, timeout)
     # F real where f is: a complex constant (x + I for 1, log(x) + I*pi for 1/x) is no real primitive. Its
     # imaginary part is constant on each piece (F' = f is real); `_one_constant` compares the pieces
-    from ..equiv.numeric import NONREAL
     checked = 0
     for batch in (_points_of(df if df is not None else discourse), _INTERIOR_PROBES):
         for p_ in batch:
-            if discourse.contains(p_) is not sp.true or _defined_at(f, cf, var, p_) is not True:
+            if discourse.contains(p_) is not sp.true or any(relation_holds_at(c, var, p_) is not True for c in cf):
                 continue
             try:
-                sg = certified_sign(F.subs(var, p_))
+                fv = sp.sympify(f).subs(var, p_)
+                if not (_reality(fv) in (-1, 0, 1) if fv.free_symbols else _real_finite(fv) is True):
+                    continue                           # f has no real value there
+                sg = _reality(F.subs(var, p_))
             except Exception:  # noqa: BLE001
                 sg = None
             if sg == NONREAL:

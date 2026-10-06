@@ -788,6 +788,10 @@ def cases_m():
                 sol("1/sqrt(x - a)", "expression"), NO, None))
     out.append(("derivative x + 0*sqrt(x - a) + 0*sqrt(5 - x) (expr), a free: 1 [empty for a > 5]",
                 der("x + 0*sqrt(x - a) + 0*sqrt(5 - x)", None, [], XA), sol("1", "expression"), UNK, None))
+    # a parameter left in the claim is a real constant
+    out.append(("anti a (a free): a*x [right]", anti("a", [], XA), sol("a*x", "expression"), OK, None))
+    out.append(("anti 1 (a free): x + I*(a**2 + 1) [not real]", anti("1", [], XA), sol("x + I*(a**2 + 1)", "expression"),
+                NOTOK, None))
     # the tangent's own dependent variable is never pinned
     out.append(("tangent x**2 at 1, given y = 1: y = 2x - 1 [right]", tan("x**2", "1", ["y = 1"]),
                 sol("y = 2*x - 1", "equation"), NOTNO, None))

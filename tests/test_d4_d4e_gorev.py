@@ -258,6 +258,9 @@ def test_antiderivative_must_be_real():
     assert _v(_anti("2*x", [], [XP]), "x**2 + 0*log(-x)", "expression") == "INCORRECT"
     assert _v(_anti("1"), "x + I", "expression") == "INCORRECT"
     assert _v(_anti("cos(x)"), "sin(x) + I", "expression") == "INCORRECT"
+    # a parameter (or the constant C) left in the claim is a real constant
+    assert _v(_anti("a", [], XA), "a*x", "expression") == "CORRECT"
+    assert _v(_anti("1", [], XA), "x + I*(a**2 + 1)", "expression") == "INCORRECT"
     # a region SymPy leaves unsolved (cos(x) != 0 on x > 100) is sampled at its own points
     assert _v(_anti("tan(x)**2 + 1", ["x > 100"]), "tan(x) + I", "expression") == "INCORRECT"
     assert _v(_anti("tan(x)**2 + 1", ["x > 100"]), "tan(x)", "expression") == "CORRECT"
