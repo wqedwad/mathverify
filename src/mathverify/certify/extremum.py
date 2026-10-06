@@ -238,7 +238,7 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
     if which in ("max", "min"):
         if hits:
             return True, ev
-        if complete and closed and eqs and all(e is False for _, e in eqs):
+        if complete and closed and all(e is False for _, e in eqs):
             ev["reason"] = "not_attained"      # the extremum is attained at a candidate, none equals c
             return False, ev
         ra = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(f, cval), var, interval, timeout=timeout)
@@ -433,15 +433,13 @@ def verify(ir, solution, ctx: Ctx):
         if err:
             return err
         # a symbol a given or a declared constraint fixes is read as its value, in f and in the interval
-        # (`Ctx.pinned_values`, checked by `Ctx.binding_issues`); one nothing fixes leaves the extremum
+        # (`Ctx.task_pins`, checked by `Ctx.binding_issues`); one nothing fixes leaves the extremum
         # without a value: with a = 3 the maximum 0 of a*x on [0, 1], with b = 3 the maximum 0 of x on
         # [0, b] were certified (fourth audit TAN-02, G4)
-        from ..normalize.parse import substitute_free
-        pins = ctx.pinned_values(var)
-        if pins and isinstance(f, sp.Basic) and f.free_symbols - {var}:
-            f, err = parse_or_unknown(LAYER, lambda e: ctx._confirmed(None, substitute_free(e, pins)), f)
-            if err:
-                return err
+        pins = ctx.task_pins(var)
+        f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
+        if err:
+            return err
         from .limits import membership_conditions, written_undefined_everywhere
         if written_undefined_everywhere(p["f"], ctx.ns):
             # log(-1) - log(-1) + 2 is 2 after parsing: its maximum 2 on [0, 1] was certified
@@ -453,12 +451,16 @@ def verify(ir, solution, ctx: Ctx):
                            {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
         from ..normalize.parse import parse_set_str
         iv = parse_set_str(p.get("interval", "Reals"), ctx.ns) if p.get("interval") else ctx.domain_for(var)
-        if pins and isinstance(iv, sp.Basic) and iv.free_symbols - {var}:
-            iv = substitute_free(iv, pins)
-        free = sorted(str(s_) for s_ in (getattr(f, "free_symbols", set()) | getattr(iv, "free_symbols", set()))
-                      - {var})
+        iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)
+        if err:
+            return err
+        from .domain import written_definedness
+        written = written_definedness(p["f"], ctx.ns, pins)[0]
+        free = sorted({str(s_) for e in [f, iv] + list(written) for s_ in getattr(e, "free_symbols", set())}
+                      - {str(var)})
         if free:
-            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare
+            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare; nor in a
+            # written condition, x + 0*sqrt(b - x) being x after parsing (review of d4e)
             return condition_not_applied(LAYER, free, t.ms)
         if not p.get("interval") and ctx.unapplied_conditions(var):
             # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)
@@ -480,7 +482,7 @@ def verify(ir, solution, ctx: Ctx):
         # f as written must be defined on the whole interval: x/x − x² parses to 1 − x², whose
         # maximum 1 sits exactly at the point x/x excludes (measured: certified CORRECT)
         from .domain import written_undefined_in
-        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv) is True:
+        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv, pins) is True:
             return unknown(LAYER, "f_undefined_on_interval_as_written", t.ms, {"f": p["f"]},
                            flags=["written_domain"])
         if which.startswith("local_"):

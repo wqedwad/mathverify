@@ -1330,6 +1330,49 @@ def closed_condition_undecided(conds) -> bool:
     return False
 
 
+def hold_nowhere(cs, s_) -> bool:
+    """Worker: do the relations `cs` on the one symbol `s_` hold nowhere together, PROVED by an exact empty set?
+    On ℝ first; then the periodic ones on one common period, where `sandbox.exactsets` solves them exactly (on
+    ℝ SymPy leaves sin(x) > 0 and -sin(x) > 0 a ConditionSet). A periodic set empty on one period is empty."""
+    from sympy.calculus.util import lcim
+    rel = sp.And(*cs)
+    if rel is sp.false or exact_solveset(rel, s_, S.Reals) is S.EmptySet:
+        return True
+    periodic, periods = [], []
+    for c in cs:
+        try:
+            p_ = sp.periodicity(c.lhs - c.rhs, s_)
+        except Exception:  # noqa: BLE001 - no period found: the relation is left out of this proof
+            p_ = None
+        if p_ is not None and p_.is_positive is True:
+            periodic.append(c)
+            periods.append(p_)
+    if not periodic:
+        return False
+    period = lcim(periods) if len(periods) > 1 else periods[0]
+    if period is None or period.is_positive is not True:
+        return False
+    return exact_solveset(sp.And(*periodic), s_, Interval.Ropen(0, period)) is S.EmptySet
+
+
+def open_conditions_empty(conds, timeout: float = 8.0) -> bool:
+    """Do the open definedness conditions on one symbol hold nowhere together? x + log(x) - log(x) + log(-x) -
+    log(-x) needs x > 0 and -x > 0: each alone has points, so no condition fails outright and the expression
+    passed as defined: its derivative 1, the antiderivative x of 1 + ..., the simplification x and its limit
+    1 at 1 were certified or refuted as if it had values (fourth audit TAN-06). Only a proof counts
+    (`hold_nowhere`); the expression is then defined nowhere, like one whose condition fails."""
+    by_sym: dict = {}
+    for c in conds:
+        fs = getattr(c, "free_symbols", set())
+        if isinstance(c, sp.core.relational.Relational) and len(fs) == 1:
+            by_sym.setdefault(next(iter(fs)), []).append(c)
+    for s_, cs in by_sym.items():
+        r = sb_run("mathverify.certify.domain:hold_nowhere", cs, s_, timeout=timeout)
+        if r.ok and r.value is True:
+            return True
+    return False
+
+
 def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
     """`closed_condition_undecided` for an IR text read as written (see `written_definedness`)."""
     from ..normalize.parse import parse_as_written
@@ -1342,11 +1385,13 @@ def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
         return False
 
 
-def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> bool | None:
+def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins: dict | None = None) -> bool | None:
     """Is the expression, AS WRITTEN, undefined somewhere in `region` (a point set, an interval, an
     index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
     own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
-    and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT."""
+    and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT. `pins`: the values the givens fix
+    (`written_definedness`); without them a condition naming a parameter decided nothing, and with b = 1/2
+    the maximum 1 of x + 0*sqrt(b - x) on [0, 1] was certified (review of d4e)."""
     # the task's interval or point must lie where the variable is declared: with x declared positive
     # the parse folds |x| to x, and on [-1, 1] the minimum of |x| - x**2 was certified to be -2, the
     # derivative of x*|x| at -1 too (-2; it is 2); no reading gives these (second audit of 29 Sep 2026)
@@ -1358,7 +1403,7 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> b
         inside = None
     if inside is not True:
         return True
-    conds, nowhere = written_definedness(src, ns)
+    conds, nowhere = written_definedness(src, ns, pins)
     if var in nowhere or written_closed_undecided(src, ns):
         return True                    # a closed condition no check proves: the callers abstain
     for c in conds:

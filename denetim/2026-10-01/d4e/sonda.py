@@ -16,6 +16,8 @@ TAN-06, TAN-07 of the `tanimlilik` angle, `denetim/2026-10-01/d4/`).
     H  TAN-07  an integral with an infinite bound: undefined points between the bounds and divergence at the
                infinite end
     K  controls whose verdict must not change
+    L  TAN-06 with periodic conditions; trigonometric derivatives, tangents and primitives that must stay decided
+    M  a parameter a given or a constraint fixes, read in every task certificate and in the written conditions
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4e/sonda.py [out.json] [groups]
@@ -190,7 +192,10 @@ def cases_b():
                 NOTNO, None))
     out.append(("derivative |x| (expr), given x > 0: -1 [wrong]", der("Abs(x)", None, ["x > 0"]),
                 sol("-1", "expression"), NOTOK, None))
-    out.append(("derivative x**2 (expr), given x = 2: 4", der("x**2", None, ["x = 2"]), sol("4", "expression"), NOTOK,
+    # a region without interior: the derivative function has nowhere to live (4 is 2x there: never refuted)
+    out.append(("derivative x**2 (expr), given x = 2: 4", der("x**2", None, ["x = 2"]), sol("4", "expression"), UNK,
+                None))
+    out.append(("derivative x**2 (expr), given x = 2: 2*x", der("x**2", None, ["x = 2"]), sol("2*x", "expression"), UNK,
                 None))
     return out
 
@@ -248,6 +253,34 @@ def cases_c():
     out.append(("max x on [a, b], a = 1, b = 3: 1 [wrong]", q, sol("1"), NOTOK, None))
     q = ext("x", "local_max", "[0, b]", ["b = 3"], XB)
     out.append(("local_max x on [0, b], b = 3: 3", q, sol("3"), NOTOK, None))
+    # the verifiers' variants
+    q = ext("x**2", "max", "[-1, b]", ["b = 2"], XB)
+    out.append(("max x**2 on [-1, b], b = 2: 1 [wrong]", q, sol("1"), NOTOK, None))
+    out.append(("max x**2 on [-1, b], b = 2: 4 [right]", q, sol("4"), NOTNO, None))
+    q = ext("x**2", "min", "[a, b]", ["a = 1", "b = 4"], [X, {"name": "a"}, B_])
+    out.append(("min x**2 on [a, b], a = 1, b = 4: 16 [wrong]", q, sol("16"), NOTOK, None))
+    out.append(("min x**2 on [a, b], a = 1, b = 4: 1 [right]", q, sol("1"), NOTNO, None))
+    q = ext("cos(x)", "min", "[0, b]", ["b = 3"], XB)
+    out.append(("min cos x on [0, b], b = 3: 1 [wrong]", q, sol("1"), NOTOK, None))
+    out.append(("min cos x on [0, b], b = 3: cos(3) [right]", q, sol("cos(3)"), NOTNO, None))
+    q = ext("x", "min", "(0, b]", ["b = 3"], XB)
+    out.append(("min x on (0, b], b = 3: 3 [wrong]", q, sol("3"), NOTOK, None))
+    q = ext("(x - b)**2", "min", "[0, 5]", ["b = 2"], XB)
+    out.append(("min (x - b)**2 on [0, 5], b = 2: 4 [wrong]", q, sol("4"), NOTOK, None))
+    out.append(("min (x - b)**2 on [0, 5], b = 2: 0 [right]", q, sol("0"), NOTNO, None))
+    q = ext("sin(x)", "min", "[0, b]", ["b = pi"], XB)
+    out.append(("min sin x on [0, b], b = pi: 1 [wrong]", q, sol("1"), NOTOK, None))
+    out.append(("min sin x on [0, b], b = pi: 0 [right]", q, sol("0"), NOTNO, None))
+    q = ext("x**2", "min", "[b, 2]", ["b = -1"], XB)
+    out.append(("min x**2 on [b, 2], b = -1: 1 [wrong]", q, sol("1"), NOTOK, None))
+    out.append(("min x**2 on [b, 2], b = -1: 0 [right]", q, sol("0"), NOTNO, None))
+    # a written condition naming the parameter: x + 0*sqrt(b - x) is x after parsing (review of d4e)
+    q = ext("x + 0*sqrt(b - x)", "max", "[0, 1]", ["b = 1/2"], XB)
+    out.append(("max x + 0*sqrt(b - x) on [0, 1], b = 1/2: 1 [undefined on (1/2, 1]]", q, sol("1"), NOTOK, None))
+    q = ext("x + 0*sqrt(b - x)", "max", "[0, 1]", [], XB)
+    out.append(("max x + 0*sqrt(b - x) on [0, 1], b free: 1", q, sol("1"), UNK, None))
+    q = ext("x + 0*sqrt(b - x)", "max", "[0, 1]", ["b = 2"], XB)
+    out.append(("max x + 0*sqrt(b - x) on [0, 1], b = 2: 1 [right]", q, sol("1"), NOTNO, None))
     return out
 
 
@@ -300,6 +333,24 @@ def cases_d():
     # candidates whose value is no number: never dropped silently
     q = ext("x + x*pi**I", "max", "[0, 1]", [], [X])
     out.append(("max x + x*pi**I on [0, 1] (complex values): 0", q, sol("0"), NOTOK, None))
+    # the verifiers' variants
+    q = ext("x**3 - 3*a*x", "local_max", "Reals", ["a = 1"], XA)
+    out.append(("local_max x**3 - 3ax on R, a = 1: 2 [right]", q, sol("2"), NOTNO, None))
+    out.append(("local_max x**3 - 3ax on R, a = 1: 0 [wrong]", q, sol("0"), NOTOK, None))
+    q = ext("x**3 - 3*a*x", "local_argmax", "Reals", ["a = 1"], XA)
+    out.append(("local_argmax x**3 - 3ax on R, a = 1: -1 [right]", q, sol("-1"), NOTNO, None))
+    out.append(("local_argmax x**3 - 3ax on R, a = 1: 0 [wrong]", q, sol("0"), NOTOK, None))
+    q = ext("x**3 - 3*a*x", "local_max", "Reals", [], XA)
+    out.append(("local_max x**3 - 3ax on R, a free: 2", q, sol("2"), UNK, None))
+    q = ext("a*x + c", "max", "[0, 1]", ["a = 2", "c = 1"], XA + [{"name": "c"}])
+    out.append(("max a*x + c on [0, 1], a = 2, c = 1: 3 [right]", q, sol("3"), NOTNO, None))
+    out.append(("max a*x + c on [0, 1], a = 2, c = 1: 1 [wrong]", q, sol("1"), NOTOK, None))
+    q = ext("a*x", "max", None, ["a = 3"], [{"name": "x", "domain": "real", "constraints": ["x >= 0", "x <= 1"]}, A_])
+    out.append(("max a*x (x in [0, 1] by constraints), a = 3: 0 [wrong]", q, sol("0"), NOTOK, None))
+    out.append(("max a*x (x in [0, 1] by constraints), a = 3: 3 [right]", q, sol("3"), NOTNO, None))
+    q = ext("(x - a)**2", "max", "[0, 5]", ["a = 3"], XA)
+    out.append(("max (x - a)**2 on [0, 5], a = 3: 9 [right]", q, sol("9"), NOTNO, None))
+    out.append(("max (x - a)**2 on [0, 5], a = 3: 4 [wrong]", q, sol("4"), NOTOK, None))
     return out
 
 
@@ -345,17 +396,54 @@ def cases_e():
     out.append(("anti 1/x (R): log(x) [wrong on x<0]", anti("1/x"), sol("log(x)", "expression"), NOTOK, None))
     # a constant that differs between the pieces of the region: a convention
     out.append(("anti 1/x (R): log|x| + Heaviside(x) [piecewise constant]", anti("1/x"),
-                sol("log(Abs(x)) + Heaviside(x)", "expression"), NOTOK, None))
+                sol("log(Abs(x)) + Heaviside(x)", "expression"), UNK, None))
     out.append(("anti 1/x, given x<-1 or x>1: log|x| + sign(x)", anti("1/x", ["x < -1 or x > 1"]),
-                sol("log(Abs(x)) + sign(x)", "expression"), NOTOK, None))
+                sol("log(Abs(x)) + sign(x)", "expression"), UNK, None))
     out.append(("anti 1/x, given x<-1 or x>1: log|x| [right]", anti("1/x", ["x < -1 or x > 1"]),
                 sol("log(Abs(x))", "expression"), NOTNO, None))
     # the complex constant on ℝ
     out.append(("anti 1 (R): x + I [not real]", anti("1"), sol("x + I", "expression"), NOTOK, None))
     out.append(("anti cos x (R): sin(x) + I [not real]", anti("cos(x)"), sol("sin(x) + I", "expression"), NOTOK, None))
+    # a region SymPy leaves unsolved is sampled at its own points; none where the integrand is defined: undecided
+    out.append(("anti tan(x)**2 + 1, given x > 100: tan(x) + I [not real]", anti("tan(x)**2 + 1", ["x > 100"]),
+                sol("tan(x) + I", "expression"), NOTOK, None))
+    out.append(("anti tan(x)**2 + 1, given x > 100: tan(x) [right]", anti("tan(x)**2 + 1", ["x > 100"]),
+                sol("tan(x)", "expression"), OK, None))
+    W = "tan(x)**2 + 1 + 0/((x - 101)*(7*x - 701))"
+    out.append((f"anti {W}, given x > 100: tan(x) + I [not real]", anti(W, ["x > 100"]), sol("tan(x) + I", "expression"),
+                NOTOK, None))
     # a free parameter in the region
     out.append(("anti 1/x, given x > b (b free): log(x)", anti("1/x", ["x > b"], [X, B_]), sol("log(x)", "expression"),
                 NOTOK, None))
+    # the verifiers' variants
+    for f, c in (("1/x", "log(-3*x)"), ("2/x", "2*log(-x)"), ("1/(2*x)", "log(-x)/2"), ("1/(x + 1)", "log(-x - 1)"),
+                 ("1/x", "log(-x) + log(-x) - log(-x)"), ("1/x", "log(-x) - log(-1)")):
+        out.append((f"anti {f}, x positive: {c} [not real]", anti(f, [], [XP]), sol(c, "expression"), NOTOK, None))
+    out.append(("anti 1/x, dod x in (0, oo): log(-x) [not real]", anti("1/x", [], [X], "x in (0, oo)"),
+                sol("log(-x)", "expression"), NOTOK, None))
+    out.append(("anti 1/x, dod x in (-oo, 0): log(-x) [right]", anti("1/x", [], [X], "x in (-oo, 0)"),
+                sol("log(-x)", "expression"), NOTNO, None))
+    out.append(("anti |x|, constraint x > 1: x**2/2 [right]", anti("Abs(x)", [], [xc("x > 1")]),
+                sol("x**2/2", "expression"), NOTNO, None))
+    out.append(("anti |x| (R): x**2/2 [wrong for x < 0]", anti("Abs(x)"), sol("x**2/2", "expression"), NOTOK, None))
+    out.append(("anti |x| (R): x*|x|/2 [right]", anti("Abs(x)"), sol("x*Abs(x)/2", "expression"), NOTNO, None))
+    out.append(("anti 1/x, given x < 0: log|x| [right]", anti("1/x", ["x < 0"]), sol("log(Abs(x))", "expression"), NOTNO,
+                None))
+    out.append(("anti 1/x, given x != 0: log|x| [right]", anti("1/x", ["x != 0"]), sol("log(Abs(x))", "expression"),
+                NOTNO, None))
+    # two constants on the pieces without a jump function: atan(1/x) + atan(x) is -pi/2 on x < 0, pi/2 on x > 0
+    for F in ("log(Abs(x)) + atan(1/x) + atan(x)", "log(x**2)/2 + 2*atan(1/x) + 2*atan(x)"):
+        out.append((f"anti 1/x (R): {F} [two constants]", anti("1/x"), sol(F, "expression"), UNK, None))
+    out.append(("anti 1/x (R): log|x| + 5 [right]", anti("1/x"), sol("log(Abs(x)) + 5", "expression"), OK, None))
+    # a restricted region keeps the proofs read on whole cells
+    out.append(("anti 1/x, given x > 1: log|x| [right]", anti("1/x", ["x > 1"]), sol("log(Abs(x))", "expression"),
+                OK, None))
+    out.append(("anti 1/x, given x > 1: -log|x| [wrong]", anti("1/x", ["x > 1"]), sol("-log(Abs(x))", "expression"),
+                NO, None))
+    out.append(("derivative log|x| (expr), given x > 1: 1/x [right]", der("log(Abs(x))", None, ["x > 1"]),
+                sol("1/x", "expression"), OK, None))
+    out.append(("derivative |x| (expr), given x > 1: -1 [wrong]", der("Abs(x)", None, ["x > 1"]),
+                sol("-1", "expression"), NOTOK, None))
     return out
 
 
@@ -409,6 +497,36 @@ def cases_f():
     q = ir("solve_equation", {"var": "y", "equation": "y + at(sqrt(x**2), x, -1) = 1"}, [], [XP, Y])
     out.append(("solve y + at(sqrt(x**2), x, -1) = 1, x positive: {0} [right]", q, sol("{0}", "set"), NOTNO, None))
     out.append(("solve y + at(sqrt(x**2), x, -1) = 1, x positive: {2} [wrong]", q, sol("{2}", "set"), NOTOK, None))
+    # the verifiers' variants
+    for decl in ("positive_real", "real"):
+        V = [{"name": "x", "domain": decl}, Y]
+        for e, right in (("y + at(Derivative(sqrt(-x), x), x, -1) = -1/2", "{0}"),
+                         ("y + at(diff(sqrt(-x), x, 2), x, -1) = -1/4", "{0}")):
+            q = ir("solve_equation", {"var": "y", "equation": e}, [], V)
+            out.append((f"solve {e}, x {decl}: EmptySet [wrong]", q, sol("EmptySet", "set"), NOTOK, None))
+            out.append((f"solve {e}, x {decl}: {right} [right]", q, sol(right, "set"), NOTNO, None))
+        q = ir("solve_equation", {"var": "y", "equation": "y + at(diff(f(x), x), x, -1) = -1/2"}, [], V + [T_],
+               functions=[{"name": "f", "args": ["t"], "expr": "sqrt(-t)"}])
+        out.append((f"solve y + at(diff(f(x)),x,-1) = -1/2 (f = sqrt(-t)), x {decl}: EmptySet [wrong]", q,
+                    sol("EmptySet", "set"), NOTOK, None))
+        q = ir("evaluate", {"expr": "at(diff(sqrt(-x), x), x, -1)"}, [], V[:1], shape="scalar")
+        out.append((f"evaluate at(diff(sqrt(-x)),x,-1), x {decl}: -1/2 [right]", q, sol("-1/2"), NOTNO, None))
+        out.append((f"evaluate at(diff(sqrt(-x)),x,-1), x {decl}: 1/2 [wrong]", q, sol("1/2"), NOTOK, None))
+        q = ir("solve_equation", {"var": "y", "equation": "y + at(diff(sqrt(-x), x), x, -1) = -1/2"}, [], V)
+        out.append((f"step compute at(diff(sqrt(-x)),x,-1) = -1/2, x {decl}", q,
+                    sol("{0}", "set", steps=[("compute", "at(diff(sqrt(-x), x), x, -1) = -1/2")]), NOTNO,
+                    {"verified", "unknown", "skipped", None}))
+        q = ir("evaluate", {"expr": "Limit(sqrt(x)**2/x, x, -oo, '+')"}, [], V[:1], shape="scalar")
+        out.append((f"evaluate Limit(sqrt(x)**2/x, x, -oo, '+'), x {decl}: 1 [undefined]", q, sol("1"), NOTOK, None))
+        q = ir("solve_inequality", {"var": "y", "inequality": "y + Limit(log(x) - log(x), x, -oo) > 0"}, [], V)
+        out.append((f"ineq y + Limit(log x - log x, x, -oo) > 0, x {decl}: (0, oo)", q,
+                    sol("Interval.open(0, oo)", "interval"), NOTOK, None))
+        q = ir("solve_equation", {"var": "y", "equation": "y + Limit(log(x) - log(x), x, -oo) = 0"}, [], V)
+        out.append((f"step compute Limit(log x - log x, x, -oo) = 0, x {decl}", q,
+                    sol("{0}", "set", steps=[("compute", "Limit(log(x) - log(x), x, -oo) = 0")]), NOTOK, NOTVER))
+    for decl in ("nonneg_integer", "integer"):
+        q = ir("evaluate", {"expr": "Limit(sqrt(n)**2/n, n, -oo)"}, [], [{"name": "n", "domain": decl}], shape="scalar")
+        out.append((f"evaluate Limit(sqrt(n)**2/n, n, -oo), n {decl}: 1 [undefined]", q, sol("1"), NOTOK, None))
     return out
 
 
@@ -436,7 +554,7 @@ def cases_g():
     I0 = "x + sqrt(x) - sqrt(x) + sqrt(-x) - sqrt(-x)"
     out.append((f"derivative {I0} (expr): 1", der(I0), sol("1", "expression"), UNK, None))
     out.append((f"derivative {I0} (expr): 0", der(I0), sol("0", "expression"), UNK, None))
-    out.append((f"antiderivative 1 + ... (domain {{0}}): x", anti("1" + I0[1:]), sol("x", "expression"), UNK, None))
+    out.append(("antiderivative 1 + ... (domain {0}): x", anti("1" + I0[1:]), sol("x", "expression"), UNK, None))
     # right on the domain's interior
     out.append(("derivative Abs(x) + sqrt(x) - sqrt(x) (expr): 1 [right on (0, oo)]", der("Abs(x) + sqrt(x) - sqrt(x)"),
                 sol("1", "expression"), NOTNO, None))
@@ -450,6 +568,21 @@ def cases_g():
     fn = [{"name": "f", "args": ["x"], "expr": "sqrt(x)**2"}]
     out.append(("derivative f(x) (f = sqrt(x)**2) at 0: 1", ir("derivative", {"f": "f(x)", "var": "x", "at": "0"}, [], [X],
                                                                shape="scalar", functions=fn), sol("1"), UNK, None))
+    # the verifiers' variants
+    for f, at, c in (("x + asin(x) - asin(x)", "-1", "1"), ("x**2 + sqrt(x - 2) - sqrt(x - 2)", "2", "4"),
+                     ("x*sqrt(x)", "0", "0"), ("x + sqrt(1 - x**2) - sqrt(1 - x**2)", "-1", "1")):
+        out.append((f"derivative {f} at {at}: {c} [end]", der(f, at), sol(c), UNK, None))
+    out.append(("tangent x**2 + sqrt(1 - x**2) - sqrt(1 - x**2) at 1: y = 2x - 1 [end]",
+                tan("x**2 + sqrt(1 - x**2) - sqrt(1 - x**2)", "1"), sol("y = 2*x - 1", "equation"), UNK, None))
+    N2 = "log(x) - log(x) + log(-x) - log(-x)"
+    out.append((f"derivative x**2 + {N2} at 1: 2", der("x**2 + " + N2, "1"), sol("2"), UNK, None))
+    out.append(("derivative Abs(x) + log(x) - log(x) (expr): 1 [right on (0, oo)]", der("Abs(x) + log(x) - log(x)"),
+                sol("1", "expression"), NOTNO, None))
+    out.append(("simplify x + log(-1) - log(-1): x", simp("x + log(-1) - log(-1)"), sol("x", "expression"), NOTOK, None))
+    out.append(("derivative sqrt(x)**2 (expr): 1 [right on (0, oo)]", der("sqrt(x)**2"), sol("1", "expression"), NOTNO,
+                None))
+    out.append((f"limit x + {N2} at 1: 1", lim("x + " + N2, "1"), sol("1"), UNK, None))
+    out.append((f"limit x + {N2} at 1: DNE", lim("x + " + N2, "1"), DNE, UNK, None))
     return out
 
 
@@ -487,6 +620,15 @@ def cases_h():
     out.append(("derivative Integral(1/t, (t, 1, x)), x > 0: 1/x [right]",
                 ir("derivative", {"f": "Integral(1/t, (t, 1, x))", "var": "x"}, [], V, shape="expression"),
                 sol("1/x", "expression"), NOTNO, None))
+    # siblings: a sum of a convergent and a divergent integral, poles towards the infinite end, an integral
+    # inside an integral; a conditionally convergent one is not proved (never refuted)
+    for f, c, want in (("Integral(exp(-t), (t, x, oo)) + Integral(1/t, (t, x, oo))", "-exp(-x) - 1/x", UNK),
+                       ("Integral(tan(t)*exp(-t**2), (t, x, oo))", "-tan(x)*exp(-x**2)", UNK),
+                       ("Integral(sin(t)/t, (t, x, oo))", "-sin(x)/x", NOTNO),
+                       ("Integral(1/(t**2 + 1), (t, -oo, x))", "1/(x**2 + 1)", NOTNO),
+                       ("Integral(exp(-t**2), (t, x, oo))", "-exp(-x**2)", NOTNO)):
+        out.append((f"derivative {f}, x > 0: {c}", ir("derivative", {"f": f, "var": "x"}, [], V, shape="expression"),
+                    sol(c, "expression"), want, None))
     return out
 
 
@@ -540,11 +682,113 @@ def cases_k():
     return out
 
 
+
+def cases_l():
+    """TAN-06 with periodic conditions (on ℝ SymPy leaves them unsolved) and the trigonometric functions whose
+    derivative, tangent and primitive must stay decided."""
+    out = []
+    NT = "log(sin(x)) - log(sin(x)) + log(-sin(x)) - log(-sin(x))"
+    out.append(("derivative x + NT (expr; defined nowhere): 1", der("x + " + NT), sol("1", "expression"), UNK, None))
+    out.append(("derivative x + NT at 1: 1", der("x + " + NT, "1"), sol("1"), UNK, None))
+    out.append(("antiderivative 1 + NT: x", anti("1 + " + NT), sol("x", "expression"), UNK, None))
+    out.append(("simplify x + NT: x", simp("x + " + NT), sol("x", "expression"), UNK, None))
+    out.append(("limit x + NT at 1: 1", lim("x + " + NT, "1"), sol("1"), UNK, None))
+    out.append(("max x + NT on [0, 1]: 1", ext("x + " + NT, "max", "[0, 1]"), sol("1"), UNK, None))
+    PT = "sqrt(sin(x)) - sqrt(sin(x)) + sqrt(-sin(x)) - sqrt(-sin(x))"
+    out.append(("derivative x + PT (expr; defined at k*pi alone): 1", der("x + " + PT), sol("1", "expression"), UNK, None))
+    out.append(("derivative x + PT at 0: 1", der("x + " + PT, "0"), sol("1"), UNK, None))
+    out.append(("antiderivative 1 + PT: x", anti("1 + " + PT), sol("x", "expression"), UNK, None))
+    MX = "x + log(x) - log(x) + log(sin(x)) - log(sin(x))"
+    out.append(("derivative MX (expr): 1 [right]", der(MX), sol("1", "expression"), NOTNO, None))
+    out.append(("derivative MX at 1: 1 [right]", der(MX, "1"), sol("1"), OK, None))
+    out.append(("derivative MX at 4 (sin 4 < 0): 1", der(MX, "4"), sol("1"), UNK, None))
+    AS = "Abs(sin(x)) + sqrt(sin(x)) - sqrt(sin(x))"
+    out.append(("derivative AS (expr): cos(x) [right on the domain]", der(AS), sol("cos(x)", "expression"), NOTNO, None))
+    out.append(("derivative AS (expr): -cos(x) [wrong]", der(AS), sol("-cos(x)", "expression"), NOTOK, None))
+    out.append(("derivative AS at 0 (end): 1", der(AS, "0"), sol("1"), UNK, None))
+    out.append(("derivative AS at pi/2: 0 [right]", der(AS, "pi/2"), sol("0"), OK, None))
+    for f, at, c in (("tan(x)", "pi/4", "2"), ("sec(x)", "pi/4", "sqrt(2)"), ("cot(x)", "pi/4", "-2"),
+                     ("1/(1 + cos(x))", "pi/2", "1"), ("tan(x)**2", "pi/4", "4")):
+        out.append((f"derivative {f} at {at}: {c} [right]", der(f, at), sol(c), OK, None))
+        out.append((f"derivative {f} at {at}: 0 [wrong]", der(f, at), sol("0"), NO, None))
+    out.append(("tangent tan(x) at pi/4: y = 2x - pi/2 + 1 [right]", tan("tan(x)", "pi/4"),
+                sol("y = 2*x - pi/2 + 1", "equation"), OK, None))
+    out.append(("tangent tan(x) at pi/4: y = 2x [wrong]", tan("tan(x)", "pi/4"), sol("y = 2*x", "equation"), NO, None))
+    out.append(("derivative tan(x) (expr): 1/cos(x)**2 [right]", der("tan(x)"), sol("1/cos(x)**2", "expression"), OK,
+                None))
+    out.append(("derivative tan(x) (expr): 1/sin(x)**2 [wrong]", der("tan(x)"), sol("1/sin(x)**2", "expression"), NO,
+                None))
+    out.append(("derivative log(sin(x)) (expr): cot(x) [right]", der("log(sin(x))"), sol("cot(x)", "expression"), OK,
+                None))
+    out.append(("antiderivative 1/cos(x)**2: tan(x) [right]", anti("1/cos(x)**2"), sol("tan(x)", "expression"), OK, None))
+    out.append(("antiderivative sec(x)**2: tan(x) + 1 [right]", anti("sec(x)**2"), sol("tan(x) + 1", "expression"), OK,
+                None))
+    return out
+
+
+def cases_m():
+    """A parameter a given or a declared constraint fixes, read in every task certificate (siblings of TAN-02
+    and G4): in the function, the point, the interval, the claim, and in the written conditions, which SymPy
+    drops with the parameter (x + 0*sqrt(b - x) is x)."""
+    out = []
+    AC = {"name": "a", "domain": "real", "constraints": ["a = 3"]}
+    for w, g, v in (("given", ["a = 3"], [X, A_]), ("constraint", [], [X, AC])):
+        out.append((f"derivative a*x**2 (expr), {w} a = 3: 6*x [right]", der("a*x**2", None, g, v),
+                    sol("6*x", "expression"), OK, None))
+        out.append((f"derivative a*x**2 (expr), {w} a = 3: 2*a*x [right]", der("a*x**2", None, g, v),
+                    sol("2*a*x", "expression"), OK, None))
+        out.append((f"derivative a*x**2 (expr), {w} a = 3: 2*x [wrong]", der("a*x**2", None, g, v),
+                    sol("2*x", "expression"), NO, None))
+        out.append((f"derivative a*x**2 at 1, {w} a = 3: 6 [right]", der("a*x**2", "1", g, v), sol("6"), NOTNO, None))
+        out.append((f"derivative a*x**2 at 1, {w} a = 3: 2 [wrong]", der("a*x**2", "1", g, v), sol("2"), NOTOK, None))
+        out.append((f"derivative x**3 at a, {w} a = 3: 27 [right]", der("x**3", "a", g, v), sol("27"), NOTNO, None))
+        out.append((f"tangent a*x**2 at 1, {w} a = 3: y = 6x - 3 [right]", tan("a*x**2", "1", g, v),
+                    sol("y = 6*x - 3", "equation"), NOTNO, None))
+        out.append((f"tangent a*x**2 at 1, {w} a = 3: y = 2x - 1 [wrong]", tan("a*x**2", "1", g, v),
+                    sol("y = 2*x - 1", "equation"), NOTOK, None))
+        out.append((f"anti a*x, {w} a = 3: 3*x**2/2 [right]", anti("a*x", g, v), sol("3*x**2/2", "expression"), NOTNO,
+                    None))
+        out.append((f"anti a*x, {w} a = 3: x**2/2 [wrong]", anti("a*x", g, v), sol("x**2/2", "expression"), NOTOK, None))
+        out.append((f"limit a*x at 1, {w} a = 3: 3 [right]", lim("a*x", "1", g, v), sol("3"), OK, None))
+        out.append((f"limit a*x at 1, {w} a = 3: a [right]", lim("a*x", "1", g, v), sol("a"), OK, None))
+        out.append((f"limit a*x at 1, {w} a = 3: 1 [wrong]", lim("a*x", "1", g, v), sol("1"), NOTOK, None))
+        q = ir("definite_integral", {"integrand": "a*x", "var": "x", "a": "0", "b": "1"}, g, v, shape="scalar")
+        out.append((f"defint a*x on [0, 1], {w} a = 3: 3/2 [right]", q, sol("3/2"), NOTNO, None))
+        out.append((f"defint a*x on [0, 1], {w} a = 3: 1/2 [wrong]", q, sol("1/2"), NOTOK, None))
+    BB = [X, B_]
+    S0 = "x + 0*sqrt(b - x)"
+    q = ir("definite_integral", {"integrand": S0, "var": "x", "a": "0", "b": "1"}, ["b = 1/2"], BB, shape="scalar")
+    out.append((f"defint {S0} on [0, 1], b = 1/2: 1/2 [undefined on (1/2, 1]]", q, sol("1/2"), NOTOK, None))
+    q = ir("definite_integral", {"integrand": S0, "var": "x", "a": "0", "b": "1"}, [], BB, shape="scalar")
+    out.append((f"defint {S0} on [0, 1], b free: 1/2", q, sol("1/2"), UNK, None))
+    q = ir("definite_integral", {"integrand": S0, "var": "x", "a": "0", "b": "1"}, ["b = 2"], BB, shape="scalar")
+    out.append((f"defint {S0} on [0, 1], b = 2: 1/2 [right]", q, sol("1/2"), NOTNO, None))
+    out.append((f"limit {S0} at 0, b free: 0", lim(S0, "0", [], BB), sol("0"), UNK, None))
+    out.append((f"limit {S0} at 0, b = -1 (0 outside its domain): 0", lim(S0, "0", ["b = -1"], BB), sol("0"), NOTOK,
+                None))
+    out.append((f"limit {S0} at 0, b = 1: 0 [right]", lim(S0, "0", ["b = 1"], BB), sol("0"), NOTNO, None))
+    S1 = "x + 0*sqrt(b - x) + 0*sqrt(x - b)"
+    out.append((f"derivative {S1} (expr; defined at b alone), b free: 1", der(S1, None, [], BB), sol("1", "expression"),
+                UNK, None))
+    out.append((f"derivative {S1} (expr), b = 2: 1", der(S1, None, ["b = 2"], BB), sol("1", "expression"), UNK, None))
+    out.append((f"derivative {S1} at 2, b = 2: 1", der(S1, "2", ["b = 2"], BB), sol("1"), UNK, None))
+    out.append(("antiderivative 1 + 0*sqrt(b - x) + 0*sqrt(x - b), b free: x",
+                anti("1 + 0*sqrt(b - x) + 0*sqrt(x - b)", [], BB), sol("x", "expression"), UNK, None))
+    out.append((f"derivative {S0} at 0, b free: 1", der(S0, "0", [], BB), sol("1"), UNK, None))
+    out.append((f"derivative {S0} at 0, b = 1: 1 [right]", der(S0, "0", ["b = 1"], BB), sol("1"), NOTNO, None))
+    out.append((f"derivative {S0} at 0, b = 0 (end): 1", der(S0, "0", ["b = 0"], BB), sol("1"), UNK, None))
+    out.append((f"tangent {S0} at 0, b free: y = x", tan(S0, "0", [], BB), sol("y = x", "equation"), UNK, None))
+    # the tangent's own dependent variable is never pinned
+    out.append(("tangent x**2 at 1, given y = 1: y = 2x - 1 [right]", tan("x**2", "1", ["y = 1"]),
+                sol("y = 2*x - 1", "equation"), NOTNO, None))
+    return out
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "K": cases_k}
+          "H": cases_h, "K": cases_k, "L": cases_l, "M": cases_m}
 
 
-def main(out_path=None, groups="ABCDEFGHK"):
+def main(out_path=None, groups="ABCDEFGHKLM"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -580,5 +824,5 @@ def main(out_path=None, groups="ABCDEFGHK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHKLM"
     sys.exit(1 if main(out, grp) else 0)

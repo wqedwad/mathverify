@@ -24,7 +24,7 @@ from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
-from .domain import closed_condition_undecided, definedness_conditions, written_definedness
+from .domain import closed_condition_undecided, definedness_conditions, open_conditions_empty, written_definedness
 
 LAYER = "certify.limits"
 
@@ -370,7 +370,9 @@ def written_undefined_everywhere(src, ns) -> bool:
     first only through the expression's free symbols, so an expression with none (log(-1) - log(-1) + 2
     is 2 after parsing) passed: its limit 2, its derivative 0, the tangent y = 2 and its maximum 2 on
     [0, 1] were certified, and x + acos(2) - acos(2) had the derivative 1 and the integral 1/2 over
-    [0, 1] (30 Sep 2026)."""
+    [0, 1] (30 Sep 2026). Open conditions that hold nowhere together count too (`open_conditions_empty`):
+    the limit 1 of x + log(x) - log(x) + log(-x) - log(-x) at 1 was refuted as if it had values (fourth
+    audit TAN-06)."""
     from ..normalize.parse import parse_as_written
     e = parse_as_written(src, ns)
     if e is None:
@@ -379,7 +381,7 @@ def written_undefined_everywhere(src, ns) -> bool:
         conds = definedness_conditions(e, None)
     except Exception:  # noqa: BLE001 - a failed reading adds no fact
         return False
-    return any(c is sp.false for c in conds) or closed_condition_undecided(conds)
+    return any(c is sp.false for c in conds) or closed_condition_undecided(conds) or open_conditions_empty(conds)
 
 
 def membership_conditions(src, expr, var, ns) -> list[Any]:
@@ -515,15 +517,20 @@ def verify(ir, solution, ctx: Ctx):
         # one no given pins leaves the limit without a value (DECISIONS §80): with n an integer
         # SymPy's limit of a*n*sin(pi/n) at oo is 0 (it is a*pi), and 0 was certified and 2*pi refuted
         # with a = 2 (part iv, 1 Oct 2026)
-        pins: dict = {}
-        params = (getattr(expr, "free_symbols", set()) | getattr(point, "free_symbols", set())) - {var}
-        if params:
-            pins = {s_: v for s_, v in ctx.bindings().items() if s_ in params}
-            expr, point = expr.xreplace(pins), point.xreplace(pins)
-            left = (getattr(expr, "free_symbols", set()) | getattr(point, "free_symbols", set())) - {var}
-            if left:
-                return unknown(LAYER, "parametric_limit", t.ms, {"parameters": sorted(str(s_) for s_ in left)},
-                               flags=["parametric_limit"])
+        # A declared constraint `a = 3` pins it too, and so does every value for the written conditions (below):
+        # x + 0*sqrt(b - x) is x after parsing, and its limit 0 at 0 was certified with b free and with b = -1,
+        # where 0 is no point of its domain (review of d4e; `Ctx.task_pins`)
+        pins = ctx.task_pins(var)
+        expr, err = parse_or_unknown(LAYER, ctx.with_pins, expr, pins)
+        if err:
+            return err
+        point, err = parse_or_unknown(LAYER, ctx.with_pins, point, pins)
+        if err:
+            return err
+        left = (getattr(expr, "free_symbols", set()) | getattr(point, "free_symbols", set())) - {var}
+        if left:
+            return unknown(LAYER, "parametric_limit", t.ms, {"parameters": sorted(str(s_) for s_ in left)},
+                           flags=["parametric_limit"])
         side = p.get("side")
         if side in ("", "+-"):
             side = None
@@ -544,21 +551,23 @@ def verify(ir, solution, ctx: Ctx):
             return condition_unsolved(LAYER, ctx.unsolved_conditions(var), t.ms)
         within = region_side(ctx, var, point, within)
         if within is False or within == UNDECIDED:
-            return unknown(LAYER, "approach_outside_declared_domain" if within is False else "region_near_point_undecided",
+            outside = within is False
+            return unknown(LAYER, "approach_outside_declared_domain" if outside else "region_near_point_undecided",
                            t.ms, {"var": str(var), "to": str(point), "side": str(side),
                                   "region": str(ctx.domain_for(var))},
-                           flags=["approach_outside_declared_domain"] if within is False else [])
+                           flags=["approach_outside_declared_domain"] if outside else [])
         side = within
         # the pinned values go in before the conditions are read: x**a has x > 0 only while a is free (TAN-09)
         written, nowhere = written_definedness(p["expr"], ctx.ns, pins)
-        if pins:
-            written = [c.xreplace(pins) if isinstance(c, sp.Basic) else c for c in written]
         if nowhere or written_undefined_everywhere(p["expr"], ctx.ns):
             # undefined as written for every value (a sum with an undefined term), or a binder whose
             # body is not proved to exist: lim_{x->0} x + Σ_{k=-1}^{1} k/k = 3 was certified (review
             # of 30 Sep 2026; the value parse reads k/k as 1)
             return unknown(LAYER, "expression_undefined_as_written", t.ms, {"expr": p["expr"]},
                            flags=["expression_undefined_as_written"])
+        unpinned = sorted({str(s_) for c in written for s_ in getattr(c, "free_symbols", set()) - {var}})
+        if unpinned:
+            return unknown(LAYER, "parametric_limit", t.ms, {"parameters": unpinned}, flags=["parametric_limit"])
         members = membership_conditions(p["expr"], expr, var, ctx.ns)
         if members:
             return unknown(LAYER, "membership_condition_on_variable", t.ms,
@@ -577,6 +586,9 @@ def verify(ir, solution, ctx: Ctx):
             # parse first, THEN recognise an infinite claim: "\infty", "+\infty" and "S.Infinity"
             # with kind "value" were read as finite values and refuted (audit of 25 Sep 2026)
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+            if err:
+                return err
+            claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)
             if err:
                 return err
             ev["claimed"] = str(claimed)

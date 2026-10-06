@@ -697,6 +697,22 @@ class Ctx:
         out.update(self.bindings())
         return {s_: v for s_, v in out.items() if s_ != var}
 
+    def task_pins(self, var: sp.Symbol, *keep: str) -> dict:
+        """`pinned_values(var)` without the symbols named in `keep` (a tangent line's dependent variable): the
+        values a task certificate puts in its function, its point, its interval and the claim. The calculus
+        certificates read none: with a = 3 the derivative 6*x of a*x**2 was refuted (it was compared with
+        2*a*x), and the written conditions of x + 0*sqrt(b - x) were dropped, so with b = 1/2 its maximum 1
+        on [0, 1] and its integral 1/2 over [0, 1] were certified (fourth audit TAN-02, review of d4e)."""
+        return {s_: v for s_, v in self.pinned_values(var).items() if s_.name not in keep}
+
+    def with_pins(self, e, pins: dict):
+        """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
+        forms this makes (Σ_{k=1}^{n} k with n = 3) by values numbers confirm (`_confirmed`, ParseError
+        otherwise)."""
+        if not pins or not isinstance(e, sp.Basic) or not (e.free_symbols & set(pins)):
+            return e
+        return self._confirmed(None, substitute_free(e, pins))
+
     def on_var(self, rels, var: sp.Symbol) -> tuple[list, list]:
         """The relations `rels` read on `var` alone, each other symbol a given fixes read as its value
         (`x > b` with b = 0 is x > 0). A relation that then always holds is left out: the binding
@@ -921,7 +937,7 @@ class Ctx:
         undecided through a closed condition? The variable of a definite integral is read as a plain
         real symbol: it runs over [a, b], not over its declared domain (certify.calculus)."""
         from ..normalize.parse import parse_as_written
-        from .domain import closed_condition_undecided, definedness_conditions
+        from .domain import closed_condition_undecided, definedness_conditions, open_conditions_empty
         ns = self.ns
         v = (self.ir.task.params or {}).get("var", "x")
         if kind == "definite_integral" and isinstance(v, str) and isinstance(ns.get(v), sp.Symbol):
@@ -931,27 +947,12 @@ class Ctx:
             return False
         try:
             conds = definedness_conditions(e, None)
+            # open conditions that hold nowhere together (x > 0 and -x > 0) too: the simplification x of
+            # x + log(x) - log(x) + log(-x) - log(-x) was certified (fourth audit TAN-06)
             return any(c is sp.false for c in conds) or self._undefined_term(e) or closed_condition_undecided(conds) \
-                or self._open_conditions_empty(conds)
+                or open_conditions_empty(conds, timeout=self.timeout)
         except Exception:  # noqa: BLE001 - a failed probe adds no fact
             return False
-
-    def _open_conditions_empty(self, conds) -> bool:
-        """Do the open written conditions on one symbol hold nowhere together? x + log(x) - log(x) +
-        log(-x) - log(-x) needs x > 0 and -x > 0: each alone has points, so no condition failed above, and
-        its derivative 1, the antiderivative x of 1 + ... and the simplification x were certified (fourth
-        audit TAN-06). Only an exact empty set counts (`sandbox.exactsets`)."""
-        from ..sandbox import run as sb_run
-        by_sym: dict = {}
-        for c in conds:
-            fs = getattr(c, "free_symbols", set())
-            if isinstance(c, sp.core.relational.Relational) and len(fs) == 1:
-                by_sym.setdefault(next(iter(fs)), []).append(c)
-        for s_, cs in by_sym.items():
-            r = sb_run("mathverify.sandbox.ops:solveset_in", sp.And(*cs), s_, S.Reals, timeout=self.timeout)
-            if r.ok and r.value is S.EmptySet:
-                return True
-        return False
 
     @staticmethod
     def _undefined_term(e) -> bool:
