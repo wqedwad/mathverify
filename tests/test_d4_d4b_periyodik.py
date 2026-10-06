@@ -901,3 +901,34 @@ def test_a_written_odd_root_of_a_negative_number_is_a_convention(rel):
 ])
 def test_review_of_round5_verdicts(ir, claim, kind, want):
     assert _run(ir, claim, kind).verdict == want
+
+
+# ------------------------------------------------------------------------------------------------
+# Round 6 (6 Oct 2026): one number written two ways at an interval's end. The polynomial class reads
+# x > log(8)/log(2) as (3, oo) (sp.Poly writes log(8) as 3*log(2)); `Ctx.domain_for` keeps the given as
+# written, (log(8)/log(2), oo); SymPy's Intersection cannot order 3 and log(8)/log(2) and raised TypeError,
+# so the certificate died (UNKNOWN) where the merge with part d4d expected CORRECT
+# ------------------------------------------------------------------------------------------------
+L8 = "log(8)/log(2)"
+
+
+@pytest.mark.parametrize("ir,claim,want", [
+    (_eq("x**2 = 4", [f"x > {L8}"]), "{}", "CORRECT"),
+    (_eq("x**2 = 9", [f"x >= {L8}"]), "{3}", "CORRECT"),
+    (_eq("x**2 = 9", [f"x >= {L8}"]), "{-3, 3}", "INCORRECT"),
+    (_eq("x**2 = 4", ["x > a", f"a = {L8}"], (X, V("a"))), "{}", "CORRECT"),
+    (_eq(f"log(x - {L8}) = 0", [f"x > {L8}"]), "{4}", "CORRECT"),
+    (_eq(f"sqrt(x - {L8}) = 1", [f"x >= {L8}"]), "{4}", "CORRECT"),
+])
+def test_one_endpoint_written_two_ways(ir, claim, want):
+    assert _run(ir, claim).verdict == want
+
+
+def test_exact_intersection_writes_one_way_only_what_is_proved_equal():
+    from mathverify.certify.base import exact_intersection
+    L = sp.log(8) / sp.log(2)
+    assert exact_intersection(sp.Interval.open(L, sp.oo), sp.Interval.open(3, sp.oo)) == sp.Interval.open(3, sp.oo)
+    assert exact_intersection(sp.Interval(L, 5), sp.Interval(3, 4)) == sp.Interval(3, 4)
+    # 3 + e^(-e^10) is no 3: SymPy cannot order them, and no proof writes them one way
+    with pytest.raises(TypeError):
+        exact_intersection(sp.Interval.open(L + sp.exp(-sp.exp(10)), sp.oo), sp.Interval.open(3, sp.oo))

@@ -239,6 +239,11 @@ MUTATIONS = [
      "            pass", T + "test_a_side_condition_with_a_period_is_not_applied"),
     ("B08 tanım evreni tek periyot", PARSE, "            dom = Intersection(dom, exact_solveset(rel, var, S.Reals))",
      "            dom = Intersection(dom, sp.solveset(rel, var, S.Reals))", T + "test_a_domain_of_discourse_with_a_period"),
+    ("B09 cut_by uç noktasını tek yazıma indirmez", BASE,
+     "                dom = rr.value if risky else exact_intersection(dom, rr.value)",
+     "                dom = rr.value if risky else sp.Intersection(dom, rr.value)", T + "test_one_endpoint_written_two_ways"),
+    ("B10 eşitliği kanıtlanmayan uçlar tek yazıma iner", BASE, "            if near and same_value(p_, q):",
+     "            if near:", T + "test_exact_intersection_writes_one_way_only_what_is_proved_equal"),
     # --- algebra
     ("A01 verilenler ℝ'de tek periyot", ALG, "    dom = ctx.cut_by(var, dom, [real_odd_roots(a) for a in plain])",
      "    dom = ctx.cut_by(var, dom, [])\n    for g in plain:\n        dom = sp.Intersection(dom, sp.solveset(real_odd_roots(g), var, S.Reals))",
