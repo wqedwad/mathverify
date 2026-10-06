@@ -1,0 +1,37 @@
+# d4e NOTLAR (görev sertifikalarının koşul ve tanımlılık okuması)
+
+## Matematik kararları
+
+- **G6 (limit, koşul yazımı).** Limit değişkenin bütün koşullarının belirlediği bölge R üzerinde alınır (bildirim,
+  kısıt, verilen, tanım evreni; verilenle sabitlenmiş parametre değeriyle). Nokta R'nin kapanışında değilse ya da
+  R'nin yalıtık noktasıysa limit yoktur/soru anlamsız → UNKNOWN (`approach_outside_declared_domain`). Nokta R'nin
+  ucundaysa (bir yandan R'ye giriliyorsa) limit o yandan alınır: |x|/x, x>0 iken 0'da 1 (mpmath 1e-30'da 1); DNE
+  yanlış. Bu, bildirilmiş alanın kapalı ucundaki §73(e) kuralının aynısı; aynı koşul her yazımda aynı karar.
+  ±oo: R yukarıdan/aşağıdan sınırsız değilse UNKNOWN (x>0 iken x→−oo). Serbest parametreli koşul → condition_not_applied.
+- **G6 (türev/teğet).** Türev iki yanlıdır (§78 C(2)): nokta R'nin iç noktası değilse UNKNOWN (`point_not_interior`),
+  verilenle gelen koşul dahil. |x|'in 0'daki türevi verilen x≥0 iken: DNE ve 1 ikisi de UNKNOWN (sağ türev 1, iki yanlı
+  türev bölgede tanımsız; karar geleneğe bağlı). İfade türevinde karşılaştırma R'nin içinde; iç boşsa UNKNOWN.
+- **G4 (extremum aralığının ucu sembol).** Verilen/kısıtla sabitlenmiş sembol d4d'nin bağlamasıyla (binding_issues
+  tutarlılık denetimi dahil) yerine konur: [0,b], b=3 → [0,3], max x = 3 (0 yanlış). [b,1], b=5 boş aralık → ekstremum
+  yok → UNKNOWN. Serbest sembol kalırsa (b positive ya da b>5) → condition_not_applied (UNKNOWN).
+- **TAN-02 (f'deki parametre).** Aynı bağlama f'ye de uygulanır: a=3 iken [0,1]'de a·x'in max'ı 3, argmax 1; a=−3 min −3;
+  x²+a max 4. Serbest parametre → UNKNOWN. Sertifikada değeri sayı olmayan/karşılaştırılamayan aday asla atılmaz:
+  böyle bir aday varsa "aday kümesi tam" EVT kanıtı ve "hiçbir aday eşit değil → not_attained" çıkarımı geçersiz → None.
+- **G12 (ilkel).** İlkel F, f'nin tanımlı olduğu bölgede (Ctx.domain_for: bildirim, kısıt, verilen, dod, yazılı tanımlılık)
+  F' = f sağlayan GERÇEL değerli, sürekli fonksiyondur. x>0 iken log(−x) gerçel değil (log x + iπ) → INCORRECT/UNKNOWN
+  (asla CORRECT); x>0'da x²/2, |x|'in ilkelidir (CORRECT ya da UNKNOWN; INCORRECT haksız); verilen x<0 iken log(−x)
+  1/x'in ilkelidir. Gerçel x'te x + i gerçel değil → CORRECT değil. Bölge ayrık parçalıysa (R∖{0}) F − F₀ her parçada sabit
+  olmalı; parçalar arası farklı sabit (log|x| + sign x) müfredatın tek C'sine uymuyor, geleneğe bağlı → UNKNOWN.
+- **TAN-05 (nokta bağlayıcısı).** at/Subs/Limit/Integral/Derivative'in bağladığı değişken yereldir: tanımlılık okumasında
+  bildirimi taşımaz. d/dx √(−x) |_{x=−1} = −1/2 (mpmath 60 basamak) → y + at(...) = −1/2 için {0} doğru, ∅ yanlış.
+  Limit(√x²/x, x, −oo): −oo civarında √x gerçel değil → tanımsız → UNKNOWN (bildirimsiz kontrolle aynı karar).
+- **TAN-06 (yazılı tanım kümesi).** Türev/teğet yalnız yazılı tanım kümesinin iç noktasında: √x²'nin 0'ı (uç), acos'un 1'i
+  (uç), {0} (yalıtık) → UNKNOWN. Tanım kümesi boş ifade (log x − log x + log(−x) − log(−x)) hiçbir yerde tanımsız → türev,
+  ilkel, sadeleştirme, ekstremum UNKNOWN (`problem_undefined_as_written`). İfade türevi tanım kümesinin içinde
+  karşılaştırılır (|x| + √x − √x için 1 doğru); iç boşsa UNKNOWN.
+- **TAN-07 (sonsuz sınırlı integral).** ∫_{−oo}^{x} dt/t: aralık (−oo, x] 0'ı içerir (ıraksak) ve −oo'da da ıraksak → F hiçbir
+  x>0'da yok → türev UNKNOWN. ∫_x^{oo} dt/(t+1) oo'da ıraksak (log) → UNKNOWN. Sonsuz uçta yakınsaklık kanıtlanmadıkça
+  integral tanımlı sayılmaz (e^{−t}, 1/t² için kanıtlı: CORRECT kalır).
+
+## İlerleme
+- 782431c'ye ff yapıldı. Sonda yazıldı: denetim/2026-10-01/d4e/sonda.py. HEAD'de koşuluyor (once/).

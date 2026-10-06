@@ -1,0 +1,11 @@
+# d4b5 saldiri notlari (2ebe7a8)
+- B1 _mono_parts: t = Dummy(positive=True) log/sinh/atan icin de -> Max(t,0)->t, sqrt(t**2)->t. Max(log x,0)=0 {1} CORRECT (4. tur, d540add'de de), croots Max(log,0)/Max(sinh,0)=1 CORRECT (5. tur), ev x|sqrt(log(x)^2)=1: e CORRECT, croots sqrt(log^2)-1: 1 CORRECT / 2 INCORRECT. Adim: sqrt(log^2)=1 => x=E verified (taban refuted).
+- B2 _piecewise sign: kapali hucrede sign(P)->+-1, kokte sign=0 kaybolur. sign(x)=0 {} CORRECT ve {0} CORRECT; croots sign(x): 0 CORRECT; sign(x)+|x| kok sayisi 1 CORRECT (dogru 2); sign(x)=1 -> [0,oo).
+- 66 adim incelendi (int 45, lim 12, kap 9): hepsi matematikce dogru.
+- B2 ek: cint sign(x)=0 [-3,3]: 0 CORRECT (taban INCORRECT); dogru zincir sign(x)=0 => x=0 INCORRECT (s1 refuted; taban CORRECT) -> haksiz red. croots Max(atan,0)=1, Max(log,-1)+1 =1 CORRECT.
+- Grobner: x+y=5,xy(x2+y2)=78 -> xy=6 dogru; zor sistemler 13-15 s UNKNOWN (takilma yok).
+- Siradaki supheli: _piecewise hucresi 'true' olunca kapali hucre tamamen aliniyor (Abs(x)/x=1 -> [0,oo)?)
+- B3 (gizli): _piecewise 'true' hucresi kapali araligin tamami: Abs(x)/x=1 -> [0,oo), Abs(x)/x>=-1 -> R, Abs(x)tan(x)=x tan(x) [0,3] -> [0,3]. Karar etkisi bulunamadi (tanimlilik kosullari asagida yakaliyor).
+- Atfetme (d540add): B1 eq/evaluate 4. turda (d540add'de de CORRECT), croots/adim 5. turda; B2 tamami 5. tur.
+- Parametrik (xii) ve Grobner: bulgu yok; sure: sin(60x)=0 [0,20] 22 s, zor sistemler <=15 s.
+- BITTI: rapor ana oturuma.

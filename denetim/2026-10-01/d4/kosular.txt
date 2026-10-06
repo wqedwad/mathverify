@@ -40,3 +40,16 @@ eleştirmeni. Aynı anda en çok 2-3 ajan. Her ajana yalnız kendi bulgularını
 - 06:45 d4b tur 2 (3872bcd) merge -> b87b625 (çakışmasız, push); birleşik ölçüm olc_b87b625
 - d4b tur 3: kapsama geri kazanımı (monoton ters sınıfı iv, a sin+b cos v, çok değişkenli sistem tamlığı) istendi
 - 07:05 b87b625 ölçüldü: sondalar 0/316,0/184,0/138,0/85; pytest çıkış 0; fark karar 0, adım 4 (aynı).
+- 10:10 d4g tur 2 BİTTİ (0120211) -> merge 195e183, push
+- d4d-baglama (ajan a95584ef21a95f97a): G1,G7-G10,TAN-01,03,04,09,P1 (taban 195e183)
+- 10:40 d4b tur 4 BİTTİ (5aa94e9) -> merge 838f667, push
+- d4b tur 5: solver_agreement tamlık kuralını kaldır, üstel oranı sınıf iv
+- 14:05 d4d BİTTİ (ecb392c) -> merge d540add (çakışmasız, push); birleşik ölçüm olc_d540add
+- d4d-saldirgan (ajan af691b1ecbaf0ee77) d4/saldiri/d4d; d4b tur5 ve d4c tur2 sürdürüldü (d540add ile birleşecekler)
+- 14:30 d4d-saldirgan: B1 virgül/or karışımı, B2 \notin True, B3 gerçel olmayan üyelik, B4 verilen a<0 + log(a); açık 6a/6b -> d4d'ye geri
+- d540add ölçüldü: 5 sonda 0 (316/236/138/275/229), pytest 0, fark karar 0 adım 4 (aynı).
+- 15:10 d4b tur 5 BİTTİ (9628439) -> merge 2ebe7a8, push; 82 adım unknown->verified (5aa94e9'a göre)
+- d4b5-saldirgan (ajan a8ed2165783911d78), d4/saldiri/d4b5
+- 15:40 d4b5-saldirgan: B1 (iv) pozitif üreteç, B2 sign kökte ±1, B3 Abs hücresi tanımsız uç -> d4b'ye geri (tur 6); 66/82 adım doğru
+- 16:10 d4d tur 2 BİTTİ (76d0c87) -> merge 782431c, push
+- d4e-gorev (ajan ac72773ff8a9ffc31): G4,G6,G12,TAN-02,05,06,07 (taban 782431c)
