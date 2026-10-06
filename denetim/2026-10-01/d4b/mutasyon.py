@@ -223,9 +223,6 @@ MUTATIONS = [
      T + "test_round7_sets"),
     ("Y08 katlanan hücrede tek kök geleneği yok", EX, "    if odd and not _PRINCIPAL[0]:", "    if False:",
      T + "test_round7_no_set"),
-    ("Y09 kesim noktasında yazılı payda okunmaz", EX,
-     "        if any(_certified(f.subs(var, p_)) == 0 for f in dep_dens):\n            continue",
-     "        if False:\n            continue", T + "test_round7_sets"),
     ("Y10 tek yanlı alan tüm doğruda çözülür", EX, "        wlo, whi = domain.inf, domain.sup\n",
      "        wlo, whi = S.NegativeInfinity, S.Infinity\n", T + "test_round7_sets"),
     ("Y11 değişkenin işareti alanı sınırlamaz", EX, "    if signed is not S.Reals:\n        domain = sp.Intersection(domain, signed)",
@@ -305,7 +302,7 @@ MUTATIONS = [
      T + "test_evaluate_with_a_proved_complete_set"),
     ("A06 sınırlı gövdede tamlık yok", ALG, "sp.Interval(*hull) if hull is not None else S.Reals, timeout=timeout)",
      "S.Reals, timeout=timeout)",
-     T + "test_tan_on_a_bounded_window_is_not_refuted"),
+     T + "test_round7_a_periodic_equation_with_a_log_on_a_bounded_window"),
     # --- counting / extremum / limits / series / formal / steps
     ("C01 periyodik verilen sayımı durdurur", CNT, "(isinstance(r.value, sp.ConditionSet) and not at_risk(rel, var))",
      "isinstance(r.value, sp.ConditionSet)", T + "test_count_integers_with_a_periodic_given"),

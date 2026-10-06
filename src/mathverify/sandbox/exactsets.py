@@ -870,9 +870,8 @@ def _piecewise(rel, var, lo, hi):
     for p_ in edges:                           # each cut point and window end on `rel` as written
         if not p_.is_finite or _same(p_, bad) or outside(p_):
             continue
-        if any(_certified(f.subs(var, p_)) == 0 for f in dep_dens):
-            continue
         val = e.subs(var, p_)
+        # a written denominator 0 there (sign(0) in x/sign(x)) is zoo or nan as written: no point
         if val.has(sp.zoo, sp.nan, sp.oo, -sp.oo):
             continue
         if _holds(type(rel), _real_sign(val)):

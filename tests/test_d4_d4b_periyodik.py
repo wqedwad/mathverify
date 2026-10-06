@@ -969,6 +969,8 @@ _Q = sp.Rational
     (x ** _Q(1, 3) >= 2, sp.Interval.open(0, sp.oo), sp.Interval(8, sp.oo)),
     (x ** _Q(2, 3) <= 4, sp.Interval.open(0, sp.oo), sp.Interval.Lopen(0, 8)),
     (sp.Eq((x + _A(x)) * x ** _Q(1, 3), 0), sp.Interval(0, 5), sp.FiniteSet(0)),             # no x < 0 there
+    # a denominator 0 inside a cell whose relation folds to True: 1 is no point
+    (sp.Eq((x - 1) / (_A(x) - 1), 1), S.Reals, sp.Union(sp.Interval.Ropen(0, 1), sp.Interval.open(1, sp.oo))),
 ])
 def test_round7_sets(rel, dom, want):
     from mathverify.sandbox.exactsets import exact_solveset
@@ -987,6 +989,8 @@ def test_round7_sets(rel, dom, want):
     (sp.Eq((sp.sign(x) + 1) * x ** _Q(1, 3), 0), S.Reals),
     ((x + _A(x)) * x ** _Q(1, 3) >= 0, S.Reals),
     (x ** _Q(1, 3) < 1, S.Reals),                                     # x < 0 is there: a convention
+    # a log argument with |x| that is no polynomial on its cell, on a folded cell: the truth is (1.106..., oo)
+    (sp.Eq((_A(x) - x) * _L(_A(x) - 2 + sp.sin(x)), 0), sp.Interval(0, sp.oo)),
 ])
 def test_round7_no_set(rel, dom):
     from mathverify.sandbox.exactsets import exact_solveset
@@ -1053,6 +1057,8 @@ C7 = "(Abs(x) + Abs(x - 10) - 10)*log(x - 6) = 0"
     (_cint(["x**(1/3) < 2"], [V("x", "positive_integer")]), "7", "count", "CORRECT"),
     (_cint(["x**(1/3) < 2"], [V("x", "positive_integer")]), "8", "count", "INCORRECT"),
     (_ineq("x**(1/3) < 1"), "Interval.open(0, 1)", "interval", {"INCORRECT", "UNKNOWN"}),
+    (_ir("domain_of", {"expr": "log(2 - x**(1/3))", "var": "x"}, (XP,), (), "interval"), "Interval.open(0, 8)",
+     "interval", "CORRECT"),                                             # 0 is no value of a positive x
     # RK4
     (_croots("x/sign(x) - 2"), "2", "count", "CORRECT"),
     (_croots("1/(x - Abs(x)) + 1/2"), "1", "count", "CORRECT"),
@@ -1072,3 +1078,12 @@ def test_round7_a_step_that_picks_one_of_two_roots():
     r = _run(_eq("x**2 - 7*x + 12 = 0", [R7]), "{3, 4}", steps=[("eq", "x = 4")])
     layer = next(la for la in r.layers if la.layer == "steps.refute")
     assert [st["status"] for st in layer.evidence["steps"]] != ["verified"]
+
+
+def test_round7_a_periodic_equation_with_a_log_on_a_bounded_window():
+    """sin(x)*log(x) = 0 on [1/2, 10]: {1, pi, 2*pi, 3*pi}. On the whole line a progression meets a log factor
+    and no set is exact; the bounded hull of the domain gives it (mutation A06: the class set on the reals
+    alone; the tan x = 1 case it named is now proved from the reals met with the domain too)."""
+    ir = _eq("sin(x)*log(x) = 0", ["x >= 1/2", "x <= 10"])
+    assert _run(ir, "{1, pi, 2*pi, 3*pi}").verdict == "CORRECT"
+    assert _run(ir, "{1, pi, 2*pi}").verdict == "INCORRECT"
