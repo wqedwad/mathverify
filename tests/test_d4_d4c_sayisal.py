@@ -378,3 +378,27 @@ def test_an_odd_integrable_singular_integrand_has_integral_zero(f):
 @pytest.mark.parametrize("f", ["1/x", "x/Abs(x)**2", "x*exp(x**(-2))"])
 def test_a_divergent_odd_integrand_is_not_zero(f):
     assert _run(_dint(f, -1, 1), "0").verdict != "CORRECT"
+
+
+# --- sibling paths of the enclosure (6 Oct 2026) ------------------------------------------------------
+# nsum's value alone refuted a series: with one-signed terms and the same value at 30 and 50 digits,
+# Σ (1/k² + c·e^(-(k - 1000)²/w)) came out π²/6 (the term far out never seen) and the true value was
+# INCORRECT. A number alone refutes no series now; SymPy's value confirmed by nsum still decides.
+def _series(term):
+    return _task("series_sum", {"term": term, "var": "k", "lo": "1", "hi": "oo"}, [K])
+
+
+@pytest.mark.parametrize("term,truth", [
+    ("1/k**2 + exp(-(k - 1000)**2)", "3.41757127167487858950366571780"),
+    ("1/k**2 + 1000000*exp(-(k - 1000)**2)", "1772638.84976071900125768702357"),
+    ("1/k**2 + exp(-(k - 1000)**2/100)", "19.3694725759033867094540900001"),
+])
+def test_nsum_alone_refutes_no_series(term, truth):
+    # truth: π²/6 + Σ_j c·e^(-j²/w) (Jacobi θ₃), a 50-digit sum of the bump
+    assert _run(_series(term), truth).verdict != "INCORRECT"
+
+
+def test_a_series_value_sympy_and_nsum_agree_on_still_decides():
+    assert _run(_series("1/(k*(k + 1))"), "1/2").verdict == "INCORRECT"
+    assert _run(_series("1/(k*(k + 1))"), "1").verdict == "CORRECT"
+    assert _run(_series("1/k**2"), "pi**2/6").verdict == "CORRECT"

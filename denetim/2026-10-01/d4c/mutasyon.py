@@ -1,8 +1,8 @@
 """Mutation check of part d4c of the fourth audit's fixes (1 Oct 2026): each mutation removes one guard of the
 exact zero and the numeric evidence (`certify.calculus` certificates and enclosure, `equiv.forms`,
-`steps.deterministic._integrals_refute`, `equiv.random_point`, the sandbox ops). The machinery (throwaway
-clones of the committed HEAD, exit codes, clean-up) is the one of denetim/2026-09-26/mutasyon.py; only the
-list of mutations is new.
+`steps.deterministic._integrals_refute`, `equiv.random_point`, the sandbox ops; `certify.series`: nsum
+alone). The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is the one of
+denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
 
     .venv/bin/python denetim/2026-10-01/d4c/mutasyon.py [-j N] [--list] [name ...]
 
@@ -26,6 +26,7 @@ RP = "src/mathverify/equiv/random_point.py"
 OPS = "src/mathverify/sandbox/ops.py"
 NUM = "src/mathverify/equiv/numeric.py"
 ENC = "src/mathverify/certify/enclosure.py"
+SER = "src/mathverify/certify/series.py"
 T = "tests/test_d4_d4c_sayisal.py"
 T4 = "tests/test_parca4_parametreli_bicim.py"
 
@@ -126,6 +127,11 @@ MUTATIONS = [
     ("Z29 kök içi çarpanlarına ayrılmaz", NUM,
      "                         lambda n: sp.factor(sp.together(n.base)) ** n.exp)\n",
      "                         lambda n: n)\n", T),
+    # sibling paths of the enclosure (6 Oct 2026)
+    ("S01 nsum tek başına seriyi reddeder", SER,
+     '        ev["method"] = "numeric_only"\n',
+     '        ev["method"] = "numeric_only"\n'
+     "        if num_equal(claimed, num_val, rel_tol=1e-15)[0] is False:\n            return False, ev\n", T),
 ]
 
 if __name__ == "__main__":

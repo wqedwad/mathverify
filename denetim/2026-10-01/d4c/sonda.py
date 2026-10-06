@@ -12,6 +12,8 @@ the `sifir` angle and D4-ADIM-C of the `adim` angle, `denetim/2026-10-01/d4/`).
     G  controls whose verdict must not change (N2 zero integrals, refutations, identities, exact values)
     H  review of d4c: narrow peaks both quadratures miss, infinite ranges, declared tolerances; decided
        only by a rigorous (interval) enclosure, and wrong values outside it still refuted
+    I  sibling paths (6 Oct 2026): nsum's value alone refuted a series (a term far out never seen); SymPy's
+       value confirmed by nsum still decides
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4c/sonda.py [out.json] [groups]
@@ -341,8 +343,38 @@ def cases_h():
     ]
 
 
+def series(term, lo="1"):
+    return _task("series_sum", {"term": term, "var": "k", "lo": lo, "hi": "oo"}, [K])
+
+
+def cases_i():
+    """Sibling paths of the enclosure (6 Oct 2026): nsum's value alone refuted a series whose term far out
+    it never saw (one-signed terms, the same value at 30 and 50 digits). Truths: π²/6 + Σ_j c·e^(-j²/w)
+    (Jacobi θ₃; 50-digit mpmath sum of the bump)."""
+    b1, t1 = "1/k**2 + exp(-(k - 1000)**2)", "3.41757127167487858950366571780"
+    b2, t2 = "1/k**2 + 1000000*exp(-(k - 1000)**2)", "1772638.84976071900125768702357"
+    b3, t3 = "1/k**2 + exp(-(k - 1000)**2/100)", "19.3694725759033867094540900001"
+    return [
+        ("bump e^-(k-1000)^2: true value", series(b1), _sol(t1), NOTNO, None),
+        ("bump 10^6 e^-(k-1000)^2: true value", series(b2), _sol(t2), NOTNO, None),
+        ("bump e^-(k-1000)^2/100: true value", series(b3), _sol(t3), NOTNO, None),
+        ("bump: evaluate Sum true value", ev(f"Sum({b1}, (k, 1, oo))", (K,)), _sol(t1), NOTNO, None),
+        ("bump: claim pi^2/6 (bump left out)", series(b1), _sol("pi**2/6"), NOTOK, None),
+        ("1/(k log k) diverges: oo", series("1/(k*log(k))", "2"), _sol("oo"), NOTNO, None),
+        ("1/(k log^2 k): 2.1097428012368919745", series("1/(k*log(k)**2)", "2"), _sol("2.1097428012368919745"),
+         NOTNO, None),
+        # controls: SymPy's value confirmed by nsum still decides
+        ("control: 1/k^2 = pi^2/6", series("1/k**2"), _sol("pi**2/6"), OK, None),
+        ("control: 1/k^2 + 1/2^k = pi^2/6 + 1 (nsum off by 6e-5: undecided)", series("1/k**2 + 1/2**k"),
+         _sol("pi**2/6 + 1"), NOTNO, None),
+        ("control: 1/(k(k+1)) = 1", series("1/(k*(k + 1))"), _sol("1"), OK, None),
+        ("control: 1/(k(k+1)) = 1/2 (wrong)", series("1/(k*(k + 1))"), _sol("1/2"), NO, None),
+        ("control: sin(pi k/2)/k = pi/4", series("sin(pi*k/2)/k"), _sol("pi/4"), NOTNO, None),
+    ]
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h}
+          "H": cases_h, "I": cases_i}
 SLOW = 60.0           # group D: every verify returns within this many seconds
 CASE_LIMIT = 240      # seconds before a case is abandoned (SIGALRM; the unfixed tree hangs on group D)
 
@@ -355,7 +387,7 @@ def _alarm(signum, frame):
     raise CaseTimeout(f"no verdict within {CASE_LIMIT} s")
 
 
-def main(out_path=None, groups="ABCDEFGH"):
+def main(out_path=None, groups="ABCDEFGHI"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -402,5 +434,5 @@ def main(out_path=None, groups="ABCDEFGH"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGH"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHI"
     sys.exit(1 if main(out, grp) else 0)
