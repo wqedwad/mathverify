@@ -553,13 +553,18 @@ def _declared_span(v):
 def _reachable(a, b):
     """The points [a, b] can cover when a bound is symbolic: the hull of the values the bounds may
     take, open at 0 when only a strict sign reaches it (x > 0 never makes 0 a bound); R when a
-    bound has no declared sign."""
+    bound has no declared sign. An infinite bound reaches out to its end: it counted as no point at all,
+    so ∫_{-oo}^{x} dt/t with x > 0 was read as running inside (0, oo), its point 0 never reached, and
+    the derivative 1/x of that integral, which exists for no x, was certified (fourth audit TAN-07)."""
     parts = []
+    ends = set()
     for v in (a, b):
-        if v.is_number:
-            if not (v.is_real or v in (oo, -oo)):
+        if v in (oo, -oo):
+            ends.add(v)
+        elif v.is_number:
+            if not v.is_real:
                 return S.Reals
-            parts.append(sp.FiniteSet(v) if v not in (oo, -oo) else S.EmptySet)
+            parts.append(sp.FiniteSet(v))
         elif v.is_positive:
             parts.append(Interval.open(0, oo))
         elif v.is_nonnegative:
@@ -571,8 +576,41 @@ def _reachable(a, b):
         else:
             return S.Reals
     u = sp.Union(*parts)
-    lo, hi = u.inf, u.sup
+    lo = -oo if -oo in ends else u.inf
+    hi = oo if oo in ends else u.sup
     return Interval(lo, hi, left_open=u.contains(lo) is not sp.true, right_open=u.contains(hi) is not sp.true)
+
+
+def decays_at(g, t, end) -> bool:
+    """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1, read off a finite real limit of
+    |t|**p * g(t) (p = 2, 3/2, 11/10)? Then ∫ g converges absolutely at that end. False when no such
+    limit is found (a divergent integral, or one this test cannot prove: sin(t)/t)."""
+    for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
+        lim = sp.limit(sp.Abs(t) ** p * g, t, end)
+        if isinstance(lim, sp.Expr) and lim.is_number and lim.is_finite is True and lim.is_real is True \
+                and not lim.has(sp.AccumBounds):
+            return True
+    return False
+
+
+def _converges_at(body, x, d, end) -> bool:
+    """Is the integral of `body` (as written, in its bound variable `x`) proved to converge at `end`?"""
+    if not _spend(_SOLVE_COST):
+        return False
+    t = sp.Dummy(d.name, real=True)
+    try:
+        with sp.evaluate(False):
+            g = body.xreplace({x: t})
+        g = _evaluated(g)
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(g, sp.Expr) or g.free_symbols - {t} or any(
+            type(m).__name__ == "written_domain" for m in sp.preorder_traversal(g)):
+        return False
+    if t not in g.free_symbols:
+        return g.is_zero is True                     # a constant converges at an infinite end only if 0
+    r = sb_run("mathverify.certify.domain:decays_at", g, t, end, timeout=_SOLVE_TIMEOUT)
+    return bool(r.ok and r.value is True)
 
 
 def _integral_conditions(n, var) -> list[Any]:
@@ -583,13 +621,22 @@ def _integral_conditions(n, var) -> list[Any]:
         return []                                   # an antiderivative: its variable is not bounded
     if len(n.limits) != 1:
         named, _ = _named_conditions(n.function, [lim[0] for lim in n.limits], var)
-        return [DEFINEDNESS_UNDECIDED] if named else []
+        improper = any(len(lim) == 3 and {_evaluated(lim[1]), _evaluated(lim[2])} & {oo, -oo}
+                       and not (_evaluated(lim[1]).is_number and _evaluated(lim[2]).is_number) for lim in n.limits)
+        return [DEFINEDNESS_UNDECIDED] if named or improper else []
     x, a, b = n.limits[0]
     named, plain = _named_conditions(n.function, [x], var)
     d = plain[x]
     region = S.Reals
     a, b = _evaluated(a), _evaluated(b)
     if not (a.is_number and b.is_number):
+        # an infinite bound next to a symbolic one: no value is computed, and a derivative of the integral
+        # is taken by the fundamental theorem, so the integral must be proved to converge at that end.
+        # The derivative -1/(x + 1) of ∫_x^oo dt/(t + 1), which diverges for every x, was certified
+        # (fourth audit TAN-07)
+        for end in (a, b):
+            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):
+                return [DEFINEDNESS_UNDECIDED]
         # a symbolic bound: the integral runs inside the hull of the values the bounds may take by
         # their declarations (∫_0^x √t dt and ∫_1^x ln t dt with x > 0 lie in [0, oo); read over R
         # they were undecided, review of 30 Sep 2026)
@@ -1281,6 +1328,51 @@ def closed_condition_undecided(conds) -> bool:
     return False
 
 
+def hold_nowhere(cs, s_) -> bool:
+    """Worker: do the relations `cs` on the one symbol `s_` hold nowhere together, PROVED by an exact empty set?
+    On ℝ first; then the periodic ones on one common period, where `sandbox.exactsets` solves them exactly (on
+    ℝ SymPy leaves sin(x) > 0 and -sin(x) > 0 a ConditionSet). A periodic set empty on one period is empty."""
+    from sympy.calculus.util import lcim
+    rel = sp.And(*cs)
+    if rel is sp.false or exact_solveset(rel, s_, S.Reals) is S.EmptySet:
+        return True
+    periodic, periods = [], []
+    for c in cs:
+        try:
+            p_ = sp.periodicity(c.lhs - c.rhs, s_)
+        except Exception:  # noqa: BLE001 - no period found: the relation is left out of this proof
+            p_ = None
+        if p_ is not None and p_.is_positive is True:
+            periodic.append(c)
+            periods.append(p_)
+    if not periodic:
+        return False
+    try:
+        # lcim: None when two periods have no common multiple (2*pi and 1), and then no proof
+        period = lcim(periods) if len(periods) > 1 else periods[0]
+        return exact_solveset(sp.And(*periodic), s_, Interval.Ropen(0, period)) is S.EmptySet
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def open_conditions_empty(conds, timeout: float = 8.0) -> bool:
+    """Do the open definedness conditions on one symbol hold nowhere together? x + log(x) - log(x) + log(-x) -
+    log(-x) needs x > 0 and -x > 0: each alone has points, so no condition fails outright and the expression
+    passed as defined: its derivative 1, the antiderivative x of 1 + ..., the simplification x and its limit
+    1 at 1 were certified or refuted as if it had values (fourth audit TAN-06). Only a proof counts
+    (`hold_nowhere`); the expression is then defined nowhere, like one whose condition fails."""
+    by_sym: dict = {}
+    for c in conds:
+        fs = getattr(c, "free_symbols", set())
+        if isinstance(c, sp.core.relational.Relational) and len(fs) == 1:
+            by_sym.setdefault(next(iter(fs)), []).append(c)
+    for s_, cs in by_sym.items():
+        r = sb_run("mathverify.certify.domain:hold_nowhere", cs, s_, timeout=timeout)
+        if r.ok and r.value is True:
+            return True
+    return False
+
+
 def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
     """`closed_condition_undecided` for an IR text read as written (see `written_definedness`)."""
     from ..normalize.parse import parse_as_written
@@ -1293,11 +1385,13 @@ def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
         return False
 
 
-def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> bool | None:
+def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins: dict | None = None) -> bool | None:
     """Is the expression, AS WRITTEN, undefined somewhere in `region` (a point set, an interval, an
     index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
     own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
-    and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT."""
+    and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT. `pins`: the values the givens fix
+    (`written_definedness`); without them a condition naming a parameter decided nothing, and with b = 1/2
+    the maximum 1 of x + 0*sqrt(b - x) on [0, 1] was certified (review of d4e)."""
     # the task's interval or point must lie where the variable is declared: with x declared positive
     # the parse folds |x| to x, and on [-1, 1] the minimum of |x| - x**2 was certified to be -2, the
     # derivative of x*|x| at -1 too (-2; it is 2); no reading gives these (second audit of 29 Sep 2026)
@@ -1309,7 +1403,7 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> b
         inside = None
     if inside is not True:
         return True
-    conds, nowhere = written_definedness(src, ns)
+    conds, nowhere = written_definedness(src, ns, pins)
     if var in nowhere or written_closed_undecided(src, ns):
         return True                    # a closed condition no check proves: the callers abstain
     for c in conds:
