@@ -1121,6 +1121,9 @@ def _same_set(a, b) -> bool:
     (sp.Eq(sp.cos(x) * sp.Max(x, 1) * sp.sqrt(x - 1) * (x ** _Q(1, 3) - 2), 0), sp.Interval(-3, 9),
      sp.FiniteSet(1, sp.pi / 2, 3 * sp.pi / 2, 5 * sp.pi / 2, 8)),
     ((_A(x) - x) * sp.acos(x / 2) >= 0, sp.FiniteSet(0, 1, 2, 3), sp.FiniteSet(0, 1, 2)),   # point by point
+    ((_A(x) - x) * _L(x - 2) >= 0, sp.FiniteSet(1, 3), sp.FiniteSet(3)),                    # 0*log(-1) is no 0
+    # an identity holds wherever defined: not where acos is not real
+    (sp.Eq((x ** 2 - 1) * sp.acos(x) / (x - 1) - (x + 1) * sp.acos(x), 0), S.Reals, sp.Interval.Ropen(-1, 1)),
 ])
 def test_round8_sets(rel, dom, want):
     from mathverify.sandbox.exactsets import exact_solveset
@@ -1136,10 +1139,12 @@ def test_round8_sets(rel, dom, want):
     (sp.Ge((_A(x) - x) * sp.arg(x - 1), 0), _P0),
     (sp.Ge((_A(x) + x) * sp.asin(x + sp.atan(x)), 0), sp.Interval(-sp.oo, 0)),
     (sp.Eq(_A(x) * sp.sqrt(x + 8) * (x ** _Q(1, 3) + 1), 0), S.Reals),  # x = -1: a root of the real reading only
+    # on a finite domain SymPy's own ConditionSet decided each point on the principal branch: {-1, 0}
+    (sp.Eq((x + _A(x)) * x ** _Q(1, 3), 0), sp.FiniteSet(-1, 0, 1)),
 ])
 def test_round8_no_set(rel, dom):
     from mathverify.sandbox.exactsets import exact_solveset
-    assert isinstance(exact_solveset(rel, x, dom), sp.ConditionSet)
+    assert exact_solveset(rel, x, dom).has(sp.ConditionSet)
 
 
 def test_round8_certified_sign_of_a_jump():
@@ -1158,6 +1163,14 @@ def test_round8_no_strip_between_two_writings():
     r2 = sp.sqrt(2)
     got = exact_complement(sp.Interval.open(sp.sqrt(3 + 2 * r2), sp.oo), sp.Interval.open(1 + r2, 2 + r2))
     assert got == sp.Interval(2 + r2, sp.oo)
+
+
+def test_round8_a_written_condition_no_class_solves_is_listed_unsolved():
+    """2**x + x - 2 <= 1 of an acos was dropped from the domain (Ctx.domain_for): now listed unsolved."""
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    ctx = make_ctx(ProblemIR.from_dict(_ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0")))
+    assert ctx.unsolved_conditions(ctx.sym("x"))
 
 
 def test_round8_a_side_undefined_at_a_point_holds_nothing():
@@ -1188,6 +1201,9 @@ def _trig_w(eqn, interval):
      "interval", "UNKNOWN"),
     (_ineq("(Abs(x) - x)*acos(x/2) <= 0", vars_=(X0,)), "Interval(0, oo)", "interval", "INCORRECT"),
     (_ineq("(Abs(x) - x)*acos(x/2) <= 0", vars_=(X0,)), "Interval(0, 2)", "interval", "CORRECT"),
+    # atan2(0, 0), arg(0): undefined or 0 (a convention)
+    (_ev("x", ["atan2(x - 1, 0) = 0"]), "1", "value", "UNKNOWN"),
+    (_ev("x", ["arg(x - 1) = 0", "x <= 1"]), "1", "value", "UNKNOWN"),
     # RK-1
     (_ineq("sign(x - 3) > 0", ["x <= log(8)/log(2)"]), "EmptySet", "set", _NOTNO),
     (_ineq("sign(x - 3) > 0", ["x <= log(8)/log(2)"]), "{log(8)/log(2)}", "set", _NOTOK),
