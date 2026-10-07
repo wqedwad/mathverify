@@ -140,10 +140,13 @@ MUTATIONS = [
     ("L04 to_mp limiti okur", NUM, "        if expr.has(sp.Integral, sp.Sum, sp.Product, sp.Limit):",
      "        if expr.has(sp.Integral, sp.Sum, sp.Product):", TA),
     ("L05 büyüyen zarf DNE", LIM, "        if _grows_without_bound(ro.value):", "        if False:", TA),
-    ("L06 işaret değiştiren seride nsum reddeder", "src/mathverify/certify/series.py",
-     "        if ok is False and one_signed and converged:", "        if ok is False and converged:", TA),
-    ("L07 yakınsamamış nsum reddeder", "src/mathverify/certify/series.py",
-     "        if ok is False and one_signed and converged:", "        if ok is False and one_signed:", TA),
+    # L06/L07 mutated the guards of nsum's refutation (one-signed terms, the second precision); d4c's sibling
+    # paths (6 Oct 2026) removed that refutation (nsum missed a term far out with both guards holding), so
+    # L06 now restores it and L07, whose guard is gone, is dropped
+    ("L06 nsum tek başına reddeder", "src/mathverify/certify/series.py",
+     '        ev["method"] = "numeric_only"\n',
+     '        ev["method"] = "numeric_only"\n'
+     "        if num_equal(claimed, num_val, rel_tol=1e-15)[0] is False:\n            return False, ev\n", TA),
     # --- (M) second round: computing notation read as forms, the functions' own arguments
     ("M01 kapalı integrate hesaplanır", P,
      "    if isinstance(form, sp.Integral) and not form.free_symbols and form.limits \\",

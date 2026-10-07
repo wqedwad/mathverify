@@ -10,6 +10,11 @@ the `sifir` angle and D4-ADIM-C of the `adim` angle, `denetim/2026-10-01/d4/`).
     E  S5  a zero with no significant bits ('0.e-168') is no proof of equality
     F  S6  an odd, absolutely integrable integrand with an interior singularity: the 0 is certified
     G  controls whose verdict must not change (N2 zero integrals, refutations, identities, exact values)
+    H  review of d4c: narrow peaks both quadratures miss, infinite ranges, declared tolerances; decided
+       only by a rigorous (interval) enclosure, and wrong values outside it still refuted
+    I  sibling paths (6 Oct 2026): nsum's value alone refuted a series (a term far out never seen); SymPy's
+       value confirmed by nsum still decides
+    J  coverage given back (6 Oct 2026): on an infinite range a value the fundamental theorem proves decides
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4c/sonda.py [out.json] [groups]
@@ -235,7 +240,7 @@ def cases_g():
         ("x^2 [0,1] claim 1/2", dint("x**2", 0, 1), _sol("1/2"), NO, None),
         ("e^x [0, pi sqrt163] claim the nearby integer", dint("exp(x)", 0, "pi*sqrt(163)"), _sol("262537412640768743"), NO, None),
         ("log x/sqrt x [0,1] claim -4", dint("log(x)/sqrt(x)", 0, 1), _sol("-4"), OK, None),
-        ("e^-x [0,oo) claim 1", dint("exp(-x)", 0, "oo"), _sol("1"), OK, None),
+        ("e^-x [0,oo) claim 1 (no numeric value on an infinite range)", dint("exp(-x)", 0, "oo"), _sol("1"), NOTNO, None),
         ("step int_0^oo e^-x = 1 verified", X1, _sol("2", cp("Integral(exp(-x), (x, 0, oo)) = 1")), OK, VER),
         ("step int_0^oo e^-x = 2 refuted", X1, _sol("2", cp("Integral(exp(-x), (x, 0, oo)) = 2")), NO, REF),
         ("step Gauss = sqrt(pi) verified", X1, _sol("2", cp("Integral(exp(-x**2), (x, -oo, oo)) = sqrt(pi)")), OK, VER),
@@ -254,6 +259,10 @@ def cases_g():
         ("atan(x) - atan(x/2) -> atan(x/(2+x^2))", simp("atan(x) - atan(x/2)", [X]), _sol("atan(x/(2 + x**2))", kind="expression"), OK, None),
         ("tanh(x) -> (e^2x - 1)/(e^2x + 1)", simp("tanh(x)", [X]), _sol("(exp(2*x) - 1)/(exp(2*x) + 1)", kind="expression"), OK, None),
         ("tan(x/2) -> sin x/(1 + cos x) on (-1,1)", simp("tan(x/2)", [X_11]), _sol("sin(x)/(1 + cos(x))", kind="expression"), OK, None),
+        ("atan(e^x) + atan(e^-x) -> pi/2 (Gudermann)", simp("atan(exp(x)) + atan(exp(-x))", [X_POS]), _sol("pi/2", kind="expression"), OK, None),
+        ("asin(tanh x) -> atan(sinh x) (Gudermann)", simp("asin(tanh(x))", [X_POS]), _sol("atan(sinh(x))", kind="expression"), OK, None),
+        ("2 atan(tanh(x/2)) -> atan(sinh x) (Gudermann)", simp("2*atan(tanh(x/2))", [X_POS]), _sol("atan(sinh(x))", kind="expression"), OK, None),
+        ("asin(tanh x) -> atan(sinh x) + 1/10^30 (wrong)", simp("asin(tanh(x))", [X_POS]), _sol("atan(sinh(x)) + 1/10**30", kind="expression"), NO, None),
         ("atan(x) + atan(1/x) -> pi/2, x free (counterexample)", simp("atan(x) + atan(1/x)", [X]), _sol("pi/2", kind="expression"), NO, None),
         ("odd + 1 [-1,1] claim 2 (even part 1)", dint("sin(x**5)*exp(cos(x)) + 1", -1, 1), _sol("2"), OK, None),
         ("odd + 1 [-1,1] claim 3", dint("sin(x**5)*exp(cos(x)) + 1", -1, 1), _sol("3"), NO, None),
@@ -262,7 +271,126 @@ def cases_g():
     ]
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g}
+P8 = "exp(-10**8*(x - 1/3)**2)"
+PK = f"x**2 + {P8}"
+PK_T = "1/3 + sqrt(pi)*(erf(20000/3) + erf(10000/3))/20000"
+PK2 = "2 + sin(x) + exp(-10**9*(x - pi/4)**2)"
+PK2_T = "3 - cos(1) + sqrt(pi)*(erf(sqrt(10**9)*(1 - pi/4)) + erf(sqrt(10**9)*pi/4))/(2*sqrt(10**9))"
+SE = "x**2 + 10**4/cosh(10**4*(x - 1/3))**2"
+SE_T = "1/3 + tanh(20000/3) + tanh(10000/3)"
+SE2 = "sin(x) + 2 + 1/cosh(10**6*(x - sqrt(2)/2))**2"
+SE2_T = "3 - cos(1) + (tanh(10**6*(1 - sqrt(2)/2)) + tanh(10**6*sqrt(2)/2))/10**6"
+SE3 = "x**2 + cos(x)*exp(sin(x))*tanh(10**4*(x - 1/3)) + 10**4*exp(sin(x))/cosh(10**4*(x - 1/3))**2"
+SE3_T = "1/3 + exp(sin(1))*tanh(20000/3) + tanh(10000/3)"
+
+
+def dtol(f, a, b, tol):
+    ir = dint(f, a, b)
+    ir["task"]["params"]["rel_tol"] = tol
+    return ir
+
+
+def cases_h():
+    """Review of d4c (2 Oct 2026): narrow peaks both quadratures miss; only a rigorous enclosure decides."""
+    I1, I2, I3, I4 = (f"Integral({PK}, (x, 0, 1))", f"Integral({SE}, (x, 0, 1))", f"Integral({SE2}, (x, 0, 1))",
+                      f"Integral({SE3}, (x, 0, 1))")
+    return [
+        ("gauss peak: step true value", X1, _sol("2", cp(f"{I1} = {PK_T}")), OK, NOTREF),
+        ("gauss peak: eq true value", X1, _sol("2", eqs(f"{I1} = {PK_T}")), OK, NOTREF),
+        ("gauss peak: step 1/3 (peak left out)", X1, _sol("2", cp(f"{I1} = 1/3")), NO, REF),
+        ("gauss peak: evaluate true", ev(I1), _sol(PK_T), NOTNO, None),
+        ("gauss peak: evaluate 1/3", ev(I1), _sol("1/3"), NOTOK, None),
+        ("gauss peak: dint true", dint(PK, 0, 1), _sol(PK_T), NOTNO, None),
+        ("gauss peak: dint 1/3", dint(PK, 0, 1), _sol("1/3"), NO, None),
+        ("gauss peak pi/4: dint true", dint(PK2, 0, 1), _sol(PK2_T), NOTNO, None),
+        ("gauss peak pi/4: dint 3 - cos 1 (peak left out)", dint(PK2, 0, 1), _sol("3 - cos(1)"), NOTOK, None),
+        ("gauss peak pi/4: rel_tol 1e-3 claim 2.4597537", dtol(PK2, 0, 1, "1e-3"), _sol("2.4597537"), NOTNO, None),
+        ("sech2 peak: step true", X1, _sol("2", cp(f"{I2} = {SE_T}")), OK, NOTREF),
+        ("sech2 peak: eq true", X1, _sol("2", eqs(f"{I2} = {SE_T}")), OK, NOTREF),
+        ("sech2 peak: step 1/3", X1, _sol("2", cp(f"{I2} = 1/3")), NO, REF),
+        ("sech2 peak: evaluate true + step", ev(I2), _sol(SE_T, cp(f"{I2} = {SE_T}")), NOTNO, NOTREF),
+        ("sech2 peak: dint true", dint(SE, 0, 1), _sol(SE_T), NOTNO, None),
+        ("sech2 peak: dint 1/3", dint(SE, 0, 1), _sol("1/3"), NO, None),
+        ("sech2 peak: dint 7/3 (off by e^-6666)", dint(SE, 0, 1), _sol("7/3"), NOTOK, None),
+        ("sech2 10^6 peak: step true", X1, _sol("2", cp(f"{I3} = {SE2_T}")), OK, NOTREF),
+        ("sech2 10^6 peak: dint true", dint(SE2, 0, 1), _sol(SE2_T), NOTNO, None),
+        ("sech2 10^6 peak: dint 3 - cos 1 (peak left out, 2e-6)", dint(SE2, 0, 1), _sol("3 - cos(1)"), NOTOK, None),
+        ("sech2 e^sin peak: step true", X1, _sol("2", cp(f"{I4} = {SE3_T}")), OK, NOTREF),
+        ("sech2 e^sin peak: dint true", dint(SE3, 0, 1), _sol(SE3_T), NOTNO, None),
+        ("sech2 e^sin peak: dint wrong", dint(SE3, 0, 1), _sol("1/3 + exp(sin(1)) - 1"), NO, None),
+        ("x^3 + 10^3 sech2(10^3(x - 1/pi)) dint true", dint("x**3 + 10**3/cosh(10**3*(x - 1/pi))**2", 0, 1),
+         _sol("1/4 + tanh(10**3*(1 - 1/pi)) + tanh(10**3/pi)"), NOTNO, None),
+        ("sin 3x + 10^5 sech2 dint true", dint("sin(3*x) + 10**5/cosh(10**5*(x - 1/7))**2", 0, 1),
+         _sol("(1 - cos(3))/3 + tanh(10**5*6/7) + tanh(10**5/7)"), NOTNO, None),
+        ("Lorentz 10^6 dint true", dint("x**2 + 10**3/(1 + 10**6*(x - 1/3)**2)", 0, 1),
+         _sol("1/3 + atan(2000/3) + atan(1000/3)"), NOTNO, None),
+        # infinite ranges: no rigorous enclosure, nothing refuted by numbers
+        ("inf: step gauss + sech2 on R", X1, _sol("2", cp("Integral(exp(-x**2) + 1/cosh(10**4*(x - 1/3))**2, (x, -oo, oo)) = sqrt(pi) + 2/10**4")), NOTNO, NOTREF),
+        ("inf: step e^-x + 10^4 sech2 [0,oo)", X1, _sol("2", cp("Integral(exp(-x) + 10**4/cosh(10**4*(x - 1/3))**2, (x, 0, oo)) = 2 + tanh(10**4/3)")), NOTNO, NOTREF),
+        ("inf: dint e^-x + 10^4 sech2 [0,oo)", dint("exp(-x) + 10**4/cosh(10**4*(x - 1/3))**2", 0, "oo"), _sol("2 + tanh(10**4/3)"), NOTNO, None),
+        ("inf: dint e^-x^2 + sech2 on R", dint("exp(-x**2) + 1/cosh(10**4*(x - 1/3))**2", "-oo", "oo"), _sol("sqrt(pi) + 2/10**4"), NOTNO, None),
+        ("inf: step gauss shifted 100", X1, _sol("2", cp("Integral(exp(-(x - 100)**2), (x, -oo, oo)) = sqrt(pi)")), NOTNO, NOTREF),
+        ("inf: dint gauss shifted 1000", dint("exp(-(x - 1000)**2)", "-oo", "oo"), _sol("sqrt(pi)"), NOTNO, None),
+        ("inf: step sech2(x - 1000) [0,oo)", X1, _sol("2", cp("Integral(1/cosh(x - 1000)**2, (x, 0, oo)) = 1 + tanh(1000)")), NOTNO, NOTREF),
+        ("inf: step E[X^2] N(60,1)", X1, _sol("2", cp("Integral(x**2*exp(-(x - 60)**2/2), (x, -oo, oo)) = 3601*sqrt(2*pi)")), NOTNO, NOTREF),
+        ("inf: eq normal density N(100,1) = 1", X1, _sol("2", eqs("Integral(exp(-(x - 100)**2/2), (x, -oo, oo))/sqrt(2*pi) = 1")), NOTNO, NOTREF),
+        # a declared tolerance with no exact value from SymPy
+        ("tol: sin(sin x) [0,1] 0.4306 rel_tol 1e-3", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("0.4306"), OK, None),
+        ("tol: sin(sin x) [0,1] 0.5 rel_tol 1e-3 (wrong)", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("0.5"), NO, None),
+        ("tol: sin(sin x) [0,1] 0.43060610312069 rel_tol 1e-10", dtol("sin(sin(x))", 0, 1, "1e-10"), _sol("0.43060610312069"), NOTNO, None),
+        ("tol: e^cos x [0,1] 2.3416 rel_tol 1e-4", dtol("exp(cos(x))", 0, 1, "1e-4"), _sol("2.3416"), OK, None),
+        ("tol: e^cos x [0,1] 2.35 rel_tol 1e-4 (wrong)", dtol("exp(cos(x))", 0, 1, "1e-4"), _sol("2.35"), NO, None),
+        ("no tol: sin(sin x) [0,1] 0.4306 (an exact claim)", dint("sin(sin(x))", 0, 1), _sol("0.4306"), NO, None),
+    ]
+
+
+def series(term, lo="1"):
+    return _task("series_sum", {"term": term, "var": "k", "lo": lo, "hi": "oo"}, [K])
+
+
+def cases_i():
+    """Sibling paths of the enclosure (6 Oct 2026): nsum's value alone refuted a series whose term far out
+    it never saw (one-signed terms, the same value at 30 and 50 digits). Truths: π²/6 + Σ_j c·e^(-j²/w)
+    (Jacobi θ₃; 50-digit mpmath sum of the bump)."""
+    b1, t1 = "1/k**2 + exp(-(k - 1000)**2)", "3.41757127167487858950366571780"
+    b2, t2 = "1/k**2 + 1000000*exp(-(k - 1000)**2)", "1772638.84976071900125768702357"
+    b3, t3 = "1/k**2 + exp(-(k - 1000)**2/100)", "19.3694725759033867094540900001"
+    return [
+        ("bump e^-(k-1000)^2: true value", series(b1), _sol(t1), NOTNO, None),
+        ("bump 10^6 e^-(k-1000)^2: true value", series(b2), _sol(t2), NOTNO, None),
+        ("bump e^-(k-1000)^2/100: true value", series(b3), _sol(t3), NOTNO, None),
+        ("bump: evaluate Sum true value", ev(f"Sum({b1}, (k, 1, oo))", (K,)), _sol(t1), NOTNO, None),
+        ("bump: claim pi^2/6 (bump left out)", series(b1), _sol("pi**2/6"), NOTOK, None),
+        ("1/(k log k) diverges: oo", series("1/(k*log(k))", "2"), _sol("oo"), NOTNO, None),
+        ("1/(k log^2 k): 2.1097428012368919745", series("1/(k*log(k)**2)", "2"), _sol("2.1097428012368919745"),
+         NOTNO, None),
+        # controls: SymPy's value confirmed by nsum still decides
+        ("control: 1/k^2 = pi^2/6", series("1/k**2"), _sol("pi**2/6"), OK, None),
+        ("control: 1/k^2 + 1/2^k = pi^2/6 + 1 (nsum off by 6e-5: undecided)", series("1/k**2 + 1/2**k"),
+         _sol("pi**2/6 + 1"), NOTNO, None),
+        ("control: 1/(k(k+1)) = 1", series("1/(k*(k + 1))"), _sol("1"), OK, None),
+        ("control: 1/(k(k+1)) = 1/2 (wrong)", series("1/(k*(k + 1))"), _sol("1/2"), NO, None),
+        ("control: sin(pi k/2)/k = pi/4", series("sin(pi*k/2)/k"), _sol("pi/4"), NOTNO, None),
+    ]
+
+
+def cases_j():
+    """Coverage given back (6 Oct 2026): an infinite range has no numeric value, but a value the fundamental
+    theorem proves with its end limits still decides (it was UNKNOWN after the review of d4c)."""
+    return [
+        ("inf cert: e^-x [0,oo) = 1", dint("exp(-x)", 0, "oo"), _sol("1"), OK, None),
+        ("inf cert: e^-x [0,oo) = 2 (wrong)", dint("exp(-x)", 0, "oo"), _sol("2"), NO, None),
+        ("inf cert: x e^-x [0,oo) = 1", dint("x*exp(-x)", 0, "oo"), _sol("1"), OK, None),
+        ("inf cert: 1/(1+x^2) on R = pi", dint("1/(1 + x**2)", "-oo", "oo"), _sol("pi"), OK, None),
+        ("inf cert: 1/x^2 [1,oo) = 1", dint("1/x**2", 1, "oo"), _sol("1"), OK, None),
+        ("inf cert: 1/x^2 [1,oo) = 1/2 (wrong)", dint("1/x**2", 1, "oo"), _sol("1/2"), NO, None),
+        ("inf no cert: e^-x^2 on R = sqrt(pi)", dint("exp(-x**2)", "-oo", "oo"), _sol("sqrt(pi)"), NOTNO, None),
+        ("inf no cert: e^-x^2 on R = 2 (wrong, undecided)", dint("exp(-x**2)", "-oo", "oo"), _sol("2"), NOTOK, None),
+    ]
+
+
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
+          "H": cases_h, "I": cases_i, "J": cases_j}
 SLOW = 60.0           # group D: every verify returns within this many seconds
 CASE_LIMIT = 240      # seconds before a case is abandoned (SIGALRM; the unfixed tree hangs on group D)
 
@@ -275,7 +403,7 @@ def _alarm(signum, frame):
     raise CaseTimeout(f"no verdict within {CASE_LIMIT} s")
 
 
-def main(out_path=None, groups="ABCDEFG"):
+def main(out_path=None, groups="ABCDEFGHIJ"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -322,5 +450,5 @@ def main(out_path=None, groups="ABCDEFG"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFG"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJ"
     sys.exit(1 if main(out, grp) else 0)

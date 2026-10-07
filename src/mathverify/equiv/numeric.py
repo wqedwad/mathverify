@@ -88,18 +88,17 @@ def exact_zero_test(d) -> bool | None:
 
 
 def _unit(theta):
-    """e^(iθ) for θ = atan/asin/acos of a real algebraic number (an algebraic number), or None."""
+    """e^(iθ) for θ = π or atan/asin/acos of a real number (algebraic in that number), or None."""
     if theta is sp.pi:
         return sp.Integer(-1)
     if not isinstance(theta, (sp.atan, sp.asin, sp.acos)) or len(theta.args) != 1:
         return None
     a = theta.args[0]
-    if not (a.is_number and a.is_real is True and a.is_algebraic is True):
+    if not (a.is_number and a.is_real is True):
         return None
     if isinstance(theta, sp.atan):
         return (1 + sp.I * a) / sp.sqrt(1 + a**2)
-    if (a**2 - 1).is_nonpositive is not True:      # asin/acos of a number outside [-1, 1]
-        return None
+    # asin/acos of a number outside [-1, 1] is complex: its 40-digit value below is no real number
     c = sp.sqrt(1 - a**2)
     return c + sp.I * a if isinstance(theta, sp.asin) else a + sp.I * c
 
@@ -128,8 +127,11 @@ def _angle_sum_is_zero(d) -> bool:
         if max(abs(k) for k in powers) > 24:
             return False
         z = sp.Mul(*[u**k for u, k in zip(units, powers)])
-        t = sp.Dummy("t")
-        if sp.expand(sp.minimal_polynomial(z, t) - (t - 1)) != 0:
+        if all(u.is_algebraic for u in units):
+            t = sp.Dummy("t")
+            if sp.expand(sp.minimal_polynomial(z, t) - (t - 1)) != 0:
+                return False
+        elif not _one_in_an_exponential(z):
             return False
         with mp.workdps(40):
             total = sum(mp.mpf(str(sp.N(term, 45))) for term in terms)
@@ -138,23 +140,48 @@ def _angle_sum_is_zero(d) -> bool:
         return False
 
 
+def _in_one_exponential(e):
+    """`e` with every e^r (r rational, hyperbolic functions written with exp) replaced by g^k, g = e^(r0)
+    a positive symbol (r0 the gcd of the r's), or None."""
+    e = e.rewrite(sp.exp)
+    args = {a.args[0] for a in e.atoms(sp.exp)}
+    if not all(isinstance(r, sp.Rational) for r in args) or len(args) > 8:
+        return None
+    if not args:
+        return e
+    r0 = sp.Rational(sp.igcd(*[r.p for r in args]), sp.ilcm(*[r.q for r in args]))
+    if any(abs(r / r0) > 64 for r in args):
+        return None
+    g = sp.Dummy("g", positive=True)
+    return e.xreplace({sp.exp(r): g ** int(r / r0) for r in args})
+
+
+def _one_in_an_exponential(z) -> bool:
+    """Is the number z, algebraic in e^(r0) (`_in_one_exponential`), exactly 1? The identity in the
+    positive symbol holds at its value: atan(e^c) + atan(e^-c) = π/2, asin(tanh c) = atan(sinh c)."""
+    w = _in_one_exponential(z)
+    if w is None or w.free_symbols == set() and not w.is_algebraic:
+        return False
+    def roots(e):
+        # sqrt((g² + 1)²) is g² + 1 for g > 0, which SymPy sees only with the radicand factored
+        return e.replace(lambda n: isinstance(n, sp.Pow) and n.exp in (sp.S.Half, -sp.S.Half),
+                         lambda n: sp.factor(sp.together(n.base)) ** n.exp)
+
+    w = roots(sp.simplify(roots(sp.together(w))))
+    return sp.simplify(w - 1) == 0
+
+
 def _exp_generator_is_zero(d) -> bool:
     """Is d exactly 0 as a rational function of one exponential? Every e^r (r rational, after writing
     the hyperbolic functions with exp) is g^k for g = e^(r0), r0 the gcd of the r's: tanh(c) and
     (e^(2c) - 1)/(e^(2c) + 1) at c = 123/1000 are then the same rational function of g. An identity of
     rational functions holds wherever both sides are defined."""
     try:
-        e = d.rewrite(sp.exp)
-        if e == 0:
+        if d.rewrite(sp.exp) == 0:
             return True
-        args = {a.args[0] for a in e.atoms(sp.exp)}
-        if not args or not all(isinstance(r, sp.Rational) for r in args) or len(args) > 8:
+        e = _in_one_exponential(d)
+        if e is None or not e.free_symbols:
             return False
-        r0 = sp.Rational(sp.igcd(*[r.p for r in args]), sp.ilcm(*[r.q for r in args]))
-        if any(abs(r / r0) > 64 for r in args):
-            return False
-        g = sp.Dummy("g", positive=True)
-        e = e.xreplace({sp.exp(r): g ** int(r / r0) for r in args})
         return sp.cancel(sp.together(e)) == 0
     except Exception:  # noqa: BLE001
         return False

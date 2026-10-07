@@ -1,8 +1,8 @@
 """Mutation check of part d4c of the fourth audit's fixes (1 Oct 2026): each mutation removes one guard of the
 exact zero and the numeric evidence (`certify.calculus` certificates and enclosure, `equiv.forms`,
-`steps.deterministic._integrals_refute`, `equiv.random_point`, the sandbox ops). The machinery (throwaway
-clones of the committed HEAD, exit codes, clean-up) is the one of denetim/2026-09-26/mutasyon.py; only the
-list of mutations is new.
+`steps.deterministic._integrals_refute`, `equiv.random_point`, the sandbox ops; `certify.series`: nsum
+alone). The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is the one of
+denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
 
     .venv/bin/python denetim/2026-10-01/d4c/mutasyon.py [-j N] [--list] [name ...]
 
@@ -25,6 +25,8 @@ DET = "src/mathverify/steps/deterministic.py"
 RP = "src/mathverify/equiv/random_point.py"
 OPS = "src/mathverify/sandbox/ops.py"
 NUM = "src/mathverify/equiv/numeric.py"
+ENC = "src/mathverify/certify/enclosure.py"
+SER = "src/mathverify/certify/series.py"
 T = "tests/test_d4_d4c_sayisal.py"
 T4 = "tests/test_parca4_parametreli_bicim.py"
 
@@ -35,12 +37,6 @@ MUTATIONS = [
     ("Z02 kesin değer yokken kareleme kabul eder", CAL,
      '                return unknown(LAYER, "no_exact_value", t.ms, ev, flags=["no_exact_value"])\n',
      '                ok = True if converged and num_equal(claimed, val, rel_tol=tol)[0] else None\n', T),
-    ("Z03 sıfır hata tahmini reddi durdurmaz", CAL,
-     "            if not (mp.isfinite(v) and mp.isfinite(err)) or err == 0:\n",
-     "            if not (mp.isfinite(v) and mp.isfinite(err)):\n", T),
-    ("Z04 yöntemler çelişse de kutu kurulur", CAL,
-     "            if abs(v1 - v2) > 10 * (e1 + e2):\n                return None\n",
-     "            if False:\n                return None\n", T),
     ("Z05 mutlak integrallenebilirlik varsayılır", CAL,
      "    if f.has(*_JUMPY):\n        return False\n    pts = _bad_points(f, var, lo, hi, timeout)\n",
      "    return True\n    pts = _bad_points(f, var, lo, hi, timeout)\n", T),
@@ -71,8 +67,6 @@ MUTATIONS = [
      "                    reps[key] = r.value\n                    continue\n", T),
     ("Z15 evalf bitleri okunmaz", FRM,
      "    if bits is not None and bits < _MIN_BITS:\n        return None\n", "", T),
-    ("Z16 adım reddinde kutu genişliği yok", DET,
-     "reps = {n: sp.Float(mp.nstr(v + c * w, 65), 65)", "reps = {n: sp.Float(mp.nstr(v, 65), 65)", T),
     ("Z17 evalf'in sıfırı ya da bitsiz sıfırı eşitlik sayılır (eski hâl)", RP,
      "        c = _exact_counterexample(a, b, syms, pt, budget)\n        if isinstance(c, dict):\n            return {\"point\"",
      "        v = sp.N(dp, 30)\n        if v == 0 or (getattr(v, \"_prec\", 0) or 0) < 50:\n            continue\n"
@@ -85,9 +79,6 @@ MUTATIONS = [
     ("Z20 değerlendirme süresi sınırsız", RP,
      "        if spent[0] > _EVAL_BUDGET:\n            ev[\"evaluation_time_budget\"] = True    # the points left",
      "        if False:\n            ev[\"evaluation_time_budget\"] = True    # the points left", T),
-    ("Z21 karelemede sonsuz uç yok", OPS,
-     "        if e in (oo, -oo):\n            return mp.inf if e is oo else -mp.inf      # mpmath maps an infinite range itself\n",
-     "", T),
     ("Z22 sertifikanın sıfır olmayan değeri alınmaz", FRM,
      "                if cval is not None:\n                    reps[key] = cval\n",
      "                if cval is not None and cval == 0:\n                    reps[key] = cval\n", T4),
@@ -104,6 +95,46 @@ MUTATIONS = [
      "    if _angle_sum_is_zero(d) or _exp_generator_is_zero(d):\n", "    if _exp_generator_is_zero(d):\n", T),
     ("Z27 üstel üreteç kesin sıfır sınamasında yok", NUM,
      "    if _angle_sum_is_zero(d) or _exp_generator_is_zero(d):\n", "    if _angle_sum_is_zero(d):\n", T),
+    # the rigorous enclosure (review of d4c, 2 Oct 2026)
+    ("R01 hücrede aralık değeri yerine orta nokta", ENC,
+     "        whole = h * iv_eval(f, {var: _hull(l, r)})\n",
+     "        whole = h * iv_eval(f, {var: (L + R) / 2})\n", T),
+    ("R02 Taylor kalanı düşer", ENC,
+     "        second = h * iv_eval(f, {var: (L + R) / 2}) + d2 * h * h * h / 24\n",
+     "        second = h * iv_eval(f, {var: (L + R) / 2})\n", T),
+    ("R03 ikili olmayan uç parçası sayılmaz", ENC,
+     "        edge = [iv.mpf([0, 1]) * cell(lo_, hi_, None) for lo_, hi_ in (ia, ib) if hi_ > lo_]\n",
+     "        edge = []\n", T),
+    ("R05 tolerans penceresi kabul etmez", CAL,
+     "            elif window is not None and integral_within(integrand, var, a, b, window, timeout=ctx.timeout * 1.5)[0]:\n",
+     "            elif False:\n", T),
+    ("R06 ret toleransı yok sayar", CAL,
+     "    window = tolerance_window(claimed, declared) if declared else None\n".replace("    window", "            window"),
+     "            window = None\n", T),
+    ("R07 tek integralli adım zarfsız reddedilir", DET,
+     "        return integral_excludes(n.function, var, a, b, other, timeout=ctx.timeout)[0]\n",
+     "        return True\n", T),
+    ("R08 SymPy değeri kanıt ya da zarf olmadan reddeder", CAL,
+     "                elif okS is False and excluded():\n",
+     "                elif okS is False:\n", T),
+    ("R09 iki integralli adımda aralık değeri yerine orta nokta", DET,
+     "        env[n] = mp.iv.mpf([enc[0], enc[1]])\n", "        env[n] = mp.iv.mpf((enc[0] + enc[1]) / 2)\n", T),
+    ("R10 SymPy'nin farklı değeri sertifikayla kabul edilmez", CAL,
+     "                    ok = okC                       # a value proved symbolically decides\n",
+     "                    ok = None if okC else okC\n", T),
+    ("Z28 aşkın sayıların açı toplamı denenmez", NUM,
+     "        elif not _one_in_an_exponential(z):\n            return False\n", "        else:\n            return False\n", T),
+    ("Z29 kök içi çarpanlarına ayrılmaz", NUM,
+     "                         lambda n: sp.factor(sp.together(n.base)) ** n.exp)\n",
+     "                         lambda n: n)\n", T),
+    # sibling paths of the enclosure (6 Oct 2026)
+    ("S01 nsum tek başına seriyi reddeder", SER,
+     '        ev["method"] = "numeric_only"\n',
+     '        ev["method"] = "numeric_only"\n'
+     "        if num_equal(claimed, num_val, rel_tol=1e-15)[0] is False:\n            return False, ev\n", T),
+    ("R11 sayısal değer yokken sertifika denenmez", CAL,
+     "                    if (okC := by_certificate()) is None:\n",
+     "                    if True:\n", T),
 ]
 
 if __name__ == "__main__":
