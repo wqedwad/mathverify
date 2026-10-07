@@ -1048,9 +1048,9 @@ def _on_window(rel, var, lo, hi):
     if op is sp.Equality and not ident:
         return cut(sp.FiniteSet(*zeros)), zeros, poles
     cuts = _on([(c, S.Zero) for c in _breaks(e, var)], lo, hi)
-    ends = [q for q in (lo, hi) if q.is_finite]
-    edges = _sorted_unique(ends + zeros + poles + cuts)
-    edges = ([lo] if not lo.is_finite else []) + edges + ([hi] if not hi.is_finite else [])
+    # a window end PROVED equal to a zero, pole or cut takes its writing: sqrt(x - 3) - 1 at the end
+    # log(8)/log(2) of x > log(8)/log(2) had no certified sign (round 8, RK-3)
+    edges = _edges_on(lo, hi, zeros + poles + cuts)
     pieces: list = []
     for a, b in zip(edges[:-1], edges[1:]):
         mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)

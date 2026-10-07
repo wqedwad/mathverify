@@ -99,7 +99,7 @@ class Ctx:
                         if r.free_symbols == {var} and at_risk(r, var):
                             deferred.append(r)
                         elif r.free_symbols == {var}:
-                            dom = sp.Intersection(dom, sp.solveset(r, var, S.Reals))
+                            dom = exact_intersection(dom, sp.solveset(r, var, S.Reals))
                         elif var in r.free_symbols:
                             unapplied.append(c)
                     except Exception:
@@ -116,7 +116,7 @@ class Ctx:
                 deferred.append(sol.condition)
                 side.append(sol.condition)
             else:
-                dom = sp.Intersection(dom, sol)
+                dom = exact_intersection(dom, sol)
         unapplied += self.cache.get(f"side_unbound:{var.name}", [])
         # the problem's own expressions must be defined, as written (see written_conditions)
         conds, nowhere = self.written_conditions()
@@ -156,7 +156,7 @@ class Ctx:
                 # all of x >= 0 (round 8 of part d4b, YO-1)
                 deferred.append(c)
                 continue
-            dom = sp.Intersection(dom, sol)
+            dom = exact_intersection(dom, sol)           # one writing per endpoint (round 8)
         # the trigonometric conditions before the convention regions: a convention point is one of the
         # domain, and sin(x) > 0 cuts the negative bases of x**(1/3) too
         dom, unsolved = self._periodic_conditions(dom, deferred, var)

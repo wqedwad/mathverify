@@ -1218,6 +1218,7 @@ def _trig_w(eqn, interval):
     (_ineq("Abs(x - 3) < 1", ["x > log(8)/log(2)"]), "Interval.open(log(8)/log(2), 4)", "interval", "CORRECT"),
     (_ineq("Abs(x - 3) <= 1", ["x >= log(8)/log(2)"]), "Interval(log(8)/log(2), 4)", "interval", "CORRECT"),
     (_ineq("Abs(x - 3) > 1", ["x > log(8)/log(2)"]), "Interval.open(4, oo)", "interval", "CORRECT"),
+    (_ineq("sqrt(x - 3) < 1", ["x > log(8)/log(2)"]), "Interval.open(3, 4)", "interval", "CORRECT"),
     # RK-4
     (_ineq("Abs(x - 1 - sqrt(2)) < 1", [f"x > {_R2}"]), "Interval.open(1 + sqrt(2), 2 + sqrt(2))", "interval", _NOTNO),
     (_ineq("x**2 < 16", [f"x > {_R2}"]), "Interval.open(1 + sqrt(2), 4)", "interval", _NOTNO),
@@ -1226,3 +1227,13 @@ def _trig_w(eqn, interval):
 def test_round8_verdicts(ir, claim, kind, want):
     v = _run(ir, claim, kind).verdict
     assert v == want if isinstance(want, str) else v in want
+
+
+@pytest.mark.parametrize("eq,claim", [("(x - 2)*atan2(x - 1, 0) = 0", "{2}"), ("atan2(x - 1, 0) = 0", "{}"),
+                                      ("(x - 2)*arg(x - 1) = 0", "{2}")])
+def test_round8_atan2_and_arg_at_the_origin_are_a_convention(eq, claim):
+    """atan2(0, 0) and arg(0): undefined, or 0 by some conventions (certify.domain ORIGIN): the point is a
+    candidate neither kept nor dropped, and no set is certified."""
+    r = _run(_eq(eq), claim)
+    alg = next(la for la in r.layers if la.layer == "certify.algebra")
+    assert r.verdict == "UNKNOWN" and alg.evidence.get("reason") == "convention_region_candidates"
