@@ -150,7 +150,8 @@ def cases_c():
         ("definite_integral sin^3 x/x claim pi/4 + true step", dint("sin(x)**3/x", 0, "oo"),
          _sol("pi/4", cp("Integral(sin(x)**3/x, (x, 0, oo)) = pi/4")), NOTNO, NOTREF),
         ("definite_integral Dirichlet claim pi/2", dint("sin(x)/x", 0, "oo"), _sol("pi/2"), NOTNO, None),
-        ("step 'Dirichlet = 0' (wrong) not verified", X1, _sol("2", cp("Integral(sin(x)/x, (x, 0, oo)) = 0")), NOTNO, NOTVER),
+        # round 3: the Si primitive proves π/2, and the wrong step is refuted (the solution with it INCORRECT)
+        ("step 'Dirichlet = 0' (wrong) not verified", X1, _sol("2", cp("Integral(sin(x)/x, (x, 0, oo)) = 0")), NOTOK, NOTVER),
         ("evaluate Dirichlet claim 0 (wrong)", dirichlet, _sol("0"), NOTOK, None),
     ]
     return out

@@ -126,6 +126,13 @@ def test_a_proof_that_a_converged_quadrature_contradicts_decides_nothing(monkeyp
     assert _run(_dtol("cos(x)", 0, 1, "1e-3"), "1.8414").verdict == "UNKNOWN"
 
 
+def test_a_proof_stands_against_a_quadrature_the_enclosure_shows_wrong():
+    """The erf primitive proves ∫_0^1 (x² + e^(-10^8 (x - 1/3)²)) dx = 1/3 + √π(erf(20000/3) + erf(10000/3))/20000;
+    tanh-sinh missed the peak and gave 1/3. The rigorous enclosure excludes 1/3, so the proof stands and the
+    claim 1/3 is refuted (it was UNKNOWN: "symbolic-numeric disagreement")."""
+    assert _run(_dint("x**2 + exp(-10**8*(x - 1/3)**2)", 0, 1), "1/3").verdict == "INCORRECT"
+
+
 def test_a_closed_integral_takes_no_value_without_a_certificate(monkeypatch):
     """With the certificate taken away, SymPy's value of a closed integral (here even the right 1/3) is no
     value: evaluate, a step and checked_forms decide nothing."""

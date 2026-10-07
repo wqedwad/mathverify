@@ -1658,9 +1658,12 @@ def verify(ir, solution, ctx: Ctx):
             ev["certificate"] = cev
             if cval is not None:
                 if converged and certified_sign(cval, timeout=ctx.timeout) != 0 and \
-                        num_equal(cval, val, rel_tol=float(ev.get("rel_err", "1e-25")))[0] is False:
-                    # a proof that a converged numeric value contradicts: something is wrong (never the
-                    # declared tolerance here: it let SymPy's wrong value "agree", YO-2)
+                        num_equal(cval, val, rel_tol=float(ev.get("rel_err", "1e-25")))[0] is False and \
+                        not integral_excludes(integrand, var, a, b, val, timeout=ctx.timeout * 1.5)[0]:
+                    # a proof that a converged numeric value contradicts, and no rigorous enclosure that shows the
+                    # numeric value wrong: something is wrong (never the declared tolerance here: it let SymPy's
+                    # wrong value "agree", YO-2). A quadrature that missed a narrow peak (1/3 for ∫_0^1 (x² +
+                    # e^(-10^8 (x - 1/3)²)) dx, which the erf primitive proves) is shown wrong and the proof stands
                     return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
                                    flags=["symbolic_numeric_disagreement"])
                 ev["decided_by"] = "certified_value"
