@@ -101,7 +101,7 @@ def exact_solveset(rel, var, domain=S.Reals):
     if isinstance(rel, (sp.And, sp.Or)):
         parts = [exact_solveset(a, var, domain) for a in rel.args]
         if any(isinstance(q, sp.ConditionSet) or q.has(sp.ConditionSet) for q in parts):
-            return sp.ConditionSet(var, rel, domain)
+            return _unsolved_set(var, rel, domain)
         return sp.Intersection(*parts) if isinstance(rel, sp.And) else sp.Union(*parts)
     if isinstance(rel, sp.Expr):
         rel = sp.Eq(rel, 0)
@@ -111,7 +111,16 @@ def exact_solveset(rel, var, domain=S.Reals):
             exact = _rebuilt(rel, var, domain)
         except Exception:  # noqa: BLE001 - not exact (a class it is not, too many points, ...): unsolved
             exact = None
-    return exact if exact is not None else sp.ConditionSet(var, rel, domain)
+    return exact if exact is not None else _unsolved_set(var, rel, domain)
+
+
+def _unsolved_set(var, rel, domain) -> sp.Set:
+    """ConditionSet(var, rel, domain), never evaluated: on a finite domain SymPy decides each point by its
+    own substitution, which reads x**(1/3) at -1 on the principal branch and folds 0*acos(3/2) to 0, and
+    returned {-1, 0} for (x + |x|)*x**(1/3) = 0 on {-1, 0, 1} and {0, 1, 2, 3} for (|x| - x)*acos(x/2) >= 0
+    on {0, 1, 2, 3} as if solved (round 8 of part d4b)."""
+    with sp.evaluate(False):
+        return sp.ConditionSet(var, rel, domain)
 
 
 def class_solveset(rel, var, domain=S.Reals):
