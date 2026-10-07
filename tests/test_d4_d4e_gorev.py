@@ -150,6 +150,9 @@ def test_limit_condition_naming_a_free_parameter():
     assert _v(q, "1") == "CORRECT"
     # a trigonometric condition left unsolved: the side is not decided (never two-sided)
     assert _dne(_lim("Abs(x)/x", "0", [], [xc("sin(x) > 0")])) != "CORRECT"
+    # floor(1/x) > 0 is x in (0, 1]: a region no exact cut decides near 0 is approached from no side (two-sided,
+    # DNE would be certified)
+    assert _dne(_lim("Abs(x)/x", "0", [], [xc("floor(1/x) > 0")])) != "CORRECT"
 
 
 def test_limit_of_a_sequence_reads_its_region():
@@ -351,6 +354,8 @@ def test_periodic_written_domain():
     assert _v(_der(AS), "-cos(x)", "expression") == "INCORRECT"
     assert _v(_der(AS, "0"), "1") == "UNKNOWN"
     assert _v(_der(AS, "pi/2"), "0") == "CORRECT"
+    # compared off sin(x) = 0, where the claim has no value and SymPy's derivative 0
+    assert _v(_der("sqrt(sin(x))**3"), "3*cos(x)*sin(x)/(2*sqrt(sin(x)))", "expression") != "INCORRECT"
 
 
 def test_trigonometric_derivatives_stay_decided():
@@ -361,6 +366,9 @@ def test_trigonometric_derivatives_stay_decided():
     assert _v(_der("tan(x)"), "1/cos(x)**2", "expression") == "CORRECT"
     assert _v(_der("tan(x)"), "1/sin(x)**2", "expression") == "INCORRECT"
     assert _v(_anti("1/cos(x)**2"), "tan(x)", "expression") == "CORRECT"
+    # a condition that is tight at the point but holds all around it: solved on the window, not strict there
+    assert _v(_der("x + 0*sqrt(1 - cos(x))", "0"), "1") == "CORRECT"
+    assert _v(_der("x + 0*sqrt(cos(x)**2)", "pi/2"), "1") == "CORRECT"
 
 
 # --- TAN-07: an infinite bound ----------------------------------------------------------------------------------
@@ -461,6 +469,9 @@ def test_series_and_closed_form_read_the_pinned_value():
     assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c = 2"]), "2**(n - 1)", "expression") == "CORRECT"
     assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c = 2"]), "c**(n - 1)", "expression") == "CORRECT"
     assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c = 2"]), "3**(n - 1)", "expression") == "INCORRECT"
+    # the claim itself is read at the pinned value: 0**0 and 0/0 with a = 0
+    assert _v(_ss("k", 1, 3, ["a = 0"]), "6*a**a") == "UNKNOWN"
+    assert _v(_ss("k", 1, 3, ["a = 0"]), "6 + 0/a") == "UNKNOWN"
 
 
 def test_integral_with_numbers_for_bounds_must_converge():
@@ -509,8 +520,10 @@ def test_negative_base_with_a_variable_exponent_is_a_convention():
     assert _v(_lim("x + 0*(-1)**x", "1/2"), "1/2") == "UNKNOWN"
     assert _v(_lim("(-1)**x", "0"), "1") == "UNKNOWN"
     assert _dne(_lim("(-1)**x", "0")) == "UNKNOWN"
+    assert _v(_simp("x + (-1)**x - (-1)**x"), "x", "expression") == "UNKNOWN"
     # an integer exponent has the curriculum's value
     assert _v(_ss("(-1)**(k + 1)/k**2", 1, 3, [], [K]), "31/36") == "CORRECT"
+    assert _v(_ss("(-1)**(k + 1)/k**2", 1, "oo", [], [K]), "pi**2/12") == "CORRECT"
     q = _ir("evaluate", {"expr": "(-1)**n"}, ["n = 3"], [{"name": "n", "domain": "integer"}])
     assert _v(q, "-1") == "CORRECT"
 

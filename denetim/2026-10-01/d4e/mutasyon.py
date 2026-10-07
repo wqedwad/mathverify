@@ -209,7 +209,7 @@ MUTATIONS = [
     ("D01 _undefined_function açık koşul boşluğunu okumaz", BASE, "                or open_conditions_empty(conds, timeout=self.timeout)",
      "                or False", T + "test_function_defined_nowhere_or_without_interior"),
     ("D02 limit açık koşul boşluğunu okumaz", LIM, " or open_conditions_empty(conds)\n", "\n",
-     T + "test_limit_of_a_function_defined_nowhere"),
+     T + "test_periodic_written_domain"),
     ("D03 boşluk ℝ'de denenmez", DOM, "    if rel is sp.false or exact_solveset(rel, s_, S.Reals) is S.EmptySet:",
      "    if rel is sp.false:", T + "test_function_defined_nowhere_or_without_interior"),
     ("D04 periyodik koşullar tek periyotta okunmaz", DOM, "    if not periodic:\n        return False\n",
