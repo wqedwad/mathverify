@@ -1090,12 +1090,13 @@ def smooth_at(f, var, p, switches, fconds, root_of=None) -> bool:
 
 
 def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
-    """f = h + g*S near p for the one switch S = |u|, sign(u) or Heaviside(u) at p (f read with `abs_form`), g, h
-    and u analytic at p (`smooth_at`) and u'(p) != 0 (a simple zero; p is a zero of u by its solution): |u| makes a
-    corner (one-sided derivatives h'(p) ± g(p)*|u'(p)|) unless g(p) = 0, where f has the derivative h'(p);
-    sign(u) and Heaviside(u) a jump unless g(p) = 0 (undecided then). Exact, no limit taken: |log x| at 1 was
+    """f = h + g*S**r near p for the one switch S = |u|, sign(u) or Heaviside(u) at p (f read with `abs_form`), r a
+    positive rational (1 for sign and Heaviside), g, h and u analytic at p (`smooth_at`; p is a zero of u by its
+    solution). |u|**r with r > 1, and g*|u| with g(p) = 0, add nothing to h'(p): f has a derivative. With g(p) != 0
+    and u'(p) != 0 (a simple zero) |u| makes a corner (one-sided derivatives h'(p) ± g(p)*|u'(p)|), |u|**r with
+    r < 1 an infinite slope, sign(u) and Heaviside(u) a jump: none. Exact, no limit taken: |log x| at 1 was
     undecided by SymPy's one-sided limits (round 3, RK-1), and 7 radical kinks took 186 s (RK-5). None when the
-    rule does not apply."""
+    rule does not apply or decides nothing."""
     others = [v for v in switches if v != u]
     if any(_nonzero_at(v, var, p, root_of=u) is not True for v in others):
         return None
@@ -1105,22 +1106,22 @@ def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
     A = atoms[0]
     D = sp.Dummy("switch")
     F = fa.xreplace({A: D})
-    if F.has(A):
+    h, rest = F.as_independent(D, as_Add=True)
+    g, r = rest.as_coeff_exponent(D)
+    if rest == 0 or g.has(D) or not (r.is_Rational and r.is_positive):
         return None
-    g = sp.diff(F, D)
-    if g.has(D):
+    if not isinstance(A, sp.Abs) and r != 1:
         return None
-    h = F.subs(D, 0)
     if not all(smooth_at(e, var, p, others, fconds, root_of=u) for e in (g, h, u)):
         return None
-    if _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
-        return None
-    gp = _nonzero_at(g, var, p, root_of=u)
-    if gp is True:
-        return "corner"
-    if gp is False and isinstance(A, sp.Abs):
+    if isinstance(A, sp.Abs) and r > 1:
         return "value"
-    return None
+    gp = _nonzero_at(g, var, p, root_of=u)
+    if gp is False:
+        return "value" if isinstance(A, sp.Abs) and r == 1 else None
+    if gp is not True or _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
+        return None
+    return "corner"
 
 
 def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout) -> str | None:
@@ -1404,6 +1405,8 @@ def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose
             continue
         if isinstance(c, Ne):
             w = c.lhs - c.rhs
+            if _implied(c, opens, var):
+                continue                 # f's own condition, in another writing (cos(x**2)**2 != 0)
             for z in _zero_factors(w):
                 rr = sb_run("mathverify.sandbox.ops:solveset_in", Eq(z, 0), var, S.Reals, timeout=ctx.timeout)
                 K = rr.value if rr.ok and isinstance(rr.value, sp.Set) and not rr.value.has(sp.ConditionSet) else None
@@ -1525,13 +1528,18 @@ def _implied(c, opens, var) -> bool:
         return any((r := free_ratio(w, v)) is not None and r.is_positive is True for v in pos) or \
             any((r := free_ratio(w, v1 * v2)) is not None and r.is_positive is True
                 for v1, v2 in itertools.combinations(pos, 2))
-    for k in (1, 2):
-        if any((r := free_ratio(w ** k, v)) is not None and r.is_zero is False for v in nonzero):
-            return True
-        if any((r := free_ratio(w ** k, v1 * v2)) is not None and r.is_zero is False
-               for v1, v2 in itertools.combinations(nonzero, 2)):
-            return True
-    return False
+    # w != 0: each factor whose zeros are w's (`_zero_factors`: cos(x**2)**2 is cos(x**2), sqrt(a**2 - x**2) is
+    # a**2 - x**2) is nonzero by the parameters' signs or a nonzero multiple of f's v (or of a product of two)
+    for z in _zero_factors(w):
+        if var not in z.free_symbols:
+            if z.is_zero is not False:
+                return False
+            continue
+        if not any(any((r := free_ratio(z ** k, v)) is not None and r.is_zero is False for v in nonzero)
+                   or any((r := free_ratio(z ** k, v1 * v2)) is not None and r.is_zero is False
+                          for v1, v2 in itertools.combinations(nonzero, 2)) for k in (1, 2)):
+            return False
+    return True
 
 
 def _smooth_witness(kr, var, claimed, truth, dom, loose, fconds, cev) -> Any:
