@@ -818,6 +818,13 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         layers.append(unknown("intake.domain", f"constraint_unreadable: {unreadable[:3]}",
                               flags=["constraint_unreadable"]))
         return layers, clean_flags
+    # ... or reads but could not be applied to the domain (an intersection whose endpoints are not ordered): it
+    # was dropped, and {-2, 2} was certified for x**2 = 4 under x >= 3 (round 9 of part d4b, YO-1)
+    not_applied = ctx.constraints_not_applied()
+    if not_applied:
+        layers.append(unknown("intake.domain", f"constraint_not_applied: {not_applied[:3]}",
+                              flags=["constraint_not_applied"]))
+        return layers, clean_flags
 
     # The problem's own expression is undefined as written at a point with nothing left to choose
     # (`f(-1)` for f(x) = log(x) − log(x) + x). SymPy simplified it to a value, and that value was

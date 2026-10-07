@@ -304,17 +304,9 @@ def certified_sign(e, timeout: float = 5.0):
         return None
     if isinstance(e, sp.Rational):
         return int(sp.sign(e))
-    parts = _evalf_strict(e)
-    if parts is not None:
-        re_, im_, s_re, s_im = parts
-        if s_im == "value":
-            return NONREAL
-        if s_im == "unknown" and not _imaginary_part_is_zero(e, timeout):
-            return None
-        if s_re == "value":
-            return 1 if re_ > 0 else -1
-        if s_re == "zero" and s_im == "zero" and e.is_zero is True:
-            return 0
+    s = _evalf_sign(e, timeout)
+    if s is not _NOT_READ:
+        return s
     if _in_sandbox_worker():
         # already inside the worker (e.g. the z3 translation): its caller holds the timeout, and
         # a daemonic worker cannot start a worker of its own
@@ -327,6 +319,37 @@ def certified_sign(e, timeout: float = 5.0):
     if r.ok and r.value is True:
         return 0
     return None
+
+
+_NOT_READ = object()       # strict evalf decided nothing: the exact zero test is left
+
+
+def _evalf_sign(e, timeout: float):
+    """The sign strict evalf certifies for `e`, read off `e` AND off `-e` when `e` is a sum: SymPy evaluates
+    the two writings of one sum differently, and 3 - log(8)/log(2) - exp(-exp(10)) had no certified sign while
+    its negation had 1, so exact_equal(3, b) was undecided and exact_equal(b, 3) False; an intersection then
+    raised in one order only, and the domain dropped the constraint x >= 3 (round 9 of part d4b, YO-1). Two
+    readings that disagree decide nothing (None). NONREAL for a part certainly not real; `_NOT_READ` when
+    neither reading decides (the caller's exact zero test is left)."""
+    reads = [p for p in (_evalf_strict(e),) if p is not None]
+    if isinstance(e, sp.Add):
+        q = _evalf_strict(-e)
+        if q is not None:
+            reads.append((-q[0], -q[1], q[2], q[3]))
+    if not reads:
+        return _NOT_READ
+    ims = {p[3] for p in reads}
+    if "value" in ims:
+        return None if "zero" in ims else NONREAL
+    if "zero" not in ims and not _imaginary_part_is_zero(e, timeout):
+        return None
+    signs = {1 if p[0] > 0 else -1 for p in reads if p[2] == "value"}
+    if signs:
+        # an exact zero against a sign, or two signs: no reading is certified
+        return signs.pop() if len(signs) == 1 and not any(p[2] == "zero" for p in reads) else None
+    if any(p[2] == "zero" and p[3] == "zero" for p in reads) and e.is_zero is True:
+        return 0
+    return _NOT_READ
 
 
 def _in_sandbox_worker() -> bool:
