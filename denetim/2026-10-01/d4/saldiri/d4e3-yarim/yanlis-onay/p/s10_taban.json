@@ -1,0 +1,468 @@
+[
+ {
+  "label": "GW solve x**2 = 1/4, given 0*Integral(1/t, (t, x, 1)) >= 0: {-1/2, 1/2} [x > 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.46
+ },
+ {
+  "label": "GW derivative |x| at 0, given 0*Integral(1/t, (t, x, 1)) >= 0: DNE [0 not interior]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW derivative |x| at 0, given 0*Integral(1/t, (t, x, 1)) >= 0: 0 ",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW min x on [-1, 1], given 0*Integral(1/t, (t, x, 1)) >= 0: -1 [x > 0: no min]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW min x**2, given 0*Integral(1/t, (t, x, 1)) >= 0: 0 [x > 0: not attained]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW derivative x/|x| expr, given 0*Integral(1/t, (t, x, 1)) >= 0: 0 + ...",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW solve x**2 < 1, given 0*Integral(1/t, (t, x, 1)) >= 0: (-1, 1) [x > 0: (0, 1)]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW solve x**2 = 1/4, constraint 0*Integral(1/t, (t, x, 1)) >= 0: {-1/2, 1/2} [x > 0]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.14
+ },
+ {
+  "label": "GW derivative |x| at 0, constraint 0*Integral(1/t, (t, x, 1)) >= 0: DNE [0 not interior]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "GW derivative |x| at 0, constraint 0*Integral(1/t, (t, x, 1)) >= 0: 0 ",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "GW min x on [-1, 1], constraint 0*Integral(1/t, (t, x, 1)) >= 0: -1 [x > 0: no min]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "GW min x**2, constraint 0*Integral(1/t, (t, x, 1)) >= 0: 0 [x > 0: not attained]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "GW derivative x/|x| expr, constraint 0*Integral(1/t, (t, x, 1)) >= 0: 0 + ...",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.08
+ },
+ {
+  "label": "GW solve x**2 < 1, constraint 0*Integral(1/t, (t, x, 1)) >= 0: (-1, 1) [x > 0: (0, 1)]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:"
+  ],
+  "s": 0.38
+ },
+ {
+  "label": "GW solve x**2 = 1/4, dod 0*Integral(1/t, (t, x, 1)) >= 0: {-1/2, 1/2} [x > 0]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.09
+ },
+ {
+  "label": "GW derivative |x| at 0, dod 0*Integral(1/t, (t, x, 1)) >= 0: DNE [0 not interior]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "GW derivative |x| at 0, dod 0*Integral(1/t, (t, x, 1)) >= 0: 0 ",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "GW min x on [-1, 1], dod 0*Integral(1/t, (t, x, 1)) >= 0: -1 [x > 0: no min]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "GW min x**2, dod 0*Integral(1/t, (t, x, 1)) >= 0: 0 [x > 0: not attained]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "GW derivative x/|x| expr, dod 0*Integral(1/t, (t, x, 1)) >= 0: 0 + ...",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "GW solve x**2 < 1, dod 0*Integral(1/t, (t, x, 1)) >= 0: (-1, 1) [x > 0: (0, 1)]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:"
+  ],
+  "s": 0.36
+ },
+ {
+  "label": "GW solve x**2 = 1/4, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: {-1/2, 1/2} [x > 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW derivative |x| at 0, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: DNE [0 not interior]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW derivative |x| at 0, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 ",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW min x on [-1, 1], given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: -1 [x > 0: no min]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW min x**2, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 [x > 0: not attained]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW derivative x/|x| expr, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 + ...",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW solve x**2 < 1, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: (-1, 1) [x > 0: (0, 1)]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW solve x**2 = 1/4, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: {-1/2, 1/2} [x > 0]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.09
+ },
+ {
+  "label": "GW derivative |x| at 0, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: DNE [0 not interior]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "GW derivative |x| at 0, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 ",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "GW min x on [-1, 1], constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: -1 [x > 0: no min]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "GW min x**2, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 [x > 0: not attained]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "GW derivative x/|x| expr, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 + ...",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "GW solve x**2 < 1, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: (-1, 1) [x > 0: (0, 1)]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:"
+  ],
+  "s": 0.46
+ },
+ {
+  "label": "GW solve x**2 = 1/4, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: {-1/2, 1/2} [x > 0]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.09
+ },
+ {
+  "label": "GW derivative |x| at 0, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: DNE [0 not interior]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "GW derivative |x| at 0, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 ",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "GW min x on [-1, 1], dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: -1 [x > 0: no min]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW min x**2, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 [x > 0: not attained]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "GW derivative x/|x| expr, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: 0 + ...",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW solve x**2 < 1, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: (-1, 1) [x > 0: (0, 1)]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:"
+  ],
+  "s": 0.21
+ }
+]

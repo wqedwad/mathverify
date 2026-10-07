@@ -1,0 +1,211 @@
+[
+ {
+  "label": "PWG derivative Piecewise((x, x < 0), (x, x > 0)) at 0: [undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.69
+ },
+ {
+  "label": "PWG tangent Piecewise((x, x < 0), (x, x > 0)) at 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "PWG derivative Piecewise((sin(x), x < 0), (sin(x), x > 0)) at 0: [undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "PWG tangent Piecewise((sin(x), x < 0), (sin(x), x > 0)) at 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "PWG derivative Piecewise((x, x < 1), (x, x > 1)) at 1: [undefined at 1]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.1
+ },
+ {
+  "label": "PWG tangent Piecewise((x, x < 1), (x, x > 1)) at 1",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "PWG derivative Piecewise((x**3, x < 0), (x**3, x > 0)) + x at 0: [undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "PWG tangent Piecewise((x**3, x < 0), (x**3, x > 0)) + x at 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "PWG derivative Piecewise((x, Abs(x) > 0)) at 0: [undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.01
+ },
+ {
+  "label": "PWG tangent Piecewise((x, Abs(x) > 0)) at 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.01
+ },
+ {
+  "label": "PWG derivative Piecewise((x, x**2 > 0)) at 0: [undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.01
+ },
+ {
+  "label": "PWG tangent Piecewise((x, x**2 > 0)) at 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.01
+ },
+ {
+  "label": "PWG derivative Piecewise((x, x < 0), (x, x > 0))*Abs(x) + x at 0: [undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "PWG tangent Piecewise((x, x < 0), (x, x > 0))*Abs(x) + x at 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.01
+ },
+ {
+  "label": "PWG max Piecewise((-x**2, x < 0), (-x**2, x > 0)) on [-1, 1]: 0 [not attained]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:unknown:attainment_undecided"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "PWG local_max Piecewise((-x**2, x < 0), (-x**2, x > 0)) on [-1, 1]: 0 [not attained]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:unknown:critical_points_not_finite"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "PWG min Piecewise((Abs(x), x < 0), (Abs(x), x > 0)) on [-1, 1]: 0 [not attained]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:unknown:attainment_undecided"
+  ],
+  "s": 0.09
+ },
+ {
+  "label": "PWG min Piecewise((x**2, x**2 > 0)) on [-1, 1]: 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:unknown:attainment_undecided"
+  ],
+  "s": 0.22
+ },
+ {
+  "label": "PWG derivative Piecewise((x**2, x < 0), (x**2, x > 0)): 2*x [ctrl]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.18
+ }
+]

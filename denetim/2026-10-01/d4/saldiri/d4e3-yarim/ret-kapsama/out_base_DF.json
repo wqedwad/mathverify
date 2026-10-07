@@ -1,0 +1,361 @@
+[
+ {
+  "group": "D",
+  "label": "derivative order 2 |x*(x - 1)*(x - 2)*(x - 3)|: (P'')*P/|P|",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['0', '1', '2', '3'], 'families': [], 'why': None}}",
+  "s": 2.3
+ },
+ {
+  "group": "D",
+  "label": "derivative order 2 |x*(x - 1)*(x - 2)*(x - 3)|: 0 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['0', '1', '2', '3'], 'families': [], 'why': 'claim_value_at_a_kink'}}",
+  "s": 1.1
+ },
+ {
+  "group": "D",
+  "label": "derivative order 2 |x**2 - 1|: 2*(x**2 - 1)/|x**2 - 1|",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['-1', '1'], 'families': [], 'why': None}}",
+  "s": 1.2
+ },
+ {
+  "group": "D",
+  "label": "derivative |x|+|x-1|+|x-2|+|x-3|+|x-4|: sum of signs as u/|u|",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['0', '4', '3', '2', '1'], 'families': [], 'why': None}}",
+  "s": 12.5
+ },
+ {
+  "group": "D",
+  "label": "derivative sum of 9 |x - j|: u/|u| sum",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['0', '6', '5', '4', '3', '1', '7', '2', '8'], 'families': [], 'why': None}}",
+  "s": 17.2
+ },
+ {
+  "group": "D",
+  "label": "derivative |x**2 - 2| * |x**2 - 3|: textbook",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['sqrt(3)', '-sqrt(3)', 'sqrt(2)', '-sqrt(2)'], 'families': [], 'why': None}}",
+  "s": 3.5
+ },
+ {
+  "group": "D",
+  "label": "derivative Max(x, x**2): Piecewise",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point'}",
+  "s": 0.5
+ },
+ {
+  "group": "D",
+  "label": "derivative Max(x, x**2): via abs",
+  "verdict": "INCORRECT",
+  "ok": false,
+  "flags": [],
+  "reason": "{'method': 'random_point'}",
+  "s": 0.2
+ },
+ {
+  "group": "D",
+  "label": "derivative Max(sin(x), cos(x)): via abs",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'undecided'}",
+  "s": 0.8
+ },
+ {
+  "group": "D",
+  "label": "derivative x*Heaviside(x): Heaviside off 0 [value at 0?]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['Heaviside'] in 'x*Heaviside(x)' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "D",
+  "label": "derivative Piecewise((x**2, x < 0), (x, True)): (x - |x|)... textbook",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['True'] in 'Piecewise((x**2, x < 0), (x, True))' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "D",
+  "label": "derivative Piecewise((x**2, x < 0), (0, True)): 2x for x<0, 0 else (smooth at 0)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['True'] in 'Piecewise((x**2, x < 0), (0, True))' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "D",
+  "label": "derivative Piecewise((x**2, x < 0), (0, True)): x - |x| (=2x for x<0, 0 for x>=0)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['True'] in 'Piecewise((x**2, x < 0), (0, True))' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "limit sin(a*x)/x at 0, given sqrt(a) = 3: 9",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parametric_limit"
+  ],
+  "reason": "parametric_limit",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "limit sin(a*x)/x at 0, given 1/a = 1/2: 2",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parametric_limit"
+  ],
+  "reason": "parametric_limit",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "limit sin(a*x)/x at 0, given log(a) = 0: 1",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parametric_limit"
+  ],
+  "reason": "parametric_limit",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "limit (x**2 - 1)/(x - 1) at 1, given y = 1/x: 2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "F",
+  "label": "limit x*sin(1/x) at 0, given x != 0: 0",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "limit sqrt(x)*log(x) at 0, given x > 0: 0",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "symbolic_numeric_disagreement"
+  ],
+  "reason": "limit_undecided",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "limit (1 + 1/x)**x at oo, given x > 0: E",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "F",
+  "label": "limit (1 + a/x)**x at oo, given a = log(2): 2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "F",
+  "label": "limit sin(x)/x at 0, constraint on a: sqrt(a) > 1, a real",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "F",
+  "label": "limit sin(x)/x at 0, dod x > 0: 1",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "limit sin(x)/x at 0, given x**2 + 0*sqrt(x) >= 0 -> x>=0: 1",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "derivative a*x**2, given sqrt(a) = 2: 8*x",
+  "verdict": "INCORRECT",
+  "ok": false,
+  "flags": [],
+  "reason": "{'method': 'random_point'}",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "derivative x**2 with constraint log(x) > -10**9 hmm: 2*x",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "extremum max log(x - sin(x)) on [1, 2]: log(2 - sin(2))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reason": "f_undefined_on_interval_as_written",
+  "s": 0.1
+ },
+ {
+  "group": "F",
+  "label": "extremum max sqrt(cos(x)) on [0, 1]: 1",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "upper_bound_unproven",
+  "s": 0.2
+ },
+ {
+  "group": "F",
+  "label": "extremum max sqrt(x - cos(x)) on [1, 2]: sqrt(2 - cos(2))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reason": "f_undefined_on_interval_as_written",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "extremum min x + sqrt(exp(x) - x) on [0, 1]: 1",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "lower_bound_unproven",
+  "s": 0.2
+ },
+ {
+  "group": "F",
+  "label": "extremum max log(x + exp(x)) on [0, 1]: log(1 + E)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "upper_bound_unproven",
+  "s": 0.1
+ },
+ {
+  "group": "F",
+  "label": "extremum max 1/(x - cos(x)) on [1, 2]: 1/(1 - cos(1))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reason": "f_undefined_on_interval_as_written",
+  "s": 0.1
+ },
+ {
+  "group": "F",
+  "label": "derivative log(x - sin(x)) at 1: (1 - cos(1))/(1 - sin(1))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'undecided'}",
+  "s": 0.2
+ },
+ {
+  "group": "F",
+  "label": "derivative sqrt(x - cos(x)) at 1: (1 + sin(1))/(2*sqrt(1 - cos(1)))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'undecided'}",
+  "s": 0.2
+ },
+ {
+  "group": "F",
+  "label": "derivative 1/(x - cos(x)) at pi: -1/(pi + 1)**2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "F",
+  "label": "derivative x**(1/3) at 8: 1/12",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "membership_condition"
+  ],
+  "reason": "membership_condition_on_variable",
+  "s": 0.0
+ },
+ {
+  "group": "F",
+  "label": "derivative Integral(sin(t)/t, (t, 0, x)) at pi: 0",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['Integral(sin(t)/t, (t, 0, x))']",
+  "s": 0.0
+ }
+]

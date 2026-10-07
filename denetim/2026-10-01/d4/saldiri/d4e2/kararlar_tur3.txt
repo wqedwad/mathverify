@@ -1,0 +1,30 @@
+# d4e 3. tur: ana oturumun kararları (7 Ekim 2026; 2. tur saldırısının 13 gerçek bulgusu)
+Bulgular: d4/saldiri/d4e2/bulgular.json. Önce yanlış onaylar.
+- YO-1 (önceden var): SymPy limiti yakınsaklık kanıtı değildir (salınan payda: lim t^{3/2}/(1+t²cos²t) yanlışlıkla 0). decays_at /
+  integrable_near: sınırı olmayan argümanlı salınan alt terim (sin, cos, tan ... sınırsız argümanla) varsa limit kanıt sayılmaz; salınan
+  çarpanlar değer aralıklarıyla güvenli yönde sınırlanır (payda ≥ sabit kısım, pay ≤ |katsayı|) ve majorantın sönmesi kanıtlanır;
+  kanıt yoksa UNKNOWN. ∫_0^∞ dt/(1+t²sin²t) ıraksak: 0·∫+1 = 1, ∫−∫ = 0, FTC türevi → UNKNOWN, compute adımı unknown.
+- YO-2 (high, önceden var): series_sum'da yazılı tanımlılık kararsızsa (None) terim tanımlı sayılmaz → UNKNOWN (fail-closed); sabitleme
+  her biçimde okunur (2a = 4, a − 2 = 0, a² = 4 ∧ a > 0, a = b ∧ b = 2, kısıt): d4d'nin bağlama mekanizması (binding/pins) kullanılır.
+- YO-3 (d4e getirdi): türev ifadesinde iddianın yazılı tanım kümesi okunur: izinli bir parametre değerinde ya da türevin tanım kümesinin
+  bir kısmında yazıldığı biçimde tanımsız iddia CORRECT olamaz (UNKNOWN; hedefin tanımlı olduğu noktada tanımsızsa aşağıdaki RK-8 kuralı).
+- YO-4 (d4e getirdi): R8 kırık kuralı yalnız Abs değil bütün parçalı-doğrusal/sıçramalı yapılara: Max, Min, sign, x·sign(x), Heaviside,
+  Piecewise: iddia kırıkta (türevin olmadığı noktada) değer veriyorsa gelenek → UNKNOWN; sign(x)' = 0 iddiası UNKNOWN.
+- YO-5 (önceden var): limit (ve türev) bölgesi verilenlerin, kısıtların ve tanım evreninin yazılı tanımlılığını da okur (verilen
+  'x + 0·√(x−1) > 0' → x ≥ 1): |x−1|/(x−1)'in 1'deki limiti bu bölgede tek yandan 1 (DNE INCORRECT değilse en az UNKNOWN; 1 INCORRECT asla).
+- RK-8 (gelenek tutarlılığı): projenin yerleşik geleneği (simplify 'claim_as_written', ilkel 'not_defined_or_continuous_where_integrand_is'):
+  iddia hedefin tanımlı olduğu bir noktada yazıldığı biçimde tanımsızsa INCORRECT. Türev ifadesi görevi de buna uyar: (x²)' için 2x²/x,
+  2x³/x², 2x+log x−log x, 2(√x)², x²eˣ(2/x+1) → INCORRECT (şimdi CORRECT: yanlış onay). Kilitli INCORRECT'ler (2x²/|x| vb.) kalır, ama
+  gerekçesi yazılı tanımlılık olur (random_point'in 0'daki nan'ı değil). R8'in aynası değildir: orada iddia fazladan değer veriyor.
+Kapsama ve sağlamlık (d4e getirdi; kanıtlı yolla):
+- RK-1: sonlu kırıkta u(p) = 0 ve u'(p) ≠ 0 (kesin) ise gerçek köşe (g·|u| okumasında g(p) ≠ 0 da gerekir): türevin tanım kümesinden
+  çıkar; iddia tam orada tanımsızsa (0/0) ders kitabı türevi CORRECT (|log x|, |√x−1|, x|log x|).
+- RK-2: 'kinks_not_solved' kesin karşı örneği atmasın: bütün Abs argümanlarının sıfırdan farklı olduğu ve f'nin türevli olduğu bir noktada
+  iddia yanlışsa INCORRECT (|tan x|' = 1/cos²x vb.); doğrular kanıtlıysa CORRECT.
+- RK-3: n tam sayı bildirilmişse (integer, natural, positive_integer) negative_base koşulu bildirimden kanıtlıdır: (−1)**n, (−2)**n,
+  (−1)**(2n) ile görevler parameter_condition_not_proved vermesin.
+- RK-4: yakınsaklık kanıtı: e^{−t^α} (α > 0) tipli sönme, görev değişkenini sabit parametre gibi taşıyan integrand (∫e^{−t}(x+t),
+  ∫e^{−t}cos(xt)): majorant e^{−t}(|x| + t), |cos| ≤ 1 ile kanıtlı → CORRECT/INCORRECT.
+- RK-5: kink_reading'in toplam deterministik bütçesi olsun (iç içe kökler 68–186 s); bütçe dolarsa UNKNOWN.
+- RK-6: PYTHONHASHSEED'den bağımsız karar: karşı örnek noktası deterministik seçilsin (küme sırası yok); |log x| + |tan x| türevi 0 → INCORRECT.
+- RK-7: at(diff(f), x, p) compute adımı aşkın/trig koşulda strict_at'in yerel kanıtını kullansın → verified.

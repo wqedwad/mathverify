@@ -1,0 +1,149 @@
+[
+ {
+  "label": "CU solve x**2 = 1/4, given x + 0*tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 1.06
+ },
+ {
+  "label": "CU limit |x|/x at 0, given x + 0*tan(acot(2) + acot(1/2)) > 0: 1",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.42
+ },
+ {
+  "label": "CU solve x**2 = 1/4, constraint x + 0*tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.4
+ },
+ {
+  "label": "CU limit |x|/x at 0, constraint x + 0*tan(acot(2) + acot(1/2)) > 0: 1",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.25
+ },
+ {
+  "label": "CU solve x**2 = 1/4, dod x + 0*tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.15
+ },
+ {
+  "label": "CU limit |x|/x at 0, dod x + 0*tan(acot(2) + acot(1/2)) > 0: 1",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.14
+ },
+ {
+  "label": "CU solve x**2 = 1/4, given x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.19
+ },
+ {
+  "label": "CU limit |x|/x at 0, given x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: 1",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.36
+ },
+ {
+  "label": "CU solve x**2 = 1/4, constraint x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.35
+ },
+ {
+  "label": "CU limit |x|/x at 0, constraint x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: 1",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.17
+ },
+ {
+  "label": "CU solve x**2 = 1/4, dod x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.13
+ },
+ {
+  "label": "CU limit |x|/x at 0, dod x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: 1",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.12
+ },
+ {
+  "label": "GW limit |x - 1|/(x - 1)... ctrl given 0*Integral(1/t, (t, x, 1)) >= 0: 1 [right]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.03
+ }
+]

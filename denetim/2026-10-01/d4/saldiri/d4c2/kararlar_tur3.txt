@@ -1,0 +1,30 @@
+# d4c 3. tur: ana oturumun kararları (7 Ekim 2026; d4c 2. tur saldırısının 10 gerçek bulgusu; RK-D gerçek değil: D3 süre sınırı yok)
+Bulgular: d4/saldiri/d4c2/bulgular.json. Önce yanlış onaylar.
+- YO-1 (high, önceden var): extremum._strictly_better üç değerli olmalı: num_equal kesin "farklı" dedikten sonra yön kesin işaretle
+  (kesin rasyonel karşılaştırma ya da artan hassasiyetle sertifikalı işaret) alınır; yön belirsizse None. Adım 1'de herhangi bir aday
+  için None çıkarsa EVT dalı kapanır; kesin (ConditionSet içermeyen) ve boş olmayan superlevel kümesi bound = True'yu engeller.
+  max(1 + x/10^50, [0,1]) = 1 INCORRECT (kesin tanık x = 1) ya da en az UNKNOWN; doğru 1 + 10^-50 CORRECT; aynı soruya iki CORRECT olamaz.
+- YO-2 (high, önceden var): belirli integralde (ve evaluate/checked_forms'taki Integral'de) SymPy'nin değeri yalnız (i) sembolik sertifikayla
+  (TTK: F' − f sembolik 0 ve F [a,b]'de sürekli; iç süreksizlik/tekillikte parçalara bölerek) ya da (ii) kesin aralık zarfının o değeri
+  içermesiyle kabul edilir; kayan noktalı kareleme uyuşması tek başına kabul ettirmez (dar tepe ortak kör noktası). SymPy–sayısal uyuşma
+  denetimi bildirilen rel_tol'ü asla kullanmaz. Toleranslı (yaklaşık) iddia yalnız kesin zarf ya da sembolik kesin değer + kesin pencere
+  denetimiyle kabul edilir. Ret aynı kanıtla (simetri): kesin değer ya da zarf iddiayı dışlarsa INCORRECT, yoksa UNKNOWN.
+  Kapsama bedelini ölç: fark.py'de karar değişimi olursa (veri setinde doğru cevabın UNKNOWN'a düşmesi) dur ve raporla.
+- YO-3 (önceden var): random_point ile özdeşlik "kanıtı": SymPy'nin kesin equals = False cevabı (ok) varken random_point CORRECT/verified
+  veremez (çatışma → karşı örnek bulunursa INCORRECT/refuted, yoksa UNKNOWN/unknown). Örnek noktalar ondalık ızgarada olmasın: büyük asal
+  paydalı rasyoneller ve irrasyonel kaymalar; yoklamalar da öyle. Adım reddedicinin eq denetimi aynı yardımcıyı kullanıyor: aynı kural.
+  sin(3·10^6·πx) = 0 sadeleştirmesi INCORRECT (kesin karşı örnek x = 1/(6·10^6)) ya da UNKNOWN.
+- YO-4 (d4c getirdi) + RK-E + RK-F: göreli tolerans tek tanımla, gerçek değere göre: |c − v|/|v| ≤ t; zarfın her v'si için sağlanıyorsa
+  CORRECT, hiçbiri için sağlanmıyorsa INCORRECT, yoksa UNKNOWN; num_equal ve bütün yollar aynı tanım. rel_tol ≤ 0, ≥ 1, nan, sonsuz ya da
+  okunamıyorsa girdi biçimce bozuk → UNKNOWN (ilke 13); v = 0 iken göreli tolerans tanımsız → UNKNOWN.
+- YO-5: kesin zarf içe yuvarlamaz: Abs/cosh/sech'in _mig_mag'ı ve benzer bütün uç hesapları dışa yuvarlanır (mpmath.iv yönlü yuvarlama);
+  zarfın gerçek değeri içerdiği bir test/mutasyonla kilitlenir (karar etkisi bulunmasa da sağlamlık hatası).
+Kapsama (d4c getirdi; kanıtlı yolla):
+- RK-A: sonsuz aralıkta erf/Gamma ailesi: definedness_conditions_strict erf, erfc, Si, Ci (x>0), Shi, polylog vb. tam/sürekli özel
+  fonksiyonları tanısın; TTK + uç limitleri (erf(±∞) = ±1 kesin) ile ∫_R e^{−x²} = √π, ∫_0^∞ √x e^{−x} = √π/2 vb. CORRECT, yanlışları
+  INCORRECT.
+- RK-B: sonlu aralıkta uçta kaldırılabilir/integrallenebilir tekillik (sin x/x, log(1+x)/x, sinh x/x, (1−cos x)/x², x^x): zarf uç hücrede
+  sınırsız olmasın: kaldırılabilir tekillikte kesin sınır (|sin x/x| ≤ 1 gibi yapısal sınırlar ya da Taylor kalan terimli sınır) ya da
+  TTK sertifikası (Si, polylog'lu ilkel, sürekliliği kanıtlı); yanlış iddialar (∫_0^1 sinh x/x = −100) INCORRECT.
+- RK-C: kesin zarfın bütçesi duvar saatine değil deterministik iş sayısına (bölme/değerlendirme sayısı) bağlı olsun; duvar saati yalnız
+  güvenlik durdurucusu (UNKNOWN).
