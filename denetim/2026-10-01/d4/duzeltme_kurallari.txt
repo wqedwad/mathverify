@@ -65,3 +65,16 @@ promptta olmayan yeni bir anlam kararı gerekirse en temkinli olanı seç (UNKNO
   (grep + ilgili satır aralığı).
 - Düzeltmeden sonra bağımsız bir saldırgan gözden geçirici senin diff'ini kırmaya çalışacak: korumayı tek yazıma
   değil mekanizmaya koy, kardeş yolları (aynı kalıbın başka çağrı yerleri) da kapat.
+
+## Ek (7 Ekim 2026, kullanıcı onayı): kalite kaybı olmadan token tasarrufu
+- Ölçüm kademesi: ARA turlarda yalnız değişen korumaların mutasyonları (`mutasyon.py <ön ekler>`), ilgili test
+  dosyaları, parça sondaları ve fark. TAM mutasyon listesi ve tam takım yalnız parçanın SON hâlinde (rapordan önce)
+  bir kez. Son hâl eskisi kadar sıkı ölçülür; ara tekrarlar atlanır.
+- Mutasyonu her zaman `--kayit <SP>/d4/duzeltme/<parça>/mut_<HEAD>.jsonl` ile koş: konteyner yeniden başlarsa aynı
+  komut biten mutasyonları atlar. Uzun ölçümleri kaldığı yerden sürebilecek parçalara böl (sonda grupları, fark
+  parçaları ayrı dosyalara).
+- Beklemeler seyrek: tek bekleme ≤10 dk, aralıklı yoklama yerine bitişi bekleyen tek komut; çıktıyı yalnız özet olarak oku.
+- Aynı anda en çok 2 ağır süreç; makine yükü yüksekse 1 (yük altında süre bütçeli kararlar UNKNOWN'a kayıyor).
+- Büyük dosyaları bütün okuma; grep + satır aralığı. Raporun kısa olsun (ayrıntı NOTLAR.md'de).
+- Yeni bir düzeltme turu taze ajanla başlar: NOTLAR.md (matematik kararları + tur kayıtları) ve ana oturumun
+  kararlar dosyası ajanın belleğidir; önceki turun bağlamı taşınmaz. Kesinti sonrası sürdürme SendMessage ile.

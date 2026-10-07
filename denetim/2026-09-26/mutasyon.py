@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import json
 import os
 import shutil
 import signal
@@ -368,6 +369,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("-j", "--jobs", type=int, default=1, help="aynı anda koşan klon sayısı")
     ap.add_argument("--list", action="store_true", help="mutasyonları yaz ve çık")
+    ap.add_argument("--kayit", metavar="DOSYA",
+                    help="her sonucu (HEAD, ad) ile bu JSONL dosyasına hemen ekler; aynı HEAD'de yeniden koşulunca "
+                         "kayıtlı mutasyonları atlar (konteyner yeniden başlarsa kaldığı yerden sürer)")
     ap.add_argument("names", nargs="*", help="yalnız adı bu öneklerle başlayan mutasyonlar (ör. C0 G A16)")
     args = ap.parse_args(argv)
     chosen = [m for m in MUTATIONS if not args.names or m[0].startswith(tuple(args.names))]
@@ -382,6 +386,28 @@ def main(argv=None) -> int:
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), _stop)
     head = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+    kayit = Path(args.kayit) if args.kayit else None
+    done = {}
+    if kayit is not None and kayit.exists():
+        for raw in kayit.read_text(encoding="utf-8").splitlines():
+            try:
+                r = json.loads(raw)
+            except ValueError:
+                continue
+            if r.get("head") == head and r.get("name") in {m[0] for m in chosen}:
+                done[r["name"]] = r["line"]
+    if done:
+        print(f"kayıttan {len(done)} mutasyon atlandı ({kayit}, HEAD {head})", flush=True)
+        for line in done.values():
+            print(line, flush=True)
+        chosen = [m for m in chosen if m[0] not in done]
+        if not chosen:
+            lines = list(done.values())
+            killed = sum(l.startswith("öldü") for l in lines)
+            print(f"toplam: {len(lines)} mutasyon, {killed} öldü, "
+                  f"{sum(l.startswith('YAŞADI') for l in lines)} yaşadı, "
+                  f"{sum(l.startswith('UYGULANMADI') for l in lines)} uygulanmadı")
+            return 0 if killed == len(lines) else 1
     tmp = Path(tempfile.mkdtemp(prefix="mutasyon-"))
     print(f"klonlar: {tmp} (sonunda silinir)", flush=True)
     try:
@@ -405,9 +431,13 @@ def main(argv=None) -> int:
                     return mutate(where, m)
                 finally:
                     free.append(where)
-            for line in ex.map(one, chosen):
+            lines.extend(done.values())
+            for m, line in zip(chosen, ex.map(one, chosen)):
                 print(line, flush=True)
                 lines.append(line)
+                if kayit is not None and "durduruldu" not in line:
+                    with kayit.open("a", encoding="utf-8") as fh:
+                        fh.write(json.dumps({"head": head, "name": m[0], "line": line}, ensure_ascii=False) + "\n")
         finally:
             ex.shutdown(wait=True, cancel_futures=True)
         killed = sum(l.startswith("öldü") for l in lines)
