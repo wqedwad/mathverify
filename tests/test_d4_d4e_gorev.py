@@ -743,6 +743,9 @@ def test_round3_refutation_off_kinks_not_listed():
         assert _v(_der(f, None, [], v), c, "expression") == "INCORRECT", (f, c)
     assert _v(_der("Abs(sin(x))", None, [], XPOS), "cos(x)*Abs(sin(x))/sin(x)", "expression") == "CORRECT"
     assert _v(_der("Abs(cot(x))"), "-cot(x)/(sin(x)**2*Abs(cot(x)))", "expression") == "CORRECT"
+    # x = cos(x) is solved by no exact class: the refutation stands at a point where f is analytic (0: f' = -1)
+    assert _v(_der("Abs(x - cos(x))"), "1 + sin(x)", "expression") == "INCORRECT"
+    assert _v(_der("Abs(x - cos(x))"), "(1 + sin(x))*(x - cos(x))/Abs(x - cos(x))", "expression") == "UNKNOWN"
 
 
 def test_round3_an_integer_exponent_is_no_convention():
@@ -826,6 +829,18 @@ def test_round3_guards_of_the_new_readings():
     # a symbol of undeclared sign in the integrand is bounded by its absolute value: e^(-x*t) diverges for x <= 0
     q = _ir("derivative", {"f": "x + 0*Integral(exp(-x*t), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
     assert _v(q, "1", "expression") != "CORRECT"
+    # a function no rule reads is never analytic, a fraction of a step is (unit)
+    import sympy as sp
+    from mathverify.certify.calculus import smooth_at
+    x = sp.Symbol("x", real=True)
+    assert smooth_at(sp.Function("g")(x), x, sp.S.Zero, [], []) is False
+    assert smooth_at(sp.sin(x) + sp.Abs(x - 1), x, sp.S.Zero, [x - 1], []) is True
+    assert smooth_at(sp.Abs(x - 1), x, sp.S.One, [x - 1], []) is False
+    # the extremum of a function or on an interval naming a free symbol: no value
+    assert _v(_ext("a*x", "max", "[0, 1]", [], XA), "a") == "UNKNOWN"
+    assert _v(_ext("x", "max", "[0, b]", [], XB), "b") == "UNKNOWN"
+    # the zeros of sin(x) are ends of sqrt(sin(x))**3's region, not points of the comparison: the claim keeps its value
+    assert _v(_der("sqrt(sin(x))**3"), "3*cos(x)*sin(x)/(2*sqrt(sin(x)))", "expression") == "CORRECT"
 
 
 def test_round3_a_written_condition_no_class_solves_is_not_defined():

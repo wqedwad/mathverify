@@ -454,13 +454,11 @@ def verify(ir, solution, ctx: Ctx):
         iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)
         if err:
             return err
-        from .domain import written_definedness
-        written = written_definedness(p["f"], ctx.ns, pins)[0]
-        free = sorted({str(s_) for e in [f, iv] + list(written) for s_ in getattr(e, "free_symbols", set())}
-                      - {str(var)})
+        free = sorted({str(s_) for e in [f, iv] for s_ in getattr(e, "free_symbols", set())} - {str(var)})
         if free:
-            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare; nor in a
-            # written condition, x + 0*sqrt(b - x) being x after parsing (review of d4e)
+            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare. One in a written
+            # condition alone (x + 0*sqrt(b - x) is x after parsing, review of d4e) leaves the definedness undecided
+            # (`written_undefined_in` None) and the certificate abstains below
             return condition_not_applied(LAYER, free, t.ms)
         if not p.get("interval") and ctx.unapplied_conditions(var):
             # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)

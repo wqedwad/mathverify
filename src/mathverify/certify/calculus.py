@@ -1341,7 +1341,8 @@ def _in_comparison(dom, loose, var, p) -> bool | None:
     if inside is not True:
         return inside
     for c in loose:
-        if relation_holds_at(c, var, p) is False:
+        # the comparison is drawn on the open part of each (`comparison_region`): sin(x) >= 0 is sin(x) > 0 there
+        if relation_holds_at(c, var, p) is False or relation_holds_at(_open_condition(c), var, p) is False:
             return False
         if not strict_at(_open_condition(c), var, p):
             return None
@@ -1989,9 +1990,9 @@ def _point_not_interior(ctx: Ctx, src, var, at, pins, ms):
     unapplied = ctx.unapplied_conditions(var)
     if unapplied:
         return condition_not_applied(LAYER, unapplied, ms)
-    conds, other = task_conditions(ctx, src, var, pins)
-    if other:
-        return condition_not_applied(LAYER, _names(other, var), ms)
+    # a condition naming a symbol nothing fixes (sqrt(x - b), b free) left `written_undefined_in` undecided at the
+    # point, and the certificate abstained before this
+    conds, _ = task_conditions(ctx, src, var, pins)
     if interior_at(ctx, conds, var, at) is not True:
         return unknown(LAYER, "point_not_interior_to_the_domain", ms,
                        {"at": str(at), "domain": str(ctx.domain_for(var)), "conditions": [str(c) for c in conds]},
