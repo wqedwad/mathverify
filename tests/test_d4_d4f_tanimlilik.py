@@ -543,6 +543,16 @@ def test_rkf2_not_where_a_pole_or_a_natural_number_condition_is(ir):
     assert _run(ir, "0").verdict != "CORRECT"
 
 
+@pytest.mark.parametrize("ir,claim", [
+    (_ir("definite_integral", {"integrand": r"x \frac{\Gamma(x)}{\Gamma(x)}", "var": "x", "a": "-1/2", "b": "1/2"}), "0"),
+    (_ir("definite_integral", {"integrand": r"\frac{\Gamma(x+1)}{\Gamma(x+1)}", "var": "x", "a": "-3/2", "b": "-1/2"}), "1"),
+    (_ir("derivative", {"f": r"\frac{\Gamma(x+1)}{\Gamma(x)}", "var": "x", "at": "0"}), "1"),
+    (_ir("derivative", {"f": r"\frac{\Gamma(x+1)}{\Gamma(x)}", "var": "x", "at": "-2"}), "1"),
+])
+def test_rkf2_a_pole_the_value_parse_simplifies_away_is_still_read(ir, claim):
+    assert _run(ir, claim).verdict != "CORRECT"
+
+
 @pytest.mark.parametrize("expr,claim", [("2*I", "sqrt(-4)"), ("-6", "sqrt(-4)*sqrt(-9)"), (r"\sqrt{-25}", r"5\sqrt{-1}")])
 def test_rkf3_over_c_a_principal_value_is_a_value(expr, claim):
     ir = dict(_ev(expr, vars_=[]), domain_of_discourse="complex")
