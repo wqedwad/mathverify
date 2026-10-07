@@ -1054,12 +1054,22 @@ def _claim_undefined_at(claim_conds, nowhere, claimed, var, p) -> bool | None:
     return None if rf is None else not rf
 
 
-def _scaled_abs(f, u) -> bool:
-    """Is f exactly c*|u|, c a nonzero number?"""
-    if f == sp.Abs(u):
-        return True
-    return isinstance(f, sp.Mul) and len(f.args) == 2 and sp.Abs(u) in f.args and \
-        next(a for a in f.args if a != sp.Abs(u)).is_number and next(a for a in f.args if a != sp.Abs(u)).is_zero is False
+def _continuous_where_defined(e) -> bool:
+    """Is `e` built of operations continuous on the interior of their domain (see `strict_at`)?"""
+    return all(n.is_Atom or isinstance(n, (sp.Add, sp.Mul, sp.Pow) + _CONTINUOUS) for n in sp.preorder_traversal(e))
+
+
+def _abs_factor(f, u):
+    """g when f is exactly g*|u|, g and u continuous where defined (no other |.|, no sign or jump); None otherwise."""
+    a = sp.Abs(u)
+    if not _continuous_where_defined(u) or u.has(sp.Abs):
+        return None
+    if f == a:
+        return S.One
+    if not isinstance(f, sp.Mul) or list(f.args).count(a) != 1:
+        return None
+    g = sp.Mul(*[x for x in f.args if x != a])
+    return g if not g.has(sp.Abs) and _continuous_where_defined(g) else None
 
 
 def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, timeout: float = 8.0):
@@ -1073,8 +1083,9 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, time
       it stays in the comparison; a corner, a cusp, a jump or an infinite slope leaves it out, and a claim that
       has a value there (sign(0) = 0) is a convention ("claim_value_at_a_kink"); a status not decided leaves
       the claim undecided ("kink_undecided");
-    * infinitely many zeros (sin(x) = 0) are read for f = c*|u| alone, of order 1, each a simple zero (u' != 0:
-      a corner); the claim must have no value at any of them, read at the family's generic point."""
+    * infinitely many zeros (sin(x) = 0) are read for f = g*|u| alone, of order 1, at the family's generic point:
+      g = 0 there is a derivative 0 at each (the family stays in the comparison); g != 0 with a simple zero
+      (u' != 0) a corner at each, and the claim must have no value at any of them."""
     us = list(dict.fromkeys(a.args[0] for a in f.atoms(sp.Abs) if var in a.args[0].free_symbols))
     kinks: list = []
     opens: list = []
@@ -1113,10 +1124,17 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, time
                 elif und is None:
                     why = why or "kink_undecided"
             continue
+        # f = g*|u| of order 1, read at the family's generic point: g = 0 there gives f a derivative (0) at each
+        # of them, and the family stays in the comparison (sin(x)*|sin(x)|: 2*cos(x)*|sin(x)| was certified before
+        # and stays so); g != 0 and u' != 0 there give a corner at each, and the family is left out
+        g = _abs_factor(f, u) if order == 1 else None
+        gv = [sp.simplify(g.subs(var, p_)) for p_ in pts] if g is not None else []
+        if g is not None and all(v.is_zero is True for v in gv):
+            continue
         opens.append(Ne(u, 0))
         signs.append(u)
         du = sp.diff(u, var)
-        simple = order == 1 and _scaled_abs(f, u) and all(
+        simple = g is not None and all(v.is_zero is False and v.is_finite is True for v in gv) and all(
             (lambda v: v.is_zero is False and v.is_finite is True)(du.subs(var, p_)) for p_ in pts)
         if not simple:
             why = why or "kink_undecided"

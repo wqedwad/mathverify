@@ -559,7 +559,8 @@ def test_derivative_of_an_absolute_value_lives_where_f_is_differentiable():
                  ("Abs(x)**3", "3*x**5/Abs(x)**3"), ("x*Abs(x)", "2*x**2/Abs(x)")):   # a derivative 0 at 0
         assert _v(_der(f), c, "expression") == "INCORRECT", (f, c)
     # sin(x)*|sin(x)| has the derivative 0 at every k*pi: no corner there, the claim has no value there
-    assert _v(_der("sin(x)*Abs(sin(x))"), "2*cos(x)*sin(x)**2/Abs(sin(x))", "expression") != "CORRECT"
+    assert _v(_der("sin(x)*Abs(sin(x))"), "2*cos(x)*sin(x)**2/Abs(sin(x))", "expression") == "INCORRECT"
+    assert _v(_der("sin(x)*Abs(sin(x))"), "2*cos(x)*Abs(sin(x))", "expression") == "CORRECT"
     q = _ir("derivative", {"f": "Abs(x)", "var": "x", "order": 2}, [], [X], "expression")
     assert _v(q, "0", "expression") == "UNKNOWN"                          # 0 at 0, where |x|' jumps
 
