@@ -12,7 +12,8 @@ import mpmath as mp
 import sympy as sp
 
 __all__ = ["num_equal", "to_mp", "certified_sign", "exact_equal", "exact_zero_test", "has_float",
-           "real_odd_roots", "NONREAL", "certified_integer", "certified_floor"]
+           "real_odd_roots", "NONREAL", "certified_integer", "certified_floor", "read_tolerance",
+           "within_rel_tol"]
 
 DPS_LADDER = (30, 50, 80)
 
@@ -509,6 +510,52 @@ def to_mp(expr, dps: int):
         return v
 
 
+# ---------------------------------------------------------------------------
+# A DECLARED tolerance (a problem asking for an approximate answer, `rel_tol`/`abs_tol` in the IR) has one
+# reading on every path: the relative error of the claim c against the true value v, |c - v|/|v| <= t
+# (attack on d4c round 2, YO-4/RK-E/RK-F, 7 Oct 2026). The window was scaled by the claim on one path and by
+# max(|c|, |v|) in num_equal on another, so one relative error was CORRECT on one path and INCORRECT on the
+# other; rel_tol >= 1 accepted any claim, even of the wrong sign, and a negative rel_tol made an inverted
+# window that refuted the exact value. A relative tolerance outside (0, 1), and any tolerance not a finite
+# positive number, is a malformed input (principle 13: UNKNOWN); at v = 0 a relative tolerance means nothing.
+def read_tolerance(raw, relative: bool = True):
+    """(t, malformed): a declared tolerance as an exact Rational, None when none is declared."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None, False
+    if isinstance(raw, bool):
+        return None, True
+    try:
+        t = sp.Rational(str(raw).strip())         # '1e-3', '0.001', 0.001 and '1/1000' alike, exactly
+    except (TypeError, ValueError, ArithmeticError, sp.SympifyError):
+        return None, True
+    if not isinstance(t, sp.Rational) or t <= 0 or (relative and t >= 1):
+        return None, True
+    return t, False
+
+
+def within_rel_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
+    """|c - v| <= t·|v| decided with certified signs, for constants c and v (v the true value): True or
+    False when certain, None when undecided or v = 0 (no relative error there)."""
+    try:
+        c, v, t = sp.sympify(claimed), sp.sympify(value), sp.sympify(t)
+    except (sp.SympifyError, TypeError):
+        return None
+    if c.free_symbols or v.free_symbols:
+        return None
+    sv = certified_sign(v, timeout=timeout)
+    if sv not in (1, -1):
+        return None
+    sd = certified_sign(c - v, timeout=timeout)
+    if sd == 0:
+        return True
+    if sd not in (1, -1):
+        return None
+    s_ = certified_sign(t * sv * v - sd * (c - v), timeout=timeout)
+    if s_ in (0, 1):
+        return True
+    return False if s_ == -1 else None
+
+
 def _rel_diff(a, b):
     diff = abs(a - b)
     scale = max(abs(a), abs(b))
@@ -560,6 +607,21 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
             ev["decided_by"] = "exact" if r is not None else "exact_undecided"
             return r, ev
     passed_rungs = 0
+    # a tolerance the caller passes is relative to `b`, the reference (true) value: |a - b|/|b| (see
+    # read_tolerance); undefined where b is 0. With an exact b it is decided exactly (within_rel_tol).
+    against_b = rel_tol is not None
+    if against_b and abs_tol is None:
+        try:
+            sb_ = sp.sympify(b)
+            exact_b = not sb_.free_symbols and not has_float(sb_) and not sb_.has(sp.oo, sp.S.NegativeInfinity, sp.zoo,
+                                                                                   sp.nan)
+            exact_a = not sp.sympify(a).free_symbols
+        except (sp.SympifyError, TypeError, AttributeError):
+            exact_b = exact_a = False
+        if exact_a and exact_b:
+            r = within_rel_tol(a, b, rel_tol)
+            ev["decided_by"] = "exact_relative_tolerance" if r is not None else "exact_relative_tolerance_undecided"
+            return r, ev
     # inputs that are already finite-precision Floats cannot be compared tighter than
     # their own precision (a 15-digit Float vs pi: at most ~1e-15 agreement is possible)
     float_digits = [int(f._prec * 0.30103) for e in (a, b) if hasattr(e, "atoms")
@@ -579,8 +641,17 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
                 same = (va == vb)
                 ev["ladder"].append({"dps": dps, "a": str(va), "b": str(vb)})
                 return bool(same), ev
-            rel = _rel_diff(va, vb)
             absd = abs(va - vb)
+            if against_b:
+                if vb == 0:
+                    if abs_tol is not None and absd <= mp.mpf(abs_tol):
+                        ev["decided_by"] = "abs_tol"
+                        return True, ev
+                    ev["decided_by"] = "relative_tolerance_at_zero"
+                    return None, ev
+                rel = absd / abs(vb)
+            else:
+                rel = _rel_diff(va, vb)
             eff = mp.mpf(10) ** (-(dps - 10))
             if rel_tol is not None:
                 eff = max(eff, mp.mpf(rel_tol))

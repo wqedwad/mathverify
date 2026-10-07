@@ -15,6 +15,9 @@ the `sifir` angle and D4-ADIM-C of the `adim` angle, `denetim/2026-10-01/d4/`).
     I  sibling paths (6 Oct 2026): nsum's value alone refuted a series (a term far out never seen); SymPy's
        value confirmed by nsum still decides
     J  coverage given back (6 Oct 2026): on an infinite range a value the fundamental theorem proves decides
+    K-P round 3 (attack on round 2, 7 Oct 2026): K extremum direction below 40 digits (YO-1), L SymPy's value
+       only with a certificate (YO-2), M random points off the decimal grid (YO-3), N the declared relative
+       tolerance (YO-4, RK-E, RK-F), O erf antiderivatives on infinite ranges (RK-A), P end singularities (RK-B)
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4c/sonda.py [out.json] [groups]
@@ -389,8 +392,185 @@ def cases_j():
     ]
 
 
+# --- round 3 (attack on round 2, 7 Oct 2026; d4/saldiri/d4c2/bulgular.json) -------------------------------
+def ext(f, which, interval):
+    return _task("extremum", {"f": f, "var": "x", "which": which, "interval": interval}, [X])
+
+
+def cases_k():
+    """YO-1: the direction of a difference below 40 digits is a certified sign; an undecided candidate or a
+    non-empty superlevel set closes the EVT route."""
+    return [
+        ("max 1+x/10^50 [0,1] = 1 (wrong, x = 1 beats it)", ext("1 + x/10**50", "max", "[0, 1]"), _sol("1"), NOTOK, None),
+        ("max 1+x/10^50 [0,1] = 1 + 10^-50", ext("1 + x/10**50", "max", "[0, 1]"), _sol("1 + 10**(-50)"), OK, None),
+        ("max x(tanh 100 - 1) + 1 = tanh(100) (wrong)", ext("x*(tanh(100) - 1) + 1", "max", "[0, 1]"), _sol("tanh(100)"),
+         NOTOK, None),
+        ("max x(tanh 100 - 1) + 1 = 1", ext("x*(tanh(100) - 1) + 1", "max", "[0, 1]"), _sol("1"), OK, None),
+        ("max sqrt(10^100 + x) = 10^50 (wrong)", ext("sqrt(10**100 + x)", "max", "[0, 1]"), _sol("10**50"), NOTOK, None),
+        ("max sqrt(10^100 + x) = sqrt(10^100 + 1)", ext("sqrt(10**100 + x)", "max", "[0, 1]"), _sol("sqrt(10**100 + 1)"),
+         OK, None),
+        ("max Max(1, 1 + x/10^50) = 1 (wrong)", ext("Max(1, 1 + x/10**50)", "max", "[0, 1]"), _sol("1"), NOTOK, None),
+        ("min 1 - x/10^50 = 1 (wrong)", ext("1 - x/10**50", "min", "[0, 1]"), _sol("1"), NOTOK, None),
+        ("min 1 - x/10^50 = 1 - 10^-50", ext("1 - x/10**50", "min", "[0, 1]"), _sol("1 - 10**(-50)"), OK, None),
+        ("max 1 + x/10^45 = 1 (wrong)", ext("1 + x/10**45", "max", "[0, 1]"), _sol("1"), NOTOK, None),
+        ("max x^2 [-1, 1 + 10^-50] = 1 (wrong)", ext("x**2", "max", "[-1, 1 + 10**(-50)]"), _sol("1"), NOTOK, None),
+        ("max x^2 [-1, 1 + 10^-50] = (1 + 10^-50)^2", ext("x**2", "max", "[-1, 1 + 10**(-50)]"), _sol("(1 + 10**(-50))**2"),
+         OK, None),
+        ("control: max 1 + x/10^20 = 1 (wrong)", ext("1 + x/10**20", "max", "[0, 1]"), _sol("1"), NO, None),
+        ("control: max x(1-x) [0,1] = 1/4", ext("x*(1 - x)", "max", "[0, 1]"), _sol("1/4"), OK, None),
+        ("control: min x^2 - 2x [0,3] = -1", ext("x**2 - 2*x", "min", "[0, 3]"), _sol("-1"), OK, None),
+        ("control: argmax x(1-x) [0,1] = 1/2", ext("x*(1 - x)", "argmax", "[0, 1]"), _sol("1/2"), OK, None),
+    ]
+
+
+YO2_F = "atan(tan(x)) + 1 + pi**2/(2*sqrt(pi))*10**4*exp(-10**8*(x - 1/3)**2)"     # ∫_0^π = π + π²/2 = 8.0764
+YO2_G = "atan(tan(x)) + 174"                                                        # ∫_0^π = 174π = 546.637
+YO2_H = "atan(tan(x)) + 100"                                                        # ∫_0^π = 100π
+
+
+def evtol(e, tol):
+    return _task("evaluate", {"expr": e, "rel_tol": tol}, [X])
+
+
+def cases_l():
+    """YO-2: SymPy's value is taken only with a symbolic certificate (or, for an approximate claim, inside a
+    rigorous enclosure): a quadrature that agrees with SymPy shares its blind spot (a narrow peak), and the
+    agreement check never uses the declared tolerance."""
+    return [
+        ("F peak + atan(tan x) rel_tol 1e-9: 3.14159265358979 (true 8.0764)", dtol(YO2_F, 0, "pi", "1e-9"),
+         _sol("3.14159265358979"), NOTOK, None),
+        ("evaluate Integral(F) rel_tol 1e-9: 3.14159265358979", evtol(f"Integral({YO2_F}, (x, 0, pi))", "1e-9"),
+         _sol("3.14159265358979"), NOTOK, None),
+        ("F no tol: pi (wrong)", dint(YO2_F, 0, "pi"), _sol("pi"), NOTOK, None),
+        ("G rel_tol 0.01: 536.4 (true 174 pi, 1.9 %)", dtol(YO2_G, 0, "pi", "0.01"), _sol("536.4"), NOTOK, None),
+        ("G rel_tol 0.01: 537 (1.8 %)", dtol(YO2_G, 0, "pi", "0.01"), _sol("537"), NOTOK, None),
+        ("H rel_tol 0.05: 295 (6.1 %)", dtol(YO2_H, 0, "pi", "0.05"), _sol("295"), NOTOK, None),
+        ("G rel_tol 0.01: 546 (0.12 %)", dtol(YO2_G, 0, "pi", "0.01"), _sol("546"), NOTNO, None),
+        ("G no tol: 174 pi", dint(YO2_G, 0, "pi"), _sol("174*pi"), NOTNO, None),
+        ("G no tol: SymPy's -pi^2/2 + 174 pi (wrong)", dint(YO2_G, 0, "pi"), _sol("-pi**2/2 + 174*pi"), NOTOK, None),
+        # SymPy's value off by less than any enclosure width: 2 for ∫_{-1}^{1} (1 + |cos x|/10^80), true 2 + 2 sin(1)/10^80
+        ("1 + |cos x|/10^80 [-1,1]: 2 (SymPy's, wrong)", dint("1 + Abs(cos(x))/10**80", -1, 1), _sol("2"), NOTOK, None),
+        ("1 + |cos x|/10^30 [-2,2]: SymPy's value (wrong by 2e-30)", dint("1 + Abs(cos(x))/10**30", -2, 2),
+         _sol("2000000000000000000000000000001/500000000000000000000000000000 - sin(2)/500000000000000000000000000000"),
+         NOTOK, None),
+        ("evaluate 1 + |cos x|/10^80 [-1,1]: 2", ev("Integral(1 + Abs(cos(x))/10**80, (x, -1, 1))"), _sol("2"), NOTOK, None),
+        ("step Integral(1 + |cos x|/10^80) = 2", X1, _sol("2", cp("Integral(1 + Abs(cos(x))/10**80, (x, -1, 1)) = 2")),
+         ANY, NOTVER),
+        ("control: x^2 [0,1] = 1/3", dint("x**2", 0, 1), _sol("1/3"), OK, None),
+        ("control: x^2 [0,1] = 1/2 (wrong)", dint("x**2", 0, 1), _sol("1/2"), NO, None),
+        ("control: e^x [0,1] = e - 1", dint("exp(x)", 0, 1), _sol("E - 1"), OK, None),
+        ("control: x^2 [0,1] 0.3333 rel_tol 1e-3", dtol("x**2", 0, 1, "1e-3"), _sol("0.3333"), OK, None),
+    ]
+
+
+def cases_m():
+    """YO-3: SymPy's exact 'equals' False is not overruled by sample points on a decimal grid; points are
+    rationals with large prime denominators and irrational shifts."""
+    return [
+        ("simplify x^2: x^2 + sin(3*10^6 pi x) (wrong)", simp("x**2", [X]),
+         _sol("x**2 + sin(3000000*pi*x)", kind="expression"), NOTOK, None),
+        ("simplify sin(3*10^6 pi x): 0 (wrong)", simp("sin(3000000*pi*x)", [X]), _sol("0", kind="expression"), NOTOK, None),
+        ("simplify cos(6*10^6 pi x): 1 (wrong)", simp("cos(6000000*pi*x)", [X]), _sol("1", kind="expression"), NOTOK, None),
+        ("simplify x: x + sin(2*10^6 pi x)/10^6 (wrong)", simp("x", [X]),
+         _sol("x + sin(2000000*pi*x)/1000000", kind="expression"), NOTOK, None),
+        ("eq step x^2 + sin(3*10^6 pi x) = x^2", X1, _sol("2", eqs("x**2 + sin(3000000*pi*x) = x**2")), ANY, NOTVER),
+        ("control: simplify sin^2 + cos^2 = 1", simp("sin(x)**2 + cos(x)**2", [X]), _sol("1", kind="expression"), OK, None),
+        ("control: simplify (x + 1)^2 = x^2 + 2x + 1", simp("(x + 1)**2", [X]), _sol("x**2 + 2*x + 1", kind="expression"),
+         OK, None),
+        ("control: simplify sin(2x) = 2 sin x cos x", simp("sin(2*x)", [X]), _sol("2*sin(x)*cos(x)", kind="expression"),
+         OK, None),
+        ("control: simplify x^2: x^2 + 1 (wrong)", simp("x**2", [X]), _sol("x**2 + 1", kind="expression"), NO, None),
+        ("control: eq step (x+1)^2 = x^2 + 2x + 1", X1, _sol("2", eqs("(x + 1)**2 = x**2 + 2*x + 1")), OK, VER),
+    ]
+
+
+EC = "exp(cos(x))"          # ∫_0^1 = 2.341574841713053...
+
+
+def cases_n():
+    """YO-4, RK-E, RK-F: a declared relative tolerance is |c - v|/|v| <= t against the true value; t <= 0,
+    t >= 1, nan or infinite is a malformed input (UNKNOWN); v = 0 leaves it undefined (UNKNOWN)."""
+    return [
+        ("t = 1: 100 (malformed tolerance)", dtol(EC, 0, 1, "1"), _sol("100"), UNK, None),
+        ("t = 2: -5 (malformed)", dtol(EC, 0, 1, "2"), _sol("-5"), UNK, None),
+        ("t = 5: 10 (malformed)", dtol(EC, 0, 1, "5"), _sol("10"), UNK, None),
+        ("t = 0.5: 4.6 (rel err 0.96)", dtol(EC, 0, 1, "0.5"), _sol("4.6"), NO, None),
+        ("t = 0.1: 2.5874 (rel err 0.105 against v)", dtol(EC, 0, 1, "0.1"), _sol("2.5874"), NO, None),
+        ("t = 0.1: 2.12 (rel err 0.0946)", dtol(EC, 0, 1, "0.1"), _sol("2.12"), OK, None),
+        ("t = 0.5: 1.2 (rel err 0.4875)", dtol(EC, 0, 1, "0.5"), _sol("1.2"), OK, None),
+        ("E1 log(1+tan x) [0,pi/4] 0.2719261991 t 1e-3 (9.995e-4)", dtol("log(1 + tan(x))", 0, "pi/4", "1e-3"),
+         _sol("0.2719261991"), OK, None),
+        ("E2 cos x [0,1] 0.8406299346 t 1e-3 (9.995e-4)", dtol("cos(x)", 0, 1, "1e-3"), _sol("0.8406299346"), OK, None),
+        ("E3 sin(sin x) [0,1] 0.4301757 t 1e-3", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("0.4301757"), OK, None),
+        ("E4 cos x [0,1] 0.8405454 t 1e-3 (1.1e-3)", dtol("cos(x)", 0, 1, "1e-3"), _sol("0.8405454"), NO, None),
+        ("E5 sin(sin x) [0,1] 0.4301 t 1e-3 (1.18e-3)", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("0.4301"), NO, None),
+        ("F1 log(1+tan x) = pi log 2/8 t -1e-3 (malformed)", dtol("log(1 + tan(x))", 0, "pi/4", "-1e-3"),
+         _sol("pi*log(2)/8"), UNK, None),
+        ("F2 t = inf: 100 (malformed)", dtol(EC, 0, 1, "inf"), _sol("100"), UNK, None),
+        ("F3 t = nan: 2.34 (malformed)", dtol(EC, 0, 1, "nan"), _sol("2.34"), UNK, None),
+        ("F4 t = 0: 2.34 (malformed)", dtol(EC, 0, 1, "0"), _sol("2.34"), UNK, None),
+        ("v = 0: sin x [-1,1] t 1e-3: 0.0001 (relative tolerance undefined)", dtol("sin(x)", -1, 1, "1e-3"), _sol("0.0001"),
+         UNK, None),
+        ("evaluate e t 1e-3: 2.716 (8.4e-4)", evtol("E", "1e-3"), _sol("2.716"), OK, None),
+        ("evaluate e t 1e-3: 2.7155 (1.02e-3)", evtol("E", "1e-3"), _sol("2.7155"), NO, None),
+        ("evaluate e t 2: 5 (malformed)", evtol("E", "2"), _sol("5"), UNK, None),
+        ("evaluate e t -1e-3: E (malformed)", evtol("E", "-1e-3"), _sol("E"), UNK, None),
+    ]
+
+
+def cases_o():
+    """RK-A: an infinite range whose antiderivative holds erf (an entire function): the fundamental theorem with
+    its end limits proves the value."""
+    G = "Integral(exp(-x**2), (x, -oo, oo))"
+    return [
+        ("e^-x^2 R = sqrt(pi)", dint("exp(-x**2)", "-oo", "oo"), _sol("sqrt(pi)"), OK, None),
+        ("e^-x^2 R = 2 (wrong)", dint("exp(-x**2)", "-oo", "oo"), _sol("2"), NO, None),
+        ("e^-x^2 [0,oo) = sqrt(pi)/2", dint("exp(-x**2)", 0, "oo"), _sol("sqrt(pi)/2"), OK, None),
+        ("normal density = 1", dint("exp(-x**2/2)/sqrt(2*pi)", "-oo", "oo"), _sol("1"), OK, None),
+        ("normal 2nd moment = 1", dint("x**2*exp(-x**2/2)/sqrt(2*pi)", "-oo", "oo"), _sol("1"), OK, None),
+        ("normal 2nd moment = 2 (wrong)", dint("x**2*exp(-x**2/2)/sqrt(2*pi)", "-oo", "oo"), _sol("2"), NO, None),
+        ("e^-x/sqrt(x) [0,oo) = sqrt(pi)", dint("exp(-x)/sqrt(x)", 0, "oo"), _sol("sqrt(pi)"), OK, None),
+        ("sqrt(x) e^-x [0,oo) = sqrt(pi)/2", dint("sqrt(x)*exp(-x)", 0, "oo"), _sol("sqrt(pi)/2"), OK, None),
+        ("e^-2x^2 R = sqrt(pi/2)", dint("exp(-2*x**2)", "-oo", "oo"), _sol("sqrt(pi/2)"), OK, None),
+        ("e^(-x^2-2x) R = e sqrt(pi)", dint("exp(-x**2 - 2*x)", "-oo", "oo"), _sol("E*sqrt(pi)"), OK, None),
+        ("e^-x^2 cos x R = sqrt(pi) e^-1/4 (complex erf: undecided allowed)", dint("exp(-x**2)*cos(x)", "-oo", "oo"),
+         _sol("sqrt(pi)*exp(-1/4)"), NOTNO, None),
+        ("e^-x^2 R 1.7725 t 1e-3", dtol("exp(-x**2)", "-oo", "oo", "1e-3"), _sol("1.7725"), OK, None),
+        ("evaluate Integral(e^-x^2, R) = sqrt(pi)", ev(G), _sol("sqrt(pi)"), OK, None),
+        ("evaluate Integral(e^-x^2, R) = 2 (wrong)", ev(G), _sol("2"), NO, None),
+    ]
+
+
+def cases_p():
+    """RK-B: a removable or integrable singularity at an end of a finite range: a bounded end cell (or the
+    fundamental theorem) refutes wrong claims."""
+    return [
+        ("sinh x/x [0,1] = -100", dint("sinh(x)/x", 0, 1), _sol("-100"), NO, None),
+        ("atan x/x [0,1] = -100", dint("atan(x)/x", 0, 1), _sol("-100"), NO, None),
+        ("asin x/x [0,1] = 100", dint("asin(x)/x", 0, 1), _sol("100"), NO, None),
+        ("sin x/x [0,1] = 1", dint("sin(x)/x", 0, 1), _sol("1"), NO, None),
+        ("sin x/x [0,1] = 100", dint("sin(x)/x", 0, 1), _sol("100"), NO, None),
+        ("sin x/x [0,pi] = 2", dint("sin(x)/x", 0, "pi"), _sol("2"), NO, None),
+        ("log(1+x)/x [0,1] = 1", dint("log(1 + x)/x", 0, 1), _sol("1"), NO, None),
+        ("log(1+x)/x [0,1] = 100", dint("log(1 + x)/x", 0, 1), _sol("100"), NO, None),
+        ("(1 - cos x)/x^2 [0,1] = 1", dint("(1 - cos(x))/x**2", 0, 1), _sol("1"), NO, None),
+        ("log x log(1-x) [0,1] = 1/2", dint("log(x)*log(1 - x)", 0, 1), _sol("1/2"), NO, None),
+        ("log x/(1+x) [0,1] = -1", dint("log(x)/(1 + x)", 0, 1), _sol("-1"), NO, None),
+        ("x^x [0,1] = 100", dint("x**x", 0, 1), _sol("100"), NO, None),
+        ("sin x/x [0,1] 0.95 t 1e-3", dtol("sin(x)/x", 0, 1, "1e-3"), _sol("0.95"), NO, None),
+        ("sin x/x [0,1] 0.946 t 1e-3 (true 0.946083)", dtol("sin(x)/x", 0, 1, "1e-3"), _sol("0.946"), OK, None),
+        ("evaluate Integral(sin x/x, (x, 0, 1)) = 1", ev("Integral(sin(x)/x, (x, 0, 1))"), _sol("1"), NO, None),
+        ("step Integral(sin x/x, (x, 0, 1)) = 1", X1, _sol("2", cp("Integral(sin(x)/x, (x, 0, 1)) = 1")), NO, REF),
+        ("step Integral(log x log(1-x), (x, 0, 1)) = 1/2", X1, _sol("2", cp("Integral(log(x)*log(1 - x), (x, 0, 1)) = 1/2")),
+         NO, REF),
+        ("log x log(1-x) [0,1] = 2 - pi^2/6 (true)", dint("log(x)*log(1 - x)", 0, 1), _sol("2 - pi**2/6"), NOTNO, None),
+        ("log x/(1+x) [0,1] = -pi^2/12 (true)", dint("log(x)/(1 + x)", 0, 1), _sol("-pi**2/12"), NOTNO, None),
+    ]
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "I": cases_i, "J": cases_j}
+          "H": cases_h, "I": cases_i, "J": cases_j, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n,
+          "O": cases_o, "P": cases_p}
 SLOW = 60.0           # group D: every verify returns within this many seconds
 CASE_LIMIT = 240      # seconds before a case is abandoned (SIGALRM; the unfixed tree hangs on group D)
 
@@ -403,7 +583,7 @@ def _alarm(signum, frame):
     raise CaseTimeout(f"no verdict within {CASE_LIMIT} s")
 
 
-def main(out_path=None, groups="ABCDEFGHIJ"):
+def main(out_path=None, groups="ABCDEFGHIJKLMNOP"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -450,5 +630,5 @@ def main(out_path=None, groups="ABCDEFGHIJ"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJ"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJKLMNOP"
     sys.exit(1 if main(out, grp) else 0)

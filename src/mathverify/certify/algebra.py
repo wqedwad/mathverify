@@ -10,7 +10,7 @@ from sympy import S, Eq, FiniteSet, ConditionSet, And, oo
 
 from ..equiv import answers_equivalent
 from ..equiv.random_point import sample_points
-from ..equiv.numeric import real_odd_roots
+from ..equiv.numeric import read_tolerance, real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk, exact_complement, exact_intersection, set_is_empty
@@ -876,6 +876,13 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
     expr_src = p.get("expr") or ir.unknown_of_interest
     if not expr_src:
         return unknown(LAYER, "no_target_expression")
+    # a declared tolerance is read once, |c - v|/|v| <= t against the true value v (equiv.numeric.read_tolerance);
+    # rel_tol >= 1 accepted any claim, a negative one refuted the exact value (YO-4, RK-F)
+    rel_tol, bad_rel = read_tolerance(p.get("rel_tol"))
+    abs_tol, bad_abs = read_tolerance(p.get("abs_tol"), relative=False)
+    if bad_rel or bad_abs:
+        return unknown(LAYER, "malformed_tolerance", 0, {"rel_tol": str(p.get("rel_tol")), "abs_tol": str(p.get("abs_tol"))},
+                       flags=["malformed_tolerance"])
     target, err = parse_or_unknown(LAYER, ctx.expr, expr_src)
     if err:
         return err
@@ -897,7 +904,7 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
             if und is None:
                 return unknown(LAYER, f"claim_as_written_undecided: {why}", 0, ev)
         ok, cev = answers_equivalent(claimed, target, shape=shape, domain=dom,
-                                     rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
+                                     rel_tol=rel_tol, abs_tol=abs_tol)
         ev["compare"] = cev
         ev["method"] = "direct"
         if dom and ok is not False:
@@ -963,7 +970,7 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         if len(values) > 1:
             return unknown(LAYER, "target_not_unique", 0, ev, flags=["ir_incomplete"])
         ok, cev = answers_equivalent(claimed, values[0], shape="scalar",
-                                     rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
+                                     rel_tol=rel_tol, abs_tol=abs_tol)
         ev["compare"] = cev
         ev["method"] = "solve_system"
     if ok is True:
