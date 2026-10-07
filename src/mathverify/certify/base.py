@@ -1259,8 +1259,18 @@ def exact_intersection(*sets) -> sp.Set:
     PROVED equal (`same_value`, an exact difference that simplifies to 0; numbers only pick the pairs to
     try) are written one way, the shortest, and the intersection is taken again; the TypeError stands when
     no such pair exists or SymPy still cannot order them (the caller abstains)."""
+    return _exact_setop(sp.Intersection, sets)
+
+
+def exact_complement(a, b) -> sp.Set:
+    """sp.Complement(a, b), with the endpoints of `exact_intersection` (round 7, RK6: the sampler of
+    solve_inequality took dom minus the claimed (3, 4) with dom (log(8)/log(2), oo) and died)."""
+    return _exact_setop(sp.Complement, (a, b))
+
+
+def _exact_setop(op, sets) -> sp.Set:
     try:
-        return sp.Intersection(*sets)
+        return op(*sets)
     except TypeError as err:
         first = err
     pts: list = []
@@ -1285,7 +1295,7 @@ def exact_intersection(*sets) -> sp.Set:
                 rep[q] = p_
     if not rep:
         raise first
-    return sp.Intersection(*[s_.xreplace(rep) for s_ in sets])
+    return op(*[s_.xreplace(rep) for s_ in sets])
 
 
 class Timer:

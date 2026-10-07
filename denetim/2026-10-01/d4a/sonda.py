@@ -419,7 +419,7 @@ def cases_k():
         ("x**(1/3) = 2 -> {8}", solve("x**(1/3) = 2"), sset("{8}"), NOTNO, None),
         ("x**(1/3) = 2 -> {}", solve("x**(1/3) = 2"), sset("{}"), NO, None),
         ("positive: x**(1/3) < 1 -> (0, 1)", solve("x**(1/3) < 1", vars_=[XP], kind="solve_inequality"),
-         ival("Interval.open(0, 1)"), NOTNO, None),
+         ival("Interval.open(0, 1)"), OK, None),     # x > 0: no convention (round 7 of d4b, RK3)
         ("cbrt(x) < 1 -> (-oo, 1)", solve("cbrt(x) < 1", kind="solve_inequality"), ival("Interval.open(-oo, 1)"),
          NOTNO, None),
         ("cbrt(x) < 1 -> (0, 1)", solve("cbrt(x) < 1", kind="solve_inequality"), ival("Interval.open(0, 1)"),
