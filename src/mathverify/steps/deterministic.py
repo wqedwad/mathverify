@@ -358,11 +358,16 @@ def _verified_where_conventions(claim, ctx: Ctx, status: str, ev: dict) -> tuple
     the value of a problem expression is a convention (`Ctx.convention_region`): an instance of the problem
     may lie there. Under the given x**(1/3) = x the real root makes x = -1 an instance, and "Abs(x) = x",
     verified on [0, oo), was a verified step (fourth audit, D4-ADIM-K). Checked again with those points;
-    verified only when it holds there too."""
+    verified only when it holds there too. Where a Sum/Product bound is not an integer no reading is the
+    curriculum's: not verified (`Ctx.integer_bound_region`, review of d4f, YO-3)."""
+    from ..certify.base import integer_bound_regions
     doms: dict = {}
     for s_ in getattr(claim, "free_symbols", set()):
         if ctx.ns.get(s_.name) != s_:
             continue
+        if integer_bound_regions(ctx, [s_]):
+            # a Sum/Product bound of the problem not an integer there: no reading is the curriculum's (YO-3)
+            return "unknown", {**ev, "reason": "not_verified_where_a_bound_is_not_an_integer"}
         reg = ctx.convention_region(s_)
         try:
             empty = reg.is_empty
@@ -2220,7 +2225,7 @@ def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool = False) -
     names are read as `_with_bound_dummies` reads them. A text the as-written reading does not take is `unread`:
     a step the value reading verified is not proved defined then (review of d4f, YO-1)."""
     from ..certify.domain import closed_condition_undecided, definedness_conditions
-    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_set_as_written, preclean
     try:
         names = _check_safe(preclean(_strip_invisible(text)), ns)
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
@@ -2228,7 +2233,8 @@ def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool = False) -
     if names:
         ns = _with_undeclared(text, ns, names)
     try:
-        w = parse_as_written(text, ns)
+        # a membership (x in {0, 4}) or a compound step (x = 1 or x = 2) part by part
+        w = parse_set_as_written(text, ns)
         if w is None:
             return unread
         conds = definedness_conditions(w, None)

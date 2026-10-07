@@ -1981,14 +1981,33 @@ def _matrix_entries(m) -> list:
     return [m]
 
 
+def _rational_as_written(e) -> bool:
+    """Is a matrix entry, as written, a rational number made of integers by +, -, * and integer powers, with no
+    division by zero? Such an entry carries no condition a computed operation could fold away."""
+    if isinstance(e, sp.Rational):
+        return True
+    if isinstance(e, (sp.Add, sp.Mul)):
+        return all(_rational_as_written(a) for a in e.args)
+    if isinstance(e, sp.Pow) and isinstance(e.exp, sp.Integer) and _rational_as_written(e.base):
+        return not (e.exp.is_negative and _evaluated_bound(e.base) == 0)
+    return False
+
+
 def _held_matrix_op(name: str):
     """A matrix operation read as written, for definedness only: an undefined function of the entries. Computed,
     det [[√x, 1], [-1, √x]] folded √x·√x into x and the condition x >= 0 was lost ({-3} certified for = -2), and
-    eigmax failed the whole reading (review of d4f, YO-2)."""
+    eigmax failed the whole reading (review of d4f, YO-2). The determinant, trace and rank of rational entries
+    are computed: no condition is lost, and 30/det [[1, 1], [2, 4]] keeps its value for the condition det != 0
+    (held, Cramer's rule steps of uni-la-009 were no longer verified)."""
     held = sp.Function(f"written_{name}")
 
     def op(m, *_rest, **_kw):
-        return held(*_matrix_entries(m))
+        entries = _matrix_entries(m)
+        if name in ("det", "trace", "rank") and isinstance(m, sp.MatrixBase) and entries \
+                and all(_rational_as_written(x) for x in entries):
+            with sp.evaluate(True):
+                return _SAFE_NAMES[name](m.applyfunc(_evaluated_bound))
+        return held(*entries)
     return op
 
 
@@ -2285,11 +2304,37 @@ _WRITTEN_SETS = {"Interval": _WrittenInterval, "Union": _written_set_args, "Inte
                  "Complement": _written_set_args}
 
 
+# and/or between relations; `|` only between bracketed ones ((x < -3) | (x > 1)): elsewhere it is |x - 1|
+_COMPOUND_RE = re.compile(r"\s+(?:or|and)\s+|\s*[∧∨&]\s*|(?<=\))\s*\|\s*(?=\()")
+_LATEX_ORDER_RE = re.compile(r"\\(?:leqslant|geqslant|leq|geq|le|ge|lt|gt)(?![A-Za-z])|<=|>=|<|>")
+
+
+def _latex_chain_sides(s: str) -> list[str]:
+    """The sides of a LaTeX order chain (0 < x \\le 3) cut at the top-level order relations (not inside braces
+    or brackets); one piece when there is none."""
+    out, depth, cur, i = [], 0, "", 0
+    while i < len(s):
+        c = s[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        m = _LATEX_ORDER_RE.match(s, i) if depth == 0 else None
+        if m is not None:
+            out.append(cur)
+            cur, i = "", m.end()
+            continue
+        cur += c
+        i += 1
+    return out + [cur]
+
+
 def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     """A text that may be set notation, read AS WRITTEN for definedness only (see `parse_as_written`): the set
     constructors hold their arguments as a Tuple, and a text the whole reading cannot take is cut the way
     `parse_set_str` reads it (the parts of A U B, the ends of (a, b], the elements of {a, b}), each part read
-    as written. None when no part is read."""
+    as written; a compound condition (x = 1 or x = 2) and a membership (x in {0, 4}) part by part. None when a
+    part is not read."""
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
@@ -2298,9 +2343,23 @@ def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     whole = parse_as_written(s, wns)
     if whole is not None:
         return whole
+    if is_latex(s):
+        m = _LATEX_NOTIN_RE.match(s)
+        if m is not None:
+            return parse_set_as_written(m.group(2), ns)           # x \notin S: the set
+        sides = _latex_chain_sides(s)
+        if len(sides) > 2:
+            # a chain (0 < x \le 3), which the reading with evaluation off does not take: each side
+            read = [parse_as_written(p, wns) for p in sides]
+            return None if any(r is None for r in read) else sp.Tuple(*[a for r in read for a in r.args])
     s2 = preclean(strip_presentation(_strip_invisible(s))).strip()
     if number_set_named(s2) is not None or number_set_named(s) is not None:
         return sp.Tuple()                           # ℕ⁺, Z+, N0: a set by its name, no condition
+    parts = _COMPOUND_RE.split(s2)
+    if len(parts) > 1:
+        # a compound condition (x < -1 or x > 3, x = 1 or x = 2): each part as written
+        read = [parse_set_as_written(p, ns) for p in parts]
+        return None if any(r is None for r in read) else sp.Tuple(*[a for r in read for a in r.args])
     member = _NOT_IN_RE.match(s2) or _DOMAIN_MEMBER_RE.match(s2)
     if member:
         # x in [a, b], x ∈ Interval(a, b): the set's ends (review of d4f, YO-6)

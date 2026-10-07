@@ -327,12 +327,22 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
 def _claim_texts(solution: Solution, raw_payload, options) -> list[str]:
     """The claimed answer's texts as the solver wrote them, before the set notation was normalized (x >= 1/(1/0)
     became [0, oo) first), and the text of the option it picked (review of d4f, YO-5)."""
+    return list(dict.fromkeys(_payload_texts(solution, raw_payload) + _option_texts(solution, options)))
+
+
+def _payload_texts(solution: Solution, raw_payload) -> list[str]:
     ca = solution.claimed_answer
+    if ca.kind in ("dne", "none"):
+        return []                                   # "DNE", "yok": no value is claimed
     payload = ca.payload if raw_payload is None else raw_payload
-    texts = [t for t in (payload if isinstance(payload, list) else [payload]) if isinstance(t, str)]
+    return [t for t in (payload if isinstance(payload, list) else [payload]) if isinstance(t, str)]
+
+
+def _option_texts(solution: Solution, options) -> list[str]:
+    ca = solution.claimed_answer
     if ca.option and isinstance(options, dict) and isinstance(options.get(ca.option), str):
-        texts.append(options[ca.option])
-    return list(dict.fromkeys(texts))
+        return [options[ca.option]]
+    return []
 
 
 def _claim_conditions(txt: str, ns: dict, ctx):
@@ -373,6 +383,14 @@ def _claim_convention(solution: Solution, ctx, task_kind: str = "", raw_payload=
     return out
 
 
+def _option_readable(solution: Solution, ctx) -> bool:
+    """Does the value reading of options (`Ctx.option_value`) take the text of the option the solution picked?"""
+    try:
+        return ctx.option_value(solution.claimed_answer.option) is not None
+    except Exception:  # noqa: BLE001 - a text no reading takes
+        return False
+
+
 def _claim_without_value(solution: Solution, ctx, raw_payload=None, options=None) -> list[str]:
     """The texts of the claimed answer (as written, an option's too) that, read as written at the values the
     givens fix, have no value: a closed operation with none (`certify.domain.NO_VALUE`: (-1)!, Γ(0), zoo), a
@@ -393,13 +411,16 @@ def _claim_without_value(solution: Solution, ctx, raw_payload=None, options=None
         readable = True
     except Exception:  # noqa: BLE001 - LeakageError cannot come from a claim; unreadable: the certificates say so
         readable = False
+    option = set(_option_texts(solution, options)) - set(_payload_texts(solution, raw_payload))
     for txt in _claim_texts(solution, raw_payload, options):
         try:
             conds = _claim_conditions(txt, ns, ctx)
         except Exception:  # noqa: BLE001 - not read as written
             conds = None
         if conds is None:
-            if readable and not complex_dod:
+            # a text the value reading takes but the as-written one does not; an option's own text ("limit
+            # yoktur") is read by the value reading of options or by none
+            if (_option_readable(solution, ctx) if txt in option else readable) and not complex_dod:
                 out.append(txt)
             continue
         if complex_dod:

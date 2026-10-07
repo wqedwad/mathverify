@@ -230,9 +230,12 @@ def test_tan10_a_step_is_neither_verified_nor_refuted(claim):
 
 
 def test_tan10_an_open_bound_is_held_to_the_integers():
-    from mathverify.certify.domain import _one_range_conditions
+    # as a convention (RK-F1): holds at an integer, undecided elsewhere, never false
+    from mathverify.certify.domain import INTEGER_BOUND, _one_range_conditions
     n = sp.Symbol("n", real=True)
-    assert _one_range_conditions(n, n + 2) == [sp.Contains(n, sp.S.Integers)]
+    assert _one_range_conditions(n, n + 2) == [sp.Contains(n, INTEGER_BOUND)]
+    assert sp.Contains(sp.Integer(3), INTEGER_BOUND) is sp.true
+    assert sp.Contains(sp.Rational(7, 3), INTEGER_BOUND) not in (sp.true, sp.false)
     assert _one_range_conditions(sp.Rational(1, 2), sp.Rational(5, 2)) is None
     assert _one_range_conditions(sp.Rational(1, 2), sp.oo) is None
     assert _one_range_conditions(sp.Rational(1, 2), n) is None

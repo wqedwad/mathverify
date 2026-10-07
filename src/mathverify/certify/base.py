@@ -156,12 +156,15 @@ class Ctx:
         # domain, and sin(x) > 0 cuts the negative bases of x**(1/3) too
         dom, unsolved = self._periodic_conditions(dom, deferred, var)
         self.cache[f"unsolved:{var.name}"] = unsolved
-        from .domain import is_value_convention
+        from .domain import is_integer_bound, is_value_convention
         # the points where a value of the problem is ANOTHER value under the other reading (an odd root:
         # the principal value; Mod: Euclidean): see value_convention_region
         _, vback = self._forward_ranges(dom, [c for c in spans if is_value_convention(c)
-                                              and not is_range_span(c)], var)
+                                              and not is_range_span(c) and not is_integer_bound(c)], var)
         self.cache[f"valueconv:{var.name}"] = vback
+        # the points where a Sum/Product bound is not an integer: see integer_bound_region
+        _, iback = self._forward_ranges(dom, [c for c in spans if is_integer_bound(c)], var)
+        self.cache[f"intbound:{var.name}"] = iback
         dom, back = self._forward_ranges(dom, spans, var)
         if back is not S.EmptySet:
             unapplied += [c for c in spans if c not in unapplied]
@@ -321,6 +324,15 @@ class Ctx:
         `convention_counterexample`. A Sum range that runs backwards is left to §80's own rules."""
         self.domain_for(var)
         return self.cache.get(f"valueconv:{var.name}", S.EmptySet)
+
+    def integer_bound_region(self, var: sp.Symbol) -> sp.Set:
+        """The part of `convention_region` where a Sum/Product bound of the problem is not an integer
+        (`certify.domain.Convention` `integer_bound`): SymPy's stepping sum, the index reading and "undefined"
+        are its readings, so a comparison made on `domain_for` (the integers) certifies nothing while it is
+        not empty, and no point of it refutes anything: Σ_{k=n}^{n+2} k with n real was CORRECT for
+        3n + 3 + sin(πn) (review of d4f, YO-3)."""
+        self.domain_for(var)
+        return self.cache.get(f"intbound:{var.name}", S.EmptySet)
 
     def reversed_region(self, var: sp.Symbol) -> sp.Set:
         """The points of `var`'s domain (the declarations, constraints, side conditions and written
@@ -1354,6 +1366,23 @@ def convention_counterexample(ctx: Ctx, claimed, truth, syms, n: int = 12) -> tu
         except Exception:  # noqa: BLE001
             continue
     return True, None
+
+
+def integer_bound_regions(ctx: Ctx, syms) -> dict[str, str]:
+    """The problem's symbols among `syms` with points where a Sum/Product bound is not an integer
+    (`Ctx.integer_bound_region`), with those points; a region not proved empty counts."""
+    out = {}
+    for s_ in syms:
+        if not self_ok(ctx, s_):
+            continue
+        r = ctx.integer_bound_region(s_)
+        try:
+            empty = r.is_empty
+        except Exception:  # noqa: BLE001
+            empty = None
+        if empty is not True:
+            out[str(s_)] = str(r)
+    return out
 
 
 def self_ok(ctx: Ctx, s_) -> bool:
