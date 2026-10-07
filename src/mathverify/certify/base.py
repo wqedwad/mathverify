@@ -682,7 +682,24 @@ class Ctx:
         (p,) = fs                                # a plain real symbol (see (4) of `_binding_issues`)
         if not any(v.name == p.name for v in self.ir.vars):
             return None
+        from .domain import Convention
         reg = self._declared_region(self.sym(p.name), givens=True)
+        if reg is not None and isinstance(c, sp.Contains) and isinstance(c.args[1], Convention):
+            # a convention read with the region's facts: (-1)**n and (-1)**(2*n) with n declared an integer have
+            # an integer exponent, no convention (round 3, RK-3: the derivative 2*x*(-1)**n of x**2*(-1)**n was
+            # parameter_condition_not_proved; the condition's set hid Convention's superset test, 2*n none)
+            facts = {}
+            for name, st in (("integer", S.Integers), ("nonnegative", sp.Interval(0, sp.oo)),
+                             ("positive", sp.Interval.open(0, sp.oo))):
+                try:
+                    if reg.is_subset(st) is True:
+                        facts[name] = True
+                except Exception:  # noqa: BLE001
+                    continue
+            if facts:
+                d = sp.Dummy(p.name, real=True, **facts)
+                if c.args[1]._contains(c.args[0].xreplace({p: d})) is sp.true:
+                    return True
         cut = self.condition_set(c, p)
         if reg is None or cut is None:
             return None
@@ -989,6 +1006,19 @@ class Ctx:
             nowhere |= nw
             conds += [c for c in cs if c not in conds]
             note(s_, self._undefined_constant(s_, pins))
+        # a condition on the variable restricts it as written too: the givens of a limit (its own expression stays
+        # out: lim x/x at 0 is 1), every declared constraint and the domain of discourse. Read after SymPy's fold,
+        # x + 0*sqrt(x - 1) > 0 was x > 0, so DNE was certified for the limit of |x - 1|/(x - 1) at 1 (x >= 1 as
+        # written: 1 from the right) and {1/2} for x**2 = 1/4 under the constraint (attack on d4e round 2, YO-5)
+        dod = self.ir.domain_of_discourse
+        extra = (list(self.ir.givens) if kind == "limit" else []) + [c for v in self.ir.vars for c in v.constraints]
+        extra += [dod] if isinstance(dod, str) and dod.strip() else []
+        for s_ in extra:
+            if s_ in srcs:
+                continue
+            cs, nw = written_definedness(s_, self.ns, pins)
+            nowhere |= nw
+            conds += [c for c in cs if c not in conds]
         cs, nw, calls = self._function_call_conditions(srcs)
         nowhere |= nw
         conds += [c for c in cs if c not in conds]

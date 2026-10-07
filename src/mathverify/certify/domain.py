@@ -1167,7 +1167,12 @@ def _subs_conditions(n, var, add) -> None:
             continue
         bad = _violations(c, d, Interval.open(p_ - 1, p_ + 1))
         if bad is None:
-            add(DEFINEDNESS_UNDECIDED)
+            # not solved near p (x - cos(x) != 0, cos(x**2) != 0): a condition that holds strictly at p, of
+            # operations continuous where defined, holds on a neighbourhood of it (`calculus.strict_at`, R1); the
+            # compute step at(diff(1/(x - cos(x)), x), x, pi) = -1/(pi + 1)**2 was left unknown (round 3, RK-7)
+            from .calculus import strict_at
+            if not strict_at(c, d, p_):
+                add(DEFINEDNESS_UNDECIDED)
             continue
         if bad.is_empty is True:
             continue

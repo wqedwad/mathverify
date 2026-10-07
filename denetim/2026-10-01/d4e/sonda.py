@@ -1145,8 +1145,9 @@ def cases_q():
                 der("log(a*x + 1)", None, [], [X, AN]), sol("a**2/(a**2*x + a)", "expression"), NOTOK, None))
     out.append(("YO-3 derivative log(a*x + 1), given a >= 0: 1/(x + 1/a) [a = 0]", der("log(a*x + 1)", None, ["a >= 0"], [X, A_]),
                 sol("1/(x + 1/a)", "expression"), NOTOK, None))
+    # pinned to 0 the claim has no value anywhere, where the derivative 0 exists: RK-8 (INCORRECT) or UNKNOWN
     out.append(("YO-3 derivative log(a*x + 1), given a = 0: 1/(x + 1/a)", der("log(a*x + 1)", None, ["a = 0"], [X, A_]),
-                sol("1/(x + 1/a)", "expression"), UNK, None))
+                sol("1/(x + 1/a)", "expression"), NOTOK, None))
     out.append(("YO-3 derivative asin(x/a), a > 0: (a - 1)/((a - 1)*sqrt(a**2 - x**2)) [a = 1]",
                 der("asin(x/a)", None, [], [X, AP]), sol("(a - 1)/((a - 1)*sqrt(a**2 - x**2))", "expression"), NOTOK, None))
     out.append(("YO-3 derivative asin(x/a), a > 0: 1/sqrt(a**2 - x**2) + 0*sqrt(1 - a) [a > 1]",
@@ -1183,8 +1184,9 @@ def cases_q():
                  ("sign(x) + x", "1"), ("sign(x**2 - 1)", "0"), ("sign(sin(x))", "0"),
                  ("tan(x**2) + Max(x, -x)", "2*x*sec(x**2)**2 + sign(x)"), ("tan(x**2) + sign(x)", "2*x*sec(x**2)**2"),
                  ("1/(x - cos(x)) + sign(x)", "-(1 + sin(x))/(x - cos(x))**2"), ("Heaviside(x)", "0"),
-                 ("floor(x) + x", "1"), ("Piecewise((x, x > 0), (-x, True))", "sign(x)"),
-                 ("Piecewise((1, x > 0), (0, True))", "0")):
+                 ("floor(x) + x", "1"), ("Piecewise((x, x > 0), (-x, x <= 0))", "sign(x)"),
+                 ("Piecewise((1, x > 0), (0, x <= 0))", "0"), ("Piecewise((x**2, x > 1), (2*x - 1, x <= 1)) + Abs(x)",
+                                                                 "Piecewise((2*x, x > 1), (2, x <= 1)) + sign(x)")):
         out.append((f"YO-4 derivative {f}: {c} [value at the kink]", der(f), sol(c, "expression"), UNK, None))
     q = ir("derivative", {"f": "x*Max(x, -x)", "var": "x", "order": 2}, [], [X], shape="expression")
     out.append(("YO-4 2nd derivative x*Max(x, -x): 2*sign(x)", q, sol("2*sign(x)", "expression"), UNK, None))
@@ -1195,6 +1197,9 @@ def cases_q():
     out.append(("YO-4 derivative Max(x, -x): Piecewise((1, x > 0), (-1, x < 0)) [right]", der("Max(x, -x)"),
                 sol("Piecewise((1, x > 0), (-1, x < 0))", "expression"), NOTNO, None))
     out.append(("YO-4 derivative Max(x, -x): 1 [wrong]", der("Max(x, -x)"), sol("1", "expression"), NOTOK, None))
+    out.append(("YO-4 derivative Piecewise((x**2, x > 1), (2*x - 1, x <= 1)) + |x|: Piecewise + x/|x| [right, C1 at 1]",
+                der("Piecewise((x**2, x > 1), (2*x - 1, x <= 1)) + Abs(x)"),
+                sol("Piecewise((2*x, x > 1), (2, x <= 1)) + x/Abs(x)", "expression"), NOTNO, None))
     out.append(("YO-4 ctrl derivative tan(x**2)*sign(x): 2*x*sec(x**2)**2*sign(x) [differentiable]",
                 der("tan(x**2)*sign(x)"), sol("2*x*sec(x**2)**2*sign(x)", "expression"), NOTNO, None))
     out.append(("YO-4 ctrl derivative x**2*sign(x): 2*Abs(x) [differentiable]", der("x**2*sign(x)"),
