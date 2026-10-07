@@ -324,6 +324,30 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     return flags
 
 
+def _claim_pins(ctx) -> dict:
+    """The values a given or a declared constraint fixes (`Ctx.pinned_values`), the task's own variable and a
+    tangent line's dependent variable left out: the claim is read at them. With a = 1 the claim (a**4 - 1)/(a - 1)
+    for Σ_{k=0}^{3} a**k is 0/0 and was certified (attack on d4e, YO-1)."""
+    from .normalize.parse import task_variables
+    keep = task_variables(ctx.ir) | {str((ctx.ir.task.params or {}).get("dep", ""))}
+    try:
+        return {s_: v for s_, v in ctx.pinned_values().items() if s_.name not in keep}
+    except Exception:  # noqa: BLE001 - no value read: the claim is read as it is
+        return {}
+
+
+def _pinned_tree(w, pins):
+    """An as-written tree with the pinned values put in (unevaluated, never into a bound variable)."""
+    from .normalize.parse import substitute_free
+    if not pins or not isinstance(w, sp.Basic):
+        return w
+    try:
+        with sp.evaluate(False):
+            return substitute_free(w, pins)
+    except Exception:  # noqa: BLE001 - read without the values (the old reading)
+        return w
+
+
 def _claim_convention(solution: Solution, ctx, task_kind: str = "") -> list[str]:
     """The texts of the claimed answer that, read as written, hold a closed operation whose value is a
     convention (`certify.domain.Convention`). An odd root of a negative number is compared under both
@@ -337,11 +361,12 @@ def _claim_convention(solution: Solution, ctx, task_kind: str = "") -> list[str]
         ns = ctx.claim_ns()
     except Exception:  # noqa: BLE001
         return out
+    pins = _claim_pins(ctx)
     for txt in (payload if isinstance(payload, list) else [payload]):
         if not isinstance(txt, str):
             continue
         try:
-            w = parse_as_written(txt, ns)
+            w = _pinned_tree(parse_as_written(txt, ns), pins)
             conds = definedness_conditions(w, None) if w is not None else []
         except Exception:  # noqa: BLE001 - not read as written: the certificates read it
             continue
@@ -366,12 +391,14 @@ def _claim_without_value(solution: Solution, ctx) -> list[str]:
         ns = ctx.claim_ns()
     except Exception:  # noqa: BLE001 - the certificates report an unreadable claim
         return out
+    pins = _claim_pins(ctx)
     for txt in (payload if isinstance(payload, list) else [payload]):
         if not isinstance(txt, str):
             continue
         w = parse_set_as_written(txt, ns)          # an interval's ends too: Interval(1/(-1)!, 2), (1/(-1)!, 2]
         if w is None:
             continue
+        w = _pinned_tree(w, pins)
         conds = [c for c in definedness_conditions(w, None) if not is_convention(c)]
         if sp.false in conds or closed_condition_undecided(conds):         # NO_VALUE comes with `false`
             out.append(txt)
@@ -503,6 +530,11 @@ def scope_note(flags: list[str], verdict: str) -> str:
         return ""
     return ("\nKAPSAM: bu CORRECT yalnız CEVAP düzeyindedir, çözümün geçerliliği hakkında değil — "
             + "; ".join(parts) + ".")
+
+
+# the task kinds whose certificates read a periodic side condition left unsolved on ℝ (cos(x) > 0) on a bounded
+# window around their point (review of d4e, R5): it was `given_not_applied` before any of them ran
+_WINDOWED_KINDS = frozenset({"derivative", "tangent_line", "antiderivative", "limit"})
 
 
 def verify(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
@@ -698,8 +730,10 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     try:
         tvar = (problem_ir.task.params or {}).get("var")
         unapplied = ctx.side_conditions(ctx.sym(tvar))[1] if isinstance(tvar, str) else []
-        if isinstance(tvar, str):
-            # one with a trigonometric function that stays unsolved on the domain the rest leaves
+        if isinstance(tvar, str) and problem_ir.task.kind not in _WINDOWED_KINDS:
+            # one with a trigonometric function that stays unsolved on the domain the rest leaves (the calculus
+            # certificates solve it on a bounded window around their point: `certify.calculus.task_region`,
+            # `certify.limits.region_side`)
             unapplied = unapplied + [str(r) for r in ctx.unsolved_side_conditions(ctx.sym(tvar))]
     except Exception:  # noqa: BLE001 - a failed probe adds no fact
         unapplied = []

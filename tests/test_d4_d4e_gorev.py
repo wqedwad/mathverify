@@ -428,3 +428,196 @@ def test_written_condition_naming_a_parameter():
 
 def test_tangent_dependent_variable_is_never_pinned():
     assert _v(_tan("x**2", "1", ["y = 1"]), "y = 2*x - 1", "equation") == "CORRECT"
+
+
+# --- round 2 (attack on d4e, 6 Oct 2026): false accepts YO-1..YO-6 ---------------------------------------------
+K = {"name": "k", "domain": "integer"}
+AC2 = {"name": "a", "domain": "real", "constraints": ["a = 2"]}
+
+
+def _ss(term, lo, hi, givens=(), vars_=None):
+    return _ir("series_sum", {"term": term, "var": "k", "lo": lo, "hi": hi}, givens, vars_ or [K, A])
+
+
+def _cf(rec, initial, givens=()):
+    return _ir("closed_form", {"recurrence": rec, "initial": initial, "var": "n", "name": "a"}, givens,
+               [{"name": "n", "domain": "positive_integer"}, {"name": "c", "domain": "real"}], "expression")
+
+
+def test_series_and_closed_form_read_the_pinned_value():
+    for g, v in ((["a = 2"], [K, A]), ([], [K, AC2])):
+        assert _v(_ss("(k - a)/(k - a)", 1, 3, g, v), "3") == "UNKNOWN"
+        assert _v(_ss("1/(k - a)", 1, 3, g, v), "1/(1 - a) + 1/(2 - a) + 1/(3 - a)") == "UNKNOWN"
+        assert _v(_ss("a*k", 1, 3, g, v), "12") == "CORRECT"
+        assert _v(_ss("a*k", 1, 3, g, v), "6*a") == "CORRECT"
+        assert _v(_ss("a*k", 1, 3, g, v), "6") == "INCORRECT"
+        assert _v(_ss("a**k", 0, 3, g, v), "15") == "CORRECT"
+    assert _v(_ss("a**k", 0, 3, ["a = 1"]), "(a**4 - 1)/(a - 1)") == "UNKNOWN"
+    assert _v(_ss("a**k", 0, 3, ["a = 1"]), "4") == "CORRECT"
+    assert _v(_ss("a**k", 0, 3, ["a = 0"]), "1") == "UNKNOWN"
+    assert _v(_ss("1/(k - a)", 1, 3, ["a = 5"]), "-13/12") == "CORRECT"
+    assert _v(_ss("0**k", 0, 3, [], [K]), "1") == "UNKNOWN"
+    assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c = 0"]), "c**(n - 1)", "expression") == "UNKNOWN"
+    assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c = 2"]), "2**(n - 1)", "expression") == "CORRECT"
+    assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c = 2"]), "c**(n - 1)", "expression") == "CORRECT"
+    assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c = 2"]), "3**(n - 1)", "expression") == "INCORRECT"
+
+
+def test_integral_with_numbers_for_bounds_must_converge():
+    i, V = "Integral(1/t, (t, 1, oo))", [T_]
+    for e, c in ((f"{i} - {i}", "0"), (f"0*{i} + 1", "1"), (f"{i}/{i}", "1"), (f"{i}**0", "1"),
+                 ("0*Integral(1/(t - 1/2), (t, 0, 1)) + 1", "1"), ("0*Integral(1/t**2, (t, -1, 1)) + 1", "1")):
+        assert _v(_ir("evaluate", {"expr": e}, [], V), c) == "UNKNOWN"
+    q = _ir("derivative", {"f": "x + 0*Integral(1/(t - 1/2), (t, 0, 1))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "1", "expression") == "UNKNOWN"
+    for e, c in (("0*Integral(1/t**2, (t, 1, oo)) + 1", "1"), ("Integral(exp(-t), (t, 0, oo))", "1"),
+                 ("Integral(1/sqrt(t), (t, 0, 1))", "2"), ("Integral(log(t), (t, 0, 1))", "-1"),
+                 ("Integral(exp(-t**2), (t, -oo, oo))", "sqrt(pi)"), ("Integral(1/(1 + t**2), (t, -oo, oo))", "pi")):
+        assert _v(_ir("evaluate", {"expr": e}, [], V), c) == "CORRECT"
+    # Dirichlet's test: sin(t)/t converges at oo (not absolutely), sin(t)**2/t does not
+    sol = {"claimed_answer": {"kind": "value", "payload": "pi/2"}, "steps": []}
+    r = verify(_ir("evaluate", {"expr": "Integral(sin(t)/t, (t, 0, oo))"}, [], V), sol)
+    assert "problem_definedness_undecided" not in {f for la in r.layers for f in (la.flags or [])}
+    assert _v(_ir("evaluate", {"expr": "0*Integral(sin(t)**2/t, (t, 1, oo)) + 1"}, [], V), "1") == "UNKNOWN"
+
+
+def test_subs_body_is_read_at_its_point():
+    for g, c in ((["x = 1"], "Subs(sqrt(x - 2), x, 1)**2 = -1"), (["x = 1"], "Subs(1/(x - 1), x, 1)*0 = 0"),
+                 (["x = 1"], "at(diff(log(x - 2) - log(x - 2) + x, x), x, 1) = 1"),
+                 (["x = -5"], "Subs(sqrt(x)**2, x, -1) = -1"), (["x = -5"], "at(diff(sqrt(x)**2, x), x, -1) = 1"),
+                 (["x = 3"], "at(diff(sqrt(x)**2, x), x, 0) = 1")):
+        q = _ir("evaluate", {"expr": "x + 1"}, g, [X])
+        assert _step(q, str(int(g[0].split("= ")[1]) + 1), "value", [("compute", c)])[1] != "verified"
+    q = _ir("evaluate", {"expr": "x + 1"}, ["x = 1"], [X])
+    assert _step(q, "2", "value", [("compute", "Subs(sqrt(x), x, 4) = 2")]) == ("CORRECT", "verified")
+    assert _step(q, "2", "value", [("compute", "at(diff(x**2, x), x, 3) = 6")]) == ("CORRECT", "verified")
+
+
+def test_pinned_value_that_makes_a_sum_term_undefined():
+    for g, v in ((["a = 2"], [X, A, K]), ([], [X, AC2, K])):
+        assert _v(_anti("1 + Sum((k - a)/(k - a), (k, 1, 3)) - 3", g, v), "x", "expression") == "UNKNOWN"
+        assert _v(_anti("1 + Product((k - a)/(k - a), (k, 1, 3)) - 1", g, v), "x", "expression") == "UNKNOWN"
+        assert _v(_der("x + Sum((k - a)/(k - a), (k, 1, 3)) - 3", None, g, v), "1", "expression") == "UNKNOWN"
+    assert _v(_anti("1 + Sum((k - a)/(k - a), (k, 1, 3)) - 3", ["a = 5"], [X, A, K]), "x", "expression") != "INCORRECT"
+
+
+def test_negative_base_with_a_variable_exponent_is_a_convention():
+    assert _v(_der("x + (-1)**x - (-1)**x", None), "1", "expression") == "UNKNOWN"
+    assert _v(_der("x + 0*(-2)**x", "1/2"), "1") == "UNKNOWN"
+    assert _v(_tan("x + 0*(-2)**x", "1/2"), "y = x", "equation") == "UNKNOWN"
+    assert _v(_anti("1 + (-1)**x - (-1)**x"), "x", "expression") == "UNKNOWN"
+    assert _v(_lim("x + 0*(-1)**x", "1/2"), "1/2") == "UNKNOWN"
+    assert _v(_lim("(-1)**x", "0"), "1") == "UNKNOWN"
+    assert _dne(_lim("(-1)**x", "0")) == "UNKNOWN"
+    # an integer exponent has the curriculum's value
+    assert _v(_ss("(-1)**(k + 1)/k**2", 1, 3, [], [K]), "31/36") == "CORRECT"
+    q = _ir("evaluate", {"expr": "(-1)**n"}, ["n = 3"], [{"name": "n", "domain": "integer"}])
+    assert _v(q, "-1") == "CORRECT"
+
+
+def test_limit_of_an_expression_defined_nowhere_in_the_region():
+    for g, v, dod in _writings("x > 0", "positive_real"):
+        assert _dne(_lim("x + 0*sqrt(-x)", "0", g, v, dod)) == "UNKNOWN"
+        assert _v(_lim("x + 0*sqrt(-x)", "0", g, v, dod), "0") == "UNKNOWN"
+        assert _dne(_lim("x + 0*log(-x)", "2", g, v, dod)) == "UNKNOWN"
+        assert _dne(_lim("x + 0*sqrt(-x)", "oo", g, v, dod)) == "UNKNOWN"
+    assert _dne(_lim("x + 0*log(a*x) + 0*log(-x)", "1", ["a = 1"], XA)) == "UNKNOWN"
+    assert _dne(_lim("sqrt(x)", "-1")) != "INCORRECT"
+
+
+# --- round 2: the unjust rejection R8 and the coverage R1..R7, decided by proof ----------------------------------
+AP = {"name": "a", "domain": "positive_real"}
+BP = {"name": "b", "domain": "positive_real"}
+KP = {"name": "k", "domain": "positive_real"}
+NP = {"name": "n", "domain": "positive_integer"}
+
+
+def test_derivative_of_an_absolute_value_lives_where_f_is_differentiable():
+    for f, c in (("Abs(x)", "x/Abs(x)"), ("Abs(x)", "Abs(x)/x"), ("Abs(x)", "x/sqrt(x**2)"),
+                 ("Abs(x)", "Piecewise((1, x > 0), (-1, x < 0))"), ("Abs(x - 1)", "(x - 1)/Abs(x - 1)"),
+                 ("Abs(x**2 - 1)", "2*x*(x**2 - 1)/Abs(x**2 - 1)"), ("Abs(sin(x))", "cos(x)*sin(x)/Abs(sin(x))"),
+                 ("Abs(x)**3", "3*x*Abs(x)")):
+        assert _v(_der(f), c, "expression") == "CORRECT", (f, c)
+    assert _v(_der("Abs(x)"), "sign(x)", "expression") == "UNKNOWN"          # sign(0) = 0: a value at the corner
+    for f, c in (("Abs(x)", "-x/Abs(x)"), ("Abs(sin(x))", "-cos(x)*sin(x)/Abs(sin(x))"),
+                 ("Abs(x)**3", "3*x**5/Abs(x)**3"), ("x*Abs(x)", "2*x**2/Abs(x)")):   # a derivative 0 at 0
+        assert _v(_der(f), c, "expression") == "INCORRECT", (f, c)
+    # sin(x)*|sin(x)| has the derivative 0 at every k*pi: no corner there, the claim has no value there
+    assert _v(_der("sin(x)*Abs(sin(x))"), "2*cos(x)*sin(x)**2/Abs(sin(x))", "expression") != "CORRECT"
+    q = _ir("derivative", {"f": "Abs(x)", "var": "x", "order": 2}, [], [X], "expression")
+    assert _v(q, "0", "expression") == "UNKNOWN"                          # 0 at 0, where |x|' jumps
+
+
+def test_interior_point_proved_by_a_strict_condition():
+    assert _v(_der("tan(x**2)", "1"), "2 + 2*tan(1)**2") == "CORRECT"
+    assert _v(_der("tan(x**2)", "1"), "2") == "INCORRECT"
+    assert _v(_der("tan(x**2)"), "2*x/cos(x**2)**2", "expression") == "CORRECT"
+    assert _v(_der("tan(x**2)"), "2/cos(x**2)**2", "expression") == "INCORRECT"
+    assert _v(_tan("tan(x**2)", "1"), "y = (2 + 2*tan(1)**2)*(x - 1) + tan(1)", "equation") == "CORRECT"
+    assert _v(_anti("2*x/cos(x**2)**2"), "tan(x**2)", "expression") == "CORRECT"
+    assert _v(_anti("2*x/cos(x**2)**2"), "2*tan(x**2)", "expression") == "INCORRECT"
+    assert _v(_der("1/(x - cos(x))", "pi"), "-1/(pi + 1)**2") == "CORRECT"
+    assert _v(_der("1/(x + exp(x))", "0"), "-2") == "CORRECT"
+    assert _v(_der("x + 0/floor(x)", "1"), "1") == "UNKNOWN"              # floor jumps at 1
+
+
+def test_parameter_of_declared_sign_for_every_value():
+    assert _v(_der("asin(x/a)", None, [], [X, AP]), "1/sqrt(a**2 - x**2)", "expression") == "CORRECT"
+    assert _v(_der("asin(x/a)", None, [], [X, AP]), "2/sqrt(a**2 - x**2)", "expression") == "INCORRECT"
+    assert _v(_der("sqrt(a**2 - x**2)", None, [], [X, AP]), "-x/sqrt(a**2 - x**2)", "expression") == "CORRECT"
+    assert _v(_der("log(a*x + b)", None, [], [X, AP, BP]), "a/(a*x + b)", "expression") == "CORRECT"
+    assert _v(_der("log(a*x + b)", None, [], [X, AP, BP]), "2*a/(a*x + b)", "expression") == "INCORRECT"
+    assert _v(_der("log(k*x)", None, [], [X, KP]), "1/x", "expression") == "CORRECT"
+    assert _v(_der("log(x**n)", None, [], [X, NP]), "n/x", "expression") == "CORRECT"
+    assert _v(_der("log(a*x + 1)", None, ["a > 0"], XA), "a/(a*x + 1)", "expression") == "CORRECT"
+    # a free: a = 0 leaves sqrt(a**2 - x**2) the point 0 alone
+    assert _v(_der("sqrt(a**2 - x**2)", None, [], XA), "-x/sqrt(a**2 - x**2)", "expression") == "UNKNOWN"
+
+
+def test_primitive_with_declared_parameters_is_real():
+    for f, F in (("exp(k*x)", "exp(k*x)/k"), ("sin(k*x)", "-cos(k*x)/k"), ("exp(-k*x)", "-exp(-k*x)/k")):
+        assert _v(_anti(f, [], [X, KP]), F, "expression") == "CORRECT"
+    assert _v(_anti("x**n", [], [X, NP]), "x**(n + 1)/(n + 1)", "expression") == "CORRECT"
+    assert _v(_anti("1/(x**2 + a**2)", [], [X, AP]), "atan(x/a)/a", "expression") == "CORRECT"
+    assert _v(_anti("exp(k*x)", [], [X, KP]), "exp(k*x)", "expression") != "CORRECT"
+
+
+def test_given_that_restates_the_curve():
+    assert _v(_tan("x**3", "1", ["y = x**3"]), "y = 3*x - 2", "equation") == "CORRECT"
+    assert _v(_tan("x**3", "1", ["y = x**3"]), "y = 3*x", "equation") == "INCORRECT"
+    assert _v(_tan("sqrt(x)", "4", ["y = sqrt(x)"]), "y = x/4 + 1", "equation") == "CORRECT"
+    assert _v(_der("x**2", "1", ["y = x**2"], [X, Y]), "2") == "CORRECT"
+    assert _v(_anti("2*x", ["y = x**2"], [X, Y]), "x**2", "expression") == "CORRECT"
+    assert _v(_lim("x**2", "1", ["y = x**2"], [X, Y]), "1") == "CORRECT"
+    # y declared positive, or y > 1 given too: the given restricts x (x > 0, x > 1)
+    assert _v(_der("x**3", "-1", ["y = x**3"], [X, {"name": "y", "domain": "positive_real"}]), "3") == "UNKNOWN"
+    assert _v(_der("x**3", "0", ["y = x**3", "y > 1"], [X, Y]), "0") == "UNKNOWN"
+
+
+def test_periodic_given_read_near_the_point():
+    assert _v(_der("x**2", "1", ["cos(x) > 0"]), "2") == "CORRECT"
+    assert _v(_der("x**2", "1", ["cos(x) > 0"]), "3") == "INCORRECT"
+    assert _v(_der("x**2", "2", ["cos(x) > 0"]), "4") == "UNKNOWN"         # cos(2) < 0: outside
+    assert _v(_anti("cos(x)", ["cos(x) > 0"]), "sin(x)", "expression") == "CORRECT"
+    assert _v(_anti("cos(x)", ["cos(x) > 0"]), "-sin(x)", "expression") == "INCORRECT"
+    assert _v(_lim("x*cos(x)", "pi", ["cos(x) < 0"]), "-pi") == "CORRECT"
+    assert _v(_lim("x*cos(x)", "pi", ["cos(x) < 0"]), "pi") == "INCORRECT"
+    assert _v(_lim("sin(x)/x", "0", ["sin(x) != 0"]), "1") == "CORRECT"
+
+
+def test_primitive_continuous_across_the_gap_has_one_constant():
+    assert _v(_anti("x/Abs(x)"), "Abs(x)", "expression") == "CORRECT"
+    assert _v(_anti("x/Abs(x)"), "Abs(x) + sign(x)", "expression") == "UNKNOWN"
+    assert _v(_anti("log(Abs(x)) + 1"), "x*log(Abs(x))", "expression") == "CORRECT"
+    # atan(tan(x**2)) - x**2 is constant on each piece of cos(x**2) != 0, another constant on each
+    assert _v(_anti("2*x/cos(x**2)**2"), "tan(x**2) + atan(tan(x**2)) - x**2", "expression") != "CORRECT"
+
+
+def test_convergence_at_an_infinite_end_with_a_declared_parameter():
+    q = _ir("derivative", {"f": "Integral(exp(-a*t), (t, x, oo))", "var": "x"}, [], [X, T_, AP], "expression")
+    assert _v(q, "-exp(-a*x)", "expression") == "CORRECT"
+    assert _v(q, "exp(-a*x)", "expression") == "INCORRECT"
+    q = _ir("derivative", {"f": "Integral(t**(-21/20), (t, x, oo))", "var": "x"}, [], [XP, T_], "expression")
+    assert _v(q, "-x**(-21/20)", "expression") == "CORRECT"
+    q = _ir("derivative", {"f": "Integral(exp(-a*t), (t, x, oo))", "var": "x"}, [], [X, T_, A], "expression")
+    assert _v(q, "-exp(-a*x)", "expression") == "UNKNOWN"

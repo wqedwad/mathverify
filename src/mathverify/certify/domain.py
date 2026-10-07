@@ -64,6 +64,12 @@ def _outer_nodes(e, var, add):
                 add(c)
             stack.extend(reversed(outer))
             continue
+        if isinstance(n, sp.Subs):
+            # at()/Subs: the body is read at its point, not on its bound variable (see _subs_conditions);
+            # its points are walked as usual
+            _subs_conditions(n, var, add)
+            stack.extend(reversed(n.point.args))
+            continue
         yield n
         if isinstance(n, sp.Basic):
             stack.extend(reversed(n.args))
@@ -162,6 +168,10 @@ class Convention(sp.Set):
       generalized binomial (C(-2, 2) = 3) and the 0 above n are extensions the curriculum does not have.
     * `mod_divisor`: the divisor of Mod is positive; below it floored, truncated and Euclidean
       remainders differ (Mod(7, -5) is -3, 2 or 2).
+    * `negative_base`: the exponent of c**e, c a negative number and e not a number, is an integer. Elsewhere
+      the real reading has no value or the real root ((-1)**(1/3) = -1), the principal one a complex value
+      ((-1)**x = e^(i*pi*x)): x + 0*(-2)**x had the derivative 1 at 1/2, (-1)**x the limit 1 at 0 and
+      x + (-1)**x - (-1)**x the primitive x certified (attack on d4e, YO-5).
 
     As `Contains(operand, CONVENTION)` the condition holds where the operand is proved inside and is
     left standing (undecided) elsewhere, never false: `decide_membership` and `relation_holds_at` leave
@@ -190,13 +200,16 @@ class Convention(sp.Set):
             ok = other.is_integer is True and other.is_nonnegative is True
         elif k == "mod_divisor":
             ok = other.is_extended_positive
+        elif k == "negative_base":
+            ok = other.is_integer
         else:
             ok = None
         return sp.true if ok is True else None      # undecided, never false
 
     def _eval_is_superset(self, other):
         inside = {"odd_root": Interval(0, oo), "binomial": S.Naturals0, "mod_divisor": Interval.open(0, oo),
-                  "zero_power": sp.Union(Interval.open(-oo, 0), Interval.open(0, oo))}.get(self.kind)
+                  "zero_power": sp.Union(Interval.open(-oo, 0), Interval.open(0, oo)),
+                  "negative_base": S.Integers}.get(self.kind)
         try:
             return True if inside is not None and other.is_subset(inside) is True else None
         except Exception:  # noqa: BLE001
@@ -210,6 +223,7 @@ ODD_ROOT_BASE = Convention("odd_root")
 ZERO_POWER_BASE = Convention("zero_power")
 BINOMIAL_ARGUMENT = Convention("binomial")
 MOD_DIVISOR = Convention("mod_divisor")
+NEGATIVE_BASE_EXPONENT = Convention("negative_base")
 
 
 def is_convention(c) -> bool:
@@ -224,7 +238,8 @@ def is_value_convention(c) -> bool:
     "undefined" (0**0, C(n, r) outside 0 <= r <= n)? A claim refuted with SymPy's value at such a point
     may be true under the other reading; where the other reading is "undefined" the claim is not true
     either, so a refutation stands (an undefined claim is no true step, `steps.deterministic`)."""
-    return is_convention(c) and (c.args[1] == FORWARD_SPANS or c.args[1].kind in ("odd_root", "mod_divisor"))
+    return is_convention(c) and (c.args[1] == FORWARD_SPANS
+                                 or c.args[1].kind in ("odd_root", "mod_divisor", "negative_base"))
 
 
 def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
@@ -246,6 +261,10 @@ def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
             fwd, back = solveset(sp.Gt(e, 0), var, S.Reals), solveset(sp.Le(e, 0), var, S.Reals)
         elif kind == "zero_power":
             fwd, back = solveset(Ne(e, 0), var, S.Reals), solveset(Eq(e, 0), var, S.Reals)
+        elif kind == "negative_base":
+            if e != var:
+                return S.Reals, S.Reals
+            fwd, back = S.Integers, sp.Complement(S.Reals, S.Integers)
         elif kind == "binomial":
             # e = ±var + k with k an integer: an integer exactly where var is one
             k = e - var if (e - var).free_symbols == set() else e + var
@@ -317,6 +336,14 @@ def _violations(c, d, region):
             if k.free_symbols or k.is_integer is not True or region.is_subset(S.Integers) is not True:
                 return None
             bad = sp.Lt(e, 0)
+        elif kind == "negative_base":
+            # an exponent that is an integer at every index (k, 2k + 1 over a Range): no convention point
+            if region.is_subset(S.Integers) is True and _integer_valued(e, d):
+                return S.EmptySet
+            if e != d:
+                return None
+            out = sp.Complement(region, S.Integers)
+            return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
         else:
             bad = {"odd_root": sp.Lt(e, 0), "zero_power": Eq(e, 0), "mod_divisor": sp.Le(e, 0)}.get(kind)
         if bad is None:
@@ -663,35 +690,109 @@ def _reachable(a, b):
     return Interval(lo, hi, left_open=u.contains(lo) is not sp.true, right_open=u.contains(hi) is not sp.true)
 
 
+def _bounded_limit(lim) -> bool:
+    """Is `lim`, SymPy's limit of a nonnegative quantity, a finite real number, or an AccumBounds whose upper
+    end is one (|cos t|/(1 + t**2)·t**2 oscillates in [0, 1] at oo: bounded all the same)?"""
+    if isinstance(lim, sp.AccumBounds):
+        return lim.max.is_number and lim.max.is_finite is True and lim.max.is_real is True
+    return isinstance(lim, sp.Expr) and lim.is_number and lim.is_finite is True and lim.is_real is True \
+        and not lim.has(sp.AccumBounds)
+
+
 def decays_at(g, t, end) -> bool:
-    """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1, read off a finite real limit of
-    |t|**p * g(t) (p = 2, 3/2, 11/10)? Then ∫ g converges absolutely at that end. False when no such
-    limit is found (a divergent integral, or one this test cannot prove: sin(t)/t)."""
+    """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1? Then ∫ g converges absolutely at that end.
+    Read off a bounded limit of |t|**p * |g(t)| (p = 2, 3/2, 11/10), or off the exponent q of the decay,
+    q = lim -log|g|/log|t| > 1 (|g| = |t|**(-q + o(1)): t**(-21/20), and e^(-a*t) with a declared positive,
+    where q = oo; review of d4e, R7), or, not absolutely, by Dirichlet's test (`_dirichlet_test`: sin(t)/t). False
+    when none is found (a divergent integral, or one these tests cannot prove: sin(t**2))."""
+    ag = sp.Abs(g)
     for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
-        lim = sp.limit(sp.Abs(t) ** p * g, t, end)
-        if isinstance(lim, sp.Expr) and lim.is_number and lim.is_finite is True and lim.is_real is True \
-                and not lim.has(sp.AccumBounds):
+        if _bounded_limit(sp.limit(sp.Abs(t) ** p * ag, t, end)):
+            return True
+    q = sp.limit(-sp.log(ag) / sp.log(sp.Abs(t)), t, end)
+    if q is oo:
+        return True
+    if isinstance(q, sp.Expr) and q.is_number and q.is_real is True and certified_sign(q - 1) == 1:
+        return True
+    return _dirichlet_test(g, t, end)
+
+
+def _dirichlet_test(g, t, end) -> bool:
+    """Dirichlet's test at `end` (±oo): g = sin(a*t + b) * h(t) (or cos), a != 0, with h free of every function,
+    real out there, tending to 0 and eventually monotone (h'/h a rational function of t has one sign from some
+    point on: t**q times a rational function). Then ∫ g converges there, not absolutely: sin(t)/t, cos(t)/sqrt(t).
+    Read as absolute convergence only, the Dirichlet integral was undefined as written and a true step about it
+    went unchecked (d4c, measured after the attack on d4e, YO-2). sin(t)**2/t is no such product."""
+    for osc in g.atoms(sp.sin, sp.cos):
+        arg = osc.args[0]
+        k = sp.diff(arg, t)
+        if not (k.is_number and k.is_real is True and k.is_zero is False and sp.diff(arg, t, 2) == 0):
+            continue
+        h = sp.simplify(g / osc)
+        if t not in h.free_symbols or h.atoms(sp.Function):
+            continue
+        side = sp.Dummy("s", positive=True)
+        hs = h.subs(t, side if end == oo else -side)
+        if hs.is_real is not True:
+            continue
+        r = sp.simplify(sp.diff(h, t) / h)
+        if not r.is_rational_function(t):
+            continue
+        if sp.limit(h, t, end) == 0:
             return True
     return False
 
 
-def _converges_at(body, x, d, end) -> bool:
-    """Is the integral of `body` (as written, in its bound variable `x`) proved to converge at `end`?"""
-    if not _spend(_SOLVE_COST):
-        return False
+def integrable_near(g, t, c, side) -> bool:
+    """Worker: is |g(t)| <= C/|t - c|**p on the `side` ('+', '-') of the finite point c for some p < 1, read off
+    a bounded limit of |t - c|**p * |g(t)| (p = 0, 1/2, 2/3, 9/10)? Then ∫ g converges absolutely there: 1/sqrt(t)
+    and log(t) at 0 do, 1/t and 1/(t - 1/2) do not (attack on d4e, YO-2)."""
+    ag = sp.Abs(g)
+    for p in (S(0), S.Half, sp.Rational(2, 3), sp.Rational(9, 10)):
+        if _bounded_limit(sp.limit(sp.Abs(t - c) ** p * ag, t, c, side)):
+            return True
+    return False
+
+
+def _integrand_on(body, x, d):
+    """The integrand on a real dummy for its bound variable, evaluated; None when it names a symbol whose sign is
+    not declared (the tests above would read it on all its values) or holds an IR function's marker."""
     t = sp.Dummy(d.name, real=True)
     try:
         with sp.evaluate(False):
             g = body.xreplace({x: t})
         g = _evaluated(g)
     except Exception:  # noqa: BLE001
+        return None, t
+    if not isinstance(g, sp.Expr) or any(type(m).__name__ == "written_domain" for m in sp.preorder_traversal(g)):
+        return None, t
+    if any(s_.is_positive is not True and s_.is_negative is not True for s_ in g.free_symbols - {t}):
+        return None, t
+    return g, t
+
+
+def _converges_at(body, x, d, end) -> bool:
+    """Is the integral of `body` (as written, in its bound variable `x`) proved to converge at `end` (±oo)? A
+    parameter of declared sign is read with it (e^(-a*t), a > 0)."""
+    if not _spend(_SOLVE_COST):
         return False
-    if not isinstance(g, sp.Expr) or g.free_symbols - {t} or any(
-            type(m).__name__ == "written_domain" for m in sp.preorder_traversal(g)):
+    g, t = _integrand_on(body, x, d)
+    if g is None:
         return False
     if t not in g.free_symbols:
         return g.is_zero is True                     # a constant converges at an infinite end only if 0
     r = sb_run("mathverify.certify.domain:decays_at", g, t, end, timeout=_SOLVE_TIMEOUT)
+    return bool(r.ok and r.value is True)
+
+
+def _integrable_at(body, x, d, c, side) -> bool:
+    """Is the integral of `body` proved to converge at its finite point c, from `side`?"""
+    if not _spend(_SOLVE_COST):
+        return False
+    g, t = _integrand_on(body, x, d)
+    if g is None:
+        return False
+    r = sb_run("mathverify.certify.domain:integrable_near", g, t, c, side, timeout=_SOLVE_TIMEOUT)
     return bool(r.ok and r.value is True)
 
 
@@ -734,10 +835,24 @@ def _integral_conditions(n, var) -> list[Any]:
         else:
             return [DEFINEDNESS_UNDECIDED] if named else []
     symbolic = not (a.is_number and b.is_number)
+    if not symbolic:
+        # numbers for bounds: the integral exists only when it is proved to converge at an infinite end and at
+        # each point between the bounds where the integrand has no value. It was "the value's business", but
+        # the value is folded away first: 0*∫_1^oo dt/t + 1 = 1, ∫_1^oo dt/t - ∫_1^oo dt/t = 0 and
+        # x + 0*∫_0^1 dt/(t - 1/2) with the derivative 1 were certified (attack on d4e, YO-2)
+        for end in (a, b):
+            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):
+                return [DEFINEDNESS_UNDECIDED]
     for c in named:
         bad = _violations(c, d, region)
         if bad is None or not (bad.is_empty is True or bad.is_finite_set is True):
             return [DEFINEDNESS_UNDECIDED]
+        if not symbolic:
+            for p_ in bad:
+                sides = [s_ for s_, on in (("-", certified_sign(p_ - region.inf) == 1),
+                                            ("+", certified_sign(region.sup - p_) == 1)) if on]
+                if not sides or any(not _integrable_at(n.function, x, d, p_, s_) for s_ in sides):
+                    return [DEFINEDNESS_UNDECIDED]
         if symbolic and bad.is_empty is not True:
             # an improper point is the value's business only when a value is computed: with a
             # symbolic bound the value is SymPy's parametric integral, and a derivative of it is
@@ -794,6 +909,55 @@ def _limit_conditions(n, var) -> list[Any]:
             if gap != 1:
                 return [DEFINEDNESS_UNDECIDED]
     return []
+
+
+def _subs_conditions(n, var, add) -> None:
+    """Subs(body, v, p), at(): the body's conditions hold AT the point. Walked into, they stood on the bound
+    variable, which nothing constrains, so Subs(sqrt(x - 2), x, 1)**2 = -1 and Subs(1/(x - 1), x, 1)*0 = 0
+    were verified compute steps (attack on d4e, YO-3). Without a derivative in v the body is read with p
+    written in for v: the same conditions as the text with the point in place. A derivative in v at p needs
+    its function defined on a neighbourhood of p, read as `_limit_conditions` reads one (a condition that
+    fails at p, or next to it, leaves the expression undecided, never undefined: a one-sided derivative or
+    a removable gap is a convention): at(diff(sqrt(x)**2, x), x, -1) = 1 and at(diff(sqrt(x)**2, x), x, 0) = 1
+    were verified."""
+    from ..normalize.parse import substitute_free
+    body, vs, pts = n.expr, tuple(n.variables), tuple(n.point)
+    if not any(set(vs) & set(d_.variables) for d_ in body.atoms(sp.Derivative)):
+        with sp.evaluate(False):
+            at_point = substitute_free(body, dict(zip(vs, pts)))
+        for c in definedness_conditions(at_point, var):
+            add(c)
+        return
+    plain = {v: sp.Dummy(getattr(v, "name", "v")) for v in vs}
+    with sp.evaluate(False):
+        b = body.xreplace(plain)
+    dummies = set(plain.values())
+    for c in definedness_conditions(b, var):
+        named = getattr(c, "free_symbols", set()) & dummies
+        if not named:
+            add(c)
+            continue
+        if len(vs) != 1:
+            add(DEFINEDNESS_UNDECIDED)
+            continue
+        d, p_ = plain[vs[0]], _evaluated(pts[0])
+        if not (isinstance(p_, sp.Expr) and p_.is_number and p_.is_real is True and p_.is_finite is True):
+            add(DEFINEDNESS_UNDECIDED)          # a symbolic point: no neighbourhood is read
+            continue
+        bad = _violations(c, d, Interval.open(p_ - 1, p_ + 1))
+        if bad is None:
+            add(DEFINEDNESS_UNDECIDED)
+            continue
+        if bad.is_empty is True:
+            continue
+        try:
+            left, right = sp.Intersection(bad, Interval(p_ - 1, p_)), sp.Intersection(bad, Interval(p_, p_ + 1))
+            clear = (left.is_empty is True or certified_sign(p_ - left.sup) == 1) and \
+                (right.is_empty is True or certified_sign(right.inf - p_) == 1)
+        except Exception:  # noqa: BLE001
+            clear = False
+        if not clear:
+            add(DEFINEDNESS_UNDECIDED)
 
 
 _BINDER_CACHE: dict = {}
@@ -936,6 +1100,11 @@ def _node_conditions(node, var, add) -> None:
             add(base > 0)
         elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
             add(base > 0)          # x^y style real power (var None: every symbol counts)
+        elif not ex.is_number and base.is_number and base.is_zero is False and base.is_positive is not True \
+                and ex.is_integer is not True:
+            # a negative base, a variable exponent: the curriculum's value at an integer exponent only
+            # (Convention negative_base)
+            add(sp.Contains(ex, NEGATIVE_BASE_EXPONENT))
         elif not ex.is_number and base.is_zero is not False:
             # 0**k at k = 0 (a Sum's term at its first index): 1 or undefined (Convention, part d4a)
             add(sp.Contains(ex, ZERO_POWER_BASE))
@@ -1543,6 +1712,16 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins
     for c in conds:
         if c.free_symbols - {var}:
             return None
+        if isinstance(c, sp.Contains):
+            # a membership or a convention (0**k at k = 0: 1 or undefined): where it fails over the region
+            # (`_violations`). Read as a relation it was never decided, and Σ_{k=0}^{3} 0**k = 1 and, with
+            # a = 0, Σ_{k=0}^{3} a**k = 1 were certified (attack on d4e, YO-1)
+            bad = _violations(c, var, region)
+            if bad is None:
+                return None
+            if bad.is_empty is not True:
+                return True
+            continue
         bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
         try:
             # a trigonometric condition is read on the region itself, not on one period of ℝ: the

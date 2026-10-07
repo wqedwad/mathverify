@@ -560,8 +560,11 @@ class Ctx:
             if ew is None:
                 continue
             try:
-                pinned_here = bool(ew.free_symbols & set(pins))
                 with sp.evaluate(False):
+                    # read unevaluated: SymPy's free_symbols of a Sum evaluates its body, (k - a)/(k - a) is 1
+                    # there, and a constraint a = 2 that makes the term 0/0 at k = 2 was read as no pin at all,
+                    # so the primitive x of 1 + Σ_{k=1}^{3} (k - a)/(k - a) - 3 was certified (attack on d4e, YO-4)
+                    pinned_here = bool(ew.free_symbols & set(pins))
                     e2 = substitute_free(ew, pins)
                 conds = definedness_conditions(e2, None)
             except Exception:  # noqa: BLE001 - not read as written: the old reading
@@ -834,7 +837,11 @@ class Ctx:
                 if rel is sp.true:
                     continue
                 if rel.free_symbols != {var}:
-                    unbound.append(g)
+                    curve = self._curve_given(g, rel, var)
+                    if curve is None:
+                        unbound.append(g)
+                    else:
+                        sets.extend(curve)
                     continue
                 if not isinstance(rel, sp.core.relational.Relational):
                     sol = self.condition_set(rel, var)
@@ -859,6 +866,51 @@ class Ctx:
         self.cache[f"side_unbound:{var.name}"] = unbound
         self.cache[key] = (sets, unapplied)
         return sets, unapplied
+
+    def _curve_given(self, g: str, rel, var: sp.Symbol) -> list | None:
+        """A given `s = g(var)` that restates the curve: s a symbol declared real with no constraint, named by no
+        other text of the problem (the tangent's own dependent variable excepted). It names s and says nothing of
+        `var` but where g is defined as written: the sets that written domain leaves `var` (a trigonometric
+        condition as a ConditionSet, solved by `domain_for`), or None. Read as a condition on two symbols it
+        was `condition_not_applied`, and the tangent y = 3x - 2 of x**3 at 1 with the given y = x**3 undecided
+        (review of d4e, R4); with y declared positive or y > 1 given too it says x > 0 or x > 1 and stays so."""
+        import re
+        from .domain import written_definedness
+        if not isinstance(rel, sp.Eq):
+            return None
+        for s_, gx in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+            if isinstance(s_, sp.Symbol) and s_ != var and getattr(gx, "free_symbols", set()) == {var}:
+                break
+        else:
+            return None
+        vd = next((d for d in self.ir.vars if d.name == s_.name), None)
+        if vd is None or vd.domain != "real" or vd.constraints:
+            return None
+        params = self.ir.task.params or {}
+        texts = [t for t in self.ir.givens if t != g] + [c for v in self.ir.vars for c in v.constraints]
+        texts += [v for k, v in params.items() if isinstance(v, str)
+                  and not (k == "dep" and self.ir.task.kind == "tangent_line")]
+        texts += [t for f in self.ir.functions for t in (f.expr, f.domain) if isinstance(t, str)]
+        texts += [o.arg for o in self.ir.operators if isinstance(o.arg, str)]
+        texts += [t for t in (self.ir.domain_of_discourse, self.ir.unknown_of_interest) if isinstance(t, str)]
+        name = re.compile(rf"(?<![\w.]){re.escape(s_.name)}(?!\w)")
+        if any(name.search(t) for t in texts):
+            return None
+        conds, nowhere = written_definedness(g, self.ns)
+        if var in nowhere:
+            return [S.EmptySet]
+        out: list = []
+        for c in conds:
+            if getattr(c, "free_symbols", set()) != {var}:
+                return None
+            if at_risk(c, var):
+                out.append(sp.ConditionSet(var, c, S.Reals))
+                continue
+            sol = self.condition_set(c, var)
+            if sol is None:
+                return None
+            out.append(sol)
+        return out
 
     def written_conditions(self) -> tuple[list[Any], set]:
         """Definedness of the problem's expressions AS WRITTEN (open conditions, and symbols of an
