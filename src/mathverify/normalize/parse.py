@@ -2011,10 +2011,20 @@ def _held_matrix_op(name: str):
     return op
 
 
+def _written_rewrite(e, *_rest, **_kw):
+    """factor(e), expand(e), simplify(e), ... read as written: `e` itself, whose value the rewrite keeps where `e`
+    has one, and whose conditions are the claim's. Computed with evaluation off they failed the reading, and once
+    such a text counted as not proved defined the step factor(x**2 - 4) = (x - 2)*(x + 2) was no longer verified
+    (review of d4f, YO-1)."""
+    return e
+
+
 _WRITTEN_COMPUTING = {"diff": (sp.diff, _written_diff), "integrate": (_integrate, _written_integrate),
                       "limit": (_limit, _Limit),
                       **{name: (_SAFE_NAMES[name], _held_matrix_op(name))
-                         for name in ("det", "trace", "rank", "eigmax", "eigmin")}}
+                         for name in ("det", "trace", "rank", "eigmax", "eigmin")},
+                      **{name: (_SAFE_NAMES[name], _written_rewrite)
+                         for name in ("simplify", "expand", "factor", "cancel", "together", "apart")}}
 
 
 def parse_as_written(s: str, ns: dict[str, Any] | None = None, _depth: int = 0):

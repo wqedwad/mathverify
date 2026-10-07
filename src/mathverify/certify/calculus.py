@@ -36,7 +36,7 @@ from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 from .domain import (definedness_conditions, written_definedness, written_undefined_in, relation_holds_at,
                      in_domain)
-from .limits import membership_conditions, written_undefined_everywhere
+from .limits import membership_conditions, membership_holds_on, neighbourhoods, written_undefined_everywhere
 
 LAYER = "certify.calculus"
 
@@ -976,18 +976,42 @@ def _line_equal(claimed, truth, var, dep) -> tuple[bool | None, dict[str, Any]]:
 _TRAILING_C = re.compile(r"\s*\+\s*[Cc]\s*$")
 
 
-def _unreadable_task_expression(src, expr, var, ns, ms):
+def _unreadable_task_expression(src, expr, var, ns, ms, regions=()):
     """UNKNOWN when the task's function or integrand is undefined as written for every value of `var`
     (limits.written_undefined_everywhere) or carries a membership condition on it
-    (limits.membership_conditions); None when neither holds."""
+    (limits.membership_conditions) that does not hold on one of `regions` for certain (the integral's
+    interval, a neighbourhood of the derivative's point: `limits.membership_holds_on`); None otherwise."""
     if written_undefined_everywhere(src, ns):
         return unknown(LAYER, "expression_undefined_as_written", ms, {"expr": src},
                        flags=["expression_undefined_as_written"])
-    members = membership_conditions(src, expr, var, ns)
+    members = [c for c in membership_conditions(src, expr, var, ns) if not membership_holds_on(c, var, regions)]
     if members:
         return unknown(LAYER, "membership_condition_on_variable", ms, {"conditions": [str(c) for c in members]},
                        flags=["membership_condition"])
     return None
+
+
+def _closed_real(txt, ctx, pins):
+    """The task's number `txt` (a bound, a point) read at the values the givens fix; None when it is not a real
+    number or not read."""
+    if txt is None:
+        return None
+    try:
+        v = ctx.with_pins(ctx.expr(str(txt)), pins)
+    except Exception:  # noqa: BLE001 - read again by the certificate, which reports it
+        return None
+    return v if getattr(v, "is_number", False) and v.is_extended_real is True else None
+
+
+def _interval_regions(p, ctx, pins) -> list:
+    """[the integral's interval [a, b]] when both bounds are real numbers; [] otherwise."""
+    a, b = _closed_real(p.get("a"), ctx, pins), _closed_real(p.get("b"), ctx, pins)
+    if a is None or b is None:
+        return []
+    try:
+        return [sp.Interval(sp.Min(a, b), sp.Max(a, b))]
+    except Exception:  # noqa: BLE001
+        return []
 
 
 # points tried for an interior point of a function's domain after the ones its solved part offers
@@ -1223,7 +1247,8 @@ def verify(ir, solution, ctx: Ctx):
             integrand, err = parse_or_unknown(LAYER, parse_expr_str, p["integrand"], ns_i)
             if err:
                 return err
-            bad = _unreadable_task_expression(p["integrand"], integrand, var, ns_i, t.ms)
+            bad = _unreadable_task_expression(p["integrand"], integrand, var, ns_i, t.ms,
+                                              _interval_regions(p, ctx, pins))
             if bad is not None:
                 return bad
             # a symbol a given or a declared constraint fixes is read as its value in the integrand, the
@@ -1360,7 +1385,8 @@ def verify(ir, solution, ctx: Ctx):
             f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
             if err:
                 return err
-            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms)
+            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms,
+                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)))
             if bad is not None:
                 return bad
             f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
@@ -1462,7 +1488,8 @@ def verify(ir, solution, ctx: Ctx):
             at, err = parse_or_unknown(LAYER, ctx.expr, str(p["at"]))
             if err:
                 return err
-            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms)
+            bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms,
+                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)))
             if bad is not None:
                 return bad
             f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
