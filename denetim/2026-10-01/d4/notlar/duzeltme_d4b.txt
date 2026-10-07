@@ -32,6 +32,31 @@
   yok); xy = 1 eğri → karar yok.
 - cbrt/real_root sınıfı eklenmedi: tek kökün okunuşu (principal ya da gerçel kök) d4a'nın gelenek kararına bağlı
   (x**(1/3) = x: {1} mi {−1,0,1} mi); sınıf bu kararı atlayamaz → ConditionSet/UNKNOWN kalır.
+- 6. tur (6 Ekim), d4d testi x² = 4, x > a, a = log(8)/log(2) (kısıt a = 3): log 8 = 3 log 2 olduğundan
+  log(8)/log(2) = 3 tam (expand_log + simplify farkı 0: kanıt, sayı değil); x > 3 ve x² = 4 → ∅, {} CORRECT doğru.
+  Kök neden: 5. turun polinom sınıfı (sp.Poly log(8)'i 3·log(2) okur) x > log(8)/log(2)'nin kümesini (3, oo) verir;
+  domain_for aynı verileni yazıldığı gibi (log(8)/log(2), oo) okur; cut_by'daki sp.Intersection iki eşit ama farklı
+  yazılmış uç noktayı sıralayamaz → TypeError → layer_exception → UNKNOWN (güvenli ama kapsama kaybı; 76d0c87'de
+  CORRECT idi). Karar: kanıtlı yol var → `exact_intersection`: TypeError'da uç noktalardan same_value ile EŞİTLİĞİ
+  KANITLANANLAR tek yazıma (en kısa) indirilip kesişim yeniden alınır; sayısal yakınlık yalnız aday çifti seçer, karar
+  vermez; kanıt yoksa TypeError aynen kalır (UNKNOWN). x ≥ log(8)/log(2), x² = 9 → {3} CORRECT, {−3, 3} INCORRECT;
+  log(x − log(8)/log(2)) = 0, x > log(8)/log(2) → {4}. log(8)/log(2) + e^(−e^10) ile 3 eşit DEĞİL: birleştirilmez.
+- 7. tur (6 Ekim), 6. tur saldırısı (8 bulgu, hepsi doğrulandı; ana oturum kararları uygulanır):
+  YO-1/RK1: ln(x−1) yalnız x>1'de; orada |x|=x>0 → |x|ln(x−1)=0 ⇔ x=2 ({2}, kök sayısı 1); √(x−2)+|x|=4 → x≥2'de
+  kesin artan, {3}; |x²−4x|ln(x−2)=0 → {3,4} (0 tanımsız); (|x|−x)ln(x−1)=0 → (1,∞); x²=9, |x|ln(x−1)≥0 → x≥2 → {3};
+  |x|+ln(x²−1)=0 → ±1.1477… (sınıf dışı → UNKNOWN; {} asla CORRECT değil); |x|=√(2x+1) → 1±√2 (iki kök);
+  (|x−3|−1/2)ln(x−2)=0 → {5/2, 3, 7/2}; (|x|+|x−10|−10)ln(x−6)=0 → (6,10] (tam sayı 4, kök sayısı sonsuz);
+  |x−2|ln(x−1)<0 → (1,2). Hücre, log argümanlarının ve radikandların kökleriyle de kesilmeden tek orta noktayla
+  atılamaz; argüman hücrede polinom değilse küme yok (UNKNOWN).
+  YO-2: (x+|x|)x^(1/3)=0 gerçel kökte (−∞,0], esas dalda {0} → küme yok (UNKNOWN); katlanan hücre de denetlenir.
+  RK2: |x−3|=3−x, x≥3 → {3}; |x|=x, x≤0 → {0}; Max(x,2)=2, x≥2 → {2}; |x−1|+|x+1|=2, x≥1 → {1}: CORRECT.
+  RK3: x>0'da x^(1/3) gerçel ve artan, iki okuma aynı: x^(1/3)<1 → (0,1); ≥2 → [8,∞); x^(2/3)≤4 → (0,8];
+  x^(1/3)<x → (1,∞); pozitif tam sayılarda x^(1/3)<2 → 7. Gerçel alanda (x<0 var) UNKNOWN kalır.
+  RK4: x/sign(x)=2 → x≠0'da |x|=2 → {−2,2}; 1/(x−|x|)=−1/2 → x≥0'da payda 0 (tanımsız), x<0'da 1/(2x) → {−1};
+  x/|x|=1 → (0,∞) (0 yok); x/sign(x)=0 → ∅.
+  RK5: x^(1/3)=x kök sayısı geleneğe bağlı (3 ya da 2) → yalnız UNKNOWN; sqrt(log²x)=1, x>0 → x∈{e,1/e}, hedef tek
+  değil → UNKNOWN; Max(log x,0)=0 kökleri (0,1] → '1' yanlış → {INCORRECT, UNKNOWN}.
+  RK6: log(8)/log(2)=3 tam; x>3, x²<16 → (3,4) CORRECT; (3,4] INCORRECT.
 
 # d4b NOTLAR
 - worktree /home/user/asd/.claude/worktrees/agent-aaed36d58e0f5ae79, ff 1df0558 -> 158c220 yapildi.
@@ -67,3 +92,43 @@
 - [4. tur devam] 7c0473a mutasyon 65/70 (K10 K17 K20 G03 A06 yasadi): K20 gercek hata (log hucresi tek noktadan; log(x)^2<=0, (x+1)log x=0 R'de {-1,1}) -> 593dd7e. A06/G03 esdeger -> tekrarli kod kaldirildi. Konteyner yeniden basladi; final7 yeniden kosuluyor.
 - [BITTI 4. tur] HEAD 5aa94e9 (7c0473a, 593dd7e, 30f60a4, 5aa94e9). sonda d4b 236: b87b625 19 -> 0; d4a 0/316, d4c 0/138, d4g 0/85; mut d4b 74/74, d4a 50/51 (A05); fark karar 0 (4 uni s7 unknown->verified); pytest 3393 gecti/93 atlandi/0 dustu; yeni test dosyasi 97 testin 42'si b87b625'te duser. Kapsama: 0ed77e2'de dogru olup 3872bcd'de UNKNOWN'a dusen 16 sonda vakasinin 16'si geri geldi; arccot 4 gelmedi.
 - [BITTI 5. tur] HEAD 9628439 (7ecb28a + merge d540add c7978cb + 9628439). Kural kaldirma olcumu (r5a, yalniz kural+oran sinifi): karar 7 (CORRECT->UNKNOWN), adim 111, sonda d4a 1 d4c 11 BAD. Siniflar (Abs/sign parcali, tek kok, log toplami, ozdeslik, parametreli) sonrasi: fark karar 0, adim 82 unknown->verified (5aa94e9'a gore), sondalar d4a 0/316 d4b 0/275 (d540add'de 6) d4c 0/138 d4g 0/229 d4d 0/275; mut d4b 86/86, d4a 50/51 (A05); pytest 3529/93/0.
+
+## 6. tur
+- worktree /home/user/asd/.claude/worktrees/agent-ae942c94e1db7bf05 (dal worktree-agent-ae942c94e1db7bf05).
+- adim 1: reset --hard wip/d4b-tur6 (ffa018d), merge 67ef480 (basliyor)
+- merge caf3cf8 (catisma yok). Dusen test: test_review_constraint_and_given_write_one_value_twice UNKNOWN. Kok neden arastiriliyor.
+- f6164fb: exact_intersection (base.cut_by) + 7 test + mutasyon B09 B10. Kok neden: 5. tur Poly log(8)->3log2, domain_for yazili; sp.Intersection TypeError. 67ef480'de de dusuyordu (76d0c87'de CORRECT). Siradaki: olcumler (final12.sh)
+- final12.sh basladi (HEAD 8ad4bdd): olcumler f12/ altinda, gunluk final12.log
+- 9c6fbdb: A05 olduren test (d4a test dosyasi): (x-8)(x^(2/3)-x^(1/3)+1)=0, esas dalda x=-1 de kok; koruma gerekli. final12 mutasyon fazi 9c6fbdb'yi klonlamali (kontrol et: mut log HEAD satiri)
+- final12: sondalar d4a 0/316, d4b 0/332, d4c 0/138, d4d 0/340, d4g 0/229. 2ebe7a8'de d4b test dosyasi: 29/174 duser (6. tur yeni testleri 32: 8274256 bolumu 25'in 22'si + benim 7'nin 7'si). mutasyon basladi 14:43
+- mut d4b 99/99, d4a 51/51 (A05 oldu) @9c6fbdb; fark basladi 14:53
+- fark: taban'a gore karar 0, ilk kotu adim 0, adim 86 (hepsi unknown->verified), K4 0; 782431c dokumune gore 0/0/0/0; 86'nin listesi 782431c-taban farkiyla birebir ayni. pytest fazi basladi
+- [BITTI 6. tur] HEAD 9c6fbdb (caf3cf8 merge, f6164fb, 8ad4bdd, 9c6fbdb). sondalar d4a 0/316 d4b 0/332 d4c 0/138 d4d 0/340 d4g 0/229; mut d4b 99/99, d4a 51/51 (A05 oldu); fark taban 0 karar/86 adim (782431c listesiyle ayni), 782431c'ye gore 0/0/0/0; pytest 3600 gecti/93 atlandi/0 dustu; pyflakes 6 (67ef480 ile ayni); 2ebe7a8'de d4b test dosyasi 29/174 duser. Kopyalar silindi. Rapor verildi.
+
+## 7. tur
+- gorev: 6. tur saldirisi 8 bulgu (scratchpad/d4/saldiri/d4b6/bulgular.json). Once merge 5754962, sonra YO-1, YO-2, RK1-RK6.
+- 5754962'ye ileri sarildi (ff; 9c6fbdb zaten icinde, catisma yok)
+- [7. tur ilerleme] src: exactsets _piecewise yeniden (log/kok kirilimlari, hucreye bagli kesimler/paydalar, tek kok gelenegi butun hucrelerde), _rebuilt pencere domain inf/sup + degisken isareti; algebra RK2 sympify, _finite_points (sinif kumesi domainle sonlu), _sample_inequality exact_intersection/complement; base _exact_setop. Sonda d4b RK5 sikilastirma (32 UNK, 2 NOTNO), d4a sonda RK3 OK. Saldirgan sondalari tekrar kosuyor (att7b.log). Commit YOK henuz.
+- [19:03 konteyner yeniden basladi] sonraki: degisiklikleri gozden gecir (sympify geri alindi: olcu try icinde; sign_range exactsets + domain._solveset_contradicted), testler gecti (round7 69/69). Kalan: mutasyon desenleri (B04-B06 guncelle, Y01..), sonda J grubu, commit, final13 olcumleri.
+- 8feacf9 (fix) + e8d51e1 (sonda) commit edildi; final13.sh basladi (f13/, gunluk final13.log)
+- final13: sondalar d4a 0/316, d4b 0/399, d4c 0/138, d4d 0/340, d4e 0/552, d4g 0/229; J @5754962 48/67 beklenmeyen (15 yanlis onay + 1 adim verified); 9c6fbdb'de 7. tur testleri 55/61 duser
+- final13 bitti: mut d4b 109/114 (Y04 Y05 Y09 Y12 A06 yasadi), d4a 51/51, fark taban 0/86 (=5754962), 5754962->HEAD 0/0/0/0, pytest 3686/93/0, pyflakes 6, saldirgan sondalari tabana gore gerileme yok. Siradaki: Y04/Y05/Y12/A06 testleri, Y09 kodu kaldir, final14.
+- ef267ab commit (Y04 Y05 Y12 A06 testleri, Y09 kaldirildi). final14.sh basladi (f14/)
+- final14: sondalar hepsi 0 (d4b 399), 9c6fbdb'de 7. tur testleri 56/65 duser, mut d4b 113/113
+- [BITTI 7. tur] HEAD ef267ab (8feacf9, e8d51e1, ef267ab; 5754962'ye ff). sondalar d4a 0/316 d4b 0/399 d4c 0/138 d4d 0/340 d4e 0/552 d4g 0/229; J @5754962 48/67; mut d4b 113/113, d4a 51/51; fark taban 0 karar/86 adim (5754962 ile ayni), 5754962->HEAD 0/0/0/0; pytest 3690/93/0; pyflakes 6 (taban); 9c6fbdb'de 7. tur testleri 56/65 duser; saldirgan sondalari: tabana gore gerileme 0, 9c6'da BAD olan 27 vaka duzeldi. Rapor verildi.
+
+## 8. tur
+- gorev: 7. tur saldirisi 5 bulgu (scratchpad/d4/saldiri/d4b7/bulgular.json). Once merge f1b1c94 (ff), sonra YO-1, RK-1..RK-4. Sonda grubu K.
+- ff f1b1c94 yapildi. PLAN (8. tur):
+  A numeric.certified_sign: sign/Abs/floor/ceiling/frac dugumlerini argumanin certified_sign'iyla kesin coz (_jumps_resolved) [RK-1 kok].
+  B exactsets: exact_setop (equiv.sets.unify_endpoints ile her zaman tek yazim; EndpointsIncomparable->TypeError), base yeniden ihrac [RK-4];
+    _rebuilt'te _on_window sonucu ∩ domain exact_intersection; _piecewise pencere uclarini kanitla esit kesimle tek yazima [RK-1/RK-3];
+    _function_conditions (asin/acos/acosh/atanh kosullari; atan2/arg/diger -> _Unsolved) -> _piecewise ve _on_window(ident) sonucunu defined ile kes; _on_points noktada tanimlilik [YO-1];
+    _piecewise gelenek denetimi yalniz tanimli hucre/uclarda [RK-2].
+  C domain: Convention('origin') atan2/arg; relation_holds_at noktada tanimlilik (gelenek kosullari haric) [YO-1 c];
+    base.domain_for written_conditions: cozulmeyen -> deferred (unsolved listesi) [YO-1 a]; algebra solve_inequality cozulmeyen tanimlilik -> condition_unsolved (ornekleme reddinden sonra).
+- 00:45 yeniden baslama; numeric.py yarim (cagri eklendi, _jumps_resolved yazilmadi). Sik commit.
+- f0c3173 A (certified_sign) commit. Siradaki B1 exact_setop
+- a6495e3 B1 commit. Siradaki B2-B5 exactsets (_piecewise uclar, _function_conditions, RK-2, _on_points, _rebuilt exact_intersection)
+- B2 6358e27, B3 commit (exactsets bitti, r8direct hepsi beklenen). Siradaki C: domain origin + relation_holds_at, base domain_for, algebra ineq
+- 7a118dc C (guvenlik aglari) commit. Siradaki: karar duzeyi olcum (saldirgan sondalari d4b7), testler

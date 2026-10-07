@@ -15,8 +15,9 @@ Audit of 25 Sep 2026 (each item was measured as a false verdict before the chang
 Fourth audit of 1 Oct 2026: numbers never ACCEPT a definite integral. An exact value is SymPy's,
 confirmed by the quadrature, or one proved symbolically (`certified_integral_value`: the integrand is
 0, odd about the midpoint and absolutely integrable, or an antiderivative checked by differentiation
-and continuous on the range); SymPy's 0 counts only when proved. Numbers alone only REFUTE, and only
-when two methods at two precisions agree (`integral_enclosure`).
+and continuous on the range); SymPy's 0 counts only when proved. Numbers alone decide only through a
+rigorous enclosure (`certify.enclosure`, interval arithmetic; review of d4c, 2 Oct 2026): a claim outside
+it is refuted, an approximate claim whose declared tolerance holds it is accepted.
 """
 from __future__ import annotations
 
@@ -135,36 +136,6 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
     ev["rel_err"] = mp.nstr(rel_err, 5)
     ev["value"] = mp.nstr(v, 40)
     return sp.Float(mp.nstr(v, 60), 60), ev
-
-
-def integral_abs_scale(integrand, var, a, b, pts=None, timeout: float = 8.0):
-    """∫|f| over [a, b] (an mpf), or None: the size of the rounding residue a quadrature of f leaves
-    at a given precision. A value that cancels to 0 comes out as that residue, not as 0: ∫_0^3 (x² - 2x) dx
-    gave -4.6e-55 at 50 digits (third audit of 30 Sep 2026, N2). None unless the 20- and 30-digit
-    quadratures agree: on a non-integrable f they grow with the precision (∫_{-1}^{1} |x^-3| came out
-    4e48, then 4e68), and such a "scale" would let any residue pass; SymPy even gives 0 for the
-    divergent ∫_{-1}^{1} x·e^(1/x²) dx (measured 30 Sep 2026)."""
-    a, b = sp.sympify(a), sp.sympify(b)
-    if pts is None:
-        pts = find_breakpoints(integrand, var, a, b, timeout)
-    vals = []
-    for dps in (20, 30):
-        r = sb_run("mathverify.sandbox.ops:quad_breakpoints", sp.Abs(sp.sympify(integrand)), var, a, b, pts, dps,
-                   "tanh-sinh", timeout=timeout)
-        if not r.ok:
-            return None
-        try:
-            s = mp.mpf(r.value[0])
-        except (TypeError, ValueError):
-            return None
-        if not (mp.isfinite(s) and s >= 0):
-            return None
-        vals.append(s)
-    s20, s30 = vals
-    with mp.workdps(40):
-        if abs(s30 - s20) > mp.mpf("1e-3") * s30:
-            return None
-    return s30
 
 
 # ---------------------------------------------------------------------------
@@ -475,75 +446,93 @@ def zero_integral_certificate(integrand, var, a, b, timeout: float = 8.0) -> tup
 
 
 # ---------------------------------------------------------------------------
-# A numeric value refutes a claim only with a trustworthy error (fourth audit of 1 Oct 2026, S2):
-# tanh-sinh missed the peak e^(-10^8 (x - 1/3)^2) at every level, reported an error of 0, and
-# "∫_0^1 (1 + peak·e^(cos x)) dx = 1" (it is 1.000456) was certified. Neither method proves a value,
-# and none is accepted from numbers alone; a claim is REFUTED only when tanh-sinh and Gauss-Legendre
-# (split at the breakpoints), each at 30 and 50 digits, agree with each other and all four stand
-# 10^3 times their error estimate (plus the residue scale 10^-(dps-10)·∫|f|) away from it. An error
-# estimate of 0 (the levels saw nothing new) or methods that disagree refute nothing.
-_ENCLOSURE_RUNS = ((30, "tanh-sinh"), (30, "gauss-legendre"), (50, "tanh-sinh"), (50, "gauss-legendre"))
-_REFUTE_MARGIN = 1000
+# Numbers decide a definite integral only through a RIGOROUS enclosure (`certify.enclosure`: interval
+# arithmetic on cells, outward rounding). A quadrature's error estimate is no proof: tanh-sinh and
+# Gauss-Legendre missed the peak e^(-10^8 (x - 1/3)^2) together, and with an error estimate small but not 0
+# the true value of ∫_0^1 (x² + 10^4 sech²(10^4 (x - 1/3))) dx was refuted (review of d4c, 2 Oct 2026). A
+# claim outside the enclosure is refuted; an approximate claim whose tolerance window holds the enclosure
+# is accepted; anything else, and every infinite range, decides nothing.
+def claim_interval(claimed):
+    """(lo, hi) mpf holding the constant `claimed` (interval arithmetic, else strict evalf), or None."""
+    from .enclosure import constant_interval
+    try:
+        c = sp.sympify(claimed)
+    except (sp.SympifyError, TypeError):
+        return None
+    if c.free_symbols or c.has(sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.zoo, sp.nan):
+        return None
+    if c in (sp.oo, -sp.oo):
+        return (mp.inf, mp.inf) if c is sp.oo else (-mp.inf, -mp.inf)
+    out = constant_interval(c)
+    if out is not None:
+        return out
+    from sympy.core.evalf import PrecisionExhausted
+    try:
+        v = c.evalf(40, strict=True)
+        if not v.is_Float:
+            return None
+        m = mp.mpf(v._mpf_)
+    except (PrecisionExhausted, TypeError, ValueError, AttributeError):
+        return None
+    with mp.workdps(60):
+        eps = mp.mpf(10) ** -35 * (1 + abs(m))
+        return m - eps, m + eps
 
 
-def integral_enclosure(integrand, var, a, b, timeout: float = 8.0) -> tuple[Any, Any, dict[str, Any]] | None:
-    """(value, width, evidence): ∫_a^b f lies within `width` of `value` as far as two independent
-    quadratures at two precisions can tell, `width` being 10^3 times the largest error estimate plus
-    residue; None when they cannot tell (see the comment above)."""
+def _raw_pair(lo, hi):
+    from .enclosure import _raw
+    return _raw(mp.mpf(lo)), _raw(mp.mpf(hi))
+
+
+def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0):
+    """(lo, hi) mpf: an interval holding ∫_a^b f, refined until it misses `outside` or lies within
+    `inside` ((lo, hi) mpf pairs) or the budget is spent; None without an enclosure (an infinite range,
+    an operation with no interval extension). The ends may be infinite (a singularity)."""
+    from .enclosure import from_raw
     try:
         f, a, b = sp.sympify(integrand), sp.sympify(a), sp.sympify(b)
     except (sp.SympifyError, TypeError):
         return None
-    if f.has(sp.Integral, sp.Sum, sp.Product, sp.Limit) or f.free_symbols - {var} or a.free_symbols \
-            or b.free_symbols:
+    if f.has(sp.Integral, sp.Sum, sp.Product, sp.Limit) or not (a.is_finite and b.is_finite):
         return None
-    pts = find_breakpoints(f, var, a, b, timeout) if a.is_finite and b.is_finite else []
-    scale = integral_abs_scale(f, var, a, b, pts, timeout)
-    if scale is None:
+    r = sb_run("mathverify.certify.enclosure:rigorous_enclosure", f, var, a, b,
+               _raw_pair(*outside) if outside else None, _raw_pair(*inside) if inside else None,
+               4000, float(timeout), timeout=timeout + 10)
+    if not r.ok or r.value is None:
         return None
-    runs = {}
-    for dps, method in _ENCLOSURE_RUNS:
-        r = sb_run("mathverify.sandbox.ops:quad_breakpoints", f, var, a, b, pts, dps, method, timeout=timeout)
-        if not r.ok:
-            return None
-        with mp.workdps(dps + 10):
-            try:
-                v, err = mp.mpf(r.value[0]), abs(mp.mpf(r.value[1]))
-            except (TypeError, ValueError):
-                return None                      # a complex value, or no number at all
-            if not (mp.isfinite(v) and mp.isfinite(err)) or err == 0:
-                return None
-            runs[(dps, method)] = (v, err + mp.mpf(10) ** (-(dps - 10)) * scale)
-    ev = {"runs": {f"{m}@{d}": [mp.nstr(v, 8), mp.nstr(e, 3)] for (d, m), (v, e) in runs.items()},
-          "abs_scale": mp.nstr(scale, 5)}
-    with mp.workdps(70):
-        for dps in (30, 50):
-            (v1, e1), (v2, e2) = runs[(dps, "tanh-sinh")], runs[(dps, "gauss-legendre")]
-            if abs(v1 - v2) > 10 * (e1 + e2):
-                return None
-        value = runs[(50, "tanh-sinh")][0]
-        width = _REFUTE_MARGIN * max(e for _, e in runs.values()) \
-            + max(abs(v - value) for v, _ in runs.values())
-    return value, width, ev
+    return from_raw(r.value[0]), from_raw(r.value[1])
 
 
-def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0) -> tuple[bool, dict[str, Any]]:
-    """Is the claimed number certainly not ∫_a^b f (see `integral_enclosure`)?"""
-    enc = integral_enclosure(integrand, var, a, b, timeout)
+def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0, window=None) -> tuple[bool, dict[str, Any]]:
+    """Is the claimed number (or the tolerance `window` around it, (lo, hi)) certainly not ∫_a^b f?"""
+    ev: dict[str, Any] = {}
+    c = window or claim_interval(claimed)
+    if c is None:
+        ev["claim_interval"] = None
+        return False, ev
+    enc = rigorous_integral(integrand, var, a, b, outside=c, timeout=timeout)
+    ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
     if enc is None:
-        return False, {"enclosure": None}
-    value, width, ev = enc
-    try:
-        c = sp.sympify(claimed)
-        if c in (sp.oo, -sp.oo):
-            return True, ev                      # a finite enclosure excludes an infinite value
-        cv = to_mp(c, 70)
-    except Exception:  # noqa: BLE001
         return False, ev
-    if isinstance(cv, mp.mpc):
-        return False, ev
-    with mp.workdps(70):
-        return bool(abs(cv - value) > width), ev
+    lo, hi = enc
+    return bool(hi < c[0] or lo > c[1]), ev
+
+
+def integral_within(integrand, var, a, b, window, timeout: float = 8.0) -> tuple[bool, dict[str, Any]]:
+    """Does a rigorous enclosure of ∫_a^b f lie within `window` ((lo, hi) mpf)?"""
+    enc = rigorous_integral(integrand, var, a, b, outside=window, inside=window, timeout=timeout)
+    ev = {"enclosure": None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]}
+    return bool(enc is not None and window[0] <= enc[0] and enc[1] <= window[1]), ev
+
+
+def tolerance_window(claimed, rel_tol):
+    """[c - tol·|c|, c + tol·|c|] around the claim, outward, or None."""
+    c = claim_interval(claimed)
+    if c is None or not (mp.isfinite(c[0]) and mp.isfinite(c[1])):
+        return None
+    with mp.workdps(60):
+        t = mp.mpf(rel_tol)
+        return c[0] - t * abs(c[0]), c[1] + t * abs(c[1])
 
 
 def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0,
@@ -1648,10 +1637,24 @@ def verify(ir, solution, ctx: Ctx):
                     ev["symbolic_zero_uncertified"] = True
                     exact = None
 
+            window = tolerance_window(claimed, declared) if declared else None
+
             def excluded() -> bool:
-                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5)
+                # the claim (or its tolerance window) outside a rigorous enclosure of the integral
+                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5,
+                                            window=window)
                 ev["enclosure"] = xev
                 return no
+
+            def by_certificate():
+                # SymPy's value differs from the claim: a value proved symbolically decides, when there is one
+                cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)
+                ev["certificate_for_the_claim"] = cev
+                if cval is None:
+                    return None
+                if declared:
+                    return num_equal(claimed, sp.N(cval, 60), rel_tol=declared)[0]
+                return answers_equivalent(claimed, cval, shape="scalar")[0]
 
             if exact is not None:
                 if zero:
@@ -1663,7 +1666,12 @@ def verify(ir, solution, ctx: Ctx):
                         return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
                                        flags=["symbolic_numeric_disagreement"])
                 elif val is None:
-                    return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
+                    # no numeric value (an infinite range has no quadrature here): a value proved
+                    # symbolically still decides, ∫_0^oo e^-x dx = 1 by the fundamental theorem with
+                    # its end limits (coverage lost in the review of d4c, given back 6 Oct 2026)
+                    if (okC := by_certificate()) is None:
+                        return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
+                    agree = None
                 else:
                     agree, _ = num_equal(exact, val, rel_tol=tol)
                 ev["symbolic_agrees_numeric"] = agree
@@ -1674,20 +1682,28 @@ def verify(ir, solution, ctx: Ctx):
                 else:
                     okS, sev = answers_equivalent(claimed, exact, shape="scalar")
                 ev["compare_exact"] = sev
-                if proved or (converged and agree is True):
+                if proved or (converged and agree is True and okS is not False):
                     ok = okS
+                elif val is None or (okC := by_certificate()) is not None:
+                    ok = okC                       # a value proved symbolically decides
                 elif okS is False and excluded():
-                    ok = False                     # two independent computations reject the claim
+                    # SymPy's value is no proof, and a quadrature that agrees with it may share its blind
+                    # spot (a narrow peak): a claim is refuted only outside a rigorous enclosure
+                    ok = False
                 else:
                     # a numeric value that did not converge (x^(-999/1000) on [0,1]: 176.5 instead
                     # of 1000) or that contradicts SymPy never decides alone
-                    reason = "numeric_not_converged" if not converged else "symbolic_numeric_disagreement"
+                    reason = "numeric_not_converged" if not converged else \
+                        "symbolic_numeric_disagreement" if agree is not True else "claim_inside_the_rigorous_enclosure"
                     return unknown(LAYER, reason, t.ms, ev, flags=[reason])
+            elif window is not None and integral_within(integrand, var, a, b, window, timeout=ctx.timeout * 1.5)[0]:
+                ok = True                          # a rigorous enclosure inside the declared tolerance
+                ev["decided_by"] = "rigorous_enclosure_within_tolerance"
             elif excluded():
                 ok = False
             else:
                 # no exact value: a quadrature alone never accepts (it can miss a narrow peak at every
-                # level and report an error of 0: S2), and this one does not refute
+                # level and report an error of 0: S2), and no rigorous enclosure decides
                 return unknown(LAYER, "no_exact_value", t.ms, ev, flags=["no_exact_value"])
             conf = 0.99
         elif kind == "derivative":

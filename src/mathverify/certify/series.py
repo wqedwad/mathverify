@@ -377,43 +377,16 @@ def certify_series_sum(term, var, lo, hi, claimed, timeout: float = 10.0) -> tup
         ev["method"] = "symbolic+numeric"
         return ok, ev
     if num_val is not None:
-        ok, cev = num_equal(claimed, num_val, rel_tol=1e-15)
-        ev["compare"] = cev
+        # nsum's value is no enclosure: it extrapolates from the first terms. Σ sin(πk/2)/k came out
+        # 263/315 at every precision (the zero terms end its extrapolation early; audit of 29 Sep 2026),
+        # and with one-signed terms and the same value at 30 and 50 digits Σ (1/k² + e^(-(k - 1000)²))
+        # came out π²/6: the term far out was never seen and the true value π²/6 + 1.7726… was refuted
+        # (fourth audit, d4c sibling paths, 6 Oct 2026). A number alone refutes no series.
         ev["method"] = "numeric_only"
-        # nsum refutes only a series it sums reliably: terms that never vanish and keep one sign, and
-        # a value that stands at a higher precision too. Σ sin(πk/2)/k came out 263/315 = 0.8349 at
-        # every precision (the zero terms end its extrapolation early), and π/4 was refuted (audit
-        # of 29 Sep 2026).
-        rt = sb_run("mathverify.certify.series:_one_signed_terms", term, var, lo, timeout=timeout)
-        one_signed = bool(rt.ok and rt.value is True)
-        rn2 = sb_run("mathverify.certify.series:_nsum_worker", term, var, lo, hi, 50, timeout=timeout * 2)
-        num2 = sp.Float(rn2.value, 50) if rn2.ok else None
-        converged = num2 is not None and num_equal(num_val, num2, rel_tol=1e-20)[0] is True
-        ev["numeric_reliable"] = one_signed and converged
-        if ok is False and one_signed and converged:
-            return False, ev
         ev["reason"] = "numeric_only_no_symbolic_confirmation"
         return None, ev
     ev["reason"] = "summation_failed"
     return None, ev
-
-
-def _one_signed_terms(term, var, lo, n=200) -> bool:
-    """Are the first `n` terms nonzero and of one sign (the series nsum sums reliably)?"""
-    if lo == -oo:
-        return False
-    f = sp.lambdify(var, term, "mpmath")
-    sign = 0
-    with mp.workdps(30):
-        for k in range(int(lo), int(lo) + n):
-            v = f(mp.mpf(k))
-            if isinstance(v, mp.mpc) or not mp.isfinite(v) or abs(v) < mp.mpf(10) ** -25:
-                return False
-            s = 1 if v > 0 else -1
-            if sign and s != sign:
-                return False
-            sign = s
-    return True
 
 
 def _summation_worker(term, var, lo, hi):

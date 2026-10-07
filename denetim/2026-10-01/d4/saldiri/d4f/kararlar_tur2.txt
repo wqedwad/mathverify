@@ -1,0 +1,29 @@
+# d4f 2. tur: ana oturumun kararları (7 Ekim 2026; saldırının 11 doğrulanmış bulgusu)
+Bulgular: d4/saldiri/d4f/bulgular.json. Önce yanlış onaylar.
+- YO-1 (high, önceden var): yazıldığı biçim okuması fail-closed olmalı. parse_as_written bir metni okuyamaz/reddederse ve değer
+  okuması okuyorsa: tanımlılık kararsızdır → CORRECT yok (UNKNOWN), adım verified yok; None "koşul yok" sayılmaz (base
+  written_conditions, _undefined_constant/_undefined_function/_text_without_value, domain.written_definedness, domain.verify,
+  limits, steps/deterministic: her çağıran). Sınırların tam sayılığı iki okumada aynı kuralla (kesin sadeleştirmeyle: sqrt(1) = 1,
+  log(8,2) = 3 tam sayı; iç içe kökle 1/2 → TAN-10 UNKNOWN): x²/x + Σ_{k=√1}^{3} k = 6 için {0} CORRECT değil.
+- YO-2 (high, önceden var): yazılı okuma det/trace/eig gibi matris işlemlerini hesaplamaz; girdilerin tanım koşulları korunur
+  (√x·√x → x katlanması yok); eigmax vb. None → fail-closed.
+- YO-3 (d4f getirdi): sınırı tam sayı bildirilmemiş (ve tam sayıya sabitlenmemiş) sembole bağlı Σ/Π (Σ_{k=n}^{n+2} k, n gerçel):
+  ℤ dışındaki değer geleneğe bağlı (adımlama 3n+3, tam sayı indis 2⌈n⌉+1, "tanımsız") → hem 3n+3 hem 3n+3+sin πn UNKNOWN;
+  INCORRECT de değil. Bildirim n tam sayıysa karar verilir. (V15 R1 aynı kural: doğru kapalı biçim reddedilmez, UNKNOWN.)
+- YO-4: holds_on_the_tail kuyrukta tanımlılığı kanıtlamalı (bir N'den sonra her tam sayıda); sonsuz çok tam sayıda tanımsız dizi
+  (cos(πx/2) paydada, 1−(−1)^x paydada, tan(πx/4)) → hem değer hem DNE UNKNOWN.
+- YO-5: claim_is_not_a_value / claim_convention pin yerine konduktan sonra ve ilişki biçimli (normalize edilmiş) iddiada da
+  uygulanır: a = 1 iken 1/factorial(−a), 1/(1/(a−1)); 'x >= 1/zoo' gibi → UNKNOWN.
+- YO-6: NO_VALUE problemin bütün metinlerinde: liste/sözlük parametreleri (nokta, merkez, başlangıç değeri, sayım sınırı),
+  üyelik biçimli verilenler ('x ∈ [a, b]'), dizi adımları → UNKNOWN.
+- YO-7: ∞⁰ (oo**0, (−oo)**0, \infty^{0}, oo**(1−1)) belirsiz biçim/gelenek → 0**0 ile aynı sınıf, UNKNOWN.
+Haksız ret:
+- RK-F1 (d4f getirdi): açık sınırın tam sayılığı sert Contains(x, ℤ) değil, gelenek koşulu (Convention/ForwardSpans gibi: kanıtlandığı
+  yerde tutar, başka yerde kararsız, hiçbir yerde yanlış değil) → {7/3} vb. UNKNOWN, adımlar refuted değil (unknown/skipped).
+Kapsama (d4f getirdi; yalnız kanıtlı yolla):
+- RK-F2: Γ'nın açık tanım koşulu: limit noktasının delinmiş komşuluğu / +∞ kuyruğu / integral aralığı / türev noktası komşuluğu
+  Γ'nın tanım kümesinin içindeyse (x pozitif gerçel bildirimi dahil) koşul kanıtlı → taban kararları geri.
+- RK-F3: domain_of_discourse complex iken iddiadaki yalnız gerçel-sayı koşulu bozulan değer (sqrt(−4), log(−1)) görev metnindeki
+  gibi esas değerle okunur → claim_is_not_a_value değil.
+- RK-F4: LaTeX \frac{c}{0}, \frac{0}{0} kanonik 1/0, 0/0 gibi (yazılı sıfıra bölme) okunur, metinde yazılmış zoo/nan sayılmaz:
+  30 Eylül geleneği (hiçbir yerde tanımlı olmayan denklemin kümesi ∅) LaTeX'te de geçerli.
