@@ -345,19 +345,41 @@ def _option_texts(solution: Solution, options) -> list[str]:
     return []
 
 
+def _claim_pins(ctx) -> dict:
+    """The values a given or a declared constraint fixes (`Ctx.pinned_values`), the task's own variable and a
+    tangent line's dependent variable left out: the claim is read at them. With a = 1 the claim (a**4 - 1)/(a - 1)
+    for Σ_{k=0}^{3} a**k is 0/0 and was certified (attack on d4e, YO-1)."""
+    from .normalize.parse import task_variables
+    keep = task_variables(ctx.ir) | {str((ctx.ir.task.params or {}).get("dep", ""))}
+    try:
+        return {s_: v for s_, v in ctx.pinned_values().items() if s_.name not in keep}
+    except Exception:  # noqa: BLE001 - no value read: the claim is read as it is
+        return {}
+
+
+def _pinned_tree(w, pins):
+    """An as-written tree with the pinned values put in (unevaluated, never into a bound variable)."""
+    from .normalize.parse import substitute_free
+    if not pins or not isinstance(w, sp.Basic):
+        return w
+    try:
+        with sp.evaluate(False):
+            return substitute_free(w, pins)
+    except Exception:  # noqa: BLE001 - read without the values (the old reading)
+        return w
+
+
 def _claim_conditions(txt: str, ns: dict, ctx):
     """The definedness conditions of a claim text read as written (a set's ends too) at the values the givens and
-    the constraints fix; None when it is not read that way. Read without them, 1/factorial(-a) with a = 1 kept
-    only an open condition, and the certificates put a = 1 into SymPy's value (1/zoo = 0): CORRECT for 0
-    (review of d4f, YO-5)."""
+    the constraints fix (`_claim_pins`); None when it is not read that way. Read without them, 1/factorial(-a)
+    with a = 1 kept only an open condition, and the certificates put a = 1 into SymPy's value (1/zoo = 0):
+    CORRECT for 0 (review of d4f, YO-5)."""
     from .certify.domain import definedness_conditions
-    from .normalize.parse import parse_set_as_written, task_variables
+    from .normalize.parse import parse_set_as_written
     w = parse_set_as_written(txt, ns)
     if w is None:
         return None
-    tv = task_variables(ctx.ir)
-    pins = {s_: v for s_, v in ctx.pinned_values().items() if s_.name not in tv}
-    return definedness_conditions(ctx._pinned(w, pins), None)
+    return definedness_conditions(_pinned_tree(w, _claim_pins(ctx)), None)
 
 
 def _claim_convention(solution: Solution, ctx, task_kind: str = "", raw_payload=None, options=None) -> list[str]:
@@ -560,6 +582,11 @@ def scope_note(flags: list[str], verdict: str) -> str:
             + "; ".join(parts) + ".")
 
 
+# the task kinds whose certificates read a periodic side condition left unsolved on ℝ (cos(x) > 0) on a bounded
+# window around their point (review of d4e, R5): it was `given_not_applied` before any of them ran
+_WINDOWED_KINDS = frozenset({"derivative", "tangent_line", "antiderivative", "limit"})
+
+
 def verify(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
            timeout: float = 8.0, run_steps: bool = True) -> VerificationResult:
     """Deterministic verification: certificates + step refuter + fusion."""
@@ -754,8 +781,10 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     try:
         tvar = (problem_ir.task.params or {}).get("var")
         unapplied = ctx.side_conditions(ctx.sym(tvar))[1] if isinstance(tvar, str) else []
-        if isinstance(tvar, str):
-            # one with a trigonometric function that stays unsolved on the domain the rest leaves
+        if isinstance(tvar, str) and problem_ir.task.kind not in _WINDOWED_KINDS:
+            # one with a trigonometric function that stays unsolved on the domain the rest leaves (the calculus
+            # certificates solve it on a bounded window around their point: `certify.calculus.task_region`,
+            # `certify.limits.region_side`)
             unapplied = unapplied + [str(r) for r in ctx.unsolved_side_conditions(ctx.sym(tvar))]
     except Exception:  # noqa: BLE001 - a failed probe adds no fact
         unapplied = []

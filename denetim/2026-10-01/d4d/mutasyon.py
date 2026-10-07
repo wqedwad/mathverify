@@ -150,7 +150,7 @@ MUTATIONS = [
     ("N13 boş ortak bölge okunmaz", BAS,
      "            if reg is not None and (reg is S.EmptySet or reg.is_empty is True):", "            if False:", T),
     ("N14 yan koşullar bölgeye girmez", BAS, "        if side:\n            sets, unapplied", "        if False:\n            sets, unapplied", T),
-    ("N15 gcd(0, 0) tanımlı", DOM, '            if type(node).__name__ == "gcd":', "            if False:", T),
+    ("N15 gcd(0, 0) tanımlı", DOM, '        if type(node).__name__ == "gcd":', "        if False:", T),
     ("N16 değerle kapanan koşul okunmaz", BAS, "                if not pinned_here:\n                    continue",
      "                if True:\n                    continue", T),
     ("N17 bildirim SymPy'ye bırakılır", BAS, "            ew = parse_as_written(src, pns)", "            ew = parse_as_written(src, self.ns)", T),

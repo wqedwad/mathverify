@@ -296,7 +296,9 @@ def test_no_limit_from_complex_values_of_a_positive_variable(ir, claim):
 
 def test_the_real_side_of_log_minus_x_keeps_its_limit():
     assert _run(lim("x*log(-x)", "0", [X], "-"), "0").verdict == "CORRECT"
-    assert _run(lim("x*log(-x)", "0", [_xv("real", ["x > 0"])], "+"), "0").verdict == "INCORRECT"
+    # x > 0 as a constraint is the declaration above: x*log(-x) has no value anywhere in the region, and no
+    # limit of it is the curriculum's (attack on d4e, YO-6; it was INCORRECT, the declaration UNKNOWN)
+    assert _run(lim("x*log(-x)", "0", [_xv("real", ["x > 0"])], "+"), "0").verdict == "UNKNOWN"
     assert _run(lim("x*log(x)", "0", P, "+"), "0").verdict == "CORRECT"
 
 

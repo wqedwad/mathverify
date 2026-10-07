@@ -554,6 +554,30 @@ def _near(region, point, d) -> str | None:
 UNDECIDED = "undecided"
 
 
+def defined_nowhere_in(region, conds, var) -> bool:
+    """Do the written conditions on `var` alone (`conds`, read at the pinned values) hold at no point of
+    `region` together, proved exactly? Then the expression has no value anywhere the variable may be, and
+    no limit of it is the curriculum's: with x > 0 a constraint, a given or the domain of discourse the
+    limit DNE of x + 0*sqrt(-x) at 0 and of x + 0*log(-x) at 2 was certified, and 0 refuted (attack on
+    d4e, YO-6); declared positive, the same expression was undefined as written. A condition whose
+    violations are not found exactly proves nothing (False)."""
+    good = region
+    for c in conds:
+        if getattr(c, "free_symbols", set()) != {var}:
+            continue
+        try:
+            bad = _violations(c, var, region)
+            if bad is None:
+                continue
+            good = sp.Intersection(good, sp.Complement(region, bad))
+        except Exception:  # noqa: BLE001 - not decided
+            continue
+    try:
+        return good.is_empty is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def region_side(ctx: Ctx, var, point, side):
     """The side ('+', '-', None: both) from which the limit approaches `point` inside the variable's
     region (`Ctx.domain_for`: its declaration, constraints, givens and domain of discourse, with the
@@ -565,6 +589,20 @@ def region_side(ctx: Ctx, var, point, side):
     rule of a declared domain's closed end (30 Sep 2026); an isolated point or a point outside the
     region is not approached."""
     region = ctx.domain_for(var)
+    unsolved = ctx.unsolved_conditions(var)
+    if unsolved:
+        # a periodic condition left unsolved on ℝ (the given cos(x) < 0) is solved on [p - 1, p + 1] around a finite
+        # point (`sandbox.exactsets` on a bounded domain); near an infinite one it is not (review of d4e, R5)
+        if point in (oo, -oo):
+            return UNDECIDED
+        from .calculus import _solved_part
+        win = Interval(point - 1, point + 1)
+        region = sp.Intersection(_solved_part(region), win)
+        for c in unsolved:
+            r = sb_run("mathverify.sandbox.ops:solveset_in", c, var, win, timeout=ctx.timeout)
+            if not (r.ok and isinstance(r.value, sp.Set)) or r.value.has(sp.ConditionSet):
+                return UNDECIDED
+            region = sp.Intersection(region, r.value)
     if getattr(var, "is_integer", None) and point in (oo, -oo):
         # a sequence (`declared_side` refuses a finite point): only an infinite end its values reach
         try:
@@ -651,6 +689,10 @@ def verify(ir, solution, ctx: Ctx):
             # body is not proved to exist: lim_{x->0} x + Σ_{k=-1}^{1} k/k = 3 was certified (review
             # of 30 Sep 2026; the value parse reads k/k as 1)
             return unknown(LAYER, "expression_undefined_as_written", t.ms, {"expr": p["expr"]},
+                           flags=["expression_undefined_as_written"])
+        if defined_nowhere_in(ctx.domain_for(var), written, var):
+            return unknown(LAYER, "expression_undefined_as_written", t.ms,
+                           {"expr": p["expr"], "region": str(ctx.domain_for(var))},
                            flags=["expression_undefined_as_written"])
         unpinned = sorted({str(s_) for c in written for s_ in getattr(c, "free_symbols", set()) - {var}})
         if unpinned:

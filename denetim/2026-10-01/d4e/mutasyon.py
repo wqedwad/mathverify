@@ -1,8 +1,12 @@
 """Mutation check of part d4e of the fourth audit's fixes (6 Oct 2026): how the task certificates read the
 conditions on their variable and the written domain of their function. Each mutation removes one guard (the
 limit's region, the two-sided point, the pins, the written conditions naming a parameter, the empty and
-periodic domains, the antiderivative's reality and single constant, the infinite bound, the point binder); the
-test it names must then fail. The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
+periodic domains, the antiderivative's reality and single constant, the infinite bound, the point binder; round 2:
+the pins of series and closed forms, the convergence of an integral with numbers for bounds, the body of Subs at
+its point, the binding check's unevaluated reading, the negative base, the limit of an expression defined nowhere
+in the region, the kinks of |u|, and the coverage regained by proof: the local interior point, the meromorphic
+primitive, a parameter of declared sign, the curve given, the windowed periodic given, the continuous primitive
+across a gap); the test it names must then fail. The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
 the one of denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
 
     .venv/bin/python denetim/2026-10-01/d4e/mutasyon.py [-j N] [--list] [name ...]
@@ -26,6 +30,8 @@ LIM = "src/mathverify/certify/limits.py"
 EXT = "src/mathverify/certify/extremum.py"
 CAL = "src/mathverify/certify/calculus.py"
 PARSE = "src/mathverify/normalize/parse.py"
+SER = "src/mathverify/certify/series.py"
+VER = "src/mathverify/verifier.py"
 T = "tests/test_d4_d4e_gorev.py::"
 
 MUTATIONS = [
@@ -129,7 +135,7 @@ MUTATIONS = [
      T + "test_written_condition_naming_a_parameter"),
     ("W08 türev ifadesinde parametreli koşul", CAL,
      "                if other and not _half_line_for_every_value(ctx, conds, other, var):\n"
-     "                    return condition_not_applied(LAYER, _names(other, var), t.ms)\n", "",
+     "                    # a parameter of declared sign", "                if False:\n                    # a parameter of declared sign",
      T + "test_written_condition_naming_a_parameter"),
     ("W10 tek yanlı parametre kanıtı her zaman", CAL, "    if len(sides) != 1:\n        return not sides",
      "    if len(sides) != 1:\n        return True", T + "test_written_condition_naming_a_parameter"),
@@ -155,8 +161,9 @@ MUTATIONS = [
      "                conds, other", T + "test_derivative_expression_on_the_region"),
     ("I05 türev ifadesi: iç nokta aranmaz", CAL, "                if interior_point(ctx, conds, var, dom) is None:",
      "                if False:", T + "test_function_defined_nowhere_or_without_interior"),
-    ("I06 türev ifadesi uçta karşılaştırılır", CAL, "                dom = comparison_region(dom, loose, var)\n", "",
-     T + "test_function_defined_nowhere_or_without_interior"),
+    ("I06 türev ifadesi uçta karşılaştırılır", CAL,
+     "dom = comparison_region(sp.Complement(dom, off) if kinks else dom, loose + kopen, var)\n",
+     "dom = sp.Complement(dom, off) if kinks else dom\n", T + "test_function_defined_nowhere_or_without_interior"),
     ("I07 karşılaştırma iç kısımda değil", CAL,
      "        inner = region.interior\n        if isinstance(inner, sp.Set) and not inner.has(sp.Complement):\n"
      "            region = inner\n", "        pass\n", T + "test_function_defined_nowhere_or_without_interior"),
@@ -202,7 +209,7 @@ MUTATIONS = [
     ("D01 _undefined_function açık koşul boşluğunu okumaz", BASE, "                or open_conditions_empty(conds, timeout=self.timeout)",
      "                or False", T + "test_function_defined_nowhere_or_without_interior"),
     ("D02 limit açık koşul boşluğunu okumaz", LIM, " or open_conditions_empty(conds)\n", "\n",
-     T + "test_limit_of_a_function_defined_nowhere"),
+     T + "test_periodic_written_domain"),
     ("D03 boşluk ℝ'de denenmez", DOM, "    if rel is sp.false or exact_solveset(rel, s_, S.Reals) is S.EmptySet:",
      "    if rel is sp.false:", T + "test_function_defined_nowhere_or_without_interior"),
     ("D04 periyodik koşullar tek periyotta okunmaz", DOM, "    if not periodic:\n        return False\n",
@@ -215,8 +222,11 @@ MUTATIONS = [
     ("H01 sonsuz sınır bölgeye uzanmaz", DOM,
      "    lo = -oo if -oo in ends else u.inf\n    hi = oo if oo in ends else u.sup\n", "    lo, hi = u.inf, u.sup\n",
      T + "test_infinite_bound_reaches_its_end_and_must_converge"),
-    ("H02 sonsuz uçta yakınsaklık aranmaz", DOM, "            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):",
-     "            if False:", T + "test_infinite_bound_reaches_its_end_and_must_converge"),
+    ("H02 sonsuz uçta yakınsaklık aranmaz", DOM,
+     "        # (fourth audit TAN-07)\n        for end in (a, b):\n"
+     "            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):",
+     "        # (fourth audit TAN-07)\n        for end in (a, b):\n            if False:",
+     T + "test_infinite_bound_reaches_its_end_and_must_converge"),
     ("H03 sönüm üssü 1'den büyük değil", DOM, "    for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):",
      "    for p in (S(0),):", T + "test_infinite_bound_reaches_its_end_and_must_converge"),
     ("H04 çok sınırlı uygunsuz integral", DOM, "        return [DEFINEDNESS_UNDECIDED] if named or improper else []",
@@ -225,6 +235,119 @@ MUTATIONS = [
     ("B01 nokta bağlayıcısı yazılı okumada yeniden bağlanmaz", PARSE, "                                              rebind_points=True))",
      "                                              rebind_points=False))",
      T + "test_point_binder_variable_carries_no_declaration"),
+    # --- round 2 (attack on d4e, 6 Oct 2026): false accepts YO-1..YO-6
+    ("Y01 seri toplamı sabitlemeyi okumaz", SER, "            pins = ctx.task_pins(ctx.sym(var_name))\n",
+     "            pins = {}\n", T + "test_series_and_closed_form_read_the_pinned_value"),
+    ("Y02 kapalı biçim sabitlemeyi okumaz", SER,
+     "            pins = {s_: v for s_, v in ctx.task_pins(ctx.sym(var)).items() if s_.name != fname}\n",
+     "            pins = {}\n", T + "test_series_and_closed_form_read_the_pinned_value"),
+    ("Y03 iddia sabitlemeyle okunmaz", VER, "    pins = _claim_pins(ctx)\n", "    pins = {}\n",
+     T + "test_series_and_closed_form_read_the_pinned_value", 2),
+    ("Y04 terim sabitlemeyle okunmaz", SER, "und = written_undefined_in(p[\"term\"], ns2, var, idx, pins)",
+     "und = written_undefined_in(p[\"term\"], ns2, var, idx)", T + "test_series_and_closed_form_read_the_pinned_value"),
+    ("Y05 terimin üyelik koşulu atlanır", DOM,
+     "            bad = _violations(c, var, region)\n            if bad is None:\n                return None\n"
+     "            if bad.is_empty is not True:\n                return True\n            continue\n",
+     "            continue\n", T + "test_series_and_closed_form_read_the_pinned_value"),
+    ("Y06 sayı sınırlı integralde sonsuz uç", DOM,
+     "(attack on d4e, YO-2)\n        for end in (a, b):\n"
+     "            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):",
+     "(attack on d4e, YO-2)\n        for end in (a, b):\n            if False:",
+     T + "test_integral_with_numbers_for_bounds_must_converge"),
+    ("Y07 sayı sınırlı integralde iç tekillik", DOM,
+     "                if not sides or any(not _integrable_at(n.function, x, d, p_, s_) for s_ in sides):",
+     "                if False:", T + "test_integral_with_numbers_for_bounds_must_converge"),
+    ("Y08 yerel integrallenebilirlik üssü 1", DOM,
+     "    for p in (S(0), S.Half, sp.Rational(2, 3), sp.Rational(9, 10)):", "    for p in (S(1),):",
+     T + "test_integral_with_numbers_for_bounds_must_converge"),
+    ("Y09 sönüm üssü 1'i geçmesi gerekmez", DOM, "certified_sign(q - 1) == 1", "certified_sign(q) == 1",
+     T + "test_infinite_bound_reaches_its_end_and_must_converge"),
+    ("Y18 Dirichlet testi yok", DOM, "    return _dirichlet_test(g, t, end)\n", "    return False\n",
+     T + "test_integral_with_numbers_for_bounds_must_converge"),
+    ("Y10 Subs gövdesi noktasında okunmaz", DOM, "        if isinstance(n, sp.Subs):", "        if False:",
+     T + "test_subs_body_is_read_at_its_point"),
+    ("Y11 Subs türevi noktaya yazılır", DOM,
+     "    if not any(set(vs) & set(d_.variables) for d_ in body.atoms(sp.Derivative)):", "    if True:",
+     T + "test_subs_body_is_read_at_its_point"),
+    ("Y12 Subs türevinde komşuluk aranmaz", DOM,
+     "            clear = (left.is_empty is True or certified_sign(p_ - left.sup) == 1) and \\\n",
+     "            clear = True or \\\n", T + "test_subs_body_is_read_at_its_point"),
+    ("Y13 bağlama denetimi toplamı değerlendirerek okur", BASE,
+     "                    pinned_here = bool(ew.free_symbols & set(pins))\n",
+     "                    pinned_here = bool(sp.Tuple(*[a.doit() for a in ew]).free_symbols & set(pins))\n",
+     T + "test_pinned_value_that_makes_a_sum_term_undefined"),
+    ("Y14 negatif tabanlı değişken üs gelenek değil", DOM, "            add(sp.Contains(ex, NEGATIVE_BASE_EXPONENT))",
+     "            pass", T + "test_negative_base_with_a_variable_exponent_is_a_convention"),
+    ("Y15 tam sayı üs aralıkta okunmaz", DOM,
+     "            if region.is_subset(S.Integers) is True and _integer_valued(e, d):\n                return S.EmptySet\n",
+     "", T + "test_negative_base_with_a_variable_exponent_is_a_convention"),
+    ("Y16 negatif taban bölünmesi her yerde tutar", DOM,
+     "            fwd, back = S.Integers, sp.Complement(S.Reals, S.Integers)", "            fwd, back = S.Reals, S.EmptySet",
+     T + "test_negative_base_with_a_variable_exponent_is_a_convention"),
+    ("Y17 bölgede hiç tanımsız ifadenin limiti", LIM, "        if defined_nowhere_in(ctx.domain_for(var), written, var):",
+     "        if False:", T + "test_limit_of_an_expression_defined_nowhere_in_the_region"),
+    # --- R8: the derivative function lives off the kinks of |u|
+    ("K01 kırık noktalar karşılaştırmadan çıkmaz", CAL,
+     "comparison_region(sp.Complement(dom, off) if kinks else dom, loose + kopen, var)",
+     "comparison_region(dom, loose + kopen, var)", T + "test_derivative_of_an_absolute_value_lives_where_f_is_differentiable"),
+    ("K02 kırık noktadaki değer gelenek sayılmaz", CAL, "                    if ok is True and kwhy is not None:",
+     "                    if False:", T + "test_derivative_of_an_absolute_value_lives_where_f_is_differentiable"),
+    ("K03 sign(u) u/|u| okunmaz", CAL, "                    truth_k = _sign_off(truth, ksigns)",
+     "                    truth_k = truth", T + "test_derivative_of_an_absolute_value_lives_where_f_is_differentiable"),
+    ("K04 sonsuz kırık ailesinde g okunmaz", CAL,
+     "    return g if not g.has(sp.Abs) and _continuous_where_defined(g) else None", "    return S.One",
+     T + "test_derivative_of_an_absolute_value_lives_where_f_is_differentiable"),
+    ("K06 g = 0 olan aile karşılaştırmadan çıkar", CAL,
+     "        if g is not None and all(v.is_zero is True for v in gv):\n            continue\n", "",
+     T + "test_derivative_of_an_absolute_value_lives_where_f_is_differentiable"),
+    ("K05 türevli kırık nokta da çıkarılır", CAL,
+     "                if st == \"value\":\n                    continue\n                kinks.append(p_)",
+     "                kinks.append(p_)", T + "test_derivative_of_an_absolute_value_lives_where_f_is_differentiable"),
+    # --- R1..R7: coverage, decided by proof
+    ("C01 iç nokta yerel kanıtlanmaz", CAL,
+     "        return True if all(strict_at(c, var, p) for c in loose) else None", "        return None",
+     T + "test_interior_point_proved_by_a_strict_condition"),
+    ("C02 süreklilik denetlenmez", CAL,
+     "        if not (n.is_Atom or isinstance(n, (sp.Add, sp.Mul, sp.Pow) + _CONTINUOUS)):\n            return False\n",
+     "        pass\n", T + "test_interior_point_proved_by_a_strict_condition", 2),
+    ("C03 meromorf ilkel tek sabit sayılmaz", CAL,
+     "    if meromorphic(F, var):\n        ev[\"reason\"] = \"one_meromorphic_primitive\"\n        return True, ev\n", "",
+     T + "test_interior_point_proved_by_a_strict_condition"),
+    ("C04 atan meromorf sayılır", CAL, "_MEROMORPHIC = (sp.exp, ", "_MEROMORPHIC = (sp.atan, sp.exp, ",
+     T + "test_primitive_continuous_across_the_gap_has_one_constant"),
+    ("C05 her değer için tanık aranmaz", CAL, "        if all(_strict_for_every(c, var, x0) for c in allc):",
+     "        if True:", T + "test_parameter_of_declared_sign_for_every_value"),
+    ("C06 parametrenin işareti okunmaz", CAL, "                    facts[name] = True\n", "                    pass\n",
+     T + "test_parameter_of_declared_sign_for_every_value"),
+    ("C07 parametre değerinde çürütme yok", CAL, "        if ok_i is False:", "        if False:",
+     T + "test_parameter_of_declared_sign_for_every_value"),
+    ("C08 gerçellik parametre bildirimini okumaz", CAL,
+     "for s_ in others if s_.is_real is not True})", "for s_ in others})",
+     T + "test_primitive_with_declared_parameters_is_real"),
+    ("C09 eğri verileni okunmaz", BASE, "                    curve = self._curve_given(g, rel, var)",
+     "                    curve = None", T + "test_given_that_restates_the_curve"),
+    ("C10 eğri verileninde y'nin bildirimi okunmaz", BASE,
+     "        if vd is None or vd.domain != \"real\" or vd.constraints:", "        if vd is None:",
+     T + "test_given_that_restates_the_curve"),
+    ("C11 eğri verileninde başka metin aranmaz", BASE,
+     "        if any(name.search(t) for t in texts):\n            return None\n", "",
+     T + "test_given_that_restates_the_curve"),
+    ("C12 periyodik verilen girişte durdurur", VER,
+     "        if isinstance(tvar, str) and problem_ir.task.kind not in _WINDOWED_KINDS:", "        if isinstance(tvar, str):",
+     T + "test_periodic_given_read_near_the_point"),
+    ("C13 periyodik verilen pencerede çözülmez", CAL,
+     "        if extra:\n            region, conds = _solved_part(region), list(conds) + extra", "        if False:\n            pass",
+     T + "test_periodic_given_read_near_the_point"),
+    ("C14 limitte periyodik verilen pencerede çözülmez", LIM, "    unsolved = ctx.unsolved_conditions(var)\n",
+     "    unsolved = []\n", T + "test_periodic_given_read_near_the_point"),
+    ("C15 boşlukta süreklilik okunmaz", CAL, "and _continuous_across(F, var, gaps, timeout):", "and False:",
+     T + "test_primitive_continuous_across_the_gap_has_one_constant"),
+    ("C16 boşlukta iki yan eşit aranmaz", CAL,
+     " or scalar_equal(lims[0][\"value\"], lims[1][\"value\"]) is not True:", ":",
+     T + "test_primitive_continuous_across_the_gap_has_one_constant"),
+    ("C17 işaretli parametre yakınsaklıkta okunmaz", DOM,
+     "    if any(s_.is_positive is not True and s_.is_negative is not True for s_ in g.free_symbols - {t}):",
+     "    if g.free_symbols - {t}:", T + "test_convergence_at_an_infinite_end_with_a_declared_parameter"),
 ]
 
 if __name__ == "__main__":

@@ -13,9 +13,8 @@ from ..equiv.random_point import sample_points
 from ..equiv.numeric import real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
-from ..sandbox.exactsets import at_risk, set_is_empty
-from .base import (Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved,
-                   exact_complement, exact_intersection)
+from ..sandbox.exactsets import at_risk, exact_complement, exact_intersection, set_is_empty
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
 LAYER = "certify.algebra"
@@ -513,10 +512,15 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
     if err:
         return err
     dom = ctx.domain_for(var)
+    # the relation's own conditions are written conditions of the problem too: one no exact class solves
+    # (x + atan(x) <= 1 of an asin) is listed by `Ctx.domain_for` (`unsolved_conditions`, round 8 of part
+    # d4b, YO-1), and the certificate abstains on it below
     for c in definedness_conditions(rel, var):
-        rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, S.Reals, timeout=ctx.timeout)
-        if rr.ok and not isinstance(rr.value, ConditionSet):
-            dom = sp.Intersection(dom, rr.value)
+        # a trigonometric one on the domain the others leave (on ℝ: one period, sandbox.exactsets)
+        rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, dom if at_risk(c, var) else S.Reals,
+                    timeout=ctx.timeout)
+        if rr.ok and isinstance(rr.value, sp.Set) and not rr.value.has(ConditionSet):
+            dom = exact_intersection(dom, rr.value)
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
     # (1) direct refutation of the claim by sampling (incl. endpoints)
     okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed)
@@ -548,7 +552,7 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
             from ..sandbox.pool import CasResult
             r = CasResult(True, exact_set, None, False, 0.0, "exact_rational_inequality")
         try:
-            truth = sp.Intersection(truth, r.value)
+            truth = exact_intersection(truth, r.value)          # one writing per endpoint (round 8, RK-3)
         except Exception as e:  # noqa: BLE001 - SymPy cannot always order symbolic endpoints
             ev["intersection_error"] = f"{type(e).__name__}: {e}"
             r = None

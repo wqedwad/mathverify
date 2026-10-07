@@ -21,6 +21,7 @@ it is refuted, an approximate claim whose declared tolerance holds it is accepte
 """
 from __future__ import annotations
 
+import itertools
 import re
 from typing import Any
 
@@ -658,8 +659,43 @@ def _reality(v):
     others = getattr(v, "free_symbols", set())
     if not others:
         return certified_sign(v)
-    v = v.xreplace({s_: sp.Dummy(s_.name, real=True) for s_ in others})
+    # a declared parameter keeps its declaration (k > 0: exp(k*x)/k is real; read as any real k, k = 0 left it
+    # undecided, review of d4e, R3); the constant C and an undeclared symbol are any real number
+    v = v.xreplace({s_: sp.Dummy(s_.name, real=True) for s_ in others if s_.is_real is not True})
     return NONREAL if v.is_real is False else 0 if v.is_real is True else None
+
+
+# entire or meromorphic on ℂ: a sum, product or integer power of these is one meromorphic function
+_MEROMORPHIC = (sp.exp, sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc, sp.sinh, sp.cosh, sp.tanh, sp.coth, sp.sech,
+                sp.csch)
+
+
+def meromorphic(F, var) -> bool:
+    """Is F, as a function of `var`, built of rational operations, integer powers, c**var (c > 0) and the
+    functions above only: one meromorphic function on ℂ? Two such primitives of f differ by a constant on ℂ minus
+    their poles, a connected set: on every piece of a real region the SAME constant. tan(x**2) for
+    2x/cos(x**2)**2 lives on infinitely many pieces, and was undecided (review of d4e, R1); log|x|, atan and a
+    root are not of that kind (atan(tan(x**2)) - x**2 is constant on each piece, a different one on each)."""
+    for n in sp.preorder_traversal(F):
+        if n.is_Atom or isinstance(n, (sp.Add, sp.Mul) + _MEROMORPHIC):
+            if n.is_Atom and isinstance(n, sp.Symbol) and n != var and getattr(n, "is_real", None) is not True:
+                return False
+            continue
+        if isinstance(n, sp.Pow) and (n.exp.is_Integer or (var not in n.base.free_symbols and n.base.is_positive)):
+            continue
+        return False
+    return True
+
+
+def _continuous_across(F, var, gaps, timeout) -> bool:
+    """Does F extend continuously across each gap point (equal finite one-sided limits)? Then a primitive on the
+    pieces around them carries one constant: |x| for x/|x| on x != 0, x*log|x| for log|x| + 1 (review of d4e, R6)."""
+    from .limits import classify_limit
+    for g in gaps:
+        lims = [classify_limit(F, var, g, d, timeout=timeout) for d in ("+", "-")]
+        if any(lm["kind"] != "VAR" for lm in lims) or scalar_equal(lims[0]["value"], lims[1]["value"]) is not True:
+            return False
+    return True
 
 
 def _one_constant(F, f, var, region, timeout) -> tuple[bool | None, dict[str, Any]]:
@@ -672,6 +708,19 @@ def _one_constant(F, f, var, region, timeout) -> tuple[bool | None, dict[str, An
     pieces = _pieces(region) if region is not None else None
     if pieces is not None and len(pieces) <= 1:
         return True, ev
+    if meromorphic(F, var):
+        ev["reason"] = "one_meromorphic_primitive"
+        return True, ev
+    if pieces is not None:
+        # the closure one interval: the pieces meet at finitely many gap points, and F continuous across each of
+        # them binds the constants (`_continuous_across`)
+        ordered = sorted(pieces, key=lambda iv: iv.inf)
+        gaps = [a.sup for a, b in zip(ordered, ordered[1:]) if a.sup == b.inf]
+        if len(gaps) == len(ordered) - 1 and all(g.is_finite for g in gaps) \
+                and _continuous_across(F, var, gaps, timeout):
+            ev["reason"] = "continuous_across_the_gaps"
+            ev["gaps"] = [str(g) for g in gaps]
+            return True, ev
     r = sb_run("mathverify.sandbox.ops:integrate_symbolic", f, var, timeout=timeout)
     if not r.ok or not isinstance(r.value, sp.Expr) or r.value.has(sp.Integral, *_PRIMITIVE_JUMPS):
         ev["reason"] = "antiderivative_pieces_undecided"
@@ -944,6 +993,158 @@ def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[st
     return ev
 
 
+_KINK_POINTS = 8          # the zeros of an |u| of f classified one by one (`derivative_at_point`)
+
+
+def _generic_points(K) -> list | None:
+    """The points of a set of kinks as expressions: a finite set's elements, the term of a family indexed by the
+    integers with its index an integer Dummy (2*n*pi); None for any other set."""
+    out: list = []
+    for s_ in (K.args if isinstance(K, sp.Union) else (K,)):
+        if isinstance(s_, sp.FiniteSet):
+            out += list(s_)
+        elif isinstance(s_, sp.ImageSet) and tuple(s_.base_sets) == (S.Integers,) and len(s_.lamda.variables) == 1:
+            out.append(s_.lamda.expr.xreplace({s_.lamda.variables[0]: sp.Dummy("n", integer=True)}))
+        else:
+            return None
+    return out
+
+
+def _claim_undefined_at(claim_conds, nowhere, claimed, var, p) -> bool | None:
+    """Has the claim, read as written, no value at the point p (True: a written condition fails there, or its value
+    is nan/zoo, as Piecewise((1, x > 0), (-1, x < 0)) at 0), a value (False: sign(x) at 0 is 0), or is that not
+    decided (None)? At a family of points (p names an integer Dummy) only a failing condition or a nan proves it."""
+    if nowhere:
+        return True
+    undecided = False
+    for c in claim_conds:
+        if var not in getattr(c, "free_symbols", set()):
+            continue
+        try:
+            v = c.subs(var, p)
+        except Exception:  # noqa: BLE001
+            undecided = True
+            continue
+        if v is sp.false:
+            return True
+        if v is not sp.true:
+            undecided = True
+    try:
+        val = sp.sympify(claimed).subs(var, p)
+    except Exception:  # noqa: BLE001
+        return None
+    if isinstance(val, sp.Basic) and val.has(sp.nan, sp.zoo):
+        return True
+    if undecided:
+        return None
+    if getattr(p, "free_symbols", None):
+        return False                              # no condition fails at the family: it has a value there
+    rf = _real_finite(val)
+    return None if rf is None else not rf
+
+
+def _continuous_where_defined(e) -> bool:
+    """Is `e` built of operations continuous on the interior of their domain (see `strict_at`)?"""
+    return all(n.is_Atom or isinstance(n, (sp.Add, sp.Mul, sp.Pow) + _CONTINUOUS) for n in sp.preorder_traversal(e))
+
+
+def _abs_factor(f, u):
+    """g when f is exactly g*|u|, g and u continuous where defined (no other |.|, no sign or jump); None otherwise."""
+    a = sp.Abs(u)
+    if not _continuous_where_defined(u) or u.has(sp.Abs):
+        return None
+    if f == a:
+        return S.One
+    if not isinstance(f, sp.Mul) or list(f.args).count(a) != 1:
+        return None
+    g = sp.Mul(*[x for x in f.args if x != a])
+    return g if not g.has(sp.Abs) and _continuous_where_defined(g) else None
+
+
+def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, timeout: float = 8.0):
+    """Where an |u| of f has u = 0, f may have no derivative (|x| at 0: a corner), and the derivative function
+    lives off those points. Compared on all of f's domain, the derivative x/|x| of |x| was refuted against SymPy's
+    sign(0) = 0, and sign(x) itself certified (attack on d4e, R8). Returns (the kinks to leave out of the
+    comparison, the open conditions u != 0 of a family of them (|sin x| at k*pi), the u whose sign SymPy wrote
+    there, why the claim cannot be certified or None):
+
+    * a zero p of u (finitely many) is classified by `derivative_at_point`: with a derivative there (|x|**3 at 0)
+      it stays in the comparison; a corner, a cusp, a jump or an infinite slope leaves it out, and a claim that
+      has a value there (sign(0) = 0) is a convention ("claim_value_at_a_kink"); a status not decided leaves
+      the claim undecided ("kink_undecided");
+    * infinitely many zeros (sin(x) = 0) are read for f = g*|u| alone, of order 1, at the family's generic point:
+      g = 0 there is a derivative 0 at each (the family stays in the comparison); g != 0 with a simple zero
+      (u' != 0) a corner at each, and the claim must have no value at any of them."""
+    us = list(dict.fromkeys(a.args[0] for a in f.atoms(sp.Abs) if var in a.args[0].free_symbols))
+    kinks: list = []
+    opens: list = []
+    signs: list = []
+    why = None
+    for u in us:
+        r = sb_run("mathverify.sandbox.ops:solveset_in", Eq(u, 0), var, S.Reals, timeout=timeout)
+        K = r.value if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet) else None
+        pts = _generic_points(K) if K is not None else None
+        if pts is None:
+            why = why or "kinks_not_solved"
+            continue
+        if isinstance(K, sp.FiniteSet):
+            if len(pts) > _KINK_POINTS:
+                why = why or "kink_undecided"
+                continue
+            for p_ in pts:
+                # a kink off the region's interior is no point of the comparison (an end: |x| + sqrt(x) - sqrt(x)
+                # at 0)
+                try:
+                    off_inside = in_domain(region.interior, p_) is False
+                except Exception:  # noqa: BLE001
+                    off_inside = in_domain(region, p_) is False
+                if off_inside:
+                    continue
+                st = derivative_at_point(f, var, order, p_, timeout=timeout)["status"]
+                if st == "value":
+                    continue
+                kinks.append(p_)
+                if st not in ("corner", "cusp", "discontinuous", "infinite"):
+                    why = why or "kink_undecided"
+                    continue
+                und = _claim_undefined_at(claim_conds, nowhere, claimed, var, p_)
+                if und is False:
+                    why = "claim_value_at_a_kink"
+                elif und is None:
+                    why = why or "kink_undecided"
+            continue
+        # f = g*|u| of order 1, read at the family's generic point: g = 0 there gives f a derivative (0) at each
+        # of them, and the family stays in the comparison (sin(x)*|sin(x)|: 2*cos(x)*|sin(x)| was certified before
+        # and stays so); g != 0 and u' != 0 there give a corner at each, and the family is left out
+        g = _abs_factor(f, u) if order == 1 else None
+        gv = [sp.simplify(g.subs(var, p_)) for p_ in pts] if g is not None else []
+        if g is not None and all(v.is_zero is True for v in gv):
+            continue
+        opens.append(Ne(u, 0))
+        signs.append(u)
+        du = sp.diff(u, var)
+        simple = g is not None and all(v.is_zero is False and v.is_finite is True for v in gv) and all(
+            (lambda v: v.is_zero is False and v.is_finite is True)(du.subs(var, p_)) for p_ in pts)
+        if not simple:
+            why = why or "kink_undecided"
+            continue
+        for p_ in pts:
+            und = _claim_undefined_at(claim_conds, nowhere, claimed, var, p_)
+            if und is False:
+                why = "claim_value_at_a_kink"
+            elif und is None:
+                why = why or "kink_undecided"
+    return kinks, opens, signs, why
+
+
+def _sign_off(truth, signs):
+    """SymPy's sign(u) as u/|u| for each u in `signs`: the same value wherever u != 0, where the comparison is
+    drawn (`kink_reading`); a family of kinks leaves no breakpoints the numbers could prove a sign on."""
+    if not signs:
+        return truth
+    return truth.replace(lambda e: isinstance(e, sp.sign) and e.args[0] in signs, lambda e: e.args[0] / sp.Abs(e.args[0]))
+
+
 # ---------------------------------------------------------------------------
 def _line_equal(claimed, truth, var, dep) -> tuple[bool | None, dict[str, Any]]:
     """Same line? A linear claim is compared by proportionality (exact); a non-linear claim can
@@ -1088,7 +1289,13 @@ def task_region(ctx: Ctx, conds, var, window=None, region=None) -> tuple[sp.Set,
     `conds` hold, each solved exactly on the window (ℝ without one); the conditions left unsolved). On a bounded
     window `sandbox.exactsets` solves a periodic condition exactly; on ℝ cos(x) != 0 stays a ConditionSet."""
     base = S.Reals if window is None else window
-    region = ctx.domain_for(var) if region is None else region
+    if region is None:
+        region = ctx.domain_for(var)
+        # a periodic condition `domain_for` left unsolved on ℝ (the given cos(x) > 0) is one of `conds` here:
+        # solved exactly on a bounded window, loose otherwise (review of d4e, R5)
+        extra = [c for c in ctx.unsolved_conditions(var) if c not in conds]
+        if extra:
+            region, conds = _solved_part(region), list(conds) + extra
     region = region if window is None else sp.Intersection(region, window)
     loose: list = []
     for c in conds:
@@ -1100,16 +1307,54 @@ def task_region(ctx: Ctx, conds, var, window=None, region=None) -> tuple[sp.Set,
     return region, loose
 
 
+# functions continuous on the interior of their domain (SymPy's acot jumps at 0, floor and the like jump anywhere)
+_CONTINUOUS = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc, sp.asin, sp.acos, sp.atan, sp.sinh, sp.cosh, sp.tanh,
+               sp.coth, sp.asinh, sp.acosh, sp.atanh, sp.exp, sp.log, sp.Abs, sp.Max, sp.Min)
+
+
+def strict_at(c, var, p) -> bool:
+    """Does the written condition `c` on `var` hold STRICTLY at p (u(p) != 0 for u != 0, u(p) > 0 for u > 0 or
+    u >= 0), with u built of operations continuous where they are defined? Then it holds on a neighbourhood of p:
+    p is interior to it without solving it (tan(x**2) at 1: cos(1) != 0; review of d4e, R1). A jump (floor(x) at
+    1), a binder or a membership proves nothing."""
+    if not isinstance(c, (Ne, sp.StrictGreaterThan, sp.GreaterThan, sp.StrictLessThan, sp.LessThan)):
+        return False
+    if getattr(c, "free_symbols", set()) != {var}:
+        return False
+    u = c.lhs - c.rhs
+    for n in sp.preorder_traversal(u):
+        if not (n.is_Atom or isinstance(n, (sp.Add, sp.Mul, sp.Pow) + _CONTINUOUS)):
+            return False
+    try:
+        sg = certified_sign(u.subs(var, p))
+    except Exception:  # noqa: BLE001
+        return False
+    if isinstance(c, Ne):
+        return sg in (1, -1)
+    return sg == (1 if isinstance(c, (sp.StrictGreaterThan, sp.GreaterThan)) else -1)
+
+
+def _solved_part(region):
+    """`region` with each ConditionSet (a periodic condition `Ctx.domain_for` left unsolved) read as its base set:
+    the condition itself is solved on a bounded window by the caller (`task_region`)."""
+    try:
+        return region.replace(lambda e: isinstance(e, sp.ConditionSet), lambda e: e.base_set)
+    except Exception:  # noqa: BLE001
+        return region
+
+
 def interior_at(ctx: Ctx, conds, var, p) -> bool | None:
     """Is `p` PROVED an interior point of the points of `var`'s region where `conds` hold? Read on
-    [p - 1, p + 1] (`task_region`); None when that is not decided."""
+    [p - 1, p + 1] (`task_region`); a condition not solved there counts when it holds strictly at p and is
+    continuous (`strict_at`). None when that is not decided."""
     try:
         if getattr(p, "is_real", None) is not True or p.is_finite is not True:
             return None
         region, loose = task_region(ctx, conds, var, Interval(p - 1, p + 1))
-        if loose:
-            return None
-        return in_domain(region.interior, p)
+        inside = in_domain(region.interior, p)
+        if not loose or inside is not True:
+            return inside if not loose or inside is False else None
+        return True if all(strict_at(c, var, p) for c in loose) else None
     except Exception:  # noqa: BLE001 - an interior SymPy cannot form is no proof
         return None
 
@@ -1137,6 +1382,114 @@ def comparison_region(region, loose, var):
     if loose:
         region = sp.ConditionSet(var, sp.And(*[_open_condition(c) for c in loose]), region)
     return region
+
+
+_WITNESSES = (S.Zero, S.One, -S.One, S.Half, -S.Half, S(2), S(-2))
+_PARAMETER_SAMPLES = (S.One, S(2), S.Half, S(3), -S.One, S(-2))
+
+
+def _parameter_dummies(ctx: Ctx, params) -> dict | None:
+    """Each parameter as a Dummy with the sign its region has (`Ctx._declared_region`: the declaration, the domain
+    of discourse, the constraints and the givens on it alone: a > 0 positive), and that region; None when a region
+    is not read."""
+    out: dict = {}
+    for p_ in params:
+        reg = ctx._declared_region(ctx.sym(p_.name), givens=True)
+        if reg is None or reg.free_symbols:
+            return None
+        facts = {"real": True}
+        if getattr(p_, "is_integer", None):
+            facts["integer"] = True
+        for name, half in (("positive", Interval.open(0, oo)), ("negative", Interval.open(-oo, 0)),
+                           ("nonnegative", Interval(0, oo)), ("nonpositive", Interval(-oo, 0))):
+            try:
+                if reg.is_subset(half) is True:
+                    facts[name] = True
+                    break
+            except Exception:  # noqa: BLE001
+                continue
+        out[p_] = (sp.Dummy(p_.name, **facts), reg)
+    return out
+
+
+def _strict_for_every(c, var, x0) -> bool:
+    """`strict_at` for a condition that also names parameters (read as Dummies of known sign): it holds strictly
+    at x0 for EVERY value they may take, decided by SymPy's assumptions (a**2 > 0 for a > 0, k*1 > 0 for k > 0)."""
+    if not isinstance(c, (Ne, sp.StrictGreaterThan, sp.GreaterThan, sp.StrictLessThan, sp.LessThan)):
+        return False
+    u = c.lhs - c.rhs
+    for n in sp.preorder_traversal(u):
+        if not (n.is_Atom or isinstance(n, (sp.Add, sp.Mul, sp.Pow) + _CONTINUOUS)):
+            return False
+    try:
+        v = sp.simplify(u.subs(var, x0))
+    except Exception:  # noqa: BLE001
+        return False
+    if isinstance(c, Ne):
+        return v.is_zero is False
+    return (v.is_positive if isinstance(c, (sp.StrictGreaterThan, sp.GreaterThan)) else v.is_negative) is True
+
+
+def for_every_parameter_value(ctx: Ctx, var, conds, other, f, claimed, truth) -> tuple[bool | None, dict[str, Any]]:
+    """The derivative function of f, whose written domain names parameters (`other`), compared with the claim for
+    EVERY value the parameters may take (review of d4e, R2: asin(x/a), sqrt(a**2 - x**2), log(a*x + b) and log(k*x)
+    with a, b, k > 0 declared or given were `condition_not_applied`). The domain has interior for every value
+    when one point x0 satisfies every written condition strictly whatever the values are (`_strict_for_every`;
+    with a free sqrt(a**2 - x**2) is defined at 0 alone for a = 0, and no point is found). Then the claim is
+    CORRECT by a symbolic identity read with the parameters' signs, INCORRECT by a disagreement at an allowed
+    value of them on the domain the value leaves (`answers_equivalent` with numbers put in), undecided otherwise.
+    A function or claim with a kink (|u|, sign) is not read this way."""
+    from ..equiv.symbolic import sym_equal
+    ev: dict[str, Any] = {"method": "for_every_parameter_value"}
+    params = sorted({s_ for c in other for s_ in c.free_symbols} - {var}, key=lambda s_: s_.name)
+    nonsmooth = (sp.Abs, sp.sign, sp.Heaviside, sp.Piecewise, sp.floor, sp.ceiling, sp.frac, sp.Mod, sp.Max, sp.Min)
+    dums = _parameter_dummies(ctx, params) if not (f.has(*nonsmooth) or sp.sympify(claimed).has(*nonsmooth)) else None
+    if dums is None:
+        ev["reason"] = "no_interior_point_for_every_value"
+        return None, ev
+    rep = {p_: d for p_, (d, _) in dums.items()}
+    allc = [c.xreplace(rep) for c in list(conds) + list(other)]
+    region = ctx.domain_for(var)
+    witness = None
+    for x0 in _WITNESSES:
+        try:
+            if in_domain(region.interior, x0) is not True:
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        if all(_strict_for_every(c, var, x0) for c in allc):
+            witness = x0
+            break
+    if witness is None:
+        ev["reason"] = "no_interior_point_for_every_value"
+        return None, ev
+    ev["witness"] = str(witness)
+    ev["parameters"] = {str(p_): str(reg) for p_, (_, reg) in dums.items()}
+    okS, sev = sym_equal(sp.sympify(claimed).xreplace(rep), sp.sympify(truth).xreplace(rep))
+    ev["symbolic"] = sev
+    if okS is True:
+        return True, ev
+    # refuted at an allowed value of the parameters, on the domain that value leaves
+    samples = []
+    for p_ in params:
+        reg = dums[p_][1]
+        vals = [v for v in _PARAMETER_SAMPLES if (not getattr(p_, "is_integer", None) or v.is_integer)
+                and in_domain(reg, v) is True][:2]
+        samples.append(vals)
+    for vals in itertools.product(*samples):
+        inst = dict(zip(params, vals))
+        ci = [c.xreplace(inst) for c in list(conds) + list(other)]
+        dom_i, loose_i = task_region(ctx, ci, var)
+        if interior_point(ctx, ci, var, dom_i) is None:
+            continue
+        ok_i, ev_i = answers_equivalent(sp.sympify(claimed).xreplace(inst), sp.sympify(truth).xreplace(inst),
+                                        shape="expression", domain=comparison_region(dom_i, loose_i, var), var=var)
+        if ok_i is False:
+            ev["instance"] = {str(k): str(v) for k, v in inst.items()}
+            ev["compare"] = ev_i
+            return False, ev
+    ev["reason"] = "not_proved_for_every_parameter_value"
+    return None, ev
 
 
 def _point_not_interior(ctx: Ctx, src, var, at, pins, ms):
@@ -1457,25 +1810,46 @@ def verify(ir, solution, ctx: Ctx):
                     return condition_not_applied(LAYER, unapplied, t.ms)
                 conds, other = task_conditions(ctx, p["f"], var, pins)
                 if other and not _half_line_for_every_value(ctx, conds, other, var):
-                    return condition_not_applied(LAYER, _names(other, var), t.ms)
-                conds += [c for c in definedness_conditions(f, var) if c not in conds
-                          and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
-                dom, loose = task_region(ctx, conds, var)
-                if interior_point(ctx, conds, var, dom) is None:
-                    return unknown(LAYER, "region_without_interior", t.ms, {"region": str(dom)},
-                                   flags=["point_not_interior"])
-                dom = comparison_region(dom, loose, var)
-                ok, cev = answers_equivalent(claimed, truth, shape="expression", domain=dom, var=var)
-                if ok is None and ctx.domain_for(var) != S.Reals:
-                    # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not
-                    # inside, and 1/x was left undecided under x > 1. Agreement where f is defined is agreement
-                    # on the region too; a disagreement may lie outside it and refutes nothing
-                    wide, wloose = task_region(ctx, conds, var, region=S.Reals)
-                    okw, wev = answers_equivalent(claimed, truth, shape="expression",
-                                                  domain=comparison_region(wide, wloose, var), var=var)
-                    cev["wide"] = wev
-                    if okw is True:
-                        ok = True
+                    # a parameter of declared sign (a > 0: asin(x/a), log(k*x)): a domain with interior for every
+                    # allowed value is proved by one point, the claim by a symbolic identity (R2)
+                    ok, cev = for_every_parameter_value(ctx, var, conds, other, f, claimed, truth)
+                    if cev.get("reason") == "no_interior_point_for_every_value":
+                        return condition_not_applied(LAYER, _names(other, var), t.ms)
+                else:
+                    conds += [c for c in definedness_conditions(f, var) if c not in conds
+                              and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
+                    dom, loose = task_region(ctx, conds, var)
+                    if interior_point(ctx, conds, var, dom) is None:
+                        return unknown(LAYER, "region_without_interior", t.ms, {"region": str(dom)},
+                                       flags=["point_not_interior"])
+                    # ... and off the points where f has no derivative (`kink_reading`, R8)
+                    claim_conds, claim_nowhere = written_definedness(str(ca.payload), ctx.claim_ns(solution), pins)
+                    kinks, kopen, ksigns, kwhy = kink_reading(f, var, order, dom, claimed, claim_conds, claim_nowhere,
+                                                              timeout=ctx.timeout)
+                    truth_k = _sign_off(truth, ksigns)
+                    off = sp.FiniteSet(*kinks)
+                    dom = comparison_region(sp.Complement(dom, off) if kinks else dom, loose + kopen, var)
+                    ok, cev = answers_equivalent(claimed, truth_k, shape="expression", domain=dom, var=var)
+                    if ok is None and ctx.domain_for(var) != S.Reals:
+                        # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not
+                        # inside, and 1/x was left undecided under x > 1. Agreement where f is defined is agreement
+                        # on the region too; a disagreement may lie outside it and refutes nothing
+                        wide, wloose = task_region(ctx, conds, var, region=S.Reals)
+                        okw, wev = answers_equivalent(
+                            claimed, truth_k, shape="expression", var=var,
+                            domain=comparison_region(sp.Complement(wide, off) if kinks else wide, wloose + kopen, var))
+                        cev["wide"] = wev
+                        if okw is True:
+                            ok = True
+                    if kinks or kopen:
+                        cev["kinks"] = {"left_out": [str(k) for k in kinks], "families": [str(c) for c in kopen],
+                                        "why": kwhy}
+                    if ok is True and kwhy is not None:
+                        # equal where the derivative exists, but a value where it does not (sign(0) = 0) is a
+                        # convention, and an undecided kink no proof
+                        ok = None
+                    if ok is False and kwhy == "kinks_not_solved":
+                        ok = None                      # the disagreement may lie where f has no derivative
             ev["compare"] = cev
             conf = 0.99 if cev.get("method") in ("symbolic", "numeric", "differentiability",
                                                  "not_differentiable", "finite_derivative") else 0.97

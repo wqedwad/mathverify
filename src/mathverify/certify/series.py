@@ -30,7 +30,7 @@ from sympy import oo, Function, Lambda
 
 from ..equiv import answers_equivalent
 from ..equiv.numeric import num_equal
-from ..normalize.parse import parse_relation, parse_expr_str, ParseError
+from ..normalize.parse import parse_relation, parse_expr_str, ParseError, substitute_free
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import exact_solveset
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
@@ -74,13 +74,14 @@ def _parse_initial(initial: dict, ns) -> dict[int, Any]:
     return out
 
 
-def _written_conditions(src: str, ns) -> list[Any] | None:
-    """Definedness conditions of the recurrence AS WRITTEN; None when it cannot be read so."""
+def _written_conditions(src: str, ns, pins: dict | None = None) -> list[Any] | None:
+    """Definedness conditions of the recurrence AS WRITTEN, with the values `pins` holds put in; None when
+    it cannot be read so."""
     from ..normalize.parse import parse_as_written
     from .domain import written_definedness
     if parse_as_written(src, ns) is None:
         return None
-    conds, nowhere = written_definedness(src, ns)
+    conds, nowhere = written_definedness(src, ns, pins)
     if nowhere:
         return [sp.false]
     return list(conds)
@@ -446,19 +447,27 @@ def verify(ir, solution, ctx: Ctx):
         ev: dict[str, Any] = {}
         if kind in ("recurrence_term", "closed_form"):
             fname, var = p.get("name", "a"), p.get("var", "n")
+            # a symbol a given or a declared constraint fixes is read as its value in the recurrence, the
+            # initial values, their written conditions and the claim (`Ctx.task_pins`): with c = 0 the claim
+            # c**(n - 1) of a(n) = c*a(n - 1), a(1) = 1, is 0**0 at n = 1 and was certified, and with c = 2
+            # 2**(n - 1) was left undecided (attack on d4e, YO-1)
+            pins = {s_: v for s_, v in ctx.task_pins(ctx.sym(var)).items() if s_.name != fname}
             try:
                 ns, f, n = _rec_ns(ctx, fname, var)
-                rel = parse_relation(p["recurrence"], ns)
-                initial = _parse_initial(p.get("initial", {}), ns)
+                rel = substitute_free(parse_relation(p["recurrence"], ns), pins)
+                initial = {k: substitute_free(v, pins) for k, v in _parse_initial(p.get("initial", {}), ns).items()}
             except (ParseError, Exception) as e:  # noqa: BLE001
                 return unknown(LAYER, f"parse_error: {e}", flags=["parse_error"])
             if not isinstance(rel, sp.Equality):
                 return unknown(LAYER, "recurrence_not_an_equation")
-            rec_conds = _written_conditions(p["recurrence"], ns)
+            rec_conds = _written_conditions(p["recurrence"], ns, pins)
             if kind == "recurrence_term":
                 if rec_conds is None:
                     return unknown(LAYER, "recurrence_unreadable_as_written", flags=["written_domain"])
                 claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+                if err:
+                    return err
+                claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)
                 if err:
                     return err
                 try:
@@ -490,13 +499,13 @@ def verify(ir, solution, ctx: Ctx):
                 try:
                     # the index variable only — the sequence symbol itself would let a claim
                     # restate the recurrence (`a(n-1) + 3`) instead of giving a closed form
-                    closed = _pe(str(solution.claimed_answer.payload), claim_ns)
+                    closed = substitute_free(_pe(str(solution.claimed_answer.payload), claim_ns), pins)
                 except Exception as e:  # noqa: BLE001
                     return unknown(LAYER, f"parse_error: {e}", flags=["parse_error"])
                 claim_conds: list | None = []
                 payload = solution.claimed_answer.payload
                 if isinstance(payload, str):
-                    claim_conds = _written_conditions(payload, claim_ns)
+                    claim_conds = _written_conditions(payload, claim_ns, pins)
                 ok, cev = check_closed_form(rel, f, n, initial, closed, rec_conds, claim_conds,
                                             timeout=ctx.timeout)
                 ev.update(cev)
@@ -517,6 +526,11 @@ def verify(ir, solution, ctx: Ctx):
             ns2 = dict(ctx.ns)
             var = sp.Symbol(var_name, integer=True)
             ns2[var_name] = var
+            # a symbol a given or a declared constraint fixes is read as its value in the term, the bounds,
+            # the term's written conditions and the claim (`Ctx.task_pins`): with a = 2 the sum 3 of
+            # (k - a)/(k - a) over k = 1..3 (0/0 at k = 2) was certified, and the right 12 of a*k refuted
+            # against 6*a (attack on d4e, YO-1, R9)
+            pins = ctx.task_pins(ctx.sym(var_name))
             term, err = parse_or_unknown(LAYER, parse_expr_str, p["term"], ns2)
             if err:
                 return err
@@ -527,6 +541,10 @@ def verify(ir, solution, ctx: Ctx):
             if err:
                 return err
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+            if err:
+                return err
+            (term, lo, hi, claimed), err = parse_or_unknown(
+                LAYER, lambda es: tuple(ctx.with_pins(e, pins) for e in es), (term, lo, hi, claimed))
             if err:
                 return err
             # an upper bound below lo - 1 is SymPy's Karr convention (Σ_{k=1}^{-2} k = 1) or an empty
@@ -546,7 +564,7 @@ def verify(ir, solution, ctx: Ctx):
                     idx = sp.Range(-oo, int(hi) + 1)
                 else:
                     idx = sp.S.Integers
-                und = written_undefined_in(p["term"], ns2, var, idx)
+                und = written_undefined_in(p["term"], ns2, var, idx, pins)
                 if und is True:
                     return unknown(LAYER, "term_undefined_in_range_as_written", t.ms, {"term": p["term"]},
                                    flags=["written_domain"])

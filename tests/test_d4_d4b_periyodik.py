@@ -929,8 +929,9 @@ def test_one_endpoint_written_two_ways(ir, claim, want):
 def test_exact_intersection_writes_one_way_only_what_is_proved_equal():
     from mathverify.certify.base import exact_intersection
     L = sp.log(8) / sp.log(2)
-    assert exact_intersection(sp.Interval.open(L, sp.oo), sp.Interval.open(3, sp.oo)) == sp.Interval.open(3, sp.oo)
-    assert exact_intersection(sp.Interval(L, 5), sp.Interval(3, 4)) == sp.Interval(3, 4)
+    assert exact_intersection(sp.Interval.open(L, sp.oo), sp.Interval.open(3, sp.oo)) in (
+        sp.Interval.open(3, sp.oo), sp.Interval.open(L, sp.oo))           # one writing (the first seen, round 8)
+    assert exact_intersection(sp.Interval(L, 5), sp.Interval(3, 4)) in (sp.Interval(3, 4), sp.Interval(L, 4))
     # 3 + e^(-e^10) is no 3: SymPy cannot order them, and no proof writes them one way
     with pytest.raises(TypeError):
         exact_intersection(sp.Interval.open(L + sp.exp(-sp.exp(10)), sp.oo), sp.Interval.open(3, sp.oo))
@@ -1087,3 +1088,152 @@ def test_round7_a_periodic_equation_with_a_log_on_a_bounded_window():
     ir = _eq("sin(x)*log(x) = 0", ["x >= 1/2", "x <= 10"])
     assert _run(ir, "{1, pi, 2*pi, 3*pi}").verdict == "CORRECT"
     assert _run(ir, "{1, pi, 2*pi}").verdict == "INCORRECT"
+
+
+
+# ------------------------------------------------------------------------------------------------
+# Round 8 (7 Oct 2026), the review of round 7: a folded cell kept the points where an acos, asin, atan2 or
+# arg of the expression is not real (YO-1); a window end equal to a cut in another writing (RK-1, RK-3);
+# the convention of an odd root read where the expression is undefined anyway (RK-2); two writings of one
+# endpoint ordered by rounding (RK-4)
+# ------------------------------------------------------------------------------------------------
+L8_ = sp.log(8) / sp.log(2)
+_P0 = sp.Interval(0, sp.oo)
+
+
+def _same_set(a, b) -> bool:
+    from mathverify.sandbox.exactsets import exact_complement
+    return exact_complement(a, b) is S.EmptySet and exact_complement(b, a) is S.EmptySet
+
+
+@pytest.mark.parametrize("rel,dom,want", [
+    (sp.Le((_A(x) - x) * sp.acos(x / 2), 0), _P0, sp.Interval(0, 2)),                      # acos(x/2) cut
+    (sp.Eq((_A(x) - x) * sp.acos(x / 2), 0), _P0, sp.Interval(0, 2)),
+    (sp.sign(x - 3) > 0, sp.Interval(-sp.oo, L8_), S.EmptySet),                            # RK-1: was {L8}
+    (sp.sign(3 - x) > 0, sp.Interval(L8_, sp.oo), S.EmptySet),
+    (sp.sign(x - 2) > 0, sp.Interval(-sp.oo, sp.log(9) / sp.log(3)), S.EmptySet),
+    (_A(x - 3) < 1, sp.Interval.open(L8_, sp.oo), sp.Interval.open(3, 4)),                 # RK-3: was no set
+    (_A(x - 3) <= 1, sp.Interval(L8_, sp.oo), sp.Interval(3, 4)),
+    (_A(x - 3) > 1, sp.Interval.open(L8_, sp.oo), sp.Interval.open(4, sp.oo)),
+    (sp.Eq(sp.sin(x) * _A(x) * sp.sqrt(x) * (x ** _Q(1, 3) - 2), 0), sp.Interval(-1, 10),   # RK-2: was no set
+     sp.FiniteSet(0, sp.pi, 2 * sp.pi, 3 * sp.pi, 8)),
+    (sp.Eq(sp.sin(x) * _A(x - 1) * _L(x) * (x ** _Q(1, 3) - 1), 0), sp.Interval(-2, 7), sp.FiniteSet(1, sp.pi, 2 * sp.pi)),
+    (sp.Eq(sp.cos(x) * sp.Max(x, 1) * sp.sqrt(x - 1) * (x ** _Q(1, 3) - 2), 0), sp.Interval(-3, 9),
+     sp.FiniteSet(1, sp.pi / 2, 3 * sp.pi / 2, 5 * sp.pi / 2, 8)),
+    ((_A(x) - x) * sp.acos(x / 2) >= 0, sp.FiniteSet(0, 1, 2, 3), sp.FiniteSet(0, 1, 2)),   # point by point
+    ((_A(x) - x) * _L(x - 2) >= 0, sp.FiniteSet(1, 3), sp.FiniteSet(3)),                    # 0*log(-1) is no 0
+    # an identity holds wherever defined: not where acos is not real
+    (sp.Eq((x ** 2 - 1) * sp.acos(x) / (x - 1) - (x + 1) * sp.acos(x), 0), S.Reals, sp.Interval.Ropen(-1, 1)),
+])
+def test_round8_sets(rel, dom, want):
+    from mathverify.sandbox.exactsets import exact_solveset
+    got = exact_solveset(rel, x, dom)
+    assert not isinstance(got, sp.ConditionSet) and _same_set(got, want), (rel, got)
+
+
+@pytest.mark.parametrize("rel,dom", [
+    (sp.Le((_A(x) - x) * sp.acos(2 ** x + x - 2), 0), _P0),          # YO-1: was [0, oo), the truth [0, 1]
+    (sp.Le((_A(x) - x) * sp.asin(x + sp.atan(x)), 0), _P0),
+    (sp.Le((_A(x) - x) * sp.acos(x * sp.exp(x)), 0), _P0),
+    (sp.Ge((_A(x) - x) * sp.atan2(x - 1, 0), 0), _P0),                # atan2(0, 0): undefined or 0
+    (sp.Ge((_A(x) - x) * sp.arg(x - 1), 0), _P0),
+    (sp.Ge((_A(x) + x) * sp.asin(x + sp.atan(x)), 0), sp.Interval(-sp.oo, 0)),
+    (sp.Eq(_A(x) * sp.sqrt(x + 8) * (x ** _Q(1, 3) + 1), 0), S.Reals),  # x = -1: a root of the real reading only
+    # on a finite domain SymPy's own ConditionSet decided each point on the principal branch: {-1, 0}
+    (sp.Eq((x + _A(x)) * x ** _Q(1, 3), 0), sp.FiniteSet(-1, 0, 1)),
+])
+def test_round8_no_set(rel, dom):
+    from mathverify.sandbox.exactsets import exact_solveset
+    assert exact_solveset(rel, x, dom).has(sp.ConditionSet)
+
+
+def test_round8_certified_sign_of_a_jump():
+    """sign() of an exact 0 written log(8)/log(2) - 3: strict evalf gave 1 (RK-1)."""
+    from mathverify.equiv.numeric import certified_sign
+    z = L8_ - 3
+    assert certified_sign(sp.sign(z)) == 0 and certified_sign(sp.sign(-z)) == 0
+    assert certified_sign(_A(z) - 1) == -1
+    assert certified_sign(sp.sign(z) + 1) == 1
+    assert certified_sign(sp.sign(sp.exp(-sp.exp(10)))) == 1
+
+
+def test_round8_no_strip_between_two_writings():
+    """(sqrt(3 + 2 sqrt 2), oo) minus (1 + sqrt 2, 2 + sqrt 2): SymPy kept a strip that holds no number (RK-4)."""
+    from mathverify.sandbox.exactsets import exact_complement
+    r2 = sp.sqrt(2)
+    got = exact_complement(sp.Interval.open(sp.sqrt(3 + 2 * r2), sp.oo), sp.Interval.open(1 + r2, 2 + r2))
+    assert got == sp.Interval(2 + r2, sp.oo)
+
+
+def test_round8_a_written_condition_no_class_solves_is_listed_unsolved():
+    """2**x + x - 2 <= 1 of an acos was dropped from the domain (Ctx.domain_for): now listed unsolved."""
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    ctx = make_ctx(ProblemIR.from_dict(_ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0")))
+    assert ctx.unsolved_conditions(ctx.sym("x"))
+
+
+def test_round8_a_side_undefined_at_a_point_holds_nothing():
+    from mathverify.certify.domain import relation_holds_at
+    assert relation_holds_at(sp.Le((_A(x) - x) * sp.acos(2 ** x + x - 2), 0), x, 2) is False
+    assert relation_holds_at(sp.Le((_A(x) - x) * sp.acos(2 ** x + x - 2), 0), x, 0) is True
+
+
+X0 = V("x", "real", ["x >= 0"])
+_NOTOK = {"INCORRECT", "UNKNOWN"}
+_NOTNO = {"CORRECT", "UNKNOWN"}
+_R2 = "sqrt(3 + 2*sqrt(2))"
+
+
+def _trig_w(eqn, interval):
+    return _ir("trig_solve", {"var": "x", "interval": interval}, (X,), [eqn], "set")
+
+
+@pytest.mark.parametrize("ir,claim,kind,want", [
+    # YO-1
+    (_ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0", vars_=(X0,)), "Interval(0, oo)", "interval", _NOTOK),
+    (_ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0", ["x >= 0"]), "Interval(0, oo)", "interval", _NOTOK),
+    (_ineq("(Abs(x) - x)*asin(x + atan(x)) <= 0", vars_=(X0,)), "Interval(0, oo)", "interval", _NOTOK),
+    (_ineq("(Abs(x) - x)*acos(x*exp(x)) <= 0", vars_=(X0,)), "Interval(0, oo)", "interval", _NOTOK),
+    (_ineq("(Abs(x) - x)*atan2(x - 1, 0) >= 0", vars_=(X0,)), "Interval(0, oo)", "interval", "UNKNOWN"),
+    (_ineq("(Abs(x) - x)*arg(x - 1) >= 0", vars_=(X0,)), "Interval(0, oo)", "interval", "UNKNOWN"),
+    (_ineq("(Abs(x) - x)*arg(x - 1) >= 0", vars_=(X0,)), "Union(Interval.Ropen(0, 1), Interval.open(1, oo))",
+     "interval", "UNKNOWN"),
+    (_ineq("(Abs(x) - x)*acos(x/2) <= 0", vars_=(X0,)), "Interval(0, oo)", "interval", "INCORRECT"),
+    (_ineq("(Abs(x) - x)*acos(x/2) <= 0", vars_=(X0,)), "Interval(0, 2)", "interval", "CORRECT"),
+    # atan2(0, 0), arg(0): undefined or 0 (a convention)
+    (_ev("x", ["atan2(x - 1, 0) = 0"]), "1", "value", "UNKNOWN"),
+    (_ev("x", ["arg(x - 1) = 0", "x <= 1"]), "1", "value", "UNKNOWN"),
+    # RK-1
+    (_ineq("sign(x - 3) > 0", ["x <= log(8)/log(2)"]), "EmptySet", "set", _NOTNO),
+    (_ineq("sign(x - 3) > 0", ["x <= log(8)/log(2)"]), "{log(8)/log(2)}", "set", _NOTOK),
+    (_ineq("sign(3 - x) > 0", ["x >= log(8)/log(2)"]), "EmptySet", "set", _NOTNO),
+    (_ineq("sign(x - log(4)) > 0"), "Interval.open(log(4), oo)", "interval", _NOTNO),
+    # RK-2
+    (_trig_w("sin(x)*Abs(x)*sqrt(x)*(x**(1/3) - 2) = 0", "[-1, 10]"), "{0, pi, 2*pi, 3*pi, 8}", "set", "CORRECT"),
+    (_trig_w("sin(x)*Abs(x)*sqrt(x)*(x**(1/3) - 2) = 0", "[-1, 10]"), "{0, pi, 2*pi, 3*pi}", "set", "INCORRECT"),
+    (_trig_w("sin(x)*Abs(x - 1)*log(x)*(x**(1/3) - 1) = 0", "[-2, 7]"), "{1, pi, 2*pi}", "set", "CORRECT"),
+    (_trig_w("sin(x)*Abs(x - 1)*log(x)*(x**(1/3) - 1) = 0", "[-2, 7]"), "{-1, 1, pi, 2*pi}", "set", "INCORRECT"),
+    # RK-3
+    (_ineq("Abs(x - 3) < 1", ["x > log(8)/log(2)"]), "Interval.open(log(8)/log(2), 4)", "interval", "CORRECT"),
+    (_ineq("Abs(x - 3) <= 1", ["x >= log(8)/log(2)"]), "Interval(log(8)/log(2), 4)", "interval", "CORRECT"),
+    (_ineq("Abs(x - 3) > 1", ["x > log(8)/log(2)"]), "Interval.open(4, oo)", "interval", "CORRECT"),
+    (_ineq("sqrt(x - 3) < 1", ["x > log(8)/log(2)"]), "Interval.open(3, 4)", "interval", "CORRECT"),
+    # RK-4
+    (_ineq("Abs(x - 1 - sqrt(2)) < 1", [f"x > {_R2}"]), "Interval.open(1 + sqrt(2), 2 + sqrt(2))", "interval", _NOTNO),
+    (_ineq("x**2 < 16", [f"x > {_R2}"]), "Interval.open(1 + sqrt(2), 4)", "interval", _NOTNO),
+    (_ineq("x < 5", ["x >= sqrt(5 + 2*sqrt(6))"]), "Interval.Ropen(sqrt(2) + sqrt(3), 5)", "interval", _NOTNO),
+])
+def test_round8_verdicts(ir, claim, kind, want):
+    v = _run(ir, claim, kind).verdict
+    assert v == want if isinstance(want, str) else v in want
+
+
+@pytest.mark.parametrize("eq,claim", [("(x - 2)*atan2(x - 1, 0) = 0", "{2}"), ("atan2(x - 1, 0) = 0", "{}"),
+                                      ("(x - 2)*arg(x - 1) = 0", "{2}")])
+def test_round8_atan2_and_arg_at_the_origin_are_a_convention(eq, claim):
+    """atan2(0, 0) and arg(0): undefined, or 0 by some conventions (certify.domain ORIGIN): the point is a
+    candidate neither kept nor dropped, and no set is certified."""
+    r = _run(_eq(eq), claim)
+    alg = next(la for la in r.layers if la.layer == "certify.algebra")
+    assert r.verdict == "UNKNOWN" and alg.evidence.get("reason") == "convention_region_candidates"

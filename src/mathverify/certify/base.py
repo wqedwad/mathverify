@@ -13,7 +13,7 @@ from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, 
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
                                claim_namespace, given_bindings, not_collapsed, same_value,
                                substitute_free, task_variables)
-from ..sandbox.exactsets import at_risk, exact_solveset
+from ..sandbox.exactsets import at_risk, exact_intersection, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
 
@@ -99,7 +99,7 @@ class Ctx:
                         if r.free_symbols == {var} and at_risk(r, var):
                             deferred.append(r)
                         elif r.free_symbols == {var}:
-                            dom = sp.Intersection(dom, sp.solveset(r, var, S.Reals))
+                            dom = exact_intersection(dom, sp.solveset(r, var, S.Reals))
                         elif var in r.free_symbols:
                             unapplied.append(c)
                     except Exception:
@@ -116,7 +116,7 @@ class Ctx:
                 deferred.append(sol.condition)
                 side.append(sol.condition)
             else:
-                dom = sp.Intersection(dom, sol)
+                dom = exact_intersection(dom, sol)
         unapplied += self.cache.get(f"side_unbound:{var.name}", [])
         # the problem's own expressions must be defined, as written (see written_conditions)
         conds, nowhere = self.written_conditions()
@@ -149,9 +149,14 @@ class Ctx:
             try:
                 sol = sp.solveset(c, var, S.Reals)
             except Exception:  # noqa: BLE001
+                sol = None
+            if sol is None or isinstance(sol, sp.ConditionSet) or sol.has(sp.ConditionSet):
+                # never dropped: solved exactly below, or left a ConditionSet the certificates abstain on
+                # (`unsolved_conditions`); 2**x + x - 2 <= 1 of an acos was dropped and the domain read as
+                # all of x >= 0 (round 8 of part d4b, YO-1)
+                deferred.append(c)
                 continue
-            if not isinstance(sol, sp.ConditionSet):
-                dom = sp.Intersection(dom, sol)
+            dom = exact_intersection(dom, sol)           # one writing per endpoint (round 8)
         # the trigonometric conditions before the convention regions: a convention point is one of the
         # domain, and sin(x) > 0 cuts the negative bases of x**(1/3) too
         dom, unsolved = self._periodic_conditions(dom, deferred, var)
@@ -279,7 +284,8 @@ class Ctx:
         return list(self.cache.get(f"unsolved_side:{var.name}", []))
 
     def unsolved_conditions(self, var: sp.Symbol) -> list:
-        """The relations on `var` with a trigonometric function that cut its domain unsolved (as a
+        """The relations on `var` (a trigonometric one, or a written condition no exact class solves, round 8)
+        that cut its domain unsolved (as a
         ConditionSet, see `_periodic_conditions`). A certificate that reads the domain as a solved set
         (compares it, enumerates it, takes its ends) abstains while this is not empty
         (`condition_unsolved`); one that only decides the membership of points reads it as it is."""
@@ -572,8 +578,11 @@ class Ctx:
             if ew is None:
                 continue
             try:
-                pinned_here = bool(ew.free_symbols & set(pins))
                 with sp.evaluate(False):
+                    # read unevaluated: SymPy's free_symbols of a Sum evaluates its body, (k - a)/(k - a) is 1
+                    # there, and a constraint a = 2 that makes the term 0/0 at k = 2 was read as no pin at all,
+                    # so the primitive x of 1 + Σ_{k=1}^{3} (k - a)/(k - a) - 3 was certified (attack on d4e, YO-4)
+                    pinned_here = bool(ew.free_symbols & set(pins))
                     e2 = substitute_free(ew, pins)
                 conds = definedness_conditions(e2, None)
             except Exception:  # noqa: BLE001 - not read as written: the old reading
@@ -846,7 +855,11 @@ class Ctx:
                 if rel is sp.true:
                     continue
                 if rel.free_symbols != {var}:
-                    unbound.append(g)
+                    curve = self._curve_given(g, rel, var)
+                    if curve is None:
+                        unbound.append(g)
+                    else:
+                        sets.extend(curve)
                     continue
                 if not isinstance(rel, sp.core.relational.Relational):
                     sol = self.condition_set(rel, var)
@@ -871,6 +884,51 @@ class Ctx:
         self.cache[f"side_unbound:{var.name}"] = unbound
         self.cache[key] = (sets, unapplied)
         return sets, unapplied
+
+    def _curve_given(self, g: str, rel, var: sp.Symbol) -> list | None:
+        """A given `s = g(var)` that restates the curve: s a symbol declared real with no constraint, named by no
+        other text of the problem (the tangent's own dependent variable excepted). It names s and says nothing of
+        `var` but where g is defined as written: the sets that written domain leaves `var` (a trigonometric
+        condition as a ConditionSet, solved by `domain_for`), or None. Read as a condition on two symbols it
+        was `condition_not_applied`, and the tangent y = 3x - 2 of x**3 at 1 with the given y = x**3 undecided
+        (review of d4e, R4); with y declared positive or y > 1 given too it says x > 0 or x > 1 and stays so."""
+        import re
+        from .domain import written_definedness
+        if not isinstance(rel, sp.Eq):
+            return None
+        for s_, gx in ((rel.lhs, rel.rhs), (rel.rhs, rel.lhs)):
+            if isinstance(s_, sp.Symbol) and s_ != var and getattr(gx, "free_symbols", set()) == {var}:
+                break
+        else:
+            return None
+        vd = next((d for d in self.ir.vars if d.name == s_.name), None)
+        if vd is None or vd.domain != "real" or vd.constraints:
+            return None
+        params = self.ir.task.params or {}
+        texts = [t for t in self.ir.givens if t != g] + [c for v in self.ir.vars for c in v.constraints]
+        texts += [v for k, v in params.items() if isinstance(v, str)
+                  and not (k == "dep" and self.ir.task.kind == "tangent_line")]
+        texts += [t for f in self.ir.functions for t in (f.expr, f.domain) if isinstance(t, str)]
+        texts += [o.arg for o in self.ir.operators if isinstance(o.arg, str)]
+        texts += [t for t in (self.ir.domain_of_discourse, self.ir.unknown_of_interest) if isinstance(t, str)]
+        name = re.compile(rf"(?<![\w.]){re.escape(s_.name)}(?!\w)")
+        if any(name.search(t) for t in texts):
+            return None
+        conds, nowhere = written_definedness(g, self.ns)
+        if var in nowhere:
+            return [S.EmptySet]
+        out: list = []
+        for c in conds:
+            if getattr(c, "free_symbols", set()) != {var}:
+                return None
+            if at_risk(c, var):
+                out.append(sp.ConditionSet(var, c, S.Reals))
+                continue
+            sol = self.condition_set(c, var)
+            if sol is None:
+                return None
+            out.append(sol)
+        return out
 
     def written_conditions(self) -> tuple[list[Any], set]:
         """Definedness of the problem's expressions AS WRITTEN (open conditions, and symbols of an
@@ -1225,53 +1283,6 @@ class Ctx:
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:
     return Ctx(ir=ir, ns=build_namespace(ir), seed=seed, timeout=timeout)
-
-
-def exact_intersection(*sets) -> sp.Set:
-    """sp.Intersection of `sets`. SymPy raises TypeError when it cannot order two endpoints that are one
-    number written two ways: a given read as written (x > log(8)/log(2)) and its set from `exact_solveset`,
-    whose polynomial class reads log(8) as 3*log(2), so (3, oo) met (log(8)/log(2), oo) and the certificate
-    died (round 6 of part d4b: x**2 = 4 with x > a, a = log(8)/log(2) gave UNKNOWN for {}). The endpoints
-    PROVED equal (`same_value`, an exact difference that simplifies to 0; numbers only pick the pairs to
-    try) are written one way, the shortest, and the intersection is taken again; the TypeError stands when
-    no such pair exists or SymPy still cannot order them (the caller abstains)."""
-    return _exact_setop(sp.Intersection, sets)
-
-
-def exact_complement(a, b) -> sp.Set:
-    """sp.Complement(a, b), with the endpoints of `exact_intersection` (round 7, RK6: the sampler of
-    solve_inequality took dom minus the claimed (3, 4) with dom (log(8)/log(2), oo) and died)."""
-    return _exact_setop(sp.Complement, (a, b))
-
-
-def _exact_setop(op, sets) -> sp.Set:
-    try:
-        return op(*sets)
-    except TypeError as err:
-        first = err
-    pts: list = []
-    for s_ in sets:
-        for n in sp.preorder_traversal(s_):
-            ends = (n.start, n.end) if isinstance(n, sp.Interval) else n.args if isinstance(n, sp.FiniteSet) else ()
-            pts += [p_ for p_ in ends if p_ not in pts and getattr(p_, "is_number", False) and p_.is_finite is True
-                    and p_.is_real is True]
-    pts.sort(key=lambda p_: (sp.count_ops(p_), sp.default_sort_key(p_)))
-    rep: dict = {}
-    for i, p_ in enumerate(pts):
-        if p_ in rep:
-            continue
-        for q in pts[i + 1:]:
-            if q in rep:
-                continue
-            try:
-                near = bool(abs(sp.N(p_ - q, 30)) < sp.Float("1e-20"))
-            except Exception:  # noqa: BLE001 - not compared: not written one way
-                near = False
-            if near and same_value(p_, q):
-                rep[q] = p_
-    if not rep:
-        raise first
-    return op(*[s_.xreplace(rep) for s_ in sets])
 
 
 class Timer:
