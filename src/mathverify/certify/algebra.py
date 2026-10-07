@@ -558,7 +558,7 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
             from ..sandbox.pool import CasResult
             r = CasResult(True, exact_set, None, False, 0.0, "exact_rational_inequality")
         try:
-            truth = sp.Intersection(truth, r.value)
+            truth = exact_intersection(truth, r.value)          # one writing per endpoint (round 8, RK-3)
         except Exception as e:  # noqa: BLE001 - SymPy cannot always order symbolic endpoints
             ev["intersection_error"] = f"{type(e).__name__}: {e}"
             r = None
