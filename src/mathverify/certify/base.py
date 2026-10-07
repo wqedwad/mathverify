@@ -726,6 +726,29 @@ class Ctx:
         on [0, 1] and its integral 1/2 over [0, 1] were certified (fourth audit TAN-02, review of d4e)."""
         return {s_: v for s_, v in self.pinned_values(var).items() if s_.name not in keep}
 
+    def solved_pins(self, var: sp.Symbol, *keep: str) -> dict:
+        """`task_pins(var, *keep)` and each other declared parameter whose region (`_declared_region` with the
+        givens: the declaration, the domain of discourse, its constraints and every given on it alone, each value a
+        given fixes put in) is one real number. 2*a = 4, a - 2 = 0, a**2 = 4 with a > 0, a = b with b = 2 and the
+        constraint 2*a = 4 fix a as `a = 2` does: read as a free parameter, the sum 3 of (k - a)/(k - a) over
+        k = 1..3 (0/0 at k = 2) was certified and the right 12 of a*k refuted against 6*a (attack on d4e round 2,
+        YO-2). A task variable is never one."""
+        out = self.task_pins(var, *keep)
+        names = task_variables(self.ir)
+        for v in self.ir.vars:
+            s_ = self.sym(v.name)
+            if s_ == var or s_ in out or v.name in names or v.name in keep:
+                continue
+            try:
+                reg = self._declared_region(s_, givens=True)
+            except Exception:  # noqa: BLE001 - a region not read fixes nothing
+                continue
+            if isinstance(reg, sp.FiniteSet) and len(reg) == 1:
+                (val,) = reg.args
+                if isinstance(val, sp.Expr) and not val.free_symbols and val.is_real is True:
+                    out[s_] = val
+        return out
+
     def with_pins(self, e, pins: dict):
         """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
         forms this makes (Σ_{k=1}^{n} k with n = 3: 6) by values numbers confirm (`_confirmed`, ParseError

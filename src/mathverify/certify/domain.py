@@ -739,21 +739,198 @@ def _bounded_limit(lim) -> bool:
         and not lim.has(sp.AccumBounds)
 
 
+# periodic functions: a SymPy limit of an expression holding one of them at an argument without a finite limit is no
+# proof (lim t**(3/2)/(1 + t**2*cos(t)**2) at oo is "0", the values at (n + 1/2)*pi grow without bound), and jumps
+_PERIODIC = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
+_JUMPS = (sp.sign, sp.frac, sp.Heaviside, sp.floor, sp.ceiling, sp.Mod, sp.Piecewise, sp.Max, sp.Min)
+
+
+class _NoBound(Exception):
+    pass
+
+
+class _Majorant:
+    """Bounds near a point of the variable s (a positive Dummy: s -> oo, or s -> 0+): `upper(e)` is an M >= |e|,
+    `ub(e)` >= e and `lb(e)` <= e (e real), each `exact` (no periodic function at an argument without a finite
+    limit there, no jump, no symbol of undeclared sign), so that SymPy's limit of it can be read. An exact part is
+    kept as it is; a periodic factor is bounded by its range (|sin| <= 1), a symbol p of undeclared sign by
+    |p| <= P (a positive Dummy: the bound holds for every value of p), a denominator by a positive lower bound
+    (1 + s**2*cos(s)**2 >= 1). Raises _NoBound when no bound is found."""
+
+    def __init__(self, s, point):
+        self.s, self.point = s, point
+        self.unsigned: dict = {}
+        self._safe: dict = {}
+
+    def _limit(self, e):
+        return sp.limit(e, self.s, 0, "+") if self.point == 0 else sp.limit(e, self.s, oo)
+
+    def exact(self, e) -> bool:
+        if e in self._safe:
+            return self._safe[e]
+        ok = all(sym.is_positive is True or sym.is_negative is True for sym in e.free_symbols - {self.s})
+        if ok:
+            for n in sp.preorder_traversal(e):
+                if self.s not in n.free_symbols:
+                    continue
+                if isinstance(n, _JUMPS):
+                    ok = False
+                    break
+                if isinstance(n, _PERIODIC):
+                    arg = n.args[0]
+                    if not self.exact(arg):
+                        ok = False
+                        break
+                    try:
+                        lim = self._limit(arg)
+                    except Exception:  # noqa: BLE001
+                        lim = None
+                    if not (isinstance(lim, sp.Expr) and lim.is_number and lim.is_finite is True
+                            and lim.is_real is True and not lim.has(sp.AccumBounds)):
+                        ok = False
+                        break
+        self._safe[e] = ok
+        return ok
+
+    def sym_bound(self, sym):
+        if sym.is_real is not True:
+            raise _NoBound(sym)
+        if sym not in self.unsigned:
+            self.unsigned[sym] = sp.Dummy(f"abs_{sym}", positive=True)
+        return self.unsigned[sym]
+
+    def upper(self, e):
+        """M >= |e|."""
+        if self.exact(e):
+            return sp.Abs(e)
+        if isinstance(e, sp.Symbol):
+            return self.sym_bound(e)
+        if isinstance(e, sp.Add):
+            return sp.Add(*[self.upper(a) for a in e.args])
+        if isinstance(e, sp.Mul):
+            return sp.Mul(*[self.upper(a) for a in e.args])
+        if isinstance(e, sp.Abs):
+            return self.upper(e.args[0])
+        if isinstance(e, (sp.sin, sp.cos, sp.sign, sp.Heaviside, sp.frac)):
+            if e.args[0].is_real is not True:
+                raise _NoBound(e)
+            return S.One
+        if isinstance(e, (sp.floor, sp.ceiling)):
+            return self.upper(e.args[0]) + 1
+        if isinstance(e, sp.exp):
+            return sp.exp(self.ub(e.args[0]))
+        if isinstance(e, sp.Pow):
+            b, x = e.args
+            if not (x.is_number and x.is_real is True):
+                raise _NoBound(e)
+            if x.is_positive:
+                return self.upper(b) ** x
+            return self.lower_abs(b) ** x
+        raise _NoBound(e)
+
+    def lower_abs(self, e):
+        """L with 0 < L <= |e| near the point."""
+        lo = self.lb(e)
+        if self._positive(lo):
+            return lo
+        hi = self.ub(e)
+        if self._positive(-hi):
+            return -hi
+        raise _NoBound(e)
+
+    def _positive(self, e) -> bool:
+        if not self.exact(e):
+            return False
+        if e.is_positive is True:
+            return True
+        try:
+            lim = self._limit(e)
+        except Exception:  # noqa: BLE001
+            return False
+        return lim is oo or (isinstance(lim, sp.Expr) and lim.is_number and lim.is_real is True
+                             and not lim.has(sp.AccumBounds) and certified_sign(lim) == 1)
+
+    def _nonnegative(self, e) -> bool:
+        """e >= 0 by its form: an even power, an Abs, a product of such, an exact part SymPy calls nonnegative."""
+        if isinstance(e, sp.Abs):
+            return True
+        if isinstance(e, sp.Pow) and e.args[1].is_number and e.args[1].is_even is True:
+            return True
+        if isinstance(e, sp.Mul):
+            return all(self._nonnegative(a) for a in e.args)
+        return self.exact(e) and e.is_nonnegative is True
+
+    def ub(self, e):
+        """U >= e (e real)."""
+        if self.exact(e):
+            return e
+        if isinstance(e, sp.Add):
+            return sp.Add(*[self.ub(a) for a in e.args])
+        if isinstance(e, (sp.sin, sp.cos)):
+            return S.One
+        if isinstance(e, sp.Mul):
+            c, rest = e.as_coeff_Mul()
+            if c != 1 and c.is_real is True and c.is_zero is False:
+                return c * (self.ub(rest) if c.is_positive else self.lb(rest))
+        return self.upper(e)
+
+    def lb(self, e):
+        """L <= e (e real)."""
+        if self.exact(e):
+            return e
+        if isinstance(e, sp.Add):
+            return sp.Add(*[self.lb(a) for a in e.args])
+        if isinstance(e, (sp.sin, sp.cos)):
+            return -S.One
+        if isinstance(e, sp.Mul):
+            c, rest = e.as_coeff_Mul()
+            if c != 1 and c.is_real is True and c.is_zero is False:
+                return c * (self.lb(rest) if c.is_positive else self.ub(rest))
+            if all(self._nonnegative(a) for a in e.args):
+                return sp.Mul(*[self.lb(a) for a in e.args])
+        if self._nonnegative(e):
+            return S.Zero
+        return -self.upper(e)
+
+
+def majorant(g, t, point, side=None):
+    """(M, s): |g(t)| <= M(s) near `point` (oo or -oo; a finite point c from `side`), t = s (oo), -s (-oo), c + s or
+    c - s with s a positive Dummy (s -> oo, or s -> 0+), M free of every periodic function at an argument without a
+    finite limit there, of jumps and of symbols of undeclared sign (`_Majorant`); (None, s) when no such M is found.
+    A SymPy limit of M is read as a proof; one of g is not: lim t**(3/2)/(1 + t**2*sin(t)**2) at oo is "0", and the
+    divergent ∫_0^oo dt/(1 + t**2*sin(t)**2) was proved convergent (attack on d4e round 2, YO-1)."""
+    s = sp.Dummy("s", positive=True)
+    if point in (oo, -oo):
+        gs, at = g.xreplace({t: s if point == oo else -s}), oo
+    else:
+        gs, at = g.xreplace({t: point + s if side == "+" else point - s}), S.Zero
+    try:
+        return _Majorant(s, at).upper(gs), s
+    except _NoBound:
+        return None, s
+    except Exception:  # noqa: BLE001 - a bound SymPy cannot form is none
+        return None, s
+
+
 def decays_at(g, t, end) -> bool:
     """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1? Then ∫ g converges absolutely at that end.
-    Read off a bounded limit of |t|**p * |g(t)| (p = 2, 3/2, 11/10), or off the exponent q of the decay,
-    q = lim -log|g|/log|t| > 1 (|g| = |t|**(-q + o(1)): t**(-21/20), and e^(-a*t) with a declared positive,
-    where q = oo; review of d4e, R7), or, not absolutely, by Dirichlet's test (`_dirichlet_test`: sin(t)/t). False
-    when none is found (a divergent integral, or one these tests cannot prove: sin(t**2))."""
-    ag = sp.Abs(g)
-    for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
-        if _bounded_limit(sp.limit(sp.Abs(t) ** p * ag, t, end)):
+    Read off a majorant M of |g| (`majorant`: periodic factors bounded by their range, a symbol of undeclared sign by
+    its absolute value, so the task's own variable may stand in the integrand: e^(-t)*(x + t), e^(-t)*cos(x*t);
+    round 3 RK-4) and a bounded limit of s**p * M (p = 2, 3/2, 11/10), or the exponent q of its decay,
+    q = lim -log M/log s > 1 (M = s**(-q + o(1)): t**(-21/20), and e^(-a*t) with a declared positive, where q = oo;
+    review of d4e, R7), or, not absolutely, by Dirichlet's test (`_dirichlet_test`: sin(t)/t). A SymPy limit of an
+    oscillating g is no proof (round 3, YO-1). False when none is found (a divergent integral, or one these tests
+    cannot prove: sin(t**2), 1/(1 + t**4*sin(t)**2))."""
+    m, s = majorant(g, t, end)
+    if m is not None:
+        for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
+            if _bounded_limit(sp.limit(s ** p * m, s, oo)):
+                return True
+        q = sp.limit(-sp.log(m) / sp.log(s), s, oo)
+        if q is oo:
             return True
-    q = sp.limit(-sp.log(ag) / sp.log(sp.Abs(t)), t, end)
-    if q is oo:
-        return True
-    if isinstance(q, sp.Expr) and q.is_number and q.is_real is True and certified_sign(q - 1) == 1:
-        return True
+        if isinstance(q, sp.Expr) and q.is_number and q.is_real is True and certified_sign(q - 1) == 1:
+            return True
     return _dirichlet_test(g, t, end)
 
 
@@ -785,18 +962,22 @@ def _dirichlet_test(g, t, end) -> bool:
 
 def integrable_near(g, t, c, side) -> bool:
     """Worker: is |g(t)| <= C/|t - c|**p on the `side` ('+', '-') of the finite point c for some p < 1, read off
-    a bounded limit of |t - c|**p * |g(t)| (p = 0, 1/2, 2/3, 9/10)? Then ∫ g converges absolutely there: 1/sqrt(t)
-    and log(t) at 0 do, 1/t and 1/(t - 1/2) do not (attack on d4e, YO-2)."""
-    ag = sp.Abs(g)
+    a bounded limit of s**p * M for a majorant M of |g| (`majorant`, t = c ± s; p = 0, 1/2, 2/3, 9/10)? Then ∫ g
+    converges absolutely there: 1/sqrt(t) and log(t) at 0 do, 1/t and 1/(t - 1/2) do not (attack on d4e, YO-2), and
+    a SymPy limit of 1/(t**2 + cos(1/t)**2) is no proof (round 3, YO-1)."""
+    m, s = majorant(g, t, c, side)
+    if m is None:
+        return False
     for p in (S(0), S.Half, sp.Rational(2, 3), sp.Rational(9, 10)):
-        if _bounded_limit(sp.limit(sp.Abs(t - c) ** p * ag, t, c, side)):
+        if _bounded_limit(sp.limit(s ** p * m, s, 0, "+")):
             return True
     return False
 
 
 def _integrand_on(body, x, d):
-    """The integrand on a real dummy for its bound variable, evaluated; None when it names a symbol whose sign is
-    not declared (the tests above would read it on all its values) or holds an IR function's marker."""
+    """The integrand on a real dummy for its bound variable, evaluated; None when it names a symbol not declared
+    real or holds an IR function's marker. A symbol of undeclared sign (the task's variable in ∫_0^oo e^(-t)*(x + t))
+    is read for all its values by `majorant` (round 3, RK-4)."""
     t = sp.Dummy(d.name, real=True)
     try:
         with sp.evaluate(False):
@@ -806,8 +987,8 @@ def _integrand_on(body, x, d):
         return None, t
     if not isinstance(g, sp.Expr) or any(type(m).__name__ == "written_domain" for m in sp.preorder_traversal(g)):
         return None, t
-    if any(s_.is_positive is not True and s_.is_negative is not True for s_ in g.free_symbols - {t}):
-        return None, t
+    if any(s_.is_real is not True for s_ in g.free_symbols - {t}):
+        return None, t                               # a symbol of undeclared sign is bounded by `majorant`
     return g, t
 
 
