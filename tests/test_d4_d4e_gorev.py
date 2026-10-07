@@ -858,3 +858,18 @@ def test_round3_a_written_condition_no_class_solves_is_not_defined():
     assert _v(_ss("sqrt(2**k + k - 3)", 0, 3, [], [K]), "sqrt(3) + 2*sqrt(2) + sqrt(2)*I") == "UNKNOWN"
     assert _v(_der(f"x + {SQ} - {SQ}", "0"), "1") == "UNKNOWN"
     assert _v(_der(f"x + {SQ} - {SQ}", "2"), "1") == "CORRECT"
+
+
+def test_round3_dirichlet_test_takes_no_parameter():
+    # attack on d4e round 3, D4E3-YO-1: SymPy's limit of t/(x**2*t**2 + 1) is 0 for a generic x; at x = 0 the
+    # integral of t*sin(t) diverges, so x + 0*I(x) has no value at 0
+    I = "Integral(t*sin(t)/(x**2*t**2 + 1), (t, 1, oo))"
+    V = [X, T_]
+    assert _v(_ir("derivative", {"f": f"x + 0*{I}", "var": "x", "at": "0"}, [], V), "1") == "UNKNOWN"
+    assert _v(_ir("solve_equation", {"var": "x", "equation": f"x**2 + 0*{I} = 0"}, [], V, "set"), "{0}",
+              "set") == "UNKNOWN"
+    assert _v(_ir("extremum", {"f": f"x**2 + 0*{I}", "var": "x", "which": "min", "interval": "[-1, 1]"}, [], V),
+              "0") == "UNKNOWN"
+    # without a parameter the test still reads sin(t)/t
+    assert _v(_ir("derivative", {"f": "x + 0*Integral(sin(t)/t, (t, 1, oo))", "var": "x", "at": "0"}, [], V),
+              "1") == "CORRECT"
