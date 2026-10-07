@@ -249,7 +249,7 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
     okR, rev = random_point_equal(claimed, truth, syms, domain, seed=seed)
     ev["random_point"] = rev
     if okR is True and (sev.get("equals") or {}).get("value") is False \
-            and all(domain[s_] == S.Reals for s_ in syms):
+            and all(domain[s_] == S.Reals for s_ in syms) and _equals_false_stands(claimed, truth):
         # SymPy's `equals` says the two differ on the real line: agreement at sample points does not overrule it
         # (it sampled x² + sin(3·10^6·πx) = x² on a grid where the sine vanishes; attack on d4c round 2, YO-3). A
         # counterexample still refutes; agreement alone decides nothing. On a smaller domain `equals` (which
@@ -263,6 +263,14 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         ev["parametric_form"] = "agreement at sample points not taken"
     ev["method"] = "random_point" if okR is not None else "undecided"
     return okR, ev
+
+
+def _equals_false_stands(a, b) -> bool:
+    """SymPy's `equals` False at every one of three random seeds (`sandbox.ops.equals_false_at_every_seed`): one
+    False alone is no fact (it said False at some seeds for a true identity)."""
+    from ..sandbox import run as sb_run
+    r = sb_run("mathverify.sandbox.ops:equals_false_at_every_seed", a, b, timeout=10.0)
+    return bool(r.ok and r.value is True)
 
 
 def _equation_equivalent(claimed, truth, domain, var, seed, ev):

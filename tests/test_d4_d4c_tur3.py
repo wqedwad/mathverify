@@ -192,6 +192,15 @@ def test_a_sign_must_stand_at_a_higher_precision():
     assert _steps(r_) != ["refuted"]
 
 
+def test_one_false_from_sympys_equals_is_no_fact():
+    """SymPy's `equals` draws random points: it said False at some seeds for the true identity
+    atan(x) - atan(x/2) = atan(x/(x² + 2)), and the identity went UNKNOWN or CORRECT from run to run."""
+    from mathverify.equiv import _equals_false_stands
+    x = sp.Symbol("x", real=True)
+    assert _equals_false_stands(sp.atan(x) - sp.atan(x / 2), sp.atan(x / (x**2 + 2))) is False
+    assert _equals_false_stands(x**2 + sp.sin(3000000 * sp.pi * x), x**2) is True
+
+
 def test_sympy_equals_false_is_not_overruled_by_agreement(monkeypatch):
     import mathverify.equiv as equiv
     monkeypatch.setattr(equiv, "random_point_equal", lambda *a, **k: (True, {}))
