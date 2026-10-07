@@ -512,10 +512,19 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
     if err:
         return err
     dom = ctx.domain_for(var)
+    from .domain import is_convention
+    cond_unsolved: list = []
     for c in definedness_conditions(rel, var):
-        rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, S.Reals, timeout=ctx.timeout)
-        if rr.ok and not isinstance(rr.value, ConditionSet):
-            dom = sp.Intersection(dom, rr.value)
+        # a trigonometric one on the domain the others leave (on ℝ: one period, sandbox.exactsets)
+        rr = sb_run("mathverify.sandbox.ops:solveset_in", c, var, dom if at_risk(c, var) else S.Reals,
+                    timeout=ctx.timeout)
+        if rr.ok and isinstance(rr.value, sp.Set) and not rr.value.has(ConditionSet):
+            dom = exact_intersection(dom, rr.value)
+        elif not is_convention(c):
+            # never dropped: x + atan(x) <= 1 of an asin left the domain all of x >= 0 and [0, oo) was
+            # certified for (|x| - x)*asin(x + atan(x)) <= 0 (round 8 of part d4b, YO-1). A sampled
+            # counterexample still refutes (the points are checked as written); no set is compared
+            cond_unsolved.append(c)
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
     # (1) direct refutation of the claim by sampling (incl. endpoints)
     okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed)
@@ -530,6 +539,8 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
         # the domain is cut by a trigonometric condition with no closed form on ℝ (the written
         # cos(x) != 0 of tan x): the solution set is no set the comparison reads (fourth audit G2)
         return condition_unsolved(LAYER, ctx.unsolved_conditions(var), 0, ev)
+    if cond_unsolved:
+        return condition_unsolved(LAYER, cond_unsolved, 0, ev)
     truth, r = dom, None
     flat: list = []
     for one in rels:

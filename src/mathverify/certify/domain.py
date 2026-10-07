@@ -7,6 +7,7 @@ conditions of the ORIGINAL expression, and (c) the original relation itself.
 """
 from __future__ import annotations
 
+import functools
 import itertools
 import threading
 from typing import Any
@@ -162,6 +163,8 @@ class Convention(sp.Set):
       generalized binomial (C(-2, 2) = 3) and the 0 above n are extensions the curriculum does not have.
     * `mod_divisor`: the divisor of Mod is positive; below it floored, truncated and Euclidean
       remainders differ (Mod(7, -5) is -3, 2 or 2).
+    * `origin`: the operand (y**2 + x**2 of atan2(y, x), u of arg(u)) is not 0: atan2(0, 0) and arg(0)
+      are undefined in mathematics and 0 in some conventions (round 8 of part d4b, YO-1).
 
     As `Contains(operand, CONVENTION)` the condition holds where the operand is proved inside and is
     left standing (undecided) elsewhere, never false: `decide_membership` and `relation_holds_at` leave
@@ -184,7 +187,7 @@ class Convention(sp.Set):
         k = self.kind
         if k == "odd_root":
             ok = other.is_extended_nonnegative
-        elif k == "zero_power":
+        elif k in ("zero_power", "origin"):
             ok = other.is_zero is False
         elif k == "binomial":
             ok = other.is_integer is True and other.is_nonnegative is True
@@ -195,8 +198,9 @@ class Convention(sp.Set):
         return sp.true if ok is True else None      # undecided, never false
 
     def _eval_is_superset(self, other):
+        nonzero = sp.Union(Interval.open(-oo, 0), Interval.open(0, oo))
         inside = {"odd_root": Interval(0, oo), "binomial": S.Naturals0, "mod_divisor": Interval.open(0, oo),
-                  "zero_power": sp.Union(Interval.open(-oo, 0), Interval.open(0, oo))}.get(self.kind)
+                  "zero_power": nonzero, "origin": nonzero}.get(self.kind)
         try:
             return True if inside is not None and other.is_subset(inside) is True else None
         except Exception:  # noqa: BLE001
@@ -210,6 +214,7 @@ ODD_ROOT_BASE = Convention("odd_root")
 ZERO_POWER_BASE = Convention("zero_power")
 BINOMIAL_ARGUMENT = Convention("binomial")
 MOD_DIVISOR = Convention("mod_divisor")
+ORIGIN = Convention("origin")
 
 
 def is_convention(c) -> bool:
@@ -224,7 +229,8 @@ def is_value_convention(c) -> bool:
     "undefined" (0**0, C(n, r) outside 0 <= r <= n)? A claim refuted with SymPy's value at such a point
     may be true under the other reading; where the other reading is "undefined" the claim is not true
     either, so a refutation stands (an undefined claim is no true step, `steps.deterministic`)."""
-    return is_convention(c) and (c.args[1] == FORWARD_SPANS or c.args[1].kind in ("odd_root", "mod_divisor"))
+    return is_convention(c) and (c.args[1] == FORWARD_SPANS or c.args[1].kind in ("odd_root", "mod_divisor",
+                                                                                   "origin"))
 
 
 def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
@@ -244,7 +250,7 @@ def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
             fwd, back = solveset(sp.Ge(e, 0), var, S.Reals), solveset(sp.Lt(e, 0), var, S.Reals)
         elif kind == "mod_divisor":
             fwd, back = solveset(sp.Gt(e, 0), var, S.Reals), solveset(sp.Le(e, 0), var, S.Reals)
-        elif kind == "zero_power":
+        elif kind in ("zero_power", "origin"):
             fwd, back = solveset(Ne(e, 0), var, S.Reals), solveset(Eq(e, 0), var, S.Reals)
         elif kind == "binomial":
             # e = ±var + k with k an integer: an integer exactly where var is one
@@ -318,7 +324,8 @@ def _violations(c, d, region):
                 return None
             bad = sp.Lt(e, 0)
         else:
-            bad = {"odd_root": sp.Lt(e, 0), "zero_power": Eq(e, 0), "mod_divisor": sp.Le(e, 0)}.get(kind)
+            bad = {"odd_root": sp.Lt(e, 0), "zero_power": Eq(e, 0), "mod_divisor": sp.Le(e, 0),
+                   "origin": Eq(e, 0)}.get(kind)
         if bad is None:
             return None
         r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
@@ -993,6 +1000,12 @@ def _node_conditions(node, var, add) -> None:
     elif isinstance(node, sp.Mod):
         # a divisor that is not positive: floored, truncated or Euclidean (Convention, part d4a)
         add(sp.Contains(node.args[1], MOD_DIVISOR))
+    elif isinstance(node, sp.atan2):
+        # atan2(0, 0): undefined, or 0 by some conventions (Convention); (|x| - x)*atan2(x - 1, 0) >= 0 on
+        # x >= 0 had [0, oo) certified (round 8 of part d4b, YO-1)
+        add(sp.Contains(node.args[0] ** 2 + node.args[1] ** 2, ORIGIN))
+    elif isinstance(node, sp.arg):
+        add(sp.Contains(node.args[0], ORIGIN))          # arg(0): undefined, or 0 (Convention)
     elif isinstance(node, sp.acosh):
         add(node.args[0] >= 1)
     elif isinstance(node, sp.atanh):
@@ -1244,7 +1257,44 @@ def relation_holds_at(rel, var, c) -> bool | None:
         return None
     # never let `rel.subs` auto-evaluate a numeric Eq/inequality: Float rounding would
     # turn a true identity into False. Substitute the sides and compare tolerantly.
-    return _num_relation_holds(rel, var, c)
+    h = _num_relation_holds(rel, var, c)
+    if h is False:
+        return False
+    # a side undefined at the point as written holds nothing there, though its value may fold: 0*acos(4) is
+    # SymPy's 0, and (|x| - x)*acos(2**x + x - 2) <= 0 "held" at x = 2 (round 8 of part d4b, YO-1). The
+    # conventions (an odd root of a negative number, ...) are read where they stand, not here
+    d = _defined_at(rel, var, c)
+    if d is False:
+        return False
+    return None if d is None else h
+
+
+def _defined_at(rel, var, c) -> bool | None:
+    """Is every side of `rel` defined at var = c (its definedness conditions other than the conventions
+    hold there)? None when one is undecided."""
+    undecided = False
+    for side in (rel.lhs, rel.rhs):
+        if var not in getattr(side, "free_symbols", set()):
+            continue
+        for cond in _side_conditions(side, var):
+            if is_convention(cond):
+                continue
+            if is_no_value(cond):
+                return False
+            if is_undecided(cond):
+                undecided = True
+                continue
+            r = relation_holds_at(cond, var, c)
+            if r is False:
+                return False
+            if r is None:
+                undecided = True
+    return None if undecided else True
+
+
+@functools.lru_cache(maxsize=1024)
+def _side_conditions(side, var) -> tuple:
+    return tuple(definedness_conditions(side, var))
 
 
 def _cmp_le(a, b, strict: bool) -> bool | None:

@@ -149,9 +149,14 @@ class Ctx:
             try:
                 sol = sp.solveset(c, var, S.Reals)
             except Exception:  # noqa: BLE001
+                sol = None
+            if sol is None or isinstance(sol, sp.ConditionSet) or sol.has(sp.ConditionSet):
+                # never dropped: solved exactly below, or left a ConditionSet the certificates abstain on
+                # (`unsolved_conditions`); 2**x + x - 2 <= 1 of an acos was dropped and the domain read as
+                # all of x >= 0 (round 8 of part d4b, YO-1)
+                deferred.append(c)
                 continue
-            if not isinstance(sol, sp.ConditionSet):
-                dom = sp.Intersection(dom, sol)
+            dom = sp.Intersection(dom, sol)
         # the trigonometric conditions before the convention regions: a convention point is one of the
         # domain, and sin(x) > 0 cuts the negative bases of x**(1/3) too
         dom, unsolved = self._periodic_conditions(dom, deferred, var)
@@ -276,7 +281,8 @@ class Ctx:
         return list(self.cache.get(f"unsolved_side:{var.name}", []))
 
     def unsolved_conditions(self, var: sp.Symbol) -> list:
-        """The relations on `var` with a trigonometric function that cut its domain unsolved (as a
+        """The relations on `var` (a trigonometric one, or a written condition no exact class solves, round 8)
+        that cut its domain unsolved (as a
         ConditionSet, see `_periodic_conditions`). A certificate that reads the domain as a solved set
         (compares it, enumerates it, takes its ends) abstains while this is not empty
         (`condition_unsolved`); one that only decides the membership of points reads it as it is."""
