@@ -1473,24 +1473,20 @@ def _refuse_reversed_ranges(expr, raw: str) -> None:
                     raise ParseError(f"{raw!r} has a {type(node).__name__} whose limit is itself an "
                                      "operation: not read")
                 if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3:
-                    # the bounds evaluated, as the value reading has them: read as written sqrt(1) - 3 was "not
-                    # an integer" and only that reading refused the text (review of d4f, YO-1)
+                    # reversed (Karr), not an integer apart (Σ_{k=1}^{7/2} k is 63/8 stepping from the lower limit),
+                    # not integers (Σ_{k=1/2}^{5/2} k: 9/2 stepping, 3 over the integers, TAN-10/C1), on the bounds
+                    # evaluated, as the value reading has them: read as written sqrt(1) - 3 was "not an integer",
+                    # and SymPy's sign of the unevaluated n - 5 - 1 + 1 raised; either refused the text (and every
+                    # condition around it) in that reading alone (review of d4f, YO-1). A question SymPy cannot
+                    # answer refuses nothing here: the domain reads the range (`certify.domain`).
                     with sp.evaluate(True):
-                        lim = (lim[0], _evaluated_bound(lim[1]), _evaluated_bound(lim[2]))
-                if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3 \
-                        and (lim[2] - lim[1] + 1).is_extended_negative is True:
-                    raise ParseError(f"{raw!r} has a {type(node).__name__} over a reversed range: not read")
-                span = lim[2] - lim[1] if len(lim) == 3 else None
-                if isinstance(node, (sp.Sum, sp.Product)) and span is not None and span.is_number \
-                        and span.is_finite and span.is_integer is False:
-                    # Σ_{k=1}^{7/2} k is 63/8 in SymPy, 1 + 2 + 3 stepping from the lower limit
-                    raise ParseError(f"{raw!r} has a {type(node).__name__} whose limits are not an "
-                                     "integer apart: not read")
-                if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3 \
-                        and any(_not_an_integer(b) for b in lim[1:]):
-                    # Σ_{k=1/2}^{5/2} k: 9/2 stepping from the lower limit, 3 over the integers (TAN-10/C1)
-                    raise ParseError(f"{raw!r} has a {type(node).__name__} whose limits are not integers: "
-                                     "not read")
+                        lo, hi = _evaluated_bound(lim[1]), _evaluated_bound(lim[2])
+                    try:
+                        _refuse_constant_range(type(node).__name__, lo, hi, raw)
+                    except ParseError:
+                        raise
+                    except Exception:  # noqa: BLE001 - see above
+                        pass
 
 
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],

@@ -432,10 +432,10 @@ def test_yo1_the_text_around_an_undecided_bound_is_still_read(expr, givens):
     assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
 
 
-def test_yo1_a_step_is_not_refuted_where_its_own_value_is_undecided():
-    r = _run(_ev("x", ["x = 1"]), "1", steps=[("compute", "tan(acot(2) + acot(1/2)) = 5")])
-    assert _status(r) != "refuted"
-    assert _status(_run(_ev("x", ["x = 1"]), "1", steps=[("compute", "0**0 = 5")])) == "refuted"   # 1 or undefined
+def test_yo1_a_step_wrong_under_every_reading_is_still_refuted():
+    # 0**0 is 1 or undefined, 4/(-2)! is 0 under 1/Γ or undefined: neither is 5, nor 1
+    assert _status(_run(_ev("x", ["x = 1"]), "1", steps=[("compute", "0**0 = 5")])) == "refuted"
+    assert _status(_run(_ev("x", ["x = 1"]), "1", steps=[("compute", "4/factorial(-2) = 1")])) == "refuted"
 
 
 def test_yo1_a_latex_matrix_parameter_is_read_as_written():

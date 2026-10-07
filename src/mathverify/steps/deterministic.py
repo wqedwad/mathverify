@@ -2275,10 +2275,10 @@ def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
     value (`certify.domain.is_value_convention`: Mod(7, -5), (-8)**(1/3)) left standing? The value parse
     computed it SymPy's way before any check saw it. 0**0 and C(2, 5) are 1 and 0 or undefined: a claim
     refuted with SymPy's value is not true under the other reading either. A text the as-written reading does
-    not take counts too, and one with a closed condition no exact check decides (other than such a convention):
-    its value is not proved the curriculum's. Σ_{k=c}^{c+2} k with c = 1/2 written in nested roots has bounds not
-    proved integers (TAN-10), and the step "= 3" was refuted with SymPy's 9/2 (review of d4f, YO-1)."""
-    from ..certify.domain import closed_condition_undecided, definedness_conditions, is_convention, is_value_convention
+    not take counts too: its value is not proved the curriculum's (review of d4f, YO-1). Σ_{k=c}^{c+2} k with
+    c = 1/2 written in nested roots has a closed bound not proved an integer (`certify.domain.INTEGER_BOUND`), and
+    the step "= 3" was refuted with SymPy's 9/2."""
+    from ..certify.domain import definedness_conditions, is_value_convention
     from ..normalize.parse import _check_safe, _strip_invisible, parse_set_as_written, preclean
     try:
         names = _check_safe(preclean(_strip_invisible(text)), ns)
@@ -2290,9 +2290,7 @@ def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
         w = parse_set_as_written(text, ns)
         if w is None:
             return True
-        conds = definedness_conditions(w, None)
-        return (any(is_value_convention(c) and not c.free_symbols for c in conds)
-                or closed_condition_undecided([c for c in conds if not is_convention(c)]))
+        return any(is_value_convention(c) and not c.free_symbols for c in definedness_conditions(w, None))
     except Exception:  # noqa: BLE001 - no reading as written: as above
         return True
 

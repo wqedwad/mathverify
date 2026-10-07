@@ -551,11 +551,12 @@ def _one_range_conditions(lo, hi) -> list[Any] | None:
     The finite bounds themselves are integers: bounds an integer apart that are not (Σ_{k=1/2}^{5/2} k)
     step from the lower one in SymPy (1/2 + 3/2 + 5/2 = 9/2) and run over the integers between them in
     the index reading (1 + 2 = 3). The value is a convention, and with a = 1/2 the sum Σ_{k=a}^{a+2} k
-    was certified 9/2 and 3 refuted (fourth audit, TAN-10/C1). A closed bound not proved an integer is
-    not read; an open one, or a gap, is held to the integers as a convention: Contains(n, INTEGER_BOUND)
-    on one of them (the gap ties the other), which holds at an integer and is undecided elsewhere, never
-    false. As Contains(n, Z) it dropped the non-integer points like undefined ones (review of d4f, YO-3,
-    RK-F1)."""
+    was certified 9/2 and 3 refuted (fourth audit, TAN-10/C1). A bound not proved an integer, or a gap, is
+    held to the integers as a convention: Contains(n, INTEGER_BOUND) on one of them (the gap ties the other),
+    which holds at an integer and is undecided elsewhere, never false. As Contains(n, Z) it dropped the
+    non-integer points like undefined ones (review of d4f, YO-3, RK-F1). A closed one (1/2 written in nested
+    roots) stays standing: undecided, and a step refuted with SymPy's stepping value of it refutes nothing
+    (review of d4f, YO-1)."""
     span = hi - lo + 1
     if span.has(sp.nan, sp.zoo) or span.is_extended_real is False:
         return None
@@ -582,7 +583,7 @@ def _one_range_conditions(lo, hi) -> list[Any] | None:
     for c in conds:
         if c is sp.true:
             continue
-        if c is sp.false or not c.free_symbols:
+        if c is sp.false or (not c.free_symbols and not is_integer_bound(c)):
             return None
         if c not in out:
             out.append(c)
