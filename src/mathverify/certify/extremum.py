@@ -485,8 +485,15 @@ def verify(ir, solution, ctx: Ctx):
         # f as written must be defined on the whole interval: x/x − x² parses to 1 − x², whose
         # maximum 1 sits exactly at the point x/x excludes (measured: certified CORRECT)
         from .domain import written_undefined_in
-        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv, pins) is True:
+        und = written_undefined_in(p["f"], ctx.ns, var, iv, pins) if isinstance(iv, sp.Set) else False
+        if und is True:
             return unknown(LAYER, "f_undefined_on_interval_as_written", t.ms, {"f": p["f"]},
+                           flags=["written_domain"])
+        if und is None:
+            # not decided is not defined: 2**x + x - 3 >= 0 of sqrt(2**x + x - 3) is solved by no exact class, and
+            # the minimum 0 of x**2 + sqrt(2**x + x - 3) - sqrt(2**x + x - 3) was certified on all of ℝ (attack on
+            # d4b round 8, YO-2; the same root as d4e round 3, YO-2)
+            return unknown(LAYER, "f_definedness_undecided_as_written", t.ms, {"f": p["f"]},
                            flags=["written_domain"])
         if which.startswith("local_"):
             ok, ev = certify_local_extremum(f, var, iv, which, claimed, timeout=ctx.timeout)

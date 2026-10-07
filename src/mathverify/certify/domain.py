@@ -975,9 +975,9 @@ def integrable_near(g, t, c, side) -> bool:
 
 
 def _integrand_on(body, x, d):
-    """The integrand on a real dummy for its bound variable, evaluated; None when it names a symbol not declared
-    real or holds an IR function's marker. A symbol of undeclared sign (the task's variable in ∫_0^oo e^(-t)*(x + t))
-    is read for all its values by `majorant` (round 3, RK-4)."""
+    """The integrand on a real dummy for its bound variable, evaluated; None when it holds an IR function's marker.
+    Another symbol is read for all its values by `majorant` (a symbol of undeclared sign: the task's variable in
+    ∫_0^oo e^(-t)*(x + t), round 3 RK-4; one not declared real has no bound) and `_dirichlet_test` (real only)."""
     t = sp.Dummy(d.name, real=True)
     try:
         with sp.evaluate(False):
@@ -987,8 +987,6 @@ def _integrand_on(body, x, d):
         return None, t
     if not isinstance(g, sp.Expr) or any(type(m).__name__ == "written_domain" for m in sp.preorder_traversal(g)):
         return None, t
-    if any(s_.is_real is not True for s_ in g.free_symbols - {t}):
-        return None, t                               # a symbol of undeclared sign is bounded by `majorant`
     return g, t
 
 

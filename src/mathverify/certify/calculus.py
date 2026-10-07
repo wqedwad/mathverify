@@ -1018,7 +1018,8 @@ def switch_arguments(f, var) -> list | None:
     Heaviside(u), a - b of a Max/Min(a, b, ...), lhs - rhs of a Piecewise's relations. The kink rule of R8 read |u|
     alone, so Max(x, -x), x*sign(x) and sign(x) had sign(x) and 0 certified as derivatives that have a value where
     there is none (round 3, YO-4). None when f holds a switch with no such u (floor, frac, Mod, a Piecewise condition
-    that is no relation). Sorted: the reading does not hang on the hash seed (round 3, RK-6)."""
+    that is no relation). In the order of f's tree, never of a set: the reading does not hang on the hash seed, as
+    f.atoms(Abs) made it (round 3, RK-6)."""
     out: list = []
 
     def add(u):
@@ -1045,7 +1046,7 @@ def switch_arguments(f, var) -> list | None:
                     add(r.lhs - r.rhs)
         elif isinstance(n, (sp.floor, sp.ceiling, sp.frac, sp.Mod, sp.DiracDelta)):
             return None
-    return sorted(out, key=sp.default_sort_key)
+    return out
 
 
 def _poly(e, var):
@@ -2243,7 +2244,8 @@ def verify(ir, solution, ctx: Ctx):
                 if err:
                     return err
                 # x²/x is x after parsing, but it has no value (so no derivative) at 0
-                if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at), pins) is True:
+                if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at), pins) is not False:
+                    # undefined there, or not decided (fail-closed: d4b round 8, YO-2)
                     return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
                                    {"f": p["f"], "at": str(at)}, flags=["written_domain"])
                 bad = _point_not_interior(ctx, p["f"], var, at, pins, t.ms)
@@ -2374,7 +2376,8 @@ def verify(ir, solution, ctx: Ctx):
             at, err = parse_or_unknown(LAYER, ctx.with_pins, at, pins)
             if err:
                 return err
-            if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at), pins) is True:
+            if written_undefined_in(p["f"], ctx.ns, var, sp.FiniteSet(at), pins) is not False:
+                # undefined there, or not decided (fail-closed: d4b round 8, YO-2)
                 return unknown(LAYER, "f_undefined_at_point_as_written", t.ms,
                                {"f": p["f"], "at": str(at)}, flags=["written_domain"])
             bad = _point_not_interior(ctx, p["f"], var, at, pins, t.ms)

@@ -1130,6 +1130,29 @@ def cases_q():
                                "index": "4"}, ["2*c = 4"], [{"name": "n", "domain": "positive_integer"}, {"name": "c"}],
            shape="scalar")
     out.append(("YO-2 recurrence term a(4), a(n) = c*a(n-1), a(1) = 1, 2*c = 4: 8 [right]", q, sol("8"), OK, None))
+    # d4b round 8, YO-2 (same root): a written condition no exact class solves is not 'defined' (extremum, series)
+    SQ, AC, LG = "sqrt(2**x + x - 3)", "acos(2**x + x - 2)", "log(x + exp(x) - 2)"
+    for label, q, c in (("min x**2 + SQ - SQ", ext(f"x**2 + {SQ} - {SQ}", "min", None), "0"),
+                        ("min x**2 + SQ - SQ on [-1, 2]", ext(f"x**2 + {SQ} - {SQ}", "min", "[-1, 2]"), "0"),
+                        ("max -(x-3)**2 + AC - AC", ext(f"-(x - 3)**2 + {AC} - {AC}", "max", None), "0"),
+                        ("max -(x-3)**2*AC/AC on [-5, 5]", ext(f"-(x - 3)**2*{AC}/{AC}", "max", "[-5, 5]"), "0"),
+                        ("max -(x-3)**2 + 0*AC on [-5, 5]", ext(f"-(x - 3)**2 + 0*{AC}", "max", "[-5, 5]"), "0"),
+                        ("min x**2 + 1 + LG - LG", ext(f"x**2 + 1 + {LG} - {LG}", "min", None), "1"),
+                        ("local_min x**2 + SQ - SQ on [-1, 2]", ext(f"x**2 + {SQ} - {SQ}", "local_min", "[-1, 2]"), "0")):
+        out.append((f"d4b8-YO-2 extremum {label}: {c} [undefined where read]", q, sol(c), NOTOK, None))
+    out.append(("d4b8-YO-2 extremum min x**2 + SQ - SQ: 1 [right where defined]", ext(f"x**2 + {SQ} - {SQ}", "min", None),
+                sol("1"), NOTNO, None))
+    out.append(("d4b8-YO-2 extremum max -(x-3)**2 + AC - AC on [-5, 5]: -4 [right where defined]",
+                ext(f"-(x - 3)**2 + {AC} - {AC}", "max", "[-5, 5]"), sol("-4"), NOTNO, None))
+    for term in ("k + sqrt(2**k + k - 3) - sqrt(2**k + k - 3)", "k + acos(2**k + k - 2) - acos(2**k + k - 2)",
+                 "k*acos(2**k + k - 2)/acos(2**k + k - 2)", "k + log(k + exp(k) - 2) - log(k + exp(k) - 2)"):
+        out.append((f"d4b8-YO-2 series {term}, k=0..3: 6 [a term undefined]", ss(term, 0, 3, [], [K_]), sol("6"), NOTOK,
+                    None))
+    out.append(("d4b8-YO-2 derivative x + SQ - SQ at 0: 1 [undefined at 0]", der(f"x + {SQ} - {SQ}", "0"), sol("1"), UNK,
+                None))
+    out.append(("d4b8-YO-2 ctrl derivative x + SQ - SQ at 2: 1", der(f"x + {SQ} - {SQ}", "2"), sol("1"), NOTNO, None))
+    out.append(("d4b8-YO-2 ctrl max -(x-3)**2 + acos(x/2) - acos(x/2) on [-5, 5]: 0",
+                ext("-(x - 3)**2 + acos(x/2) - acos(x/2)", "max", "[-5, 5]"), sol("0"), NOTOK, None))
     out.append(("YO-2 ctrl series (k - 7)/(k - 7), k=1..3: 3", ss("(k - 7)/(k - 7)", 1, 3, [], [K_]), sol("3"), OK, None))
     out.append(("YO-2 ctrl series (-1)**k, k=0..3: 0", ss("(-1)**k", 0, 3, [], [K_]), sol("0"), OK, None))
     out.append(("YO-2 ctrl series 1/(k*(k + 1)), k=1..oo: 1", ss("1/(k*(k + 1))", 1, "oo", [], [K_]), sol("1"), OK, None))

@@ -807,3 +807,35 @@ def test_round3_subs_body_defined_near_its_point_by_a_strict_condition():
               "at(diff(1/(x + exp(x)), x), x, 0) = -2"):
         assert _step(q, "2", "value", [("compute", c)]) == ("CORRECT", "verified"), c
     assert _step(q, "2", "value", [("compute", "at(diff(1/(x + exp(x)), x), x, 0) = -3")])[1] == "refuted"
+
+
+def test_round3_guards_of_the_new_readings():
+    # Max/Min read as |.|: a family of corners, the claim undefined exactly there
+    assert _v(_der("Max(sin(x), -sin(x))"), "cos(x)*sin(x)/Abs(sin(x))", "expression") == "CORRECT"
+    # a double zero of u is no corner: |x**3 - x**2| has the derivative 0 at 0, where the claim has no value
+    assert _v(_der("Abs(x**3 - x**2)"), "(3*x**2 - 2*x)*(x**3 - x**2)/Abs(x**3 - x**2)", "expression") == "INCORRECT"
+    # a written condition not strict at the point (x**4 - 2*x**2 + 1 >= 0 at 1): f is |x**2 - 1| there, no derivative
+    assert _v(_der("sqrt(x**4 - 2*x**2 + 1)"), "(2*x**3 - 2*x)/sqrt(x**4 - 2*x**2 + 1)", "expression") != "INCORRECT"
+    # acosh has no written condition: never read as analytic
+    assert _v(_der("acosh(x)"), "1/sqrt(x**2 - 1)", "expression") != "INCORRECT"
+    # a - x >= 0 is not x - a >= 0: the sign of the ratio counts
+    assert _v(_der("sqrt(x - a)", None, [], XA), "1/(2*sqrt(x - a)) + 0*sqrt(a - x)", "expression") != "CORRECT"
+    assert _v(_der("sqrt(x - a)", None, [], XA), "1/(2*sqrt(x - a))", "expression") == "CORRECT"
+    # a claim condition not proved on the region: never CORRECT
+    assert _v(_der("tan(x)", None, ["cos(x) > 0"]), "sec(x)**2 + 0*sqrt(sin(x))", "expression") != "CORRECT"
+    # a symbol of undeclared sign in the integrand is bounded by its absolute value: e^(-x*t) diverges for x <= 0
+    q = _ir("derivative", {"f": "x + 0*Integral(exp(-x*t), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "1", "expression") != "CORRECT"
+
+
+def test_round3_a_written_condition_no_class_solves_is_not_defined():
+    # d4b round 8, YO-2: 2**x + x - 3 >= 0 (x >= 1) and -1 <= 2**x + x - 2 <= 1 (0 <= x <= 1) are solved by no exact
+    # class; written_undefined_in is None there, and every caller abstains on it
+    SQ, AC = "sqrt(2**x + x - 3)", "acos(2**x + x - 2)"
+    assert _v(_ext(f"x**2 + {SQ} - {SQ}", "min", None), "0") == "UNKNOWN"
+    assert _v(_ext(f"x**2 + {SQ} - {SQ}", "min", None), "1") != "INCORRECT"
+    assert _v(_ext(f"-(x - 3)**2 + 0*{AC}", "max", "[-5, 5]"), "0") == "UNKNOWN"
+    assert _v(_ss("k + sqrt(2**k + k - 3) - sqrt(2**k + k - 3)", 0, 3, [], [K]), "6") == "UNKNOWN"
+    assert _v(_ss("sqrt(2**k + k - 3)", 0, 3, [], [K]), "sqrt(3) + 2*sqrt(2) + sqrt(2)*I") == "UNKNOWN"
+    assert _v(_der(f"x + {SQ} - {SQ}", "0"), "1") == "UNKNOWN"
+    assert _v(_der(f"x + {SQ} - {SQ}", "2"), "1") == "CORRECT"
