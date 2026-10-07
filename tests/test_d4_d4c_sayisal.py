@@ -574,6 +574,8 @@ def test_read_tolerance_and_the_relative_error():
     assert within_rel_tol(sp.Float("0.8406299346"), sp.sin(1), t) is True          # 9.995e-4 against v
     assert within_rel_tol(sp.Float("0.8405454"), sp.sin(1), t) is False
     assert within_rel_tol(sp.Float("0.0001"), 0, t) is None                         # v = 0: undefined
+    assert within_rel_tol(0, 0, t) is True                                          # ... but the claim is v
+    assert num_equal(sp.S.Zero, sp.Float(0), rel_tol=1e-25)[0] is True              # a form's 0 and its number
     assert num_equal(sp.Float("2.716"), sp.E, rel_tol=t)[0] is True
     assert num_equal(sp.Float("2.7155"), sp.E, rel_tol=t)[0] is False
     # against the reference b, not max(|a|, |b|): 0.105 of 2.3416, 0.095 of 2.5874

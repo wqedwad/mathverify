@@ -562,12 +562,12 @@ def within_rel_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
         return None
     if c.free_symbols or v.free_symbols:
         return None
+    sd = certified_sign(c - v, timeout=timeout)
+    if sd == 0:
+        return True                           # the claim is the value
     sv = certified_sign(v, timeout=timeout)
     if sv not in (1, -1):
         return None
-    sd = certified_sign(c - v, timeout=timeout)
-    if sd == 0:
-        return True
     if sd not in (1, -1):
         return None
     s_ = certified_sign(t * sv * v - sd * (c - v), timeout=timeout)
@@ -665,8 +665,8 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
             absd = abs(va - vb)
             if against_b:
                 if vb == 0:
-                    if abs_tol is not None and absd <= mp.mpf(abs_tol):
-                        ev["decided_by"] = "abs_tol"
+                    if absd == 0 or (abs_tol is not None and absd <= mp.mpf(abs_tol)):
+                        ev["decided_by"] = "equal_at_zero" if absd == 0 else "abs_tol"
                         return True, ev
                     ev["decided_by"] = "relative_tolerance_at_zero"
                     return None, ev
