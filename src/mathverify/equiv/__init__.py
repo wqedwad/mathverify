@@ -248,6 +248,12 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         domain = {s_: domain.get(s_, S.Reals) for s_ in syms}
     okR, rev = random_point_equal(claimed, truth, syms, domain, seed=seed)
     ev["random_point"] = rev
+    if okR is True and (sev.get("equals") or {}).get("value") is False:
+        # SymPy's `equals` says the two differ: agreement at sample points does not overrule it (it sampled
+        # x² + sin(3·10^6·πx) = x² on a grid where the sine vanishes; attack on d4c round 2, YO-3). A
+        # counterexample still refutes; agreement alone decides nothing
+        okR = None
+        ev["conflict"] = "sympy_equals_false"
     if okR is True and parametric:
         # agreement at sample values of a parameter is no proof of a parametric integral's or limit's
         # value (DECISIONS §80, principle 4); a counterexample at one value still refutes

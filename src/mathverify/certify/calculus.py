@@ -484,6 +484,9 @@ def _raw_pair(lo, hi):
     return _raw(mp.mpf(lo)), _raw(mp.mpf(hi))
 
 
+_ENCLOSURE_SAFETY = 120.0       # seconds: past it an enclosure is abandoned (UNKNOWN), never cut short
+
+
 def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0):
     """(lo, hi) mpf: an interval holding ∫_a^b f, refined until it misses `outside` or lies within
     `inside` ((lo, hi) mpf pairs) or the budget is spent; None without an enclosure (an infinite range,
@@ -495,9 +498,10 @@ def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: 
         return None
     if f.has(sp.Integral, sp.Sum, sp.Product, sp.Limit) or not (a.is_finite and b.is_finite):
         return None
+    # the budget is the number of cells (deterministic); the time is only a safety stop (RK-C)
     r = sb_run("mathverify.certify.enclosure:rigorous_enclosure", f, var, a, b,
                _raw_pair(*outside) if outside else None, _raw_pair(*inside) if inside else None,
-               4000, float(timeout), timeout=timeout + 10)
+               4000, _ENCLOSURE_SAFETY, timeout=_ENCLOSURE_SAFETY + 10)
     if not r.ok or r.value is None:
         return None
     return from_raw(r.value[0]), from_raw(r.value[1])

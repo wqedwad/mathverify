@@ -84,6 +84,7 @@ def eqs(c):
 
 
 X1 = _task("evaluate", {"expr": "x + 1"}, [X], ["x = 1"])          # the answer 2, a step about a closed form
+X7 = _task("evaluate", {"expr": "x + 1"}, [X], ["x = 1/7"])
 ABSCOS = "Integral(x + Abs(cos(x))/10**80, (x, -1, 1))"            # SymPy: 0; true 2 sin(1)/10^80
 PEAK = "exp(-10**8*(x - 1/3)**2)"
 
@@ -473,7 +474,13 @@ def cases_m():
         ("simplify cos(6*10^6 pi x): 1 (wrong)", simp("cos(6000000*pi*x)", [X]), _sol("1", kind="expression"), NOTOK, None),
         ("simplify x: x + sin(2*10^6 pi x)/10^6 (wrong)", simp("x", [X]),
          _sol("x + sin(2000000*pi*x)/1000000", kind="expression"), NOTOK, None),
-        ("eq step x^2 + sin(3*10^6 pi x) = x^2", X1, _sol("2", eqs("x**2 + sin(3000000*pi*x) = x**2")), ANY, NOTVER),
+        # with x = 1 given the step is TRUE (sin(3·10^6·π) = 0: the attack's own repro); with x = 1/7 it is false
+        ("eq step x^2 + sin(3*10^6 pi x) = x^2, x = 1/7", X7, _sol("8/7", eqs("x**2 + sin(3000000*pi*x) = x**2")),
+         NOTOK, NOTVER),
+        ("eq step x^2 + sin(3*10^6 pi x) = x^2, no premise", simp("x**2", [X]),
+         _sol("x**2", eqs("x**2 + sin(3000000*pi*x) = x**2"), kind="expression"), ANY, NOTVER),
+        ("control: eq step x^2 + sin(3*10^6 pi x) = x^2, x = 1 (true)", X1,
+         _sol("2", eqs("x**2 + sin(3000000*pi*x) = x**2")), OK, VER),
         ("control: simplify sin^2 + cos^2 = 1", simp("sin(x)**2 + cos(x)**2", [X]), _sol("1", kind="expression"), OK, None),
         ("control: simplify (x + 1)^2 = x^2 + 2x + 1", simp("(x + 1)**2", [X]), _sol("x**2 + 2*x + 1", kind="expression"),
          OK, None),

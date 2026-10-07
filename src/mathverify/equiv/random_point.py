@@ -22,7 +22,25 @@ from sympy import S, Interval, FiniteSet, Union, Intersection, Complement, Condi
 __all__ = ["random_point_equal", "sample_points"]
 
 
-def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False):
+# Sample points off the decimal grid (attack on d4c round 2, YO-3): 6-decimal rationals and probes at
+# integers, halves and 10^k all make sin(3·10^6·πx) vanish, and x² + sin(3·10^6·πx) was certified equal to
+# x². A sample is a rational with a large prime denominator (exact substitution stays exact) and, past the
+# first `_RATIONAL_POINTS` (the ones the exact difference check reads), shifted by an irrational number, at
+# which no sin(Nπx) with rational N vanishes.
+_PRIMES = (1000003, 999983, 1000033, 999979, 1000037, 999961, 1000039, 999959)
+_SHIFTS = (sp.sqrt(2), sp.sqrt(3), sp.sqrt(5), sp.sqrt(7), sp.pi / 3, sp.E / 2)
+_RATIONAL_POINTS = 8
+
+
+def _off_grid(v: float, rng: random.Random, shift: bool):
+    den = rng.choice(_PRIMES)
+    q = sp.Rational(round(v * den), den)
+    if shift:
+        q += rng.choice(_SHIFTS) / 10 ** rng.choice((5, 6, 7))
+    return q
+
+
+def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False, shift: bool | None = None):
     lo, hi = iv.inf, iv.sup
     lo_f = -1e3 if lo == -oo else float(lo)
     hi_f = 1e3 if hi == oo else float(hi)
@@ -48,20 +66,23 @@ def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False):
         v = lo_f + (hi_f - lo_f) * 1e-3
     if iv.right_open and hi != oo and v >= hi_f:
         v = hi_f - (hi_f - lo_f) * 1e-3
-    # exact rational sample (6 decimals): substitution into polynomial/rational expressions
-    # is then exact and an identity never fails on Float rounding (measured on
-    # x^2-5x-14 = (x-7)(x+2), which a Float sample 'refuted')
-    q = sp.Rational(f"{v:.6f}")
-    if iv.contains(q) != True:  # noqa: E712  (rounding pushed it onto an open endpoint)
-        q = sp.Rational(f"{(lo_f + hi_f) / 2:.6f}") if (lo != -oo and hi != oo) else q + sp.Rational(1, 1000)
+    # exact sample: substitution into polynomial/rational expressions is then exact and an identity never
+    # fails on Float rounding (measured on x^2-5x-14 = (x-7)(x+2), which a Float sample 'refuted'). A
+    # 6-decimal rational for a counterexample search; off the decimal grid (shift not None: _off_grid) for an
+    # identity test
+    q = sp.Rational(f"{v:.6f}") if shift is None else _off_grid(v, rng, shift)
+    if iv.contains(q) != True:  # noqa: E712  (rounding or the shift pushed it onto or past an end)
+        mid = (lo_f + hi_f) / 2
+        q = (sp.Rational(f"{mid:.6f}") if shift is None else _off_grid(mid, rng, False)) \
+            if (lo != -oo and hi != oo) else q + sp.Rational(1, 1000)
     return q
 
 
-def _sample_one(dom, rng: random.Random, depth: int = 0):
+def _sample_one(dom, rng: random.Random, depth: int = 0, shift: bool | None = None):
     if depth > 6:
         return None
     if dom == S.Reals or dom == S.Complexes:
-        return _sample_interval(Interval(-oo, oo), rng)
+        return _sample_interval(Interval(-oo, oo), rng, shift=shift)
     if dom == S.Integers:
         return sp.Integer(rng.randint(-60, 60))
     if dom == S.Naturals:
@@ -69,11 +90,11 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
     if dom == S.Naturals0:
         return sp.Integer(rng.randint(0, 120))
     if isinstance(dom, Interval):
-        return _sample_interval(dom, rng)
+        return _sample_interval(dom, rng, shift=shift)
     if isinstance(dom, FiniteSet):
         return rng.choice(list(dom.args))
     if isinstance(dom, Union):
-        return _sample_one(rng.choice(list(dom.args)), rng, depth + 1)
+        return _sample_one(rng.choice(list(dom.args)), rng, depth + 1, shift)
     if isinstance(dom, sp.Range):
         if dom.is_finite_set:
             return sp.Integer(rng.choice(list(dom)))
@@ -100,7 +121,7 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
         else:
             base = dom.base_set
         for _ in range(50):
-            p = _sample_one(base, rng, depth + 1)
+            p = _sample_one(base, rng, depth + 1, shift)
             if p is None:
                 return None
             try:
@@ -111,7 +132,7 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
         return None
     # unknown set: try membership rejection on reals
     for _ in range(50):
-        p = _sample_interval(Interval(-oo, oo), rng)
+        p = _sample_interval(Interval(-oo, oo), rng, shift=shift)
         try:
             if dom.contains(p) == True:  # noqa: E712
                 return p
@@ -120,19 +141,21 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
     return None
 
 
-def sample_points(domains: dict, n: int, seed: int, special: bool = False) -> list[dict]:
+def sample_points(domains: dict, n: int, seed: int, special: bool = False, off_grid: bool = False) -> list[dict]:
     """`n` random points of the domains. With special=True, deterministic probe points are
     appended: for each symbol in turn, small integers, half-integers and far points of its
     domain (the others held at the first random point). Random 6-decimal samples essentially
     never land on an integer or a boundary, which is where a wrong strict/non-strict step
-    (`-2 < x` for x² − 5x − 14 ≤ 0) differs from the truth (audit of 25 Sep 2026, D2)."""
+    (`-2 < x` for x² − 5x − 14 ≤ 0) differs from the truth (audit of 25 Sep 2026, D2). With
+    off_grid=True (an identity test) the samples are rationals with large prime denominators, past
+    the first `_RATIONAL_POINTS` shifted by an irrational number (YO-3)."""
     rng = random.Random(seed)
     pts = []
-    for _ in range(n):
+    for i in range(n):
         pt = {}
         ok = True
         for sym, dom in domains.items():
-            v = _sample_one(dom, rng)
+            v = _sample_one(dom, rng, shift=(i >= _RATIONAL_POINTS) if off_grid else None)
             if v is None:
                 ok = False
                 break
@@ -208,15 +231,21 @@ def _in(dom, v) -> bool:
         return False
 
 
-def _special_values(dom, far: bool = False) -> list:
+def _special_values(dom, far: bool = False, irrational: bool = False) -> list:
     """Deterministic probe values: small integers and half-integers and, with far=True, far points
-    (10³ … 10⁶ and their negatives, also with a rational offset), filtered by the domain."""
+    (10³ … 10⁶ and their negatives, also with a rational offset), filtered by the domain; with
+    irrational=True (an identity test) a few irrational points too."""
     vals = [sp.Integer(k) for k in range(-12, 13)]
     vals += [sp.Rational(k, 2) for k in (-5, -3, -1, 1, 3, 5)]
+    if irrational:
+        # and off the grid for an identity test: irrational points (YO-3)
+        vals += [sp.sqrt(2) / 2, -sp.sqrt(3), sp.pi / 7, sp.sqrt(5) / 3, -sp.E / 5]
     if far:
         for v in (10 ** 3, 3 * 10 ** 3, 7 * 10 ** 3, 10 ** 4, 10 ** 5, 10 ** 6):
             v = sp.Integer(v)
             vals += [v, -v, v + sp.Rational(1, 3), -v - sp.Rational(1, 3)]
+        if irrational:
+            vals += [10 ** 3 + sp.sqrt(2), -(10 ** 4) - sp.sqrt(3)]
     return [v for v in vals if _in(dom, v)]
 
 
@@ -605,7 +634,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
         ev["error"] = f"unbound symbols {extra}; declare their domains"
         return None, ev
     nonsmooth = bool(_nonsmooth(a) or _nonsmooth(b))
-    pts = sample_points(domains, n, seed)
+    pts = sample_points(domains, n, seed, off_grid=True)
     if len(pts) < max(3, n // 3):
         ev["error"] = "could not sample enough points from domain"
         return None, ev
@@ -683,7 +712,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     base = pts[0]
     far = _far_safe(a) and _far_safe(b)
     for s_ in syms:
-        vals = _special_values(domains[s_], far=far)
+        vals = _special_values(domains[s_], far=far, irrational=True)
         if nonsmooth and len(syms) == 1:
             bps = _breakpoints([a, b], s_, domains[s_]) or []
             for bp in bps:

@@ -1124,6 +1124,20 @@ def _node_conditions(node, var, add) -> None:
     elif isinstance(node, (sp.asin, sp.acos)):
         add(node.args[0] >= -1)
         add(node.args[0] <= 1)
+    elif isinstance(node, (sp.Ci, sp.Chi, sp.li)):
+        add(node.args[0] > 0)                    # complex for x < 0 (a log term), -oo at 0
+        if isinstance(node, sp.li):
+            add(Ne(node.args[0], 1))             # li(1) = -oo
+    elif isinstance(node, sp.Ei):
+        add(Ne(node.args[0], 0))
+    elif isinstance(node, sp.polylog):
+        s_, z = node.args
+        if s_.is_Integer and s_ >= 2:
+            add(z <= 1)                          # real for z <= 1, complex past 1
+        elif s_ == 1:
+            add(z < 1)                           # -log(1 - z)
+        else:
+            add(DEFINEDNESS_UNDECIDED)
     elif type(node).__name__ in ("gcd", "lcm"):
         # normalize.parse.gcd/lcm have a value only at rational numbers: x + gcd(x, 2) - gcd(2, x)
         # read as x was certified a simplification of x on all of R, and its value at
@@ -1250,9 +1264,15 @@ def _numeric_exponent(ex):
 # Functions defined on all of ℝ (no condition), and the ones the rules above bound. Anything
 # else — factorial or gamma of a variable, Mod, atan2, an undefined function, an integral — has a
 # real domain these rules do not describe.
+# The error function family, the sine/hyperbolic sine integrals and the Fresnel integrals are entire and real
+# on ℝ; the cosine integrals and li need x > 0, Ei x ≠ 0, polylog(s, z) (s an integer >= 2) z <= 1. They are
+# the primitives of e^(-x²), sin x/x, log(1+x)/x, ...: without them no fundamental-theorem certificate was
+# built and ∫_R e^(-x²) dx = √π was UNKNOWN (attack on d4c round 2, RK-A/RK-B).
 _TOTAL_FUNCS = (sp.sin, sp.cos, sp.exp, sp.Abs, sp.atan, sp.acot, sp.sinh, sp.cosh, sp.tanh,
-                sp.asinh, sp.floor, sp.ceiling, sp.frac, sp.sign, sp.Max, sp.Min)
-_BOUNDED_FUNCS = (sp.log, sp.tan, sp.sec, sp.cot, sp.csc, sp.asin, sp.acos, sp.acosh, sp.atanh)
+                sp.asinh, sp.floor, sp.ceiling, sp.frac, sp.sign, sp.Max, sp.Min,
+                sp.erf, sp.erfc, sp.erfi, sp.Si, sp.Shi, sp.fresnels, sp.fresnelc)
+_BOUNDED_FUNCS = (sp.log, sp.tan, sp.sec, sp.cot, sp.csc, sp.asin, sp.acos, sp.acosh, sp.atanh,
+                  sp.Ci, sp.Chi, sp.Ei, sp.li, sp.polylog)
 # sets are containers: their elements are checked (an ImageSet's Lambda is not, so it refuses)
 _CONTAINERS = (sp.Tuple, sp.Set, sp.core.relational.Relational, sp.And, sp.Or, sp.Not)
 
