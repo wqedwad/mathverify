@@ -126,6 +126,19 @@ def test_a_proof_that_a_converged_quadrature_contradicts_decides_nothing(monkeyp
     assert _run(_dtol("cos(x)", 0, 1, "1e-3"), "1.8414").verdict == "UNKNOWN"
 
 
+def test_a_closed_integral_takes_no_value_without_a_certificate(monkeypatch):
+    """With the certificate taken away, SymPy's value of a closed integral (here even the right 1/3) is no
+    value: evaluate, a step and checked_forms decide nothing."""
+    from mathverify.certify import calculus
+    from mathverify.equiv.forms import UnverifiedForm, checked_forms
+    monkeypatch.setattr(calculus, "certified_integral_value", lambda *a, **k: (None, {}))
+    I = "Integral(x**2, (x, 0, 1))"
+    assert _run(_task("evaluate", {"expr": I}, [X]), "1/3").verdict == "UNKNOWN"
+    x = sp.Symbol("x", real=True)
+    with pytest.raises(UnverifiedForm):
+        checked_forms(sp.Integral(x**2, (x, 0, 1)))
+
+
 def test_sympys_value_off_by_less_than_any_enclosure_is_not_taken():
     """SymPy gives 2 for ∫_{-1}^{1} (1 + |cos x|/10^80) dx; it is 2 + 2 sin(1)/10^80."""
     f = "1 + Abs(cos(x))/10**80"
