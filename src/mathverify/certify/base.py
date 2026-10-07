@@ -882,7 +882,12 @@ class Ctx:
             srcs.append(self.ir.unknown_of_interest)
         conds: list[Any] = []
         nowhere: set = set()
-        undefined: list[str] = []
+        found: dict[str, list[str]] = {"undefined": [], "undecided": []}
+
+        def note(src, state):
+            if state is not None and src not in found[state]:
+                found[state].append(src)
+
         # a value a given fixes is put in before the conditions are read (x**a with a = 2 is x**2, defined
         # everywhere; TAN-09); never the task's own variable, which a given only restricts
         pins = self.parameter_pins()
@@ -890,70 +895,130 @@ class Ctx:
             cs, nw = written_definedness(s_, self.ns, pins)
             nowhere |= nw
             conds += [c for c in cs if c not in conds]
-            if self._undefined_constant(s_):
-                undefined.append(s_)
+            note(s_, self._undefined_constant(s_, pins))
         cs, nw, calls = self._function_call_conditions(srcs)
         nowhere |= nw
         conds += [c for c in cs if c not in conds]
-        undefined += calls
+        for c in calls:
+            note(c, "undefined")
         fsrc = params.get(self._NOWHERE_PARAMS.get(kind, ""))
-        if isinstance(fsrc, str) and fsrc not in undefined and self._undefined_function(fsrc, kind):
-            undefined.append(fsrc)
+        if isinstance(fsrc, str):
+            note(fsrc, self._undefined_function(fsrc, kind, pins))
+        # every other text of the problem (a point, a bound, an interval, a term, a constraint, a limit's
+        # expression): one with a closed operation that has no value ((-1)!, Γ(0), zoo), or closed and
+        # undefined itself. The point 1/(-1)! of a derivative, the bound of an integral and the interval
+        # [1/(1/0), 1] of an extremum were read as SymPy's 1/zoo = 0 and certified (CAP-F1)
+        others = [v for k, v in params.items() if isinstance(v, str) and k != "var"]
+        others += list(self.ir.givens) + [c for v in self.ir.vars for c in v.constraints]
+        if isinstance(self.ir.domain_of_discourse, str):
+            others.append(self.ir.domain_of_discourse)
+        for t in others:
+            if t not in srcs and t != fsrc:
+                note(t, self._text_without_value(t, pins))
         self.cache[key] = (conds, nowhere)
-        self.cache["written_undefined"] = undefined
+        self.cache["written_undefined"] = found["undefined"]
+        self.cache["written_undecided"] = [u for u in found["undecided"] if u not in found["undefined"]]
         return conds, nowhere
 
     def written_undefined(self) -> list[str]:
         """The problem's expressions that are undefined AS WRITTEN with no variable left to choose:
         `log(-1) - log(-1) - 1`, or `f(-1)` for f(x) = log(x) − log(x) + x. The closed condition
         fails, but `nowhere` only records free symbols, so the value SymPy simplified to (−1) was
-        certified (audit of 25 Sep 2026). Empty over the complex numbers, where the conditions are
-        the real ones."""
+        certified (audit of 25 Sep 2026). Also any text with a closed operation that has no value
+        (`certify.domain.NO_VALUE`: x + 1/(-1)! = 2 is no equation defined nowhere, CAP-F1). Empty over the
+        complex numbers, where the conditions are the real ones."""
         self.written_conditions()
         if (self.ir.domain_of_discourse or "").lower() in ("complex", "c", "ℂ"):
             return []
         return list(self.cache.get("written_undefined", []))
 
-    def _undefined_constant(self, src: str) -> bool:
-        from ..normalize.parse import parse_as_written
-        from .domain import definedness_conditions
-        e = parse_as_written(src, self.ns)
-        if e is None:
-            return False
+    def written_undecided(self) -> list[str]:
+        """The problem's expressions whose definedness AS WRITTEN rests on a closed condition no exact check
+        decides: a binder not proved to exist over its range (DEFINEDNESS_UNDECIDED), a convention value
+        (0**0), a comparison left standing (tan(arccot(2) + arccot(1/2))). The callers abstain as on
+        `written_undefined`, but the problem is not proved undefined: Π_{k=1}^{n} Σ_{j=1}^{k} 1 with n free
+        was "problem_undefined_as_written" (fourth audit, TAN-12)."""
+        self.written_conditions()
+        if (self.ir.domain_of_discourse or "").lower() in ("complex", "c", "ℂ"):
+            return []
+        return list(self.cache.get("written_undecided", []))
+
+    @staticmethod
+    def _pinned(e, pins: dict | None):
+        """The as-written tree `e` with the values the givens fix (see `parameter_pins`), unevaluated."""
+        if not pins or e is None:
+            return e
+        from ..normalize.parse import substitute_free
         try:
-            conds = definedness_conditions(e, None)
-        except Exception:  # noqa: BLE001
-            return False
+            with sp.evaluate(False):
+                return substitute_free(e, pins)
+        except Exception:  # noqa: BLE001 - read without the values (the old reading)
+            return e
+
+    def _undefined_constant(self, src: str, pins: dict | None = None) -> str | None:
+        """"undefined" when `src`, read as written at the values the givens fix (TAN-12: Π_{k=1}^{n} Σ_{j=1}^{k}
+        1 with n = 3 has every inner range forward), has no value whatever its free symbols are: a closed
+        operation with none (NO_VALUE), or a condition that fails with no symbol left; "undecided" when a
+        closed condition no exact check decides stands; None otherwise."""
+        from ..normalize.parse import parse_as_written
+        from .domain import closed_condition_undecided, definedness_conditions, is_no_value
+        e = self._pinned(parse_as_written(src, self.ns), pins)
+        if e is None:
+            return None
+        conds = definedness_conditions(e, None)
+        if any(is_no_value(c) for c in conds):
+            return "undefined"
         if not e.free_symbols and (any(c is sp.false for c in conds) or self._undefined_term(e)):
-            return True
+            return "undefined"
         # a closed condition SymPy left standing is one it could not decide: it counts only when it
         # is proved. tan(arccot(2) + arccot(1/2)) is tan(pi/2); its condition cos(...) != 0 stayed
         # symbolic and the value oo was certified (-oo before V14; audit of 29 Sep 2026). Inside an
         # expression with a variable (x + tan(...) - tan(...) = 1) the condition was dropped too.
-        from .domain import closed_condition_undecided
-        return closed_condition_undecided(conds)
+        return "undecided" if closed_condition_undecided(conds) else None
 
-    def _undefined_function(self, src: str, kind: str) -> bool:
-        """Is the expression of the task (`_NOWHERE_PARAMS`), read as written, defined nowhere or
-        undecided through a closed condition? The variable of a definite integral is read as a plain
-        real symbol: it runs over [a, b], not over its declared domain (certify.calculus)."""
+    def _undefined_function(self, src: str, kind: str, pins: dict | None = None) -> str | None:
+        """Is the expression of the task (`_NOWHERE_PARAMS`), read as written, defined nowhere
+        ("undefined") or undecided through a closed condition ("undecided")? The variable of a definite
+        integral is read as a plain real symbol: it runs over [a, b], not over its declared domain
+        (certify.calculus)."""
         from ..normalize.parse import parse_as_written
         from .domain import closed_condition_undecided, definedness_conditions, open_conditions_empty
         ns = self.ns
         v = (self.ir.task.params or {}).get("var", "x")
         if kind == "definite_integral" and isinstance(v, str) and isinstance(ns.get(v), sp.Symbol):
             ns = dict(ns, **{v: sp.Symbol(v, real=True)})
-        e = parse_as_written(src, ns)
+        e = self._pinned(parse_as_written(src, ns), pins)
         if e is None:
-            return False
+            return None
+        conds = definedness_conditions(e, None)
+        # open conditions that hold nowhere together (x > 0 and -x > 0) too: the simplification x of
+        # x + log(x) - log(x) + log(-x) - log(-x) was certified (fourth audit TAN-06)
+        if any(c is sp.false for c in conds) or self._undefined_term(e) \
+                or open_conditions_empty(conds, timeout=self.timeout):          # NO_VALUE comes with `false`
+            return "undefined"
+        return "undecided" if closed_condition_undecided(conds) else None
+
+    def _text_without_value(self, src: str, pins: dict | None = None) -> str | None:
+        """Any other text of the problem, read as written: "undefined" when it holds a closed operation
+        with no value (NO_VALUE) or is closed and undefined, "undecided" when it is closed and a condition
+        no exact check decides stands; None otherwise (open conditions are the certificates')."""
+        from ..normalize.parse import parse_set_as_written
+        from .domain import closed_condition_undecided, definedness_conditions, is_no_value, tree_free_symbols
         try:
+            # an interval's ends too: Interval.open(1/(-1)!, oo), [1/(1/0), 1)
+            e = self._pinned(parse_set_as_written(src, self.ns), pins)
+            if e is None:
+                return None
             conds = definedness_conditions(e, None)
-            # open conditions that hold nowhere together (x > 0 and -x > 0) too: the simplification x of
-            # x + log(x) - log(x) + log(-x) - log(-x) was certified (fourth audit TAN-06)
-            return any(c is sp.false for c in conds) or self._undefined_term(e) or closed_condition_undecided(conds) \
-                or open_conditions_empty(conds, timeout=self.timeout)
-        except Exception:  # noqa: BLE001 - a failed probe adds no fact
-            return False
+            if any(is_no_value(c) for c in conds):
+                return "undefined"
+            if tree_free_symbols(e):
+                return None
+        except Exception:  # noqa: BLE001 - a text no reading reads adds no fact (it was not read before)
+            return None
+        if any(c is sp.false for c in conds):
+            return "undefined"
+        return "undecided" if closed_condition_undecided(conds) else None
 
     @staticmethod
     def _undefined_term(e) -> bool:
@@ -1142,8 +1207,18 @@ def exact_intersection(*sets) -> sp.Set:
     PROVED equal (`same_value`, an exact difference that simplifies to 0; numbers only pick the pairs to
     try) are written one way, the shortest, and the intersection is taken again; the TypeError stands when
     no such pair exists or SymPy still cannot order them (the caller abstains)."""
+    return _exact_setop(sp.Intersection, sets)
+
+
+def exact_complement(a, b) -> sp.Set:
+    """sp.Complement(a, b), with the endpoints of `exact_intersection` (round 7, RK6: the sampler of
+    solve_inequality took dom minus the claimed (3, 4) with dom (log(8)/log(2), oo) and died)."""
+    return _exact_setop(sp.Complement, (a, b))
+
+
+def _exact_setop(op, sets) -> sp.Set:
     try:
-        return sp.Intersection(*sets)
+        return op(*sets)
     except TypeError as err:
         first = err
     pts: list = []
@@ -1168,7 +1243,7 @@ def exact_intersection(*sets) -> sp.Set:
                 rep[q] = p_
     if not rep:
         raise first
-    return sp.Intersection(*[s_.xreplace(rep) for s_ in sets])
+    return op(*[s_.xreplace(rep) for s_ in sets])
 
 
 class Timer:

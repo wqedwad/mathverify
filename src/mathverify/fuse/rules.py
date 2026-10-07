@@ -122,6 +122,9 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
                          "decimal_comma_ambiguous", "recovered_answer_refuted",
                          # the prose around the value negates or doubts it ("5 değil")
                          "payload_negated", "problem_undefined_as_written", "var_domain_unsupported", "ir_malformed", "given_not_applied",
+                         # the problem's definedness rests on a closed condition no exact check decides
+                         # (fourth audit TAN-12: kept apart from "undefined", abstains all the same)
+                         "problem_definedness_undecided",
                          "function_domain_not_applied", "constraint_unreadable",
                          # the claimed answer is a computation or restates the question: the
                          # certificates would be checking an answer the verifier itself produced

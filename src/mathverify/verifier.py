@@ -352,6 +352,32 @@ def _claim_convention(solution: Solution, ctx, task_kind: str = "") -> list[str]
     return out
 
 
+def _claim_without_value(solution: Solution, ctx) -> list[str]:
+    """The texts of the claimed answer (an option's too) that, read as written, have no value: a closed
+    operation with none (`certify.domain.NO_VALUE`: (-1)!, Γ(0), zoo), a condition that fails outright
+    (1/(x - x)), or a closed one no exact check proves. The value parse folds them first: the claim
+    1/factorial(-1) for 0 was certified (SymPy's 1/zoo, fourth audit CAP-F1). A convention value (0**0,
+    an odd root of a negative number) is `_claim_convention`'s."""
+    from .certify.domain import closed_condition_undecided, definedness_conditions, is_convention
+    from .normalize.parse import parse_set_as_written
+    payload = solution.claimed_answer.payload
+    out: list[str] = []
+    try:
+        ns = ctx.claim_ns()
+    except Exception:  # noqa: BLE001 - the certificates report an unreadable claim
+        return out
+    for txt in (payload if isinstance(payload, list) else [payload]):
+        if not isinstance(txt, str):
+            continue
+        w = parse_set_as_written(txt, ns)          # an interval's ends too: Interval(1/(-1)!, 2), (1/(-1)!, 2]
+        if w is None:
+            continue
+        conds = [c for c in definedness_conditions(w, None) if not is_convention(c)]
+        if sp.false in conds or closed_condition_undecided(conds):         # NO_VALUE comes with `false`
+            out.append(txt)
+    return out
+
+
 def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     from .normalize.parse import ClaimNotAValue, check_claim_is_value
     ca = solution.claimed_answer
@@ -709,6 +735,17 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         layers.append(unknown("intake.definedness", f"problem_undefined_as_written: {undefined[:3]}",
                               flags=["problem_undefined_as_written"]))
         return layers, clean_flags
+    # ... or its definedness rests on a closed condition no exact check decides (a binder not proved to
+    # exist, a convention value): no answer is checked either, but the problem is not called undefined
+    # (Π_{k=1}^{n} Σ_{j=1}^{k} 1 with n free was "problem_undefined_as_written", fourth audit TAN-12)
+    try:
+        undecided = ctx.written_undecided()
+    except Exception:  # noqa: BLE001 - a probe that fails proves nothing: abstain
+        undecided = ["definedness check failed"]
+    if undecided:
+        layers.append(unknown("intake.definedness", f"problem_definedness_undecided: {undecided[:3]}",
+                              flags=["problem_definedness_undecided"]))
+        return layers, clean_flags
     # A value a given fixes (`a = 0`) that the rest of the problem contradicts, that leaves one of its
     # expressions undefined as written, that a bound or the task's own variable receives, or that no
     # exact check decides: every certificate read it unchecked (fourth audit G7-G9, TAN-01/03/04, P1).
@@ -726,6 +763,13 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         layers.append(unknown("intake.definedness", f"claim_value_is_a_convention: {conv[:3]}",
                               flags=["claim_convention"]))
         return layers, clean_flags
+    # ... or has no value at all as written ((-1)!, zoo, 1/(x - x)): SymPy's value of it (1/zoo = 0) is no
+    # value of what was written, so the claim is never CORRECT; a refutation with that value stands (the
+    # claim is no right answer under any reading), so the certificates still run (CAP-F1)
+    no_value = _claim_without_value(solution, ctx)
+    if no_value:
+        layers.append(unknown("intake.claim", f"claimed answer has no value as written: {no_value[:3]}",
+                              flags=["claim_is_not_a_value"]))
 
     # A claimed answer must be a VALUE. A computation (`integrate(…)`, `limit(…)`) or the
     # question written back (`f(g(2))`, `gcd(84, 120)` for "evaluate gcd(84, 120)") would make

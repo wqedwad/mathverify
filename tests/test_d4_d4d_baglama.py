@@ -174,8 +174,9 @@ def test_g7_inconsistent_binding(givens, vars_):
                                         ("a = 0**0 + 3", "given_binding_undecided")])
 def test_g7_binding_value_undefined_or_convention(given, flag):
     r = _run(_eq("x**2 = a", [given], XA), "{-2, 2}")
-    # since the review of d4d the written_undefined intake runs first and may name the convention value
-    assert r.verdict == "UNKNOWN" and {flag, "problem_undefined_as_written"} & _flags(r)
+    # since the review of d4d the written_undefined intake runs first and may name the convention value; since
+    # part d4f (TAN-12) a closed condition it cannot decide (0**0) is "problem_definedness_undecided" there
+    assert r.verdict == "UNKNOWN" and {flag, "problem_undefined_as_written", "problem_definedness_undecided"} & _flags(r)
 
 
 def test_g7_limit_binding_checked():
@@ -226,7 +227,9 @@ def test_g8_closed_false_given_or_constraint_is_inconsistent():
 def test_g9_condition_at_the_bound_value(term, a):
     r = _run(_eq(f"x + {term} - {term} = 2", [f"a = {a}"], XA), "{2}")
     assert r.verdict == "UNKNOWN"
-    assert {"problem_undefined_as_written", "given_binding_undecided"} & _flags(r)
+    # the written intake reads at the given values since part d4f (TAN-12): a convention value there (C(-1, 2))
+    # is "problem_definedness_undecided"
+    assert {"problem_undefined_as_written", "given_binding_undecided", "problem_definedness_undecided"} & _flags(r)
 
 
 def test_g9_other_tasks_and_sources():
