@@ -169,7 +169,7 @@ MUTATIONS = [
      "    if loose:\n        region = sp.ConditionSet(var, sp.And(*[_open_condition(c) for c in loose]), region)\n", "",
      T + "test_periodic_written_domain"),
     ("I09 açık kısım kapalı kalır", CAL, "    if isinstance(c, sp.GreaterThan):\n        return sp.StrictGreaterThan(c.lhs, c.rhs)\n",
-     "", T + "test_periodic_written_domain"),
+     "", T + "test_round3_guards_of_the_new_readings"),
     ("I10 türev ifadesi geniş bölge yedeği yok", CAL, "                if ok is None and ctx.domain_for(var) != S.Reals:",
      "                if False:", T + "test_comparison_on_a_restricted_region_keeps_its_proofs"),
     ("I11 ilkel: koşul uygulanmaz", CAL,

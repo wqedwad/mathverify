@@ -766,6 +766,10 @@ def test_round3_convergence_by_a_majorant():
     assert _v(q, "2", "expression") == "INCORRECT"
     q = _ir("derivative", {"f": "Integral(exp(-t)*cos(x*t), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
     assert _v(q, "2*x/(1 + x**2)**2", "expression") == "INCORRECT"
+    # SymPy's limit of t**2/(x**2*t**3 + 1) at oo is 0 for x != 0 alone; at x = 0 the integral diverges: x is bounded
+    # by |x|, and no majorant decays
+    q = _ir("derivative", {"f": "x + 0*Integral(1/(x**2*t**3 + 1), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "1", "expression") != "CORRECT"
 
 
 def test_round3_kink_reading_has_a_budget(monkeypatch):
