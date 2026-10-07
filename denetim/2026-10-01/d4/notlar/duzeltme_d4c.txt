@@ -81,3 +81,40 @@ yöntemler uyumlu.
 - merge d540add → 31eb67b. Son ölçümler: full4, sonda son3, batch4 (d4a/b/d/g + fark), mut7 (34).
 - 31eb67b: d4c sonda 183/0; d4a 316/0, d4b 236/0, d4d 275/0, d4g 229/0; fark karar 0 adım 4; pytest tek başına
   3486 geçti/93 atlandı/1 düştü (test_cloud_scripts zaman sınırı; tek başına geçiyor). mut7 (34) koşuyor.
+
+## 2. tur sonu (6 Ekim)
+- worktree dalı 31eb67b (wip/d4c-tur2) + merge 67ef480 → 579f711 (çakışmasız).
+- [ ] mutasyon, sondalar, fark, tam takım, pyflakes, 782431c kopyasında d4c testleri, kardeş yol taraması
+- betikler yeni worktree yoluna (agent-af364e3cb209f1155) güncellendi; runpy.sh (TREE=<ağaç>) eklendi.
+- kardeş yol taraması: limit (SymPy + sonda, uyuşmazlıkta UNKNOWN; ret yok), türev değeri (classify_limit,
+  kesin), alan/ortalama (definite_integral/evaluate → checked_forms §72a, zarf), extremum (_strictly_better:
+  num_equal kesin + 40 basamak yön; düşük risk, rapor), seri: numeric_only ret = BULGU (bump e^-(k-1000)^2
+  doğru değer INCORRECT). Düzeltme d03ad51 (sayısal tek başına seri reddetmez). sonda I: b579 3 → 0.
+  testler 4 (3 b579'da düşer). mutasyon S01 (d4c), v14 L06 uyarlandı, L07 düştü. pyflakes = taban (6 noqa).
+- mut8 (579f711, 34 mut) koşuyor (butky8bfp). Sonra: S01 + v14 L06 tek başına d03ad51'de.
+- kopyalar: b579/, b782/ (.env içerir; bitince sil)
+- mut8 (579f711): 2 sa arka plan sınırında öldürüldü; 32/34 tamam, hepsi öldü (Z01..R10). Kalan Z28, Z29 +
+  S01 → batch6.sh mut (d03ad51). Klon dizini elle silindi.
+- batch6.sh aşamalı: sonda (bv5mil73j, 16:15 başladı) → fark → full + mut (ikisi paralel). Günlük batch6_<aşama>.log
+- SONUÇLAR (d03ad51): sondalar d4a 316/0, d4b 275/0, d4c 195/0 (1624 s), d4d 340/0, d4g 229/0. mut Z28 Z29 S01 3/3,
+  v14 L06 1/1 → d4c toplam 35/35. fark: taban'a karar 0 / adım 86 (hepsi 782431c'de de var); fark_782431c'ye
+  karar 0 / adım 0. b782 (782431c) kopyasında d4c testleri 11/43 düşer; d4c sonda @782431c 27/195 beklenmeyen.
+- 19:01 konteyner yeniden başladı. Tam takım d03ad51: kd03/ klonunda (full_kd03.sh, bnpk1mhou). Sonra merge 5754962
+  (d4b 6. tur + d4e) → sondalar d4a/b/c/d/g/e, fark, d4_*/parca* testleri.
+- merge 5754962 → 49d1dfb (çakışmasız; pyflakes = taban). batch7.sh (bl38xaex5, 19:10) birleşik ölçümler;
+  günlük batch7.log. kd03 tam takım (bnpk1mhou) paralel.
+- SONUÇ kd03 (d03ad51) tam takım: 3574 geçti / 93 atlandı / 1 düştü (test_d4_d4d_baglama::
+  test_review_constraint_and_given_write_one_value_twice; tek başına da düşer; 782431c kopyasında da düşer;
+  5754962 kopyasında geçer → oturum dalında önceden var, d4c değil).
+- SONUÇ 49d1dfb: sondalar d4a 316/0, d4b 332/0, d4d 340/0, d4g 229/0, d4e 552/0, d4c 195/0; fark taban karar 0
+  adım 86, 782431c'ye 0/0, d03ad51'e 0/0; d4_*/parca* 1548 geçti 0 düştü.
+- kapsama: sonda kıyası (kiyas782.py) G 'e^-x [0,oo) = 1' CORRECT→UNKNOWN (val None → sertifika denenmiyordu).
+  Düzeltme b2c9182 (sonda J 6→0, test, R11). Kalan: e^-x^2 R'de (FTC sertifikası yok).
+- batch8.sh 1 / 2 (b2c9182) koşuyor: batch8_1.log, batch8_2.log.
+- SONUÇ b2c9182 (batch8 bitmişti, 21:27): d4c sonda 203/0; d4a 316/0, d4b 332/0, d4d 340/0, d4g 229/0, d4e 552/0;
+  R11 öldü (1/1 → d4c toplam 36/36); fark taban karar 0 adım 86, 782431c'ye 0/0, 49d1dfb'ye 0/0; d4_*/parca* 1549/0.
+- 7 Ekim 00:01 yeniden başlama. merge f1b1c94 (d4f + d4b 7. tur) → db7fb6d (çakışmasız, pyflakes = taban).
+  batch9.sh 1 / 2 (db7fb6d) koşuyor: batch9_1.log, batch9_2.log. Sonra kopyaları sil (b579 b782 b575 kd03: .env).
+- SONUÇ db7fb6d: sondalar d4a 316/0, d4b 399/0, d4d 340/0, d4e 552/0, d4f 225/0, d4g 229/0, d4c 203/0 (1626 s);
+  fark taban karar 0 adım 86, 782431c'ye 0/0, b2c9182'ye 0/0. Kopyalar silindi (b579 b575 b782 kd03).
+- 00:45 yeniden başlama: d4_*/parca* testleri öldü → t10.sh (t10.log) tek süreç koşuyor. Bitince RAPOR.

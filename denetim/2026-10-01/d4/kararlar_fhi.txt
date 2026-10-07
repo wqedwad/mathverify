@@ -1,0 +1,41 @@
+# Ana oturumun matematik kararları: d4f, d4h, d4i (6 Ekim 2026)
+
+## d4f (tanımlılık)
+- CAP-F1: n! negatif tam sayıda Γ'nın kutbu; (−1)!, (−2)! içeren ifade yazıldığı biçimde tanımsız → UNKNOWN
+  (problem_undefined_as_written); adım verified olamaz; 1/zoo = 0 hurdası (ilke 8'in SymPy karşılığı) hiçbir yolda
+  değer sayılmaz. Mekanizma: _definedness_conditions'ın kutup alt ifadesinde istisna atıp "tanımlı" sayması;
+  gamma/factorial/binomial/RisingFactorial/FallingFactorial kardeşleri de.
+- TAN-10/C1: Σ/Π/seri, tam sayı olmayan ama farkı tam sayı olan sınırlar (k = 1/2 .. 5/2): değer geleneğe bağlı
+  (SymPy adımlaması 9/2, tam sayı indis okuması 3) → UNKNOWN; ne 9/2 CORRECT ne 3 INCORRECT. Literal ve hesaplanan
+  sınırların her yolunda (Sum, Product, series_sum, LaTeX).
+- B1: LaTeX ters sabit aralık (Karr) indis adı ya da boşluk yazımından bağımsız okunmamalı → UNKNOWN; denetim metin
+  kalıbında değil ayrıştırılmış ağaçta.
+- TAN-12 (kapsama): iç bağlayıcının aralık koşulu dış indise bağlıysa, dış aralık sonlu ve kesinse koşul her dış
+  indis değerinde tek tek kanıtlanabilir (n = 3: Π_{k=1}^{3} Σ_{j=1}^{k} 1 = 6 CORRECT). Kanıtlanamazsa UNKNOWN, ama
+  "problem_undefined_as_written" bayrağı YOK (yanlış etiket; kararsız ≠ tanımsız).
+- G14 (kapsama): limit yalnız limit noktasının (bölge içi) delinmiş komşuluğundaki tanımlılığa bakar; x pozitif tam
+  sayı iken lim_{x→∞} (x−2)!/x^x: ifade x ≥ 2'de tanımlı, kuyrukta tanımlı → 0 CORRECT kanıtlıysa. Kanıtsızsa
+  UNKNOWN ve V19 listesine.
+## d4h (ayrıştırıcı)
+- F1/H1: problem metnindeki simplify(...) ve Matrix(...) içindeki Limit/Integral/Sum, ayrıştırma sırasında SymPy'ye
+  hesaplatılmaz; hold_parametric ve checked_forms her kapsayıcıda (simplify, Matrix, başka sarmalayıcılar) geçerli.
+  Yanlış 0 iddiaları CORRECT olmaz; değer doğrulanamıyorsa UNKNOWN. 35–130 s takılma da kapatılır (süre sınırı).
+- D1: LaTeX `x \notin S` sabit True'ya inemez: koşul olarak okunur ya da okunamıyorsa UNKNOWN (fonksiyon tanım kümesi
+  okuyucusu dahil; d4d givens için kapattı, kardeş yollar).
+- D2: tanım kümesi metninde aralık/küme parçalarının virgül/and/&/∧ ile listelenmesi belirsiz (birleşim de olabilir)
+  → UNKNOWN (parçalar özdeşse karar verilebilir). Parçalar değişken üzerine ilişkiyse (x > 0, x < 3) bağlaç = kesişim
+  (d4d kararıyla aynı).
+- I2: IR'da d ya da dn gibi adlar bildirilmişken \frac{d^k}{dn^k}(...) yazımı türev de çarpım da okunabilir →
+  UNKNOWN.
+- CAP-G1: sayıların gcd/lcm'ini hesaplayan iddia yazımdan bağımsız claim_is_not_a_value (UNKNOWN): \mathit, \mathbf,
+  \textit, \textbf; sembolle çarpılmış kapalı gcd; \binom yeniden yazımı (binom da hesaplayan operatör mü: yalnız
+  COMPUTING_OPERATORS kapsamına göre). Denetim metin regex'inde değil ağaçta.
+- G11: iki aile parametreli genel çözüm (nπ + kπ): karar hash tohumundan bağımsız olmalı. Tam sayı katsayılı doğrusal
+  birleşim kesin kafes indirgemesiyle (gcd) tek aileye inerse karşılaştırılabilir (CORRECT kanıtlı); inmiyorsa UNKNOWN.
+## d4i (füzyon)
+- CAP-K1: anlam/gelenek çekimserlikleri (ters aralık §80, F9 serbest parametre, point_not_interior,
+  condition_not_applied, membership_condition, reversed_bounds, d4a gelenek bayrakları, d4e'nin yeni bayrakları)
+  füzyonda engelleyici: sonraki bir katman (Lean, L7) bunları CORRECT'e çeviremez, çünkü onun şablonu da bir anlam
+  seçer. "Kanıtlanamadı" türü çekimserlik (üyelik kararsız, sertifika yok) engelleyici değil: kanıtlı başka katman
+  karar verebilir. Her bayrak bu iki sınıftan birine yazılı listeyle atanır; listede olmayan yeni bayrak bir kapıyla
+  yakalanır (sınıflandırılmamış bayrak testi).
