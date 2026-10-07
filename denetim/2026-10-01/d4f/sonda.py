@@ -13,7 +13,18 @@ TAN-12 of the `tanimlilik` angle, C1, B1 of the `ayristirici` angle and G14 of t
     E  TAN-12  an inner range that names the outer index: decided at each outer value when the outer range is
                finite (n = 3); undecided otherwise, and then not called undefined
     F  G14     a limit at oo of a sequence reads the definedness of its tail only ((x - 2)!, C(x, 3))
-    K  controls whose verdict must not change
+    K  controls whose verdict must not change (one changed in round 2: Σ_{k=1}^{n} k with n real, YO-3)
+
+Round 2 (the review of d4f, `denetim/2026-10-01/d4/saldiri/d4f/`, 7 Oct 2026):
+
+    L  YO-1    a text the as-written reading does not take is not proved defined; bounds read with exact
+               simplification (sqrt(1) = 1); controls the reading must still take
+    M  YO-2    det, trace, eigenvalues are not computed as written: the entries keep their conditions
+    N  YO-3, RK-F1  a bound on a symbol not declared an integer is held to the integers as a convention
+    O  YO-4    a sequence's limit: every written condition holds on the tail
+    P  YO-5, YO-6  no value on the claim's every path and in every problem text
+    Q  YO-7    ∞⁰ is a convention like 0⁰
+    R  RK-F2, RK-F3, RK-F4  Γ's open condition where it is proved, ℂ's principal values, LaTeX \frac{c}{0}
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/d4f/sonda.py [out.json] [groups]
@@ -346,12 +357,263 @@ def cases_k():
         ("evaluate (-8)**(1/3) -> -2 (both readings compared)", ev("(-8)**(1/3)"), sol("-2"), NOTOK, None),
         ("claim cbrt(-8) for x**3 = -8", ir("solve_equation", {"var": "x", "equation": "x**3 = -8"}, shape="set"),
          sol("{cbrt(-8)}", "set"), OK, None),
+        # n real: its bound may be no integer, a convention; was OK before round 2 (review of d4f, YO-3)
         ("Sum(k, (k, 1, n)), n real free -> n*(n + 1)/2", ev("Sum(k, (k, 1, n))", vars_=[K, {"name": "n", "domain": "real"}]),
-         sol("n*(n + 1)/2"), OK, None),
+         sol("n*(n + 1)/2"), UNK, None),
     ]
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k}
+# --- round 2 (review of d4f, `denetim/2026-10-01/d4/saldiri/d4f/`) -------------------------------------------
+
+R1 = "Sum(k, (k, sqrt(1), 3))"                                         # = 6
+C12 = "sqrt(2) + sqrt(3) - sqrt(5 + 2*sqrt(6)) + 1/2"                  # = 1/2
+DET = "det(Matrix([[sqrt(x), 1], [-1, sqrt(x)]]))"                     # = x + 1 on x >= 0
+NR = {"name": "n", "domain": "real"}
+
+
+def solve(eq, vars_=None, givens=()):
+    return ir("solve_equation", {"var": "x", "equation": eq}, givens, vars_, shape="set")
+
+
+def with_option(q, options):
+    return dict(q, options=options)
+
+
+def picked(payload, option, kind="value"):
+    s = sol(payload, kind)
+    s["claimed_answer"]["option"] = option
+    return s
+
+
+def cases_l():
+    """YO-1: a text the as-written reading does not take is not proved defined (fail-closed); a bound read with
+    exact simplification (sqrt(1) = 1). Controls: what that reading must still take (factor, a membership, a compound
+    step, Cramer's determinants, a DNE claim with its option's text)."""
+    lim = ir("limit", {"expr": "Abs(x)/x", "var": "x", "to": "0"}, vars_=[X], shape="dne_or_scalar")
+    opts = {"A": "-1", "B": "0", "C": "1", "D": "2", "E": "limit yoktur"}
+    dne = sol(None, "dne")
+    dne["claimed_answer"]["option"] = "E"
+    return [
+        ("solve x**2/x + Σ_{k=√1}^{3} k = 6 -> {0}", solve(f"x**2/x + {R1} = 6", [X, K]), sol("{0}", "set"), NOTOK, None),
+        ("solve sqrt(x)**2 + Σ_{k=√1}^{3} k = 5 -> {-1}", solve(f"sqrt(x)**2 + {R1} = 5", [X, K]), sol("{-1}", "set"),
+         NOTOK, None),
+        ("x/x + Σ_{k=√1}^{3} k, x = 0 -> 7", ev(f"x/x + {R1}", ["x = 0"], [X, K]), sol("7"), UNK, None),
+        ("1/factorial(-1) + Σ_{k=√1}^{3} k -> 6", ev(f"1/factorial(-1) + {R1}", vars_=[K]), sol("6"), UNK, None),
+        ("domain_of sqrt(x)/sqrt(x) + Σ -> Reals", ir("domain_of", {"expr": f"sqrt(x)/sqrt(x) + {R1}", "var": "x"},
+                                                       vars_=[X, K], shape="set"), sol("Reals", "set"), NOTOK, None),
+        ("step x/x + Σ_{k=√1}^{3} k = 7, x = 0", *step(f"x/x + {R1} = 7", vars_=[X, K], givens=("x = 0",)), NOTOK, NOTVER),
+        (r"LaTeX \frac{x^2}{x} + \sum_{k=\sqrt{1}}^{3} k = 6 -> {0}",
+         solve(r"\frac{x^2}{x} + \sum_{k=\sqrt{1}}^{3} k = 6", [X, K]), sol("{0}", "set"), NOTOK, None),
+        ("Σ_{k=c}^{c+2} k, c = 1/2 in nested roots -> 9/2", ev(f"Sum(k, (k, {C12}, {C12} + 2))", vars_=[K]), sol("9/2"),
+         UNK, None),
+        ("Σ_{k=c}^{c+2} k, c = 1/2 in nested roots -> 3", ev(f"Sum(k, (k, {C12}, {C12} + 2))", vars_=[K]), sol("3"),
+         UNK, None),
+        ("control: Σ_{k=√1}^{3} k -> 6 (sqrt(1) = 1)", ev(R1, vars_=[K]), sol("6"), OK, None),
+        ("control: Σ_{k=1}^{log(8, 2)} k -> 6", ev("Sum(k, (k, 1, log(8, 2)))", vars_=[K]), sol("6"), OK, None),
+        ("control: x**2/x + Σ_{k=1}^{3} k = 6 -> {0}", solve("x**2/x + Sum(k, (k, 1, 3)) = 6", [X, K]), sol("{0}", "set"),
+         NO, None),
+        ("control: step factor(x**2 - 4) = (x - 2)*(x + 2)", *step("factor(x**2 - 4) = (x - 2)*(x + 2)"), OK, VER),
+        ("control: step Cramer det/det = 16",
+         *step("det(Matrix([[30, 1], [88, 4]]))/det(Matrix([[1, 1], [2, 4]])) = 16"), OK, VER),
+        ("control: eq step x in {0, 4} after x**2 - 4x = 0",
+         solve("x**2 - 4*x = 0"), sol("{0, 4}", "set", [("eq", "x**2 - 4*x = 0"), ("eq", "x in {0, 4}")]), OK, VER),
+        ("control: given x > 0 and x < 3, x**2 < 4 -> (0, 2)",
+         ir("solve_inequality", {"var": "x", "inequality": "x**2 < 4"}, ["x > 0 and x < 3"], shape="interval"),
+         sol("Interval.open(0, 2)", "interval"), OK, None),
+        ("given x > 1/(1 - 1) and x < 3, x**2 < 4 -> (0, 2)",
+         ir("solve_inequality", {"var": "x", "inequality": "x**2 < 4"}, ["x > 1/(1 - 1) and x < 3"], shape="interval"),
+         sol("Interval.open(0, 2)", "interval"), NOTOK, None),
+        ("control: lim |x|/x at 0 DNE, option E 'limit yoktur'", with_option(lim, opts), dne, OK, None),
+        (r"control: given 0 < x \le 3, x**2 < 4 -> (0, 2)",
+         ir("solve_inequality", {"var": "x", "inequality": "x**2 < 4"}, [r"0 < x \le 3"], shape="interval"),
+         sol("Interval.open(0, 2)", "interval"), OK, None),
+    ]
+
+
+def cases_m():
+    """YO-2: the as-written reading computes no det/trace/eigenvalue: the entries keep their conditions."""
+    ineq = ir("solve_inequality", {"var": "x", "inequality": f"{DET} > 0"}, shape="interval")
+    return [
+        ("solve det[[√x, 1], [-1, √x]] = -2 -> {-3}", solve(f"{DET} = -2"), sol("{-3}", "set"), NOTOK, None),
+        ("solve det[[√x, 1], [-1, √x]] = -2 -> {}", solve(f"{DET} = -2"), sol("EmptySet", "set"), NOTNO, None),
+        ("det[[√x, 1], [-1, √x]] > 0 -> (-1, oo)", ineq, sol("Interval.open(-1, oo)", "interval"), NOTOK, None),
+        ("LaTeX vmatrix = -2 -> {-3}",
+         solve(r"\begin{vmatrix} \sqrt{x} & 1 \\ -1 & \sqrt{x} \end{vmatrix} = -2"), sol("{-3}", "set"), NOTOK, None),
+        ("eigmax [[√x², 0], [0, -5]] = -1 -> {-1}", solve("eigmax(Matrix([[sqrt(x)**2, 0], [0, -5]])) = -1"),
+         sol("{-1}", "set"), NOTOK, None),
+        ("trace [[√x², 0], [0, 1]] = 0 -> {-1}", solve("trace(Matrix([[sqrt(x)**2, 0], [0, 1]])) = 0"),
+         sol("{-1}", "set"), NOTOK, None),
+        ("control: det[[x, 1], [1, x]] = 0 -> {-1, 1}", solve("det(Matrix([[x, 1], [1, x]])) = 0"), sol("{-1, 1}", "set"),
+         OK, None),
+        ("control: det[[2, 1], [1, 3]] -> 5", ev("det(Matrix([[2, 1], [1, 3]]))", vars_=[]), sol("5"), OK, None),
+    ]
+
+
+def cases_n():
+    """YO-3, RK-F1: a bound on a symbol not declared an integer is held to the integers as a convention (SymPy's
+    stepping, the index reading, "undefined"): no claim is certified or refuted on its account."""
+    s3 = "Sum(k, (k, n, n + 2))"
+    return [
+        ("Σ_{k=n}^{n+2} k, n real -> 3n + 3 + sin(πn)", ev(s3, vars_=[NR, K]), sol("3*n + 3 + sin(pi*n)"), UNK, None),
+        ("Σ_{k=n}^{n+2} 1, n real -> 3 + sin(πn)", ev("Sum(1, (k, n, n + 2))", vars_=[NR, K]), sol("3 + sin(pi*n)"),
+         UNK, None),
+        ("Σ_{k=n}^{n+2} k, n real -> 3n + 3cos(2πn)", ev(s3, vars_=[NR, K]), sol("3*n + 3*cos(2*pi*n)"), UNK, None),
+        (r"\sum_{k=n}^{n+2} k, n real -> 3n + 3 + sin(πn)", ev(r"\sum_{k=n}^{n+2} k", vars_=[NR, K]),
+         sol("3*n + 3 + sin(pi*n)"), UNK, None),
+        ("simplify Σ_{k=n}^{n+2} k, n real -> 3n + 3 + sin(πn)",
+         ir("simplify_expression", {"expr": s3}, vars_=[NR, K], shape="expression"), sol("3*n + 3 + sin(pi*n)", "expression"),
+         UNK, None),
+        ("Σ_{k=n}^{n+2} k, n real -> 3n + 3", ev(s3, vars_=[NR, K]), sol("3*n + 3"), UNK, None),
+        ("Σ_{k=1}^{n} k, n no domain -> n(n + 1)/2", ev("Sum(k, (k, 1, n))", vars_=[K, {"name": "n"}]), sol("n*(n + 1)/2"),
+         UNK, None),
+        ("Σ_{k=1}^{n} k, n = 7/2 -> 63/8", ev("Sum(k, (k, 1, n))", ["n = 7/2"], [NR, K]), sol("63/8"), UNK, None),
+        ("Σ_{k=1}^{n/2} k, n integer -> n(n + 2)/8", ev("Sum(k, (k, 1, n/2))", vars_=[N, K]), sol("n*(n + 2)/8"), UNK, None),
+        ("solve Σ_{k=x}^{x+2} k = 10 -> {7/3}", solve("Sum(k, (k, x, x + 2)) = 10", [X, K]), sol("{7/3}", "set"), UNK, None),
+        (r"solve \sum_{k=x}^{x+2} k = 10 -> {7/3}", solve(r"\sum_{k=x}^{x+2} k = 10"), sol("{7/3}", "set"), UNK, None),
+        ("solve Π_{k=x}^{x+1} k = 15/4 -> {-5/2, 3/2}", solve("Product(k, (k, x, x + 1)) = 15/4", [X, K]),
+         sol("{-5/2, 3/2}", "set"), UNK, None),
+        ("solve x + Σ_{k=x}^{x+2} 1 = 7/2 -> {1/2}", solve("x + Sum(1, (k, x, x + 2)) = 7/2", [X, K]), sol("{1/2}", "set"),
+         UNK, None),
+        ("solve Σ_{k=x}^{x+2} k = 10 -> {}", solve("Sum(k, (k, x, x + 2)) = 10", [X, K]), sol("EmptySet", "set"), UNK, None),
+        ("step 3x + 3 = 10 under Σ_{k=x}^{x+2} k = 10", solve("Sum(k, (k, x, x + 2)) = 10", [X, K]),
+         sol("EmptySet", "set", [("eq", "3*x + 3 = 10")]), UNK, NEITHER),
+        ("step x = 7/3 after x + (x + 1) + (x + 2) = 10", solve("Sum(k, (k, x, x + 2)) = 10", [X, K]),
+         sol("{7/3}", "set", [("eq", "x + (x + 1) + (x + 2) = 10"), ("eq", "3*x = 7"), ("eq", "x = 7/3")]), UNK, NEITHER),
+        ("control: Σ_{k=n}^{n+2} k, n real -> 3n + 4", ev(s3, vars_=[NR, K]), sol("3*n + 4"), NO, None),
+        ("control: Σ_{k=n}^{n+2} k, n integer -> 3n + 3", ev(s3, vars_=[N, K]), sol("3*n + 3"), OK, None),
+        ("control: Σ_{k=1}^{n} k, n real, n = 4 -> 10", ev("Sum(k, (k, 1, n))", ["n = 4"], [NR, K]), sol("10"), OK, None),
+        ("control: solve Σ_{k=x}^{x+2} k = 12, x real -> {4}", solve("Sum(k, (k, x, x + 2)) = 12", [X, K]),
+         sol("{4}", "set"), NO, None),
+    ]
+
+
+def cases_o():
+    """YO-4: a sequence's limit reads its tail, where every written condition must hold from some index on."""
+    lim = lambda e, claim, v=XP, kind="value": (ir("limit", {"expr": e, "var": "x", "to": "oo"}, vars_=[v]),  # noqa: E731
+                                                sol(claim, kind))
+    return [
+        ("lim (x-2)!/x^x + cos(πx/2)/cos(πx/2) -> 1", *lim("factorial(x - 2)/x**x + cos(pi*x/2)/cos(pi*x/2)", "1"), UNK,
+         None),
+        ("lim (x-2)!x²/x! + 0/sin(πx/3) -> 1", *lim("factorial(x - 2)*x**2/factorial(x) + 0/sin(pi*x/3)", "1"), UNK, None),
+        ("lim (x-2)!x²/x! + 0/(1 - (-1)^x) -> 1", *lim("factorial(x - 2)/factorial(x)*x**2 + 0/(1 - (-1)**x)", "1"), UNK,
+         None),
+        ("lim (x-2)!x²/x! + 0 tan(πx/4) -> 1", *lim("factorial(x - 2)*x**2/factorial(x) + 0*tan(pi*x/4)", "1"), UNK, None),
+        ("lim cos(πx/2)/cos(πx/2) -> 1", *lim("cos(pi*x/2)/cos(pi*x/2)", "1"), UNK, None),
+        ("lim cos(πx/2)/cos(πx/2) -> DNE", *lim("cos(pi*x/2)/cos(pi*x/2)", None, kind="dne"), UNK, None),
+        ("lim 1 + 0/sin(πx/3) -> 1", *lim("1 + 0/sin(pi*x/3)", "1"), UNK, None),
+        ("control: lim (x-2)!x²/x! + 0/(x - 5) -> 1", *lim("factorial(x - 2)*x**2/factorial(x) + 0/(x - 5)", "1"), OK, None),
+        ("control: lim (1 + 1/x)^x -> E", *lim("(1 + 1/x)**x", "E"), OK, None),
+        ("control: lim 1/(x - 3) -> 0", *lim("1/(x - 3)", "0"), OK, None),
+        ("control: lim x/(x² - 9), x integer -> 0", *lim("x/(x**2 - 9)", "0", XI), OK, None),
+        ("control: lim cos x/cos x, x real -> 1", *lim("cos(x)/cos(x)", "1", X), OK, None),
+    ]
+
+
+def cases_p():
+    """YO-5, YO-6: no value on the claim's every path (the pinned values, the relation form, the option's text) and in
+    every problem text (list/dict parameters, a membership given, a sequence step)."""
+    A = [X, {"name": "a"}]
+    lim_a = ir("limit", {"expr": "a*x", "var": "x", "to": "0"}, ["a = 1"], A)
+    der_a = ir("derivative", {"f": "a*x", "var": "x", "at": "1"}, ["a = 0"], A)
+    ineq0 = ir("solve_inequality", {"var": "x", "inequality": "x >= 0"}, shape="interval")
+    ineq2 = ir("solve_inequality", {"var": "x", "inequality": "x*(x - 2) < 0"}, shape="interval")
+    rec = {"recurrence": "a(n) = a(n-1) + 1", "index": 4, "var": "n"}
+    NP = [{"name": "n", "domain": "positive_integer"}]
+    return [
+        ("limit a*x at 0, a = 1: claim 1/factorial(-a)", lim_a, sol("1/factorial(-a)"), UNK, None),
+        ("limit a*x at 0, a = 1: claim 1/(1/(a - 1))", lim_a, sol("1/(1/(a - 1))"), UNK, None),
+        ("derivative a*x at 1, a = 0: claim a/a - 1", der_a, sol("a/a - 1"), UNK, None),
+        ("derivative a*x at 1, a = 0: claim a**0 - 1", der_a, sol("a**0 - 1"), UNK, None),
+        ("solve_inequality x >= 0: claim x >= 1/(1/0)", ineq0, sol("x >= 1/(1/0)", "interval"), UNK, None),
+        ("solve_inequality x >= 0: claim x >= 1/zoo", ineq0, sol("x >= 1/zoo", "interval"), UNK, None),
+        ("solve_inequality x(x - 2) < 0: claim 1/factorial(-1) < x < 2", ineq2,
+         sol("1/factorial(-1) < x < 2", "interval"), UNK, None),
+        ("option A = 1/factorial(-1), payload 0", with_option(ev("0"), {"A": "1/factorial(-1)", "B": "1"}), picked("0", "A"),
+         UNK, None),
+        ("line through (1/(-1)!, 0), (1, 1) -> y = x",
+         ir("equation_of", {"object": "line_points", "p1": ["1/factorial(-1)", "0"], "p2": ["1", "1"]},
+            vars_=[{"name": "x"}, {"name": "y"}], shape="equation"), sol("y = x", "equation"), UNK, None),
+        ("recurrence a(1) = 1/(-1)!, a(4) -> 3", ir("recurrence_term", dict(rec, initial={"1": "1/factorial(-1)"}), vars_=NP),
+         sol("3"), UNK, None),
+        ("given x ∈ [1/(-1)!, 1]: min x -> 0", ir("extremum", {"f": "x", "var": "x", "which": "min"},
+                                                  ["x ∈ [1/factorial(-1), 1]"]), sol("0"), UNK, None),
+        ("count x + y = 2, x in [1/(1/0), 3] -> 3",
+         ir("count_solutions", {"bounds": {"x": ["1/(1/0)", "3"], "y": ["0", "3"]}}, ["x + y = 2"],
+            [{"name": "x", "domain": "nonneg_integer"}, {"name": "y", "domain": "nonneg_integer"}], shape="count"),
+         sol(3, "count"), UNK, None),
+        ("step a(3) = 3 + 1/factorial(-1)", ir("recurrence_term", dict(rec, initial={"1": "1"}), vars_=NP),
+         sol("4", steps=[("compute", "a(3) = 3 + 1/factorial(-1)")]), NOTNO, NOTVER),
+        ("control: limit a*x at 0, a = 1 -> 0", lim_a, sol("0"), OK, None),
+        ("control: solve_inequality x >= 0 -> x >= 0", ineq0, sol("x >= 0", "interval"), OK, None),
+        ("control: solve_inequality x(x - 2) < 0 -> (0, 2)", ineq2, sol("(0, 2)", "interval"), OK, None),
+        ("control: recurrence a(1) = 1, a(4) -> 4", ir("recurrence_term", dict(rec, initial={"1": "1"}), vars_=NP), sol("4"),
+         OK, None),
+    ]
+
+
+def cases_q():
+    """YO-7: ∞⁰ is an indeterminate form like 0⁰: a convention, no value."""
+    return [
+        ("evaluate oo**0 -> 1", ev("oo**0"), sol("1"), UNK, None),
+        (r"evaluate \infty^{0} -> 1", ev(r"\infty^{0}"), sol("1"), UNK, None),
+        ("evaluate (-oo)**0 -> 1", ev("(-oo)**0"), sol("1"), UNK, None),
+        ("evaluate oo**(1 - 1) -> 1", ev("oo**(1 - 1)"), sol("1"), UNK, None),
+        ("claim oo**0 for evaluate 1", ev("1"), sol("oo**0"), UNK, None),
+        ("step oo**0 = 1", *step("oo**0 = 1"), NOTNO, NOTVER),
+        ("solve x + oo**0 = 2 -> {1}", solve("x + oo**0 = 2"), sol("{1}", "set"), UNK, None),
+        ("control: evaluate 2**0 -> 1", ev("2**0"), sol("1"), OK, None),
+        ("control: evaluate 0**0 -> 1", ev("0**0"), sol("1"), UNK, None),
+    ]
+
+
+def cases_r():
+    """RK-F2: Γ's open condition proved where the task reads it; RK-F3: over ℂ a claim with only a real condition
+    failing is a value; RK-F4: LaTeX \\frac{c}{0} is a written division by zero, like 1/0."""
+    XPR = {"name": "x", "domain": "positive_real"}
+    lim = lambda e, to, v=X: ir("limit", {"expr": e, "var": "x", "to": to}, vars_=[v])  # noqa: E731
+
+    def cplx(expr):
+        return dict(ev(expr, vars_=[]), domain_of_discourse="complex")
+    integral = ir("definite_integral", {"integrand": r"x \frac{\Gamma(1+x)}{\Gamma(1+x)}", "var": "x", "a": "0", "b": "1"})
+    deriv = ir("derivative", {"f": r"\frac{\Gamma(x+1)}{\Gamma(x)}", "var": "x", "at": "2"}, vars_=[XPR])
+    return [
+        (r"lim x \Gamma(x) at 0 -> 1", lim(r"x \Gamma(x)", "0"), sol("1"), OK, None),
+        (r"lim x \Gamma(x) at 0 -> 0", lim(r"x \Gamma(x)", "0"), sol("0"), NO, None),
+        (r"lim \Gamma(x) at 3, x > 0 -> 2", lim(r"\Gamma(x)", "3", XPR), sol("2"), OK, None),
+        (r"lim \Gamma(x) at 3, x > 0 -> 6", lim(r"\Gamma(x)", "3", XPR), sol("6"), NO, None),
+        (r"lim \Gamma(x + 1/2)/(\sqrt{x}\Gamma(x)) at oo -> 1",
+         lim(r"\frac{\Gamma(x + 1/2)}{\sqrt{x}\Gamma(x)}", "oo"), sol("1"), OK, None),
+        (r"∫_0^1 x \Gamma(1+x)/\Gamma(1+x) -> 1/2", integral, sol("1/2"), OK, None),
+        (r"d/dx \Gamma(x+1)/\Gamma(x) at 2 -> 1", deriv, sol("1"), OK, None),
+        (r"control: d/dx \Gamma(x) at 0 -> 0 (a pole)", ir("derivative", {"f": r"\Gamma(x)", "var": "x", "at": "0"}),
+         sol("0"), NOTOK, None),
+        (r"control: ∫_{-1/2}^{1/2} \Gamma(x) -> 0 (a pole inside)",
+         ir("definite_integral", {"integrand": r"\Gamma(x)", "var": "x", "a": "-1/2", "b": "1/2"}), sol("0"), NOTOK, None),
+        ("control: lim x! at 3 -> 6, x real", lim("factorial(x)", "3"), sol("6"), UNK, None),
+        ("ℂ: 2*I, claim sqrt(-4)", cplx("2*I"), sol("sqrt(-4)"), OK, None),
+        ("ℂ: -6, claim sqrt(-4)*sqrt(-9)", cplx("-6"), sol("sqrt(-4)*sqrt(-9)"), OK, None),
+        (r"ℂ: \sqrt{-25}, claim 5\sqrt{-1}", cplx(r"\sqrt{-25}"), sol(r"5\sqrt{-1}"), OK, None),
+        ("ℂ control: 0, claim 1/factorial(-1)", cplx("0"), sol("1/factorial(-1)"), UNK, None),
+        ("ℂ control: 2*I, claim sqrt(-4) + 1", cplx("2*I"), sol("sqrt(-4) + 1"), NO, None),
+        (r"solve x + \frac{1}{0} = 2 -> {}", solve(r"x + \frac{1}{0} = 2"), sol("EmptySet", "set"), OK, None),
+        (r"solve x + \frac{1}{0} = 2 -> {2}", solve(r"x + \frac{1}{0} = 2"), sol("{2}", "set"), NO, None),
+        (r"solve x + \frac{0}{0} = 1 -> {}", solve(r"x + \frac{0}{0} = 1"), sol("EmptySet", "set"), OK, None),
+        (r"solve 2x = 4 + \frac{1}{0} -> {}", solve(r"2x = 4 + \frac{1}{0}"), sol("EmptySet", "set"), OK, None),
+        (r"solve \frac{2}{0} = x -> {}", solve(r"\frac{2}{0} = x"), sol("EmptySet", "set"), OK, None),
+        (r"count_roots x + \frac{1}{0} -> 0", ir("count_roots", {"expr": r"x + \frac{1}{0}", "var": "x"}, shape="count"),
+         sol(0, "count"), OK, None),
+        (r"control: x + \frac{1}{\frac{1}{0}} = 2 -> {2}", solve(r"x + \frac{1}{\frac{1}{0}} = 2"), sol("{2}", "set"),
+         NOTOK, None),
+        (r"control: x + \frac{1}{\frac{1}{0}} = 2 -> {}", solve(r"x + \frac{1}{\frac{1}{0}} = 2"), sol("EmptySet", "set"),
+         UNK, None),
+        (r"control: x + 0 \cdot \frac{1}{0} = 2 -> {2}", solve(r"x + 0 \cdot \frac{1}{0} = 2"), sol("{2}", "set"), NOTOK,
+         None),
+        (r"control: x + \frac{x}{x} = 2 -> {1}", solve(r"x + \frac{x}{x} = 2"), sol("{1}", "set"), OK, None),
+    ]
+
+
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k,
+          "L": cases_l, "M": cases_m, "N": cases_n, "O": cases_o, "P": cases_p, "Q": cases_q, "R": cases_r}
 
 
 def main(out_path=None, groups="ABCDEFK"):
@@ -395,5 +657,5 @@ def main(out_path=None, groups="ABCDEFK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFK"
+    grp = args[1] if len(args) > 1 else "ABCDEFKLMNOPQR"
     sys.exit(1 if main(out, grp) else 0)
