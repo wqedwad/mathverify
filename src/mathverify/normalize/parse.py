@@ -1062,9 +1062,9 @@ def _constant_bound(node, names: dict[str, Any]):
     try:
         v = sympify_nontext(eval(compile(ast.Expression(body=node), "<bound>", "eval"),  # noqa: S307
                                  {"__builtins__": {}}, dict(names)))
-        # evaluated whatever the caller's setting: read as written (evaluation off) sqrt(1) stayed a power whose
-        # integrality SymPy got wrong, the as-written reading refused Σ_{k=√1}^{3} k and every condition of
-        # the text around it was lost (review of d4f, YO-1)
+        # evaluated whatever the caller's setting: read as written (evaluation off) a bound in nested roots
+        # equal to 1/2 was "not an integer" for certain, the as-written reading refused the text and every
+        # condition around it was lost (x/x at the given x = 0, review of d4f, YO-1)
         v = _evaluated_bound(v)
     except Exception:  # noqa: BLE001 - the whole parse reports it
         return None
@@ -1643,11 +1643,33 @@ def _latex2sympy(s: str):
                     r = self.convert_expr(func.root)
                     if isinstance(r, Integer) and int(r) > 1 and int(r) % 2 == 1:
                         return _real_root(self.convert_expr(func.base), r)
-                if not global_parameters.evaluate and self.rule2text(func).lstrip().startswith("\\det"):
-                    # read as written the determinant is not computed (see _held_matrix_op); \det(...) is not
-                    # held here, so it is not read that way at all (review of d4f, YO-2)
-                    raise ParseError("\\det is not read as written")
+                held = self._held_matrix_func(func) if not global_parameters.evaluate else None
+                if held is not None:
+                    return held
                 return super().convert_func(func)
+
+            def _held_matrix_func(self, func):
+                """\\det A, \\operatorname{rank} A, \\operatorname{tr} A read as written: `_held_matrix_op` (the
+                entries, not the computed value: review of d4f, YO-2); None for any other function."""
+                single = func.func_normal_single_arg()
+                if not single:
+                    return None
+                name = single.start.text[1:]
+                if name == "operatorname":
+                    name = {"rank": "rank", "tr": "trace", "trace": "trace"}.get(
+                        single.func_operator_name.getText() if single.func_operator_name else "")
+                elif name != "det":
+                    name = None
+                if name is None:
+                    return None
+                arg = self.convert_func_arg(func.func_single_arg() if func.func_single_arg()
+                                            else func.func_single_arg_noparens())
+                expr = _held_matrix_op(name)(arg)
+                if func.supexpr():
+                    sup = func.supexpr()
+                    expr = sp.Pow(expr, self.convert_expr(sup.expr()) if sup.expr() else self.convert_atom(sup.atom()),
+                                  evaluate=False)
+                return expr
 
             def convert_comp(self, comp):
                 if not global_parameters.evaluate and comp.det():
@@ -2052,6 +2074,10 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None, _depth: int = 0):
             return None
         if isinstance(e, sp.core.relational.Relational):
             return sp.Tuple(e.lhs, e.rhs)
+        if isinstance(e, sp.MatrixBase):
+            # a matrix (\begin{bmatrix} ...): its entries; read as no text at all, a matrix parameter made the
+            # problem undecided (review of d4f, YO-1)
+            return sp.Tuple(*_matrix_entries(e))
         if isinstance(e, sp.Basic) and not isinstance(e, sp.logic.boolalg.Boolean):
             return sp.Tuple(e)
         return None

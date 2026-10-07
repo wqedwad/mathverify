@@ -141,8 +141,9 @@ MUTATIONS = [
      "        conds.append(sp.Contains(b, INTEGER_BOUND))", "        conds.append(sp.Contains(b, S.Integers))", T),
     ("N11 tam sayı sınır bölgesinde CORRECT", "src/mathverify/certify/algebra.py",
      "    if bounds and ok is True:", "    if False:", T),
-    ("N12 tam sayı sınır bölgesinde adım verified", "src/mathverify/steps/deterministic.py",
-     "        if integer_bound_regions(ctx, [s_]):", "        if False:", T),
+    ("N12 iddianın kendi tam sayı olmayan sınırı verified", "src/mathverify/steps/deterministic.py",
+     '    if own:\n        return "unknown", {**ev, "reason": "not_verified_where_a_bound_is_not_an_integer"}',
+     '    if False:\n        return "unknown", {**ev, "reason": "not_verified_where_a_bound_is_not_an_integer"}', T),
     ("N13 tam sayı sınırı ayrılmaz", DOM,
      "            fwd = S.Integers if abs(a) == 1 and b.is_integer else sp.imageset(sp.Lambda(t, (t - b) / a), S.Integers)\n"
      "            back = sp.Complement(S.Reals, fwd)\n",
@@ -186,6 +187,16 @@ MUTATIONS = [
     ("N27 bileşik metin bölünmez", PAR, "    parts = _COMPOUND_RE.split(s2)\n", "    parts = [s2]\n", T),
     ("N28 LaTeX zinciri okunmaz", PAR, "        sides = _latex_chain_sides(s)\n", "        sides = [s]\n", T),
     ("N29 dne metni değer sayılır", VER, '    if ca.kind in ("dne", "none"):\n        return []', "    if False:\n        return []", T),
+    ("N30 kararsız değerli adım çürütülür", "src/mathverify/steps/deterministic.py",
+     "                or closed_condition_undecided([c for c in conds if not is_convention(c)]))", "                )", T),
+    ("N31 okunamayan adım çürütülür", "src/mathverify/steps/deterministic.py",
+     "        w = parse_set_as_written(text, ns)\n        if w is None:\n            return True\n        conds =",
+     "        w = parse_set_as_written(text, ns)\n        if w is None:\n            return False\n        conds =", T),
+    ("N32 LaTeX matris fonksiyonu hesaplanır", PAR,
+     "                held = self._held_matrix_func(func) if not global_parameters.evaluate else None",
+     "                held = None", T),
+    ("N33 LaTeX matrisi okunmaz", PAR, "        if isinstance(e, sp.MatrixBase):\n            # a matrix",
+     "        if False:\n            # a matrix", T),
 ]
 
 if __name__ == "__main__":

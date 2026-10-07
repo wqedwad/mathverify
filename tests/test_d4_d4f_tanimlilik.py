@@ -359,6 +359,21 @@ def test_yo1_a_step_the_as_written_reading_does_not_take_is_not_verified():
     assert _status(r) != "verified"
 
 
+@pytest.mark.parametrize("value", ["9/2", "3"])
+def test_yo1_a_step_the_as_written_reading_refuses_is_neither_verified_nor_refuted(value):
+    # the bounds are 1/2 in nested roots: refused as written (TAN-10), SymPy's value steps to 9/2
+    c = "sqrt(2) + sqrt(3) - sqrt(5 + 2*sqrt(6)) + 1/2"
+    r = _run(_ev("x", ["x = 1"], [X, K]), "1", steps=[("compute", f"Sum(k, (k, {c}, {c} + 2)) = {value}")])
+    assert _status(r) not in ("verified", "refuted") and r.verdict != "INCORRECT"
+
+
+def test_yo6_a_closed_list_parameter_without_a_value_is_undefined():
+    q = _ir("count_solutions", {"bounds": {"x": ["1/(1/0)", "3"], "y": ["0", "3"]}}, ["x + y = 2"],
+            [{"name": "x", "domain": "nonneg_integer"}, {"name": "y", "domain": "nonneg_integer"}], shape="count")
+    r = _run(q, 3, "count")
+    assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+
+
 @pytest.mark.parametrize("steps", [
     [("compute", "factor(x**2 - 4) = (x - 2)*(x + 2)")],
     [("compute", "det(Matrix([[30, 1], [88, 4]]))/det(Matrix([[1, 1], [2, 4]])) = 16")],
@@ -381,6 +396,51 @@ def test_yo1_a_compound_text_is_read_part_by_part():
     for given, verdict in (("x > 0 and x < 3", "CORRECT"), ("x > 1/(1 - 1) and x < 3", "UNKNOWN")):
         q = _ir("solve_inequality", {"var": "x", "inequality": "x**2 < 4"}, [given], shape="interval")
         assert _run(q, "Interval.open(0, 2)", "interval").verdict == verdict, given
+
+
+def test_yo1_an_unread_text_is_never_read_as_no_condition(monkeypatch):
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    from mathverify.steps.deterministic import _convention_as_written, _undefined_as_written
+    ctx = make_ctx(ProblemIR.from_dict(_ev("x")))
+    assert ctx._unread("x + 1") == "undecided" and ctx._unread("((") is None
+    assert _undefined_as_written("x + 1 = 2", ctx.ns, unread=True) is False
+    assert _convention_as_written("x + 1 = 2", ctx.ns) is False
+    # a text the as-written reading does not take: not proved defined, and SymPy's value refutes nothing
+    monkeypatch.setattr("mathverify.normalize.parse.parse_set_as_written", lambda *a, **k: None)
+    assert _undefined_as_written("x + 1 = 2", ctx.ns, unread=True) is True
+    assert _undefined_as_written("x + 1 = 2", ctx.ns, unread=False) is False
+    assert _convention_as_written("x + 1 = 2", ctx.ns) is True
+
+
+def test_yo1_an_unread_claim_text_is_flagged(monkeypatch):
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    from mathverify.solution import Solution
+    from mathverify.verifier import _claim_without_value
+    ctx = make_ctx(ProblemIR.from_dict(_ev("0")))
+    sol = Solution.from_dict({"claimed_answer": {"kind": "value", "payload": "0"}, "steps": []})
+    assert _claim_without_value(sol, ctx) == []
+    monkeypatch.setattr("mathverify.normalize.parse.parse_set_as_written", lambda *a, **k: None)
+    assert _claim_without_value(sol, ctx) == ["0"]
+
+
+@pytest.mark.parametrize("expr,givens", [("x/x + {S}", ["x = 0"]), ("1/factorial(-1) + {S}", [])])
+def test_yo1_the_text_around_an_undecided_bound_is_still_read(expr, givens):
+    c = "sqrt(2) + sqrt(3) - sqrt(5 + 2*sqrt(6)) + 1/2"
+    r = _run(_ev(expr.format(S=f"Sum(k, (k, {c}, {c} + 2))"), givens, [X, K]), "11/2")
+    assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+
+
+def test_yo1_a_step_is_not_refuted_where_its_own_value_is_undecided():
+    r = _run(_ev("x", ["x = 1"]), "1", steps=[("compute", "tan(acot(2) + acot(1/2)) = 5")])
+    assert _status(r) != "refuted"
+    assert _status(_run(_ev("x", ["x = 1"]), "1", steps=[("compute", "0**0 = 5")])) == "refuted"   # 1 or undefined
+
+
+def test_yo1_a_latex_matrix_parameter_is_read_as_written():
+    ir = _ir("linalg", {"op": "inverse", "matrix": r"\begin{bmatrix}1&2\\3&4\end{bmatrix}"}, vars_=[], shape="expression")
+    assert _run(ir, "Matrix([[-2, 1], [3/2, -1/2]])", "expression").verdict == "CORRECT"
 
 
 def test_yo1_a_dne_claim_and_its_option_text_carry_no_value_to_read():
@@ -410,6 +470,15 @@ def test_yo2_controls():
     assert _run(_ev("det(Matrix([[2, 1], [1, 3]]))", vars_=[]), "5").verdict == "CORRECT"
 
 
+def test_yo2_latex_matrix_functions_are_not_computed_as_written():
+    m = r"\begin{pmatrix}\sqrt{x}&1\\-1&\sqrt{x}\end{pmatrix}"
+    t = r"\begin{pmatrix}\sqrt{x}^2&0\\0&1\end{pmatrix}"
+    assert _run(_solve(rf"\det {m} = -2"), "{-3}", "set").verdict != "CORRECT"            # was CORRECT on eedd182
+    assert _run(_solve(rf"\operatorname{{tr}} {t} = 0"), "{-1}", "set").verdict != "CORRECT"
+    assert _run(_ev(r"\det \begin{pmatrix}1&2\\3&4\end{pmatrix}", vars_=[]), "-2").verdict == "CORRECT"
+    assert _run(_solve(r"\det \begin{pmatrix}x&1\\1&x\end{pmatrix} = 0"), "{-1, 1}", "set").verdict == "CORRECT"
+
+
 # --- YO-3, RK-F1: a bound not declared an integer is held to the integers as a convention ---------------------------
 
 @pytest.mark.parametrize("expr,claim,vars_", [
@@ -419,6 +488,12 @@ def test_yo2_controls():
 ])
 def test_yo3_no_claim_is_certified_where_a_bound_may_be_no_integer(expr, claim, vars_):
     assert _run(_ev(expr, vars_=vars_), claim).verdict == "UNKNOWN"
+
+
+def test_yo3_a_step_whose_own_bound_may_be_no_integer_is_not_verified():
+    step = [("compute", "Sum(k, (k, n, n + 2)) = 3*n + 3")]
+    assert _status(_run(_ev("n", vars_=[NR, K]), "n", steps=step)) != "verified"
+    assert _status(_run(_ev("n", vars_=[N, K]), "n", steps=step)) == "verified"
 
 
 def test_yo3_controls():

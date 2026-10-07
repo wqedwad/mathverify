@@ -358,16 +358,21 @@ def _verified_where_conventions(claim, ctx: Ctx, status: str, ev: dict) -> tuple
     the value of a problem expression is a convention (`Ctx.convention_region`): an instance of the problem
     may lie there. Under the given x**(1/3) = x the real root makes x = -1 an instance, and "Abs(x) = x",
     verified on [0, oo), was a verified step (fourth audit, D4-ADIM-K). Checked again with those points;
-    verified only when it holds there too. Where a Sum/Product bound is not an integer no reading is the
-    curriculum's: not verified (`Ctx.integer_bound_region`, review of d4f, YO-3)."""
-    from ..certify.base import integer_bound_regions
+    verified only when it holds there too (a non-integer Sum/Product bound of the problem is such a point,
+    `Ctx.integer_bound_region`). Where a bound of the claim's own Sum/Product may be no integer no reading is the
+    curriculum's: not verified (Σ_{k=n}^{n+2} k = 3n + 3 with n real holds in SymPy's stepping alone, review of
+    d4f, YO-3)."""
+    from ..certify.domain import definedness_conditions, is_integer_bound
+    try:
+        own = [c for c in definedness_conditions(claim, None) if is_integer_bound(c) and c.free_symbols]
+    except Exception:  # noqa: BLE001 - no conditions read: as before
+        own = []
+    if own:
+        return "unknown", {**ev, "reason": "not_verified_where_a_bound_is_not_an_integer"}
     doms: dict = {}
     for s_ in getattr(claim, "free_symbols", set()):
         if ctx.ns.get(s_.name) != s_:
             continue
-        if integer_bound_regions(ctx, [s_]):
-            # a Sum/Product bound of the problem not an integer there: no reading is the curriculum's (YO-3)
-            return "unknown", {**ev, "reason": "not_verified_where_a_bound_is_not_an_integer"}
         reg = ctx.convention_region(s_)
         try:
             empty = reg.is_empty
@@ -2269,9 +2274,12 @@ def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
     """Does the claim, read AS WRITTEN, hold a closed operation whose value is a convention with another
     value (`certify.domain.is_value_convention`: Mod(7, -5), (-8)**(1/3)) left standing? The value parse
     computed it SymPy's way before any check saw it. 0**0 and C(2, 5) are 1 and 0 or undefined: a claim
-    refuted with SymPy's value is not true under the other reading either."""
-    from ..certify.domain import definedness_conditions, is_value_convention
-    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    refuted with SymPy's value is not true under the other reading either. A text the as-written reading does
+    not take counts too, and one with a closed condition no exact check decides (other than such a convention):
+    its value is not proved the curriculum's. Σ_{k=c}^{c+2} k with c = 1/2 written in nested roots has bounds not
+    proved integers (TAN-10), and the step "= 3" was refuted with SymPy's 9/2 (review of d4f, YO-1)."""
+    from ..certify.domain import closed_condition_undecided, definedness_conditions, is_convention, is_value_convention
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_set_as_written, preclean
     try:
         names = _check_safe(preclean(_strip_invisible(text)), ns)
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
@@ -2279,12 +2287,14 @@ def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
     if names:
         ns = _with_undeclared(text, ns, names)
     try:
-        w = parse_as_written(text, ns)
+        w = parse_set_as_written(text, ns)
         if w is None:
-            return False
-        return any(is_value_convention(c) and not c.free_symbols for c in definedness_conditions(w, None))
-    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
-        return False
+            return True
+        conds = definedness_conditions(w, None)
+        return (any(is_value_convention(c) and not c.free_symbols for c in conds)
+                or closed_condition_undecided([c for c in conds if not is_convention(c)]))
+    except Exception:  # noqa: BLE001 - no reading as written: as above
+        return True
 
 
 _MAX_DEFINED_POINTS = 200            # points of the premises' sets a claim's definedness is checked at one by one
