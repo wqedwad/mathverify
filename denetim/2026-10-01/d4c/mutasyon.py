@@ -1,8 +1,11 @@
 """Mutation check of part d4c of the fourth audit's fixes (1 Oct 2026): each mutation removes one guard of the
 exact zero and the numeric evidence (`certify.calculus` certificates and enclosure, `equiv.forms`,
 `steps.deterministic._integrals_refute`, `equiv.random_point`, the sandbox ops; `certify.series`: nsum
-alone). The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is the one of
-denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
+alone). Round 3 (7 Oct 2026) adds the extremum's direction (E), a definite integral's value only with a
+certificate (Y), random points off the grid and signs at two precisions (P), the declared tolerance (T),
+outward rounding (V), the special functions' domains (A), end singularities (B) and the cell budget (C); its
+mutations run tests/test_d4_d4c_tur3.py. The machinery (throwaway clones of the committed HEAD, exit codes,
+clean-up) is the one of denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
 
     .venv/bin/python denetim/2026-10-01/d4c/mutasyon.py [-j N] [--list] [name ...]
 
@@ -32,6 +35,7 @@ EQV = "src/mathverify/equiv/__init__.py"
 ALG = "src/mathverify/certify/algebra.py"
 DOM = "src/mathverify/certify/domain.py"
 T = "tests/test_d4_d4c_sayisal.py"
+T3 = "tests/test_d4_d4c_tur3.py"
 T4 = "tests/test_parca4_parametreli_bicim.py"
 
 MUTATIONS = [
@@ -115,7 +119,7 @@ MUTATIONS = [
      '            ev["certificate"] = cev\n'
      '            if cval is None and rs.ok and isinstance(rs.value, sp.Basic) and not rs.value.has(sp.Integral):\n'
      '                cval = rs.value\n'
-     '            if cval is not None:\n', T),
+     '            if cval is not None:\n', T3),
     ("Y02 kareleme tek başına kabul eder", CAL,
      '                if not no:\n                    return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])\n'
      '                ok = False\n',
@@ -131,103 +135,103 @@ MUTATIONS = [
     ("Y04 sertifika denenmez", CAL,
      '            cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)\n'
      '            ev["certificate"] = cev\n',
-     '            cval, cev = None, {}\n            ev["certificate"] = cev\n', T),
+     '            cval, cev = None, {}\n            ev["certificate"] = cev\n', T3),
     ("Y05 sayının çeliştiği kanıt da karar verir", CAL,
      '                if converged and certified_sign(cval, timeout=ctx.timeout) != 0 and \\\n',
-     '                if False and \\\n', T),
+     '                if False and \\\n', T3),
     ("Y06 checked_forms integralde SymPy'nin değerini alır", FRM,
      "                if cval is None:\n                    raise UnverifiedForm(f\"{n}: no certified value ({cev.get('reason')})\")\n",
-     "                if cval is None:\n                    cval = n.doit()\n", T),
+     "                if cval is None:\n                    cval = n.doit()\n", T3),
     ("Y07 checked_forms sertifikanın sıfır olmayan değerini almaz", FRM,
      "                reps[key] = cval\n                continue\n",
      "                if cval != 0:\n                    raise UnverifiedForm(\"nonzero\")\n                reps[key] = cval\n                continue\n", T4),
     # YO-1: the extremum's direction
     ("E01 yön 40 basamaktan okunur", EXT,
      "        s_ = certified_sign(sp.sympify(fa) - sp.sympify(fb))\n",
-     "        s_ = 1 if na > nb else -1 if na < nb else None\n", T),
+     "        s_ = 1 if na > nb else -1 if na < nb else None\n", T3),
     ("E02 kararsız aday EVT'yi kapatmaz", EXT,
      "    if bound is None and complete and closed and not undecided and not superlevel:\n",
-     "    if bound is None and complete and closed and not superlevel:\n", T),
+     "    if bound is None and complete and closed and not superlevel:\n", T3),
     ("E03 boş olmayan üst küme EVT'yi kapatmaz", EXT,
      "    if bound is None and complete and closed and not undecided and not superlevel:\n",
-     "    if bound is None and complete and closed and not undecided:\n", T),
+     "    if bound is None and complete and closed and not undecided:\n", T3),
     # YO-3: random points off the grid, SymPy's equals
     ("P01 özdeşlik örnekleri ızgarada", RP,
-     "    pts = sample_points(domains, n, seed, off_grid=True)\n", "    pts = sample_points(domains, n, seed)\n", T),
+     "    pts = sample_points(domains, n, seed, off_grid=True)\n", "    pts = sample_points(domains, n, seed)\n", T3),
     ("P02 irrasyonel yoklama yok", RP,
      "        vals = _special_values(domains[s_], far=far, irrational=True)\n",
-     "        vals = _special_values(domains[s_], far=far)\n", T),
+     "        vals = _special_values(domains[s_], far=far)\n", T3),
     ("P03 SymPy equals False çatışması yok sayılır", EQV,
      '    if okR is True and (sev.get("equals") or {}).get("value") is False \\\n',
-     '    if False and (sev.get("equals") or {}).get("value") is False \\\n', T),
+     '    if False and (sev.get("equals") or {}).get("value") is False \\\n', T3),
     ("P04 kaymasız örnekler", RP,
      "            v = _sample_one(dom, rng, shift=(i >= _RATIONAL_POINTS) if off_grid else None)\n",
-     "            v = _sample_one(dom, rng, shift=False if off_grid else None)\n", T),
+     "            v = _sample_one(dom, rng, shift=False if off_grid else None)\n", T3),
     ("P05 işaret ikinci hassasiyette denetlenmez", NUM,
      '    if parts is not None and "value" in (parts[2], parts[3]) and not _stands_higher(e, parts):\n',
-     '    if False:\n', T),
+     '    if False:\n', T3),
     # YO-4, RK-E, RK-F: the declared tolerance
     ("T01 göreli toleransın üst sınırı yok", NUM,
      "    if not isinstance(t, sp.Rational) or t <= 0 or (relative and t >= 1):\n",
-     "    if not isinstance(t, sp.Rational) or t <= 0:\n", T),
+     "    if not isinstance(t, sp.Rational) or t <= 0:\n", T3),
     ("T02 sıfır ya da negatif tolerans okunur", NUM,
      "    if not isinstance(t, sp.Rational) or t <= 0 or (relative and t >= 1):\n",
-     "    if not isinstance(t, sp.Rational) or (relative and t >= 1):\n", T),
+     "    if not isinstance(t, sp.Rational) or (relative and t >= 1):\n", T3),
     ("T03 v = 0'da göreli tolerans karar verir", NUM,
      "    sv = certified_sign(v, timeout=timeout)\n    if sv not in (1, -1):\n        return None\n",
-     "    sv = certified_sign(v, timeout=timeout)\n    if sv is None or sv == NONREAL:\n        return None\n", T),
+     "    sv = certified_sign(v, timeout=timeout)\n    if sv is None or sv == NONREAL:\n        return None\n", T3),
     ("T09 sıfırda eşit değerler eşit sayılmaz", NUM,
      "                    if absd == 0 or (abs_tol is not None and absd <= mp.mpf(abs_tol)):\n",
-     "                    if abs_tol is not None and absd <= mp.mpf(abs_tol):\n", T),
+     "                    if abs_tol is not None and absd <= mp.mpf(abs_tol):\n", T3),
     ("T10 iddia değerin kendisiyse de v = 0 karar vermez", NUM,
      "    if sd == 0:\n        return True                           # the claim is the value\n",
-     "", T),
+     "", T3),
     ("T04 merdivende ölçek max(|a|, |b|)", NUM,
-     "                rel = absd / abs(vb)\n", "                rel = _rel_diff(va, vb)\n", T),
+     "                rel = absd / abs(vb)\n", "                rel = _rel_diff(va, vb)\n", T3),
     ("T05 kesin değerde tolerans merdivende", NUM,
      "        if exact_a and exact_b:\n            r = within_rel_tol(a, b, rel_tol)\n",
-     "        if False:\n            r = within_rel_tol(a, b, rel_tol)\n", T),
+     "        if False:\n            r = within_rel_tol(a, b, rel_tol)\n", T3),
     ("T06 zarfta pencere iddiaya göre", CAL,
      "            lo_v, hi_v = (C / (1 + T), C / (1 - T)) if c[0] > 0 else (C / (1 - T), C / (1 + T))\n",
-     "            lo_v, hi_v = (C - T * C, C + T * C) if c[0] > 0 else (C + T * C, C - T * C)\n", T),
+     "            lo_v, hi_v = (C - T * C, C + T * C) if c[0] > 0 else (C + T * C, C - T * C)\n", T3),
     ("T07 evaluate bozuk toleransı okur", ALG,
-     "    if bad_rel or bad_abs:\n", "    if False:\n", T),
+     "    if bad_rel or bad_abs:\n", "    if False:\n", T3),
     ("T08 belirli integral bozuk toleransı okur", CAL,
      "            if bad_tol:\n                return unknown(LAYER, \"malformed_tolerance\"",
-     "            if False:\n                return unknown(LAYER, \"malformed_tolerance\"", T),
+     "            if False:\n                return unknown(LAYER, \"malformed_tolerance\"", T3),
     # YO-5: outward rounding
     ("V01 uç negatifliği yuvarlanır", ENC,
-     "    return mp.make_mpf(mp.libmp.mpf_neg(v._mpf_))\n", "    return -v\n", T),
+     "    return mp.make_mpf(mp.libmp.mpf_neg(v._mpf_))\n", "    return -v\n", T3),
     ("V02 Float noktası yuvarlanır", ENC,
      "        return iv.mpf(mp.make_mpf(v._mpf_))     # the Float's own binary value, exactly (mp.mpf would round it)\n",
-     "        return iv.mpf(mp.mpf(v._mpf_))\n", T),
+     "        return iv.mpf(mp.mpf(v._mpf_))\n", T3),
     # RK-A: the special functions' domains
     ("A01 erf tanınmaz", DOM,
      "                sp.erf, sp.erfc, sp.erfi, sp.Si, sp.Shi, sp.fresnels, sp.fresnelc)\n",
-     "                sp.erfc, sp.erfi, sp.Si, sp.Shi, sp.fresnels, sp.fresnelc)\n", T),
+     "                sp.erfc, sp.erfi, sp.Si, sp.Shi, sp.fresnels, sp.fresnelc)\n", T3),
     ("A02 Ci koşulsuz", DOM,
      "        add(node.args[0] > 0)                    # complex for x < 0 (a log term), -oo at 0\n",
-     "        pass\n", T),
+     "        pass\n", T3),
     ("A03 polylog koşulsuz", DOM,
-     "            add(z <= 1)                          # real for z <= 1, complex past 1\n", "            pass\n", T),
+     "            add(z <= 1)                          # real for z <= 1, complex past 1\n", "            pass\n", T3),
     # RK-B: end singularities
     ("B01 kaldırılabilir tekillik kuralı yok", ENC,
      "                ends[here] = (_removable(f, var, end), _weights(f, var, end))\n",
-     "                ends[here] = (None, _weights(f, var, end))\n", T),
+     "                ends[here] = (None, _weights(f, var, end))\n", T3),
     ("B02 ağırlık kuralı yok", ENC,
      "                ends[here] = (_removable(f, var, end), _weights(f, var, end))\n",
-     "                ends[here] = (_removable(f, var, end), [])\n", T),
+     "                ends[here] = (_removable(f, var, end), [])\n", T3),
     ("B03 P'nin uçta sıfırlığı aranmaz", ENC,
      "            if not all(sp.simplify(sp.diff(P, var, j).subs(var, c)) == 0 for j in range(k)):\n",
-     "            if False:\n", T),
+     "            if False:\n", T3),
     ("B04 log ağırlığı işaret değiştirebilir", ENC,
-     "        if not _ends(H)[1] < 1:\n            return None\n", "", T),
+     "        if not _ends(H)[1] < 1:\n            return None\n", "", T3),
     # RK-C: the enclosure's budget
     ("C01 güvenlik durdurucusu kısmi zarf verir", ENC,
      "                # have refuted undecided (attack on d4c round 2, RK-C). Past the safety stop, no enclosure\n"
      "                return None\n",
      "                # have refuted undecided (attack on d4c round 2, RK-C). Past the safety stop, no enclosure\n"
-     "                break\n", T),
+     "                break\n", T3),
 ]
 
 if __name__ == "__main__":
