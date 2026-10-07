@@ -908,7 +908,7 @@ class Ctx:
         # expression): one with a closed operation that has no value ((-1)!, Γ(0), zoo), or closed and
         # undefined itself. The point 1/(-1)! of a derivative, the bound of an integral and the interval
         # [1/(1/0), 1] of an extremum were read as SymPy's 1/zoo = 0 and certified (CAP-F1)
-        others = [v for k, v in params.items() if isinstance(v, str) and k != "var"]
+        others = [t for k, v in params.items() if k != "var" for t in _texts(v)]
         others += list(self.ir.givens) + [c for v in self.ir.vars for c in v.constraints]
         if isinstance(self.ir.domain_of_discourse, str):
             others.append(self.ir.domain_of_discourse)
@@ -960,15 +960,15 @@ class Ctx:
         1 with n = 3 has every inner range forward), has no value whatever its free symbols are: a closed
         operation with none (NO_VALUE), or a condition that fails with no symbol left; "undecided" when a
         closed condition no exact check decides stands; None otherwise."""
-        from ..normalize.parse import parse_as_written
-        from .domain import closed_condition_undecided, definedness_conditions, is_no_value
-        e = self._pinned(parse_as_written(src, self.ns), pins)
+        from ..normalize.parse import parse_set_as_written
+        from .domain import closed_condition_undecided, definedness_conditions, is_no_value, tree_free_symbols
+        e = self._pinned(parse_set_as_written(src, self.ns), pins)
         if e is None:
-            return None
+            return self._unread(src)
         conds = definedness_conditions(e, None)
         if any(is_no_value(c) for c in conds):
             return "undefined"
-        if not e.free_symbols and (any(c is sp.false for c in conds) or self._undefined_term(e)):
+        if not tree_free_symbols(e) and (any(c is sp.false for c in conds) or self._undefined_term(e)):
             return "undefined"
         # a closed condition SymPy left standing is one it could not decide: it counts only when it
         # is proved. tan(arccot(2) + arccot(1/2)) is tan(pi/2); its condition cos(...) != 0 stayed
@@ -989,7 +989,7 @@ class Ctx:
             ns = dict(ns, **{v: sp.Symbol(v, real=True)})
         e = self._pinned(parse_as_written(src, ns), pins)
         if e is None:
-            return None
+            return self._unread(src)
         conds = definedness_conditions(e, None)
         # open conditions that hold nowhere together (x > 0 and -x > 0) too: the simplification x of
         # x + log(x) - log(x) + log(-x) - log(-x) was certified (fourth audit TAN-06)
@@ -1008,17 +1008,33 @@ class Ctx:
             # an interval's ends too: Interval.open(1/(-1)!, oo), [1/(1/0), 1)
             e = self._pinned(parse_set_as_written(src, self.ns), pins)
             if e is None:
-                return None
+                return self._unread(src)
             conds = definedness_conditions(e, None)
             if any(is_no_value(c) for c in conds):
                 return "undefined"
             if tree_free_symbols(e):
                 return None
-        except Exception:  # noqa: BLE001 - a text no reading reads adds no fact (it was not read before)
-            return None
+        except Exception:  # noqa: BLE001 - not read as written: as above
+            return self._unread(src)
         if any(c is sp.false for c in conds):
             return "undefined"
         return "undecided" if closed_condition_undecided(conds) else None
+
+    def _unread(self, src) -> str | None:
+        """A text the as-written reading does not take: "undecided" when the value reading reads it (as an
+        expression, a relation, a condition or a set), None when no reading does (the certificates report it).
+        The as-written reading refused Σ_{k=√1}^{3} k alone, and read as "no condition" the text around it
+        lost x/x, √x², 1/(-1)!: {0} was certified for x²/x + Σ = 6 (review of d4f, YO-1)."""
+        from ..normalize.parse import parse_expr_str, parse_relation, parse_set_str, read_condition
+        if not isinstance(src, str):
+            return None
+        for read in (parse_expr_str, parse_relation, read_condition, parse_set_str):
+            try:
+                read(src, self.ns)
+            except Exception:  # noqa: BLE001 - not this reading
+                continue
+            return "undecided"
+        return None
 
     @staticmethod
     def _undefined_term(e) -> bool:
@@ -1362,6 +1378,18 @@ def parse_or_unknown(layer: str, fn, *args, **kw):
 
 
 _OPERATIONS = (sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs)
+
+
+def _texts(v) -> list[str]:
+    """The texts of a task parameter: itself, or those in its lists and dicts (a point, a center, the initial
+    values of a recurrence, the bounds of a count: review of d4f, YO-6)."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        return [t for x in v.values() for t in _texts(x)]
+    if isinstance(v, (list, tuple)):
+        return [t for x in v for t in _texts(x)]
+    return []
 
 
 def closed_binding(rel) -> tuple[sp.Symbol, Any] | None:

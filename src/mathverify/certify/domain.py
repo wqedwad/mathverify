@@ -36,10 +36,10 @@ def _outer_nodes(e, var, add):
     stack = [e]
     while stack:
         n = stack.pop()
-        if isinstance(n, (list, tuple)):
-            # a bracketed text ("[1/(1/0), 1]") is a Python list inside the as-written Tuple: its elements
-            # are expressions too (fourth audit, CAP-F1)
-            stack.extend(reversed(n))
+        if isinstance(n, (list, tuple)) or (isinstance(n, sp.MatrixBase) and not isinstance(n, sp.Basic)):
+            # a bracketed text ("[1/(1/0), 1]") is a Python list inside the as-written Tuple, a Matrix is no
+            # Basic: their elements are expressions too (fourth audit, CAP-F1; review of d4f, YO-2)
+            stack.extend(reversed(list(n)))
             continue
         if isinstance(n, (sp.Integral, sp.Sum, sp.Product)) or isinstance(n, sp.Limit):
             if isinstance(n, sp.Limit):
@@ -185,7 +185,8 @@ class Convention(sp.Set):
         if k == "odd_root":
             ok = other.is_extended_nonnegative
         elif k == "zero_power":
-            ok = other.is_zero is False
+            # ∞⁰ is an indeterminate form like 0**0: oo**0 = 1 was certified (review of d4f, YO-7)
+            ok = other.is_zero is False and other.is_infinite is False
         elif k == "binomial":
             ok = other.is_integer is True and other.is_nonnegative is True
         elif k == "mod_divisor":
@@ -890,6 +891,12 @@ def _definedness_conditions(expr, var) -> list[Any]:
     return conds
 
 
+def _no_number(v) -> bool:
+    """Is the evaluated closed expression `v` SymPy's zoo, nan or ±oo (a pole, not a value)? An infinite bound of
+    a Sum inside it is no pole."""
+    return v in (S.ComplexInfinity, S.NaN, oo, -oo) or (isinstance(v, sp.Basic) and v.has(S.ComplexInfinity, S.NaN))
+
+
 def _no_value_off(add, c):
     """The condition `c` of an operation that has no value where it fails; a closed operation off it
     (`c` false) is NO_VALUE too."""
@@ -918,6 +925,13 @@ def _node_conditions(node, var, add) -> None:
     elif isinstance(node, sp.Pow):
         base, ex = node.args
         ex = _numeric_exponent(ex)
+        if ex.is_number and ex.is_extended_negative is True and not base.free_symbols \
+                and _no_number(_evaluated(base)):
+            # the reciprocal of a closed pole (1/(1/0), 1/tan(pi/2), 1/log(0)): 0 under a reading that gives
+            # the pole a value (the Riemann sphere, cot = 1/tan), SymPy's 1/zoo: no value, and no "defined
+            # nowhere" either, like 1/(-1)! (review of d4f, RK-F4, YO-6)
+            add(sp.false)
+            add(NO_VALUE)
         if isinstance(ex, sp.Rational) and not ex.is_Integer:
             if ex.q % 2 == 0:
                 add(base >= 0 if ex > 0 else base > 0)

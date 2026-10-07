@@ -324,55 +324,89 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     return flags
 
 
-def _claim_convention(solution: Solution, ctx, task_kind: str = "") -> list[str]:
+def _claim_texts(solution: Solution, raw_payload, options) -> list[str]:
+    """The claimed answer's texts as the solver wrote them, before the set notation was normalized (x >= 1/(1/0)
+    became [0, oo) first), and the text of the option it picked (review of d4f, YO-5)."""
+    ca = solution.claimed_answer
+    payload = ca.payload if raw_payload is None else raw_payload
+    texts = [t for t in (payload if isinstance(payload, list) else [payload]) if isinstance(t, str)]
+    if ca.option and isinstance(options, dict) and isinstance(options.get(ca.option), str):
+        texts.append(options[ca.option])
+    return list(dict.fromkeys(texts))
+
+
+def _claim_conditions(txt: str, ns: dict, ctx):
+    """The definedness conditions of a claim text read as written (a set's ends too) at the values the givens and
+    the constraints fix; None when it is not read that way. Read without them, 1/factorial(-a) with a = 1 kept
+    only an open condition, and the certificates put a = 1 into SymPy's value (1/zoo = 0): CORRECT for 0
+    (review of d4f, YO-5)."""
+    from .certify.domain import definedness_conditions
+    from .normalize.parse import parse_set_as_written, task_variables
+    w = parse_set_as_written(txt, ns)
+    if w is None:
+        return None
+    tv = task_variables(ctx.ir)
+    pins = {s_: v for s_, v in ctx.pinned_values().items() if s_.name not in tv}
+    return definedness_conditions(ctx._pinned(w, pins), None)
+
+
+def _claim_convention(solution: Solution, ctx, task_kind: str = "", raw_payload=None, options=None) -> list[str]:
     """The texts of the claimed answer that, read as written, hold a closed operation whose value is a
     convention (`certify.domain.Convention`). An odd root of a negative number is compared under both
     readings by the evaluate and simplify certificates (equiv.conventions); anywhere else it is read
     one way: the root (-8)**(1/3) of x**3 = -8 was "not real" and {(-8)**(1/3)} INCORRECT (part d4a)."""
-    from .certify.domain import Convention, definedness_conditions
-    from .normalize.parse import parse_as_written
-    payload = solution.claimed_answer.payload
+    from .certify.domain import Convention
     out: list[str] = []
     try:
         ns = ctx.claim_ns()
     except Exception:  # noqa: BLE001
         return out
-    for txt in (payload if isinstance(payload, list) else [payload]):
-        if not isinstance(txt, str):
-            continue
+    both_ways = task_kind in ("evaluate", "simplify_expression")
+    for txt in _claim_texts(solution, raw_payload, options):
         try:
-            w = parse_as_written(txt, ns)
-            conds = definedness_conditions(w, None) if w is not None else []
+            conds = _claim_conditions(txt, ns, ctx) or []
         except Exception:  # noqa: BLE001 - not read as written: the certificates read it
             continue
-        both_ways = task_kind in ("evaluate", "simplify_expression")
         if any(isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and not c.free_symbols
                and not (both_ways and c.args[1].kind == "odd_root") for c in conds):
             out.append(txt)
     return out
 
 
-def _claim_without_value(solution: Solution, ctx) -> list[str]:
-    """The texts of the claimed answer (an option's too) that, read as written, have no value: a closed
-    operation with none (`certify.domain.NO_VALUE`: (-1)!, Γ(0), zoo), a condition that fails outright
-    (1/(x - x)), or a closed one no exact check proves. The value parse folds them first: the claim
-    1/factorial(-1) for 0 was certified (SymPy's 1/zoo, fourth audit CAP-F1). A convention value (0**0,
-    an odd root of a negative number) is `_claim_convention`'s."""
-    from .certify.domain import closed_condition_undecided, definedness_conditions, is_convention
-    from .normalize.parse import parse_set_as_written
-    payload = solution.claimed_answer.payload
+def _claim_without_value(solution: Solution, ctx, raw_payload=None, options=None) -> list[str]:
+    """The texts of the claimed answer (as written, an option's too) that, read as written at the values the
+    givens fix, have no value: a closed operation with none (`certify.domain.NO_VALUE`: (-1)!, Γ(0), zoo), a
+    condition that fails outright (1/(x - x)), or a closed one no exact check proves; and a text the value
+    reading takes but the as-written reading does not (not proved to have a value, review of d4f, YO-1). The
+    value parse folds them first: the claim 1/factorial(-1) for 0 was certified (SymPy's 1/zoo, fourth audit
+    CAP-F1). A convention value (0**0, an odd root of a negative number) is `_claim_convention`'s. Over the
+    complex numbers only NO_VALUE counts: sqrt(-4) is 2i there, as in the task's own text (RK-F3)."""
+    from .certify.domain import closed_condition_undecided, is_convention, is_no_value
     out: list[str] = []
     try:
         ns = ctx.claim_ns()
     except Exception:  # noqa: BLE001 - the certificates report an unreadable claim
         return out
-    for txt in (payload if isinstance(payload, list) else [payload]):
-        if not isinstance(txt, str):
+    complex_dod = (ctx.ir.domain_of_discourse or "").strip().lower() in ("complex", "complexes", "c", "ℂ")
+    try:
+        ctx.claimed(solution)
+        readable = True
+    except Exception:  # noqa: BLE001 - LeakageError cannot come from a claim; unreadable: the certificates say so
+        readable = False
+    for txt in _claim_texts(solution, raw_payload, options):
+        try:
+            conds = _claim_conditions(txt, ns, ctx)
+        except Exception:  # noqa: BLE001 - not read as written
+            conds = None
+        if conds is None:
+            if readable and not complex_dod:
+                out.append(txt)
             continue
-        w = parse_set_as_written(txt, ns)          # an interval's ends too: Interval(1/(-1)!, 2), (1/(-1)!, 2]
-        if w is None:
+        if complex_dod:
+            if any(is_no_value(c) for c in conds):
+                out.append(txt)
             continue
-        conds = [c for c in definedness_conditions(w, None) if not is_convention(c)]
+        conds = [c for c in conds if not is_convention(c)]
         if sp.false in conds or closed_condition_undecided(conds):         # NO_VALUE comes with `false`
             out.append(txt)
     return out
@@ -666,6 +700,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
             else:
                 ca.kind = "value"
 
+    raw_payload = list(ca.payload) if isinstance(ca.payload, list) else ca.payload    # before its notation is normalized
     scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
 
     # DECISIONS §2 defines CORRECT as "the claimed answer is right AND no step was refuted".
@@ -758,7 +793,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     # The claim itself, read as written, holds a value that is a convention (0**0, C(2, 5), Mod(7, -5)):
     # the parse computed it SymPy's way, and "0**0" for 5**0 was certified like 1 (part d4a). An odd
     # root of a negative number is compared under both readings instead (equiv.conventions).
-    conv = _claim_convention(solution, ctx, problem_ir.task.kind)
+    conv = _claim_convention(solution, ctx, problem_ir.task.kind, raw_payload, problem_ir.options)
     if conv:
         layers.append(unknown("intake.definedness", f"claim_value_is_a_convention: {conv[:3]}",
                               flags=["claim_convention"]))
@@ -766,7 +801,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     # ... or has no value at all as written ((-1)!, zoo, 1/(x - x)): SymPy's value of it (1/zoo = 0) is no
     # value of what was written, so the claim is never CORRECT; a refutation with that value stands (the
     # claim is no right answer under any reading), so the certificates still run (CAP-F1)
-    no_value = _claim_without_value(solution, ctx)
+    no_value = _claim_without_value(solution, ctx, raw_payload, problem_ir.options)
     if no_value:
         layers.append(unknown("intake.claim", f"claimed answer has no value as written: {no_value[:3]}",
                               flags=["claim_is_not_a_value"]))

@@ -2200,12 +2200,25 @@ def _states_task_object(claim, objects: list, ctx: Ctx) -> bool:
     return False
 
 
-def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
+def _with_undeclared(text: str, ns: dict[str, Any], names) -> dict[str, Any]:
+    """`ns` with the claim's undeclared names: a symbol, or a function where the text calls it (the sequence a of
+    a recurrence: read as a symbol, a(3) = 3 + 1/factorial(-1) was no reading at all and its 1/zoo was verified,
+    review of d4f, YO-6)."""
+    import re
+    out = dict(ns)
+    for n in names:
+        if n not in ns:
+            called = re.search(rf"(?<![\w.]){re.escape(n)}\s*\(", text)
+            out[n] = sp.Function(n) if called else sp.Symbol(n)
+    return out
+
+
+def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool = False) -> bool:
     """Is the claim, read AS WRITTEN, undefined whatever its free symbols are (a closed condition
     that fails, e.g. a term of a finite sum at one of its indices)? The value parse folds j/j to 1,
     and the compute step `Sum(j/j, (j, -1, 1)) = 3` was verified (V14 tests, 30 Sep 2026). Undeclared
-    names are read as `_with_bound_dummies` reads them; a text that cannot be read that way adds
-    nothing."""
+    names are read as `_with_bound_dummies` reads them. A text the as-written reading does not take is `unread`:
+    a step the value reading verified is not proved defined then (review of d4f, YO-1)."""
     from ..certify.domain import closed_condition_undecided, definedness_conditions
     from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
     try:
@@ -2213,16 +2226,16 @@ def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
         w = parse_as_written(text, ns)
         if w is None:
-            return False
+            return unread
         conds = definedness_conditions(w, None)
         # a binder whose body is not proved to exist (DEFINEDNESS_UNDECIDED) is not verified either
         return any(c is sp.false for c in conds) or closed_condition_undecided(conds)
-    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
-        return False
+    except Exception:  # noqa: BLE001 - no reading as written: as above
+        return unread
 
 
 def _written_relations(text: str, ns: dict[str, Any]) -> list:
@@ -2236,7 +2249,7 @@ def _written_relations(text: str, ns: dict[str, Any]) -> list:
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
         w = parse_as_written(text, ns)
         conds = definedness_conditions(w, None) if w is not None else []
@@ -2258,7 +2271,7 @@ def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
         w = parse_as_written(text, ns)
         if w is None:
@@ -2424,7 +2437,7 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
         w = parse_as_written(text, ns)
         conds = [c for c in definedness_conditions(w, None) if getattr(c, "free_symbols", None)] if w is not None else []
@@ -2774,7 +2787,7 @@ def check_steps(ir, solution, ctx: Ctx):
                     status, ev = "unknown", {"reason": "counterexample_where_the_claim_is_undefined", "withdrawn": ev}
                 why = None
                 if status != "refuted":
-                    if _undefined_as_written(st.claim, step_ns):
+                    if _undefined_as_written(st.claim, step_ns, unread=status == "verified"):
                         why = "claim_undefined_as_written"
                     else:
                         try:
