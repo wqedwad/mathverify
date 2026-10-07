@@ -356,6 +356,7 @@ def test_periodic_written_domain():
     assert _v(_der(AS, "pi/2"), "0") == "CORRECT"
     # compared off sin(x) = 0, where the claim has no value and SymPy's derivative 0
     assert _v(_der("sqrt(sin(x))**3"), "3*cos(x)*sin(x)/(2*sqrt(sin(x)))", "expression") != "INCORRECT"
+    assert _v(_der("sqrt(sin(x))**2*sign(sin(x))"), "cos(x)", "expression") != "INCORRECT"   # sign(0) = 0 at the ends
 
 
 def test_trigonometric_derivatives_stay_decided():
@@ -369,6 +370,7 @@ def test_trigonometric_derivatives_stay_decided():
     # a condition that is tight at the point but holds all around it: solved on the window, not strict there
     assert _v(_der("x + 0*sqrt(1 - cos(x))", "0"), "1") == "CORRECT"
     assert _v(_der("x + 0*sqrt(cos(x)**2)", "pi/2"), "1") == "CORRECT"
+    assert _v(_der("x + 0*sqrt(cos(x) - cos(x)**3)", "0"), "1") == "CORRECT"     # cos(x)*sin(x)**2 >= 0 near 0
 
 
 # --- TAN-07: an infinite bound ----------------------------------------------------------------------------------
@@ -524,6 +526,7 @@ def test_negative_base_with_a_variable_exponent_is_a_convention():
     # an integer exponent has the curriculum's value
     assert _v(_ss("(-1)**(k + 1)/k**2", 1, 3, [], [K]), "31/36") == "CORRECT"
     assert _v(_ss("(-1)**(k + 1)/k**2", 1, "oo", [], [K]), "pi**2/12") == "CORRECT"
+    assert _v(_ir("evaluate", {"expr": "Sum((-1)**(k + 1)/k**2, (k, 1, oo))"}, [], [K]), "pi**2/12") == "CORRECT"
     q = _ir("evaluate", {"expr": "(-1)**n"}, ["n = 3"], [{"name": "n", "domain": "integer"}])
     assert _v(q, "-1") == "CORRECT"
 
