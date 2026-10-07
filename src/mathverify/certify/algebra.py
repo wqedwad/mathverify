@@ -13,9 +13,8 @@ from ..equiv.random_point import sample_points
 from ..equiv.numeric import real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
-from ..sandbox.exactsets import at_risk, set_is_empty
-from .base import (Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved,
-                   exact_complement, exact_intersection)
+from ..sandbox.exactsets import at_risk, exact_complement, exact_intersection, set_is_empty
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
 LAYER = "certify.algebra"

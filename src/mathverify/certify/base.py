@@ -13,7 +13,7 @@ from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, 
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
                                claim_namespace, given_bindings, not_collapsed, same_value,
                                substitute_free, task_variables)
-from ..sandbox.exactsets import at_risk, exact_solveset
+from ..sandbox.exactsets import at_risk, exact_intersection, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
 
@@ -1197,53 +1197,6 @@ class Ctx:
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:
     return Ctx(ir=ir, ns=build_namespace(ir), seed=seed, timeout=timeout)
-
-
-def exact_intersection(*sets) -> sp.Set:
-    """sp.Intersection of `sets`. SymPy raises TypeError when it cannot order two endpoints that are one
-    number written two ways: a given read as written (x > log(8)/log(2)) and its set from `exact_solveset`,
-    whose polynomial class reads log(8) as 3*log(2), so (3, oo) met (log(8)/log(2), oo) and the certificate
-    died (round 6 of part d4b: x**2 = 4 with x > a, a = log(8)/log(2) gave UNKNOWN for {}). The endpoints
-    PROVED equal (`same_value`, an exact difference that simplifies to 0; numbers only pick the pairs to
-    try) are written one way, the shortest, and the intersection is taken again; the TypeError stands when
-    no such pair exists or SymPy still cannot order them (the caller abstains)."""
-    return _exact_setop(sp.Intersection, sets)
-
-
-def exact_complement(a, b) -> sp.Set:
-    """sp.Complement(a, b), with the endpoints of `exact_intersection` (round 7, RK6: the sampler of
-    solve_inequality took dom minus the claimed (3, 4) with dom (log(8)/log(2), oo) and died)."""
-    return _exact_setop(sp.Complement, (a, b))
-
-
-def _exact_setop(op, sets) -> sp.Set:
-    try:
-        return op(*sets)
-    except TypeError as err:
-        first = err
-    pts: list = []
-    for s_ in sets:
-        for n in sp.preorder_traversal(s_):
-            ends = (n.start, n.end) if isinstance(n, sp.Interval) else n.args if isinstance(n, sp.FiniteSet) else ()
-            pts += [p_ for p_ in ends if p_ not in pts and getattr(p_, "is_number", False) and p_.is_finite is True
-                    and p_.is_real is True]
-    pts.sort(key=lambda p_: (sp.count_ops(p_), sp.default_sort_key(p_)))
-    rep: dict = {}
-    for i, p_ in enumerate(pts):
-        if p_ in rep:
-            continue
-        for q in pts[i + 1:]:
-            if q in rep:
-                continue
-            try:
-                near = bool(abs(sp.N(p_ - q, 30)) < sp.Float("1e-20"))
-            except Exception:  # noqa: BLE001 - not compared: not written one way
-                near = False
-            if near and same_value(p_, q):
-                rep[q] = p_
-    if not rep:
-        raise first
-    return op(*[s_.xreplace(rep) for s_ in sets])
 
 
 class Timer:

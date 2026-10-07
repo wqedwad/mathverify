@@ -929,8 +929,9 @@ def test_one_endpoint_written_two_ways(ir, claim, want):
 def test_exact_intersection_writes_one_way_only_what_is_proved_equal():
     from mathverify.certify.base import exact_intersection
     L = sp.log(8) / sp.log(2)
-    assert exact_intersection(sp.Interval.open(L, sp.oo), sp.Interval.open(3, sp.oo)) == sp.Interval.open(3, sp.oo)
-    assert exact_intersection(sp.Interval(L, 5), sp.Interval(3, 4)) == sp.Interval(3, 4)
+    assert exact_intersection(sp.Interval.open(L, sp.oo), sp.Interval.open(3, sp.oo)) in (
+        sp.Interval.open(3, sp.oo), sp.Interval.open(L, sp.oo))           # one writing (the first seen, round 8)
+    assert exact_intersection(sp.Interval(L, 5), sp.Interval(3, 4)) in (sp.Interval(3, 4), sp.Interval(L, 4))
     # 3 + e^(-e^10) is no 3: SymPy cannot order them, and no proof writes them one way
     with pytest.raises(TypeError):
         exact_intersection(sp.Interval.open(L + sp.exp(-sp.exp(10)), sp.oo), sp.Interval.open(3, sp.oo))

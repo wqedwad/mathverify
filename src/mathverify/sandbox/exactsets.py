@@ -132,6 +132,32 @@ def class_solveset(rel, var, domain=S.Reals):
         return None
 
 
+def exact_intersection(*sets) -> sp.Set:
+    """sp.Intersection of `sets` with their endpoints written one way first (`exact_setop`)."""
+    return exact_setop(sp.Intersection, sets)
+
+
+def exact_complement(a, b) -> sp.Set:
+    """sp.Complement(a, b) with their endpoints written one way first (`exact_setop`)."""
+    return exact_setop(sp.Complement, (a, b))
+
+
+def exact_setop(op, sets) -> sp.Set:
+    """`op` of `sets` after every pair of endpoints PROVED equal is written one way (equiv.sets.
+    unify_endpoints: numbers only pick the pairs, an exact zero proves them). SymPy orders two writings
+    of one number by their rounded values, or raises: (3, oo) met (log(8)/log(2), oo) with a TypeError
+    (round 6 of part d4b), and (sqrt(3 + 2*sqrt(2)), oo) minus (1 + sqrt(2), 2 + sqrt(2)) kept a strip
+    (sqrt(3 + 2*sqrt(2)), 1 + sqrt(2)] that holds no number, from which the sampler drew a point and
+    refuted the right (1 + sqrt(2), 2 + sqrt(2)) (round 8, RK-4). A pair neither proved equal nor certainly
+    different raises TypeError: the caller abstains."""
+    from ..equiv.sets import EndpointsIncomparable, unify_endpoints
+    try:
+        sets = unify_endpoints(list(sets))
+    except EndpointsIncomparable as err:
+        raise TypeError(f"endpoints not ordered: {err}") from None
+    return op(*sets)
+
+
 def _hull(domain):
     """The closed bounded interval [lo, hi] that holds `domain`, as (lo, hi), or None (SymPy's inf and sup
     raise on a ConditionSet: no hull)."""
