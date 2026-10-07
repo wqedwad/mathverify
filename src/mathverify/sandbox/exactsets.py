@@ -1021,6 +1021,11 @@ def _on_window(rel, var, lo, hi):
     if pw is not None:
         return pw, [], []
     ident = _identity(e, var)              # x**2 - 5*x - 14 = (x - 7)*(x + 2): every defined point
+    # an identity holds wherever defined: where an acos is not real too, unless cut (round 8, YO-1)
+    conds = _function_conditions(e, var)
+
+    def cut(st):
+        return exact_intersection(st, _defined_by(conds, var, lo, hi)) if conds else st
     if ident:
         # over one denominator an identity is 0/1: its poles are those of the denominators as written
         zp, pp = [], _written_poles(e, var)
@@ -1032,7 +1037,7 @@ def _on_window(rel, var, lo, hi):
     op = type(rel)
     _convention_free(e, var, lo, hi)
     if op is sp.Equality and not ident:
-        return sp.FiniteSet(*zeros), zeros, poles
+        return cut(sp.FiniteSet(*zeros)), zeros, poles
     cuts = _on([(c, S.Zero) for c in _breaks(e, var)], lo, hi)
     ends = [q for q in (lo, hi) if q.is_finite]
     edges = _sorted_unique(ends + zeros + poles + cuts)
@@ -1053,7 +1058,7 @@ def _on_window(rel, var, lo, hi):
         s_ = 0 if ident or _same(p, zeros) else _real_sign(e.subs(var, p))
         if _holds(op, s_):
             pieces.append(sp.FiniteSet(p))
-    return (sp.Union(*pieces) if pieces else S.EmptySet), zeros, poles
+    return cut(sp.Union(*pieces) if pieces else S.EmptySet), zeros, poles
 
 
 def period(e, var):
@@ -1186,7 +1191,7 @@ def _rebuilt(rel, var, domain):
         domain = sp.Intersection(domain, signed)
     hull = _hull(domain)
     if hull is not None:
-        return sp.Intersection(_on_window(rel, var, hull[0], hull[1])[0], domain)
+        return exact_intersection(_on_window(rel, var, hull[0], hull[1])[0], domain)
     # the window of a domain bounded on one side is its own (inf, sup), not the whole line: on x > 0 no odd
     # root of x has a negative radicand, and x**(1/3) < 1 was left unsolved for its x < 0 (round 7, RK3)
     try:
@@ -1204,7 +1209,7 @@ def _rebuilt(rel, var, domain):
     if (_identity(e, var) or e.has(sp.Abs, sp.sign, sp.Max, sp.Min) or any(
             isinstance(n, sp.Pow) and n.exp == S.Half and isinstance(n.base, sp.Pow) and n.base.exp == 2
             for n in sp.preorder_traversal(e))) and P is None:
-        return sp.Intersection(_on_window(rel, var, wlo, whi)[0], domain)
+        return exact_intersection(_on_window(rel, var, wlo, whi)[0], domain)
     if isinstance(rel, sp.Equality):
         zp, pp, _ = _structure(e, var)
         try:
@@ -1228,7 +1233,7 @@ def _rebuilt(rel, var, domain):
         return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)
     if P is None:
         # not periodic: with finitely many zeros and poles, the cells cover the whole line
-        return sp.Intersection(_on_window(rel, var, wlo, whi)[0], domain)
+        return exact_intersection(_on_window(rel, var, wlo, whi)[0], domain)
     # an inequality or `!=` on an unbounded domain: its set on one whole period decides only "nowhere"
     # and "everywhere" (sin(x) > 2, cos(x) + 2 != 0); anything else is a union over all periods, and
     # ℝ minus progressions is a set no sampler draws from: the ConditionSet decides each point exactly
@@ -1433,8 +1438,20 @@ def _on_points(rel, var, pts):
     poles = _poles(e, var)
     keep = []
     try:
+        # a point where a log, an even root or an acos is not real is no point, though its value may fold
+        # (0*acos(4) is 0); an odd root of a negative number there is a convention (round 8, YO-1)
+        outside = _log_outside(e, var)
+        conds = _function_conditions(e, var)
+        odd = [n.base for n in _roots_of(e, var) if n.exp.q % 2 == 1]
         for p in pts:
-            if any(_certified(u.subs(var, p)) == 0 for u in poles):
+            if any(_certified(u.subs(var, p)) == 0 for u in poles) or outside(p):
+                continue
+            if not all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds
+                       if c is not sp.true):
+                continue
+            if any(_certified(r_.subs(var, p)) < 0 for r_ in odd):
+                if not _PRINCIPAL[0]:
+                    raise _Unsolved("an odd root of a negative number: a convention (part d4a)")
                 continue
             if _holds(type(rel), _certified(e.subs(var, p))):
                 keep.append(p)
