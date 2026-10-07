@@ -325,9 +325,11 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
 
 
 def _claim_texts(solution: Solution, raw_payload, options) -> list[str]:
-    """The claimed answer's texts as the solver wrote them, before the set notation was normalized (x >= 1/(1/0)
-    became [0, oo) first), and the text of the option it picked (review of d4f, YO-5)."""
-    return list(dict.fromkeys(_payload_texts(solution, raw_payload) + _option_texts(solution, options)))
+    """The claimed answer's texts: as the solver wrote them, before the set notation was normalized (x >= 1/(1/0)
+    became [0, oo) first), as verified (junk around it stripped: "12 bu çözüm doğrudur" is 12), and the text of
+    the option it picked (review of d4f, YO-5)."""
+    return list(dict.fromkeys(_payload_texts(solution, raw_payload) + _payload_texts(solution, None)
+                              + _option_texts(solution, options)))
 
 
 def _payload_texts(solution: Solution, raw_payload) -> list[str]:
@@ -433,7 +435,9 @@ def _claim_without_value(solution: Solution, ctx, raw_payload=None, options=None
         readable = True
     except Exception:  # noqa: BLE001 - LeakageError cannot come from a claim; unreadable: the certificates say so
         readable = False
-    option = set(_option_texts(solution, options)) - set(_payload_texts(solution, raw_payload))
+    payload = _payload_texts(solution, raw_payload) + _payload_texts(solution, None)
+    option = set(_option_texts(solution, options)) - set(payload)
+    unread: list[str] = []
     for txt in _claim_texts(solution, raw_payload, options):
         try:
             conds = _claim_conditions(txt, ns, ctx)
@@ -442,8 +446,11 @@ def _claim_without_value(solution: Solution, ctx, raw_payload=None, options=None
         if conds is None:
             # a text the value reading takes but the as-written one does not; an option's own text ("limit
             # yoktur") is read by the value reading of options or by none
-            if (_option_readable(solution, ctx) if txt in option else readable) and not complex_dod:
-                out.append(txt)
+            if txt in option:
+                if _option_readable(solution, ctx) and not complex_dod:
+                    out.append(txt)
+            else:
+                unread.append(txt)
             continue
         if complex_dod:
             if any(is_no_value(c) for c in conds):
@@ -452,6 +459,9 @@ def _claim_without_value(solution: Solution, ctx, raw_payload=None, options=None
         conds = [c for c in conds if not is_convention(c)]
         if sp.false in conds or closed_condition_undecided(conds):         # NO_VALUE comes with `false`
             out.append(txt)
+    if unread and readable and not complex_dod and not any(t not in unread for t in dict.fromkeys(payload)):
+        # no form of the payload is read as written (the junk around a cleaned one is no claim of its own)
+        out += unread
     return out
 
 

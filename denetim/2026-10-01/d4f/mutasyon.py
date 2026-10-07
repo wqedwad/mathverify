@@ -120,8 +120,7 @@ MUTATIONS = [
      "            except Exception:  # noqa: BLE001 - not this reading\n                continue\n            return \"undecided\"",
      "            except Exception:  # noqa: BLE001 - not this reading\n                continue\n            return None", T),
     ("N03 iddiada okunamayan metin koşulsuz", VER,
-     "            if (_option_readable(solution, ctx) if txt in option else readable) and not complex_dod:",
-     "            if False:", T),
+     "        out += unread\n", "        pass\n", T),
     ("N04 sabit sınır değerlenmez", PAR, "        v = _evaluated_bound(v)\n", "", T),
     ("N05 ağaçtaki sınır değerlenmez", PAR,
      "                        lo, hi = _evaluated_bound(lim[1]), _evaluated_bound(lim[2])", "                        lo, hi = lim[1], lim[2]", T),
@@ -154,7 +153,7 @@ MUTATIONS = [
      '        if point in (oo, -oo) and getattr(var, "is_integer", None):\n            # a sequence:',
      '        if False:\n            # a sequence:', T),
     # --- YO-5: the claim at its pins, as written, with its option
-    ("N15 iddia pinsiz okunur", VER, "    return definedness_conditions(ctx._pinned(w, pins), None)",
+    ("N15 iddia pinsiz okunur", VER, "    return definedness_conditions(_pinned_tree(w, _claim_pins(ctx)), None)",
      "    return definedness_conditions(w, None)", T),
     ("N16 iddia normalize edilmiş okunur", VER, "    payload = ca.payload if raw_payload is None else raw_payload",
      "    payload = ca.payload", T),
