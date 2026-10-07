@@ -663,6 +663,91 @@ def cases_j():
     ]
 
 
+def cases_k():
+    """Round 8 (7 Oct 2026), the review of round 7: a folded cell kept the points where acos, asin, atan2, arg
+    are not real (YO-1); a one-sided domain whose end is a cut written another way (RK-1, RK-3); the
+    convention of an odd root read where the expression is undefined anyway (RK-2); two writings of one
+    endpoint ordered by rounding in the sampler (RK-4)."""
+    X0 = V("x", "real", ["x >= 0"])
+    I_ = "interval"
+    R2 = "sqrt(3 + 2*sqrt(2))"
+
+    def trig_w(eqn, interval):
+        return _ir("trig_solve", {"var": "x", "interval": interval}, (X,), [eqn], "set")
+    return [
+        # YO-1
+        ("K1 ineq x>=0 (|x|-x)acos(2^x+x-2)<=0: [0,oo)", ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0", vars_=(X0,)),
+         _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("K1 ineq given x>=0 (|x|-x)acos(2^x+x-2)<=0: [0,oo)", ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0", ["x >= 0"]),
+         _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("K1 ineq dod x>=0 (|x|-x)acos(..)<=0: [0,oo)",
+         _ir("solve_inequality", {"inequality": "(Abs(x) - x)*acos(2**x + x - 2) <= 0", "var": "x"}, (X,), (), "set",
+             "x >= 0"), _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("K1 ineq x>=0 (|x|-x)acos(2^x+x-2)<=0: [0,1]", ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0", vars_=(X0,)),
+         _sol("Interval(0, 1)", I_), NOTNO, None),
+        ("K1 ineq x>=0 (|x|-x)asin(x+atan x)<=0: [0,oo)", ineq("(Abs(x) - x)*asin(x + atan(x)) <= 0", vars_=(X0,)),
+         _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("K1 ineq x>=0 (Max(x,0)-x)asin(..)<=0: [0,oo)", ineq("(Max(x, 0) - x)*asin(x + atan(x)) <= 0", vars_=(X0,)),
+         _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("K1 ineq x>=0 (|x|-x)acos(x e^x)<=0: [0,oo)", ineq("(Abs(x) - x)*acos(x*exp(x)) <= 0", vars_=(X0,)),
+         _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("K1 ineq x<=0 (|x|+x)asin(..)>=0: (-oo,0]", ineq("(Abs(x) + x)*asin(x + atan(x)) >= 0", vars_=(V("x", "real", ["x <= 0"]),)),
+         _sol("Interval(-oo, 0)", I_), NOTOK, None),
+        ("K1 ineq x>=0 (|x|-x)atan2(x-1,0)>=0: [0,oo)", ineq("(Abs(x) - x)*atan2(x - 1, 0) >= 0", vars_=(X0,)),
+         _sol("Interval(0, oo)", I_), UNK, None),
+        ("K1 ineq x>=0 (|x|-x)arg(x-1)>=0: [0,oo)", ineq("(Abs(x) - x)*arg(x - 1) >= 0", vars_=(X0,)),
+         _sol("Interval(0, oo)", I_), UNK, None),
+        ("K1 ineq x>=0 (|x|-x)arg(x-1)>=0: [0,1)U(1,oo)", ineq("(Abs(x) - x)*arg(x - 1) >= 0", vars_=(X0,)),
+         _sol("Union(Interval.Ropen(0, 1), Interval.open(1, oo))", I_), UNK, None),
+        ("K1 ctl ineq x>=0 (|x|-x)acos(x/2)<=0: [0,oo)", ineq("(Abs(x) - x)*acos(x/2) <= 0", vars_=(X0,)),
+         _sol("Interval(0, oo)", I_), NO, None),
+        ("K1 ctl ineq x>=0 (|x|-x)acos(x/2)<=0: [0,2]", ineq("(Abs(x) - x)*acos(x/2) <= 0", vars_=(X0,)),
+         _sol("Interval(0, 2)", I_), OK, None),
+        ("K1 cint (|x|-x)acos(x/2)>=0 [0,5]: 3", cint(["(Abs(x) - x)*acos(x/2) >= 0", "x >= 0", "x <= 5"], [V("x", "integer")]),
+         _sol("3", "count"), NOTNO, None),
+        ("K1 cint (|x|-x)acos(x/2)>=0 [0,5]: 6", cint(["(Abs(x) - x)*acos(x/2) >= 0", "x >= 0", "x <= 5"], [V("x", "integer")]),
+         _sol("6", "count"), NOTOK, None),
+        # RK-1
+        ("K2 ineq sign(x-3)>0, x<=L8: {}", ineq("sign(x - 3) > 0", ["x <= log(8)/log(2)"]), _sol("EmptySet", S_), NOTNO, None),
+        ("K2 ineq sign(x-3)>0, x<=L8: {L8}", ineq("sign(x - 3) > 0", ["x <= log(8)/log(2)"]), _sol("{log(8)/log(2)}", S_),
+         NOTOK, None),
+        ("K2 ineq sign(x-2)>0, x<=L9: {}", ineq("sign(x - 2) > 0", ["x <= log(9)/log(3)"]), _sol("EmptySet", S_), NOTNO, None),
+        ("K2 ineq sign(3-x)>0, x>=L8: {}", ineq("sign(3 - x) > 0", ["x >= log(8)/log(2)"]), _sol("EmptySet", S_), NOTNO, None),
+        ("K2 ineq sign(x-log4)>0: (log4,oo)", ineq("sign(x - log(4)) > 0"), _sol("Interval.open(log(4), oo)", I_), NOTNO, None),
+        ("K2 ineq sign(x-3)>0, -5<=x<=L8: {L8}", ineq("sign(x - 3) > 0", ["x >= -5", "x <= log(8)/log(2)"]),
+         _sol("{log(8)/log(2)}", S_), NOTOK, None),
+        # RK-2
+        ("K3 trig sin|x|sqrt(x)(x^(1/3)-2)=0 [-1,10]", trig_w("sin(x)*Abs(x)*sqrt(x)*(x**(1/3) - 2) = 0", "[-1, 10]"),
+         _sol("{0, pi, 2*pi, 3*pi, 8}", S_), OK, None),
+        ("K3 trig same, 8 missing", trig_w("sin(x)*Abs(x)*sqrt(x)*(x**(1/3) - 2) = 0", "[-1, 10]"),
+         _sol("{0, pi, 2*pi, 3*pi}", S_), NO, None),
+        ("K3 trig sin|x-1|log x(x^(1/3)-1)=0 [-2,7]", trig_w("sin(x)*Abs(x - 1)*log(x)*(x**(1/3) - 1) = 0", "[-2, 7]"),
+         _sol("{1, pi, 2*pi}", S_), OK, None),
+        ("K3 trig same, -1 added", trig_w("sin(x)*Abs(x - 1)*log(x)*(x**(1/3) - 1) = 0", "[-2, 7]"),
+         _sol("{-1, 1, pi, 2*pi}", S_), NO, None),
+        ("K3 trig cos Max(x,1)sqrt(x-1)(x^(1/3)-2)=0 [-3,9]",
+         trig_w("cos(x)*Max(x, 1)*sqrt(x - 1)*(x**(1/3) - 2) = 0", "[-3, 9]"), _sol("{1, pi/2, 3*pi/2, 5*pi/2, 8}", S_), OK, None),
+        ("K3 trig same, -pi/2 added", trig_w("cos(x)*Max(x, 1)*sqrt(x - 1)*(x**(1/3) - 2) = 0", "[-3, 9]"),
+         _sol("{-pi/2, 1, pi/2, 3*pi/2, 5*pi/2, 8}", S_), NO, None),
+        ("K3 eq |x|sqrt(x+8)(x^(1/3)+1)=0: {-8,-1,0}", eq("Abs(x)*sqrt(x + 8)*(x**(1/3) + 1) = 0"), _sol("{-8, -1, 0}", S_), UNK, None),
+        # RK-3
+        ("K4 ineq |x-3|<1, x>L8: (L8,4)", ineq("Abs(x - 3) < 1", ["x > log(8)/log(2)"]),
+         _sol("Interval.open(log(8)/log(2), 4)", I_), OK, None),
+        ("K4 ineq |x-3|<=1, x>=L8: [L8,4]", ineq("Abs(x - 3) <= 1", ["x >= log(8)/log(2)"]),
+         _sol("Interval(log(8)/log(2), 4)", I_), OK, None),
+        ("K4 ineq |x-3|>1, x>L8: (4,oo)", ineq("Abs(x - 3) > 1", ["x > log(8)/log(2)"]), _sol("Interval.open(4, oo)", I_), OK, None),
+        ("K4 ineq |x-3|<1, x>L8: [3,4)", ineq("Abs(x - 3) < 1", ["x > log(8)/log(2)"]), _sol("Interval.Ropen(3, 4)", I_), NO, None),
+        ("K4 ineq sqrt(x-3)<1, x>L8: (3,4)", ineq("sqrt(x - 3) < 1", ["x > log(8)/log(2)"]), _sol("Interval.open(3, 4)", I_), OK, None),
+        # RK-4
+        ("K5 ineq |x-1-sqrt2|<1, x>R2: (1+sqrt2,2+sqrt2)", ineq("Abs(x - 1 - sqrt(2)) < 1", [f"x > {R2}"]),
+         _sol("Interval.open(1 + sqrt(2), 2 + sqrt(2))", I_), NOTNO, None),
+        ("K5 ineq x^2<16, x>R2: (1+sqrt2,4)", ineq("x**2 < 16", [f"x > {R2}"]), _sol("Interval.open(1 + sqrt(2), 4)", I_), NOTNO, None),
+        ("K5 ineq x<5, x>=sqrt(5+2sqrt6): [s2+s3,5)", ineq("x < 5", ["x >= sqrt(5 + 2*sqrt(6))"]),
+         _sol("Interval.Ropen(sqrt(2) + sqrt(3), 5)", I_), NOTNO, None),
+        ("K5 ineq x^2<16, x>R2: (1+sqrt2,5)", ineq("x**2 < 16", [f"x > {R2}"]), _sol("Interval.open(1 + sqrt(2), 5)", I_), NO, None),
+    ]
+
+
 class _Slow(Exception):
     pass
 
@@ -676,10 +761,10 @@ CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "H": cases_h,
-          "I": cases_i, "J": cases_j}
+          "I": cases_i, "J": cases_j, "K": cases_k}
 
 
-def main(out_path=None, groups="ABCDEFGHIJ"):
+def main(out_path=None, groups="ABCDEFGHIJK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -720,5 +805,5 @@ def main(out_path=None, groups="ABCDEFGHIJ"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJ"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJK"
     sys.exit(1 if main(out, grp) else 0)

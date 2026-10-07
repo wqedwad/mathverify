@@ -228,6 +228,57 @@ def _evalf_strict(e):
     return re_, im_, _part_state(re_), _part_state(im_)
 
 
+_JUMPS = (sp.sign, sp.Abs, sp.floor, sp.ceiling, sp.frac)
+
+
+def _jumps_resolved(e, timeout: float):
+    """`e` with every sign, Abs, floor, ceiling, frac of a closed argument replaced by its exact value, read
+    from the CERTIFIED sign of the argument (innermost first); None when one is undecided. Strict evalf of
+    sign(z) gave 1.0 for a z that is exactly 0 written log(8)/log(2) - 3 (no precision is left to tell), so
+    sign(x - 3) > 0 held at x = log(8)/log(2), and Abs of such a z left -1 + |z| undecided (round 8 of part
+    d4b, RK-1 and RK-3). An Abs whose argument's sign is undecided is left to evalf (it is continuous)."""
+    for _ in range(64):
+        nodes = [n for n in sp.preorder_traversal(e) if isinstance(n, _JUMPS) and not n.args[0].free_symbols
+                 and not any(isinstance(m, _JUMPS) for m in sp.preorder_traversal(n.args[0]))]
+        if not nodes:
+            return e
+        rep = {}
+        for n in dict.fromkeys(nodes):
+            u = n.args[0]
+            if isinstance(n, (sp.sign, sp.Abs)):
+                s = certified_sign(u, timeout)
+                if s is None or s == NONREAL:
+                    if isinstance(n, sp.Abs):
+                        continue
+                    return None
+                rep[n] = sp.Integer(s) if isinstance(n, sp.sign) else s * u
+                continue
+            k = _certified_floor(u, timeout)
+            if k is None:
+                return None
+            rep[n] = (k if isinstance(n, sp.floor) else u - k if isinstance(n, sp.frac)
+                      else k if certified_sign(u - k, timeout) == 0 else k + 1)
+        if not rep:
+            return e
+        e = e.xreplace(rep)
+    return None
+
+
+def _certified_floor(u, timeout: float):
+    """The integer floor of the real constant `u`, each comparison certified; None when undecided."""
+    try:
+        k = sp.Integer(int(sp.floor(sp.N(u, _SIGN_DPS))))
+    except Exception:  # noqa: BLE001
+        return None
+    for cand in (k, k - 1, k + 1):
+        lo, hi = certified_sign(u - cand, timeout), certified_sign(u - cand - 1, timeout)
+        if lo is None or hi is None or NONREAL in (lo, hi):
+            return None
+        if lo >= 0 and hi < 0:
+            return cand
+    return None
+
+
 def certified_sign(e, timeout: float = 5.0):
     """Sign of a constant: -1, 0 or 1 when certified, NONREAL when it is certainly not real,
     None when it cannot be decided. Never a sign read off rounding noise."""
@@ -248,6 +299,11 @@ def certified_sign(e, timeout: float = 5.0):
     if isinstance(e, sp.Rational):
         return int(sp.sign(e))
     e = real_odd_roots(e)
+    e = _jumps_resolved(e, timeout)
+    if e is None:
+        return None
+    if isinstance(e, sp.Rational):
+        return int(sp.sign(e))
     parts = _evalf_strict(e)
     if parts is not None:
         re_, im_, s_re, s_im = parts
