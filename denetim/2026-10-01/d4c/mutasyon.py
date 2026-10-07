@@ -27,16 +27,14 @@ OPS = "src/mathverify/sandbox/ops.py"
 NUM = "src/mathverify/equiv/numeric.py"
 ENC = "src/mathverify/certify/enclosure.py"
 SER = "src/mathverify/certify/series.py"
+EXT = "src/mathverify/certify/extremum.py"
+EQV = "src/mathverify/equiv/__init__.py"
+ALG = "src/mathverify/certify/algebra.py"
+DOM = "src/mathverify/certify/domain.py"
 T = "tests/test_d4_d4c_sayisal.py"
 T4 = "tests/test_parca4_parametreli_bicim.py"
 
 MUTATIONS = [
-    ("Z01 SymPy'nin sertifikasız 0'ı kesin değer kalır", CAL,
-     '                    ev["symbolic_zero_uncertified"] = True\n                    exact = None\n',
-     '                    ev["symbolic_zero_uncertified"] = True\n', T),
-    ("Z02 kesin değer yokken kareleme kabul eder", CAL,
-     '                return unknown(LAYER, "no_exact_value", t.ms, ev, flags=["no_exact_value"])\n',
-     '                ok = True if converged and num_equal(claimed, val, rel_tol=tol)[0] else None\n', T),
     ("Z05 mutlak integrallenebilirlik varsayılır", CAL,
      "    if f.has(*_JUMPY):\n        return False\n    pts = _bad_points(f, var, lo, hi, timeout)\n",
      "    return True\n    pts = _bad_points(f, var, lo, hi, timeout)\n", T),
@@ -62,9 +60,6 @@ MUTATIONS = [
     ("Z13 Abs/sign kırılmalarında bölünmez", CAL,
      "    cuts = _switch_points(f, var, lo, hi, timeout) if _nonsmooth(f) else []\n",
      "    cuts = []\n", T),
-    ("Z14 checked_forms SymPy'nin 0'ını sertifikasız alır", FRM,
-     '                    raise UnverifiedForm(f"{n}: SymPy 0 without a certificate ({cev.get(\'reason\')})")\n',
-     "                    reps[key] = r.value\n                    continue\n", T),
     ("Z15 evalf bitleri okunmaz", FRM,
      "    if bits is not None and bits < _MIN_BITS:\n        return None\n", "", T),
     ("Z17 evalf'in sıfırı ya da bitsiz sıfırı eşitlik sayılır (eski hâl)", RP,
@@ -79,13 +74,6 @@ MUTATIONS = [
     ("Z20 değerlendirme süresi sınırsız", RP,
      "        if spent[0] > _EVAL_BUDGET:\n            ev[\"evaluation_time_budget\"] = True    # the points left",
      "        if False:\n            ev[\"evaluation_time_budget\"] = True    # the points left", T),
-    ("Z22 sertifikanın sıfır olmayan değeri alınmaz", FRM,
-     "                if cval is not None:\n                    reps[key] = cval\n",
-     "                if cval is not None and cval == 0:\n                    reps[key] = cval\n", T4),
-    ("Z23 sıfır iddiası küçük sayıyla kabul (eski kalıntı sınaması)", CAL,
-     "            elif excluded():\n                ok = False\n",
-     "            elif claimed_zero and converged and abs(val) < 1e-60:\n                ok = True\n"
-     "            elif excluded():\n                ok = False\n", T),
     ("Z24 simetrikleştirilmiş integralde mutlak integrallenebilirlik aranmaz", CAL,
      "        if v is not None and not _absolutely_integrable(f, var, a, b, timeout):\n",
      "        if False:\n", T),
@@ -105,23 +93,11 @@ MUTATIONS = [
     ("R03 ikili olmayan uç parçası sayılmaz", ENC,
      "        edge = [iv.mpf([0, 1]) * cell(lo_, hi_, None) for lo_, hi_ in (ia, ib) if hi_ > lo_]\n",
      "        edge = []\n", T),
-    ("R05 tolerans penceresi kabul etmez", CAL,
-     "            elif window is not None and integral_within(integrand, var, a, b, window, timeout=ctx.timeout * 1.5)[0]:\n",
-     "            elif False:\n", T),
-    ("R06 ret toleransı yok sayar", CAL,
-     "    window = tolerance_window(claimed, declared) if declared else None\n".replace("    window", "            window"),
-     "            window = None\n", T),
     ("R07 tek integralli adım zarfsız reddedilir", DET,
      "        return integral_excludes(n.function, var, a, b, other, timeout=ctx.timeout)[0]\n",
      "        return True\n", T),
-    ("R08 SymPy değeri kanıt ya da zarf olmadan reddeder", CAL,
-     "                elif okS is False and excluded():\n",
-     "                elif okS is False:\n", T),
     ("R09 iki integralli adımda aralık değeri yerine orta nokta", DET,
      "        env[n] = mp.iv.mpf([enc[0], enc[1]])\n", "        env[n] = mp.iv.mpf((enc[0] + enc[1]) / 2)\n", T),
-    ("R10 SymPy'nin farklı değeri sertifikayla kabul edilmez", CAL,
-     "                    ok = okC                       # a value proved symbolically decides\n",
-     "                    ok = None if okC else okC\n", T),
     ("Z28 aşkın sayıların açı toplamı denenmez", NUM,
      "        elif not _one_in_an_exponential(z):\n            return False\n", "        else:\n            return False\n", T),
     ("Z29 kök içi çarpanlarına ayrılmaz", NUM,
@@ -132,9 +108,120 @@ MUTATIONS = [
      '        ev["method"] = "numeric_only"\n',
      '        ev["method"] = "numeric_only"\n'
      "        if num_equal(claimed, num_val, rel_tol=1e-15)[0] is False:\n            return False, ev\n", T),
-    ("R11 sayısal değer yokken sertifika denenmez", CAL,
-     "                    if (okC := by_certificate()) is None:\n",
-     "                    if True:\n", T),
+    # --- round 3: the attack on round 2 (7 Oct 2026) -----------------------------------------------------
+    # YO-2: SymPy's value only with a certificate
+    ("Y01 sertifika yokken SymPy'nin değeri alınır", CAL,
+     '            ev["certificate"] = cev\n            if cval is not None:\n',
+     '            ev["certificate"] = cev\n'
+     '            if cval is None and rs.ok and isinstance(rs.value, sp.Basic) and not rs.value.has(sp.Integral):\n'
+     '                cval = rs.value\n'
+     '            if cval is not None:\n', T),
+    ("Y02 kareleme tek başına kabul eder", CAL,
+     '                if not no:\n                    return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])\n'
+     '                ok = False\n',
+     '                if not no and converged and num_equal(claimed, val, rel_tol=1e-20)[0]:\n'
+     '                    ok = True\n'
+     '                elif not no:\n                    return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])\n'
+     '                else:\n                    ok = False\n', T),
+    ("Y03 SymPy'nin farklı değeri kanıtsız reddeder", CAL,
+     '                if not no:\n                    return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])\n',
+     '                if not no and not (rs.ok and isinstance(rs.value, sp.Basic) and not rs.value.has(sp.Integral)\n'
+     '                                   and answers_equivalent(claimed, rs.value, shape="scalar")[0] is False):\n'
+     '                    return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])\n', T),
+    ("Y04 sertifika denenmez", CAL,
+     '            cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)\n'
+     '            ev["certificate"] = cev\n',
+     '            cval, cev = None, {}\n            ev["certificate"] = cev\n', T),
+    ("Y05 sayının çeliştiği kanıt da karar verir", CAL,
+     '                if converged and certified_sign(cval, timeout=ctx.timeout) != 0 and \\\n',
+     '                if False and \\\n', T),
+    ("Y06 checked_forms integralde SymPy'nin değerini alır", FRM,
+     "                if cval is None:\n                    raise UnverifiedForm(f\"{n}: no certified value ({cev.get('reason')})\")\n",
+     "                if cval is None:\n                    cval = n.doit()\n", T),
+    ("Y07 checked_forms sertifikanın sıfır olmayan değerini almaz", FRM,
+     "                reps[key] = cval\n                continue\n",
+     "                if cval != 0:\n                    raise UnverifiedForm(\"nonzero\")\n                reps[key] = cval\n                continue\n", T4),
+    # YO-1: the extremum's direction
+    ("E01 yön 40 basamaktan okunur", EXT,
+     "        s_ = certified_sign(sp.sympify(fa) - sp.sympify(fb))\n",
+     "        s_ = 1 if na > nb else -1 if na < nb else None\n", T),
+    ("E02 kararsız aday EVT'yi kapatmaz", EXT,
+     "    if bound is None and complete and closed and not undecided and not superlevel:\n",
+     "    if bound is None and complete and closed and not superlevel:\n", T),
+    ("E03 boş olmayan üst küme EVT'yi kapatmaz", EXT,
+     "    if bound is None and complete and closed and not undecided and not superlevel:\n",
+     "    if bound is None and complete and closed and not undecided:\n", T),
+    # YO-3: random points off the grid, SymPy's equals
+    ("P01 özdeşlik örnekleri ızgarada", RP,
+     "    pts = sample_points(domains, n, seed, off_grid=True)\n", "    pts = sample_points(domains, n, seed)\n", T),
+    ("P02 irrasyonel yoklama yok", RP,
+     "        vals = _special_values(domains[s_], far=far, irrational=True)\n",
+     "        vals = _special_values(domains[s_], far=far)\n", T),
+    ("P03 SymPy equals False çatışması yok sayılır", EQV,
+     '    if okR is True and (sev.get("equals") or {}).get("value") is False \\\n',
+     '    if False and (sev.get("equals") or {}).get("value") is False \\\n', T),
+    ("P04 kaymasız örnekler", RP,
+     "            v = _sample_one(dom, rng, shift=(i >= _RATIONAL_POINTS) if off_grid else None)\n",
+     "            v = _sample_one(dom, rng, shift=False if off_grid else None)\n", T),
+    ("P05 işaret ikinci hassasiyette denetlenmez", NUM,
+     '    if parts is not None and "value" in (parts[2], parts[3]) and not _stands_higher(e, parts):\n',
+     '    if False:\n', T),
+    # YO-4, RK-E, RK-F: the declared tolerance
+    ("T01 göreli toleransın üst sınırı yok", NUM,
+     "    if not isinstance(t, sp.Rational) or t <= 0 or (relative and t >= 1):\n",
+     "    if not isinstance(t, sp.Rational) or t <= 0:\n", T),
+    ("T02 sıfır ya da negatif tolerans okunur", NUM,
+     "    if not isinstance(t, sp.Rational) or t <= 0 or (relative and t >= 1):\n",
+     "    if not isinstance(t, sp.Rational) or (relative and t >= 1):\n", T),
+    ("T03 v = 0'da göreli tolerans karar verir", NUM,
+     "    sv = certified_sign(v, timeout=timeout)\n    if sv not in (1, -1):\n        return None\n",
+     "    sv = certified_sign(v, timeout=timeout)\n    if sv is None or sv == NONREAL:\n        return None\n", T),
+    ("T04 merdivende ölçek max(|a|, |b|)", NUM,
+     "                rel = absd / abs(vb)\n", "                rel = _rel_diff(va, vb)\n", T),
+    ("T05 kesin değerde tolerans merdivende", NUM,
+     "        if exact_a and exact_b:\n            r = within_rel_tol(a, b, rel_tol)\n",
+     "        if False:\n            r = within_rel_tol(a, b, rel_tol)\n", T),
+    ("T06 zarfta pencere iddiaya göre", CAL,
+     "            lo_v, hi_v = (C / (1 + T), C / (1 - T)) if c[0] > 0 else (C / (1 - T), C / (1 + T))\n",
+     "            lo_v, hi_v = (C - T * C, C + T * C) if c[0] > 0 else (C + T * C, C - T * C)\n", T),
+    ("T07 evaluate bozuk toleransı okur", ALG,
+     "    if bad_rel or bad_abs:\n", "    if False:\n", T),
+    ("T08 belirli integral bozuk toleransı okur", CAL,
+     "            if bad_tol:\n                return unknown(LAYER, \"malformed_tolerance\"",
+     "            if False:\n                return unknown(LAYER, \"malformed_tolerance\"", T),
+    # YO-5: outward rounding
+    ("V01 uç negatifliği yuvarlanır", ENC,
+     "    return mp.make_mpf(mp.libmp.mpf_neg(v._mpf_))\n", "    return -v\n", T),
+    ("V02 Float noktası yuvarlanır", ENC,
+     "        return iv.mpf(mp.make_mpf(v._mpf_))     # the Float's own binary value, exactly (mp.mpf would round it)\n",
+     "        return iv.mpf(mp.mpf(v._mpf_))\n", T),
+    # RK-A: the special functions' domains
+    ("A01 erf tanınmaz", DOM,
+     "                sp.erf, sp.erfc, sp.erfi, sp.Si, sp.Shi, sp.fresnels, sp.fresnelc)\n",
+     "                sp.erfc, sp.erfi, sp.Si, sp.Shi, sp.fresnels, sp.fresnelc)\n", T),
+    ("A02 Ci koşulsuz", DOM,
+     "        add(node.args[0] > 0)                    # complex for x < 0 (a log term), -oo at 0\n",
+     "        pass\n", T),
+    ("A03 polylog koşulsuz", DOM,
+     "            add(z <= 1)                          # real for z <= 1, complex past 1\n", "            pass\n", T),
+    # RK-B: end singularities
+    ("B01 kaldırılabilir tekillik kuralı yok", ENC,
+     "                ends[here] = (_removable(f, var, end), _weights(f, var, end))\n",
+     "                ends[here] = (None, _weights(f, var, end))\n", T),
+    ("B02 ağırlık kuralı yok", ENC,
+     "                ends[here] = (_removable(f, var, end), _weights(f, var, end))\n",
+     "                ends[here] = (_removable(f, var, end), [])\n", T),
+    ("B03 P'nin uçta sıfırlığı aranmaz", ENC,
+     "            if not all(sp.simplify(sp.diff(P, var, j).subs(var, c)) == 0 for j in range(k)):\n",
+     "            if False:\n", T),
+    ("B04 log ağırlığı işaret değiştirebilir", ENC,
+     "        if not _ends(H)[1] < 1:\n            return None\n", "", T),
+    # RK-C: the enclosure's budget
+    ("C01 güvenlik durdurucusu kısmi zarf verir", ENC,
+     "                # have refuted undecided (attack on d4c round 2, RK-C). Past the safety stop, no enclosure\n"
+     "                return None\n",
+     "                # have refuted undecided (attack on d4c round 2, RK-C). Past the safety stop, no enclosure\n"
+     "                break\n", T),
 ]
 
 if __name__ == "__main__":

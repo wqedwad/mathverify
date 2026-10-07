@@ -248,10 +248,12 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         domain = {s_: domain.get(s_, S.Reals) for s_ in syms}
     okR, rev = random_point_equal(claimed, truth, syms, domain, seed=seed)
     ev["random_point"] = rev
-    if okR is True and (sev.get("equals") or {}).get("value") is False:
-        # SymPy's `equals` says the two differ: agreement at sample points does not overrule it (it sampled
-        # x² + sin(3·10^6·πx) = x² on a grid where the sine vanishes; attack on d4c round 2, YO-3). A
-        # counterexample still refutes; agreement alone decides nothing
+    if okR is True and (sev.get("equals") or {}).get("value") is False \
+            and all(domain[s_] == S.Reals for s_ in syms):
+        # SymPy's `equals` says the two differ on the real line: agreement at sample points does not overrule it
+        # (it sampled x² + sin(3·10^6·πx) = x² on a grid where the sine vanishes; attack on d4c round 2, YO-3). A
+        # counterexample still refutes; agreement alone decides nothing. On a smaller domain `equals` (which
+        # does not know it) is no contradiction: log(x - 1) + log(x - 3) = log((x - 1)(x - 3)) holds for x > 3
         okR = None
         ev["conflict"] = "sympy_equals_false"
     if okR is True and parametric:

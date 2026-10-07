@@ -206,14 +206,14 @@ def _part_state(f):
     return "value" if f != 0 else "zero"
 
 
-def _evalf_strict(e):
+def _evalf_strict(e, dps: int = _SIGN_DPS):
     """(real part, imaginary part, state_re, state_im) of a constant, or None when evalf fails.
     A part is trusted only when it carries significant bits: strict evalf may return a
     no-significance zero such as '-0.e-38' for the imaginary part of a real number written with
     complex radicals (the casus irreducibilis roots of x³ − 3x + 1) instead of raising."""
     from sympy.core.evalf import PrecisionExhausted
     try:
-        v = e.evalf(_SIGN_DPS, strict=True)
+        v = e.evalf(dps, strict=True)
     except PrecisionExhausted:
         return None
     except Exception:  # noqa: BLE001
@@ -227,6 +227,24 @@ def _evalf_strict(e):
     if not (re_.is_number and im_.is_number):
         return None
     return re_, im_, _part_state(re_), _part_state(im_)
+
+
+def _stands_higher(e, parts) -> bool:
+    """Does each significant part found at _SIGN_DPS stand at a higher precision too (same sign, the same leading
+    digits)? Strict evalf trusts a function's own evaluation where it is ill-conditioned: asin(tanh x) -
+    atan(sinh x), which is 0, came out 6.5e-61 with 103 significant bits at x = 139278301/1000033 (a 60-digit
+    evaluation could not separate it from 0), and the true identity asin(tanh x) = atan(sinh x) was refuted
+    (d4c round 3, samples off the decimal grid)."""
+    hi = _evalf_strict(e, 2 * _SIGN_DPS + 10)
+    if hi is None:
+        return False
+    for k in (0, 1):
+        if parts[k + 2] != "value":
+            continue
+        a, b = parts[k], hi[k]
+        if hi[k + 2] != "value" or (a > 0) != (b > 0) or abs(a - b) > abs(b) * sp.Float(10) ** -20:
+            return False
+    return True
 
 
 _JUMPS = (sp.sign, sp.Abs, sp.floor, sp.ceiling, sp.frac)
@@ -306,6 +324,8 @@ def certified_sign(e, timeout: float = 5.0):
     if isinstance(e, sp.Rational):
         return int(sp.sign(e))
     parts = _evalf_strict(e)
+    if parts is not None and "value" in (parts[2], parts[3]) and not _stands_higher(e, parts):
+        parts = None                          # a significant part that does not stand: no sign from evalf
     if parts is not None:
         re_, im_, s_re, s_im = parts
         if s_im == "value":
@@ -573,6 +593,21 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
     comparison is 'exact up to working precision'.
     """
     ev: dict[str, Any] = {"ladder": [], "rel_tol": rel_tol, "abs_tol": abs_tol}
+    # a tolerance the caller passes is relative to `b`, the reference (true) value: |a - b|/|b| (see
+    # read_tolerance); undefined where b is 0. With an exact b it is decided exactly (within_rel_tol), two
+    # Rationals as well: a tolerance holds for every claim
+    if rel_tol is not None and abs_tol is None:
+        try:
+            sb_ = sp.sympify(b)
+            exact_b = not sb_.free_symbols and not has_float(sb_) and not sb_.has(sp.oo, sp.S.NegativeInfinity, sp.zoo,
+                                                                                   sp.nan)
+            exact_a = not sp.sympify(a).free_symbols
+        except (sp.SympifyError, TypeError, AttributeError):
+            exact_b = exact_a = False
+        if exact_a and exact_b:
+            r = within_rel_tol(a, b, rel_tol)
+            ev["decided_by"] = "exact_relative_tolerance" if r is not None else "exact_relative_tolerance_undecided"
+            return r, ev
     # Exact numbers are compared exactly. Measured: 10^30 + 1 and 10^30 were declared equal,
     # because their relative difference (1e-30) sits below the first rung's tolerance.
     try:
@@ -607,21 +642,7 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
             ev["decided_by"] = "exact" if r is not None else "exact_undecided"
             return r, ev
     passed_rungs = 0
-    # a tolerance the caller passes is relative to `b`, the reference (true) value: |a - b|/|b| (see
-    # read_tolerance); undefined where b is 0. With an exact b it is decided exactly (within_rel_tol).
     against_b = rel_tol is not None
-    if against_b and abs_tol is None:
-        try:
-            sb_ = sp.sympify(b)
-            exact_b = not sb_.free_symbols and not has_float(sb_) and not sb_.has(sp.oo, sp.S.NegativeInfinity, sp.zoo,
-                                                                                   sp.nan)
-            exact_a = not sp.sympify(a).free_symbols
-        except (sp.SympifyError, TypeError, AttributeError):
-            exact_b = exact_a = False
-        if exact_a and exact_b:
-            r = within_rel_tol(a, b, rel_tol)
-            ev["decided_by"] = "exact_relative_tolerance" if r is not None else "exact_relative_tolerance_undecided"
-            return r, ev
     # inputs that are already finite-precision Floats cannot be compared tighter than
     # their own precision (a 15-digit Float vs pi: at most ~1e-15 agreement is possible)
     float_digits = [int(f._prec * 0.30103) for e in (a, b) if hasattr(e, "atoms")

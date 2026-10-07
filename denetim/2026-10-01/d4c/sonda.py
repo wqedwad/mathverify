@@ -481,6 +481,13 @@ def cases_m():
          _sol("x**2", eqs("x**2 + sin(3000000*pi*x) = x**2"), kind="expression"), ANY, NOTVER),
         ("control: eq step x^2 + sin(3*10^6 pi x) = x^2, x = 1 (true)", X1,
          _sol("2", eqs("x**2 + sin(3000000*pi*x) = x**2")), OK, VER),
+        # strict evalf's sign of asin(tanh x) - atan(sinh x) (0) was 6.5e-61 at this point: a sign must stand
+        # at a higher precision too
+        ("Gudermann asin(tanh x) = atan(sinh x) x > 0", simp("asin(tanh(x))", [X_POS]),
+         _sol("atan(sinh(x))", kind="expression"), OK, None),
+        ("eq step asin(tanh x) = atan(sinh x) at x = 139278301/1000033",
+         _task("evaluate", {"expr": "x + 1"}, [X], ["x = 139278301/1000033"]),
+         _sol("140278334/1000033", eqs("asin(tanh(x)) = atan(sinh(x))")), NOTNO, NOTREF),
         ("control: simplify sin^2 + cos^2 = 1", simp("sin(x)**2 + cos(x)**2", [X]), _sol("1", kind="expression"), OK, None),
         ("control: simplify (x + 1)^2 = x^2 + 2x + 1", simp("(x + 1)**2", [X]), _sol("x**2 + 2*x + 1", kind="expression"),
          OK, None),

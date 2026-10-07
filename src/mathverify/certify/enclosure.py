@@ -326,35 +326,43 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
             if e_lo == e_hi and not f.has(*_JUMPS):
                 ends[here] = (_removable(f, var, end), _weights(f, var, end))
 
+        def finite(b_):
+            blo, bhi = _ends(b_)
+            return mp.isfinite(blo) and mp.isfinite(bhi)
+
+        def meet(u, v):
+            # two enclosures of one integral: their intersection is one too
+            (a1, b1), (a2, b2) = _ends(u), _ends(v)
+            lo_, hi_ = max(a1, a2), min(b1, b2)
+            return _hull(lo_, hi_) if lo_ <= hi_ else u
+
         def cell(l, r, d):
             try:
                 c_ = _cell(f, d, var, l, r)
             except Unsupported:
                 c_ = iv.mpf([-mp.inf, mp.inf])
-            lo_, hi_ = _ends(c_)
-            if mp.isfinite(lo_) and mp.isfinite(hi_):
-                return c_
-            for at in (l, r):
-                if at not in ends:
-                    continue
-                rule, weights = ends[at]
-                h = iv.mpf(r) - iv.mpf(l)
-                tries = []
+            h = iv.mpf(r) - iv.mpf(l)
+            for at, (rule, weights) in ends.items():
                 if rule is not None:
+                    # Taylor at the end c holds on the whole side: f(x) = P^(k)(ξ)/k! with ξ between c and x, so
+                    # on any cell, f is in P^(k)([c, r])/k! (or [l, c]); near c it is far tighter than the plain
+                    # value (sin x/x on [h, 2h]: [1/2, 2] against [cos 2h, 1])
                     pk, kf = rule
-                    tries.append(lambda pk=pk, kf=kf: h * iv_eval(pk, {var: _hull(l, r)}) / kf)
-                for g, kind, alpha, p_ in weights:
-                    tries.append(lambda g=g, kind=kind, alpha=alpha, p_=p_: _weighted(g, kind, alpha, p_, var, l, r, h))
-                for t_ in tries:
                     try:
-                        b_ = t_()
+                        b_ = h * iv_eval(pk, {var: _hull(min(at, l), max(at, r))}) / kf
                     except (Unsupported, ArithmeticError, ValueError, NotImplementedError):
-                        continue
-                    if b_ is None:
-                        continue
-                    blo, bhi = _ends(b_)
-                    if mp.isfinite(blo) and mp.isfinite(bhi):
-                        return b_
+                        b_ = None
+                    if b_ is not None and finite(b_):
+                        c_ = meet(b_, c_) if finite(c_) else b_
+                if at in (l, r) and not finite(c_):
+                    for g, kind, alpha, p_ in weights:
+                        try:
+                            b_ = _weighted(g, kind, alpha, p_, var, l, r, h)
+                        except (Unsupported, ArithmeticError, ValueError, NotImplementedError):
+                            continue
+                        if b_ is not None and finite(b_):
+                            c_ = b_
+                            break
             return c_
 
         # an end that is not a binary number (π) is an interval [lo, hi]: ∫ from the true end to the
