@@ -367,10 +367,17 @@ def test_yo1_a_step_the_as_written_reading_refuses_is_neither_verified_nor_refut
     assert _status(r) not in ("verified", "refuted") and r.verdict != "INCORRECT"
 
 
-def test_yo6_a_closed_list_parameter_without_a_value_is_undefined():
-    q = _ir("count_solutions", {"bounds": {"x": ["1/(1/0)", "3"], "y": ["0", "3"]}}, ["x + y = 2"],
+@pytest.mark.parametrize("bound", ["1/(1/0)", "1/(3 - 3)"])      # no value (NO_VALUE) / undefined (false alone)
+def test_yo6_a_closed_list_parameter_without_a_value_is_undefined(bound):
+    q = _ir("count_solutions", {"bounds": {"x": [bound, "3"], "y": ["0", "3"]}}, ["x + y = 2"],
             [{"name": "x", "domain": "nonneg_integer"}, {"name": "y", "domain": "nonneg_integer"}], shape="count")
     r = _run(q, 3, "count")
+    assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
+
+
+@pytest.mark.parametrize("expr", ["2 + 0*zoo", "zoo - zoo + 2", "2 + 0*nan"])
+def test_cap_f1_a_written_zoo_or_nan_is_undefined(expr):
+    r = _run(_ev(expr), "2")
     assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in _flags(r)
 
 
@@ -580,6 +587,8 @@ def test_yo6_a_sequence_step():
     ir = _ir("recurrence_term", {"recurrence": "a(n) = a(n-1) + 1", "initial": {"1": "1"}, "index": 4, "var": "n"},
              vars_=[{"name": "n", "domain": "positive_integer"}])
     assert _status(_run(ir, "4", steps=[("compute", "a(3) = 3 + 1/factorial(-1)")])) != "verified"
+    # read as written with a(3) a term (not an unreadable symbol call): wrong under every reading, still refuted
+    assert _status(_run(ir, "4", steps=[("compute", "a(3) = 1/factorial(-1)")])) == "refuted"
 
 
 # --- YO-7: ∞⁰ is a convention -------------------------------------------------------------------------------------
