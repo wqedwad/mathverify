@@ -924,8 +924,9 @@ def cases_l():
     return out
 
 
-class _Slow(Exception):
-    pass
+class _Slow(BaseException):
+    """Past CASE_TIMEOUT. A BaseException: the verifier's layers catch Exception, and an Exception raised here
+    came back as a layer's UNKNOWN after 120 s (round 9: the evaluation precision had no ceiling)."""
 
 
 def _on_alarm(signum, frame):
