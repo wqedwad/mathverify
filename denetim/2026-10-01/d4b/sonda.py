@@ -45,6 +45,7 @@ NOTNO = {"CORRECT", "UNKNOWN"}        # anything but a false rejection
 UNK = {"UNKNOWN"}
 REF = {"refuted"}
 NOTVER = {"refuted", "unknown", "skipped"}
+NOTREF = {"verified", "unknown", "skipped"}
 
 X = {"name": "x", "domain": "real"}
 
@@ -825,6 +826,16 @@ def cases_l():
         ("L2 ev Piecewise((1,Z^2>0),(0,Z^2<=0)): 0", ev(f"Piecewise((1, ({Z})**2 > 0), (0, ({Z})**2 <= 0))", []), _sol("0"),
          NOTNO, None),
         ("L2 ev 0: ceiling(Z^2)", ev("0", []), _sol(f"ceiling(({Z})**2)"), NOTNO, None),
+        # the step layer: doit/simplify and the solvers read the jump off the noise
+        ("L2 step eq x=ceiling(Z^2) | x=0", ev("x + 1", ["x = 0"]), _sol("1", steps=[("eq", f"x = ceiling(({Z})**2)")]),
+         NOTNO, NOTREF),
+        ("L2 step eq x=ceiling(Z^2) | x=1", ev("x + 1", ["x = 1"]), _sol("2", steps=[("eq", f"x = ceiling(({Z})**2)")]),
+         NOTNO, NOTVER),
+        ("L2 step compute Piecewise(..)=1", ev("x + 1", ["x = 2"]),
+         _sol("3", steps=[("compute", f"Piecewise((1, ({Z})**2 > 0), (0, ({Z})**2 <= 0)) = 1")]), NOTNO, NOTVER),
+        ("L2 step compute Piecewise(..)=0", ev("x + 1", ["x = 2"]),
+         _sol("3", steps=[("compute", f"Piecewise((1, ({Z})**2 > 0), (0, ({Z})**2 <= 0)) = 0")]), NOTNO, NOTREF),
+        ("L2 ctl step compute floor(pi)=4", ev("x + 1", ["x = 2"]), _sol("3", steps=[("compute", "floor(pi) = 4")]), NO, REF),
         ("L2 ctl ev floor(pi): 3", ev("floor(pi)", []), _sol("3"), OK, None),
         ("L2 ctl ev ceiling(log8/log2): 3", ev("ceiling(log(8)/log(2))", []), _sol("3"), OK, None),
         ("L2 ctl ev ceiling(log8/log2): 4", ev("ceiling(log(8)/log(2))", []), _sol("4"), NO, None),

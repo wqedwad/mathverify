@@ -433,6 +433,10 @@ MUTATIONS += [
      T9 + "test_relations_of_numbers_need_significant_digits"),
     ("N15 ilişki farkı tek yazımdan", GRD, "    for dif, sign in ((a - b, 1), (b - a, -1)):", "    for dif, sign in ((a - b, 1),):",
      T9 + "test_relations_of_numbers_need_significant_digits"),
+    ("N40 hesap adımı kararsız sıçramada karar verir", DET, "    if _jump_undecided(claim):\n        return \"unknown\"",
+     "    if False:\n        return \"unknown\"", T9 + "test_steps_with_a_jump_of_an_unproved_zero"),
+    ("N41 eşitlik adımı kararsız sıçramada karar verir", DET, "    if _jump_undecided(claim, *premises):", "    if False:",
+     T9 + "test_steps_with_a_jump_of_an_unproved_zero"),
     # RK-1
     ("N16 hücre kesişimi SymPy'nin", EX, "            got = exact_intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",
      "            got = sp.Intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",

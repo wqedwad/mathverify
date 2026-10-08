@@ -187,6 +187,29 @@ def test_exact_jumps_keep_their_verdicts(e, claim, want):
     assert _run(_ev(e), claim).verdict == want
 
 
+def _step_status(given, answer, kind, claim):
+    r = verify(_ir("evaluate", {"expr": "x + 1"}, (X,), [given]),
+               {"claimed_answer": {"kind": "value", "payload": answer},
+                "steps": [{"id": "s1", "kind": kind, "claim": claim, "from": [], "text": ""}]})
+    layer = next(la for la in r.layers if la.layer == "steps.refute")
+    return r.verdict, layer.evidence["steps"][-1]["status"]
+
+
+@pytest.mark.parametrize("given,answer,kind,claim,bad", [
+    ("x = 0", "1", "eq", f"x = ceiling(({Z})**2)", "refuted"),
+    ("x = 1", "2", "eq", f"x = ceiling(({Z})**2)", "verified"),
+    ("x = 2", "3", "compute", f"Piecewise((1, ({Z})**2 > 0), (0, ({Z})**2 <= 0)) = 1", "verified"),
+])
+def test_steps_with_a_jump_of_an_unproved_zero(given, answer, kind, claim, bad):    # 56cec1d
+    verdict, status = _step_status(given, answer, kind, claim)
+    assert status != bad and verdict != "INCORRECT"
+
+
+def test_steps_with_exact_jumps_still_decide():
+    assert _step_status("x = 2", "3", "compute", "floor(pi) = 4") == ("INCORRECT", "refuted")
+    assert _step_status("x = 2", "3", "compute", "floor(pi) = 3")[1] == "verified"
+
+
 # --- RK-1 --------------------------------------------------------------------------------------------------------
 
 def test_a_cell_zero_written_another_way():                                           # 56cec1d
