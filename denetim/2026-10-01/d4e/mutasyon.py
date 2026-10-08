@@ -572,6 +572,9 @@ MUTATIONS = [
      "                    holes, hole_ok, hole_ev = [], True, {}", T4 + "test_a_kink_value_where_the_formula_has_none"),
     ("V50 ayrı okunan noktada yanlış değer çürütmez", CAL, "                    elif hole_ok is False:",
      "                    elif False:", T4 + "test_a_kink_value_where_the_formula_has_none"),
+    ("V51 gevşek koşulun bütün aileyi dışlaması okunmaz", CAL,
+     "                    if getattr(q, \"free_symbols\", None) and _family_outside(q, var, loose):",
+     "                    if False:", T + "test_round3_guards_of_the_new_readings"),
     ("V41 hücre kanıtının bütçesi yok", RP, "            if failures[0] >= _CELL_FAILURES:", "            if False:",
      T4 + "test_cell_proof_budget_keeps_one_verify_short"),
 ]

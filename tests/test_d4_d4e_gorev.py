@@ -745,7 +745,9 @@ def test_round3_refutation_off_kinks_not_listed():
     assert _v(_der("Abs(cot(x))"), "-cot(x)/(sin(x)**2*Abs(cot(x)))", "expression") == "CORRECT"
     # x = cos(x) is solved by no exact class: the refutation stands at a point where f is analytic (0: f' = -1)
     assert _v(_der("Abs(x - cos(x))"), "1 + sin(x)", "expression") == "INCORRECT"
-    assert _v(_der("Abs(x - cos(x))"), "(1 + sin(x))*(x - cos(x))/Abs(x - cos(x))", "expression") == "UNKNOWN"
+    # every zero of x - cos(x) is simple (1 + sin(x) = 0 only where x - cos(x) != 0): a corner, where the claim has no
+    # value (round 4, RK-6): CORRECT or UNKNOWN, never INCORRECT
+    assert _v(_der("Abs(x - cos(x))"), "(1 + sin(x))*(x - cos(x))/Abs(x - cos(x))", "expression") != "INCORRECT"
 
 
 def test_round3_an_integer_exponent_is_no_convention():

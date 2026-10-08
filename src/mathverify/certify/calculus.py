@@ -1645,6 +1645,24 @@ def _interval_parts(dom) -> list | None:
     return None
 
 
+def _family_outside(q, var, loose) -> bool:
+    """Does the open part of one of the unsolved conditions `loose` fail at the family's generic point q (n an integer
+    Dummy), so at every member: sin(x) > 0 at (2*n + 1)*pi? The zeros of sin(x) in the claim of (sqrt(sin(x))**3)' were
+    no point of the comparison, the family's members could not all be listed, and the claim was left undecided."""
+    for c in loose:
+        try:
+            v = _open_condition(c).subs(var, q)
+            if v is not sp.false and isinstance(v, sp.core.relational.Relational):
+                v = sp.simplify(v.lhs - v.rhs)
+                v = {sp.StrictGreaterThan: v > 0, sp.StrictLessThan: v < 0, sp.GreaterThan: v >= 0,
+                     sp.LessThan: v <= 0}.get(type(_open_condition(c)), None)
+        except Exception:  # noqa: BLE001
+            continue
+        if v is sp.false:
+            return True
+    return False
+
+
 def _family_members(q, dom, limit: int = 6) -> tuple[list, bool] | None:
     """(the members q(n) of a family (n the integer Dummy of q, q = alpha*n + beta with numbers alpha != 0 and beta)
     in the hull of each interval of `dom` (`_interval_parts`), up to `limit` from each, exactly by the integer range
@@ -1827,6 +1845,8 @@ def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose
                     # a family's members in the region, read exactly (`_family_members`): sampled at n = 0, ±1, 2,
                     # the poles k*pi/4 of cot(4*x) missed the region x > 10, and 2*x + 0*cot(4*x) for (x**2)' was
                     # certified there (attack on d4e round 3, D4E3-YO-2)
+                    if getattr(q, "free_symbols", None) and _family_outside(q, var, loose):
+                        continue         # a loose condition fails on the whole family (sin(x) > 0 at each k*pi)
                     fam = ([q], True) if not getattr(q, "free_symbols", None) else _family_members(q, dom)
                     if fam is None:
                         state, why = "undecided", f"claim_condition_undecided: {c} at {q}"
