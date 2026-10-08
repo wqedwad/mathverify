@@ -750,9 +750,12 @@ def cases_t():
                        ("(2*x + 1)/(x**2 + x - 6)", 0, 1, "log(2/3)"),
                        ("1/cos(x)**3", 0, "pi/4", "sqrt(2)/2 + log(1 + sqrt(2))/2"),
                        ("log(1 + x)/x", 0, 1, "pi**2/12"), ("log(1 - x)/x", 0, 1, "-pi**2/6"),
-                       ("log(x)/(1 - x)", 0, 1, "-pi**2/6"), ("log(1 + x)/x", 0, 2, "-polylog(2, -2)")):
+                       ("log(x)/(1 - x)", 0, 1, "-pi**2/6")):
         out.append((f"{f} [{a},{b}] = {c}", dint(f, a, b), _sol(c), OK, None))
     out += [
+        ("log(1 + x)/x [0,2] t 1e-12: 1.43674636688368 (-Li_2(-2); polylog is no claim identifier)",
+         dtol("log(1 + x)/x", 0, 2, "1e-12"), _sol("1.43674636688368"), OK, None),
+        ("log(1 + x)/x [0,2] t 1e-3: 1.5 (wrong)", dtol("log(1 + x)/x", 0, 2, "1e-3"), _sol("1.5"), NO, None),
         ("1/x [-2,-1] = log 2 (wrong sign)", dint("1/x", -2, -1), _sol("log(2)"), NO, None),
         ("1/(x - 2) [0,1] = -log 3 (wrong)", dint("1/(x - 2)", 0, 1), _sol("-log(3)"), NO, None),
         ("log(1 + x)/x [0,1] = pi^2/6 (wrong)", dint("log(1 + x)/x", 0, 1), _sol("pi**2/6"), NO, None),
