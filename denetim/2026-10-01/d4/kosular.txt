@@ -109,3 +109,14 @@ SP yeni: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scrat
 - 11:50 d4h yaması ana oturumca gözden geçirildi (kararlar kararlar_fhi.txt ile tutarlı) ve commit edildi: a2f5603 (dal d4h, 62a40e9 üstü; push yok).
 - 12:00 d4c tur 3 oturum dalıyla birleşti: 443e078 (dal birlesik = e03ea1f + d9a7bb3, çakışmasız). Hafif birleşik ölçüm olc_sira.sh 443e078
   (pytest_d4, fark, sonda d4e, d4c; sıralı). 12:15 saldırgan d4c3 (iş akışı v3: v2 + hafif sonda kuralı; wf_0a724682-738), commit 443e078 taban e03ea1f.
+- 13:29 olc_443e078 (hafif, sıralı): pytest test_d4_*/parca* 1 düştü: test_d4_d4e_gorev::test_round3_convergence_by_a_majorant
+  (∫_0^∞ e^(−t^(1/3)) dt = 6 UNKNOWN, 5 UNKNOWN; beklenen CORRECT/INCORRECT). Kök neden (ölçüldü): d4c 3. tur integral değerini yalnız
+  sertifikayla alıyor; TTK'nın _exact_conditions'ı definedness_conditions_strict'in Contains(t, Convention(odd_root)) koşulunu (d4a)
+  Relational olmadığı için reddediyor (None) → sertifika yok; t^(1/4)'te koşul t ≥ 0 ve sertifika var. Birleşimin getirdiği kapsama
+  kaybı (güvenli yön) = BİRLEŞİK-1, d4c 4. tura. fark: 782431c'ye göre 0/0/0/0 (tabana göre adım 86: bilinenler); sonda d4e 942'de 2
+  (aynı vaka), d4c 310/0 (2898 s).
+- 13:35 saldırgan d4e3 yeniden (iş akışı v4 = v3 + devralınan adaylar bağımsız doğrulayıcıya; wf_04746446-ddc), commit d342778 taban 849ea4e;
+  devralınan: D4E3-YO-2, D4E3-YO-3, D4E3-KINK.
+- 13:31–13:41 d4h kalan ölçümler (fin8.sh): d4h sondası a2f5603'te (_float kaldırılmış son ağaç) 301 vakada 0; test_d4_d4h_ayristirici.py
+  ec62a68'de 111 testin 69'u düşer; G11 tohumları (PYTHONHASHSEED 0..7) ec62a68'de 14 beklenmeyen (tohuma bağlı karar; cos x = 1 için
+  {nπ + kπ} bazı tohumlarda CORRECT: yanlış onay), a2f5603'te 0.
