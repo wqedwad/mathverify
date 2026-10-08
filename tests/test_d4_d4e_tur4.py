@@ -300,3 +300,24 @@ def test_kink_rules_for_a_higher_order_and_h_plus_g_abs():
     assert _v(_der("Max(sin(x), 0)**2"), "2*sin(x)*cos(x)", E) == "INCORRECT"
     # h has a corner of its own at 0, where f has no derivative: never refuted for being undefined there
     assert _v(_der("Abs(x) + Max(sin(x), 0)**2"), "x/Abs(x) + 2*cos(x)*Max(sin(x), 0)", E) != "INCORRECT"
+
+
+def test_series_tasks_refute_at_an_allowed_value_only():
+    C = {"name": "c", "domain": "real"}
+    N = {"name": "n", "domain": "positive_integer"}
+    q = _ir("series_sum", {"term": "a**2*k", "var": "k", "lo": "1", "hi": "3"}, ["a**2 = 4"], [K_, AR])
+    assert _v(q, "24") != "INCORRECT" and _v(q, "12") == "INCORRECT"
+    q = _ir("recurrence_term", {"recurrence": "a(n) = c*a(n - 1)", "initial": {"1": "1"}, "index": "3", "var": "n",
+                                "name": "a"}, ["c**2 = 4"], [N, C])
+    assert _v(q, "4") != "INCORRECT" and _v(q, "5") == "INCORRECT"
+    q = _ir("closed_form", {"recurrence": "a(n) = c**2*a(n - 1)", "initial": {"1": "1"}, "var": "n", "name": "a"},
+            ["c**2 = 4"], [N, C], "expression")
+    assert _v(q, "4**(n - 1)", "expression") != "INCORRECT"
+    assert _v(q, "3**(n - 1)", "expression") != "CORRECT"
+
+
+def test_a_kink_value_where_the_formula_has_none():
+    E = "expression"
+    f = "Abs(x) - sqrt(x**2 + x**4)"
+    assert _v(_der(f), "sign(x)*(1 - (1 + 2*x**2)/sqrt(1 + x**2))", E) == "CORRECT"
+    assert _v(_der(f), "sign(x)*(1 - (1 + 2*x**2)/sqrt(1 + x**2)) + 1 - sign(x)**2", E) != "CORRECT"

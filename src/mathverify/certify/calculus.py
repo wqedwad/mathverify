@@ -1538,6 +1538,42 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fcon
     return out
 
 
+def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool | None, dict]:
+    """(the zeros where f has a derivative (`kink_reading`'s values) but SymPy's derivative formula `truth` has no value
+    there, each left out of the comparison; whether the claim's value at each is the derivative's, read by
+    `derivative_at_point` (True: all, False: one differs, None: undecided); evidence). sqrt(x**2 + x**4) beside |x|
+    cancels its corner: f'(0) = 0, the formula is sign(0) - 0/0, and the right claim sign(x)*(1 - (1 + 2x**2)/
+    sqrt(1 + x**2)), 0 at 0, was refuted there (round 4, after RK-1). A claim with no value there is
+    `claim_where_derivative`'s."""
+    holes, state, ev = [], True, {}
+    for p_ in kr["values"]:
+        try:
+            tv = sp.sympify(truth).subs(var, p_)
+            bad = tv.has(sp.nan, sp.zoo) or _real_finite(tv) is not True
+        except Exception:  # noqa: BLE001
+            bad = True
+        if not bad:
+            continue
+        holes.append(p_)
+        try:
+            cv = sp.sympify(claimed).subs(var, p_)
+        except Exception:  # noqa: BLE001
+            cv = sp.nan
+        if cv.has(sp.nan, sp.zoo) or _real_finite(cv) is not True:
+            continue                             # no value of the claim: `claim_where_derivative` decides
+        dap = derivative_at_point(f, var, order, p_, timeout=timeout)
+        ev[str(p_)] = {"status": str(dap.get("status")), "value": str(dap.get("value")), "claimed": str(cv)}
+        if dap.get("status") != "value":
+            state = None if state is True else state
+            continue
+        eq, _ = answers_equivalent(cv, dap["value"], shape="scalar")
+        if eq is False:
+            state = False
+        elif eq is not True and state is True:
+            state = None
+    return holes, state, ev
+
+
 def _has_derivative_at(kr, var, p, fconds) -> bool:
     """Has f (read by `kink_reading`) a derivative at the number p: analytic there, or a zero of a switch where it
     was classified as having one?"""
@@ -2760,12 +2796,21 @@ def verify(ir, solution, ctx: Ctx):
                     cstate, cwhy = claim_where_derivative(ctx, claim_conds, claim_nowhere, var, dom, loose, kr,
                                                           fconds)
                     truth_k = _sign_off(truth, kr["signs"])
-                    off = sp.FiniteSet(*kinks)
-                    cdom = comparison_region(sp.Complement(dom, off) if kinks else dom, loose + kopen, var)
+                    # a zero where f has a derivative and SymPy's formula has no value (|x| - sqrt(x**2 + x**4) at 0:
+                    # sign(0) - 0/0) is compared apart, with the derivative read there (`_value_holes`)
+                    holes, hole_ok, hole_ev = _value_holes(f, var, order, kr, truth_k, claimed, ctx.timeout)
+                    off = sp.FiniteSet(*kinks, *holes)
+                    cdom = comparison_region(sp.Complement(dom, off) if kinks or holes else dom, loose + kopen, var)
                     if cstate == "undefined":
                         ok, cev = False, {"method": "claim_as_written", "reason": cwhy}
+                    elif hole_ok is False:
+                        ok, cev = False, {"method": "value_at_a_kink", "values": hole_ev}
                     else:
                         ok, cev = answers_equivalent(claimed, truth_k, shape="expression", domain=cdom, var=var)
+                        if hole_ok is None and ok is True:
+                            ok = None
+                        if holes:
+                            cev["values_apart"] = hole_ev
                     if ok is None and ctx.domain_for(var) != S.Reals:
                         # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not
                         # inside, and 1/x was left undecided under x > 1. Agreement where f is defined is agreement

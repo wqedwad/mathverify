@@ -270,6 +270,12 @@ def rk1_6():
                 E("sign(x)*(1 + 2*x**2)/sqrt(1 + x**2)"), UNK, None))
     out.append(("RK-1 der |x| - sqrt(x**2 + x**4): x/|x| - textbook [f'(0) = 0 exists]", der(f"Abs(x) - {S4}"),
                 E(f"x/Abs(x) - (x + 2*x**3)/{S4}"), NOTOK, None))
+    out.append(("RK-1 der |x| - sqrt(x**2 + x**4): sign(x)*(1 - (1 + 2x**2)/sqrt(1 + x**2)) [right everywhere, 0 at 0]",
+                der(f"Abs(x) - {S4}"), E("sign(x)*(1 - (1 + 2*x**2)/sqrt(1 + x**2))"), OK, None))
+    out.append(("RK-1 der |x| - sqrt(x**2 + x**4): the same + 1 - sign(x)**2 [1 at 0, f'(0) = 0]", der(f"Abs(x) - {S4}"),
+                E("sign(x)*(1 - (1 + 2*x**2)/sqrt(1 + x**2)) + 1 - sign(x)**2"), NOTOK, None))
+    out.append(("RK-1 der sqrt(x**4 + x**6): x*(2 + 3x**2)/sqrt(1 + x**2) [0 at 0]", der("sqrt(x**4 + x**6)"),
+                E("x*(2 + 3*x**2)/sqrt(1 + x**2)"), OK, None))
     out.append(("RK-1 der sqrt(x**4 + x**6): textbook undefined at 0 [f'(0) = 0]", der("sqrt(x**4 + x**6)"),
                 E("(2*x**3 + 3*x**5)/sqrt(x**4 + x**6)"), NOTOK, None))
     out.append(("RK-1 der (x**2 + x**4)**(2/3): undefined at 0 [f'(0) = 0]", der("(x**2 + x**4)**(2/3)"),
@@ -332,6 +338,18 @@ def rk3_4_5():
     out.append(("RK-3 der a*x**2, given a > 0: 2*a*x", der("a*x**2", None, ["a > 0"], [X, AR]), E("2*a*x"), OK, None))
     out.append(("RK-3 der a*x**2, given a**2 = 4: 4*x [a = -2 too]", der("a*x**2", None, ["a**2 = 4"], [X, AR]), E("4*x"),
                 NOTOK, None))
+    # the same rule in series_sum, recurrence_term and closed_form: c**2 = 4 fixes no value
+    C = {"name": "c", "domain": "real"}
+    for q, good, bad in ((ss("a**2*k", "1", "3", ["a**2 = 4"], [K_, AR]), "24", "12"),
+                         (ir("recurrence_term", {"recurrence": "a(n) = c*a(n - 1)", "initial": {"1": "1"}, "index": "3",
+                                                 "var": "n", "name": "a"}, ["c**2 = 4"], [NPI, C], "scalar"), "4", "5")):
+        out.append((f"RK-3 {q['task']['kind']}, a**2 = 4 / c**2 = 4: {good} [right for both values]", q, sol(good), NOTNO,
+                    None))
+        out.append((f"RK-3 {q['task']['kind']}, a**2 = 4 / c**2 = 4: {bad} [wrong for both]", q, sol(bad), NO, None))
+    q = ir("closed_form", {"recurrence": "a(n) = c**2*a(n - 1)", "initial": {"1": "1"}, "var": "n", "name": "a"},
+           ["c**2 = 4"], [NPI, C], "expression")
+    out.append(("RK-3 closed_form a(n) = c**2*a(n - 1), c**2 = 4: 4**(n - 1)", q, E("4**(n - 1)"), NOTNO, None))
+    out.append(("RK-3 closed_form a(n) = c**2*a(n - 1), c**2 = 4: 3**(n - 1) [wrong]", q, E("3**(n - 1)"), NOTOK, None))
     for t, lo, hi, v in (("1/factorial(k)", "0", "oo", "E"), ("1/factorial(k)", "0", "3", "8/3"),
                          ("2**k/factorial(k)", "0", "oo", "exp(2)"), ("k/factorial(k)", "1", "oo", "E"),
                          ("1/factorial(2*k)", "0", "oo", "cosh(1)"), ("1/factorial(k + 1)", "0", "oo", "E - 1"),

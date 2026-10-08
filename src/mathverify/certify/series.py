@@ -492,6 +492,12 @@ def verify(ir, solution, ctx: Ctx):
                     return unknown(LAYER, iev.get("error", "iteration_failed"), 0, ev, flags=flags)
                 ev["value"] = str(val)
                 ok, cev = answers_equivalent(claimed, val, shape="scalar")
+                # a parameter a given restricts without fixing it (c**2 = 4): refuted at an allowed value only, never
+                # against the general symbol (a(3) = 4 of a(n) = c*a(n - 1) was refuted against c**2; round 4, RK-3)
+                from .calculus import refuted_at_an_allowed_value
+                ok = refuted_at_an_allowed_value(
+                    ctx, n, ok, cev, [claimed, val],
+                    lambda inst: answers_equivalent(claimed.xreplace(inst), val.xreplace(inst), shape="scalar")[0])
                 ev["compare"] = cev
                 conf = 0.99
             else:
@@ -509,6 +515,15 @@ def verify(ir, solution, ctx: Ctx):
                     claim_conds = _written_conditions(payload, claim_ns, pins)
                 ok, cev = check_closed_form(rel, f, n, initial, closed, rec_conds, claim_conds,
                                             timeout=ctx.timeout)
+                from .calculus import refuted_at_an_allowed_value
+
+                def _at(inst):
+                    return check_closed_form(rel.xreplace(inst), f, n, {k: v.xreplace(inst) for k, v in initial.items()},
+                                             closed.xreplace(inst), [c.xreplace(inst) for c in rec_conds or []],
+                                             None if claim_conds is None else [c.xreplace(inst) for c in claim_conds],
+                                             timeout=ctx.timeout)[0]
+                ok = refuted_at_an_allowed_value(ctx, n, ok, cev, [closed, rel.lhs, rel.rhs] + list(initial.values()),
+                                                 _at)
                 ev.update(cev)
                 rr = sb_run("mathverify.certify.series:_rsolve_worker", rel, f, n, initial, timeout=ctx.timeout)
                 ev["rsolve"] = str(rr.value) if rr.ok else rr.error
@@ -583,6 +598,11 @@ def verify(ir, solution, ctx: Ctx):
                 return unknown(LAYER, "term_definedness_undecided_as_written", t.ms, {"term": p["term"]},
                                flags=["written_domain"])
             ok, cev = certify_series_sum(term, var, lo, hi, claimed, timeout=ctx.timeout)
+            from .calculus import refuted_at_an_allowed_value
+            ok = refuted_at_an_allowed_value(
+                ctx, var, ok, cev, [term, lo, hi, claimed],
+                lambda inst: certify_series_sum(term.xreplace(inst), var, lo.xreplace(inst), hi.xreplace(inst),
+                                                claimed.xreplace(inst), timeout=ctx.timeout)[0])
             ev.update(cev)
             conf = 0.99 if ev.get("method") in ("exact_finite", "symbolic+numeric") else 0.95
     if ok is True:
