@@ -120,3 +120,14 @@ SP yeni: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scrat
 - 13:31–13:41 d4h kalan ölçümler (fin8.sh): d4h sondası a2f5603'te (_float kaldırılmış son ağaç) 301 vakada 0; test_d4_d4h_ayristirici.py
   ec62a68'de 111 testin 69'u düşer; G11 tohumları (PYTHONHASHSEED 0..7) ec62a68'de 14 beklenmeyen (tohuma bağlı karar; cos x = 1 için
   {nπ + kπ} bazı tohumlarda CORRECT: yanlış onay), a2f5603'te 0.
+- 14:02 d4c3 saldırısı BİTTİ: 8 bulgu, 8 gerçek (YO-A = R-YO-1 = R-RET-1 yüksek: zarfın Taylor hücresi atan(tan x) sıçramasını görmüyor,
+  tolerans yolu bu parçayla kabule döndü; YO-B kesin fark yalnız 8 sabit noktada (önceden var sınıf); YO-C dar aralık; KK-1 TTK log/polylog
+  (bu parça); SG-1 TypeError (bu parça); KK-2 ters sınır). Kararlar saldiri/d4c3/kararlar_tur4.txt. 14:15 d4c tur 4 taze ajan (worktree
+  /home/user/wt/d4c3, 443e078'e ileri sarıldı).
+- 14:27 saldırgan d4h (iş akışı v3, wf_ed0b0f73-93a), commit a2f5603 taban 62a40e9 (yük düşük: 1.1–1.4).
+- 14:44 d4e3 saldırısı (yeniden) BİTTİ: 18 kayıt, 17 gerçek. Devralınanlar: D4E3-YO-2 ve YO-3 gerçek (önceden var), KINK gerçek değil
+  (beklenti hatası; bağımsız doğrulayıcı mpmath fark bölümleriyle). Yeni: YO-4 = RK-2 (yüksek, önceden var: majorant yolunda işaretli
+  sembollü parçada SymPy'nin genel parametre limiti kanıt sayılıyor), YO-5 + YO-3-EK1 (aralıklı ekstremum yazılı tanımlılık), YO-6
+  (Piecewise dal koşulu), YO-7 (Piecewise boşluğu), RK-1 (yüksek haksız ret, d4e 3. tur getirdi: sqrt(x²+x⁴) 0'da analitik sayılıyor),
+  RK-3 (2a = 4 türevde okunmuyor), RK-4..RK-8, RK-10 kapsama (d4e 3. tur/d342778), RK-9 süre. Kararlar saldiri/d4e3/kararlar_tur4.txt.
+- 14:46 makine çapında iki slotlu ağır süreç semaforu: $SP/agir.sh (flock; kayıt $SP/agir/kayit.txt); d4b9 ve d4c4 ajanlarına bildirildi.
