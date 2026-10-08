@@ -239,6 +239,14 @@ def test_rk1_verdicts(e, claim, want):                                          
     assert _run(_ineq(e), claim, "interval").verdict == want
 
 
+def test_rk1_a_one_sided_domain_written_another_way():                                # 56cec1d
+    # the pieces of the cells end at 3 and at log(8)/log(2): their union is taken with one writing
+    r = _run(_ineq("Abs(x)*(x - 3) <= 0", givens=["x <= log(8)/log(2)"]), "Interval(-oo, 3)", "interval")
+    assert r.verdict == "CORRECT"
+    r = _run(_ineq("Abs(x)*(x - 3) <= 0", givens=["x <= log(8)/log(2)"]), "Interval.open(-oo, 3)", "interval")
+    assert r.verdict == "INCORRECT"
+
+
 def test_rk1_count_integers():                                                        # 56cec1d
     ir = _ir("count_integers", {"var": "x"}, [V("x", "integer")], ["Abs(x - 3)*(2**x - 8) <= 0", "x >= -5", "x <= 10"],
              "count")

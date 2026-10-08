@@ -439,6 +439,8 @@ MUTATIONS += [
     ("N16 hücre kesişimi SymPy'nin", EX, "            got = exact_intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",
      "            got = sp.Intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",
      T9 + "test_a_cell_zero_written_another_way"),
+    ("N17 hücre birleşimi SymPy'nin", EX, "    out = exact_setop(sp.Union, pieces) if pieces else S.EmptySet",
+     "    out = sp.Union(*pieces) if pieces else S.EmptySet", T9 + "test_rk1_a_one_sided_domain_written_another_way"),
     ("N19 denklem kümesi alanla SymPy'nin kesişimiyle", EX,
      "        return exact_intersection(exact_complement(zs, union(pp)) if pp else zs, domain)",
      "        return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)",

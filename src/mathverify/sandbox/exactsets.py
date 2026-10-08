@@ -989,7 +989,9 @@ def _piecewise(rel, var, lo, hi):
             continue
         if _holds(type(rel), _real_sign(val)):
             pieces.append(sp.FiniteSet(p_))
-    out = sp.Union(*pieces) if pieces else S.EmptySet
+    # the pieces end at cuts and zeros written one way per cell: |x|*(x - 3) <= 0 under x <= log(8)/log(2) met
+    # (0, log(8)/log(2)) and {3}, and SymPy's union of them was left unsolved (round 9 of part d4b, RK-1)
+    out = exact_setop(sp.Union, pieces) if pieces else S.EmptySet
     return exact_intersection(out, _defined_by(conds, var, lo, hi)) if conds else out
 
 
