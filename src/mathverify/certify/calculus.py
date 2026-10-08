@@ -1135,12 +1135,15 @@ def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout) -
     """'value' (f has a derivative of `order` at the zero p of the switch or root base u), 'corner' (none: a corner,
     a cusp, a jump, an infinite slope) or None (undecided, or the reading's budget of `derivative_at_point` calls
     spent)."""
-    if order == 1:
-        st = _linear_switch_rule(fa, var, p, u, switches, fconds)
-        if st is None:
-            st = _power_rule(fa, var, p, u, switches, fconds)
-        if st is not None:
-            return st
+    st = _linear_switch_rule(fa, var, p, u, switches, fconds)
+    if st is None:
+        st = _power_rule(fa, var, p, u, switches, fconds)
+    if order == 1 and st is not None:
+        return st
+    if st == "corner":
+        # no first derivative at p: none of a higher order either; four simple zeros of a quartic |P| spent the
+        # budget of the second derivative (attack on d4e round 3, D4E3-RK-10)
+        return "corner"
     if budget[0] <= 0:
         return None
     budget[0] -= 1
@@ -1231,6 +1234,28 @@ def _abs_factor(f, u):
         return None
     g = sp.Mul(*[x for x in f.args if x != a])
     return g if not g.has(sp.Abs) and _continuous_where_defined(g) else None
+
+
+def _abs_linear(fa, var, u):
+    """g when f (in `abs_form`) is h + g*|u| once |u|**2 is read as u**2 (Max(sin(x), 0)**2 is
+    (sin(x)**2 + sin(x)*|sin(x)|)/2), g and h analytic where defined (`_analytic_where_defined`); None otherwise. At a
+    zero p of u, g(p) = 0 gives f the derivative h'(p), and g(p) != 0 with u'(p) != 0 a corner (attack on d4e round 3,
+    D4E3-RK-8: Max(sin(x), 0)**2, which is C1, had its derivative left undecided)."""
+    atoms = [a for a in fa.atoms(sp.Abs) if a.args[0] == u]
+    if len(atoms) != 1 or not _continuous_where_defined(u) or u.has(sp.Abs):
+        return None
+    D = sp.Dummy("abs")
+    try:
+        F = sp.expand(fa.xreplace({atoms[0]: D}))
+        F = F.replace(lambda e: isinstance(e, sp.Pow) and e.base == D and e.exp.is_Integer and e.exp >= 2,
+                      lambda e: u ** (e.exp - e.exp % 2) * D ** (e.exp % 2))
+        h, rest = F.as_independent(D, as_Add=True)
+        g, k = rest.as_coeff_exponent(D)
+    except Exception:  # noqa: BLE001
+        return None
+    if rest == 0 or k != 1 or g.has(D) or not (_analytic_where_defined(g, var) and _analytic_where_defined(h, var)):
+        return None
+    return g
 
 
 def _is_zero_at(u, var, p) -> bool:
@@ -1489,6 +1514,8 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fcon
         # of them, and the family stays in the comparison (sin(x)*|sin(x)|: 2*cos(x)*|sin(x)| was certified before
         # and stays so); g != 0 and u' != 0 there give a corner at each, and the family is left out
         g = _abs_factor(fa, u) if order == 1 else None
+        if g is None and order == 1:
+            g = _abs_linear(fa, var, u)
         gv = [sp.simplify(g.subs(var, p_)) for p_ in family] if g is not None else []
         if g is not None and all(v.is_zero is True for v in gv):
             out["value_families"].append(u)
@@ -2219,8 +2246,8 @@ def refuted_at_an_allowed_value(ctx: Ctx, var, ok, ev: dict, exprs, compare, exc
         return None
     samples = []
     for p_ in params:
-        vals = [v for v in _PARAMETER_SAMPLES if (not getattr(p_, "is_integer", None) or v.is_integer)
-                and in_domain(regions[p_], v) is True][:2]
+        vals = [v for v in list(_PARAMETER_SAMPLES) + _points_of(regions[p_])
+                if (not getattr(p_, "is_integer", None) or v.is_integer) and in_domain(regions[p_], v) is True][:2]
         if not vals:
             ev["parameter_given_not_applied"] = named
             return None

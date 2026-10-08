@@ -15,6 +15,7 @@ is marked as a control.
 * RK-5: the claim's condition on a parameter ignored the parameter's region (a != 0 given).
 * RK-7: Dirichlet's test with a declared-positive parameter (sin(t)/(t + a)).
 * RK-9: one verify of |x**4 - 10*x**2 + 1|*|x**3 - 3*x + 1|' took over 60 s.
+* RK-8, RK-10: Max(sin(x), 0)**2 (C1) and the second derivative of |x(x - 1)(x - 2)(x - 3)| were left undecided.
 """
 import time
 
@@ -284,3 +285,13 @@ def test_kink_controls_stay_correct():
                  ("Max(x, -x)*Max(x, -x)", "2*x"), ("Max(x**3, -x**3)", "3*x**2*sign(x)"),
                  ("x*Max(x, -x)", "2*Max(x, -x)"), ("Max(x, -x)**(1/2)", "sign(x)/(2*sqrt(Abs(x)))")):
         assert _v(_der(f), c, E) == "CORRECT", f
+
+
+def test_kink_rules_for_a_higher_order_and_h_plus_g_abs():
+    E = "expression"
+    P4 = "x*(x - 1)*(x - 2)*(x - 3)"
+    assert _v(_der(f"Abs({P4})", None, (), None, 2), f"(12*x**2 - 36*x + 22)*({P4})/Abs({P4})", E) == "CORRECT"
+    assert _v(_der("Max(sin(x), 0)**2"), "2*cos(x)*Max(sin(x), 0)", E) == "CORRECT"
+    assert _v(_der("Max(sin(x), 0)**2"), "2*sin(x)*cos(x)", E) == "INCORRECT"
+    # h has a corner of its own at 0, where f has no derivative: never refuted for being undefined there
+    assert _v(_der("Abs(x) + Max(sin(x), 0)**2"), "x/Abs(x) + 2*cos(x)*Max(sin(x), 0)", E) != "INCORRECT"
