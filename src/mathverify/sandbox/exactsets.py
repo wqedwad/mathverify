@@ -159,9 +159,15 @@ def exact_setop(op, sets) -> sp.Set:
     (sqrt(3 + 2*sqrt(2)), 1 + sqrt(2)] that holds no number, from which the sampler drew a point and
     refuted the right (1 + sqrt(2), 2 + sqrt(2)) (round 8, RK-4). A pair neither proved equal nor certainly
     different raises TypeError: the caller abstains."""
-    from ..equiv.sets import EndpointsIncomparable, unify_endpoints
+    from ..equiv.sets import EndpointsIncomparable, TooManyEndpoints, endpoints_apart, unify_endpoints
+    sets = list(sets)
     try:
-        sets = unify_endpoints(list(sets))
+        sets = unify_endpoints(sets)
+    except TooManyEndpoints as err:
+        # more endpoints than are compared pair by pair: still read when no two of them are close (the
+        # 300 zeros of sin(x) on [0, 940]; round 9 of part d4b, RK-3), so none needs another writing
+        if not endpoints_apart(sets, 2 * LIMIT + 4):
+            raise TypeError(f"endpoints not ordered: {err}") from None
     except EndpointsIncomparable as err:
         raise TypeError(f"endpoints not ordered: {err}") from None
     return op(*sets)
@@ -969,7 +975,10 @@ def _piecewise(rel, var, lo, hi):
         elif cell is sp.false:
             got = S.EmptySet
         else:
-            got = sp.Intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))
+            # the cell's own set may end at a zero PROVED equal to a cut but written another way (2**x - 8 on
+            # (-oo, 3) of |x - 3|*(2**x - 8) <= 0 ends at log(8)/log(2)): one writing first, or SymPy raised
+            # and the right (-oo, 3] was left unsolved (round 9 of part d4b, RK-1)
+            got = exact_intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))
         pieces.append(got)
     for p_ in edges:                           # each cut point and window end on `rel` as written
         if not p_.is_finite or _same(p_, bad) or outside(p_):
@@ -980,7 +989,7 @@ def _piecewise(rel, var, lo, hi):
             continue
         if _holds(type(rel), _real_sign(val)):
             pieces.append(sp.FiniteSet(p_))
-    out = sp.Union(*pieces) if pieces else S.EmptySet
+    out = exact_setop(sp.Union, pieces) if pieces else S.EmptySet
     return exact_intersection(out, _defined_by(conds, var, lo, hi)) if conds else out
 
 
@@ -1239,7 +1248,7 @@ def _rebuilt(rel, var, domain):
             return sp.Union(*[sp.FiniteSet(p0) if step == 0 else sp.ImageSet(sp.Lambda(n, p0 + step * n), S.Integers)
                               for p0, step in progs]) if progs else S.EmptySet
         zs = union(zp)
-        return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)
+        return exact_intersection(exact_complement(zs, union(pp)) if pp else zs, domain)
     if P is None:
         # not periodic: with finitely many zeros and poles, the cells cover the whole line
         return exact_intersection(_on_window(rel, var, wlo, whi)[0], domain)
@@ -1438,6 +1447,20 @@ def _on_periodic_points(rel, var, domain, P):
     return sp.Union(*[sp.ImageSet(sp.Lambda(n, p + L * n), S.Integers) for p in keep])
 
 
+def _defined_at_point(e, var, p) -> bool:
+    """Is `e` defined at var = p, every definedness condition (certify.domain) decided there? False where one
+    certainly fails; raise _Unsolved where one is undecided, a convention among them (Mod by a negative number,
+    (-1)**x at a non-integer: part d4a)."""
+    from ..certify.domain import definedness_conditions, is_convention, relation_holds_at
+    for c in definedness_conditions(e, var):
+        h = relation_holds_at(c, var, p)
+        if h is False and not is_convention(c):
+            return False
+        if h is not True:
+            raise _Unsolved(f"definedness undecided at {p}: {c}")
+    return True
+
+
 def _on_points(rel, var, pts):
     """The points of the finite set `pts` where `rel` holds, each sign certified; a pole is no point
     of the set. None when a point cannot be decided (or there are too many)."""
@@ -1450,13 +1473,22 @@ def _on_points(rel, var, pts):
         # a point where a log, an even root or an acos is not real is no point, though its value may fold
         # (0*acos(4) is 0); an odd root of a negative number there is a convention (round 8, YO-1)
         outside = _log_outside(e, var)
-        conds = _function_conditions(e, var)
+        try:
+            conds = _function_conditions(e, var)
+        except _Unsolved:
+            # factorial, Mod, (-1)**x, ...: no interval rule, but at a point their definedness is decided exactly
+            # (`_defined_at_point`); {3} of x**2 - 5x + 6 = 0 with sin(pi*x/2)*x! != 0 on {1, ..., 6} was left
+            # unsolved (round 9 of part d4b, RK-4)
+            conds = None
         odd = [n.base for n in _roots_of(e, var) if n.exp.q % 2 == 1]
         for p in pts:
             if any(_certified(u.subs(var, p)) == 0 for u in poles) or outside(p):
                 continue
-            if not all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds
-                       if c is not sp.true):
+            if conds is None:
+                if not _defined_at_point(e, var, p):
+                    continue
+            elif not all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds
+                         if c is not sp.true):
                 continue
             if any(_certified(r_.subs(var, p)) < 0 for r_ in odd):
                 if not _PRINCIPAL[0]:

@@ -35,6 +35,11 @@ DET = "src/mathverify/steps/deterministic.py"
 VER = "src/mathverify/verifier.py"
 NUM = "src/mathverify/equiv/numeric.py"
 T = "tests/test_d4_d4b_periyodik.py::"
+T9 = "tests/test_d4_d4b_tur9.py::"
+SYM = "src/mathverify/equiv/symbolic.py"
+SETS = "src/mathverify/equiv/sets.py"
+GRD = "src/mathverify/_sympy_guards.py"
+CALC = "src/mathverify/certify/calculus.py"
 _B01_MID = ("\n    bt = base.xreplace({n: tl})\n    if bt.free_symbols != {tl}:\n        return None\n    try:\n"
             "        g = sp.Poly(bt, tl)\n    except sp.PolynomialError:\n        return None\n")
 _RATIO_MID = ("\n        else:\n            return None\n    L = sp.expand(L)\n"
@@ -71,8 +76,8 @@ MUTATIONS = [
      T + "test_a_bounded_domain_is_rebuilt_on_every_period"),
     ("K05 paydanın sıfırı sıfır sayılır", EX, "            (zeros if is_num else poles).extend(z)", "            zeros.extend(z)",
      T + "test_only_the_exact_classes_give_a_set"),
-    ("K06 sınırsız denklemde kutup düşülmez", EX, "        return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)",
-     "        return sp.Intersection(zs, domain)", T + "test_only_the_exact_classes_give_a_set"),
+    ("K06 sınırsız denklemde kutup düşülmez", EX, "        return exact_intersection(exact_complement(zs, union(pp)) if pp else zs, domain)",
+     "        return exact_intersection(zs, domain)", T + "test_only_the_exact_classes_give_a_set"),
     ("K07 sınırsızda hiçbir yer / her yer okunmaz", EX,
      "    if w is S.EmptySet:\n        return S.EmptySet\n    if w == sp.Interval(0, P):\n        return domain\n", "",
      T + "test_equations_keep_their_exact_sets"),
@@ -234,10 +239,10 @@ MUTATIONS = [
     ("Y13 sınıf kümesinin alandaki sonlu noktaları okunmaz", ALG, "            on_dom = _finite_points(rc.value, domain)",
      "            on_dom = None", T + "test_round7_verdicts"),
     ("Y14 örnekleyici kesişimi iki yazımda ölür", ALG,
-     "sample_points({var: exact_intersection(claimed_set, dom)}, n, seed, special=True)",
-     "sample_points({var: sp.Intersection(claimed_set, dom)}, n, seed, special=True)", T + "test_round7_verdicts"),
-    ("Y15 örnekleyici tümleyeni iki yazımda ölür", ALG, "    outside_set = exact_complement(dom, claimed_set)",
-     "    outside_set = sp.Complement(dom, claimed_set)", T + "test_round7_verdicts"),
+     "sample_points({var: exact_intersection(claimed_set, base)}, n, seed, special=True)",
+     "sample_points({var: sp.Intersection(claimed_set, base)}, n, seed, special=True)", T + "test_round7_verdicts"),
+    ("Y15 örnekleyici tümleyeni iki yazımda ölür", ALG, "    outside_set = exact_complement(base, claimed_set)",
+     "    outside_set = sp.Complement(base, claimed_set)", T + "test_round7_verdicts"),
     # --- round 8: the review of round 7 (YO-1, RK-1 ... RK-4)
     ("Z01 sıçramalı fonksiyon evalf'le okunur", NUM, "    e = _jumps_resolved(e, timeout)\n    if e is None:\n        return None",
      "    if False:\n        return None", T + "test_round8_certified_sign_of_a_jump"),
@@ -251,8 +256,8 @@ MUTATIONS = [
      "    conds = _function_conditions(e, var)\n\n    def cut(st):", "    conds = []\n\n    def cut(st):",
      T + "test_round8_sets"),
     ("Z05 noktada sınıf dışı fonksiyon koşulu okunmaz", EX,
-     "                continue\n            if not all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds",
-     "                continue\n            if False and all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds",
+     "            elif not all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds",
+     "            elif False and all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds",
      T + "test_round8_sets"),
     ("Z06 noktada log/kök tanım dışı okunmaz", EX,
      "            if any(_certified(u.subs(var, p)) == 0 for u in poles) or outside(p):",
@@ -340,7 +345,7 @@ MUTATIONS = [
     ("B09 cut_by uç noktasını tek yazıma indirmez", BASE,
      "                dom = rr.value if risky else exact_intersection(dom, rr.value)",
      "                dom = rr.value if risky else sp.Intersection(dom, rr.value)", T + "test_one_endpoint_written_two_ways"),
-    ("B10 küme işleminde uçlar tek yazıma inmez", EX, "        sets = unify_endpoints(list(sets))",
+    ("B10 küme işleminde uçlar tek yazıma inmez", EX, "        sets = unify_endpoints(sets)",
      "        sets = list(sets)", T + "test_round8_no_strip_between_two_writings"),
     # --- algebra
     ("A01 verilenler ℝ'de tek periyot", ALG, "    dom = ctx.cut_by(var, dom, [real_odd_roots(a) for a in plain])",
@@ -386,6 +391,107 @@ MUTATIONS = [
      T + "test_trig_solve_with_a_free_bound_or_a_general_solution_on_a_restricted_variable"),
     ("T05 uygulanamayan koşulda çekimser değil", TRIG, "    if unbound or unb:\n        return None, unbound + unb\n", "",
      T + "test_trig_solve_with_a_free_bound_or_a_general_solution_on_a_restricted_variable"),
+]
+
+# --- round 9 (8 Oct 2026): the review of round 8
+MUTATIONS += [
+    # YO-1
+    ("N01 düşen kısıt işaretlenmez", BASE, "                        unapplied.append(c)\n                        failed.append(c)\n",
+     "                        pass\n", T9 + "test_constraints_not_applied_lists_the_failed_one"),
+    ("N02 giriş uygulanamayan kısıtta çekimser değil", VER, "    if not_applied:\n", "    if False:\n",
+     T9 + "test_an_intersection_that_raises_abstains"),
+    ("N03 toplam tek yazımdan okunur", NUM, "    if isinstance(e, sp.Add):\n        q = _evalf_strict(-e)",
+     "    if False:\n        q = _evalf_strict(-e)", T9 + "test_certified_sign_reads_a_sum_both_ways"),
+    ("N04 çelişen iki okuma karar verir", NUM,
+     "        return signs.pop() if len(signs) == 1 and not any(p[2] == \"zero\" for p in reads) else None",
+     "        return signs.pop()", T9 + "test_two_readings_that_disagree_decide_nothing"),
+    # YO-4
+    ("N05 ad alanında SymPy'nin ceiling'i", PARSE, '"floor": floor, "ceiling": ceiling, "ceil": ceiling,',
+     '"floor": sp.floor, "ceiling": sp.ceiling, "ceil": sp.ceiling,', T9 + "test_the_parse_holds_a_jump_of_an_unproved_zero"),
+    ("N06 sıçrama sabitte SymPy'nin değeri", PARSE, "    if all(isinstance(a, sp.Expr) and a.is_number is True",
+     "    if False and all(isinstance(a, sp.Expr) and a.is_number is True",
+     T9 + "test_the_parse_holds_a_jump_of_an_unproved_zero"),
+    ("N07 num_equal kararsız sıçramada karar verir", NUM, "    if undecided_jumps(a, b):\n        # a jump at a constant",
+     "    if False:\n        # a jump at a constant", T9 + "test_jumps_of_an_unproved_zero"),
+    ("N08 sym_equal kararsız sıçramada karar verir", SYM, "    if undecided_jumps(a, b):", "    if False:",
+     T9 + "test_jumps_of_an_unproved_zero"),
+    ("N09 belirsiz Abs üstündeki sıçrama evalf'e kalır", NUM,
+     "            if any(_closed_jump(n) and not isinstance(n, sp.Abs) for n in sp.preorder_traversal(e)):\n"
+     "                return None\n            return e",
+     "            return e", T9 + "test_sign_of_an_undecided_abs_is_undecided"),
+    ("N10 sabit koşullu Piecewise sıçrama değil", NUM,
+     "    if isinstance(n, sp.Piecewise):\n        return not any(getattr(c, \"free_symbols\", None) for _, c in n.args)",
+     "    if isinstance(n, sp.Piecewise):\n        return False", T9 + "test_a_piecewise_of_numbers_is_a_jump"),
+    ("N11 yeniden kurulan sıçrama değerlendirilir", NUM,
+     "    return e.func(*args, evaluate=False) if isinstance(e, _JUMPS + (sp.Piecewise,)) else e.func(*args)",
+     "    return e.func(*args)", T9 + "test_a_rebuilt_jump_is_resolved_again_not_read_off_the_noise"),
+    ("N12 LaTeX sıçraması tutulmaz", PARSE, "            e = held_jumps(e)  ", "            e = e  ",
+     T9 + "test_a_latex_jump_is_held_through_substitution"),
+    ("N13 hassasiyet bütçesi yok", GRD, "        if prec > PREC_CEILING:\n", "        if False:\n",
+     T9 + "test_evalf_precision_has_a_ceiling"),
+    ("N14 ilişki farkı katı değil", GRD, "            v = dif.evalf(2, strict=True)", "            v = dif.evalf(2)",
+     T9 + "test_relations_of_numbers_need_significant_digits"),
+    ("N15 ilişki farkı tek yazımdan", GRD, "    for dif, sign in ((a - b, 1), (b - a, -1)):", "    for dif, sign in ((a - b, 1),):",
+     T9 + "test_relations_of_numbers_need_significant_digits"),
+    # RK-1
+    ("N16 hücre kesişimi SymPy'nin", EX, "            got = exact_intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",
+     "            got = sp.Intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",
+     T9 + "test_a_cell_zero_written_another_way"),
+    ("N17 hücre birleşimi SymPy'nin", EX, "    out = exact_setop(sp.Union, pieces) if pieces else S.EmptySet",
+     "    out = sp.Union(*pieces) if pieces else S.EmptySet", T9 + "test_rk1_verdicts"),
+    ("N19 denklem kümesi alanla SymPy'nin kesişimiyle", EX,
+     "        return exact_intersection(exact_complement(zs, union(pp)) if pp else zs, domain)",
+     "        return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)",
+     T9 + "test_an_equation_on_a_domain_written_another_way"),
+    # RK-3
+    ("N20 sınır üstünde hep TypeError", EX, "        if not endpoints_apart(sets, 2 * LIMIT + 4):", "        if True:",
+     T9 + "test_many_points_are_counted"),
+    ("N21 yakın çift aranmaz", SETS, "            if not (isinstance(ea, sp.Rational) and isinstance(eb, sp.Rational)):\n"
+     "                return False", "            if False:\n                return False", T9 + "test_endpoints_apart"),
+    ("N22 tavan yok", SETS, "            if len(consts) > cap:\n                return False", "            pass",
+     T9 + "test_endpoints_apart"),
+    ("N23 karmaşık uç sıralanır", SETS, "        if k is None or k.imag != 0:", "        if k is None:",
+     T9 + "test_endpoints_apart_refuses_complex_values"),
+    # RK-4
+    ("N24 noktada tanımlılık okunmaz", EX, "            conds = None\n        odd =", "            raise\n        odd =",
+     T9 + "test_on_points_reads_factorial_and_mod"),
+    ("N25 tanımsız nokta kararsız sayılır", EX, "        if h is False and not is_convention(c):\n            return False\n", "",
+     T9 + "test_on_points_drops_a_point_where_factorial_is_undefined"),
+    ("N26 kararsız tanımlılık tanımlı sayılır", EX, "        if h is not True:\n            raise _Unsolved(f\"definedness undecided",
+     "        if False:\n            raise _Unsolved(f\"definedness undecided", T9 + "test_on_points_reads_factorial_and_mod"),
+    # RK-5
+    ("N27 üyelik koşulunda verilen değer konmaz", LIM, "    if pins:\n        conds = [c.xreplace(pins)",
+     "    if False:\n        conds = [c.xreplace(pins)", T9 + "test_rk5_verdicts"),
+    ("N28 başlangıç geleneği bölgede okunmaz", LIM,
+     "    if isinstance(st, Convention) and st.kind == \"origin\":\n        return _origin_avoided(c.args[0], var, regions)\n", "",
+     T9 + "test_origin_avoided"),
+    ("N29 sıfır bölgede olsa da tutar", LIM, "        if all(in_domain(closure, z) is False for z in zs):", "        if True:",
+     T9 + "test_origin_avoided"),
+    ("N30 sıfırsız işlenen tutmaz", LIM, "    if zs is S.EmptySet:\n        return True", "    if zs is S.EmptySet:\n        return False",
+     T9 + "test_origin_avoided"),
+    ("N31 ekstremum başlangıç geleneğini aralıkta okumaz", EXT, "                           and membership_holds_on(c, var, [iv]))]",
+     "                           and False)]", T9 + "test_extremum_away_from_the_origin_convention"),
+    ("N32 türev üyeliğinde verilen değer yok", CALC,
+     "                                              neighbourhoods(_closed_real(p.get(\"at\"), ctx, pins)), pins)",
+     "                                              neighbourhoods(_closed_real(p.get(\"at\"), ctx, pins)))",
+     T9 + "test_rk5_verdicts", 2),
+    ("N33 limit üyeliğinde verilen değer yok", LIM,
+     "        members = [c for c in membership_conditions(p[\"expr\"], expr, var, ctx.ns, pins)",
+     "        members = [c for c in membership_conditions(p[\"expr\"], expr, var, ctx.ns)", T9 + "test_rk5_verdicts"),
+    ("N34 ekstremum üyeliğinde verilen değer yok", EXT,
+     "        members = [c for c in membership_conditions(p[\"f\"], f, var, ctx.ns, pins)",
+     "        members = [c for c in membership_conditions(p[\"f\"], f, var, ctx.ns)", T9 + "test_rk5_verdicts"),
+    # RK-2 / RK-6
+    ("N35 ConditionSet'ler ayrılmaz", ALG, "    split = _split_conditions(dom, var)\n", "    split = None\n",
+     T9 + "test_the_sampler_never_asks_sympy_for_a_conditionset_member"),
+    ("N36 iç noktada beyan koşulu aranmaz", ALG, "        inside = [c for c in inside if holds(keep, c)]\n", "",
+     T9 + "test_a_declared_constraint_stays_a_condition_of_the_sample"),
+    ("N37 dış noktada koşul aranmaz", ALG, "        outside = [c for c in outside if holds(conds, c)]\n", "",
+     T9 + "test_outside_the_claim_a_point_needs_every_condition"),
+    ("N38 yazılı koşul da iç noktada aranır", ALG, "    keep = [k for k in conds if k not in written]\n",
+     "    keep = list(conds)\n", T9 + "test_a_claim_over_an_unsolved_condition_is_refuted"),
+    ("N39 yazılı koşullar örnekleyiciye verilmez", ALG, "    okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed, written=written)",
+     "    okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed)", T9 + "test_a_claim_over_an_unsolved_condition_is_refuted"),
 ]
 
 if __name__ == "__main__":

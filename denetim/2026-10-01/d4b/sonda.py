@@ -748,6 +748,171 @@ def cases_k():
     ]
 
 
+def cases_l():
+    """Round 9 (8 Oct 2026), the review of round 8: a declared constraint dropped by an intersection that raised
+    (YO-1), a jump function of an unprovable zero read off rounding noise (YO-4), a cell's zero written another way
+    (RK-1), the sampler blind where an unsolved written condition fails (RK-2), 300 points and more (RK-3), factorial
+    and Mod on a finite domain (RK-4), the origin convention of atan2/arg under givens (RK-5), a sampling time set
+    by PYTHONHASHSEED (RK-6); SymPy's unbounded evaluation precision (one verify ran past 90 s)."""
+    I_ = "interval"
+    NEAR = "log(8)/log(2) + exp(-exp(10))"          # 3 + e^(-e^10), certified > 3 one way only
+    NEAR2 = "log(9)/log(3) + exp(-exp(9))"
+    FAR = "3 + 2*atan(tanh(1/2)) - atan(sinh(1))"     # exactly 3, no exact test proves it
+    HUGE = "log(8)/log(2) + exp(-exp(exp(5)))"       # 3 + e^(-e^148): ~4e64 bits to separate from 3
+    Z = "2*atan(tanh(1/2)) - atan(sinh(1))"          # exactly 0 (gd(1) twice)
+    cs = (V("x", "real", [f"x <= {NEAR}", "x >= 3"]),)
+    cr = (V("x", "real", ["x >= 3", f"x <= {NEAR}"]),)
+    cs2 = (V("x", "real", [f"x <= {NEAR2}", "x >= 2"]),)
+    cf = (V("x", "real", [f"x <= {FAR}", "x >= 3"]),)
+    cfr = (V("x", "real", ["x >= 3", f"x <= {FAR}"]),)
+    ch = (V("x", "real", [f"x <= {HUGE}", "x >= 3"]),)
+    X0 = V("x", "real", ["x >= 0"])
+    XY = (X, V("y", "real"))
+    D6 = "{1, 2, 3, 4, 5, 6}"
+
+    def cr_(e, lo, hi):
+        return _ir("count_roots", {"expr": e, "var": "x", "lo": lo, "hi": hi}, (X,), (), "count")
+
+    def trig4(vars_):
+        return _ir("trig_solve", {"var": "x", "interval": "[-4, 4]"}, vars_, ["sin(x) = 0"], "set")
+    out = []
+    for tag, vs in (("", cs), (" rev", cr)):
+        out += [
+            (f"L1 ineq x<5 | x<=NEAR,x>=3{tag}: (-oo,NEAR]", ineq("x < 5", vars_=vs), _sol(f"Interval(-oo, {NEAR})", I_), NOTOK,
+             None),
+            (f"L1 ineq x<5 | x<=NEAR,x>=3{tag}: [3,NEAR]", ineq("x < 5", vars_=vs), _sol(f"Interval(3, {NEAR})", I_), NOTNO, None),
+            (f"L1 eq x^2=4 | x<=NEAR,x>=3{tag}: {{-2,2}}", eq("x**2 = 4", vars_=vs), _sol("{-2, 2}", S_), NOTOK, None),
+            (f"L1 eq x^2=4 | x<=NEAR,x>=3{tag}: {{}}", eq("x**2 = 4", vars_=vs), _sol("EmptySet", S_), NOTNO, None),
+            (f"L1 ext max -x^2 | x<=NEAR,x>=3{tag}: 0", ext("-x**2", "max", vars_=vs), _sol("0"), NOTOK, None),
+            (f"L1 ext max -x^2 | x<=NEAR,x>=3{tag}: -9", ext("-x**2", "max", vars_=vs), _sol("-9"), NOTNO, None),
+            (f"L1 domof sqrt x | x<=NEAR,x>=3{tag}: [0,NEAR]", domof("sqrt(x)", vars_=vs), _sol(f"Interval(0, {NEAR})", I_),
+             NOTOK, None),
+            (f"L1 croots x^2-4 | x<=NEAR,x>=3{tag}: 2", croots("x**2 - 4", vars_=vs), _sol("2", "count"), NOTOK, None),
+            (f"L1 croots x^2-4 | x<=NEAR,x>=3{tag}: 0", croots("x**2 - 4", vars_=vs), _sol("0", "count"), NOTNO, None),
+            (f"L1 trig sin x=0 [-4,4] | x<=NEAR,x>=3{tag}: {{-pi,0}}", trig4(vs), _sol("{-pi, 0}", S_), NOTOK, None),
+            (f"L1 trig sin x=0 [-4,4] | x<=NEAR,x>=3{tag}: {{}}", trig4(vs), _sol("EmptySet", S_), NOTNO, None),
+        ]
+    out += [
+        ("L1 eq x^2=4 | x<=NEAR2,x>=2: {-2,2}", eq("x**2 = 4", vars_=cs2), _sol("{-2, 2}", S_), NOTOK, None),
+        ("L1 eq x^2=4 | x<=NEAR2,x>=2: {2}", eq("x**2 = 4", vars_=cs2), _sol("{2}", S_), NOTNO, None),
+        ("L1 eq x^2=9 | x<=FAR,x>=3: {-3,3}", eq("x**2 = 9", vars_=cf), _sol("{-3, 3}", S_), NOTOK, None),
+        ("L1 eq x^2=9 | x<=FAR,x>=3: {3}", eq("x**2 = 9", vars_=cf), _sol("{3}", S_), NOTNO, None),
+        ("L1 eq x^2=9 | x>=3,x<=FAR: {-3,3}", eq("x**2 = 9", vars_=cfr), _sol("{-3, 3}", S_), NOTOK, None),
+        ("L1 ext max -x^2 | x>=3,x<=FAR: 0", ext("-x**2", "max", vars_=cfr), _sol("0"), NOTOK, None),
+        # the evaluation precision budget: these ran past 90 s in the main process
+        ("L1 eq x^2=4 | x<=HUGE,x>=3: {-2,2}", eq("x**2 = 4", vars_=ch), _sol("{-2, 2}", S_), NOTOK, None),
+        ("L1 eq x^2=4 | x<=HUGE,x>=3: {}", eq("x**2 = 4", vars_=ch), _sol("EmptySet", S_), NOTNO, None),
+        ("L1 ev HUGE: 3", ev(HUGE, []), _sol("3"), NOTOK, None),
+        ("L1 ev log8/log2: HUGE", ev("log(8)/log(2)", []), _sol(HUGE), NOTOK, None),
+        ("L1 ctl ev log8/log2+exp(-exp(10)): 3", ev(NEAR, []), _sol("3"), NO, None),
+        # YO-4
+        ("L2 ev ceiling(Z^2): 1", ev(f"ceiling(({Z})**2)", []), _sol("1"), NOTOK, None),
+        ("L2 ev ceiling(Z^2): 0", ev(f"ceiling(({Z})**2)", []), _sol("0"), NOTNO, None),
+        ("L2 ev sign(Z^2): 1", ev(f"sign(({Z})**2)", []), _sol("1"), NOTOK, None),
+        ("L2 ev sign(Z^2): 0", ev(f"sign(({Z})**2)", []), _sol("0"), NOTNO, None),
+        ("L2 ev ceiling(sqrt|Z|): 1", ev(f"ceiling(sqrt(Abs({Z})))", []), _sol("1"), NOTOK, None),
+        ("L2 ev ceiling(sqrt|Z|): 0", ev(f"ceiling(sqrt(Abs({Z})))", []), _sol("0"), NOTNO, None),
+        ("L2 ev floor(-Z^2): -1", ev(f"floor(-({Z})**2)", []), _sol("-1"), NOTOK, None),
+        ("L2 ev floor(-Z^2): 0", ev(f"floor(-({Z})**2)", []), _sol("0"), NOTNO, None),
+        ("L2 ev sign(|Z|): 0", ev(f"sign(Abs({Z}))", []), _sol("0"), NOTNO, None),
+        ("L2 ev sign(|Z|): 1", ev(f"sign(Abs({Z}))", []), _sol("1"), NOTOK, None),
+        ("L2 ev frac(Z^2+3): 0", ev(f"frac(({Z})**2 + 3)", []), _sol("0"), NOTNO, None),
+        ("L2 ev Mod(Z^2+3,1): 0", ev(f"Mod(({Z})**2 + 3, 1)", []), _sol("0"), NOTNO, None),
+        ("L2 ev floor(3-Z^2): 2", ev(f"floor(3 - ({Z})**2)", []), _sol("2"), NOTOK, None),
+        ("L2 ev 5 sign(Z^2): 5", ev(f"5*sign(({Z})**2)", []), _sol("5"), NOTOK, None),
+        ("L2 ev Piecewise((1,Z^2>0),(0,Z^2<=0)): 1", ev(f"Piecewise((1, ({Z})**2 > 0), (0, ({Z})**2 <= 0))", []), _sol("1"),
+         NOTOK, None),
+        ("L2 ev Piecewise((1,Z^2>0),(0,Z^2<=0)): 0", ev(f"Piecewise((1, ({Z})**2 > 0), (0, ({Z})**2 <= 0))", []), _sol("0"),
+         NOTNO, None),
+        ("L2 ev 0: ceiling(Z^2)", ev("0", []), _sol(f"ceiling(({Z})**2)"), NOTNO, None),
+        ("L2 ctl ev floor(pi): 3", ev("floor(pi)", []), _sol("3"), OK, None),
+        ("L2 ctl ev ceiling(log8/log2): 3", ev("ceiling(log(8)/log(2))", []), _sol("3"), OK, None),
+        ("L2 ctl ev ceiling(log8/log2): 4", ev("ceiling(log(8)/log(2))", []), _sol("4"), NO, None),
+        ("L2 ctl ev sign(log8/log2-3): 0", ev("sign(log(8)/log(2) - 3)", []), _sol("0"), OK, None),
+        ("L2 ctl ev Mod(7,3): 1", ev("Mod(7, 3)", []), _sol("1"), OK, None),
+        ("L2 ctl ev frac(pi): pi-3", ev("frac(pi)", []), _sol("pi - 3"), OK, None),
+        ("L2 ctl ev Piecewise((7,pi>3),(0,pi<=3)): 7", ev("Piecewise((7, pi > 3), (0, pi <= 3))", []), _sol("7"), OK, None),
+        # RK-1
+        ("L3 ineq |x-3|(2^x-8)<=0: (-oo,3]", ineq("Abs(x - 3)*(2**x - 8) <= 0"), _sol("Interval(-oo, 3)", I_), OK, None),
+        ("L3 ineq |x-3|(2^x-8)<=0: (-oo,3)", ineq("Abs(x - 3)*(2**x - 8) <= 0"), _sol("Interval.open(-oo, 3)", I_), NO, None),
+        ("L3 ineq |x-3|(2^x-8)>0: (3,oo)", ineq("Abs(x - 3)*(2**x - 8) > 0"), _sol("Interval.open(3, oo)", I_), OK, None),
+        ("L3 ineq |x-3|(2^x-8)>0: [3,oo)", ineq("Abs(x - 3)*(2**x - 8) > 0"), _sol("Interval(3, oo)", I_), NO, None),
+        ("L3 ineq (x-3)|2^x-8|<=0: (-oo,3]", ineq("(x - 3)*Abs(2**x - 8) <= 0"), _sol("Interval(-oo, 3)", I_), OK, None),
+        ("L3 ineq sign(x-3)(2^x-8)>=0: R", ineq("sign(x - 3)*(2**x - 8) >= 0"), _sol("Reals", S_), OK, None),
+        ("L3 ineq Max(x,3)(2^x-8)<=0: (-oo,3]", ineq("Max(x, 3)*(2**x - 8) <= 0"), _sol("Interval(-oo, 3)", I_), OK, None),
+        ("L3 ineq |x-2|(3^x-9)<0: (-oo,2)", ineq("Abs(x - 2)*(3**x - 9) < 0"), _sol("Interval.open(-oo, 2)", I_), OK, None),
+        ("L3 ineq |x|(x-3)<=0, x<=L8: (-oo,3]", ineq("Abs(x)*(x - 3) <= 0", ["x <= log(8)/log(2)"]),
+         _sol("Interval(-oo, 3)", I_), OK, None),
+        ("L3 cint |x-3|(2^x-8)<=0 [-5,10]: 9", cint(["Abs(x - 3)*(2**x - 8) <= 0", "x >= -5", "x <= 10"], [V("x", "integer")]),
+         _sol("9", "count"), OK, None),
+        ("L3 cint |x-3|(2^x-8)<=0 [-5,10]: 8", cint(["Abs(x - 3)*(2**x - 8) <= 0", "x >= -5", "x <= 10"], [V("x", "integer")]),
+         _sol("8", "count"), NO, None),
+        # RK-2
+        ("L4 ineq sqrt(2^x-x-1)>=0: R", ineq("sqrt(2**x - x - 1) >= 0"), _sol("Reals", S_), NO, None),
+        ("L4 ineq acos(x+atan x)>=0: R", ineq("acos(x + atan(x)) >= 0"), _sol("Reals", S_), NO, None),
+        ("L4 ineq acos(2^x+x-2)>=0: [0,2]", ineq("acos(2**x + x - 2) >= 0"), _sol("Interval(0, 2)", I_), NO, None),
+        ("L4 ineq acos(2^x+x-2)>=0: [0,1]", ineq("acos(2**x + x - 2) >= 0"), _sol("Interval(0, 1)", I_), NOTNO, None),
+        ("L4 ineq sqrt(x e^x-1)>=0: [0,oo)", ineq("sqrt(x*exp(x) - 1) >= 0"), _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("L4 ineq sqrt(1-x e^x)>=0: R", ineq("sqrt(1 - x*exp(x)) >= 0"), _sol("Reals", S_), NOTOK, None),
+        ("L4 ineq x>=0 (|x|-x)acos(2^x+x-2)<=0: [0,2]", ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0", vars_=(X0,)),
+         _sol("Interval(0, 2)", I_), NOTOK, None),
+        ("L4 ineq x>=0 (|x|-x)acos(2^x+x-2)<=0: [0,1]", ineq("(Abs(x) - x)*acos(2**x + x - 2) <= 0", vars_=(X0,)),
+         _sol("Interval(0, 1)", I_), NOTNO, None),
+        # RK-6 (the time is bounded by CASE_TIMEOUT; the seed independence is a test)
+        ("L4 ineq x>=0 (|x|-x)(4 arc terms)<=0: [0,oo)",
+         ineq("(Abs(x) - x)*(acos(2**x + x - 2) + asin(x + atan(x)) + acos(x*exp(x)) + asin(3**x + x - 2)) <= 0",
+              vars_=(X0,)), _sol("Interval(0, oo)", I_), NOTOK, None),
+        # RK-3
+        ("L5 croots sin x [0,940]: 300", cr_("sin(x)", "0", "940"), _sol("300", "count"), OK, None),
+        ("L5 croots sin x [0,940]: 299", cr_("sin(x)", "0", "940"), _sol("299", "count"), NO, None),
+        ("L5 croots sin 100x [0,10]: 319", cr_("sin(100*x)", "0", "10"), _sol("319", "count"), OK, None),
+        ("L5 croots cos x [0,1000]: 318", cr_("cos(x)", "0", "1000"), _sol("318", "count"), OK, None),
+        ("L5 croots sin(pi x) [0,300]: 301", cr_("sin(pi*x)", "0", "300"), _sol("301", "count"), OK, None),
+        ("L5 ctl croots sin x [0,930]: 297", cr_("sin(x)", "0", "930"), _sol("297", "count"), OK, None),
+        # RK-4
+        ("L6 eq dod 1..6 x^2-5x+6=0, sin(pi x/2)x!!=0: {3}",
+         _ir("solve_equation", {"equation": "x**2 - 5*x + 6 = 0", "var": "x"}, (X,), ["sin(pi*x/2)*factorial(x) != 0"], "set", D6),
+         _sol("{3}", S_), OK, None),
+        ("L6 eq dod 1..6 x^2-5x+6=0, sin(pi x/2)x!!=0: {2,3}",
+         _ir("solve_equation", {"equation": "x**2 - 5*x + 6 = 0", "var": "x"}, (X,), ["sin(pi*x/2)*factorial(x) != 0"], "set", D6),
+         _sol("{2, 3}", S_), NO, None),
+        ("L6 eq dod 1..6 x^2-5x+6=0, cos(pi x)Mod(x,4)>0: {2}",
+         _ir("solve_equation", {"equation": "x**2 - 5*x + 6 = 0", "var": "x"}, (X,), ["cos(pi*x)*Mod(x, 4) > 0"], "set", D6),
+         _sol("{2}", S_), OK, None),
+        ("L6 ineq dod 1..6 x^2<20, sin(x)x!>0: {1,2,3}",
+         _ir("solve_inequality", {"inequality": "x**2 < 20", "var": "x"}, (X,), ["sin(x)*factorial(x) > 0"], "set", D6),
+         _sol("{1, 2, 3}", S_), OK, None),
+        ("L6 ineq dod 1..6 x^2<20, sin(x)x!>0: {1,2,3,4}",
+         _ir("solve_inequality", {"inequality": "x**2 < 20", "var": "x"}, (X,), ["sin(x)*factorial(x) > 0"], "set", D6),
+         _sol("{1, 2, 3, 4}", S_), NO, None),
+        # RK-5
+        ("L7 deriv atan2(y,x) at 0, y=2: -1/2", _ir("derivative", {"f": "atan2(y, x)", "var": "x", "at": "0"}, XY, ["y = 2"]),
+         _sol("-1/2"), OK, None),
+        ("L7 deriv atan2(y,x) at 0, y=2: 1/2", _ir("derivative", {"f": "atan2(y, x)", "var": "x", "at": "0"}, XY, ["y = 2"]),
+         _sol("1/2"), NO, None),
+        ("L7 deriv atan2(y,x), y=2: -2/(x^2+4)", _ir("derivative", {"f": "atan2(y, x)", "var": "x"}, XY, ["y = 2"], "expression"),
+         _sol("-2/(x**2 + 4)"), OK, None),
+        ("L7 deriv atan2(y,x), y=2: 2/(x^2+4)", _ir("derivative", {"f": "atan2(y, x)", "var": "x"}, XY, ["y = 2"], "expression"),
+         _sol("2/(x**2 + 4)"), NO, None),
+        ("L7 ext max atan2(x,y) [0,1], y=1: pi/4",
+         _ir("extremum", {"f": "atan2(x, y)", "var": "x", "which": "max", "interval": "[0, 1]"}, XY, ["y = 1"]), _sol("pi/4"),
+         OK, None),
+        ("L7 ext max atan2(x,y) [0,1], y=1: pi/3",
+         _ir("extremum", {"f": "atan2(x, y)", "var": "x", "which": "max", "interval": "[0, 1]"}, XY, ["y = 1"]), _sol("pi/3"),
+         NO, None),
+        ("L7 lim atan2(y,x) x->0, y=1: pi/2", _ir("limit", {"expr": "atan2(y, x)", "var": "x", "to": "0"}, XY, ["y = 1"]),
+         _sol("pi/2"), OK, None),
+        ("L7 lim atan2(y,x) x->0, y=1: 0", _ir("limit", {"expr": "atan2(y, x)", "var": "x", "to": "0"}, XY, ["y = 1"]),
+         _sol("0"), NO, None),
+        ("L7 deriv atan2(x-1,0) at 2: 0", _ir("derivative", {"f": "atan2(x - 1, 0)", "var": "x", "at": "2"}), _sol("0"), OK, None),
+        ("L7 deriv atan2(x-1,0) at 2: 1", _ir("derivative", {"f": "atan2(x - 1, 0)", "var": "x", "at": "2"}), _sol("1"), NO, None),
+        ("L7 deriv arg(x) at 1: 0", _ir("derivative", {"f": "arg(x)", "var": "x", "at": "1"}), _sol("0"), OK, None),
+        ("L7 deriv atan2(x,0) at 0: 0 (convention point)", _ir("derivative", {"f": "atan2(x, 0)", "var": "x", "at": "0"}),
+         _sol("0"), NOTOK, None),
+    ]
+    return out
+
+
 class _Slow(Exception):
     pass
 
@@ -761,10 +926,10 @@ CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "H": cases_h,
-          "I": cases_i, "J": cases_j, "K": cases_k}
+          "I": cases_i, "J": cases_j, "K": cases_k, "L": cases_l}
 
 
-def main(out_path=None, groups="ABCDEFGHIJK"):
+def main(out_path=None, groups="ABCDEFGHIJKL"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -805,5 +970,5 @@ def main(out_path=None, groups="ABCDEFGHIJK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJKL"
     sys.exit(1 if main(out, grp) else 0)

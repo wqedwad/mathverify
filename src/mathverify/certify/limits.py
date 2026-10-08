@@ -24,8 +24,8 @@ from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
-from .domain import (_violations, closed_condition_undecided, definedness_conditions, open_conditions_empty,
-                     written_definedness)
+from .domain import (Convention, _violations, closed_condition_undecided, definedness_conditions,
+                     open_conditions_empty, written_definedness)
 
 LAYER = "certify.limits"
 
@@ -385,19 +385,23 @@ def written_undefined_everywhere(src, ns) -> bool:
     return any(c is sp.false for c in conds) or closed_condition_undecided(conds) or open_conditions_empty(conds)
 
 
-def membership_conditions(src, expr, var, ns) -> list[Any]:
+def membership_conditions(src, expr, var, ns, pins=None) -> list[Any]:
     """The membership conditions naming `var` (a gcd/lcm argument rational, an n! or C(n, r) argument a
     natural number: certify.domain) of a task's expression, as written or as parsed. No interval rule
     reads them, and the limit, derivative and integral certificates dropped them: with x + x! - x!
     (x after parsing), the limit -3 at -3, the derivative 1 at -3 and the integral -4 over [-3, -1]
     were certified, although the expression has a value at the natural numbers alone (30 Sep 2026). A
     variable whose declaration settles the membership (n a positive integer: n! has its value) carries
-    no such condition."""
+    no such condition. The values the givens fix (`pins`, `Ctx.task_pins`) are put in: the condition of
+    atan2(y, x) that y**2 + x**2 is not 0 holds for every x with y = 2, and the derivative -1/2 at 0 was
+    UNKNOWN (round 9 of part d4b, RK-5)."""
     conds = list(written_definedness(src, ns)[0])
     try:
         conds += definedness_conditions(expr, var)
     except Exception:  # noqa: BLE001 - a failed reading adds no fact
         pass
+    if pins:
+        conds = [c.xreplace(pins) if isinstance(c, sp.Basic) else c for c in conds]
     return [c for c in dict.fromkeys(conds) if isinstance(c, sp.Contains) and var in c.free_symbols]
 
 
@@ -410,8 +414,13 @@ def membership_holds_on(c, var, regions) -> bool:
     `regions` (unions of intervals), for certain? Proved for a set ℝ ∖ D (Γ off its poles 0, -1, -2, ...) with an
     argument linear in `var`: the image of the region misses D. Γ has a value on (-1, 0) ∪ (0, 1), around its pole
     0, and the limit 1 of x Γ(x) at 0, the integral of x Γ(1 + x)/Γ(1 + x) over [0, 1] and the derivative of
-    Γ(x + 1)/Γ(x) at 2 were UNKNOWN (review of d4f, RK-F2). A natural-number condition (x!) holds on no interval."""
+    Γ(x + 1)/Γ(x) at 2 were UNKNOWN (review of d4f, RK-F2). A natural-number condition (x!) holds on no interval.
+    The convention that the operand of atan2 or arg is not 0 (`domain.Convention` `origin`) holds where its exact
+    zeros are not: everywhere for y**2 + x**2 with y = 2, on a neighbourhood of 2 for (x - 1)**2 (round 9 of part
+    d4b, RK-5); at a zero it stays undecided."""
     st = c.args[1] if isinstance(c, sp.Contains) else None
+    if isinstance(st, Convention) and st.kind == "origin":
+        return _origin_avoided(c.args[0], var, regions)
     if not (isinstance(st, sp.Complement) and st.args[0] == S.Reals) or not regions:
         return False
     arg, hole = c.args[0], st.args[1]
@@ -440,6 +449,31 @@ def membership_holds_on(c, var, regions) -> bool:
                 return True
         except Exception:  # noqa: BLE001 - a region SymPy cannot cut proves nothing
             continue
+    return False
+
+
+def _origin_avoided(u, var, regions) -> bool:
+    """Is the operand `u` (in `var` alone) certainly not 0 on all of ℝ, or on the closure of one of `regions`? Its
+    zeros from the exact classes (sandbox.exactsets), a finite set checked point by point; anything else: False."""
+    from ..sandbox.exactsets import exact_solveset
+    from .domain import in_domain
+    if not isinstance(u, sp.Expr) or u.free_symbols != {var}:
+        return False
+    try:
+        zs = exact_solveset(sp.Eq(u, 0), var, S.Reals)
+    except Exception:  # noqa: BLE001 - zeros not found exactly prove nothing
+        return False
+    if zs is S.EmptySet:
+        return True
+    if not isinstance(zs, sp.FiniteSet):
+        return False
+    for region in regions:
+        try:
+            closure = region.closure
+        except Exception:  # noqa: BLE001
+            continue
+        if all(in_domain(closure, z) is False for z in zs):
+            return True
     return False
 
 
@@ -697,7 +731,7 @@ def verify(ir, solution, ctx: Ctx):
         unpinned = sorted({str(s_) for c in written for s_ in getattr(c, "free_symbols", set()) - {var}})
         if unpinned:
             return unknown(LAYER, "parametric_limit", t.ms, {"parameters": unpinned}, flags=["parametric_limit"])
-        members = [c for c in membership_conditions(p["expr"], expr, var, ctx.ns)
+        members = [c for c in membership_conditions(p["expr"], expr, var, ctx.ns, pins)
                    if not holds_on_the_tail(c, var, point)
                    and not membership_holds_on(c, var, approach_regions(point, side))]
         if members:

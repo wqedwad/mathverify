@@ -397,17 +397,61 @@ def _endpoints(sset: sp.Set) -> tuple[list, list]:
     return members, non
 
 
-def _sample_inequality(rel, var, claimed_set: sp.Set, dom: sp.Set, seed: int, n: int = 40) -> tuple[bool | None, dict]:
+def _split_conditions(s_, var):
+    """(`s_` with every ConditionSet on `var` replaced by its base set, the conditions so taken out), or None when
+    a ConditionSet sits inside another operation (a union, a complement): `Ctx._periodic_conditions` cuts a domain
+    by intersections only."""
+    if isinstance(s_, sp.ConditionSet):
+        inner = _split_conditions(s_.base_set, var)
+        if inner is None:
+            return None
+        return inner[0], [s_.condition.xreplace({s_.sym: var})] + inner[1]
+    if isinstance(s_, sp.Intersection) and s_.has(sp.ConditionSet):
+        bases, conds = [], []
+        for a in s_.args:
+            r = _split_conditions(a, var)
+            if r is None:
+                return None
+            bases.append(r[0])
+            conds += r[1]
+        return exact_intersection(*bases), conds
+    if isinstance(s_, sp.Set) and s_.has(sp.ConditionSet):
+        return None
+    return s_, []
+
+
+def _sample_inequality(rel, var, claimed_set: sp.Set, dom: sp.Set, seed: int, n: int = 40,
+                       written=()) -> tuple[bool | None, dict]:
     """Inside the claimed set the relation must hold; in dom \\ claimed it must fail.
-    Endpoints are checked explicitly (continuous sampling never hits them)."""
+    Endpoints are checked explicitly (continuous sampling never hits them).
+
+    A condition that cuts `dom` unsolved (a ConditionSet: `Ctx.unsolved_conditions`) is decided at each point
+    here, exactly (`relation_holds_at`), never by SymPy's membership of a ConditionSet: the points are drawn from
+    the domain without them. SymPy read the conditions in an order PYTHONHASHSEED set, and one rejection took 2 s
+    or 62 s (round 9 of part d4b, RK-6). Inside the claim a point needs only the conditions that are not `written`
+    (the definedness of the problem's expressions as written): where the relation's own is not real the relation
+    fails, and the claim [0, 2] of acos(2**x + x - 2) >= 0 is refuted at 2 (acos 4), where it was drawn from the
+    domain alone and never refuted (round 9, RK-2). Outside the claim a point needs every condition."""
     ev: dict[str, Any] = {}
+    split = _split_conditions(dom, var)
+    if split is None:
+        base, conds = dom, []
+    else:
+        base, conds = split
+    keep = [k for k in conds if k not in written]
+
+    def holds(ks, c) -> bool:
+        return all(relation_holds_at(k, var, c) is True for k in ks)
     # the endpoints proved equal written one way (round 7, RK6: (3, 4) against dom (log(8)/log(2), oo))
-    inside = [pt[var] for pt in sample_points({var: exact_intersection(claimed_set, dom)}, n, seed, special=True)]
-    outside_set = exact_complement(dom, claimed_set)
+    inside = [pt[var] for pt in sample_points({var: exact_intersection(claimed_set, base)}, n, seed, special=True)]
+    outside_set = exact_complement(base, claimed_set)
     outside = [pt[var] for pt in sample_points({var: outside_set}, n, seed + 1, special=True)]
     members, non = _endpoints(claimed_set)
-    inside += [m for m in members if in_domain(dom, m) is not False]
-    outside += [m for m in non if in_domain(dom, m) is True]
+    inside += [m for m in members if in_domain(base, m) is not False]
+    outside += [m for m in non if in_domain(base, m) is True]
+    if conds:
+        inside = [c for c in inside if holds(keep, c)]
+        outside = [c for c in outside if holds(conds, c)]
     ev["n_inside"], ev["n_outside"] = len(inside), len(outside)
     for c in inside:
         h = relation_holds_at(rel, var, c)
@@ -523,7 +567,10 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
             dom = exact_intersection(dom, rr.value)
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
     # (1) direct refutation of the claim by sampling (incl. endpoints)
-    okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed)
+    # the definedness of the problem's expressions as written (see _sample_inequality), read as `Ctx.domain_for`
+    # puts them in the domain
+    written = [ctx._with_bound_values(c, var) for c in ctx.written_conditions()[0]] + list(definedness_conditions(rel, var))
+    okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed, written=written)
     ev["sampling"] = sev
     if okS is False:
         ev["reason"] = "sampling_counterexample"

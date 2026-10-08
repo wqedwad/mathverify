@@ -932,9 +932,14 @@ def test_exact_intersection_writes_one_way_only_what_is_proved_equal():
     assert exact_intersection(sp.Interval.open(L, sp.oo), sp.Interval.open(3, sp.oo)) in (
         sp.Interval.open(3, sp.oo), sp.Interval.open(L, sp.oo))           # one writing (the first seen, round 8)
     assert exact_intersection(sp.Interval(L, 5), sp.Interval(3, 4)) in (sp.Interval(3, 4), sp.Interval(L, 4))
-    # 3 + e^(-e^10) is no 3: SymPy cannot order them, and no proof writes them one way
+    # 3 + e^(-e^10) is no 3: no proof writes them one way. SymPy could not order them (it read the difference one
+    # way only); a certified difference orders them now (round 9, mathverify._sympy_guards)
+    near = L + sp.exp(-sp.exp(10))
+    assert exact_intersection(sp.Interval.open(near, sp.oo), sp.Interval.open(3, sp.oo)) == sp.Interval.open(near, sp.oo)
+    # 3 + gd(1) - gd(1) is exactly 3, and no exact test proves it: not ordered, not merged
+    far = 3 + 2 * sp.atan(sp.tanh(S.Half)) - sp.atan(sp.sinh(1))
     with pytest.raises(TypeError):
-        exact_intersection(sp.Interval.open(L + sp.exp(-sp.exp(10)), sp.oo), sp.Interval.open(3, sp.oo))
+        exact_intersection(sp.Interval.open(far, sp.oo), sp.Interval.open(3, sp.oo))
 
 
 
