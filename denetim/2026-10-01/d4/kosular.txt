@@ -137,3 +137,5 @@ SP yeni: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scrat
   yazımları, YO-3 anahtar kelimeli argüman, YO-4 iki argümanlı alan; PRE-RK-4 yüksek haksız ret: params.equation adım öncülü değil,
   PRE-RK-5 ilişki biçimli cevap INCORRECT, PRE-RK-6 SympifyError sızıyor, PRE-RK-7 132–149 s, PRE-RK-8 yeniden yazım). Kararlar
   saldiri/d4h/kararlar_tur2.txt. d4h 2. tur worktree slotu boşalınca.
+- 15:42 saldırgan d4f2 (iş akışı v3, wf_568f6d87-023), commit e0983d0 taban 62a40e9.
+- 16:20 oturum sınırı (sıfırlanma 18:20) + konteyner yeniden başladı: d4b9, d4c4, d4e4 ajanları kesildi (ağaçlar commit'li ve temiz: fecc2be, b99f0ca, bfdc5ff); d4f2 saldırısında ret-kapsama lensi ve yanlış onay doğrulayıcısı düştü. 18:22 ajanlar SendMessage ile, d4f2 resume ile sürdürülüyor.
