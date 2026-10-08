@@ -1668,30 +1668,26 @@ def _candidates(s_, var) -> list:
     return pts[:12]
 
 
-def _parameter_region(ctx: Ctx, p_, extra=()) -> sp.Set | None:
+def _parameter_region(ctx: Ctx, p_) -> sp.Set | None:
     """The values the parameter p_ may take: its declaration, the domain of discourse, its constraints and every given
-    on it alone (`Ctx._declared_region`), cut by the conditions in `extra` on it alone (f's own: a != 0 for
-    log(x)/a; one not solved exactly is left out, a larger region); None when it is not read."""
+    on it alone (`Ctx._declared_region`); None when it is not read. f's own conditions on it alone hold there already:
+    the verifier abstains before any certificate otherwise (`Ctx._parameter_condition`: log(x)/a with a free is
+    parameter_condition_not_proved)."""
     try:
         reg = ctx._declared_region(p_, givens=True)
     except Exception:  # noqa: BLE001
         return None
     if reg is None or reg.free_symbols:
         return None
-    for c in extra:
-        if getattr(c, "free_symbols", set()) == {p_}:
-            st = Ctx.condition_set(c, p_)
-            if st is not None:
-                reg = sp.Intersection(reg, st)
     return reg
 
 
-def _region_dummies(ctx: Ctx, params, extra=()) -> dict | None:
+def _region_dummies(ctx: Ctx, params) -> dict | None:
     """Each parameter as a real Dummy with the facts its region (`_parameter_region`) proves: integer, its sign, and
     nonzero when 0 is no value of it; None when a region is not read."""
     out: dict = {}
     for p_ in params:
-        reg = _parameter_region(ctx, p_, extra)
+        reg = _parameter_region(ctx, p_)
         if reg is None:
             return None
         facts = {"real": True}
@@ -1711,7 +1707,7 @@ def _region_dummies(ctx: Ctx, params, extra=()) -> dict | None:
     return out
 
 
-def _parameter_condition_holds(ctx: Ctx, c, extra=()) -> bool:
+def _parameter_condition_holds(ctx: Ctx, c) -> bool:
     """Does the condition c, free of the task's variable, hold at every value its parameters may take
     (`_parameter_region`)? One parameter: its region inside the exact solution set of c (log(a) != 0 with a > 0 and
     a != 1); several: by the facts of their regions (`_region_dummies`)."""
@@ -1719,33 +1715,33 @@ def _parameter_condition_holds(ctx: Ctx, c, extra=()) -> bool:
     if not fs:
         return c is sp.true
     if len(fs) == 1:
-        reg, st = _parameter_region(ctx, fs[0], extra), Ctx.condition_set(c, fs[0])
+        reg, st = _parameter_region(ctx, fs[0]), Ctx.condition_set(c, fs[0])
         if reg is None or st is None:
             return False
         try:
             return reg.is_subset(st) is True
         except Exception:  # noqa: BLE001
             return False
-    rep = _region_dummies(ctx, fs, extra)
+    rep = _region_dummies(ctx, fs)
     return rep is not None and c.xreplace(rep) is sp.true
 
 
-def _claim_condition_holds(ctx: Ctx, c, var, opens, extra=()) -> bool:
-    """A condition of the claim that names a parameter, proved on the parameters' regions (bildirim ∩ verilen ∩ kısıt
-    ∩ f's own conditions, `_parameter_region`): free of var, at every value (`_parameter_condition_holds`); with var,
+def _claim_condition_holds(ctx: Ctx, c, var, opens) -> bool:
+    """A condition of the claim that names a parameter, proved on the parameters' regions (declaration, givens,
+    constraints; f's own conditions on them hold there, `_parameter_region`): free of var, at every value (`_parameter_condition_holds`); with var,
     each factor of w != 0 free of var so, the rest by `_implied` with the parameters as Dummies of their regions'
     facts. Read with the assumptions alone, a/(a**2 + x**2) for atan(x/a) with the given a != 0 and 1/(x*log(a)) for
     log(x)/log(a) with a > 0, a != 1 were left undecided (attack on d4e round 3, D4E3-RK-5)."""
     if isinstance(c, sp.Contains) or not getattr(c, "free_symbols", None):
         return False
     if var not in c.free_symbols:
-        return _parameter_condition_holds(ctx, c, extra)
-    rep = _region_dummies(ctx, sorted(c.free_symbols - {var}, key=lambda s_: s_.name), extra)
+        return _parameter_condition_holds(ctx, c)
+    rep = _region_dummies(ctx, sorted(c.free_symbols - {var}, key=lambda s_: s_.name))
     if rep is None:
         return False
     if isinstance(c, Ne):
         rest = [z for z in _zero_factors(c.lhs - c.rhs)
-                if var in z.free_symbols or not _parameter_condition_holds(ctx, Ne(z, 0), extra)]
+                if var in z.free_symbols or not _parameter_condition_holds(ctx, Ne(z, 0))]
         if not rest:
             return True
         c = Ne(sp.Mul(*rest), 0)
@@ -1773,7 +1769,7 @@ def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose
         if c in fconds:
             continue                     # f's own condition (a convention both read alike): holds where f does
         if fs - {var} or isinstance(c, sp.Contains):
-            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens, fconds)):
+            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens)):
                 state, why = "undecided", f"claim_condition_not_proved: {c}"
             continue
         if isinstance(c, Ne):
@@ -2265,14 +2261,14 @@ def refuted_at_an_allowed_value(ctx: Ctx, var, ok, ev: dict, exprs, compare, exc
     return None
 
 
-def _parameter_dummies(ctx: Ctx, params, extra=()) -> dict | None:
+def _parameter_dummies(ctx: Ctx, params) -> dict | None:
     """Each parameter as a Dummy with the facts its region has (`_region_dummies`: the declaration, the domain of
-    discourse, the constraints and the givens on it alone, f's own conditions on it in `extra`: a > 0 positive, a != 0
-    nonzero), and that region; None when a region is not read."""
-    rep = _region_dummies(ctx, params, extra)
+    discourse, the constraints and the givens on it alone: a > 0 positive, a != 0 nonzero), and that region; None when
+    a region is not read."""
+    rep = _region_dummies(ctx, params)
     if rep is None:
         return None
-    return {p_: (rep[p_], _parameter_region(ctx, p_, extra)) for p_ in params}
+    return {p_: (rep[p_], _parameter_region(ctx, p_)) for p_ in params}
 
 
 def _strict_for_every(c, var, x0) -> bool:
@@ -2310,7 +2306,7 @@ def for_every_parameter_value(ctx: Ctx, var, conds, other, f, claimed, truth, cl
     ev: dict[str, Any] = {"method": "for_every_parameter_value"}
     params = sorted({s_ for c in other for s_ in c.free_symbols} - {var}, key=lambda s_: s_.name)
     nonsmooth = (sp.Abs, sp.sign, sp.Heaviside, sp.Piecewise, sp.floor, sp.ceiling, sp.frac, sp.Mod, sp.Max, sp.Min)
-    dums = _parameter_dummies(ctx, params, other) if not (f.has(*nonsmooth) or sp.sympify(claimed).has(*nonsmooth)) else None
+    dums = _parameter_dummies(ctx, params) if not (f.has(*nonsmooth) or sp.sympify(claimed).has(*nonsmooth)) else None
     if dums is None:
         ev["reason"] = "no_interior_point_for_every_value"
         return None, ev
@@ -2394,8 +2390,7 @@ def _claim_for_every_value(ctx: Ctx, f, var, x0, rep, fc, claim_conds, claim_now
             if at is sp.false:
                 ev["claim_as_written"] = f"claim_undefined_at {x0} (condition {c}) for every value"
                 return "undefined"
-        if not (_implied(cd, opens, var) or _claim_condition_holds(ctx, c, var, _orient(list(fc) + list(fconds), var),
-                                                                   list(fc) + list(fconds))):
+        if not (_implied(cd, opens, var) or _claim_condition_holds(ctx, c, var, _orient(list(fc) + list(fconds), var))):
             ev["claim_as_written"] = f"claim_condition_not_proved: {c}"
             state = "undecided"
     return state

@@ -885,9 +885,9 @@ class _Majorant:
         raise _NoBound(e)
 
     def _polynomial_floor(self, v):
-        """(c/2)*s**k with v >= (c/2)*s**k near the point for EVERY value of v's other symbols: v a polynomial in s whose
-        leading term (at oo; its lowest one at 0+) is c*s**k, c a positive number, the others' coefficients s-free (a
-        bound P of |x|): s**2 - P**2 >= s**2/2 from some s on, whatever P is. None otherwise."""
+        """(c/2)*s**k with v >= (c/2)*s**k near the point for EVERY value of v's other symbols: v a polynomial in s
+        whose leading term (at oo; its lowest one at 0+) is c*s**k, c a positive number, the others' coefficients
+        s-free (a bound P of |x|): s**2 - P**2 >= s**2/2 from some s on, whatever P is. None otherwise."""
         if self.s not in v.free_symbols:
             return None
         try:
@@ -2160,7 +2160,8 @@ def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
 
 
 def _region_facts(d, region):
-    """`d` as a Dummy with the facts of `region` (an index Range: an integer, nonnegative or positive), or `d` itself."""
+    """`d` as a Dummy with the facts of `region` (an index Range: an integer, nonnegative or positive), or `d`
+    itself."""
     facts = {}
     try:
         if region.is_subset(S.Integers) is True:

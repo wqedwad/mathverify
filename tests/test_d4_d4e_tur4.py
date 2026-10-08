@@ -158,11 +158,13 @@ def test_extremum_interval_reads_conditions_as_written():
 
 
 def test_piecewise_branches_and_gaps():
+    from mathverify.certify.base import make_ctx
     from mathverify.certify.domain import written_definedness
-    x = sp.Symbol("x", real=True)
-    ns = {"x": x, "Piecewise": sp.Piecewise, "Eq": sp.Eq, "Ne": sp.Ne, "Abs": sp.Abs}
+    from mathverify.ir import ProblemIR
+    ctx = make_ctx(ProblemIR.from_dict(_der("Abs(x)")))
+    ns = ctx.claim_ns()
     assert written_definedness("Piecewise((0, Eq(x, 0)), (x/Abs(x), Ne(x, 0)))", ns)[0] == []
-    assert written_definedness("Piecewise((x**2, x < 0), (x**2, x > 0))", ns)[0] == [sp.Ne(x, 0)]
+    assert written_definedness("Piecewise((x**2, x < 0), (x**2, x > 0))", ns)[0] == [sp.Ne(ctx.sym("x"), 0)]
     E = "expression"
     assert _v(_der("Abs(x)"), "Piecewise((0, Eq(x, 0)), (x/Abs(x), Ne(x, 0)))", E) == "UNKNOWN"
     assert _v(_der("Abs(x)"), "Piecewise((7, Eq(x, 0)), (x/Abs(x), Ne(x, 0)))", E) != "CORRECT"
@@ -173,7 +175,8 @@ def test_piecewise_branches_and_gaps():
                              ("x*Piecewise((1, x < 0), (1, x > 0)) = 0", "{0}", "EmptySet")):
         assert _v(_solve(eq), wrong, "set") != "CORRECT", eq
         assert _v(_solve(eq), right, "set") != "INCORRECT", eq
-    q = _ir("solve_inequality", {"var": "x", "inequality": "Piecewise((x**2, x < 0), (x**2, x > 0)) >= 0"}, (), None, "set")
+    q = _ir("solve_inequality", {"var": "x", "inequality": "Piecewise((x**2, x < 0), (x**2, x > 0)) >= 0"}, (), None,
+            "set")
     assert _v(q, "Reals", "set") != "CORRECT"
     q = _ir("evaluate", {"expr": "Piecewise((t**2, t < 0), (t**2, t > 0))"}, ["t = 0"], [T_])
     assert _v(q, "0") != "CORRECT"
@@ -264,7 +267,9 @@ def test_claim_condition_on_the_parameters_region():
     AC = {"name": "a", "domain": "real", "constraints": ["a != 0"]}
     assert _v(_der("atan(x/a)", None, ["a != 0"], [X, AR]), "a/(a**2 + x**2)", E) == "CORRECT"
     assert _v(_der("atan(x/a)", None, (), [X, AC]), "a/(a**2 + x**2)", E) == "CORRECT"
-    assert _v(_der("log(x)/a", None, (), [X, AR]), "1/(a*x)", E) == "CORRECT"
+    assert _v(_der("log(x)/a", None, ["a != 0"], [X, AR]), "1/(a*x)", E) == "CORRECT"
+    # with a free, the problem's own a != 0 is not proved on a's region: the verifier abstains before (d4d)
+    assert _v(_der("log(x)/a", None, (), [X, AR]), "1/(a*x)", E) == "UNKNOWN"
     assert _v(_der("log(x)/log(a)", None, ["a != 1"], [X, AP]), "1/(x*log(a))", E) == "CORRECT"
     assert _v(_der("atan(x/a)", None, ["a != 0"], [X, AR]), "a/(a**2 + x**2) + 1", E) == "INCORRECT"
     # the plain path (f's condition on a half-line): a condition of the claim free of x, on the parameter's region

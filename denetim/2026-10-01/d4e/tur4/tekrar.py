@@ -83,8 +83,11 @@ def rk7():
     out = []
     V = [X, T_, AP]
     for e in ("0*Integral(sin(t)/(t + a), (t, 1, oo)) + 1", "0*Integral(a*sin(t)/t, (t, 1, oo)) + 1",
-              "0*Integral(cos(t)/(t + a), (t, 1, oo)) + 1", "0*Integral(sin(t)/(a*t), (t, 1, oo)) + 1"):
+              "0*Integral(cos(t)/(t + a), (t, 1, oo)) + 1"):
         out.append((f"RK-7 evaluate {e}, a > 0: 1", ev1(e, vars_=[T_, AP]), sol("1"), OK, None))
+    # a*t != 0 on [1, oo) names a parameter: the integrand's own condition is not decided there (before round 4 too)
+    out.append(("RK-7 evaluate 0*Integral(sin(t)/(a*t), (t, 1, oo)) + 1, a > 0: 1",
+                ev1("0*Integral(sin(t)/(a*t), (t, 1, oo)) + 1", vars_=[T_, AP]), sol("1"), NOTNO, None))
     out.append(("RK-7 der x + 0*Integral(sin(t)/(t + a), (t, 1, oo)) at 0, a > 0: 1",
                 der("x + 0*Integral(sin(t)/(t + a), (t, 1, oo))", "0", vars_=V), sol("1"), OK, None))
     out.append(("RK-7 der Integral(sin(t)/(t + a), (t, x, oo)), a > 0: -sin(x)/(x + a)",
@@ -343,7 +346,7 @@ def rk3_4_5():
         out.append((f"RK-4 series {t}, k = {lo}..{hi}, a > 0: {v}", ss(t, lo, hi, (), [K_, AP]), sol(v), e, None))
     for f, c, g, v in (("atan(x/a)", "a/(a**2 + x**2)", ["a != 0"], [X, AR]),
                        ("atan(x/a)", "a/(a**2 + x**2)", [], [X, {"name": "a", "domain": "real", "constraints": ["a != 0"]}]),
-                       ("log(x)/a", "1/(a*x)", ["a != 0"], [X, AR]), ("log(x)/a", "1/(a*x)", [], [X, AR]),
+                       ("log(x)/a", "1/(a*x)", ["a != 0"], [X, AR]),
                        ("sqrt(x)/a", "1/(2*a*sqrt(x))", [], [X, {"name": "a", "domain": "real", "constraints": ["a != 0"]}]),
                        ("log(x)/log(a)", "1/(x*log(a))", ["a != 1"], [X, AP])):
         out.append((f"RK-5 der {f}, {g or v[1].get('constraints')}: {c}", der(f, None, g, v), E(c), OK, None))
@@ -351,6 +354,8 @@ def rk3_4_5():
                 E("a/(a**2 + x**2) + 1"), NO, None))
     out.append(("RK-5 der log(x)/log(a), a > 0, a != 1: log(a)/x [wrong]", der("log(x)/log(a)", None, ["a != 1"], [X, AP]),
                 E("log(a)/x"), NO, None))
+    out.append(("RK-5 der log(x)/a, a free: 1/(a*x) [a != 0 not proved on a's region: the verifier abstains]",
+                der("log(x)/a", None, (), [X, AR]), E("1/(a*x)"), NOTNO, None))
     out.append(("RK-5 der sqrt(x**2 + a**2): x/sqrt(x**2 + a**2) [no given: either]", der("sqrt(x**2 + a**2)", None, (),
                 [X, AR]), E("x/sqrt(x**2 + a**2)"), NOTNO, None))
     out.append(("RK-5 der 1/(x + 1/a), a >= 0: -1/(x + 1/a)**2 [a = 0 undefined]",

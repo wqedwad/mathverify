@@ -1388,6 +1388,10 @@ ROUND4_EXPECT = {
     "KINK derivative Max(x**3, -x**3): 3*x**2*sign(x) [value at a corner]": (OK | UNK, "KINK"),
     "KINK derivative x*Max(x, -x): 2*Max(x, -x) [value at a corner]": (OK | UNK, "KINK"),
     "KINK derivative Max(x, -x)**(1/2): sign(x)/(2*sqrt(Abs(x))) [value at a corner]": (OK | UNK, "KINK"),
+    # robustness probes whose claim is wrong (measured: 2 against f' = 1; 0.190 against 0.342 at x = 0.7): INCORRECT is
+    # right, never CORRECT
+    "der Abs(x)*sign(x): 2*Abs(x)/x*0 + 2*x/x*Abs(x)/Abs(x)": (NOTOK, "wrong claim"),
+    "der Abs(sin(x))**(1/3): cos(x)*sin(x)/(3*Abs(sin(x))**(7/3))*Abs(sin(x))**2": (NOTOK, "wrong claim"),
 }
 
 
