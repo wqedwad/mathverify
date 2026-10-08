@@ -450,8 +450,9 @@ def verify(ir, solution, ctx: Ctx):
             # a symbol a given or a declared constraint fixes is read as its value in the recurrence, the
             # initial values, their written conditions and the claim (`Ctx.task_pins`): with c = 0 the claim
             # c**(n - 1) of a(n) = c*a(n - 1), a(1) = 1, is 0**0 at n = 1 and was certified, and with c = 2
-            # 2**(n - 1) was left undecided (attack on d4e, YO-1)
-            pins = {s_: v for s_, v in ctx.task_pins(ctx.sym(var)).items() if s_.name != fname}
+            # 2**(n - 1) was left undecided (attack on d4e, YO-1); a value fixed in another form (2*c = 0) too
+            # (`Ctx.solved_pins`, round 3 YO-2: c**(n - 1) was certified and the 8 of a(4) with 2*c = 4 refuted)
+            pins = {s_: v for s_, v in ctx.solved_pins(ctx.sym(var)).items() if s_.name != fname}
             try:
                 ns, f, n = _rec_ns(ctx, fname, var)
                 rel = substitute_free(parse_relation(p["recurrence"], ns), pins)
@@ -529,8 +530,9 @@ def verify(ir, solution, ctx: Ctx):
             # a symbol a given or a declared constraint fixes is read as its value in the term, the bounds,
             # the term's written conditions and the claim (`Ctx.task_pins`): with a = 2 the sum 3 of
             # (k - a)/(k - a) over k = 1..3 (0/0 at k = 2) was certified, and the right 12 of a*k refuted
-            # against 6*a (attack on d4e, YO-1, R9)
-            pins = ctx.task_pins(ctx.sym(var_name))
+            # against 6*a (attack on d4e, YO-1, R9); so is a value the givens fix in any other form (2*a = 4,
+            # a = b with b = 2: `Ctx.solved_pins`, round 3 YO-2)
+            pins = ctx.solved_pins(ctx.sym(var_name))
             term, err = parse_or_unknown(LAYER, parse_expr_str, p["term"], ns2)
             if err:
                 return err
@@ -553,21 +555,26 @@ def verify(ir, solution, ctx: Ctx):
             if (hi - lo + 1).is_extended_negative is True:
                 return unknown(LAYER, "reversed_bounds", t.ms, {"lo": str(lo), "hi": str(hi)},
                                flags=["reversed_bounds"])
-            # every term as written must exist: k/k parses to 1, so Σ_{k=-1}^{1} k/k was "3"
+            # every term as written must exist: k/k parses to 1, so Σ_{k=-1}^{1} k/k was "3". Not decided is
+            # not defined: a condition naming a free parameter (k - a != 0 with a > 5 or 2*a = 4) or a negative
+            # base (-1)**(k/2) left the sum of the folded term certified (attack on d4e round 2, YO-2). A bound
+            # that is no number reads the terms from the lower bound on (from -oo without one)
             from .domain import written_undefined_in
-            if (lo.is_Integer or lo == -oo) and (hi.is_Integer or hi == oo):
-                if lo.is_Integer and hi.is_Integer:
-                    idx = sp.Range(int(lo), int(hi) + 1)
-                elif lo.is_Integer:
-                    idx = sp.Range(int(lo), oo)
-                elif hi.is_Integer:
-                    idx = sp.Range(-oo, int(hi) + 1)
-                else:
-                    idx = sp.S.Integers
-                und = written_undefined_in(p["term"], ns2, var, idx, pins)
-                if und is True:
-                    return unknown(LAYER, "term_undefined_in_range_as_written", t.ms, {"term": p["term"]},
-                                   flags=["written_domain"])
+            lo_i = int(lo) if lo.is_Integer else -oo
+            hi_i = int(hi) if hi.is_Integer else oo
+            if lo_i == -oo and hi_i == oo:
+                idx = sp.S.Integers
+            elif lo_i == -oo:
+                idx = sp.Range(-oo, hi_i + 1)
+            else:
+                idx = sp.Range(lo_i, hi_i + 1 if hi_i != oo else oo)
+            und = written_undefined_in(p["term"], ns2, var, idx, pins)
+            if und is True:
+                return unknown(LAYER, "term_undefined_in_range_as_written", t.ms, {"term": p["term"]},
+                               flags=["written_domain"])
+            if und is None:
+                return unknown(LAYER, "term_definedness_undecided_as_written", t.ms, {"term": p["term"]},
+                               flags=["written_domain"])
             ok, cev = certify_series_sum(term, var, lo, hi, claimed, timeout=ctx.timeout)
             ev.update(cev)
             conf = 0.99 if ev.get("method") in ("exact_finite", "symbolic+numeric") else 0.95

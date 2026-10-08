@@ -71,3 +71,84 @@
 - BİTTİ: rapor SubagentHandback ile verildi.
 - Yapılacak: _violations ±d+k → tam sayı katsayılı polinom genellemesi (G14 kapsaması, (2x-3)!), M33 deseni güncelle;
   fark yeniden (son commit), öteki sondalar (d4a,b,c,d,g), tam takım Lean'siz, eski kopyayı sil.
+
+## 2. tur matematik kararları (ana oturum, kararlar_tur2.md; 11 doğrulanmış bulgu, bulgular.json)
+- YO-1 (high): yazıldığı biçim okuması fail-closed. parse_as_written metni okuyamaz/reddederse ve değer okuması okuyorsa
+  tanımlılık kararsızdır → CORRECT yok, adım verified yok; None "koşul yok" değil (her çağıran). Sınır tam sayılığı iki okumada
+  aynı kural, kesin sadeleştirmeyle (sqrt(1) = 1, log(8,2) = 3 tam sayı; iç içe kökle 1/2 → TAN-10 UNKNOWN).
+  Gerekçe: x²/x + Σ_{k=√1}^{3} k = 6 → doğru ∅ ({0} tanım dışı); okunamayan metin hiçbir koşul taşımıyor sayılınca x/x vb. kayboluyor.
+- YO-2 (high): yazılı okuma det/trace/eig hesaplamaz; matris girdilerinin koşulları korunur (√x·√x → x katlanmaz).
+  det[[√x,1],[-1,√x]] = −2 → x ≥ 0'da det = x+1 ≥ 1 → ∅; {−3} CORRECT olamaz.
+- YO-3: sınırı tam sayı bildirilmemiş (sabitlenmemiş) sembole bağlı Σ/Π: ℤ dışındaki değer geleneğe bağlı (adımlama 3n+3,
+  Iverson 2⌈n⌉+1, "tanımsız") → 3n+3 de 3n+3+sin πn de UNKNOWN; INCORRECT değil. n tam sayı bildirilmişse karar verilir.
+- YO-4: kuyruk = bir N'den sonra her tam sayıda tanımlı (bütün koşullar); cos(πx/2), 1−(−1)^x paydada, tan(πx/4) sonsuz
+  çok tam sayıda tanımsız → değer de DNE de UNKNOWN (dizi tanımı geleneği).
+- YO-5: değersiz/gelenek iddia denetimi pinler yerine konduktan sonra ve ilişki biçimli (normalize edilen) iddiada, şık
+  metninde de: a = 1 iken 1/factorial(−a), 'x >= 1/zoo' → UNKNOWN.
+- YO-6: NO_VALUE bütün metinlerde: liste/sözlük parametreleri, 'x ∈ [a, b]' verilenleri, dizi adımları → UNKNOWN.
+- YO-7: ∞⁰ belirsiz biçim/gelenek → 0**0 sınıfı, UNKNOWN (iddia ve adım dahil).
+- RK-F1 (haksız ret): açık sınırın tam sayılığı gelenek koşulu (kanıtlandığı yerde tutar, başka yerde kararsız, hiçbir yerde
+  yanlış değil) → Σ_{k=x}^{x+2} k = 10'da {7/3} ve ∅ UNKNOWN; '3x+3=10' adımı refuted değil (her okumada denk).
+- RK-F2 (kapsama): Γ'nın açık koşulu limit noktasının delinmiş komşuluğunda / +∞ kuyruğunda / integral aralığında / türev
+  noktası komşuluğunda kanıtlıysa koşul tutar → taban kararları (lim x Γ(x) = 1 at 0, ∫_0^1 ..., d/dx at 2) geri.
+- RK-F3 (kapsama): dod complex iken iddiada yalnız gerçel koşulu bozulan değer (sqrt(−4), log(−1)) esas değerle okunur
+  (claim_is_not_a_value değil); NO_VALUE (Γ kutbu, zoo) ℂ'de de değersiz kalır.
+- RK-F4 (kapsama): LaTeX \frac{c}{0}, \frac{0}{0} kanonik 1/0, 0/0 gibi (false, NO_VALUE değil) → 30 Eylül geleneği ∅;
+  iç içe \frac{1}{\frac{1}{0}} ve 0·\frac{1}{0} UNKNOWN kalır.
+
+## 2. tur ilerleme
+- Worktree eedd182'ye ileri sarıldı (7d29714 + d4b 7. tur + d4c 2. tur + ara kayıt).
+- 3b3344e: ara 1 (YO-1, YO-2, YO-5, YO-6, YO-7, RK-F3, RK-F4). Fark (eedd182'ye göre): karar 3 (ayt-lim-003 ×2, ayt-lim-009
+  CORRECT -> UNKNOWN: dne "DNE" ve şık metni "limit yoktur" yazılı okunamıyor diye işaretlendi), adım 16 (üyelik/bileşik adım,
+  Cramer det adımları yazılı okunamadı).
+- 2e46f6a: ara 2 (YO-3 + RK-F1: Convention("integer_bound"), Ctx.integer_bound_region; dne/none metni atlanır, şık metni yalnız
+  değer okuması alırsa; parse_set_as_written bileşik/üyelik/LaTeX zincir/\notin; rasyonel girdili det/trace/rank hesaplanır).
+  Fark: karar 0, adım 3 (k4 tyt-kap-004/005/006 s2 'factor(x**2 - 4) = ...' verified -> unknown).
+  Testler: parca7a KUN ve parca9 KU 'n*(n+1)/2' CORRECT -> UNKNOWN (YO-3 kararı), aralık koşulu testleri INTEGER_BOUND.
+- Commit edilmemiş (05:00 yeniden başlatmada): YO-4 (limits: tam sayı değişkenli ±∞ limitinde her yazılı koşul kuyrukta),
+  RK-F2 (limits.membership_holds_on: ℝ∖D kümesi, doğrusal argüman; limit delinmiş komşuluk/kuyruk, integral [a,b], türev
+  komşuluğu), yazılı okumada simplify/expand/factor/cancel/together/apart = argümanın kendisi (tyt-kap s2 kaybı).
+  Ölçüm: yo.py F1-F7 hepsi beklenen; rk.py 1-4 beklenen (F3c dod'suz UNKNOWN, taban da öyle).
+- Sıradaki: test + commit, fark ara3, sonda grubu (eedd182 öncesi/sonrası), testler, mutasyon, öteki sondalar, tam takım.
+- 05:00 yeniden başlatmadan sonra: a543bed (ara 3: YO-4, RK-F2, yeniden yazma işlemleri; holds_on_the_tail kuyruğun
+  işaretindeki tam sayılarda — x**x != 0 ℤ'de çözülmüyordu, G14 XI testi). Fark a543bed: eedd182'ye göre 0/0/0/0,
+  taban'a göre karar 0, adım 86.
+- 4f53067: sonda L-R (+K) ve 69 test. Sonda eedd182 72/135 beklenmedik, yeni 0; tüm sonda A-R 335 vaka 0.
+  Testler eedd182'de 52 düşer / 17 geçer.
+- f95fe02: mutasyonlar (65: M01-M36 güncel + N01-N29) ve Γ kutbu öldürücü testi (184 test geçer).
+  Mutasyon koşusu tur2/mutasyon3.log. Sonra tur2/son.sh <rev>: sondalar d4a-g + tam takım (donmuş kopyada).
+- Mutasyon 3. koşu (f95fe02, 65): 59 öldü; yaşayan M23, N01, N02, N03, N04, N12. f305d8c: N12 dalı gereksizdi
+  (convention_region yeniden denetimi kapsıyor) -> kaldırıldı, iddianın kendi sınırı için denetim; N04 gerekli
+  (x/x + c-toplam bayrağı); LaTeX \det/\operatorname{tr|rank} yazılı okumada hesaplanıyordu (eedd182'de {-3} CORRECT):
+  tutulur; değeri kararsız/okunamayan adımın çürütmesi geri çekilir (Σ_{k=c}^{c+2} k = 3 refuted idi); bmatrix okunur.
+  Mutasyonlar 69. Hedefli koşu tur2/mutasyon4.log; sonra tam koşu, fark, son.sh.
+- f305d8c'nin "kararsız değerli adım çürütülmez" kuralı fazla genişti (test_v14 Limit(log(x), x, -1) = I*pi, tam dosya
+  koşulmadan commit edildi; mutasyonsuz tur yakaladı). fbc1a3a: kural kaldırıldı; kapalı tam sayı kanıtlanamayan sınır
+  Contains(c, INTEGER_BOUND) (gelenek) olarak kalır; _refuse_reversed_ranges aralık denetimini değerlenmiş sınırla
+  _refuse_constant_range'e devrederek SymPy PolynomialError'unu (Sum(0, (k, 1, n - 5)) yazılı) giderdi.
+  Mutasyon 5. koşu (69) tur2/mutasyon5.log.
+- Mutasyon 5 (fbc1a3a, 69): 66 öldü; M04, M23, N20 yaşadı -> e3e3cdb öldürücü testler; hedefli koşu (e3e3cdb) 3/3 öldü.
+  Toplam 69/69 (src fbc1a3a = e3e3cdb).
+- Fark e3e3cdb: eedd182'ye göre karar 0, ilk kötü adım 0, adım 0, K4 etiket 0; taban'a göre karar 0, adım 86.
+- son.sh e3e3cdb (sondalar d4a-g + tam takım) koşuyor: tur2/son_e3e3cdb/.
+- 07:00 yeniden başlatma: son.sh e3e3cdb sondaları d4a 316, d4b 399, d4d 340, d4e 552, d4f 335, d4g 229 hepsi 0 (d4c ve
+  tam takım ölmüştü). 10:00: koordinatör 62a40e9 birleşmesini istedi -> 6e79ead (çakışma domain.py Convention türleri,
+  verifier.py iddia pinleri; d4e'nin _claim_pins/_pinned_tree'si _claim_conditions'ta). Birleşik ölçümler sırada:
+  d4f sonda, fark (eedd182 ve 62a40e9'a göre), son.sh (sondalar + tam takım), mutasyon.
+- Birleşik 6e79ead: d4f sonda 335/0; fark eedd182'ye göre 0/0/0/0, 62a40e9'a göre 0/0/0/0, taban'a göre karar 0 adım 86.
+  son.sh 6e79ead koşuyor (tur2/son_6e79ead).
+- Birleşik sondalar (6e79ead): d4a 316, d4b 436, d4d 340, d4e 708, d4f 335, d4g 229 -> 0; d4c 1800 s sınırına takıldı
+  (A-H 183 vaka 0 BAD), I+J ayrıca 20 vaka 0 -> d4c 203/0.
+- Test sayımı: test_d4_d4f_tanimlilik.py 199 test; 2. tur 88 (yo/rkf/written_zoo). eedd182 src'de 63 düşer (62'si 2. tur,
+  1'i güncellenen test_tan10_an_open_bound...), 136 geçer.
+- Birleşik tam takım (6e79ead, donmuş kopya): 14 düşüş. 10'u çöplü iddia ("5 bu çözüm doğrudur", "12{"): YO-1 iddia
+  kuralı ham payload'ı _sanitize_payload'dan önce okuyordu -> e0983d0: payload'ın ham ve temizlenmiş biçimi birlikte,
+  okunamayan yalnız hiçbir biçim okunmuyorsa. 4'ü test_staged_check (kopyada .git yok; worktree'de geçiyor).
+- e0983d0 fark: eedd182 0/0/0/0, 62a40e9 0/0/0/0, taban karar 0 adım 86. Koşuyor: tam takım worktree'de
+  (tur2/takim_e0983d0.log) + d4c sonda (tur2/sonda_e0983d0). Sonra mutasyon -j2, öteki sondalar.
+- Tam takım Lean'siz e0983d0 (worktree, git'li): exit 0; 3967 geçti, 93 atlandı (Lean araç zinciri + 5 başka), 0 düştü.
+  Mutasyon 7. koşu (-j1) tur2/mutasyon7.log; d4c sonda koşuyor.
+- SON (e0983d0 = 62a40e9 birleşik + çöplü iddia düzeltmesi): mutasyon 69/69 (mutasyon7.log, -j1, 12:00 sınırından önce
+  bitti); sondalar d4a 316, d4b 436, d4c 203, d4d 340, d4e 708, d4f 335, d4g 229 hepsi 0; fark eedd182 0/0/0/0, 62a40e9
+  0/0/0/0, taban karar 0 adım 86; tam takım 3967 geçti / 93 atlandı / 0 düştü; pyflakes 6 eski uyarı. base_eedd182 ve
+  mutcopy (.env'li) silindi. BİTTİ: rapor SubagentHandback ile.

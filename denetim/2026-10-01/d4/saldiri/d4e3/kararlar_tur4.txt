@@ -1,0 +1,65 @@
+# d4e 4. tur: ana oturumun kararları (8 Ekim 2026; 3. tur saldırısının yeniden koşusu, d342778 taban 849ea4e)
+Bulgular: d4/saldiri/d4e3/bulgular.json (18 kayıt: saldırgan 14 + devralınan 3 + doğrulayıcının bulduğu YO-3-EK1; 17 gerçek, KINK değil).
+Her kural mekanizmaya konur ve kardeş yollar (bütün görevler: türev, teğet, limit, ekstremum, çözüm, eşitsizlik, seri, ilkel, evaluate)
+aynı kurala bağlanır. Önce yanlış onaylar.
+
+- YO-4 = RK-2 (yüksek, önceden var; D4E3-YO-1'in kökü majorant yolunda): SymPy'nin serbest parametreli limiti parametrenin HER değeri için
+  kanıt değildir ((x−1)² katsayısı x = 1'de söner). decays_at/_Majorant'ta t dışındaki sembol (işareti bildirilmiş olsa da) içeren parça
+  "exact" sayılamaz; yakınsaklık yalnız parametreden bağımsız bir majorantla (parametre bölgesinde kanıtlı: katsayının bölgede kanıtlı pozitif
+  alt sınırı c > 0 ile) kurulur, yoksa UNKNOWN. Beklenen: x = 1'de ıraksayan ∫_1^∞ dt/((x−1)²t² + 1) ve ∫_1^∞ dt/(1 + (x−1)²t⁴) ile kurulan
+  türev (1'de), teğet, x²−1+0·A = 0 → {1}, x+0·A ≥ 1 → [1,∞), [1/2,2]'de max/min: CORRECT asla (UNKNOWN ya da INCORRECT); ayna (∅, (1,∞))
+  INCORRECT asla. evaluate 0·∫(…a…)+a (a > 0): projenin evaluate geleneği (0/(a−1)+a → a CORRECT) yalıtık tanımsızlığı kabul ediyor,
+  CORRECT ya da UNKNOWN ikisi de kabul (ama kanıt sağlam yoldan).
+- YO-2 (orta, önceden var; devralınan, doğrulandı): iddianın tanımsız kümesinin bölgeyle kesişimi kesin okunur (ailenin bütün üyeleri:
+  ImageSet ∩ bölge), örnek n'lerle değil; okunamazsa fail-closed (UNKNOWN), "tanımlı" değil. Beklenen (RK-8): x > 10 iken (x²)' =
+  2x + 0·cot 4x, x > 30 iken 2x·sin x/sin x ve 2x·cos x/cos x, x < −10 iken 2x + 0·cot x, 10 < x < 11 iken 2x + 0·cot 4x,
+  (log(x − 20))' = cot x·tan x/(x − 20) (x > 30): INCORRECT (en az UNKNOWN); kontrol 10 < x < 51/5 (kutup yok): CORRECT kalır.
+- YO-3 (orta, önceden var; devralınan, doğrulandı): kısıtın, tanım evreninin ve verilenin yazılı tanımlılığı kararsızsa (DEFINEDNESS_UNDECIDED)
+  koşul düşmez: uygulanmamış sayılır ve karar en çok UNKNOWN (d4d'nin verilen kuralıyla aynı). Beklenen: 0·∫ₓ¹ dt/t ≥ 0 kısıtıyla
+  x² = 1/4 → {−1/2, 1/2} CORRECT asla; x + 0·tan(acot 2 + acot ½) > 0 → {1/2} CORRECT asla; aynaları ({1/2} ve limit 1 INCORRECT) → UNKNOWN.
+- YO-5 + YO-3-EK1 (orta/düşük, önceden var; D4E2-YO-5'in ekstremum kısmı): aralıklı ekstremumda bölge = aralık ∩ verilenlerin, kısıtların ve
+  tanım evreninin hem ayrıştırılmış hem YAZILI tanımlılık koşulları (aralıksız yoldaki ctx.domain_for ile aynı okuma). Beklenen: x²+0·√(x−1/2)
+  ≥ 0 altında [−1,1]'de min x² = 1/4 (CORRECT ya da UNKNOWN), 0 INCORRECT ya da UNKNOWN; argmin 1/2; max −x² = −1/4; [−1,1/4]'te bölge boş
+  → UNKNOWN; x/x > 0 ve x²+0·log x ≥ 0 altında min erişilmez → 0 CORRECT asla; 0·log x ≥ 0 altında [−1,1]'de min x için −1 CORRECT asla.
+- YO-6 (orta, önceden var): Piecewise'ın yazılı tanımlılığı dal dal okunur: her noktada SEÇİLEN dalın (ilk doğru koşul) ifadesi tanımlı
+  olmalı; seçilmeyen dalın tanımsızlığı o noktada sayılmaz. Piecewise((0, Eq(x,0)), (x/|x|, Ne(x,0))) her yerde tanımlı = sign(x): |x|'in
+  türevine 0'da değer veren iddia (0 ya da 7) gelenek → UNKNOWN (sign(x) yazımıyla aynı karar); (|x−1|)', (|x|^(2/3))' benzer;
+  (x²)' = Piecewise((2x²/x, Ne(x,0)), (0, Eq(x,0))) her x'te 2x → CORRECT (d4e 3. turun getirdiği haksız ret kapanır).
+- YO-7 (orta, önceden var): Piecewise'ın hiçbir dalının kapsamadığı nokta (boşluk) tanımsızdır (SymPy subs → nan): tanımlılık koşuluna
+  "bir dal koşulu sağlanır" eklenir; z3 köprüsü son dalı yalnız koşulu True ise koşulsuz else yapar, değilse boşluk tanımsız. Beklenen:
+  PW((x²,x<0),(x²,x>0)) = 0 → ∅ ({0} CORRECT asla); PW((x²−1,x<1),(x²−1,x>1)) = 0 → {−1}; x·PW((1,x<0),(1,x>0)) = 0 → ∅; PW ≥ 0 → ℝ∖{0}
+  ('Reals' CORRECT asla); t = 0 sabitken PW(t²) değeri UNKNOWN.
+- RK-1 (yüksek, haksız ret, bu parça getirdi): kesirli kuvvet u^(p/q) yalnız u ≠ 0 (kanıtlı) noktada analitik sayılır; u'nun sıfırında f'nin
+  türevli olup olmadığı tek yanlı fark bölümüyle (kink_reading) kanıtlanmadıkça bilinmez. f'(p) var ve iddia p'de tanımsız → INCORRECT
+  (RK-8); f'(p) yok ve iddia p'de tanımsız → CORRECT (R8); f'(p) yok ve iddia değer veriyor → UNKNOWN (YO-4 geleneği); kararsız → UNKNOWN.
+  Beklenen: sqrt(x²+x⁴), (x²+x⁴)^(1/3), (x²+x⁴)^(1/4), sqrt((x−1)²+(x−1)⁴) ve bulgudaki öteki 21 vakanın ders kitabı türevi CORRECT ya da
+  UNKNOWN (INCORRECT asla); sqrt(x⁴+x⁶) için 0'da tanımsız iddia INCORRECT kalır (f'(0) = 0 var); |x| − sqrt(x²+x⁴) için 0'da tanımsız
+  iddia INCORRECT ya da UNKNOWN (CORRECT asla: f'(0) = 0 var).
+- RK-3 (orta, haksız ret, önceden var): türev/limit/ekstremum/ilkel görevleri parametreyi başka biçimde sabitleyen verilenleri okur
+  (Ctx.solved_pins, 3. turda yalnız seri/özyinelemede); parametre üzerindeki bir verilen uygulanamazsa karar en çok UNKNOWN (genel sembole
+  karşı INCORRECT asla). Beklenen: 2a = 4 (a − 2 = 0, a² = 4 ∧ a > 0, a = b ∧ b = 2, kısıt 2a = 4) iken (a·x²)' = 4x CORRECT (ya da UNKNOWN),
+  6x INCORRECT; sqrt(a) = 2 iken 8x CORRECT.
+- RK-4 (orta, kapsama, bu parça getirdi): series_sum'ın yazılı tanımlılık okuması kanıtlanabilir koşulda karar verir: indeks dışında sembol
+  içeren koşul parametrenin bölgesinde (bildirim ∩ verilen ∩ kısıt) değerlendirilir (k + a > 0, a > 0, k ≥ 0); factorial(k) ℕ₀'da hiç 0
+  değildir; tam sayı üslü (−1)^(k(k+1)/2) tanımlıdır. Gerçekten karar verilemeyen durumda çekimserlik kalır. Beklenen: Σ1/k! = e,
+  Σ_0^3 1/k! = 8/3, Σ2^k/k! = e², Σk/k! = e, Σ1/(2k)! = cosh 1, Σ1/(k+1)! = e − 1, Σ(−1)^k/k! = 1/e, Σ_1^3 1/(k+a) (a > 0) kapalı biçim,
+  11/(6a), sqrt(a)(1+√2), 2 log a + log 2, Σ_0^3 (−1)^(k(k+1)/2) = 0 CORRECT; Σ1/k! = e + 1, Σ1/(k+a) = 3/(a+2) INCORRECT.
+- RK-5 (orta, kapsama, bu parça getirdi): claim_where_derivative x içermeyen koşulu parametrenin bölgesinde (bildirim ∩ verilen ∩ kısıt ∩ f'nin
+  kendi koşulları) kanıtlar. Beklenen: a ≠ 0 verilen ya da kısıtken atan(x/a), log(x)/a, sqrt(x)/a türevleri; a > 0, a ≠ 1 iken log_a x
+  türevi CORRECT; yanlış iddialar INCORRECT; sqrt(x²+a²) verilensiz UNKNOWN kalabilir.
+- RK-6 (orta, kapsama, bu parça getirdi): sqrt(u)'lu iddianın u ≠ 0 koşulu: u'nun bölgedeki her sıfırında f türevsizse (u'(p) ≠ 0: tanım
+  kümesinin ucu; u'(p) = 0, u''(p) ≠ 0: köşe) iddianın orada tanımsızlığı R8'e uygundur; bu, sıfırlar tek tek çözülemese de "u = 0 ∧ u' = 0
+  ∧ u'' = 0 sisteminin bölgede çözümü yok" kanıtıyla kurulabilir (u' = 0 ya da u'' = 0 kesin çözülüp u'nun orada sıfırdan farklı olduğu
+  gösterilir). u''(p) = 0 olan sıfırda f türevli olabilir (sqrt(x⁴) = x²): orada tanımsız iddia INCORRECT ya da UNKNOWN. Kanıt yoksa
+  UNKNOWN. Beklenen: sqrt(x − cos x), sqrt(x + eˣ), sqrt(x − sin x), sqrt(1 − cos x), sqrt(x·eˣ − 1), sqrt(log x + x), sqrt(x + sin x),
+  sqrt(eˣ − 1 − x), sqrt(1 + sin x), sqrt(x² + sin²x), sqrt(x − log x) ders kitabı türevleri CORRECT (ya da UNKNOWN); |x − cos x|'in ders
+  kitabı iddiası (1 + sin x)(x − cos x)/|x − cos x| CORRECT ya da UNKNOWN (INCORRECT asla; test satırı buna göre gevşer ya da CORRECT olur).
+- RK-7 (düşük, kapsama, d342778 getirdi): Dirichlet testi parametreli h için yalnız her parametre değerinde kanıtla: parametreden bağımsız
+  0 ≤ h(t, a) ≤ C(t), C → 0 (limit kanıtı parametresiz) ve ∂h/∂t ≤ 0 bölgedeki her a için (t ≥ t₀) sembolik kanıtlı; yoksa UNKNOWN.
+  Beklenen: a > 0 iken ∫_1^∞ sin t/(t + a), a·sin t/t ile kurulan 6 vaka CORRECT; ∫_1^∞ t·sin t/((a−1)²t² + 1) (a = 1'de ıraksak) CORRECT asla.
+- RK-8, RK-10 (düşük, kapsama, bu parça getirdi): isteğe bağlı. Kanıtlı yolla geri kazanılabiliyorsa (Max(sin x,0)² C¹: h + g|u| ailesi;
+  2. mertebede g(p) ≠ 0, u'(p) ≠ 0 ise f' sıçrar) yap; değilse UNKNOWN belgelenmiş takas olarak kalır, raporla.
+- RK-9 (düşük, süre, önceden var): random_point'in hücre başına sembolik kanıtı (sym_equal) deterministik bütçeli olur; bütçe dolarsa
+  UNKNOWN. Beklenen: |x⁴−10x²+1|·|x³−3x+1| ders kitabı türevi < 60 s (CORRECT ya da bütçeyle UNKNOWN).
+- KINK: gerçek değil (bağımsız doğrulayıcı: f 0'da türevli ve iddia aynı değeri veriyor ya da f türevsiz ve iddia tanımsız); CORRECT doğru
+  karar; bu beş vakayı sondaya kontrol (CORRECT beklenir) olarak ekle.

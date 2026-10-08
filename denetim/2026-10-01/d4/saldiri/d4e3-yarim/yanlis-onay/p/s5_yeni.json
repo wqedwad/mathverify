@@ -1,0 +1,233 @@
+[
+ {
+  "label": "CW derivative x**2: 2*x + 0*Integral(1/t, (t, x, 1)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Integral(1/t, (t, x, 1))' is a computation (Integral("
+  ],
+  "s": 0.59
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Integral(1/t, (t, 0, 1)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Integral(1/t, (t, 0, 1))' is a computation (Integral("
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*tan(acot(2) + acot(1/2)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value"
+  ],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.32
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Integral(1/(t - x), (t, 0, 1)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Integral(1/(t - x), (t, 0, 1))' is a computation (Int"
+  ],
+  "s": 0.01
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Integral(1/sqrt(t), (t, x, 1)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Integral(1/sqrt(t), (t, x, 1))' is a computation (Int"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Sum(1/(k - x), (k, 1, 3)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Sum(1/(k - x), (k, 1, 3))' is a computation (Sum(…)),"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Integral(t*sin(t)/(x**2*t**2 + 1), (t, 1, oo)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Integral(t*sin(t)/(x**2*t**2 + 1), (t, 1, oo))' is a "
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Integral(exp(x*t), (t, 0, oo)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Integral(exp(x*t), (t, 0, oo))' is a computation (Int"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Integral(1/t, (t, 1, oo)) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Integral(1/t, (t, 1, oo))' is a computation (Integral"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*Limit(1/(x*y), y, 0) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*Limit(1/(x*y), y, 0)' is a computation (Limit(…)), no"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW derivative x**2: 2*x + 0*at(diff(sqrt(x), x), x, x) [claim undefined where f' exists]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer '2*x + 0*at(diff(sqrt(x), x), x, x)' is a computation (at(…)),"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW anti 2*x: x**2 + 0*Integral(1/t, (t, x, 1))",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer 'x**2 + 0*Integral(1/t, (t, x, 1))' is a computation (Integral"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW anti 2*x: x**2 + 0*Integral(exp(x*t), (t, 0, oo))",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.calculus:unknown:parse_error: claimed answer 'x**2 + 0*Integral(exp(x*t), (t, 0, oo))' is a computation (In"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW simplify x + 1: x + 1 + 0*Integral(1/t, (t, x, 1))",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.algebra:unknown:parse_error: claimed answer 'x + 1 + 0*Integral(1/t, (t, x, 1))' is a computation (Integra"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW simplify x + 1: x + 1 + 0*Integral(exp(x*t), (t, 0, oo))",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "claim_is_not_a_value",
+   "parse_error"
+  ],
+  "reasons": [
+   "certify.algebra:unknown:parse_error: claimed answer 'x + 1 + 0*Integral(exp(x*t), (t, 0, oo))' is a computation (I"
+  ],
+  "s": 0.0
+ },
+ {
+  "label": "CW ctrl derivative x**2: 2*x + 0*sqrt(x)",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "CW ctrl simplify x + 1: x + 1 + 0*sqrt(x)",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:fail:claim_as_written: claim_undefined_on Interval.open(-oo, 0) (condition x >= 0)"
+  ],
+  "s": 0.01
+ }
+]

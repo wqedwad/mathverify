@@ -454,13 +454,11 @@ def verify(ir, solution, ctx: Ctx):
         iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)
         if err:
             return err
-        from .domain import written_definedness
-        written = written_definedness(p["f"], ctx.ns, pins)[0]
-        free = sorted({str(s_) for e in [f, iv] + list(written) for s_ in getattr(e, "free_symbols", set())}
-                      - {str(var)})
+        free = sorted({str(s_) for e in [f, iv] for s_ in getattr(e, "free_symbols", set())} - {str(var)})
         if free:
-            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare; nor in a
-            # written condition, x + 0*sqrt(b - x) being x after parsing (review of d4e)
+            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare. One in a written
+            # condition alone (x + 0*sqrt(b - x) is x after parsing, review of d4e) leaves the definedness undecided
+            # (`written_undefined_in` None) and the certificate abstains below
             return condition_not_applied(LAYER, free, t.ms)
         if not p.get("interval") and ctx.unapplied_conditions(var):
             # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)
@@ -485,8 +483,15 @@ def verify(ir, solution, ctx: Ctx):
         # f as written must be defined on the whole interval: x/x − x² parses to 1 − x², whose
         # maximum 1 sits exactly at the point x/x excludes (measured: certified CORRECT)
         from .domain import written_undefined_in
-        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv, pins) is True:
+        und = written_undefined_in(p["f"], ctx.ns, var, iv, pins) if isinstance(iv, sp.Set) else False
+        if und is True:
             return unknown(LAYER, "f_undefined_on_interval_as_written", t.ms, {"f": p["f"]},
+                           flags=["written_domain"])
+        if und is None:
+            # not decided is not defined: 2**x + x - 3 >= 0 of sqrt(2**x + x - 3) is solved by no exact class, and
+            # the minimum 0 of x**2 + sqrt(2**x + x - 3) - sqrt(2**x + x - 3) was certified on all of ℝ (attack on
+            # d4b round 8, YO-2; the same root as d4e round 3, YO-2)
+            return unknown(LAYER, "f_definedness_undecided_as_written", t.ms, {"f": p["f"]},
                            flags=["written_domain"])
         if which.startswith("local_"):
             ok, ev = certify_local_extremum(f, var, iv, which, claimed, timeout=ctx.timeout)

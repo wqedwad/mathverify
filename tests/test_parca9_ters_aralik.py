@@ -159,7 +159,7 @@ def test_a_solution_resting_on_a_reversed_range_is_not_certified_through_steps()
     (_ev(S), "n*(n + 1)/2", "CORRECT"),
     (_ev(S), "n**2/2", "INCORRECT"),
     (_ev(S, (), KP), "n*(n + 1)/2", "CORRECT"),
-    (_ev(S, (), KU), "n*(n + 1)/2", "CORRECT"),
+    (_ev(S, (), KU), "n*(n + 1)/2", "UNKNOWN"),          # n not declared an integer (review of d4f, YO-3)
     (_ir("simplify_expression", {"expr": S}, KN), "n*(n + 1)/2", "CORRECT"),
     (_ev(S, [], _constrained("n >= 0", "n <= 5")), "n*(n + 1)/2", "CORRECT"),
     (_solve(f"n**2 = 4 + {S} - {S}", KP), "{2}", "CORRECT"),

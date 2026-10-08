@@ -1,0 +1,336 @@
+[
+ {
+  "label": "DIR series k + 0*I(k), k=-1..1: 0 [term undefined at k = 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reasons": [
+   "certify.series:unknown:term_undefined_in_range_as_written"
+  ],
+  "s": 1.52
+ },
+ {
+  "label": "DIR evaluate 0*I(a) + 1, a >= 0 declared: 1 [undefined at a = 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.09
+ },
+ {
+  "label": "DIR evaluate 0*I(a) + 1, given a >= 0: 1 [undefined at a = 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.06
+ },
+ {
+  "label": "DIR derivative x + 0*I2(x) at 0 [-oo end]: 1",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.05
+ },
+ {
+  "label": "DIR derivative x**2 + 0*I3(x) at 0: 0",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.08
+ },
+ {
+  "label": "DIR max -x**2 + 0*I4(x) on [-1, 1]: 0 [not attained]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reasons": [
+   "certify.extremum:unknown:f_undefined_as_written"
+  ],
+  "s": 0.13
+ },
+ {
+  "label": "DIR derivative x**3 + 0*I5(x) at 1: 3 [undefined at 1]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.06
+ },
+ {
+  "label": "DIR tangent x**3 + 0*I5(x) at 1: y = 3*x - 2",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.03
+ },
+ {
+  "label": "DIR solve x**2 - 1 + 0*I5(x) = 0: {-1, 1} [1 undefined]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.03
+ },
+ {
+  "label": "DIR solve x**2 + 0*I5(x) <= 1: [-1, 1] [1 undefined]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "DIR ctrl derivative x + 0*Integral(sin(t)/t, (t, 1, oo)) at 0: 1",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.99
+ },
+ {
+  "label": "PIN series a*k, k=1..3, given a + 0*sqrt(a - 3) = 2: 6*a value [no a as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_undefined_as_written"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "PIN series a*k, k=1..3, given a*sqrt(a - 3)/sqrt(a - 3) = 2: 6*a value [no a as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_undefined_as_written"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "PIN series a*k, k=1..3, given sqrt(a - 3)**2 = -1: 6*a value [no a as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_undefined_as_written"
+  ],
+  "reasons": [],
+  "s": 0.37
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a**2 = 4: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a = b: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a**2 = 4, a > -3: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.08
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a**2 = 4, a**3 > -9: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, abs(a) = 2: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, floor(a) = 2: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a**2 <= 4, a >= 2: 3 [a = 2]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a*(a - 2) = 0, a > -1, a != 0: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a positive integer, a**2 < 5, a > 1: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "PIN series (k - a)/(k - a), k=1..3, a positive integer, a < 3, a > 1: 3",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.series:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "PIN series 1/(k - a), k=1..3, given 2*a = 3: -2/... ",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.series:fail:"
+  ],
+  "s": 0.25
+ },
+ {
+  "label": "FN limit |x-1|/(x-1) at 1, given f(x) > 0, f = x + 0*sqrt(x - 1): DNE [x >= 1]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "FN limit |x-1|/(x-1) at 1, constraint f(x) > 0: DNE [x >= 1]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "FN limit |x-1|/(x-1) at 1, dod f(x) > 0: DNE [x >= 1]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.1
+ },
+ {
+  "label": "FN limit |x-1|/(x-1) at 1, given y = sqrt(x - 1): DNE [x >= 1]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.08
+ },
+ {
+  "label": "FN limit |x-1|/(x-1) at 1, given log(x-1) - log(x-1) = 0: DNE [x > 1]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.07
+ }
+]

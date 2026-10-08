@@ -638,3 +638,238 @@ def test_convergence_at_an_infinite_end_with_a_declared_parameter():
     assert _v(q, "-x**(-21/20)", "expression") == "CORRECT"
     q = _ir("derivative", {"f": "Integral(exp(-a*t), (t, x, oo))", "var": "x"}, [], [X, T_, A], "expression")
     assert _v(q, "-exp(-a*x)", "expression") == "UNKNOWN"
+
+
+# --- round 3: the attack on round 2 (`d4/saldiri/d4e2/`): false accepts YO-1..YO-5, the convention RK-8, coverage and
+# robustness RK-1..RK-7 ---------------------------------------------------------------------------------------------
+NI = {"name": "n", "domain": "integer"}
+NN = {"name": "n", "domain": "natural"}
+D1 = "Integral(1/(1 + t**2*sin(t)**2), (t, 0, oo))"
+
+
+def test_round3_a_sympy_limit_is_no_proof_of_convergence():
+    # 1/(1 + t**2*sin(t)**2) >= 1/(1 + T**2*u**2) around n*pi: the integral diverges, SymPy's limit of t**(3/2)*g is 0
+    for e, c in ((f"0*{D1} + 1", "1"), (f"{D1} - {D1}", "0"),
+                 ("0*Integral(1/(1 + t**2*cos(t)**2), (t, 0, oo)) + 1", "1"),
+                 ("0*Integral(t**2/(1 + t**6*sin(t)**2), (t, 1, oo)) + 1", "1"),
+                 ("0*Integral(1/(t**2 + cos(1/t)**2), (t, 0, 1)) + 1", "1")):
+        assert _v(_ir("evaluate", {"expr": e}, [], [T_]), c) != "CORRECT", e
+    q = _ir("derivative", {"f": "Integral(1/(1 + t**2*cos(t)**2), (t, x, oo))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "-1/(1 + x**2*cos(x)**2)", "expression") == "UNKNOWN"
+    q = _ir("evaluate", {"expr": "x + 1"}, ["x = 1"], [X, T_])
+    assert _step(q, "2", "value", [("compute", f"{D1}*0 = 0")]) == ("CORRECT", "unknown")
+    # a majorant: |sin| <= 1, e^(-t)
+    for e in ("0*Integral(sin(t)/t**2, (t, 1, oo)) + 1", "0*Integral(exp(-t)*cos(t), (t, 0, oo)) + 1"):
+        assert _v(_ir("evaluate", {"expr": e}, [], [T_]), "1") == "CORRECT", e
+
+
+def test_round3_series_sum_undecided_term_and_a_pin_in_any_form():
+    KAB = [K, A, B]
+    for g, v in ((["2*a = 4"], None), (["a - 2 = 0"], None), (["a**2 = 4", "a > 0"], None), (["a = b", "b = 2"], KAB),
+                 ([], [K, {"name": "a", "domain": "real", "constraints": ["2*a = 4"]}])):
+        assert _v(_ss("(k - a)/(k - a)", 1, 3, g, v), "3") == "UNKNOWN", g
+        assert _v(_ss("a*k", 1, 3, g, v), "12") == "CORRECT", g
+        assert _v(_ss("a*k", 1, 3, g, v), "13") == "INCORRECT", g
+    assert _v(_ss("0*log(k - a) + 1", 1, 2, ["a > 5"]), "2") == "UNKNOWN"
+    assert _v(_ss("(k - a)/(k - a)", 1, 3), "3") == "UNKNOWN"                 # a free: 0/0 at a = 1, 2, 3
+    for term, lo, hi, val in (("(-1)**(k/2)", 0, 3, "0"), ("(-9)**(k/2)", 0, 2, "-8 + 3*I")):
+        assert _v(_ss(term, lo, hi, [], [K]), val) == "UNKNOWN", term
+    assert _v(_ss("a**(k/2)", 0, 3, ["a = -1"]), "0") == "UNKNOWN"
+    assert _v(_ss("(k - 7)/(k - 7)", 1, 3, [], [K]), "3") == "CORRECT"
+    assert _v(_cf("a(n) = c*a(n - 1)", {"1": "1"}, ["2*c = 0"]), "c**(n - 1)", "expression") == "UNKNOWN"
+    q = _ir("recurrence_term", {"recurrence": "a(n) = c*a(n - 1)", "initial": {"1": "1"}, "var": "n", "name": "a",
+                                "index": "4"}, ["2*c = 4"], [{"name": "n", "domain": "positive_integer"}, {"name": "c"}])
+    assert _v(q, "8") == "CORRECT"
+
+
+def test_round3_claim_has_a_value_where_the_derivative_exists():
+    AN = {"name": "a", "domain": "nonneg_real"}
+    # a = 0 is allowed: the claim has no value there (YO-3)
+    assert _v(_der("log(a*x + 1)", None, [], [X, AN]), "1/(x + 1/a)", "expression") == "UNKNOWN"
+    assert _v(_der("log(a*x + 1)", None, ["a >= 0"], XA), "1/(x + 1/a)", "expression") == "UNKNOWN"
+    assert _v(_der("asin(x/a)", None, [], [X, AP]), "(a - 1)/((a - 1)*sqrt(a**2 - x**2))", "expression") == "UNKNOWN"
+    assert _v(_der("log(a*x + 1)", None, [], [X, AP]), "1/(x + 1/a)", "expression") == "CORRECT"
+    assert _v(_der("log(a*x + 1)", None, [], [X, AP]), "a/(a*x + 1)", "expression") == "CORRECT"
+    # no value on part of the derivative's domain, where f has a derivative: INCORRECT (RK-8)
+    for f, c, v in (("log(a*x)", "1/x + 0*sqrt(-x)", [X, AP]), ("log(x**n)", "n/x + 0*sqrt(-x)", [X, NP]),
+                    ("Abs(x)", "x/Abs(x) + 0*sqrt(x)", None), ("tan(x**2)", "2*x*sec(x**2)**2 + 0*sqrt(x)", None),
+                    ("x**2", "2*x**2/x", None), ("x**2", "2*x + log(x) - log(x)", None), ("x**2", "2*sqrt(x)**2", None),
+                    ("x**3", "x**3*(3/x)", None), ("x*Abs(x)", "2*x*Abs(x)/x", None),
+                    ("x**2*exp(x)", "x**2*exp(x)*(2/x + 1)", None), ("x**2*sin(x)", "x**2*sin(x)*(2/x + cos(x)/sin(x))", None)):
+        assert _v(_der(f, None, [], v), c, "expression") == "INCORRECT", (f, c)
+    for f, c in (("x**2", "2*x"), ("Abs(x)", "x/Abs(x)"), ("x**2/x", "x/x"), ("tan(x)", "1/cos(x)**2")):
+        assert _v(_der(f), c, "expression") == "CORRECT", (f, c)
+    assert _v(_der("x**2", None, ["x > 0"]), "2*x**2/x", "expression") == "CORRECT"
+
+
+def test_round3_kinks_of_every_switch():
+    for f, c in (("Max(x, -x)", "sign(x)"), ("x*sign(x)", "sign(x)"), ("Min(x, -x)", "-sign(x)"),
+                 ("Max(x, 0)", "(1 + sign(x))/2"), ("sign(x)", "0"), ("sign(x) + x", "1"), ("sign(sin(x))", "0"),
+                 ("tan(x**2) + sign(x)", "2*x*sec(x**2)**2"), ("Piecewise((x, x > 0), (-x, x <= 0))", "sign(x)")):
+        assert _v(_der(f), c, "expression") == "UNKNOWN", (f, c)
+    q = _ir("derivative", {"f": "x*Max(x, -x)", "var": "x", "order": 2}, [], [X], "expression")
+    assert _v(q, "2*sign(x)", "expression") == "UNKNOWN"
+    assert _v(_der("Max(cos(x), -cos(x))", None, ["sin(x) > 0"]), "-sign(cos(x))*sin(x)", "expression") == "UNKNOWN"
+    assert _v(_der("Max(x, -x)"), "x/Abs(x)", "expression") == "CORRECT"
+    assert _v(_der("Max(x, -x)"), "Piecewise((1, x > 0), (-1, x < 0))", "expression") == "CORRECT"
+    assert _v(_der("x**2*sign(x)"), "2*Abs(x)", "expression") == "CORRECT"
+    assert _v(_der("x**2*sign(x)"), "2*x", "expression") == "INCORRECT"
+
+
+def test_round3_written_givens_constraints_and_domain_of_discourse():
+    G = "x + 0*sqrt(x - 1) > 0"                                         # x >= 1 as written
+    for g, v, dod in _writings(G):
+        assert _dne(_lim("Abs(x - 1)/(x - 1)", "1", g, v, dod)) == "INCORRECT"
+        assert _v(_lim("Abs(x - 1)/(x - 1)", "1", g, v, dod), "1") == "CORRECT"
+        q = _ir("solve_equation", {"var": "x", "equation": "x**2 = 1/4"}, g, v, "set", dod)
+        assert _v(q, "{1/2}", "set") != "CORRECT"
+    assert _v(_lim("x", "1/2", ["0*log(x - 1) >= 0"]), "1/2") == "UNKNOWN"
+    q = _ir("solve_equation", {"var": "x", "equation": "x**2 = 1/4"}, [], [xc("sqrt(x)**2 = x")], "set")
+    assert _v(q, "{-1/2, 1/2}", "set") == "INCORRECT"
+    assert _v(q, "{1/2}", "set") == "CORRECT"
+
+
+def test_round3_a_simple_zero_of_u_is_a_corner():
+    for f, c in (("Abs(log(x))", "log(x)/(x*Abs(log(x)))"), ("Abs(sqrt(x) - 1)", "(sqrt(x) - 1)/(2*sqrt(x)*Abs(sqrt(x) - 1))"),
+                 ("x*Abs(log(x))", "Abs(log(x)) + log(x)/Abs(log(x))"), ("Abs(log(x))", "Piecewise((1/x, x > 1), (-1/x, x < 1))")):
+        assert _v(_der(f), c, "expression") == "CORRECT", (f, c)
+    assert _v(_der("Abs(log(x))"), "-log(x)/(x*Abs(log(x)))", "expression") == "INCORRECT"
+    assert _v(_der("Abs(log(x))"), "sign(log(x))/x", "expression") == "UNKNOWN"
+
+
+def test_round3_refutation_off_kinks_not_listed():
+    XPOS = [{"name": "x", "domain": "positive_real"}]
+    for f, c, v in (("Abs(tan(x))", "1/cos(x)**2", None), ("Abs(sin(x))", "cos(x)", XPOS), ("Abs(x**2 + x + 1)", "2*x", None)):
+        assert _v(_der(f, None, [], v), c, "expression") == "INCORRECT", (f, c)
+    assert _v(_der("Abs(sin(x))", None, [], XPOS), "cos(x)*Abs(sin(x))/sin(x)", "expression") == "CORRECT"
+    assert _v(_der("Abs(cot(x))"), "-cot(x)/(sin(x)**2*Abs(cot(x)))", "expression") == "CORRECT"
+    # x = cos(x) is solved by no exact class: the refutation stands at a point where f is analytic (0: f' = -1)
+    assert _v(_der("Abs(x - cos(x))"), "1 + sin(x)", "expression") == "INCORRECT"
+    assert _v(_der("Abs(x - cos(x))"), "(1 + sin(x))*(x - cos(x))/Abs(x - cos(x))", "expression") == "UNKNOWN"
+
+
+def test_round3_an_integer_exponent_is_no_convention():
+    for nv in (NI, NN):
+        assert _v(_der("x**2*(-1)**n", None, [], [X, nv]), "2*x*(-1)**n", "expression") == "CORRECT"
+        assert _v(_der("x**2*(-1)**n", None, [], [X, nv]), "2*x", "expression") == "INCORRECT"
+        assert _v(_ext("(-1)**(2*n)*x**2", "max", "[0, 2]", [], [X, nv]), "4") == "CORRECT"
+        assert _v(_ss("k*(-1)**n", 1, 3, [], [K, nv]), "6*(-1)**n") == "CORRECT"
+    assert _v(_der("x**2*(-1)**n", None, [], [X, {"name": "n", "domain": "real"}]), "2*x*(-1)**n", "expression") == "UNKNOWN"
+
+
+def test_round3_convergence_by_a_majorant():
+    for I, val, wrong in (("exp(-sqrt(t))", "2", "3"), ("exp(-t**(1/3))", "6", "5")):
+        q = _ir("evaluate", {"expr": f"Integral({I}, (t, 0, oo))"}, [], [T_])
+        assert _v(q, val) == "CORRECT" and _v(q, wrong) == "INCORRECT", I
+    q = _ir("derivative", {"f": "Integral(exp(-t)*(x + t), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "1", "expression") == "CORRECT"
+    assert _v(q, "2", "expression") == "INCORRECT"
+    q = _ir("derivative", {"f": "Integral(exp(-t)*cos(x*t), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "2*x/(1 + x**2)**2", "expression") == "INCORRECT"
+    # SymPy's limit of t**2/(x**2*t**3 + 1) at oo is 0 for x != 0 alone; at x = 0 the integral diverges: x is bounded
+    # by |x|, and no majorant decays
+    q = _ir("derivative", {"f": "x + 0*Integral(1/(x**2*t**3 + 1), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "1", "expression") != "CORRECT"
+
+
+def test_round3_kink_reading_has_a_budget(monkeypatch):
+    import mathverify.certify.calculus as cal
+    calls = []
+    real = cal.derivative_at_point
+
+    def counted(*a, **k):
+        calls.append(a)
+        return real(*a, **k)
+    monkeypatch.setattr(cal, "derivative_at_point", counted)
+    # seven nested-radical kinks, each decided by the exact rule (a simple zero, gcd 1): no limit taken
+    assert _v(_der("Abs(x**3 - 3*x + 1) + Abs(x**4 - 10*x**2 + 1)"), "0", "expression") == "INCORRECT"
+    assert calls == []
+    calls.clear()
+    assert _v(_der("Abs(x**4 - 10*x**2 + 1)**3"), "0", "expression") == "INCORRECT"
+    assert calls == []
+    calls.clear()
+    assert _v(_der("Piecewise((x, x > 0), (-x, x <= 0)) + Piecewise((x - 1, x > 1), (1 - x, x <= 1))"
+                   " + Piecewise((x - 2, x > 2), (2 - x, x <= 2)) + Piecewise((x - 3, x > 3), (3 - x, x <= 3))"),
+              "0", "expression") == "INCORRECT"
+    assert len(calls) <= cal._KINK_BUDGET
+
+
+def test_round3_kink_reading_does_not_hang_on_the_hash_seed():
+    import os
+    import subprocess
+    import sys
+    code = ("from mathverify.verifier import verify\n"
+            "q = {'task': {'kind': 'derivative', 'params': {'f': 'Abs(log(x)) + Abs(tan(x))', 'var': 'x'}},"
+            " 'vars': [{'name': 'x', 'domain': 'real'}], 'givens': [], 'answer_shape': 'expression'}\n"
+            "print(verify(q, {'claimed_answer': {'kind': 'expression', 'payload': '0'}, 'steps': []}).verdict)\n")
+    for seed in ("3", "5"):
+        env = dict(os.environ, PYTHONHASHSEED=seed)
+        out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=300)
+        assert out.stdout.strip().splitlines()[-1] == "INCORRECT", (seed, out.stdout, out.stderr[-500:])
+
+
+def test_round3_subs_body_defined_near_its_point_by_a_strict_condition():
+    q = _ir("evaluate", {"expr": "x + 1"}, ["x = 1"], [X])
+    for c in ("at(diff(1/(x - cos(x)), x), x, pi) = -1/(pi + 1)**2", "at(diff(tan(x**2), x), x, 1) = 2 + 2*tan(1)**2",
+              "at(diff(1/(x + exp(x)), x), x, 0) = -2"):
+        assert _step(q, "2", "value", [("compute", c)]) == ("CORRECT", "verified"), c
+    assert _step(q, "2", "value", [("compute", "at(diff(1/(x + exp(x)), x), x, 0) = -3")])[1] == "refuted"
+
+
+def test_round3_guards_of_the_new_readings():
+    # Max/Min read as |.|: a family of corners, the claim undefined exactly there
+    assert _v(_der("Max(sin(x), -sin(x))"), "cos(x)*sin(x)/Abs(sin(x))", "expression") == "CORRECT"
+    # a double zero of u is no corner: |x**3 - x**2| has the derivative 0 at 0, where the claim has no value
+    assert _v(_der("Abs(x**3 - x**2)"), "(3*x**2 - 2*x)*(x**3 - x**2)/Abs(x**3 - x**2)", "expression") == "INCORRECT"
+    # a written condition not strict at the point (x**4 - 2*x**2 + 1 >= 0 at 1): f is |x**2 - 1| there, no derivative
+    assert _v(_der("sqrt(x**4 - 2*x**2 + 1)"), "(2*x**3 - 2*x)/sqrt(x**4 - 2*x**2 + 1)", "expression") != "INCORRECT"
+    # acosh has no written condition: never read as analytic
+    assert _v(_der("acosh(x)"), "1/sqrt(x**2 - 1)", "expression") != "INCORRECT"
+    # a - x >= 0 is not x - a >= 0: the sign of the ratio counts
+    assert _v(_der("sqrt(x - a)", None, [], XA), "1/(2*sqrt(x - a)) + 0*sqrt(a - x)", "expression") != "CORRECT"
+    assert _v(_der("sqrt(x - a)", None, [], XA), "1/(2*sqrt(x - a))", "expression") == "CORRECT"
+    # a claim condition not proved on the region: never CORRECT
+    assert _v(_der("tan(x)", None, ["cos(x) > 0"]), "sec(x)**2 + 0*sqrt(sin(x))", "expression") != "CORRECT"
+    # a symbol of undeclared sign in the integrand is bounded by its absolute value: e^(-x*t) diverges for x <= 0
+    q = _ir("derivative", {"f": "x + 0*Integral(exp(-x*t), (t, 0, oo))", "var": "x"}, [], [X, T_], "expression")
+    assert _v(q, "1", "expression") != "CORRECT"
+    # a function no rule reads is never analytic, a fraction of a step is (unit)
+    import sympy as sp
+    from mathverify.certify.calculus import smooth_at
+    x = sp.Symbol("x", real=True)
+    assert smooth_at(sp.Function("g")(x), x, sp.S.Zero, [], []) is False
+    assert smooth_at(sp.sin(x) + sp.Abs(x - 1), x, sp.S.Zero, [x - 1], []) is True
+    assert smooth_at(sp.Abs(x - 1), x, sp.S.One, [x - 1], []) is False
+    # the extremum of a function or on an interval naming a free symbol: no value
+    assert _v(_ext("a*x", "max", "[0, 1]", [], XA), "a") == "UNKNOWN"
+    assert _v(_ext("x", "max", "[0, b]", [], XB), "b") == "UNKNOWN"
+    # the zeros of sin(x) are ends of sqrt(sin(x))**3's region, not points of the comparison: the claim keeps its value
+    assert _v(_der("sqrt(sin(x))**3"), "3*cos(x)*sin(x)/(2*sqrt(sin(x)))", "expression") == "CORRECT"
+
+
+def test_round3_a_written_condition_no_class_solves_is_not_defined():
+    # d4b round 8, YO-2: 2**x + x - 3 >= 0 (x >= 1) and -1 <= 2**x + x - 2 <= 1 (0 <= x <= 1) are solved by no exact
+    # class; written_undefined_in is None there, and every caller abstains on it
+    SQ, AC = "sqrt(2**x + x - 3)", "acos(2**x + x - 2)"
+    assert _v(_ext(f"x**2 + {SQ} - {SQ}", "min", None), "0") == "UNKNOWN"
+    assert _v(_ext(f"x**2 + {SQ} - {SQ}", "min", None), "1") != "INCORRECT"
+    assert _v(_ext(f"-(x - 3)**2 + 0*{AC}", "max", "[-5, 5]"), "0") == "UNKNOWN"
+    assert _v(_ss("k + sqrt(2**k + k - 3) - sqrt(2**k + k - 3)", 0, 3, [], [K]), "6") == "UNKNOWN"
+    assert _v(_ss("sqrt(2**k + k - 3)", 0, 3, [], [K]), "sqrt(3) + 2*sqrt(2) + sqrt(2)*I") == "UNKNOWN"
+    assert _v(_der(f"x + {SQ} - {SQ}", "0"), "1") == "UNKNOWN"
+    assert _v(_der(f"x + {SQ} - {SQ}", "2"), "1") == "CORRECT"
+
+
+def test_round3_dirichlet_test_takes_no_parameter():
+    # attack on d4e round 3, D4E3-YO-1: SymPy's limit of t/(x**2*t**2 + 1) is 0 for a generic x; at x = 0 the
+    # integral of t*sin(t) diverges, so x + 0*I(x) has no value at 0
+    I = "Integral(t*sin(t)/(x**2*t**2 + 1), (t, 1, oo))"
+    V = [X, T_]
+    assert _v(_ir("derivative", {"f": f"x + 0*{I}", "var": "x", "at": "0"}, [], V), "1") == "UNKNOWN"
+    assert _v(_ir("solve_equation", {"var": "x", "equation": f"x**2 + 0*{I} = 0"}, [], V, "set"), "{0}",
+              "set") == "UNKNOWN"
+    assert _v(_ir("extremum", {"f": f"x**2 + 0*{I}", "var": "x", "which": "min", "interval": "[-1, 1]"}, [], V),
+              "0") == "UNKNOWN"
+    # without a parameter the test still reads sin(t)/t
+    assert _v(_ir("derivative", {"f": "x + 0*Integral(sin(t)/t, (t, 1, oo))", "var": "x", "at": "0"}, [], V),
+              "1") == "CORRECT"

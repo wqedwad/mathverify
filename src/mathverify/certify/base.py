@@ -161,12 +161,15 @@ class Ctx:
         # domain, and sin(x) > 0 cuts the negative bases of x**(1/3) too
         dom, unsolved = self._periodic_conditions(dom, deferred, var)
         self.cache[f"unsolved:{var.name}"] = unsolved
-        from .domain import is_value_convention
+        from .domain import is_integer_bound, is_value_convention
         # the points where a value of the problem is ANOTHER value under the other reading (an odd root:
         # the principal value; Mod: Euclidean): see value_convention_region
         _, vback = self._forward_ranges(dom, [c for c in spans if is_value_convention(c)
-                                              and not is_range_span(c)], var)
+                                              and not is_range_span(c) and not is_integer_bound(c)], var)
         self.cache[f"valueconv:{var.name}"] = vback
+        # the points where a Sum/Product bound is not an integer: see integer_bound_region
+        _, iback = self._forward_ranges(dom, [c for c in spans if is_integer_bound(c)], var)
+        self.cache[f"intbound:{var.name}"] = iback
         dom, back = self._forward_ranges(dom, spans, var)
         if back is not S.EmptySet:
             unapplied += [c for c in spans if c not in unapplied]
@@ -327,6 +330,15 @@ class Ctx:
         `convention_counterexample`. A Sum range that runs backwards is left to §80's own rules."""
         self.domain_for(var)
         return self.cache.get(f"valueconv:{var.name}", S.EmptySet)
+
+    def integer_bound_region(self, var: sp.Symbol) -> sp.Set:
+        """The part of `convention_region` where a Sum/Product bound of the problem is not an integer
+        (`certify.domain.Convention` `integer_bound`): SymPy's stepping sum, the index reading and "undefined"
+        are its readings, so a comparison made on `domain_for` (the integers) certifies nothing while it is
+        not empty, and no point of it refutes anything: Σ_{k=n}^{n+2} k with n real was CORRECT for
+        3n + 3 + sin(πn) (review of d4f, YO-3)."""
+        self.domain_for(var)
+        return self.cache.get(f"intbound:{var.name}", S.EmptySet)
 
     def reversed_region(self, var: sp.Symbol) -> sp.Set:
         """The points of `var`'s domain (the declarations, constraints, side conditions and written
@@ -670,7 +682,24 @@ class Ctx:
         (p,) = fs                                # a plain real symbol (see (4) of `_binding_issues`)
         if not any(v.name == p.name for v in self.ir.vars):
             return None
+        from .domain import Convention
         reg = self._declared_region(self.sym(p.name), givens=True)
+        if reg is not None and isinstance(c, sp.Contains) and isinstance(c.args[1], Convention):
+            # a convention read with the region's facts: (-1)**n and (-1)**(2*n) with n declared an integer have
+            # an integer exponent, no convention (round 3, RK-3: the derivative 2*x*(-1)**n of x**2*(-1)**n was
+            # parameter_condition_not_proved; the condition's set hid Convention's superset test, 2*n none)
+            facts = {}
+            for name, st in (("integer", S.Integers), ("nonnegative", sp.Interval(0, sp.oo)),
+                             ("positive", sp.Interval.open(0, sp.oo))):
+                try:
+                    if reg.is_subset(st) is True:
+                        facts[name] = True
+                except Exception:  # noqa: BLE001
+                    continue
+            if facts:
+                d = sp.Dummy(p.name, real=True, **facts)
+                if c.args[1]._contains(c.args[0].xreplace({p: d})) is sp.true:
+                    return True
         cut = self.condition_set(c, p)
         if reg is None or cut is None:
             return None
@@ -713,6 +742,29 @@ class Ctx:
         2*a*x), and the written conditions of x + 0*sqrt(b - x) were dropped, so with b = 1/2 its maximum 1
         on [0, 1] and its integral 1/2 over [0, 1] were certified (fourth audit TAN-02, review of d4e)."""
         return {s_: v for s_, v in self.pinned_values(var).items() if s_.name not in keep}
+
+    def solved_pins(self, var: sp.Symbol, *keep: str) -> dict:
+        """`task_pins(var, *keep)` and each other declared parameter whose region (`_declared_region` with the
+        givens: the declaration, the domain of discourse, its constraints and every given on it alone, each value a
+        given fixes put in) is one real number. 2*a = 4, a - 2 = 0, a**2 = 4 with a > 0, a = b with b = 2 and the
+        constraint 2*a = 4 fix a as `a = 2` does: read as a free parameter, the sum 3 of (k - a)/(k - a) over
+        k = 1..3 (0/0 at k = 2) was certified and the right 12 of a*k refuted against 6*a (attack on d4e round 2,
+        YO-2). A task variable is never one."""
+        out = self.task_pins(var, *keep)
+        names = task_variables(self.ir)
+        for v in self.ir.vars:
+            s_ = self.sym(v.name)
+            if s_ == var or s_ in out or v.name in names or v.name in keep:
+                continue
+            try:
+                reg = self._declared_region(s_, givens=True)
+            except Exception:  # noqa: BLE001 - a region not read fixes nothing
+                continue
+            if isinstance(reg, sp.FiniteSet) and len(reg) == 1:
+                (val,) = reg.args
+                if isinstance(val, sp.Expr) and not val.free_symbols and val.is_real is True:
+                    out[s_] = val
+        return out
 
     def with_pins(self, e, pins: dict):
         """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
@@ -954,6 +1006,19 @@ class Ctx:
             nowhere |= nw
             conds += [c for c in cs if c not in conds]
             note(s_, self._undefined_constant(s_, pins))
+        # a condition on the variable restricts it as written too: the givens of a limit (its own expression stays
+        # out: lim x/x at 0 is 1), every declared constraint and the domain of discourse. Read after SymPy's fold,
+        # x + 0*sqrt(x - 1) > 0 was x > 0, so DNE was certified for the limit of |x - 1|/(x - 1) at 1 (x >= 1 as
+        # written: 1 from the right) and {1/2} for x**2 = 1/4 under the constraint (attack on d4e round 2, YO-5)
+        dod = self.ir.domain_of_discourse
+        extra = (list(self.ir.givens) if kind == "limit" else []) + [c for v in self.ir.vars for c in v.constraints]
+        extra += [dod] if isinstance(dod, str) and dod.strip() else []
+        for s_ in extra:
+            if s_ in srcs:
+                continue
+            cs, nw = written_definedness(s_, self.ns, pins)
+            nowhere |= nw
+            conds += [c for c in cs if c not in conds]
         cs, nw, calls = self._function_call_conditions(srcs)
         nowhere |= nw
         conds += [c for c in cs if c not in conds]
@@ -966,7 +1031,7 @@ class Ctx:
         # expression): one with a closed operation that has no value ((-1)!, Γ(0), zoo), or closed and
         # undefined itself. The point 1/(-1)! of a derivative, the bound of an integral and the interval
         # [1/(1/0), 1] of an extremum were read as SymPy's 1/zoo = 0 and certified (CAP-F1)
-        others = [v for k, v in params.items() if isinstance(v, str) and k != "var"]
+        others = [t for k, v in params.items() if k != "var" for t in _texts(v)]
         others += list(self.ir.givens) + [c for v in self.ir.vars for c in v.constraints]
         if isinstance(self.ir.domain_of_discourse, str):
             others.append(self.ir.domain_of_discourse)
@@ -1018,15 +1083,15 @@ class Ctx:
         1 with n = 3 has every inner range forward), has no value whatever its free symbols are: a closed
         operation with none (NO_VALUE), or a condition that fails with no symbol left; "undecided" when a
         closed condition no exact check decides stands; None otherwise."""
-        from ..normalize.parse import parse_as_written
-        from .domain import closed_condition_undecided, definedness_conditions, is_no_value
-        e = self._pinned(parse_as_written(src, self.ns), pins)
+        from ..normalize.parse import parse_set_as_written
+        from .domain import closed_condition_undecided, definedness_conditions, is_no_value, tree_free_symbols
+        e = self._pinned(parse_set_as_written(src, self.ns), pins)
         if e is None:
-            return None
+            return self._unread(src)
         conds = definedness_conditions(e, None)
         if any(is_no_value(c) for c in conds):
             return "undefined"
-        if not e.free_symbols and (any(c is sp.false for c in conds) or self._undefined_term(e)):
+        if not tree_free_symbols(e) and (any(c is sp.false for c in conds) or self._undefined_term(e)):
             return "undefined"
         # a closed condition SymPy left standing is one it could not decide: it counts only when it
         # is proved. tan(arccot(2) + arccot(1/2)) is tan(pi/2); its condition cos(...) != 0 stayed
@@ -1047,7 +1112,7 @@ class Ctx:
             ns = dict(ns, **{v: sp.Symbol(v, real=True)})
         e = self._pinned(parse_as_written(src, ns), pins)
         if e is None:
-            return None
+            return self._unread(src)
         conds = definedness_conditions(e, None)
         # open conditions that hold nowhere together (x > 0 and -x > 0) too: the simplification x of
         # x + log(x) - log(x) + log(-x) - log(-x) was certified (fourth audit TAN-06)
@@ -1066,17 +1131,33 @@ class Ctx:
             # an interval's ends too: Interval.open(1/(-1)!, oo), [1/(1/0), 1)
             e = self._pinned(parse_set_as_written(src, self.ns), pins)
             if e is None:
-                return None
+                return self._unread(src)
             conds = definedness_conditions(e, None)
             if any(is_no_value(c) for c in conds):
                 return "undefined"
             if tree_free_symbols(e):
                 return None
-        except Exception:  # noqa: BLE001 - a text no reading reads adds no fact (it was not read before)
-            return None
+        except Exception:  # noqa: BLE001 - not read as written: as above
+            return self._unread(src)
         if any(c is sp.false for c in conds):
             return "undefined"
         return "undecided" if closed_condition_undecided(conds) else None
+
+    def _unread(self, src) -> str | None:
+        """A text the as-written reading does not take: "undecided" when the value reading reads it (as an
+        expression, a relation, a condition or a set), None when no reading does (the certificates report it).
+        The as-written reading refused Σ_{k=√1}^{3} k alone, and read as "no condition" the text around it
+        lost x/x, √x², 1/(-1)!: {0} was certified for x²/x + Σ = 6 (review of d4f, YO-1)."""
+        from ..normalize.parse import parse_expr_str, parse_relation, parse_set_str, read_condition
+        if not isinstance(src, str):
+            return None
+        for read in (parse_expr_str, parse_relation, read_condition, parse_set_str):
+            try:
+                read(src, self.ns)
+            except Exception:  # noqa: BLE001 - not this reading
+                continue
+            return "undecided"
+        return None
 
     @staticmethod
     def _undefined_term(e) -> bool:
@@ -1351,6 +1432,23 @@ def convention_counterexample(ctx: Ctx, claimed, truth, syms, n: int = 12) -> tu
     return True, None
 
 
+def integer_bound_regions(ctx: Ctx, syms) -> dict[str, str]:
+    """The problem's symbols among `syms` with points where a Sum/Product bound is not an integer
+    (`Ctx.integer_bound_region`), with those points; a region not proved empty counts."""
+    out = {}
+    for s_ in syms:
+        if not self_ok(ctx, s_):
+            continue
+        r = ctx.integer_bound_region(s_)
+        try:
+            empty = r.is_empty
+        except Exception:  # noqa: BLE001
+            empty = None
+        if empty is not True:
+            out[str(s_)] = str(r)
+    return out
+
+
 def self_ok(ctx: Ctx, s_) -> bool:
     return isinstance(s_, sp.Symbol) and ctx.ns.get(s_.name) == s_
 
@@ -1373,6 +1471,18 @@ def parse_or_unknown(layer: str, fn, *args, **kw):
 
 
 _OPERATIONS = (sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs)
+
+
+def _texts(v) -> list[str]:
+    """The texts of a task parameter: itself, or those in its lists and dicts (a point, a center, the initial
+    values of a recurrence, the bounds of a count: review of d4f, YO-6)."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        return [t for x in v.values() for t in _texts(x)]
+    if isinstance(v, (list, tuple)):
+        return [t for x in v for t in _texts(x)]
+    return []
 
 
 def closed_binding(rel) -> tuple[sp.Symbol, Any] | None:

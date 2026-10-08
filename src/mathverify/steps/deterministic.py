@@ -358,7 +358,17 @@ def _verified_where_conventions(claim, ctx: Ctx, status: str, ev: dict) -> tuple
     the value of a problem expression is a convention (`Ctx.convention_region`): an instance of the problem
     may lie there. Under the given x**(1/3) = x the real root makes x = -1 an instance, and "Abs(x) = x",
     verified on [0, oo), was a verified step (fourth audit, D4-ADIM-K). Checked again with those points;
-    verified only when it holds there too."""
+    verified only when it holds there too (a non-integer Sum/Product bound of the problem is such a point,
+    `Ctx.integer_bound_region`). Where a bound of the claim's own Sum/Product may be no integer no reading is the
+    curriculum's: not verified (Σ_{k=n}^{n+2} k = 3n + 3 with n real holds in SymPy's stepping alone, review of
+    d4f, YO-3)."""
+    from ..certify.domain import definedness_conditions, is_integer_bound
+    try:
+        own = [c for c in definedness_conditions(claim, None) if is_integer_bound(c) and c.free_symbols]
+    except Exception:  # noqa: BLE001 - no conditions read: as before
+        own = []
+    if own:
+        return "unknown", {**ev, "reason": "not_verified_where_a_bound_is_not_an_integer"}
     doms: dict = {}
     for s_ in getattr(claim, "free_symbols", set()):
         if ctx.ns.get(s_.name) != s_:
@@ -2200,29 +2210,43 @@ def _states_task_object(claim, objects: list, ctx: Ctx) -> bool:
     return False
 
 
-def _undefined_as_written(text: str, ns: dict[str, Any]) -> bool:
+def _with_undeclared(text: str, ns: dict[str, Any], names) -> dict[str, Any]:
+    """`ns` with the claim's undeclared names: a symbol, or a function where the text calls it (the sequence a of
+    a recurrence: read as a symbol, a(3) = 3 + 1/factorial(-1) was no reading at all and its 1/zoo was verified,
+    review of d4f, YO-6)."""
+    import re
+    out = dict(ns)
+    for n in names:
+        if n not in ns:
+            called = re.search(rf"(?<![\w.]){re.escape(n)}\s*\(", text)
+            out[n] = sp.Function(n) if called else sp.Symbol(n)
+    return out
+
+
+def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool = False) -> bool:
     """Is the claim, read AS WRITTEN, undefined whatever its free symbols are (a closed condition
     that fails, e.g. a term of a finite sum at one of its indices)? The value parse folds j/j to 1,
     and the compute step `Sum(j/j, (j, -1, 1)) = 3` was verified (V14 tests, 30 Sep 2026). Undeclared
-    names are read as `_with_bound_dummies` reads them; a text that cannot be read that way adds
-    nothing."""
+    names are read as `_with_bound_dummies` reads them. A text the as-written reading does not take is `unread`:
+    a step the value reading verified is not proved defined then (review of d4f, YO-1)."""
     from ..certify.domain import closed_condition_undecided, definedness_conditions
-    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_set_as_written, preclean
     try:
         names = _check_safe(preclean(_strip_invisible(text)), ns)
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
-        w = parse_as_written(text, ns)
+        # a membership (x in {0, 4}) or a compound step (x = 1 or x = 2) part by part
+        w = parse_set_as_written(text, ns)
         if w is None:
-            return False
+            return unread
         conds = definedness_conditions(w, None)
         # a binder whose body is not proved to exist (DEFINEDNESS_UNDECIDED) is not verified either
         return any(c is sp.false for c in conds) or closed_condition_undecided(conds)
-    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
-        return False
+    except Exception:  # noqa: BLE001 - no reading as written: as above
+        return unread
 
 
 def _written_relations(text: str, ns: dict[str, Any]) -> list:
@@ -2236,7 +2260,7 @@ def _written_relations(text: str, ns: dict[str, Any]) -> list:
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
         w = parse_as_written(text, ns)
         conds = definedness_conditions(w, None) if w is not None else []
@@ -2250,22 +2274,25 @@ def _convention_as_written(text: str, ns: dict[str, Any]) -> bool:
     """Does the claim, read AS WRITTEN, hold a closed operation whose value is a convention with another
     value (`certify.domain.is_value_convention`: Mod(7, -5), (-8)**(1/3)) left standing? The value parse
     computed it SymPy's way before any check saw it. 0**0 and C(2, 5) are 1 and 0 or undefined: a claim
-    refuted with SymPy's value is not true under the other reading either."""
+    refuted with SymPy's value is not true under the other reading either. A text the as-written reading does
+    not take counts too: its value is not proved the curriculum's (review of d4f, YO-1). Σ_{k=c}^{c+2} k with
+    c = 1/2 written in nested roots has a closed bound not proved an integer (`certify.domain.INTEGER_BOUND`), and
+    the step "= 3" was refuted with SymPy's 9/2."""
     from ..certify.domain import definedness_conditions, is_value_convention
-    from ..normalize.parse import _check_safe, _strip_invisible, parse_as_written, preclean
+    from ..normalize.parse import _check_safe, _strip_invisible, parse_set_as_written, preclean
     try:
         names = _check_safe(preclean(_strip_invisible(text)), ns)
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
-        w = parse_as_written(text, ns)
+        w = parse_set_as_written(text, ns)
         if w is None:
-            return False
+            return True
         return any(is_value_convention(c) and not c.free_symbols for c in definedness_conditions(w, None))
-    except Exception:  # noqa: BLE001 - no reading as written: nothing is added
-        return False
+    except Exception:  # noqa: BLE001 - no reading as written: as above
+        return True
 
 
 _MAX_DEFINED_POINTS = 200            # points of the premises' sets a claim's definedness is checked at one by one
@@ -2424,7 +2451,7 @@ def _undefined_at_premises(text: str, ns: dict[str, Any], premises: list, ctx: C
     except Exception:  # noqa: BLE001 - LaTeX, or not well-formed: the parse decides
         names = []
     if names:
-        ns = dict(ns, **{n: sp.Symbol(n) for n in names if n not in ns})
+        ns = _with_undeclared(text, ns, names)
     try:
         w = parse_as_written(text, ns)
         conds = [c for c in definedness_conditions(w, None) if getattr(c, "free_symbols", None)] if w is not None else []
@@ -2774,7 +2801,7 @@ def check_steps(ir, solution, ctx: Ctx):
                     status, ev = "unknown", {"reason": "counterexample_where_the_claim_is_undefined", "withdrawn": ev}
                 why = None
                 if status != "refuted":
-                    if _undefined_as_written(st.claim, step_ns):
+                    if _undefined_as_written(st.claim, step_ns, unread=status == "verified"):
                         why = "claim_undefined_as_written"
                     else:
                         try:

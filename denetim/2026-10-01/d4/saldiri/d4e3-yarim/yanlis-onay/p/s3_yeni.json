@@ -1,0 +1,332 @@
+[
+ {
+  "label": "KINK derivative Piecewise((x, x > 0), (-x, x <= 0)): Piecewise((1, x > 0), (-1, x <= 0)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 1.28
+ },
+ {
+  "label": "KINK derivative Piecewise((x**2, x >= 0), (x, x < 0)): Piecewise((2*x, x >= 0), (1, x < 0)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.22
+ },
+ {
+  "label": "KINK derivative Piecewise((x, x < 1), (2 - x, x >= 1)): Piecewise((1, x < 1), (-1, x >= 1)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.53
+ },
+ {
+  "label": "KINK derivative Max(x, x**2): Piecewise((2*x, x < 0), (1, x < 1), (2*x, x >= 1)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 1.89
+ },
+ {
+  "label": "KINK derivative Min(x**2, 1): Piecewise((2*x, x**2 < 1), (0, x**2 >= 1)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 1.15
+ },
+ {
+  "label": "KINK derivative Piecewise((x, x > 0), (0, x <= 0)): Piecewise((1, x > 0), (0, x <= 0)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.13
+ },
+ {
+  "label": "KINK derivative Piecewise((x, x > 0), (0, x <= 0)): (1 + sign(x))/2 [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.37
+ },
+ {
+  "label": "KINK derivative Piecewise((x, Abs(x) < 1), (sign(x), Abs(x) >= 1)): Piecewise((1, Abs(x) < 1), (0, Abs(x) >= 1)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.27
+ },
+ {
+  "label": "KINK derivative Piecewise((x, x**3 > 0), (-x, x**3 <= 0)): sign(x) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.34
+ },
+ {
+  "label": "KINK derivative Piecewise((x, x**2 > x), (x**2, x**2 <= x)): Piecewise((1, x**2 > x), (2*x, x**2 <= x)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.78
+ },
+ {
+  "label": "KINK derivative Piecewise((sin(x), sin(x) > 0), (-sin(x), sin(x) <= 0)): sign(sin(x))*cos(x) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.52
+ },
+ {
+  "label": "KINK derivative Piecewise((exp(x), x > 0), (1 + x, x <= 0)): Piecewise((exp(x), x > 0), (1, x <= 0)) [value at a corner]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "KINK derivative Max(x, -x) + Max(x - 1, 1 - x): sign(x) + sign(x - 1) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "KINK derivative Max(x, -x)*Max(x, -x): 2*x [value at a corner]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "KINK derivative Max(x**3, -x**3): 3*x**2*sign(x) [value at a corner]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.37
+ },
+ {
+  "label": "KINK derivative Max(sqrt(x**2), 0): sign(x) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "KINK derivative x*Max(x, -x): 2*Max(x, -x) [value at a corner]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.11
+ },
+ {
+  "label": "KINK derivative Max(x, -x)**(1/2): sign(x)/(2*sqrt(Abs(x))) [value at a corner]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 1.23
+ },
+ {
+  "label": "KINK derivative Max(x, 2*x): Piecewise((1, x < 0), (2, x >= 0)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.19
+ },
+ {
+  "label": "KINK derivative Min(x, 2*x): Piecewise((2, x < 0), (1, x >= 0)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.45
+ },
+ {
+  "label": "KINK derivative Max(x, 2*x): (3 + sign(x))/2 [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "KINK derivative Max(x, -x, 2*x): Piecewise((-1, x < 0), (2, x >= 0)) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 5.69
+ },
+ {
+  "label": "KINK derivative Abs(x) + Max(x, -x): 2*sign(x) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "KINK derivative Abs(x - 1)*sign(x - 1): 2*Abs(x - 1) [value at a corner]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.12
+ },
+ {
+  "label": "KINK derivative sign(x)*x**2 + Abs(x): 2*Abs(x) + sign(x) [value at a corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "KINK ctrl derivative Max(x, 2*x): Piecewise((1, x < 0), (2, x > 0))",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.2
+ },
+ {
+  "label": "KINK derivative Max(x, 2*x) at 0: 1 [corner]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "KINK derivative Piecewise((x, x < 1), (2 - x, x >= 1)) at 1: 1 [corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.08
+ },
+ {
+  "label": "KINK derivative Piecewise((x**2, x >= 0), (x, x < 0)) at 0: 0 [corner]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:unknown:undecided"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "KINK derivative Max(x, -x, 2*x) at 0: 0 [corner]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.07
+ }
+]

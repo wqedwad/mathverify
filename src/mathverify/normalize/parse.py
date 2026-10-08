@@ -20,6 +20,7 @@ from fractions import Fraction
 from typing import Any
 
 import sympy as sp
+from sympy.core.parameters import global_parameters
 from sympy import (S, Symbol, Rational, Integer, Interval, FiniteSet, Union, Intersection,
                    Complement, EmptySet, Eq, Ne, Lt, Le, Gt, Ge, And, Or, Not, pi, E, I, oo, zoo, nan)
 from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, convert_xor,
@@ -1231,6 +1232,10 @@ def _constant_bound(node, names: dict[str, Any]):
     try:
         v = sympify_nontext(eval(compile(ast.Expression(body=node), "<bound>", "eval"),  # noqa: S307
                                  {"__builtins__": {}}, dict(names)))
+        # evaluated whatever the caller's setting: read as written (evaluation off) a bound in nested roots
+        # equal to 1/2 was "not an integer" for certain, the as-written reading refused the text and every
+        # condition around it was lost (x/x at the given x = 0, review of d4f, YO-1)
+        v = _evaluated_bound(v)
     except Exception:  # noqa: BLE001 - the whole parse reports it
         return None
     return v if isinstance(v, sp.Expr) and v.is_number and not v.free_symbols else None
@@ -1647,20 +1652,21 @@ def _refuse_reversed_ranges(expr, raw: str) -> None:
                     # whether the range is reversed (Karr) is not asked of a bound SymPy computes
                     raise ParseError(f"{raw!r} has a {type(node).__name__} whose limit is itself an "
                                      "operation: not read")
-                if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3 \
-                        and (lim[2] - lim[1] + 1).is_extended_negative is True:
-                    raise ParseError(f"{raw!r} has a {type(node).__name__} over a reversed range: not read")
-                span = lim[2] - lim[1] if len(lim) == 3 else None
-                if isinstance(node, (sp.Sum, sp.Product)) and span is not None and span.is_number \
-                        and span.is_finite and span.is_integer is False:
-                    # Σ_{k=1}^{7/2} k is 63/8 in SymPy, 1 + 2 + 3 stepping from the lower limit
-                    raise ParseError(f"{raw!r} has a {type(node).__name__} whose limits are not an "
-                                     "integer apart: not read")
-                if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3 \
-                        and any(_not_an_integer(b) for b in lim[1:]):
-                    # Σ_{k=1/2}^{5/2} k: 9/2 stepping from the lower limit, 3 over the integers (TAN-10/C1)
-                    raise ParseError(f"{raw!r} has a {type(node).__name__} whose limits are not integers: "
-                                     "not read")
+                if isinstance(node, (sp.Sum, sp.Product)) and len(lim) == 3:
+                    # reversed (Karr), not an integer apart (Σ_{k=1}^{7/2} k is 63/8 stepping from the lower limit),
+                    # not integers (Σ_{k=1/2}^{5/2} k: 9/2 stepping, 3 over the integers, TAN-10/C1), on the bounds
+                    # evaluated, as the value reading has them: read as written sqrt(1) - 3 was "not an integer",
+                    # and SymPy's sign of the unevaluated n - 5 - 1 + 1 raised; either refused the text (and every
+                    # condition around it) in that reading alone (review of d4f, YO-1). A question SymPy cannot
+                    # answer refuses nothing here: the domain reads the range (`certify.domain`).
+                    with sp.evaluate(True):
+                        lo, hi = _evaluated_bound(lim[1]), _evaluated_bound(lim[2])
+                    try:
+                        _refuse_constant_range(type(node).__name__, lo, hi, raw)
+                    except ParseError:
+                        raise
+                    except Exception:  # noqa: BLE001 - see above
+                        pass
 
 
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
@@ -1813,7 +1819,48 @@ def _latex2sympy(s: str):
                     r = self.convert_expr(func.root)
                     if isinstance(r, Integer) and int(r) > 1 and int(r) % 2 == 1:
                         return _real_root(self.convert_expr(func.base), r)
+                held = self._held_matrix_func(func) if not global_parameters.evaluate else None
+                if held is not None:
+                    return held
                 return super().convert_func(func)
+
+            def _held_matrix_func(self, func):
+                """\\det A, \\operatorname{rank} A, \\operatorname{tr} A read as written: `_held_matrix_op` (the
+                entries, not the computed value: review of d4f, YO-2); None for any other function."""
+                single = func.func_normal_single_arg()
+                if not single:
+                    return None
+                name = single.start.text[1:]
+                if name == "operatorname":
+                    name = {"rank": "rank", "tr": "trace", "trace": "trace"}.get(
+                        single.func_operator_name.getText() if single.func_operator_name else "")
+                elif name != "det":
+                    name = None
+                if name is None:
+                    return None
+                arg = self.convert_func_arg(func.func_single_arg() if func.func_single_arg()
+                                            else func.func_single_arg_noparens())
+                expr = _held_matrix_op(name)(arg)
+                if func.supexpr():
+                    sup = func.supexpr()
+                    expr = sp.Pow(expr, self.convert_expr(sup.expr()) if sup.expr() else self.convert_atom(sup.atom()),
+                                  evaluate=False)
+                return expr
+
+            def convert_comp(self, comp):
+                if not global_parameters.evaluate and comp.det():
+                    # a vmatrix read as written: its entries, not its determinant (review of d4f, YO-2)
+                    return _held_matrix_op("det")(self.convert_matrix(comp.det()).subs(self.variances))
+                return super().convert_comp(comp)
+
+            def convert_frac(self, frac):
+                # a fraction of integers over 0 is a written division by zero, like the canonical 1/0, not
+                # SymPy's zoo or nan, which `certify.domain` reads as a value written out (review of d4f, RK-F4)
+                return _written_zero_division(super().convert_frac(frac),
+                                              lambda: (self.convert_expr(frac.upper), self.convert_expr(frac.lower)))
+
+            def convert_mp(self, mp):
+                return _written_zero_division(super().convert_mp(mp), lambda: _mp_sides(self, mp))
 
             def handle_limit(self, func):
                 lim = super().handle_limit(func)
@@ -1824,6 +1871,24 @@ def _latex2sympy(s: str):
         _LATEX_CONVERTER = _TwoSidedLimits
     converter = _LATEX_CONVERTER(None, None, False, config=ConversionConfig())
     return converter.parse(normalize_latex(s, NormalizationConfig()))
+
+
+def _written_zero_division(out, sides):
+    """`out` (latex2sympy's value of a quotient), or the quotient as written when that value is SymPy's zoo or
+    nan of an integer over 0: num * 0**(-1), unevaluated. Only read as written (evaluation off): the value
+    reading keeps latex2sympy's zoo and nan, as 1/0 evaluates to zoo."""
+    if not global_parameters.evaluate and (out is S.ComplexInfinity or out is S.NaN):
+        top, bot = sides()
+        if getattr(bot, "is_zero", None) is True and getattr(top, "is_Integer", False):
+            return sp.Mul(top, sp.Pow(bot, -1, evaluate=False), evaluate=False)
+    return out
+
+
+def _mp_sides(conv, mp):
+    """The operands of a latex2sympy division node."""
+    if hasattr(mp, "mp") and mp.mp(0) is not None:
+        return conv.convert_mp(mp.mp(0)), conv.convert_mp(mp.mp(1))
+    return conv.convert_mp(mp.mp_nofunc(0)), conv.convert_mp(mp.mp_nofunc(1))
 
 
 def _domain_end_limits(expr):
@@ -2196,8 +2261,79 @@ def _written_integrate(*args, **kwargs):
 
 # computing helpers of the namespace read as forms (or, for diff, computed with evaluation on)
 # when a text is read as written
+def _matrix_entries(m) -> list:
+    """The entries of a matrix (or of nested lists) as they were written."""
+    if isinstance(m, sp.MatrixBase):
+        return list(m)
+    if isinstance(m, (list, tuple, sp.Tuple)):
+        return [x for e in m for x in _matrix_entries(e)]
+    return [m]
+
+
+def _rational_as_written(e) -> bool:
+    """Is a matrix entry, as written, a rational number made of integers by +, -, * and integer powers, with no
+    division by zero? Such an entry carries no condition a computed operation could fold away."""
+    if isinstance(e, sp.Rational):
+        return True
+    if isinstance(e, (sp.Add, sp.Mul)):
+        return all(_rational_as_written(a) for a in e.args)
+    if isinstance(e, sp.Pow) and isinstance(e.exp, sp.Integer) and _rational_as_written(e.base):
+        return not (e.exp.is_negative and _evaluated_bound(e.base) == 0)
+    return False
+
+
+def _held_matrix_op(name: str):
+    """A matrix operation read as written, for definedness only: an undefined function of the entries. Computed,
+    det [[√x, 1], [-1, √x]] folded √x·√x into x and the condition x >= 0 was lost ({-3} certified for = -2), and
+    eigmax failed the whole reading (review of d4f, YO-2). The determinant, trace and rank of rational entries
+    are computed: no condition is lost, and 30/det [[1, 1], [2, 4]] keeps its value for the condition det != 0
+    (held, Cramer's rule steps of uni-la-009 were no longer verified)."""
+    held = sp.Function(f"written_{name}")
+
+    def op(m, *_rest, **_kw):
+        entries = _matrix_entries(m)
+        if name in ("det", "trace", "rank") and isinstance(m, sp.MatrixBase) and entries \
+                and all(_rational_as_written(x) for x in entries):
+            with sp.evaluate(True):
+                return _SAFE_NAMES[name](m.applyfunc(_evaluated_bound))
+        return held(*entries)
+    return op
+
+
+def _written_rewrite(e, *_rest, **_kw):
+    """factor(e), expand(e), simplify(e), ... read as written: `e` itself, whose value the rewrite keeps where `e`
+    has one, and whose conditions are the claim's. Computed with evaluation off they failed the reading, and once
+    such a text counted as not proved defined the step factor(x**2 - 4) = (x - 2)*(x + 2) was no longer verified
+    (review of d4f, YO-1)."""
+    return e
+
+
 _WRITTEN_COMPUTING = {"diff": (sp.diff, _written_diff), "integrate": (_integrate, _written_integrate),
-                      "limit": (_limit, _Limit)}
+                      "limit": (_limit, _Limit),
+                      **{name: (_SAFE_NAMES[name], _held_matrix_op(name))
+                         for name in ("det", "trace", "rank", "eigmax", "eigmin")},
+                      **{name: (_SAFE_NAMES[name], _written_rewrite)
+                         for name in ("simplify", "expand", "factor", "cancel", "together", "apart")}}
+
+
+def _condition_sides(c) -> list | None:
+    """The expressions a condition compares (the sides of its relations, the element and the set of a membership,
+    through And/Or/Not), or None for anything else."""
+    if c is sp.true or c is sp.false:
+        return []
+    if isinstance(c, sp.core.relational.Relational):
+        return [c.lhs, c.rhs]
+    if isinstance(c, sp.Contains):
+        return list(c.args[:2])
+    if isinstance(c, (And, Or, Not)):
+        out: list = []
+        for a in c.args:
+            sides = _condition_sides(a)
+            if sides is None:
+                return None
+            out += sides
+        return out
+    return None
 
 
 def parse_as_written(s: str, ns: dict[str, Any] | None = None, _depth: int = 0):
@@ -2223,8 +2359,16 @@ def parse_as_written(s: str, ns: dict[str, Any] | None = None, _depth: int = 0):
                 e = _latex_to_sympy(s, ns)
         except Exception:  # noqa: BLE001 - the normal parse reports errors; this only adds facts
             return None
-        if isinstance(e, sp.core.relational.Relational):
-            return sp.Tuple(e.lhs, e.rhs)
+        if isinstance(e, sp.logic.boolalg.Boolean):
+            # a condition (`x \in (0, 3)`, `x \notin \mathbb{Z}`: relations and memberships since part d4h): the
+            # sides of its relations; read as no text at all, every LaTeX membership given made the problem
+            # undecided (merge of d4h with d4f's YO-1)
+            sides = _condition_sides(e)
+            return None if sides is None else sp.Tuple(*sides)
+        if isinstance(e, sp.MatrixBase):
+            # a matrix (\begin{bmatrix} ...): its entries; read as no text at all, a matrix parameter made the
+            # problem undecided (review of d4f, YO-1)
+            return sp.Tuple(*_matrix_entries(e))
         if isinstance(e, sp.Basic) and not isinstance(e, sp.logic.boolalg.Boolean):
             return sp.Tuple(e)
         return None
@@ -2444,6 +2588,26 @@ def _union_parts(s2: str) -> list[str]:
     return parts
 
 
+def _top_level_terms(s: str) -> list[str]:
+    """`s` split at the + and - signs outside brackets (a sign after another operator, an `e` of 1e-3 or the
+    start is no split)."""
+    out, depth, cur, prev = [], 0, "", ""
+    for i, c in enumerate(s):
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        if depth == 0 and c in "+-" and cur.strip() and prev not in "*/^(,eE" and not s[:i].rstrip().endswith(("*", "/", "^")):
+            out.append(cur)
+            cur = ""
+        else:
+            cur += c
+        if not c.isspace():
+            prev = c
+    out.append(cur)
+    return [p for p in out if p.strip()]
+
+
 class _WrittenInterval:
     """`Interval` read for definedness only (`parse_set_as_written`): its arguments as written, in a Tuple.
     SymPy's Interval compares its ends when it is built, and an end with no value ((-1)!) failed the whole
@@ -2467,11 +2631,37 @@ _WRITTEN_SETS = {"Interval": _WrittenInterval, "Union": _written_set_args, "Inte
                  "Complement": _written_set_args}
 
 
+# and/or between relations; `|` only between bracketed ones ((x < -3) | (x > 1)): elsewhere it is |x - 1|
+_COMPOUND_RE = re.compile(r"\s+(?:or|and)\s+|\s*[∧∨&]\s*|(?<=\))\s*\|\s*(?=\()")
+_LATEX_ORDER_RE = re.compile(r"\\(?:leqslant|geqslant|leq|geq|le|ge|lt|gt)(?![A-Za-z])|<=|>=|<|>")
+
+
+def _latex_chain_sides(s: str) -> list[str]:
+    """The sides of a LaTeX order chain (0 < x \\le 3) cut at the top-level order relations (not inside braces
+    or brackets); one piece when there is none."""
+    out, depth, cur, i = [], 0, "", 0
+    while i < len(s):
+        c = s[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        m = _LATEX_ORDER_RE.match(s, i) if depth == 0 else None
+        if m is not None:
+            out.append(cur)
+            cur, i = "", m.end()
+            continue
+        cur += c
+        i += 1
+    return out + [cur]
+
+
 def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     """A text that may be set notation, read AS WRITTEN for definedness only (see `parse_as_written`): the set
     constructors hold their arguments as a Tuple, and a text the whole reading cannot take is cut the way
     `parse_set_str` reads it (the parts of A U B, the ends of (a, b], the elements of {a, b}), each part read
-    as written. None when no part is read."""
+    as written; a compound condition (x = 1 or x = 2) and a membership (x in {0, 4}) part by part. None when a
+    part is not read."""
     if ns is None:
         ns = dict(_SAFE_NAMES)
     if not isinstance(s, str):
@@ -2480,18 +2670,48 @@ def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     whole = parse_as_written(s, wns)
     if whole is not None:
         return whole
+    if is_latex(s):
+        # `$x \notin \mathbb{Z}$` too: with the delimiters the text matched nothing and the given made the problem
+        # undecided (latex2sympy fails on \mathbb{Z} with evaluation off)
+        m = _LATEX_NOTIN_RE.match(strip_presentation(_strip_invisible(s)))
+        if m is not None:
+            return parse_set_as_written(m.group(2), ns)           # x \notin S: the set
+        sides = _latex_chain_sides(s)
+        if len(sides) > 2:
+            # a chain (0 < x \le 3), which the reading with evaluation off does not take: each side
+            read = [parse_as_written(p, wns) for p in sides]
+            return None if any(r is None for r in read) else sp.Tuple(*[a for r in read for a in r.args])
+    s2 = preclean(strip_presentation(_strip_invisible(s))).strip()
+    if number_set_named(s2) is not None or number_set_named(s) is not None:
+        return sp.Tuple()                           # ℕ⁺, Z+, N0: a set by its name, no condition
+    parts = _COMPOUND_RE.split(s2)
+    if len(parts) > 1:
+        # a compound condition (x < -1 or x > 3, x = 1 or x = 2): each part as written
+        read = [parse_set_as_written(p, ns) for p in parts]
+        return None if any(r is None for r in read) else sp.Tuple(*[a for r in read for a in r.args])
+    member = _NOT_IN_RE.match(s2) or _DOMAIN_MEMBER_RE.match(s2)
+    if member:
+        # x in [a, b], x ∈ Interval(a, b): the set's ends (review of d4f, YO-6)
+        return parse_set_as_written(member.group(2), ns)
     pieces: list[str] = []
-    for part in _union_parts(preclean(strip_presentation(_strip_invisible(s)))):
+    for part in _union_parts(s2):
         part = part.strip()
         m = _INTERVAL_RE.match(part)
         if part.startswith("{") and part.endswith("}"):
             pieces += _split_commas(part[1:-1])
         elif m:
             pieces += [m.group(2), m.group(3)]
-        elif part:
-            pieces.append(part)
-    read = [w for w in (parse_as_written(p, wns) for p in pieces if p.strip()) if w is not None]
-    return sp.Tuple(*[a for w in read for a in w.args]) if read else None
+        elif part and number_set_named(part) is None:
+            # set arithmetic (Interval.Ropen(0, 1) + Interval(1, oo)): its operands; the definedness of a sum or a
+            # difference is that of its operands, so a split of an expression loses no condition either
+            pieces += [p for p in _top_level_terms(part) if number_set_named(p.strip()) is None]
+    pieces = [p for p in pieces if p.strip()]
+    if not pieces:
+        return sp.Tuple()                           # named sets only (Reals U Integers)
+    read = [parse_as_written(p, wns) for p in pieces]
+    if any(w is None for w in read):
+        return None                                 # a part no reading takes: the whole is not read
+    return sp.Tuple(*[a for w in read for a in w.args])
 
 
 def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:

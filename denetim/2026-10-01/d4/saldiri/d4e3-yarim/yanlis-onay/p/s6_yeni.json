@@ -1,0 +1,123 @@
+[
+ {
+  "label": "FAMS anti 2*x, given x > 10: x**2 + 0*cot(4*x)",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:antiderivative_not_defined_or_continuous_where_integrand_is"
+  ],
+  "s": 1.69
+ },
+ {
+  "label": "FAMS anti 1/(x - 20): log(x - 20) + 0*cot(x)",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:antiderivative_not_defined_or_continuous_where_integrand_is"
+  ],
+  "s": 0.7
+ },
+ {
+  "label": "FAMS simplify x**2/x, given x > 10: x + 0*cot(4*x)",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:unknown:claim_as_written_undecided: claim_condition_undecided: Ne(sin(4*x), 0) on Union(Intersecti"
+  ],
+  "s": 0.18
+ },
+ {
+  "label": "FAMS simplify log(x - 20) + 1: log(x - 20) + 1 + 0*tan(x)",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:unknown:claim_as_written_undecided: claim_condition_undecided: Ne(cos(x), 0) on Union(Intersection"
+  ],
+  "s": 0.19
+ },
+ {
+  "label": "FAMS ctrl simplify x**2/x: x + 0*cot(x)",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:unknown:claim_as_written_undecided: claim_condition_undecided: Ne(sin(x), 0) on Union(Intersection"
+  ],
+  "s": 0.09
+ },
+ {
+  "label": "FAM derivative log(x - 20): cot(x)*tan(x)/(x - 20)",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.5
+ },
+ {
+  "label": "FAM derivative x*sin(x), given x > 10: sin(x) + x*cos(x)*tan(4*x)*cot(4*x)",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.29
+ },
+ {
+  "label": "FAM derivative tan(x), given x > 10: 1 + tan(x)**2 [ctrl right]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.84
+ },
+ {
+  "label": "FAM derivative sin(x)**2, given x > 10: 2*sin(x)**2*cot(x)",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "FAM derivative sin(x)**2, x > 10 constraint: 2*sin(x)**2/tan(x)",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.14
+ },
+ {
+  "label": "FAM ctrl derivative sin(x)**2: 2*sin(x)**2*cot(x)",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:fail:"
+  ],
+  "s": 0.04
+ }
+]

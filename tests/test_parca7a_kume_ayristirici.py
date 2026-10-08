@@ -242,7 +242,7 @@ def test_a_given_that_reverses_a_symbolic_range_is_no_value(ir, claim):
     (_ev(r"\sum_{k=1}^{n} k", ["n = 3"]), "6", "CORRECT"),
     (_ev("Sum(k, (k, 1, n))"), "n*(n + 1)/2", "CORRECT"),
     (_ev("Sum(k, (k, 1, n))"), "n**2/2", "INCORRECT"),
-    (_ev("Sum(k, (k, 1, n))", (), KUN), "n*(n + 1)/2", "CORRECT"),
+    (_ev("Sum(k, (k, 1, n))", (), KUN), "n*(n + 1)/2", "UNKNOWN"),   # n not an integer: review of d4f, YO-3
     (_ev("Sum(k, (k, 1, n))", ["n**2 = 4", "n > 0"]), "3", "CORRECT"),
 ])
 def test_a_symbolic_range_the_right_way_round_is_read(ir, claim, verdict):
@@ -267,7 +267,7 @@ def test_a_reversed_range_decides_no_solution(ir, claim, verdict):
 
 
 def test_the_range_conditions():
-    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED, FORWARD_SPANS, definedness_conditions
+    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED, FORWARD_SPANS, INTEGER_BOUND, definedness_conditions
 
     def fwd(span):
         # hi - lo + 1 >= 0, undecided where the range is reversed (DECISIONS §80)
@@ -285,10 +285,10 @@ def test_the_range_conditions():
     got = [definedness_conditions(e, None) for e in exprs]
     assert got[0] == [fwd(n)]
     assert got[1] == []
-    assert got[2] == [fwd(m), sp.Contains(m, sp.S.Integers)]
+    assert got[2] == [fwd(m), sp.Contains(m, INTEGER_BOUND)]           # a convention (review of d4f, RK-F1)
     assert got[3] == [fwd(n - 2)]
     assert got[4] == []
-    assert got[5] == [fwd(n / 2), sp.Contains(n / 2, sp.S.Integers)]
+    assert got[5] == [fwd(n / 2), sp.Contains(n / 2, INTEGER_BOUND)]
     assert got[6] == []
     # an inner range an outer index reverses: not read (`false` would make it defined nowhere)
     assert got[7] == [DEFINEDNESS_UNDECIDED] and sp.false not in got[7]

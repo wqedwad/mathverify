@@ -20,6 +20,10 @@ TAN-06, TAN-07 of the `tanimlilik` angle, `denetim/2026-10-01/d4/`).
     M  a parameter a given or a constraint fixes, read in every task certificate and in the written conditions
     N  round 2 (the attack on d4e): false accepts YO-1..YO-6 and the rejections R8, R9
     P  round 2: the coverage R1..R7, decided again by proof only
+    Q  round 3 (the attack on round 2): false accepts YO-1..YO-5 (a SymPy limit as a proof of convergence, series_sum
+       on an undecided term, the claim's written domain in a derivative, kinks of Max/Min/sign, written givens)
+    R  round 3: RK-8, a claim undefined as written where the derivative exists is INCORRECT
+    S  round 3: coverage and robustness RK-1..RK-7, decided by proof only
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4e/sonda.py [out.json] [groups]
@@ -1045,11 +1049,324 @@ def cases_p():
     return out
 
 
+# --- round 3 (the attack on d4e's round 2, `d4/saldiri/d4e2/`): 13 findings
+NI_ = {"name": "n", "domain": "integer"}
+NN_ = {"name": "n", "domain": "natural"}
+NR_ = {"name": "n", "domain": "real"}
+E3 = "Integral(1/(1 + t**2*cos(t)**2), (t, 0, oo))"
+E2 = "Integral(t/(1 + t**4*sin(t)**2), (t, 1, oo))"
+E4 = "Integral(t**2/(1 + t**6*sin(t)**2), (t, 1, oo))"
+D1 = "Integral(1/(1 + t**2*sin(t)**2), (t, 0, oo))"
+D6 = "Integral(1/(1 + t**2*sin(t)**2), (t, -oo, 0))"
+
+
+def ev1(expr, vars_=None, givens=()):
+    return ir("evaluate", {"expr": expr}, givens, vars_ or [T_], shape="scalar")
+
+
+def cases_q():
+    """Round 3, false accepts: YO-1 (a SymPy limit is no proof of convergence), YO-2 (series_sum fails closed and
+    reads a pin in every form), YO-3 (the claim's written domain in the derivative), YO-4 (a kink of Max, Min, sign,
+    Heaviside, Piecewise), YO-5 (the written definedness of givens, constraints and the domain of discourse)."""
+    out = []
+    XT = [X, T_]
+    # YO-1: an oscillating denominator; SymPy's limit 0 of t**(3/2)*g is no proof (the integrals diverge)
+    for name, I in (("E3", E3), ("D1", D1), ("E4", E4), ("D6", D6)):
+        out.append((f"YO-1 evaluate 0*{name} + 1: 1 [diverges]", ev1(f"0*{I} + 1"), sol("1"), UNK, None))
+    out.append(("YO-1 evaluate D1 - D1: 0 [oo - oo]", ev1(f"{D1} - {D1}"), sol("0"), NOTOK, None))
+    out.append(("YO-1 derivative x + 0*E2: 1", der(f"x + 0*{E2}", None, [], XT), sol("1", "expression"), UNK, None))
+    out.append(("YO-1 derivative Integral(1/(1 + t**2 cos(t)**2), (t, x, oo)): FTC",
+                der("Integral(1/(1 + t**2*cos(t)**2), (t, x, oo))", None, [], XT),
+                sol("-1/(1 + x**2*cos(x)**2)", "expression"), UNK, None))
+    q = ir("evaluate", {"expr": "x + 1"}, ["x = 1"], XT, shape="scalar")
+    out.append(("YO-1 step compute E3*0 = 0", q, sol("2", steps=[("compute", f"{E3}*0 = 0")]), OK, NOTVER))
+    q = ir("solve_equation", {"var": "y", "equation": f"y + 0*{D1} = 2"}, [], [Y, T_])
+    out.append(("YO-1 solve y + 0*D1 = 2: {2}", q, sol("{2}", "set"), UNK, None))
+    out.append(("YO-1 evaluate 0*Integral(1/(t**2 + cos(1/t)**2), (t, 0, 1)) + 1: 1 [diverges]",
+                ev1("0*Integral(1/(t**2 + cos(1/t)**2), (t, 0, 1)) + 1"), sol("1"), NOTOK, None))
+    # convergent controls: a majorant proves them, or nothing is claimed
+    out.append(("YO-1 ctrl evaluate 0*Integral(1/(1 + t**2), (t, 0, oo)) + 1: 1", ev1("0*Integral(1/(1 + t**2), (t, 0, oo)) + 1"),
+                sol("1"), OK, None))
+    out.append(("YO-1 ctrl evaluate 0*Integral(sin(t)/t**2, (t, 1, oo)) + 1: 1 [|sin| <= 1]",
+                ev1("0*Integral(sin(t)/t**2, (t, 1, oo)) + 1"), sol("1"), OK, None))
+    out.append(("YO-1 ctrl evaluate 0*Integral(exp(-t)*cos(t), (t, 0, oo)) + 1: 1",
+                ev1("0*Integral(exp(-t)*cos(t), (t, 0, oo)) + 1"), sol("1"), OK, None))
+    out.append(("YO-1 ctrl evaluate 0*Integral(1/(1 + t**4 sin(t)**2), (t, 0, oo)) + 1: 1 [converges, no proof needed]",
+                ev1("0*Integral(1/(1 + t**4*sin(t)**2), (t, 0, oo)) + 1"), sol("1"), NOTNO, None))
+    out.append(("YO-1 ctrl evaluate 0*Integral(1/t, (t, 1, oo)) + 1: 1 [diverges]", ev1("0*Integral(1/t, (t, 1, oo)) + 1"),
+                sol("1"), UNK, None))
+    # YO-2: series_sum, written definedness undecided -> UNKNOWN; a pin read in every form
+    KAB = [K_, A_, {"name": "b", "domain": "real"}]
+    T1 = "(k - a)/(k - a)"
+    for label, g, v in (("a = 2", ["a = 2"], None), ("2*a = 4", ["2*a = 4"], None), ("a - 2 = 0", ["a - 2 = 0"], None),
+                        ("a**2 = 4, a > 0", ["a**2 = 4", "a > 0"], None), ("a + a = 4", ["a + a = 4"], None),
+                        ("sqrt(a) = sqrt(2)", ["sqrt(a) = sqrt(2)"], None), ("a = b, b = 2", ["a = b", "b = 2"], KAB),
+                        ("a >= 2, a <= 2", ["a >= 2", "a <= 2"], None),
+                        ("constraint 2*a = 4", [], [K_, {"name": "a", "domain": "real", "constraints": ["2*a = 4"]}])):
+        out.append((f"YO-2 series {T1}, k=1..3, {label}: 3 [0/0 at k = 2]", ss(T1, 1, 3, g, v), sol("3"), UNK, None))
+    for label, g, v in (("2*a = 4", ["2*a = 4"], None), ("a - 2 = 0", ["a - 2 = 0"], None),
+                        ("a = b, b = 2", ["a = b", "b = 2"], KAB),
+                        ("constraint 2*a = 4", [], [K_, {"name": "a", "domain": "real", "constraints": ["2*a = 4"]}])):
+        out.append((f"YO-2 series a*k, k=1..3, {label}: 12 [right]", ss("a*k", 1, 3, g, v), sol("12"), OK, None))
+        out.append((f"YO-2 series a*k, k=1..3, {label}: 13 [wrong]", ss("a*k", 1, 3, g, v), sol("13"), NO, None))
+    out.append(("YO-2 series (k - a)/(k - a), k=1..3, a free: 3", ss(T1, 1, 3), sol("3"), NOTOK, None))
+    for label, g, v in (("given a > 5", ["a > 5"], None),
+                        ("constraint a > 5", [], [K_, {"name": "a", "domain": "real", "constraints": ["a > 5"]}])):
+        out.append((f"YO-2 series 0*log(k - a) + 1, k=1..2, {label}: 2", ss("0*log(k - a) + 1", 1, 2, g, v), sol("2"),
+                    UNK, None))
+        out.append((f"YO-2 series sqrt(k - a)**2, k=1..2, {label}: 3 - 2*a", ss("sqrt(k - a)**2", 1, 2, g, v),
+                    sol("3 - 2*a"), UNK, None))
+    for term, lo, hi, val in (("(-1)**(k/2)", 0, 3, "0"), ("(-9)**(k/2)", 0, 2, "-8 + 3*I"),
+                              ("0*(-2)**(k/2) + k", 1, 3, "6"), ("((-1)**(k/2))**2", 0, 3, "0")):
+        out.append((f"YO-2 series {term}, k={lo}..{hi}: {val} [negative base]", ss(term, lo, hi, [], [K_]), sol(val), UNK,
+                    None))
+    out.append(("YO-2 series a**(k/2), k=0..3, a = -1: 0", ss("a**(k/2)", 0, 3, ["a = -1"]), sol("0"), UNK, None))
+    # the closed form and the term of a recurrence read the same pins
+    out.append(("YO-2 closed form a(n) = c*a(n-1), a(1) = 1, 2*c = 0: c**(n - 1) [0**0 at n = 1]",
+                cf("a(n) = c*a(n - 1)", {"1": "1"}, ["2*c = 0"]), sol("c**(n - 1)", "expression"), UNK, None))
+    out.append(("YO-2 closed form a(n) = c*a(n-1), a(1) = 1, c - 2 = 0: 2**(n - 1) [right]",
+                cf("a(n) = c*a(n - 1)", {"1": "1"}, ["c - 2 = 0"]), sol("2**(n - 1)", "expression"), OK, None))
+    q = ir("recurrence_term", {"recurrence": "a(n) = c*a(n - 1)", "initial": {"1": "1"}, "var": "n", "name": "a",
+                               "index": "4"}, ["2*c = 4"], [{"name": "n", "domain": "positive_integer"}, {"name": "c"}],
+           shape="scalar")
+    out.append(("YO-2 recurrence term a(4), a(n) = c*a(n-1), a(1) = 1, 2*c = 4: 8 [right]", q, sol("8"), OK, None))
+    # d4b round 8, YO-2 (same root): a written condition no exact class solves is not 'defined' (extremum, series)
+    SQ, AC, LG = "sqrt(2**x + x - 3)", "acos(2**x + x - 2)", "log(x + exp(x) - 2)"
+    for label, q, c in (("min x**2 + SQ - SQ", ext(f"x**2 + {SQ} - {SQ}", "min", None), "0"),
+                        ("min x**2 + SQ - SQ on [-1, 2]", ext(f"x**2 + {SQ} - {SQ}", "min", "[-1, 2]"), "0"),
+                        ("max -(x-3)**2 + AC - AC", ext(f"-(x - 3)**2 + {AC} - {AC}", "max", None), "0"),
+                        ("max -(x-3)**2*AC/AC on [-5, 5]", ext(f"-(x - 3)**2*{AC}/{AC}", "max", "[-5, 5]"), "0"),
+                        ("max -(x-3)**2 + 0*AC on [-5, 5]", ext(f"-(x - 3)**2 + 0*{AC}", "max", "[-5, 5]"), "0"),
+                        ("min x**2 + 1 + LG - LG", ext(f"x**2 + 1 + {LG} - {LG}", "min", None), "1"),
+                        ("local_min x**2 + SQ - SQ on [-1, 2]", ext(f"x**2 + {SQ} - {SQ}", "local_min", "[-1, 2]"), "0")):
+        out.append((f"d4b8-YO-2 extremum {label}: {c} [undefined where read]", q, sol(c), NOTOK, None))
+    out.append(("d4b8-YO-2 extremum min x**2 + SQ - SQ: 1 [right where defined]", ext(f"x**2 + {SQ} - {SQ}", "min", None),
+                sol("1"), NOTNO, None))
+    out.append(("d4b8-YO-2 extremum max -(x-3)**2 + AC - AC on [-5, 5]: -4 [right where defined]",
+                ext(f"-(x - 3)**2 + {AC} - {AC}", "max", "[-5, 5]"), sol("-4"), NOTNO, None))
+    for term in ("k + sqrt(2**k + k - 3) - sqrt(2**k + k - 3)", "k + acos(2**k + k - 2) - acos(2**k + k - 2)",
+                 "k*acos(2**k + k - 2)/acos(2**k + k - 2)", "k + log(k + exp(k) - 2) - log(k + exp(k) - 2)"):
+        out.append((f"d4b8-YO-2 series {term}, k=0..3: 6 [a term undefined]", ss(term, 0, 3, [], [K_]), sol("6"), NOTOK,
+                    None))
+    out.append(("d4b8-YO-2 derivative x + SQ - SQ at 0: 1 [undefined at 0]", der(f"x + {SQ} - {SQ}", "0"), sol("1"), UNK,
+                None))
+    out.append(("d4b8-YO-2 ctrl derivative x + SQ - SQ at 2: 1", der(f"x + {SQ} - {SQ}", "2"), sol("1"), NOTNO, None))
+    out.append(("d4b8-YO-2 ctrl max -(x-3)**2 + acos(x/2) - acos(x/2) on [-5, 5]: 0",
+                ext("-(x - 3)**2 + acos(x/2) - acos(x/2)", "max", "[-5, 5]"), sol("0"), NOTOK, None))
+    out.append(("YO-2 ctrl series (k - 7)/(k - 7), k=1..3: 3", ss("(k - 7)/(k - 7)", 1, 3, [], [K_]), sol("3"), OK, None))
+    out.append(("YO-2 ctrl series (-1)**k, k=0..3: 0", ss("(-1)**k", 0, 3, [], [K_]), sol("0"), OK, None))
+    out.append(("YO-2 ctrl series 1/(k*(k + 1)), k=1..oo: 1", ss("1/(k*(k + 1))", 1, "oo", [], [K_]), sol("1"), OK, None))
+    out.append(("YO-2 ctrl series 1/(k - a), k=1..3, a = 5: -13/12", ss("1/(k - a)", 1, 3, ["a = 5"]), sol("-13/12"), OK,
+                None))
+    # YO-3: the claim's written domain in the derivative (a parameter value, a part of the derivative's domain)
+    AN = {"name": "a", "domain": "nonneg_real"}
+    AP = {"name": "a", "domain": "positive_real"}
+    NP = {"name": "n", "domain": "positive_integer"}
+    out.append(("YO-3 derivative log(a*x + 1), a >= 0 declared: 1/(x + 1/a) [a = 0]", der("log(a*x + 1)", None, [], [X, AN]),
+                sol("1/(x + 1/a)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative log(a*x + 1), a >= 0 declared: a**2/(a**2*x + a) [a = 0]",
+                der("log(a*x + 1)", None, [], [X, AN]), sol("a**2/(a**2*x + a)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative log(a*x + 1), given a >= 0: 1/(x + 1/a) [a = 0]", der("log(a*x + 1)", None, ["a >= 0"], [X, A_]),
+                sol("1/(x + 1/a)", "expression"), NOTOK, None))
+    # pinned to 0 the claim has no value anywhere, where the derivative 0 exists: RK-8 (INCORRECT) or UNKNOWN
+    out.append(("YO-3 derivative log(a*x + 1), given a = 0: 1/(x + 1/a)", der("log(a*x + 1)", None, ["a = 0"], [X, A_]),
+                sol("1/(x + 1/a)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative asin(x/a), a > 0: (a - 1)/((a - 1)*sqrt(a**2 - x**2)) [a = 1]",
+                der("asin(x/a)", None, [], [X, AP]), sol("(a - 1)/((a - 1)*sqrt(a**2 - x**2))", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative asin(x/a), a > 0: 1/sqrt(a**2 - x**2) + 0*sqrt(1 - a) [a > 1]",
+                der("asin(x/a)", None, [], [X, AP]), sol("1/sqrt(a**2 - x**2) + 0*sqrt(1 - a)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative asin(x/a), a > 0: 1/sqrt(a**2 - x**2) + 0*log(x) [x < 0]",
+                der("asin(x/a)", None, [], [X, AP]), sol("1/sqrt(a**2 - x**2) + 0*log(x)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative log(a*x), a > 0: 1/x + 0*sqrt(-x)", der("log(a*x)", None, [], [X, AP]),
+                sol("1/x + 0*sqrt(-x)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative log(x**n), n positive integer: n/x + 0*sqrt(-x)", der("log(x**n)", None, [], [X, NP]),
+                sol("n/x + 0*sqrt(-x)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative |x|: x/|x| + 0*sqrt(x)", der("Abs(x)"), sol("x/Abs(x) + 0*sqrt(x)", "expression"), NOTOK,
+                None))
+    out.append(("YO-3 derivative tan(x**2): 2*x*sec(x**2)**2 + 0*sqrt(x)", der("tan(x**2)"),
+                sol("2*x*sec(x**2)**2 + 0*sqrt(x)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative tan(x), given cos(x) > 0: sec(x)**2 + 0*sqrt(sin(x))", der("tan(x)", None, ["cos(x) > 0"]),
+                sol("sec(x)**2 + 0*sqrt(sin(x))", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative log(x): 1/x + 0*sqrt(-x)", der("log(x)"), sol("1/x + 0*sqrt(-x)", "expression"), NOTOK,
+                None))
+    out.append(("YO-3 derivative x**2: 2*x + 0*sqrt(-x)", der("x**2"), sol("2*x + 0*sqrt(-x)", "expression"), NOTOK, None))
+    out.append(("YO-3 derivative x**2: 2*x*(x - 1)/(x - 1)", der("x**2"), sol("2*x*(x - 1)/(x - 1)", "expression"), NOTOK,
+                None))
+    out.append(("YO-3 ctrl derivative log(a*x + 1), a > 0: a/(a*x + 1)", der("log(a*x + 1)", None, [], [X, AP]),
+                sol("a/(a*x + 1)", "expression"), OK, None))
+    out.append(("YO-3 ctrl derivative log(a*x + 1), a > 0: 1/(x + 1/a)", der("log(a*x + 1)", None, [], [X, AP]),
+                sol("1/(x + 1/a)", "expression"), NOTNO, None))
+    out.append(("YO-3 ctrl derivative log(a*x + 1), a > 0: 1/(x + a) [wrong]", der("log(a*x + 1)", None, [], [X, AP]),
+                sol("1/(x + a)", "expression"), NOTOK, None))
+    out.append(("YO-3 ctrl derivative asin(x/a), a > 0: 1/sqrt(a**2 - x**2)", der("asin(x/a)", None, [], [X, AP]),
+                sol("1/sqrt(a**2 - x**2)", "expression"), NOTNO, None))
+    out.append(("YO-3 ctrl anti 2*x: x**2 + 0*sqrt(-x)", anti("2*x"), sol("x**2 + 0*sqrt(-x)", "expression"), NO, None))
+    # YO-4: a kink of Max, Min, sign, Heaviside, Piecewise: a claim with a value there is a convention
+    for f, c in (("Abs(x)", "sign(x)"), ("Max(x, -x)", "sign(x)"), ("x*sign(x)", "sign(x)"), ("Min(x, -x)", "-sign(x)"),
+                 ("Max(x, 0)", "(1 + sign(x))/2"), ("Max(sin(x), -sin(x))", "sign(sin(x))*cos(x)"), ("sign(x)", "0"),
+                 ("sign(x) + x", "1"), ("sign(x**2 - 1)", "0"), ("sign(sin(x))", "0"),
+                 ("tan(x**2) + Max(x, -x)", "2*x*sec(x**2)**2 + sign(x)"), ("tan(x**2) + sign(x)", "2*x*sec(x**2)**2"),
+                 ("1/(x - cos(x)) + sign(x)", "-(1 + sin(x))/(x - cos(x))**2"), ("Heaviside(x)", "0"),
+                 ("floor(x) + x", "1"), ("Piecewise((x, x > 0), (-x, x <= 0))", "sign(x)"),
+                 ("Piecewise((1, x > 0), (0, x <= 0))", "0"), ("Piecewise((x**2, x > 1), (2*x - 1, x <= 1)) + Abs(x)",
+                                                                 "Piecewise((2*x, x > 1), (2, x <= 1)) + sign(x)")):
+        out.append((f"YO-4 derivative {f}: {c} [value at the kink]", der(f), sol(c, "expression"), UNK, None))
+    q = ir("derivative", {"f": "x*Max(x, -x)", "var": "x", "order": 2}, [], [X], shape="expression")
+    out.append(("YO-4 2nd derivative x*Max(x, -x): 2*sign(x)", q, sol("2*sign(x)", "expression"), UNK, None))
+    for f, c in (("sign(cos(x))", "0"), ("Max(cos(x), -cos(x))", "-sign(cos(x))*sin(x)")):
+        out.append((f"YO-4 derivative {f}, given sin(x) > 0: {c} [value at the kink]", der(f, None, ["sin(x) > 0"]),
+                    sol(c, "expression"), UNK, None))
+    out.append(("YO-4 derivative Max(x, -x): x/|x| [right]", der("Max(x, -x)"), sol("x/Abs(x)", "expression"), NOTNO, None))
+    out.append(("YO-4 derivative Max(x, -x): Piecewise((1, x > 0), (-1, x < 0)) [right]", der("Max(x, -x)"),
+                sol("Piecewise((1, x > 0), (-1, x < 0))", "expression"), NOTNO, None))
+    out.append(("YO-4 derivative Max(x, -x): 1 [wrong]", der("Max(x, -x)"), sol("1", "expression"), NOTOK, None))
+    out.append(("YO-4 derivative Piecewise((x**2, x > 1), (2*x - 1, x <= 1)) + |x|: Piecewise + x/|x| [right, C1 at 1]",
+                der("Piecewise((x**2, x > 1), (2*x - 1, x <= 1)) + Abs(x)"),
+                sol("Piecewise((2*x, x > 1), (2, x <= 1)) + x/Abs(x)", "expression"), NOTNO, None))
+    out.append(("YO-4 ctrl derivative tan(x**2)*sign(x): 2*x*sec(x**2)**2*sign(x) [differentiable]",
+                der("tan(x**2)*sign(x)"), sol("2*x*sec(x**2)**2*sign(x)", "expression"), NOTNO, None))
+    out.append(("YO-4 ctrl derivative x**2*sign(x): 2*Abs(x) [differentiable]", der("x**2*sign(x)"),
+                sol("2*Abs(x)", "expression"), NOTNO, None))
+    out.append(("YO-4 ctrl derivative x**2*sign(x): 2*x [wrong]", der("x**2*sign(x)"), sol("2*x", "expression"), NOTOK,
+                None))
+    # YO-5: the written definedness of a given, a constraint and the domain of discourse
+    G = "x + 0*sqrt(x - 1) > 0"
+    for w, g, v, d in writings(G):
+        q = lim("Abs(x - 1)/(x - 1)", "1", g, v, d)
+        out.append((f"YO-5 lim |x-1|/(x-1) at 1, {w} {G}: DNE [x >= 1]", q, DNE, NOTOK, None))
+        out.append((f"YO-5 lim |x-1|/(x-1) at 1, {w} {G}: 1 [right]", q, sol("1"), NOTNO, None))
+        out.append((f"YO-5 derivative |x - 1| at 1, {w} {G}: DNE [end]", der("Abs(x - 1)", "1", g, v, d), DNE, UNK, None))
+        q = ir("solve_equation", {"var": "x", "equation": "x**2 = 1/4"}, g, v, dod=d)
+        out.append((f"YO-5 solve x**2 = 1/4, {w} {G}: {{1/2}} [no root in x >= 1]", q, sol("{1/2}", "set"), NOTOK, None))
+        out.append((f"YO-5 solve x**2 = 1/4, {w} {G}: {{}} [right]", q, sol("EmptySet", "set"), NOTNO, None))
+    q = lim("x", "1/2", ["0*log(x - 1) >= 0"])
+    out.append(("YO-5 lim x at 1/2, given 0*log(x - 1) >= 0: 1/2 [not approached]", q, sol("1/2"), UNK, None))
+    S2 = "sqrt(x)**2 = x"
+    for w, g, v, d in writings(S2):
+        q = ir("solve_equation", {"var": "x", "equation": "x**2 = 1/4"}, g, v, dod=d)
+        out.append((f"YO-5 solve x**2 = 1/4, {w} {S2}: {{-1/2, 1/2}} [x >= 0]", q, sol("{-1/2, 1/2}", "set"), NOTOK, None))
+        out.append((f"YO-5 solve x**2 = 1/4, {w} {S2}: {{1/2}} [right]", q, sol("{1/2}", "set"), NOTNO, None))
+        q = lim("Abs(x)/x", "0", g, v, d)
+        out.append((f"YO-5 lim |x|/x at 0, {w} {S2}: DNE [x >= 0]", q, DNE, NOTOK, None))
+        out.append((f"YO-5 lim |x|/x at 0, {w} {S2}: 1 [right]", q, sol("1"), NOTNO, None))
+    return out
+
+
+def cases_r():
+    """Round 3, RK-8: a claim undefined, as written, where the derivative exists is INCORRECT (the convention of
+    simplify `claim_as_written` and of the antiderivative): the same reason for the locked INCORRECTs."""
+    out = []
+    for f, c in (("x**2", "2*x**2/x"), ("x**2", "2*x**3/x**2"), ("x**2", "2*x*x/x"), ("x**2", "2*x + log(x) - log(x)"),
+                 ("x**2", "2*sqrt(x)**2"), ("x**2", "2*Abs(x)**2/x"), ("x**2", "2*x + 0*log(x)"), ("x**3", "3*x**3/x"),
+                 ("x**3", "x**3*(3/x)"), ("x*Abs(x)", "2*x*Abs(x)/x"), ("x*Abs(x)", "2*x**2/Abs(x)"),
+                 ("x*Abs(x)", "Abs(x) + x**2/Abs(x)"), ("Abs(x)**3", "3*x**5/Abs(x)**3"),
+                 ("sin(x)*Abs(sin(x))", "2*cos(x)*sin(x)**2/Abs(sin(x))"), ("x**2*exp(x)", "x**2*exp(x)*(2/x + 1)"),
+                 ("x**2*sin(x)", "x**2*sin(x)*(2/x + cos(x)/sin(x))")):
+        out.append((f"RK-8 derivative {f}: {c} [undefined where f' exists]", der(f), sol(c, "expression"), NO, None))
+    for f, c in (("x**2", "2*x"), ("Abs(x)", "x/Abs(x)"), ("log(x)", "1/x"), ("sqrt(x)", "1/(2*sqrt(x))"),
+                 ("x*Abs(x)", "2*Abs(x)"), ("x**2/x", "1"), ("x**2/x", "x/x"), ("sin(x)*Abs(sin(x))", "2*cos(x)*Abs(sin(x))"),
+                 ("tan(x)", "1/cos(x)**2"), ("1/x", "-1/x**2")):
+        out.append((f"RK-8 ctrl derivative {f}: {c}", der(f), sol(c, "expression"), OK, None))
+    out.append(("RK-8 ctrl derivative x**2, given x > 0: 2*x**2/x [x != 0 on the region]", der("x**2", None, ["x > 0"]),
+                sol("2*x**2/x", "expression"), OK, None))
+    out.append(("RK-8 ctrl derivative x**2: 2*x + 1 [wrong]", der("x**2"), sol("2*x + 1", "expression"), NO, None))
+    return out
+
+
+def cases_s():
+    """Round 3, coverage and robustness (RK-1..RK-7), decided by proof only."""
+    out = []
+    XT = [X, T_]
+    # RK-1: a simple zero of u is a corner of |u|; the textbook derivative undefined exactly there
+    for f, c in (("Abs(log(x))", "log(x)/(x*Abs(log(x)))"), ("Abs(sqrt(x) - 1)", "(sqrt(x) - 1)/(2*sqrt(x)*Abs(sqrt(x) - 1))"),
+                 ("x*Abs(log(x))", "Abs(log(x)) + log(x)/Abs(log(x))"),
+                 ("Abs(log(x))", "Piecewise((1/x, x > 1), (-1/x, x < 1))"), ("Abs(log(x)) + 1", "log(x)/(x*Abs(log(x)))")):
+        out.append((f"RK-1 derivative {f}: {c}", der(f), sol(c, "expression"), OK, None))
+    out.append(("RK-1 derivative |log x|, given x > 0: log(x)/(x*Abs(log(x)))", der("Abs(log(x))", None, ["x > 0"]),
+                sol("log(x)/(x*Abs(log(x)))", "expression"), OK, None))
+    out.append(("RK-1 derivative |log x|: -log(x)/(x*Abs(log(x))) [wrong]", der("Abs(log(x))"),
+                sol("-log(x)/(x*Abs(log(x)))", "expression"), NO, None))
+    out.append(("RK-1 derivative |log x|: sign(log(x))/x [value at the kink]", der("Abs(log(x))"),
+                sol("sign(log(x))/x", "expression"), UNK, None))
+    out.append(("RK-1 derivative |log x|: Piecewise((1/x, x >= 1), (-1/x, x < 1)) [value at the kink]", der("Abs(log(x))"),
+                sol("Piecewise((1/x, x >= 1), (-1/x, x < 1))", "expression"), UNK, None))
+    # RK-2: kinks SymPy does not list as a finite set or one progression: an exact refutation off them stands
+    for f, c, v in (("Abs(tan(x))", "1/cos(x)**2", [X]), ("Abs(cot(x))", "-1/sin(x)**2", [X]),
+                    ("Abs(sin(x))", "cos(x)", [XP]), ("Abs(cos(x))", "-sin(x)", [XP]), ("Abs(x**2 + x + 1)", "2*x", [X])):
+        out.append((f"RK-2 derivative {f}, x {v[0]['domain']}: {c} [wrong]", der(f, None, [], v), sol(c, "expression"), NO,
+                    None))
+    for f, c, v in (("Abs(sin(x))", "cos(x)*Abs(sin(x))/sin(x)", [XP]), ("Abs(cot(x))", "-cot(x)/(sin(x)**2*Abs(cot(x)))", [X]),
+                    ("Abs(tan(x))", "tan(x)/(cos(x)**2*Abs(tan(x)))", [X]), ("Abs(x**2 + x + 1)", "2*x + 1", [X])):
+        out.append((f"RK-2 derivative {f}, x {v[0]['domain']}: {c} [right]", der(f, None, [], v), sol(c, "expression"),
+                    NOTNO, None))
+    # RK-3: an integer exponent has no convention
+    for nv in (NI_, NN_):
+        dn = nv["domain"]
+        out.append((f"RK-3 derivative x**2*(-1)**n, n {dn}: 2*x*(-1)**n", der("x**2*(-1)**n", None, [], [X, nv]),
+                    sol("2*x*(-1)**n", "expression"), OK, None))
+        out.append((f"RK-3 derivative x**2*(-1)**n, n {dn}: 2*x [wrong]", der("x**2*(-1)**n", None, [], [X, nv]),
+                    sol("2*x", "expression"), NO, None))
+        out.append((f"RK-3 derivative x**2*(-2)**n, n {dn}: 2*x*(-2)**n", der("x**2*(-2)**n", None, [], [X, nv]),
+                    sol("2*x*(-2)**n", "expression"), OK, None))
+        q = ext("(-1)**(2*n)*x**2", "max", "[0, 2]", [], [X, nv])
+        out.append((f"RK-3 max (-1)**(2n)*x**2 on [0, 2], n {dn}: 4", q, sol("4"), OK, None))
+        out.append((f"RK-3 max (-1)**(2n)*x**2 on [0, 2], n {dn}: 5 [wrong]", q, sol("5"), NO, None))
+        out.append((f"RK-3 series k*(-1)**n, k=1..3, n {dn}: 6*(-1)**n", ss("k*(-1)**n", 1, 3, [], [K_, nv]),
+                    sol("6*(-1)**n"), OK, None))
+        q = ir("solve_equation", {"var": "x", "equation": "x**2 = (-1)**(2*n)"}, [], [X, nv])
+        out.append((f"RK-3 solve x**2 = (-1)**(2n), n {dn}: {{-1, 1}}", q, sol("{-1, 1}", "set"), OK, None))
+        out.append((f"RK-3 solve x**2 = (-1)**(2n), n {dn}: {{1}} [wrong]", q, sol("{1}", "set"), NO, None))
+        q = ir("solve_inequality", {"var": "x", "inequality": "(-1)**(2*n)*x > 0"}, [], [X, nv])
+        out.append((f"RK-3 solve (-1)**(2n)*x > 0, n {dn}: (0, oo)", q, sol("Interval.open(0, oo)", "interval"), OK, None))
+    out.append(("RK-3 anti (-1)**n*x, n natural: (-1)**n*x**2/2", anti("(-1)**n*x", [], [X, NN_]),
+                sol("(-1)**n*x**2/2", "expression"), OK, None))
+    out.append(("RK-3 ctrl derivative x**2*(-1)**n, n real: 2*x*(-1)**n [convention]", der("x**2*(-1)**n", None, [], [X, NR_]),
+                sol("2*x*(-1)**n", "expression"), UNK, None))
+    # RK-4: convergence by a majorant: exp(-t**alpha), the task variable carried as a fixed parameter
+    for I, v, w in (("exp(-sqrt(t))", "2", "3"), ("exp(-t**(1/3))", "6", "5"), ("t*exp(-sqrt(t))", "12", "11")):
+        q = ev1(f"Integral({I}, (t, 0, oo))")
+        out.append((f"RK-4 evaluate Integral({I}, (t, 0, oo)): {v}", q, sol(v), OK, None))
+        out.append((f"RK-4 evaluate Integral({I}, (t, 0, oo)): {w} [wrong]", q, sol(w), NO, None))
+    q = der("Integral(exp(-t)*(x + t), (t, 0, oo))", None, [], XT)
+    out.append(("RK-4 derivative Integral(exp(-t)*(x + t), (t, 0, oo)): 1", q, sol("1", "expression"), OK, None))
+    out.append(("RK-4 derivative Integral(exp(-t)*(x + t), (t, 0, oo)): 2 [wrong]", q, sol("2", "expression"), NO, None))
+    q = der("Integral(exp(-t)*cos(x*t), (t, 0, oo))", None, [], XT)
+    out.append(("RK-4 derivative Integral(exp(-t)*cos(x*t), (t, 0, oo)): 2*x/(1 + x**2)**2 [wrong sign]", q,
+                sol("2*x/(1 + x**2)**2", "expression"), NO, None))
+    out.append(("RK-4 derivative Integral(exp(-t)*cos(x*t), (t, 0, oo)): -2*x/(1 + x**2)**2", q,
+                sol("-2*x/(1 + x**2)**2", "expression"), NOTNO, None))
+    q = der("x**2 + Integral(exp(-sqrt(t)), (t, 0, oo))", None, [], XT)
+    out.append(("RK-4 derivative x**2 + Integral(exp(-sqrt(t)), (t, 0, oo)): 2*x", q, sol("2*x", "expression"), OK, None))
+    out.append(("RK-4 derivative x**2 + Integral(exp(-sqrt(t)), (t, 0, oo)): 3*x [wrong]", q, sol("3*x", "expression"), NO,
+                None))
+    out.append(("RK-4 ctrl evaluate Integral(exp(-t), (t, 0, oo)): 1", ev1("Integral(exp(-t), (t, 0, oo))"), sol("1"), OK,
+                None))
+    # RK-5: kinks of nested radicals and roots: a budget, never a wrong verdict
+    U1, U2 = "x**3 - 3*x + 1", "x**4 - 10*x**2 + 1"
+    out.append((f"RK-5 derivative |{U2}|: sign formula [right]", der(f"Abs({U2})"),
+                sol(f"(4*x**3 - 20*x)*({U2})/Abs({U2})", "expression"), NOTNO, None))
+    for f in (f"Abs({U1}) + Abs({U2})", f"Abs({U2})**3", f"sqrt(Abs({U2}))", f"Abs({U2})"):
+        out.append((f"RK-5 derivative {f}: 0 [wrong]", der(f), sol("0", "expression"), NO, None))
+    # RK-6: one verdict whatever the hash seed
+    for f, c in (("Abs(log(x)) + Abs(tan(x))", "0"), ("Abs(sqrt(x) - 1) + Abs(tan(x))", "1/(2*sqrt(x))"),
+                 ("Abs(log(x))*Abs(tan(x))", "0")):
+        out.append((f"RK-6 derivative {f}: {c} [wrong]", der(f), sol(c, "expression"), NO, None))
+    # RK-7: the body of at(diff(f), x, p) is defined near p by a strict condition (strict_at)
+    q = ir("evaluate", {"expr": "x + 1"}, ["x = 1"], [X], shape="scalar")
+    for c in ("at(diff(1/(x - cos(x)), x), x, pi) = -1/(pi + 1)**2", "at(diff(tan(x**2), x), x, 1) = 2 + 2*tan(1)**2",
+              "at(diff(1/(x + exp(x)), x), x, 0) = -2", "at(diff(sec(x**2), x), x, 1) = 2*tan(1)*sec(1)"):
+        out.append((f"RK-7 step compute {c}", q, sol("2", steps=[("compute", c)]), OK, VER))
+    for c in ("at(diff(1/(x - cos(x)), x), x, pi) = -1/(pi + 2)**2", "at(diff(1/(x + exp(x)), x), x, 0) = -3"):
+        out.append((f"RK-7 step compute {c} [wrong]", q, sol("2", steps=[("compute", c)]), NOTOK, None))
+    return out
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n, "P": cases_p}
+          "H": cases_h, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n, "P": cases_p,
+          "Q": cases_q, "R": cases_r, "S": cases_s}
 
 
-def main(out_path=None, groups="ABCDEFGHKLMNP"):
+def main(out_path=None, groups="ABCDEFGHKLMNPQRS"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -1085,5 +1402,5 @@ def main(out_path=None, groups="ABCDEFGHKLMNP"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHKLMNP"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHKLMNPQRS"
     sys.exit(1 if main(out, grp) else 0)

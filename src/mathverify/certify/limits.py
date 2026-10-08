@@ -401,24 +401,94 @@ def membership_conditions(src, expr, var, ns) -> list[Any]:
     return [c for c in dict.fromkeys(conds) if isinstance(c, sp.Contains) and var in c.free_symbols]
 
 
+_DELTAS = (S.Half, S.One / 10, S.One / 1000)
+_TAILS = (S.Zero, S(10), S(1000), S(10) ** 6)
+
+
+def membership_holds_on(c, var, regions) -> bool:
+    """Does the membership condition `c` on `var` (see `membership_conditions`) hold at every point of one of
+    `regions` (unions of intervals), for certain? Proved for a set ℝ ∖ D (Γ off its poles 0, -1, -2, ...) with an
+    argument linear in `var`: the image of the region misses D. Γ has a value on (-1, 0) ∪ (0, 1), around its pole
+    0, and the limit 1 of x Γ(x) at 0, the integral of x Γ(1 + x)/Γ(1 + x) over [0, 1] and the derivative of
+    Γ(x + 1)/Γ(x) at 2 were UNKNOWN (review of d4f, RK-F2). A natural-number condition (x!) holds on no interval."""
+    st = c.args[1] if isinstance(c, sp.Contains) else None
+    if not (isinstance(st, sp.Complement) and st.args[0] == S.Reals) or not regions:
+        return False
+    arg, hole = c.args[0], st.args[1]
+    try:
+        poly = sp.Poly(arg, var)
+        if arg.free_symbols != {var} or poly.degree() != 1:
+            return False
+        a, b = poly.all_coeffs()
+        if not (a.is_number and b.is_number and a.is_extended_real and b.is_extended_real and a != 0):
+            return False
+    except Exception:  # noqa: BLE001 - not linear in var
+        return False
+    for region in regions:
+        try:
+            parts = region.args if isinstance(region, sp.Union) else (region,)
+            if not all(isinstance(q, sp.Interval) for q in parts):
+                continue
+            images = []
+            for q in parts:
+                lo, hi = a * q.start + b, a * q.end + b
+                lo_open, hi_open = q.left_open, q.right_open
+                if a.is_negative:
+                    lo, hi, lo_open, hi_open = hi, lo, hi_open, lo_open
+                images.append(Interval(lo, hi, lo_open, hi_open))
+            if all(sp.Intersection(img, hole).is_empty is True for img in images):
+                return True
+        except Exception:  # noqa: BLE001 - a region SymPy cannot cut proves nothing
+            continue
+    return False
+
+
+def approach_regions(point, side) -> list:
+    """Regions where a condition holding proves it holds near the limit point: punctured neighbourhoods of a finite
+    point (on the side approached), tails toward an infinite one."""
+    if point == oo:
+        return [Interval.open(m, oo) for m in _TAILS]
+    if point == -oo:
+        return [Interval.open(-oo, -m) for m in _TAILS]
+    if not (getattr(point, "is_number", False) and point.is_extended_real is True):
+        return []
+    out = []
+    for d in _DELTAS:
+        left, right = Interval.open(point - d, point), Interval.open(point, point + d)
+        out.append(right if side == "+" else left if side == "-" else sp.Union(left, right))
+    return out
+
+
+def neighbourhoods(point) -> list:
+    """Open neighbourhoods of a finite real point (a derivative's)."""
+    if not (getattr(point, "is_number", False) and point.is_extended_real is True and point.is_finite):
+        return []
+    return [Interval.open(point - d, point + d) for d in _DELTAS]
+
+
 def holds_on_the_tail(c, var, point) -> bool:
     """Does the membership condition `c` (see `membership_conditions`) hold at every value of the
     sequence `var` from some point on, toward the infinite `point`? A limit there reads only that tail:
     with x a positive integer (x - 2)! has its value from x = 2 on, and lim_{x->oo} (x - 2)!/x^x = 0 was
     UNKNOWN (fourth audit G14). Over the reals a natural-number condition holds on no tail (it fails
-    between the integers); a violation set no exact check finds is no proof either."""
+    between the integers); a violation set no exact check finds is no proof either. Any condition (x**x != 0,
+    cos(πx/2) != 0) is read the same way (review of d4f, YO-4), on the integers of the tail's sign: x**x = 0 is
+    no equation solveset takes over all of ℤ."""
     if point not in (oo, -oo) or not getattr(var, "is_integer", None):
         return False
-    over = sp.Range(1, oo) if var.is_positive else sp.Range(0, oo) if var.is_nonnegative else S.Integers
+    over = sp.Range(1, oo) if point == oo else sp.Range(-oo, 0)
     try:
         bad = _violations(c, var, over)
     except Exception:  # noqa: BLE001 - not decided
         return False
     if bad is None:
         return False
-    if bad.is_empty is True:
-        return True
-    end = bad.sup if point == oo else bad.inf
+    try:
+        if bad.is_empty is True:
+            return True
+        end = bad.sup if point == oo else bad.inf
+    except Exception:  # noqa: BLE001 - a set SymPy cannot bound decides nothing
+        return False
     return getattr(end, "is_finite", None) is True
 
 
@@ -628,10 +698,20 @@ def verify(ir, solution, ctx: Ctx):
         if unpinned:
             return unknown(LAYER, "parametric_limit", t.ms, {"parameters": unpinned}, flags=["parametric_limit"])
         members = [c for c in membership_conditions(p["expr"], expr, var, ctx.ns)
-                   if not holds_on_the_tail(c, var, point)]
+                   if not holds_on_the_tail(c, var, point)
+                   and not membership_holds_on(c, var, approach_regions(point, side))]
         if members:
             return unknown(LAYER, "membership_condition_on_variable", t.ms,
                            {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
+        if point in (oo, -oo) and getattr(var, "is_integer", None):
+            # a sequence: its limit reads the tail, so every written condition must hold from some index on.
+            # cos(πx/2) in a denominator fails at every odd x, and the limit 1 of cos(πx/2)/cos(πx/2) (and of
+            # (x - 2)!/x^x + cos(πx/2)/cos(πx/2)) was certified (review of d4f, YO-4)
+            off = [c for c in written if var in getattr(c, "free_symbols", set()) and not isinstance(c, sp.Contains)
+                   and not holds_on_the_tail(c, var, point)]
+            if off:
+                return unknown(LAYER, "sequence_undefined_on_the_tail", t.ms, {"conditions": [str(c) for c in off]},
+                               flags=["sequence_undefined_on_the_tail"])
         extra = [c for c in written if getattr(c, "free_symbols", set()) == {var}]
         cls = classify_limit(expr, var, point, side, timeout=ctx.timeout,
                              conds=limit_conditions(expr, var, extra))

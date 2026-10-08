@@ -1,0 +1,48 @@
+# d4h 2. tur: ana oturumun kararları (8 Ekim 2026; 1. tur saldırısının 13 gerçek bulgusu)
+Bulgular: d4/saldiri/d4h/bulgular.json (saldırgan + bağımsız doğrulayıcı; a2f5603 = 62a40e9 + d4h, taban 62a40e9). Önce yanlış onaylar.
+Her kural mekanizmaya (ayrıştırılmış ağaç, ad alanı, işleç yolu) konur, metin regex'ine değil; kardeş yollar (cevap, adım, verilen, alan,
+hedef metni) aynı kurala bağlanır. Aynanın haksız reddi de kapanır (doğru değer INCORRECT/refuted olamaz; en az UNKNOWN/unknown).
+
+- YO-1 (orta, önceden var): kapalı formun (Integral/Sum/Product/Limit) sayısal değerine karar veren HER yol değerlendirmesiz kurulur ya da
+  okunmaz: Python işleçleri (//, %, <, >, <=, >=: Expr.__floordiv__ → floor; StrictGreaterThan …), Interval/Intersection/Union kurulumu,
+  at()/.subs ile yerine koyma, Piecewise koşulları. Karar ancak checked_forms'un kanıtladığı değerle. Beklenen: SPK//1 için 0 ve 1, tavan,
+  Piecewise, Interval(1, SPK) boşluğu, SPK ∈ [1, 2], at(floor), at(Max), x² − 1 = 0'ın kök sayısı vakalarında yanlış değer CORRECT ya da
+  verified asla; doğru değer (SPK//1 = 1 vb.) INCORRECT asla (UNKNOWN kabul).
+- YO-2 (orta, önceden var; I2'nin kardeşi): Leibniz okuması ayrıştırılmış/normalleştirilmiş LaTeX üzerinden: boşluk komutları (\, \; \! \:),
+  \mathrm{d}, \operatorname{d}, {d}, (dn), dn\,dn, \dfrac/\tfrac, üslü biçimler soyulduktan sonra pay d^k (ya da d^k f) ve payda (d v)^k
+  biçimindeyse ve d (ya da dv) adı bildirilmişse okuma belirsiz → UNKNOWN (cevap, adım, hedef). Türev okumasıyla doğru iddia da INCORRECT
+  asla (UNKNOWN).
+- YO-3 (orta, önceden var): biçim tutan sarmalayıcılar (simplify, expand, factor, cancel, together, apart, nsimplify, …) anahtar kelimeli
+  argümanları da (expr=, e=, f=, …) denetler. Yanlış adım verified asla; doğru adım 'simplify(expr=2*COS) = 4*sin(1)' refuted asla.
+- YO-4 (düşük, önceden var): alan metnindeki "hiçbir sayının sağlamadığı çok parçalı liste" ve "küme listesi belirsiz" kuralları argüman
+  sayısından bağımsız (iki argümanlı f(x, y) alanı 'x < -1, x > 1' → UNKNOWN). Verilen listesi gelenekçe bağlaçtır (değişmez).
+- YO-5 (düşük, bu parça getirdi): bir verilenin sabitlediği (m = 1/2) ya da tam sayı olmadığı bildirilen sembol iddiada aile indisi
+  okunamaz; m'nin indis mi problemin değişkeni mi olduğu belirsiz → UNKNOWN. {mπ + kπ}, {mπ}, {mπ + 2kπ} sin x = 0 için (m = 1/2 verili)
+  CORRECT asla. Verilensiz bildirilmiş m (V17: tam sayı indis) değişmez.
+- RK-1 (orta, kapsama, bu parça getirdi): `x \in S` (S bir küme sabiti: ℝ, aralık, birleşim) Contains(x, S) olarak okunur ve x'in
+  bildirilen tanım evrenine göre değerlendirilir: S ⊇ bildirim evreni ise koşul UYGULANMIŞ ve kısıtsızdır (okunamayan değil); değilse kısıt.
+  Gerçel olmayan (complex) bildirimde x ∈ ℝ kısıt olarak kalır. Beklenen: gerçel x için LaTeX x ∈ ℝ verilenle x² − 4'ün gerçel kök sayısı
+  2 CORRECT / 1 INCORRECT, x² < 4 → (−2, 2) CORRECT, min(x² − 2x) = −1 CORRECT / 0 INCORRECT, √(x − 1)'in tanım kümesi [1, ∞) CORRECT.
+- RK-2 (düşük, kapsama, bu parça getirdi): D2 belirsizliği yalnız kararı değiştiriyorsa çekimserlik: alan listesi hem birleşim hem kesişim
+  okumasıyla kurulur; iki okumada karar aynıysa karar verilir, ayrışıyorsa UNKNOWN (d4a'daki "iki gelenekte aynıysa karar" ilkesi).
+  Beklenen: '(0,3),(1,5)', 'x in (0,3), x in (1,5)', '(0,3), x>1', '[0,5],[1,3]', 'x>1,(0,3)' için f(x) = x²+1 = 5 → {2} CORRECT, {−2,2}
+  ve {} INCORRECT, sayım 1 CORRECT / 2 INCORRECT; '(−3,3),(−5,5)' → {−2,2} CORRECT; '(0,oo), x<=5' ve '(−oo,−1),(1,oo)' ayrışan iddialar UNKNOWN.
+- RK-3 (düşük, sonda beklentisi): d4h sondası cases_c'de Max(SPK, 1) için 'sqrt(pi)' [wrong] NOTOK (SPK ≠ √π; fark ~1.27·10^-193023);
+  doğru kesin değer √π(erf(2000/3) + erf(4000/3))/2 NOTNO.
+- PRE-RK-4 (yüksek, haksız ret, önceden var): solve_equation'da params.equation görevin denklemidir; adım reddedicinin öncül havuzuna
+  givens[0] biçimiyle aynı şekilde girer (SOLVER_FORMAT iki biçimi de veriyor). Beklenen: x² − x − 2 = 0, {−1, 2} + adım 'x + 2 = x**2'
+  CORRECT; √(x+2) = x, {2} + 'x + 2 = x**2' CORRECT; 'x**2 - x - 2 = 0', 'x = 2' dizisi CORRECT; yanlış adım ('x + 2 = x**3') iki biçimde
+  de refuted.
+- PRE-RK-5 (orta, haksız ret, önceden var): bilinmeyeni içeren ilişki biçimli cevap (x ∈ S, x = ±2, x ≠ 1, 1 ≤ x ≤ 3) DECISIONS'taki iddia
+  okuma kuralıyla küme/aralık olarak okunabiliyorsa öyle okunur (LaTeX yazımı da düz yazımla aynı); okunamıyorsa intake'in "değer değil"
+  kararı sert reddi de durdurur → UNKNOWN. Yanlış okunan iddia hiçbir sertifikada çürütülmez. Beklenen: `$x \in \{-2, 2\}$`, `$x = \pm 2$`
+  (x² = 4), `$1 \leq x \leq 3$`, `$x \in [1, 3]$` (x² − 4x + 3 ≤ 0), `$x \in \mathbb{R}$` (x² + 1 > 0), `$x \neq 1$` / ℝ∖{1}: CORRECT ya
+  da UNKNOWN, INCORRECT asla; yanlış kümeler (okunuyorsa) INCORRECT.
+- PRE-RK-6 (orta, istisna, önceden var; ilke 13): 'S = {…}', '$S = (-2, 2)$', 'S = [1, 2]', evaluate'te 'S = 2' iddiası istisna sızdırmaz:
+  UNKNOWN (A = {…}, x = {…} gibi). İddia ad alanında SymPy'nin S tekil kayıt defteri bir değer/ad olarak okunmaz.
+- PRE-RK-7 (düşük, süre, önceden var): det(Matrix([[Integral(x,(x,0,2)),1],[1,1]])) tek verify 132–149 s: yapısal/yazılı okumanın tekrarlı
+  pahalı çağrısı önbelleklenir ya da bütçelenir; < 60 s ya da bütçeyle UNKNOWN; karar CORRECT (det = 1) korunur.
+- PRE-RK-8 (düşük, kapsama, önceden var): §28 yeniden yazım kuralı yalnız iddia hedefin İŞLEMİNİ tekrar ettiğinde (yapısal ağaçta aynı
+  operatör) tetiklenir; hedefin yapısal okuması kurulamayınca değerlendirilmiş değerle karşılaştırılıp yeniden yazım sayılmaz. Beklenen:
+  eigmax(M) için '2 + sqrt(2)', 'sqrt(2) + 2', eigmin(M) için '2 - sqrt(2)' CORRECT (M = [[2,1,0],[1,2,1],[0,1,2]]); eigmax(M) yazımı
+  yeniden yazım (UNKNOWN) kalır.

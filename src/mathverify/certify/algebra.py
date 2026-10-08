@@ -978,7 +978,12 @@ def _beyond_value_conventions(ctx: Ctx, claimed, truth, syms, ok, ev: dict):
     another value there under the other convention are read too (`convention_counterexample`): refuted
     where both readings differ, otherwise never certified (part d4a, attack A: Abs(x) for (x**3)**(1/3)
     was CORRECT, it is wrong at x = -2 under both readings; cbrt(x) for x**(1/3) holds under one)."""
-    from .base import convention_counterexample
+    from .base import convention_counterexample, integer_bound_regions
+    bounds = integer_bound_regions(ctx, syms)
+    if bounds and ok is True:
+        # a Sum/Product bound not an integer there: no reading is the curriculum's (YO-3)
+        ev["integer_bound_region"] = bounds
+        return None
     present, pt = convention_counterexample(ctx, claimed, truth, syms)
     if not present:
         return ok

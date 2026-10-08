@@ -1,0 +1,292 @@
+[
+ {
+  "id": "D4C3-YO-A",
+  "klass": "false_accept",
+  "severity": "high",
+  "title": "Kesin zarf, SymPy türevinin görmediği sıçramada yanlış: atan(tan x) içeren integralde toleranslı saf (yanlış) cevap CORRECT, doğru değer INCORRECT",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/yanlis-onay/sonda_ya.py; kopya kökünde: PYTHONUTF8=1 PYTHONPATH=<kopya>/src:<kopya> MATHVERIFY_LEAN_REPL=/nonexistent .venv/bin/python sonda_ya.py E - (E1,E2,E3), F - (F4), G - (G1,G2,G3,G5). Zarfın kendisi: sonda_enc.py (rigorous_integral; 33 integrandın 30'u gerçek değeri tutuyor, tutmayan 3'ü atan(tan x)/atan(cot x) içerenler). Örnek IR: {task:{kind:'definite_integral', params:{integrand:'atan(tan(x))', var:'x', a:'0', b:'2', rel_tol:'1e-3'}}, vars:[{name:'x',domain:'real'}]}, iddia '2'.",
+  "expected": "E2 ∫_0^2 atan(tan x) dx, rel_tol 1e-3, iddia 2: INCORRECT (göreli hata 2.07). F4 ∫_0^2 (x²+atan(tan x)), rel_tol 1e-2, iddia 14/3: INCORRECT. G1 ∫_0^3 atan(tan x), rel_tol 1e-2, iddia 9/2: INCORRECT. G2 ∫_0^2 x·atan(tan x), iddia 8/3: INCORRECT. G3 ∫_0^1 atan(tan 2x), iddia 1: INCORRECT. Doğru değer (2−π)²/2 (E1, kesin) ve 0.6516 (E3, tol 1e-3): CORRECT ya da UNKNOWN; doğru adım 'Integral(atan(tan x),(x,0,2)) = (2−π)²/2' (G5): refuted değil.",
+  "actual_new": "E2, F4, G1, G2, G3: CORRECT (decided_by rigorous_enclosure_and_tolerance; zarf tek nokta: [2.0,2.0], [14/3], [4.5,4.5], [8/3], [1.0,1.0]). E1 ve E3 (doğru değer): INCORRECT (zarf [2.0,2.0]). G5 doğru adım: refuted. sin(x)/x + atan(tan x) [0,2] zarfı [2.2555098822851, 2.25550988464638], gerçek 2.25702987016779 (uç Taylor kuralı da aynı varsayımla yanlış).",
+  "actual_base": "E2, F4, G1, G2, G3: INCORRECT (SymPy'nin yanlış değeri + excluded() yolu; base zarfları da yanlış: −0.2124, −0.0822, 0.2146, 3.0959 gibi tek noktalar). E1, E3: INCORRECT; G5: refuted (aynı sağlam olmayan zarf base'de de var, e2f2c0b).",
+  "math": "atan(tan x) = x (0 ≤ x < π/2), x − π (π/2 < x < 3π/2); π/2'de tanımsız tek nokta (integrand_undefined_on_a_subinterval tek noktayı kabul ediyor), sınırlı, integrali var. ∫_0^2 = π²/8 + ((2−π)² − π²/4)/2 = (2−π)²/2 = 0.651616893365092832491958733379… (mpmath 50 basamak, π/2'de kırılmalı quad ile aynı). ∫_0^3 = (3−π)²/2 = 0.0100242397752995940…; ∫_0^2 x·atan(tan x) = 0.2592659445245577…; ∫_0^1 atan(tan 2x) = 0.3258084466825464…; ∫_0^2 (x²+atan(tan x)) = 8/3 + (2−π)²/2 = 3.3182835600317594…; ∫_0^2 (sin x/x + atan(tan x)) = 2.2570298701677…. Kabul edilen değerler (2, 9/2, 8/3, 1, 14/3) atan(tan u)'yu u sanan saf cevaplar; göreli hataları 0.4 ile 448 arası.",
+  "introduced_by_piece": "yes",
+  "mechanism": "enclosure.rigorous_enclosure, f Abs/sign/Max/Min içermiyorsa _cell'de orta nokta Taylor sınırını kullanıyor: h·f(m) + f''([l,r])·h³/24, f'' = sp.diff(f, x, 2). atan(tan u) için SymPy f' = u' (1 + tan²)/(1 + tan²) → 1 sadeleştiriyor, f'' = 0; tan'ın kutbundaki −π sıçrama türevde yok. Kutbu içeren hücrede 'whole' sınırsız (_monotone sınırsız argümanda Unsupported → [−inf, inf]), kesişim yalnız Taylor sınırını, yani h·f(m)'yi bırakıyor: f'' = 0 olduğu için genişliği sıfır ve yanlış bir tek nokta (ilk hücre [0,2], m = 1 → 2). Uçta kaldırılabilir tekillik kuralı (_removable: P^(k)'yı [c, r] üzerinde değerlendiriyor) ve meet (ayrık kesişimde Taylor sınırını seçiyor) da P'nin [c, r]'de C^k olduğunu varsayıyor (sin x/x + atan(tan x)). Kök neden d4c 2. tur incelemesinden (e2f2c0b). Yanlış onayı bu parça getirdi: YO-2 ile toleranslı iddianın tek kabul yolu tolerance_by_enclosure oldu ve inside penceresi verildiği için ilk (saf) hücre değeri pencereye düşer düşmez inceltme duruyor. Base'de SymPy'nin değeri devreye girip excluded() ile reddediyordu. Aynı kök neden doğru değeri ve doğru adımı da reddediyor (E1, E3, G5: haksız ret, iki sürümde de). Not: atan(1/x)'te f'' 1/x² taşıdığı için zarf sınırsız kalıyor; ölçülen sınıf, f''sinin kutup taşımadığı atan∘tan ve atan∘cot. Düzeltme yönü: Taylor kuralını (orta nokta ve uç) yalnız f'nin tanımsız noktalarından (tan/cot kutupları: _bad_points ya da Ne koşulları) arındığı kanıtlanmış hücrelerde kullanmak; kutbu içeren hücrede yalnız 'whole' sınırı. YO-5'in 'zarf gerçek değeri içerir' kilidi bu sınıfta tutmuyor.",
+  "verdict": {
+   "id": "D4C3-YO-A",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "high",
+   "corrected_expectation": "Beklenti doğru. Saf cevaplar (2; 14/3; 9/2; 8/3; 1; ayrıca atan(tan x)+1 için 4 ve ∫_2^4 atan(cot x) için π−6) CORRECT olmamalı: INCORRECT (en az UNKNOWN). Doğru değerler ((2−π)²/2 = 0.65161689336509283…, 0.6516 tol 1e-3, 5π−6−π² = −0.16164113314039…) INCORRECT olmamalı: CORRECT ya da UNKNOWN; doğru adım refuted olmamalı. π/2'de tanımsız tek nokta yüzünden 'yazıldığı biçimde tanımsız' okuması UNKNOWN verebilir; hiçbir okumada saf değer doğru değil.",
+   "note": "Yeniden üretildi. 443e078: A2,A4,A5,A6,A7 + atan(tan x)+1→4, atan(cot x)[2,4]→π−6 CORRECT (zarf tek nokta); doğru değerler INCORRECT, adım refuted. e03ea1f: saf cevaplar INCORRECT, doğrular da INCORRECT. f''=0 (SymPy), orta nokta Taylor kuralı tabanda da var; yanlış onayı bu parçanın tolerans yolu getirdi; uç kuralı (sin x/x + atan(tan x)) yeni, gerçek değeri dışlıyor.",
+   "measured": {
+    "new_443e078": {
+     "A1 ∫_0^2 atan(tan x), iddia (2−π)²/2 (doğru)": "INCORRECT, rigorous_enclosure, zarf [2.0, 2.0]",
+     "A2 aynı, rel_tol 1e-3, iddia 2 (saf)": "CORRECT, rigorous_enclosure_and_tolerance, zarf [2.0, 2.0]",
+     "A3 aynı, rel_tol 1e-3, iddia 0.6516 (doğru, göreli hata 2.59e-5)": "INCORRECT, zarf [2.0, 2.0]",
+     "A11 aynı, rel_tol 1e-3, iddia (2−π)²/2 (kesin doğru)": "INCORRECT, zarf [2.0, 2.0]",
+     "A4 ∫_0^2 x²+atan(tan x), rel_tol 1e-2, iddia 14/3": "CORRECT, zarf [4.66666666666667] tek nokta",
+     "A5 ∫_0^3 atan(tan x), rel_tol 1e-2, iddia 9/2": "CORRECT, zarf [4.5, 4.5]",
+     "A6 ∫_0^2 x·atan(tan x), rel_tol 1e-2, iddia 8/3": "CORRECT, zarf [2.66666666666667] tek nokta",
+     "A7 ∫_0^1 atan(tan 2x), rel_tol 1e-2, iddia 1": "CORRECT, zarf [1.0, 1.0]",
+     "A12 ∫_0^2 atan(tan x)+1, rel_tol 1e-3, iddia 4 (saf; gerçek 2.6516)": "CORRECT, zarf [4.0, 4.0]",
+     "A10 ∫_2^4 atan(cot x), rel_tol 1e-2, iddia π−6 (saf; gerçek −0.16164)": "CORRECT, zarf [−2.85840734641021] tek nokta",
+     "A13 aynı, iddia 5π−6−π² (doğru)": "INCORRECT",
+     "A8 adım Integral(atan(tan x),(x,0,2)) = (2−π)²/2 (doğru)": "steps refuted, karar INCORRECT",
+     "A9 ∫_0^2 atan(tan x), toleranssız, iddia 2": "INCORRECT (doğru karar, ama zarf [0.4292036732051] de yanlış: inceltme düzeyine göre farklı yanlış tek noktalar)",
+     "rigorous_enclosure doğrudan (süreç içi)": "atan(tan x)[0,2] → [2.0, 2.0]; sin(x)/x + atan(tan x)[0,2] → [2.2555098822851, 2.25550988464638] (gerçek 2.25702987016779 dışarıda); atan(cot x)[2,4] → [−2.85840734641021] tek nokta"
+    },
+    "base_e03ea1f": {
+     "A2, A4, A5, A6, A7, A10, A12 (saf)": "INCORRECT (zarflar başka yanlış tek noktalar: 0.4292, 3.0959, −0.2124, −0.0822, 0.2146, 0.2832, 2.4292)",
+     "A1, A3, A11, A13 (doğru)": "INCORRECT",
+     "A8 doğru adım": "refuted",
+     "rigorous_enclosure doğrudan": "atan(tan x)[0,2] → [2.0, 2.0] (tabanda da yanlış); sin(x)/x + atan(tan x)[0,2] → [2.25550988209428, +inf] (gerçek değeri içeriyor: uç kuralı yeni)"
+    },
+    "sympy_f2": "diff(atan(tan x), x) = 1, f'' = 0; diff(atan(cot x), x, 2) = 0; diff(atan(tan 2x), x, 2) = 0 (iki sürümde de)",
+    "math_mpmath_50": {
+     "∫_0^2 atan(tan x)": "0.651616893365092832491958733379 = (2−π)²/2 (π/2'de kırılmalı quad ile kapalı biçim farkı 1e-51)",
+     "∫_0^2 x²+atan(tan x)": "3.31828356003175949915862540005; 14/3'ün göreli hatası 0.406",
+     "∫_0^3 atan(tan x)": "0.0100242397752995940293153500996 = (3−π)²/2; 9/2'nin göreli hatası 447.9",
+     "∫_0^2 x·atan(tan x)": "0.259265944524557711675919283495 = 8/3 − 2π + π³/8; 8/3'ün göreli hatası 9.29",
+     "∫_0^1 atan(tan 2x)": "0.32580844668254641624597936669 = (1 − π/2)²; 1'in göreli hatası 2.07",
+     "∫_2^4 atan(cot x)": "−0.161641133140392426521274083479 = 5π − 6 − π²; π−6'nın göreli hatası 16.7",
+     "∫_0^2 atan(tan x)+1": "2.65161689336509283249195873338; 4'ün göreli hatası 0.509",
+     "∫_0^2 sin x/x + atan(tan x)": "2.25702987016778768106867888158 = Si(2) + (2−π)²/2",
+     "0.6516 göreli hatası": "2.59e-5 < 1e-3"
+    },
+    "provenance": "orta nokta Taylor kuralı (_cell, d2f) tabanda var (e2f2c0b tabanın atası); uç kuralı (_removable, meet, _JUMPS) e03ea1f..443e078 farkında yeni; tolerans yolunun yalnız tolerance_by_enclosure'a bağlanması (inside penceresiyle ilk hücrede durma) bu parçanın YO-2'si"
+   },
+   "probe": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-yanlis-onay/dg.py A1..A13; /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-yanlis-onay/math_a.py; /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-yanlis-onay/mech_a.py"
+  }
+ },
+ {
+  "id": "D4C3-YO-B",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "YO-3 mekanizma olarak kapanmadı: kesin fark denetimi yalnız sabit 8 asal paydalı noktada; ε·sin(πNx) (N = 8 asalın çarpımı) özdeş sayılıyor, antiderivative yolunda ℝ'de bile",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/yanlis-onay/sonda_ya.py Y - (Y1,Y3,Y4,Y6), Z - (Z2,Z3). N = 1000003·999983·1000033·999979·1000037·999961·1000039·999959. Örnek: simplify_expression 'x**2', x>0, iddia 'x**2 + sin(N*pi*x)/10**40'; antiderivative '2*x' (x gerçel, kısıt yok), iddia 'x**2 + cos(N*pi*x)/(10**40*N*pi) + C'.",
+  "expected": "Hepsi INCORRECT (kesin karşı örnek x = 1/(2N): fark ±10^-40 ≠ 0) ya da en az UNKNOWN.",
+  "actual_new": "Y1 (x>0) CORRECT, Y6 (0<x<10) CORRECT, Y3 antiderivative 2x ℝ'de CORRECT (kalıntı −sin(Nπx)/10^40 kanıtta açıkça görünüyor; random_point 40/40), Y4 CORRECT, Z2 türev x>0 CORRECT, Z3 ∫cos x ℝ'de CORRECT. Y2 ve Z1 (simplify/derivative, ℝ) UNKNOWN (equals çatışma kuralı yakalıyor). Kontrol Y7/Z4 (sin(3·10^6πx), cos(2·10^6πx)): INCORRECT.",
+  "actual_base": "Y1, Y3, Y4, Y6, Z2, Z3: INCORRECT (6 ondalık ızgara N'yi görüyor). Buna karşılık Y7 ve Z4 (eski YO-3 biçimi, 10^-40 genlikli) base'de CORRECT, yenide INCORRECT: koruma ızgaraya kondu, kör nokta taşındı.",
+  "math": "sin(πN·p/q) = 0 tam olarak, q ∈ _PRIMES olduğu için (Np/q tam sayı), aynı şey tam ve yarım tam sayı yoklamalarında da geçerli (yarım tamda ±1·10^-40, sayısal eşik altında). Kaydırılmış noktalarda (p/q + √2/10^5 vb.) |fark| ≤ 10^-40, göreli tolerans 10^-20'nin altında. İddianın türevi 2x − sin(Nπx)/10^40 ≠ 2x, örneğin x = 1/(2N)'de fark −10^-40. x² + 10^-40 sin(Nπx) ≠ x², herhangi bir açık aralıkta da.",
+  "introduced_by_piece": "no",
+  "mechanism": "random_point_equal: sayısal karşılaştırma dps 30 ve göreli tolerans 10^-20 ile yapılıyor; kesin fark denetimi (_definite_nonzero_difference) yalnız pts[:8] üzerinde, yani paydaları sabit _PRIMES listesinden gelen rasyonel noktalarda (tohum 0 deterministik). Kaydırılmış irrasyonel noktalar ve irrasyonel yoklamalar yalnız sayısal denetleniyor; kesin fark denetimine girmiyorlar. N = ∏ _PRIMES ile ε·sin(πNx) bu 8 noktada tam sıfır, öbür noktalarda eşiğin altında. SymPy equals = False çatışma kuralı (i) yalnız answers_equivalent'ta, (ii) yalnız alan tümüyle ℝ iken uygulanıyor. calculus.antiderivative_certificate random_point_equal'ı doğrudan çağırıyor (simplify_diff sıfır olmayan kalıntı −sin(Nπx)/10^40 verdiği hâlde), bu yüzden ℝ'de de koruma yok. Kısıtlı alanlarda (x>0, 0<x<10) simplify, türev ve adım yollarında koruma yalnız örnek ızgarası. YO-3 sınıfı önceden vardı; bu parça kör noktayı başka bir ızgaraya taşıdı. Düzeltme yönü: kesin fark denetimini kaydırılmış (irrasyonel) noktalarda da yapmak (certified_sign farkı ayırır); antiderivative_certificate'te sıfır olmayan simplify kalıntısına equals çatışma kuralını uygulamak.",
+  "verdict": {
+   "id": "D4C3-YO-B",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti doğru: hepsi INCORRECT ya da en az UNKNOWN; CORRECT yanlış onay. Kesin karşı örnek x = 1/(2N) (x>0 ve 0<x<10 içinde): 10^-40·sin(Nπx) = 10^-40 ≠ 0, ilkelde türev farkı −10^-40. Genlik sayısal eşiğin (10^-20) üstündeyken (10^-10) yeni kod da INCORRECT veriyor; açık yalnız eşik altı genlikte.",
+   "note": "Yeniden üretildi: yenide simplify x>0 ve 0<x<10, ilkel 2x (ℝ ve x>0), türev x>0, ilkel cos x (ℝ) CORRECT; tabanda hepsi INCORRECT. ℝ'de simplify/türev UNKNOWN. İlk 8 nokta paydaları N'yi bölüyor, S orada tam 0. Sınıf tabanda da var (3·10^6 kontrolleri tabanda CORRECT, yenide INCORRECT): kör nokta taşındı, bu girdiler yenide gerileme; parçanın YO-3 düzeltmesi eksik.",
+   "measured": {
+    "new_443e078": {
+     "B1 simplify x² (x>0), iddia x² + S": "CORRECT",
+     "B2 simplify x² (ℝ)": "UNKNOWN (undecided)",
+     "B3 antiderivative 2x (ℝ), iddia x² + C_N + C": "CORRECT, random_point 40/40, probes 62",
+     "B4 antiderivative 2x (x>0)": "CORRECT, random_point 40/40",
+     "B5 simplify x² (0<x<10)": "CORRECT",
+     "B6 derivative x² (x>0), iddia 2x + S": "CORRECT",
+     "B7 derivative x² (ℝ)": "UNKNOWN",
+     "B8 antiderivative cos x (ℝ), iddia sin x + C_N + C": "CORRECT",
+     "B9 kontrol sin(3·10^6πx)/10^40 (x>0)": "INCORRECT",
+     "B10 kontrol cos(2·10^6πx) ilkel": "INCORRECT",
+     "B11 genlik 10^-10 (x>0)": "INCORRECT",
+     "B12 genlik 1/(Nπ) ilkel": "INCORRECT",
+     "random_point_equal(x²+S, x², (0,oo)) doğrudan": "True, 30/30, probes 31; ilk 8 nokta rasyonel, paydalar {999959, 999979, 999983, 1000033, 1000037, 1000039} hepsi N'yi bölüyor; S bu noktalarda tam 0; S(1/(2N)) = 10^-40"
+    },
+    "base_e03ea1f": {
+     "B1..B8": "hepsi INCORRECT",
+     "B9, B10 (eski YO-3 biçimi)": "CORRECT",
+     "B11, B12": "INCORRECT"
+    },
+    "S": "sin(Nπx)/10^40, N = 1000003·999983·1000033·999979·1000037·999961·1000039·999959 (tek sayı)"
+   },
+   "probe": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-yanlis-onay/dg.py B1..B12; /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-yanlis-onay/mech_bc.py"
+  }
+ },
+ {
+  "id": "D4C3-YO-C",
+  "klass": "false_accept",
+  "severity": "low",
+  "title": "Dar açık aralıkta örnek noktaların hepsi alanın dışına (dışlanan uca) düşüyor; x + x² = x ve 2x − 3 = x CORRECT",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/yanlis-onay/sonda_ya.py N - (N1,N2,N3). Örnek: simplify_expression 'x', vars [{name:'x',domain:'real',constraints:['x > 3','x < 3 + 1/10**7']}], iddia '2*x - 3'. Örnek noktalar: sample_points({x: Interval.open(3, 3+10^-7)}, 30, 0, off_grid=True) → 30 noktanın hepsi x = 3 (alanın dışında).",
+  "expected": "INCORRECT (x = 3 + 1/(2·10^7)'de 2x − 3 − x = 1/(2·10^7) ≠ 0; N1'de x² ≠ 0) ya da en az UNKNOWN.",
+  "actual_new": "N1, N2, N3: CORRECT (random_point evaluated 30, agreed 30, probes 0; SymPy equals False, ama alan ℝ olmadığı için çatışma kuralı çalışmıyor).",
+  "actual_base": "N1, N2, N3: CORRECT (6 ondalık yuvarlama da aynı noktayı veriyor).",
+  "math": "(3, 3 + 10^-7) açık aralığında 2x − 3 = x ancak x = 3'te tutuyor, o nokta aralıkta değil. (0, 10^-7)'de x + x² − x = x² > 0. Polinomlar pozitif uzunluklu bir aralıkta eşitse özdeş olur; burada özdeş değiller.",
+  "introduced_by_piece": "no",
+  "mechanism": "_sample_interval: örnek yuvarlandığında (_off_grid: round(v·den)/den, den ≈ 10^6; base'de 6 ondalık) alanın dışında kalırsa geri dönüş noktası orta noktanın aynı ızgaraya yuvarlanmışı oluyor ve aralıktaki üyeliği yeniden denetlenmiyor. 1/den'den dar aralıkta 30 noktanın hepsi dışlanan uca düşüyor. _special_values yoklamaları alana göre süzüldüğü için hiçbiri kalmıyor. _definite_nonzero_difference de aynı dış noktalarda farkı 0 buluyor. Parça bu fonksiyonu değiştirdi ama geri dönüşü korudu. Girdi yapay (genişliği 10^-6'dan küçük kısıt), etkisi temiz bir yanlış onay. Düzeltme yönü: geri dönüş noktasının üyeliğini denetlemek, alan içinde nokta yoksa UNKNOWN; ya da kesin rasyonel noktayı aralığın içinden seçmek (örneğin (lo + hi)/2'nin kendisi).",
+  "verdict": {
+   "id": "D4C3-YO-C",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "Beklenti doğru: INCORRECT ya da en az UNKNOWN. Bulgunun örneklerinden daha açık hâlleri de ölçüldü: (0, 10^-7)'de 'x' için '2*x' ve (3, 3+10^-7)'de 'x' için sabit '3' de CORRECT alıyor; bunlar da INCORRECT (ya da UNKNOWN) olmalı. Alanın içinde tek örnek nokta yoksa doğru davranış UNKNOWN.",
+   "note": "Yeniden üretildi, iki sürümde aynı: N1–N3 ve ek olarak x→2x, x→3 CORRECT. sample_points 30 noktanın 30'unu da alanın dışında (x=0 ya da x=3) veriyor, yoklama 0. Tabanda aynı, parça getirmedi. Girdi yapay (genişliği ~10^-6'dan dar kısıt), ama etkisi kaba: alan içinde hiç nokta yokken karar CORRECT.",
+   "measured": {
+    "new_443e078": {
+     "C1 x (0<x<1e-7), iddia x+x²": "CORRECT",
+     "C2 x², iddia x²+x³": "CORRECT",
+     "C3 x (3<x<3+1e-7), iddia 2x−3": "CORRECT",
+     "C4 kontrol x": "CORRECT",
+     "C5 x (3<x<3+1e-7), iddia 3": "CORRECT",
+     "C6 x (0<x<1e-7), iddia 2x": "CORRECT",
+     "sample_points": "(0,1e-7): 30 nokta, tek değer 0, alanda 0; (3,3+1e-7): 30 nokta, tek değer 3, alanda 0; _special_values boş",
+     "random_point_equal(2x, x) ve (2x−3, x)": "True, evaluated 30, agreed 30, probes 0"
+    },
+    "base_e03ea1f": {
+     "C1..C6": "hepsi CORRECT",
+     "sample_points": "aynı: hepsi 0 ya da 3, alanda 0"
+    }
+   },
+   "probe": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-yanlis-onay/dg.py C1..C6; /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-yanlis-onay/mech_bc.py"
+  }
+ },
+ {
+  "id": "D4C3R-YO-1",
+  "klass": "false_accept",
+  "severity": "high",
+  "title": "Bildirilen toleranslı belirli integralde tek kabul yolu artık kesin zarf; zarfın orta nokta Taylor hücresi atan(tan x) gibi SymPy türevinin gizlediği sıçramada sağlam değil ve 'inside' erken durması saf yanlış cevabı (arctan(tan x) = x) CORRECT yapıyor",
+  "repro": "from mathverify.verifier import verify\nX={'name':'x','domain':'real'}\nfor a,b,c in [('0','3','4.5'),('1','2','1.5'),('1/2','5/2','3.0')]:\n    ir={'task':{'kind':'definite_integral','params':{'integrand':'atan(tan(x))','var':'x','a':a,'b':b,'rel_tol':'1e-3'}},'vars':[X],'givens':[],'answer_shape':'scalar'}\n    print(a,b,c,verify(ir,{'claimed_answer':{'kind':'value','payload':c},'steps':[]}).verdict)\n# PYTHONUTF8=1 PYTHONPATH=<ağaç>/src:<ağaç> MATHVERIFY_LEAN_REPL=/nonexistent; sonda: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/ret-kapsama/sonda/c17.py grup O (run.py ile), c15.py grup M; kanıt alanları sonda/s6.py",
+  "expected": "INCORRECT (iddia gerçek değerden yüzlerce kat uzak; zarf sağlam olsaydı ret) ya da en az UNKNOWN",
+  "actual_new": "443e078: dört vaka da CORRECT ([0,3] 4.5 t1e-3; [1/2,5/2] 3.0 t1e-3; [1,2] 1.5 t1e-2 ve t1e-6). Kanıt: decided_by=rigorous_enclosure_and_tolerance, enclosure=['1.5','1.5'] (sıfır genişlik), certificate=no_certificate; aynı koşudaki yakınsamış kareleme değeri 0.15161689336509283 yok sayılıyor",
+  "actual_base": "e03ea1f: dördü de INCORRECT",
+  "math": "atan(tan x) = x (x < π/2), x − π (π/2 < x < 3π/2). ∫_0^3 = π²/8 + ((3−π)² − π²/4)/2 = 0.0100242397752995940; ∫_1^2 = ((π−2)² − 1)/2 = 0.1516168933650928325; ∫_{1/2}^{5/2} = 0.0808205665701962133 (mpmath quad, π/2 kırılma noktasıyla, 30 basamak; kapalı biçimle 1e-50 uyumlu). Saf iddia (b²−a²)/2 = 4.5, 1.5, 3.0: göreli hata 448, 8.9, 36 ≫ t.",
+  "introduced_by_piece": "yes",
+  "mechanism": "YO-2 ile (8427b14) SymPy değeri yok sayılıyor; sertifika yoksa (atan(tan x)'in ilkeli π/2'de kesintili, _checked_difference reddeder) toleranslı iddia yalnız tolerance_by_enclosure → rigorous_integral(outside, inside) ile karara bağlanıyor. enclosure._cell (d4c 1. tur, e2f2c0b) 'whole' = h·f([l,r]) Unsupported('unbounded argument', tan'ın kutbu) verince onu [-inf, inf] yapıp yalnız orta nokta Taylor sınırını h·f(m) + f''([l,r])·h³/24 döndürüyor; SymPy d/dx atan(tan x) = (tan²+1)/(tan²+1) = 1 sadeleştirdiği için f'' = 0 ve sınır sıfır genişlikli h·f(m). f π/2'de −π sıçradığı için C² varsayımı yanlış. İlk hücre [a,b]'de m < π/2 iken h·f(m) = m·(b−a) = (b²−a²)/2, yani tam olarak 'arctan(tan x) = x' saf cevabı; rigorous_enclosure döngüsü ilk turda 'inside' koşulunu sağlayıp duruyor → True → CORRECT. Tabanda bu integrand için SymPy'nin (yanlış) değeri vardı, integral_within yoluna girilmiyordu ve excluded() reddediyordu. Düzeltme önerisi: _cell'de whole sınırsız/Unsupported ise (hücrede tekillik ya da sıçrama) Taylor sınırına güvenme; ayrıca yakınsamış kareleme değeri zarfın dışındaysa zarfla kabul etme. Aynı kökün tabandan beri var olan haksız ret yüzü D4C3R-RET-1'de.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "high",
+   "corrected_expectation": "Saldırganın beklentisi doğru: dört iddia da INCORRECT olmalı (sağlam bir zarf gerçek değeri ve iddiayı ayırır), en az UNKNOWN; CORRECT hiçbir okumada savunulamaz. Doğru değerler: ∫_0^3 = 0.0100242397752995940, ∫_1^2 = ((π−2)²−1)/2 = 0.1516168933650928325, ∫_{1/2}^{5/2} = 0.0808205665701962133.",
+   "note": "443e078'de dört vaka CORRECT (decided_by rigorous_enclosure_and_tolerance, zarf sıfır genişlikli [4.5,4.5], [3,3], [1.5,1.5]); e03ea1f'de dördü INCORRECT. Kök (zarf hücresi) tabanda da var; kabul yolunu parça açtı.",
+   "detail": [
+    "Yeniden üretim: sonda/p.py grup yo1, iki ağaçta (yeni: CORRECT×4, taban: INCORRECT×4).",
+    "Bağımsız matematik: mpmath 50 basamak, quad [a, π/2, b] kırılmalı; kapalı biçim ((π/2)²−a²)/2 + ((b−π)²−π²/4)/2 ile fark ≤ 1e-51. Saf iddia (b²−a²)/2 göreli hatası 448, 8.9, 36.",
+    "Mekanizma doğrulandı (sonda/enc.py, iki ağaçta aynı): SymPy f' = 1, f'' = 0; _cell(atan(tan x), f'', [1,2]) = [1.5, 1.5] (whole iv_eval Unsupported('unbounded argument') → Unsupported ValueError alt sınıfı olduğundan whole = [-inf, inf], sonra yalnız h·f(m)). rigorous_enclosure: ∫_1^2 → [1.5,1.5], ∫_0^π → π²/2 = 4.9348 (gerçek 0), ∫_0^3 → 4.5 (gerçek 0.01).",
+    "atan(cot x) de aynı gizlemeyi taşır (f' = −1, f'' = 0): kök tek bir integrandla sınırlı değil.",
+    "Düzeltme yönü (öneri): f hücrede sınırlı değilse (whole sonlu değil) Taylor/orta nokta sınırına güvenme; SymPy türevi süreksizliği gizleyebildiği için f'' sonluluğu C² kanıtı değildir."
+   ],
+   "probes": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-ret-kapsama/sonda/"
+  }
+ },
+ {
+  "id": "D4C3R-RET-1",
+  "klass": "unjust_reject",
+  "severity": "high",
+  "title": "Aynı sağlam olmayan zarf hücresi (atan(tan x) sıçraması, f''=0) doğru değeri reddediyor: belirli integral (kesin ve toleranslı iddia) INCORRECT, doğru 'compute/eq' adımı refuted",
+  "repro": "from mathverify.verifier import verify\nX={'name':'x','domain':'real'}\ndef dint(f,a,b,t=None):\n    p={'integrand':f,'var':'x','a':a,'b':b}\n    if t: p['rel_tol']=t\n    return {'task':{'kind':'definite_integral','params':p},'vars':[X],'givens':[],'answer_shape':'scalar'}\nS=lambda c,st=(): {'claimed_answer':{'kind':'value','payload':c},'steps':[{'id':f's{i+1}','kind':k,'claim':q,'from':[],'text':''} for i,(k,q) in enumerate(st)]}\nprint(verify(dint('atan(tan(x))','1','2'),S('((pi - 2)**2 - 1)/2')).verdict)\nprint(verify(dint('atan(tan(x))','1','2','1e-3'),S('0.1516')).verdict)\nprint(verify(dint('atan(tan(x)) + exp(cos(x))','1','2','1e-3'),S('1.2644')).verdict)\nX1={'task':{'kind':'evaluate','params':{'expr':'x + 1'}},'vars':[X],'givens':['x = 1'],'answer_shape':'scalar'}\nprint(verify(X1,S('2',[('eq','Integral(atan(tan(x)), (x, 1, 2)) = ((pi - 2)**2 - 1)/2')])).verdict)\n# sondalar: sonda/c14.py grup L, sonda/c16.py grup N, sonda/enc4.py (zarf doğrudan)",
+  "expected": "CORRECT ya da UNKNOWN (doğru değer); adım verified ya da unknown",
+  "actual_new": "443e078: INCORRECT, INCORRECT, INCORRECT; adım refuted → çözüm INCORRECT. Zarf doğrudan (enc4.py): ∫_1^2 atan(tan x) için [1.5, 1.5] ya da [−0.0708, −0.0708] (outside'a göre değişiyor), ∫_0^π için π²/2, ∫_0^3 için 9 – hepsi gerçek değeri dışlıyor",
+  "actual_base": "e03ea1f: aynı (INCORRECT, INCORRECT, INCORRECT, refuted). Taban ayrıca 'Integral(atan(tan(x)) + 174, (x, 0, pi)) = 174*pi' adımını da refuted yapıyordu; yeni kodda simetri sertifikasıyla verified (iyileşme)",
+  "math": "∫_1^2 atan(tan x) dx = (π²/4 − 1)/2 + ((2−π)² − π²/4)/2 = ((π−2)² − 1)/2 = 0.15161689336509283249; ∫_1^2 (atan(tan x) + e^{cos x}) = 0.15161689336509283 + 1.11278005480614302 = 1.26439694817123585 (mpmath, π/2 kırılmalı, 30 basamak). 0.1516 ve 1.2644 göreli 1e-3 içinde.",
+  "introduced_by_piece": "no",
+  "mechanism": "Kök D4C3R-YO-1 ile aynı: enclosure._cell (e2f2c0b, d4c 1. tur) f'nin hücrede sınırsız olduğu (Unsupported) durumda bile orta nokta Taylor sınırını kullanıyor; SymPy'nin türevi tan'ın kutbundaki −π sıçramasını görmüyor (d/dx atan(tan x) → 1), sonuç sıfır genişlikli yanlış zarf. integral_excludes (kesin iddia), tolerance_by_enclosure (toleranslı iddia) ve steps._integrals_refute bu zarfla doğru değeri dışlıyor. Parça (d4c3) zarfın sağlamlığını YO-5 ile kilitlemeyi hedeflediği hâlde bu kusur kalıyor; parça bunu getirmedi ama aynı modülde ve parçanın yeni kabul yolu (YO-1 bulgusu) bunu yanlış onaya da çevirdi.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "high",
+   "corrected_expectation": "Beklenti doğru: ∫_1^2 atan(tan x) = ((π−2)²−1)/2 = 0.15161689336509283249 kesin iddiası CORRECT ya da UNKNOWN; 0.1516 (t 1e-3, göreli 1.1e-4) ve atan(tan x)+e^{cos x} için 1.2644 (gerçek 1.26439694817123585, göreli 2.4e-6) CORRECT ya da UNKNOWN; 'Integral(atan(tan(x)), (x, 1, 2)) = ((pi - 2)**2 - 1)/2' adımı verified ya da unknown. INCORRECT/refuted yanlış.",
+   "note": "Yeni ve tabanda aynı: üç iddia INCORRECT, adım refuted (zarf [1.5,1.5] ve [2.578,2.675] gerçek değeri dışlıyor). Kök D4C3R-YO-1 ile aynı _cell kusuru; tek düzeltme ikisini kapatır. 174π adımı yenide verified (simetri sertifikası; doğru: ∫_0^π atan(tan x) = 0).",
+   "detail": [
+    "Yeniden üretim: sonda/p.py grup ret1. Yeni: INCORRECT, INCORRECT, INCORRECT (21.8 s), adım refuted; 174π adımı verified. Taban: aynı dört ret; 174π adımı refuted.",
+    "Bağımsız matematik: mpmath 50 basamak kırılmalı quad; ∫_0^π (atan(tan x)+174) = 546.637121724624 = 174π.",
+    "Zarf doğrudan (sonda/enc.py): ∫_1^2 için [1.5, 1.5] (gerçek 0.1516).",
+    "Saldırgan yeni ve tabanı doğru ölçmüş; parça bu reddi getirmedi (introduced no), ancak aynı kök YO-1 yanlış onayını da doğuruyor. Önem: ret, kesin (zarf) kanıt sayılan bir çıkarımla veriliyor; ilke 5'e aykırı haksız ret."
+   ],
+   "probes": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-ret-kapsama/sonda/"
+  }
+ },
+ {
+  "id": "D4C3R-KK-1",
+  "klass": "coverage_loss",
+  "severity": "medium",
+  "title": "YO-2 sonrası SymPy değeri yalnız TTK sertifikasıyla alınıyor, ama sertifika negatif argümanlı log (log(x−2), −log(sin x − 1)/2) ve exp_polar'lı polylog ilkellerini hiç kabul etmiyor: ∫_{−2}^{−1}dx/x = −ln 2 gibi temel ders kitabı integralleri CORRECT → UNKNOWN",
+  "repro": "from mathverify.verifier import verify\nX={'name':'x','domain':'real'}\nfor f,a,b,c in [('1/x','-2','-1','-log(2)'),('1/(x - 2)','0','1','-log(2)'),('1/cos(x)','0','pi/4','log(1 + sqrt(2))'),('log(1 + x)/x','0','1','pi**2/12'),('2*x/(x**2 - 9)','0','2','log(5/9)'),('tan(x)','2*pi/3','3*pi/4','-log(2)/2')]:\n    ir={'task':{'kind':'definite_integral','params':{'integrand':f,'var':'x','a':a,'b':b}},'vars':[X],'givens':[],'answer_shape':'scalar'}\n    print(f,verify(ir,{'claimed_answer':{'kind':'value','payload':c},'steps':[]}).verdict)\n# evaluate: {'task':{'kind':'evaluate','params':{'expr':'Integral(1/(x - 2), (x, 0, 1))'}},...} iddia -log(2)\n# sondalar: sonda/c5.py grup E, c6.py grup F, c7.py grup G, s3.py (sertifika gerekçesi)",
+  "expected": "CORRECT (tabandaki gibi; doğru değer, sağlam bir TTK sertifikası mümkün: log|u| ya da u<0 aralığında log(−u), F' değişmez)",
+  "actual_new": "443e078: UNKNOWN (no_certified_value) — ölçülen 14 vaka: sec [0,π/4], csc [π/4,π/2], 1/(x−2) [0,1], x/(x²−4) [0,1], 2x/(x²−9) [0,2], 1/x [−2,−1], 1/x [−e,−1], 1/(x−1) [0,1/2], tan [2π/3,3π/4], (2x+1)/(x²+x−6) [0,1], sec³ [0,π/4], ln(1+x)/x, ln(1−x)/x, ln x/(1−x) [0,1]; evaluate 'Integral(...)' görevleri UNKNOWN (closed form with no confirmed value); 'compute' adımı verified → unknown. Süre 0.1–1.5 s'den 5–21 s'ye (boşuna 4000 hücrelik zarf)",
+  "actual_base": "e03ea1f: hepsi CORRECT; adım verified",
+  "math": "∫_{−2}^{−1} dx/x = ln|−1| − ln|−2| = −ln 2; ∫_0^1 dx/(x−2) = −ln 2; ∫_0^{π/4} sec = ln(1+√2); ∫_0^1 ln(1+x)/x = Σ(−1)^{n+1}/n² = π²/12; ∫_0^1 ln(1−x)/x = −π²/6; ∫_0^2 2x/(x²−9) = ln(5/9); ∫_{2π/3}^{3π/4} tan = −ln 2/2; ∫_0^{π/4} sec³ = √2/2 + ln(1+√2)/2. Hepsi mpmath quad ile 50 basamakta kapalı biçimle ≤ 4e-51 farkla doğrulandı.",
+  "introduced_by_piece": "yes",
+  "mechanism": "8427b14 (YO-2) definite_integral'da SymPy değeri + kareleme kabulünü, forms.checked_forms'ta integralin SymPy değerini kaldırdı; tek yol certified_integral_value. _checked_difference ilkel F'yi definedness koşullarıyla [p,q]'da sürekli ister ve F.has(Abs) ise reddeder: SymPy (default ve manual) ∫1/(x−2) = log(x−2), ∫sec = −log(sin x − 1)/2 + log(sin x + 1)/2 verir; log argümanı aralıkta negatif → koşul her yerde düşer → sertifika yok. Polylog ilkelleri −polylog(2, x·exp_polar(iπ)) biçiminde gelir; parçanın domain.py'ye eklediği polylog kuralı (z ≤ 1) exp_polar yüzünden hiç işlemez (RK-B kararı 'polylog'lu ilkel' ile TTK'yi öngörüyordu). Karar YO-2 kapsama bedelinin ölçülmesini istedi; notlara göre fark.py veri setinde 0 karar değişimi gösterdi, ama veri seti dışındaki bu temel sınıf ölçülmedi. Sağlam onarım: u'nun [p,q]'da sabit işaretli olduğu (certified_sign) log(u) yerine log(|u|) ya da log(−u) koymak, exp_polar'ı unpolarify etmek; F' − f = 0 denetimi ve süreklilik aynen kalır. Tolerans bildirilmişse zarf yolu kurtarıyor (1/(x−2) [0,1] t1e-6 −0.693147 CORRECT), kesin iddiada kurtarmıyor.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti doğru: hepsi CORRECT (tabandaki gibi). Doğru değerler mpmath 50 basamakta kapalı biçimle ≤ 4e-51 farkla doğrulandı. Sağlam TTK sertifikası mümkün: u'nun aralıkta sabit işaretli olduğu yerde log(u) yerine log(−u) (ölçüldü: _checked_difference log(−x) [−2,−1] → −log 2, log(2−x) [0,1] → −log 2, sec için −log(1−sin x)/2 + log(1+sin x)/2 → ln(1+√2)). polylog ilkeli için ek iş gerekli.",
+   "note": "Yeni: 6/6 temel vaka + 4 ek (csc, sec³, ln(1−x)/x, ln x/(1−x)) UNKNOWN no_certified_value, evaluate Integral(...) UNKNOWN, adım verified→unknown; taban hepsi CORRECT. Yanlış değerler (log 2, −log 3) yenide de INCORRECT. Kapsama kaybı, yanlış karar değil.",
+   "detail": [
+    "Yeniden üretim: sonda/p.py grup kk1 ve kk1b iki ağaçta. Yenide süreler 5–23 s (zarf), tabanda 0.1–1.4 s.",
+    "Mekanizma (sonda/kk1m.py): SymPy ilkelleri log(x), log(x−2), −log(sin x−1)/2+log(sin x+1)/2, −polylog(2, x·exp_polar(iπ)), log(x²−9), −log(cos x); certified_integral_value hepsinde no_certificate. İşareti düzeltilmiş elle ilkel _checked_difference'tan geçiyor (log türleri); −polylog(2,−x) exp_polar'sız bile None döndü, yani polylog için yalnız unpolarify yetmeyebilir (saldırganın mekanizma iddiasının bu kısmı tam doğrulanmadı).",
+    "Bildirilen toleransla zarf yolu kurtarıyor (1/(x−2) [0,1] −0.693147 t1e-6 CORRECT, ölçüldü)."
+   ],
+   "probes": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-ret-kapsama/sonda/"
+  }
+ },
+ {
+  "id": "D4C3R-SG-1",
+  "klass": "other",
+  "severity": "low",
+  "title": "Bildirilen toleranslı yolda within_rel_tol: küme/demet/aralık iddiası TypeError (layer_exception) ile, karmaşık ya da ∞ iddia 'undecided' ile UNKNOWN; tabanda istisnasız UNKNOWN ya da doğru INCORRECT",
+  "repro": "from mathverify.verifier import verify\nX={'name':'x','domain':'real'}\nev=lambda c: verify({'task':{'kind':'evaluate','params':{'expr':'E','rel_tol':'1e-3'}},'vars':[X],'givens':[],'answer_shape':'scalar'},{'claimed_answer':{'kind':'value','payload':c},'steps':[]})\nfor c in ['{2.716}','Interval(2.7, 2.72)','2.716 + I']:\n    r=ev(c); print(c,r.verdict,[ (l.layer,str(l.evidence.get('reason'))[:90]) for l in r.layers if l.layer=='certify.algebra'])\ndi=lambda f,c: verify({'task':{'kind':'definite_integral','params':{'integrand':f,'var':'x','a':'0','b':'1','rel_tol':'1e-3'}},'vars':[X],'givens':[],'answer_shape':'scalar'},{'claimed_answer':{'kind':'value','payload':c},'steps':[]}).verdict\nprint(di('cos(x)','{0.8414}'), di('cos(x)','0.8414 + I'), di('sin(sin(x))','oo'))\n# sonda: sonda/c11.py grup W",
+  "expected": "Küme/demet iddiası: istisnasız UNKNOWN (ilke 13); 2.716 + i ve 0.8414 + i (gerçek değere karşı karmaşık) ve ∞ (sınırlı integrand, sonlu aralık): INCORRECT",
+  "actual_new": "443e078: '{2.716}', 'Interval(2.7, 2.72)', '{0.8414}', '(0.8414, 1)' → UNKNOWN reason 'layer_exception: TypeError: unsupported operand type(s) for -: FiniteSet/Interval/Tuple'; '2.716 + I' ve '0.8414 + I' → UNKNOWN (undecided / relative_tolerance_undecided); sin(sin x) [0,1] iddia oo → UNKNOWN",
+  "actual_base": "e03ea1f: küme/demet → UNKNOWN 'undecided' (istisnasız); '2.716 + I', '0.8414 + I' → INCORRECT; sin(sin x) iddia oo → INCORRECT",
+  "math": "|c − v| ≥ |Im c| = 1 > 10⁻³·|v| (v = e ya da sin 1, gerçek) → tolerans dışı; ∫_0^1 sin(sin x) dx = 0.4306... sonlu, ∞ değil.",
+  "introduced_by_piece": "yes",
+  "mechanism": "num_equal'ın yeni kesin dalı exact_a = not sympify(a).free_symbols ile küme/demet/aralığı 'kesin sayı' sayıp within_rel_tol'e veriyor; orada c − v Set/Tuple için TypeError fırlatıyor (katman sarmalayıcısı yakalıyor, karar UNKNOWN ama ilke 13 'istisna olarak sızmaz' der). within_rel_tol certified_sign(c − v) = NONREAL olunca None döndürüyor (|c − v| ≥ |Im c| ile False verilebilirdi); tolerance_by_enclosure sonsuz iddiada claim_not_a_nonzero_number ile None. Karar etkisi küçük (yalnız biçimce garip iddialar).",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "Küme/aralık/demet iddiası ({2.716}, Interval(2.7, 2.72), {0.8414}, (0.8414, 1)): istisnasız UNKNOWN (layer_exception bayrağı bir çökme işaretidir; testlerde 'no layer_exception' kapısı var). 2.716 + i (e'ye karşı) ve 0.8414 + i (sin 1'e karşı): INCORRECT, çünkü |c − v| ≥ |Im c| = 1 > t·|v|. ∫_0^1 sin(sin x) = 0.43060610312069060491 için ∞ iddiası (t 1e-3): INCORRECT.",
+   "note": "Yeni: küme/demet/aralık → UNKNOWN 'layer_exception: TypeError ... FiniteSet/Interval/Tuple'; karmaşık → UNKNOWN (undecided, relative_tolerance_undecided); ∞ toleranslı → UNKNOWN (claim_not_a_nonzero_number), toleranssız INCORRECT. Taban: küme 'undecided' istisnasız, karmaşık ve ∞ INCORRECT. Karar etkisi küçük.",
+   "detail": [
+    "Yeniden üretim: sonda/p.py grup sg1 iki ağaçta.",
+    "Mekanizma okundu: num_equal kesin dalında exact_a = not sympify(a).free_symbols kümeyi geçiriyor; within_rel_tol'de c − v try dışında TypeError. Karmaşık c − v için certified_sign ±1 değil → None. tolerance_by_enclosure sonsuz iddiada None.",
+    "Fuse kuralında layer_exception CORRECT'i engelliyor, yani yanlış onay riski yok; bulgu biçim/kapsama düzeyinde."
+   ],
+   "probes": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-ret-kapsama/sonda/"
+  }
+ },
+ {
+  "id": "D4C3R-KK-2",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "title": "Ters sınırlı (a > b) integralde rigorous_enclosure 'outside'/'inside' denetimini çevrilmemiş toplamla yapıyor: toleranslı iddia hiç kabul edilmiyor, yakın yanlış iddia reddedilmiyor; YO-2 zarfı tek yol yapınca 1/(x−2) [1,0] CORRECT → UNKNOWN",
+  "repro": "from mathverify.verifier import verify\nX={'name':'x','domain':'real'}\nd=lambda f,a,b,c,t=None: verify({'task':{'kind':'definite_integral','params':dict({'integrand':f,'var':'x','a':a,'b':b},**({'rel_tol':t} if t else {}))},'vars':[X],'givens':[],'answer_shape':'scalar'},{'claimed_answer':{'kind':'value','payload':c},'steps':[]}).verdict\nprint(d('1/(x - 2)','1','0','0.693147','1e-6'), d('1/(x - 2)','0','1','-0.693147','1e-6'))\nprint(d('exp(cos(x))','1','0','-2.3416','1e-4'), d('exp(cos(x))','0','1','2.3416','1e-4'))\nprint(d('exp(cos(x))','1','0','-2.35','1e-4'), d('exp(cos(x))','0','1','2.35','1e-4'))\n# sonda: sonda/c13.py grup K; zarf doğrudan sonda/enc1.py vaka 18 (sin(x)/x [1,0]: 0.0 s'de [-1, -0.54])",
+  "expected": "İleri yönle simetrik: 0.693147 (t1e-6) CORRECT, −2.3416 (t1e-4) CORRECT, −2.35 INCORRECT",
+  "actual_new": "443e078: 1/(x−2) [1,0] 0.693147 → UNKNOWN (ileri yön CORRECT); e^{cos x} [1,0] −2.3416 → UNKNOWN, −2.35 → UNKNOWN (ileri yönde CORRECT / INCORRECT)",
+  "actual_base": "e03ea1f: 1/(x−2) [1,0] → CORRECT (SymPy değeri yolu); e^{cos x} [1,0] → UNKNOWN, UNKNOWN (aynı kusur tabanda da var)",
+  "math": "∫_1^0 dx/(x−2) = ln 2 = 0.693147180...; ∫_1^0 e^{cos x} dx = −2.3415748417130531 (mpmath); −2.3416 göreli 1.08e-5 ≤ 1e-4; −2.35 göreli 3.6e-3 > 1e-4.",
+  "introduced_by_piece": "no",
+  "mechanism": "enclosure.rigorous_enclosure ia[0] > ib[1] iken uçları değiştirip ∫_b^a'yı (pozitif yön) hesaplıyor ve yalnız sonunda işareti çeviriyor; döngüdeki 'outside'/'inside' (çağıranın yönünde, yani −∫_b^a civarında) çevrilmemiş toplam s ile karşılaştırılıyor: s > 0 > iddia olduğundan ilk turda 'outside dışlandı' sayılıp kaba tek hücre zarfı dönüyor, 'inside' hiç sağlanmıyor. Kusur tabandan (e2f2c0b) beri var; parça zarfı toleranslı iddianın tek kabul yolu yaptığı için SymPy değeri olan ama sertifikasız ters sınırlı integrallerde (D4C3R-KK-1 sınıfı) CORRECT → UNKNOWN gerilemesine dönüşüyor. Onarım: sign < 0 iken outside/inside'ı çevirip (−hi, −lo) karşılaştırmak.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "Beklenti doğru: ileri yönle simetrik. ∫_1^0 dx/(x−2) = ln 2: 0.693147 (t 1e-6, göreli 2.6e-7) CORRECT; ∫_1^0 e^{cos x} = −2.3415748417130531649: −2.3416 (göreli 1.07e-5 ≤ 1e-4) CORRECT, −2.35 (göreli 3.6e-3) INCORRECT.",
+   "note": "Yeni: üçü UNKNOWN (zarf kaba tek hücre [0.677,0.75], [−2.424,−2.292]); ileri yön CORRECT/CORRECT/INCORRECT. Taban: e^{cos} ters yönde de UNKNOWN (kusur e2f2c0b'den beri), 1/(x−2) [1,0] CORRECT (SymPy değeri yolu). Kök önceden var; 1/(x−2) gerilemesi KK-1 ile birleşince parçadan.",
+   "detail": [
+    "Yeniden üretim: sonda/p.py grup kk2 iki ağaçta.",
+    "Mekanizma kod okumasıyla doğrulandı (iki ağaçta aynı): rigorous_enclosure sign = −1 iken döngüde outside/inside çevrilmemiş s ile karşılaştırılıyor, işaret yalnız sonda çevriliyor. Dönen zarf yine geçerli (çağıran çevrilmiş zarfla yeniden karar veriyor), yani sağlamlık sorunu yok, yalnız kapsama."
+   ],
+   "probes": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4c3/dogrulama-ret-kapsama/sonda/"
+  }
+ }
+]
