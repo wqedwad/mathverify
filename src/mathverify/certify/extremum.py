@@ -383,8 +383,27 @@ def _conditions_on(ctx: Ctx, var, with_interval: bool, region=None) -> tuple[lis
             if var not in getattr(r, "free_symbols", set()):
                 continue
             (rels if isinstance(r, sp.core.relational.Relational) else compound).append(r)
+    # ... and each of them AS WRITTEN (`written_definedness`, the domain of discourse's too with an interval), as
+    # `Ctx.domain_for` reads them without one: x**2 + 0*sqrt(x - 1/2) >= 0 is x**2 >= 0 after SymPy's fold, and on
+    # [-1, 1] under it the minimum 0 of x**2 was certified and the right 1/4 refuted; under 0*log(x) >= 0 the minimum
+    # -1 of x (attack on d4e round 3, D4E3-YO-5, YO-3-EK1). f's own conditions stay `written_undefined_in`'s.
+    from .domain import written_definedness
+    dod = ctx.ir.domain_of_discourse
+    wsrcs = list(srcs) + ([dod] if with_interval and isinstance(dod, str) and dod.strip() else [])
+    pins = ctx.parameter_pins()
+    nowhere_here = False
+    for s_ in wsrcs:
+        try:
+            wconds, nowhere = written_definedness(s_, ctx.ns, pins)
+        except Exception:  # noqa: BLE001 - not read as written: the certificate abstains
+            unread.append(s_)
+            continue
+        nowhere_here = nowhere_here or var in nowhere
+        for c in wconds:
+            if var in getattr(c, "free_symbols", set()) and c not in rels and c not in compound:
+                (rels if isinstance(c, sp.core.relational.Relational) else compound).append(c)
     kept, unbound = ctx.on_var(rels, var)
-    sets: list[sp.Set] = []
+    sets: list[sp.Set] = [S.EmptySet] if nowhere_here else []
     ckept, cunbound = ctx.on_var(compound, var)
     unbound += cunbound
     for r in ckept:
@@ -433,10 +452,10 @@ def verify(ir, solution, ctx: Ctx):
         if err:
             return err
         # a symbol a given or a declared constraint fixes is read as its value, in f and in the interval
-        # (`Ctx.task_pins`, checked by `Ctx.binding_issues`); one nothing fixes leaves the extremum
+        # (`Ctx.solved_pins`, checked by `Ctx.binding_issues`); one nothing fixes leaves the extremum
         # without a value: with a = 3 the maximum 0 of a*x on [0, 1], with b = 3 the maximum 0 of x on
         # [0, b] were certified (fourth audit TAN-02, G4)
-        pins = ctx.task_pins(var)
+        pins = ctx.solved_pins(var)
         f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
         if err:
             return err

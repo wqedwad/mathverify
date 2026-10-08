@@ -568,7 +568,14 @@ def verify(ir, solution, ctx: Ctx):
                 idx = sp.Range(-oo, hi_i + 1)
             else:
                 idx = sp.Range(lo_i, hi_i + 1 if hi_i != oo else oo)
-            und = written_undefined_in(p["term"], ns2, var, idx, pins)
+            # a parameter is read with its region's facts (a > 0: k + a != 0 from k = 1 on; round 4, RK-4)
+            from .calculus import _region_dummies
+            params: dict = {}
+            for v in ctx.ir.vars:
+                s_ = ctx.sym(v.name)
+                if v.name != var_name and s_ not in pins:
+                    params.update(_region_dummies(ctx, [s_]) or {})
+            und = written_undefined_in(p["term"], ns2, var, idx, pins, params=params)
             if und is True:
                 return unknown(LAYER, "term_undefined_in_range_as_written", t.ms, {"term": p["term"]},
                                flags=["written_domain"])

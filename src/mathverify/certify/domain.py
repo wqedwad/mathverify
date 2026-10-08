@@ -71,6 +71,10 @@ def _outer_nodes(e, var, add):
             _subs_conditions(n, var, add)
             stack.extend(reversed(n.point.args))
             continue
+        if isinstance(n, sp.Piecewise):
+            # its branches are read where they are taken (`_piecewise_conditions`), not each everywhere
+            _piecewise_conditions(n, var, add)
+            continue
         yield n
         if isinstance(n, sp.Basic):
             stack.extend(reversed(n.args))
@@ -447,11 +451,16 @@ def _violations(c, d, region):
 
 
 def _integer_valued(e, d) -> bool:
-    """Is `e` a polynomial in `d` alone with integer coefficients, an integer at every integer `d`?"""
+    """Is `e` a polynomial in `d` alone, an integer at every integer `d`? With rational coefficients it is exactly when
+    it is one at deg + 1 consecutive integers (its coefficients in the binomial basis are integers): k*(k + 1)/2 is,
+    and (-1)**(k*(k + 1)/2) was read as a convention (attack on d4e round 3, D4E3-RK-4)."""
     if e.free_symbols != {d}:
         return False
     try:
-        return all(a.is_integer is True for a in sp.Poly(e, d).all_coeffs())
+        P = sp.Poly(e, d)
+        if not all(a.is_rational is True for a in P.all_coeffs()):
+            return False
+        return all(P.eval(i).is_integer is True for i in range(P.degree() + 1))
     except Exception:  # noqa: BLE001 - not a polynomial in d
         return False
 
@@ -752,10 +761,18 @@ class _NoBound(Exception):
 class _Majorant:
     """Bounds near a point of the variable s (a positive Dummy: s -> oo, or s -> 0+): `upper(e)` is an M >= |e|,
     `ub(e)` >= e and `lb(e)` <= e (e real), each `exact` (no periodic function at an argument without a finite
-    limit there, no jump, no symbol of undeclared sign), so that SymPy's limit of it can be read. An exact part is
-    kept as it is; a periodic factor is bounded by its range (|sin| <= 1), a symbol p of undeclared sign by
-    |p| <= P (a positive Dummy: the bound holds for every value of p), a denominator by a positive lower bound
-    (1 + s**2*cos(s)**2 >= 1). Raises _NoBound when no bound is found."""
+    limit there, no jump, no symbol but s), so that SymPy's limit of it can be read. An exact part is kept as it
+    is; a periodic factor is bounded by its range (|sin| <= 1), any other symbol p by |p| <= P (a positive Dummy:
+    the bound holds for every value of p) and by its declared sign on the safe side only (lb(a) = 0 for a >= 0), a
+    denominator by a positive lower bound (1 + s**2*cos(s)**2 >= 1). A symbol of declared sign is no exact part:
+    SymPy's limit of 1/((x - 1)**2*s**2 + 1) is read for a generic positive x, and ∫_1^oo dt/((x - 1)**2*t**2 + 1),
+    which diverges at x = 1, was proved to converge (attack on d4e round 3, D4E3-YO-4 and RK-2). An exponential
+    whose exponent is c*r(s), c of proved sign (c < 0 for every value) and r free of every other symbol with
+    r -> oo, is bounded per value: e**(c*r) <= (N/(e*|c|))**N * r**(-N) (e**(-a*t) with a > 0 declared, R7).
+    The parameters are left in s-free factors only (`parameter_free_terms` reads them). Raises _NoBound when no
+    bound is found."""
+
+    _N = 6                         # the power of r an exponential of proved negative rate is bounded by
 
     def __init__(self, s, point):
         self.s, self.point = s, point
@@ -768,7 +785,7 @@ class _Majorant:
     def exact(self, e) -> bool:
         if e in self._safe:
             return self._safe[e]
-        ok = all(sym.is_positive is True or sym.is_negative is True for sym in e.free_symbols - {self.s})
+        ok = not (e.free_symbols - {self.s})
         if ok:
             for n in sp.preorder_traversal(e):
                 if self.s not in n.free_symbols:
@@ -792,6 +809,10 @@ class _Majorant:
         self._safe[e] = ok
         return ok
 
+    def _constant(self, e) -> bool:
+        """Is e free of s, built of other symbols, and finite for every value they may take (by their assumptions)?"""
+        return self.s not in e.free_symbols and bool(e.free_symbols) and e.is_finite is True and e.is_real is True
+
     def sym_bound(self, sym):
         if sym.is_real is not True:
             raise _NoBound(sym)
@@ -799,10 +820,30 @@ class _Majorant:
             self.unsigned[sym] = sp.Dummy(f"abs_{sym}", positive=True)
         return self.unsigned[sym]
 
+    def _decaying_exponential(self, arg):
+        """(the per-value bound of the factors c*r of the exponent `arg`, c < 0 for every value of its symbols and r
+        free of them with r -> oo at the point; the rest of the exponent)."""
+        bound, rest = S.One, []
+        for term in sp.Add.make_args(sp.expand(arg)):
+            c, r = term.as_independent(self.s, as_Add=False)
+            if c.free_symbols and self._constant(c) and c.is_negative is True and r.has(self.s) \
+                    and not (r.free_symbols - {self.s}) and self.exact(r):
+                try:
+                    lim = self._limit(r)
+                except Exception:  # noqa: BLE001
+                    lim = None
+                if lim is oo:
+                    bound *= (self._N / (sp.E * (-c))) ** self._N * r ** (-self._N)
+                    continue
+            rest.append(term)
+        return bound, sp.Add(*rest)
+
     def upper(self, e):
         """M >= |e|."""
         if self.exact(e):
             return sp.Abs(e)
+        if self._constant(e):
+            return sp.Abs(e)                            # a finite number for each value of its symbols
         if isinstance(e, sp.Symbol):
             return self.sym_bound(e)
         if isinstance(e, sp.Add):
@@ -818,7 +859,8 @@ class _Majorant:
         if isinstance(e, (sp.floor, sp.ceiling)):
             return self.upper(e.args[0]) + 1
         if isinstance(e, sp.exp):
-            return sp.exp(self.ub(e.args[0]))
+            bound, rest = self._decaying_exponential(e.args[0])
+            return bound * sp.exp(self.ub(rest))
         if isinstance(e, sp.Pow):
             b, x = e.args
             if not (x.is_number and x.is_real is True):
@@ -836,7 +878,29 @@ class _Majorant:
         hi = self.ub(e)
         if self._positive(-hi):
             return -hi
+        for v in (lo, -hi):
+            floor = self._polynomial_floor(v)
+            if floor is not None:
+                return floor
         raise _NoBound(e)
+
+    def _polynomial_floor(self, v):
+        """(c/2)*s**k with v >= (c/2)*s**k near the point for EVERY value of v's other symbols: v a polynomial in s whose
+        leading term (at oo; its lowest one at 0+) is c*s**k, c a positive number, the others' coefficients s-free (a
+        bound P of |x|): s**2 - P**2 >= s**2/2 from some s on, whatever P is. None otherwise."""
+        if self.s not in v.free_symbols:
+            return None
+        try:
+            poly = sp.Poly(v, self.s)
+        except Exception:  # noqa: BLE001 - not a polynomial in s
+            return None
+        terms = poly.terms()
+        if not terms or any(self.s in c.free_symbols for _, c in terms):
+            return None
+        (k,), c = max(terms) if self.point is oo else min(terms)
+        if certified_sign(c) != 1:
+            return None
+        return c / 2 * self.s ** k
 
     def _positive(self, e) -> bool:
         if not self.exact(e):
@@ -851,19 +915,24 @@ class _Majorant:
                              and not lim.has(sp.AccumBounds) and certified_sign(lim) == 1)
 
     def _nonnegative(self, e) -> bool:
-        """e >= 0 by its form: an even power, an Abs, a product of such, an exact part SymPy calls nonnegative."""
+        """e >= 0 by its form: an even power, an Abs, a product of such, an exact part SymPy calls nonnegative, an
+        s-free part nonnegative for every value of its symbols (a declared a > 0)."""
         if isinstance(e, sp.Abs):
             return True
         if isinstance(e, sp.Pow) and e.args[1].is_number and e.args[1].is_even is True:
             return True
         if isinstance(e, sp.Mul):
             return all(self._nonnegative(a) for a in e.args)
+        if self.s not in e.free_symbols and e.is_nonnegative is True:
+            return True
         return self.exact(e) and e.is_nonnegative is True
 
     def ub(self, e):
         """U >= e (e real)."""
         if self.exact(e):
             return e
+        if self.s not in e.free_symbols and e.is_nonpositive is True:
+            return S.Zero                               # a declared a <= 0: its sign, never its value
         if isinstance(e, sp.Add):
             return sp.Add(*[self.ub(a) for a in e.args])
         if isinstance(e, (sp.sin, sp.cos)):
@@ -896,9 +965,10 @@ class _Majorant:
 def majorant(g, t, point, side=None):
     """(M, s): |g(t)| <= M(s) near `point` (oo or -oo; a finite point c from `side`), t = s (oo), -s (-oo), c + s or
     c - s with s a positive Dummy (s -> oo, or s -> 0+), M free of every periodic function at an argument without a
-    finite limit there, of jumps and of symbols of undeclared sign (`_Majorant`); (None, s) when no such M is found.
-    A SymPy limit of M is read as a proof; one of g is not: lim t**(3/2)/(1 + t**2*sin(t)**2) at oo is "0", and the
-    divergent ∫_0^oo dt/(1 + t**2*sin(t)**2) was proved convergent (attack on d4e round 2, YO-1)."""
+    finite limit there and of jumps, its other symbols in s-free factors only (`_Majorant`); (None, s) when no
+    such M is found. A SymPy limit of M's parameter-free terms is read as a proof (`parameter_free_terms`); one of g
+    is not: lim t**(3/2)/(1 + t**2*sin(t)**2) at oo is "0", and the divergent ∫_0^oo dt/(1 + t**2*sin(t)**2) was
+    proved convergent (attack on d4e round 2, YO-1)."""
     s = sp.Dummy("s", positive=True)
     if point in (oo, -oo):
         gs, at = g.xreplace({t: s if point == oo else -s}), oo
@@ -912,74 +982,126 @@ def majorant(g, t, point, side=None):
         return None, s
 
 
+def parameter_free_terms(M, s) -> list | None:
+    """The terms m_i of M = Σ K_i*m_i with each m_i free of every symbol but s and each K_i free of s; None when M has
+    no such form. A majorant's K_i is finite for every value of its symbols by construction (`_Majorant`: an s-free
+    part is kept only when finite, a bound P of |p| and the exponential's constant are). Then M is bounded near a
+    point, for EVERY value of the parameters, when each m_i is: a limit is taken of the m_i alone, never one with a
+    parameter in it, which SymPy reads for a generic value (D4E3-YO-4: lim s**(3/2)/((x - 1)**2*s**2 + 1) is 0, and
+    at x = 1 the integrand is 1)."""
+    try:
+        E = sp.expand(M)
+    except Exception:  # noqa: BLE001
+        return None
+    out = []
+    for term in sp.Add.make_args(E):
+        K, m = term.as_independent(s, as_Add=False)
+        if m.free_symbols - {s}:
+            return None
+        out.append(m)
+    return out
+
+
+def _without_constant_factor(g, t):
+    """g with its t-free factor dropped when that factor is finite for every value of its symbols: the integral of
+    K*g0 converges where that of g0 does (a*sin(t)/t, a > 0: K = a, round 4 RK-7)."""
+    K, g0 = g.as_independent(t, as_Add=False)
+    if K != 1 and K.is_finite is True and K.is_real is True and g0.has(t):
+        return g0
+    return g
+
+
 def decays_at(g, t, end) -> bool:
-    """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1? Then ∫ g converges absolutely at that end.
-    Read off a majorant M of |g| (`majorant`: periodic factors bounded by their range, a symbol of undeclared sign by
-    its absolute value, so the task's own variable may stand in the integrand: e^(-t)*(x + t), e^(-t)*cos(x*t);
-    round 3 RK-4) and a bounded limit of s**p * M (p = 2, 3/2, 11/10), or the exponent q of its decay,
-    q = lim -log M/log s > 1 (M = s**(-q + o(1)): t**(-21/20), and e^(-a*t) with a declared positive, where q = oo;
-    review of d4e, R7), or, not absolutely, by Dirichlet's test (`_dirichlet_test`: sin(t)/t). A SymPy limit of an
-    oscillating g is no proof (round 3, YO-1). False when none is found (a divergent integral, or one these tests
-    cannot prove: sin(t**2), 1/(1 + t**4*sin(t)**2))."""
+    """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1, for EVERY value of g's other symbols? Then
+    ∫ g converges absolutely at that end. Read off a majorant M of |g| (`majorant`: periodic factors bounded by their
+    range, another symbol by its absolute value and its sign on the safe side, so the task's own variable may stand
+    in the integrand: e^(-t)*(x + t), e^(-t)*cos(x*t); round 3 RK-4), split into parameter-free terms
+    (`parameter_free_terms`), each with a bounded limit of s**p * m (p = 2, 3/2, 11/10) or the exponent q of its
+    decay, q = lim -log m/log s > 1 (m = s**(-q + o(1)): t**(-21/20); review of d4e, R7), or, not absolutely, by
+    Dirichlet's test (`_dirichlet_test`: sin(t)/t). A SymPy limit of an oscillating g is no proof (round 3, YO-1),
+    nor one with a parameter in it (round 4, YO-4). False when none is found (a divergent integral, or one these
+    tests cannot prove: sin(t**2), 1/(1 + t**4*sin(t)**2), 1/((x - 1)**2*t**2 + 1))."""
+    g = _without_constant_factor(g, t)
     m, s = majorant(g, t, end)
-    if m is not None:
-        for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
-            if _bounded_limit(sp.limit(s ** p * m, s, oo)):
-                return True
-        q = sp.limit(-sp.log(m) / sp.log(s), s, oo)
-        if q is oo:
-            return True
-        if isinstance(q, sp.Expr) and q.is_number and q.is_real is True and certified_sign(q - 1) == 1:
-            return True
+    terms = parameter_free_terms(m, s) if m is not None else None
+    if terms is not None and all(_term_decays(mi, s) for mi in terms):
+        return True
     return _dirichlet_test(g, t, end)
 
 
+def _term_decays(m, s) -> bool:
+    """Is |m(s)| <= C/s**p for large s, some p > 1 (m free of every symbol but s)?"""
+    for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
+        if _bounded_limit(sp.limit(s ** p * m, s, oo)):
+            return True
+    q = sp.limit(-sp.log(m) / sp.log(s), s, oo)
+    if q is oo:
+        return True
+    return isinstance(q, sp.Expr) and q.is_number and q.is_real is True and certified_sign(q - 1) == 1
+
+
 def _dirichlet_test(g, t, end) -> bool:
-    """Dirichlet's test at `end` (±oo): g = sin(a*t + b) * h(t) (or cos), a != 0, with h free of every function,
-    real out there, tending to 0 and eventually monotone (h'/h a rational function of t has one sign from some
-    point on: t**q times a rational function). Then ∫ g converges there, not absolutely: sin(t)/t, cos(t)/sqrt(t).
-    Read as absolute convergence only, the Dirichlet integral was undefined as written and a true step about it
-    went unchecked (d4c, measured after the attack on d4e, YO-2). sin(t)**2/t is no such product. h holds no other
-    symbol: SymPy's limit of t/(x**2*t**2 + 1) is 0 for a generic x, not at x = 0, where ∫ t*sin(t) diverges (attack
-    on d4e round 3, D4E3-YO-1)."""
+    """Dirichlet's test at `end` (±oo): g = sin(a*t + b) * h(t) (or cos), a != 0 a number, h free of every function,
+    real out there, tending to 0 and eventually monotone. Then ∫ g converges there, not absolutely: sin(t)/t,
+    cos(t)/sqrt(t). Read as absolute convergence only, the Dirichlet integral was undefined as written and a true step
+    about it went unchecked (d4c, measured after the attack on d4e, YO-2). sin(t)**2/t is no such product. With h
+    free of every other symbol (its t-free finite factor dropped first: a*sin(t)/t), h'/h a rational function of t
+    has one sign from some point on (t**q times a rational function). With other symbols (t = ±s, s > 0), for EVERY
+    value of them: h >= 0 (or <= 0) and h nonincreasing in s (nondecreasing) for every s > 0 by their assumptions,
+    and |h| <= K*m(s) with m free of them tending to 0 (`parameter_free_terms`): sin(t)/(t + a) with a > 0
+    (1/(s + a) <= 1/s, round 4 RK-7). SymPy's limit of t/(x**2*t**2 + 1) is 0 for a generic x, not at x = 0, where
+    ∫ t*sin(t) diverges (attack on d4e round 3, D4E3-YO-1)."""
     for osc in g.atoms(sp.sin, sp.cos):
         arg = osc.args[0]
         k = sp.diff(arg, t)
         if not (k.is_number and k.is_real is True and k.is_zero is False and sp.diff(arg, t, 2) == 0):
             continue
-        h = sp.simplify(g / osc)
-        if h.free_symbols != {t} or h.atoms(sp.Function):
+        h = _without_constant_factor(sp.simplify(g / osc), t)
+        if t not in h.free_symbols or h.atoms(sp.Function):
             continue
         side = sp.Dummy("s", positive=True)
         hs = h.subs(t, side if end == oo else -side)
         if hs.is_real is not True:
             continue
-        r = sp.simplify(sp.diff(h, t) / h)
-        if not r.is_rational_function(t):
+        if h.free_symbols == {t}:
+            r = sp.simplify(sp.diff(h, t) / h)
+            if not r.is_rational_function(t):
+                continue
+            if sp.limit(h, t, end) == 0:
+                return True
             continue
-        if sp.limit(h, t, end) == 0:
+        sgn = 1 if hs.is_nonnegative is True else -1 if hs.is_nonpositive is True else 0
+        if not sgn or sp.diff(sgn * hs, side).is_nonpositive is not True:
+            continue
+        try:
+            M = _Majorant(side, oo).upper(sgn * hs)
+        except Exception:  # noqa: BLE001 - _NoBound, or a bound SymPy cannot form
+            continue
+        terms = parameter_free_terms(M, side)
+        if terms is not None and all(sp.limit(mi, side, oo) == 0 for mi in terms):
             return True
     return False
 
 
 def integrable_near(g, t, c, side) -> bool:
-    """Worker: is |g(t)| <= C/|t - c|**p on the `side` ('+', '-') of the finite point c for some p < 1, read off
-    a bounded limit of s**p * M for a majorant M of |g| (`majorant`, t = c ± s; p = 0, 1/2, 2/3, 9/10)? Then ∫ g
-    converges absolutely there: 1/sqrt(t) and log(t) at 0 do, 1/t and 1/(t - 1/2) do not (attack on d4e, YO-2), and
-    a SymPy limit of 1/(t**2 + cos(1/t)**2) is no proof (round 3, YO-1)."""
+    """Worker: is |g(t)| <= C/|t - c|**p on the `side` ('+', '-') of the finite point c for some p < 1, for EVERY
+    value of g's other symbols, read off the parameter-free terms of a majorant M of |g| (`majorant`, t = c ± s,
+    `parameter_free_terms`), each with a bounded limit of s**p * m (p = 0, 1/2, 2/3, 9/10)? Then ∫ g converges
+    absolutely there: 1/sqrt(t) and log(t) at 0 do, 1/t and 1/(t - 1/2) do not (attack on d4e, YO-2), and a SymPy
+    limit of 1/(t**2 + cos(1/t)**2) is no proof (round 3, YO-1)."""
+    g = _without_constant_factor(g, t)
     m, s = majorant(g, t, c, side)
-    if m is None:
+    terms = parameter_free_terms(m, s) if m is not None else None
+    if terms is None:
         return False
-    for p in (S(0), S.Half, sp.Rational(2, 3), sp.Rational(9, 10)):
-        if _bounded_limit(sp.limit(s ** p * m, s, 0, "+")):
-            return True
-    return False
+    return all(any(_bounded_limit(sp.limit(s ** p * mi, s, 0, "+"))
+                   for p in (S(0), S.Half, sp.Rational(2, 3), sp.Rational(9, 10))) for mi in terms)
 
 
 def _integrand_on(body, x, d):
     """The integrand on a real dummy for its bound variable, evaluated; None when it holds an IR function's marker.
-    Another symbol is read for all its values by `majorant` (a symbol of undeclared sign: the task's variable in
-    ∫_0^oo e^(-t)*(x + t), round 3 RK-4; one not declared real has no bound); `_dirichlet_test` takes none."""
+    Another symbol is read for all its values by `majorant` (the task's variable in ∫_0^oo e^(-t)*(x + t), round 3
+    RK-4; one not declared real has no bound) and by `_dirichlet_test` (sin(t)/(t + a), a > 0)."""
     t = sp.Dummy(d.name, real=True)
     try:
         with sp.evaluate(False):
@@ -1189,6 +1311,73 @@ def _subs_conditions(n, var, add) -> None:
 _BINDER_CACHE: dict = {}
 _BINDER_CACHE_LOCK = threading.Lock()
 _BINDER_CACHE_SIZE = 512
+
+
+def _piecewise_conditions(pw, var, add) -> None:
+    """The written definedness of a Piecewise, branch by branch: at x the first branch whose condition holds is the
+    value, so its expression must be defined there, each condition up to it too (a condition with no value stops
+    the evaluation), and a point no condition covers has no value at all (SymPy's subs gives nan). Read on every
+    branch alike, Piecewise((0, Eq(x, 0)), (x/|x|, Ne(x, 0))), which is sign(x), had no value at 0: the derivative
+    of |x| with the value 0 at the corner was certified, the right Piecewise((2*x**2/x, Ne(x, 0)), (0, Eq(x, 0)))
+    for (x**2)' refuted (attack on d4e round 3, D4E3-YO-6); and the gap 0 of Piecewise((x**2 - 1, x < 1),
+    (x**2 - 1, x > 1)) was a root (D4E3-YO-7). On one symbol v the set D where it has a value is computed exactly:
+    ℝ ∖ {p, ...} gives v != p, any other set Contains(v, D) (a membership: the certificates abstain on it). A
+    membership of a branch (n!, an odd root) holds as before, on every branch; anything else not read exactly
+    (two symbols, a periodic condition) is DEFINEDNESS_UNDECIDED."""
+    from .base import Ctx
+    branches = []
+    for val, cond in pw.args:
+        vc = definedness_conditions(val, var)
+        cc = [] if cond in (sp.true, sp.false) else definedness_conditions(cond, var)
+        branches.append((cond, vc, cc))
+    rel: list = []
+    for _, vc, cc in branches:
+        for c in vc + cc:
+            if isinstance(c, sp.Contains) and c.free_symbols:
+                add(c)                                   # a membership or a convention: on every branch, as before
+            elif c is sp.false or c not in rel:
+                rel.append(c)
+    if not rel and branches and branches[-1][0] is sp.true:
+        return                                           # every branch defined wherever it is reached
+    syms = set().union(*[c.free_symbols for c in rel if c is not sp.false],
+                       *[b[0].free_symbols for b in branches if b[0] not in (sp.true, sp.false)])
+    if any(c.free_symbols == set() and c not in (sp.false, sp.true) for c in rel) or len(syms) != 1:
+        add(DEFINEDNESS_UNDECIDED)                       # a closed condition left standing, two symbols, none
+        return
+    (v,) = syms
+
+    def where(conds):
+        out = S.Reals
+        for c in conds:
+            if isinstance(c, sp.Contains):
+                continue                                 # added above
+            st = Ctx.condition_set(c, v)
+            if st is None:
+                return None
+            out = sp.Intersection(out, st)
+        return out
+    covered, D = S.EmptySet, S.EmptySet
+    for cond, vc, cc in branches:
+        Ci = S.Reals if cond is sp.true else S.EmptySet if cond is sp.false else Ctx.condition_set(cond, v)
+        Ec, Ev = where(cc), where(vc)
+        if Ci is None or Ec is None or Ev is None:
+            add(DEFINEDNESS_UNDECIDED)
+            return
+        avail = sp.Complement(S.Reals, covered)
+        sel = sp.Intersection(avail, Ec, Ci)
+        D = sp.Union(D, sp.Intersection(sel, Ev))
+        covered = sp.Union(covered, sp.Complement(avail, Ec), sel)
+    U = sp.Complement(S.Reals, D)
+    if U is S.EmptySet:
+        return
+    if isinstance(U, sp.FiniteSet) and all(p.is_real is True for p in U):
+        for p in U:
+            add(Ne(v, p))
+        return
+    if isinstance(U, (sp.Complement, sp.ConditionSet)) or U.has(sp.ConditionSet):
+        add(DEFINEDNESS_UNDECIDED)
+        return
+    add(sp.Contains(v, D))
 
 
 def _binder_conditions(n, var) -> list[Any]:
@@ -1970,7 +2159,25 @@ def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
         return False
 
 
-def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins: dict | None = None) -> bool | None:
+def _region_facts(d, region):
+    """`d` as a Dummy with the facts of `region` (an index Range: an integer, nonnegative or positive), or `d` itself."""
+    facts = {}
+    try:
+        if region.is_subset(S.Integers) is True:
+            facts["integer"] = True
+            if region.inf.is_positive is True:
+                facts["positive"] = True
+            elif region.inf.is_nonnegative is True:
+                facts["nonnegative"] = True
+        elif region.is_subset(S.Reals) is True:
+            facts["real"] = True
+    except Exception:  # noqa: BLE001
+        return d
+    return sp.Dummy(d.name, **facts) if facts else d
+
+
+def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins: dict | None = None,
+                         params: dict | None = None) -> bool | None:
     """Is the expression, AS WRITTEN, undefined somewhere in `region` (a point set, an interval, an
     index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
     own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
@@ -1991,9 +2198,20 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins
     conds, nowhere = written_definedness(src, ns, pins)
     if var in nowhere or written_closed_undecided(src, ns):
         return True                    # a closed condition no check proves: the callers abstain
+    d2 = _region_facts(var, region)
     for c in conds:
-        if c.free_symbols - {var}:
-            return None
+        other = c.free_symbols - {var}
+        if other:
+            # a parameter is read with the facts of its region (`params`: Dummies, a > 0 positive) and the variable
+            # with the region's (k >= 1 an integer): k + a != 0 holds for every value. Left undecided, the sums of
+            # 1/(k + a) with a > 0 were UNKNOWN (attack on d4e round 3, D4E3-RK-4)
+            if not params or not other <= set(params) or isinstance(c, sp.Contains) \
+                    or not isinstance(c, sp.core.relational.Relational):
+                return None
+            held = c.xreplace({**params, var: d2})
+            if held is sp.true:
+                continue
+            return True if held is sp.false and var not in c.free_symbols else None
         if isinstance(c, sp.Contains):
             # a membership or a convention (0**k at k = 0: 1 or undefined): where it fails over the region
             # (`_violations`). Read as a relation it was never decided, and Σ_{k=0}^{3} 0**k = 1 and, with
@@ -2005,6 +2223,10 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins
                 return True
             continue
         bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
+        # first with the region's facts (an index k >= 0: factorial(k) != 0 at every one, which exact_solveset left a
+        # ConditionSet even on Range(0, 4); round 4, RK-4)
+        if d2 is not var and bad.xreplace({var: d2}) is sp.false:
+            continue
         try:
             # a trigonometric condition is read on the region itself, not on one period of ℝ: the
             # violations of sin(x) >= 0 on [10, 12] were empty (sandbox.exactsets)

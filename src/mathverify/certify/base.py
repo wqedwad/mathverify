@@ -766,6 +766,46 @@ class Ctx:
                     out[s_] = val
         return out
 
+    def parameter_regions(self, params) -> tuple[list[str], dict | None]:
+        """(the givens and declared constraints that name one of the parameters `params`, each other value a given
+        fixes read as its value; each parameter's region, `_declared_region` with the givens, or None when one of
+        those texts is not read on its parameter alone: not read, naming two free symbols (a = b, a > b), or a region
+        not solved exactly). A certificate refutes a claim on such a parameter only at an allowed value of it, never
+        against the general symbol: with 2*a = 4 the derivative 4*x of a*x**2 was refuted against 2*a*x (attack on
+        d4e round 3, D4E3-RK-3)."""
+        from ..normalize.parse import read_condition
+        params = set(params)
+        named: list[str] = []
+        applied = True
+        bind = self.bindings()
+        texts = list(self.ir.givens) + [c for v in self.ir.vars if self.sym(v.name) in params for c in v.constraints]
+        for t in texts:
+            try:
+                cond = read_condition(t, self.ns)
+            except Exception:  # noqa: BLE001 - a text not read applies nothing
+                named.append(t)
+                applied = False
+                continue
+            fs = getattr(cond.xreplace({s_: v for s_, v in bind.items() if s_ not in params}), "free_symbols", set())
+            if fs & params:
+                named.append(t)
+                if len(fs) != 1:
+                    applied = False
+        if not named:
+            return named, {}
+        if not applied:
+            return named, None
+        regions: dict = {}
+        for p_ in params:
+            try:
+                reg = self._declared_region(p_, givens=True)
+            except Exception:  # noqa: BLE001
+                reg = None
+            if reg is None or reg.free_symbols:
+                return named, None
+            regions[p_] = reg
+        return named, regions
+
     def with_pins(self, e, pins: dict):
         """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
         forms this makes (Σ_{k=1}^{n} k with n = 3: 6) by values numbers confirm (`_confirmed`, ParseError
@@ -1019,6 +1059,11 @@ class Ctx:
             cs, nw = written_definedness(s_, self.ns, pins)
             nowhere |= nw
             conds += [c for c in cs if c not in conds]
+            # ... and a closed condition no exact check decides leaves them undecided, as a given's does: dropped,
+            # 0*∫_x^1 dt/t >= 0 (x > 0 as written) read as no condition, and {-1/2, 1/2} was certified for
+            # x**2 = 1/4 under it as a constraint; x + 0*tan(acot(2) + acot(1/2)) > 0, defined nowhere, too
+            # (attack on d4e round 3, D4E3-YO-3)
+            note(s_, self._undefined_constant(s_, pins))
         cs, nw, calls = self._function_call_conditions(srcs)
         nowhere |= nw
         conds += [c for c in cs if c not in conds]

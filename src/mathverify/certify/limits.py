@@ -645,8 +645,8 @@ def verify(ir, solution, ctx: Ctx):
         # with a = 2 (part iv, 1 Oct 2026)
         # A declared constraint `a = 3` pins it too, and so does every value for the written conditions (below):
         # x + 0*sqrt(b - x) is x after parsing, and its limit 0 at 0 was certified with b free and with b = -1,
-        # where 0 is no point of its domain (review of d4e; `Ctx.task_pins`)
-        pins = ctx.task_pins(var)
+        # where 0 is no point of its domain (review of d4e; `Ctx.solved_pins`)
+        pins = ctx.solved_pins(var)
         expr, err = parse_or_unknown(LAYER, ctx.with_pins, expr, pins)
         if err:
             return err
