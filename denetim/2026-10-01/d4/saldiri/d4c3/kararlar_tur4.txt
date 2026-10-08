@@ -1,0 +1,40 @@
+# d4c 4. tur: ana oturumun kararları (8 Ekim 2026; 3. tur saldırısının 8 gerçek bulgusu + birleşimin BİRLEŞİK-1'i)
+Bulgular: d4/saldiri/d4c3/bulgular.json (saldırgan + bağımsız doğrulayıcı, 8/8 gerçek). Saldırı 443e078'de (d4c 3. tur + oturum dalı e03ea1f).
+Önce yanlış onaylar. Her kural mekanizmaya konur; aynı kalıbın bütün çağrı yerleri (calculus.definite_integral, forms.checked_forms,
+steps._integrals_refute, tolerance_by_enclosure, integral_excludes, random_point'in bütün kullanıcıları) aynı kurala bağlanır.
+
+- YO-A = R-YO-1 = R-RET-1 (yüksek; kabul yolunu bu parça açtı, hücre kusuru d4c 1. turdan): kesin zarf ancak hücrede kanıtlı
+  varsayımlarla kanıttır. Orta nokta Taylor sınırı h·f(m) + f''([l,r])·h³/24 yalnız f'nin hücrede C² olduğu kanıtlıysa: f'nin kendi
+  aralık genişlemesi ('whole') hücrede SONLU olmalı ve f'' SymPy'nin sadeleştirmesine bırakılmadan (sadeleştirme tan'ın kutbunu siler:
+  d/dx atan(tan x) → 1) yazılı türevden aralık aritmetiğiyle sınırlanmalı; 'whole' Unsupported/sınırsızsa hücre böl ya da zarf yok
+  (None → UNKNOWN), hiçbir zaman yalnız Taylor sınırı. Uçta kaldırılabilir tekillik kuralı (RK-B, P^(k) [c, r] üzerinde) aynı koşula
+  bağlı. Beklenen: saf cevaplar (∫_0^2 atan(tan x) için 2; 14/3; 9/2; 8/3; 1; atan(tan x)+1 için 4; ∫_2^4 atan(cot x) için π−6; ∫_0^3
+  için 4.5, ∫_1^2 için 1.5, ∫_{1/2}^{5/2} için 3.0) asla CORRECT (INCORRECT ya da UNKNOWN); doğru değerler ((2−π)²/2 = 0.6516168933…,
+  0.6516 t1e-3, ((π−2)²−1)/2 = 0.1516168933…, 1.2644 t1e-3, 5π−6−π²) asla INCORRECT, doğru adım asla refuted (CORRECT/verified ya da
+  UNKNOWN/unknown). π/2'de tek noktada tanımsız sınırlı integrand: integral var (ölçüsü sıfır küme); sertifika yoksa UNKNOWN yeter.
+- YO-B (orta; sınıf önceden var, bu girdiler tur 3'ün gerilemesi): sayısal uyum hiçbir yolda kesin farkı olan iddiayı CORRECT yapamaz.
+  Kesin fark denetimi (_definite_nonzero_difference ya da eşdeğeri) SABİT 8 noktayla değil BÜTÜN örnek noktalarda (asal paydalı
+  rasyoneller, irrasyonel kaymalı noktalar, yoklamalar) yapılır: alan içindeki bir noktada farkın sertifikalı işareti ±1 ise karşı
+  örnek (INCORRECT/refuted). Bu kural random_point'in bütün kullanıcılarında geçerli: answers_equivalent, ilkel (türevi integranda
+  karşı), türev ve simplify görevleri, adım denetimleri. SymPy equals = False çatışma kuralı ilkel/türev yollarında da (alan ℝ iken)
+  uygulanır. Beklenen: x² + 10^-40 sin(Nπx) (N = örnek paydalarının çarpımı) için simplify (x > 0, 0 < x < 10), ilkel 2x ve cos x (ℝ,
+  x > 0), türev (x > 0) INCORRECT ya da en az UNKNOWN; doğru özdeşlikler (sin²+cos² = 1, atan(x) − atan(x/2) = atan(x/(x²+2)) x > 0)
+  CORRECT kalmalı (kalmıyorsa kapsama kaybını ölç ve raporla).
+- YO-C (düşük, önceden var): örnek nokta alanın içinde olmalı; ızgaraya yuvarlanan nokta alanı terk ederse kullanılmaz, dar aralıkta
+  noktalar kesin aritmetikle aralığın içinden seçilir (a + (b − a)·k/(m + 1)). Alanın içinde hiç nokta yoksa random_point karar vermez
+  (UNKNOWN). Beklenen: (3, 3 + 10^-7)'de 2x − 3 = x ve sabit 3 = x, (0, 10^-7)'de x + x² = x ve 2x = x: INCORRECT (ya da UNKNOWN).
+- KK-1 (orta, kapsama; bu parça getirdi): TTK sertifikası işaret değiştirmeyen argümanlı log ilkelini kabul eder: u'nun [p, q]'da
+  sertifikalı işareti sabit −1 ise log(u) yerine log(−u) (türevi aynı), F' − g yeniden sembolik 0 denetlenir, süreklilik aynı kural.
+  polylog(s, z·exp_polar(iπk)): exp_polar yalnız (−1)^k'ye indirilirse ve polylog'un argümanı gerçel analitik bölgesinde (z ≤ 1)
+  kalıyorsa; yoksa sertifika yok. Beklenen: bulgudaki 14 ders kitabı integrali (∫_{−2}^{−1} dx/x = −ln 2, ∫_0^1 dx/(x−2) = −ln 2,
+  ∫_0^{π/4} sec = ln(1+√2), ∫_0^1 ln(1+x)/x = π²/12, ∫_0^1 ln(1−x)/x = −π²/6, …) CORRECT, yanlış değerler INCORRECT, adımlar verified.
+- SG-1 (düşük, bu parça getirdi): toleranslı yolda küme/demet/aralık iddiası istisnasız UNKNOWN (ilke 13; layer_exception yok);
+  karmaşık iddia c, gerçel değer v: |c − v| ≥ |Im c| ve |Im c| > t·|v| kanıtlıysa INCORRECT; integral kanıtla sonluyken (sonlu zarf ya
+  da sertifika) ∞ iddiası INCORRECT.
+- KK-2 (düşük, önceden var): ters sınırlı integralde zarfın outside/inside denetimi işareti çevrilmiş toplamla; ileri yönle simetrik:
+  ∫_1^0 dx/(x−2) = ln 2 (0.693147 t1e-6 CORRECT), ∫_1^0 e^{cos x} = −2.3415748… (−2.3416 t1e-4 CORRECT, −2.35 INCORRECT).
+- BİRLEŞİK-1 (kapsama, birleşimin getirdiği; ölçüm kosular.txt 13:29): _exact_conditions (TTK) definedness_conditions_strict'in
+  Contains(t, Convention(odd_root)) koşulunu Relational olmadığı için reddediyor. b**(p/q)'nun kesirli kuvvet kuralı (b ≥ 0, negatif
+  üste b > 0) zaten ekleniyor ve o bölgede iki gelenek aynı değeri verir: bu Pow'dan gelen odd_root gelenek koşulu kesirli kuvvet
+  kuralıyla karşılanmış sayılır (yalnız tam o Pow'un tabanı için). Beklenen: ∫_0^∞ e^(−t^(1/3)) = 6 CORRECT, 5 INCORRECT
+  (test_d4_d4e_gorev::test_round3_convergence_by_a_majorant, d4e sondası RK-4); ∫_{−1}^0 t^(1/3) dt hiçbir okumada CORRECT değil (UNKNOWN).
