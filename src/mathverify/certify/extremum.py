@@ -20,7 +20,7 @@ import sympy as sp
 from sympy import S, Interval, FiniteSet, ConditionSet, oo
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import num_equal, to_mp
+from ..equiv.numeric import certified_sign, num_equal, to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk, exact_solveset
@@ -44,19 +44,28 @@ def _num(v):
         return None
 
 
-def _better(a, b, is_max: bool) -> bool:
-    return a > b if is_max else a < b
-
-
-def _strictly_better(fa, na, fb, nb, is_max: bool) -> bool:
-    """fa beats fb for certain: exact inequality (strict ladder) AND the right direction."""
-    if na is None or nb is None or not _better(na, nb, is_max):
-        return False
+def _strictly_better(fa, na, fb, nb, is_max: bool) -> bool | None:
+    """Does fa beat fb? True or False when certain, None when undecided (a candidate that may beat the
+    claim). Equality is decided by num_equal, the direction by a CERTIFIED sign of fa - fb, never by the
+    40-digit values: 1 + 10^-50 and 1 agree to 40 digits, "not better" was read, and the maximum 1 of
+    1 + x/10^50 on [0, 1] was certified next to the true 1 + 10^-50 (attack on d4c round 2, YO-1)."""
+    if na is None or nb is None:
+        return None
     try:
         eq, _ = num_equal(fa, fb)
     except Exception:  # noqa: BLE001
+        return None
+    if eq is True:
         return False
-    return eq is False
+    if eq is None:
+        return None
+    try:
+        s_ = certified_sign(sp.sympify(fa) - sp.sympify(fb))
+    except Exception:  # noqa: BLE001
+        return None
+    if s_ not in (1, -1):
+        return None
+    return (s_ == 1) == is_max
 
 
 def _classical(e):
@@ -169,12 +178,18 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
         return (False if getattr(cval, "is_number", False) and cval.is_real is False else None), ev
     wrong = "better_value_exists" if which in ("max", "min") else "argument_does_not_attain_extremum"
 
-    # 1. a candidate point beats the claim
+    # 1. a candidate point beats the claim; one that may (undecided) leaves the EVT route closed
+    undecided = []
     for c, fc, fn_ in vals:
-        if _strictly_better(fc, fn_, cval, cn, is_max):
+        better = _strictly_better(fc, fn_, cval, cn, is_max)
+        if better is True:
             ev["reason"] = wrong
             ev["witness"] = (str(c), str(fc))
             return False, ev
+        if better is None:
+            undecided.append(str(c))
+    if undecided:
+        ev["candidates_undecided"] = undecided
     # 2. an open end whose limit beats the claim: points near it do too
     for end, is_open in ((interval.inf, interval.left_open), (interval.sup, interval.right_open)):
         if not is_open:
@@ -192,27 +207,31 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
                 return False, ev
             continue
         ln = _num(lv)
-        if ln is not None and _strictly_better(lv, ln, cval, cn, is_max):
+        if ln is not None and _strictly_better(lv, ln, cval, cn, is_max) is True:
             ev["reason"] = "better_value_near_open_endpoint"
             return False, ev
     # 3. nothing beats the claim
     strict_rel = (f > cval) if is_max else (f < cval)
     rs = sb_run("mathverify.sandbox.ops:solveset_in", strict_rel, var, interval, timeout=timeout)
     bound = None
+    superlevel = False             # an exact set of points better than the claim, not proved empty
     if rs.ok and not rs.value.has(ConditionSet):
         ev["superlevel_set"] = str(rs.value)
         if rs.value is S.EmptySet:
             bound = True
         else:
+            superlevel = rs.value.is_empty is not True
             from .calculus import _points_of
             for p_ in _points_of(rs.value):
                 fp = sp.simplify(f.subs(var, p_))
-                if _strictly_better(fp, _num(fp), cval, cn, is_max):
+                if _strictly_better(fp, _num(fp), cval, cn, is_max) is True:
                     ev["reason"] = "better_value_exists_symbolic"
                     ev["witness"] = (str(p_), str(fp))
                     return False, ev
-    if bound is None and complete and closed:
-        # EVT: f continuous on [a, b] attains its extremum at a candidate, none of which beats c
+    if bound is None and complete and closed and not undecided and not superlevel:
+        # EVT: f continuous on [a, b] attains its extremum at a candidate, none of which beats c (each
+        # one PROVED not to), and SymPy found no point that does: a non-empty superlevel set, or a
+        # candidate whose comparison is undecided, closed this route (YO-1)
         bound = True
         ev["proof"] = "EVT+complete_critical_set"
     if bound is None and interval.inf.is_number and interval.sup.is_number:
@@ -222,7 +241,7 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
                     is_max, timeout=timeout)
         if rn.ok and rn.value is not None and interval.contains(rn.value) is sp.true:
             fp = sp.simplify(f.subs(var, rn.value))
-            if _strictly_better(fp, _num(fp), cval, cn, is_max):
+            if _strictly_better(fp, _num(fp), cval, cn, is_max) is True:
                 ev["reason"] = "better_value_found_numerically"
                 ev["numeric_better_point"] = (str(rn.value), str(sp.N(fp, 12)))
                 return False, ev

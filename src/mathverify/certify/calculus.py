@@ -30,7 +30,7 @@ import sympy as sp
 from sympy import S, Eq, Ne, Interval, oo
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import NONREAL, certified_sign, num_equal, to_mp
+from ..equiv.numeric import NONREAL, certified_sign, num_equal, read_tolerance, to_mp, within_rel_tol
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
@@ -484,6 +484,9 @@ def _raw_pair(lo, hi):
     return _raw(mp.mpf(lo)), _raw(mp.mpf(hi))
 
 
+_ENCLOSURE_SAFETY = 120.0       # seconds: past it an enclosure is abandoned (UNKNOWN), never cut short
+
+
 def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0):
     """(lo, hi) mpf: an interval holding ∫_a^b f, refined until it misses `outside` or lies within
     `inside` ((lo, hi) mpf pairs) or the budget is spent; None without an enclosure (an infinite range,
@@ -495,18 +498,19 @@ def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: 
         return None
     if f.has(sp.Integral, sp.Sum, sp.Product, sp.Limit) or not (a.is_finite and b.is_finite):
         return None
+    # the budget is the number of cells (deterministic); the time is only a safety stop (RK-C)
     r = sb_run("mathverify.certify.enclosure:rigorous_enclosure", f, var, a, b,
                _raw_pair(*outside) if outside else None, _raw_pair(*inside) if inside else None,
-               4000, float(timeout), timeout=timeout + 10)
+               4000, _ENCLOSURE_SAFETY, timeout=_ENCLOSURE_SAFETY + 10)
     if not r.ok or r.value is None:
         return None
     return from_raw(r.value[0]), from_raw(r.value[1])
 
 
-def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0, window=None) -> tuple[bool, dict[str, Any]]:
-    """Is the claimed number (or the tolerance `window` around it, (lo, hi)) certainly not ∫_a^b f?"""
+def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0) -> tuple[bool, dict[str, Any]]:
+    """Is the claimed number certainly not ∫_a^b f (outside a rigorous enclosure)?"""
     ev: dict[str, Any] = {}
-    c = window or claim_interval(claimed)
+    c = claim_interval(claimed)
     if c is None:
         ev["claim_interval"] = None
         return False, ev
@@ -518,21 +522,46 @@ def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0, windo
     return bool(hi < c[0] or lo > c[1]), ev
 
 
-def integral_within(integrand, var, a, b, window, timeout: float = 8.0) -> tuple[bool, dict[str, Any]]:
-    """Does a rigorous enclosure of ∫_a^b f lie within `window` ((lo, hi) mpf)?"""
-    enc = rigorous_integral(integrand, var, a, b, outside=window, inside=window, timeout=timeout)
-    ev = {"enclosure": None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]}
-    return bool(enc is not None and window[0] <= enc[0] and enc[1] <= window[1]), ev
-
-
-def tolerance_window(claimed, rel_tol):
-    """[c - tol·|c|, c + tol·|c|] around the claim, outward, or None."""
+def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: float = 8.0
+                           ) -> tuple[bool | None, dict[str, Any]]:
+    """The declared relative tolerance decided over a rigorous enclosure E of the integral: |c - v| <= t·|v|
+    for every v in E (True), for none (False), or undecided (None; also when E holds 0, where a relative
+    tolerance means nothing). For c > 0 the values v the claim stands for are [c/(1 + t), c/(1 - t)] (for
+    c < 0 the mirror image), computed with interval arithmetic over the claim's own interval: the window
+    was [c - t|c|, c + t|c|], scaled by the claim, and with t >= 1 it held any value (YO-4, RK-E)."""
+    ev: dict[str, Any] = {}
     c = claim_interval(claimed)
-    if c is None or not (mp.isfinite(c[0]) and mp.isfinite(c[1])):
-        return None
-    with mp.workdps(60):
-        t = mp.mpf(rel_tol)
-        return c[0] - t * abs(c[0]), c[1] + t * abs(c[1])
+    if c is None or not (mp.isfinite(c[0]) and mp.isfinite(c[1])) or c[0] <= 0 <= c[1]:
+        ev["reason"] = "claim_not_a_nonzero_number"
+        return None, ev
+    iv, saved = mp.iv, mp.iv.dps
+    try:
+        iv.dps = 60
+        with mp.workdps(60):
+            C = iv.mpf([c[0], c[1]])
+            t_ = sp.Rational(rel_tol)
+            T = iv.mpf(int(t_.p)) / int(t_.q)
+            lo_v, hi_v = (C / (1 + T), C / (1 - T)) if c[0] > 0 else (C / (1 - T), C / (1 + T))
+            # every v in `inside` is within the tolerance of every c; no v outside `outside` is within it of any c
+            inside = (mp.make_mpf(lo_v._mpi_[1]), mp.make_mpf(hi_v._mpi_[0]))
+            outside = (mp.make_mpf(lo_v._mpi_[0]), mp.make_mpf(hi_v._mpi_[1]))
+    finally:
+        iv.dps = saved
+    enc = rigorous_integral(integrand, var, a, b, outside=outside, inside=inside if inside[0] <= inside[1] else None,
+                            timeout=timeout)
+    ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+    ev["values_within_tolerance"] = [mp.nstr(outside[0], 15), mp.nstr(outside[1], 15)]
+    if enc is None:
+        return None, ev
+    lo, hi = enc
+    if lo <= 0 <= hi:
+        ev["reason"] = "enclosure_holds_zero"
+        return None, ev
+    if inside[0] <= lo and hi <= inside[1]:
+        return True, ev
+    if hi < outside[0] or lo > outside[1]:
+        return False, ev
+    return None, ev
 
 
 def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0,
@@ -2109,6 +2138,12 @@ def verify(ir, solution, ctx: Ctx):
                                                     (a, b, claimed))
             if err:
                 return err
+            # a declared tolerance, read once: |c - v|/|v| <= t against the true value v, t in (0, 1); anything
+            # else is a malformed input (equiv.numeric.read_tolerance; YO-4, RK-E, RK-F)
+            declared, bad_tol = read_tolerance(p.get("rel_tol"))
+            if bad_tol:
+                return unknown(LAYER, "malformed_tolerance", t.ms, {"rel_tol": str(p.get("rel_tol"))},
+                               flags=["malformed_tolerance"])
             undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ns_i,
                                                              timeout=ctx.timeout, pins=pins)
             if undefined is not False:
@@ -2117,104 +2152,55 @@ def verify(ir, solution, ctx: Ctx):
                                flags=["written_domain"] if undefined else [])
             val, ev = definite_integral_numeric(integrand, var, a, b, timeout=ctx.timeout * 1.5)
             ev["claimed"] = str(claimed)
-            declared = float(p.get("rel_tol") or 0.0)
-            tol = max(declared, float(ev.get("rel_err", "1e-25")))
-            ev["rel_tol_used"] = tol
             converged = val is not None and bool(ev.get("converged", False))
-            # an exact value, when SymPy has one, is what the claim is compared with: a numeric
-            # tolerance of 1e-25 accepted 262537412640768743 for ∫_0^{π√163} e^x dx, whose value
-            # is e^(π√163) - 1 = 262537412640768742.99999999999925… (audit of 25 Sep 2026)
-            exact = None
+            # SymPy's value is evidence only. It is taken with a symbolic certificate (below) or not at all: a
+            # quadrature that agrees with it may share its blind spot (a narrow peak: SymPy's wrong π for
+            # ∫_0^π (atan(tan x) + 1 + peak) and tanh-sinh agreed, and 3.14159265358979 was accepted with
+            # rel_tol 1e-9; the value is π + π²/2), and SymPy's value can be off by less than any enclosure is
+            # wide (2 for ∫_{-1}^{1} (1 + |cos x|/10^80) dx, which is 2 + 2 sin(1)/10^80): attack on d4c
+            # round 2, YO-2. An exact 0 needs the certificate as well (fourth audit of 1 Oct 2026, S1)
             rs = sb_run("mathverify.sandbox.ops:integrate_symbolic", integrand, var, a, b, timeout=ctx.timeout)
-            if rs.ok and not rs.value.has(sp.Integral) and not rs.value.free_symbols \
-                    and not rs.value.has(sp.AccumBounds, sp.zoo, sp.nan):
-                exact = rs.value
-                ev["symbolic"] = str(exact)
-            # an exact 0, SymPy's or the claim's, is taken only with a symbolic certificate: numbers
-            # bound a value, they never show it is 0 (2π·I_50(1) = 1.8e-79 was certified 0), and SymPy
-            # integrates |cos x| over [-1, 1] to 0 (fourth audit of 1 Oct 2026, S1). Without SymPy's
-            # value, the certificate's own (an antiderivative checked by differentiation) is the exact
-            # value: numbers alone never accept (S2)
-            claimed_zero = isinstance(claimed, sp.Basic) and claimed.is_Rational and claimed == 0
-            proved = zero = False
-            if claimed_zero or exact is None or exact == 0:
-                cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)
-                ev["certificate"] = cev
-                if cval is not None:
-                    exact, proved = cval, True
-                    zero = certified_sign(cval, timeout=ctx.timeout) == 0
-                elif exact is not None and exact == 0:
-                    ev["symbolic_zero_uncertified"] = True
-                    exact = None
-
-            window = tolerance_window(claimed, declared) if declared else None
-
-            def excluded() -> bool:
-                # the claim (or its tolerance window) outside a rigorous enclosure of the integral
-                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5,
-                                            window=window)
-                ev["enclosure"] = xev
-                return no
-
-            def by_certificate():
-                # SymPy's value differs from the claim: a value proved symbolically decides, when there is one
-                cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)
-                ev["certificate_for_the_claim"] = cev
-                if cval is None:
-                    return None
-                if declared:
-                    return num_equal(claimed, sp.N(cval, 60), rel_tol=declared)[0]
-                return answers_equivalent(claimed, cval, shape="scalar")[0]
-
-            if exact is not None:
-                if zero:
-                    agree = True                   # a proof; the numbers are a residue around 0
-                elif proved:
-                    # a proof too, but a numeric value that contradicts it means something is wrong
-                    agree = not converged or num_equal(exact, val, rel_tol=tol)[0] is not False
-                    if not agree:
-                        return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
-                                       flags=["symbolic_numeric_disagreement"])
-                elif val is None:
-                    # no numeric value (an infinite range has no quadrature here): a value proved
-                    # symbolically still decides, ∫_0^oo e^-x dx = 1 by the fundamental theorem with
-                    # its end limits (coverage lost in the review of d4c, given back 6 Oct 2026)
-                    if (okC := by_certificate()) is None:
-                        return unknown(LAYER, "numeric_integration_failed", 0, ev, flags=ev.get("flags", []))
-                    agree = None
+            if rs.ok and isinstance(rs.value, sp.Basic):
+                ev["symbolic"] = str(rs.value)
+            # the value the certificate proves (an integrand 0, odd symmetry, the fundamental theorem with a
+            # primitive checked by differentiation and continuous on the range, pieces split where it jumps)
+            cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)
+            ev["certificate"] = cev
+            if cval is not None:
+                if converged and certified_sign(cval, timeout=ctx.timeout) != 0 and \
+                        num_equal(cval, val, rel_tol=float(ev.get("rel_err", "1e-25")))[0] is False and \
+                        not integral_excludes(integrand, var, a, b, val, timeout=ctx.timeout * 1.5)[0]:
+                    # a proof that a converged numeric value contradicts, and no rigorous enclosure that shows the
+                    # numeric value wrong: something is wrong (never the declared tolerance here: it let SymPy's
+                    # wrong value "agree", YO-2). A quadrature that missed a narrow peak (1/3 for ∫_0^1 (x² +
+                    # e^(-10^8 (x - 1/3)²)) dx, which the erf primitive proves) is shown wrong and the proof stands
+                    return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
+                                   flags=["symbolic_numeric_disagreement"])
+                ev["decided_by"] = "certified_value"
+                if declared is not None:
+                    ok = within_rel_tol(claimed, cval, declared, timeout=ctx.timeout)
+                    if ok is None:
+                        return unknown(LAYER, "relative_tolerance_undecided", t.ms, ev,
+                                       flags=["relative_tolerance_undecided"])
                 else:
-                    agree, _ = num_equal(exact, val, rel_tol=tol)
-                ev["symbolic_agrees_numeric"] = agree
-                if declared:
-                    # a declared tolerance means an approximate answer: compare with the exact value's
-                    # decimal expansion (two Rationals would be compared exactly, ignoring rel_tol)
-                    okS, sev = num_equal(claimed, sp.N(exact, 60), rel_tol=declared)
-                else:
-                    okS, sev = answers_equivalent(claimed, exact, shape="scalar")
-                ev["compare_exact"] = sev
-                if proved or (converged and agree is True and okS is not False):
-                    ok = okS
-                elif val is None or (okC := by_certificate()) is not None:
-                    ok = okC                       # a value proved symbolically decides
-                elif okS is False and excluded():
-                    # SymPy's value is no proof, and a quadrature that agrees with it may share its blind
-                    # spot (a narrow peak): a claim is refuted only outside a rigorous enclosure
-                    ok = False
-                else:
-                    # a numeric value that did not converge (x^(-999/1000) on [0,1]: 176.5 instead
-                    # of 1000) or that contradicts SymPy never decides alone
-                    reason = "numeric_not_converged" if not converged else \
-                        "symbolic_numeric_disagreement" if agree is not True else "claim_inside_the_rigorous_enclosure"
-                    return unknown(LAYER, reason, t.ms, ev, flags=[reason])
-            elif window is not None and integral_within(integrand, var, a, b, window, timeout=ctx.timeout * 1.5)[0]:
-                ok = True                          # a rigorous enclosure inside the declared tolerance
-                ev["decided_by"] = "rigorous_enclosure_within_tolerance"
-            elif excluded():
-                ok = False
+                    ok, sev = answers_equivalent(claimed, cval, shape="scalar")
+                    ev["compare_exact"] = sev
+            elif declared is not None:
+                # an approximate claim and no proved value: a rigorous enclosure inside the tolerance accepts,
+                # one outside it refutes
+                ok, tev = tolerance_by_enclosure(integrand, var, a, b, claimed, declared, timeout=ctx.timeout * 1.5)
+                ev["enclosure"] = tev
+                ev["decided_by"] = "rigorous_enclosure_and_tolerance"
+                if ok is None:
+                    return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])
             else:
-                # no exact value: a quadrature alone never accepts (it can miss a narrow peak at every
-                # level and report an error of 0: S2), and no rigorous enclosure decides
-                return unknown(LAYER, "no_exact_value", t.ms, ev, flags=["no_exact_value"])
+                # no value proved: a claim outside a rigorous enclosure is refuted, nothing is accepted
+                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5)
+                ev["enclosure"] = xev
+                if not no:
+                    return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])
+                ok = False
+                ev["decided_by"] = "rigorous_enclosure"
             conf = 0.99
         elif kind == "derivative":
             # a symbol a given or a declared constraint fixes is read as its value in f, the point and the

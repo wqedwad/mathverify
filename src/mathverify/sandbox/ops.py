@@ -49,6 +49,25 @@ def equals(a, b):
         return None
 
 
+def equals_false_at_every_seed(a, b, seeds=(0, 1, 2)) -> bool:
+    """Does SymPy's `equals` say False at every one of `seeds`? Its numeric tests draw random points, and it said
+    False at some seeds for the identity atan(x) - atan(x/2) = atan(x/(x**2 + 2)) on the real line (measured 7 Oct
+    2026): one False is no fact about the two expressions, a False that stands at every seed is taken as one."""
+    import sympy.core.random as sympy_random     # the generator `equals` draws from
+    state = sympy_random.rng.getstate()
+    try:
+        for seed in seeds:
+            sympy_random.seed(seed)
+            try:
+                if a.equals(b) is not False:
+                    return False
+            except Exception:  # noqa: BLE001
+                return False
+        return True
+    finally:
+        sympy_random.rng.setstate(state)
+
+
 def zero_test_battery(d):
     """Try several cheap canonicalisers on `d`; return True if any proves d == 0.
 
