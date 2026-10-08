@@ -179,6 +179,16 @@ def test_jumps_of_an_unproved_zero(e, claim, bad):                              
     assert _run(_ev(e), claim).verdict != bad
 
 
+def test_num_equal_does_not_read_a_jump_off_the_noise():                             # 56cec1d
+    # a Float side takes num_equal past its exact comparison, onto the precision ladder: ceiling(Z**2)
+    # evaluates to 1.0 there at every precision
+    from mathverify.equiv.numeric import num_equal
+    from mathverify.normalize.parse import parse_expr_str
+    e = parse_expr_str(f"ceiling(({Z})**2)")
+    assert num_equal(e, sp.Float(1.0))[0] is None and num_equal(e, sp.Float(0.0))[0] is None
+    assert num_equal(parse_expr_str("ceiling(sqrt(2))"), sp.Float(2.0))[0] is True
+
+
 @pytest.mark.parametrize("e,claim,want", [
     ("floor(pi)", "3", "CORRECT"), ("ceiling(log(8)/log(2))", "3", "CORRECT"), ("ceiling(log(8)/log(2))", "4", "INCORRECT"),
     ("Mod(7, 3)", "1", "CORRECT"), ("frac(pi)", "pi - 3", "CORRECT"), ("Piecewise((7, pi > 3), (0, pi <= 3))", "7", "CORRECT"),

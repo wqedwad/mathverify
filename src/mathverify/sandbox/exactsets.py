@@ -989,7 +989,7 @@ def _piecewise(rel, var, lo, hi):
             continue
         if _holds(type(rel), _real_sign(val)):
             pieces.append(sp.FiniteSet(p_))
-    out = exact_setop(sp.Union, pieces) if pieces else S.EmptySet
+    out = sp.Union(*pieces) if pieces else S.EmptySet
     return exact_intersection(out, _defined_by(conds, var, lo, hi)) if conds else out
 
 

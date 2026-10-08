@@ -2012,10 +2012,11 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins
         except Exception:  # noqa: BLE001
             return None
         if isinstance(s, sp.ConditionSet) or s.has(sp.ConditionSet):
-            # no proof that the condition holds on the whole region is no proof of definedness: the
-            # callers abstain only on True, and the maximum 0 of -(x - pi)**2 + (x + 1)Q/((x + 1)Q) - 1 on
-            # [2, 4] (undefined at pi) was certified (review of 2 Oct 2026, B5)
-            return True if at_risk(bad, var) else None
+            # no proof that the condition holds on the whole region is no proof of definedness: the maximum 0
+            # of -(x - pi)**2 + (x + 1)Q/((x + 1)Q) - 1 on [2, 4] (undefined at pi) was certified (review of
+            # 2 Oct 2026, B5). Undecided: every caller abstains on None as on True (d4e round 3), and a
+            # trigonometric condition read True here added nothing (round 9 of part d4b, mutation K10)
+            return None
         if s != S.EmptySet:
             return True
     return False
