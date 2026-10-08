@@ -1,0 +1,38 @@
+# d4b 10. tur: ana oturumun kararları (8 Ekim 2026; 9. tur saldırısının 6 gerçek bulgusu)
+Bulgular: d4/saldiri/d4b9/bulgular.json (saldırgan + bağımsız doğrulayıcı; fecc2be, taban e03ea1f). Önce yanlış onaylar.
+Kural mekanizmaya konur; "sertifikalı" denen her okuyucu gerçekten sertifikalı olmalı (ilke 4: sayısal eşitlik tek başına kanıt değil).
+
+- YO-1 (yüksek, 9. tur getirdi; kök önceden var): strict evalf yalnız SymPy'nin doğruluğu izlediği düğümlerde kanıttır (evalf_table:
+  Add, Mul, Pow, exp, log, sin, cos, tan, atan, Abs, re, im, floor, ceiling, Piecewise ve sayı sabitleri). Tablo dışındaki fonksiyon
+  düğümü (asin, acos, acot, sinh, cosh, tanh, asinh, acosh, atanh, erf, erfc, atan2, gamma, … her Function._eval_evalf yolu) argümanını
+  doğruluk izlemeden değerlendirip tam hassasiyet bildirir: kesin 0'ın asin/sinh/tanh'i ±1 işaret alıyordu. certified_sign ve onu
+  kullanan her yol (jump_value, exact_equal, _n2 koruması, Interval kurulumu, adım denetimleri): tablo dışı düğümün argümanı önce
+  sertifikalı okunur; argüman kesin 0 ise düğüm f(0)'ın kesin değeriyle (asin 0 = sinh 0 = tanh 0 = 0 …), değilse düğüm dışa yuvarlamalı
+  aralık aritmetiğiyle ya da tablo fonksiyonlarına kesin özdeş yeniden yazımla (tanh u = (e^{2u} − 1)/(e^{2u} + 1) gibi, tanım bölgesinde)
+  değerlendirilir; hiçbiri olmazsa kesin sıfır testi, o da yoksa kararsız (UNKNOWN). Beklenen: Q = log 6 − log 2 − log 3, A = atan(1/2)
+  + atan(1/3) − π/4, P = log 4 − 2 log 2, L = log 8/log 2 − 3, 2atan(1/3) − atan(3/4) (hepsi tam 0) ile: ceiling(asin Q) = floor(−sinh A)
+  = sign(asin Q) = 0; x = ceiling(asin Q) + 2 → {2}; x > 2 + tanh P iken x² = 4 → ∅; x·asin Q = 0 → ℝ; ceiling(sinh(L)²) = 0. Yanlış
+  iddialar (1, −1, {3}, {2}, {0}) CORRECT asla, yanlış adım ('sign(asin Q) = 1') verified asla; doğrular INCORRECT asla (A'lı vakalarda
+  exact_zero_test A = 0'ı kanıtlayamıyorsa UNKNOWN yeter).
+- YO-2 (orta, önceden var; 9. turun Piecewise korumasının kardeşi): sayılar arası ilişki SymPy'nin varsayım yedeği (is_gt/is_ge, _n2
+  None dönünce is_extended_positive(fark): strict olmayan evalf(2) ve yalnız _prec != 1 denetimi) üzerinden de karara bağlanamaz:
+  kapalı sayılar arasındaki ilişki ve Piecewise koşulu yalnız certified_sign (YO-1'e göre düzeltilmiş) ile karar verir, yoksa
+  değerlendirilmemiş kalır. Beklenen: Z = gd(1) − gd(1) ve L ile Piecewise((1, u > 0), (0, u ≤ 0)), u ∈ {sin(Z)², atan(Z)², sin(Z²),
+  tan(L²)}: 1 CORRECT asla, 0 INCORRECT asla, 'Pw = 1' adımı verified asla, 5·Pw + 2 = 7 ve x = Pw için {1} CORRECT asla;
+  x² + 1 = 0 için Interval(0, −tan(L²)) CORRECT asla.
+- RK-1 (yüksek, haksız ret, 9. tur getirdi): bir noktada tanımlılık o noktanın kesin değeriyle okunur, aralık kuralıyla (taban > 0)
+  değil: tam sayı üs ve sıfırdan farklı taban tanımlı ((−2)^(−2), (−1)^(−1)); 0^(pozitif) = 0 tanımlı; 0^0 geleneği (zero_power) →
+  kararsız; negatif tabanın tam sayı olmayan rasyonel üssü d4a geleneğine göre; 0^√2 için iki okuma çelişiyor (katı kural 0, yazılı okuma
+  belirsiz): o nokta kararsız. Yerine koymadan önce okunur (SymPy (x**x).subs(x, 0) = 1 geleneği siler). Beklenen: Q1 {−2, 2} CORRECT ya
+  da UNKNOWN, {2} INCORRECT ya da UNKNOWN; Q2 {−1} INCORRECT asla, ∅ CORRECT asla; Q4/Q6 (0^0) yalnız UNKNOWN; Q7 {2, 5} INCORRECT asla,
+  {5} CORRECT asla; Q8/Q9/Q10: {0, 2} CORRECT ya da UNKNOWN, {2} CORRECT asla; {−1, 3} INCORRECT asla, {−1} CORRECT asla.
+- RK-2 (düşük, kapsama, 9. tur getirdi): hassasiyet bütçesi ayrıştırmayı ve SymPy'nin varsayım sistemini düşürmez: bütçe aşımı yalnız
+  sertifikalı okuyucuda "kararsız" olur; katı olmayan çağrıya istisna sızmaz (parse_error, layer_exception yok). Gürültüden karar yine
+  yasak (YO-2). Beklenen (taban gibi): |…| = e^(−e^11) CORRECT, '1' ve '4' iddiaları INCORRECT (2 basamak yeter), Max(3, 3 + e^(−e^11))
+  doğru iddia CORRECT, x = |…| verilenle x + 1 → 1 INCORRECT, adım refuted, kısıtla {2} CORRECT, aralık iddiası INCORRECT.
+- RK-3 (düşük, süre, önceden var; 9. turun RK-3'ü süreyi uzattı): kesin küme işlemleri deterministik bütçeli (uç nokta/aralık sayısı ve
+  SymPy Union/Complement maliyeti); bütçe dolarsa kararsız (UNKNOWN) ve hızlı. 300 uç noktanın üstüne çıkan yol yalnız bütçe içinde.
+  Beklenen: sin x > 0, 0 ≤ x ≤ 1000 verilenli çözüm < 60 s, karar INCORRECT ya da UNKNOWN ({π/2} eksik: 159 nokta).
+- RK-4 (düşük, test): UNKNOWN'u kilitleyen iki test kararın yönünü sınar: FAR kısıtında {−3, 3} için verdict != CORRECT (gerekçe
+  denetimi yalnız UNKNOWN dönerse); max_{[0,3]}(x + 0·atan2(x − 1, 0)) = 3 için verdict != INCORRECT. Kanıtlı iyileştirme (kısıtın tek
+  başına uygulanabilen parçasıyla üst küme çürütmesi: −3 ∉ [3, ∞)) yapılabiliyorsa yap.

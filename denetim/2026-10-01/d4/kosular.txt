@@ -151,3 +151,8 @@ SP yeni: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scrat
   RecursionError'lu LaTeX adımı çürütülmüyor (yanlış onay), yalın ad etiketleri, kuyruk kapısı, tam sayı değerli polinom sınır, tutulan
   det payda; önceden var: ℂ söyleminde NO_VALUE/gelenek, kısıt/limit verileninin yazılı okunmaması, ∞ argümanlı işlemler, sıfır üs
   yazımları, ÇS şık okuması). Kararlar saldiri/d4f2/kararlar_tur3.txt. d4f 3. tur slot boşalınca (d4e 4. turdan sonra: aynı mekanizma).
+- 20:05 d4b9 saldırısı BİTTİ: 6 bulgu, 6 gerçek. YO-1 (yüksek, 9. tur getirdi: certified_sign evalf_table dışı fonksiyonların (asin,
+  sinh, tanh, erf, atan2) strict evalf'ine güveniyor; kesin 0'ın asin'i ±1 işaret alıyor), YO-2 (önceden var: is_gt/is_ge'nin
+  is_extended_positive yedeği _n2 korumasını atlıyor), RK-1 (yüksek haksız ret, 9. tur: noktada tanımlılık aralık kuralıyla), RK-2 (bütçe
+  istisnası ayrıştırmayı düşürüyor), RK-3 (sin x > 0 [0,1000] 219 s), RK-4 (UNKNOWN kilitleyen iki test). Kararlar
+  saldiri/d4b9/kararlar_tur10.txt. d4b 10. tur ilk boşalan worktree slotunda (öncelik), sonra d4f 3. tur.
