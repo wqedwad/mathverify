@@ -70,12 +70,11 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 4. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir): önce kalibrasyon (`run_f3
    --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
 5. **İsteğe bağlı / kullanıcı kararı:** yanlış onay direnci için daha zayıf ya da başka aileden çözücü (K4 e); yedek etiketleri (PR #3, #4, #9, #10,
-   #12, #13, #14 öncesi, §6); bulut önyükleyicisi 250 → 275 s (B1–B2); açık kapsama işleri (§4.2, V1–V16).
+   #12, #13, #14 öncesi, §6); bulut önyükleyicisi 250 → 275 s (B1–B2); açık kapsama işleri (§4.2, V1–V16); YKS 2025–2026 matematik ölçümü abonelikle, ayrı sohbette, birleştirmeden sonra (DECISIONS §87).
 
 ## 4. Açık maddeler (tam liste)
 
-Kaynak: arşivdeki §0.8–§0.14, §5–§7, §12, DECISIONS §53–§63 ve BULUT §12. Bir madde yalnız kapandığında,
-kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
+Kaynak: arşivdeki §0.8–§0.14, §5–§7, §12, DECISIONS §53–§63 ve BULUT §12. Bir madde yalnız kapandığında, kanıtıyla birlikte (DECISIONS'ta) buradan çıkarılır.
 
 ### 4.1 Bulut ve ortam
 
@@ -181,8 +180,9 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), (ters aralık noktasında ad
    Ekstremum/türev/seride tanımsız noktada çekimserlik yeter mi (V3)?
 6. Başka sağlayıcıyla (GPT/Gemini, `set_client_override`) ölçüm istenir mi?
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
-8. Depo açılacak/paylaşılacak mı? Açılırsa önce anahtarlar yenilenir, `.env` geçmişten temizlenir.
+8. **Karar (8 Ekim, DECISIONS §87): depo kimseyle paylaşılmayacak, açılmayacak.** Karar değişirse önce anahtarlar yenilenir; `.env` ve YKS kaynak PDF'leri geçmişten temizlenir.
 9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 5)?
+10. **Açık (8 Ekim, DECISIONS §87):** dördüncü denetimde durdurma kuralı. Öneri: d4b tur 9 + d4c tur 3, `--full`, birleştir; kalan yapay sınıflar geniş fail-closed kuralla UNKNOWN; birleşik hâle tek son saldırı, sonra kod dondurma ve F3/F4. Kullanıcı henüz karar vermedi.
 
 ### 4.5 Teknik borç
 
