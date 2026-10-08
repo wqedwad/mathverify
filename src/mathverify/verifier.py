@@ -473,31 +473,47 @@ def _claim_computes_integer_op(solution: Solution, ctx) -> LayerResult | None:
     """A gcd/lcm of numbers is evaluated by the parser, so a claim written as one is a computation the
     verifier would do itself (principle 2): for "evaluate gcd(84, 120)" the claims gcd(120, 84),
     igcd(84, 120) and \\gcd(84, 120) were certified; only the literal restatement was caught (GCD-10,
-    30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays."""
+    30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays.
+
+    The decision is read off the parse, not the text (fourth audit CAP-G1): a regex on the text missed
+    \\mathit{gcd}, \\mathbf{gcd}, \\textit{lcm}, \\textbf{gcd}, (gcd)(24, 18), and a closed gcd next to a symbol
+    (gcd(120, 84)*a, {gcd(120, 84)*a}) was taken because the claim as a whole was not closed. Every gcd/lcm the
+    parse of the claim computes from closed arguments (`normalize.parse.recording_integer_ops`) makes it one."""
+    from .normalize.parse import parse_answer, recording_integer_ops
     ca = solution.claimed_answer
-    texts = ca.payload if isinstance(ca.payload, list) else [ca.payload]
-    if any(_INTEGER_OP_TEXT.search(str(t)) for t in texts):
+    with recording_integer_ops() as computed:
         try:
-            closed = not getattr(ctx.claimed(solution), "free_symbols", {None})
+            parse_answer(ca.kind, ca.payload, ctx.claim_ns(solution))
         except LeakageError:
             raise
         except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
-            closed = False
-        if closed:
-            return unknown("intake.claim", f"claimed answer {ca.payload!r} computes a gcd/lcm, not a value",
-                           flags=["claim_is_not_a_value"])
+            pass
+    if computed:
+        return unknown("intake.claim", f"claimed answer {ca.payload!r} computes {computed[0]}, not a value",
+                       flags=["claim_is_not_a_value"])
     return None
 
 
-_INTEGER_OP_TEXT = re.compile(r"(?<![A-Za-z_])i?(?:gcd|lcm)\s*\(|\\(?:gcd|lcm)(?![A-Za-z])|"
-                              r"\\(?:operatorname|mathrm|text|textrm)\s*\{\s*(?:gcd|lcm)\s*\}")
+def _structure(text: str, ctx):
+    """`text` read as written for `_same_structure`. LaTeX is read by latex2sympy with evaluation off, its
+    binomial, factorial, gcd and lcm made the inert functions `formal.statement.structural_ns` writes: the
+    structural parse fell back to the evaluated one for LaTeX, so \\binom{6}{3} was 20 and the restatement of
+    "evaluate binomial(6, 3)" was certified while C(6, 3) was caught (fourth audit CAP-G1)."""
+    from .formal.statement import _INERT, parse_structural
+    from .normalize.parse import _latex_to_sympy, _strip_invisible, is_latex, strip_presentation
+    t = strip_presentation(_strip_invisible(text))
+    if not is_latex(t):
+        return parse_structural(text, ctx.ns)
+    with sp.evaluate(False):
+        e = _latex_to_sympy(t, ctx.ns)
+        return e.replace(lambda n: isinstance(n, sp.Function) and type(n).__name__ in _INERT,
+                         lambda n: sp.Function(type(n).__name__)(*n.args))
 
 
 def _same_structure(a: str, b: str, ctx) -> bool:
     """Same UNEVALUATED expression tree — `gcd(84, 120)` vs `gcd(84,120)`, but not `12`."""
     try:
-        from .formal.statement import parse_structural
-        ta, tb = parse_structural(a, ctx.ns), parse_structural(b, ctx.ns)
+        ta, tb = _structure(a, ctx), _structure(b, ctx)
     except Exception:  # noqa: BLE001
         return False
     try:

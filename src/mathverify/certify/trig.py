@@ -267,17 +267,47 @@ def _enumerate_window_of_interval(progs, window: Interval):
 _FAMILY_NAMES = ("n", "k", "m")
 
 
+def _one_family(e, ints: list):
+    """c + g·j (j over the integers) for an element c + a_1·t_1 + ... + a_r·t_r whose parameters t_i run over
+    the integers independently and whose coefficients are rational multiples of one another: the lattice
+    a_1·ℤ + ... + a_r·ℤ is g·ℤ with g = gcd(r_1, ..., r_r)·a for a_i = r_i·a (exact; {nπ + kπ} is πℤ,
+    {nπ/2 + kπ/3} is (π/6)ℤ). None for anything else (a parameter in a coefficient, a power of one,
+    incommensurable coefficients such as π and 1): no single family states it."""
+    # affine in the parameters: each derivative free of them (a power, a product, |n|, floor(n/2) keep one)
+    coeffs = [sp.diff(e, t) for t in ints]
+    if any(c.free_symbols & set(ints) for c in coeffs):
+        return None
+    c0 = e.subs({t: 0 for t in ints})
+    nonzero = [c for c in coeffs if c != 0]
+    if not nonzero:
+        return c0, None
+    ratios = [sp.cancel(c / nonzero[0]) for c in nonzero]
+    if not all(isinstance(r, sp.Rational) for r in ratios):
+        return None
+    g = sp.Rational(sp.gcd_list([r.p for r in ratios]), sp.lcm_list([r.q for r in ratios]))
+    return c0, g * nonzero[0]
+
+
 def general_solution_from_claim(claimed, ns) -> Any:
-    """Turn a claimed set whose elements contain the integer symbol n/k into ImageSets."""
+    """Turn a claimed set whose elements contain the integer symbol n/k into ImageSets. An element with two or
+    more family parameters is one family only when the lattice they span is (`_one_family`); otherwise None
+    (the certificate abstains). The first of them in `free_symbols` order was taken, a hash order: with
+    Symbol("n") as the family's variable, (nπ + kπ).subs(k, n) merged the two into 2πn, so {nπ + kπ} was
+    INCORRECT for sin x = 0 and CORRECT for cos x = 1 depending on PYTHONHASHSEED (fourth audit G11)."""
     if not isinstance(claimed, FiniteSet):
         return claimed
     parts = []
+    nn = sp.Symbol("n", integer=True)
     for e in claimed.args:
-        ints = [s_ for s_ in e.free_symbols if s_.name in _FAMILY_NAMES]
-        if ints:
-            n = ints[0]
-            nn = sp.Symbol("n", integer=True)
-            parts.append(ImageSet(Lambda(nn, e.subs(n, nn)), S.Integers))
+        ints = sorted((s_ for s_ in e.free_symbols if s_.name in _FAMILY_NAMES), key=lambda s_: s_.name)
+        if len(ints) > 1:
+            fam = _one_family(e, ints)
+            if fam is None:
+                return None
+            c0, step = fam
+            parts.append(FiniteSet(c0) if step is None else ImageSet(Lambda(nn, c0 + step * nn), S.Integers))
+        elif ints:
+            parts.append(ImageSet(Lambda(nn, e.subs(ints[0], nn)), S.Integers))
         else:
             parts.append(FiniteSet(e))
     return Union(*parts) if len(parts) > 1 else parts[0]
@@ -361,6 +391,8 @@ def verify(ir, solution, ctx: Ctx):
         conds += [c for c in definedness_conditions(rel, var)
                   if getattr(c, "free_symbols", set()) == {var} and c not in conds]
         claimed_g = general_solution_from_claim(claimed, ns2) if window is None else claimed
+        if claimed_g is None:
+            return unknown(LAYER, "family_parameters_not_one_family", t.ms, {"claimed": str(claimed)})
         region, unapplied = _region(ctx, var, eq_src)
         if region is None:
             return condition_not_applied(LAYER, unapplied, t.ms)

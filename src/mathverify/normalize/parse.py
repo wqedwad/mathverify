@@ -12,6 +12,7 @@ the caller is expected to run parsing inside the sandbox worker for untrusted te
 from __future__ import annotations
 
 import ast
+import contextvars
 import math
 import re
 import threading
@@ -170,15 +171,45 @@ class lcm(sp.Function):  # noqa: N801 - the name is the notation
         return True if all(a.is_integer for a in self.args) else None
 
 
+# the gcd/lcm calls a parse makes on numbers alone, while `recording_integer_ops` is active
+_INTEGER_OP_RECORD: contextvars.ContextVar = contextvars.ContextVar("integer_op_record", default=None)
+
+
+class recording_integer_ops:  # noqa: N801 - used as a context manager
+    """Within it, every gcd/lcm the parse computes from closed arguments (no free symbol) is recorded in the
+    list it yields: a claimed answer that makes the parse compute one is a computation, not a value
+    (GCD-10, principle 2), whatever its spelling (\\gcd, \\mathit{gcd}, \\textbf{lcm}, (gcd)(24, 18), igcd) and
+    wherever it stands (gcd(120, 84)*a); the text regex this replaced missed most of them (fourth audit
+    CAP-G1)."""
+
+    def __enter__(self) -> list:
+        self._seen: list = []
+        self._token = _INTEGER_OP_RECORD.set(self._seen)
+        return self._seen
+
+    def __exit__(self, *exc) -> None:
+        _INTEGER_OP_RECORD.reset(self._token)
+
+
+def _record_integer_op(name: str, args) -> None:
+    rec = _INTEGER_OP_RECORD.get()
+    if rec is not None and args and not any(getattr(a, "free_symbols", None) for a in args):
+        rec.append(f"{name}{tuple(args)}")
+
+
 def _integer_op(cls):
     """The callable the namespace gives for gcd/lcm: SymPy's `gcd([84, 120])` list form stays
     readable (the class itself takes the numbers as arguments)."""
     def call(*args):
         if len(args) == 1 and isinstance(args[0], (list, tuple, sp.Tuple)):
             args = tuple(args[0])
+        _record_integer_op(cls.__name__, args)
         return cls(*args)
     call.__name__ = cls.__name__
     return call
+
+
+_GCD_CALL, _LCM_CALL = _integer_op(gcd), _integer_op(lcm)
 
 
 def _integer_only_op(cls, name):
@@ -189,6 +220,7 @@ def _integer_only_op(cls, name):
         args = tuple(sympify_nontext(a) for a in args)
         if any(getattr(a, "is_integer", None) is not True for a in args):
             raise ValueError(f"{name} takes integers")
+        _record_integer_op(name, args)
         return cls(*args)
     call.__name__ = name
     return call
@@ -397,6 +429,16 @@ def binder_variables(e) -> set:
     return set()
 
 
+def rebuilt(e, args):
+    """`e` rebuilt from new `args` (evaluation as the caller's), but UNEVALUATED when `e` decides on the numeric
+    value of an argument (floor, Max, |·|, ...) and one holds a closed form: rebuilt evaluated, evalf decided it
+    (`_form_unevaluated`): floor(∫ + a) once a given fixed a, floor(Σ 1/k²) once the index became an integer."""
+    if isinstance(e, _DECIDING) and has_closed_form_node(args):
+        with sp.evaluate(False):
+            return e.func(*args)
+    return e.func(*args)
+
+
 def substitute_free(expr, mapping: dict):
     """`expr` with the FREE occurrences of the symbols of `mapping` replaced: never a variable an
     enclosing operator binds (`binder_variables`), whose own range or point is still substituted.
@@ -415,7 +457,7 @@ def substitute_free(expr, mapping: dict):
         bound = binder_variables(e)
         inner = {s_: v for s_, v in sub.items() if s_ not in bound} if bound else sub
         args = [walk(a, inner) for a in e.args]
-        return e.func(*args) if any(a is not b for a, b in zip(args, e.args)) else e
+        return rebuilt(e, args) if any(a is not b for a, b in zip(args, e.args)) else e
 
     return walk(expr, dict(mapping))
 
@@ -430,7 +472,9 @@ def hold_parametric(expr, pins: dict | None = None, protected=()):
     with the given x = 2 the constant 8/3, so 0 was certified for both (fourth audit P1). Such a form
     raises PinnedBoundVariable: whether the value goes in before or after the operator is a reading
     of the problem, and the verifier abstains on it (part d4d)."""
-    if not isinstance(expr, sp.Basic) or not expr.has(sp.Integral, sp.Limit):
+    if not isinstance(expr, sp.Basic):
+        return map_entries(expr, lambda e: hold_parametric(e, pins, protected))
+    if not expr.has(sp.Integral, sp.Limit):
         return expr
     pins = pins or {}
     protected = frozenset(protected or ())
@@ -441,7 +485,7 @@ def hold_parametric(expr, pins: dict | None = None, protected=()):
         inner = bound | binder_variables(e)
         args = [walk(a, inner) for a in e.args]
         if any(a is not b for a, b in zip(args, e.args)):
-            e = e.func(*args)
+            e = rebuilt(e, args)
         if isinstance(e, (sp.Integral, sp.Limit)):
             own = binder_variables(e)
             blocked = sorted(str(s_) for s_ in pins if s_ in e.free_symbols and s_ not in own
@@ -457,10 +501,130 @@ def hold_parametric(expr, pins: dict | None = None, protected=()):
 
 def _hold_value(out, pins, protected=()):
     """A value parse's result with its parametric forms held (`hold_parametric`), on each side of a
-    relation (rebuilt unevaluated, `_on_sides`); anything without an Integral or a Limit unchanged."""
-    if not isinstance(out, sp.Basic) or not out.has(sp.Integral, sp.Limit):
+    relation (rebuilt unevaluated, `_on_sides`), in each entry of a matrix, list or tuple (`map_entries`);
+    anything without an Integral or a Limit unchanged. A Matrix is no Basic: Matrix([[Limit(a*n*sin(pi/n),
+    n, oo)]]) with a = 2 kept the plain limit, the evaluate certificate's simplify took SymPy's 0 for it,
+    and Matrix([[0]]) was certified (fourth audit H1)."""
+    if not isinstance(out, sp.Basic):
+        return map_entries(out, lambda e: _hold_value(e, pins, protected))
+    if not out.has(sp.Integral, sp.Limit):
         return out
     return _on_sides(out, lambda e: hold_parametric(e, pins, protected))
+
+
+# the forms whose value only `equiv.forms.checked_forms` takes (numbers confirm SymPy's)
+FORM_TYPES = (sp.Integral, sp.Sum, sp.Product, sp.Limit)
+
+
+def map_entries(obj, f):
+    """`f` applied to each entry of a matrix (`applyfunc`, same class), a list or a tuple (recursively), or
+    to `obj` itself when it is a Basic; anything else unchanged. The containers a parse returns that are
+    no Basic: Matrix(...) and the Python list or tuple of a bracketed text."""
+    if isinstance(obj, sp.MatrixBase):
+        return obj.applyfunc(f)
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(map_entries(x, f) for x in obj)
+    if isinstance(obj, sp.Basic):
+        return f(obj)
+    return obj
+
+
+def entries(obj) -> list:
+    """The Basic entries of `obj` (a matrix, a list or a tuple, recursively), or [obj] for a Basic."""
+    if isinstance(obj, sp.MatrixBase):
+        return [x for x in obj if isinstance(x, sp.Basic)]
+    if isinstance(obj, (list, tuple)):
+        return [y for x in obj for y in entries(x)]
+    return [obj] if isinstance(obj, sp.Basic) else []
+
+
+def contains_form(obj) -> bool:
+    """Does `obj` (any container a parse builds) hold an Integral, a Sum, a Product or a Limit?"""
+    return any(e.has(*FORM_TYPES) for e in entries(obj))
+
+
+def _form_kept(fn):
+    """`fn`, a rewrite that keeps the value (simplify, expand, factor, ...), except on an argument that holds
+    an Integral, a Sum, a Product or a Limit: that argument is returned as written, its value is the one
+    numbers confirm later (`equiv.forms.checked_forms`). SymPy's simplify ends with doit: inside a problem's
+    text simplify(Limit(n*sin(pi/n), n, oo)) was SymPy's 0 with n an integer (the limit is pi),
+    simplify(2*Integral(Abs(cos(x)), (x, -1, 1))) 0 (it is 4 sin 1), the value was taken unconfirmed and 0
+    was certified; read as written under evaluation off the same call ran for 35-130 s (fourth audit F1).
+    A form held from doit (HeldIntegral) is no help: simplify rebuilds a Sum as a plain one and sums it."""
+    def call(*args, **kwargs):
+        if args and contains_form(list(args)):
+            return args[0]
+        return fn(*args, **kwargs)
+    call.__name__ = getattr(fn, "__name__", "rewrite")
+    return call
+
+
+def has_closed_form_node(obj) -> bool:
+    """Does `obj` (any container a parse builds) hold an Integral, Sum, Product or Limit with no free symbol?"""
+    return any(isinstance(n, FORM_TYPES) and not n.free_symbols
+               for e in entries(obj) if e.has(*FORM_TYPES) for n in sp.preorder_traversal(e))
+
+
+# the helpers whose value DECIDES on the numeric value of an argument (its integer part, its sign, which
+# argument is larger, whether a relation holds)
+_DECIDING = (sp.floor, sp.ceiling, sp.frac, sp.sign, sp.Abs, sp.Max, sp.Min, sp.Mod, sp.re, sp.im, sp.arg,
+             sp.conjugate, sp.atan2, sp.Piecewise, sp.core.relational.Relational)
+
+
+class _ClassCall:
+    """A namespace helper standing for SymPy's class `base`: called, it runs `call`; named bare it is `base`
+    itself (`_sympy_`). The parameter which = "min" is read as written with the problem's namespace, and a
+    plain function in Min's place could not be sympified: every extremum task abstained (review, part d4h)."""
+
+    def __init__(self, base, call):
+        self._base, self._call = base, call
+        self.__name__ = base.__name__
+
+    def __call__(self, *args, **kwargs):
+        return self._call(*args, **kwargs)
+
+    def _sympy_(self):
+        return self._base
+
+
+def _form_unevaluated(cls):
+    """SymPy's `cls`, a helper whose value decides on the numeric value of its argument (floor, Max, sign,
+    ...), built UNEVALUATED over a closed Integral, Sum, Product or Limit: SymPy decides it with evalf, and
+    evalf misses the peak of ∫_{-1}^{1} 1000·exp(-10⁶(x - 1/3)²) dx = √π·erf(...) ≈ 1.77, so its floor was 0 and
+    certified (claim 0 CORRECT, the true 1 INCORRECT), ceiling 1 and Max(∫, 1) = 1 too, while the integral alone
+    is UNKNOWN: its value is never confirmed (fourth audit F1, review of part d4h). Built unevaluated the form
+    stays, and `equiv.forms.checked_forms` takes its value, confirmed by numbers, before anything decides."""
+    def call(*args, **kwargs):
+        if has_closed_form_node(list(args)):
+            with sp.evaluate(False):
+                return cls(*args, **kwargs)
+        return cls(*args, **kwargs)
+    return _ClassCall(cls, call)
+
+
+def _matrix_decision(name: str, fn):
+    """A helper whose value DECIDES on the entries of a matrix (rank: which entries are 0; eigmax/eigmin:
+    which eigenvalues are real): refused (ParseError) on a matrix that holds a form, whose value SymPy
+    decided unconfirmed (the rank of [[L, 1], [L, 2]] with L = lim n·sin(π/n) was 1: SymPy's 0 for L; an
+    eigenvalue ∫_{-1}^{1}|cos x| dx, of undecided realness, was dropped from eigmax), and on an eigenvalue
+    whose realness SymPy does not decide (it was dropped, not read)."""
+    def call(m, *args, **kwargs):
+        mat = sp.Matrix(m)
+        if contains_form(mat):
+            raise ParseError(f"{name} of a matrix holding an integral, sum, product or limit: not read")
+        return fn(mat, *args, **kwargs)
+    call.__name__ = name
+    return call
+
+
+def _real_eigen(pick):
+    def value(mat):
+        ev = list(mat.eigenvals())
+        real = [k.is_real for k in ev]
+        if any(r is None for r in real):
+            raise ParseError(f"an eigenvalue of {mat} whose realness is not decided: not read")
+        return pick(*[k for k, r in zip(ev, real) if r])
+    return value
 
 
 def _limit(e, v, p, d=None):
@@ -544,22 +708,22 @@ _SAFE_NAMES: dict[str, Any] = {
     "real_root": _real_root,
     "Abs": sp.Abs, "abs": sp.Abs, "floor": sp.floor, "ceiling": sp.ceiling, "ceil": sp.ceiling,
     "frac": sp.frac, "sign": sp.sign, "Mod": sp.Mod, "mod": sp.Mod,
-    "gcd": _integer_op(gcd), "lcm": _integer_op(lcm), "igcd": _integer_only_op(gcd, "igcd"),
+    "gcd": _GCD_CALL, "lcm": _LCM_CALL, "igcd": _integer_only_op(gcd, "igcd"),
     "ilcm": _integer_only_op(lcm, "ilcm"),
     "factorial": sp.factorial, "binomial": sp.binomial, "C": sp.binomial, "comb": sp.binomial,
     "P": _perm, "perm": _perm, "deg": _deg,
     "dist": _dist, "slope": _slope, "tri_area": _tri_area, "dot": _dot, "point_line_dist": _point_line_dist,
     "at": _at,                                               # at(diff(f(x), x), x, 1)
-    "eigmax": lambda m: sp.Max(*[k for k in sp.Matrix(m).eigenvals() if k.is_real]),
-    "eigmin": lambda m: sp.Min(*[k for k in sp.Matrix(m).eigenvals() if k.is_real]),
-    "trace": lambda m: sp.Matrix(m).trace(), "rank": lambda m: sp.Matrix(m).rank(),
+    "eigmax": _matrix_decision("eigmax", _real_eigen(sp.Max)),
+    "eigmin": _matrix_decision("eigmin", _real_eigen(sp.Min)),
+    "trace": lambda m: sp.Matrix(m).trace(), "rank": _matrix_decision("rank", lambda m: m.rank()),
     "Max": sp.Max, "Min": sp.Min, "max": sp.Max, "min": sp.Min,
     "re": sp.re, "im": sp.im, "conjugate": sp.conjugate, "arg": sp.arg,
     # calculus (unevaluated forms allowed in step claims)
     "Sum": sp.Sum, "Product": sp.Product, "Integral": sp.Integral, "Derivative": sp.Derivative,
     "Limit": _Limit, "diff": sp.diff, "integrate": _integrate, "limit": _limit,
     # numbers
-    "Rational": Rational, "Integer": Integer, "Float": sp.Float, "S": S, "nsimplify": sp.nsimplify,
+    "Rational": Rational, "Integer": Integer, "Float": sp.Float, "S": S, "nsimplify": _form_kept(sp.nsimplify),
     # relations / logic
     "Eq": Eq, "Ne": Ne, "Lt": Lt, "Le": Le, "Gt": Gt, "Ge": Ge, "And": And, "Or": Or, "Not": Not,
     "Piecewise": sp.Piecewise,
@@ -572,10 +736,16 @@ _SAFE_NAMES: dict[str, Any] = {
     "Matrix": sp.Matrix, "det": lambda m: sp.Matrix(m).det(), "eye": sp.eye, "zeros": sp.zeros,
     "Transpose": sp.Transpose,
     # polynomials / algebra helpers (pure, no solving)
-    "expand": sp.expand, "factor": sp.factor, "simplify": sp.simplify, "cancel": sp.cancel,
-    "together": sp.together, "apart": sp.apart, "Poly": sp.Poly, "degree": sp.degree,
+    "expand": _form_kept(sp.expand), "factor": _form_kept(sp.factor), "simplify": _form_kept(sp.simplify),
+    "cancel": _form_kept(sp.cancel), "together": _form_kept(sp.together), "apart": _form_kept(sp.apart),
+    "Poly": sp.Poly, "degree": sp.degree,
     "Symbol": Symbol, "symbols": sp.symbols,
 }
+# the value-deciding helpers are built unevaluated over a closed form (`_form_unevaluated`)
+for _name in ("Abs", "abs", "floor", "ceiling", "ceil", "frac", "sign", "Mod", "mod", "Max", "Min", "max", "min",
+              "re", "im", "conjugate", "arg", "atan2", "Piecewise", "Eq", "Ne", "Lt", "Le", "Gt", "Ge"):
+    _SAFE_NAMES[_name] = _form_unevaluated(_SAFE_NAMES[_name])
+del _name
 
 # ----------------------------------------------------------------------------
 # claims are values, not computations
@@ -1448,7 +1618,17 @@ def _integer_indices(expr):
             if all(b.is_integer or b in (sp.oo, -sp.oo) for b in lim[1:]):
                 reps[lim[0]] = Symbol(lim[0].name, integer=True)
         return n.xreplace(reps) if reps else n
-    return expr.replace(lambda n: isinstance(n, (sp.Sum, sp.Product)), upgrade)
+
+    def walk(e):
+        # bottom up, as `replace` does; a floor or Max over the upgraded sum is rebuilt unevaluated: rebuilt
+        # evaluated, evalf decided floor(Σ_{k≥1} 1/k²) at parse (`rebuilt`, review of part d4h)
+        if not isinstance(e, sp.Basic) or not e.has(sp.Sum, sp.Product):
+            return e
+        args = [walk(a) for a in e.args]
+        if any(a is not b for a, b in zip(args, e.args)):
+            e = rebuilt(e, args)
+        return upgrade(e) if isinstance(e, (sp.Sum, sp.Product)) else e
+    return walk(expr)
 
 
 def _refuse_reversed_ranges(expr, raw: str) -> None:
@@ -1744,6 +1924,95 @@ def _refuse_latex_integer_calculus(expr, ns: dict[str, Any], raw: str) -> None:
                                  "integer: not read")
 
 
+_LATEX_FRAC = re.compile(r"\\[dt]?frac(?![A-Za-z])")
+_LATEX_UPRIGHT_D = re.compile(r"\\(?:mathrm|operatorname|text|textrm|mathit)\s*\{\s*d\s*\}")
+_LEIBNIZ_DEN = re.compile(r"d([A-Za-z]\w*?)(?:\^(?:\{\d+\}|\d))?")
+_LEIBNIZ_NUM = re.compile(r"d(\^(?:\{\d+\}|\d))?(.*)", re.S)
+
+
+def _latex_group(s: str, i: int) -> tuple[str | None, int]:
+    """The argument of a LaTeX command starting at s[i] (a brace group, a control word or one character) and
+    the index after it; None when there is none."""
+    while i < len(s) and s[i].isspace():
+        i += 1
+    if i >= len(s):
+        return None, i
+    if s[i] == "{":
+        depth = 0
+        for j in range(i, len(s)):
+            depth += {"{": 1, "}": -1}.get(s[j], 0)
+            if depth == 0:
+                return s[i + 1:j], j + 1
+        return None, len(s)
+    m = re.match(r"\\[A-Za-z]+", s[i:])
+    return (m.group(0), i + m.end()) if m else (s[i], i + 1)
+
+
+def _leibniz_names(num: str, den: str) -> set | None:
+    """The names latex2sympy's PRODUCT reading of \\frac{num}{den} takes when the fraction is a derivative in
+    Leibniz notation (d/dx, d^2/dn^2, dy/dx): d and dn for d^2/dn^2. None when it is no such fraction."""
+    num = re.sub(r"\s+", "", _LATEX_UPRIGHT_D.sub("d", num))
+    den = re.sub(r"\s+", "", _LATEX_UPRIGHT_D.sub("d", den))
+    mden, mnum = _LEIBNIZ_DEN.fullmatch(den), _LEIBNIZ_NUM.fullmatch(num)
+    if mden is None or mnum is None:
+        return None
+    rest = mnum.group(2)
+    head = "d" + rest if mnum.group(1) is None and re.fullmatch(r"[A-Za-z]\w*", rest or "-") else "d"
+    return {head, "d" + mden.group(1)}
+
+
+def _refuse_leibniz_products(s: str, ns: dict[str, Any]) -> None:
+    """ParseError for a derivative written in Leibniz notation whose product reading is a valid expression of
+    the problem: with d and dn declared, latex2sympy reads \\frac{d^2}{dn^2}(n \\sin(\\pi n)) as the product
+    d**2*n*sin(pi*n)/dn**2, 0 for n an integer, and 0 was certified for a second derivative that is 2π(-1)^n
+    (fourth audit I2; with the names undeclared `_check_symbols_declared` refuses it, V17). The text is a
+    derivative or a product of declared symbols: the verifier does not choose."""
+    for m in _LATEX_FRAC.finditer(s):
+        num, i = _latex_group(s, m.end())
+        den, _ = _latex_group(s, i) if num is not None else (None, i)
+        names = _leibniz_names(num, den) if num is not None and den is not None else None
+        if names and all(isinstance(ns.get(n), Symbol) for n in names):
+            raise ParseError(f"LaTeX {s!r}: \\frac{{{num}}}{{{den}}} is a derivative or the product of the declared "
+                             f"{sorted(names)}: not read")
+
+
+def _set_relations(st, el):
+    """`el ∈ st` as relations for an interval, a finite set or a union of those, no infinite bound written
+    (x ∈ [1, oo) is x >= 1, x ∈ R no condition)."""
+    if isinstance(st, Union):
+        return Or(*[_set_relations(p, el) for p in st.args])
+    if isinstance(st, FiniteSet):
+        return Or(*[Eq(el, a) for a in st.args])
+    if not isinstance(st, Interval):
+        return sp.Contains(el, st, evaluate=False)
+    return And(*_interval_conditions(st, el, ""))
+
+
+def _latex_membership(expr):
+    """latex2sympy writes `x \\in S` as Eq(x, S) and `x \\notin S` as Not(Eq(x, S)): SymPy reads both as the
+    EQUALITY of a number and a set, false for every x, so rebinding the symbols folded `x \\notin [0, 3]` to
+    True; as a function's domain it restricted nothing and {-2, 2} was certified for f(x) = 5 with
+    f = x² + 1 (fourth audit D1). Read here as the membership it is (Contains: an interval turns it into
+    relations on x, `x \\notin [0, 3]` into x < 0 ∨ x > 3); one no relation states stays a Contains, which the
+    condition readers refuse or read themselves."""
+    if not isinstance(expr, sp.Basic) or not expr.has(sp.Set):
+        return expr
+
+    def member(n):
+        return isinstance(n, Eq) and isinstance(n.lhs, sp.Set) != isinstance(n.rhs, sp.Set)
+
+    def condition(eq, negated: bool):
+        el, st = (eq.lhs, eq.rhs) if isinstance(eq.rhs, sp.Set) else (eq.rhs, eq.lhs)
+        if negated and isinstance(st, FiniteSet):
+            return And(*[Ne(el, a) for a in st.args])
+        if all(isinstance(p, (Interval, FiniteSet)) for p in (st.args if isinstance(st, Union) else (st,))):
+            return _set_relations(Complement(S.Reals, st) if negated else st, el)
+        c = sp.Contains(el, st, evaluate=False)
+        return Not(c) if negated else c
+    expr = expr.replace(lambda n: isinstance(n, Not) and member(n.args[0]), lambda n: condition(n.args[0], True))
+    return expr.replace(member, lambda n: condition(n, False))
+
+
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
     _refuse_latex_ranges(s)
@@ -1754,9 +2023,11 @@ def _latex_to_sympy(s: str, ns: dict[str, Any]):
     # second derivative that is 2*pi*(-1)**n there (V17, parca5)
     _check_symbols_declared(expr, ns, s)
     _refuse_latex_integer_calculus(expr, ns, s)
+    _refuse_leibniz_products(s, ns)
     if isinstance(expr, sp.Basic):
         from sympy.core.function import AppliedUndef
-        ops = {"gcd": gcd, "lcm": lcm}
+        expr = _latex_membership(expr)
+        ops = {"gcd": _GCD_CALL, "lcm": _LCM_CALL}
 
         def convert(e):
             e = e.replace(lambda n: isinstance(n, AppliedUndef) and n.func.__name__ in _LATEX_INTEGER_OPS,
@@ -2310,6 +2581,8 @@ def read_domain_condition(spec: str, argsyms: list, ns: dict[str, Any]):
     else:
         pieces, latex = _split_domain(preclean(strip_presentation(_strip_invisible(spec)))), False
     conds: list = []
+    # per piece: (argument, set) for a set, None for relations; the arguments it names; whether it only excludes
+    read: list = []
     for p in pieces:
         if not p:
             raise ParseError(f"domain {spec!r} has an empty part")
@@ -2321,18 +2594,59 @@ def read_domain_condition(spec: str, argsyms: list, ns: dict[str, Any]):
             v = argsyms[0] if name is None else next((a for a in argsyms if a.name == name), None)
             if v is None:
                 raise ParseError(f"domain {spec!r}: {name} is not an argument")
-            found = _interval_conditions(parse_set_str(set_txt, ns), v, spec)
+            st = parse_set_str(set_txt, ns)
+            found = _interval_conditions(st, v, spec)
+            read.append(((v, st), {v}, False))
         else:
+            # LaTeX `x \notin [0, 3]` is x < 0 ∨ x > 3 (`_latex_membership`), no relation list: not read
             rel = _conjunction(parse_relation(p, ns), spec)
             found = [] if rel is None else list(rel.args if isinstance(rel, And) else (rel,))
+            read.append((None, {s_ for c in found for s_ in c.free_symbols} & set(argsyms),
+                         bool(found) and all(isinstance(c, Ne) for c in found)))
         for c in found:
             if not c.free_symbols & set(argsyms):
                 raise ParseError(f"domain {spec!r}: {c} is not a condition on the arguments")
             if c not in conds:
                 conds.append(c)
+    _refuse_set_lists(read, spec)
     if not conds:
         return None
+    if len(pieces) > 1 and len(argsyms) == 1:
+        _refuse_empty_list(conds, argsyms[0], spec)
     return _conjunction(conds[0] if len(conds) == 1 else And(*conds), spec)
+
+
+def _refuse_empty_list(conds: list, v, spec: str) -> None:
+    """ParseError when the conditions a domain LISTS (`x < -1, x > 1`, `x < -1 and x > 1`) hold for no number:
+    read as all holding, a list meant as "x < -1 or x > 1" was the empty domain, and {} was certified for
+    f(x) = 5 and 0 roots for f(x) - 5 (fourth audit D2). A declared domain no number is in is no problem's;
+    the verifier abstains (decided exactly, `sandbox.exactsets`; undecided, the conditions are kept)."""
+    from ..sandbox.exactsets import exact_solveset
+    try:
+        dom = S.Reals
+        for c in conds:
+            dom = Intersection(dom, exact_solveset(c, v, S.Reals))
+        empty = dom.is_empty
+    except Exception:  # noqa: BLE001 - undecided: the conditions are read as they are
+        return
+    if empty is True:
+        raise ParseError(f"domain {spec!r} lists conditions no number meets: a union or an intersection, not read")
+
+
+def _refuse_set_lists(read: list, spec: str) -> None:
+    """ParseError when a domain lists a set next to another condition on the same argument
+    (`(-oo, -1), (1, oo)`, `(0, 3) and (4, 5)`, `x in (0, 3), x in (1, 5)`, `(0, 3), x > 1`): a list of
+    intervals is a union as often as an intersection, and read as the intersection the domain was empty and
+    {} certified for f(x) = 5 with f = x² + 1 (fourth audit D2). Read as all holding: the same set twice (either
+    reading), relations alone (`x > 0, x < 3`, DECISIONS §76 (ii)) and a set with exclusions only
+    (`x in [0, 3), x != 1`: as a union, the line or the line without a point, no domain a text lists so)."""
+    for i, (key, names, _) in enumerate(read):
+        if key is None:
+            continue
+        for j, (other, onames, excludes) in enumerate(read):
+            if j != i and names & onames and other != key and not (other is None and excludes):
+                raise ParseError(f"domain {spec!r} lists a set next to another condition on {key[0]}: "
+                                 "a union or an intersection, not read")
 
 
 _OR_JOIN_RE = re.compile(r"\s+or\s+|\s*∨\s*|\s*\|\|\s*|(?<=\))\s*\|\s*(?=\()")
@@ -2362,9 +2676,8 @@ def _condition_atom(c, spec: str):
         return c
     if isinstance(c, (And, Or)):
         return type(c)(*[_condition_atom(a, spec) for a in c.args])
-    if isinstance(c, Eq) and isinstance(c.lhs, Symbol) and isinstance(c.rhs, sp.Set):
-        # LaTeX `x \in (0, 3)` reads as Eq(x, set)
-        return sp.Contains(c.lhs, _reals_set(c.rhs, spec), evaluate=False)
+    # LaTeX `x \in (0, 3)` is read as membership by the parse itself (`_latex_membership`, part d4h); an
+    # equation between a number and a set (`x = Interval(0, 3)`) is no condition here
     if isinstance(c, sp.Contains) and isinstance(c.args[1], sp.Set):
         return sp.Contains(c.args[0], _reals_set(c.args[1], spec), evaluate=False)
     if isinstance(c, sp.core.relational.Relational) and isinstance(c.lhs, sp.Expr) and isinstance(c.rhs, sp.Expr):
@@ -2422,7 +2735,8 @@ def read_condition(spec: str, ns: dict[str, Any]):
         raise ParseError(f"not a condition: {type(spec).__name__}")
     if is_latex(spec):
         refuse_congruence(spec)
-        m = _LATEX_NOTIN_RE.match(spec)
+        # `$x \notin \mathbb{Z}$` too: the delimiters kept the text from the reading, and the given was not applied
+        m = _LATEX_NOTIN_RE.match(strip_presentation(_strip_invisible(spec)))
         if m is not None:
             return _not_in(m.group(1), m.group(2), ns, spec)
         return not_collapsed(_condition_atom(parse_relation(spec, ns), spec), spec, ns)
