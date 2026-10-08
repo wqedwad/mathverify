@@ -939,14 +939,16 @@ def _dirichlet_test(g, t, end) -> bool:
     real out there, tending to 0 and eventually monotone (h'/h a rational function of t has one sign from some
     point on: t**q times a rational function). Then ∫ g converges there, not absolutely: sin(t)/t, cos(t)/sqrt(t).
     Read as absolute convergence only, the Dirichlet integral was undefined as written and a true step about it
-    went unchecked (d4c, measured after the attack on d4e, YO-2). sin(t)**2/t is no such product."""
+    went unchecked (d4c, measured after the attack on d4e, YO-2). sin(t)**2/t is no such product. h holds no other
+    symbol: SymPy's limit of t/(x**2*t**2 + 1) is 0 for a generic x, not at x = 0, where ∫ t*sin(t) diverges (attack
+    on d4e round 3, D4E3-YO-1)."""
     for osc in g.atoms(sp.sin, sp.cos):
         arg = osc.args[0]
         k = sp.diff(arg, t)
         if not (k.is_number and k.is_real is True and k.is_zero is False and sp.diff(arg, t, 2) == 0):
             continue
         h = sp.simplify(g / osc)
-        if t not in h.free_symbols or h.atoms(sp.Function):
+        if h.free_symbols != {t} or h.atoms(sp.Function):
             continue
         side = sp.Dummy("s", positive=True)
         hs = h.subs(t, side if end == oo else -side)
@@ -977,7 +979,7 @@ def integrable_near(g, t, c, side) -> bool:
 def _integrand_on(body, x, d):
     """The integrand on a real dummy for its bound variable, evaluated; None when it holds an IR function's marker.
     Another symbol is read for all its values by `majorant` (a symbol of undeclared sign: the task's variable in
-    ∫_0^oo e^(-t)*(x + t), round 3 RK-4; one not declared real has no bound) and `_dirichlet_test` (real only)."""
+    ∫_0^oo e^(-t)*(x + t), round 3 RK-4; one not declared real has no bound); `_dirichlet_test` takes none."""
     t = sp.Dummy(d.name, real=True)
     try:
         with sp.evaluate(False):

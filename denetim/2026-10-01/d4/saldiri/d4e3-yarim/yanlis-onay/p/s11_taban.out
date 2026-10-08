@@ -1,0 +1,15 @@
+ok  UNKNOWN   None        1.1s CU solve x**2 = 1/4, given x + 0*tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]  ['problem_definedness_undecided'] []
+Timeout is disabled as timeout_seconds is None or <= 0, you must provide                         the logic for timeout interuption yourself to prevent code getting stuck.
+BAD CORRECT   None        0.3s CU limit |x|/x at 0, given x + 0*tan(acot(2) + acot(1/2)) > 0: 1  [] ['certify.limits:pass:']
+BAD CORRECT   None        0.3s CU solve x**2 = 1/4, constraint x + 0*tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]  [] ['certify.algebra:pass:', 'certify.wordproblem:pass:']
+BAD CORRECT   None        0.1s CU limit |x|/x at 0, constraint x + 0*tan(acot(2) + acot(1/2)) > 0: 1  [] ['certify.limits:pass:']
+BAD CORRECT   None        0.1s CU solve x**2 = 1/4, dod x + 0*tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]  [] ['certify.algebra:pass:', 'certify.wordproblem:pass:']
+BAD CORRECT   None        0.1s CU limit |x|/x at 0, dod x + 0*tan(acot(2) + acot(1/2)) > 0: 1  [] ['certify.limits:pass:']
+ok  UNKNOWN   None        0.2s CU solve x**2 = 1/4, given x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]  ['problem_definedness_undecided'] []
+BAD CORRECT   None        0.2s CU limit |x|/x at 0, given x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: 1  [] ['certify.limits:pass:']
+BAD CORRECT   None        0.2s CU solve x**2 = 1/4, constraint x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]  [] ['certify.algebra:pass:', 'certify.wordproblem:pass:']
+BAD CORRECT   None        0.2s CU limit |x|/x at 0, constraint x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: 1  [] ['certify.limits:pass:']
+BAD CORRECT   None        0.2s CU solve x**2 = 1/4, dod x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: {1/2} [condition undefined as written]  [] ['certify.algebra:pass:', 'certify.wordproblem:pass:']
+BAD CORRECT   None        0.1s CU limit |x|/x at 0, dod x*tan(acot(2) + acot(1/2))/tan(acot(2) + acot(1/2)) > 0: 1  [] ['certify.limits:pass:']
+BAD INCORRECT None        0.0s GW limit |x - 1|/(x - 1)... ctrl given 0*Integral(1/t, (t, x, 1)) >= 0: 1 [right]  [] ['certify.limits:fail:']
+13 cases, 11 not as expected, 3 s

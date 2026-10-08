@@ -1,0 +1,106 @@
+# d4h düzeltme notları (ayrıştırıcı: F1, H1, D1, D2, I2, CAP-G1, G11)
+
+## Matematik kararları
+
+- **F1** (yeniden üretildi, ec62a68): `simplify(Limit(n*sin(pi/n), n, oo))` (n pozitif tam sayı) 0 CORRECT, 62-71 s.
+  Doğrusu π (mpmath: n=1e12'de 3.14159265358979...; sin(π/n) ~ π/n). ∫_{-1}^{1}|cos x|dx = 2 sin 1 = 1.68294196961579
+  (cos [-1,1]'de pozitif); SymPy `simplify(2*Integral(|cos|))` 0 veriyor. ∫_0^1 dx/(x²+1) = π/4; ∫_0^2 tan ıraksak.
+  Karar: sarmalayıcı (simplify, nsimplify, expand, ... ) içindeki Limit/Integral/Sum ayrıştırmada hesaplatılmaz;
+  hold_parametric/checked_forms her kapsayıcıda geçerli. Değer doğrulanamıyorsa UNKNOWN; yanlış 0 asla CORRECT.
+  Takılma (35-130 s) hesaplatmayarak kapanır.
+- **H1** (yeniden üretildi): `Matrix([[Limit(a*n*sin(pi/n), n, oo)]])`, a=2: Matrix([[0]]) CORRECT, [[2π]] INCORRECT.
+  Doğrusu [[2π]] (lim 2n sin(π/n) = 2π, tam sayı n'de de). Karar: Matrix girdilerindeki Limit/Integral/Sum da
+  skaler gibi tutulur ve checked_forms denetiminden geçer; doğrulanamıyorsa UNKNOWN, [[0]] asla CORRECT, [[2π]]
+  asla INCORRECT. (Kapalı Matrix([[Limit(n sin(π/n))]]) ec62a68'de zaten UNKNOWN.)
+- **D1** (doğrulanmış): `x \notin [0,3]` küme dışlamasıdır; x²+1=5 kökleri ±2, 2∈[0,3] → cevap {-2}. Fonksiyon tanım
+  kümesinde LaTeX `\notin` ya koşul olarak okunur (x<0 ∨ x>3) ya da okunamıyorsa UNKNOWN; sabit True/False'a
+  inemez. Değişken adlı bir metnin True/False'a çökmesi okunamama sayılır (d4d'nin `not_collapsed` ilkesi) —
+  domain okuyucusunda ve `_latex_to_sympy`'nin sembol yeniden bağlamasında (Not düğümü subs ile katlanıyor).
+- **D2** (doğrulanmış): `(-oo,-1), (1,oo)` gibi aralık/küme listesi birleşim de olabilir (gelenek): UNKNOWN.
+  Birleşimle (-oo,-1)∪(1,oo) üzerinde x²+1=5 → {-2,2}; kesişimle ∅. Parçalar özdeşse (aynı aralık iki kez) okuma
+  ikisinde de aynı → karar verilebilir. Parçalar değişken üzerine ilişkiyse (`x > 0, x < 3`) bağlaç = kesişim
+  (DECISIONS §76(ii), d4d kararı). Karışık liste (aralık + ilişki) da belirsiz → UNKNOWN.
+- **I2** (yeniden üretildi): d, dn bildirilmişken `\frac{d^2}{dn^2}(n \sin(\pi n))` 0 CORRECT. Doğrusu
+  (n sin πn)'' = 2π cos πn − π² n sin πn; tam sayı n'de 2π(−1)ⁿ ≠ 0. Yazım hem türev hem d²·(...)/dn² çarpımı
+  okunabilir: d ya da dn (dx, d...) adları bildirilmişken türev biçimli LaTeX kesri → UNKNOWN.
+- **CAP-G1** (doğrulanmış): değerler doğru (12, 20) ama ilke 2 (doğrulayıcı gcd/lcm'i kendisi hesaplıyor). Sayıların
+  gcd/lcm'ini hesaplayan iddia yazımdan bağımsız UNKNOWN (claim_is_not_a_value): \mathit/\mathbf/\textit/\textbf/
+  \textnormal{gcd}, (gcd)(..), sembolle çarpılmış kapalı gcd (gcd(120,84)*a). Denetim ayrıştırılmış ağaçta (kapalı
+  sayı argümanlı gcd/lcm alt terimi), metin regex'inde değil. \binom{6}{3}: binomial, COMPUTING_OPERATORS'ta mı ona
+  göre (binom yalnız o kapsama göre); hedefin aynen yeniden yazımı olarak §28 kuralı.
+- **G11** (doğrulanmış): {an + bk : n,k∈ℤ} = gcd(a,b)ℤ (pencere sayımıyla doğrulandı). İki aile parametreli
+  c + aπn + bπk: a,b tam sayı (π'nin rasyonel katı) ise kesin kafes indirgemesi c + gcd(a,b)π·j tek aileye iner
+  → karşılaştırılır ({nπ+kπ} = {jπ} sin x=0 için CORRECT, cos x=1 için INCORRECT). İnmiyorsa (rasyonel olmayan
+  oran, doğrusal olmayan) UNKNOWN. Seçim free_symbols sırasına bağlı olmaz; PYTHONHASHSEED 0..7 aynı karar.
+
+## İlerleme
+- [x] worktree ec62a68'e ileri sarıldı (reset --hard izin almadı; ff-only).
+- [x] yeniden üretim: sonda/r_hizli.py, r_yavas.py (ec62a68).
+- [x] (10:07) F1/H1 kodu yazıldı (commit edilmemişti, 07:00 oturum sınırı): parse.py `_form_kept` (simplify/expand/factor/
+  cancel/together/apart/nsimplify form tutan argümanı olduğu gibi döndürür), `_form_unevaluated` (floor/ceiling/Max/Min/
+  sign/Abs/Mod/re/im/arg/atan2/Piecewise/Eq.. kapalı form üzerinde değerlendirmesiz), `_float` (kapalı formun Float'ı
+  ParseError), `_matrix_decision` (rank/eigmax/eigmin form tutan matriste ParseError; özdeğer gerçelliği belirsizse
+  ParseError), `map_entries`/`entries`/`contains_form`/`has_closed_form_node`, `_hold_value`/`hold_parametric`
+  kapsayıcı-duyarlı, hold_parametric ve substitute_free yürüyüşünde karar veren ebeveyn değerlendirmesiz yeniden kurulur.
+  forms.py has_closed_form/has_parametric_form/checked_forms kapsayıcı-duyarlı.
+- Yeni kardeş bulgu (ölçüldü, ec62a68): floor(∫_{-1}^{1} 1000 e^{-10^6(x-1/3)^2}dx) = 1 (√π≈1.77) ama ayrıştırma evalf
+  ile 0 → claim 0 CORRECT; ceiling 1 CORRECT (doğrusu 2); Max(∫,1)=1 CORRECT. Düzeltme sonrası UNKNOWN (sonda/x_spike.py).
+- Gerileme araştırılıyor: tests/test_audit_2026_09_29_v14.py iki extremum testi (Abs(x)-x**2 min [0,2] = -2 CORRECT
+  bekleniyor, UNKNOWN çıkıyor). Oturum dalı artık 62a40e9 (ec62a68 + d4b 8. tur): sonda `git merge 62a40e9`.
+- (10:20) Gerileme düzeldi: `which: "min"` parse_as_written ile okununca sarmalayıcı fonksiyon sympify edilemiyordu →
+  `_ClassCall` (çağrılınca sarmalayıcı, çıplak adda `_sympy_` ile SymPy sınıfı). 5 test dosyası geçti.
+- COMMIT İZNİ REDDEDİLDİ (otomatik sınıflandırıcı "Modify Shared Resources"; reset --hard da reddedilmişti). Yeniden
+  denenmeyecek; değişiklikler çalışma ağacında, yedek yama `yama_*.diff`. Son raporda ana oturuma bildir.
+- (10:22) worktree `git merge --ff-only 62a40e9` (ileri sarma, commit yok): taban artık 62a40e9. 62a40e9 parse.py/forms.py'ye
+  dokunmuyor.
+- (10:45) D1/D2/I2/CAP-G1/G11 kodu yazıldı (yedek yama_tum.diff): parse.py `_latex_membership` (Eq(x,S)->Contains, Ne->Not
+  Contains; `\notin [0,3]` -> x<0 v x>3), `_refuse_leibniz_products` (Leibniz kesrinin çarpım okuması adları hepsi
+  bildirilmişse ParseError), read_domain_condition: not_collapsed, `_refuse_set_lists` (aynı argümanda küme parçası +
+  başka parça, özdeş değilse), `_refuse_empty_list` (çok parçalı liste boş küme -> ParseError: YENİ ANLAM KARARI, en
+  temkinlisi; raporla), `recording_integer_ops` (gcd/lcm çağrı kaydı, LaTeX convert de _GCD_CALL ile); verifier.py
+  `_claim_computes_integer_op` kayıtla, `_INTEGER_OP_TEXT` kaldırıldı, `_structure` (LaTeX değerlendirmesiz + inert);
+  trig.py `_one_family` (gcd kafes indirgemesi), tohumdan bağımsız (g11_seeds.py 0..7: 19/19 beklenen).
+- r_hizli.py: hepsi beklenen (D2 'x < -1, x > 1' boş liste -> UNKNOWN eklendi).
+- Sıradaki: ilgili testler, sonda.py (denetim/2026-10-01/d4h/), testler, mutasyon (commit yok: kopya ağaçta), fark.
+- (11:10) D2 karışık: küme + yalnız dışlama (x != c) parçaları kesişim (test_parca2'nin `x in [0, 3), x != 1` kararı korunur);
+  küme + başka ilişki (x > 1) aynı argümanda -> UNKNOWN (yeni, temkinli). Domain okuyucusundaki not_collapsed kaldırıldı
+  (x \in \mathbb{R} doğru biçimde True=kısıt yok; \notin artık Or -> _conjunction reddeder).
+- sonda: worktree denetim/2026-10-01/d4h/sonda.py; test: tests/test_d4_d4h_ayristirici.py (henüz koşulmadı).
+- eski kopya: $SP/d4/duzeltme/d4h/eski (ec62a68 + yeni sonda/test kopyası; .env içerir, bitince SİL). sonda_once.* koşuyor.
+- (11:45) `_latex_membership` artık aralık/sonlu küme/birleşimi ilişkiye çevirir (`_set_relations`, sonsuz uç yazılmaz;
+  \notin {c} -> Ne): `x \in [1, oo)` alan okunur (x >= 1), `x \in \mathbb{R}` -> True (verilende not_collapsed -> UNKNOWN,
+  küçük kapsama kaybı). d4d M03 (_condition_atom Eq-küme dalı) ve N05 (_LATEX_NOTIN_RE) artık ölü/gereksiz olabilir -> kontrol et.
+- _one_family'deki expand doğrusallık denetimi kaldırıldı (türevler parametreden bağımsızsa afin; gereksizdi).
+- Yeni test dosyası 104 test geçti. sonda sonra: 301 durum, 2 beklenti hatası düzeltildi (gcd*a+0, rank kontrolü UNK:
+  rank Python int döndürür -> layer_exception, ec62a68'de de; kapsam dışı).
+- \lfloor\frac{17}{5}\rfloor yeniden yazımı açık bırakıldı (latex Rational vs metin Mul; 1/2 hedeflerinde karar değişir).
+- pyflakes: yalnız önceden var olan sandbox/pool.py:206 (noqa ısınma importu).
+- (12:20) `_set_relations` _interval_conditions'ı kullanır; `_condition_atom`'un Eq(x, küme) dalı silindi (ölü; metin
+  `x = Interval(...)` artık okunmaz); read_condition notin regex'i `$...$`'ı soyarak uygular (`$x \notin \mathbb{Z}$` artık
+  uygulanır). d4d mutasyon listesi: M03 kaldırıldı (yorumla), N05 deseni + testi d4h dosyasına yönlendirildi.
+- mutasyon: denetim/2026-10-01/d4h/mutasyon.py (39 mutasyon, ÇALIŞMA AĞACI kopyası; commit yok). Başkasının listesini
+  çalışma ağacında koşmak için: $SP/d4/duzeltme/d4h/mut_baska.py <parça> [adlar].
+- Testler: yeni dosya + d4d geçti. fark1 koşuyor (fark_calistir.sh, sıralı, kaldığı yerden). Bu sırada src'ye DOKUNMA.
+- (10:46 gerçek saat; önceki saat damgaları yanlış) `rebuilt(e, args)` ortak yardımcı: hold_parametric, substitute_free ve
+  `_integer_indices` (replace yerine yürüyüş) karar veren ebeveyni kapalı form üzerinde değerlendirmesiz kurar
+  (floor(Sum(1/k**2)) evalf ile 1'e iniyordu; LaTeX \lfloor\sum\rfloor da). `_refuse_latex_decided` denendi, ulaşılamaz
+  çıktı, kaldırıldı. Mutasyon listesi 41. Testler (d4h, d4d, parca2/4/5, v14) geçti.
+- fark2 koşuyor (son kod). fark1 (eski ara kod) f1+f2 taban'a göre: karar 0, adım 3 (ayt-lim-001/005/011 s1 unknown->verified;
+  62a40e9 dökümüyle karşılaştırıp ata).
+- SIRADA: sonda_once bitince G grubu yeniden (etiket değişti), mutasyon koşusu, öteki sondalar, tam takım, G11 seeds önce.
+- (10:52) Bekleyen: fark2 (bjy2q5uhr), sonda_once (bp0qjnkyu). Sonra: once_say.py ile önce sayımı (+ G,K gruplarını eski
+  kopyada sonda_son.py ile yeniden), sonda sonra, mutasyon -j 2, öteki sondalar, tam takım, eski kopyada yeni testler,
+  g11_seeds önce. Evalset/K4'te LaTeX iddia yok (x_evalset.py): _same_structure değişikliği fark'ı etkilemez.
+- (11:55) fark2 (son kod) taban'a göre: karar 0, ilk kötü adım 0, adım 86, etiket 0; 62a40e9 dökümüne göre: HEPSİ 0 (86 adım
+  farkı 62a40e9'da da var, başka parçalardan). sonda önce (ec62a68): 301 durumda 186 beklenmeyen (A31 B8 C6 D32 E70 F8 G22 H9,
+  K0); sonra: 0 (78 s).
+- (16:24) Koordinatör iki kez "ara commit at" dedi: commit otomatik sınıflandırıcı tarafından reddedilmişti (aynı sonuç başka
+  yolla denenmez); YAPILMADI, raporda bildirilecek. Yedek: yama_tum.diff + yedek_yeni/ (sonda, mutasyon, test).
+- SIRADA: mutasyon (-j 2), eski kopyada yeni testler (kaçı düşer), öteki sondalar (d4a..d4g), tam takım, g11 seeds önce.
+- (16:45) mutasyon 1. tam koşu: 41'de 39 öldü; D03 (Float koruması) yaşadı: sp.Float formu zaten reddediyor (TypeError ->
+  ParseError) -> `_float` kaldırıldı (gereksiz); D37 (katsayıda parametre) yaşadı -> test eklendi ((n+k)^2 pi: katsayılar
+  eşit oran 1 ama parametreli). Son tam koşu (40 mutasyon) mutasyon2.log'da koşuyor. Bundan sonra src DEĞİŞMEYECEK.
+- (21:31) SON AĞAÇ: 62a40e9 + yama_tum.diff sha256 e251733eb7e066b57e79d3f414de78e526819111a77c015377998e5f24c2f3f2
+  (yama_yaz.sh üretir; 8 dosya, yama_dosyalar.txt). Son tam mutasyon (bu ağaç, `_float` kaldırılmış): 40/40 öldü.
+  fark2 ve sonda_sonra `_float` varken koştu (Float davranışı aynı: sp.Float formu zaten reddediyor) -> sonda sonra yeniden.
+- SIRADA: sonda sonra (yeniden), eski kopyada yeni testler, öteki sondalar, tam takım, g11 tohumları önce.

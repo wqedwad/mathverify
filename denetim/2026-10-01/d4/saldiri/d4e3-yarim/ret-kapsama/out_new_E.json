@@ -1,0 +1,536 @@
+[
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t)*sin(t), (t, 0, oo)): 1/2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.8
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t)*sin(t), (t, 0, oo)): 1/2 + 1 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'numeric'}",
+  "s": 0.1
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(sin(t)/t, (t, 0, oo)): pi/2",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 1.0
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(sin(t)/t, (t, 0, oo)): pi/2 + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 0.7
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(cos(t)/(1 + t**2), (t, 0, oo)): pi/(2*E)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 1.1
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(cos(t)/(1 + t**2), (t, 0, oo)): pi/(2*E) + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 1.2
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t)*cos(t)**2, (t, 0, oo)): 3/5",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.9
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t)*cos(t)**2, (t, 0, oo)): 3/5 + 1 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'numeric'}",
+  "s": 0.4
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t)*floor(t), (t, 0, oo)): 1/(E - 1)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 0.2
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t)*floor(t), (t, 0, oo)): 1/(E - 1) + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 0.1
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(sin(t)**2/t**2, (t, 0, oo)): pi/2",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 0.8
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(sin(t)**2/t**2, (t, 0, oo)): pi/2 + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "no_givens",
+  "s": 0.8
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t**2)*cos(t), (t, -oo, oo)): sqrt(pi)*exp(-1/4)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.3
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(exp(-t**2)*cos(t), (t, -oo, oo)): sqrt(pi)*exp(-1/4) + 1 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'numeric'}",
+  "s": 0.2
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(t*exp(-t)*sin(t), (t, 0, oo)): 1/2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "E",
+  "label": "evaluate Integral(t*exp(-t)*sin(t), (t, 0, oo)): 1/2 + 1 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'numeric'}",
+  "s": 0.2
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)/(2 + sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)/(sin(t) + 2), (t, 0, oo))",
+  "s": 1.3
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)/(2 + sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)/(sin(t) + 2), (t, 0, oo))",
+  "s": 1.2
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*Abs(sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*Abs(sin(t)), (t, 0, oo))",
+  "s": 0.2
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*Abs(sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*Abs(sin(t)), (t, 0, oo))",
+  "s": 0.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(sin(t)/t**2, (t, 1, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: no numeric value checks SymPy's value of Integral(sin(t)/t**2, (t, 1, oo))",
+  "s": 2.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(sin(t)/t**2, (t, 1, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: no numeric value checks SymPy's value of Integral(sin(t)/t**2, (t, 1, oo))",
+  "s": 2.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*Max(sin(t), 0), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*Max(sin(t), 0), (t, 0, oo))']",
+  "s": 0.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*Max(sin(t), 0), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*Max(sin(t), 0), (t, 0, oo))']",
+  "s": 0.0
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*log(2 + sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*log(2 + sin(t)), (t, 0, oo))']",
+  "s": 0.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*log(2 + sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*log(2 + sin(t)), (t, 0, oo))']",
+  "s": 0.0
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*atan(sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*atan(sin(t)), (t, 0, oo))']",
+  "s": 0.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*atan(sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*atan(sin(t)), (t, 0, oo))']",
+  "s": 0.0
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(log(t)*sin(t)/t**3, (t, 1, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: no numeric value checks SymPy's value of Integral(log(t)*sin(t)/t**3, (t, 1, oo))",
+  "s": 2.9
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(log(t)*sin(t)/t**3, (t, 1, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: no numeric value checks SymPy's value of Integral(log(t)*sin(t)/t**3, (t, 1, oo))",
+  "s": 2.8
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(1/(t**2 + cos(t)**2), (t, 1, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(1/(t**2 + cos(t)**2), (t, 1, oo))']",
+  "s": 0.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(1/(t**2 + cos(t)**2), (t, 1, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(1/(t**2 + cos(t)**2), (t, 1, oo))']",
+  "s": 0.0
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sign(sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*sign(sin(t)), (t, 0, oo))",
+  "s": 0.4
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sign(sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*sign(sin(t)), (t, 0, oo))",
+  "s": 0.2
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sin(t)**3/(1 + cos(t)**2), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*sin(t)**3/(cos(t)**2 + 1), (t, 0, oo))",
+  "s": 11.3
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sin(t)**3/(1 + cos(t)**2), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*sin(t)**3/(cos(t)**2 + 1), (t, 0, oo))",
+  "s": 7.3
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(sin(1/t), (t, 0, 1)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: no numeric value checks SymPy's value of Integral(sin(1/t), (t, 0, 1))",
+  "s": 1.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(sin(1/t), (t, 0, 1)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: no numeric value checks SymPy's value of Integral(sin(1/t), (t, 0, 1))",
+  "s": 0.9
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sin(t)**2/(2 - cos(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*sin(t)**2/(2 - cos(t)), (t, 0, oo))",
+  "s": 5.3
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sin(t)**2/(2 - cos(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*sin(t)**2/(2 - cos(t)), (t, 0, oo))",
+  "s": 5.5
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sqrt(1 + sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(sqrt(sin(t) + 1)*exp(-t), (t, 0, oo))",
+  "s": 1.9
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*sqrt(1 + sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(sqrt(sin(t) + 1)*exp(-t), (t, 0, oo))",
+  "s": 1.6
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*cos(sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*cos(sin(t)), (t, 0, oo))",
+  "s": 16.5
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*cos(sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*cos(sin(t)), (t, 0, oo))",
+  "s": 17.1
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*exp(sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*exp(sin(t)), (t, 0, oo))",
+  "s": 1.9
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*exp(sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)*exp(sin(t)), (t, 0, oo))",
+  "s": 1.3
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*(2 + sin(t))**(-1/2), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)/sqrt(sin(t) + 2), (t, 0, oo))",
+  "s": 0.8
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*(2 + sin(t))**(-1/2), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: a closed form with no confirmed value: SymPy has no closed value for Integral(exp(-t)/sqrt(sin(t) + 2), (t, 0, oo))",
+  "s": 0.6
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*tanh(sin(t)), (t, 0, oo)): 2*x",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*tanh(sin(t)), (t, 0, oo))']",
+  "s": 0.0
+ },
+ {
+  "group": "E",
+  "label": "derivative x**2 + Integral(exp(-t)*tanh(sin(t)), (t, 0, oo)): 2*x + 1 [wrong]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reason": "problem_definedness_undecided: ['x**2 + Integral(exp(-t)*tanh(sin(t)), (t, 0, oo))']",
+  "s": 0.0
+ }
+]

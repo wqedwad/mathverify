@@ -1,0 +1,19 @@
+# d4b 9. tur: ana oturumun kararları (7 Ekim 2026; 8. tur saldırısının 10 gerçek bulgusu)
+Bulgular: d4/saldiri/d4b8/bulgular.json. YO-3 (ekstremum 40 basamak) d4c 3. turda (aynı mekanizma, d4c2 YO-1); YO-2 (yazılı koşul
+None → tanımlı: extremum/series_sum) d4e 3. turda (d4e2 YO-2 ile aynı mekanizma). Bu turda bunlara dokunma (yalnız çakışmayı birleşmede çöz).
+- YO-1 (high, 8. tur getirdi): Ctx.domain_for (ve bütün kısıt/verilen kesişim döngüleri) kesişimdeki istisnayı yutup kısıtı düşüremez:
+  kısıt unapplied/unsolved olarak işaretlenir, karar UNKNOWN. exact_equal/certified_sign simetrik olmalı (sign(a−b) kararsız ama
+  sign(b−a) kesinse onu kullan; ikisi çelişirse kararsız). Kodda aynı "try: kesişim ... except: pass" kalıbının bütün yerlerini ara ve
+  fail-closed yap. Beklenen: x ≤ log(8)/log(2) + e^(−e^10), x ≥ 3 iken x² = 4 için ∅ CORRECT ya da UNKNOWN, {−2, 2} asla CORRECT;
+  max(−x²) = −9; ters kısıt sırasında aynı karar.
+- YO-4 (önceden var): sıçramalı fonksiyon (ceiling, floor, sign, frac, Heaviside) argümanı kanıtla sıfır/tam sayı değilse ya da kanıtla
+  öyle değilse değeri SymPy'nin sayısal değerlendirmesinden okunmaz (ayrıştırmada ceiling(Z²) → 1 dahil): kararsız → UNKNOWN.
+- RK-1 (kapsama): hücrede ilişkinin sıfırı kesimle aynı sayı başka yazımla çıkınca same_value ile tek yazıma indir: |x−3|(2^x−8) ≤ 0 → doğru küme.
+- RK-2 (kapsama): çözülemeyen yazılı tanım koşulu alana ConditionSet olarak girince örnekleyici iddianın tanımsız bölgesine de bakabilsin
+  (koşulu noktada kesin değerlendirerek örnek nokta seç): "tanım kümesini unutma" türü yanlış cevaplar INCORRECT (tabandaki gibi).
+- RK-3 (kapsama): exact_setop'un 300 noktalı unify_endpoints sınırı: büyük sonlu kümelerde kesin sıralama yolu ya da sınırın üstünde eski
+  davranış (kanıtlı); 300–400 noktalı kesin kümeler count_roots'ta CORRECT kalsın.
+- RK-4 (kapsama): _on_points sonlu alanda factorial/Mod/(−1)^x koşullarını noktada kesin değerlendirsin (_Unsolved değil).
+- RK-5 (kapsama): Convention('origin') koşulu türev/ekstremum/limit sertifikalarında üyelik koşulu sayılıp çekimser bıraktırmasın, verilen
+  (y ≠ 0) ya da bölge operandın sıfırdan farklılığını kanıtlıyorsa koşul tutulur.
+- RK-6 (sağlamlık): _sample_inequality'nin ret örneklemesi PYTHONHASHSEED'den bağımsız ve deterministik bütçeli (2–62 s salınım yok).

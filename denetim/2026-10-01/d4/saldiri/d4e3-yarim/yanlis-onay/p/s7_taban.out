@@ -1,0 +1,13 @@
+Timeout is disabled as timeout_seconds is None or <= 0, you must provide                         the logic for timeout interuption yourself to prevent code getting stuck.
+BAD CORRECT   None        1.3s PIN cf a(n) = a(n-1)/c, a(1) = 1, 2*c = 0: c**(1 - n) [division by 0]  [] ['certify.series:pass:']
+ok  UNKNOWN   None        0.0s PIN rt a(n) = a(n-1)/c, a(1) = 1, 2*c = 0, a(3): 0 [division by 0]  [] ['certify.series:unknown:recurrence_definedness_undecided_at_2']
+ok  UNKNOWN   None        0.0s PIN rt a(n) = a(n-1)*(n - c)/(n - c), a(1) = 1, c - 2 = 0, a(3): 1 [0/0 at n = 2]  [] ['certify.series:unknown:recurrence_definedness_undecided_at_2']
+ok  UNKNOWN   None        0.1s PIN cf a(n) = a(n-1)*(n - c)/(n - c), a(1) = 1, 2*c = 4: 1 [0/0 at n = 2]  [] ['certify.series:unknown:recurrence_definedness_undecided']
+BAD INCORRECT None        0.1s PIN rt a(n) = c*a(n-1), a(1) = 1, c**2 = 4, c < 0, a(3): 4 [right]  [] ['certify.series:fail:']
+ok  INCORRECT None        0.1s PIN rt a(n) = c*a(n-1), a(1) = 1, c**2 = 4, c < 0, a(3): -4 [wrong]  [] ['certify.series:fail:']
+BAD INCORRECT None        0.1s PIN rt a(n) = c*a(n-1), a(1) = 1, c**2 = 4, a(3): 4 [right for both]  [] ['certify.series:fail:']
+ok  INCORRECT None        0.1s PIN rt a(n) = c*a(n-1), a(1) = 1, c**2 = 4, a(4): 8 [c = -2 gives -8]  [] ['certify.series:fail:']
+ok  INCORRECT None        0.1s PIN series c*k, k=1..3, c**2 = 4: 12 [c = -2 gives -12]  [] ['certify.series:fail:']
+BAD INCORRECT None        0.1s PIN series c**k, k=0..2, c**3 = 8: 7 [right]  [] ['certify.series:fail:']
+ok  UNKNOWN   None        0.0s PIN series c**k, k=0..2, c**4 = 16: 7 [c = -2 gives 3]  ['parameter_condition_not_proved'] []
+11 cases, 4 not as expected, 2 s

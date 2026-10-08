@@ -132,3 +132,55 @@
 - a6495e3 B1 commit. Siradaki B2-B5 exactsets (_piecewise uclar, _function_conditions, RK-2, _on_points, _rebuilt exact_intersection)
 - B2 6358e27, B3 commit (exactsets bitti, r8direct hepsi beklenen). Siradaki C: domain origin + relation_holds_at, base domain_for, algebra ineq
 - 7a118dc C (guvenlik aglari) commit. Siradaki: karar duzeyi olcum (saldirgan sondalari d4b7), testler
+- saldirgan sondalari: tabana gore gerileme E10/E11 -> truth exact_intersection ile duzeldi (commit). Siradaki: testler, mutasyon desenleri, sonda K
+- testler+mutasyon commit; Z mutasyonlari kosuluyor (mutz.log)
+- mutasyon turu commit (Z11 kaldirildi, Z17/_on_window uc/domain_for exact). Siradaki: Z mutasyonlarini tekrar, sonda K, final15
+- sonda K commit. Siradaki: final15 (sondalar 7 parca + K@f1b + eski test @f1b + saldirgan + mut d4b/d4a + fark f1b + pytest)
+- final15 basladi 01:36 (yuk 6.8)
+- [05:00 sonrasi] final15 oldu (sondalar a/b/d/e/f/g 0, K@f1b 31/37; d4c bitmedi). Oturum dali eedd182: merge edilecek, olcumler birlesikte.
+- c43244d merge eedd182 (catisma yok). Siradaki: hizli testler sonra final16
+- final16 basladi (f16/, final16.log) HEAD c43244d
+- K@f1b: 11 yanlis onay, 9 haksiz ret, 11 kapsama (31/37)
+- final16: sondalar a/b/d/e/f/g 0 (d4b 436), K@f1b 31/37, eski f1b 50 FAILED
+- d4c 0/203. Saldirgan sondalari + mutasyon kosuyor
+- saldirgan: tabana gore gerileme 0, 60 duzeldi, 20 BAD tabanda da BAD; repro_all hepsi beklenen
+- mut d4b 131/131 @c43244d
+- mut d4a 51/51. fark kosuyor (3 dokum)
+- fark: taban->HEAD 0/86 (onceki ile ayni), eedd182->HEAD 0/0/0/0, f1b1c94->HEAD 0/0/0/0. pytest kosuyor
+- pytest 3864 gecti/93 atlandi/1 dustu (d4f test_g14 binomial(x,3)/x**3); pyflakes 6. Arastiriliyor
+- g14 tek basina kosuldu: 5/5 gecti (yuk altinda sure butcesi). [BITTI 8. tur] HEAD c43244d.
+
+## 9. tur matematik kararları (ana oturum, kararlar_tur9.md; 8. tur saldırısı 10 bulgu)
+- YO-3 (ekstremum 40 basamak) d4c 3. turda, YO-2 (yazılı koşul None → tanımlı: extremum/series_sum) d4e 3. turda kapatılıyor: dokunma, yalnız sondada ölç.
+- YO-1 (high): domain_for ve bütün kısıt/verilen kesişim döngüleri kesişimdeki istisnayı yutup kısıtı düşüremez; kısıt
+  unapplied/unsolved, karar UNKNOWN. exact_equal/certified_sign simetrik (sign(a−b) kararsız, sign(b−a) kesin → onu kullan;
+  çelişirse kararsız). Bütün "try: kesişim ... except: pass" yerleri fail-closed. x ≤ log(8)/log(2) + e^(−e^10), x ≥ 3 iken
+  x² = 4 için ∅ CORRECT ya da UNKNOWN, {−2, 2} asla CORRECT; max(−x²) = −9; ters kısıt sırasında aynı karar.
+  Matematik: log 8 = 3 log 2 → NEAR = 3 + e^(−e^10), ε ≈ 1.07e−9566 > 0; alan [3, NEAR] boş değil; x²=4 → ∅; x<5 → [3,NEAR];
+  sqrt alanı [3,NEAR]; x²−4 kök sayısı 0; sin x = 0, [−4,4] ∩ alan → ∅ (π > 3+ε). İkinci yazım log(9)/log(3)+e^(−e^9), x≥2 → {2}.
+- YO-4: sıçramalı fonksiyon (ceiling, floor, sign, frac, Heaviside) argümanı kanıtla sıfır/tam sayı ya da kanıtla değil
+  değilse değeri SymPy'nin sayısal değerlendirmesinden okunmaz (ayrıştırmada ceiling(Z²) → 1 dahil): kararsız → UNKNOWN.
+  Z = 2·atan(tanh(1/2)) − atan(sinh 1) = gd(1) − gd(1) = 0 tam; ceiling(Z²) = sign(Z²) = ceiling(√|Z|) = floor(−Z²) =
+  sign(|Z|) = 0. 1/−1 iddiaları asla CORRECT; 0 iddiaları asla INCORRECT (kanıt yoksa UNKNOWN).
+- RK-1: hücrede ilişkinin sıfırı kesimle aynı sayı başka yazımla çıkınca same_value ile tek yazıma indir: |x−3|(2^x−8) ≤ 0 →
+  (−∞,3] CORRECT; >0 → (3,∞); sign(x−3)(2^x−8) ≥ 0 → ℝ; Max(x,3)(2^x−8) ≤ 0 → (−∞,3]; |x−2|(3^x−9)<0 → (−∞,2);
+  count_integers −5..10 → 9. Yanlışlar ((−∞,3), [3,∞), 8) INCORRECT.
+- RK-2: çözülemeyen yazılı tanım koşulu alana ConditionSet olarak girince örnekleyici iddianın tanımsız bölgesine de baksın
+  (koşulu noktada kesin değerlendirerek): sqrt(2^x−x−1)≥0 iddia ℝ → INCORRECT (x=1/2'de 2^(1/2) − 3/2 < 0); acos(x+atan x)≥0
+  iddia ℝ → INCORRECT; acos(2^x+x−2)≥0 iddia [0,2] → INCORRECT (x=2: acos 4 tanımsız). Doğru iddialar UNKNOWN kalabilir.
+  Karşı örnek yalnız kesin (noktada kanıtlı) tanımsızlık; gelenek (Convention) noktası karşı örnek sayılmaz.
+- RK-3: exact_setop'un 300 noktalı unify_endpoints sınırı: büyük sonlu kümelerde kesin sıralama yolu ya da sınırın üstünde eski
+  davranış (kanıtlı); sin x [0,940] 300 CORRECT / 299 INCORRECT; sin(100x) [0,10] 319; cos x [0,1000] 318; sin(πx) [0,300] 301.
+- RK-4: _on_points sonlu alanda factorial/Mod/(−1)^x koşullarını noktada kesin değerlendirsin: {1..6}'da sin(πx/2)x! ≠ 0 ∧
+  x²−5x+6=0 → {3}; cos(πx)Mod(x,4) > 0 → {2}; x² < 20 ∧ sin x · x! > 0 → {1,2,3}.
+- RK-5: Convention('origin') koşulu türev/ekstremum/limit sertifikalarında, verilen (y ≠ 0, y = 2) ya da bölge operandın
+  sıfırdan farklılığını kanıtlıyorsa tutulur sayılır: d/dx atan2(2,x) x=0'da −1/2; −2/(x²+4); max_{[0,1]} atan2(x,1) = π/4;
+  lim_{x→0} atan2(1,x) = π/2; d/dx atan2(x−1,0) x=2'de 0. Gelenek noktasına ulaşılan vakalar UNKNOWN kalır.
+- RK-6: _sample_inequality'nin ret örneklemesi PYTHONHASHSEED'den bağımsız ve deterministik bütçeli (2–62 s salınım yok);
+  karar UNKNOWN ya da INCORRECT ((|x|−x)·(…) ≤ 0, x≥0, iddia [0,∞): x=2'de acos 4 tanımsız).
+
+## 9. tur
+- worktree /home/user/asd/.claude/worktrees/agent-a24e2411c16874abb, reset --hard 56cec1d yapildi (d4b 8 + d4e 3 + d4f 2).
+- f05d5c2 YO-1 ara 1: numeric._evalf_sign (Add ise -e de okunur; celiski None), base.domain_for kisit dongusu except -> unapplied+failed, Ctx.constraints_not_applied, verifier intake constraint_not_applied. Saldiri A 10/10. Kanitlanamaz cift 3 vs 3+gd(1)-gd(1): iki sirada UNKNOWN.
+  Not (kapsam disi): certified_sign(log(8)/log(2)+exp(-exp(exp(5)))-3) surec icinde asiliyor (evalf sinirsiz, >6 dk) — taban davranisi, olcu: m2 ilk surumu.
+  YO-1 tarama (t9/trys.txt, AST): try icinde kesisim/solveset 33 yer; dusuren (pass/continue/buyuk kume) yalniz base.domain_for kisit dongusu; digerleri fail-closed (return None/False, aday listesi, Lean kutusu).

@@ -1,0 +1,459 @@
+[
+ {
+  "group": "B",
+  "label": "derivative sqrt(x - cos(x)): (1 + sin(x))/(2*sqrt(x - cos(x)))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic', 'claim_as_written': 'claim_condition_undecided: Ne(2*sqrt(x - cos(x)), 0)'}",
+  "s": 1.4
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x + exp(x)): (1 + exp(x))/(2*sqrt(x + exp(x)))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic', 'claim_as_written': 'claim_condition_undecided: Ne(2*sqrt(x + exp(x)), 0)'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x - sin(x)): (1 - cos(x))/(2*sqrt(x - sin(x)))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic', 'claim_as_written': 'claim_condition_undecided: Ne(2*sqrt(x - sin(x)), 0)'}",
+  "s": 0.5
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(1 - cos(x)): sin(x)/(2*sqrt(1 - cos(x)))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic', 'claim_as_written': 'claim_condition_undecided: Ne(2*sqrt(1 - cos(x)), 0) at 2*_n*pi'}",
+  "s": 0.5
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(sin(x)): cos(x)/(2*sqrt(sin(x)))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.3
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x*exp(x) - 1): (exp(x) + x*exp(x))/(2*sqrt(x*exp(x) - 1))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic', 'claim_as_written': 'claim_condition_undecided: Ne(2*sqrt(x*exp(x) - 1*1), 0)'}",
+  "s": 0.3
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(log(x) + x): (1/x + 1)/(2*sqrt(log(x) + x))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic', 'claim_as_written': 'claim_condition_undecided: Ne(2*sqrt(x + log(x)), 0)'}",
+  "s": 0.2
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x**5 - x + 1): (5*x**4 - 1)/(2*sqrt(x**5 - x + 1))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.5
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x**3 - x + 1): (3*x**2 - 1)/(2*sqrt(x**3 - x + 1))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.3
+ },
+ {
+  "group": "B",
+  "label": "derivative acosh(x): 1/sqrt(x**2 - 1)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['acosh'] in 'acosh(x)' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "B",
+  "label": "derivative asin(x): 1/sqrt(1 - x**2)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "B",
+  "label": "derivative asin(x): 1/(sqrt(1 - x)*sqrt(1 + x))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point'}",
+  "s": 0.4
+ },
+ {
+  "group": "B",
+  "label": "derivative log(x - cos(x)): (1 + sin(x))/(x - cos(x))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "B",
+  "label": "derivative x**x: x**x*(log(x) + 1)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ },
+ {
+  "group": "B",
+  "label": "derivative log(log(x)): 1/(x*log(x))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative cot(x): -1/sin(x)**2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "B",
+  "label": "derivative cot(x): -(1 + cot(x)**2)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "B",
+  "label": "derivative sec(x): sec(x)*tan(x)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.3
+ },
+ {
+  "group": "B",
+  "label": "derivative log(Abs(x)): 1/x",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point'}",
+  "s": 0.3
+ },
+ {
+  "group": "B",
+  "label": "derivative log(x**2): 2/x",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x)*log(x): log(x)/(2*sqrt(x)) + 1/sqrt(x)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative 1/(x**2 - 1): -2*x/((x - 1)**2*(x + 1)**2)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.3
+ },
+ {
+  "group": "B",
+  "label": "derivative log((x - 1)/(x + 1)): 2/(x**2 - 1)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.4
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x**2 - 1): x/sqrt(x**2 - 1)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "B",
+  "label": "derivative atan(1/x): -1/(1 + x**2)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative x*sqrt(x): 3*sqrt(x)/2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ },
+ {
+  "group": "B",
+  "label": "derivative exp(sqrt(x)): exp(sqrt(x))/(2*sqrt(x))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(tan(x)): 1/(2*cos(x)**2*sqrt(tan(x)))",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 1.0
+ },
+ {
+  "group": "B",
+  "label": "derivative sqrt(x)/(1 + x): (1 - x)/(2*sqrt(x)*(1 + x)**2)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.2
+ },
+ {
+  "group": "B",
+  "label": "derivative tan(x)/x: (x/cos(x)**2 - tan(x))/x**2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.6
+ },
+ {
+  "group": "B",
+  "label": "derivative sin(x)/x: (x*cos(x) - sin(x))/x**2",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative log(sin(x)): cot(x)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "B",
+  "label": "derivative log(cos(x)): -tan(x)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.3
+ },
+ {
+  "group": "C",
+  "label": "series binomial(n, k), k = 0..n: 2**n",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reason": "term_definedness_undecided_as_written",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series k*binomial(n, k), k = 0..n: n*2**(n - 1)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reason": "term_definedness_undecided_as_written",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series binomial(n, k)*2**k, k = 0..n: 3**n",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reason": "term_definedness_undecided_as_written",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series 1/(n + k), k = 1..n (n positive integer): harmonic(2n) - harmonic(n)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['harmonic'] in 'harmonic(2*n) - harmonic(n)' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series 1/(k*(k + 1)), k = 1..n: n/(n + 1)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "non_integer_bounds",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series k, k = 1..n: n*(n + 1)/2",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "non_integer_bounds",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series k/n, k = 1..n (n positive integer): (n + 1)/2",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "non_integer_bounds",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series 1/(n - k + 1), k = 1..n: harmonic(n)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['harmonic'] in 'harmonic(n)' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series (n - k), k = 0..n: n*(n + 1)/2",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "non_integer_bounds",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series sqrt(n - k), k = n..n: 0",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reason": "term_definedness_undecided_as_written",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series 1/(2**k), k = 0..n - 1: 2 - 2**(1 - n)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "non_integer_bounds",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series log(k), k = 1..n: log(factorial(n))",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "non_integer_bounds",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series 1/(k - n - 1), k = 1..n: -harmonic(n)",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [
+   "parse_error"
+  ],
+  "reason": "parse_error: unknown identifier(s) ['harmonic'] in '-harmonic(n)' (declare them in the IR)",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series sqrt(n - k) k = 0..n-1 ... k=0..2 n=2 given",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.1
+ },
+ {
+  "group": "C",
+  "label": "series binomial(n, k), k = 0..n, n = 3 given: 8",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ },
+ {
+  "group": "C",
+  "label": "series binomial(n, k), k = 0..n, 2n = 6 given: 8",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'symbolic'}",
+  "s": 0.0
+ }
+]
