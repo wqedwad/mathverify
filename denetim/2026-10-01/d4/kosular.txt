@@ -139,3 +139,15 @@ SP yeni: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scrat
   saldiri/d4h/kararlar_tur2.txt. d4h 2. tur worktree slotu boşalınca.
 - 15:42 saldırgan d4f2 (iş akışı v3, wf_568f6d87-023), commit e0983d0 taban 62a40e9.
 - 16:20 oturum sınırı (sıfırlanma 18:20) + konteyner yeniden başladı: d4b9, d4c4, d4e4 ajanları kesildi (ağaçlar commit'li ve temiz: fecc2be, b99f0ca, bfdc5ff); d4f2 saldırısında ret-kapsama lensi ve yanlış onay doğrulayıcısı düştü. 18:22 ajanlar SendMessage ile, d4f2 resume ile sürdürülüyor.
+- 18:40 d4b tur 9 BİTTİ (fecc2be, dal d4b-tur9; e03ea1f ile birleşik): YO-1, YO-4, RK-1..RK-6 kapandı; asılma kök nedeni (SymPy evalf_add
+  hassasiyeti tavansız, ~4e64 bit) için yeni src/mathverify/_sympy_guards.py (süreç çapında: evalf ≤ 2**16 bit, relational._n2 katı fark).
+  Sonda L 105 vakada 56cec1d'de 65 → 0; d4b 0/541, öteki sondalar 0 (d4a 316, d4c 203, d4d 340, d4e 942, d4f 335, d4g 229); test_d4_d4b_tur9
+  85 testin 66'sı 56cec1d'de düşer; mutasyon d4b 170/170, d4a 51/51; fark tabana 0/0/86/0 (782431c'ye 0/0/0/0); tam takım 4063 passed /
+  93 skipped / 4 (.git'siz kural testleri). Ana oturum: matematik kararları NOTLAR'da denetlendi (sabit ilişki ve Piecewise koşulu yalnız
+  kesin işaretle; RK-2'de izinli bölge dışındaki iç nokta karşı örnek değil): uygun.
+- 18:42 saldırgan d4b9 (iş akışı v3, wf_8799629a-c86), commit fecc2be taban e03ea1f (SymPy yamasının yan etkileri özellikle).
+- 18:45 d4h 2. tur taze ajan (worktree /home/user/wt/d4h; önce c4ca9dc ile birleşir).
+- 19:22 d4f2 saldırısı BİTTİ (resume sonrası): 13 bulgu, 13 gerçek (d4f 2. tur getirdi: matriste 0**0, doğrusal olmayan sınır,
+  RecursionError'lu LaTeX adımı çürütülmüyor (yanlış onay), yalın ad etiketleri, kuyruk kapısı, tam sayı değerli polinom sınır, tutulan
+  det payda; önceden var: ℂ söyleminde NO_VALUE/gelenek, kısıt/limit verileninin yazılı okunmaması, ∞ argümanlı işlemler, sıfır üs
+  yazımları, ÇS şık okuması). Kararlar saldiri/d4f2/kararlar_tur3.txt. d4f 3. tur slot boşalınca (d4e 4. turdan sonra: aynı mekanizma).
