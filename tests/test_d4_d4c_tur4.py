@@ -109,6 +109,8 @@ def test_a_cell_with_a_hidden_jump_has_no_taylor_bound():
     ("atan(cot(x))", 2, 4, lambda: 5 * mp.pi - 6 - mp.pi ** 2),
     (f"sin(x)/x + {AT}", 0, 2, lambda: mp.mpf("2.25702987016778768106867888158")),
     (f"x*{AT}", 0, 2, lambda: mp.mpf("0.259265944524557711675919283496")),
+    # the end rule at 0: P = atan(tan x) - x, SymPy's P' = 0, and f is -π/x past π/2: the rule only where P is analytic
+    (f"({AT} - x)/x", 0, 2, lambda: -mp.pi * mp.log(4 / mp.pi)),
 ])
 def test_the_enclosure_holds_the_true_value_across_the_jump(f, a, b, true):
     lo, hi = _enc(f, a, b)
