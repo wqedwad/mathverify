@@ -553,20 +553,34 @@ def read_tolerance(raw, relative: bool = True):
     return t, False
 
 
+def is_number_expr(e) -> bool:
+    """Is `e` a number (not a set, a tuple, an interval, a relation, a matrix)? Only such a claim has a distance to
+    a value: c - v of a FiniteSet raised TypeError on the tolerance path (attack on d4c round 3, SG-1; principle
+    13)."""
+    return isinstance(e, sp.Expr) and not isinstance(e, sp.MatrixBase) and e.is_number is True
+
+
 def within_rel_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
     """|c - v| <= t·|v| decided with certified signs, for constants c and v (v the true value): True or
-    False when certain, None when undecided or v = 0 (no relative error there)."""
+    False when certain, None when undecided or v = 0 (no relative error there). A claim with an imaginary part,
+    against a real v: |c - v| >= |Im c|, so |Im c| > t·|v| refutes it (SG-1)."""
     try:
         c, v, t = sp.sympify(claimed), sp.sympify(value), sp.sympify(t)
     except (sp.SympifyError, TypeError):
         return None
-    if c.free_symbols or v.free_symbols:
+    if not (is_number_expr(c) and is_number_expr(v)):
         return None
     sd = certified_sign(c - v, timeout=timeout)
     if sd == 0:
         return True                           # the claim is the value
     sv = certified_sign(v, timeout=timeout)
     if sv not in (1, -1):
+        return None
+    if sd == NONREAL:
+        im_c = sp.im(c)
+        si = certified_sign(im_c, timeout=timeout)
+        if si in (1, -1) and certified_sign(si * im_c - t * sv * v, timeout=timeout) == 1:
+            return False
         return None
     if sd not in (1, -1):
         return None

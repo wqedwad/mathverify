@@ -40,6 +40,27 @@ def _off_grid(v: float, rng: random.Random, shift: bool):
     return q
 
 
+def _inside(iv: Interval, rng: random.Random, shift: bool | None):
+    """An exact point strictly inside the (nonempty, open or closed) interval: lo + (hi - lo)·k/(m + 1) with m a
+    large prime and 0 < k < m (k + an irrational in (0, 1/3) for an identity test past the rational points). A sample
+    rounded onto the grid or shifted left a narrow interval: in (3, 3 + 10^-7) all 30 samples fell on 3, outside
+    it, and 2x - 3 = x was certified there (attack on d4c round 3, YO-C)."""
+    lo, hi = iv.inf, iv.sup
+    m = rng.choice(_PRIMES)
+    frac = sp.Rational(rng.randint(1, m - 1), m + 1)
+    if shift:
+        frac += rng.choice(_SHIFTS) / (10 * (m + 1))
+    if lo != -oo and hi != oo:
+        q = lo + (hi - lo) * frac
+    elif lo != -oo:
+        q = lo + frac
+    elif hi != oo:
+        q = hi - frac
+    else:
+        q = frac
+    return q
+
+
 def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False, shift: bool | None = None):
     lo, hi = iv.inf, iv.sup
     lo_f = -1e3 if lo == -oo else float(lo)
@@ -71,10 +92,9 @@ def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False, sh
     # 6-decimal rational for a counterexample search; off the decimal grid (shift not None: _off_grid) for an
     # identity test
     q = sp.Rational(f"{v:.6f}") if shift is None else _off_grid(v, rng, shift)
-    if iv.contains(q) != True:  # noqa: E712  (rounding or the shift pushed it onto or past an end)
-        mid = (lo_f + hi_f) / 2
-        q = (sp.Rational(f"{mid:.6f}") if shift is None else _off_grid(mid, rng, False)) \
-            if (lo != -oo and hi != oo) else q + sp.Rational(1, 1000)
+    if not _in(iv, q):
+        # rounding or the shift pushed it onto or past an end: a point inside, exactly
+        q = _inside(iv, rng, shift)
     return q
 
 
@@ -763,7 +783,16 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     # all. Measured: 1/(x−1) and 1/(x−1) + e^(−1000) agreed at every point (the gap is
     # 1e-435) and were declared equal. A true identity evaluates to 0, or to a zero with no
     # significant bits ("0.e-167", _prec ≈ 1); a real difference carries ~100 bits.
-    witness, unsure = _definite_nonzero_difference(ae - be, syms, pts[:8], a, b, budget)
+    witness, unsure = _definite_nonzero_difference(ae - be, syms, pts[:_RATIONAL_POINTS], a, b, budget)
+    if witness is None:
+        # and at every other point, the shifted samples and the probes: a difference with a certified sign there
+        # is a counterexample too. Read at the rational points alone, 10^-40·sin(Nπx) with N the product of their
+        # prime denominators vanished at all of them and x² + 10^-40·sin(Nπx) = x² was certified on x > 0
+        # (attack on d4c round 3, YO-B)
+        witness, undecided = _nonzero_elsewhere(ae - be, syms, pts[_RATIONAL_POINTS:] + probes, a, b, budget)
+        if undecided:
+            ev["reason"] = "difference_at_the_other_points_not_read"
+            return None, ev
     if witness is not None:
         ev["counterexample"] = witness
         ev["reason"] = "difference_below_working_precision_but_nonzero"
@@ -776,6 +805,48 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
         ev["reason"] = "disagreement_not_confirmed_exactly"
         return None, ev
     return True, ev
+
+
+def nonzero_sign_points(d, syms, pts) -> list[int]:
+    """Sandbox worker: the indices of the points where the closed value of `d` has a sign CERTIFIED by interval
+    arithmetic (`certify.enclosure.constant_sign`: outward rounding, up to 240 digits). Strict evalf is no such
+    certificate there: it gave the identity asin(tanh x) = atan(sinh x) a difference of 2.4e-125 at x near 287,
+    stable at 70 digits. A point with no interval extension, or whose interval holds 0, is no witness, and no proof
+    of zero is sought there."""
+    from ..certify.enclosure import constant_sign
+    from .numeric import real_odd_roots
+    out = []
+    for i, pt in enumerate(pts):
+        try:
+            dp = real_odd_roots(d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True))
+            if dp == 0 or dp.has(*_FORMS) or dp.has(sp.zoo, sp.nan, sp.oo, -sp.oo) or dp.free_symbols:
+                continue
+            if constant_sign(dp) is None:
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        out.append(i)
+    return out
+
+
+_ELSEWHERE_TIMEOUT = 30.0
+
+
+def _nonzero_elsewhere(d, syms, pts, a, b, budget) -> tuple[dict[str, Any] | None, bool]:
+    """(witness, undecided): a point of `pts` where a and b certainly differ (`nonzero_sign_points`, confirmed by
+    `_exact_counterexample`), else None; undecided when the points could not be read (the worker failed)."""
+    if not pts:
+        return None, False
+    from ..sandbox import run as sb_run
+    r = sb_run("mathverify.equiv.random_point:nonzero_sign_points", sp.sympify(d), syms, pts, timeout=_ELSEWHERE_TIMEOUT)
+    if not r.ok or not isinstance(r.value, list):
+        return None, True
+    for i in r.value:
+        pt = pts[i]
+        cx = _exact_counterexample(a, b, syms, pt, budget)
+        if isinstance(cx, dict):
+            return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "exact": cx["exact"]}, False
+    return None, False
 
 
 def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None) -> tuple[dict[str, Any] | None, int]:

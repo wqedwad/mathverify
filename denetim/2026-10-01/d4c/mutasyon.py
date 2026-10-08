@@ -4,7 +4,10 @@ exact zero and the numeric evidence (`certify.calculus` certificates and enclosu
 alone). Round 3 (7 Oct 2026) adds the extremum's direction (E), a definite integral's value only with a
 certificate (Y), random points off the grid and signs at two precisions (P), the declared tolerance (T),
 outward rounding (V), the special functions' domains (A), end singularities (B) and the cell budget (C); its
-mutations run tests/test_d4_d4c_tur3.py. The machinery (throwaway clones of the committed HEAD, exit codes,
+mutations run tests/test_d4_d4c_tur3.py. Round 4 (8 Oct 2026, Q) adds the analytic cell (YO-A), the exact
+difference at every point (YO-B), points inside the domain (YO-C), real primitives (KK-1), the tolerance path's
+claims (SG-1), reversed ranges (KK-2) and the odd-root convention (BİRLEŞİK-1); its mutations run
+tests/test_d4_d4c_tur4.py. The machinery (throwaway clones of the committed HEAD, exit codes,
 clean-up) is the one of denetim/2026-09-26/mutasyon.py; only the list of mutations is new.
 
     .venv/bin/python denetim/2026-10-01/d4c/mutasyon.py [-j N] [--list] [name ...]
@@ -37,6 +40,7 @@ DOM = "src/mathverify/certify/domain.py"
 T = "tests/test_d4_d4c_sayisal.py"
 T3 = "tests/test_d4_d4c_tur3.py"
 T4 = "tests/test_parca4_parametreli_bicim.py"
+T5 = "tests/test_d4_d4c_tur4.py"
 
 MUTATIONS = [
     ("Z05 mutlak integrallenebilirlik varsayılır", CAL,
@@ -89,8 +93,8 @@ MUTATIONS = [
      "    if _angle_sum_is_zero(d) or _exp_generator_is_zero(d):\n", "    if _angle_sum_is_zero(d):\n", T),
     # the rigorous enclosure (review of d4c, 2 Oct 2026)
     ("R01 hücrede aralık değeri yerine orta nokta", ENC,
-     "        whole = h * iv_eval(f, {var: _hull(l, r)})\n",
-     "        whole = h * iv_eval(f, {var: (L + R) / 2})\n", T),
+     "    box = {var: _hull(l, r)}\n",
+     "    box = {var: (L + R) / 2}\n", T),
     ("R02 Taylor kalanı düşer", ENC,
      "        second = h * iv_eval(f, {var: (L + R) / 2}) + d2 * h * h * h / 24\n",
      "        second = h * iv_eval(f, {var: (L + R) / 2})\n", T),
@@ -238,6 +242,85 @@ MUTATIONS = [
      "                return None\n",
      "                # have refuted undecided (attack on d4c round 2, RK-C). Past the safety stop, no enclosure\n"
      "                break\n", T3),
+    # round 4. YO-A: Taylor bounds only on a cell proved analytic, read as written
+    ("Q01 kesirli kuvvet 0'da analitik sayılır", ENC,
+     "            if an and not lo > 0:\n                raise NotAnalytic(\"a fractional power of a base that may be 0\")\n",
+     "", T5),
+    ("Q02 gerçel kuvvet 0'da analitik sayılır", ENC,
+     "        if an and not lo > 0:\n            raise NotAnalytic(\"a real power of a base that may be 0\")\n", "", T5),
+    ("Q03 Max/Min analitik sayılır", ENC,
+     "            if an:\n                raise NotAnalytic(\"Max/Min\")\n", "", T5),
+    ("Q04 Abs 0'da analitik sayılır", ENC, "        if an:\n            _off_zero(x, \"the argument of Abs\")\n", "", T5),
+    ("Q05 sign 0'da analitik sayılır", ENC, "        if an:\n            _off_zero(x, \"the argument of sign\")\n", "", T5),
+    ("Q06 asin/acos uçta analitik sayılır", ENC,
+     "        if an and not (-1 < lo and hi < 1):\n            raise NotAnalytic(\"asin/acos at -1 or 1\")\n", "", T5),
+    ("Q07 ara değerin sınırlılığı aranmaz", ENC, "    return _bounded(v) if analytic else v\n", "    return v\n", T5),
+    ("Q08 Taylor sınırı analitik kanıtsız", ENC, "    if d2f is None or not smooth:\n", "    if d2f is None:\n", T5),
+    ("Q09 uç kuralında P analitik kanıtsız", ENC, "                        iv_eval(P, side, analytic=True)\n", "", T5),
+    ("Q10 ayrık kesişimde uç kuralı seçilir", ENC,
+     "    return _hull(lo_, hi_) if lo_ <= hi_ else _hull(min(a1, a2), max(b1, b2))\n",
+     "    return _hull(lo_, hi_) if lo_ <= hi_ else u\n", T5),
+    ("Q11 sınırsız hücre önce bölünmez", ENC,
+     "            k = sum(1 for _, _, c_ in cells if not finite(c_)) or max(1, len(cells) // 8)\n",
+     "            k = max(1, len(cells) // 8)\n", T5),
+    ("Q34 uçtaki kutup sonsuza dek bölünür", ENC,
+     "                if not l < m < r or (not finite(c) and r - l < finest):\n", "                if not l < m < r:\n", T5),
+    ("Q12 atan sınırsız argümanda tanımsız", ENC,
+     "        return _monotone(mp.atan, x, limits=(lambda: -mp.pi / 2, lambda: mp.pi / 2))\n",
+     "        return _monotone(mp.atan, x)\n", T5),
+    ("Q13 tanh sınırsız argümanda tanımsız", ENC,
+     "        return _monotone(mp.tanh, x, limits=(lambda: mp.mpf(-1), lambda: mp.mpf(1)))\n",
+     "        return _monotone(mp.tanh, x)\n", T5),
+    # KK-2: a reversed range
+    ("Q14 ters sınırda pencere çevrilmemiş toplamla", ENC,
+     "            clo, chi = (slo, shi) if sign > 0 else (_neg(shi), _neg(slo))\n", "            clo, chi = slo, shi\n", T5),
+    # BİRLEŞİK-1: the odd-root convention of a fractional power
+    ("Q15 tek kök geleneği sertifikayı durdurur", CAL,
+     "            continue                                  # the fractional power rule below holds it\n",
+     "            return None\n", T5),
+    ("Q16 tek kök geleneği her taban için kabul", CAL,
+     "                and c.args[0] in fractional:\n", "                and True:\n", T5),
+    # KK-1: real primitives
+    ("Q17 log(u) u < 0'da çevrilmez", CAL, "            logs[n] = sp.log(-n.args[0])\n", "            pass\n", T5),
+    ("Q18 exp_polar'ın her katı indirilir", CAL, "        if not k.is_Integer:\n            return None\n", "", T5),
+    ("Q19 gerçel ilkel denenmez", CAL, "            R = _real_primitive(F, var, p, q)\n", "            R = None\n", T5),
+    ("Q20 polylog(1, z) türevde açılmaz", CAL,
+     "    dF = rd.value.replace(lambda n: isinstance(n, sp.polylog) and n.args[0] == 1, lambda n: -sp.log(1 - n.args[1]))\n",
+     "    dF = rd.value\n", T5),
+    # SG-1: the tolerance path's claims
+    ("Q21 toleransta sayı olmayan iddia okunur", NUM,
+     "    if not (is_number_expr(c) and is_number_expr(v)):\n        return None\n", "", T5),
+    ("Q22 karmaşık iddia reddedilmez", NUM,
+     "        if si in (1, -1) and certified_sign(si * im_c - t * sv * v, timeout=timeout) == 1:\n            return False\n",
+     "        if si in (1, -1) and certified_sign(si * im_c - t * sv * v, timeout=timeout) == 1:\n            return None\n", T5),
+    ("Q23 karmaşık iddia sanal kısmı küçükken de reddedilir", NUM,
+     "        if si in (1, -1) and certified_sign(si * im_c - t * sv * v, timeout=timeout) == 1:\n",
+     "        if si in (1, -1):\n", T5),
+    ("Q24 sonsuz iddia zarfla reddedilmez", CAL,
+     "    if c is not None and not (mp.isfinite(c[0]) and mp.isfinite(c[1])):\n", "    if False:\n", T5),
+    ("Q25 karmaşık iddia zarfla reddedilmez", CAL, "        im = _imaginary_part(claimed)\n", "        im = None\n", T5),
+    ("Q26 karmaşık iddia zarfta sanal kısmı küçükken de reddedilir", CAL,
+     "                if certified_sign(si * im_c - t_ * B) == 1:\n", "                if True:\n", T5),
+    # YO-B: the exact difference at every point; the equals conflict on the antiderivative path
+    ("Q27 kalan noktalarda kesin fark okunmaz", RP,
+     "        witness, undecided = _nonzero_elsewhere(ae - be, syms, pts[_RATIONAL_POINTS:] + probes, a, b, budget)\n",
+     "        witness, undecided = None, False\n", T5),
+    ("Q28 yoklamalarda kesin fark okunmaz", RP,
+     "        witness, undecided = _nonzero_elsewhere(ae - be, syms, pts[_RATIONAL_POINTS:] + probes, a, b, budget)\n",
+     "        witness, undecided = _nonzero_elsewhere(ae - be, syms, pts[_RATIONAL_POINTS:], a, b, budget)\n", T5),
+    ("Q29 okunamayan noktalar karar verdirir", RP,
+     "        if undecided:\n            ev[\"reason\"] = \"difference_at_the_other_points_not_read\"\n            return None, ev\n",
+     "", T5),
+    ("Q35 kalan noktalarda işaret evalf'ten", RP,
+     "            if constant_sign(dp) is None:\n                continue\n",
+     "            if dp.evalf(30) == 0:\n                continue\n", T5),
+    ("Q30 ilkelde equals çatışması yok", CAL,
+     "        if ok is True and agreed_on == S.Reals and _equals_false_stands(dF, integrand):\n", "        if False:\n", T5),
+    ("Q31 geniş alandaki uyum çatışmaya bakılmadan", CAL,
+     "                ok, agreed_on = True, wide\n", "                ok = True\n", T5),
+    # YO-C: points inside the domain
+    ("Q32 alan dışına düşen nokta kullanılır", RP, "        q = _inside(iv, rng, shift)\n", "        q = q\n", T5),
+    ("Q33 içerideki nokta ızgarada", RP, "        frac += rng.choice(_SHIFTS) / (10 * (m + 1))\n", "", T5),
 ]
 
 if __name__ == "__main__":

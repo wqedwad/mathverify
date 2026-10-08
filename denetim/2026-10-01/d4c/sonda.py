@@ -18,6 +18,13 @@ the `sifir` angle and D4-ADIM-C of the `adim` angle, `denetim/2026-10-01/d4/`).
     K-P round 3 (attack on round 2, 7 Oct 2026): K extremum direction below 40 digits (YO-1), L SymPy's value
        only with a certificate (YO-2), M random points off the decimal grid (YO-3), N the declared relative
        tolerance (YO-4, RK-E, RK-F), O erf antiderivatives on infinite ranges (RK-A), P end singularities (RK-B)
+    Q-W round 4 (attack on round 3, 8 Oct 2026; saldiri/d4c3/bulgular.json): Q a jump SymPy's derivative hides
+       (atan(tan x)): the enclosure's Taylor bounds only where the integrand is proved analytic (YO-A, R-YO-1,
+       R-RET-1), R the exact difference at every sample point and the equals conflict on every path (YO-B),
+       S sample points inside a narrow domain (YO-C), T real primitives for the fundamental theorem: log(-u),
+       polylog (KK-1), U non-numbers, complex and infinite claims on the tolerance path (SG-1), V reversed ranges
+       (KK-2), W the odd-root convention of a fractional power met by its base >= 0 (BİRLEŞİK-1). In Q-W a
+       layer_exception anywhere is a failure.
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4c/sonda.py [out.json] [groups]
@@ -593,9 +600,248 @@ def cases_p():
     ]
 
 
+X_0_10 = {"name": "x", "domain": "real", "constraints": ["x > 0", "x < 10"]}
+X_N0 = {"name": "x", "domain": "real", "constraints": ["x > 0", "x < 1/10**7"]}
+X_N3 = {"name": "x", "domain": "real", "constraints": ["x > 3", "x < 3 + 1/10**7"]}
+X_GT1 = {"name": "x", "domain": "real", "constraints": ["x > 1"]}
+NPR = 1000003 * 999983 * 1000033 * 999979 * 1000037 * 999961 * 1000039 * 999959   # the 8 prime denominators
+SN = f"sin({NPR}*pi*x)/10**40"
+CN = f"cos({NPR}*pi*x)/(10**40*{NPR}*pi)"
+AT = "atan(tan(x))"
+
+
+def anti(f, vars_=(X,)):
+    return _task("antiderivative", {"integrand": f, "var": "x"}, vars_, shape="expression")
+
+
+def der(f, vars_=(X,)):
+    return _task("derivative", {"f": f, "var": "x"}, vars_, shape="expression")
+
+
+def cases_q():
+    """YO-A = R-YO-1 = R-RET-1: atan(tan x) jumps by -π at π/2 and SymPy's derivative of it is 1: no Taylor bound
+    on a cell that is not proved analytic. Naive answers (atan(tan u) read as u) are never accepted, true values
+    never refuted, true steps never refuted. ∫_0^2 atan(tan x) = (2 - π)²/2 = 0.651616893365093."""
+    return [
+        ("atan(tan x) [0,2] t 1e-3: 2 (naive)", dtol(AT, 0, 2, "1e-3"), _sol("2"), NOTOK, None),
+        ("atan(tan x) [0,2] t 1e-3: 0.6516 (true)", dtol(AT, 0, 2, "1e-3"), _sol("0.6516"), NOTNO, None),
+        ("atan(tan x) [0,2] t 1e-3: (2 - pi)^2/2 (true, exact)", dtol(AT, 0, 2, "1e-3"), _sol("(2 - pi)**2/2"), NOTNO,
+         None),
+        ("atan(tan x) [0,2] = (2 - pi)^2/2 (true)", dint(AT, 0, 2), _sol("(2 - pi)**2/2"), NOTNO, None),
+        ("atan(tan x) [0,2] = 2 (naive)", dint(AT, 0, 2), _sol("2"), NOTOK, None),
+        ("atan(tan x) [0,2] t 1e-3: 0.4292036732051 (an old wrong enclosure)", dtol(AT, 0, 2, "1e-3"),
+         _sol("0.4292036732051"), NOTOK, None),
+        ("atan(tan x) + 1 [0,2] t 1e-3: 4 (naive)", dtol(f"{AT} + 1", 0, 2, "1e-3"), _sol("4"), NOTOK, None),
+        ("atan(tan x) + 1 [0,2] = 4 (naive)", dint(f"{AT} + 1", 0, 2), _sol("4"), NOTOK, None),
+        ("atan(tan x) + 1 [0,2] t 1e-3: 2.4292036732051 (wrong)", dtol(f"{AT} + 1", 0, 2, "1e-3"),
+         _sol("2.4292036732051"), NOTOK, None),
+        ("x^2 + atan(tan x) [0,2] t 1e-2: 14/3 (naive)", dtol(f"x**2 + {AT}", 0, 2, "1e-2"), _sol("14/3"), NOTOK, None),
+        ("atan(tan x) [0,3] t 1e-2: 9/2 (naive)", dtol(AT, 0, 3, "1e-2"), _sol("9/2"), NOTOK, None),
+        ("atan(tan x) [0,3] t 1e-3: 4.5 (naive)", dtol(AT, 0, 3, "1e-3"), _sol("4.5"), NOTOK, None),
+        ("atan(tan x) [0,3] t 1e-6: 0.01002424 (true 0.0100242397753)", dtol(AT, 0, 3, "1e-6"), _sol("0.01002424"),
+         NOTNO, None),
+        ("x atan(tan x) [0,2] t 1e-2: 8/3 (naive)", dtol(f"x*{AT}", 0, 2, "1e-2"), _sol("8/3"), NOTOK, None),
+        ("x atan(tan x) [0,2] t 1e-3: 0.25927 (true 0.259265944)", dtol(f"x*{AT}", 0, 2, "1e-3"), _sol("0.25927"),
+         NOTNO, None),
+        ("atan(tan 2x) [0,1] t 1e-2: 1 (naive)", dtol("atan(tan(2*x))", 0, 1, "1e-2"), _sol("1"), NOTOK, None),
+        ("exp(x) + atan(tan x) [0,2] t 1e-3: e^2 + 1 (naive)", dtol(f"exp(x) + {AT}", 0, 2, "1e-3"), _sol("E**2 + 1"),
+         NOTOK, None),
+        ("atan(tan x) [1/2,5/2] t 1e-3: 3.0 (naive)", dtol(AT, "1/2", "5/2", "1e-3"), _sol("3.0"), NOTOK, None),
+        ("atan(tan x) [1,2] t 1e-2: 1.5 (naive)", dtol(AT, 1, 2, "1e-2"), _sol("1.5"), NOTOK, None),
+        ("atan(tan x) [1,2] t 1e-6: 1.5 (naive)", dtol(AT, 1, 2, "1e-6"), _sol("1.5"), NOTOK, None),
+        ("atan(tan x) [1,2] = ((pi - 2)^2 - 1)/2 (true)", dint(AT, 1, 2), _sol("((pi - 2)**2 - 1)/2"), NOTNO, None),
+        ("atan(tan x) [1,2] t 1e-3: 0.1516 (true)", dtol(AT, 1, 2, "1e-3"), _sol("0.1516"), NOTNO, None),
+        ("atan(tan x) + e^cos x [1,2] t 1e-3: 1.2644 (true)", dtol(f"{AT} + exp(cos(x))", 1, 2, "1e-3"),
+         _sol("1.2644"), NOTNO, None),
+        ("atan(cot x) [2,4] t 1e-2: pi - 6 (naive)", dtol("atan(cot(x))", 2, 4, "1e-2"), _sol("pi - 6"), NOTOK, None),
+        ("atan(cot x) [2,4] t 1e-2: 5 pi - 6 - pi^2 (true)", dtol("atan(cot(x))", 2, 4, "1e-2"),
+         _sol("5*pi - 6 - pi**2"), NOTNO, None),
+        ("sin x/x + atan(tan x) [0,2] t 1e-5: 2.2555 (an old wrong enclosure)", dtol(f"sin(x)/x + {AT}", 0, 2, "1e-5"),
+         _sol("2.2555"), NOTOK, None),
+        ("sin x/x + atan(tan x) [0,2] t 1e-5: 2.25703 (true 2.25702987)", dtol(f"sin(x)/x + {AT}", 0, 2, "1e-5"),
+         _sol("2.25703"), NOTNO, None),
+        ("sin x/x + atan(tan x) [0,2] t 1e-3: Si(2) + 2 (naive)", dtol(f"sin(x)/x + {AT}", 0, 2, "1e-3"),
+         _sol("Si(2) + 2"), NOTOK, None),
+        ("step Integral(atan(tan x), (x, 0, 2)) = (2 - pi)^2/2 (true)", X1,
+         _sol("2", cp("Integral(atan(tan(x)), (x, 0, 2)) = (2 - pi)**2/2")), NOTNO, NOTREF),
+        ("step Integral(atan(tan x), (x, 1, 2)) = ((pi - 2)^2 - 1)/2 (true)", X1,
+         _sol("2", eqs("Integral(atan(tan(x)), (x, 1, 2)) = ((pi - 2)**2 - 1)/2")), NOTNO, NOTREF),
+        ("step Integral(atan(tan x) + 174, (x, 0, pi)) = 174 pi (true)", X1,
+         _sol("2", eqs("Integral(atan(tan(x)) + 174, (x, 0, pi)) = 174*pi")), NOTNO, NOTREF),
+        ("step Integral(atan(tan x), (x, 0, 2)) = 2 (naive)", X1, _sol("2", cp("Integral(atan(tan(x)), (x, 0, 2)) = 2")),
+         NOTOK, NOTVER),
+        ("ctrl e^cos x [0,1] t 1e-4: 2.3416", dtol(EC, 0, 1, "1e-4"), _sol("2.3416"), OK, None),
+        ("ctrl e^cos x [0,1] t 1e-4: 2.35", dtol(EC, 0, 1, "1e-4"), _sol("2.35"), NO, None),
+        ("ctrl tan x [0,3/2] t 1e-3: 2.6488 (no pole in the range)", dtol("tan(x)", 0, "3/2", "1e-3"), _sol("2.6488"),
+         OK, None),
+    ]
+
+
+def cases_r():
+    """YO-B: the exact difference is read at every sample point and probe, not at the 8 rational points alone;
+    SymPy's equals = False on the real line overrules agreement on every path (antiderivative, derivative)."""
+    return [
+        ("simplify x^2 (x>0): x^2 + 1e-40 sin(N pi x)", simp("x**2", [X_POS]), _sol(f"x**2 + {SN}", kind="expression"),
+         NOTOK, None),
+        ("simplify x^2 (R): x^2 + 1e-40 sin(N pi x)", simp("x**2", [X]), _sol(f"x**2 + {SN}", kind="expression"),
+         NOTOK, None),
+        ("simplify x^2 (0<x<10): x^2 + 1e-40 sin(N pi x)", simp("x**2", [X_0_10]), _sol(f"x**2 + {SN}", kind="expression"),
+         NOTOK, None),
+        ("antiderivative 2x (R): x^2 + 1e-40 cos(N pi x)/(N pi) + C", anti("2*x"), _sol(f"x**2 + {CN} + C", kind="expression"),
+         NOTOK, None),
+        ("antiderivative 2x (x>0): x^2 + 1e-40 cos(N pi x)/(N pi) + C", anti("2*x", (X_POS,)),
+         _sol(f"x**2 + {CN} + C", kind="expression"), NOTOK, None),
+        ("antiderivative cos x (R): sin x + 1e-40 cos(N pi x)/(N pi) + C", anti("cos(x)"),
+         _sol(f"sin(x) + {CN} + C", kind="expression"), NOTOK, None),
+        ("derivative x^2 (x>0): 2x + 1e-40 sin(N pi x)", der("x**2", (X_POS,)), _sol(f"2*x + {SN}", kind="expression"),
+         NOTOK, None),
+        ("derivative x^2 (R): 2x + 1e-40 sin(N pi x)", der("x**2"), _sol(f"2*x + {SN}", kind="expression"), NOTOK, None),
+        ("eq step x^2 + 1e-40 sin(N pi x) = x^2 (x>0)", simp("x**2", [X_POS]),
+         _sol("x**2", eqs(f"x**2 + {SN} = x**2"), kind="expression"), ANY, NOTVER),
+        ("ctrl simplify x^2 (x>0): x^2 + 1e-40 sin(3e6 pi x)", simp("x**2", [X_POS]),
+         _sol("x**2 + sin(3000000*pi*x)/10**40", kind="expression"), NO, None),
+        ("ctrl antiderivative 2x: x^2 + 1e-40 cos(2e6 pi x)/(2e6 pi) + C", anti("2*x"),
+         _sol("x**2 + cos(2000000*pi*x)/(10**40*2000000*pi) + C", kind="expression"), NO, None),
+        ("ctrl simplify x^2 (x>0): x^2 + 1e-10 sin(N pi x)", simp("x**2", [X_POS]),
+         _sol(f"x**2 + sin({NPR}*pi*x)/10**10", kind="expression"), NO, None),
+        ("ctrl antiderivative 2x: x^2 + cos(N pi x)/(N pi) + C", anti("2*x"),
+         _sol(f"x**2 + cos({NPR}*pi*x)/({NPR}*pi) + C", kind="expression"), NO, None),
+        ("ctrl simplify sin^2 + cos^2 (R): 1", simp("sin(x)**2 + cos(x)**2", [X]), _sol("1", kind="expression"), OK, None),
+        ("ctrl simplify atan(x) - atan(x/2) (x>0): atan(x/(x^2+2))", simp("atan(x) - atan(x/2)", [X_POS]),
+         _sol("atan(x/(x**2 + 2))", kind="expression"), OK, None),
+        ("ctrl simplify asin(tanh x) (R): atan(sinh x)", simp("asin(tanh(x))", [X]), _sol("atan(sinh(x))", kind="expression"),
+         OK, None),
+        ("ctrl simplify log(x - 1) + log(x - 3) (x>3): log((x-1)(x-3))",
+         simp("log(x - 1) + log(x - 3)", [{"name": "x", "domain": "real", "constraints": ["x > 3"]}]),
+         _sol("log((x - 1)*(x - 3))", kind="expression"), OK, None),
+        ("ctrl antiderivative cos x (R): sin x + C", anti("cos(x)"), _sol("sin(x) + C", kind="expression"), OK, None),
+        ("ctrl antiderivative 1/x (x>1): log(x) + C", anti("1/x", (X_GT1,)), _sol("log(x) + C", kind="expression"), OK, None),
+        ("ctrl derivative x^2 (x>0): 2x", der("x**2", (X_POS,)), _sol("2*x", kind="expression"), OK, None),
+        ("ctrl derivative sin x^2 (R): 2x cos x^2", der("sin(x**2)"), _sol("2*x*cos(x**2)", kind="expression"), OK, None),
+    ]
+
+
+def cases_s():
+    """YO-C: a sample point lies inside the domain; in (0, 10^-7) and (3, 3 + 10^-7) every rounded sample had
+    fallen on the excluded end."""
+    return [
+        ("simplify x (0<x<1e-7): x + x^2", simp("x", [X_N0]), _sol("x + x**2", kind="expression"), NOTOK, None),
+        ("simplify x^2 (0<x<1e-7): x^2 + x^3", simp("x**2", [X_N0]), _sol("x**2 + x**3", kind="expression"), NOTOK, None),
+        ("simplify x (3<x<3+1e-7): 2x - 3", simp("x", [X_N3]), _sol("2*x - 3", kind="expression"), NOTOK, None),
+        ("simplify x (3<x<3+1e-7): 3", simp("x", [X_N3]), _sol("3", kind="expression"), NOTOK, None),
+        ("simplify x (0<x<1e-7): 2x", simp("x", [X_N0]), _sol("2*x", kind="expression"), NOTOK, None),
+        ("ctrl simplify x (0<x<1e-7): x", simp("x", [X_N0]), _sol("x", kind="expression"), OK, None),
+        ("ctrl simplify (x-3)^2 (3<x<3+1e-7): x^2 - 6x + 9", simp("(x - 3)**2", [X_N3]),
+         _sol("x**2 - 6*x + 9", kind="expression"), OK, None),
+        ("ctrl simplify sin^2 + cos^2 (0<x<1e-7): 1", simp("sin(x)**2 + cos(x)**2", [X_N0]), _sol("1", kind="expression"),
+         OK, None),
+    ]
+
+
+def cases_t():
+    """KK-1: SymPy's primitive is complex on the range (log of a negative argument, polylog with exp_polar): the
+    fundamental theorem takes the real primitive (log(-u) where u < 0 on the range, polylog(s, (-1)^k z) with
+    z <= 1), checked by differentiation and continuity as any other."""
+    out = []
+    for f, a, b, c in (("1/cos(x)", 0, "pi/4", "log(1 + sqrt(2))"), ("1/sin(x)", "pi/4", "pi/2", "log(1 + sqrt(2))"),
+                       ("1/(x - 2)", 0, 1, "-log(2)"), ("x/(x**2 - 4)", 0, 1, "log(3/4)/2"),
+                       ("2*x/(x**2 - 9)", 0, 2, "log(5/9)"), ("1/x", -2, -1, "-log(2)"), ("1/x", "-E", -1, "-1"),
+                       ("1/(x - 1)", 0, "1/2", "-log(2)"), ("tan(x)", "2*pi/3", "3*pi/4", "-log(2)/2"),
+                       ("(2*x + 1)/(x**2 + x - 6)", 0, 1, "log(2/3)"),
+                       ("1/cos(x)**3", 0, "pi/4", "sqrt(2)/2 + log(1 + sqrt(2))/2"),
+                       ("log(1 + x)/x", 0, 1, "pi**2/12"), ("log(1 - x)/x", 0, 1, "-pi**2/6"),
+                       ("log(x)/(1 - x)", 0, 1, "-pi**2/6"), ("log(1 + x)/x", 0, 2, "-polylog(2, -2)")):
+        out.append((f"{f} [{a},{b}] = {c}", dint(f, a, b), _sol(c), OK, None))
+    out += [
+        ("1/x [-2,-1] = log 2 (wrong sign)", dint("1/x", -2, -1), _sol("log(2)"), NO, None),
+        ("1/(x - 2) [0,1] = -log 3 (wrong)", dint("1/(x - 2)", 0, 1), _sol("-log(3)"), NO, None),
+        ("log(1 + x)/x [0,1] = pi^2/6 (wrong)", dint("log(1 + x)/x", 0, 1), _sol("pi**2/6"), NO, None),
+        ("1/(x - 2) [0,1] t 1e-6: -0.693147", dtol("1/(x - 2)", 0, 1, "1e-6"), _sol("-0.693147"), OK, None),
+        ("evaluate Integral(1/(x - 2), (x, 0, 1)) = -log 2", ev("Integral(1/(x - 2), (x, 0, 1))"), _sol("-log(2)"), OK, None),
+        ("step Integral(1/(x - 2), (x, 0, 1)) = -log 2", X1, _sol("2", eqs("Integral(1/(x - 2), (x, 0, 1)) = -log(2)")),
+         OK, VER),
+        ("1/x [-1,1] = 0 (principal value; diverges)", dint("1/x", -1, 1), _sol("0"), NOTOK, None),
+        ("1/(x - 1) [1/2,2] = log 2 (principal value; diverges)", dint("1/(x - 1)", "1/2", 2), _sol("log(2)"), NOTOK, None),
+        ("1/(x - 2) [1,3] = 0 (principal value; diverges)", dint("1/(x - 2)", 1, 3), _sol("0"), NOTOK, None),
+        ("tan x [0,pi] = 0 (diverges)", dint("tan(x)", 0, "pi"), _sol("0"), NOTOK, None),
+    ]
+    return out
+
+
+def cases_u():
+    """SG-1: on the tolerance path a set, a tuple or an interval is no number (UNKNOWN, no exception); a complex
+    claim with |Im c| > t·|v| and an infinite claim against a finite integral are refuted."""
+    return [
+        ("evaluate e t 1e-3: {2.716}", evtol("E", "1e-3"), _sol("{2.716}"), UNK, None),
+        ("evaluate e t 1e-3: Interval(2.7, 2.72)", evtol("E", "1e-3"), _sol("Interval(2.7, 2.72)"), UNK, None),
+        ("evaluate e t 1e-3: (2.716, 2.717) (a pair for a scalar: the shape rule)", evtol("E", "1e-3"),
+         _sol("(2.716, 2.717)"), NOTOK, None),
+        ("evaluate e t 1e-3: 2.716 + I", evtol("E", "1e-3"), _sol("2.716 + I"), NO, None),
+        ("evaluate e t 1e-3: 2.71828 + I/10^9 (imaginary part inside the tolerance)", evtol("E", "1e-3"),
+         _sol("2.71828 + I/10**9"), UNK, None),
+        ("evaluate e = 2.716 + I", ev("E"), _sol("2.716 + I"), NO, None),
+        ("ctrl evaluate e t 1e-3: 2.716", evtol("E", "1e-3"), _sol("2.716"), OK, None),
+        ("cos [0,1] t 1e-3: {0.8414}", dtol("cos(x)", 0, 1, "1e-3"), _sol("{0.8414}"), UNK, None),
+        ("cos [0,1] t 1e-3: (0.8414, 1)", dtol("cos(x)", 0, 1, "1e-3"), _sol("(0.8414, 1)"), UNK, None),
+        ("cos [0,1] t 1e-3: Interval(0.84, 0.85)", dtol("cos(x)", 0, 1, "1e-3"), _sol("Interval(0.84, 0.85)"), UNK, None),
+        ("cos [0,1] t 1e-3: 0.8414 + I", dtol("cos(x)", 0, 1, "1e-3"), _sol("0.8414 + I"), NO, None),
+        ("e^cos x [0,1] t 1e-3: 2.3416 + I (no certificate: the enclosure)", dtol(EC, 0, 1, "1e-3"), _sol("2.3416 + I"),
+         NO, None),
+        ("sin(sin x) [0,1] t 1e-3: oo", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("oo"), NO, None),
+        ("sin(sin x) [0,1] t 1e-3: -oo", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("-oo"), NO, None),
+        ("sin(sin x) [0,1] = oo", dint("sin(sin(x))", 0, 1), _sol("oo"), NO, None),
+        ("1/x [0,1] t 1e-3: oo (diverges: undecided)", dtol("1/x", 0, 1, "1e-3"), _sol("oo"), NOTNO, None),
+        ("ctrl cos [0,1] t 1e-3: 0.8414", dtol("cos(x)", 0, 1, "1e-3"), _sol("0.8414"), OK, None),
+    ]
+
+
+def cases_v():
+    """KK-2: a reversed range compares the enclosure with its sign turned, as the forward range does."""
+    return [
+        ("1/(x - 2) [1,0] t 1e-6: 0.693147", dtol("1/(x - 2)", 1, 0, "1e-6"), _sol("0.693147"), OK, None),
+        ("ctrl 1/(x - 2) [0,1] t 1e-6: -0.693147", dtol("1/(x - 2)", 0, 1, "1e-6"), _sol("-0.693147"), OK, None),
+        ("e^cos x [1,0] t 1e-4: -2.3416", dtol(EC, 1, 0, "1e-4"), _sol("-2.3416"), OK, None),
+        ("e^cos x [1,0] t 1e-4: -2.35", dtol(EC, 1, 0, "1e-4"), _sol("-2.35"), NO, None),
+        ("e^cos x [1,0] t 1e-4: 2.3416 (sign)", dtol(EC, 1, 0, "1e-4"), _sol("2.3416"), NO, None),
+        ("ctrl e^cos x [0,1] t 1e-4: 2.35", dtol(EC, 0, 1, "1e-4"), _sol("2.35"), NO, None),
+        ("1/(x - 2) [1,0] = log 2", dint("1/(x - 2)", 1, 0), _sol("log(2)"), OK, None),
+        ("sin x/x [1,0] t 1e-3: -0.946", dtol("sin(x)/x", 1, 0, "1e-3"), _sol("-0.946"), OK, None),
+        ("sin x/x [1,0] t 1e-3: -0.95", dtol("sin(x)/x", 1, 0, "1e-3"), _sol("-0.95"), NO, None),
+    ]
+
+
+def cases_w():
+    """BİRLEŞİK-1: the odd-root convention of t**(1/3) is met by the fractional power rule (t >= 0) for that base;
+    a range with t < 0 stays undecided."""
+    G = "Integral(exp(-t**(1/3)), (t, 0, oo))"
+    T_ = {"name": "t", "domain": "real"}
+    return [
+        ("evaluate Integral(e^(-t^(1/3)), (t, 0, oo)) = 6", ev(G, (T_,)), _sol("6"), OK, None),
+        ("evaluate Integral(e^(-t^(1/3)), (t, 0, oo)) = 5 (wrong)", ev(G, (T_,)), _sol("5"), NO, None),
+        # the definite_integral task itself abstains on a membership condition of its variable (d4a, before this part)
+        ("e^(-x^(1/3)) [0,oo) = 6", dint("exp(-x**(1/3))", 0, "oo"), _sol("6"), NOTNO, None),
+        ("e^(-x^(1/3)) [0,oo) = 5 (wrong)", dint("exp(-x**(1/3))", 0, "oo"), _sol("5"), NOTOK, None),
+        ("x^(1/3) [0,1] = 3/4", dint("x**(1/3)", 0, 1), _sol("3/4"), NOTNO, None),
+        ("evaluate Integral(x^(1/3), (x, 0, 1)) = 3/4", ev("Integral(x**(1/3), (x, 0, 1))"), _sol("3/4"), OK, None),
+        ("evaluate Integral(x^(1/3), (x, 0, 1)) = 1 (wrong)", ev("Integral(x**(1/3), (x, 0, 1))"), _sol("1"), NO, None),
+        ("evaluate Integral(x^(-1/3), (x, 0, 1)) = 3/2", ev("Integral(x**(-1/3), (x, 0, 1))"), _sol("3/2"), OK, None),
+        ("evaluate Integral(x^(-2/3), (x, 1, 8)) = 3", ev("Integral(x**(-2/3), (x, 1, 8))"), _sol("3"), OK, None),
+        ("evaluate Integral(x^(1/3), (x, -1, 0)) = -3/4 (a convention)", ev("Integral(x**(1/3), (x, -1, 0))"),
+         _sol("-3/4"), UNK, None),
+        ("x^(1/3) [-1,0] = -3/4 (a convention: real root or principal value)", dint("x**(1/3)", -1, 0), _sol("-3/4"),
+         UNK, None),
+        ("x^(1/3) [-1,0] = 3/4 (wrong in both readings)", dint("x**(1/3)", -1, 0), _sol("3/4"), NOTOK, None),
+        ("x^(-2/3) [-8,-1] = 3 (a convention)", dint("x**(-2/3)", -8, -1), _sol("3"), UNK, None),
+        ("ctrl evaluate Integral(e^(-sqrt(t)), (t, 0, oo)) = 2", ev("Integral(exp(-sqrt(t)), (t, 0, oo))", (T_,)),
+         _sol("2"), OK, None),
+    ]
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
           "H": cases_h, "I": cases_i, "J": cases_j, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n,
-          "O": cases_o, "P": cases_p}
+          "O": cases_o, "P": cases_p, "Q": cases_q, "R": cases_r, "S": cases_s, "T": cases_t, "U": cases_u,
+          "V": cases_v, "W": cases_w}
+NO_EXCEPTION = "QRSTUVW"          # groups where a layer_exception anywhere fails the case
 SLOW = 60.0           # group D: every verify returns within this many seconds
 CASE_LIMIT = 240      # seconds before a case is abandoned (SIGALRM; the unfixed tree hangs on group D)
 
@@ -608,7 +854,7 @@ def _alarm(signum, frame):
     raise CaseTimeout(f"no verdict within {CASE_LIMIT} s")
 
 
-def main(out_path=None, groups="ABCDEFGHIJKLMNOP"):
+def main(out_path=None, groups="ABCDEFGHIJKLMNOPQRSTUVW"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -631,6 +877,10 @@ def main(out_path=None, groups="ABCDEFGHIJKLMNOP"):
                 status = last.get("status")
                 lev = last.get("evidence") or {}
                 detail = {k: lev[k] for k in ("reason",) if k in lev}
+                crash = [la.layer for la in r.layers if isinstance(la.evidence, dict)
+                         and str(la.evidence.get("reason", "")).startswith("layer_exception")]
+                if crash and g in NO_EXCEPTION:
+                    detail["layer_exception"] = crash
             except (Exception, CaseTimeout) as e:  # noqa: BLE001
                 signal.alarm(0)
                 if isinstance(e, CaseTimeout):
@@ -639,7 +889,8 @@ def main(out_path=None, groups="ABCDEFGHIJKLMNOP"):
                     get_sandbox().close()
                 verdict, status, detail = f"EXC {type(e).__name__}: {e}", None, {}
             s = round(time.time() - t, 2)
-            ok = verdict in verdicts and (statuses is None or status in statuses) and (g != "D" or s <= SLOW)
+            ok = verdict in verdicts and (statuses is None or status in statuses) and (g != "D" or s <= SLOW) \
+                and "layer_exception" not in detail
             bad += not ok
             rows.append({"group": g, "label": label, "verdict": verdict, "status": status, "ok": ok,
                          "detail": json.loads(json.dumps(detail, default=str)), "s": s})
@@ -655,5 +906,5 @@ def main(out_path=None, groups="ABCDEFGHIJKLMNOP"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJKLMNOP"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJKLMNOPQRSTUVW"
     sys.exit(1 if main(out, grp) else 0)

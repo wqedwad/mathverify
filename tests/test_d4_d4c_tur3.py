@@ -316,7 +316,7 @@ def test_end_cells_are_bounded():
     import mpmath as mp
     from mathverify.certify.enclosure import _raw, _removable, from_raw, rigorous_enclosure
     x = sp.Symbol("x", real=True)
-    assert _removable(sp.sin(x) / x, x, 0) == (sp.cos(x), 1)
+    assert _removable(sp.sin(x) / x, x, 0) == (sp.sin(x), sp.cos(x), 1)
     assert _removable(1 / x, x, 0) is None
     out = (_raw(mp.mpf("0.49")), _raw(mp.mpf("0.51")))
     lo, hi = (from_raw(v) for v in rigorous_enclosure(sp.log(x) * sp.log(1 - x), x, 0, 1, out, None, 4000, 120.0))

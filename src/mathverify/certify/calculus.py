@@ -29,8 +29,8 @@ import mpmath as mp
 import sympy as sp
 from sympy import S, Eq, Ne, Interval, oo
 
-from ..equiv import answers_equivalent
-from ..equiv.numeric import NONREAL, certified_sign, num_equal, read_tolerance, to_mp, within_rel_tol
+from ..equiv import _equals_false_stands, answers_equivalent
+from ..equiv.numeric import NONREAL, certified_sign, is_number_expr, num_equal, read_tolerance, to_mp, within_rel_tol
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
@@ -156,15 +156,23 @@ _TAIL_EXPONENTS = (sp.Integer(2), sp.Rational(3, 2), sp.Rational(6, 5))
 def _exact_conditions(e, var) -> list | None:
     """The conditions for `e` to be a real number, EXACT or None (`definedness_conditions_strict`),
     with a fractional power read as real only for a base >= 0 (> 0 when the exponent is negative):
-    SymPy's x**(1/3) is complex for x < 0, and no condition said so."""
-    from .domain import definedness_conditions_strict
+    SymPy's x**(1/3) is complex for x < 0, and no condition said so. The odd-root convention of such a power
+    (`Contains(b, Convention(odd_root))`: the real root or the principal value at b < 0) is met by that rule
+    for that very base: on b >= 0 the two readings are one value. It had made every certificate with t**(1/3)
+    fail, ∫_0^∞ e^(-t^(1/3)) dt = 6 among them (merge of d4c round 3 with d4a, BİRLEŞİK-1)."""
+    from .domain import Convention, definedness_conditions_strict
     conds = definedness_conditions_strict(e, var)
     if conds is None:
         return None
+    fractional = {node.base for node in sp.preorder_traversal(e) if isinstance(node, sp.Pow)
+                  and node.base.has(var) and node.exp.is_Rational and not node.exp.is_Integer}
     out: list = []
     for c in conds:
         if c is sp.true:
             continue
+        if isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and c.args[1].kind == "odd_root" \
+                and c.args[0] in fractional:
+            continue                                  # the fractional power rule below holds it
         if not getattr(c, "free_symbols", None):
             return None                               # a constant condition: no rule decides it here
         if c.free_symbols != {var} or not isinstance(c, sp.core.relational.Relational):
@@ -316,9 +324,62 @@ def _primitive_difference(g, var, p, q, timeout):
         return None
     for F in r.value[:2]:
         v = _checked_difference(F, g, var, p, q, timeout)
+        if v is None:
+            R = _real_primitive(F, var, p, q)
+            if R is not None and R != F:
+                v = _checked_difference(R, g, var, p, q, timeout)
         if v is not None:
             return v
     return None
+
+
+def _real_on(u, var, p, q, pieces: int = 64):
+    """Interval (lo, hi) of the real expression u over [p, q] (finite ends; the hull of `pieces` cells), or None."""
+    from .enclosure import _ends, _hull, constant_interval, iv_eval
+    ip, iq = constant_interval(p), constant_interval(q)
+    if ip is None or iq is None or not ip[1] < iq[0]:
+        return None
+    saved = mp.iv.dps
+    try:
+        mp.iv.dps = 30
+        with mp.workdps(30):
+            lo_, hi_ = mp.inf, -mp.inf
+            ends = [ip[0]] + [ip[1] + (iq[0] - ip[1]) * k / pieces for k in range(1, pieces)] + [iq[1]]
+            for l_, r_ in zip(ends, ends[1:]):
+                a_, b_ = _ends(iv_eval(u, {var: _hull(l_, r_)}))
+                lo_, hi_ = min(lo_, a_), max(hi_, b_)
+            return lo_, hi_
+    except (ArithmeticError, ValueError, TypeError, AttributeError):
+        return None
+    finally:
+        mp.iv.dps = saved
+
+
+def _real_primitive(F, var, p, q):
+    """SymPy's complex-valued primitive written as a real one on [p, q], or None: log(u) with u < 0 on all of
+    [p, q] (certified by interval arithmetic) as log(-u), the same derivative and real there; exp_polar(iπk) in a
+    polylog's argument as (-1)^k (any other exp_polar: None). The result is only a candidate: `_checked_difference`
+    proves its derivative and its continuity, and a polylog's argument past 1, where Li_s is complex, fails the
+    definedness rule there (`domain.definedness_conditions_strict`: z <= 1). SymPy's primitives of 1/x on [-2, -1],
+    1/(x - 2), sec x, tan x on (π/2, π) and ln(1 + x)/x were never real there, and the textbook values -ln 2,
+    ln(1 + √2), π²/12 had no certificate (attack on d4c round 3, KK-1)."""
+    if not isinstance(F, sp.Basic):
+        return None
+    reps = {}
+    for n in F.atoms(sp.exp_polar):
+        k = sp.simplify(n.args[0] / (sp.I * sp.pi))
+        if not k.is_Integer:
+            return None
+        reps[n] = sp.Integer(-1) ** k
+    R = F.xreplace(reps) if reps else F
+    if R.has(sp.exp_polar):
+        return None
+    logs = {}
+    for n in R.atoms(sp.log):
+        box = _real_on(n.args[0], var, p, q)
+        if box is not None and box[1] < 0:
+            logs[n] = sp.log(-n.args[0])
+    return R.xreplace(logs) if logs else R
 
 
 def _checked_difference(F, g, var, p, q, timeout):
@@ -331,7 +392,8 @@ def _checked_difference(F, g, var, p, q, timeout):
     rd = sb_run("mathverify.sandbox.ops:diff_expr", F, var, 1, timeout=timeout)
     if not rd.ok:
         return None
-    dF = rd.value
+    # Li_1(z) = -log(1 - z): SymPy leaves the derivative of Li_2 as polylog(1, ·), which simplify does not reduce
+    dF = rd.value.replace(lambda n: isinstance(n, sp.polylog) and n.args[0] == 1, lambda n: -sp.log(1 - n.args[1]))
     rs = sb_run("mathverify.sandbox.ops:simplify_diff", dF, g, timeout=timeout)
     if not rs.ok or rs.value != 0:
         return None
@@ -531,7 +593,28 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     was [c - t|c|, c + t|c|], scaled by the claim, and with t >= 1 it held any value (YO-4, RK-E)."""
     ev: dict[str, Any] = {}
     c = claim_interval(claimed)
-    if c is None or not (mp.isfinite(c[0]) and mp.isfinite(c[1])) or c[0] <= 0 <= c[1]:
+    if c is not None and not (mp.isfinite(c[0]) and mp.isfinite(c[1])):
+        # an infinite claim: any finite enclosure refutes it (SG-1)
+        no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=timeout)
+        ev.update(xev)
+        return (False if no else None), ev
+    if c is None:
+        im = _imaginary_part(claimed)
+        if im is not None:
+            # |c - v| >= |Im c| > t·|v| for every real v of an enclosure E: refuted when |Im c| - t·max|E| > 0 is
+            # certified (SG-1); E is refined until it lies inside (-|Im c|/t, |Im c|/t) or misses it
+            si, im_c = im
+            t_ = sp.Rational(rel_tol)
+            with mp.workdps(30):
+                far = abs(to_mp(im_c, 30)) * (1 - mp.mpf(10) ** -10) / mp.mpf(t_.p) * t_.q
+            enc = rigorous_integral(integrand, var, a, b, outside=(-far, far), inside=(-far, far), timeout=timeout)
+            ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+            if enc is not None and mp.isfinite(enc[0]) and mp.isfinite(enc[1]):
+                B = max(_mpf_rational(abs(enc[0])), _mpf_rational(abs(enc[1])))
+                if certified_sign(si * im_c - t_ * B) == 1:
+                    ev["reason"] = "imaginary_part_beyond_the_tolerance"
+                    return False, ev
+    if c is None or c[0] <= 0 <= c[1]:
         ev["reason"] = "claim_not_a_nonzero_number"
         return None, ev
     iv, saved = mp.iv, mp.iv.dps
@@ -562,6 +645,25 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     if hi < outside[0] or lo > outside[1]:
         return False, ev
     return None, ev
+
+
+def _imaginary_part(claimed):
+    """(sign, Im c) for a closed claim c whose imaginary part is certified nonzero, else None."""
+    try:
+        c = sp.sympify(claimed)
+        if not is_number_expr(c) or c.has(sp.oo, -sp.oo, sp.zoo, sp.nan):
+            return None
+        im_c = sp.im(c)
+        si = certified_sign(im_c)
+        return (si, im_c) if si in (1, -1) else None
+    except (sp.SympifyError, TypeError, ValueError, ArithmeticError, AttributeError):
+        return None
+
+
+def _mpf_rational(x):
+    """The binary number x (finite mpf) as an exact Rational."""
+    m, e = mp.mpf(x).man_exp
+    return sp.Integer(m) * sp.Integer(2) ** e
 
 
 def integrand_undefined_on_a_subinterval(src, expr, var, a, b, ns, timeout: float = 8.0,
@@ -922,6 +1024,7 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
         ok, rev = random_point_equal(dF, integrand, var, domain, seed=0, n=40)
         ev["random_point"] = rev
         ev["method"] = "random_point"
+        agreed_on = domain
         if ok is None and wide is not None and discourse != S.Reals:
             # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not inside, and
             # log|x| was left undecided for 1/x under x > 1. Agreement where both are defined is agreement on
@@ -929,7 +1032,13 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
             okw, wev = random_point_equal(dF, integrand, var, wide, seed=0, n=40)
             ev["random_point_wide"] = wev
             if okw is True:
-                ok = True
+                ok, agreed_on = True, wide
+        if ok is True and agreed_on == S.Reals and _equals_false_stands(dF, integrand):
+            # SymPy's `equals` says they differ on the real line: agreement at sample points does not overrule it,
+            # here as in `answers_equivalent` (x² + cos(Nπx)/(10^40·Nπ) as a primitive of 2x; attack on d4c round 3,
+            # YO-B). A counterexample still refutes
+            ok = None
+            ev["conflict"] = "sympy_equals_false"
     if ok is True:
         okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
         ev["domain_check"] = dev

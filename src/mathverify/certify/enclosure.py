@@ -20,13 +20,17 @@ import time
 import mpmath as mp
 import sympy as sp
 
-__all__ = ["iv_eval", "Unsupported", "rigorous_enclosure", "constant_interval", "from_raw"]
+__all__ = ["iv_eval", "Unsupported", "rigorous_enclosure", "constant_interval", "constant_sign", "from_raw"]
 
 _DPS = 30
 
 
 class Unsupported(ValueError):
     """An expression with no interval extension here."""
+
+
+class NotAnalytic(Unsupported):
+    """`iv_eval(..., analytic=True)`: an operation not proved analytic on its argument's interval."""
 
 
 def _iv():
@@ -55,11 +59,19 @@ def _point(v):
     raise Unsupported(f"no interval for {v}")
 
 
-def _monotone(fn, x, increasing=True):
-    """[fn(lo), fn(hi)] widened by a margin for mpmath's last-digit error (fn at a higher precision)."""
+def _monotone(fn, x, increasing=True, limits=None):
+    """[fn(lo), fn(hi)] widened by a margin for mpmath's last-digit error (fn at a higher precision). An
+    unbounded argument only for a bounded fn, with `limits` = (fn(-oo), fn(oo)): atan of every real number is
+    in [-π/2, π/2], so atan(tan x) on a cell holding a pole of tan is bounded there (YO-A)."""
     lo, hi = _ends(x)
     if not (mp.isfinite(lo) and mp.isfinite(hi)):
-        raise Unsupported("unbounded argument")
+        if limits is None:
+            raise Unsupported("unbounded argument")
+        with mp.workdps(_DPS + 15):
+            eps = mp.mpf(10) ** (-(_DPS + 5))
+            a = limits[0]() if lo == -mp.inf else fn(lo)
+            b = limits[1]() if hi == mp.inf else fn(hi)
+            return _hull(a - eps * (1 + abs(a)), b + eps * (1 + abs(b)))
     with mp.workdps(_DPS + 15):
         a, b = fn(lo), fn(hi)
         if not increasing:
@@ -83,8 +95,35 @@ def _mig_mag(x):
     return (lo, hi) if lo > 0 else (_neg(hi), _neg(lo))
 
 
-def iv_eval(e, env: dict):
-    """The interval value of the SymPy expression `e` with the symbols of `env` (Symbol -> interval)."""
+def _bounded(v):
+    lo, hi = _ends(v)
+    if not (mp.isfinite(lo) and mp.isfinite(hi)):
+        raise NotAnalytic("an unbounded value")
+    return v
+
+
+def _off_zero(v, what):
+    lo, hi = _ends(v)
+    if not (lo > 0 or hi < 0):
+        raise NotAnalytic(f"{what} may be 0")
+
+
+def iv_eval(e, env: dict, analytic: bool = False):
+    """The interval value of the SymPy expression `e` with the symbols of `env` (Symbol -> interval).
+
+    analytic=True also PROVES `e` analytic on the box, read as written: every operation is applied inside the
+    open set where it is analytic (log of a positive number, tan where cos is not 0, a fractional power of a
+    positive base, asin inside (-1, 1), ...) and every intermediate value is bounded; NotAnalytic otherwise. A
+    pole (1/x, tan, log at 0) shows as an unbounded value, a log below 0 as an error; a function that stays
+    bounded where it is not analytic (√x and asin at an end, |x| and sign at 0, Max/Min) is refused by name.
+    SymPy's derivatives of `e` are then its true derivatives on the box. Without that proof they are not:
+    SymPy reduces d/dx atan(tan x) to 1, so f'' = 0 hid the jump of -π at π/2, and the Taylor bound of a cell
+    holding it was one wrong point (attack on d4c round 3, YO-A)."""
+    v = _iv_node(e, env, analytic)
+    return _bounded(v) if analytic else v
+
+
+def _iv_node(e, env: dict, an: bool):
     iv = _iv()
     if e in env:
         return env[e]
@@ -97,22 +136,24 @@ def iv_eval(e, env: dict):
     if isinstance(e, sp.Add):
         out = iv.mpf(0)
         for a in e.args:
-            out = out + iv_eval(a, env)
+            out = out + iv_eval(a, env, an)
         return out
     if isinstance(e, sp.Mul):
         out = iv.mpf(1)
         for a in e.args:
-            out = out * iv_eval(a, env)
+            out = out * iv_eval(a, env, an)
         return out
     if isinstance(e, sp.Pow):
         base, ex = e.args
         if ex.is_Integer:
-            b = iv_eval(base, env)
+            b = iv_eval(base, env, an)
             n = int(ex)
             return iv.mpf(1) / (b ** (-n)) if n < 0 else b ** n     # 1/[0, c] is [1/c, +inf]
         if ex.is_Rational:
-            b = iv_eval(base, env)
+            b = iv_eval(base, env, an)
             lo, hi = _ends(b)
+            if an and not lo > 0:
+                raise NotAnalytic("a fractional power of a base that may be 0")
             if ex == sp.S.Half and lo >= 0:
                 return iv.sqrt(b)
             if lo >= 0:
@@ -120,20 +161,24 @@ def iv_eval(e, env: dict):
                 return iv.exp(_point(ex) * iv.log(b))
             raise Unsupported("fractional power of a base that is not positive")
         if base is sp.E:
-            return iv.exp(iv_eval(ex, env))
-        b = iv_eval(base, env)
+            return iv.exp(iv_eval(ex, env, an))
+        b = iv_eval(base, env, an)
         lo, _ = _ends(b)
+        if an and not lo > 0:
+            raise NotAnalytic("a real power of a base that may be 0")
         if lo >= 0:
             # a cell touching b = 0 (x^x on [0, h]): exp(e·log b) is bounded where the power is (RK-B)
-            return iv.exp(iv_eval(ex, env) * iv.log(b))
+            return iv.exp(iv_eval(ex, env, an) * iv.log(b))
         raise Unsupported("real power of a base that is not positive")
     if not isinstance(e, sp.Function) or len(e.args) != 1:
         if isinstance(e, (sp.Max, sp.Min)):
-            vals = [_ends(iv_eval(a, env)) for a in e.args]
+            if an:
+                raise NotAnalytic("Max/Min")
+            vals = [_ends(iv_eval(a, env, an)) for a in e.args]
             pick = max if isinstance(e, sp.Max) else min
             return _hull(pick(v[0] for v in vals), pick(v[1] for v in vals))
         raise Unsupported(f"no interval extension for {type(e).__name__}")
-    x = iv_eval(e.args[0], env)
+    x = iv_eval(e.args[0], env, an)
     lo, hi = _ends(x)
     if isinstance(e, sp.exp):
         return iv.exp(x)
@@ -151,19 +196,25 @@ def iv_eval(e, env: dict):
             return iv.mpf([-mp.inf, mp.inf])
         return num / den
     if isinstance(e, sp.Abs):
+        if an:
+            _off_zero(x, "the argument of Abs")
         return _hull(*_mig_mag(x))
     if isinstance(e, sp.sign):
+        if an:
+            _off_zero(x, "the argument of sign")
         return _hull(-1 if lo < 0 else (0 if lo == 0 else 1), 1 if hi > 0 else (0 if hi == 0 else -1))
     if isinstance(e, sp.atan):
-        return _monotone(mp.atan, x)
+        return _monotone(mp.atan, x, limits=(lambda: -mp.pi / 2, lambda: mp.pi / 2))
     if isinstance(e, (sp.asin, sp.acos)):
         if lo < -1 or hi > 1:
             raise Unsupported("asin/acos outside [-1, 1]")
+        if an and not (-1 < lo and hi < 1):
+            raise NotAnalytic("asin/acos at -1 or 1")
         return _monotone(mp.asin, x) if isinstance(e, sp.asin) else _monotone(mp.acos, x, increasing=False)
     if isinstance(e, sp.sinh):
         return _monotone(mp.sinh, x)
     if isinstance(e, sp.tanh):
-        return _monotone(mp.tanh, x)
+        return _monotone(mp.tanh, x, limits=(lambda: mp.mpf(-1), lambda: mp.mpf(1)))
     if isinstance(e, sp.cosh):
         m, M = _mig_mag(x)
         return _monotone(mp.cosh, _hull(m, M))
@@ -185,18 +236,49 @@ def constant_interval(c):
         return None
 
 
+def constant_sign(c, ladder=(30, 60, 120, 240)):
+    """-1 or 1 when an interval holding the closed constant `c` (outward rounding) excludes 0 at one of the
+    precisions of `ladder`; None otherwise (0 is never certified here, nor anything with no interval extension).
+    Strict evalf is no such proof: asin(tanh x) - atan(sinh x), which is 0, came out 2.36e-125 at 30 and at 70
+    digits at x = π/3·10^-6 + 287652374/999983 (asin near 1 amplifies the error of tanh by 10^125)."""
+    saved = mp.iv.dps
+    try:
+        for dps in ladder:
+            mp.iv.dps = dps
+            with mp.workdps(dps):
+                try:
+                    lo, hi = _ends(iv_eval(sp.sympify(c), {}))
+                except (ArithmeticError, ValueError, TypeError, AttributeError, NotImplementedError):
+                    return None
+                if lo > 0:
+                    return 1
+                if hi < 0:
+                    return -1
+        return None
+    finally:
+        mp.iv.dps = saved
+
+
 def _cell(f, d2f, var, l, r):
-    """An interval holding ∫_l^r f (l, r mpf): (r - l)·f([l, r]), intersected, when f'' is given, with
-    (r - l)·f(m) + f''([l, r])·(r - l)³/24 (Taylor at the midpoint m with Lagrange remainder: the linear
-    term integrates to 0, and (x - m)²/2 >= 0 integrates to (r - l)³/24)."""
+    """An interval holding ∫_l^r f (l, r mpf): (r - l)·f([l, r]), intersected, when f'' is given and f is
+    PROVED analytic on [l, r] (`iv_eval(..., analytic=True)`), with (r - l)·f(m) + f''([l, r])·(r - l)³/24
+    (Taylor at the midpoint m with Lagrange remainder: the linear term integrates to 0, and (x - m)²/2 >= 0
+    integrates to (r - l)³/24). Taylor's theorem needs f in C² on the cell: SymPy's f'' of atan(tan x) is 0,
+    and a cell holding the jump at π/2 gave one wrong point (attack on d4c round 3, YO-A)."""
     iv = _iv()
     L, R = iv.mpf(l), iv.mpf(r)
     h = R - L
+    box = {var: _hull(l, r)}
+    smooth = True
     try:
-        whole = h * iv_eval(f, {var: _hull(l, r)})
+        whole = h * iv_eval(f, box, analytic=True)
     except (ArithmeticError, ValueError):
-        whole = iv.mpf([-mp.inf, mp.inf])
-    if d2f is None:
+        smooth = False
+        try:
+            whole = h * iv_eval(f, box)
+        except (ArithmeticError, ValueError):
+            whole = iv.mpf([-mp.inf, mp.inf])
+    if d2f is None or not smooth:
         return whole
     try:
         d2 = iv_eval(d2f, {var: _hull(l, r)})          # unbounded near a singularity: no help, no harm
@@ -214,14 +296,15 @@ _JUMPS = (sp.floor, sp.ceiling, sp.frac, sp.Piecewise, sp.Heaviside, sp.sign, sp
 
 
 def _removable(f, var, c):
-    """(P^(k), k!) when f = P/(var - c)^k near the end c with P^(j)(c) = 0 exactly for j < k (k <= 3), so that
-    f(x) = P^(k)(ξ)/k! for some ξ between c and x; None otherwise."""
+    """(P, P^(k), k!) when f = P/(var - c)^k near the end c with P^(j)(c) = 0 exactly for j < k (k <= 3), so that
+    f(x) = P^(k)(ξ)/k! for some ξ between c and x where P is C^k (the caller proves P analytic there); None
+    otherwise."""
     for k in (1, 2, 3):
         try:
             P = sp.cancel(f * (var - c) ** k)
             if not all(sp.simplify(sp.diff(P, var, j).subs(var, c)) == 0 for j in range(k)):
                 continue
-            return sp.diff(P, var, k), int(sp.factorial(k))
+            return P, sp.diff(P, var, k), int(sp.factorial(k))
         except Exception:  # noqa: BLE001 - no rule
             continue
     return None
@@ -264,6 +347,14 @@ def _weighted(g, kind, alpha, p_, var, l, r, h):
         q1 = iv.mpf(int((p_ + 1).p)) / int((p_ + 1).q)
         W = iv.exp(q1 * iv.log(H)) / (q1 * (iv.mpf(int(alpha.p)) / int(alpha.q)))
     return iv_eval(g, {var: _hull(l, r)}) * W
+
+
+def _meet(u, v):
+    """Two enclosures of one integral: their intersection is one too. Disjoint, one of them rests on a false
+    premise: neither is picked, their hull holds the true one (the end rule's bound had been picked, YO-A)."""
+    (a1, b1), (a2, b2) = _ends(u), _ends(v)
+    lo_, hi_ = max(a1, a2), min(b1, b2)
+    return _hull(lo_, hi_) if lo_ <= hi_ else _hull(min(a1, a2), max(b1, b2))
 
 
 def _raw(x):
@@ -330,12 +421,6 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
             blo, bhi = _ends(b_)
             return mp.isfinite(blo) and mp.isfinite(bhi)
 
-        def meet(u, v):
-            # two enclosures of one integral: their intersection is one too
-            (a1, b1), (a2, b2) = _ends(u), _ends(v)
-            lo_, hi_ = max(a1, a2), min(b1, b2)
-            return _hull(lo_, hi_) if lo_ <= hi_ else u
-
         def cell(l, r, d):
             try:
                 c_ = _cell(f, d, var, l, r)
@@ -346,14 +431,17 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
                 if rule is not None:
                     # Taylor at the end c holds on the whole side: f(x) = P^(k)(ξ)/k! with ξ between c and x, so
                     # on any cell, f is in P^(k)([c, r])/k! (or [l, c]); near c it is far tighter than the plain
-                    # value (sin x/x on [h, 2h]: [1/2, 2] against [cos 2h, 1])
-                    pk, kf = rule
+                    # value (sin x/x on [h, 2h]: [1/2, 2] against [cos 2h, 1]). Taylor needs P in C^k from c to the
+                    # cell: P proved analytic there, read as written (sin x/x + atan(tan x) past π/2: YO-A)
+                    P, pk, kf = rule
                     try:
-                        b_ = h * iv_eval(pk, {var: _hull(min(at, l), max(at, r))}) / kf
+                        side = {var: _hull(min(at, l), max(at, r))}
+                        iv_eval(P, side, analytic=True)
+                        b_ = h * iv_eval(pk, side) / kf
                     except (Unsupported, ArithmeticError, ValueError, NotImplementedError):
                         b_ = None
                     if b_ is not None and finite(b_):
-                        c_ = meet(b_, c_) if finite(c_) else b_
+                        c_ = _meet(b_, c_) if finite(c_) else b_
                 if at in (l, r) and not finite(c_):
                     for g, kind, alpha, p_ in weights:
                         try:
@@ -372,6 +460,7 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
         out_lo, out_hi = (from_raw(outside[0]), from_raw(outside[1])) if outside else (None, None)
         in_lo, in_hi = (from_raw(inside[0]), from_raw(inside[1])) if inside else (None, None)
         t0 = time.monotonic()
+        finest = (ib[0] - ia[1]) * mp.mpf(2) ** -110
 
         def width(c):
             lo, hi = _ends(c)
@@ -382,9 +471,12 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
             for c in [c_ for _, _, c_ in cells] + edge:
                 s = s + c
             slo, shi = _ends(s)
-            if outside is not None and (shi < out_lo or slo > out_hi):
+            # `outside` and `inside` are about ∫_a^b: with a > b the sum is ∫_b^a, compared with its sign
+            # turned (the unturned sum missed every window, KK-2)
+            clo, chi = (slo, shi) if sign > 0 else (_neg(shi), _neg(slo))
+            if outside is not None and (chi < out_lo or clo > out_hi):
                 break
-            if inside is not None and in_lo <= slo and shi <= in_hi:
+            if inside is not None and in_lo <= clo and chi <= in_hi:
                 break
             if len(cells) >= max_cells:
                 break
@@ -397,16 +489,20 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
                     and shi - slo <= mp.mpf(10) ** (-(_DPS - 8)) * (1 + abs(slo)):
                 break
             cells.sort(key=lambda c: width(c[2]), reverse=True)
-            k = max(1, len(cells) // 8)
+            # while a cell is unbounded the sum is, and only splitting such cells can bound it: they alone are
+            # split, until each is bounded or is split no further (a pole in it: no bound to be had, and none
+            # narrower than 2^-110 of the range, where a pole at an end would be halved forever; the budget of
+            # cells used to run out first, 4000 cells for nothing)
+            k = sum(1 for _, _, c_ in cells if not finite(c_)) or max(1, len(cells) // 8)
             new = []
             for l, r, c in cells[:k]:
                 m = (l + r) / 2
-                if not l < m < r:
+                if not l < m < r or (not finite(c) and r - l < finest):
                     new.append((l, r, c))
                     continue
                 new += [(l, m, cell(l, m, df)), (m, r, cell(m, r, df))]
             if len(new) == k:
-                break                             # no cell can be split further
+                break                             # no cell can be split further (an unbounded one: no bound at all)
             cells = new + cells[k:]
         if sign < 0:
             slo, shi = _neg(shi), _neg(slo)
