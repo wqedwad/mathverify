@@ -244,6 +244,24 @@ def test_root_base_zeros_without_derivative_proved_at_once():
     assert _v(q, "cos(x)**2/(2*sqrt(1 + sin(x))) - sin(x)*sqrt(1 + sin(x))", E) != "CORRECT"
 
 
+def test_asin_acos_at_an_attained_end_are_not_analytic():
+    # SymPy proves 1 - 2*x**2 <= 1 and drops it; acos(1 - 2*x**2) = 2*asin(|x|) has a corner at 0, where the
+    # textbook derivative has no value: never refuted for that (found in round 4 beside RK-1, same rule)
+    E = "expression"
+    q = _der("acos(1 - 2*x**2)")
+    assert _v(q, "4*x/sqrt(1 - (1 - 2*x**2)**2)", E) != "INCORRECT"
+    assert _v(q, "2*x/(Abs(x)*sqrt(1 - x**2))", E) != "INCORRECT"
+    assert _v(q, "2/sqrt(1 - x**2)", E) == "INCORRECT"                                               # control
+    assert _v(_der("asin(1 - x**2)"), "-2*x/sqrt(1 - (1 - x**2)**2)", E) != "INCORRECT"
+    assert _v(_der("acos(1 - 2*x**2)", "0"), DNE) != "INCORRECT"
+    assert _v(_der("acos(1 - 2*x**2)", "0"), "0") != "CORRECT"
+    # the parameter path: 1 - 2*x**2/a**2 = 1 at x = 0 for every a
+    q = _der("acos(1 - 2*x**2/a**2)", None, (), [X, AP])
+    assert _v(q, "4*x/(a**2*sqrt(1 - (1 - 2*x**2/a**2)**2))", E) != "INCORRECT"
+    assert _v(_der("asin(x/2)"), "1/sqrt(4 - x**2)", E) == "CORRECT"                                  # control
+    assert _v(_der("acos(x/a)", None, (), [X, AP]), "-1/sqrt(a**2 - x**2)", E) == "CORRECT"           # control
+
+
 def test_parameter_fixed_in_another_form_read_by_calculus():
     E = "expression"
     for g in (["2*a = 4"], ["a - 2 = 0"], ["a**2 = 4", "a > 0"]):

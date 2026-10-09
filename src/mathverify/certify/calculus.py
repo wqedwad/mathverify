@@ -1088,9 +1088,13 @@ def smooth_at(f, var, p, switches, fconds, root_of=None) -> bool:
             return False
         if isinstance(n, sp.Pow) and var in n.base.free_symbols and not (n.exp.is_Integer and n.exp >= 0):
             bases.append(n.base)
+        if isinstance(n, (sp.asin, sp.acos)) and var in n.args[0].free_symbols:
+            bases.append(1 - n.args[0] ** 2)
     # a power u**r with r no natural number is analytic only where u != 0, proved, whatever its written condition: SymPy
     # proves x**2 + x**4 >= 0 and drops it, and sqrt(x**2 + x**4), with a corner at 0, was read as analytic there, so
-    # its textbook derivative, undefined at 0, was refuted (attack on d4e round 3, D4E3-RK-1)
+    # its textbook derivative, undefined at 0, was refuted (attack on d4e round 3, D4E3-RK-1). asin(u) and acos(u) alike
+    # only where u**2 != 1: SymPy proves 1 - 2*x**2 <= 1, and acos(1 - 2*x**2), with a corner at 0, was read as analytic
+    # there (round 4, the same rule's sibling)
     if any(_nonzero_at(u, var, p, root_of=root_of) is not True for u in list(switches) + bases):
         return False
     return all(strict_at(c, var, p) for c in fconds if getattr(c, "free_symbols", None))
@@ -2427,6 +2431,10 @@ def _claim_for_every_value(ctx: Ctx, f, var, x0, rep, fc, claim_conds, claim_now
     analytic = analytic and all(
         sp.sympify(n.base).xreplace(rep).subs(var, x0).is_zero is False for n in sp.preorder_traversal(f)
         if isinstance(n, sp.Pow) and var in n.base.free_symbols and not (n.exp.is_Integer and n.exp >= 0))
+    # asin(u) and acos(u) only where u**2 != 1 (`smooth_at`)
+    analytic = analytic and all(
+        (1 - n.args[0] ** 2).xreplace(rep).subs(var, x0).is_zero is False for n in sp.preorder_traversal(f)
+        if isinstance(n, (sp.asin, sp.acos)) and var in n.args[0].free_symbols)
     if claim_nowhere & ({var} | set(rep)):
         ev["claim_as_written"] = "claim_defined_nowhere"
         return "undefined" if analytic else "undecided"
