@@ -314,12 +314,22 @@ def test_claim_condition_on_the_parameters_region():
     assert _v(_der("sqrt(x - a)", None, ["a != 0"], [X, AR]), "1/(2*sqrt(x - a)) + 0/a", E) == "CORRECT"
 
 
-def test_cell_proof_budget_keeps_one_verify_short():
+def test_cell_proof_budget_keeps_one_verify_short(monkeypatch):
+    from mathverify.equiv import symbolic
+    plain, results = symbolic.sym_equal, []
+
+    def counted(a, b, timeout=5.0):
+        r = plain(a, b, timeout)
+        results.append(r[0])
+        return r
+    monkeypatch.setattr(symbolic, "sym_equal", counted)
     U2, U3 = "x**4 - 10*x**2 + 1", "x**3 - 3*x + 1"
     t0 = time.time()
     v = _v(_der(f"Abs({U2})*Abs({U3})"),
            f"(4*x**3 - 20*x)*({U2})*Abs({U3})/Abs({U2}) + (3*x**2 - 3)*({U3})*Abs({U2})/Abs({U3})", "expression")
     assert v == "CORRECT" and time.time() - t0 < 30          # 60.6 s on a0a0829, 6 s now (measured)
+    # every cell proved by its first attempt, the plain identity: a failed parametrised attempt costs 10 s each
+    assert results and all(r is True for r in results)
 
 
 def test_cell_proof_spends_at_most_its_budget(monkeypatch):
