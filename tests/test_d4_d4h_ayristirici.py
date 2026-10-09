@@ -336,7 +336,8 @@ def test_leibniz_notation_without_declared_names_reads_as_before():
     ns = _ns(X, {"name": "d", "domain": "real"})
     assert parse_expr_str(r"\frac{d}{2}", ns) == ns["d"] / 2
     assert _leibniz_names("d^2", "dn^2") == {"d", "dn"}
-    assert _leibniz_names("dy", "dx") == {"dy", "dx"}
+    # round 2 (YO-2): d itself is among the names too (`d y` is the product d·y): one of them declared is enough
+    assert _leibniz_names("dy", "dx") == {"d", "dy", "dx"}
     assert _leibniz_names(r"\mathrm{d}^{2} y", r"\mathrm{d} x^{2}") == {"d", "dx"}
     assert _leibniz_names("d", "2") is None and _leibniz_names("a", "dx") is None
 

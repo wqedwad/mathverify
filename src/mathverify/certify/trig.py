@@ -288,6 +288,19 @@ def _one_family(e, ints: list):
     return c0, g * nonzero[0]
 
 
+def _problem_names(ir, ctx: Ctx) -> set:
+    """The names the problem's givens (its equation among them when it is givens[0]) and its variables' constraints
+    use, read off their parses (a given that does not parse: every identifier of its text, the cautious side)."""
+    import re
+    names: set = set()
+    for src in list(ir.givens) + [c for v in ir.vars for c in v.constraints]:
+        try:
+            names |= {s_.name for s_ in ctx.rel(src).free_symbols}
+        except Exception:  # noqa: BLE001 - unread: its identifiers
+            names |= set(re.findall(r"[A-Za-z_]\w*", str(src)))
+    return names
+
+
 def general_solution_from_claim(claimed, ns) -> Any:
     """Turn a claimed set whose elements contain the integer symbol n/k into ImageSets. An element with two or
     more family parameters is one family only when the lattice they span is (`_one_family`); otherwise None
@@ -390,6 +403,14 @@ def verify(ir, solution, ctx: Ctx):
         conds = [c for c in written_definedness(eq_src, ctx.ns)[0] if c.free_symbols == {var}]
         conds += [c for c in definedness_conditions(rel, var)
                   if getattr(c, "free_symbols", set()) == {var} and c not in conds]
+        if window is None:
+            # a family name the problem itself uses (a given pins m = 1/2, a constraint restricts it) is an index
+            # of the claim or that quantity: {mπ + kπ} was the lattice πℤ (CORRECT for
+            # sin x = 0) with m = 1/2 given, where m read as the given's m it is π/2 + πℤ (attack on d4h, YO-5)
+            taken = sorted({s_.name for s_ in getattr(claimed, "free_symbols", set()) if s_.name in _FAMILY_NAMES}
+                           & _problem_names(ir, ctx))
+            if taken:
+                return unknown(LAYER, f"family_name_is_a_problem_symbol: {taken}", t.ms, {"claimed": str(claimed)})
         claimed_g = general_solution_from_claim(claimed, ns2) if window is None else claimed
         if claimed_g is None:
             return unknown(LAYER, "family_parameters_not_one_family", t.ms, {"claimed": str(claimed)})
