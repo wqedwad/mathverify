@@ -447,7 +447,10 @@ def _zero_arguments_resolved(e, timeout: float):
             return n
         args = [go(a) for a in n.args]
         if any(a is not b for a, b in zip(args, n.args)):
-            n = n.func(*args)
+            try:
+                n = n.func(*args)
+            except Exception:  # noqa: BLE001 - a node SymPy will not rebuild so: the original stands
+                return n
         if tracked(n) or n.free_symbols or not isinstance(n, (sp.Function, sp.Max, sp.Min)):
             return n
         if isinstance(n, (sp.Max, sp.Min)):
@@ -455,7 +458,8 @@ def _zero_arguments_resolved(e, timeout: float):
         elif isinstance(n, sp.atan2):
             sy, sx = certified_sign(n.args[0], timeout), certified_sign(n.args[1], timeout)
             v = {(0, 1): sp.S.Zero, (0, -1): sp.pi, (1, 0): sp.pi / 2, (-1, 0): -sp.pi / 2}.get((sy, sx))
-        elif len(n.args) == 1 and certified_sign(n.args[0], timeout) == 0:
+        elif len(n.args) == 1 and not isinstance(n, sp.acot) and certified_sign(n.args[0], timeout) == 0:
+            # (SymPy writes acot(-u) as -acot(u): at u = 0 that is -pi/2 where acot(0) is pi/2; no value is read there)
             v = n.func(sp.S.Zero)
         else:
             v = None
@@ -489,6 +493,8 @@ def _certified_sign(e, timeout: float):
     s = _evalf_sign(e, timeout)
     if s is not _NOT_READ:
         return s
+    if e.is_extended_real is not True and _imaginary_part_nonzero(e, timeout):
+        return NONREAL
     if _in_sandbox_worker():
         # already inside the worker (e.g. the z3 translation): its caller holds the timeout, and
         # a daemonic worker cannot start a worker of its own
@@ -532,6 +538,19 @@ def _evalf_sign(e, timeout: float):
     if any(p[2] == "zero" and p[3] == "zero" for p in reads) and e.is_zero is True:
         return 0
     return _NOT_READ
+
+
+def _imaginary_part_nonzero(e, timeout: float) -> bool:
+    """Is the imaginary part of `e` certainly not 0, read from a closed real form (inverse functions written as
+    logarithms)? 2*atan(1 - sqrt(2)*I), a complex root of sin(x) - cos(x) = 2, has no strict evaluation (SymPy's atan
+    of a complex number has none) and was kept as a real root."""
+    try:
+        im_e = sp.expand_complex(sp.im(e.rewrite(sp.log)))
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(im_e, sp.Expr) or im_e.has(sp.im, sp.re) or im_e.free_symbols or im_e.has(sp.I):
+        return False
+    return certified_sign(im_e, timeout) in (-1, 1)
 
 
 def _in_sandbox_worker() -> bool:

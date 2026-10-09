@@ -21,9 +21,11 @@
    are read with a certified sign (sinh u = (e^u - e^-u)/2, asin u = atan(u/sqrt(1 - u^2)) for |u| < 1,
    Max(a, b) = (a + b + |a - b|)/2, f(0) where the argument is exactly 0, ...), or the evaluation raises
    PrecisionExhausted. Sum, Product and Integral are not tracked either (a quadrature's error estimate is no
-   proof). sin, cos, tan, atan and log read a complex argument by an untracked path or on a branch cut (log of
+   proof): a Sum or Product over finitely many integer indices is written out. sin, cos, tan, atan and log read a complex argument by an untracked path or on a branch cut (log of
    -1 + i*noise is ±i*pi by the sign of the noise), and so does a non-integer power of a complex base: in
-   strict mode that argument (base) must be certainly real. A NotImplementedError inside a strict evaluation
+   strict mode that argument must be certainly real, and a complex base of a power certainly off the negative
+   real axis. SymPy's log of a number near 1 does not check u - 1 (log(1 + e^(-200)) came out an exact 0): it
+   is computed again as log1p(u - 1), u - 1 read strictly. A NotImplementedError inside a strict evaluation
    becomes PrecisionExhausted: EvalfMixin.evalf answers it by evaluating the whole expression again WITHOUT
    accuracy tracking and then "checking" the rounded result, which always passes.
 
@@ -53,6 +55,9 @@ PREC_CEILING = 1 << 17          # bits of working precision any one SymPy evalua
 _LOCAL = threading.local()      # depth of the assumption fallback below (a strict reading may ask assumptions)
 _MAX_DEPTH = 6
 _SIGN_PREC = 64                 # bits a sign read inside a strict evaluation is certified to
+# the working precision a rewritten node may climb to (SymPy's default for evalf(30) is 332 bits): asin(tanh(x)) at
+# x = 300 asks 1 - tanh(x)**2 = 4e^(-600), some 870 bits of cancellation, to read |u| < 1
+_REWRITE_MAXPREC = 1 << 11
 _TRACKED: frozenset = frozenset()
 _REAL_ARGUMENT = (sp.sin, sp.cos, sp.tan, sp.atan, sp.log)
 
@@ -78,7 +83,7 @@ def _exact_leaf(x) -> bool:
 def _sign(u, options):
     """-1, 0 or 1 when a strict evaluation of `u` certifies it, "nonreal" when its imaginary part is certainly
     nonzero, None otherwise (read inside a strict evaluation, through these guards)."""
-    opts = {"maxprec": max(options.get("maxprec", 0), 2 * _SIGN_PREC), "strict": True, "chop": False}
+    opts = {"maxprec": max(options.get("maxprec", 0), _REWRITE_MAXPREC), "strict": True, "chop": False}
     if "subs" in options:
         opts["subs"] = options["subs"]
     try:
@@ -140,11 +145,30 @@ def _asin_like(kind, u, s, options):
     return None
 
 
+def _finite(x):
+    """A Sum or Product over finitely many integer indices (at most 1000 terms), written out exactly; None otherwise
+    (an infinite series is evaluated by an error estimate, no proof)."""
+    n = 1
+    for lim in x.limits:
+        if len(lim) != 3 or not (lim[1].is_Integer and lim[2].is_Integer):
+            return None
+        n *= max(int(lim[2] - lim[1]) + 1, 0)
+        if n > 1000:
+            return None
+    try:
+        v = x.doit()
+    except Exception:  # noqa: BLE001
+        return None
+    return v if getattr(v, "is_number", False) and not v.has(sp.Sum, sp.Product, sp.Integral) else None
+
+
 def _rewritten(x, options):
     """`x`, a node SymPy's evalf does not track, rewritten EXACTLY into tracked nodes where its arguments are read
     with a certified sign; None when it cannot be (the strict evaluation then decides nothing)."""
     if isinstance(x, sp.UnevaluatedExpr):
         return x.args[0]
+    if isinstance(x, (sp.Sum, sp.Product)):
+        return _finite(x)
     if isinstance(x, (sp.Max, sp.Min)):
         if any(_sign(a, options) not in (-1, 0, 1) for a in x.args):
             return None                          # a lattice operation of real numbers only
@@ -171,6 +195,8 @@ def _rewritten(x, options):
     if s is None:
         return None
     if s == 0:
+        if isinstance(x, sp.acot):
+            return None                  # SymPy writes acot(-u) as -acot(u), which is false at u = 0
         try:
             v = x.func(sp.S.Zero)
         except Exception:  # noqa: BLE001
@@ -202,6 +228,8 @@ def _rewritten(x, options):
         return _div(sp.S.One, _u(sp.sin, u))
     if f is sp.acot:
         return _u(sp.atan, _div(sp.S.One, u))   # SymPy's acot of a real u != 0
+    if f.__name__ == "arccot":                   # normalize.parse.arccot: values in (0, pi)
+        return _sub(sp.pi / 2, _u(sp.atan, u))
     if f in (sp.asin, sp.acos):
         return _asin_like(f.__name__, u, s, options)
     if f in (sp.asec, sp.acsc):                  # asec u = acos(1/u), acsc u = asin(1/u)
@@ -232,6 +260,59 @@ def _strict_inner(inner, x, prec, options):
         raise PrecisionExhausted(f"no tracked evaluation of {type(x).__name__}") from ex
 
 
+def _read_real(z, prec, options) -> bool:
+    """Is `z` real by a strict evaluation (an imaginary part that is exactly none, the real part significant)? Where
+    the assumptions cannot tell: u/sqrt(1 - u**2) of asin's rewriting at u = tanh(486), 1 - u**2 = 1e-422."""
+    opts = {"maxprec": options.get("maxprec", 2 * prec), "strict": True, "chop": False}
+    try:
+        r = _evalf.evalf(z, prec + 10, opts)
+    except (PrecisionExhausted, NotImplementedError, ValueError, TypeError, ArithmeticError):
+        return False
+    return r is not sp.S.ComplexInfinity and not r[1] and bool(r[0]) and r[0] not in (_evalf.fnan, _evalf.finf,
+                                                                                        _evalf.fninf)
+
+
+def _off_the_cut(z, prec, options) -> bool:
+    """Is the complex number `z` certainly off the negative real axis (the branch cut of a power): its imaginary part
+    read with significant bits of its own? A part of noise ((-1 + i*(log 6 - log 2 - log 3))**(1/2)) is ±i by its sign;
+    the cube roots of a casus irreducibilis ((27/2 + 27*sqrt(3)*I/2)**(1/3)) have one."""
+    opts = {"maxprec": options.get("maxprec", 2 * prec), "strict": True, "chop": False}
+    try:
+        r = _evalf.evalf(z, prec + 10, opts)
+    except (PrecisionExhausted, NotImplementedError, ValueError, TypeError, ArithmeticError):
+        return False
+    if r is sp.S.ComplexInfinity:
+        return False
+    _, im_, _, im_acc = r
+    return bool(im_ and im_[1] and im_acc is not None and im_acc >= 20)
+
+
+def _log_near_one(inner, x, prec, options):
+    """log(u) where SymPy's evaluator reads u - 1 without checking it: at u = 1 + e^(-200) it returned an exact 0, and
+    log(1 + e^(-200)) - e^(-200)/2 > 0 was certified negative; at u = 1 + (an exact 0 written as a sum) a value read
+    off noise. A logarithm smaller than 2**-8 is computed again as log1p(u - 1), u - 1 read strictly (undecided when it
+    cannot be told from 0)."""
+    r = _strict_inner(inner, x, prec, options)
+    if r is sp.S.ComplexInfinity or r[1]:
+        return r                                  # a negative argument: log|u| + i*pi, |u| = -u
+    re_ = r[0]
+    if re_ and re_[1] and _evalf.fastlog(re_) > -8:
+        return r
+    u = x.args[0]
+    if u == 1:
+        return r
+    opts = {"maxprec": options.get("maxprec", 2 * prec), "strict": True, "chop": False}
+    d = _evalf.evalf(sp.Add(u, sp.S.NegativeOne, evaluate=False), prec + 20, opts)   # raises if u - 1 is not read
+    if d is sp.S.ComplexInfinity or d[1]:
+        raise PrecisionExhausted("log near 1 of a number not certainly real")
+    if not d[0] or not d[0][1]:
+        return None, None, None, None             # u - 1 exactly 0
+    import mpmath
+    with mpmath.workprec(prec + 30):
+        v = mpmath.log1p(mpmath.mpf(d[0]))
+    return v._mpf_, None, prec, None
+
+
 def _guarded(inner):
     def evalf(x, prec, options):
         if prec > PREC_CEILING:
@@ -247,11 +328,15 @@ def _guarded(inner):
             y = _rewritten(x, options)
             if y is None:
                 raise PrecisionExhausted(f"{t.__name__} does not track the accuracy of its value")
-            return evalf(y, prec, options)
-        if t in _REAL_ARGUMENT and x.args[0].is_extended_real is not True:
+            # with room for the cancellation the rewriting itself makes (1 - u**2 of asin)
+            return evalf(y, prec, dict(options, maxprec=max(options.get("maxprec", 0), _REWRITE_MAXPREC)))
+        if t in _REAL_ARGUMENT and x.args[0].is_extended_real is not True and not _read_real(x.args[0], prec, options):
             raise PrecisionExhausted(f"{t.__name__} of an argument not certainly real")
-        if t is sp.Pow and not x.exp.is_Integer and x.base.is_extended_real is not True:
-            raise PrecisionExhausted("a non-integer power of a base not certainly real")
+        if t is sp.Pow and not x.exp.is_Integer and x.base.is_extended_real is not True \
+                and not _off_the_cut(x.base, prec, options):
+            raise PrecisionExhausted("a non-integer power of a base on or near the negative real axis")
+        if t is sp.log:
+            return _log_near_one(inner, x, prec, options)
         return _strict_inner(inner, x, prec, options)
     evalf.mathverify_guard = True        # type: ignore[attr-defined]
     evalf.inner = inner                  # type: ignore[attr-defined]

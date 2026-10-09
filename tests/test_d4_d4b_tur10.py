@@ -90,10 +90,10 @@ def test_strict_evalf_of_an_untracked_node_of_an_exact_zero_decides_nothing(e): 
 def test_strict_evalf_keeps_its_value_where_the_argument_is_certain(e):
     import mpmath as mp
     v = sp.sympify(e)
-    with mp.workdps(40):
-        want = mp.mpf(sp.N(v, 40))
-    got = v.evalf(30, strict=True)
-    assert abs(mp.mpf(got) - want) <= mp.mpf(10) ** -25 * (1 + abs(want))
+    with mp.workdps(50):
+        want = mp.mpf(sp.N(v, 50)._mpf_) if v != 0 else mp.mpf(0)
+        got = mp.mpf(v.evalf(30, strict=True)._mpf_)
+        assert abs(got - want) <= mp.mpf(10) ** -25 * (1 + abs(want))
 
 
 @pytest.mark.parametrize("e", ["log(-1 + I*log(6) - I*log(2) - I*log(3))",     # i*pi or -i*pi by the noise's sign
@@ -126,7 +126,7 @@ def test_certified_integer_and_floor_of_an_untracked_node():                    
 
 
 @pytest.mark.parametrize("e,s", [(f"asin({Q})", 0), (f"asin({Q}) - 1", -1), (f"tanh({P})", 0), (f"sinh({L})**2", 0),
-                                 (f"erf({Q})", 0), (f"acot({Q})", 1), (f"cosh({Q}) - 1", 0), (f"atan2({Q}, -1) - pi", 0),
+                                 (f"erf({Q})", 0), (f"cosh({Q})", 1), (f"cosh({Q}) - 1", 0), (f"atan2({Q}, -1) - pi", 0),
                                  (f"Max(sin({Q}), 0) - 1", -1), (f"Min(sin({Q}), 0) + 1", 1), (f"2 + tanh({P}) - 2", 0)])
 def test_certified_sign_reads_an_untracked_node_at_its_exact_zero(e, s):                     # fecc2be
     from mathverify.equiv.numeric import certified_sign
@@ -140,10 +140,10 @@ def test_certified_sign_never_reads_noise(e):
 
 
 def test_jump_values_of_untracked_nodes():                                                     # fecc2be
-    from mathverify.equiv.numeric import jump_value
+    from mathverify.equiv.numeric import certified_sign, jump_value
     assert jump_value(sp.ceiling(sp.sympify(f"asin({Q})"), evaluate=False)) == 0
     assert jump_value(sp.sign(sp.sympify(f"asin({L})"), evaluate=False)) == 0
-    assert jump_value(sp.Mod(sp.sympify(f"tanh({P}) + 5"), 5, evaluate=False)) == 0
+    assert certified_sign(jump_value(sp.Mod(sp.sympify(f"tanh({P}) + 5"), 5, evaluate=False))) == 0
 
 
 @pytest.mark.parametrize("e,good,bad", [
@@ -193,7 +193,7 @@ def test_latex_jumps_of_an_untracked_node():                                    
 
 def test_the_controls_keep_their_verdicts():
     assert _run(_ev("ceiling(10*asin(1/2))"), "6").verdict == "CORRECT"
-    assert _run(_ev("floor(acosh(3))"), "1").verdict == "CORRECT"
+    assert _run(_ev("floor(sinh(2))"), "3").verdict == "CORRECT"
     assert _run(_ev("sign(Max(1, sqrt(2)) - 1)"), "1").verdict == "CORRECT"
     assert _run(_eq("x**2 = 4", (V("x", "real", ["x > 2 + tanh(1)"]),)), "EmptySet", "set").verdict == "CORRECT"
 
