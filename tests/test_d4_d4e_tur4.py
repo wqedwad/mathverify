@@ -319,7 +319,7 @@ def test_cell_proof_budget_keeps_one_verify_short():
     t0 = time.time()
     v = _v(_der(f"Abs({U2})*Abs({U3})"),
            f"(4*x**3 - 20*x)*({U2})*Abs({U3})/Abs({U2}) + (3*x**2 - 3)*({U3})*Abs({U2})/Abs({U3})", "expression")
-    assert v == "CORRECT" and time.time() - t0 < 60
+    assert v == "CORRECT" and time.time() - t0 < 30          # 60.6 s on a0a0829, 6 s now (measured)
 
 
 def test_cell_proof_spends_at_most_its_budget(monkeypatch):
