@@ -209,6 +209,15 @@ def test_an_equation_and_a_step_through_an_untracked_node():                    
     assert _run(r, "1").verdict != "CORRECT"
 
 
+def test_trig_index_range_of_an_exact_zero_phase():                                             # fecc2be
+    # SymPy read ceiling(-asin(Q)/pi) = 1 and floor(-asin(Q)/pi) = 0 for one exact 0: the solution 0 was lost
+    from mathverify.certify.trig import _enumerate_on_window, _enumerate_window_of_interval
+    c = sp.asin(sp.sympify(Q))
+    for ph in (c, -c):
+        assert _enumerate_on_window([(ph, sp.pi)], 2 * sp.pi) == sp.FiniteSet(0, sp.pi)
+        assert _enumerate_window_of_interval([(ph, sp.pi)], sp.Interval(0, 2 * sp.pi)) == sp.FiniteSet(0, sp.pi, 2 * sp.pi)
+
+
 def test_a_polynomial_whose_leading_coefficient_may_be_zero():                                 # fecc2be
     from mathverify.sandbox.exactsets import certified_degree
     with pytest.raises(ValueError):

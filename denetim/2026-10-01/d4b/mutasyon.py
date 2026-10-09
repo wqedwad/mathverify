@@ -542,6 +542,8 @@ MUTATIONS += [
      "    if e.is_extended_real is not True and _imaginary_part_nonzero(e, timeout):", "    if False:",
      T10 + "test_complex_numbers_read_off_the_cut"),
     ("R45 sonlu Sum açılmaz", GRD, "        return _finite(x)\n", "        return None\n", T10 + "test_a_finite_sum_is_written_out"),
+    ("R47 trig indeks aralığı SymPy'nin tabanıyla", TRIG, "    f_hi, f_lo = certified_floor(hi_v), certified_floor(-lo_v)",
+     "    f_hi, f_lo = sp.floor(hi_v), sp.floor(-lo_v)", T10 + "test_trig_index_range_of_an_exact_zero_phase"),
     ("R46 yeniden yazılan düğüm 332 bitte", GRD, "_REWRITE_MAXPREC = 1 << 11", "_REWRITE_MAXPREC = 1 << 7",
      T10 + "test_a_rewritten_node_has_room_for_its_own_cancellation"),
     ("R12 Max/Min kesin işaretle seçilmez", NUM, "            v = picked(n)\n", "            v = None\n",
