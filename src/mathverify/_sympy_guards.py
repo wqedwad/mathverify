@@ -83,7 +83,7 @@ def _exact_leaf(x) -> bool:
 def _sign(u, options):
     """-1, 0 or 1 when a strict evaluation of `u` certifies it, "nonreal" when its imaginary part is certainly
     nonzero, None otherwise (read inside a strict evaluation, through these guards)."""
-    opts = {"maxprec": max(options.get("maxprec", 0), _REWRITE_MAXPREC), "strict": True, "chop": False}
+    opts = {"maxprec": max(options.get("maxprec", 0), _REWRITE_MAXPREC), "strict": True, "chop": False, "room": True}
     if "subs" in options:
         opts["subs"] = options["subs"]
     try:
@@ -195,8 +195,6 @@ def _rewritten(x, options):
     if s is None:
         return None
     if s == 0:
-        if isinstance(x, sp.acot):
-            return None                  # SymPy writes acot(-u) as -acot(u), which is false at u = 0
         try:
             v = x.func(sp.S.Zero)
         except Exception:  # noqa: BLE001
@@ -263,7 +261,7 @@ def _strict_inner(inner, x, prec, options):
 def _read_real(z, prec, options) -> bool:
     """Is `z` real by a strict evaluation (an imaginary part that is exactly none, the real part significant)? Where
     the assumptions cannot tell: u/sqrt(1 - u**2) of asin's rewriting at u = tanh(486), 1 - u**2 = 1e-422."""
-    opts = {"maxprec": options.get("maxprec", 2 * prec), "strict": True, "chop": False}
+    opts = {"maxprec": max(options.get("maxprec", 0), _REWRITE_MAXPREC), "strict": True, "chop": False, "room": True}
     try:
         r = _evalf.evalf(z, prec + 10, opts)
     except (PrecisionExhausted, NotImplementedError, ValueError, TypeError, ArithmeticError):
@@ -276,7 +274,7 @@ def _off_the_cut(z, prec, options) -> bool:
     """Is the complex number `z` certainly off the negative real axis (the branch cut of a power): its imaginary part
     read with significant bits of its own? A part of noise ((-1 + i*(log 6 - log 2 - log 3))**(1/2)) is ±i by its sign;
     the cube roots of a casus irreducibilis ((27/2 + 27*sqrt(3)*I/2)**(1/3)) have one."""
-    opts = {"maxprec": options.get("maxprec", 2 * prec), "strict": True, "chop": False}
+    opts = {"maxprec": max(options.get("maxprec", 0), _REWRITE_MAXPREC), "strict": True, "chop": False, "room": True}
     try:
         r = _evalf.evalf(z, prec + 10, opts)
     except (PrecisionExhausted, NotImplementedError, ValueError, TypeError, ArithmeticError):
@@ -301,7 +299,7 @@ def _log_near_one(inner, x, prec, options):
     u = x.args[0]
     if u == 1:
         return r
-    opts = {"maxprec": options.get("maxprec", 2 * prec), "strict": True, "chop": False}
+    opts = {"maxprec": max(options.get("maxprec", 0), _REWRITE_MAXPREC), "strict": True, "chop": False, "room": True}
     d = _evalf.evalf(sp.Add(u, sp.S.NegativeOne, evaluate=False), prec + 20, opts)   # raises if u - 1 is not read
     if d is sp.S.ComplexInfinity or d[1]:
         raise PrecisionExhausted("log near 1 of a number not certainly real")
@@ -328,8 +326,9 @@ def _guarded(inner):
             y = _rewritten(x, options)
             if y is None:
                 raise PrecisionExhausted(f"{t.__name__} does not track the accuracy of its value")
-            # with room for the cancellation the rewriting itself makes (1 - u**2 of asin)
-            return evalf(y, prec, dict(options, maxprec=max(options.get("maxprec", 0), _REWRITE_MAXPREC)))
+            # with room for the cancellation the rewriting itself makes (1 - u**2 of asin): every sum below gets it
+            # (SymPy's sum lowers the bound of the sums inside it to twice its own precision)
+            return evalf(y, prec, dict(options, maxprec=max(options.get("maxprec", 0), _REWRITE_MAXPREC), room=True))
         if t in _REAL_ARGUMENT and x.args[0].is_extended_real is not True and not _read_real(x.args[0], prec, options):
             raise PrecisionExhausted(f"{t.__name__} of an argument not certainly real")
         if t is sp.Pow and not x.exp.is_Integer and x.base.is_extended_real is not True \
@@ -337,6 +336,8 @@ def _guarded(inner):
             raise PrecisionExhausted("a non-integer power of a base on or near the negative real axis")
         if t is sp.log:
             return _log_near_one(inner, x, prec, options)
+        if t is sp.Add and options.get("room"):
+            options = dict(options, maxprec=max(options.get("maxprec", 0), _REWRITE_MAXPREC))
         return _strict_inner(inner, x, prec, options)
     evalf.mathverify_guard = True        # type: ignore[attr-defined]
     evalf.inner = inner                  # type: ignore[attr-defined]

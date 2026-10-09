@@ -118,6 +118,41 @@ def test_no_untracked_fallback_inside_a_strict_evaluation():                    
         sp.Piecewise((sp.asin(sp.sympify(Q)), True), evaluate=False).evalf(30, strict=True)
 
 
+def test_a_rewritten_node_has_room_for_its_own_cancellation():
+    from mathverify.equiv.numeric import certified_sign
+    # asin(tanh(486)): 1 - tanh(486)**2 = 4e^(-972), a cancellation past SymPy's 332 bits of evalf(30)
+    assert certified_sign(sp.asin(sp.tanh(sp.Integer(486)))) == 1
+    assert certified_sign(sp.acos(sp.tanh(sp.Integer(486)))) == 1
+
+
+def test_complex_numbers_read_off_the_cut():
+    from mathverify.equiv.numeric import NONREAL, certified_sign
+    t = sp.Symbol("t")
+    signs = sorted(certified_sign(r_) for r_ in sp.roots(t ** 3 - 3 * t + 1, t))   # Cardano: complex radicals
+    assert signs == [-1, 1, 1]
+    assert certified_sign(2 * sp.atan(1 - sp.sqrt(2) * sp.I)) == NONREAL           # a complex root of sin - cos = 2
+
+
+def test_log_near_one_is_read_from_u_minus_one():                                               # fecc2be
+    from mathverify.equiv.numeric import certified_sign
+    e = sp.exp(-200)
+    assert sp.log(1 + e).evalf(30, strict=True) > 0
+    assert certified_sign(sp.log(1 + e) - e / 2) in (1, None)          # log(1 + e) - e/2 = e/2 - e**2/2 + ...
+
+
+def test_a_finite_sum_is_written_out():
+    k = sp.Symbol("k", integer=True)
+    assert abs(sp.Sum(k, (k, 1, 3)).evalf(30, strict=True) - 6) < 1e-25
+    with pytest.raises(PrecisionExhausted):
+        sp.Sum(1 / k ** 2, (k, 1, sp.oo)).evalf(30, strict=True)
+
+
+def test_acot_of_an_exact_zero_is_not_read_through_its_normalization():
+    from mathverify.equiv.numeric import certified_sign
+    # SymPy writes acot(Q) as -acot(-Q); acot(0) is pi/2, so -acot(-0) would read -pi/2
+    assert certified_sign(sp.sympify(f"acot({Q})")) in (1, None)
+
+
 def test_certified_integer_and_floor_of_an_untracked_node():                                   # fecc2be
     from mathverify.equiv.numeric import certified_floor, certified_integer
     c = sp.asin(sp.sympify(Q)) + 2
