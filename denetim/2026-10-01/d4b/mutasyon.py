@@ -611,6 +611,8 @@ MUTATIONS += [
     ("V50 trig argümanı Poly derecesinden", EX, "    ab = _linear(T.args[0], var)\n",
      "    ab = (lambda q: (q.coeff_monomial(var), q.coeff_monomial(1)) if q.degree() == 1 else None)(sp.Poly(T.args[0], var))\n",
      T10 + "test_a_linear_argument_whose_coefficient_may_be_zero"),
+    ("V51 kesin argümanlı özel fonksiyon okunmaz", GRD, "                r = _at_exact_arguments(x, prec)\n",
+     "                r = None\n", T10 + "test_a_special_function_of_exact_arguments"),
     # RK-4: a constraint that could not be applied
     ("V35 uygulanamayan kısıtta üst küme çürütmesi yok", VER,
      "        outside = _claim_outside_superset(problem_ir, solution, ctx)", "        outside = None",

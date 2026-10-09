@@ -80,6 +80,27 @@ def _exact_leaf(x) -> bool:
     return (x.is_Atom and x.is_number) or isinstance(x, sp.CRootOf)
 
 
+def _at_exact_arguments(x, prec):
+    """A function of exact arguments (rationals and the number constants: erf(20000/3), gamma(1/3)) that no exact
+    rewriting reads: mpmath's value at two working precisions, taken where they agree, at an accuracy short of that
+    agreement (an argument rounded to the working precision moves the value by the condition number, and the two then
+    disagree). YO-1 is an argument read off noise; these have none. The tuple of strict evalf, or None (a value not
+    real, or 0: an exact zero is left to the exact tests)."""
+    from mpmath.libmp import mpf_abs, mpf_lt, mpf_shift, mpf_sub
+    if not isinstance(x, sp.Function) or not x.args or not all(
+            a.is_Rational or isinstance(a, sp.NumberSymbol) for a in x.args):
+        return None
+    try:
+        lo, hi = x._eval_evalf(prec + 30), x._eval_evalf(prec + 90)
+    except Exception:  # noqa: BLE001 - no mpmath function, a pole, ...
+        return None
+    if not (getattr(lo, "is_Float", False) and getattr(hi, "is_Float", False)) or not hi:
+        return None
+    if mpf_lt(mpf_shift(mpf_abs(hi._mpf_), -(prec + 20)), mpf_abs(mpf_sub(lo._mpf_, hi._mpf_, prec + 100))):
+        return None
+    return hi._mpf_, None, prec + 20, None
+
+
 def _sign(u, options):
     """-1, 0 or 1 when a strict evaluation of `u` certifies it, "nonreal" when its imaginary part is certainly
     nonzero, None otherwise (read inside a strict evaluation, through these guards)."""
@@ -325,7 +346,10 @@ def _guarded(inner):
                 return _strict_inner(inner, x, prec, options)
             y = _rewritten(x, options)
             if y is None:
-                raise PrecisionExhausted(f"{t.__name__} does not track the accuracy of its value")
+                r = _at_exact_arguments(x, prec)
+                if r is None:
+                    raise PrecisionExhausted(f"{t.__name__} does not track the accuracy of its value")
+                return r
             # with room for the cancellation the rewriting itself makes (1 - u**2 of asin): every sum below gets it
             # (SymPy's sum lowers the bound of the sums inside it to twice its own precision)
             return evalf(y, prec, dict(options, maxprec=max(options.get("maxprec", 0), _REWRITE_MAXPREC), room=True))

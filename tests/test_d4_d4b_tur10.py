@@ -174,6 +174,20 @@ def test_certified_sign_reads_an_untracked_node_at_its_exact_zero(e, s):        
     assert certified_sign(sp.sympify(e), 20) == s
 
 
+def test_a_special_function_of_exact_arguments():
+    # erf(1), gamma(1/3): no argument to read off noise; mpmath's value where two working precisions agree. Without it
+    # d4c's narrow peak (the integral of x**2 + exp(-10**8*(x - 1/3)**2), sqrt(pi)*erf(...)/20000 above 1/3) lost its
+    # INCORRECT
+    from mathverify.equiv.numeric import certified_floor, certified_sign
+    R = sp.Rational
+    assert certified_sign(sp.erf(1) - R(84, 100)) == 1 and certified_sign(sp.erf(1) - R(85, 100)) == -1
+    assert certified_floor(10 * sp.erf(1)) == 8
+    assert certified_sign(sp.gamma(R(1, 3)) - R(268, 100)) == -1
+    assert certified_sign(sp.erf(sp.sympify(Q)) + 1) == 1          # an argument written as an exact 0: f(0)
+    dint = _ir("definite_integral", {"integrand": "x**2 + exp(-10**8*(x - 1/3)**2)", "var": "x", "a": "0", "b": "1"})
+    assert _run(dint, "1/3").verdict == "INCORRECT"
+
+
 @pytest.mark.parametrize("e", [f"asin({A})", f"sinh({A})", f"tanh(2*atan(1/3) - atan(3/4)) + 0*{A}"])
 def test_certified_sign_never_reads_noise(e):
     from mathverify.equiv.numeric import certified_sign
