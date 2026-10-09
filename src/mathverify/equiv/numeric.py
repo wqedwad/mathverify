@@ -438,8 +438,8 @@ def _zero_arguments_resolved(e, timeout: float):
             s = certified_sign(a - best, timeout)
             if s not in (-1, 0, 1):
                 return None
-            if (s > 0) == isinstance(n, sp.Max) and s != 0:
-                best = a
+            if (s != 0 and (s > 0) == isinstance(n, sp.Max)) or (s == 0 and a.is_Rational):
+                best = a                    # of two equal arguments the rational one (sin(Q) = 0)
         return best
 
     def go(n):

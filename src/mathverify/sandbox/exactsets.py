@@ -197,8 +197,8 @@ def _pieces(op, sets) -> int:
 
 def _joined(edges, cell_holds, point_holds):
     """The union of the cells (edges[i], edges[i+1]) where `cell_holds[i]` and the edges where `point_holds[i]`, joined
-    in one pass along the sorted edges (SymPy's Union joins pair by pair: `SET_PIECES`); _Unsolved past SET_PIECES
-    intervals."""
+    in one pass along the sorted edges (SymPy's Union joins pair by pair: `SET_PIECES`; every caller meets the union
+    with its domain through `exact_setop`, which holds the budget)."""
     runs: list = []
     start = None
     for i, e in enumerate(edges):
@@ -214,8 +214,6 @@ def _joined(edges, cell_holds, point_holds):
             start = (e, p)
         elif p:
             runs.append(sp.FiniteSet(e))
-        if sum(isinstance(r_, sp.Interval) for r_ in runs) > SET_PIECES:
-            raise _Unsolved(f"more than {SET_PIECES} intervals")
     if not runs:
         return S.EmptySet
     return runs[0] if len(runs) == 1 else sp.Union(*runs, evaluate=False)

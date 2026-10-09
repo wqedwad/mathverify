@@ -1039,8 +1039,13 @@ def cases_m():
         ("M1v ev sign(asinh(Q)): -1", ev(f"sign(asinh({Q}))", []), _sol("-1"), NOTOK, None),
         ("M1v ev sign(erf(Q)): 1", ev(f"sign(erf({Q}))", []), _sol("1"), NOTOK, None),
         ("M1v ev sign(atan2(Q, 1)): 1", ev(f"sign(atan2({Q}, 1))", []), _sol("1"), NOTOK, None),
-        ("M1v ev sign(Max(Q, 0)): 1", ev(f"sign(Max({Q}, 0))", []), _sol("1"), NOTOK, None),
-        ("M1v ev sign(Min(Q, 0)): -1", ev(f"sign(Min({Q}, 0))", []), _sol("-1"), NOTOK, None),
+        ("M1v ev sign(Max(sin Q, 0)): 1", ev(f"sign(Max(sin({Q}), 0))", []), _sol("1"), NOTOK, None),
+        ("M1v ev sign(Min(sin Q, 0)): -1", ev(f"sign(Min(sin({Q}), 0))", []), _sol("-1"), NOTOK, None),
+        ("M1v ev sign(Max(asin Q, 0) - 1): -1", ev(f"sign(Max(asin({Q}), 0) - 1)", []), _sol("-1"), NOTNO, None),
+        ("M1v ev log(-1 + I*Q') imaginary part: pi", ev("im(log(-1 + I*log(6) - I*log(2) - I*log(3)))", []), _sol("pi"),
+         NOTOK, None),
+        ("M1v ev sign(im(sin(pi + I*Q'))): 1", ev("sign(im(sin(pi + I*log(6) - I*log(2) - I*log(3))))", []), _sol("1"),
+         NOTOK, None),
         ("M1v eq x*sinh(L)=0: {0}", eq(f"x*sinh({L}) = 0"), _sol("{0}", S_), NOTOK, None),
         ("M1v croots x*tanh(P): 1", _ir("count_roots", {"expr": f"x*tanh({P})", "var": "x"}, (X,), (), "count"), _sol("1", "count"),
          NOTOK, None),
@@ -1057,7 +1062,7 @@ def cases_m():
     ]
     # YO-2: relations of numbers through SymPy's assumption fallback (e5, e6)
     for nm, u in (("sin(Z)^2", f"sin({Z})**2"), ("atan(Z)^2", f"atan({Z})**2"), ("sin(Z^2)", f"sin({Z}**2)"), ("tan(L^2)", L2),
-                  ("Z^2", f"{Z}**2"), ("cosh(Q)-1", f"cosh({Q}) - 1"), ("Max(Q,0)", f"Max({Q}, 0)")):
+                  ("Z^2", f"{Z}**2"), ("cosh(Q)-1", f"cosh({Q}) - 1"), ("Max(sin Q,0)", f"Max(sin({Q}), 0)")):
         out += [
             (f"M2 ev Pw({nm} > 0): 1", ev(pw(u), []), _sol("1"), NOTOK, None),
             (f"M2 ev Pw({nm} > 0): 0", ev(pw(u), []), _sol("0"), NOTNO, None),

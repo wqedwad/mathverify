@@ -76,8 +76,8 @@ def _pw(u):
 
 # --- YO-1: strict evalf at a node SymPy does not track ------------------------------------------------------------
 
-@pytest.mark.parametrize("e", [f"asin({Q})", f"sinh({L})", f"tanh({P})", f"erf({Q})", f"atan2({Q}, 1)", f"Max({Q}, 0)",
-                               f"acot({Q}) - pi/2", f"cosh({Q}) - 1", f"asinh({L})", f"atanh({P})"])
+@pytest.mark.parametrize("e", [f"asin({Q})", f"sinh({L})", f"tanh({P})", f"erf({Q})", f"atan2({Q}, 1)",
+                               f"Max(sin({Q}), 0)", f"acot({Q}) - pi/2", f"cosh({Q}) - 1", f"asinh({L})", f"atanh({P})"])
 def test_strict_evalf_of_an_untracked_node_of_an_exact_zero_decides_nothing(e):            # fecc2be
     with pytest.raises(PrecisionExhausted):
         sp.sympify(e).evalf(30, strict=True)
@@ -96,18 +96,38 @@ def test_strict_evalf_keeps_its_value_where_the_argument_is_certain(e):
     assert abs(mp.mpf(got) - want) <= mp.mpf(10) ** -25 * (1 + abs(want))
 
 
-def test_a_complex_trig_argument_and_an_untracked_sum_decide_nothing():                    # fecc2be
+@pytest.mark.parametrize("e", ["log(-1 + I*log(6) - I*log(2) - I*log(3))",     # i*pi or -i*pi by the noise's sign
+                               "sqrt(-1 + I*log(6) - I*log(2) - I*log(3))",    # i or -i
+                               "sin(pi + I*log(6) - I*log(2) - I*log(3))"])    # an imaginary part of noise
+def test_a_complex_argument_on_a_branch_cut_decides_nothing(e):                              # fecc2be
     with pytest.raises(PrecisionExhausted):
-        sp.sympify(f"log(-1 + I*{Q})").evalf(30, strict=True)        # ±i*pi by the sign of the noise
+        sp.sympify(e).evalf(30, strict=True)
+    from mathverify.equiv.numeric import certified_sign
+    assert certified_sign(sp.im(sp.sympify(e)), 20) in (0, None)
+
+
+def test_a_quadrature_is_no_strict_evaluation():                                              # fecc2be
     with pytest.raises(PrecisionExhausted):
-        sp.Integral(x, (x, 0, 1)).evalf(30, strict=True)            # no strict evaluation of a quadrature
+        sp.Integral(x, (x, 0, 1)).evalf(30, strict=True)
+
+
+def test_no_untracked_fallback_inside_a_strict_evaluation():                                   # fecc2be
+    # SymPy's evaluator of a Piecewise raises NotImplementedError; EvalfMixin.evalf then evaluated the whole
+    # expression without accuracy tracking (asin of noise) and "checked" the rounded number
     with pytest.raises(PrecisionExhausted):
-        sp.sympify(f"sin(1 + I*{Q})").evalf(30, strict=True)
+        sp.Piecewise((sp.asin(sp.sympify(Q)), True), evaluate=False).evalf(30, strict=True)
+
+
+def test_certified_integer_and_floor_of_an_untracked_node():                                   # fecc2be
+    from mathverify.equiv.numeric import certified_floor, certified_integer
+    c = sp.asin(sp.sympify(Q)) + 2
+    assert certified_integer(c) == (True, 2)
+    assert certified_floor(c) == 2
 
 
 @pytest.mark.parametrize("e,s", [(f"asin({Q})", 0), (f"asin({Q}) - 1", -1), (f"tanh({P})", 0), (f"sinh({L})**2", 0),
                                  (f"erf({Q})", 0), (f"acot({Q})", 1), (f"cosh({Q}) - 1", 0), (f"atan2({Q}, -1) - pi", 0),
-                                 (f"Max({Q}, 0)", 0), (f"2 + tanh({P}) - 2", 0)])
+                                 (f"Max(sin({Q}), 0) - 1", -1), (f"Min(sin({Q}), 0) + 1", 1), (f"2 + tanh({P}) - 2", 0)])
 def test_certified_sign_reads_an_untracked_node_at_its_exact_zero(e, s):                     # fecc2be
     from mathverify.equiv.numeric import certified_sign
     assert certified_sign(sp.sympify(e), 20) == s
@@ -212,6 +232,7 @@ def test_an_interval_ending_at_an_exact_zero_is_not_empty():                    
 
 def test_equals_does_not_call_an_exact_zero_nonzero():                                        # fecc2be
     assert sp.sympify(f"asin({Q})").equals(0) is not False
+    assert sp.sympify(f"sinh({A})").equals(0) is not False
 
 
 def test_relations_of_numbers_still_decide():
@@ -255,6 +276,13 @@ def test_a_finite_domain_with_a_real_power(e, given, dod, right, wrong):        
     assert _run(ir, wrong, "set").verdict != "CORRECT"
 
 
+def test_every_point_of_a_finite_domain_read_exactly():                                        # fecc2be
+    # (x - 3)**(x + 4) on {-3, ..., 3}: an integer exponent at every point, a zero base at 3 with exponent 7
+    ir = _eq("(x + 2)*(x - 3) = 0", givens=["(x - 3)**(x + 4)*cos(pi*x) > 0"], dod=D7)
+    assert _run(ir, "{-2}", "set").verdict == "CORRECT"
+    assert _run(ir, "EmptySet", "set").verdict == "INCORRECT"
+
+
 def test_zero_to_the_zero_is_undecided():                                                      # fecc2be
     ir = _eq("x*(x - 2) = 0", givens=["x**x*(2 + sin(x)) > 0"], dod="{0, 1, 2, 3}")
     assert _run(ir, "{2}", "set").verdict == "UNKNOWN"
@@ -275,7 +303,17 @@ def test_a_root_at_a_negative_integer_on_the_line():                            
 
 
 def test_real_powers_away_from_their_convention_points():
+    for f in ("x + 0*x**x", "x + 0*x**sqrt(2)", "x + 0*(x - 1)**x"):
+        assert _run(_ir("extremum", {"f": f, "var": "x", "which": "max", "interval": "[2, 3]"}), "3").verdict == "CORRECT"
+        assert _run(_ir("limit", {"expr": f, "var": "x", "to": "2"}), "2").verdict == "CORRECT"
+    assert _run(_ir("simplify_expression", {"expr": "x**sqrt(2)*x"}, shape="expression"), "x**(1 + sqrt(2))",
+                "expression").verdict == "CORRECT"
     assert _run(_ir("derivative", {"f": "x**x", "var": "x", "at": "1"}), "1").verdict == "CORRECT"
+    # around -1 the power x**x has no real value but at the integers: no limit
+    assert _run(_ir("limit", {"expr": "x + 0*x**x", "var": "x", "to": "-1"}), "-1").verdict != "CORRECT"
+    # |x|**x is x**x on x > 0 only: at -1 they are 1 and -1
+    assert _run(_ir("simplify_expression", {"expr": "x**x"}, shape="expression"), "Abs(x)**x",
+                "expression").verdict != "CORRECT"
     assert _run(_ir("derivative", {"f": "x**sqrt(2)", "var": "x", "at": "1"}), "sqrt(2)").verdict == "CORRECT"
     assert _run(_ev("x**x", ["x = 2"]), "4").verdict == "CORRECT"
     assert _run(_ev("x**x", ["x = 0"]), "1").verdict == "UNKNOWN"
@@ -335,6 +373,21 @@ def test_a_given_with_160_intervals_answers_in_time():                          
 
 
 # --- RK-4: a constraint that could not be applied -----------------------------------------------------------------
+
+def test_a_convention_point_is_not_refuted_by_a_dropped_constraint():
+    neg = "-10 + 2*atan(tanh(1/2)) - atan(sinh(1))"          # exactly -10
+    for cons in ([f"x >= {neg}", "x >= -10"], ["x >= -10", f"x >= {neg}"]):
+        # (-8)**(1/3): the real root -2 or the principal value: -8 is neither kept nor dropped
+        assert _run(_eq("x**(1/3) = -2", (V("x", "real", cons),)), "{-8}", "set").verdict != "INCORRECT"
+
+
+def test_a_complement_with_many_points_is_budgeted():
+    from mathverify.sandbox.exactsets import exact_complement
+    with pytest.raises(TypeError):
+        exact_complement(sp.Interval(0, 100), sp.FiniteSet(*range(1, 40)))
+    assert exact_complement(sp.Interval(0, 10), sp.FiniteSet(1, 2)) == sp.Union(
+        sp.Interval.Ropen(0, 1), sp.Interval.open(1, 2), sp.Interval.Lopen(2, 10))
+
 
 @pytest.mark.parametrize("cons", [[f"x <= {FAR}", "x >= 3"], ["x >= 3", f"x <= {FAR}"]])
 def test_a_claimed_root_outside_a_constraint_read_alone(cons):                                  # fecc2be
