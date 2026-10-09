@@ -596,6 +596,9 @@ def certified_integer(c, timeout: float = 5.0):
         return None, None
     if c.is_integer is False:
         return False, None
+    c = _zero_arguments_resolved(c, timeout)        # asin(Q) + 2 of an exact 0 Q: 2 (round 10, YO-1)
+    if isinstance(c, sp.Rational):
+        return (True, c) if c.is_Integer else (False, None)
     parts = _evalf_strict(real_odd_roots(c))
     if parts is None or parts[2] != "value":
         return None, None
@@ -626,6 +629,9 @@ def certified_floor(v, timeout: float = 5.0):
         return sp.floor(v)
     if getattr(v, "free_symbols", None) or v.has(sp.oo, sp.S.NegativeInfinity, sp.zoo, sp.nan):
         return None
+    v = _zero_arguments_resolved(v, timeout)        # asin(Q) + 2 of an exact 0 Q: 2 (round 10, YO-1)
+    if isinstance(v, sp.Rational):
+        return sp.floor(v)
     parts = _evalf_strict(real_odd_roots(v))
     if parts is None or parts[2] != "value" or parts[3] == "value" or (
             parts[3] == "unknown" and not _imaginary_part_is_zero(real_odd_roots(v), timeout)):

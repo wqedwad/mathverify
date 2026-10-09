@@ -288,18 +288,16 @@ def _n2(a, b):
     significant (a strict evaluation), else None: SymPy's own reading of the relation's truth. When a - b
     cannot be evaluated so, -(b - a) is: SymPy evaluates the two writings of one difference differently
     (log(8)/log(2) + exp(-exp(10)) - 3 to 1.1e-9566, its negation not at all), and N > 3 stayed unevaluated
-    while N >= 3 was True (the relation reads b - a; equiv.numeric reads both writings too, YO-1). Two
-    writings read with opposite signs decide nothing."""
+    while N >= 3 was True (the relation reads b - a; equiv.numeric reads both writings too, YO-1). A strict
+    reading is certified: the second writing is read only when the first decides nothing (a relation is asked
+    often: SymPy joins the intervals of a union pair by pair)."""
     if not (a.is_comparable and b.is_comparable):
         return None
-    reads = []
     for dif, sign in ((a - b, 1), (b - a, -1)):
         v = strict_value(dif, 2)
         if v is not None and (v.is_Rational or v.is_Float):
-            reads.append((v if sign == 1 else -v, _number_sign(v) * sign))
-    if not reads or len({s for _, s in reads}) > 1:
-        return None
-    return reads[0][0]
+            return v if sign == 1 else -v
+    return None
 
 
 def _number_sign(v) -> int:
