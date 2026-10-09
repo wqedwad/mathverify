@@ -123,6 +123,11 @@ def test_dirichlet_with_a_parameter_for_every_value():
     assert _v(q, "sin(x)/(x + a)", "expression") == "INCORRECT"
     q = _ir("evaluate", {"expr": "0*Integral(t*sin(t)/((a - 1)**2*t**2 + 1), (t, 1, oo)) + 1"}, (), [T_, AP])
     assert _v(q, "1") != "CORRECT"
+    # h = a + 1/t is nonnegative and nonincreasing but tends to a, not 0: the integral diverges for every a > 0
+    q = _ir("evaluate", {"expr": "0*Integral(sin(t)*(a + 1/t), (t, 1, oo)) + 1"}, (), [T_, AP])
+    assert _v(q, "1") != "CORRECT"
+    q = _der("Integral(sin(t)*(a + 1/t), (t, x, oo))", None, (), [XPOS, T_, AP])
+    assert _v(q, "-sin(x)*(a + 1/x)", "expression") != "CORRECT"
 
 
 def test_claim_family_met_with_the_region_exactly():
@@ -132,6 +137,13 @@ def test_claim_family_met_with_the_region_exactly():
     assert _v(_der("x**2", None, ["x > 10", "x < 11"]), "2*x + 0*cot(4*x)", E) != "CORRECT"
     assert _v(_der("log(x - 20)", None, ["x > 30"]), "cot(x)*tan(x)/(x - 20)", E) != "CORRECT"
     assert _v(_der("x**2", None, ["x > 10", "x < 51/5"]), "2*x + 0*cot(4*x)", E) == "CORRECT"     # control: no pole
+    # the first members k*pi of the family fail sin(x) + x/100 > 1, 32*pi and others past them hold it: a family
+    # listed in part never certifies the claim
+    G = ["x > 0", "sin(x) + x/100 > 1"]
+    assert _v(_der("x**2", None, G), "2*x + 0/sin(x)", E) != "CORRECT"
+    assert _v(_der("x**2", None, G), "2*x", E) == "CORRECT"                                       # control
+    # pi is an end of sqrt(sin(x))'s domain, no point of the comparison's open part: the claim may lack a value there
+    assert _v(_der("sqrt(sin(x))**3"), "3*cos(x)*sin(x)/(2*sqrt(sin(x))) + 0/(x - pi)", E) == "CORRECT"
 
 
 def test_undecided_written_constraint_dod_and_limit_given():
@@ -198,6 +210,8 @@ def test_root_base_zero_classified_as_a_kink():
     E = "expression"
     S4 = "sqrt(x**2 + x**4)"
     assert _v(_der(S4), f"(x + 2*x**3)/{S4}", E) == "CORRECT"
+    # the claim's own condition x**2 + x**4 > 0 fails at 0 alone, where f has no derivative
+    assert _v(_der(S4), "(x + 2*x**3)*(x**2 + x**4)**(-1/2)", E) == "CORRECT"
     assert _v(_der("(x**2 + x**4)**(1/3)"), "(2*x + 4*x**3)/(3*(x**2 + x**4)**(2/3))", E) == "CORRECT"
     # four corners classified by the exact rule, past the budget of `derivative_at_point` calls
     x = sp.Symbol("x")
@@ -218,7 +232,11 @@ def test_root_base_zeros_without_derivative_proved_at_once():
                  ("1/sqrt(x - cos(x))", "-(1 + sin(x))/(2*(x - cos(x))**(3/2))"),
                  ("Abs(x - cos(x))", "(1 + sin(x))*(x - cos(x))/Abs(x - cos(x))")):
         assert _v(_der(f), c, E) == "CORRECT", f
+    # the claim's condition x - cos(x) > 0 fails at the base's zero alone, an end of f's domain
+    assert _v(_der("sqrt(x - cos(x))"), "(1 + sin(x))*(x - cos(x))**(-1/2)/2", E) == "CORRECT"
     assert _v(_der("sqrt(1 + sin(x))"), "-cos(x)/(2*sqrt(1 + sin(x)))", E) == "INCORRECT"
+    # zeros not solved one by one, a counterexample at an analytic point between them (cos(x) < x < 1)
+    assert _v(_der("Abs(x - cos(x)) + Abs(x - 1)"), "1 + sin(x) + 1", E) == "INCORRECT"
     # a value at a zero where f has no derivative: a convention
     assert _v(_der("Abs(x - cos(x))"), "(1 + sin(x))*sign(x - cos(x))", E) == "UNKNOWN"
     # f has a derivative at the zeros of its root's base: the claim undefined there is never certified
@@ -271,6 +289,8 @@ def test_claim_condition_on_the_parameters_region():
     # with a free, the problem's own a != 0 is not proved on a's region: the verifier abstains before (d4d)
     assert _v(_der("log(x)/a", None, (), [X, AR]), "1/(a*x)", E) == "UNKNOWN"
     assert _v(_der("log(x)/log(a)", None, ["a != 1"], [X, AP]), "1/(x*log(a))", E) == "CORRECT"
+    # the parameter path (f's condition -a < x < a): log(a) != 0 on a's region a > 0, a != 1
+    assert _v(_der("asin(x/a)", None, ["a != 1"], [X, AP]), "1/sqrt(a**2 - x**2) + 0/log(a)", E) == "CORRECT"
     assert _v(_der("atan(x/a)", None, ["a != 0"], [X, AR]), "a/(a**2 + x**2) + 1", E) == "INCORRECT"
     # the plain path (f's condition on a half-line): a condition of the claim free of x, on the parameter's region
     assert _v(_der("sqrt(x - a)", None, ["a != 0"], [X, AR]), "1/(2*sqrt(x - a)) + 0/a", E) == "CORRECT"
@@ -281,7 +301,7 @@ def test_cell_proof_budget_keeps_one_verify_short():
     t0 = time.time()
     v = _v(_der(f"Abs({U2})*Abs({U3})"),
            f"(4*x**3 - 20*x)*({U2})*Abs({U3})/Abs({U2}) + (3*x**2 - 3)*({U3})*Abs({U2})/Abs({U3})", "expression")
-    assert v != "INCORRECT" and time.time() - t0 < 60
+    assert v == "CORRECT" and time.time() - t0 < 60
 
 
 def test_kink_controls_stay_correct():
@@ -290,6 +310,9 @@ def test_kink_controls_stay_correct():
                  ("Max(x, -x)*Max(x, -x)", "2*x"), ("Max(x**3, -x**3)", "3*x**2*sign(x)"),
                  ("x*Max(x, -x)", "2*Max(x, -x)"), ("Max(x, -x)**(1/2)", "sign(x)/(2*sqrt(Abs(x)))")):
         assert _v(_der(f), c, E) == "CORRECT", f
+    # f's condition 2*x/(1 + x**2) <= 1 is tight at x = 1 (and >= -1 at -1), its corners: f is not analytic there,
+    # and the claim's lack of a value is no counterexample
+    assert _v(_der("asin(2*x/(1 + x**2))"), "2*(1 - x**2)/((1 + x**2)*Abs(1 - x**2))", E) != "INCORRECT"
 
 
 def test_kink_rules_for_a_higher_order_and_h_plus_g_abs():
@@ -300,6 +323,9 @@ def test_kink_rules_for_a_higher_order_and_h_plus_g_abs():
     assert _v(_der("Max(sin(x), 0)**2"), "2*sin(x)*cos(x)", E) == "INCORRECT"
     # h has a corner of its own at 0, where f has no derivative: never refuted for being undefined there
     assert _v(_der("Abs(x) + Max(sin(x), 0)**2"), "x/Abs(x) + 2*cos(x)*Max(sin(x), 0)", E) != "INCORRECT"
+    # h = asin(sin(x)) is not analytic where defined (corners at cos(x) = 0): the rule of h + g|u| is not applied
+    assert _v(_der("asin(sin(x)) + Max(cos(x), 0)**2"),
+              "cos(x)/sqrt(1 - sin(x)**2) - 2*sin(x)*Max(cos(x), 0)", E) != "INCORRECT"
 
 
 def test_series_tasks_refute_at_an_allowed_value_only():
@@ -314,6 +340,9 @@ def test_series_tasks_refute_at_an_allowed_value_only():
             ["c**2 = 4"], [N, C], "expression")
     assert _v(q, "4**(n - 1)", "expression") != "INCORRECT"
     assert _v(q, "3**(n - 1)", "expression") != "CORRECT"
+    q = _ir("closed_form", {"recurrence": "a(n) = a(n - 1) + 1", "initial": {"1": "c**2"}, "var": "n", "name": "a"},
+            ["c**2 = 4"], [N, C], "expression")
+    assert _v(q, "n + 3", "expression") != "INCORRECT"
 
 
 def test_a_kink_value_where_the_formula_has_none():
