@@ -168,3 +168,9 @@ SP yeni: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scrat
   kitabı vakasında kayıp 0, kazanç 3. Kapsama: acos(1 − x⁴) yanlış iddiası UNKNOWN; 6'dan uzun kısmi aile listesi UNKNOWN. Ana oturum:
   kararlar kararlar_tur4.txt'e uygun; acos(1 − 2x²) ders kitabı türevi INCORRECT → UNKNOWN (önceden var haksız ret kapandı).
 - 07:37 saldırgan d4e4 (v3, wf_e32146de-940), commit 8025acb taban a0a0829. d4h 2. tur sürdürüldü (boşalan slot).
+- 07:55 dördüncü oturum sınırı (sıfırlanma 09:20) + yeniden başlatma: d4b10 (9d60d17), d4c4 (c32cdad), d4h2 (1aa422f) kesildi; d4e4
+  saldırısının iki lensi de düştü (resume edilecek).
+- 09:35 yarım işler güvenceye alındı: wip/wip-2026-10-09.bundle (wip/d4b-tur9 9d60d17, wip/d4c-tur3 c32cdad, wip/d4e-tur4 8025acb,
+  wip/d4h 1aa422f, wip/birlesik 443e078; önkoşul origin/claude/amazing-edison-0g21ci; verify geçti) ve wip/scratch-2026-10-09.tar.gz
+  (ajan notları, sondalar, saldırı dizinleri; git archive kopyaları ve .env hariç; .env'deki gerçek anahtar değerleri arşivde yok,
+  taranarak doğrulandı).
