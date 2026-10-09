@@ -570,6 +570,9 @@ def within_rel_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
         return None
     if not (is_number_expr(c) and is_number_expr(v)):
         return None
+    if c in (sp.oo, sp.S.NegativeInfinity) and not v.has(sp.oo, sp.S.NegativeInfinity, sp.zoo) \
+            and certified_sign(v, timeout=timeout) in (-1, 0, 1):
+        return False                          # no tolerance holds an infinite claim to a finite value, 0 included (SG-1)
     sd = certified_sign(c - v, timeout=timeout)
     if sd == 0:
         return True                           # the claim is the value

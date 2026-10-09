@@ -266,6 +266,7 @@ def test_within_rel_tol_reads_numbers_only():
     assert within_rel_tol(sp.FiniteSet(sp.Float("2.716")), sp.E, t) is None
     assert within_rel_tol(sp.Tuple(1, 2), sp.E, t) is None
     assert within_rel_tol(sp.Interval(2, 3), sp.E, t) is None
+    assert within_rel_tol(sp.oo, sp.Integer(0), t) is False and within_rel_tol(-sp.oo, sp.E, t) is False
     for c in (sp.FiniteSet(sp.Float("2.716")), sp.Interval(2.7, 2.72), sp.Tuple(2.716, 2.717)):
         assert num_equal(c, sp.E, rel_tol=1e-3)[0] is None
         assert num_equal(c, sp.E)[0] is None
@@ -285,6 +286,8 @@ def test_within_rel_tol_reads_numbers_only():
     (_dint("exp(cos(x))", 0, 1, "1e-3"), "2.3416 + I/10**9", "UNKNOWN"),
     (_dint("sin(sin(x))", 0, 1, "1e-3"), "oo", "INCORRECT"),
     (_dint("sin(sin(x))", 0, 1, "1e-3"), "-oo", "INCORRECT"),
+    (_dint("sin(sin(x)) - 2/5", 0, 1, "1e-3"), "oo", "INCORRECT"),        # no certificate; a coarse enclosure holds 0
+    (_dint("sin(x)", -1, 1, "1e-3"), "oo", "INCORRECT"),                  # certified 0
 ])
 def test_the_tolerance_path_without_exceptions(ir, claim, verdict):
     r = _v(ir, claim)

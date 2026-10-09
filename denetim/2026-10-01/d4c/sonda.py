@@ -793,6 +793,9 @@ def cases_u():
         ("sin(sin x) [0,1] t 1e-3: oo", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("oo"), NO, None),
         ("sin(sin x) [0,1] t 1e-3: -oo", dtol("sin(sin(x))", 0, 1, "1e-3"), _sol("-oo"), NO, None),
         ("sin(sin x) [0,1] = oo", dint("sin(sin(x))", 0, 1), _sol("oo"), NO, None),
+        ("sin(sin x) - 2/5 [0,1] t 1e-3: oo (no certificate; a coarse enclosure holds 0)", dtol("sin(sin(x)) - 2/5", 0, 1, "1e-3"),
+         _sol("oo"), NO, None),
+        ("sin x [-1,1] t 1e-3: oo (certified 0)", dtol("sin(x)", -1, 1, "1e-3"), _sol("oo"), NO, None),
         ("1/x [0,1] t 1e-3: oo (diverges: undecided)", dtol("1/x", 0, 1, "1e-3"), _sol("oo"), NOTNO, None),
         ("ctrl cos [0,1] t 1e-3: 0.8414", dtol("cos(x)", 0, 1, "1e-3"), _sol("0.8414"), OK, None),
     ]
