@@ -387,6 +387,20 @@ def _named_conditions(body, bound, var):
     return [c for c in definedness_conditions(b, var) if getattr(c, "free_symbols", set()) & dummies], plain
 
 
+def finite_points(region, limit: int = 400):
+    """`region` as a FiniteSet when it is one of at most `limit` points (a FiniteSet, or a finite Range: the
+    integers -3 <= x <= -1 are Range(-3, 0)), else None."""
+    if isinstance(region, sp.FiniteSet):
+        return region if len(region) <= limit else None
+    if isinstance(region, sp.Range):
+        try:
+            if region.is_finite_set is True and int(region.size) <= limit:
+                return sp.FiniteSet(*region)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 def _violations(c, d, region):
     """Where in `region` the condition `c` on `d` fails, computed in the sandbox under a time limit;
     None when that is not known exactly (solveset over a Range of a transcendental condition did not
@@ -417,8 +431,9 @@ def _violations(c, d, region):
         elif kind == "real_power":
             # x**x: each point of a finite region read exactly (an integer exponent of a nonzero base holds);
             # elsewhere the base's sign (RK-1)
-            if isinstance(region, sp.FiniteSet):
-                return sp.FiniteSet(*[q for q in region.args if relation_holds_at(c, d, q) is not True])
+            pts = finite_points(region)
+            if pts is not None:
+                return sp.FiniteSet(*[q for q in pts.args if relation_holds_at(c, d, q) is not True])
             bad = sp.Le(e[0], 0)
         else:
             bad = {"odd_root": sp.Lt(e, 0), "zero_power": Eq(e, 0), "mod_divisor": sp.Le(e, 0),

@@ -306,7 +306,7 @@ class Ctx:
         Convention`), the points where one does not): see `convention_region`. A condition solveset
         cannot split keeps `dom` as it was (the condition was not applied before either) and makes
         every point undecided."""
-        from .domain import convention_split
+        from .domain import convention_split, finite_points
         if not spans:
             return dom, S.EmptySet
         fwd_all, back_all = S.Reals, S.EmptySet
@@ -320,7 +320,9 @@ class Ctx:
         except Exception:  # noqa: BLE001
             empty = None
         dom = sp.Intersection(dom, fwd_all)
-        if empty is not True and isinstance(back, sp.FiniteSet) and len(back) <= 400:
+        pts = finite_points(back) if empty is not True else None
+        if pts is not None:
+            back = pts
             # a point of a finite region where every condition holds read at the point itself (x**x at x = -2:
             # Convention real_power, whose split by the base's sign is an interval rule) belongs to the domain
             # (round 9 attack on part d4b, RK-1)

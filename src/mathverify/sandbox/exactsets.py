@@ -292,13 +292,10 @@ def _trig_parts(base, var):
     T = atoms[0]                               # another one left in g makes it no polynomial in t
     if type(T) not in _TRIG:
         return None
-    try:
-        arg = sp.Poly(T.args[0], var)
-    except sp.PolynomialError:
+    ab = _linear(T.args[0], var)
+    if ab is None:
         return None
-    if arg.degree() != 1 or not arg.domain.is_Exact or arg.free_symbols_in_domain:
-        return None
-    a, b = arg.coeff_monomial(var), arg.coeff_monomial(1)
+    a, b = ab
     t = sp.Dummy("t")
     bt = base.xreplace({T: t})
     if bt.free_symbols != {t}:
@@ -343,12 +340,18 @@ def _u_solutions(f, r) -> list[tuple]:
 
 
 def _linear(arg, var):
-    """(a, b) with arg = a*var + b, a != 0, exact numbers; or None."""
+    """(a, b) with arg = a*var + b, a CERTAINLY not 0 (`certified_degree`), exact numbers; or None. Poly takes a
+    constant such as log(6) - log(2) - log(3) for a generator and gives x*(that) degree 1: exp(x*Q) = 1, true for
+    every x (Q is exactly 0), was solved {0} (round 10 of part d4b, the class readers of YO-1)."""
     try:
         p = sp.Poly(arg, var)
     except sp.PolynomialError:
         return None
     if p.degree() != 1 or not p.domain.is_Exact or p.free_symbols_in_domain:
+        return None
+    try:
+        certified_degree(p)
+    except ValueError:
         return None
     return p.coeff_monomial(var), p.coeff_monomial(1)
 

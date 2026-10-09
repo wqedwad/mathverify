@@ -116,6 +116,11 @@ def test_no_untracked_fallback_inside_a_strict_evaluation():                    
     # expression without accuracy tracking (asin of noise) and "checked" the rounded number
     with pytest.raises(PrecisionExhausted):
         sp.Piecewise((sp.asin(sp.sympify(Q)), True), evaluate=False).evalf(30, strict=True)
+    # a condition no evaluation decides (Q <= 0 holds: Q is exactly 0): the fallback evaluated both pieces, 1 + e**-200
+    # and 1 rounded alike, merged them, and P - 1 came out 0
+    pw = sp.Piecewise((1 + sp.exp(-200), sp.Le(sp.sympify(Q), 0)), (1, True))
+    with pytest.raises(PrecisionExhausted):
+        (pw - 1).evalf(15, strict=True)
 
 
 def test_a_rewritten_node_has_room_for_its_own_cancellation():
@@ -158,6 +163,7 @@ def test_certified_integer_and_floor_of_an_untracked_node():                    
     c = sp.asin(sp.sympify(Q)) + 2
     assert certified_integer(c) == (True, 2)
     assert certified_floor(c) == 2
+    assert certified_floor(c + sp.Rational(1, 2)) == 2                 # no integer: certified_integer cannot answer it
 
 
 @pytest.mark.parametrize("e,s", [(f"asin({Q})", 0), (f"asin({Q}) - 1", -1), (f"tanh({P})", 0), (f"sinh({L})**2", 0),
@@ -209,6 +215,16 @@ def test_an_equation_and_a_step_through_an_untracked_node():                    
     assert _run(r, "1").verdict != "CORRECT"
 
 
+def test_an_unevaluated_atan2_on_an_axis():
+    # as written (parse_as_written) an atan2 of an exact 0 stays a node: on an axis its value is exact
+    from mathverify.equiv.numeric import certified_sign
+    q = sp.sympify(Q)
+    assert certified_sign(sp.atan2(q, -1, evaluate=False)) == 1                          # pi
+    assert certified_sign(sp.atan2(1, q, evaluate=False)) == 1                           # pi/2
+    assert certified_sign(sp.atan2(-1, q, evaluate=False)) == -1                         # -pi/2
+    assert certified_sign(sp.atan2(q, q, evaluate=False)) is None                        # atan2(0, 0): undefined
+
+
 def test_trig_index_range_of_an_exact_zero_phase():                                             # fecc2be
     # SymPy read ceiling(-asin(Q)/pi) = 1 and floor(-asin(Q)/pi) = 0 for one exact 0: the solution 0 was lost
     from mathverify.certify.trig import _enumerate_on_window, _enumerate_window_of_interval
@@ -227,6 +243,24 @@ def test_a_polynomial_whose_leading_coefficient_may_be_zero():                  
     assert _run(_eq(f"x*asin({Q}) = 0"), "Reals", "set").verdict != "INCORRECT"
     cr = _ir("count_roots", {"expr": f"x*tanh({P})", "var": "x"}, (X,), (), "count")
     assert _run(cr, "1", "count").verdict != "CORRECT"
+    cr = _ir("count_roots", {"expr": f"x*asin({Q})", "var": "x"}, (X,), (), "count")       # every x is a root
+    assert _run(cr, "1", "count").verdict != "CORRECT"
+    # sqrt(x**2) = x holds on [0, oo): the radical's resultant -x*asin(Q) is no polynomial of degree 1 (fecc2be: {0})
+    assert _run(_eq(f"sqrt(x**2 - x*asin({Q})) = x"), "{0}", "set").verdict != "CORRECT"
+
+
+def test_a_linear_argument_whose_coefficient_may_be_zero():                                    # fecc2be
+    from mathverify.sandbox.exactsets import exact_solveset
+    xr = sp.Symbol("x", real=True)
+    q = sp.sympify(Q)
+    # exp(x*Q) = 1 holds for every x (Q is exactly 0); Poly read x*Q as degree 1 and the class solved it {0}
+    for lhs in (sp.exp(xr * q), 2 ** (xr * q), sp.exp(xr * sp.asin(q))):
+        assert exact_solveset(sp.Eq(lhs, 1), xr, S.Reals) != sp.FiniteSet(0)
+    assert not exact_solveset(sp.Eq(sp.sin(xr * sp.asin(q)), 0), xr, S.Reals).has(sp.ImageSet)   # no period 2*pi/0
+    for e in (f"exp(x*{Q}) = 1", f"2**(x*{Q}) = 1", f"exp(x*asin({Q})) = 1"):
+        assert _run(_eq(e), "{0}", "set").verdict != "CORRECT"
+        assert _run(_eq(e), "Reals", "set").verdict != "INCORRECT"
+    assert _run(_eq("exp(2*x) = 1"), "{0}", "set").verdict == "CORRECT"
 
 
 def test_latex_jumps_of_an_untracked_node():                                                   # fecc2be
@@ -346,6 +380,16 @@ def test_a_root_at_a_negative_integer_on_the_line():                            
     assert _run(_eq("x**sqrt(2) = 0"), "{0}", "set").verdict == "UNKNOWN"
 
 
+def test_a_real_power_on_a_positive_or_finite_domain():
+    # x*x**x = x**(x + 1) wherever both have a value: on x > 0 (the base's sign splits the line), and at the integers
+    # -3, -2, -1 (Range(-3, 0), each point read: fecc2be CORRECT, lost when only a FiniteSet was read)
+    for var in (V("x", "integer", ["x >= -3", "x <= -1"]), V("x", "real", ["x > 0"])):
+        ir = _ir("simplify_expression", {"expr": "x*x**x"}, (var,), shape="expression")
+        assert _run(ir, "x**(x + 1)", "expression").verdict == "CORRECT"
+    ir = _ir("simplify_expression", {"expr": "x**x"}, (V("x", "integer", ["x >= -3", "x <= -1"]),), shape="expression")
+    assert _run(ir, "Abs(x)**x", "expression").verdict == "INCORRECT"            # -1 and 1 at x = -1
+
+
 def test_real_powers_away_from_their_convention_points():
     for f in ("x + 0*x**x", "x + 0*x**sqrt(2)", "x + 0*(x - 1)**x"):
         assert _run(_ir("extremum", {"f": f, "var": "x", "which": "max", "interval": "[2, 3]"}), "3").verdict == "CORRECT"
@@ -406,6 +450,16 @@ def test_the_joined_cells_are_the_union():
     s = exact_solveset(sp.Ge(sp.sin(x) * sp.cos(x), 0), x, sp.Interval(0, 2 * sp.pi))
     want = sp.Union(sp.Interval(0, sp.pi / 2), sp.Interval(sp.pi, 3 * sp.pi / 2), sp.FiniteSet(2 * sp.pi))
     assert sp.Complement(s, want) is S.EmptySet and sp.Complement(want, s) is S.EmptySet
+
+
+def test_cells_are_joined_in_one_pass():
+    # 160 intervals with edges k*pi: SymPy's Union joins them pair by pair (about 40 s here), the pass along the edges
+    # does not
+    from mathverify.sandbox.exactsets import _joined
+    n = 321
+    t = time.time()
+    u = _joined([k * sp.pi for k in range(n)], [k % 2 == 0 for k in range(n - 1)], [False] * n)
+    assert len(u.args) == 160 and time.time() - t < 5
 
 
 def test_a_given_with_160_intervals_answers_in_time():                                         # fecc2be (> 100 s)
