@@ -60,8 +60,10 @@ def count_real_roots(expr, var, lo=-oo, hi=oo, distinct: bool = True) -> int:
 
 
 def _poly_real_roots(num, var):
-    """Sandbox worker: exact real roots of a polynomial, with multiplicity (rationals/CRootOf)."""
-    return list(sp.Poly(num, var).real_roots())
+    """Sandbox worker: exact real roots of a polynomial, with multiplicity (rationals/CRootOf), of a certain
+    degree (`sandbox.exactsets.certified_degree`)."""
+    from ..sandbox.exactsets import certified_degree
+    return list(certified_degree(sp.Poly(num, var)).real_roots())
 
 
 # ---------------------------------------------------------------------------------------------

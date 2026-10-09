@@ -93,10 +93,13 @@ def test_a_constraint_is_never_dropped(cons, ir, claim, kind, bad):             
 
 @pytest.mark.parametrize("cons", [[f"x <= {FAR}", "x >= 3"], ["x >= 3", f"x <= {FAR}"]])
 def test_an_intersection_that_raises_abstains(cons):
+    # never CORRECT: -3 is below 3 (round 10: refuted by the constraint read alone, RK-4 of the round 9 attack); the
+    # reason is checked only where the problem abstains
     ir = dict(_eq("x**2 = 9"), vars=[V("x", "real", cons)])
     r = _run(ir, "{-3, 3}", "set")
-    assert r.verdict == "UNKNOWN"
-    assert any("constraint_not_applied" in str((la.evidence or {}).get("reason", "")) for la in r.layers)
+    assert r.verdict != "CORRECT"
+    if r.verdict == "UNKNOWN":
+        assert any("constraint_not_applied" in str((la.evidence or {}).get("reason", "")) for la in r.layers)
 
 
 def test_constraints_not_applied_lists_the_failed_one():                             # 56cec1d
@@ -414,7 +417,7 @@ def test_extremum_away_from_the_origin_convention():                            
     ir = _ir("extremum", {"f": "x + 0*atan2(x - 1, 0)", "var": "x", "which": "max", "interval": "[2, 3]"})
     assert _run(ir, "3").verdict == "CORRECT"
     ir = _ir("extremum", {"f": "x + 0*atan2(x - 1, 0)", "var": "x", "which": "max", "interval": "[0, 3]"})
-    assert _run(ir, "3").verdict == "UNKNOWN"             # the convention point 1 is in [0, 3]
+    assert _run(ir, "3").verdict != "INCORRECT"           # the convention point 1 is in [0, 3]; 3 is right either way
 
 
 def test_outside_the_claim_a_point_needs_every_condition():

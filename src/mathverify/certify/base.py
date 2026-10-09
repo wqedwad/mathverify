@@ -319,7 +319,17 @@ class Ctx:
             empty = back.is_empty
         except Exception:  # noqa: BLE001
             empty = None
-        return sp.Intersection(dom, fwd_all), (S.EmptySet if empty is True else back)
+        dom = sp.Intersection(dom, fwd_all)
+        if empty is not True and isinstance(back, sp.FiniteSet) and len(back) <= 400:
+            # a point of a finite region where every condition holds read at the point itself (x**x at x = -2:
+            # Convention real_power, whose split by the base's sign is an interval rule) belongs to the domain
+            # (round 9 attack on part d4b, RK-1)
+            from .domain import relation_holds_at
+            held = [p for p in back.args if all(relation_holds_at(c, var, p) is True for c in spans)]
+            if held:
+                dom, back = sp.Union(dom, sp.FiniteSet(*held)), sp.Complement(back, sp.FiniteSet(*held))
+                empty = back.is_empty
+        return dom, (S.EmptySet if empty is True else back)
 
     def convention_region(self, var: sp.Symbol) -> sp.Set:
         """The points of `var`'s domain where the value of one of the problem's expressions is a

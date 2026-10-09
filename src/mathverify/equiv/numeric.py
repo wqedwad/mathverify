@@ -6,6 +6,7 @@ genuine difference.
 """
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import mpmath as mp
@@ -395,6 +396,9 @@ def _certified_floor(u, timeout: float):
     return None
 
 
+_SESSION = threading.local()     # the certified signs read so far in one outermost call (nested readers ask again)
+
+
 def certified_sign(e, timeout: float = 5.0):
     """Sign of a constant: -1, 0 or 1 when certified, NONREAL when it is certainly not real,
     None when it cannot be decided. Never a sign read off rounding noise."""
@@ -402,6 +406,67 @@ def certified_sign(e, timeout: float = 5.0):
         e = sp.sympify(e)
     except (sp.SympifyError, TypeError):
         return None
+    memo = getattr(_SESSION, "memo", None)
+    if memo is None:
+        _SESSION.memo = {}
+        try:
+            return _certified_sign(e, timeout)
+        finally:
+            _SESSION.memo = None
+    try:
+        return memo[e]
+    except KeyError:
+        s = memo[e] = _certified_sign(e, timeout)
+        return s
+    except TypeError:
+        return _certified_sign(e, timeout)
+
+
+def _zero_arguments_resolved(e, timeout: float):
+    """`e` with every node SymPy's evalf does not track the accuracy of (asin, sinh, tanh, erf, ...: see
+    `_sympy_guards`) whose argument is CERTIFIED 0 replaced by its exact value there (asin 0 = sinh 0 = tanh 0 =
+    erf 0 = 0, cosh 0 = 1, acos 0 = pi/2), innermost first; a Max/Min whose arguments certified signs order, and
+    an atan2 on an axis, by their value. Strict evalf read asin(log(6) - log(2) - log(3)) off rounding noise of
+    its argument (a sign that changed with the precision), and ceiling(asin(Q)) = 1 was certified (round 9
+    attack, YO-1); a guarded strict evaluation reads such a node only where its argument has a certified sign,
+    and an argument that is exactly 0 has none there: its exact zero test is here."""
+    from .._sympy_guards import tracked
+
+    def picked(n):
+        best = n.args[0]
+        for a in n.args[1:]:
+            s = certified_sign(a - best, timeout)
+            if s not in (-1, 0, 1):
+                return None
+            if (s > 0) == isinstance(n, sp.Max) and s != 0:
+                best = a
+        return best
+
+    def go(n):
+        if not isinstance(n, sp.Expr) or not n.args or isinstance(n, (sp.CRootOf, sp.AlgebraicNumber)):
+            return n
+        args = [go(a) for a in n.args]
+        if any(a is not b for a, b in zip(args, n.args)):
+            n = n.func(*args)
+        if tracked(n) or n.free_symbols or not isinstance(n, (sp.Function, sp.Max, sp.Min)):
+            return n
+        if isinstance(n, (sp.Max, sp.Min)):
+            v = picked(n)
+        elif isinstance(n, sp.atan2):
+            sy, sx = certified_sign(n.args[0], timeout), certified_sign(n.args[1], timeout)
+            v = {(0, 1): sp.S.Zero, (0, -1): sp.pi, (1, 0): sp.pi / 2, (-1, 0): -sp.pi / 2}.get((sy, sx))
+        elif len(n.args) == 1 and certified_sign(n.args[0], timeout) == 0:
+            v = n.func(sp.S.Zero)
+        else:
+            v = None
+        if v is None or not v.is_number or v.has(type(n), sp.oo, sp.S.NegativeInfinity, sp.zoo, sp.nan):
+            return n
+        return v
+
+    return go(e)
+
+
+def _certified_sign(e, timeout: float):
     if getattr(e, "free_symbols", None):
         return None
     if e.has(sp.nan, sp.zoo):
@@ -418,6 +483,7 @@ def certified_sign(e, timeout: float = 5.0):
     e = _jumps_resolved(e, timeout)
     if e is None:
         return None
+    e = _zero_arguments_resolved(e, timeout)
     if isinstance(e, sp.Rational):
         return int(sp.sign(e))
     s = _evalf_sign(e, timeout)

@@ -57,6 +57,11 @@ from sympy.functions.elementary.trigonometric import TrigonometricFunction
 
 # more points (zeros, poles, cells) on one window than this: the set is left unsolved
 LIMIT = 400
+# more intervals than this in one set, or a set operation that would make more: left unsolved (undecided). SymPy
+# joins and meets the intervals of a Union pair by pair, each comparison of two endpoints an evaluation: the 160
+# intervals of sin(x) > 0 on [0, 1000] took 170 s to join, 220 s for one verify (round 9 attack on part d4b, RK-3);
+# 32 take 3 s
+SET_PIECES = 32
 _TRIG = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
 # the functions whose poles cut the cells: (pole function, the function whose zeros they are)
 _POLES = ((sp.tan, sp.cos), (sp.sec, sp.cos), (sp.cot, sp.sin), (sp.csc, sp.sin))
@@ -161,6 +166,8 @@ def exact_setop(op, sets) -> sp.Set:
     different raises TypeError: the caller abstains."""
     from ..equiv.sets import EndpointsIncomparable, TooManyEndpoints, endpoints_apart, unify_endpoints
     sets = list(sets)
+    if _pieces(op, sets) > SET_PIECES:
+        raise TypeError(f"a set operation over more than {SET_PIECES} intervals: undecided (its cost has no bound)")
     try:
         sets = unify_endpoints(sets)
     except TooManyEndpoints as err:
@@ -171,6 +178,47 @@ def exact_setop(op, sets) -> sp.Set:
     except EndpointsIncomparable as err:
         raise TypeError(f"endpoints not ordered: {err}") from None
     return op(*sets)
+
+
+def _pieces(op, sets) -> int:
+    """The intervals `op` of `sets` works through (`SET_PIECES`): every interval of every operand, and, for a join or a
+    complement, every point too (one cuts an interval in two, and points join an interval pair by pair)."""
+    n_int = n_pt = 0
+    for st in sets:
+        for a in (st.args if isinstance(st, (sp.Union, sp.Intersection, sp.Complement)) else (st,)):
+            if isinstance(a, sp.Interval):
+                n_int += 1
+            elif isinstance(a, sp.FiniteSet):
+                n_pt += len(a)
+            elif isinstance(a, (sp.Union, sp.Intersection, sp.Complement)):
+                n_int += _pieces(sp.Union, [a])
+    return n_int if op is sp.Intersection or not n_int else n_int + n_pt
+
+
+def _joined(edges, cell_holds, point_holds):
+    """The union of the cells (edges[i], edges[i+1]) where `cell_holds[i]` and the edges where `point_holds[i]`, joined
+    in one pass along the sorted edges (SymPy's Union joins pair by pair: `SET_PIECES`); _Unsolved past SET_PIECES
+    intervals."""
+    runs: list = []
+    start = None
+    for i, e in enumerate(edges):
+        prev = i > 0 and cell_holds[i - 1]
+        nxt = i < len(cell_holds) and cell_holds[i]
+        p = point_holds[i]
+        if prev and p and nxt:
+            continue
+        if prev:
+            runs.append(sp.Interval(start[0], e, not start[1], not p))
+            start = (e, False) if nxt else None
+        elif nxt:
+            start = (e, p)
+        elif p:
+            runs.append(sp.FiniteSet(e))
+        if sum(isinstance(r_, sp.Interval) for r_ in runs) > SET_PIECES:
+            raise _Unsolved(f"more than {SET_PIECES} intervals")
+    if not runs:
+        return S.EmptySet
+    return runs[0] if len(runs) == 1 else sp.Union(*runs, evaluate=False)
 
 
 def _hull(domain):
@@ -201,10 +249,25 @@ def _poly_roots(base, var):
     return _real_roots(p)
 
 
+def certified_degree(p):
+    """`p` itself when its degree is certain: rational coefficients, or a leading coefficient whose certified sign
+    is not 0; ValueError otherwise. With a constant such as asin(log(6) - log(2) - log(3)) in its coefficients,
+    Poly takes it as a generator of the domain and never asks whether it is 0: x*asin(Q) = 0, an identity
+    (asin(Q) is exactly 0), was solved {0} and that root certified complete (round 9 attack, YO-1)."""
+    if p.domain.is_ZZ or p.domain.is_QQ:
+        return p
+    from ..equiv.numeric import NONREAL, certified_sign
+    if certified_sign(p.LC()) in (-1, 1, NONREAL):
+        return p
+    raise ValueError(f"the degree of a polynomial over {p.domain} is not certain: its leading coefficient may be 0")
+
+
 def _real_roots(p) -> list:
     """All the real roots of a polynomial with exact coefficients, exactly: `real_roots` over the
     rationals; over an algebraic field (sqrt(3) - t) every root `roots` finds, when they are all of them
-    (multiplicities summing to the degree), the real ones kept by a certified sign."""
+    (multiplicities summing to the degree), the real ones kept by a certified sign. Of a certain degree only
+    (`certified_degree`)."""
+    certified_degree(p)
     try:
         return list(dict.fromkeys(p.real_roots()))
     except Exception:  # noqa: BLE001 - not over ZZ/QQ
@@ -1062,23 +1125,24 @@ def _on_window(rel, var, lo, hi):
     # a window end PROVED equal to a zero, pole or cut takes its writing: sqrt(x - 3) - 1 at the end
     # log(8)/log(2) of x > log(8)/log(2) had no certified sign (round 8, RK-3)
     edges = _edges_on(lo, hi, zeros + poles + cuts)
-    pieces: list = []
+    cell_holds: list = []
     for a, b in zip(edges[:-1], edges[1:]):
         mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
         if outside(mid):
-            continue                                    # a log is not real on this cell: nothing holds
+            cell_holds.append(False)                    # a log is not real on this cell: nothing holds
+            continue
         s_ = 0 if ident else _real_sign(e.subs(var, mid))
         if s_ == 0 and not ident:
             raise _Unsolved("a zero inside a cell")       # cannot happen with the classes: refuse
-        if _holds(op, s_):
-            pieces.append(sp.Interval.open(a, b))
+        cell_holds.append(_holds(op, s_))
+    point_holds: list = []
     for p in edges:
         if not p.is_finite or _same(p, poles) or outside(p):
+            point_holds.append(False)
             continue
         s_ = 0 if ident or _same(p, zeros) else _real_sign(e.subs(var, p))
-        if _holds(op, s_):
-            pieces.append(sp.FiniteSet(p))
-    return cut(sp.Union(*pieces) if pieces else S.EmptySet), zeros, poles
+        point_holds.append(_holds(op, s_))
+    return cut(_joined(edges, cell_holds, point_holds)), zeros, poles
 
 
 def period(e, var):

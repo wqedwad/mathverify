@@ -419,8 +419,11 @@ def membership_holds_on(c, var, regions) -> bool:
     zeros are not: everywhere for y**2 + x**2 with y = 2, on a neighbourhood of 2 for (x - 1)**2 (round 9 of part
     d4b, RK-5); at a zero it stays undecided."""
     st = c.args[1] if isinstance(c, sp.Contains) else None
-    if isinstance(st, Convention) and st.kind == "origin":
+    if isinstance(st, Convention) and st.kind in ("origin", "zero_power"):
         return _origin_avoided(c.args[0], var, regions)
+    if isinstance(st, Convention) and st.kind == "real_power":
+        # x**x: the one value where the base is positive (round 9 attack on part d4b, RK-1)
+        return _base_positive(c.args[0][0], var, regions)
     if not (isinstance(st, sp.Complement) and st.args[0] == S.Reals) or not regions:
         return False
     arg, hole = c.args[0], st.args[1]
@@ -474,6 +477,21 @@ def _origin_avoided(u, var, regions) -> bool:
             continue
         if all(in_domain(closure, z) is False for z in zs):
             return True
+    return False
+
+
+def _base_positive(b, var, regions) -> bool:
+    """Is the base `b` (in `var` alone) certainly positive on the closure of one of `regions`: no point of it where
+    b <= 0, by the exact classes (sandbox.exactsets)?"""
+    from ..sandbox.exactsets import exact_solveset
+    if not isinstance(b, sp.Expr) or b.free_symbols != {var}:
+        return False
+    for region in regions:
+        try:
+            if exact_solveset(sp.Le(b, 0), var, region.closure) is S.EmptySet:
+                return True
+        except Exception:  # noqa: BLE001 - a region SymPy cannot cut proves nothing
+            continue
     return False
 
 

@@ -924,6 +924,252 @@ def cases_l():
     return out
 
 
+def cases_m():
+    """Round 10 (9 Oct 2026), the attack on round 9: strict evalf trusted at a node SymPy does not track the accuracy of
+    (asin, sinh, tanh, erf, atan2, Max ... of an exact 0 read off noise; YO-1), a relation of numbers decided by the
+    assumption system's non-strict fallback (YO-2), the interval rule base > 0 of x**x and x**sqrt(2) read at a point
+    (RK-1), the precision budget raising out of non-strict evaluations (RK-2), a finite set of 300+ endpoints with
+    no time budget (RK-3), and a constraint dropped where it alone refutes the claim (RK-4)."""
+    I_ = "interval"
+    Q = "(log(6) - log(2) - log(3))"                  # exactly 0
+    A = "(atan(1/2) + atan(1/3) - pi/4)"               # exactly 0 (no exact test proves it)
+    P = "(log(4) - 2*log(2))"                          # exactly 0
+    L = "(log(8)/log(2) - 3)"                          # exactly 0
+    L2 = f"tan({L}**2)"                                # exactly 0
+    Z = "(2*atan(tanh(1/2)) - atan(sinh(1)))"          # exactly 0 (gd(1) twice)
+    E11 = "log(8)/log(2) + exp(-exp(11))"              # 3 + e^(-e^11): 86396 bits apart
+    E12 = "log(8)/log(2) + exp(-exp(12))"              # past the budget
+    AB = f"Abs({E11} - 3)"
+    FAR = "3 + 2*atan(tanh(1/2)) - atan(sinh(1))"      # exactly 3
+    XI = V("x", "integer")
+    Y = V("y")
+    D7 = "{-3, -2, -1, 0, 1, 2, 3}"
+
+    def pw(u):
+        return f"Piecewise((1, {u} > 0), (0, {u} <= 0))"
+
+    def step(c):
+        return _sol("3", steps=[("compute", c)])
+
+    def cons(*cs):
+        return (V("x", "real", list(cs)),)
+    out = [
+        # YO-1: the attack's repros (e1, e3, e4, e8, e10)
+        ("M1 ev sign(asin Q): 1", ev(f"sign(asin({Q}))", []), _sol("1"), NOTOK, None),
+        ("M1 ev sign(asin Q): -1", ev(f"sign(asin({Q}))", []), _sol("-1"), NOTOK, None),
+        ("M1 ev sign(asin Q): 0", ev(f"sign(asin({Q}))", []), _sol("0"), NOTNO, None),
+        ("M1 ev sign(sinh A): 1", ev(f"sign(sinh({A}))", []), _sol("1"), NOTOK, None),
+        ("M1 ev floor(-sinh A): -1", ev(f"floor(-sinh({A}))", []), _sol("-1"), NOTOK, None),
+        ("M1 ev floor(-sinh A): 0", ev(f"floor(-sinh({A}))", []), _sol("0"), NOTNO, None),
+        ("M1 ev ceiling(asin Q): 1", ev(f"ceiling(asin({Q}))", []), _sol("1"), NOTOK, None),
+        ("M1 ev ceiling(asin Q): 0", ev(f"ceiling(asin({Q}))", []), _sol("0"), NOTNO, None),
+        ("M1 ev Mod(tanh P + 5, 5): 5 + tanh P", ev(f"Mod(tanh({P}) + 5, 5)", []), _sol(f"5 + tanh({P})"), NOTOK, None),
+        ("M1 ev Mod(tanh P + 5, 5): 0", ev(f"Mod(tanh({P}) + 5, 5)", []), _sol("0"), NOTNO, None),
+        ("M1 ev frac(tanh P): 1 + tanh P", ev(f"frac(tanh({P}))", []), _sol(f"1 + tanh({P})"), NOTOK, None),
+        ("M1 eq x^2=4 | x>=2+asin Q: {}", eq("x**2 = 4", vars_=cons(f"x >= 2 + asin({Q})")), _sol("EmptySet", S_), NOTOK, None),
+        ("M1 eq x^2=4 | x>=2+asin Q: {2}", eq("x**2 = 4", vars_=cons(f"x >= 2 + asin({Q})")), _sol("{2}", S_), NOTNO, None),
+        ("M1 eq x^2=4 | x>2+tanh P: {2}", eq("x**2 = 4", vars_=cons(f"x > 2 + tanh({P})")), _sol("{2}", S_), NOTOK, None),
+        ("M1 eq x^2=4 | x>2+tanh P: {}", eq("x**2 = 4", vars_=cons(f"x > 2 + tanh({P})")), _sol("EmptySet", S_), NOTNO, None),
+        ("M1 ext max -x^2 | x>=2+asin Q: -4", ext("-x**2", "max", vars_=cons(f"x >= 2 + asin({Q})")), _sol("-4"), NOTNO, None),
+        ("M1 eq x*asin Q=0: {0}", eq(f"x*asin({Q}) = 0"), _sol("{0}", S_), NOTOK, None),
+        ("M1 eq x*asin Q=0: R", eq(f"x*asin({Q}) = 0"), _sol("Reals", S_), NOTNO, None),
+        ("M1 cint x>=asin Q, x<=3: 3", cint([f"x >= asin({Q})", "x <= 3"], [XI]), _sol("3", "count"), NOTOK, None),
+        ("M1 cint x>=asin Q, x<=3: 4", cint([f"x >= asin({Q})", "x <= 3"], [XI]), _sol("4", "count"), NOTNO, None),
+        ("M1 cint constraint x>=asin Q, x<=3: 3", cint(["x <= 3"], [V("x", "integer", [f"x >= asin({Q})"])]), _sol("3", "count"),
+         NOTOK, None),
+        ("M1 step sign(asin Q) = 1", ev("x + 1", ["x = 2"]), step(f"sign(asin({Q})) = 1"), NOTNO, NOTVER),
+        ("M1 step asin Q > 0", ev("x + 1", ["x = 2"]), step(f"asin({Q}) > 0"), NOTNO, NOTVER),
+        ("M1 latex ceil(arcsin(ln6-ln2-ln3)): 1", ev(r"\lceil \arcsin(\ln 6 - \ln 2 - \ln 3) \rceil", []), _sol("1"), NOTOK,
+         None),
+        ("M1 ev ceiling(y) | y=asin Q: 1", ev("ceiling(y)", [f"y = asin({Q})"], (Y,)), _sol("1"), NOTOK, None),
+        ("M1 ev ceiling(y) | y=asin Q: 0", ev("ceiling(y)", [f"y = asin({Q})"], (Y,)), _sol("0"), NOTNO, None),
+        ("M1 ev sign(y) | y=sinh A: 1", ev("sign(y)", [f"y = sinh({A})"], (Y,)), _sol("1"), NOTOK, None),
+        ("M1 ev Pw(asin Q > 0): 1", ev(pw(f"asin({Q})"), []), _sol("1"), NOTOK, None),
+        ("M1 ineq asin(Q)*x>0: (0,oo)", ineq(f"asin({Q})*x > 0"), _sol("Interval.open(0, oo)", I_), NOTOK, None),
+        ("M1 ineq asin(Q)*x>0: {}", ineq(f"asin({Q})*x > 0"), _sol("EmptySet", S_), NOTNO, None),
+        ("M1 ev floor(asin Q) + ceiling(asin Q): 1", ev(f"floor(asin({Q})) + ceiling(asin({Q}))", []), _sol("1"), NOTOK, None),
+        ("M1 ev ceiling(tanh(2atan(1/3) - atan(3/4))): 1", ev("ceiling(tanh(2*atan(1/3) - atan(3/4)))", []), _sol("1"), NOTOK,
+         None),
+        ("M1 eq x = ceiling(asin Q) + 2: {3}", eq(f"x = ceiling(asin({Q})) + 2"), _sol("{3}", S_), NOTOK, None),
+        ("M1 eq x = ceiling(asin Q) + 2: {2}", eq(f"x = ceiling(asin({Q})) + 2"), _sol("{2}", S_), NOTNO, None),
+        ("M1 ev ceiling(asin(log6/log2 - 1 - log3/log2)): 1", ev("ceiling(asin(log(6)/log(2) - 1 - log(3)/log(2)))", []),
+         _sol("1"), NOTOK, None),
+        ("M1 ev sign(asin L): -1", ev(f"sign(asin({L}))", []), _sol("-1"), NOTOK, None),
+        ("M1 ev sign(asin L): 0", ev(f"sign(asin({L}))", []), _sol("0"), NOTNO, None),
+        ("M1 ev sign(tanh L): -1", ev(f"sign(tanh({L}))", []), _sol("-1"), NOTOK, None),
+        ("M1 ev ceiling(sinh(L)^2): 1", ev(f"ceiling(sinh({L})**2)", []), _sol("1"), NOTOK, None),
+        ("M1 ev ceiling(sinh(L)^2): 0", ev(f"ceiling(sinh({L})**2)", []), _sol("0"), NOTNO, None),
+        ("M1 ev floor(asin L): -1", ev(f"floor(asin({L}))", []), _sol("-1"), NOTOK, None),
+        ("M1 ev Pw((1, sinh(L)<0),(0,True)): 1", ev(f"Piecewise((1, sinh({L}) < 0), (0, True))", []), _sol("1"), NOTOK, None),
+        ("M1 ev Pw((1, sinh(L)<0),(0,True)): 0", ev(f"Piecewise((1, sinh({L}) < 0), (0, True))", []), _sol("0"), NOTNO, None),
+        ("M1 ev atan2(-tan(L^2), -1): -pi", ev(f"atan2(-tan({L}**2), -1)", []), _sol("-pi"), NOTOK, None),
+        ("M1 ev atan2(-tan(L^2), -1): pi", ev(f"atan2(-tan({L}**2), -1)", []), _sol("pi"), NOTNO, None),
+        ("M1 ev atan2(asin L, -1): -pi", ev(f"atan2(asin({L}), -1)", []), _sol("-pi"), NOTOK, None),
+        ("M1 eq x^2=9 | x>3+sinh L: {3}", eq("x**2 = 9", vars_=cons(f"x > 3 + sinh({L})")), _sol("{3}", S_), NOTOK, None),
+        ("M1 eq x^2=9 | x>3+sinh L: {}", eq("x**2 = 9", vars_=cons(f"x > 3 + sinh({L})")), _sol("EmptySet", S_), NOTNO, None),
+        ("M1 eq x^2=9 | given x>3+asin L: {3}", eq("x**2 = 9", [f"x > 3 + asin({L})"]), _sol("{3}", S_), NOTOK, None),
+        ("M1 cint x>sinh L, x<3: 3", cint([f"x > sinh({L})", "x < 3"], [XI]), _sol("3", "count"), NOTOK, None),
+        ("M1 cint x>sinh L, x<3: 2", cint([f"x > sinh({L})", "x < 3"], [XI]), _sol("2", "count"), NOTNO, None),
+        ("M1 step sign(asin L) = -1", ev("x + 1", ["x = 2"]), step(f"sign(asin({L})) = -1"), NOTNO, NOTVER),
+        ("M1 step sinh(L) = 0 (right)", ev("x + 1", ["x = 2"]), step(f"sinh({L}) = 0"), NOTNO, NOTREF),
+        ("M1 ineq x>asin L: (0,oo)", ineq(f"x > asin({L})"), _sol("Interval.open(0, oo)", I_), NOTNO, None),
+        ("M1 ineq x>asin L: [0,oo)", ineq(f"x > asin({L})"), _sol("Interval(0, oo)", I_), NOTOK, None),
+        ("M1 croots x^2-9 on [3+sinh L, 5]: 1", _ir("count_roots", {"expr": "x**2 - 9", "var": "x", "lo": f"3 + sinh({L})", "hi": "5"},
+                                                      (X,), (), "count"), _sol("1", "count"), NOTNO, None),
+        ("M1 latex ceil(sinh(ln8/ln2-3)^2): 1", ev(r"\lceil \sinh(\frac{\ln 8}{\ln 2} - 3)^2 \rceil", []), _sol("1"), NOTOK, None),
+        ("M1 latex ceil(sinh(ln8/ln2-3)^2): 0", ev(r"\lceil \sinh(\frac{\ln 8}{\ln 2} - 3)^2 \rceil", []), _sol("0"), NOTNO, None),
+        ("M1 latex floor(tanh(ln4-2ln2)): -1", ev(r"\lfloor \tanh(\ln 4 - 2\ln 2) \rfloor", []), _sol("-1"), NOTOK, None),
+        ("M1 latex floor(tanh(ln4-2ln2)): 0", ev(r"\lfloor \tanh(\ln 4 - 2\ln 2) \rfloor", []), _sol("0"), NOTNO, None),
+        ("M1 latex claim ceil(sinh(..)^2) + 1 for 1 + 1", ev("1 + 1", []),
+         _sol(r"\lceil \sinh(\frac{\ln 8}{\ln 2} - 3)^2 \rceil + 1"), NOTOK, None),
+        ("M1 eq x^2=4 | closed asin Q > 0: {-2,2}", eq("x**2 = 4", vars_=cons(f"asin({Q}) > 0")), _sol("{-2, 2}", S_), NOTOK, None),
+        ("M1 eq x^2=4 | x>=a, a=2+tanh P: {}", eq("x**2 = 4", ["a = 2 + tanh(log(4) - 2*log(2))"], (V("x", "real", ["x >= a"]),
+                                                                                                    V("a", "real"))),
+         _sol("EmptySet", S_), NOTOK, None),
+        ("M1 eq x^2=4 | x>a, a=2+tanh P: {2}", eq("x**2 = 4", ["a = 2 + tanh(log(4) - 2*log(2))"], (V("x", "real", ["x > a"]),
+                                                                                                    V("a", "real"))),
+         _sol("{2}", S_), NOTOK, None),
+        # YO-1, the other untracked nodes (verifier variants): an argument exactly 0 or 1
+        ("M1v ev ceiling(acos(1 + Q)): 1", ev(f"ceiling(acos(1 + {Q}))", []), _sol("1"), NOTOK, None),
+        ("M1v ev sign(cosh(Q) - 1): 1", ev(f"sign(cosh({Q}) - 1)", []), _sol("1"), NOTOK, None),
+        ("M1v ev sign(cosh(Q) - 1): 0", ev(f"sign(cosh({Q}) - 1)", []), _sol("0"), NOTNO, None),
+        ("M1v ev ceiling(acot(Q)): 1", ev(f"ceiling(acot({Q}))", []), _sol("1"), NOTOK, None),
+        ("M1v ev ceiling(acot(Q)): 2", ev(f"ceiling(acot({Q}))", []), _sol("2"), NOTNO, None),
+        ("M1v ev sign(atanh(Q)): 1", ev(f"sign(atanh({Q}))", []), _sol("1"), NOTOK, None),
+        ("M1v ev sign(asinh(Q)): -1", ev(f"sign(asinh({Q}))", []), _sol("-1"), NOTOK, None),
+        ("M1v ev sign(erf(Q)): 1", ev(f"sign(erf({Q}))", []), _sol("1"), NOTOK, None),
+        ("M1v ev sign(atan2(Q, 1)): 1", ev(f"sign(atan2({Q}, 1))", []), _sol("1"), NOTOK, None),
+        ("M1v ev sign(Max(Q, 0)): 1", ev(f"sign(Max({Q}, 0))", []), _sol("1"), NOTOK, None),
+        ("M1v ev sign(Min(Q, 0)): -1", ev(f"sign(Min({Q}, 0))", []), _sol("-1"), NOTOK, None),
+        ("M1v eq x*sinh(L)=0: {0}", eq(f"x*sinh({L}) = 0"), _sol("{0}", S_), NOTOK, None),
+        ("M1v croots x*tanh(P): 1", _ir("count_roots", {"expr": f"x*tanh({P})", "var": "x"}, (X,), (), "count"), _sol("1", "count"),
+         NOTOK, None),
+        # controls: the same functions away from 0 keep their verdicts
+        ("M1c ev ceiling(10*asin(1/2)): 6", ev("ceiling(10*asin(1/2))", []), _sol("6"), OK, None),
+        ("M1c ev sign(sinh(1) - 1): 1", ev("sign(sinh(1) - 1)", []), _sol("1"), OK, None),
+        ("M1c ev floor(acosh(3)): 1", ev("floor(acosh(3))", []), _sol("1"), OK, None),
+        ("M1c ev ceiling(atanh(1/2)): 1", ev("ceiling(atanh(1/2))", []), _sol("1"), OK, None),
+        ("M1c ev sign(Max(1, sqrt(2)) - 1): 1", ev("sign(Max(1, sqrt(2)) - 1)", []), _sol("1"), OK, None),
+        ("M1c ev floor(atan2(1, -1)): 2", ev("floor(atan2(1, -1))", []), _sol("2"), OK, None),
+        ("M1c ev floor(10*erf(1)): 8", ev("floor(10*erf(1))", []), _sol("8"), NOTNO, None),
+        ("M1c ev floor(10*erf(1)): 9", ev("floor(10*erf(1))", []), _sol("9"), NOTOK, None),
+        ("M1c eq x^2=4 | x>2+tanh(1): {}", eq("x**2 = 4", vars_=cons("x > 2 + tanh(1)")), _sol("EmptySet", S_), OK, None),
+    ]
+    # YO-2: relations of numbers through SymPy's assumption fallback (e5, e6)
+    for nm, u in (("sin(Z)^2", f"sin({Z})**2"), ("atan(Z)^2", f"atan({Z})**2"), ("sin(Z^2)", f"sin({Z}**2)"), ("tan(L^2)", L2),
+                  ("Z^2", f"{Z}**2"), ("cosh(Q)-1", f"cosh({Q}) - 1"), ("Max(Q,0)", f"Max({Q}, 0)")):
+        out += [
+            (f"M2 ev Pw({nm} > 0): 1", ev(pw(u), []), _sol("1"), NOTOK, None),
+            (f"M2 ev Pw({nm} > 0): 0", ev(pw(u), []), _sol("0"), NOTNO, None),
+        ]
+    PS = pw(f"sin({Z})**2")
+    out += [
+        ("M2 step Pw(sin(Z)^2) = 1", ev("x + 1", ["x = 2"]), step(f"{PS} = 1"), NOTNO, NOTVER),
+        ("M2 ev 5*Pw + 2: 7", ev(f"5*{PS} + 2", []), _sol("7"), NOTOK, None),
+        ("M2 eq x = Pw: {1}", eq(f"x = {PS}"), _sol("{1}", S_), NOTOK, None),
+        ("M2 eq x = Pw: {0}", eq(f"x = {PS}"), _sol("{0}", S_), NOTNO, None),
+        ("M2 ev 0**L2: 0", ev(f"0**({L2})", []), _sol("0"), NOTOK, None),
+        ("M2 ev 0**asin Q: 0", ev(f"0**asin({Q})", []), _sol("0"), NOTOK, None),
+        ("M2 eq x^2+1=0: Interval(0, -tan(L^2))", eq("x**2 + 1 = 0"), _sol(f"Interval(0, -{L2})", I_), NOTOK, None),
+        ("M2 eq x^2+1=0: Interval(0, asin Q)", eq("x**2 + 1 = 0"), _sol(f"Interval(0, asin({Q}))", I_), NOTOK, None),
+        ("M2 eq x^2+1=0: Interval(0, cosh(Q) - 1)", eq("x**2 + 1 = 0"), _sol(f"Interval(0, cosh({Q}) - 1)", I_), NOTOK, None),
+        ("M2 ineq L2*x>0: (0,oo)", ineq(f"{L2}*x > 0"), _sol("Interval.open(0, oo)", I_), NOTOK, None),
+        ("M2 ineq x>L2: (0,oo)", ineq(f"x > {L2}"), _sol("Interval.open(0, oo)", I_), NOTNO, None),
+        ("M2 eq x^2=4 | x>2-L2: {2}", eq("x**2 = 4", vars_=cons(f"x > 2 - {L2}")), _sol("{2}", S_), NOTOK, None),
+        ("M2 ev sign(L2): 1", ev(f"sign({L2})", []), _sol("1"), NOTOK, None),
+        ("M2 step L2 > 0", ev("x + 1", ["x = 2"]), step(f"{L2} > 0"), NOTNO, NOTVER),
+        ("M2 trig sin x=0 on [0, 2pi - L2): {0, pi}", _ir("trig_solve", {"var": "x", "interval": f"[0, 2*pi - {L2})"}, (X,),
+                                                           ["sin(x) = 0"], "set"), _sol("{0, pi}", S_), NOTNO, None),
+        ("M2 trig sin x=0 on [0, 2pi - L2): {0, pi, 2pi}", _ir("trig_solve", {"var": "x", "interval": f"[0, 2*pi - {L2})"}, (X,),
+                                                                ["sin(x) = 0"], "set"), _sol("{0, pi, 2*pi}", S_), NOTOK, None),
+        ("M2c ev Pw(sin(1)^2 > 0): 1", ev(pw("sin(1)**2"), []), _sol("1"), OK, None),
+        ("M2c eq x^2+1=0: Interval(0, -1/2)", eq("x**2 + 1 = 0"), _sol("Interval(0, -1/2)", I_), OK, None),
+    ]
+    # RK-1: definedness at a point read from the point's exact value (p10, p12, p16, r1, r1b)
+    out += [
+        ("M3 Q1 {-2,2}", eq("(x + 2)*(x - 2) = 0", ["x**x*(2 + sin(x)) > 0"], dod=D7), _sol("{-2, 2}", S_), NOTNO, None),
+        ("M3 Q1 {2}", eq("(x + 2)*(x - 2) = 0", ["x**x*(2 + sin(x)) > 0"], dod=D7), _sol("{2}", S_), NOTOK, None),
+        ("M3 Q2 {-1}", eq("(x + 1)*(x - 1) = 0", ["x**x*(2 + sin(x)) < 0"], dod=D7), _sol("{-1}", S_), NOTNO, None),
+        ("M3 Q2 {}", eq("(x + 1)*(x - 1) = 0", ["x**x*(2 + sin(x)) < 0"], dod=D7), _sol("EmptySet", S_), NOTOK, None),
+        ("M3 Q4 {2} (0**0)", eq("x*(x - 2) = 0", ["x**x*(2 + sin(x)) > 0"], dod="{0, 1, 2, 3}"), _sol("{2}", S_), UNK, None),
+        ("M3 Q4 {0,2} (0**0)", eq("x*(x - 2) = 0", ["x**x*(2 + sin(x)) > 0"], dod="{0, 1, 2, 3}"), _sol("{0, 2}", S_), UNK, None),
+        ("M3 Q5 {-2}", eq("(x + 2)*(x - 3) = 0", ["(x - 3)**(x + 4)*cos(pi*x) > 0"], dod=D7), _sol("{-2}", S_), NOTNO, None),
+        ("M3 Q5 {}", eq("(x + 2)*(x - 3) = 0", ["(x - 3)**(x + 4)*cos(pi*x) > 0"], dod=D7), _sol("EmptySet", S_), NOTOK, None),
+        ("M3 Q6 cint 3", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("3", "count"), UNK, None),
+        ("M3 Q6 cint 4", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("4", "count"), UNK, None),
+        ("M3 Q6 cint 5", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("5", "count"), UNK, None),
+        ("M3 Q7 {2,5}", eq("(x - 2)*(x - 5) = 0", ["(x - 4)**x*factorial(x)*(2 + sin(x)) > 0"], dod="{1, 2, 3, 4, 5, 6}"),
+         _sol("{2, 5}", S_), NOTNO, None),
+        ("M3 Q7 {5}", eq("(x - 2)*(x - 5) = 0", ["(x - 4)**x*factorial(x)*(2 + sin(x)) > 0"], dod="{1, 2, 3, 4, 5, 6}"),
+         _sol("{5}", S_), NOTOK, None),
+        ("M3 Q8 {0,2}", eq("x*(x - 2) = 0", ["x**sqrt(2)*(2 + sin(x)) >= 0"], dod="{0, 1, 2, 3}"), _sol("{0, 2}", S_), NOTNO, None),
+        ("M3 Q8 {2}", eq("x*(x - 2) = 0", ["x**sqrt(2)*(2 + sin(x)) >= 0"], dod="{0, 1, 2, 3}"), _sol("{2}", S_), NOTOK, None),
+        ("M3 Q9 {-1,3}", eq("(x + 1)*(x - 3) = 0", ["Abs(x - 3)**sqrt(2)*(2 + sin(x)) >= 0"], dod="{-1, 0, 1, 2, 3}"),
+         _sol("{-1, 3}", S_), NOTNO, None),
+        ("M3 Q9 {-1}", eq("(x + 1)*(x - 3) = 0", ["Abs(x - 3)**sqrt(2)*(2 + sin(x)) >= 0"], dod="{-1, 0, 1, 2, 3}"),
+         _sol("{-1}", S_), NOTOK, None),
+        ("M3 Q10 {0,1,2,3}", _ir("solve_inequality", {"inequality": "x**sqrt(2)*(2 + sin(x)) >= 0", "var": "x"}, (X,), (), "set",
+                                 "{0, 1, 2, 3}"), _sol("{0, 1, 2, 3}", S_), NOTNO, None),
+        ("M3 Q10 {1,2,3}", _ir("solve_inequality", {"inequality": "x**sqrt(2)*(2 + sin(x)) >= 0", "var": "x"}, (X,), (), "set",
+                               "{0, 1, 2, 3}"), _sol("{1, 2, 3}", S_), NOTOK, None),
+        # the same reading on R: a root at a negative integer is no root outside the domain
+        ("M3r x^x = 1/4: {-2}", eq("x**x = 1/4"), _sol("{-2}", S_), NOTNO, None),
+        ("M3r x^x = 1/4: {}", eq("x**x = 1/4"), _sol("EmptySet", S_), NOTOK, None),
+        ("M3r x^x = -1: {-1}", eq("x**x = -1"), _sol("{-1}", S_), NOTNO, None),
+        ("M3r x^sqrt2 = 0: {0}", eq("x**sqrt(2) = 0"), _sol("{0}", S_), UNK, None),
+        ("M3r x^sqrt2 = 0: {}", eq("x**sqrt(2) = 0"), _sol("EmptySet", S_), UNK, None),
+        ("M3c ev x^x at -2: 1/4", ev("x**x", ["x = -2"]), _sol("1/4"), NOTNO, None),
+        ("M3c ev x^x at -1: -1", ev("x**x", ["x = -1"]), _sol("-1"), NOTNO, None),
+        ("M3c ev x^x at 0: 1", ev("x**x", ["x = 0"]), _sol("1"), UNK, None),
+        ("M3c ev x^sqrt2 at 0: 0", ev("x**sqrt(2)", ["x = 0"]), _sol("0"), UNK, None),
+        ("M3c deriv x^x at 1: 1", _ir("derivative", {"f": "x**x", "var": "x", "at": "1"}), _sol("1"), OK, None),
+        ("M3c deriv x^sqrt2 at 1: sqrt2", _ir("derivative", {"f": "x**sqrt(2)", "var": "x", "at": "1"}), _sol("sqrt(2)"), OK, None),
+        ("M3c ev x^x at 2: 4", ev("x**x", ["x = 2"]), _sol("4"), OK, None),
+        ("M3c eq x^x = 4 | x>0 [1,3]: {} wrong", eq("x**x = 4", vars_=cons("x >= 1", "x <= 3")), _sol("EmptySet", S_), NOTOK, None),
+    ]
+    # RK-2: the precision budget in non-strict evaluations (p24, p25, r2)
+    out += [
+        ("M4 Abs(E11-3) = e^-e^11", ev(AB, [], ()), _sol("exp(-exp(11))"), OK, None),
+        ("M4 Abs(E11-3) = 1", ev(AB, [], ()), _sol("1"), NO, None),
+        ("M4 Max(3, E11) = E11", ev(f"Max(3, {E11})", [], ()), _sol(E11), OK, None),
+        ("M4 Max(3, E11) = 4", ev(f"Max(3, {E11})", [], ()), _sol("4"), NO, None),
+        ("M4 E11 = 3", ev(E11, [], ()), _sol("3"), NOTOK, None),
+        ("M4 E11 = 4", ev(E11, [], ()), _sol("4"), NO, None),
+        ("M4 claim Abs(..) for 1", ev("1", [], ()), _sol(AB), NO, None),
+        ("M4 given x = Abs(..): x + 1 = 1", ev("x + 1", [f"x = {AB}"]), _sol("1"), NO, None),
+        ("M4 step Abs(..) = 0", ev("x + 1", ["x = 0"]), _sol("1", steps=[("compute", f"{AB} = 0")]), NOTOK, REF),
+        ("M4 constraint x >= Abs(..): {2}", eq("x**2 = 4", vars_=cons(f"x >= {AB}")), _sol("{2}", S_), OK, None),
+        ("M4 interval (-2, 2 + Abs(..))", ineq("x**2 < 4"), _sol(f"Interval.open(-2, 2 + {AB})", I_), NO, None),
+        ("M4 Abs(E10-3) = 1 (control)", ev("Abs(log(8)/log(2) + exp(-exp(10)) - 3)", [], ()), _sol("1"), NO, None),
+        ("M4 Abs(E10-3) = e^-e^10 (control)", ev("Abs(log(8)/log(2) + exp(-exp(10)) - 3)", [], ()), _sol("exp(-exp(10))"), OK, None),
+        ("M4 past the budget: Abs(E12-3) = 1", ev(f"Abs({E12} - 3)", [], ()), _sol("1"), NOTOK, None),
+        ("M4 past the budget: Abs(E12-3) = e^-e^12", ev(f"Abs({E12} - 3)", [], ()), _sol("exp(-exp(12))"), NOTNO, None),
+        ("M4 past the budget: x^2=4 | x >= Abs(E12-3): {2}", eq("x**2 = 4", vars_=cons(f"x >= Abs({E12} - 3)")), _sol("{2}", S_),
+         NOTNO, None),
+    ]
+    # RK-3: a finite set of 320 endpoints (p17 M3): undecided or refuted, under 60 s
+    out += [
+        ("M5 cos x = 0 | sin x > 0, [0, 1000]: {pi/2} <60s", eq("cos(x) = 0", ["sin(x) > 0"], cons("x >= 0", "x <= 1000")),
+         _sol("{pi/2}", S_), NOTOK, None),
+    ]
+    # RK-4: a constraint that could not be applied refutes alone (p14, r4)
+    for tag, cs in (("", (f"x <= {FAR}", "x >= 3")), (" rev", ("x >= 3", f"x <= {FAR}"))):
+        out += [
+            (f"M6 x^2=9 | x<=FAR, x>=3{tag}: {{-3,3}}", eq("x**2 = 9", vars_=cons(*cs)), _sol("{-3, 3}", S_), NOTOK, None),
+            (f"M6 x^2=9 | x<=FAR, x>=3{tag}: {{3}}", eq("x**2 = 9", vars_=cons(*cs)), _sol("{3}", S_), NOTNO, None),
+            (f"M6 x^2=25 | x<=FAR, x>=3{tag}: {{5}}", eq("x**2 = 25", vars_=cons(*cs)), _sol("{5}", S_), NOTOK, None),
+            (f"M6 x+1=0 | x<=FAR, x>=3{tag}: {{-1}}", eq("x + 1 = 0", vars_=cons(*cs)), _sol("{-1}", S_), NOTOK, None),
+        ]
+    EXT = "x + 0*atan2(x - 1, 0)"
+    out += [
+        ("M6 max x + 0*atan2(x-1, 0) on [0,3]: 3", ext(EXT, "max", "[0, 3]"), _sol("3"), NOTNO, None),
+        ("M6 max x + 0*atan2(x-1, 0) on [0,3]: 1", ext(EXT, "max", "[0, 3]"), _sol("1"), NOTOK, None),
+        ("M6 max x + 0*atan2(x-1, 0) on [2,3]: 3", ext(EXT, "max", "[2, 3]"), _sol("3"), OK, None),
+        ("M6c x^2=9 | x>=3: {-3,3}", eq("x**2 = 9", vars_=cons("x >= 3")), _sol("{-3, 3}", S_), NO, None),
+    ]
+    return out
+
+
 class _Slow(BaseException):
     """Past CASE_TIMEOUT. A BaseException: the verifier's layers catch Exception, and an Exception raised here
     came back as a layer's UNKNOWN after 120 s (round 9: the evaluation precision had no ceiling)."""
@@ -938,10 +1184,10 @@ CASE_TIMEOUT = int(os.environ.get("CASE_TIMEOUT", "120"))
 signal.signal(signal.SIGALRM, _on_alarm)
 
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "H": cases_h,
-          "I": cases_i, "J": cases_j, "K": cases_k, "L": cases_l}
+          "I": cases_i, "J": cases_j, "K": cases_k, "L": cases_l, "M": cases_m}
 
 
-def main(out_path=None, groups="ABCDEFGHIJKL"):
+def main(out_path=None, groups="ABCDEFGHIJKLM"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -968,6 +1214,8 @@ def main(out_path=None, groups="ABCDEFGHIJKL"):
                 verdict, status, cert = f"EXC {type(e).__name__}: {e}", None, []
             signal.alarm(0)
             ok = verdict in verdicts and (statuses is None or status in statuses)
+            if "<60s" in label and time.time() - t >= 60:
+                ok = False                      # a time budget the case states (round 10, RK-3)
             bad += not ok
             rows.append({"group": g, "label": label, "verdict": verdict, "status": status, "ok": ok,
                          "certificates": cert[:3], "s": round(time.time() - t, 2)})
@@ -982,5 +1230,5 @@ def main(out_path=None, groups="ABCDEFGHIJKL"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJKL"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJKLM"
     sys.exit(1 if main(out, grp) else 0)

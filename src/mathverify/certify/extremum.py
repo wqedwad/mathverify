@@ -450,10 +450,12 @@ def verify(ir, solution, ctx: Ctx):
         if err:
             return err
         # read at the values the givens fix; the origin convention of atan2/arg on the interval (atan2(x, y) with
-        # y = 1 on [0, 1]: its operand x**2 + 1 is never 0; round 9 of part d4b, RK-5)
+        # y = 1 on [0, 1]: its operand x**2 + 1 is never 0; round 9 of part d4b, RK-5), and the base of a power
+        # x**x or x**sqrt(2) away from 0 and the negative numbers (round 9 attack, RK-1)
         from .domain import Convention
         members = [c for c in membership_conditions(p["f"], f, var, ctx.ns, pins)
-                   if not (isinstance(iv, sp.Set) and isinstance(c.args[1], Convention) and c.args[1].kind == "origin"
+                   if not (isinstance(iv, sp.Set) and isinstance(c.args[1], Convention)
+                           and c.args[1].kind in ("origin", "zero_power", "real_power")
                            and membership_holds_on(c, var, [iv]))]
         if members:
             # x + x! - x! is x after parsing: its maximum -1 on [-3, -1] was certified (30 Sep 2026)

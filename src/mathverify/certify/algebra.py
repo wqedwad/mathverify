@@ -13,7 +13,7 @@ from ..equiv.random_point import sample_points
 from ..equiv.numeric import real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
-from ..sandbox.exactsets import at_risk, exact_complement, exact_intersection, set_is_empty
+from ..sandbox.exactsets import at_risk, certified_degree, exact_complement, exact_intersection, set_is_empty
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
@@ -37,7 +37,7 @@ def _poly_in(expr, var):
 
 def _real_roots_worker(num, var):
     """Sandbox worker: every real root of a polynomial, exactly (rationals / radicals / CRootOf)."""
-    return list(sp.Poly(num, var).real_roots())
+    return list(certified_degree(sp.Poly(num, var)).real_roots())
 
 
 def _bounded_hull(dom):
@@ -1048,7 +1048,7 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
     defined? The claim is parsed with SymPy's automatic simplification, which erases its own
     undefined points: `sqrt(x)**2` becomes x, and was certified as a simplification of x on ℝ
     (Lean audit E10, 25 Sep 2026). True -> the claim is not equal to the expression on its domain."""
-    from .domain import written_definedness
+    from .domain import Convention, _violations, written_definedness
     payload = solution.claimed_answer.payload
     if not isinstance(payload, str):
         return False, "payload_not_text"
@@ -1074,6 +1074,14 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
         if len(fs) > 1:
             return None, f"multivariate_claim_condition: {c}"
         (v,) = tuple(fs)
+        if isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and c.args[1].kind in (
+                "real_power", "zero_power"):
+            # the base of x**(x + 1) or x**sqrt(2) read where it is a convention point, on the problem's domain
+            # (an interval rule before: base > 0; round 9 attack on part d4b, RK-1)
+            out = _violations(c, v, dom[v])
+            if out is None or set_is_empty(out) is not True:
+                return None, f"claim_condition_undecided: {c}"
+            continue
         bad = sp.Eq(c.lhs, c.rhs) if isinstance(c, sp.Ne) else sp.Not(c)
         rr = sb_run("mathverify.sandbox.ops:solveset_in", bad, v, dom[v], timeout=ctx.timeout)
         if not rr.ok or isinstance(rr.value, ConditionSet):
