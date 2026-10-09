@@ -304,6 +304,28 @@ def test_cell_proof_budget_keeps_one_verify_short():
     assert v == "CORRECT" and time.time() - t0 < 60
 
 
+def test_cell_proof_spends_at_most_its_budget(monkeypatch):
+    from mathverify.equiv import random_point, symbolic
+    calls = []
+
+    def first_attempt_fails(a, b, timeout=5.0):
+        calls.append(1)
+        return (True if len(calls) % 2 == 0 else None), {}
+    monkeypatch.setattr(symbolic, "sym_equal", first_attempt_fails)
+    x = sp.Symbol("x", real=True)
+    e = sum(sp.Abs(x - k) for k in range(4))
+    ev: dict = {}
+    # each cell's first form fails and its other proves it: one failure per cell, five cells, a budget of three
+    # (the third failure ends the proof before another attempt)
+    assert random_point._cell_proof(e, e + 0 * x, x, sp.S.Reals, ev) is None
+    assert ev["nonsmooth_proof"] == "cell_proof_budget" and len(calls) == 2 * random_point._CELL_FAILURES - 1
+    monkeypatch.undo()
+    # the form that proved a cell is tried first on the next: log(x**2) as 2*log(|x|) needs each cell's sign
+    E = "expression"
+    assert _v(_der("Abs(x**3 - x)*log(x**2)"), "(3*x**2 - 1)*sign(x**3 - x)*2*log(Abs(x)) + 2*Abs(x**3 - x)/x",
+              E) == "CORRECT"
+
+
 def test_kink_controls_stay_correct():
     E = "expression"
     for f, c in (("Piecewise((exp(x), x > 0), (1 + x, x <= 0))", "Piecewise((exp(x), x > 0), (1, x <= 0))"),

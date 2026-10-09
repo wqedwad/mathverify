@@ -544,9 +544,8 @@ MUTATIONS = [
      "            facts[\"nonzero\"] = True\n", "            pass\n", T4 + "test_claim_condition_on_the_parameters_region"),
     ("V38 _implied varsayım işaretini x'li w'de okumaz", CAL, "    if sign_ok[kind] or var not in w.free_symbols:",
      "    if var not in w.free_symbols:", T4 + "test_claim_condition_on_the_parameters_region"),
-    ("V40 hücre kanıtı önce parametreli biçimi dener", RP,
-     "        for pa, pb in ((sa, sb_), (sa.subs(sym, xt), sb_.subs(sym, xt))):",
-     "        for pa, pb in ((sa.subs(sym, xt), sb_.subs(sym, xt)), (sa, sb_)):", T4 + "test_cell_proof_budget_keeps_one_verify_short"),
+    ("V40 hücre kanıtı önce parametreli biçimi dener", RP, "    order = [0, 1]    ", "    order = [1, 0]    ",
+     T4 + "test_cell_proof_budget_keeps_one_verify_short"),
     ("V42 polinom alt sınırında baş katsayı sayı değil", DOM, "        if certified_sign(c) != 1:\n            return None\n        return c / 2",
      "        return c / 2", T4 + "test_majorant_terms_are_parameter_free"),
     ("V43 birinci mertebe köşesi yüksek mertebede okunmaz", CAL, "    if st == \"corner\":\n        # no first derivative",
@@ -577,7 +576,10 @@ MUTATIONS = [
      "                    if getattr(q, \"free_symbols\", None) and _family_outside(q, var, loose):",
      "                    if False:", T + "test_round3_guards_of_the_new_readings"),
     ("V41 hücre kanıtının bütçesi yok", RP, "            if failures[0] >= _CELL_FAILURES:", "            if False:",
-     T4 + "test_cell_proof_budget_keeps_one_verify_short"),
+     T4 + "test_cell_proof_spends_at_most_its_budget"),
+    ("V52 hücreyi kanıtlayan biçim sonrakinde önce denenmez", RP,
+     "                if i != order[0]:\n                    order.reverse()\n", "",
+     T4 + "test_cell_proof_spends_at_most_its_budget"),
 ]
 
 if __name__ == "__main__":
