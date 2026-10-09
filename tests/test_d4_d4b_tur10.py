@@ -174,6 +174,20 @@ def test_certified_sign_reads_an_untracked_node_at_its_exact_zero(e, s):        
     assert certified_sign(sp.sympify(e), 20) == s
 
 
+def test_floor_and_ceiling_of_a_number_are_not_formed_from_noise():                             # fecc2be
+    # SymPy forms floor/ceiling of a number at construction with a non-strict evaluation: ceiling(Z**2) was 1
+    z = sp.sympify(Z)
+    assert not isinstance(sp.ceiling(z ** 2), sp.Integer) or sp.ceiling(z ** 2) == 0
+    assert not isinstance(sp.floor(z), sp.Integer) or sp.floor(z) == 0
+    assert sp.ceiling(sp.sqrt(2)) == 2 and sp.floor(-sp.pi) == -4 and sp.floor(sp.exp(10)) == 22026
+    # the round 9 attack's e9 S2: the true step y = ceiling(x**2) at x = Z, y = 0 was refuted (and y = 1 not)
+    xy = (X, V("y"))
+    assert _run(_ev("y + 1", [f"x = {Z}", "y = 0"], xy), "1", steps=[("eq", "y = ceiling(x**2)")]).verdict != "INCORRECT"
+    r = _run(_ev("y + 1", [f"x = {Z}", "y = 1"], xy), "2", steps=[("eq", "y = ceiling(x**2)")])
+    steps = next(la for la in r.layers if la.layer == "steps.refute").evidence["steps"]
+    assert steps[0]["status"] != "verified"                         # ceiling(0) = 0: the step is false
+
+
 def test_a_special_function_of_exact_arguments():
     # erf(1), gamma(1/3): no argument to read off noise; mpmath's value where two working precisions agree. Without it
     # d4c's narrow peak (the integral of x**2 + exp(-10**8*(x - 1/3)**2), sqrt(pi)*erf(...)/20000 above 1/3) lost its

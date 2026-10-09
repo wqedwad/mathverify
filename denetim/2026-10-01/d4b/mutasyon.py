@@ -613,6 +613,8 @@ MUTATIONS += [
      T10 + "test_a_linear_argument_whose_coefficient_may_be_zero"),
     ("V51 kesin argümanlı özel fonksiyon okunmaz", GRD, "                r = _at_exact_arguments(x, prec)\n",
      "                r = None\n", T10 + "test_a_special_function_of_exact_arguments"),
+    ("V52 floor/ceiling kuruluşta gürültüden", GRD, "        _integers.get_integer_part = _strict_integer_part\n",
+     "        pass\n", T10 + "test_floor_and_ceiling_of_a_number_are_not_formed_from_noise"),
     # RK-4: a constraint that could not be applied
     ("V35 uygulanamayan kısıtta üst küme çürütmesi yok", VER,
      "        outside = _claim_outside_superset(problem_ir, solution, ctx)", "        outside = None",

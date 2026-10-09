@@ -1053,6 +1053,13 @@ def cases_m():
         ("M1v croots x*asin(Q): 1", _ir("count_roots", {"expr": f"x*asin({Q})", "var": "x"}, (X,), (), "count"), _sol("1", "count"),
          NOTOK, None),
         # the coefficient of a linear argument read off Poly's degree (Q a generator: x*Q of degree 1; fecc2be: {0} CORRECT)
+        # floor/ceiling of a number formed by SymPy at construction off noise (the attack's e9 S2; fecc2be refuted it)
+        ("M1i ev y+1 | x=Z, y=0, step y=ceiling(x^2)", ev("y + 1", [f"x = {Z}", "y = 0"], (X, Y)),
+         _sol("1", steps=[("eq", "y = ceiling(x**2)")]), NOTNO, NOTREF),
+        ("M1i ev y+1 | x=Z, y=1, step y=ceiling(x^2)", ev("y + 1", [f"x = {Z}", "y = 1"], (X, Y)),
+         _sol("2", steps=[("eq", "y = ceiling(x**2)")]), ANY, NOTVER),
+        ("M1i ev ceiling(Z^2): 1", ev(f"ceiling({Z}**2)", []), _sol("1"), NOTOK, None),
+        ("M1i ev ceiling(Z^2): 0", ev(f"ceiling({Z}**2)", []), _sol("0"), NOTNO, None),
         ("M1l eq exp(x*Q)=1: {0}", eq(f"exp(x*{Q}) = 1"), _sol("{0}", S_), NOTOK, None),
         ("M1l eq exp(x*Q)=1: R", eq(f"exp(x*{Q}) = 1"), _sol("Reals", S_), NOTNO, None),
         ("M1l eq 2**(x*Q)=1: {0}", eq(f"2**(x*{Q}) = 1"), _sol("{0}", S_), NOTOK, None),

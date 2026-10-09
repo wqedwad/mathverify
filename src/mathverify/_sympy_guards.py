@@ -487,8 +487,22 @@ def _guarded_random(inner):
     return _random
 
 
+def _strict_integer_part(expr, no, options, return_ints=False):
+    """SymPy's floor/ceiling of a number formed at construction (RoundFunction.eval passes empty options, so a
+    non-strict evaluation): the integer part read STRICTLY, through the guards; where none decides it,
+    PrecisionExhausted leaves the node unevaluated. Off rounding noise ceiling(Z**2), Z = 2*atan(tanh(1/2)) -
+    atan(sinh(1)) exactly 0, came out 1, and the true step y = ceiling(x**2) at x = Z, y = 0 was refuted (round 9
+    attack on part d4b, e9 S2; the evaluation of floor/ceiling by evalf is the guarded one already)."""
+    return _INTEGER_PART(expr, no, dict(options, strict=True), return_ints)
+
+
+_strict_integer_part.mathverify_guard = True     # type: ignore[attr-defined]
+_INTEGER_PART = _evalf.get_integer_part
+
+
 def install() -> None:
     """Install the guards (idempotent)."""
+    import sympy.functions.elementary.integers as _integers
     global _TRACKED
     _TRACKED = _tracked_types()
     if not getattr(_evalf.evalf, "mathverify_guard", False):
@@ -502,6 +516,8 @@ def install() -> None:
         rel._eval_simplify = _guarded_simplify(rel._eval_simplify)
     if not getattr(Expr._random, "mathverify_guard", False):
         Expr._random = _guarded_random(Expr._random)
+    if not getattr(_integers.get_integer_part, "mathverify_guard", False):
+        _integers.get_integer_part = _strict_integer_part
 
 
 install()
