@@ -10,6 +10,8 @@ control.
 * U3: a family listed in a wide region built the whole integer range (MemoryError, OverflowError).
 * U4: each hole of `_value_holes` called derivative_at_point outside the reading's budget.
 * U5: an exponent declared an integer gave its base the condition > 0: (x**2)**n' = 2*n*x**(2*n - 1) refuted.
+* Merge (wip/birlesik-a): SymPy's `equals` False overruled an exact cell proof (Max(x**3, -x**3)' = 3*x**2*sign(x)).
+  The last test's assertions other than its controls fail on the merged 5e88d41 and hold on 8025acb.
 """
 import time
 
@@ -222,3 +224,14 @@ def test_integer_exponent_written_domain():
     assert _v(_der("(x**2)**n", vars_=[X, NP]), "2*n*x**(2*n)", E) == "INCORRECT"         # control
     assert _v(_der("x**n", vars_=[X, NP]), "n*x**(n - 1)", E) == "CORRECT"                # control
     assert _v(_der("(x**2)**n", vars_=[X, NR]), "2*n*x**(2*n - 1)", E) != "CORRECT"       # control
+
+
+def test_exact_cell_proof_is_not_overruled_by_equals():
+    # merge of d4c round 4 (SymPy's `equals` False against agreement at points) with d4e round 4: an identity proved
+    # exactly on each cell of sign(x) stands; SymPy reads x as complex, and sign(x**3) != sign(x) there
+    assert _v(_der("Max(x**3, -x**3)"), "3*x**2*sign(x)", E) == "CORRECT"
+    assert _v(_der("x**2"), "Piecewise((2*x**2/x, Ne(x, 0)), (0, Eq(x, 0)))", E) == "CORRECT"
+    anti = _ir("antiderivative", {"integrand": "3*x**2*sign(x)", "var": "x"}, shape="expression")
+    assert _v(anti, "Max(x**3, -x**3)", E) == "CORRECT"
+    assert _v(anti, "Max(x**3, -x**3) + x", E) == "INCORRECT"                               # control
+    assert _v(_der("Max(x**3, -x**3)"), "3*x**2", E) != "CORRECT"                            # control

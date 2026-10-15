@@ -1026,7 +1026,7 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
         ev["method"] = "random_point"
         if ok is False and _formula_hole_refutation(ev, F, var, side="lhs"):
             ok, ev["formula_hole"] = None, True      # F's derivative formula alone has no value there (D4E4-RK-1)
-        agreed_on = domain
+        agreed_on, agreed_ev = domain, rev
         if ok is None and wide is not None and discourse != S.Reals and not ev.get("formula_hole"):
             # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not inside, and
             # log|x| was left undecided for 1/x under x > 1. Agreement where both are defined is agreement on
@@ -1034,8 +1034,8 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
             okw, wev = random_point_equal(dF, integrand, var, wide, seed=0, n=40)
             ev["random_point_wide"] = wev
             if okw is True:
-                ok, agreed_on = True, wide
-        if ok is True and agreed_on == S.Reals and _equals_false_stands(dF, integrand):
+                ok, agreed_on, agreed_ev = True, wide, wev
+        if ok is True and agreed_on == S.Reals and not agreed_ev.get("proved") and _equals_false_stands(dF, integrand):
             # SymPy's `equals` says they differ on the real line: agreement at sample points does not overrule it,
             # here as in `answers_equivalent` (x² + cos(Nπx)/(10^40·Nπ) as a primitive of 2x; attack on d4c round 3,
             # YO-B). A counterexample still refutes

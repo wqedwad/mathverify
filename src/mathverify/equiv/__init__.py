@@ -248,12 +248,15 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         domain = {s_: domain.get(s_, S.Reals) for s_ in syms}
     okR, rev = random_point_equal(claimed, truth, syms, domain, seed=seed)
     ev["random_point"] = rev
-    if okR is True and (sev.get("equals") or {}).get("value") is False \
+    if okR is True and not rev.get("proved") and (sev.get("equals") or {}).get("value") is False \
             and all(domain[s_] == S.Reals for s_ in syms) and _equals_false_stands(claimed, truth):
         # SymPy's `equals` says the two differ on the real line: agreement at sample points does not overrule it
         # (it sampled x² + sin(3·10^6·πx) = x² on a grid where the sine vanishes; attack on d4c round 2, YO-3). A
         # counterexample still refutes; agreement alone decides nothing. On a smaller domain `equals` (which
-        # does not know it) is no contradiction: log(x - 1) + log(x - 3) = log((x - 1)(x - 3)) holds for x > 3
+        # does not know it) is no contradiction: log(x - 1) + log(x - 3) = log((x - 1)(x - 3)) holds for x > 3.
+        # Nor is it against an exact proof (the cells of |x|, sign(x)): SymPy's `equals` reads x as complex there,
+        # and 3*x**2*sign(x) for Max(x**3, -x**3)' and Piecewise((2*x**2/x, Ne(x, 0)), (0, Eq(x, 0))) for (x**2)',
+        # proved on each cell, were left undecided (merge of d4c round 4 with d4e round 4)
         okR = None
         ev["conflict"] = "sympy_equals_false"
     if okR is True and parametric:
