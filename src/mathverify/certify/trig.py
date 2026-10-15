@@ -290,14 +290,16 @@ def _one_family(e, ints: list):
 
 def _problem_names(ir, ctx: Ctx) -> set:
     """The names the problem's givens (its equation among them when it is givens[0]) and its variables' constraints
-    use, read off their parses (a given that does not parse: every identifier of its text, the cautious side)."""
-    import re
+    use, read off their parses. A text that does not parse adds none: an unread given leaves the problem's region
+    not applied (`condition_not_applied`) and an unread constraint stops the intake (`constraint_unreadable`), so
+    the claim is never decided with it (measured on round 2 of d4h: its identifiers, once added here, changed no
+    verdict and no layer's)."""
     names: set = set()
     for src in list(ir.givens) + [c for v in ir.vars for c in v.constraints]:
         try:
             names |= {s_.name for s_ in ctx.rel(src).free_symbols}
-        except Exception:  # noqa: BLE001 - unread: its identifiers
-            names |= set(re.findall(r"[A-Za-z_]\w*", str(src)))
+        except Exception:  # noqa: BLE001 - unread: the problem is not decided (above)
+            continue
     return names
 
 

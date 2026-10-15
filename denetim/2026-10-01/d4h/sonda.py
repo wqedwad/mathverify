@@ -24,12 +24,17 @@ Round 2 (8 Oct 2026, the attack on round 1: `denetim/2026-10-01/d4/saldiri/d4h/`
     N  YO-3    a rewrite called by keyword keeps the form too
     P  YO-4    a domain list no number meets on one argument is not read, whatever the number of arguments
     Q  YO-5    a family name the problem uses (a given, a constraint) is no index of the claim
-    R  RK-1    `x \in S` with S holding the line restricts no real x
+    R  RK-1    `x \\in S` with S holding the line restricts no real x
     S  RK-2    a domain list read as union and as intersection: a verdict where both agree
     T  PRE-RK-4  the task's relation written in params is a premise of the steps
     U  PRE-RK-5  a condition on the variable is read as the set it names (notation only); otherwise not read
     V  PRE-RK-6  SymPy's registry S is no value: UNKNOWN, no exception
     W  PRE-RK-7/8  matrix operations stay operations in the structure; a restatement is the same tree, not the value
+
+Round 2 completed (15 Oct 2026, after the interim commit 1aa422f): M the Leibniz typographies latex2sympy reads as a
+derivative (\\dfrac, an upright d, \\! and \\: spacing, dx declared without d) and the claim side; S the whole table of
+the RK-2 decision; T trig_solve's params.equation as a premise (the same mechanism as PRE-RK-4); V lists and tuples
+holding the registry S.
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/d4h/sonda.py [out.json] [groups]
@@ -355,6 +360,7 @@ T_ = {"name": "t", "domain": "real"}
 Y_ = {"name": "y", "domain": "real"}
 D_ = {"name": "d", "domain": "real"}
 DN_ = {"name": "dn", "domain": "real"}
+DX_ = {"name": "dx", "domain": "real"}
 NOTREF = {"verified", "unknown", "skipped", None}     # a true step: never refuted
 VER = {"verified"}
 REF = {"refuted"}
@@ -439,6 +445,21 @@ def cases_m():
         q = ir("simplify_expression", {"expr": e}, (), vs, "expression")
         out.append((f"YO2 [{tag}] {e}: 0 [product reading]", q, sol("0", "expression"), UNK, None))
         out.append((f"YO2 [{tag}] {e}: 2*pi*(-1)**n [derivative reading]", q, sol("2*pi*(-1)**n", "expression"), NOTNO, None))
+    # round 2 completed (15 Oct 2026): typographies latex2sympy reads as a DERIVATIVE (the tree holds no quotient of
+    # differentials, the text alone finds them), dx declared without d (the decision: d OR dv declared), \: spacing
+    for e, vs in [(r"\dfrac{d}{dx}(x^2)", [X, D_]), (r"\tfrac{d}{dx}(x^2)", [X, D_]), (r"\frac{\mathrm{d}}{\mathrm{d}x}(x^2)", [X, D_]),
+                  (r"\frac{\operatorname{d}}{\operatorname{d}x}(x^2)", [X, D_]), (r"\frac{d}{d\!x}(x^2)", [X, D_]),
+                  (r"\frac{d}{dx\,}(x^2)", [X, D_]), (r"\frac{d}{d\:x}(x^2)", [X, D_]), (r"\frac{d}{dx}(x^2)", [X, DX_]),
+                  (r"\frac{d}{dx} x^2", [X, DX_])]:
+        q = ir("simplify_expression", {"expr": e}, (), vs, "expression")
+        out.append((f"YO2 {e} {[v['name'] for v in vs]}: x [product reading]", q, sol("x", "expression"), UNK, None))
+        out.append((f"YO2 {e} {[v['name'] for v in vs]}: 2*x [derivative reading]", q, sol("2*x", "expression"), UNK, None))
+    cq = ir("simplify_expression", {"expr": "2*x"}, (), [X, D_], "expression")
+    out.append(("YO2 claim \\frac{d}{d\\,x}(x^2) for 2x, d declared", cq, sol(r"\frac{d}{d\,x}(x^2)", "expression"), UNK, None))
+    out.append(("YO2 claim \\frac{\\mathrm{d}}{\\mathrm{d}x}(x^2) for 2x, d declared", cq,
+                sol(r"\frac{\mathrm{d}}{\mathrm{d}x}(x^2)", "expression"), UNK, None))
+    out.append(("YO2 ctl claim \\frac{d}{dx}(x^2) for 2x, d undeclared", ir("simplify_expression", {"expr": "2*x"}, (), [X], "expression"),
+                sol(r"\frac{d}{dx}(x^2)", "expression"), NOTNO, None))
     e3 = ev(r"\frac{d}{d\,x}(x^2)", [X, D_], ["x = 3"])
     out.append(("YO2 evaluate d/d\\,x x^2 at x = 3: 3 [product]", e3, sol("3"), UNK, None))
     out.append(("YO2 evaluate d/d\\,x x^2 at x = 3: 6 [derivative]", e3, sol("6"), UNK, None))
@@ -573,6 +594,14 @@ def cases_s():
         q = ir("solve_equation", {"equation": "f(x) = 5", "var": "x"}, (), [X], "set", _f(dom))
         for c, exp in rows:
             out.append((f"RK2 domain {dom!r}: f(x) = 5: {c}", q, sol(c, "set"), exp, None))
+    # the whole table of kararlar_tur2 RK-2 (round 2 completed, 15 Oct 2026)
+    for dom in ["(0, 3), (1, 5)", "x in (0, 3), x in (1, 5)", "(0, 3), x > 1", "[0, 5], [1, 3]", "x > 1, (0, 3)"]:
+        q = ir("solve_equation", {"equation": "f(x) = 5", "var": "x"}, (), [X], "set", _f(dom))
+        for c, exp in [("{2}", OK), ("{-2, 2}", NO), ("{}", NO)]:
+            out.append((f"RK2 table {dom!r}: f(x) = 5: {c}", q, sol(c, "set"), exp, None))
+        c_ = ir("count_roots", {"expr": "f(x) - 5", "var": "x"}, (), [X], "count", _f(dom))
+        for v, exp in [("1", OK), ("2", NO)]:
+            out.append((f"RK2 table {dom!r}: count f(x) - 5: {v}", c_, sol(v, "count"), exp, None))
     for dom, rows in [("(-3, 3), (-5, 5)", [("2", OK), ("1", NO)]), ("(0, oo), x <= 5", [("1", UNK), ("2", UNK)])]:
         c = ir("count_roots", {"expr": "f(x) - 5", "var": "x"}, (), [X], "count", _f(dom))
         for v, exp in rows:
@@ -597,6 +626,14 @@ def cases_t():
                () if form == "params" else ["x**2 < 4"], [X], "set")
         out.append((f"RK4 {form} x**2 < 4: (-2, 2) with x < 2", q, sol("Interval.open(-2, 2)", "interval", [("eq", "x < 2")]), OK, VER))
         out.append((f"RK4 {form} x**2 < 4: (-2, 2) with x < 1", q, sol("Interval.open(-2, 2)", "interval", [("eq", "x < 1")]), NO, REF))
+        # trig_solve reads params.equation or givens[0] too (round 2 completed, 15 Oct 2026)
+        for iv, ans, right_st in [("[0, 2*pi)", "{pi/6, 5*pi/6}", VER), (None, "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}", NOTREF)]:
+            p_ = {"var": "x", **({"interval": iv} if iv else {}), **({"equation": "2*sin(x) = 1"} if form == "params" else {})}
+            q = ir("trig_solve", p_, () if form == "params" else ["2*sin(x) = 1"], [X], "set")
+            out.append((f"RK4 trig {form} 2 sin x = 1 on {iv}: step sin(x) = 1/2", q, sol(ans, "set", [("eq", "sin(x) = 1/2")]),
+                        OK, right_st))
+            out.append((f"RK4 trig {form} 2 sin x = 1 on {iv}: step sin(x) = 1/3 [wrong]", q,
+                        sol(ans, "set", [("eq", "sin(x) = 1/3")]), NO, REF))
     return out
 
 
@@ -640,7 +677,7 @@ def cases_v():
                  ("S", "set"), ("{S}", "set")]:
         out.append((f"RK6 x**2 = 4: {c!r} [{k}]", sq, sol(c, k), UNK, None))
     e2 = ev("2", [X])
-    for c in ["S = 2", "S", "S + 1", "Eq(S, 2)", "{S: 2}"]:
+    for c in ["S = 2", "S", "S + 1", "Eq(S, 2)", "{S: 2}", "[S, 1]", "(S, 1)", "S*1"]:
         out.append((f"RK6 evaluate 2: {c!r}", e2, sol(c), UNK, None))
     for st in ["S = 2", "S + 1 = 3", "x = S"]:
         out.append((f"RK6 step {st!r}", e2, sol("2", steps=[("eq", st)]), UNK, None))

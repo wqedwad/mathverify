@@ -10,6 +10,9 @@ the family names a problem uses, memberships in the line, the task's relation as
 SymPy's registry S, the structure of the target). The copies are clones of the committed HEAD; `--calisma-agaci`
 copies the working tree instead (round 1: its commit was refused in its session).
 
+Round 2 completed (15 Oct 2026): R72 trig_solve's params.equation as a premise, R94/R98 the reader never hands on
+the registry S (alone or in a list); R04, R05 and R42 left with their code (see the notes at their place).
+
     .venv/bin/python denetim/2026-10-01/d4h/mutasyon.py [-j N] [--list] [name ...]
 
 Kept out of pyflakes and pytest like the rest of denetim/. No string here may name a document.
@@ -127,8 +130,8 @@ MUTATIONS = [
      "            if False:\n                raise NotImplementedError(", T2),
     ("R02 bağlam açılmaz", PAR, "        token = _FORMS_HELD.set(True)", "        token = _FORMS_HELD.set(False)", T2),
     ("R03 kanonik ayrıştırma tutmaz", PAR, "@_holds_forms\ndef guarded_parse_expr(", "def guarded_parse_expr(", T2),
-    ("R04 LaTeX ayrıştırma tutmaz", PAR, "@_holds_forms\ndef _latex_to_sympy(", "def _latex_to_sympy(", T2),
-    ("R05 ilişki kurulumu tutmaz", PAR, "@_holds_forms\ndef parse_relation(", "def parse_relation(", T2),
+    # R04/R05 (the holds on _latex_to_sympy and parse_relation) are gone with their decorators: no test, no case of
+    # the sonda and no parse of 69 texts over the spike integral changed without them (round 2 completed)
     ("R06 küme kurulumu tutmaz", PAR, "@_holds_forms\ndef parse_set_str(", "def parse_set_str(", T2),
     ("R07 tanım evreni kurulumu tutmaz", PAR, "@_holds_forms\ndef parse_domain(", "def parse_domain(", T2),
     # --- YO-2: Leibniz fractions in any typography
@@ -168,8 +171,8 @@ MUTATIONS = [
      "            if False:\n                return unknown(", T2),
     ("R41 kısıtlar okunmaz", TRG, "    for src in list(ir.givens) + [c for v in ir.vars for c in v.constraints]:",
      "    for src in list(ir.givens):", T2),
-    ("R42 okunamayan verilenin adları alınmaz", TRG, '            names |= set(re.findall(r"[A-Za-z_]\\w*", str(src)))',
-     "            pass", T2),
+    # R42 (an unread given's identifiers) is gone with its code: an unread given leaves the region not applied, an
+    # unread constraint stops the intake; measured, no verdict and no layer changed without it (round 2 completed)
     # --- RK-1: membership in the line
     ("R50 x ∈ ℝ ilişkiye çöker", PAR, "        if S.Reals.is_subset(st) is True:", "        if False:", T2),
     ("R51 yeniden bağlama üyeliği katlar", PAR, "    if isinstance(expr, sp.Contains):\n        # a membership too",
@@ -181,14 +184,15 @@ MUTATIONS = [
      "        m = None", T2),
     ("R54 yazılı okumada küme işlemi bölünmez", PAR, "        if len(cup) > 1:", "        if False:", T2),
     ("R55 yazılı okumada koşul kenarları yok", PAR,
-     "        if isinstance(e, sp.logic.boolalg.Boolean):\n            # a condition", "        if False:\n            # a condition", T),
+     "        if isinstance(e, sp.logic.boolalg.Boolean):\n            # a condition", "        if False:\n            # a condition", T2),
     ("R56 yazılı okumada $ soyulmaz", PAR, "        m = _LATEX_MEMBER_RE.match(strip_presentation(_strip_invisible(s)))",
      "        m = _LATEX_MEMBER_RE.match(s)", T),
     # --- PRE-RK-4: the task's relation is a premise
     ("R70 görev bağıntısı öncül değil", STP, "        givens = givens + [r for r in _task_relations(ir, ctx) if r not in givens]",
      "        givens = givens", T2),
-    ("R71 eşitsizlik öncül değil", STP, '_TASK_RELATION_PARAMS = {"solve_equation": "equation", "solve_inequality": "inequality"}',
-     '_TASK_RELATION_PARAMS = {"solve_equation": "equation"}', T2),
+    ("R71 eşitsizlik öncül değil", STP, '{"solve_equation": "equation", "solve_inequality": "inequality", "trig_solve"',
+     '{"solve_equation": "equation", "trig_solve"', T2),
+    ("R72 trig_solve denklemi öncül değil", STP, ', "trig_solve": "equation"}', "}", T2),
     # --- PRE-RK-5: conditions as notation
     ("R80 gösterim okunmaz", VER, "        named = _notation_set(text, ctx.ns.get(tvar), ctx)", "        named = None", T2),
     ("R81 her ilişki çözülür", VER, '    else:\n        return None\n    if op == "==" and isinstance(k, sp.Set):',
@@ -207,6 +211,8 @@ MUTATIONS = [
      "    if True:\n        return sp.Tuple(*out)\n    try:\n        pass\n    except Exception:", T2),
     ("R92 S.Half okunmaz", PAR, '        if f"S.{name}" in _ALLOWED_DOTTED:', "        if False:", T2),
     ("R93 S(2) okunmaz", PAR, "        return sympify_nontext(value)", '        raise ParseError("S")', T2),
+    ("R94 S kaydı değer olarak döner", PAR, "    if _names_the_registry(out):\n", "    if False:\n", T2),
+    ("R98 kaptaki S kaydı görülmez", PAR, "        return any(_names_the_registry(x) for x in out)\n", "        return False\n", T2),
     # --- PRE-RK-7/8: the structure of the target
     ("R95 matris işlemleri yapıda hesaplanır", VER, "        ns = dict(ctx.ns, **{n: sp.Function(n) for n in _MATRIX_OPS})",
      "        ns = dict(ctx.ns)", T2),

@@ -29,6 +29,7 @@ Y = {"name": "y", "domain": "real"}
 T = {"name": "t", "domain": "real"}
 D = {"name": "d", "domain": "real"}
 DN = {"name": "dn", "domain": "real"}
+DX = {"name": "dx", "domain": "real"}
 N = {"name": "n", "domain": "positive_integer"}
 SPK = "Integral(1000*exp(-1000000*(x - 1/3)**2), (x, -1, 1))"
 SPKT = "Integral(1000*exp(-1000000*(t - x)**2), (t, -1, 1))"
@@ -132,6 +133,11 @@ def test_yo1_controls_decide_as_before():
     (r"\frac{d^2}{d{n}^2}(n \sin(\pi n))", [N, X, D]), (r"\frac{d^2}{(dn)^2}(n \sin(\pi n))", [N, X, D, DN]),
     (r"\frac{d^2}{dn\,dn}(n \sin(\pi n))", [N, X, D, DN]), (r"\frac{{d}^2}{d n^2}(n \sin(\pi n))", [N, X, D]),
     (r"\frac{d^2}{dn^2}(n \sin(\pi n))", [N, X, DN]),
+    # latex2sympy reads these as a derivative, so the tree holds no quotient of differentials: the text alone
+    # finds the fraction (\dfrac, an upright d, \! and a trailing \, inside it, dx declared without d)
+    (r"\dfrac{d}{dx}(x^2)", [X, D]), (r"\tfrac{d}{dx}(x^2)", [X, D]), (r"\frac{\mathrm{d}}{\mathrm{d}x}(x^2)", [X, D]),
+    (r"\frac{\operatorname{d}}{\operatorname{d}x}(x^2)", [X, D]), (r"\frac{d}{d\!x}(x^2)", [X, D]),
+    (r"\frac{d}{dx\,}(x^2)", [X, D]), (r"\frac{d}{dx}(x^2)", [X, DX]), (r"\frac{d}{dx} x^2", [X, DX]),
 ])
 def test_yo2_a_leibniz_fraction_with_d_or_dv_declared_is_not_read(expr, vars_):
     from mathverify.ir import ProblemIR
@@ -145,6 +151,12 @@ def test_yo2_both_readings_abstain_and_the_step_is_not_verified():
     q = _ir("simplify_expression", {"expr": r"\frac{d}{d\,x}(x^2)"}, (), [X, D], "expression")
     assert _run(q, "x", "expression").verdict == "UNKNOWN"
     assert _run(q, "2*x", "expression").verdict == "UNKNOWN"
+    # read as a derivative by latex2sympy, with d declared: still a product too
+    q = _ir("simplify_expression", {"expr": r"\frac{\mathrm{d}}{\mathrm{d}x}(x^2)"}, (), [X, D], "expression")
+    assert _run(q, "2*x", "expression").verdict == "UNKNOWN"
+    # the claim too: \frac{d}{d\,x}(x^2) for 2x is x (a product) or 2x (a derivative)
+    q = _ir("simplify_expression", {"expr": "2*x"}, (), [X, D], "expression")
+    assert _run(q, r"\frac{d}{d\,x}(x^2)", "expression").verdict == "UNKNOWN"
     st = _ir("simplify_expression", {"expr": "x"}, (), [X, D], "expression")
     assert _step(_run(st, "x", "expression", steps=[("eq", r"\frac{d}{d\,x}(x^2) = x")])) != "verified"
 
@@ -255,6 +267,16 @@ def test_rk1_the_membership_stays_for_a_complex_symbol_and_a_domain_reads_it():
     assert _run(q, "{-2, 2}", "set").verdict != "CORRECT"
 
 
+@pytest.mark.parametrize("given,right,wrong", [(r"$x \in [0, \infty)$", "{2}", "{-2, 2}"), (r"$x \neq 2$", "{-2}", "{-2, 2}"),
+                                               (r"$x \geq 0$", "{2}", "{-2, 2}")])
+def test_rk1_a_latex_condition_given_is_read_as_written_too(given, right, wrong):
+    """The as-written reading takes a LaTeX membership (`_LATEX_MEMBER_RE`, latex2sympy has no ∞ with evaluation off)
+    and a LaTeX relation (its sides): read as no text, the given made the problem undecided."""
+    q = _ir("solve_equation", {"equation": "x**2 = 4", "var": "x"}, [given], [X], "set")
+    assert _run(q, right, "set").verdict == "CORRECT"
+    assert _run(q, wrong, "set").verdict == "INCORRECT"
+
+
 # ---------------------------------------------------------------- RK-2: two readings of a domain list
 
 @pytest.mark.parametrize("dom,right,wrong", [("(0, 3), (1, 5)", "{2}", "{-2, 2}"), ("x in (0, 3), x in (1, 5)", "{2}", "{}"),
@@ -264,6 +286,15 @@ def test_rk2_both_readings_agree(dom, right, wrong):
     q = _ir("solve_equation", {"equation": "f(x) = 5", "var": "x"}, (), [X], "set", _f(dom))
     assert _run(q, right, "set").verdict == "CORRECT"
     assert _run(q, wrong, "set").verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("dom", ["(0, 3), (1, 5)", "x in (0, 3), x in (1, 5)", "(0, 3), x > 1", "[0, 5], [1, 3]", "x > 1, (0, 3)"])
+def test_rk2_the_decided_table(dom):
+    """kararlar_tur2 RK-2: union and intersection both give {2} for x² + 1 = 5 and one root."""
+    q = _ir("solve_equation", {"equation": "f(x) = 5", "var": "x"}, (), [X], "set", _f(dom))
+    assert [_run(q, c, "set").verdict for c in ("{2}", "{-2, 2}", "{}")] == ["CORRECT", "INCORRECT", "INCORRECT"]
+    c = _ir("count_roots", {"expr": "f(x) - 5", "var": "x"}, (), [X], "count", _f(dom))
+    assert [_run(c, n, "count").verdict for n in ("1", "2")] == ["CORRECT", "INCORRECT"]
 
 
 @pytest.mark.parametrize("dom,claims", [("(0, oo), x <= 5", ["{2}", "{-2, 2}"]), ("(-oo, -1), (1, oo)", ["{}", "{-2, 2}"]),
@@ -304,6 +335,16 @@ def test_rk4_a_wrong_step_is_refuted_in_both_forms():
     q = _ir("solve_inequality", {"inequality": "x**2 < 4", "var": "x"}, (), [X], "set")
     assert _step(_run(q, "Interval.open(-2, 2)", "interval", [("eq", "x < 2")])) == "verified"
     assert _step(_run(q, "Interval.open(-2, 2)", "interval", [("eq", "x < 1")])) == "refuted"
+
+
+def test_rk4_trig_solve_reads_its_params_equation_as_a_premise_too():
+    """trig_solve's certificate reads params.equation or givens[0]; the steps did not: every step was skipped in the
+    params form, the wrong sin x = 1/3 too, which the givens form refutes."""
+    for q in (_ir("trig_solve", {"var": "x", "equation": "2*sin(x) = 1", "interval": "[0, 2*pi)"}, (), [X], "set"),
+              _ir("trig_solve", {"var": "x", "interval": "[0, 2*pi)"}, ["2*sin(x) = 1"], [X], "set")):
+        assert _step(_run(q, "{pi/6, 5*pi/6}", "set", [("eq", "sin(x) = 1/2")])) == "verified"
+        r = _run(q, "{pi/6, 5*pi/6}", "set", [("eq", "sin(x) = 1/3")])
+        assert _step(r) == "refuted" and r.verdict == "INCORRECT"
 
 
 # ---------------------------------------------------------------- PRE-RK-5: conditions as notation
@@ -366,6 +407,17 @@ def test_rk6_singletons_and_numbers_still_read():
     with pytest.raises(ParseError):
         parse_expr_str("S + 1")
     assert parse_as_written("S = {-2, 2}") is None
+
+
+@pytest.mark.parametrize("text", ["S", "{S}", "[S, 1]", "(S, 1)", "{S: 2}"])
+def test_rk6_the_reader_refuses_the_registry_itself(text):
+    """No reader hands the registry on as a value: `S` came back as SymPy's S (or a list holding it) and each caller
+    met it in its own way (a SympifyError from a set reading, a layer exception)."""
+    from mathverify.normalize.parse import ParseError, parse_expr_str, parse_set_str
+    with pytest.raises(ParseError):
+        parse_expr_str(text)
+    with pytest.raises(ParseError):
+        parse_set_str(text)
 
 
 # ---------------------------------------------------------------- PRE-RK-7/8: the structure of the target

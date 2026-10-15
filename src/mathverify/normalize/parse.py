@@ -71,7 +71,12 @@ _install_form_evalf_hold()
 
 
 def _holds_forms(fn):
-    """`fn` (a reader of text) run with the closed forms' numeric evaluation held (`_install_form_evalf_hold`)."""
+    """`fn` (a reader of text) run with the closed forms' numeric evaluation held (`_install_form_evalf_hold`): the
+    readers that build a tree with evaluation on (`guarded_parse_expr`, `parse_set_str`, `parse_domain`). latex2sympy
+    and `parse_relation` need no hold of their own: SymPy takes a form with a bound symbol for a symbolic term, the
+    relations are built unevaluated, and the deciding nodes rebuilt over a form stay so (`rebuilt`): with or without a
+    hold there, no case of the d4h sonda and no parse of 69 texts over the spike integral differed (round 2 of d4h,
+    completed)."""
     def call(*args, **kwargs):
         token = _FORMS_HELD.set(True)
         try:
@@ -1804,9 +1809,25 @@ def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[
     if pointed is not None and evaluate:
         out = _domain_end_limits(out)
     _refuse_reversed_ranges(out, s)
+    if _names_the_registry(out):
+        # `S`, `{S}`, `[S, 1]`: the registry itself came back as the "value" (a sum or a sympified S raises in
+        # `_SingletonNames`); a caller took it for an expression (PRE-RK-6, principle 13)
+        raise ParseError(f"{s!r} names SymPy's registry S bare: no value, not read")
     if evaluate:
         out = _hold_value(out, local_dict.get(PINS_KEY), local_dict.get(PROTECTED_KEY, ()))
     return out
+
+
+def _names_the_registry(out) -> bool:
+    """Is `out` (a parse's result, or the Python list, tuple, set or dict a bracketed text builds) or one of its
+    items SymPy's registry `S` named bare (`_SingletonNames`)?"""
+    if isinstance(out, _SingletonNames):
+        return True
+    if isinstance(out, dict):
+        return any(_names_the_registry(x) for x in list(out) + list(out.values()))
+    if isinstance(out, (list, tuple, set, frozenset)):
+        return any(_names_the_registry(x) for x in out)
+    return False
 
 
 def _check_safe(s: str, ns: dict[str, Any]) -> list[str]:
@@ -2225,7 +2246,6 @@ def _latex_membership(expr):
     return expr.replace(member, lambda n: condition(n, False))
 
 
-@_holds_forms
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
     s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
     _refuse_latex_ranges(s)
@@ -2596,7 +2616,6 @@ def _split_top_level(s: str) -> list[tuple[str, str]]:
     return out
 
 
-@_holds_forms
 def parse_relation(s: str, ns: dict[str, Any] | None = None):
     """Parse an equation/inequality (or a plain expression if no operator)."""
     if ns is None:
