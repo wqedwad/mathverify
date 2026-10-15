@@ -13,7 +13,8 @@ import mpmath as mp
 import sympy as sp
 
 __all__ = ["num_equal", "to_mp", "certified_sign", "exact_equal", "exact_zero_test", "has_float",
-           "real_odd_roots", "NONREAL", "certified_integer", "certified_floor"]
+           "real_odd_roots", "NONREAL", "certified_integer", "certified_floor", "read_tolerance",
+           "within_rel_tol"]
 
 DPS_LADDER = (30, 50, 80)
 
@@ -206,14 +207,14 @@ def _part_state(f):
     return "value" if f != 0 else "zero"
 
 
-def _evalf_strict(e):
+def _evalf_strict(e, dps: int = _SIGN_DPS):
     """(real part, imaginary part, state_re, state_im) of a constant, or None when evalf fails.
     A part is trusted only when it carries significant bits: strict evalf may return a
     no-significance zero such as '-0.e-38' for the imaginary part of a real number written with
     complex radicals (the casus irreducibilis roots of x³ − 3x + 1) instead of raising."""
     from sympy.core.evalf import PrecisionExhausted
     try:
-        v = e.evalf(_SIGN_DPS, strict=True)
+        v = e.evalf(dps, strict=True)
     except PrecisionExhausted:
         return None
     except Exception:  # noqa: BLE001
@@ -227,6 +228,24 @@ def _evalf_strict(e):
     if not (re_.is_number and im_.is_number):
         return None
     return re_, im_, _part_state(re_), _part_state(im_)
+
+
+def _stands_higher(e, parts) -> bool:
+    """Does each significant part found at _SIGN_DPS stand at a higher precision too (same sign, the same leading
+    digits)? Strict evalf trusts a function's own evaluation where it is ill-conditioned: asin(tanh x) -
+    atan(sinh x), which is 0, came out 6.5e-61 with 103 significant bits at x = 139278301/1000033 (a 60-digit
+    evaluation could not separate it from 0), and the true identity asin(tanh x) = atan(sinh x) was refuted
+    (d4c round 3, samples off the decimal grid)."""
+    hi = _evalf_strict(e, 2 * _SIGN_DPS + 10)
+    if hi is None:
+        return False
+    for k in (0, 1):
+        if parts[k + 2] != "value":
+            continue
+        a, b = parts[k], hi[k]
+        if hi[k + 2] != "value" or (a > 0) != (b > 0) or abs(a - b) > abs(b) * sp.Float(10) ** -20:
+            return False
+    return True
 
 
 _JUMPS = (sp.sign, sp.Abs, sp.floor, sp.ceiling, sp.frac, sp.Heaviside, sp.Mod)
@@ -512,6 +531,12 @@ def _certified_sign(e, timeout: float):
 _NOT_READ = object()       # strict evalf decided nothing: the exact zero test is left
 
 
+def _stands(e, parts) -> bool:
+    """Is a strict reading of `e` usable: no significant part, or each significant part standing at a higher
+    precision too (`_stands_higher`, d4c round 3)? A reading that does not stand is dropped, as one that failed."""
+    return "value" not in (parts[2], parts[3]) or _stands_higher(e, parts)
+
+
 def _evalf_sign(e, timeout: float):
     """The sign strict evalf certifies for `e`, read off `e` AND off `-e` when `e` is a sum: SymPy evaluates
     the two writings of one sum differently, and 3 - log(8)/log(2) - exp(-exp(10)) had no certified sign while
@@ -519,10 +544,10 @@ def _evalf_sign(e, timeout: float):
     raised in one order only, and the domain dropped the constraint x >= 3 (round 9 of part d4b, YO-1). Two
     readings that disagree decide nothing (None). NONREAL for a part certainly not real; `_NOT_READ` when
     neither reading decides (the caller's exact zero test is left)."""
-    reads = [p for p in (_evalf_strict(e),) if p is not None]
+    reads = [p for p in (_evalf_strict(e),) if p is not None and _stands(e, p)]
     if isinstance(e, sp.Add):
         q = _evalf_strict(-e)
-        if q is not None:
+        if q is not None and _stands(-e, q):
             reads.append((-q[0], -q[1], q[2], q[3]))
     if not reads:
         return _NOT_READ
@@ -739,6 +764,69 @@ def to_mp(expr, dps: int):
         return v
 
 
+# ---------------------------------------------------------------------------
+# A DECLARED tolerance (a problem asking for an approximate answer, `rel_tol`/`abs_tol` in the IR) has one
+# reading on every path: the relative error of the claim c against the true value v, |c - v|/|v| <= t
+# (attack on d4c round 2, YO-4/RK-E/RK-F, 7 Oct 2026). The window was scaled by the claim on one path and by
+# max(|c|, |v|) in num_equal on another, so one relative error was CORRECT on one path and INCORRECT on the
+# other; rel_tol >= 1 accepted any claim, even of the wrong sign, and a negative rel_tol made an inverted
+# window that refuted the exact value. A relative tolerance outside (0, 1), and any tolerance not a finite
+# positive number, is a malformed input (principle 13: UNKNOWN); at v = 0 a relative tolerance means nothing.
+def read_tolerance(raw, relative: bool = True):
+    """(t, malformed): a declared tolerance as an exact Rational, None when none is declared."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None, False
+    if isinstance(raw, bool):
+        return None, True
+    try:
+        t = sp.Rational(str(raw).strip())         # '1e-3', '0.001', 0.001 and '1/1000' alike, exactly
+    except (TypeError, ValueError, ArithmeticError, sp.SympifyError):
+        return None, True
+    if not isinstance(t, sp.Rational) or t <= 0 or (relative and t >= 1):
+        return None, True
+    return t, False
+
+
+def is_number_expr(e) -> bool:
+    """Is `e` a number (not a set, a tuple, an interval, a relation, a matrix)? Only such a claim has a distance to
+    a value: c - v of a FiniteSet raised TypeError on the tolerance path (attack on d4c round 3, SG-1; principle
+    13)."""
+    return isinstance(e, sp.Expr) and not isinstance(e, sp.MatrixBase) and e.is_number is True
+
+
+def within_rel_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
+    """|c - v| <= t·|v| decided with certified signs, for constants c and v (v the true value): True or
+    False when certain, None when undecided or v = 0 (no relative error there). A claim with an imaginary part,
+    against a real v: |c - v| >= |Im c|, so |Im c| > t·|v| refutes it (SG-1)."""
+    try:
+        c, v, t = sp.sympify(claimed), sp.sympify(value), sp.sympify(t)
+    except (sp.SympifyError, TypeError):
+        return None
+    if not (is_number_expr(c) and is_number_expr(v)):
+        return None
+    if c in (sp.oo, sp.S.NegativeInfinity) and not v.has(sp.oo, sp.S.NegativeInfinity, sp.zoo) \
+            and certified_sign(v, timeout=timeout) in (-1, 0, 1):
+        return False                          # no tolerance holds an infinite claim to a finite value, 0 included (SG-1)
+    sd = certified_sign(c - v, timeout=timeout)
+    if sd == 0:
+        return True                           # the claim is the value
+    sv = certified_sign(v, timeout=timeout)
+    if sv not in (1, -1):
+        return None
+    if sd == NONREAL:
+        im_c = sp.im(c)
+        si = certified_sign(im_c, timeout=timeout)
+        if si in (1, -1) and certified_sign(si * im_c - t * sv * v, timeout=timeout) == 1:
+            return False
+        return None
+    if sd not in (1, -1):
+        return None
+    s_ = certified_sign(t * sv * v - sd * (c - v), timeout=timeout)
+    if s_ in (0, 1):
+        return True
+    return False if s_ == -1 else None
+
+
 def _rel_diff(a, b):
     diff = abs(a - b)
     scale = max(abs(a), abs(b))
@@ -756,6 +844,21 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
     comparison is 'exact up to working precision'.
     """
     ev: dict[str, Any] = {"ladder": [], "rel_tol": rel_tol, "abs_tol": abs_tol}
+    # a tolerance the caller passes is relative to `b`, the reference (true) value: |a - b|/|b| (see
+    # read_tolerance); undefined where b is 0. With an exact b it is decided exactly (within_rel_tol), two
+    # Rationals as well: a tolerance holds for every claim
+    if rel_tol is not None and abs_tol is None:
+        try:
+            sb_ = sp.sympify(b)
+            exact_b = not sb_.free_symbols and not has_float(sb_) and not sb_.has(sp.oo, sp.S.NegativeInfinity, sp.zoo,
+                                                                                   sp.nan)
+            exact_a = not sp.sympify(a).free_symbols
+        except (sp.SympifyError, TypeError, AttributeError):
+            exact_b = exact_a = False
+        if exact_a and exact_b:
+            r = within_rel_tol(a, b, rel_tol)
+            ev["decided_by"] = "exact_relative_tolerance" if r is not None else "exact_relative_tolerance_undecided"
+            return r, ev
     # Exact numbers are compared exactly. Measured: 10^30 + 1 and 10^30 were declared equal,
     # because their relative difference (1e-30) sits below the first rung's tolerance.
     try:
@@ -794,6 +897,7 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
             ev["decided_by"] = "exact" if r is not None else "exact_undecided"
             return r, ev
     passed_rungs = 0
+    against_b = rel_tol is not None
     # inputs that are already finite-precision Floats cannot be compared tighter than
     # their own precision (a 15-digit Float vs pi: at most ~1e-15 agreement is possible)
     float_digits = [int(f._prec * 0.30103) for e in (a, b) if hasattr(e, "atoms")
@@ -813,8 +917,17 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
                 same = (va == vb)
                 ev["ladder"].append({"dps": dps, "a": str(va), "b": str(vb)})
                 return bool(same), ev
-            rel = _rel_diff(va, vb)
             absd = abs(va - vb)
+            if against_b:
+                if vb == 0:
+                    if absd == 0 or (abs_tol is not None and absd <= mp.mpf(abs_tol)):
+                        ev["decided_by"] = "equal_at_zero" if absd == 0 else "abs_tol"
+                        return True, ev
+                    ev["decided_by"] = "relative_tolerance_at_zero"
+                    return None, ev
+                rel = absd / abs(vb)
+            else:
+                rel = _rel_diff(va, vb)
             eff = mp.mpf(10) ** (-(dps - 10))
             if rel_tol is not None:
                 eff = max(eff, mp.mpf(rel_tol))

@@ -159,7 +159,8 @@ def test_sympys_value_refutes_only_with_a_proof_or_an_enclosure(monkeypatch):
     monkeypatch.setattr(calculus, "certified_integral_value", lambda *a, **k: (None, {}))
     assert _run(_dint("cos(x)", "0", "1"), "sin(1) + 10**(-40)").verdict == "UNKNOWN"
     assert _run(_dint("cos(x)", "0", "1"), "sin(1) + 10**(-3)").verdict == "INCORRECT"
-    assert _run(_dint("cos(x)", "0", "1"), "sin(1)").verdict == "CORRECT"
+    # and without a proof SymPy's value accepts nothing either (round 3, YO-2)
+    assert _run(_dint("cos(x)", "0", "1"), "sin(1)").verdict == "UNKNOWN"
 
 
 def test_a_proved_value_overrides_a_wrong_sympy_value(monkeypatch):
