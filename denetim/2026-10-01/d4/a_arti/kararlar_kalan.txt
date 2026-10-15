@@ -1,0 +1,46 @@
+A+ adım (vi)+(vii): hiçbir dalda düzeltilmemiş kalan maddeler (ana oturum kararları, 15 Ekim 2026; DECISIONS §89). Parça adı d4j
+("kalanlar"). Kaynaklar: a_arti/envanter.json (durum, kanıt), saldiri/d4f2/kararlar_tur3.txt (d4f 3. tur kararları), kararlar_fhi.txt
+(CAP-K1), a_arti/kural_etkisi.json (R01–R29: kuralların gerçek derlemdeki ölçülmüş etkisi). Taban: birleşik dal (d4b tur 10 + d4c tur 4 +
+d4e tur 4/5 + d4h tur 2). Genel ilke: yanlış olabilecek cevaba CORRECT yok; doğru cevabın haksız reddi de hata; kanıtlanamıyorsa UNKNOWN;
+gerçekçi maddeler KESİN düzeltilir, yapay maddeler DAR fail-closed kuralla kapanır; her kuralın gerçek derlemdeki etkisi ölçülür (558 çözüm
+fark.py: karar değişimi 0; d4e'nin 89 ders kitabı vakası: kayıp 0).
+
+A. Gerçekçi (kesin düzeltme; kararlar_tur3.txt'teki metin geçerli):
+- D4F2B-RK-1 (kapsama, d4f 2. tur getirdi): liste/sözlük parametresindeki yalın ad (nokta 'P', 'S', olasılık öğesi; ad alanındaki işlev/
+  sınıf nesnesine denk gelen tek tanımlayıcı) matematik metni olarak yazılı tanımlılığa okunmaz (etiket). PQR, ABS, {S, K}, {P, Q} CORRECT.
+- D4F2B-RK-2 (kapsama, d4f 2. tur getirdi): kuyruk kapısında ihlal kümesi ℝ'de sonlu ya da üstten sınırlıysa kuyrukta tutma kanıtlıdır;
+  1/(2ⁿ − 1000), 1/(3ⁿ − 7), 1/(n! − 100), n²/(n² − 2ⁿ), ln n/(n − ln n), 1/⌊n/2⌋ ve bulgudaki öteki ders kitabı dizi limitleri CORRECT,
+  yanlış iddialar INCORRECT.
+- D4F2B-ONCEKI-1 (haksız ret, önceden var): şık metni cevap biçimiyle (answer_shape) iddia gibi okunur; tek ilişki biçimli şık ('x > -2',
+  'x ≥ 1', LaTeX \ge) çözüm kümesi olarak; ondalık virgüllü şık ('1,5') tahmin edilmez → UNKNOWN (decimal_comma_ambiguous). Hiçbiri
+  INCORRECT değil (mc.consistency yalnız şık metni cevabın türünde okunduğunda veto eder).
+
+B. Yapay yanlış onaylar ve haksız retler (dar fail-closed; kararlar_tur3.txt'teki metin geçerli):
+- D4F2A-YO-1 (0⁰ girdili matris işlemi), D4F2A-YO-2 (özdeş sıfır üslü 0/∞ tabanı), D4F2A-YO-3 (ℂ söyleminde NO_VALUE ve gelenekler
+  düşmez), D4F2A-YO-5 (kapalı ±∞ argümanlı toplam fonksiyon; limit görevleri hariç), D4F2A-RK-1 (doğrusal olmayan sınır: INCORRECT asla,
+  UNKNOWN).
+- D4F2A-YO-4: birleşik hâlde dört kapalı tanımsız vakayı ve üç kısıt vakasını yeniden üret; kapanmışsa (d4e 3.–4. tur) yalnız test ekle.
+- D4F2B-YO-1 / B-RK-3: d4b tur 10'da yan etkiyle kapandığı söyleniyor (envanter); birleşik hâlde doğrula. RecursionError'un kök nedeni
+  (evaluate(False) altında Sum.doit/evalf_log) küçük bir düzeltmeyle gidiyorsa gider, gitmiyorsa bilinen sınır.
+- D4B9-E2-R1 (doğrulanmadı): d/dx atan2(x, −1) = −1/(x² + 1) şu an CORRECT; atan2(·, x<0)'ın dal kesimi (y = 0, x < 0) x = 0'da sıçrar,
+  türev orada yok; iddia orada değer veriyor (RK-8 aynası: kırıkta fazladan değer → UNKNOWN). Önce yeniden üret ve matematiğini hesapla.
+  Kural: türev/limit/ekstremum sertifikasında f atan2/arg içeriyor ve dal kesimi bölgeyle kesişiyor ya da kesişmediği kanıtlanamıyorsa
+  UNKNOWN; kesim bölge dışında kanıtlıysa davranış değişmez.
+- GAP-NE (doğrulanmadı): relation_holds_at / _num_relation_holds'ta Eq/Ne bir Float işlenenle toleranslı num_equal'dan karar alıyorsa
+  (ilke 4: nümerik eşitlik kanıt değil) karar yok (None). Önce yeniden üret; yalnız bu iki yer (cevap karşılaştırması değişmez: R09 ölçümü).
+- GAP-LFLOOR (doğrulanmadı): iddia hedefin kendi işlemini hesaplıyorsa (floor/ceiling/gcd… ile yeniden yazım, ör. \lfloor\frac{17}{5}\rfloor)
+  claim_is_not_a_value (UNKNOWN); birleşik hâlde yeniden üret, kapanmışsa yalnız test.
+- CAP-K1 (d4i; kararlar_fhi.txt): birincil olmayan katmanların çekimserlik bayrakları iki yazılı listeyle sınıflanır: anlam/gelenek
+  (engelleyici: sonraki katman, Lean ya da L7, CORRECT'e çeviremez) ve "kanıtlanamadı" (engelleyici değil). Listede olmayan bayrak bir
+  kapıyla (test) yakalanır. Ölç: d4fhi/realist ajan notlarındaki 89 Lean koşusunun 3 UNKNOWN→CORRECT kurtarması (count_integers pozitif Mod
+  böleni, yineleme (n−5)², n−5) korunuyor mu; korunmuyorsa bayrağın gerçekten değeri etkileyip etkilemediğini incele ve raporla (bayrak
+  aşırı ise dar düzelt, değilse kurtarma kaybı kabul).
+
+C. Bilinen sınır olarak kayıt (kod yok; gerekçe DECISIONS'a ana oturum yazar):
+- D4C-T4-PI: deterministik örnekleyicinin bütün noktalarında sıfır olan özel kurgulanmış fark (Π(x − p_i) gibi) yalnız örnekleyiciyi bilen
+  saldırganca kurulur; özdeşlik sorunu genelde karar verilemez (Richardson). d4c tur 4 örnekleyiciyi sertleştirdi. "Rastgele nokta uyumu hiçbir
+  yolda kanıt değil" kuralı (R08) ders kitabı özdeşliklerini kaybettirir; uygulanmaz.
+- D4G-BUTCE / GAP-D4G-BUTCE: D3 (süre sınırı yok; askıya karşı sert timeout var). Sandbox'taki 40 s / 300 s sınırları askıya karşı ve
+  UNKNOWN döndürür; süreç içi bütçenin işbirlikçi olması bilinen sınır.
+- Kapsama: D4F2B-RK-4, RK-5, D4E4-U1, GAP-WORDPROBLEM (bileşik verilen; gerçekçi, ikisinde de UNKNOWN), GAP-XA, D4D-XA,
+  D4D-KAPSAMA-KALAN, V20-G14-YUK, GAP-LIMABS, GAP-RANK.
