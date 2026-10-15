@@ -339,13 +339,7 @@ def test_signs_at_the_other_points_are_certified_by_intervals():
     assert constant_sign(d) is None
     assert constant_sign(sp.sin(NPR * sp.pi * (sp.Rational(1, 3) + sp.sqrt(2) / 10**5)) / 10**40) in (-1, 1)
     assert constant_sign(sp.Integer(0)) is None and constant_sign(1 + sp.I) is None
-    ok, ev = random_point_equal(sp.asin(sp.tanh(x)), sp.atan(sp.sinh(x)), x, sp.Interval.open(0, sp.oo))
-    # the true identity is never refuted. Since d4b round 10 (merged state, 15 Oct 2026) it is no longer certified on
-    # (0, oo) either: strict evalf is trusted only on the nodes SymPy tracks the accuracy of, and where tanh x is within
-    # the working precision of 1 (x > ~20: 1 - tanh x < 1e-17) nothing tells whether the argument of asin stays <= 1,
-    # so asin is not read there (UNKNOWN, a known coverage limit, DECISIONS §89)
-    assert ok is not False and ev.get("counterexample") is None
-    ok, _ = random_point_equal(sp.asin(sp.tanh(x)), sp.atan(sp.sinh(x)), x, sp.Interval.open(0, 20))
+    ok, _ = random_point_equal(sp.asin(sp.tanh(x)), sp.atan(sp.sinh(x)), x, sp.Interval.open(0, sp.oo))
     assert ok is True
 
 

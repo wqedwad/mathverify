@@ -380,7 +380,8 @@ def test_origin_avoided():
 def test_two_readings_that_disagree_decide_nothing(monkeypatch):
     from mathverify.equiv import numeric
     one = (sp.Float(1, 30), sp.Integer(0), "value", "zero")
-    monkeypatch.setattr(numeric, "_evalf_strict", lambda e: one)     # e and -e both read +1: a contradiction
+    monkeypatch.setattr(numeric, "_evalf_strict", lambda e, dps=None: one)   # e and -e both read +1: a contradiction
+    # (dps: d4c round 3 reads a significant part again at a higher precision, `_stands_higher`)
     assert numeric._evalf_sign(sp.sympify("sqrt(2) - 1"), 5.0) is None
 
 

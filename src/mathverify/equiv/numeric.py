@@ -489,6 +489,57 @@ def _zero_arguments_resolved(e, timeout: float):
     return go(e)
 
 
+# Monotone functions read off their argument (merged state of the fourth audit, 15 Oct 2026). Strict evalf is trusted
+# only on the nodes SymPy tracks the accuracy of (round 10 of part d4b), and asin(tanh(x)) at x = 982817908/1000033 has no
+# reading: tanh x is 1 - 2e-854, and no working precision tells whether asin's argument stays <= 1. But the sign of an odd
+# increasing function is the sign of its argument wherever it is real, and |tanh v| < 1 for every real v: exact facts, no
+# evaluation. The true identity asin(tanh x) = atan(sinh x) on x > 0 had fallen to UNKNOWN in the merged state.
+_SIGN_OF_ARGUMENT = (sp.sinh, sp.tanh, sp.asinh, sp.atan, sp.erf)    # odd, increasing and real on the reals
+_SIGN_ON_THE_UNIT = (sp.asin, sp.atanh)                               # odd and increasing on [-1, 1], (-1, 1)
+_INSIDE_THE_UNIT = (sp.tanh, sp.erf)                                  # |f(v)| < 1 for every real v
+_ON_THE_UNIT = (sp.sin, sp.cos)                                       # |f(v)| <= 1 for every real v
+
+
+def _real_argument(u, timeout: float) -> bool:
+    return certified_sign(u, timeout) in (-1, 0, 1)
+
+
+def _in_the_unit(u, strict: bool, timeout: float) -> bool:
+    """Is the constant `u` certainly in [-1, 1] ((-1, 1) when `strict`): by the range of the function it is, or by
+    certified signs of 1 - u and 1 + u."""
+    if isinstance(u, _INSIDE_THE_UNIT + _ON_THE_UNIT) and len(u.args) == 1 and _real_argument(u.args[0], timeout):
+        if isinstance(u, _INSIDE_THE_UNIT) or not strict:
+            return True
+    ok = (1,) if strict else (0, 1)
+    return certified_sign(1 - u, timeout) in ok and certified_sign(1 + u, timeout) in ok
+
+
+def _monotone_sign(e, timeout: float):
+    """The sign of `e` when it is an odd increasing function of a real argument (the argument's certified sign), a
+    cosh of one (1), an acos of a number certainly inside (-1, 1) (1), or a product of factors with certified real
+    signs (SymPy writes asin(tanh(-x)) as -asin(tanh(x))); None otherwise."""
+    if isinstance(e, sp.Mul):
+        p = 1
+        for f in e.args:
+            s = certified_sign(f, timeout)
+            if s not in (-1, 0, 1):
+                return None
+            p *= s
+        return p
+    if not isinstance(e, sp.Function) or len(e.args) != 1:
+        return None
+    u = e.args[0]
+    if isinstance(e, _SIGN_OF_ARGUMENT) or (isinstance(e, _SIGN_ON_THE_UNIT)
+                                            and _in_the_unit(u, isinstance(e, sp.atanh), timeout)):
+        s = certified_sign(u, timeout)
+        return s if s in (-1, 0, 1) else None
+    if isinstance(e, sp.cosh):
+        return 1 if _real_argument(u, timeout) else None
+    if isinstance(e, sp.acos):
+        return 1 if _in_the_unit(u, True, timeout) else None
+    return None
+
+
 def _certified_sign(e, timeout: float):
     if getattr(e, "free_symbols", None):
         return None
@@ -509,6 +560,9 @@ def _certified_sign(e, timeout: float):
     e = _zero_arguments_resolved(e, timeout)
     if isinstance(e, sp.Rational):
         return int(sp.sign(e))
+    s = _monotone_sign(e, timeout)
+    if s is not None:
+        return s
     s = _evalf_sign(e, timeout)
     if s is not _NOT_READ:
         return s
