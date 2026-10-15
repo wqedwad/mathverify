@@ -1,0 +1,193 @@
+
+=== R01 constraint∩given exception -> constraint_not_applied
+  EV=59 K4=59 TB=20  {('EV', 'CORRECT'): 32, ('EV', 'INCORRECT'): 27, ('K4', 'CORRECT'): 55, ('K4', 'INCORRECT'): 4, ('TB', 'CORRECT'): 13, ('TB', 'INCORRECT'): 1, ('TB', 'UNKNOWN'): 6}
+    EV x2: ineq_given=(x - 1)/(x + 2) >= 0
+    EV x2: ineq_given=m > 0
+    EV x2: ineq_given=x < y; var_domain=x:positive_integer; var_domain=y:positive
+    EV x3: interval=(0, oo); discourse=x > 0; var_domain=x:positive_real
+    EV x7: irrational_endpoint interval=[0, 2*pi)
+    EV x4: irrational_endpoint interval=[0, pi)
+    EV x3: var_domain=a:integer; var_domain=b:integer
+    EV x5: var_domain=a:positive_integer; var_domain=b:positive_integer
+    EV x8: var_domain=k:positive_integer; var_domain=n:positive_integer
+    EV x4: var_domain=n:nonneg_integer
+    EV x4: var_domain=n:positive_integer
+    EV x3: var_domain=o:positive_integer; var_domain=b:positive_integer
+    EV x4: var_domain=t:positive_real
+    EV x2: var_domain=x:nonneg_integer; var_domain=y:nonneg_integer
+
+=== R02 EVT: extremum candidates compared only exactly
+  EV=7 K4=7 TB=5  {('EV', 'CORRECT'): 5, ('EV', 'INCORRECT'): 2, ('K4', 'CORRECT'): 7, ('TB', 'CORRECT'): 3, ('TB', 'INCORRECT'): 1, ('TB', 'UNKNOWN'): 1}
+    EV x3: extremum x + 4/x
+    EV x3: extremum x**3 - 3*x
+    EV x1: extremum x**3 - 6*x**2 + 9*x + 1
+    K4 x3: extremum x + 4/x
+    K4 x3: extremum x**3 - 3*x
+    K4 x1: extremum x**3 - 6*x**2 + 9*x + 1
+    TB x1: extremum Piecewise((x, x < 1), (2 - x, True))
+    TB x1: extremum log(x)
+    TB x1: extremum sqrt(x)
+    TB x1: extremum x*exp(-x)
+    TB x1: extremum x/(x**2 + 1)
+
+=== R03 constant-argument jump function (floor/ceiling/sign/frac/Mod/Heaviside/%//) read only from certified sign
+  EV=3 K4=2 TB=0  {('EV', 'CORRECT'): 2, ('EV', 'INCORRECT'): 1, ('K4', 'CORRECT'): 2}
+    EV x2: ir:param:expr:Mod(5**100, 7)[rational]; sol:claim:s1:Mod(5**6, 7)[rati
+    EV x1: sol:claim:s1:Mod(120, 84)[rational]; sol:claim:s2:Mod(84, 36)[rational
+    K4 x2: ir:param:expr:Mod(5**100, 7)[rational]; sol:claim:s1:Mod(5**6, 7)[rati
+
+=== R04 deterministic budgets (set pieces>32, family members, value holes, parse time)
+  EV=0 K4=0 TB=0  {}
+
+=== R05 non-evalf_table special function in a constant sign/counterexample decision
+  EV=0 K4=0 TB=5  {('TB', 'CORRECT'): 4, ('TB', 'INCORRECT'): 1}
+    TB x1: ir:param:f:acos
+    TB x1: ir:param:f:asin
+    TB x1: sol:answer:asin
+    TB x2: sol:answer:sign
+
+=== R06 constant relational / Piecewise condition / Interval endpoint only via certified_sign
+  EV=11 K4=17 TB=12  {('EV', 'CORRECT'): 5, ('EV', 'INCORRECT'): 6, ('K4', 'CORRECT'): 17, ('TB', 'CORRECT'): 4, ('TB', 'INCORRECT'): 1, ('TB', 'UNKNOWN'): 7}
+    EV x11: ir:interval_irrational_endpoint
+    K4 x11: ir:interval_irrational_endpoint
+    K4 x4: sol:claim:a1:const_rel_irrational
+    K4 x2: sol:claim:s2:const_rel_irrational; sol:claim:s5:const_rel_irrational; 
+    TB x1: ir:interval_irrational_endpoint
+    TB x4: ir:param:expr:Piecewise
+    TB x2: ir:param:f:Piecewise
+    TB x4: ir:param:f:Piecewise; sol:answer:Piecewise
+    TB x1: sol:answer:Piecewise
+
+=== R07 finite-domain point definedness undecidable (variable-exponent power) -> UNKNOWN not INCORRECT
+  EV=0 K4=0 TB=0  {}
+
+=== R08 random-point agreement never a proof (expression-shaped comparison)
+  EV=13 K4=13 TB=45  {('EV', 'CORRECT'): 6, ('EV', 'INCORRECT'): 7, ('K4', 'CORRECT'): 13, ('TB', 'CORRECT'): 38, ('TB', 'INCORRECT'): 1, ('TB', 'UNKNOWN'): 6}
+    EV x5: antiderivative
+    EV x2: derivative expression
+    EV x6: simplify_expression
+    K4 x5: antiderivative
+    K4 x2: derivative expression
+    K4 x6: simplify_expression
+    TB x5: antiderivative
+    TB x40: derivative expression
+
+=== R09 Float operand: tolerant Eq/Ne not decisive
+  EV=1 K4=0 TB=0  {('EV', 'CORRECT'): 1}
+    EV x1: sol:answer; sol:claim:s2
+
+=== R10 wordproblem layer abstains on compound/unreadable given
+  EV=8 K4=8 TB=0  {('EV', 'CORRECT'): 5, ('EV', 'INCORRECT'): 3, ('K4', 'CORRECT'): 4, ('K4', 'INCORRECT'): 4}
+    EV x4: function_application:Mod(n, 2) = 0
+    EV x3: function_application:P(3) = 0
+    EV x1: function_application:at(diff(f(x), x), x, 1) = 0; function_application
+    K4 x4: function_application:Mod(n, 2) = 0
+    K4 x3: function_application:P(3) = 0
+    K4 x1: function_application:at(diff(f(x), x), x, 1) = 0; function_application
+
+=== R11 hard wall-clock per verify
+  EV=0 K4=13 TB=0  {('K4', 'CORRECT'): 13}
+    K4 x1: ms=102482
+    K4 x1: ms=102605
+    K4 x1: ms=139633
+    K4 x1: ms=141622
+    K4 x1: ms=31292
+    K4 x1: ms=32536
+    K4 x1: ms=39481
+    K4 x1: ms=45182
+    K4 x1: ms=55051
+    K4 x1: ms=56711
+    K4 x1: ms=59057
+    K4 x1: ms=75188
+    K4 x1: ms=86206
+
+=== R12a d4e4-YO-1: derivative of Abs(non-polynomial u)
+  EV=0 K4=0 TB=1  {('TB', 'CORRECT'): 1}
+    TB x1: Abs(sin(x))
+
+=== R12b d4e4-YO-2/YO-3: fractional power whose base zeros are a family / not classifiable, claim undefined at base zero
+  EV=0 K4=0 TB=4  {('TB', 'CORRECT'): 3, ('TB', 'UNKNOWN'): 1}
+    TB x1: sqrt(1 + cos(x))[family]
+    TB x1: sqrt(a**2 - x**2)[param]
+    TB x1: sqrt(sin(x))[family]
+    TB x1: sqrt(x - a)[param]
+
+=== R12c d4e4-RK-1/U5 softening: derivative refuted via nan at base zero / symbolic integer exponent
+  EV=0 K4=0 TB=17  {('TB', 'CORRECT'): 15, ('TB', 'UNKNOWN'): 2}
+    TB x17: fractional/symbolic power in f
+
+=== R13 Matrix with condition-bearing / closed-form entries held
+  EV=0 K4=0 TB=0  {}
+
+=== R14 0/oo base with non-constant exponent -> zero_power convention
+  EV=0 K4=0 TB=0  {}
+
+=== R15 complex discourse keeps NO_VALUE/convention conditions
+  EV=0 K4=0 TB=0  {}
+
+=== R16 total function of ±oo / AccumBounds outside limit tasks -> NO_VALUE
+  EV=0 K4=0 TB=0  {}
+
+=== R17 Sum/Product bound non-linear or non-integer -> region not built
+  EV=0 K4=0 TB=0  {}
+
+=== R18 closed Integral/Sum/Product/Limit inside a deciding node or wrapper (strict) / as a relation side (wide)
+  EV=44 K4=55 TB=0  {('EV', 'CORRECT'): 24, ('EV', 'INCORRECT'): 20, ('K4', 'CORRECT'): 55}
+    EV x35: wide_only | wide=1
+    EV x6: wide_only | wide=2
+    EV x3: wide_only | wide=3
+    K4 x2: STRICT sol:claim:s11:Ne(..Limit..) | wide=1
+    K4 x2: wide_only | wide=1
+    K4 x26: wide_only | wide=2
+    K4 x16: wide_only | wide=3
+    K4 x3: wide_only | wide=4
+    K4 x6: wide_only | wide=8
+
+=== R19 keyword-argument call in claim/step text
+  EV=0 K4=4 TB=0  {('K4', 'CORRECT'): 4}
+    K4 x4: sol:claim:s11:, 0, dir='+')
+
+=== R20 declared d/dv symbol + LaTeX d-fraction
+  EV=0 K4=0 TB=0  {}
+
+=== R21 domain/given text collapsing to constant or multi-piece list
+  EV=0 K4=0 TB=0  {}
+
+=== R22 trig family index named in givens / >=2 family parameters in claim
+  EV=0 K4=0 TB=0  {}
+
+=== R23 claimed answer computes gcd/lcm or the target operation (floor, Mod, ...)
+  EV=0 K4=0 TB=0  {}
+
+=== R24 relation-shaped claim with non-bare-variable side (as_set not used)
+  EV=0 K4=0 TB=0  {}
+
+=== R25 PRE-RK-5 softening: claim containing the unknown -> UNKNOWN not INCORRECT
+  EV=0 K4=0 TB=5  {('TB', 'UNKNOWN'): 5}
+    TB x4: answer names a
+    TB x1: answer names x
+
+=== R26 PRE-RK-4: params.equation/inequality as step premise
+  EV=2 K4=2 TB=0  {('EV', 'CORRECT'): 1, ('EV', 'INCORRECT'): 1, ('K4', 'CORRECT'): 2}
+    EV x2: params.equation
+    K4 x2: params.equation
+
+=== R27 D4F2B-YO-1: unreadable as-written step text not treated as convention
+  EV=14 K4=13 TB=0  {('EV', 'CORRECT'): 7, ('EV', 'INCORRECT'): 7, ('K4', 'CORRECT'): 13}
+    EV x1: claim:s1
+    EV x3: claim:s2
+    EV x5: claim:s3
+    EV x1: claim:s3; claim:s4
+    EV x2: claim:s4
+    EV x1: claim:s5
+    EV x1: claim:s6
+    K4 x4: claim:s11
+    K4 x6: claim:s3
+    K4 x3: claim:s5
+
+=== R28 mc.consistency vetoes only when option is read in the answer type
+  EV=10 K4=10 TB=0  {('EV', 'CORRECT'): 6, ('EV', 'INCORRECT'): 4, ('K4', 'CORRECT'): 10}
+    EV x4: A:tuple; B:tuple; C:tuple; D:tuple; E:tuple
+    EV x6: E:text
+    K4 x4: A:tuple; B:tuple; C:tuple; D:tuple; E:tuple
+    K4 x6: E:text

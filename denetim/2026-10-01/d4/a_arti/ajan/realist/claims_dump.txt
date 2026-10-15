@@ -1,0 +1,3670 @@
+##EV ayt-ana-001 CORRECT True
+   answer | y = 2*x
+   claim:s1 | slope(1, 2, 4, 8) = 2
+   claim:s2 | y - 2 = 2*(x - 1)
+   claim:s3 | y = 2*x
+##EV ayt-ana-002 CORRECT True
+   answer | 5
+   claim:s1 | sqrt((4 - 1)**2 + (6 - 2)**2) = 5
+##EV ayt-ana-003 CORRECT True
+   answer | (x - 2)**2 + (y + 1)**2 = 9
+   claim:s1 | (x - 2)**2 + (y + 1)**2 = 3**2
+##EV ayt-ana-004 CORRECT True
+   answer | 4
+   claim:s1 | Abs(3*3 + 4*4 - 5) = 20
+   claim:s2 | sqrt(3**2 + 4**2) = 5
+   claim:s3 | 20/5 = 4
+##EV ayt-ana-005 CORRECT True
+   answer | 6
+   claim:s2 | 4*3/2 = 6
+##EV ayt-ana-006 CORRECT True
+   answer | y = 2*x
+   claim:s1 | slope(1, 2, 4, 8) = 2
+   claim:s2 | 2 = 2*1 + n
+   claim:s3 | n = 0
+##EV ayt-ana-007 CORRECT True
+   answer | 2*x - y = 0
+   claim:s1 | (y - 2)/(x - 1) = (8 - 2)/(4 - 1)
+   claim:s2 | 2*x - y = 0
+##EV ayt-ana-008 CORRECT True
+   answer | 5
+   claim:s1 | 4 - 1 = 3
+   claim:s2 | 6 - 2 = 4
+##EV ayt-ana-009 CORRECT True
+   answer | x**2 + y**2 - 4*x + 2*y - 4 = 0
+   claim:s1 | (x - 2)**2 + (y + 1)**2 = 9
+   claim:s2 | (x - 2)**2 + (y + 1)**2 - 9 = x**2 + y**2 - 4*x + 2*y - 4
+##EV ayt-ana-010 CORRECT True
+   answer | 6
+   claim:s1 | Abs(0*(0 - 3) + 4*(3 - 0) + 0*(0 - 0))/2 = 6
+##EV ayt-ana-011 INCORRECT False
+   answer | y = (x + 3)/2
+   claim:s1 | slope(1, 2, 4, 8) = 1/2
+   claim:s2 | y - 2 = (x - 1)/2
+##EV ayt-ana-012 INCORRECT False
+   answer | 25
+   claim:s1 | (4 - 1)**2 + (6 - 2)**2 = 25
+##EV ayt-ana-013 INCORRECT False
+   answer | (x + 2)**2 + (y - 1)**2 = 9
+   claim:s1 | (x + 2)**2 + (y - 1)**2 = 9
+##EV ayt-ana-014 INCORRECT False
+   answer | 20
+   claim:s1 | Abs(3*3 + 4*4 - 5) = 20
+##EV ayt-ana-015 INCORRECT False
+   answer | 12
+   claim:s1 | 4*3 = 12
+##EV ayt-ana-016 INCORRECT False
+   answer | (x - 2)**2 + (y + 1)**2 = 3
+   claim:s1 | (x - 2)**2 + (y + 1)**2 = 3
+##EV ayt-ana-017 INCORRECT False
+   answer | 5
+   claim:s1 | 4 - 1 = 4
+   claim:s2 | 6 - 2 = 3
+   claim:s3 | sqrt(4**2 + 3**2) = 5
+##EV ayt-ana-018 INCORRECT False
+   answer | 4
+   claim:s1 | 3*3 + 4*4 - 5 = 25
+   claim:s2 | sqrt(3**2 + 4**2) = 5
+   claim:s3 | 25/5 = 4
+##EV ayt-ana-019 INCORRECT False
+   answer | y = 2*x
+   claim:s1 | slope(1, 2, 4, 8) = 3
+   claim:s2 | y = 2*x
+##EV ayt-ana-020 CORRECT True
+   answer | 4
+   claim:s2 | (3*3 + 4*4 - 5)/5 = 4
+   claim:s3 | 4 > 0
+##EV ayt-ana-021 INCORRECT False
+   answer | y = 2*x + 1
+   claim:s1 | slope(1, 2, 4, 8) = 2
+   claim:s2 | 2 = 2*1 + n
+   claim:s3 | n = 1
+##EV ayt-ana-022 INCORRECT False
+   answer | 7
+   claim:s1 | 4*3/2 = 7
+##EV ayt-diz-001 CORRECT True
+   answer | 43
+   claim:s1 | 3 + 2*1 = 5
+   claim:s2 | 5 + 2*3 = 11
+   claim:s3 | 11 + 2*5 = 21
+   claim:s4 | 21 + 2*11 = 43
+##EV ayt-diz-002 CORRECT True
+   answer | 62
+   claim:s1 | 5 + 19*3 = 62
+##EV ayt-diz-003 CORRECT True
+   answer | 3*2**(n-1)
+##EV ayt-diz-004 CORRECT True
+   answer | (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)
+   claim:s2 | (((1+sqrt(5))/2) - ((1-sqrt(5))/2))/sqrt(5) = 1
+   claim:s3 | (((1+sqrt(5))/2)**2 - ((1-sqrt(5))/2)**2)/sqrt(5) = 1
+##EV ayt-diz-005 CORRECT True
+   answer | 385
+   claim:s1 | 10*11*21/6 = 385
+##EV ayt-diz-006 CORRECT True
+   answer | 1
+   claim:s1 | (1/2)/(1 - 1/2) = 1
+##EV ayt-diz-007 CORRECT True
+   answer | 43
+   claim:s2 | (2**7 + (-1)**6)/3 = 43
+##EV ayt-diz-008 CORRECT True
+   answer | 62
+   claim:s1 | a(n) = 3*n + 2
+   claim:s2 | 3*20 + 2 = 62
+##EV ayt-diz-009 CORRECT True
+   answer | 6*2**n/4
+   claim:s2 | 6*2**1/4 = 3
+##EV ayt-diz-010 CORRECT True
+   answer | 385
+   claim:s1 | 1 + 4 + 9 + 16 + 25 + 36 + 49 + 64 + 81 + 100 = 385
+##EV ayt-diz-011 CORRECT True
+   answer | 1
+   claim:s1 | Sum(1/2**k, (k, 1, n)) = 1 - 1/2**n
+   claim:s2 | Limit(1 - 1/2**n, n, oo) = 1
+##EV ayt-diz-012 INCORRECT False
+   answer | 21
+   claim:s1 | 3 + 2*1 = 5
+   claim:s2 | 5 + 2*3 = 11
+   claim:s3 | 11 + 2*5 = 21
+##EV ayt-diz-013 INCORRECT False
+   answer | 65
+   claim:s1 | 5 + 20*3 = 65
+##EV ayt-diz-014 INCORRECT False
+   answer | 3*2**n
+##EV ayt-diz-015 INCORRECT False
+   answer | (((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5)
+##EV ayt-diz-016 INCORRECT False
+   answer | 330
+   claim:s1 | 10*11*(2*10 + 1)/6 = 330
+##EV ayt-diz-017 INCORRECT False
+   answer | 2
+   claim:s1 | 1/(1 - 1/2) = 2
+##EV ayt-diz-018 INCORRECT False
+   answer | 62
+   claim:s1 | 20*3 = 57
+   claim:s2 | 5 + 57 = 62
+##EV ayt-diz-019 INCORRECT False
+   answer | 385
+   claim:s1 | Sum(k, (k, 1, 10)) = 50
+   claim:s2 | 10*11*21/6 = 385
+##EV ayt-diz-020 INCORRECT False
+   answer | 1
+   claim:s1 | Sum(1/2**k, (k, 1, 3)) = 3/4
+##EV ayt-int-001 CORRECT True
+   answer | x*log(x) - x + C
+   claim:s2 | Integral(log(x), x) = x*log(x) - x
+##EV ayt-int-002 CORRECT True
+   answer | 23
+   claim:s2 | Integral(-2*x - 1, (x, -3, -2)) = 4
+   claim:s3 | Integral(3, (x, -2, 1)) = 9
+   claim:s4 | Integral(2*x + 1, (x, 1, 3)) = 10
+   claim:s5 | 4 + 9 + 10 = 23
+##EV ayt-int-003 CORRECT True
+   answer | 1
+   claim:s1 | Integral(x*exp(x), x) = x*exp(x) - exp(x)
+   claim:s2 | at(x*exp(x) - exp(x), x, 1) - at(x*exp(x) - exp(x), x, 0) = 1
+##EV ayt-int-004 CORRECT True
+   answer | 2
+   claim:s1 | Integral(sin(x), x) = -cos(x)
+   claim:s2 | -cos(pi) + cos(0) = 2
+##EV ayt-int-005 CORRECT True
+   answer | x*log(x) - x + C
+   claim:s2 | diff(x*log(x) - x, x) = log(x)
+   claim:s3 | diff(x*log(x), x) = log(x) + 1
+##EV ayt-int-006 CORRECT True
+   answer | 23
+   claim:s2 | (4**2 + 2**2)/2 = 10
+   claim:s3 | (1**2 + 5**2)/2 = 13
+   claim:s4 | 10 + 13 = 23
+##EV ayt-int-007 CORRECT True
+   answer | 1
+   claim:s1 | diff((x - 1)*exp(x), x) = x*exp(x)
+   claim:s2 | at((x - 1)*exp(x), x, 1) - at((x - 1)*exp(x), x, 0) = 1
+##EV ayt-int-008 CORRECT True
+   answer | 2
+   claim:s2 | Integral(sin(x), (x, 0, pi/2)) = 1
+   claim:s3 | 2*1 = 2
+##EV ayt-int-009 CORRECT True
+   answer | 23
+   claim:s1 | Abs(x - 1) = Abs(1 - x)
+   claim:s2 | Integral(Abs(x - 1), (x, -3, 3)) = 10
+   claim:s3 | Integral(Abs(x + 2), (x, -3, 3)) = 13
+   claim:s4 | 10 + 13 = 23
+##EV ayt-int-010 INCORRECT False
+   answer | x*log(x) + C
+   claim:s1 | Integral(log(x), x) = x*log(x)
+##EV ayt-int-011 INCORRECT False
+   answer | 6
+   claim:s1 | Abs(x - 1) + Abs(x + 2) = 2*x + 1
+   claim:s2 | Integral(2*x + 1, (x, -3, 3)) = 6
+##EV ayt-int-012 INCORRECT False
+   answer | 2*E - 1
+   claim:s1 | Integral(x*exp(x), x) = x*exp(x) + exp(x)
+   claim:s2 | at(x*exp(x) + exp(x), x, 1) - at(x*exp(x) + exp(x), x, 0) = 2*E - 1
+##EV ayt-int-013 INCORRECT False
+   answer | 0
+   claim:s1 | Integral(sin(x), (x, 0, pi)) = -cos(pi) - cos(0)
+   claim:s2 | -cos(pi) - cos(0) = 0
+##EV ayt-int-014 INCORRECT False
+   answer | 1/x + C
+   claim:s1 | Integral(log(x), x) = 1/x
+##EV ayt-int-015 INCORRECT False
+   answer | E/2
+   claim:s1 | Integral(x*exp(x), x) = x**2/2*exp(x)
+   claim:s2 | at(x**2/2*exp(x), x, 1) - at(x**2/2*exp(x), x, 0) = E/2
+##EV ayt-int-016 INCORRECT False
+   answer | 1
+   claim:s1 | diff(x*exp(x), x) = exp(x)
+   claim:s2 | Integral(x*exp(x), (x, 0, 1)) = 1
+##EV ayt-int-017 INCORRECT False
+   answer | 23
+   claim:s1 | Integral(-2*x - 1, (x, -3, -2)) = 5
+   claim:s2 | Integral(3, (x, -2, 1)) = 9
+   claim:s3 | Integral(2*x + 1, (x, 1, 3)) = 9
+   claim:s4 | 5 + 9 + 9 = 23
+##EV ayt-int-018 INCORRECT False
+   answer | 2
+   claim:s1 | Integral(sin(x), x) = cos(x)
+   claim:s2 | at(cos(x), x, pi) - at(cos(x), x, 0) = 2
+##EV ayt-int-019 CORRECT True
+   answer | 1
+   claim:s2 | Integral(x*exp(x), (x, 0, 1)) = 1
+##EV ayt-int-020 INCORRECT False
+   answer | 21
+   claim:s1 | Integral(-2*x - 1, (x, -3, -2)) = 4
+   claim:s2 | Integral(3, (x, -2, 1)) = 9
+   claim:s3 | Integral(2*x + 1, (x, 1, 3)) = 8
+   claim:s4 | 4 + 9 + 8 = 21
+##EV ayt-int-021 INCORRECT False
+   answer | x*log(x) - x + C
+   claim:s1 | diff(log(x), x) = log(x)/x
+   claim:s2 | Integral(log(x), x) = x*log(x) - x
+##EV ayt-lim-001 CORRECT True
+   answer | 4
+   claim:s1 | (x**2 - 4)/(x - 2) = x + 2
+   claim:s2 | Limit(x + 2, x, 2) = 4
+##EV ayt-lim-002 CORRECT True
+   answer | 3
+   claim:s1 | sin(3*x)/x = 3*sin(3*x)/(3*x)
+   claim:s2 | Limit(sin(3*x)/(3*x), x, 0) = 1
+   claim:s3 | 3*1 = 3
+##EV ayt-lim-003 CORRECT True
+   answer | None
+   claim:s1 | Limit(Abs(x)/x, x, 0, '+') = 1
+   claim:s2 | Limit(Abs(x)/x, x, 0, '-') = -1
+##EV ayt-lim-004 CORRECT True
+   answer | 2
+   claim:s1 | (2*x**2 + 1)/(x**2 - 5) = (2 + 1/x**2)/(1 - 5/x**2)
+   claim:s2 | Limit((2 + 1/x**2)/(1 - 5/x**2), x, oo) = 2
+##EV ayt-lim-005 CORRECT True
+   answer | 1/2
+   claim:s1 | (sqrt(x) - 1)/(x - 1) = 1/(sqrt(x) + 1)
+   claim:s2 | Limit(1/(sqrt(x) + 1), x, 1) = 1/2
+##EV ayt-lim-006 CORRECT True
+   answer | 0
+   claim:s1 | x*log(x) = log(x)/(1/x)
+   claim:s2 | Limit((1/x)/(-1/x**2), x, 0, '+') = 0
+##EV ayt-lim-007 CORRECT True
+   answer | 3
+   claim:s2 | diff(sin(3*x), x) = 3*cos(3*x)
+   claim:s3 | Limit(3*cos(3*x), x, 0) = 3
+##EV ayt-lim-008 CORRECT True
+   answer | 1/2
+   claim:s2 | (t - 1)/(t**2 - 1) = 1/(t + 1)
+   claim:s3 | Limit(1/(t + 1), t, 1) = 1/2
+##EV ayt-lim-009 INCORRECT False
+   answer | 1
+   claim:s1 | Limit(Abs(x)/x, x, 0) = 1
+##EV ayt-lim-010 INCORRECT False
+   answer | oo
+##EV ayt-lim-011 INCORRECT False
+   answer | 1
+   claim:s1 | (sqrt(x) - 1)/(x - 1) = 1/(sqrt(x) + 1)
+   claim:s2 | Limit(1/(sqrt(x) + 1), x, 1) = 1
+##EV ayt-lim-012 INCORRECT False
+   answer | 4
+   claim:s1 | (x**2 - 4)/(x - 2) = x - 2
+   claim:s2 | Limit(x - 2, x, 2) = 4
+##EV ayt-lim-013 CORRECT True
+   answer | 2
+   claim:s2 | diff(2*x**2 + 1, x) = 4*x
+   claim:s3 | diff(x**2 - 5, x) = 2*x
+   claim:s4 | Limit(4*x/(2*x), x, oo) = 2
+##EV ayt-lim-014 INCORRECT False
+   answer | -oo
+##EV ayt-trig-001 CORRECT True
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s3 | x in {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+##EV ayt-trig-002 CORRECT True
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s1 | sin(pi/6) = 1/2
+##EV ayt-trig-003 CORRECT True
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s1 | sin(75°) = sin(45°)*cos(30°) + cos(45°)*sin(30°)
+   claim:s2 | sin(45°)*cos(30°) + cos(45°)*sin(30°) = (sqrt(6) + sqrt(2))/4
+##EV ayt-trig-004 CORRECT True
+   answer | pi/3
+   claim:s1 | tan(pi/3) = sqrt(3)
+##EV ayt-trig-005 CORRECT True
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s2 | cos(2*pi/6) = 1/2
+   claim:s3 | cos(2*5*pi/6) = 1/2
+   claim:s4 | cos(2*7*pi/6) = 1/2
+   claim:s5 | cos(2*11*pi/6) = 1/2
+##EV ayt-trig-006 CORRECT True
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s2 | sin(pi/6) = 1/2
+   claim:s3 | sin(5*pi/6) = 1/2
+##EV ayt-trig-007 CORRECT True
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s1 | sin(75°) = sin(135° - 60°)
+   claim:s2 | sin(135°)*cos(60°) - cos(135°)*sin(60°) = (sqrt(6) + sqrt(2))/4
+##EV ayt-trig-008 CORRECT True
+   answer | 60°
+   claim:s2 | 60° = pi/3
+##EV ayt-trig-009 CORRECT True
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | 2*cos(x)**2 - 1 = 1/2
+   claim:s2 | cos(x)**2 = 3/4
+   claim:s3 | x in {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+##EV ayt-trig-010 INCORRECT False
+   answer | {pi/6, 5*pi/6}
+   claim:s2 | x in {pi/6, 5*pi/6}
+##EV ayt-trig-011 INCORRECT False
+   answer | {pi/6 + k*pi, 5*pi/6 + k*pi}
+   claim:s1 | sin(pi/6) = 1/2
+##EV ayt-trig-012 INCORRECT False
+   answer | (sqrt(6) - sqrt(2))/4
+   claim:s1 | sin(75°) = sin(45° - 30°)
+   claim:s2 | sin(45°)*cos(30°) - cos(45°)*sin(30°) = (sqrt(6) - sqrt(2))/4
+##EV ayt-trig-013 INCORRECT False
+   answer | 2*pi/3
+   claim:s1 | tan(2*pi/3) = sqrt(3)
+##EV ayt-trig-014 INCORRECT False
+   answer | {30, 150, 210, 330}
+   claim:s2 | x in {30, 150, 210, 330}
+##EV ayt-trig-015 INCORRECT False
+   answer | {pi/6 + 2*k*pi}
+   claim:s1 | sin(pi/6) = 1/2
+##EV ayt-trig-016 INCORRECT False
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s1 | sin(75°) = sin(15°)
+   claim:s2 | sin(45°)*cos(30°) + cos(45°)*sin(30°) = (sqrt(6) + sqrt(2))/4
+##EV ayt-trig-017 INCORRECT False
+   answer | pi/3
+   claim:s1 | tan(pi/3) = sqrt(3)
+   claim:s2 | 60° = pi/2
+##EV ayt-trig-018 INCORRECT False
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(pi/6) = 1/2
+   claim:s3 | x in {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+##EV ayt-trig-019 CORRECT True
+   answer | sqrt(2 + sqrt(3))/2
+   claim:s1 | sin(75°)**2 = (1 - cos(150°))/2
+   claim:s2 | (1 - cos(150°))/2 = (2 + sqrt(3))/4
+   claim:s3 | sin(75°) = sqrt(2 + sqrt(3))/2
+##EV ayt-trig-020 INCORRECT False
+   answer | {pi/3, 5*pi/3}
+   claim:s1 | x in {pi/3, 5*pi/3}
+##EV ayt-trig-021 INCORRECT False
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s1 | sin(x) = cos(x - pi/2)
+   claim:s2 | sin(x) = cos(x + pi/2)
+   claim:s3 | sin(pi/6) = 1/2
+##EV ayt-tur-001 CORRECT True
+   answer | 18
+   claim:s1 | diff(x**3 - 3*x, x) = 3*x**2 - 3
+   claim:s3 | at(x**3 - 3*x, x, -1) = 2
+   claim:s4 | at(x**3 - 3*x, x, 1) = -2
+   claim:s5 | at(x**3 - 3*x, x, -2) = -2
+   claim:s6 | at(x**3 - 3*x, x, 3) = 18
+##EV ayt-tur-002 CORRECT True
+   answer | 0
+   claim:s1 | diff(x**2*exp(x), x) = (2*x + x**2)*exp(x)
+   claim:s2 | at((2*x + x**2)*exp(x), x, 0) = 0
+##EV ayt-tur-003 CORRECT True
+   answer | y = 2*x - 1
+   claim:s1 | diff(x**2, x) = 2*x
+   claim:s2 | at(2*x, x, 1) = 2
+   claim:s3 | at(x**2, x, 1) = 1
+   claim:s4 | y - 1 = 2*(x - 1)
+##EV ayt-tur-004 CORRECT True
+   answer | 2*x/(x**2 + 1)
+   claim:s1 | diff(x**2 + 1, x) = 2*x
+   claim:s2 | diff(log(x**2 + 1), x) = 2*x/(x**2 + 1)
+##EV ayt-tur-005 CORRECT True
+   answer | 4
+   claim:s1 | diff(x + 4/x, x) = 1 - 4/x**2
+   claim:s3 | at(x + 4/x, x, 2) = 4
+##EV ayt-tur-006 CORRECT True
+   answer | 5
+   claim:s1 | diff(x**3 - 6*x**2 + 9*x + 1, x) = 3*x**2 - 12*x + 9
+   claim:s2 | 3*x**2 - 12*x + 9 = 3*(x - 1)*(x - 3)
+   claim:s4 | at(x**3 - 6*x**2 + 9*x + 1, x, 1) = 5
+##EV ayt-tur-007 CORRECT True
+   answer | -5
+   claim:s1 | 3 + 2*a + b = 0
+   claim:s2 | 1 + a + b = -3
+   claim:s3 | a = 1
+   claim:s4 | b = -5
+   claim:s5 | 1*(-5) = -5
+##EV ayt-tur-008 CORRECT True
+   answer | 18
+   claim:s2 | at(x**3 - 3*x, x, 3) = 18
+   claim:s3 | at(x**3 - 3*x, x, -1) = 2
+   claim:s4 | 2 < 18
+##EV ayt-tur-009 CORRECT True
+   answer | 4
+   claim:s2 | 2*sqrt(4) = 4
+##EV ayt-tur-010 CORRECT True
+   answer | 2*x - y - 1 = 0
+   claim:s1 | Limit(((1 + x)**2 - 1)/x, x, 0) = 2
+   claim:s2 | y - 1 = 2*(x - 1)
+   claim:s3 | 2*x - y - 1 = 0
+##EV ayt-tur-011 INCORRECT False
+   answer | 2
+   claim:s1 | diff(x**3 - 3*x, x) = 3*x**2 - 3
+   claim:s3 | at(x**3 - 3*x, x, -1) = 2
+##EV ayt-tur-012 INCORRECT False
+   answer | 2
+   claim:s1 | diff(x**2*exp(x), x) = (2*x + x**2)*exp(x)
+   claim:s2 | at((2*x + x**2)*exp(x), x, 0) = 2
+##EV ayt-tur-013 INCORRECT False
+   answer | y = x
+   claim:s1 | diff(x**2, x) = x
+   claim:s2 | at(x, x, 1) = 1
+   claim:s3 | y - 1 = 1*(x - 1)
+##EV ayt-tur-014 INCORRECT False
+   answer | 1/(x**2 + 1)
+   claim:s1 | diff(log(x**2 + 1), x) = 1/(x**2 + 1)
+##EV ayt-tur-015 INCORRECT False
+   answer | 4
+   claim:s1 | diff(x + 4/x, x) = 1 + 4/x**2
+   claim:s2 | x**2 = 4
+   claim:s3 | x = 2
+   claim:s4 | at(x + 4/x, x, 2) = 4
+##EV ayt-tur-016 INCORRECT False
+   answer | 0
+   claim:s1 | diff(x**2*exp(x), x) = 2*x*exp(x)
+   claim:s2 | at(2*x*exp(x), x, 0) = 0
+##EV tyt-den-001 CORRECT True
+   answer | {4}
+   claim:s1 | log((x - 1)*(x - 3)) = log(3)
+   claim:s2 | (x - 1)*(x - 3) = 3
+   claim:s3 | x**2 - 4*x = 0
+   claim:s4 | x in {0, 4}
+   claim:s5 | x > 3
+   claim:s6 | x = 4
+##EV tyt-den-002 CORRECT True
+   answer | {5}
+   claim:s1 | x + 4 = (x - 2)**2
+   claim:s2 | x**2 - 5*x = 0
+   claim:s3 | x in {0, 5}
+   claim:s4 | x - 2 >= 0
+   claim:s5 | x = 5
+##EV tyt-den-003 CORRECT True
+   answer | {}
+   claim:s1 | x != 3
+   claim:s2 | x = 3 + 2*(x - 3)
+   claim:s3 | x = 3
+##EV tyt-den-004 CORRECT True
+   answer | {-1, 4}
+   claim:s1 | 2*x - 3 = 5
+   claim:s2 | x = 4
+   claim:s3 | 2*x - 3 = -5
+   claim:s4 | x = -1
+   claim:s5 | x in {-1, 4}
+##EV tyt-den-005 CORRECT True
+   answer | 3
+   claim:s1 | (m + 1)**2 - 16 = 0
+   claim:s2 | m + 1 = 4
+   claim:s3 | m = 3
+##EV tyt-den-006 CORRECT True
+   answer | {4}
+   claim:s1 | x = 4
+   claim:s2 | log(4 - 1) + log(4 - 3) = log(3)
+##EV tyt-den-007 CORRECT True
+   answer | {5}
+   claim:s2 | u = u**2 - 6
+   claim:s3 | u = 3
+   claim:s4 | x = 5
+##EV tyt-den-008 CORRECT True
+   answer | {-1, 4}
+   claim:s1 | Abs(x - 3/2) = 5/2
+   claim:s3 | x in {3/2 + 5/2, 3/2 - 5/2}
+   claim:s4 | x in {4, -1}
+##EV tyt-den-009 INCORRECT False
+   answer | {0, 4}
+   claim:s1 | log((x - 1)*(x - 3)) = log(3)
+   claim:s2 | (x - 1)*(x - 3) = 3
+   claim:s3 | x**2 - 4*x = 0
+   claim:s4 | x in {0, 4}
+##EV tyt-den-010 INCORRECT False
+   answer | {0, 5}
+   claim:s1 | x + 4 = (x - 2)**2
+   claim:s2 | x**2 - 5*x = 0
+   claim:s3 | x in {0, 5}
+##EV tyt-den-011 INCORRECT False
+   answer | {3}
+   claim:s1 | x = 3 + 2*(x - 3)
+   claim:s2 | x = 3
+##EV tyt-den-012 INCORRECT False
+   answer | 15
+   claim:s1 | (m + 1)**2 - 16 = 0
+   claim:s2 | m + 1 = 16
+   claim:s3 | m = 15
+##EV tyt-den-013 INCORRECT False
+   answer | {5}
+   claim:s1 | x + 4 = (x - 2)**2
+   claim:s2 | x**2 - 5*x + 8 = 0
+   claim:s3 | x = 5
+   claim:s4 | x - 2 >= 0
+##EV tyt-den-014 INCORRECT False
+   answer | {-1, 4}
+   claim:s1 | Abs(-5) = -5
+   claim:s2 | 2*x - 3 = 5
+   claim:s3 | x = 4
+   claim:s4 | 2*x - 3 = -5
+   claim:s5 | x = -1
+   claim:s6 | x in {-1, 4}
+##EV tyt-esf-001 CORRECT True
+   answer | (-2, 7)
+   claim:s1 | x**2 - 5*x - 14 = (x - 7)*(x + 2)
+##EV tyt-esf-002 CORRECT True
+   answer | (-oo, -2) U [1, oo)
+   claim:s1 | x != -2
+##EV tyt-esf-003 CORRECT True
+   answer | 3
+   claim:s1 | -2 < x - 3
+   claim:s2 | x - 3 < 2
+##EV tyt-esf-004 CORRECT True
+   answer | 9
+   claim:s1 | g(2) = 3
+   claim:s2 | f(3) = 9
+##EV tyt-esf-005 CORRECT True
+   answer | 8/3
+   claim:s1 | (2*x + 3)/(x - 1) = 5
+   claim:s2 | 2*x + 3 = 5*x - 5
+   claim:s3 | 3*x = 8
+   claim:s4 | x = 8/3
+##EV tyt-esf-006 CORRECT True
+   answer | -5
+   claim:s1 | 27 - 18 + 3*k + 6 = 0
+   claim:s2 | 3*k = -15
+   claim:s3 | k = -5
+##EV tyt-esf-007 CORRECT True
+   answer | 3
+   claim:s1 | 1 - 3 + 1 + 1 = 0
+   claim:s2 | x**5 - 3*x**3 + x + 1 = (x - 1)*(x**4 + x**3 - 2*x**2 - 2*x - 1)
+##EV tyt-esf-008 CORRECT True
+   answer | (-2, 7)
+   claim:s2 | 0**2 - 5*0 - 14 = -14
+   claim:s3 | -14 < 0
+   claim:s4 | 10**2 - 5*10 - 14 = 36
+##EV tyt-esf-009 CORRECT True
+   answer | 9
+   claim:s1 | f(g(x)) = 2*x**2 + 1
+   claim:s2 | 2*2**2 + 1 = 9
+##EV tyt-esf-010 CORRECT True
+   answer | -5
+   claim:s2 | -3 + 1 = -2
+   claim:s3 | -3*c = 6
+   claim:s4 | c = -2
+   claim:s5 | k = c - 3
+   claim:s6 | k = -5
+##EV tyt-esf-011 INCORRECT False
+   answer | (-oo, -2) U (7, oo)
+   claim:s1 | x**2 - 5*x - 14 = (x - 7)*(x + 2)
+##EV tyt-esf-012 INCORRECT False
+   answer | (-oo, -2] U [1, oo)
+##EV tyt-esf-013 INCORRECT False
+   answer | 2/3
+   claim:s1 | (2*x + 3)/(x - 1) = 5
+   claim:s2 | 2*x + 3 = 5*x - 5
+   claim:s3 | 3*x = 2
+   claim:s4 | x = 2/3
+##EV tyt-esf-014 INCORRECT False
+   answer | 5
+##EV tyt-esf-015 INCORRECT False
+   answer | 9
+   claim:s1 | g(2) = 5
+   claim:s2 | f(5) = 9
+##EV tyt-esf-016 INCORRECT False
+   answer | -5
+   claim:s1 | 3**3 = 24
+   claim:s2 | 2*3**2 = 15
+   claim:s3 | 24 - 15 + 6 = 15
+   claim:s4 | 15 + 3*k = 0
+   claim:s5 | k = -5
+##EV tyt-geo-001 CORRECT True
+   answer | 10
+   claim:s1 | 6**2 + 8**2 = 100
+   claim:s2 | sqrt(100) = 10
+##EV tyt-geo-002 CORRECT True
+   answer | 70
+   claim:s2 | (180 - 40)/2 = 70
+##EV tyt-geo-003 CORRECT True
+   answer | 13
+   claim:s1 | 12**2 + 5**2 = 169
+   claim:s2 | sqrt(169) = 13
+##EV tyt-geo-004 CORRECT True
+   answer | 8
+   claim:s2 | sqrt(10**2 - 6**2) = 8
+##EV tyt-geo-005 CORRECT True
+   answer | 24
+   claim:s1 | 6*8/2 = 24
+##EV tyt-geo-006 CORRECT True
+   answer | 70
+   claim:s1 | 180 - 50 - 60 = 70
+##EV tyt-geo-007 CORRECT True
+   answer | 10
+   claim:s2 | 2*5 = 10
+##EV tyt-geo-008 CORRECT True
+   answer | 70
+   claim:s2 | 180 - 40 = 140
+   claim:s3 | 140/2 = 70
+##EV tyt-geo-009 CORRECT True
+   answer | 13
+##EV tyt-geo-010 CORRECT True
+   answer | 8
+   claim:s2 | sqrt(16*6*6*4) = 48
+   claim:s3 | 2*48/12 = 8
+##EV tyt-geo-011 CORRECT True
+   answer | 24
+   claim:s2 | sqrt(12*6*4*2) = 24
+##EV tyt-geo-012 INCORRECT False
+   answer | 14
+   claim:s1 | 6 + 8 = 14
+##EV tyt-geo-013 INCORRECT False
+   answer | 40
+##EV tyt-geo-014 INCORRECT False
+   answer | 17
+   claim:s1 | 12 + 5 = 17
+##EV tyt-geo-015 INCORRECT False
+   answer | 6
+   claim:s2 | sqrt(10**2 - 8**2) = 6
+##EV tyt-geo-016 INCORRECT False
+   answer | 48
+   claim:s1 | 6*8 = 48
+##EV tyt-geo-017 INCORRECT False
+   answer | 60
+   claim:s1 | 180 - 50 - 60 = 60
+##EV tyt-geo-018 INCORRECT False
+   answer | 10
+   claim:s1 | 6**2 + 8**2 = 90
+   claim:s2 | sqrt(90) = 10
+##EV tyt-geo-019 INCORRECT False
+   answer | 24
+   claim:s1 | 6*8 = 24
+##EV tyt-geo-020 INCORRECT False
+   answer | 70
+   claim:s1 | 50 + 60 = 120
+   claim:s2 | 180 - 120 = 70
+##EV tyt-kap-001 CORRECT True
+   answer | [3, oo)
+   claim:s1 | x - 3 >= 0
+##EV tyt-kap-002 CORRECT True
+   answer | Interval(3, oo)
+   claim:s2 | sqrt(3 - 3) = 0
+   claim:s3 | x >= 3
+##EV tyt-kap-003 INCORRECT False
+   answer | (3, oo)
+   claim:s1 | x - 3 > 0
+##EV tyt-kap-004 CORRECT True
+   answer | (-oo, -2) U (-2, 2) U (2, oo)
+   claim:s1 | x != -2
+   claim:s2 | x != 2
+##EV tyt-kap-005 INCORRECT False
+   answer | (-oo, -2) U (2, oo)
+   claim:s1 | x**2 - 4 > 0
+##EV tyt-kap-006 INCORRECT False
+   answer | (-oo, -2) U (-2, 2) U (2, oo)
+   claim:s1 | (-2)**2 - 4 = -8
+##EV tyt-kap-007 CORRECT True
+   answer | (1, oo)
+   claim:s1 | x - 1 > 0
+##EV tyt-kap-008 CORRECT True
+   answer | Interval.open(1, oo)
+   claim:s2 | x > 1
+##EV tyt-kap-009 INCORRECT False
+   answer | [1, oo)
+   claim:s1 | x - 1 >= 0
+##EV tyt-kap-010 CORRECT True
+   answer | (2*x + 1)/(x*(x + 1))
+   claim:s1 | 1/x + 1/(x + 1) = (2*x + 1)/(x*(x + 1))
+##EV tyt-kap-011 CORRECT True
+   answer | \frac{2x+1}{x^2+x}
+   claim:s1 | x*(x + 1) = x**2 + x
+##EV tyt-kap-012 INCORRECT False
+   answer | 2/(2*x + 1)
+   claim:s1 | 1/x + 1/(x + 1) = 2/(2*x + 1)
+##EV tyt-kap-013 CORRECT True
+   answer | 4*x
+   claim:s1 | (x + 1)**2 - (x - 1)**2 = 4*x
+##EV tyt-kap-014 INCORRECT False
+   answer | 2*x
+   claim:s1 | (x + 1)**2 - (x - 1)**2 = 2*x
+##EV tyt-kap-015 INCORRECT False
+   answer | 4*x
+   claim:s1 | (x + 1)**2 - (x - 1)**2 = 4*x
+   claim:s2 | x**2 + 2*x + 1 = x**2 - 2*x + 1
+##EV tyt-kap-016 CORRECT True
+   answer | 9
+   claim:s1 | y = 10 - x
+##EV tyt-kap-017 CORRECT True
+   answer | 9
+   claim:s1 | x >= 1
+   claim:s2 | x <= 9
+   claim:s3 | 9 - 1 + 1 = 9
+##EV tyt-kap-018 INCORRECT False
+   answer | 11
+   claim:s1 | y = 10 - x
+##EV tyt-kap-019 CORRECT True
+   answer | 3
+##EV tyt-kap-020 INCORRECT False
+   answer | 3
+   claim:s1 | y = 4
+##EV tyt-ola-001 CORRECT True
+   answer | 1/6
+   claim:s1 | 6*6 = 36
+   claim:s3 | 6/36 = 1/6
+##EV tyt-ola-002 CORRECT True
+   answer | 120
+   claim:s1 | factorial(5) = 120
+##EV tyt-ola-003 CORRECT True
+   answer | 20
+   claim:s1 | binomial(6, 3) = 20
+##EV tyt-ola-004 CORRECT True
+   answer | 60
+   claim:s1 | 5*4*3 = 60
+##EV tyt-ola-005 CORRECT True
+   answer | 3/10
+   claim:s1 | binomial(3, 2) = 3
+   claim:s2 | binomial(5, 2) = 10
+   claim:s3 | 3/10 = 3/10
+##EV tyt-ola-006 CORRECT True
+   answer | 1/2
+   claim:s1 | binomial(3, 2) + binomial(3, 3) = 4
+   claim:s2 | 4/8 = 1/2
+##EV tyt-ola-007 CORRECT True
+   answer | 1/6
+   claim:s2 | 1/6 = 1/6
+##EV tyt-ola-008 CORRECT True
+   answer | 120
+   claim:s2 | 5*4*3*2*1 = 120
+##EV tyt-ola-009 CORRECT True
+   answer | 20
+   claim:s1 | binomial(5, 2) + binomial(5, 3) = 20
+##EV tyt-ola-010 CORRECT True
+   answer | 60
+   claim:s1 | binomial(5, 3) = 10
+   claim:s2 | factorial(3) = 6
+   claim:s3 | 10*6 = 60
+##EV tyt-ola-011 CORRECT True
+   answer | 3/10
+   claim:s1 | (3/5)*(2/4) = 3/10
+##EV tyt-ola-012 INCORRECT False
+   answer | 1/12
+   claim:s2 | 3/36 = 1/12
+##EV tyt-ola-013 INCORRECT False
+   answer | 25
+   claim:s1 | 5*5 = 25
+##EV tyt-ola-014 INCORRECT False
+   answer | 120
+   claim:s1 | 6*5*4 = 120
+##EV tyt-ola-015 INCORRECT False
+   answer | 125
+   claim:s1 | 5**3 = 125
+##EV tyt-ola-016 INCORRECT False
+   answer | 9/25
+   claim:s1 | (3/5)*(3/5) = 9/25
+##EV tyt-ola-017 INCORRECT False
+   answer | 3/8
+   claim:s1 | binomial(3, 2)/8 = 3/8
+##EV tyt-ola-018 INCORRECT False
+   answer | 120
+   claim:s1 | factorial(4) = 120
+##EV tyt-ola-019 INCORRECT False
+   answer | 20
+   claim:s1 | 6*5*4 = 20
+##EV tyt-ola-020 INCORRECT False
+   answer | 1/6
+   claim:s1 | 6*6 = 36
+   claim:s3 | 5/36 = 1/6
+##EV tyt-prob-001 CORRECT True
+   answer | 16
+   claim:s1 | b = 30 - a
+   claim:s2 | 2*a + 4*(30 - a) = 88
+   claim:s3 | -2*a + 120 = 88
+   claim:s4 | a = 16
+##EV tyt-prob-002 CORRECT True
+   answer | 16
+   claim:s1 | a = 16
+   claim:s2 | b = 14
+   claim:s3 | 2*16 + 4*14 = 88
+##EV tyt-prob-003 CORRECT True
+   answer | 2
+   claim:s1 | 1/6 + 1/3 = 1/2
+   claim:s2 | t = 2
+##EV tyt-prob-004 CORRECT True
+   answer | 6
+   claim:s1 | 3*x + 5 = 5*x - 7
+   claim:s2 | 2*x = 12
+   claim:s3 | x = 6
+##EV tyt-prob-005 CORRECT True
+   answer | 40
+   claim:s1 | 4*o + 5 = 3*(o + 5)
+   claim:s2 | o = 10
+   claim:s3 | b = 40
+##EV tyt-prob-006 CORRECT True
+   answer | 7
+   claim:s1 | 240/80 = 3
+   claim:s2 | 240/60 = 4
+   claim:s3 | 3 + 4 = 7
+##EV tyt-prob-007 CORRECT True
+   answer | 300
+   claim:s1 | x*120/100 = 360
+   claim:s2 | x = 300
+##EV tyt-prob-008 CORRECT True
+   answer | 2
+   claim:s2 | 6/6 + 6/3 = 3
+   claim:s3 | 6/3 = 2
+##EV tyt-prob-009 CORRECT True
+   answer | 40
+   claim:s1 | b - o = 3*o
+   claim:s2 | b - o = 2*(o + 5)
+   claim:s3 | 3*o = 2*(o + 5)
+   claim:s4 | o = 10
+   claim:s5 | b = 40
+##EV tyt-prob-010 CORRECT True
+   answer | 7
+   claim:s1 | 2*80*60/(80 + 60) = 480/7
+   claim:s2 | 480/(480/7) = 7
+##EV tyt-prob-011 CORRECT True
+   answer | 300
+   claim:s2 | 360*5/6 = 300
+##EV tyt-prob-012 INCORRECT False
+   answer | 16
+   claim:s1 | b = 30 - a
+   claim:s2 | 2*a + 4*(30 - a) = 88
+   claim:s3 | -2*a + 120 = 88
+   claim:s4 | a = 16
+##EV tyt-prob-013 INCORRECT False
+   answer | 14
+   claim:s1 | b = 30 - a
+   claim:s2 | 2*a + 4*(30 - a) = 88
+   claim:s3 | -2*a + 120 = 88
+   claim:s4 | a = 14
+##EV tyt-prob-014 INCORRECT False
+   answer | 3
+   claim:s1 | t = 6 - 3
+   claim:s2 | t = 3
+##EV tyt-prob-015 INCORRECT False
+   answer | 1
+   claim:s1 | 3*x + 5 = 5*x - 7
+   claim:s2 | 2*x = 2
+   claim:s3 | x = 1
+##EV tyt-prob-016 INCORRECT False
+   answer | 30
+   claim:s1 | 4*o + 5 = 3*(o + 5)
+   claim:s2 | o = 10
+   claim:s3 | b = 3*10
+##EV tyt-prob-017 INCORRECT False
+   answer | 288
+   claim:s1 | x = 360*(1 - 20/100)
+   claim:s2 | x = 288
+##EV tyt-prob-018 CORRECT False
+   answer | 16
+   claim:s1 | a - b = 2
+   claim:s2 | 2*a = 32
+   claim:s3 | a = 16
+##EV tyt-prob-019 INCORRECT False
+   answer | 2
+   claim:s1 | 1/6 + 1/3 = 3/9
+   claim:s2 | t = 2
+##EV tyt-prob-020 INCORRECT False
+   answer | 7
+   claim:s1 | 240/80 = 4
+   claim:s2 | 240/60 = 3
+   claim:s3 | 4 + 3 = 7
+##EV tyt-prob-021 CORRECT True
+   answer | 6
+   claim:s1 | x = 6
+   claim:s2 | 3*6 + 5 = 23
+   claim:s3 | 5*6 - 7 = 23
+##EV tyt-say-001 CORRECT True
+   answer | 12
+   claim:s1 | 84 = 2**2 * 3 * 7
+   claim:s2 | 120 = 2**3 * 3 * 5
+   claim:s3 | gcd(84, 120) = 2**2 * 3
+##EV tyt-say-002 CORRECT True
+   answer | 9
+   claim:s3 | y = 7
+   claim:s4 | x = 2
+   claim:s5 | 2 + 7 = 9
+##EV tyt-say-003 CORRECT True
+   answer | 47
+   claim:s1 | 9*b - 9*a = 27
+   claim:s2 | b - a = 3
+   claim:s3 | b = 7
+   claim:s4 | a = 4
+   claim:s5 | 10*4 + 7 = 47
+##EV tyt-say-004 CORRECT True
+   answer | 28
+   claim:s1 | 3*n + 6 = 78
+   claim:s2 | n = 24
+   claim:s3 | n + 4 = 28
+##EV tyt-say-005 CORRECT True
+   answer | 8
+   claim:s1 | x**2 - 5*x - 14 = (x - 7)*(x + 2)
+   claim:s3 | 6 - (-1) + 1 = 8
+##EV tyt-say-006 CORRECT True
+   answer | 2
+   claim:s1 | Mod(5**6, 7) = 1
+   claim:s2 | Mod(100, 6) = 4
+   claim:s3 | Mod(5**4, 7) = 2
+##EV tyt-say-007 CORRECT True
+   answer | 12
+   claim:s1 | Mod(120, 84) = 36
+   claim:s2 | Mod(84, 36) = 12
+   claim:s3 | Mod(36, 12) = 0
+##EV tyt-say-008 CORRECT True
+   answer | 47
+   claim:s1 | a = 4
+   claim:s2 | b = 7
+   claim:s3 | 4 + 7 = 11
+   claim:s4 | 74 - 47 = 27
+##EV tyt-say-009 CORRECT True
+   answer | 28
+   claim:s1 | 78/3 = 26
+   claim:s2 | n + 2 = 26
+   claim:s3 | n + 4 = 28
+##EV tyt-say-010 INCORRECT False
+   answer | 24
+   claim:s1 | 84 = 2**2 * 3 * 7
+   claim:s2 | 120 = 2**3 * 3 * 5
+   claim:s3 | gcd(84, 120) = 2**3 * 3
+##EV tyt-say-011 INCORRECT False
+   answer | 74
+   claim:s1 | a + b = 11
+   claim:s2 | a - b = 3
+   claim:s3 | a = 7
+   claim:s4 | 10*a + b = 74
+##EV tyt-say-012 INCORRECT False
+   answer | 30
+   claim:s1 | 3*n = 78
+   claim:s2 | n = 26
+   claim:s3 | n + 4 = 30
+##EV tyt-say-013 INCORRECT False
+   answer | 10
+   claim:s1 | x**2 - 5*x - 14 = (x - 7)*(x + 2)
+   claim:s3 | 7 - (-2) + 1 = 10
+##EV tyt-say-014 INCORRECT False
+   answer | 2
+   claim:s1 | Mod(5**6, 7) = 1
+   claim:s2 | Mod(100, 6) = 2
+   claim:s3 | Mod(5**2, 7) = 2
+##EV tyt-say-015 INCORRECT False
+   answer | 9
+   claim:s1 | Mod(y, 3) = 2
+   claim:s2 | y = 7
+   claim:s3 | 41 - 5*7 = 6
+   claim:s4 | x = 2
+   claim:s5 | 2 + 7 = 9
+##EV tyt-say-016 INCORRECT False
+   answer | 28
+   claim:s1 | 3*n + 6 = 78
+   claim:s2 | 3*n = 74
+   claim:s3 | n = 24
+   claim:s4 | n + 4 = 28
+##EV uni-001 CORRECT True
+   answer | -4
+   claim:s1 | Integral(log(x)/sqrt(x), x) = 2*sqrt(x)*log(x) - 4*sqrt(x)
+   claim:s2 | Limit(2*sqrt(x)*log(x), x, 0, '+') = 0
+   claim:s3 | (2*1*0 - 4*1) - 0 = -4
+##EV uni-002 CORRECT True
+   answer | -2
+   claim:s1 | 1*4 - 2*3 = -2
+##EV uni-003 CORRECT True
+   answer | E
+   claim:s1 | Limit(n*log(1 + 1/n), n, oo) = 1
+   claim:s2 | exp(1) = E
+##EV uni-004 CORRECT True
+   answer | 1
+   claim:s1 | 1/(k*(k + 1)) = 1/k - 1/(k + 1)
+   claim:s2 | Sum(1/k - 1/(k + 1), (k, 1, n)) = 1 - 1/(n + 1)
+   claim:s3 | Limit(1 - 1/(n + 1), n, oo) = 1
+##EV uni-006 CORRECT True
+   answer | -4
+   claim:s2 | Integral(log(x), (x, 0, 1)) = -1
+   claim:s3 | 4*(-1) = -4
+##EV uni-007 CORRECT True
+   answer | -2
+   claim:s2 | ((5 + sqrt(33))/2)*((5 - sqrt(33))/2) = -2
+##EV uni-008 CORRECT True
+   answer | 1
+   claim:s1 | Sum(1/(k*(k + 1)), (k, 1, 4)) = 4/5
+   claim:s3 | Limit(n/(n + 1), n, oo) = 1
+##EV uni-009 CORRECT True
+   answer | exp(1)
+   claim:s2 | Sum(1/factorial(k), (k, 0, oo)) = E
+##EV uni-010 INCORRECT False
+   answer | -2
+   claim:s1 | Integral(log(x)/sqrt(x), x) = 2*sqrt(x)*log(x) - 2*sqrt(x)
+   claim:s2 | (0 - 2) - 0 = -2
+##EV uni-011 INCORRECT False
+   answer | 2
+   claim:s1 | 1*4 - 2*3 = 2
+##EV uni-012 INCORRECT False
+   answer | 1
+##EV uni-013 INCORRECT False
+   answer | 1/2
+   claim:s1 | 1/(k*(k + 1)) = 1/k - 1/(k + 1)
+   claim:s2 | Sum(1/k - 1/(k + 1), (k, 1, oo)) = 1/2
+##EV uni-014 INCORRECT False
+   answer | 1
+   claim:s1 | det(Matrix([[2 - t, 1], [1, 2 - t]])) = (t - 1)*(t - 3)
+##EV uni-015 INCORRECT False
+   answer | -2
+   claim:s1 | 1*4 = 5
+   claim:s2 | 2*3 = 7
+   claim:s3 | 5 - 7 = -2
+##EV uni-016 INCORRECT False
+   answer | 1
+   claim:s1 | 1/(k*(k + 1)) = 1/k + 1/(k + 1)
+   claim:s2 | Limit(1 - 1/(n + 1), n, oo) = 1
+##EV uni-017 INCORRECT False
+   answer | E
+   claim:s1 | Limit(n*log(1 + 1/n), n, oo) = 0
+##EV uni-018 CORRECT True
+   answer | -4
+   claim:s2 | at(-1/s**2, s, 1/2) = -4
+##EV uni-019 CORRECT True
+   answer | 3
+   claim:s2 | trace(Matrix([[2, 1], [1, 2]])) = 4
+   claim:s3 | 4 - 3 = 1
+##EV uni-020 INCORRECT False
+   answer | -1
+   claim:s1 | 1*4 - 2*3 = -2
+   claim:s2 | -2/2 = -1
+##EV uni-la-001 CORRECT True
+   answer | Matrix([[-2, 1], [3/2, -1/2]])
+   claim:s1 | det(Matrix([[1,2],[3,4]])) = -2
+   claim:s2 | Matrix([[4, -2], [-3, 1]])/(-2) = Matrix([[-2, 1], [3/2, -1/2]])
+##EV uni-la-002 CORRECT True
+   answer | {1, 3}
+   claim:s1 | (2 - t)**2 - 1 = (t - 1)*(t - 3)
+   claim:s2 | t in {1, 3}
+##EV uni-la-003 CORRECT True
+   answer | (1, 1)
+   claim:s2 | Matrix([[2,1],[1,2]])*Matrix([1, 1]) = 3*Matrix([1, 1])
+##EV uni-la-004 CORRECT True
+   answer | (16, 14)
+   claim:s1 | det(Matrix([[1,1],[2,4]])) = 2
+   claim:s2 | Matrix([[4, -1], [-2, 1]])/2*Matrix([30, 88]) = Matrix([16, 14])
+##EV uni-la-005 CORRECT True
+   answer | Matrix([[1, 3], [0, 1]])
+   claim:s1 | Matrix([[1,1],[0,1]])**2 = Matrix([[1,2],[0,1]])
+   claim:s2 | Matrix([[1,2],[0,1]])*Matrix([[1,1],[0,1]]) = Matrix([[1,3],[0,1]])
+##EV uni-la-006 CORRECT True
+   answer | Matrix([[-2, 1], [1.5, -0.5]])
+   claim:s2 | Matrix([[1,2],[3,4]])*Matrix([[-2, 1], [1.5, -0.5]]) = Matrix([[1,0],[0,1]])
+##EV uni-la-007 CORRECT True
+   answer | {3, 1}
+   claim:s1 | trace(Matrix([[2,1],[1,2]])) = 4
+   claim:s2 | det(Matrix([[2,1],[1,2]])) = 3
+##EV uni-la-008 CORRECT True
+   answer | (-2, -2)
+   claim:s2 | Matrix([[2,1],[1,2]])*Matrix([-2, -2]) = 3*Matrix([-2, -2])
+##EV uni-la-009 CORRECT True
+   answer | (16, 14)
+   claim:s1 | det(Matrix([[30,1],[88,4]]))/det(Matrix([[1,1],[2,4]])) = 16
+   claim:s2 | det(Matrix([[1,30],[2,88]]))/det(Matrix([[1,1],[2,4]])) = 14
+##EV uni-la-010 CORRECT True
+   answer | Matrix([[1, 3], [0, 1]])
+   claim:s2 | Matrix([[0,1],[0,0]])**2 = Matrix([[0,0],[0,0]])
+   claim:s3 | eye(2) + 3*Matrix([[0,1],[0,0]]) = Matrix([[1,3],[0,1]])
+##EV uni-la-011 CORRECT True
+   answer | 0
+   claim:s1 | 2*(3*1 - 2*1) = 2
+   claim:s2 | 1*(1*1 - 3*1) = -2
+   claim:s3 | 2 - 0 + (-2) = 0
+##EV uni-la-012 INCORRECT False
+   answer | Matrix([[4, -2], [-3, 1]])
+   claim:s1 | Matrix([[4, -2], [-3, 1]]) = Matrix([[4, -2], [-3, 1]])
+##EV uni-la-013 INCORRECT False
+   answer | {1, 2}
+   claim:s1 | (2 - t)**2 - 1 = (t - 1)*(t - 2)
+##EV uni-la-014 INCORRECT False
+   answer | (1, -1)
+##EV uni-la-015 INCORRECT False
+   answer | (14, 16)
+   claim:s1 | det(Matrix([[1,1],[2,4]])) = 2
+##EV uni-la-016 INCORRECT False
+   answer | Matrix([[1, 2], [0, 1]])
+   claim:s1 | Matrix([[1,1],[0,1]])**2 = Matrix([[1,2],[0,1]])
+##EV uni-la-017 INCORRECT False
+   answer | 4
+   claim:s1 | 2*(3*1 - 2*1) = 2
+   claim:s2 | 1*(1*1 - 3*1) = -2
+   claim:s3 | 2 - (-2) = 4
+##EV uni-la-018 INCORRECT False
+   answer | (16, 14)
+   claim:s1 | det(Matrix([[1,1],[2,4]])) = 3
+   claim:s2 | (16, 14)
+##EV uni-la-019 INCORRECT False
+   answer | 0
+   claim:s1 | 2*(3*1 - 2*1) = 4
+   claim:s2 | 1*(1*1 - 3*1) = -4
+   claim:s3 | 4 - 4 = 0
+##EV uni-la-020 INCORRECT False
+   answer | Matrix([[1, 3], [0, 1]])
+   claim:s1 | Matrix([[1,1],[0,1]])**2 = Matrix([[1,2],[0,2]])
+   claim:s2 | Matrix([[1, 3], [0, 1]])
+##K4 ayt-ana-001 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x
+   claim:s1 | (8-2)/(4-1) = 2
+   claim:s2 | y - 2 = 2*(x - 1)
+   claim:s3 | y = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | at(2*x, x, 4) = 8
+   claim:s6 | y = 2*x
+##K4 ayt-ana-002 CORRECT ['right', 'equal as value']
+   answer | 5
+   claim:s1 | (4-1)**2+(6-2)**2 = 25
+   claim:a1 | 25 >= 0
+   claim:s2 | sqrt(25) = 5
+##K4 ayt-ana-003 CORRECT ['right', 'equal as equation']
+   answer | (x-2)**2+(y+1)**2=9
+   claim:s1 | (x-2)**2+(y-(-1))**2=3**2
+   claim:s2 | 3**2=9
+   claim:s3 | y-(-1)=y+1
+   claim:s4 | (x-2)**2+(y+1)**2=9
+   claim:s5 | (x-2)**2+(y+1)**2=9
+##K4 ayt-ana-004 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | 3*3+4*4-5 = 20
+   claim:s2 | sqrt(3**2+4**2) = 5
+   claim:s3 | 5 != 0
+   claim:s4 | Abs(20)/5 = 4
+   claim:s5 | 4 = 4
+##K4 ayt-ana-005 CORRECT ['right', 'equal as value']
+   answer | 6
+   claim:s1 | sqrt((4-0)**2+(0-0)**2) = 4
+   claim:s2 | sqrt((0-0)**2+(3-0)**2) = 3
+   claim:s3 | (4-0)*(0-0)+(0-0)*(3-0) = 0
+   claim:s4 | 4*3/2 = 6
+   claim:s5 | 6 = 6
+##K4 ayt-ana-006 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x
+   claim:s1 | (8-2)/(4-1) = 2
+   claim:s2 | y - 2 = 2*(x - 1)
+   claim:s3 | y = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | at(2*x, x, 4) = 8
+   claim:s6 | y = 2*x
+##K4 ayt-ana-007 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x
+   claim:s1 | (8-2)/(4-1) = 2
+   claim:s2 | y - 2 = 2*(x - 1)
+   claim:s3 | y = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | at(2*x, x, 4) = 8
+   claim:s6 | y = 2*x
+##K4 ayt-ana-008 CORRECT ['right', 'equal as value']
+   answer | 5
+   claim:s1 | (4-1)**2+(6-2)**2 = 25
+   claim:a1 | 25 >= 0
+   claim:s2 | sqrt(25) = 5
+##K4 ayt-ana-009 CORRECT ['right', 'equal as equation']
+   answer | (x-2)**2+(y+1)**2=9
+   claim:s1 | (x-2)**2+(y-(-1))**2=3**2
+   claim:s2 | 3**2=9
+   claim:s3 | y-(-1)=y+1
+   claim:s4 | (x-2)**2+(y+1)**2=9
+   claim:s5 | (x-2)**2+(y+1)**2=9
+##K4 ayt-ana-010 CORRECT ['right', 'equal as value']
+   answer | 6
+   claim:s1 | sqrt((4-0)**2+(0-0)**2) = 4
+   claim:s2 | sqrt((0-0)**2+(3-0)**2) = 3
+   claim:s3 | (4-0)*(0-0)+(0-0)*(3-0) = 0
+   claim:s4 | 4*3/2 = 6
+   claim:s5 | 6 = 6
+##K4 ayt-ana-011 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x
+   claim:s1 | (8-2)/(4-1) = 2
+   claim:s2 | y - 2 = 2*(x - 1)
+   claim:s3 | y = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | at(2*x, x, 4) = 8
+   claim:s6 | y = 2*x
+##K4 ayt-ana-012 CORRECT ['right', 'equal as value']
+   answer | 5
+   claim:s1 | (4-1)**2+(6-2)**2 = 25
+   claim:a1 | 25 >= 0
+   claim:s2 | sqrt(25) = 5
+##K4 ayt-ana-013 CORRECT ['right', 'equal as equation']
+   answer | (x-2)**2+(y+1)**2=9
+   claim:s1 | (x-2)**2+(y-(-1))**2=3**2
+   claim:s2 | 3**2=9
+   claim:s3 | y-(-1)=y+1
+   claim:s4 | (x-2)**2+(y+1)**2=9
+   claim:s5 | (x-2)**2+(y+1)**2=9
+##K4 ayt-ana-014 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | 3*3+4*4-5 = 20
+   claim:s2 | sqrt(3**2+4**2) = 5
+   claim:s3 | 5 != 0
+   claim:s4 | Abs(20)/5 = 4
+   claim:s5 | 4 = 4
+##K4 ayt-ana-015 CORRECT ['right', 'equal as value']
+   answer | 6
+   claim:s1 | sqrt((4-0)**2+(0-0)**2) = 4
+   claim:s2 | sqrt((0-0)**2+(3-0)**2) = 3
+   claim:s3 | (4-0)*(0-0)+(0-0)*(3-0) = 0
+   claim:s4 | 4*3/2 = 6
+   claim:s5 | 6 = 6
+##K4 ayt-ana-016 CORRECT ['right', 'equal as equation']
+   answer | (x-2)**2+(y+1)**2=9
+   claim:s1 | (x-2)**2+(y-(-1))**2=3**2
+   claim:s2 | 3**2=9
+   claim:s3 | y-(-1)=y+1
+   claim:s4 | (x-2)**2+(y+1)**2=9
+   claim:s5 | (x-2)**2+(y+1)**2=9
+##K4 ayt-ana-017 CORRECT ['right', 'equal as value']
+   answer | 5
+   claim:s1 | (4-1)**2+(6-2)**2 = 25
+   claim:a1 | 25 >= 0
+   claim:s2 | sqrt(25) = 5
+##K4 ayt-ana-018 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | 3*3+4*4-5 = 20
+   claim:s2 | sqrt(3**2+4**2) = 5
+   claim:s3 | 5 != 0
+   claim:s4 | Abs(20)/5 = 4
+   claim:s5 | 4 = 4
+##K4 ayt-ana-019 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x
+   claim:s1 | (8-2)/(4-1) = 2
+   claim:s2 | y - 2 = 2*(x - 1)
+   claim:s3 | y = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | at(2*x, x, 4) = 8
+   claim:s6 | y = 2*x
+##K4 ayt-ana-020 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | 3*3+4*4-5 = 20
+   claim:s2 | sqrt(3**2+4**2) = 5
+   claim:s3 | 5 != 0
+   claim:s4 | Abs(20)/5 = 4
+   claim:s5 | 4 = 4
+##K4 ayt-ana-021 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x
+   claim:s1 | (8-2)/(4-1) = 2
+   claim:s2 | y - 2 = 2*(x - 1)
+   claim:s3 | y = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | at(2*x, x, 4) = 8
+   claim:s6 | y = 2*x
+##K4 ayt-ana-022 CORRECT ['right', 'equal as value']
+   answer | 6
+   claim:s1 | sqrt((4-0)**2+(0-0)**2) = 4
+   claim:s2 | sqrt((0-0)**2+(3-0)**2) = 3
+   claim:s3 | (4-0)*(0-0)+(0-0)*(3-0) = 0
+   claim:s4 | 4*3/2 = 6
+   claim:s5 | 6 = 6
+##K4 ayt-diz-001 CORRECT ['right', 'equal as value']
+   answer | 43
+   claim:s2 | n = 6
+   claim:s3 | 3+2*1 = 5
+   claim:s4 | 5+2*3 = 11
+   claim:s5 | 11+2*5 = 21
+   claim:s6 | 21+2*11 = 43
+   claim:s7 | k = 43
+   claim:s8 | k = 43
+##K4 ayt-diz-002 CORRECT ['right', 'equal as value']
+   answer | 62
+   claim:s1 | n = 20
+   claim:s2 | k = 5 + (n - 1)*3
+   claim:s3 | k = 5 + (20 - 1)*3
+   claim:s4 | 5 + (20 - 1)*3 = 62
+   claim:s5 | k = 62
+##K4 ayt-diz-003 CORRECT ['right', 'equal as expression']
+   answer | 3*2**(n-1)
+   claim:s1 | n >= 1
+   claim:s2 | k = 3*2**(n-1)
+   claim:s3 | at(3*2**(n-1), n, 1) = 3
+   claim:s4 | (3*2**n)/(3*2**(n-1)) = 2
+   claim:s5 | k = 3*2**(n-1)
+##K4 ayt-diz-004 CORRECT ['right', 'equal as expression']
+   answer | (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)
+   claim:s1 | 5 > 0
+   claim:s2 | sqrt(5) > 0
+   claim:s3 | 2 != 0
+   claim:s4 | n >= 1
+   claim:s5 | (1+sqrt(5))/2 != 0
+   claim:s6 | (1-sqrt(5))/2 != 0
+   claim:s7 | (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5) - (((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5) - (((1+sqrt(5))/2)**(n-2) - ((1-sqrt(5))/2)**(n-2))/sqrt(5) = 0
+   claim:s8 | at((((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5), n, 1) = 1
+   claim:s9 | at((((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5), n, 2) = 1
+   claim:s10 | at((((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5), n, 1) = 0
+   claim:s11 | at(2**(n-1), n, 2) = 2
+   claim:s12 | at((((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5), n, 1) = 1/sqrt(5)
+   claim:s13 | at(((1+sqrt(5))/2)**n, n, 1) = (1+sqrt(5))/2
+   claim:s15 | k = (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)
+##K4 ayt-diz-005 CORRECT ['right', 'equal as value']
+   answer | 385
+   claim:s1 | n>0
+   claim:s2 | 6!=0
+   claim:s3 | n=10
+   claim:s4 | Sum(k**2,(k,1,n))=n*(n+1)*(2*n+1)/6
+   claim:s5 | at(n*(n+1)*(2*n+1)/6,n,10)=385
+   claim:s6 | 1**2+2**2+3**2+4**2+5**2+6**2+7**2+8**2+9**2+10**2=385
+   claim:s7 | Sum(k**2,(k,1,10))=385
+##K4 ayt-diz-006 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s2 | 2**k != 0
+   claim:s3 | Sum((1/2)**k, (k, 1, n)) = 1 - (1/2)**n
+   claim:s4 | Abs(1/2) < 1
+   claim:s5 | Limit(1 - (1/2)**n, n, oo) = 1
+   claim:s6 | (1/2)/(1 - 1/2) = 1
+   claim:s7 | Sum((1/2)**k, (k, 1, oo)) = 1
+##K4 ayt-diz-007 CORRECT ['right', 'equal as value']
+   answer | 43
+   claim:s2 | n = 6
+   claim:s3 | 3+2*1 = 5
+   claim:s4 | 5+2*3 = 11
+   claim:s5 | 11+2*5 = 21
+   claim:s6 | 21+2*11 = 43
+   claim:s7 | k = 43
+   claim:s8 | k = 43
+##K4 ayt-diz-008 CORRECT ['right', 'equal as value']
+   answer | 62
+   claim:s1 | n = 20
+   claim:s2 | k = 5 + (n - 1)*3
+   claim:s3 | k = 5 + (20 - 1)*3
+   claim:s4 | 5 + (20 - 1)*3 = 62
+   claim:s5 | k = 62
+##K4 ayt-diz-009 CORRECT ['right', 'equal as expression']
+   answer | 3*2**(n-1)
+   claim:s1 | n >= 1
+   claim:s2 | k = 3*2**(n-1)
+   claim:s3 | at(3*2**(n-1), n, 1) = 3
+   claim:s4 | (3*2**n)/(3*2**(n-1)) = 2
+   claim:s5 | k = 3*2**(n-1)
+##K4 ayt-diz-010 CORRECT ['right', 'equal as value']
+   answer | 385
+   claim:s1 | n>0
+   claim:s2 | 6!=0
+   claim:s3 | n=10
+   claim:s4 | Sum(k**2,(k,1,n))=n*(n+1)*(2*n+1)/6
+   claim:s5 | at(n*(n+1)*(2*n+1)/6,n,10)=385
+   claim:s6 | 1**2+2**2+3**2+4**2+5**2+6**2+7**2+8**2+9**2+10**2=385
+   claim:s7 | Sum(k**2,(k,1,10))=385
+##K4 ayt-diz-011 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s2 | 2**k != 0
+   claim:s3 | Sum((1/2)**k, (k, 1, n)) = 1 - (1/2)**n
+   claim:s4 | Abs(1/2) < 1
+   claim:s5 | Limit(1 - (1/2)**n, n, oo) = 1
+   claim:s6 | (1/2)/(1 - 1/2) = 1
+   claim:s7 | Sum((1/2)**k, (k, 1, oo)) = 1
+##K4 ayt-diz-012 CORRECT ['right', 'equal as value']
+   answer | 43
+   claim:s2 | n = 6
+   claim:s3 | 3+2*1 = 5
+   claim:s4 | 5+2*3 = 11
+   claim:s5 | 11+2*5 = 21
+   claim:s6 | 21+2*11 = 43
+   claim:s7 | k = 43
+   claim:s8 | k = 43
+##K4 ayt-diz-013 CORRECT ['right', 'equal as value']
+   answer | 62
+   claim:s1 | n = 20
+   claim:s2 | k = 5 + (n - 1)*3
+   claim:s3 | k = 5 + (20 - 1)*3
+   claim:s4 | 5 + (20 - 1)*3 = 62
+   claim:s5 | k = 62
+##K4 ayt-diz-014 CORRECT ['right', 'equal as expression']
+   answer | 3*2**(n-1)
+   claim:s1 | n >= 1
+   claim:s2 | k = 3*2**(n-1)
+   claim:s3 | at(3*2**(n-1), n, 1) = 3
+   claim:s4 | (3*2**n)/(3*2**(n-1)) = 2
+   claim:s5 | k = 3*2**(n-1)
+##K4 ayt-diz-015 CORRECT ['right', 'equal as expression']
+   answer | (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)
+   claim:s1 | 5 > 0
+   claim:s2 | sqrt(5) > 0
+   claim:s3 | 2 != 0
+   claim:s4 | n >= 1
+   claim:s5 | (1+sqrt(5))/2 != 0
+   claim:s6 | (1-sqrt(5))/2 != 0
+   claim:s7 | (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5) - (((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5) - (((1+sqrt(5))/2)**(n-2) - ((1-sqrt(5))/2)**(n-2))/sqrt(5) = 0
+   claim:s8 | at((((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5), n, 1) = 1
+   claim:s9 | at((((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5), n, 2) = 1
+   claim:s10 | at((((1+sqrt(5))/2)**(n-1) - ((1-sqrt(5))/2)**(n-1))/sqrt(5), n, 1) = 0
+   claim:s11 | at(2**(n-1), n, 2) = 2
+   claim:s12 | at((((1+sqrt(5))/2)**n + ((1-sqrt(5))/2)**n)/sqrt(5), n, 1) = 1/sqrt(5)
+   claim:s13 | at(((1+sqrt(5))/2)**n, n, 1) = (1+sqrt(5))/2
+   claim:s15 | k = (((1+sqrt(5))/2)**n - ((1-sqrt(5))/2)**n)/sqrt(5)
+##K4 ayt-diz-016 CORRECT ['right', 'equal as value']
+   answer | 385
+   claim:s1 | n>0
+   claim:s2 | 6!=0
+   claim:s3 | n=10
+   claim:s4 | Sum(k**2,(k,1,n))=n*(n+1)*(2*n+1)/6
+   claim:s5 | at(n*(n+1)*(2*n+1)/6,n,10)=385
+   claim:s6 | 1**2+2**2+3**2+4**2+5**2+6**2+7**2+8**2+9**2+10**2=385
+   claim:s7 | Sum(k**2,(k,1,10))=385
+##K4 ayt-diz-017 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s2 | 2**k != 0
+   claim:s3 | Sum((1/2)**k, (k, 1, n)) = 1 - (1/2)**n
+   claim:s4 | Abs(1/2) < 1
+   claim:s5 | Limit(1 - (1/2)**n, n, oo) = 1
+   claim:s6 | (1/2)/(1 - 1/2) = 1
+   claim:s7 | Sum((1/2)**k, (k, 1, oo)) = 1
+##K4 ayt-diz-018 CORRECT ['right', 'equal as value']
+   answer | 62
+   claim:s1 | n = 20
+   claim:s2 | k = 5 + (n - 1)*3
+   claim:s3 | k = 5 + (20 - 1)*3
+   claim:s4 | 5 + (20 - 1)*3 = 62
+   claim:s5 | k = 62
+##K4 ayt-diz-019 CORRECT ['right', 'equal as value']
+   answer | 385
+   claim:s1 | n>0
+   claim:s2 | 6!=0
+   claim:s3 | n=10
+   claim:s4 | Sum(k**2,(k,1,n))=n*(n+1)*(2*n+1)/6
+   claim:s5 | at(n*(n+1)*(2*n+1)/6,n,10)=385
+   claim:s6 | 1**2+2**2+3**2+4**2+5**2+6**2+7**2+8**2+9**2+10**2=385
+   claim:s7 | Sum(k**2,(k,1,10))=385
+##K4 ayt-diz-020 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s2 | 2**k != 0
+   claim:s3 | Sum((1/2)**k, (k, 1, n)) = 1 - (1/2)**n
+   claim:s4 | Abs(1/2) < 1
+   claim:s5 | Limit(1 - (1/2)**n, n, oo) = 1
+   claim:s6 | (1/2)/(1 - 1/2) = 1
+   claim:s7 | Sum((1/2)**k, (k, 1, oo)) = 1
+##K4 ayt-int-001 CORRECT ['right', 'equal as expression']
+   answer | x*log(x) - x
+   claim:a1 | x > 0
+   claim:c1 | Integral(log(x), x) = x*log(x) - x
+   claim:c2 | diff(x*log(x) - x, x) = log(x)
+   claim:f1 | Integral(log(x), x) = x*log(x) - x
+##K4 ayt-int-002 CORRECT ['right', 'equal as value']
+   answer | 23
+   claim:c1 | x <= -2
+   claim:e1a | Abs(x-1) = 1-x
+   claim:e1b | Abs(x+2) = -x-2
+   claim:e1c | Abs(x-1)+Abs(x+2) = -2*x-1
+   claim:comp1 | Integral(-2*x-1,(x,-3,-2)) = 4
+   claim:e1d | Integral(Abs(x-1)+Abs(x+2),(x,-3,-2)) = 4
+   claim:c2a | x >= -2
+   claim:c2b | x <= 1
+   claim:e2a | Abs(x-1) = 1-x
+   claim:e2b | Abs(x+2) = x+2
+   claim:e2c | Abs(x-1)+Abs(x+2) = 3
+   claim:comp2 | Integral(3,(x,-2,1)) = 9
+   claim:e2d | Integral(Abs(x-1)+Abs(x+2),(x,-2,1)) = 9
+   claim:c3 | x >= 1
+   claim:e3a | Abs(x-1) = x-1
+   claim:e3b | Abs(x+2) = x+2
+   claim:e3c | Abs(x-1)+Abs(x+2) = 2*x+1
+   claim:comp3 | Integral(2*x+1,(x,1,3)) = 10
+   claim:e3d | Integral(Abs(x-1)+Abs(x+2),(x,1,3)) = 10
+   claim:etot | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 4+9+10
+   claim:compTot | 4+9+10 = 23
+   claim:concl | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 23
+##K4 ayt-int-003 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | Integral(x*exp(x), x) = (x-1)*exp(x)
+   claim:s2 | at((x-1)*exp(x), x, 1) = 0
+   claim:s3 | at((x-1)*exp(x), x, 0) = -1
+   claim:s4 | 0 - (-1) = 1
+   claim:s5 | Integral(x*exp(x), (x, 0, 1)) = 1
+##K4 ayt-int-004 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:a1 | pi > 0
+   claim:c1 | diff(-cos(x), x) = sin(x)
+   claim:c2 | Integral(sin(x), x) = -cos(x)
+   claim:c3 | at(-cos(x), x, pi) = 1
+   claim:c4 | at(-cos(x), x, 0) = -1
+   claim:c5 | Integral(sin(x), (x, 0, pi)) = 1-(-1)
+   claim:c6 | 1-(-1) = 2
+   claim:s_conc | Integral(sin(x), (x, 0, pi)) = 2
+##K4 ayt-int-005 CORRECT ['right', 'equal as expression']
+   answer | x*log(x) - x
+   claim:a1 | x > 0
+   claim:c1 | Integral(log(x), x) = x*log(x) - x
+   claim:c2 | diff(x*log(x) - x, x) = log(x)
+   claim:f1 | Integral(log(x), x) = x*log(x) - x
+##K4 ayt-int-006 CORRECT ['right', 'equal as value']
+   answer | 23
+   claim:c1 | x <= -2
+   claim:e1a | Abs(x-1) = 1-x
+   claim:e1b | Abs(x+2) = -x-2
+   claim:e1c | Abs(x-1)+Abs(x+2) = -2*x-1
+   claim:comp1 | Integral(-2*x-1,(x,-3,-2)) = 4
+   claim:e1d | Integral(Abs(x-1)+Abs(x+2),(x,-3,-2)) = 4
+   claim:c2a | x >= -2
+   claim:c2b | x <= 1
+   claim:e2a | Abs(x-1) = 1-x
+   claim:e2b | Abs(x+2) = x+2
+   claim:e2c | Abs(x-1)+Abs(x+2) = 3
+   claim:comp2 | Integral(3,(x,-2,1)) = 9
+   claim:e2d | Integral(Abs(x-1)+Abs(x+2),(x,-2,1)) = 9
+   claim:c3 | x >= 1
+   claim:e3a | Abs(x-1) = x-1
+   claim:e3b | Abs(x+2) = x+2
+   claim:e3c | Abs(x-1)+Abs(x+2) = 2*x+1
+   claim:comp3 | Integral(2*x+1,(x,1,3)) = 10
+   claim:e3d | Integral(Abs(x-1)+Abs(x+2),(x,1,3)) = 10
+   claim:etot | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 4+9+10
+   claim:compTot | 4+9+10 = 23
+   claim:concl | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 23
+##K4 ayt-int-007 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | Integral(x*exp(x), x) = (x-1)*exp(x)
+   claim:s2 | at((x-1)*exp(x), x, 1) = 0
+   claim:s3 | at((x-1)*exp(x), x, 0) = -1
+   claim:s4 | 0 - (-1) = 1
+   claim:s5 | Integral(x*exp(x), (x, 0, 1)) = 1
+##K4 ayt-int-008 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:a1 | pi > 0
+   claim:c1 | diff(-cos(x), x) = sin(x)
+   claim:c2 | Integral(sin(x), x) = -cos(x)
+   claim:c3 | at(-cos(x), x, pi) = 1
+   claim:c4 | at(-cos(x), x, 0) = -1
+   claim:c5 | Integral(sin(x), (x, 0, pi)) = 1-(-1)
+   claim:c6 | 1-(-1) = 2
+   claim:s_conc | Integral(sin(x), (x, 0, pi)) = 2
+##K4 ayt-int-009 CORRECT ['right', 'equal as value']
+   answer | 23
+   claim:c1 | x <= -2
+   claim:e1a | Abs(x-1) = 1-x
+   claim:e1b | Abs(x+2) = -x-2
+   claim:e1c | Abs(x-1)+Abs(x+2) = -2*x-1
+   claim:comp1 | Integral(-2*x-1,(x,-3,-2)) = 4
+   claim:e1d | Integral(Abs(x-1)+Abs(x+2),(x,-3,-2)) = 4
+   claim:c2a | x >= -2
+   claim:c2b | x <= 1
+   claim:e2a | Abs(x-1) = 1-x
+   claim:e2b | Abs(x+2) = x+2
+   claim:e2c | Abs(x-1)+Abs(x+2) = 3
+   claim:comp2 | Integral(3,(x,-2,1)) = 9
+   claim:e2d | Integral(Abs(x-1)+Abs(x+2),(x,-2,1)) = 9
+   claim:c3 | x >= 1
+   claim:e3a | Abs(x-1) = x-1
+   claim:e3b | Abs(x+2) = x+2
+   claim:e3c | Abs(x-1)+Abs(x+2) = 2*x+1
+   claim:comp3 | Integral(2*x+1,(x,1,3)) = 10
+   claim:e3d | Integral(Abs(x-1)+Abs(x+2),(x,1,3)) = 10
+   claim:etot | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 4+9+10
+   claim:compTot | 4+9+10 = 23
+   claim:concl | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 23
+##K4 ayt-int-010 CORRECT ['right', 'equal as expression']
+   answer | x*log(x) - x
+   claim:a1 | x > 0
+   claim:c1 | Integral(log(x), x) = x*log(x) - x
+   claim:c2 | diff(x*log(x) - x, x) = log(x)
+   claim:f1 | Integral(log(x), x) = x*log(x) - x
+##K4 ayt-int-011 CORRECT ['right', 'equal as value']
+   answer | 23
+   claim:c1 | x <= -2
+   claim:e1a | Abs(x-1) = 1-x
+   claim:e1b | Abs(x+2) = -x-2
+   claim:e1c | Abs(x-1)+Abs(x+2) = -2*x-1
+   claim:comp1 | Integral(-2*x-1,(x,-3,-2)) = 4
+   claim:e1d | Integral(Abs(x-1)+Abs(x+2),(x,-3,-2)) = 4
+   claim:c2a | x >= -2
+   claim:c2b | x <= 1
+   claim:e2a | Abs(x-1) = 1-x
+   claim:e2b | Abs(x+2) = x+2
+   claim:e2c | Abs(x-1)+Abs(x+2) = 3
+   claim:comp2 | Integral(3,(x,-2,1)) = 9
+   claim:e2d | Integral(Abs(x-1)+Abs(x+2),(x,-2,1)) = 9
+   claim:c3 | x >= 1
+   claim:e3a | Abs(x-1) = x-1
+   claim:e3b | Abs(x+2) = x+2
+   claim:e3c | Abs(x-1)+Abs(x+2) = 2*x+1
+   claim:comp3 | Integral(2*x+1,(x,1,3)) = 10
+   claim:e3d | Integral(Abs(x-1)+Abs(x+2),(x,1,3)) = 10
+   claim:etot | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 4+9+10
+   claim:compTot | 4+9+10 = 23
+   claim:concl | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 23
+##K4 ayt-int-012 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | Integral(x*exp(x), x) = (x-1)*exp(x)
+   claim:s2 | at((x-1)*exp(x), x, 1) = 0
+   claim:s3 | at((x-1)*exp(x), x, 0) = -1
+   claim:s4 | 0 - (-1) = 1
+   claim:s5 | Integral(x*exp(x), (x, 0, 1)) = 1
+##K4 ayt-int-013 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:a1 | pi > 0
+   claim:c1 | diff(-cos(x), x) = sin(x)
+   claim:c2 | Integral(sin(x), x) = -cos(x)
+   claim:c3 | at(-cos(x), x, pi) = 1
+   claim:c4 | at(-cos(x), x, 0) = -1
+   claim:c5 | Integral(sin(x), (x, 0, pi)) = 1-(-1)
+   claim:c6 | 1-(-1) = 2
+   claim:s_conc | Integral(sin(x), (x, 0, pi)) = 2
+##K4 ayt-int-014 CORRECT ['right', 'equal as expression']
+   answer | x*log(x) - x
+   claim:a1 | x > 0
+   claim:c1 | Integral(log(x), x) = x*log(x) - x
+   claim:c2 | diff(x*log(x) - x, x) = log(x)
+   claim:f1 | Integral(log(x), x) = x*log(x) - x
+##K4 ayt-int-015 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | Integral(x*exp(x), x) = (x-1)*exp(x)
+   claim:s2 | at((x-1)*exp(x), x, 1) = 0
+   claim:s3 | at((x-1)*exp(x), x, 0) = -1
+   claim:s4 | 0 - (-1) = 1
+   claim:s5 | Integral(x*exp(x), (x, 0, 1)) = 1
+##K4 ayt-int-016 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | Integral(x*exp(x), x) = (x-1)*exp(x)
+   claim:s2 | at((x-1)*exp(x), x, 1) = 0
+   claim:s3 | at((x-1)*exp(x), x, 0) = -1
+   claim:s4 | 0 - (-1) = 1
+   claim:s5 | Integral(x*exp(x), (x, 0, 1)) = 1
+##K4 ayt-int-017 CORRECT ['right', 'equal as value']
+   answer | 23
+   claim:c1 | x <= -2
+   claim:e1a | Abs(x-1) = 1-x
+   claim:e1b | Abs(x+2) = -x-2
+   claim:e1c | Abs(x-1)+Abs(x+2) = -2*x-1
+   claim:comp1 | Integral(-2*x-1,(x,-3,-2)) = 4
+   claim:e1d | Integral(Abs(x-1)+Abs(x+2),(x,-3,-2)) = 4
+   claim:c2a | x >= -2
+   claim:c2b | x <= 1
+   claim:e2a | Abs(x-1) = 1-x
+   claim:e2b | Abs(x+2) = x+2
+   claim:e2c | Abs(x-1)+Abs(x+2) = 3
+   claim:comp2 | Integral(3,(x,-2,1)) = 9
+   claim:e2d | Integral(Abs(x-1)+Abs(x+2),(x,-2,1)) = 9
+   claim:c3 | x >= 1
+   claim:e3a | Abs(x-1) = x-1
+   claim:e3b | Abs(x+2) = x+2
+   claim:e3c | Abs(x-1)+Abs(x+2) = 2*x+1
+   claim:comp3 | Integral(2*x+1,(x,1,3)) = 10
+   claim:e3d | Integral(Abs(x-1)+Abs(x+2),(x,1,3)) = 10
+   claim:etot | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 4+9+10
+   claim:compTot | 4+9+10 = 23
+   claim:concl | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 23
+##K4 ayt-int-018 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:a1 | pi > 0
+   claim:c1 | diff(-cos(x), x) = sin(x)
+   claim:c2 | Integral(sin(x), x) = -cos(x)
+   claim:c3 | at(-cos(x), x, pi) = 1
+   claim:c4 | at(-cos(x), x, 0) = -1
+   claim:c5 | Integral(sin(x), (x, 0, pi)) = 1-(-1)
+   claim:c6 | 1-(-1) = 2
+   claim:s_conc | Integral(sin(x), (x, 0, pi)) = 2
+##K4 ayt-int-019 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | Integral(x*exp(x), x) = (x-1)*exp(x)
+   claim:s2 | at((x-1)*exp(x), x, 1) = 0
+   claim:s3 | at((x-1)*exp(x), x, 0) = -1
+   claim:s4 | 0 - (-1) = 1
+   claim:s5 | Integral(x*exp(x), (x, 0, 1)) = 1
+##K4 ayt-int-020 CORRECT ['right', 'equal as value']
+   answer | 23
+   claim:c1 | x <= -2
+   claim:e1a | Abs(x-1) = 1-x
+   claim:e1b | Abs(x+2) = -x-2
+   claim:e1c | Abs(x-1)+Abs(x+2) = -2*x-1
+   claim:comp1 | Integral(-2*x-1,(x,-3,-2)) = 4
+   claim:e1d | Integral(Abs(x-1)+Abs(x+2),(x,-3,-2)) = 4
+   claim:c2a | x >= -2
+   claim:c2b | x <= 1
+   claim:e2a | Abs(x-1) = 1-x
+   claim:e2b | Abs(x+2) = x+2
+   claim:e2c | Abs(x-1)+Abs(x+2) = 3
+   claim:comp2 | Integral(3,(x,-2,1)) = 9
+   claim:e2d | Integral(Abs(x-1)+Abs(x+2),(x,-2,1)) = 9
+   claim:c3 | x >= 1
+   claim:e3a | Abs(x-1) = x-1
+   claim:e3b | Abs(x+2) = x+2
+   claim:e3c | Abs(x-1)+Abs(x+2) = 2*x+1
+   claim:comp3 | Integral(2*x+1,(x,1,3)) = 10
+   claim:e3d | Integral(Abs(x-1)+Abs(x+2),(x,1,3)) = 10
+   claim:etot | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 4+9+10
+   claim:compTot | 4+9+10 = 23
+   claim:concl | Integral(Abs(x-1)+Abs(x+2),(x,-3,3)) = 23
+##K4 ayt-int-021 CORRECT ['right', 'equal as expression']
+   answer | x*log(x) - x
+   claim:a1 | x > 0
+   claim:c1 | Integral(log(x), x) = x*log(x) - x
+   claim:c2 | diff(x*log(x) - x, x) = log(x)
+   claim:f1 | Integral(log(x), x) = x*log(x) - x
+##K4 ayt-lim-001 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | x != 2
+   claim:s2 | (x**2-4)/(x-2) = x+2
+   claim:s3 | Limit(x+2, x, 2) = 4
+   claim:s4 | Limit((x**2-4)/(x-2), x, 2) = 4
+   claim:s5 | Limit((x**2-4)/(x-2), x, 2) = 4
+##K4 ayt-lim-002 CORRECT ['right', 'equal as value']
+   answer | 3
+   claim:s1 | x != 0
+   claim:s2 | sin(3*x)/x = 3*sin(3*x)/(3*x)
+   claim:s3 | Limit(sin(3*x)/(3*x), x, 0) = 1
+   claim:s4 | Limit(sin(3*x)/x, x, 0) = 3*Limit(sin(3*x)/(3*x), x, 0)
+   claim:s5 | Limit(sin(3*x)/x, x, 0) = 3
+##K4 ayt-lim-003 CORRECT ['right', 'both do not exist']
+   answer | None
+   claim:s1 | Ne(x, 0)
+   claim:s2 | x > 0
+   claim:s3 | Abs(x) = x
+   claim:s4 | Abs(x)/x = 1
+   claim:s6 | x < 0
+   claim:s7 | Abs(x) = -1*x
+   claim:s8 | Abs(x)/x = -1
+   claim:s11 | Ne(Limit(Abs(x)/x, x, 0, dir='+'), Limit(Abs(x)/x, x, 0, dir='-')) = True
+##K4 ayt-lim-004 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | x>3
+   claim:s2 | (2*x**2+1)/(x**2-5) = (2+1/x**2)/(1-5/x**2)
+   claim:s3 | Limit(1/x**2, x, oo) = 0
+   claim:s4 | Limit(5/x**2, x, oo) = 0
+   claim:s5 | Limit((2+1/x**2)/(1-5/x**2), x, oo) = 2
+   claim:s6 | Limit((2*x**2+1)/(x**2-5), x, oo) = 2
+##K4 ayt-lim-005 CORRECT ['right', 'equal as value']
+   answer | 1/2
+   claim:s1 | x >= 0
+   claim:s2 | x != 1
+   claim:s3 | (sqrt(x)-1)*(sqrt(x)+1) = x-1
+   claim:s4 | (sqrt(x)-1)/(x-1) = 1/(sqrt(x)+1)
+   claim:s5 | Limit(1/(sqrt(x)+1), x, 1) = 1/2
+   claim:s6 | Limit((sqrt(x)-1)/(x-1), x, 1) = 1/2
+##K4 ayt-lim-006 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s1 | x > 0
+   claim:s2 | x != 0
+   claim:s2b | (1/x) != 0
+   claim:s3 | x*log(x) = log(x)/(1/x)
+   claim:s6 | diff(log(x), x) = 1/x
+   claim:s7 | diff(1/x, x) = -1/x**2
+   claim:s9 | (1/x)/(-1/x**2) = -x
+   claim:s11 | Limit(x*log(x), x, 0, dir='+') = 0
+##K4 ayt-lim-007 CORRECT ['right', 'equal as value']
+   answer | 3
+   claim:s1 | x != 0
+   claim:s2 | sin(3*x)/x = 3*sin(3*x)/(3*x)
+   claim:s3 | Limit(sin(3*x)/(3*x), x, 0) = 1
+   claim:s4 | Limit(sin(3*x)/x, x, 0) = 3*Limit(sin(3*x)/(3*x), x, 0)
+   claim:s5 | Limit(sin(3*x)/x, x, 0) = 3
+##K4 ayt-lim-008 CORRECT ['right', 'equal as value']
+   answer | 1/2
+   claim:s1 | x >= 0
+   claim:s2 | x != 1
+   claim:s3 | (sqrt(x)-1)*(sqrt(x)+1) = x-1
+   claim:s4 | (sqrt(x)-1)/(x-1) = 1/(sqrt(x)+1)
+   claim:s5 | Limit(1/(sqrt(x)+1), x, 1) = 1/2
+   claim:s6 | Limit((sqrt(x)-1)/(x-1), x, 1) = 1/2
+##K4 ayt-lim-009 CORRECT ['right', 'both do not exist']
+   answer | None
+   claim:s1 | Ne(x, 0)
+   claim:s2 | x > 0
+   claim:s3 | Abs(x) = x
+   claim:s4 | Abs(x)/x = 1
+   claim:s6 | x < 0
+   claim:s7 | Abs(x) = -1*x
+   claim:s8 | Abs(x)/x = -1
+   claim:s11 | Ne(Limit(Abs(x)/x, x, 0, dir='+'), Limit(Abs(x)/x, x, 0, dir='-')) = True
+##K4 ayt-lim-010 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | x>3
+   claim:s2 | (2*x**2+1)/(x**2-5) = (2+1/x**2)/(1-5/x**2)
+   claim:s3 | Limit(1/x**2, x, oo) = 0
+   claim:s4 | Limit(5/x**2, x, oo) = 0
+   claim:s5 | Limit((2+1/x**2)/(1-5/x**2), x, oo) = 2
+   claim:s6 | Limit((2*x**2+1)/(x**2-5), x, oo) = 2
+##K4 ayt-lim-011 CORRECT ['right', 'equal as value']
+   answer | 1/2
+   claim:s1 | x >= 0
+   claim:s2 | x != 1
+   claim:s3 | (sqrt(x)-1)*(sqrt(x)+1) = x-1
+   claim:s4 | (sqrt(x)-1)/(x-1) = 1/(sqrt(x)+1)
+   claim:s5 | Limit(1/(sqrt(x)+1), x, 1) = 1/2
+   claim:s6 | Limit((sqrt(x)-1)/(x-1), x, 1) = 1/2
+##K4 ayt-lim-012 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | x != 2
+   claim:s2 | (x**2-4)/(x-2) = x+2
+   claim:s3 | Limit(x+2, x, 2) = 4
+   claim:s4 | Limit((x**2-4)/(x-2), x, 2) = 4
+   claim:s5 | Limit((x**2-4)/(x-2), x, 2) = 4
+##K4 ayt-lim-013 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | x>3
+   claim:s2 | (2*x**2+1)/(x**2-5) = (2+1/x**2)/(1-5/x**2)
+   claim:s3 | Limit(1/x**2, x, oo) = 0
+   claim:s4 | Limit(5/x**2, x, oo) = 0
+   claim:s5 | Limit((2+1/x**2)/(1-5/x**2), x, oo) = 2
+   claim:s6 | Limit((2*x**2+1)/(x**2-5), x, oo) = 2
+##K4 ayt-lim-014 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s1 | x > 0
+   claim:s2 | x != 0
+   claim:s2b | (1/x) != 0
+   claim:s3 | x*log(x) = log(x)/(1/x)
+   claim:s6 | diff(log(x), x) = 1/x
+   claim:s7 | diff(1/x, x) = -1/x**2
+   claim:s9 | (1/x)/(-1/x**2) = -x
+   claim:s11 | Limit(x*log(x), x, 0, dir='+') = 0
+##K4 ayt-trig-001 CORRECT ['right', 'equal as set']
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(2*x) = 1/2
+   claim:s2 | 0 <= x
+   claim:s3 | x < 2*pi
+   claim:s4 | 0 <= 2*x
+   claim:s5 | 2*x < 4*pi
+   claim:s7 | cos(pi/3) = 1/2
+   claim:s8 | cos(5*pi/3) = 1/2
+   claim:s9 | cos(7*pi/3) = 1/2
+   claim:s10 | cos(11*pi/3) = 1/2
+   claim:s11 | (pi/3)/2 = pi/6
+   claim:s12 | (5*pi/3)/2 = 5*pi/6
+   claim:s13 | (7*pi/3)/2 = 7*pi/6
+   claim:s14 | (11*pi/3)/2 = 11*pi/6
+   claim:s15 | 2*x = pi/3
+   claim:s16 | x = pi/6
+   claim:s17 | 2*x = 5*pi/3
+   claim:s18 | x = 5*pi/6
+   claim:s19 | 2*x = 7*pi/3
+   claim:s20 | x = 7*pi/6
+   claim:s21 | 2*x = 11*pi/3
+   claim:s22 | x = 11*pi/6
+   claim:s23 | Or(Eq(x, pi/6), Eq(x, 5*pi/6), Eq(x, 7*pi/6), Eq(x, 11*pi/6))
+##K4 ayt-trig-002 CORRECT ['right', 'same general solution as set']
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s1 | sin(x) = 1/2
+   claim:s2 | at(sin(x), x, pi/6) = 1/2
+   claim:s3 | at(sin(x), x, 5*pi/6) = 1/2
+   claim:s4 | pi - pi/6 = 5*pi/6
+##K4 ayt-trig-003 CORRECT ['right', 'equal as value']
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s_decomp | 75° = 30° + 45°
+   claim:a2 | 2 > 0
+   claim:a3 | 3 > 0
+   claim:a6 | 6 > 0
+   claim:a_denom | 4 != 0
+   claim:a_denom2 | 2 != 0
+   claim:s_sin30 | sin(30°) = 1/2
+   claim:s_cos30 | cos(30°) = sqrt(3)/2
+   claim:s_sin45 | sin(45°) = sqrt(2)/2
+   claim:s_cos45 | cos(45°) = sqrt(2)/2
+   claim:s_form | sin(75°) = sin(30°)*cos(45°) + cos(30°)*sin(45°)
+   claim:s_sub | sin(30°)*cos(45°) + cos(30°)*sin(45°) = (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2)
+   claim:s_simp | (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2) = (sqrt(6) + sqrt(2))/4
+   claim:s_conc | sin(75°) = (sqrt(6) + sqrt(2))/4
+##K4 ayt-trig-004 CORRECT ['right', 'equal as set']
+   answer | {pi/3}
+   claim:s1 | tan(x) = sqrt(3)
+   claim:s2 | 0 <= x
+   claim:s3 | x < pi
+   claim:s4 | x != pi/2
+   claim:s5 | tan(pi/3) = sqrt(3)
+   claim:s7 | x = pi/3
+   claim:s8 | x = pi/3
+##K4 ayt-trig-005 CORRECT ['right', 'equal as set']
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(2*x) = 1/2
+   claim:s2 | 0 <= x
+   claim:s3 | x < 2*pi
+   claim:s4 | 0 <= 2*x
+   claim:s5 | 2*x < 4*pi
+   claim:s7 | cos(pi/3) = 1/2
+   claim:s8 | cos(5*pi/3) = 1/2
+   claim:s9 | cos(7*pi/3) = 1/2
+   claim:s10 | cos(11*pi/3) = 1/2
+   claim:s11 | (pi/3)/2 = pi/6
+   claim:s12 | (5*pi/3)/2 = 5*pi/6
+   claim:s13 | (7*pi/3)/2 = 7*pi/6
+   claim:s14 | (11*pi/3)/2 = 11*pi/6
+   claim:s15 | 2*x = pi/3
+   claim:s16 | x = pi/6
+   claim:s17 | 2*x = 5*pi/3
+   claim:s18 | x = 5*pi/6
+   claim:s19 | 2*x = 7*pi/3
+   claim:s20 | x = 7*pi/6
+   claim:s21 | 2*x = 11*pi/3
+   claim:s22 | x = 11*pi/6
+   claim:s23 | Or(Eq(x, pi/6), Eq(x, 5*pi/6), Eq(x, 7*pi/6), Eq(x, 11*pi/6))
+##K4 ayt-trig-006 CORRECT ['right', 'same general solution as set']
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s1 | sin(x) = 1/2
+   claim:s2 | at(sin(x), x, pi/6) = 1/2
+   claim:s3 | at(sin(x), x, 5*pi/6) = 1/2
+   claim:s4 | pi - pi/6 = 5*pi/6
+##K4 ayt-trig-007 CORRECT ['right', 'equal as value']
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s_decomp | 75° = 30° + 45°
+   claim:a2 | 2 > 0
+   claim:a3 | 3 > 0
+   claim:a6 | 6 > 0
+   claim:a_denom | 4 != 0
+   claim:a_denom2 | 2 != 0
+   claim:s_sin30 | sin(30°) = 1/2
+   claim:s_cos30 | cos(30°) = sqrt(3)/2
+   claim:s_sin45 | sin(45°) = sqrt(2)/2
+   claim:s_cos45 | cos(45°) = sqrt(2)/2
+   claim:s_form | sin(75°) = sin(30°)*cos(45°) + cos(30°)*sin(45°)
+   claim:s_sub | sin(30°)*cos(45°) + cos(30°)*sin(45°) = (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2)
+   claim:s_simp | (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2) = (sqrt(6) + sqrt(2))/4
+   claim:s_conc | sin(75°) = (sqrt(6) + sqrt(2))/4
+##K4 ayt-trig-008 CORRECT ['right', 'equal as set']
+   answer | {pi/3}
+   claim:s1 | tan(x) = sqrt(3)
+   claim:s2 | 0 <= x
+   claim:s3 | x < pi
+   claim:s4 | x != pi/2
+   claim:s5 | tan(pi/3) = sqrt(3)
+   claim:s7 | x = pi/3
+   claim:s8 | x = pi/3
+##K4 ayt-trig-009 CORRECT ['right', 'equal as set']
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(2*x) = 1/2
+   claim:s2 | 0 <= x
+   claim:s3 | x < 2*pi
+   claim:s4 | 0 <= 2*x
+   claim:s5 | 2*x < 4*pi
+   claim:s7 | cos(pi/3) = 1/2
+   claim:s8 | cos(5*pi/3) = 1/2
+   claim:s9 | cos(7*pi/3) = 1/2
+   claim:s10 | cos(11*pi/3) = 1/2
+   claim:s11 | (pi/3)/2 = pi/6
+   claim:s12 | (5*pi/3)/2 = 5*pi/6
+   claim:s13 | (7*pi/3)/2 = 7*pi/6
+   claim:s14 | (11*pi/3)/2 = 11*pi/6
+   claim:s15 | 2*x = pi/3
+   claim:s16 | x = pi/6
+   claim:s17 | 2*x = 5*pi/3
+   claim:s18 | x = 5*pi/6
+   claim:s19 | 2*x = 7*pi/3
+   claim:s20 | x = 7*pi/6
+   claim:s21 | 2*x = 11*pi/3
+   claim:s22 | x = 11*pi/6
+   claim:s23 | Or(Eq(x, pi/6), Eq(x, 5*pi/6), Eq(x, 7*pi/6), Eq(x, 11*pi/6))
+##K4 ayt-trig-010 CORRECT ['right', 'equal as set']
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(2*x) = 1/2
+   claim:s2 | 0 <= x
+   claim:s3 | x < 2*pi
+   claim:s4 | 0 <= 2*x
+   claim:s5 | 2*x < 4*pi
+   claim:s7 | cos(pi/3) = 1/2
+   claim:s8 | cos(5*pi/3) = 1/2
+   claim:s9 | cos(7*pi/3) = 1/2
+   claim:s10 | cos(11*pi/3) = 1/2
+   claim:s11 | (pi/3)/2 = pi/6
+   claim:s12 | (5*pi/3)/2 = 5*pi/6
+   claim:s13 | (7*pi/3)/2 = 7*pi/6
+   claim:s14 | (11*pi/3)/2 = 11*pi/6
+   claim:s15 | 2*x = pi/3
+   claim:s16 | x = pi/6
+   claim:s17 | 2*x = 5*pi/3
+   claim:s18 | x = 5*pi/6
+   claim:s19 | 2*x = 7*pi/3
+   claim:s20 | x = 7*pi/6
+   claim:s21 | 2*x = 11*pi/3
+   claim:s22 | x = 11*pi/6
+   claim:s23 | Or(Eq(x, pi/6), Eq(x, 5*pi/6), Eq(x, 7*pi/6), Eq(x, 11*pi/6))
+##K4 ayt-trig-011 CORRECT ['right', 'same general solution as set']
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s1 | sin(x) = 1/2
+   claim:s2 | at(sin(x), x, pi/6) = 1/2
+   claim:s3 | at(sin(x), x, 5*pi/6) = 1/2
+   claim:s4 | pi - pi/6 = 5*pi/6
+##K4 ayt-trig-012 CORRECT ['right', 'equal as value']
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s_decomp | 75° = 30° + 45°
+   claim:a2 | 2 > 0
+   claim:a3 | 3 > 0
+   claim:a6 | 6 > 0
+   claim:a_denom | 4 != 0
+   claim:a_denom2 | 2 != 0
+   claim:s_sin30 | sin(30°) = 1/2
+   claim:s_cos30 | cos(30°) = sqrt(3)/2
+   claim:s_sin45 | sin(45°) = sqrt(2)/2
+   claim:s_cos45 | cos(45°) = sqrt(2)/2
+   claim:s_form | sin(75°) = sin(30°)*cos(45°) + cos(30°)*sin(45°)
+   claim:s_sub | sin(30°)*cos(45°) + cos(30°)*sin(45°) = (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2)
+   claim:s_simp | (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2) = (sqrt(6) + sqrt(2))/4
+   claim:s_conc | sin(75°) = (sqrt(6) + sqrt(2))/4
+##K4 ayt-trig-013 CORRECT ['right', 'equal as set']
+   answer | {pi/3}
+   claim:s1 | tan(x) = sqrt(3)
+   claim:s2 | 0 <= x
+   claim:s3 | x < pi
+   claim:s4 | x != pi/2
+   claim:s5 | tan(pi/3) = sqrt(3)
+   claim:s7 | x = pi/3
+   claim:s8 | x = pi/3
+##K4 ayt-trig-014 CORRECT ['right', 'equal as set']
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(2*x) = 1/2
+   claim:s2 | 0 <= x
+   claim:s3 | x < 2*pi
+   claim:s4 | 0 <= 2*x
+   claim:s5 | 2*x < 4*pi
+   claim:s7 | cos(pi/3) = 1/2
+   claim:s8 | cos(5*pi/3) = 1/2
+   claim:s9 | cos(7*pi/3) = 1/2
+   claim:s10 | cos(11*pi/3) = 1/2
+   claim:s11 | (pi/3)/2 = pi/6
+   claim:s12 | (5*pi/3)/2 = 5*pi/6
+   claim:s13 | (7*pi/3)/2 = 7*pi/6
+   claim:s14 | (11*pi/3)/2 = 11*pi/6
+   claim:s15 | 2*x = pi/3
+   claim:s16 | x = pi/6
+   claim:s17 | 2*x = 5*pi/3
+   claim:s18 | x = 5*pi/6
+   claim:s19 | 2*x = 7*pi/3
+   claim:s20 | x = 7*pi/6
+   claim:s21 | 2*x = 11*pi/3
+   claim:s22 | x = 11*pi/6
+   claim:s23 | Or(Eq(x, pi/6), Eq(x, 5*pi/6), Eq(x, 7*pi/6), Eq(x, 11*pi/6))
+##K4 ayt-trig-015 CORRECT ['right', 'same general solution as set']
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s1 | sin(x) = 1/2
+   claim:s2 | at(sin(x), x, pi/6) = 1/2
+   claim:s3 | at(sin(x), x, 5*pi/6) = 1/2
+   claim:s4 | pi - pi/6 = 5*pi/6
+##K4 ayt-trig-016 CORRECT ['right', 'equal as value']
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s_decomp | 75° = 30° + 45°
+   claim:a2 | 2 > 0
+   claim:a3 | 3 > 0
+   claim:a6 | 6 > 0
+   claim:a_denom | 4 != 0
+   claim:a_denom2 | 2 != 0
+   claim:s_sin30 | sin(30°) = 1/2
+   claim:s_cos30 | cos(30°) = sqrt(3)/2
+   claim:s_sin45 | sin(45°) = sqrt(2)/2
+   claim:s_cos45 | cos(45°) = sqrt(2)/2
+   claim:s_form | sin(75°) = sin(30°)*cos(45°) + cos(30°)*sin(45°)
+   claim:s_sub | sin(30°)*cos(45°) + cos(30°)*sin(45°) = (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2)
+   claim:s_simp | (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2) = (sqrt(6) + sqrt(2))/4
+   claim:s_conc | sin(75°) = (sqrt(6) + sqrt(2))/4
+##K4 ayt-trig-017 CORRECT ['right', 'equal as set']
+   answer | {pi/3}
+   claim:s1 | tan(x) = sqrt(3)
+   claim:s2 | 0 <= x
+   claim:s3 | x < pi
+   claim:s4 | x != pi/2
+   claim:s5 | tan(pi/3) = sqrt(3)
+   claim:s7 | x = pi/3
+   claim:s8 | x = pi/3
+##K4 ayt-trig-018 CORRECT ['right', 'equal as set']
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(2*x) = 1/2
+   claim:s2 | 0 <= x
+   claim:s3 | x < 2*pi
+   claim:s4 | 0 <= 2*x
+   claim:s5 | 2*x < 4*pi
+   claim:s7 | cos(pi/3) = 1/2
+   claim:s8 | cos(5*pi/3) = 1/2
+   claim:s9 | cos(7*pi/3) = 1/2
+   claim:s10 | cos(11*pi/3) = 1/2
+   claim:s11 | (pi/3)/2 = pi/6
+   claim:s12 | (5*pi/3)/2 = 5*pi/6
+   claim:s13 | (7*pi/3)/2 = 7*pi/6
+   claim:s14 | (11*pi/3)/2 = 11*pi/6
+   claim:s15 | 2*x = pi/3
+   claim:s16 | x = pi/6
+   claim:s17 | 2*x = 5*pi/3
+   claim:s18 | x = 5*pi/6
+   claim:s19 | 2*x = 7*pi/3
+   claim:s20 | x = 7*pi/6
+   claim:s21 | 2*x = 11*pi/3
+   claim:s22 | x = 11*pi/6
+   claim:s23 | Or(Eq(x, pi/6), Eq(x, 5*pi/6), Eq(x, 7*pi/6), Eq(x, 11*pi/6))
+##K4 ayt-trig-019 CORRECT ['right', 'equal as value']
+   answer | (sqrt(6) + sqrt(2))/4
+   claim:s_decomp | 75° = 30° + 45°
+   claim:a2 | 2 > 0
+   claim:a3 | 3 > 0
+   claim:a6 | 6 > 0
+   claim:a_denom | 4 != 0
+   claim:a_denom2 | 2 != 0
+   claim:s_sin30 | sin(30°) = 1/2
+   claim:s_cos30 | cos(30°) = sqrt(3)/2
+   claim:s_sin45 | sin(45°) = sqrt(2)/2
+   claim:s_cos45 | cos(45°) = sqrt(2)/2
+   claim:s_form | sin(75°) = sin(30°)*cos(45°) + cos(30°)*sin(45°)
+   claim:s_sub | sin(30°)*cos(45°) + cos(30°)*sin(45°) = (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2)
+   claim:s_simp | (1/2)*(sqrt(2)/2) + (sqrt(3)/2)*(sqrt(2)/2) = (sqrt(6) + sqrt(2))/4
+   claim:s_conc | sin(75°) = (sqrt(6) + sqrt(2))/4
+##K4 ayt-trig-020 CORRECT ['right', 'equal as set']
+   answer | {pi/6, 5*pi/6, 7*pi/6, 11*pi/6}
+   claim:s1 | cos(2*x) = 1/2
+   claim:s2 | 0 <= x
+   claim:s3 | x < 2*pi
+   claim:s4 | 0 <= 2*x
+   claim:s5 | 2*x < 4*pi
+   claim:s7 | cos(pi/3) = 1/2
+   claim:s8 | cos(5*pi/3) = 1/2
+   claim:s9 | cos(7*pi/3) = 1/2
+   claim:s10 | cos(11*pi/3) = 1/2
+   claim:s11 | (pi/3)/2 = pi/6
+   claim:s12 | (5*pi/3)/2 = 5*pi/6
+   claim:s13 | (7*pi/3)/2 = 7*pi/6
+   claim:s14 | (11*pi/3)/2 = 11*pi/6
+   claim:s15 | 2*x = pi/3
+   claim:s16 | x = pi/6
+   claim:s17 | 2*x = 5*pi/3
+   claim:s18 | x = 5*pi/6
+   claim:s19 | 2*x = 7*pi/3
+   claim:s20 | x = 7*pi/6
+   claim:s21 | 2*x = 11*pi/3
+   claim:s22 | x = 11*pi/6
+   claim:s23 | Or(Eq(x, pi/6), Eq(x, 5*pi/6), Eq(x, 7*pi/6), Eq(x, 11*pi/6))
+##K4 ayt-trig-021 CORRECT ['right', 'same general solution as set']
+   answer | {pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}
+   claim:s1 | sin(x) = 1/2
+   claim:s2 | at(sin(x), x, pi/6) = 1/2
+   claim:s3 | at(sin(x), x, 5*pi/6) = 1/2
+   claim:s4 | pi - pi/6 = 5*pi/6
+##K4 ayt-tur-001 CORRECT ['right', 'equal as value']
+   answer | 18
+   claim:a1 | x >= -2
+   claim:a2 | x <= 3
+   claim:s1 | diff(x**3 - 3*x, x) = 3*x**2 - 3
+   claim:s2 | 3*x**2 - 3 = 0
+   claim:s3 | x**2 - 1 = 0
+   claim:s4 | (x - 1)*(x + 1) = 0
+   claim:c1 | x = -1
+   claim:c2 | x = 1
+   claim:v1 | at(x**3 - 3*x, x, -2) = -2
+   claim:v2 | at(x**3 - 3*x, x, -1) = 2
+   claim:v3 | at(x**3 - 3*x, x, 1) = -2
+   claim:v4 | at(x**3 - 3*x, x, 3) = 18
+   claim:m1 | Max(-2, 2, -2, 18) = 18
+   claim:fin | 18 = 18
+##K4 ayt-tur-002 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s2 | diff(x**2*exp(x), x) = (2*x + x**2)*exp(x)
+   claim:s3 | at((2*x + x**2)*exp(x), x, 0) = 0
+   claim:s4 | at(diff(x**2*exp(x), x), x, 0) = 0
+##K4 ayt-tur-003 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x - 1
+   claim:s1 | y = x**2
+   claim:s2 | at(x**2, x, 1) = 1
+   claim:s3 | diff(x**2, x) = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | y = 2*x - 1
+   claim:s6 | y = 2*x - 1
+##K4 ayt-tur-004 CORRECT ['right', 'equal as expression']
+   answer | 2*x/(x**2 + 1)
+   claim:s1 | x**2 + 1 > 0
+   claim:s2 | diff(x**2 + 1, x) = 2*x
+   claim:s3 | diff(log(x**2 + 1), x) = 2*x/(x**2 + 1)
+   claim:s4 | diff(log(x**2 + 1), x) = 2*x/(x**2 + 1)
+##K4 ayt-tur-005 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | x > 0
+   claim:s2 | diff(x + 4/x, x) = 1 - 4/x**2
+   claim:s3 | 1 - 4/x**2 = 0
+   claim:s4 | x**2 - 4 = 0
+   claim:s5 | x = 2
+   claim:s6 | diff(1 - 4/x**2, x) = 8/x**3
+   claim:s7 | 8/x**3 > 0
+   claim:s8 | at(x + 4/x, x, 2) = 4
+   claim:s9 | x + 4/x >= 4
+##K4 ayt-tur-006 CORRECT ['right', 'equal as value']
+   answer | 5
+   claim:s2 | diff(x**3 -6*x**2 +9*x +1, x) = 3*x**2 -12*x +9
+   claim:s3 | 3*x**2 -12*x +9 = 0
+   claim:s4 | 3*x**2 -12*x +9 = 3*(x-1)*(x-3)
+   claim:s5 | x = 1
+   claim:s6 | x = 3
+   claim:s7 | diff(3*x**2 -12*x +9, x) = 6*x -12
+   claim:s8 | at(6*x -12, x, 1) = -6
+   claim:s9 | at(6*x -12, x, 3) = 6
+   claim:s10 | at(x**3 -6*x**2 +9*x +1, x, 1) = 5
+   claim:s11 | at(x**3 -6*x**2 +9*x +1, x, 1) = 5
+##K4 ayt-tur-007 CORRECT ['right', 'equal as value']
+   answer | -5
+   claim:s1 | a + b + 1 = -3
+   claim:s2 | 3 + 2*a + b = 0
+   claim:s3 | a = 1
+   claim:s4 | b = -5
+   claim:s5 | 1*(-5) = -5
+   claim:s6 | a*b = -5
+##K4 ayt-tur-008 CORRECT ['right', 'equal as value']
+   answer | 18
+   claim:a1 | x >= -2
+   claim:a2 | x <= 3
+   claim:s1 | diff(x**3 - 3*x, x) = 3*x**2 - 3
+   claim:s2 | 3*x**2 - 3 = 0
+   claim:s3 | x**2 - 1 = 0
+   claim:s4 | (x - 1)*(x + 1) = 0
+   claim:c1 | x = -1
+   claim:c2 | x = 1
+   claim:v1 | at(x**3 - 3*x, x, -2) = -2
+   claim:v2 | at(x**3 - 3*x, x, -1) = 2
+   claim:v3 | at(x**3 - 3*x, x, 1) = -2
+   claim:v4 | at(x**3 - 3*x, x, 3) = 18
+   claim:m1 | Max(-2, 2, -2, 18) = 18
+   claim:fin | 18 = 18
+##K4 ayt-tur-009 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | x > 0
+   claim:s2 | diff(x + 4/x, x) = 1 - 4/x**2
+   claim:s3 | 1 - 4/x**2 = 0
+   claim:s4 | x**2 - 4 = 0
+   claim:s5 | x = 2
+   claim:s6 | diff(1 - 4/x**2, x) = 8/x**3
+   claim:s7 | 8/x**3 > 0
+   claim:s8 | at(x + 4/x, x, 2) = 4
+   claim:s9 | x + 4/x >= 4
+##K4 ayt-tur-010 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x - 1
+   claim:s1 | y = x**2
+   claim:s2 | at(x**2, x, 1) = 1
+   claim:s3 | diff(x**2, x) = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | y = 2*x - 1
+   claim:s6 | y = 2*x - 1
+##K4 ayt-tur-011 CORRECT ['right', 'equal as value']
+   answer | 18
+   claim:a1 | x >= -2
+   claim:a2 | x <= 3
+   claim:s1 | diff(x**3 - 3*x, x) = 3*x**2 - 3
+   claim:s2 | 3*x**2 - 3 = 0
+   claim:s3 | x**2 - 1 = 0
+   claim:s4 | (x - 1)*(x + 1) = 0
+   claim:c1 | x = -1
+   claim:c2 | x = 1
+   claim:v1 | at(x**3 - 3*x, x, -2) = -2
+   claim:v2 | at(x**3 - 3*x, x, -1) = 2
+   claim:v3 | at(x**3 - 3*x, x, 1) = -2
+   claim:v4 | at(x**3 - 3*x, x, 3) = 18
+   claim:m1 | Max(-2, 2, -2, 18) = 18
+   claim:fin | 18 = 18
+##K4 ayt-tur-012 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s2 | diff(x**2*exp(x), x) = (2*x + x**2)*exp(x)
+   claim:s3 | at((2*x + x**2)*exp(x), x, 0) = 0
+   claim:s4 | at(diff(x**2*exp(x), x), x, 0) = 0
+##K4 ayt-tur-013 CORRECT ['right', 'equal as equation']
+   answer | y = 2*x - 1
+   claim:s1 | y = x**2
+   claim:s2 | at(x**2, x, 1) = 1
+   claim:s3 | diff(x**2, x) = 2*x
+   claim:s4 | at(2*x, x, 1) = 2
+   claim:s5 | y = 2*x - 1
+   claim:s6 | y = 2*x - 1
+##K4 ayt-tur-014 CORRECT ['right', 'equal as expression']
+   answer | 2*x/(x**2 + 1)
+   claim:s1 | x**2 + 1 > 0
+   claim:s2 | diff(x**2 + 1, x) = 2*x
+   claim:s3 | diff(log(x**2 + 1), x) = 2*x/(x**2 + 1)
+   claim:s4 | diff(log(x**2 + 1), x) = 2*x/(x**2 + 1)
+##K4 ayt-tur-015 CORRECT ['right', 'equal as value']
+   answer | 4
+   claim:s1 | x > 0
+   claim:s2 | diff(x + 4/x, x) = 1 - 4/x**2
+   claim:s3 | 1 - 4/x**2 = 0
+   claim:s4 | x**2 - 4 = 0
+   claim:s5 | x = 2
+   claim:s6 | diff(1 - 4/x**2, x) = 8/x**3
+   claim:s7 | 8/x**3 > 0
+   claim:s8 | at(x + 4/x, x, 2) = 4
+   claim:s9 | x + 4/x >= 4
+##K4 ayt-tur-016 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s2 | diff(x**2*exp(x), x) = (2*x + x**2)*exp(x)
+   claim:s3 | at((2*x + x**2)*exp(x), x, 0) = 0
+   claim:s4 | at(diff(x**2*exp(x), x), x, 0) = 0
+##K4 tyt-den-001 CORRECT ['right', 'equal as set']
+   answer | {4}
+   claim:s1 | x-1>0
+   claim:s2 | x-3>0
+   claim:s3 | x>3
+   claim:s4 | log(x-1)+log(x-3)=log(3)
+   claim:s5 | log(x-1)+log(x-3)=log((x-1)*(x-3))
+   claim:s6 | log((x-1)*(x-3))=log(3)
+   claim:s7 | (x-1)*(x-3)=3
+   claim:s8 | (x-1)*(x-3)=x**2-4*x+3
+   claim:s9 | x**2-4*x+3=3
+   claim:s10 | x**2-4*x=0
+   claim:s11 | x**2-4*x=x*(x-4)
+   claim:s12 | x*(x-4)=0
+   claim:s13 | x=0
+   claim:s14 | at(x-3,x,0)=-3
+   claim:s16 | x=4
+   claim:s17 | at(x-1,x,4)=3
+   claim:s18 | at(x-3,x,4)=1
+   claim:s19 | log(3)+log(1)=log(3)
+   claim:s20 | x=4
+##K4 tyt-den-002 CORRECT ['right', 'equal as set']
+   answer | {5}
+   claim:s0 | sqrt(x + 4) = x - 2
+   claim:s1 | x + 4 >= 0
+   claim:s2 | x - 2 >= 0
+   claim:s3 | (x - 2)**2 = x + 4
+   claim:s4 | (x - 2)**2 - (x + 4) = x**2 - 5*x
+   claim:s5 | x**2 - 5*x = x*(x - 5)
+   claim:s6 | x*(x - 5) = 0
+   claim:s7 | x = 0
+   claim:s8 | x = 5
+   claim:s9 | at(sqrt(x + 4) - (x - 2), x, 0) = 4
+   claim:s10 | at(sqrt(x + 4) - (x - 2), x, 5) = 0
+   claim:s11 | x = 5
+##K4 tyt-den-003 CORRECT ['right', 'equal as set']
+   answer | {}
+   claim:d1 | Ne(x,3)
+   claim:e1 | x/(x-3) = 3/(x-3) + 2
+   claim:e2 | x = 3 + 2*(x-3)
+   claim:c1 | 3 + 2*(x-3) = 2*x - 3
+   claim:e3 | x = 2*x - 3
+   claim:e4 | 0 = x - 3
+   claim:e5 | x = 3
+   claim:fin | False
+##K4 tyt-den-004 CORRECT ['right', 'equal as set']
+   answer | {-1, 4}
+   claim:s1 | Abs(2*x - 3) = 5
+   claim:s2 | 2*x - 3 >= 0
+   claim:s3 | Abs(2*x - 3) = 2*x - 3
+   claim:s4 | 2*x - 3 = 5
+   claim:s5 | 2*x = 8
+   claim:s6 | x = 4
+   claim:s7 | at(Abs(2*x - 3), x, 4) = 5
+   claim:s8 | 2*x - 3 < 0
+   claim:s9 | Abs(2*x - 3) = -(2*x - 3)
+   claim:s10 | 2*x - 3 = -5
+   claim:s11 | 2*x = -2
+   claim:s12 | x = -1
+   claim:s13 | at(Abs(2*x - 3), x, -1) = 5
+   claim:s14 | Or(Eq(x, -1), Eq(x, 4))
+##K4 tyt-den-005 CORRECT ['right', 'equal as value']
+   answer | 3
+   claim:s1 | (m+1)**2-16=0
+   claim:s2 | (m+1)**2-16=(m-3)*(m+5)
+   claim:s3 | (m-3)*(m+5)=0
+   claim:s4 | m-3=0
+   claim:s5 | m=3
+   claim:s6 | m+5=0
+   claim:s7 | m=-5
+   claim:s8 | m=3
+##K4 tyt-den-006 CORRECT ['right', 'equal as set']
+   answer | {4}
+   claim:s1 | x-1>0
+   claim:s2 | x-3>0
+   claim:s3 | x>3
+   claim:s4 | log(x-1)+log(x-3)=log(3)
+   claim:s5 | log(x-1)+log(x-3)=log((x-1)*(x-3))
+   claim:s6 | log((x-1)*(x-3))=log(3)
+   claim:s7 | (x-1)*(x-3)=3
+   claim:s8 | (x-1)*(x-3)=x**2-4*x+3
+   claim:s9 | x**2-4*x+3=3
+   claim:s10 | x**2-4*x=0
+   claim:s11 | x**2-4*x=x*(x-4)
+   claim:s12 | x*(x-4)=0
+   claim:s13 | x=0
+   claim:s14 | at(x-3,x,0)=-3
+   claim:s16 | x=4
+   claim:s17 | at(x-1,x,4)=3
+   claim:s18 | at(x-3,x,4)=1
+   claim:s19 | log(3)+log(1)=log(3)
+   claim:s20 | x=4
+##K4 tyt-den-007 CORRECT ['right', 'equal as set']
+   answer | {5}
+   claim:s0 | sqrt(x + 4) = x - 2
+   claim:s1 | x + 4 >= 0
+   claim:s2 | x - 2 >= 0
+   claim:s3 | (x - 2)**2 = x + 4
+   claim:s4 | (x - 2)**2 - (x + 4) = x**2 - 5*x
+   claim:s5 | x**2 - 5*x = x*(x - 5)
+   claim:s6 | x*(x - 5) = 0
+   claim:s7 | x = 0
+   claim:s8 | x = 5
+   claim:s9 | at(sqrt(x + 4) - (x - 2), x, 0) = 4
+   claim:s10 | at(sqrt(x + 4) - (x - 2), x, 5) = 0
+   claim:s11 | x = 5
+##K4 tyt-den-008 CORRECT ['right', 'equal as set']
+   answer | {-1, 4}
+   claim:s1 | Abs(2*x - 3) = 5
+   claim:s2 | 2*x - 3 >= 0
+   claim:s3 | Abs(2*x - 3) = 2*x - 3
+   claim:s4 | 2*x - 3 = 5
+   claim:s5 | 2*x = 8
+   claim:s6 | x = 4
+   claim:s7 | at(Abs(2*x - 3), x, 4) = 5
+   claim:s8 | 2*x - 3 < 0
+   claim:s9 | Abs(2*x - 3) = -(2*x - 3)
+   claim:s10 | 2*x - 3 = -5
+   claim:s11 | 2*x = -2
+   claim:s12 | x = -1
+   claim:s13 | at(Abs(2*x - 3), x, -1) = 5
+   claim:s14 | Or(Eq(x, -1), Eq(x, 4))
+##K4 tyt-den-009 CORRECT ['right', 'equal as set']
+   answer | {4}
+   claim:s1 | x-1>0
+   claim:s2 | x-3>0
+   claim:s3 | x>3
+   claim:s4 | log(x-1)+log(x-3)=log(3)
+   claim:s5 | log(x-1)+log(x-3)=log((x-1)*(x-3))
+   claim:s6 | log((x-1)*(x-3))=log(3)
+   claim:s7 | (x-1)*(x-3)=3
+   claim:s8 | (x-1)*(x-3)=x**2-4*x+3
+   claim:s9 | x**2-4*x+3=3
+   claim:s10 | x**2-4*x=0
+   claim:s11 | x**2-4*x=x*(x-4)
+   claim:s12 | x*(x-4)=0
+   claim:s13 | x=0
+   claim:s14 | at(x-3,x,0)=-3
+   claim:s16 | x=4
+   claim:s17 | at(x-1,x,4)=3
+   claim:s18 | at(x-3,x,4)=1
+   claim:s19 | log(3)+log(1)=log(3)
+   claim:s20 | x=4
+##K4 tyt-den-010 CORRECT ['right', 'equal as set']
+   answer | {5}
+   claim:s0 | sqrt(x + 4) = x - 2
+   claim:s1 | x + 4 >= 0
+   claim:s2 | x - 2 >= 0
+   claim:s3 | (x - 2)**2 = x + 4
+   claim:s4 | (x - 2)**2 - (x + 4) = x**2 - 5*x
+   claim:s5 | x**2 - 5*x = x*(x - 5)
+   claim:s6 | x*(x - 5) = 0
+   claim:s7 | x = 0
+   claim:s8 | x = 5
+   claim:s9 | at(sqrt(x + 4) - (x - 2), x, 0) = 4
+   claim:s10 | at(sqrt(x + 4) - (x - 2), x, 5) = 0
+   claim:s11 | x = 5
+##K4 tyt-den-011 CORRECT ['right', 'equal as set']
+   answer | {}
+   claim:d1 | Ne(x,3)
+   claim:e1 | x/(x-3) = 3/(x-3) + 2
+   claim:e2 | x = 3 + 2*(x-3)
+   claim:c1 | 3 + 2*(x-3) = 2*x - 3
+   claim:e3 | x = 2*x - 3
+   claim:e4 | 0 = x - 3
+   claim:e5 | x = 3
+   claim:fin | False
+##K4 tyt-den-012 CORRECT ['right', 'equal as value']
+   answer | 3
+   claim:s1 | (m+1)**2-16=0
+   claim:s2 | (m+1)**2-16=(m-3)*(m+5)
+   claim:s3 | (m-3)*(m+5)=0
+   claim:s4 | m-3=0
+   claim:s5 | m=3
+   claim:s6 | m+5=0
+   claim:s7 | m=-5
+   claim:s8 | m=3
+##K4 tyt-den-013 CORRECT ['right', 'equal as set']
+   answer | {5}
+   claim:s0 | sqrt(x + 4) = x - 2
+   claim:s1 | x + 4 >= 0
+   claim:s2 | x - 2 >= 0
+   claim:s3 | (x - 2)**2 = x + 4
+   claim:s4 | (x - 2)**2 - (x + 4) = x**2 - 5*x
+   claim:s5 | x**2 - 5*x = x*(x - 5)
+   claim:s6 | x*(x - 5) = 0
+   claim:s7 | x = 0
+   claim:s8 | x = 5
+   claim:s9 | at(sqrt(x + 4) - (x - 2), x, 0) = 4
+   claim:s10 | at(sqrt(x + 4) - (x - 2), x, 5) = 0
+   claim:s11 | x = 5
+##K4 tyt-den-014 CORRECT ['right', 'equal as set']
+   answer | {-1, 4}
+   claim:s1 | Abs(2*x - 3) = 5
+   claim:s2 | 2*x - 3 >= 0
+   claim:s3 | Abs(2*x - 3) = 2*x - 3
+   claim:s4 | 2*x - 3 = 5
+   claim:s5 | 2*x = 8
+   claim:s6 | x = 4
+   claim:s7 | at(Abs(2*x - 3), x, 4) = 5
+   claim:s8 | 2*x - 3 < 0
+   claim:s9 | Abs(2*x - 3) = -(2*x - 3)
+   claim:s10 | 2*x - 3 = -5
+   claim:s11 | 2*x = -2
+   claim:s12 | x = -1
+   claim:s13 | at(Abs(2*x - 3), x, -1) = 5
+   claim:s14 | Or(Eq(x, -1), Eq(x, 4))
+##K4 tyt-esf-001 CORRECT ['right', 'equal as interval']
+   answer | (-2, 7)
+   claim:s1 | x**2 - 5*x - 14 < 0
+   claim:s2 | factor(x**2 - 5*x - 14) = (x - 7)*(x + 2)
+   claim:s3 | (x - 7)*(x + 2) < 0
+   claim:s4 | at(x**2 - 5*x - 14, x, -2) = 0
+   claim:s5 | at(x**2 - 5*x - 14, x, 7) = 0
+   claim:s6 | at(x**2 - 5*x - 14, x, 0) = -14
+   claim:s7 | at(x**2 - 5*x - 14, x, -3) = 10
+   claim:s8 | at(x**2 - 5*x - 14, x, 8) = 10
+   claim:s10 | Contains(x, Interval.open(-2, 7))
+##K4 tyt-esf-002 CORRECT ['right', 'equal as interval']
+   answer | (-oo, -2) U [1, oo)
+   claim:s1 | x + 2 != 0
+   claim:s2 | (x - 1)/(x + 2) >= 0
+   claim:s3 | x + 2 > 0
+   claim:s4 | x - 1 >= 0
+   claim:s5 | x >= 1
+   claim:s6 | x + 2 < 0
+   claim:s7 | x - 1 <= 0
+   claim:s8 | x < -2
+   claim:s9 | (x < -2) | (x >= 1)
+##K4 tyt-esf-003 CORRECT ['right', 'equal as count']
+   answer | 3
+   claim:s1 | Abs(x - 3) < 2
+   claim:s2 | -2 < x - 3
+   claim:s3 | x - 3 < 2
+   claim:s4 | -2 + 3 = 1
+   claim:s5 | 1 < x
+   claim:s6 | 2 + 3 = 5
+   claim:s7 | x < 5
+   claim:s9 | 4 - 2 + 1 = 3
+   claim:s10 | 5 - 1 - 1 = 3
+##K4 tyt-esf-004 CORRECT ['right', 'equal as value']
+   answer | 9
+   claim:s1 | f(x) = 2*x + 3
+   claim:s2 | g(x) = x**2 - 1
+   claim:s3 | at(x**2 - 1, x, 2) = 3
+   claim:s4 | at(2*x + 3, x, 3) = 9
+   claim:s5 | at(2*(x**2 - 1) + 3, x, 2) = 9
+##K4 tyt-esf-005 CORRECT ['right', 'equal as value']
+   answer | 8/3
+   claim:s1 | (2*x+3)/(x-1)=5
+   claim:s2 | x-1 != 0
+   claim:s3 | 2*x+3=5*(x-1)
+   claim:s4 | 2*x+3=5*x-5
+   claim:s5 | 8=3*x
+   claim:s6 | x=8/3
+   claim:s7 | at((2*x+3)/(x-1),x,8/3)=5
+   claim:s8 | x=8/3
+##K4 tyt-esf-006 CORRECT ['right', 'equal as value']
+   answer | -5
+   claim:s1 | P(3) = 0
+   claim:s2 | P(3) = 3**3 - 2*3**2 + k*3 + 6
+   claim:s3 | 3**3 - 2*3**2 + k*3 + 6 = 15 + 3*k
+   claim:s4 | 15 + 3*k = 0
+   claim:s5 | k = -5
+   claim:s6 | k = -5
+##K4 tyt-esf-008 CORRECT ['right', 'equal as interval']
+   answer | (-2, 7)
+   claim:s1 | x**2 - 5*x - 14 < 0
+   claim:s2 | factor(x**2 - 5*x - 14) = (x - 7)*(x + 2)
+   claim:s3 | (x - 7)*(x + 2) < 0
+   claim:s4 | at(x**2 - 5*x - 14, x, -2) = 0
+   claim:s5 | at(x**2 - 5*x - 14, x, 7) = 0
+   claim:s6 | at(x**2 - 5*x - 14, x, 0) = -14
+   claim:s7 | at(x**2 - 5*x - 14, x, -3) = 10
+   claim:s8 | at(x**2 - 5*x - 14, x, 8) = 10
+   claim:s10 | Contains(x, Interval.open(-2, 7))
+##K4 tyt-esf-009 CORRECT ['right', 'equal as value']
+   answer | 9
+   claim:s1 | f(x) = 2*x + 3
+   claim:s2 | g(x) = x**2 - 1
+   claim:s3 | at(x**2 - 1, x, 2) = 3
+   claim:s4 | at(2*x + 3, x, 3) = 9
+   claim:s5 | at(2*(x**2 - 1) + 3, x, 2) = 9
+##K4 tyt-esf-010 CORRECT ['right', 'equal as value']
+   answer | -5
+   claim:s1 | P(3) = 0
+   claim:s2 | P(3) = 3**3 - 2*3**2 + k*3 + 6
+   claim:s3 | 3**3 - 2*3**2 + k*3 + 6 = 15 + 3*k
+   claim:s4 | 15 + 3*k = 0
+   claim:s5 | k = -5
+   claim:s6 | k = -5
+##K4 tyt-esf-011 CORRECT ['right', 'equal as interval']
+   answer | (-2, 7)
+   claim:s1 | x**2 - 5*x - 14 < 0
+   claim:s2 | factor(x**2 - 5*x - 14) = (x - 7)*(x + 2)
+   claim:s3 | (x - 7)*(x + 2) < 0
+   claim:s4 | at(x**2 - 5*x - 14, x, -2) = 0
+   claim:s5 | at(x**2 - 5*x - 14, x, 7) = 0
+   claim:s6 | at(x**2 - 5*x - 14, x, 0) = -14
+   claim:s7 | at(x**2 - 5*x - 14, x, -3) = 10
+   claim:s8 | at(x**2 - 5*x - 14, x, 8) = 10
+   claim:s10 | Contains(x, Interval.open(-2, 7))
+##K4 tyt-esf-012 CORRECT ['right', 'equal as interval']
+   answer | (-oo, -2) U [1, oo)
+   claim:s1 | x + 2 != 0
+   claim:s2 | (x - 1)/(x + 2) >= 0
+   claim:s3 | x + 2 > 0
+   claim:s4 | x - 1 >= 0
+   claim:s5 | x >= 1
+   claim:s6 | x + 2 < 0
+   claim:s7 | x - 1 <= 0
+   claim:s8 | x < -2
+   claim:s9 | (x < -2) | (x >= 1)
+##K4 tyt-esf-013 CORRECT ['right', 'equal as value']
+   answer | 8/3
+   claim:s1 | (2*x+3)/(x-1)=5
+   claim:s2 | x-1 != 0
+   claim:s3 | 2*x+3=5*(x-1)
+   claim:s4 | 2*x+3=5*x-5
+   claim:s5 | 8=3*x
+   claim:s6 | x=8/3
+   claim:s7 | at((2*x+3)/(x-1),x,8/3)=5
+   claim:s8 | x=8/3
+##K4 tyt-esf-015 CORRECT ['right', 'equal as value']
+   answer | 9
+   claim:s1 | f(x) = 2*x + 3
+   claim:s2 | g(x) = x**2 - 1
+   claim:s3 | at(x**2 - 1, x, 2) = 3
+   claim:s4 | at(2*x + 3, x, 3) = 9
+   claim:s5 | at(2*(x**2 - 1) + 3, x, 2) = 9
+##K4 tyt-esf-016 CORRECT ['right', 'equal as value']
+   answer | -5
+   claim:s1 | P(3) = 0
+   claim:s2 | P(3) = 3**3 - 2*3**2 + k*3 + 6
+   claim:s3 | 3**3 - 2*3**2 + k*3 + 6 = 15 + 3*k
+   claim:s4 | 15 + 3*k = 0
+   claim:s5 | k = -5
+   claim:s6 | k = -5
+##K4 tyt-geo-001 CORRECT ['right', 'equal as value']
+   answer | 10
+   claim:s3 | AC > 0
+   claim:s5 | 6**2 + 8**2 = 100
+   claim:s6b | 100 >= 0
+   claim:s7 | sqrt(100) = 10
+   claim:s8 | AC = 10
+##K4 tyt-geo-002 CORRECT ['right', 'equal as value']
+   answer | 70°
+   claim:s6 | (180° - 40°)/2 = 70°
+   claim:s8 | B = 70°
+##K4 tyt-geo-003 CORRECT ['right', 'equal as value']
+   answer | 13
+   claim:s3 | AC > 0
+   claim:s5 | 12**2 + 5**2 = 169
+   claim:s7 | sqrt(169) = 13
+   claim:s8 | AC = 13
+##K4 tyt-geo-004 CORRECT ['right', 'equal as value']
+   answer | 8
+   claim:s5 | AD > 0
+   claim:s7 | 12/2 = 6
+   claim:s10 | 10**2 - 6**2 >= 0
+   claim:s11 | sqrt(10**2 - 6**2) = 8
+   claim:s13 | AD = 8
+##K4 tyt-geo-005 CORRECT ['right', 'equal as value']
+   answer | 24
+   claim:s2 | 6*8/2 = 24
+   claim:s3 | S = 24
+##K4 tyt-geo-006 CORRECT ['right', 'equal as value']
+   answer | 70
+   claim:s4 | 180-50-60 = 70
+   claim:s5 | C = 70°
+##K4 tyt-geo-007 CORRECT ['right', 'equal as value']
+   answer | 10
+   claim:s3 | AC > 0
+   claim:s5 | 6**2 + 8**2 = 100
+   claim:s6b | 100 >= 0
+   claim:s7 | sqrt(100) = 10
+   claim:s8 | AC = 10
+##K4 tyt-geo-008 CORRECT ['right', 'equal as value']
+   answer | 70°
+   claim:s6 | (180° - 40°)/2 = 70°
+   claim:s8 | B = 70°
+##K4 tyt-geo-009 CORRECT ['right', 'equal as value']
+   answer | 13
+   claim:s3 | AC > 0
+   claim:s5 | 12**2 + 5**2 = 169
+   claim:s7 | sqrt(169) = 13
+   claim:s8 | AC = 13
+##K4 tyt-geo-010 CORRECT ['right', 'equal as value']
+   answer | 8
+   claim:s5 | AD > 0
+   claim:s7 | 12/2 = 6
+   claim:s10 | 10**2 - 6**2 >= 0
+   claim:s11 | sqrt(10**2 - 6**2) = 8
+   claim:s13 | AD = 8
+##K4 tyt-geo-011 CORRECT ['right', 'equal as value']
+   answer | 24
+   claim:s2 | 6*8/2 = 24
+   claim:s3 | S = 24
+##K4 tyt-geo-012 CORRECT ['right', 'equal as value']
+   answer | 10
+   claim:s3 | AC > 0
+   claim:s5 | 6**2 + 8**2 = 100
+   claim:s6b | 100 >= 0
+   claim:s7 | sqrt(100) = 10
+   claim:s8 | AC = 10
+##K4 tyt-geo-013 CORRECT ['right', 'equal as value']
+   answer | 70°
+   claim:s6 | (180° - 40°)/2 = 70°
+   claim:s8 | B = 70°
+##K4 tyt-geo-014 CORRECT ['right', 'equal as value']
+   answer | 13
+   claim:s3 | AC > 0
+   claim:s5 | 12**2 + 5**2 = 169
+   claim:s7 | sqrt(169) = 13
+   claim:s8 | AC = 13
+##K4 tyt-geo-015 CORRECT ['right', 'equal as value']
+   answer | 8
+   claim:s5 | AD > 0
+   claim:s7 | 12/2 = 6
+   claim:s10 | 10**2 - 6**2 >= 0
+   claim:s11 | sqrt(10**2 - 6**2) = 8
+   claim:s13 | AD = 8
+##K4 tyt-geo-016 CORRECT ['right', 'equal as value']
+   answer | 24
+   claim:s2 | 6*8/2 = 24
+   claim:s3 | S = 24
+##K4 tyt-geo-017 CORRECT ['right', 'equal as value']
+   answer | 70
+   claim:s4 | 180-50-60 = 70
+   claim:s5 | C = 70°
+##K4 tyt-geo-018 CORRECT ['right', 'equal as value']
+   answer | 10
+   claim:s3 | AC > 0
+   claim:s5 | 6**2 + 8**2 = 100
+   claim:s6b | 100 >= 0
+   claim:s7 | sqrt(100) = 10
+   claim:s8 | AC = 10
+##K4 tyt-geo-019 CORRECT ['right', 'equal as value']
+   answer | 24
+   claim:s2 | 6*8/2 = 24
+   claim:s3 | S = 24
+##K4 tyt-geo-020 CORRECT ['right', 'equal as value']
+   answer | 70
+   claim:s4 | 180-50-60 = 70
+   claim:s5 | C = 70°
+##K4 tyt-kap-001 CORRECT ['right', 'equal as interval']
+   answer | [3, oo)
+   claim:s1 | x - 3 >= 0
+   claim:s2 | x >= 3
+   claim:s3 | x in Interval(3, oo)
+##K4 tyt-kap-002 CORRECT ['right', 'equal as interval']
+   answer | [3, oo)
+   claim:s1 | x - 3 >= 0
+   claim:s2 | x >= 3
+   claim:s3 | x in Interval(3, oo)
+##K4 tyt-kap-003 CORRECT ['right', 'equal as interval']
+   answer | [3, oo)
+   claim:s1 | x - 3 >= 0
+   claim:s2 | x >= 3
+   claim:s3 | x in Interval(3, oo)
+##K4 tyt-kap-004 CORRECT ['right', 'equal as set']
+   answer | Union(Interval.open(-oo, -2), Interval.open(-2, 2), Interval.open(2, oo))
+   claim:s1 | x**2 - 4 != 0
+   claim:s2 | factor(x**2 - 4) = (x - 2)*(x + 2)
+   claim:s4 | x != -2
+   claim:s5 | x != 2
+   claim:s6 | Or(x < -2, And(x > -2, x < 2), x > 2)
+##K4 tyt-kap-005 CORRECT ['right', 'equal as set']
+   answer | Union(Interval.open(-oo, -2), Interval.open(-2, 2), Interval.open(2, oo))
+   claim:s1 | x**2 - 4 != 0
+   claim:s2 | factor(x**2 - 4) = (x - 2)*(x + 2)
+   claim:s4 | x != -2
+   claim:s5 | x != 2
+   claim:s6 | Or(x < -2, And(x > -2, x < 2), x > 2)
+##K4 tyt-kap-006 CORRECT ['right', 'equal as set']
+   answer | Union(Interval.open(-oo, -2), Interval.open(-2, 2), Interval.open(2, oo))
+   claim:s1 | x**2 - 4 != 0
+   claim:s2 | factor(x**2 - 4) = (x - 2)*(x + 2)
+   claim:s4 | x != -2
+   claim:s5 | x != 2
+   claim:s6 | Or(x < -2, And(x > -2, x < 2), x > 2)
+##K4 tyt-kap-007 CORRECT ['right', 'equal as interval']
+   answer | (1, oo)
+   claim:s1 | x - 1 > 0
+   claim:s2 | x > 1
+   claim:s3 | x in Interval.open(1, oo)
+##K4 tyt-kap-008 CORRECT ['right', 'equal as interval']
+   answer | (1, oo)
+   claim:s1 | x - 1 > 0
+   claim:s2 | x > 1
+   claim:s3 | x in Interval.open(1, oo)
+##K4 tyt-kap-009 CORRECT ['right', 'equal as interval']
+   answer | (1, oo)
+   claim:s1 | x - 1 > 0
+   claim:s2 | x > 1
+   claim:s3 | x in Interval.open(1, oo)
+##K4 tyt-kap-010 CORRECT ['right', 'equal as expression']
+   answer | (2*x+1)/(x*(x+1))
+   claim:s1 | x != 0
+   claim:s2 | x+1 != 0
+   claim:s3 | 1/x + 1/(x+1) = (x+1+x)/(x*(x+1))
+   claim:s4 | (x+1+x) = (2*x+1)
+   claim:s5 | 1/x + 1/(x+1) = (2*x+1)/(x*(x+1))
+   claim:s6 | 1/x + 1/(x+1) = (2*x+1)/(x*(x+1))
+##K4 tyt-kap-011 CORRECT ['right', 'equal as expression']
+   answer | (2*x+1)/(x*(x+1))
+   claim:s1 | x != 0
+   claim:s2 | x+1 != 0
+   claim:s3 | 1/x + 1/(x+1) = (x+1+x)/(x*(x+1))
+   claim:s4 | (x+1+x) = (2*x+1)
+   claim:s5 | 1/x + 1/(x+1) = (2*x+1)/(x*(x+1))
+   claim:s6 | 1/x + 1/(x+1) = (2*x+1)/(x*(x+1))
+##K4 tyt-kap-012 CORRECT ['right', 'equal as expression']
+   answer | (2*x+1)/(x*(x+1))
+   claim:s1 | x != 0
+   claim:s2 | x+1 != 0
+   claim:s3 | 1/x + 1/(x+1) = (x+1+x)/(x*(x+1))
+   claim:s4 | (x+1+x) = (2*x+1)
+   claim:s5 | 1/x + 1/(x+1) = (2*x+1)/(x*(x+1))
+   claim:s6 | 1/x + 1/(x+1) = (2*x+1)/(x*(x+1))
+##K4 tyt-kap-013 CORRECT ['right', 'equal as expression']
+   answer | 4*x
+   claim:s1 | (x+1)**2 = x**2 + 2*x + 1
+   claim:s2 | (x-1)**2 = x**2 - 2*x + 1
+   claim:s3 | (x+1)**2 - (x-1)**2 = (x**2 + 2*x + 1) - (x**2 - 2*x + 1)
+   claim:s4 | (x**2 + 2*x + 1) - (x**2 - 2*x + 1) = 4*x
+   claim:s5 | (x+1)**2 - (x-1)**2 = 4*x
+##K4 tyt-kap-014 CORRECT ['right', 'equal as expression']
+   answer | 4*x
+   claim:s1 | (x+1)**2 = x**2 + 2*x + 1
+   claim:s2 | (x-1)**2 = x**2 - 2*x + 1
+   claim:s3 | (x+1)**2 - (x-1)**2 = (x**2 + 2*x + 1) - (x**2 - 2*x + 1)
+   claim:s4 | (x**2 + 2*x + 1) - (x**2 - 2*x + 1) = 4*x
+   claim:s5 | (x+1)**2 - (x-1)**2 = 4*x
+##K4 tyt-kap-015 CORRECT ['right', 'equal as expression']
+   answer | 4*x
+   claim:s1 | (x+1)**2 = x**2 + 2*x + 1
+   claim:s2 | (x-1)**2 = x**2 - 2*x + 1
+   claim:s3 | (x+1)**2 - (x-1)**2 = (x**2 + 2*x + 1) - (x**2 - 2*x + 1)
+   claim:s4 | (x**2 + 2*x + 1) - (x**2 - 2*x + 1) = 4*x
+   claim:s5 | (x+1)**2 - (x-1)**2 = 4*x
+##K4 tyt-kap-016 CORRECT ['right', 'equal as count']
+   answer | 9
+   claim:s1 | x + y = 10
+   claim:s2 | x >= 1
+   claim:s3 | y >= 1
+   claim:s5 | y = 10 - x
+   claim:s6 | 10 - x >= 1
+   claim:s7 | x <= 9
+   claim:s8 | 9 - 1 + 1 = 9
+   claim:s9 | 9 = 9
+##K4 tyt-kap-017 CORRECT ['right', 'equal as count']
+   answer | 9
+   claim:s1 | x + y = 10
+   claim:s2 | x >= 1
+   claim:s3 | y >= 1
+   claim:s5 | y = 10 - x
+   claim:s6 | 10 - x >= 1
+   claim:s7 | x <= 9
+   claim:s8 | 9 - 1 + 1 = 9
+   claim:s9 | 9 = 9
+##K4 tyt-kap-018 CORRECT ['right', 'equal as count']
+   answer | 9
+   claim:s1 | x + y = 10
+   claim:s2 | x >= 1
+   claim:s3 | y >= 1
+   claim:s5 | y = 10 - x
+   claim:s6 | 10 - x >= 1
+   claim:s7 | x <= 9
+   claim:s8 | 9 - 1 + 1 = 9
+   claim:s9 | 9 = 9
+##K4 tyt-kap-019 CORRECT ['right', 'equal as count']
+   answer | 3
+   claim:s1 | 2*x + 3*y = 12
+   claim:s2 | x >= 0
+   claim:s3 | y >= 0
+   claim:s5 | 2*x = 12 - 3*y
+   claim:s6 | 12 - 3*y >= 0
+   claim:s7 | y <= 4
+   claim:c0 | y = 0
+   claim:e0 | x = 6
+   claim:c1 | y = 1
+   claim:e1 | x = 9/2
+   claim:c2 | y = 2
+   claim:e2 | x = 3
+   claim:c3 | y = 3
+   claim:e3 | x = 3/2
+   claim:c4 | y = 4
+   claim:e4 | x = 0
+   claim:sf | 5 - 2 = 3
+##K4 tyt-kap-020 CORRECT ['right', 'equal as count']
+   answer | 3
+   claim:s1 | 2*x + 3*y = 12
+   claim:s2 | x >= 0
+   claim:s3 | y >= 0
+   claim:s5 | 2*x = 12 - 3*y
+   claim:s6 | 12 - 3*y >= 0
+   claim:s7 | y <= 4
+   claim:c0 | y = 0
+   claim:e0 | x = 6
+   claim:c1 | y = 1
+   claim:e1 | x = 9/2
+   claim:c2 | y = 2
+   claim:e2 | x = 3
+   claim:c3 | y = 3
+   claim:e3 | x = 3/2
+   claim:c4 | y = 4
+   claim:e4 | x = 0
+   claim:sf | 5 - 2 = 3
+##K4 tyt-ola-001 CORRECT ['right', 'equal as value']
+   answer | 1/6
+   claim:s2 | 6*6 = 36
+   claim:s3 | 36 != 0
+   claim:s5 | 6/36 = 1/6
+   claim:s6 | 1/6 = 1/6
+##K4 tyt-ola-002 CORRECT ['right', 'equal as count']
+   answer | 120
+   claim:s2 | 5*4*3*2*1 = 120
+   claim:s3 | factorial(5) = 120
+##K4 tyt-ola-003 CORRECT ['right', 'equal as count']
+   answer | 20
+   claim:s2 | binomial(6, 3) = 20
+   claim:s3 | 6*5*4/(3*2*1) = 20
+   claim:s4 | binomial(6, 3) = 20
+##K4 tyt-ola-004 CORRECT ['right', 'equal as count']
+   answer | 60
+   claim:s1 | 1 > 0
+   claim:s3 | 5*4*3 = 60
+   claim:s4 | 60 = 60
+##K4 tyt-ola-005 CORRECT ['right', 'equal as value']
+   answer | 3/10
+   claim:s1 | binomial(5,2) = 10
+   claim:s2 | 10 != 0
+   claim:s3 | binomial(3,2) = 3
+   claim:s4 | binomial(3,2)/binomial(5,2) = 3/10
+##K4 tyt-ola-006 CORRECT ['right', 'equal as value']
+   answer | 1/2
+   claim:s1 | 2**3 = 8
+   claim:s2 | binomial(3, 2) = 3
+   claim:s3 | binomial(3, 3) = 1
+   claim:s4 | 3 + 1 = 4
+   claim:a1 | 8 != 0
+   claim:s5 | 4/8 = 1/2
+   claim:s6 | 4/8 = 1/2
+##K4 tyt-ola-007 CORRECT ['right', 'equal as value']
+   answer | 1/6
+   claim:s2 | 6*6 = 36
+   claim:s3 | 36 != 0
+   claim:s5 | 6/36 = 1/6
+   claim:s6 | 1/6 = 1/6
+##K4 tyt-ola-008 CORRECT ['right', 'equal as count']
+   answer | 120
+   claim:s2 | 5*4*3*2*1 = 120
+   claim:s3 | factorial(5) = 120
+##K4 tyt-ola-009 CORRECT ['right', 'equal as count']
+   answer | 20
+   claim:s2 | binomial(6, 3) = 20
+   claim:s3 | 6*5*4/(3*2*1) = 20
+   claim:s4 | binomial(6, 3) = 20
+##K4 tyt-ola-010 CORRECT ['right', 'equal as count']
+   answer | 60
+   claim:s1 | 1 > 0
+   claim:s3 | 5*4*3 = 60
+   claim:s4 | 60 = 60
+##K4 tyt-ola-011 CORRECT ['right', 'equal as value']
+   answer | 3/10
+   claim:s1 | binomial(5,2) = 10
+   claim:s2 | 10 != 0
+   claim:s3 | binomial(3,2) = 3
+   claim:s4 | binomial(3,2)/binomial(5,2) = 3/10
+##K4 tyt-ola-012 CORRECT ['right', 'equal as value']
+   answer | 1/6
+   claim:s2 | 6*6 = 36
+   claim:s3 | 36 != 0
+   claim:s5 | 6/36 = 1/6
+   claim:s6 | 1/6 = 1/6
+##K4 tyt-ola-013 CORRECT ['right', 'equal as count']
+   answer | 120
+   claim:s2 | 5*4*3*2*1 = 120
+   claim:s3 | factorial(5) = 120
+##K4 tyt-ola-014 CORRECT ['right', 'equal as count']
+   answer | 20
+   claim:s2 | binomial(6, 3) = 20
+   claim:s3 | 6*5*4/(3*2*1) = 20
+   claim:s4 | binomial(6, 3) = 20
+##K4 tyt-ola-015 CORRECT ['right', 'equal as count']
+   answer | 60
+   claim:s1 | 1 > 0
+   claim:s3 | 5*4*3 = 60
+   claim:s4 | 60 = 60
+##K4 tyt-ola-016 CORRECT ['right', 'equal as value']
+   answer | 3/10
+   claim:s1 | binomial(5,2) = 10
+   claim:s2 | 10 != 0
+   claim:s3 | binomial(3,2) = 3
+   claim:s4 | binomial(3,2)/binomial(5,2) = 3/10
+##K4 tyt-ola-017 CORRECT ['right', 'equal as value']
+   answer | 1/2
+   claim:s1 | 2**3 = 8
+   claim:s2 | binomial(3, 2) = 3
+   claim:s3 | binomial(3, 3) = 1
+   claim:s4 | 3 + 1 = 4
+   claim:a1 | 8 != 0
+   claim:s5 | 4/8 = 1/2
+   claim:s6 | 4/8 = 1/2
+##K4 tyt-ola-018 CORRECT ['right', 'equal as count']
+   answer | 120
+   claim:s2 | 5*4*3*2*1 = 120
+   claim:s3 | factorial(5) = 120
+##K4 tyt-ola-019 CORRECT ['right', 'equal as count']
+   answer | 20
+   claim:s2 | binomial(6, 3) = 20
+   claim:s3 | 6*5*4/(3*2*1) = 20
+   claim:s4 | binomial(6, 3) = 20
+##K4 tyt-ola-020 CORRECT ['right', 'equal as value']
+   answer | 1/6
+   claim:s2 | 6*6 = 36
+   claim:s3 | 36 != 0
+   claim:s5 | 6/36 = 1/6
+   claim:s6 | 1/6 = 1/6
+##K4 tyt-prob-001 CORRECT ['right', 'equal as value']
+   answer | 16
+   claim:s1 | a + b = 30
+   claim:s2 | 2*a + 4*b = 88
+   claim:s3 | a >= 0
+   claim:s4 | b >= 0
+   claim:s5 | a = 30 - b
+   claim:s6 | 2*(30 - b) + 4*b = 88
+   claim:s7 | 2*(30 - b) + 4*b = 60 + 2*b
+   claim:s8 | 60 + 2*b = 88
+   claim:s9 | 2*b = 28
+   claim:s10 | 28/2 = 14
+   claim:s11 | b = 14
+   claim:s12 | 30 - 14 = 16
+   claim:s13 | a = 16
+   claim:s14 | a = 16
+##K4 tyt-prob-002 CORRECT ['right', 'equal as value']
+   answer | 16
+   claim:s1 | a + b = 30
+   claim:s2 | 2*a + 4*b = 88
+   claim:s3 | a >= 0
+   claim:s4 | b >= 0
+   claim:s5 | a = 30 - b
+   claim:s6 | 2*(30 - b) + 4*b = 88
+   claim:s7 | 2*(30 - b) + 4*b = 60 + 2*b
+   claim:s8 | 60 + 2*b = 88
+   claim:s9 | 2*b = 28
+   claim:s10 | 28/2 = 14
+   claim:s11 | b = 14
+   claim:s12 | 30 - 14 = 16
+   claim:s13 | a = 16
+   claim:s14 | a = 16
+##K4 tyt-prob-003 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | t > 0
+   claim:s2 | t*(1/6+1/3) = 1
+   claim:s3 | 1/6+1/3 = 1/2
+   claim:s4 | t*(1/2) = 1
+   claim:s5 | 1/(1/2) = 2
+   claim:s6 | t = 2
+   claim:s7 | t = 2
+##K4 tyt-prob-004 CORRECT ['right', 'equal as value']
+   answer | 6
+   claim:s1 | 3*x+5 = 5*x-7
+   claim:s2 | 12 = 2*x
+   claim:s3 | 12/2 = 6
+   claim:s4 | x = 6
+##K4 tyt-prob-005 CORRECT ['right', 'equal as value']
+   answer | 40
+   claim:s1 | o > 0
+   claim:s2 | b > 0
+   claim:s3 | b = 4*o
+   claim:s4 | b + 5 = 3*(o + 5)
+   claim:s5 | 4*o + 5 = 3*(o + 5)
+   claim:s6 | o = 10
+   claim:s7 | 4*10 = 40
+   claim:s8 | b = 40
+   claim:s9 | b = 40
+##K4 tyt-prob-006 CORRECT ['right', 'equal as value']
+   answer | 7
+   claim:a1 | 80 != 0
+   claim:a2 | 60 != 0
+   claim:s1 | 240/80 = 3
+   claim:s2 | 240/60 = 4
+   claim:s3 | 3 + 4 = 7
+   claim:s4 | 7 = 7
+##K4 tyt-prob-007 CORRECT ['right', 'equal as value']
+   answer | 300
+   claim:s1 | x > 0
+   claim:s2 | x*(1 + 20/100) = 360
+   claim:s3 | 1 + 20/100 = 6/5
+   claim:s4 | x*(6/5) = 360
+   claim:s5 | 6/5 > 0
+   claim:s6 | 360*5/6 = 300
+   claim:s7 | x = 300
+   claim:s8 | x = 300
+##K4 tyt-prob-008 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | t > 0
+   claim:s2 | t*(1/6+1/3) = 1
+   claim:s3 | 1/6+1/3 = 1/2
+   claim:s4 | t*(1/2) = 1
+   claim:s5 | 1/(1/2) = 2
+   claim:s6 | t = 2
+   claim:s7 | t = 2
+##K4 tyt-prob-009 CORRECT ['right', 'equal as value']
+   answer | 40
+   claim:s1 | o > 0
+   claim:s2 | b > 0
+   claim:s3 | b = 4*o
+   claim:s4 | b + 5 = 3*(o + 5)
+   claim:s5 | 4*o + 5 = 3*(o + 5)
+   claim:s6 | o = 10
+   claim:s7 | 4*10 = 40
+   claim:s8 | b = 40
+   claim:s9 | b = 40
+##K4 tyt-prob-010 CORRECT ['right', 'equal as value']
+   answer | 7
+   claim:a1 | 80 != 0
+   claim:a2 | 60 != 0
+   claim:s1 | 240/80 = 3
+   claim:s2 | 240/60 = 4
+   claim:s3 | 3 + 4 = 7
+   claim:s4 | 7 = 7
+##K4 tyt-prob-011 CORRECT ['right', 'equal as value']
+   answer | 300
+   claim:s1 | x > 0
+   claim:s2 | x*(1 + 20/100) = 360
+   claim:s3 | 1 + 20/100 = 6/5
+   claim:s4 | x*(6/5) = 360
+   claim:s5 | 6/5 > 0
+   claim:s6 | 360*5/6 = 300
+   claim:s7 | x = 300
+   claim:s8 | x = 300
+##K4 tyt-prob-012 CORRECT ['right', 'equal as value']
+   answer | 16
+   claim:s1 | a + b = 30
+   claim:s2 | 2*a + 4*b = 88
+   claim:s3 | a >= 0
+   claim:s4 | b >= 0
+   claim:s5 | a = 30 - b
+   claim:s6 | 2*(30 - b) + 4*b = 88
+   claim:s7 | 2*(30 - b) + 4*b = 60 + 2*b
+   claim:s8 | 60 + 2*b = 88
+   claim:s9 | 2*b = 28
+   claim:s10 | 28/2 = 14
+   claim:s11 | b = 14
+   claim:s12 | 30 - 14 = 16
+   claim:s13 | a = 16
+   claim:s14 | a = 16
+##K4 tyt-prob-013 CORRECT ['right', 'equal as value']
+   answer | 16
+   claim:s1 | a + b = 30
+   claim:s2 | 2*a + 4*b = 88
+   claim:s3 | a >= 0
+   claim:s4 | b >= 0
+   claim:s5 | a = 30 - b
+   claim:s6 | 2*(30 - b) + 4*b = 88
+   claim:s7 | 2*(30 - b) + 4*b = 60 + 2*b
+   claim:s8 | 60 + 2*b = 88
+   claim:s9 | 2*b = 28
+   claim:s10 | 28/2 = 14
+   claim:s11 | b = 14
+   claim:s12 | 30 - 14 = 16
+   claim:s13 | a = 16
+   claim:s14 | a = 16
+##K4 tyt-prob-014 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | t > 0
+   claim:s2 | t*(1/6+1/3) = 1
+   claim:s3 | 1/6+1/3 = 1/2
+   claim:s4 | t*(1/2) = 1
+   claim:s5 | 1/(1/2) = 2
+   claim:s6 | t = 2
+   claim:s7 | t = 2
+##K4 tyt-prob-015 CORRECT ['right', 'equal as value']
+   answer | 6
+   claim:s1 | 3*x+5 = 5*x-7
+   claim:s2 | 12 = 2*x
+   claim:s3 | 12/2 = 6
+   claim:s4 | x = 6
+##K4 tyt-prob-016 CORRECT ['right', 'equal as value']
+   answer | 40
+   claim:s1 | o > 0
+   claim:s2 | b > 0
+   claim:s3 | b = 4*o
+   claim:s4 | b + 5 = 3*(o + 5)
+   claim:s5 | 4*o + 5 = 3*(o + 5)
+   claim:s6 | o = 10
+   claim:s7 | 4*10 = 40
+   claim:s8 | b = 40
+   claim:s9 | b = 40
+##K4 tyt-prob-017 CORRECT ['right', 'equal as value']
+   answer | 300
+   claim:s1 | x > 0
+   claim:s2 | x*(1 + 20/100) = 360
+   claim:s3 | 1 + 20/100 = 6/5
+   claim:s4 | x*(6/5) = 360
+   claim:s5 | 6/5 > 0
+   claim:s6 | 360*5/6 = 300
+   claim:s7 | x = 300
+   claim:s8 | x = 300
+##K4 tyt-prob-018 CORRECT ['right', 'equal as value']
+   answer | 16
+   claim:s1 | a + b = 30
+   claim:s2 | 2*a + 4*b = 88
+   claim:s3 | a >= 0
+   claim:s4 | b >= 0
+   claim:s5 | a = 30 - b
+   claim:s6 | 2*(30 - b) + 4*b = 88
+   claim:s7 | 2*(30 - b) + 4*b = 60 + 2*b
+   claim:s8 | 60 + 2*b = 88
+   claim:s9 | 2*b = 28
+   claim:s10 | 28/2 = 14
+   claim:s11 | b = 14
+   claim:s12 | 30 - 14 = 16
+   claim:s13 | a = 16
+   claim:s14 | a = 16
+##K4 tyt-prob-019 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | t > 0
+   claim:s2 | t*(1/6+1/3) = 1
+   claim:s3 | 1/6+1/3 = 1/2
+   claim:s4 | t*(1/2) = 1
+   claim:s5 | 1/(1/2) = 2
+   claim:s6 | t = 2
+   claim:s7 | t = 2
+##K4 tyt-prob-020 CORRECT ['right', 'equal as value']
+   answer | 7
+   claim:a1 | 80 != 0
+   claim:a2 | 60 != 0
+   claim:s1 | 240/80 = 3
+   claim:s2 | 240/60 = 4
+   claim:s3 | 3 + 4 = 7
+   claim:s4 | 7 = 7
+##K4 tyt-prob-021 CORRECT ['right', 'equal as value']
+   answer | 6
+   claim:s1 | 3*x+5 = 5*x-7
+   claim:s2 | 12 = 2*x
+   claim:s3 | 12/2 = 6
+   claim:s4 | x = 6
+##K4 tyt-say-001 CORRECT ['right', 'equal as value']
+   answer | 12
+   claim:s1 | gcd(84,120)=12
+   claim:s2 | gcd(84,120)=12
+##K4 tyt-say-002 CORRECT ['right', 'equal as value']
+   answer | 9
+   claim:s1 | 3*x + 5*y = 41
+   claim:s2 | x >= 1
+   claim:s3 | y >= 1
+   claim:s4 | x < y
+   claim:s5 | 5*y = 41 - 3*x
+   claim:s6 | 5*y <= 38
+   claim:s7 | 5*8 - 38 = 2
+   claim:s8 | y < 8
+   claim:c1 | y = 1
+   claim:k1 | (41 - 5*1)/3 = 12
+   claim:g1 | x = 12
+   claim:c2 | y = 2
+   claim:k2 | (41 - 5*2)/3 = 31/3
+   claim:g2 | x = 31/3
+   claim:c3 | y = 3
+   claim:k3 | (41 - 5*3)/3 = 26/3
+   claim:g3 | x = 26/3
+   claim:c4 | y = 4
+   claim:k4 | (41 - 5*4)/3 = 7
+   claim:g4 | x = 7
+   claim:c5 | y = 5
+   claim:k5 | (41 - 5*5)/3 = 16/3
+   claim:g5 | x = 16/3
+   claim:c6 | y = 6
+   claim:k6 | (41 - 5*6)/3 = 11/3
+   claim:g6 | x = 11/3
+   claim:c7 | y = 7
+   claim:k7 | (41 - 5*7)/3 = 2
+   claim:g7 | x = 2
+   claim:ksum | 2 + 7 = 9
+   claim:gsum | x + y = 9
+   claim:fin | x + y = 9
+##K4 tyt-say-003 CORRECT ['right', 'equal as value']
+   answer | 47
+   claim:s1 | a >= 1
+   claim:s2 | a <= 9
+   claim:s3 | b >= 0
+   claim:s4 | b <= 9
+   claim:s6 | a + b = 11
+   claim:s7 | 10*b + a = 10*a + b + 27
+   claim:s8 | -9*a + 9*b = 27
+   claim:s9 | -1*a + b = 3
+   claim:s10 | b = 7
+   claim:s11 | a = 4
+   claim:s12 | 10*4 + 7 = 47
+   claim:s13 | 10*7 + 4 - (10*4 + 7) = 27
+   claim:s14 | 10*a + b = 47
+##K4 tyt-say-004 INCORRECT ['right', 'equal as value']
+   answer | 28
+   claim:a1 | n>0
+   claim:a2 | Mod(n,2)=0
+   claim:s1 | (n-4)+(n-2)+n=78
+   claim:s2 | ((n-4)+(n-2)+n)=3*n-6
+   claim:s3 | 3*n-6=78
+   claim:s4 | 3*n=84
+   claim:s5 | n=28
+   claim:s6 | n=28
+##K4 tyt-say-005 CORRECT ['right', 'equal as count']
+   answer | 8
+   claim:s1 | x**2 - 5*x - 14 < 0
+   claim:s2 | (x - 7)*(x + 2) = x**2 - 5*x - 14
+   claim:s3 | (x - 7)*(x + 2) < 0
+   claim:s4 | at(x**2 - 5*x - 14, x, -2) = 0
+   claim:s5 | at(x**2 - 5*x - 14, x, 7) = 0
+   claim:s6 | x > -2
+   claim:s7 | x < 7
+   claim:s9 | 6 - (-1) + 1 = 8
+   claim:s10 | 8 = 8
+##K4 tyt-say-006 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | Mod(5**6, 7) = 1
+   claim:s2 | 6*16 + 4 = 100
+   claim:s3 | 5**100 = (5**6)**16*5**4
+   claim:s4 | Mod(5**4, 7) = 2
+   claim:s5 | Mod(5**100, 7) = 2
+##K4 tyt-say-007 CORRECT ['right', 'equal as value']
+   answer | 12
+   claim:s1 | gcd(84,120)=12
+   claim:s2 | gcd(84,120)=12
+##K4 tyt-say-008 CORRECT ['right', 'equal as value']
+   answer | 47
+   claim:s1 | a >= 1
+   claim:s2 | a <= 9
+   claim:s3 | b >= 0
+   claim:s4 | b <= 9
+   claim:s6 | a + b = 11
+   claim:s7 | 10*b + a = 10*a + b + 27
+   claim:s8 | -9*a + 9*b = 27
+   claim:s9 | -1*a + b = 3
+   claim:s10 | b = 7
+   claim:s11 | a = 4
+   claim:s12 | 10*4 + 7 = 47
+   claim:s13 | 10*7 + 4 - (10*4 + 7) = 27
+   claim:s14 | 10*a + b = 47
+##K4 tyt-say-009 INCORRECT ['right', 'equal as value']
+   answer | 28
+   claim:a1 | n>0
+   claim:a2 | Mod(n,2)=0
+   claim:s1 | (n-4)+(n-2)+n=78
+   claim:s2 | ((n-4)+(n-2)+n)=3*n-6
+   claim:s3 | 3*n-6=78
+   claim:s4 | 3*n=84
+   claim:s5 | n=28
+   claim:s6 | n=28
+##K4 tyt-say-010 CORRECT ['right', 'equal as value']
+   answer | 12
+   claim:s1 | gcd(84,120)=12
+   claim:s2 | gcd(84,120)=12
+##K4 tyt-say-011 CORRECT ['right', 'equal as value']
+   answer | 47
+   claim:s1 | a >= 1
+   claim:s2 | a <= 9
+   claim:s3 | b >= 0
+   claim:s4 | b <= 9
+   claim:s6 | a + b = 11
+   claim:s7 | 10*b + a = 10*a + b + 27
+   claim:s8 | -9*a + 9*b = 27
+   claim:s9 | -1*a + b = 3
+   claim:s10 | b = 7
+   claim:s11 | a = 4
+   claim:s12 | 10*4 + 7 = 47
+   claim:s13 | 10*7 + 4 - (10*4 + 7) = 27
+   claim:s14 | 10*a + b = 47
+##K4 tyt-say-012 INCORRECT ['right', 'equal as value']
+   answer | 28
+   claim:a1 | n>0
+   claim:a2 | Mod(n,2)=0
+   claim:s1 | (n-4)+(n-2)+n=78
+   claim:s2 | ((n-4)+(n-2)+n)=3*n-6
+   claim:s3 | 3*n-6=78
+   claim:s4 | 3*n=84
+   claim:s5 | n=28
+   claim:s6 | n=28
+##K4 tyt-say-013 CORRECT ['right', 'equal as count']
+   answer | 8
+   claim:s1 | x**2 - 5*x - 14 < 0
+   claim:s2 | (x - 7)*(x + 2) = x**2 - 5*x - 14
+   claim:s3 | (x - 7)*(x + 2) < 0
+   claim:s4 | at(x**2 - 5*x - 14, x, -2) = 0
+   claim:s5 | at(x**2 - 5*x - 14, x, 7) = 0
+   claim:s6 | x > -2
+   claim:s7 | x < 7
+   claim:s9 | 6 - (-1) + 1 = 8
+   claim:s10 | 8 = 8
+##K4 tyt-say-014 CORRECT ['right', 'equal as value']
+   answer | 2
+   claim:s1 | Mod(5**6, 7) = 1
+   claim:s2 | 6*16 + 4 = 100
+   claim:s3 | 5**100 = (5**6)**16*5**4
+   claim:s4 | Mod(5**4, 7) = 2
+   claim:s5 | Mod(5**100, 7) = 2
+##K4 tyt-say-015 CORRECT ['right', 'equal as value']
+   answer | 9
+   claim:s1 | 3*x + 5*y = 41
+   claim:s2 | x >= 1
+   claim:s3 | y >= 1
+   claim:s4 | x < y
+   claim:s5 | 5*y = 41 - 3*x
+   claim:s6 | 5*y <= 38
+   claim:s7 | 5*8 - 38 = 2
+   claim:s8 | y < 8
+   claim:c1 | y = 1
+   claim:k1 | (41 - 5*1)/3 = 12
+   claim:g1 | x = 12
+   claim:c2 | y = 2
+   claim:k2 | (41 - 5*2)/3 = 31/3
+   claim:g2 | x = 31/3
+   claim:c3 | y = 3
+   claim:k3 | (41 - 5*3)/3 = 26/3
+   claim:g3 | x = 26/3
+   claim:c4 | y = 4
+   claim:k4 | (41 - 5*4)/3 = 7
+   claim:g4 | x = 7
+   claim:c5 | y = 5
+   claim:k5 | (41 - 5*5)/3 = 16/3
+   claim:g5 | x = 16/3
+   claim:c6 | y = 6
+   claim:k6 | (41 - 5*6)/3 = 11/3
+   claim:g6 | x = 11/3
+   claim:c7 | y = 7
+   claim:k7 | (41 - 5*7)/3 = 2
+   claim:g7 | x = 2
+   claim:ksum | 2 + 7 = 9
+   claim:gsum | x + y = 9
+   claim:fin | x + y = 9
+##K4 tyt-say-016 INCORRECT ['right', 'equal as value']
+   answer | 28
+   claim:a1 | n>0
+   claim:a2 | Mod(n,2)=0
+   claim:s1 | (n-4)+(n-2)+n=78
+   claim:s2 | ((n-4)+(n-2)+n)=3*n-6
+   claim:s3 | 3*n-6=78
+   claim:s4 | 3*n=84
+   claim:s5 | n=28
+   claim:s6 | n=28
+##K4 uni-001 CORRECT ['right', 'equal as value']
+   answer | -4
+   claim:s1 | x > 0
+   claim:s2 | diff(2*sqrt(x)*log(x) - 4*sqrt(x), x) = log(x)/sqrt(x)
+   claim:s3 | at(2*sqrt(x)*log(x) - 4*sqrt(x), x, 1) = -4
+   claim:s7 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+   claim:s8 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+##K4 uni-002 CORRECT ['right', 'equal as value']
+   answer | -2
+   claim:s1 | 1*4 = 4
+   claim:s2 | 2*3 = 6
+   claim:s3 | 4-6 = -2
+   claim:s4 | -2 = -2
+##K4 uni-003 CORRECT ['right', 'equal as value']
+   answer | E
+   claim:s1 | n > 0
+   claim:s2 | Limit((1+1/n)**n, n, oo) = E
+   claim:s3 | Limit((1+1/n)**n, n, oo) = E
+##K4 uni-004 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | k >= 1
+   claim:s2 | n >= 1
+   claim:s3 | k*(k+1) != 0
+   claim:s4 | n+1 != 0
+   claim:s5 | 1/(k*(k+1)) = 1/k - 1/(k+1)
+   claim:s6 | Sum(1/(k*(k+1)), (k, 1, n)) = 1 - 1/(n+1)
+   claim:s7 | Limit(1 - 1/(n+1), n, oo) = 1
+   claim:s8 | Sum(1/(k*(k+1)), (k, 1, oo)) = 1
+##K4 uni-006 CORRECT ['right', 'equal as value']
+   answer | -4
+   claim:s1 | x > 0
+   claim:s2 | diff(2*sqrt(x)*log(x) - 4*sqrt(x), x) = log(x)/sqrt(x)
+   claim:s3 | at(2*sqrt(x)*log(x) - 4*sqrt(x), x, 1) = -4
+   claim:s7 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+   claim:s8 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+##K4 uni-007 CORRECT ['right', 'equal as value']
+   answer | -2
+   claim:s1 | 1*4 = 4
+   claim:s2 | 2*3 = 6
+   claim:s3 | 4-6 = -2
+   claim:s4 | -2 = -2
+##K4 uni-008 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | k >= 1
+   claim:s2 | n >= 1
+   claim:s3 | k*(k+1) != 0
+   claim:s4 | n+1 != 0
+   claim:s5 | 1/(k*(k+1)) = 1/k - 1/(k+1)
+   claim:s6 | Sum(1/(k*(k+1)), (k, 1, n)) = 1 - 1/(n+1)
+   claim:s7 | Limit(1 - 1/(n+1), n, oo) = 1
+   claim:s8 | Sum(1/(k*(k+1)), (k, 1, oo)) = 1
+##K4 uni-009 CORRECT ['right', 'equal as value']
+   answer | E
+   claim:s1 | n > 0
+   claim:s2 | Limit((1+1/n)**n, n, oo) = E
+   claim:s3 | Limit((1+1/n)**n, n, oo) = E
+##K4 uni-010 CORRECT ['right', 'equal as value']
+   answer | -4
+   claim:s1 | x > 0
+   claim:s2 | diff(2*sqrt(x)*log(x) - 4*sqrt(x), x) = log(x)/sqrt(x)
+   claim:s3 | at(2*sqrt(x)*log(x) - 4*sqrt(x), x, 1) = -4
+   claim:s7 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+   claim:s8 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+##K4 uni-011 CORRECT ['right', 'equal as value']
+   answer | -2
+   claim:s1 | 1*4 = 4
+   claim:s2 | 2*3 = 6
+   claim:s3 | 4-6 = -2
+   claim:s4 | -2 = -2
+##K4 uni-012 CORRECT ['right', 'equal as value']
+   answer | E
+   claim:s1 | n > 0
+   claim:s2 | Limit((1+1/n)**n, n, oo) = E
+   claim:s3 | Limit((1+1/n)**n, n, oo) = E
+##K4 uni-013 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | k >= 1
+   claim:s2 | n >= 1
+   claim:s3 | k*(k+1) != 0
+   claim:s4 | n+1 != 0
+   claim:s5 | 1/(k*(k+1)) = 1/k - 1/(k+1)
+   claim:s6 | Sum(1/(k*(k+1)), (k, 1, n)) = 1 - 1/(n+1)
+   claim:s7 | Limit(1 - 1/(n+1), n, oo) = 1
+   claim:s8 | Sum(1/(k*(k+1)), (k, 1, oo)) = 1
+##K4 uni-014 CORRECT ['right', 'equal as value']
+   answer | 3
+   claim:s7 | Max(1, 3) = 3
+   claim:s8 | L = 3
+##K4 uni-015 CORRECT ['right', 'equal as value']
+   answer | -2
+   claim:s1 | 1*4 = 4
+   claim:s2 | 2*3 = 6
+   claim:s3 | 4-6 = -2
+   claim:s4 | -2 = -2
+##K4 uni-016 CORRECT ['right', 'equal as value']
+   answer | 1
+   claim:s1 | k >= 1
+   claim:s2 | n >= 1
+   claim:s3 | k*(k+1) != 0
+   claim:s4 | n+1 != 0
+   claim:s5 | 1/(k*(k+1)) = 1/k - 1/(k+1)
+   claim:s6 | Sum(1/(k*(k+1)), (k, 1, n)) = 1 - 1/(n+1)
+   claim:s7 | Limit(1 - 1/(n+1), n, oo) = 1
+   claim:s8 | Sum(1/(k*(k+1)), (k, 1, oo)) = 1
+##K4 uni-017 CORRECT ['right', 'equal as value']
+   answer | E
+   claim:s1 | n > 0
+   claim:s2 | Limit((1+1/n)**n, n, oo) = E
+   claim:s3 | Limit((1+1/n)**n, n, oo) = E
+##K4 uni-018 CORRECT ['right', 'equal as value']
+   answer | -4
+   claim:s1 | x > 0
+   claim:s2 | diff(2*sqrt(x)*log(x) - 4*sqrt(x), x) = log(x)/sqrt(x)
+   claim:s3 | at(2*sqrt(x)*log(x) - 4*sqrt(x), x, 1) = -4
+   claim:s7 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+   claim:s8 | Integral(log(x)/sqrt(x), (x, 0, 1)) = -4
+##K4 uni-019 CORRECT ['right', 'equal as value']
+   answer | 3
+   claim:s7 | Max(1, 3) = 3
+   claim:s8 | L = 3
+##K4 uni-020 CORRECT ['right', 'equal as value']
+   answer | -2
+   claim:s1 | 1*4 = 4
+   claim:s2 | 2*3 = 6
+   claim:s3 | 4-6 = -2
+   claim:s4 | -2 = -2
+##K4 uni-la-001 CORRECT ['right', 'equal as expression']
+   answer | Matrix([[-2, 1], [3/2, -1/2]])
+   claim:s2 | 1*4-2*3 = -2
+   claim:s3 | -2 != 0
+   claim:s4 | (1/(-2))*Matrix([[4, -2], [-3, 1]]) = Matrix([[-2, 1], [3/2, -1/2]])
+   claim:s5 | Matrix([[1, 2], [3, 4]])*Matrix([[-2, 1], [3/2, -1/2]]) = Matrix([[1, 0], [0, 1]])
+   claim:s6 | A**(-1) = Matrix([[-2, 1], [3/2, -1/2]])
+##K4 uni-la-002 CORRECT ['right', 'equal as set']
+   answer | {1, 3}
+   claim:s5 | L in {1, 3}
+##K4 uni-la-003 CORRECT ['right', 'equal element by element']
+   answer | [1, 1]
+   claim:s3 | (2-3) = -1
+   claim:s7 | x=1
+   claim:s8 | y=1
+##K4 uni-la-004 CORRECT ['right', 'equal element by element']
+   answer | (16,14)
+   claim:s3 | 1*4-1*2=2
+   claim:s4 | 2!=0
+   claim:s6 | 30*4-1*88=32
+   claim:s7 | 32/2=16
+   claim:s10 | 1*88-30*2=28
+   claim:s11 | 28/2=14
+   claim:s13 | (x,y)=(16,14)
+##K4 uni-la-005 CORRECT ['right', 'equal as expression']
+   answer | Matrix([[1, 3], [0, 1]])
+   claim:s4 | A**3 = Matrix([[1, 3], [0, 1]])
+##K4 uni-la-006 CORRECT ['right', 'equal as expression']
+   answer | Matrix([[-2, 1], [3/2, -1/2]])
+   claim:s2 | 1*4-2*3 = -2
+   claim:s3 | -2 != 0
+   claim:s4 | (1/(-2))*Matrix([[4, -2], [-3, 1]]) = Matrix([[-2, 1], [3/2, -1/2]])
+   claim:s5 | Matrix([[1, 2], [3, 4]])*Matrix([[-2, 1], [3/2, -1/2]]) = Matrix([[1, 0], [0, 1]])
+   claim:s6 | A**(-1) = Matrix([[-2, 1], [3/2, -1/2]])
+##K4 uni-la-007 CORRECT ['right', 'equal as set']
+   answer | {1, 3}
+   claim:s5 | L in {1, 3}
+##K4 uni-la-008 CORRECT ['right', 'equal element by element']
+   answer | [1, 1]
+   claim:s3 | (2-3) = -1
+   claim:s7 | x=1
+   claim:s8 | y=1
+##K4 uni-la-009 CORRECT ['right', 'equal element by element']
+   answer | (16,14)
+   claim:s3 | 1*4-1*2=2
+   claim:s4 | 2!=0
+   claim:s6 | 30*4-1*88=32
+   claim:s7 | 32/2=16
+   claim:s10 | 1*88-30*2=28
+   claim:s11 | 28/2=14
+   claim:s13 | (x,y)=(16,14)
+##K4 uni-la-010 CORRECT ['right', 'equal as expression']
+   answer | Matrix([[1, 3], [0, 1]])
+   claim:s4 | A**3 = Matrix([[1, 3], [0, 1]])
+##K4 uni-la-011 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s1 | 3*1-2*1 = 1
+   claim:s2 | 1*1-2*1 = -1
+   claim:s3 | 1*1-3*1 = -2
+   claim:s4 | 2*1-0*(-1)+1*(-2) = 0
+   claim:s5 | 2*(3*1-2*1)-0*(1*1-2*1)+1*(1*1-3*1) = 0
+##K4 uni-la-012 CORRECT ['right', 'equal as expression']
+   answer | Matrix([[-2, 1], [3/2, -1/2]])
+   claim:s2 | 1*4-2*3 = -2
+   claim:s3 | -2 != 0
+   claim:s4 | (1/(-2))*Matrix([[4, -2], [-3, 1]]) = Matrix([[-2, 1], [3/2, -1/2]])
+   claim:s5 | Matrix([[1, 2], [3, 4]])*Matrix([[-2, 1], [3/2, -1/2]]) = Matrix([[1, 0], [0, 1]])
+   claim:s6 | A**(-1) = Matrix([[-2, 1], [3/2, -1/2]])
+##K4 uni-la-013 CORRECT ['right', 'equal as set']
+   answer | {1, 3}
+   claim:s5 | L in {1, 3}
+##K4 uni-la-014 CORRECT ['right', 'equal element by element']
+   answer | [1, 1]
+   claim:s3 | (2-3) = -1
+   claim:s7 | x=1
+   claim:s8 | y=1
+##K4 uni-la-015 CORRECT ['right', 'equal element by element']
+   answer | (16,14)
+   claim:s3 | 1*4-1*2=2
+   claim:s4 | 2!=0
+   claim:s6 | 30*4-1*88=32
+   claim:s7 | 32/2=16
+   claim:s10 | 1*88-30*2=28
+   claim:s11 | 28/2=14
+   claim:s13 | (x,y)=(16,14)
+##K4 uni-la-016 CORRECT ['right', 'equal as expression']
+   answer | Matrix([[1, 3], [0, 1]])
+   claim:s4 | A**3 = Matrix([[1, 3], [0, 1]])
+##K4 uni-la-017 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s1 | 3*1-2*1 = 1
+   claim:s2 | 1*1-2*1 = -1
+   claim:s3 | 1*1-3*1 = -2
+   claim:s4 | 2*1-0*(-1)+1*(-2) = 0
+   claim:s5 | 2*(3*1-2*1)-0*(1*1-2*1)+1*(1*1-3*1) = 0
+##K4 uni-la-018 CORRECT ['right', 'equal element by element']
+   answer | (16,14)
+   claim:s3 | 1*4-1*2=2
+   claim:s4 | 2!=0
+   claim:s6 | 30*4-1*88=32
+   claim:s7 | 32/2=16
+   claim:s10 | 1*88-30*2=28
+   claim:s11 | 28/2=14
+   claim:s13 | (x,y)=(16,14)
+##K4 uni-la-019 CORRECT ['right', 'equal as value']
+   answer | 0
+   claim:s1 | 3*1-2*1 = 1
+   claim:s2 | 1*1-2*1 = -1
+   claim:s3 | 1*1-3*1 = -2
+   claim:s4 | 2*1-0*(-1)+1*(-2) = 0
+   claim:s5 | 2*(3*1-2*1)-0*(1*1-2*1)+1*(1*1-3*1) = 0
+##K4 uni-la-020 CORRECT ['right', 'equal as expression']
+   answer | Matrix([[1, 3], [0, 1]])
+   claim:s4 | A**3 = Matrix([[1, 3], [0, 1]])
