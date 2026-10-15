@@ -1,0 +1,35 @@
+d4e 5. tur kararları (ana oturum, 15 Ekim 2026; A+ planı, DECISIONS §89). Kaynak: saldiri/d4e4/bulgular.json (d4e 4. tur saldırısı,
+8025acb, taban a0a0829) ve bu oturumun envanteri (a_arti/envanter.json, a_arti/ajan/d4e/probe/p_k.py, p_u.py). Tur 4'ün üstüne kurulur
+(dal wip/d4e-tur4, worktree /home/user/wt/d4e4). Genel ilke değişmedi: yanlış olabilecek cevaba CORRECT yok; doğru cevabın haksız reddi de hata;
+kanıtlanamıyorsa UNKNOWN; kapsama kaybı en dar biçimde. Kontroller (CORRECT kalmalı, ölçüldü): |sin x|' = cos x·sin x/|sin x|, √(sin x)',
+√(1+sin x)', √(1+cos x)', √(x − cos x)' = (1 + sin x)/(2√(x − cos x)), (x⁴)^(1/3)'; kap.py/kap2.py'nin 89 ders kitabı vakasında kayıp 0.
+
+- D4E4-YO-1 (yüksek, tur 4 getirdi, yanlış onay): RK-6'nın "u > 0 koşulu yalnız u'nun sıfırlarında düşer" atlaması YALNIZ kök/kesirli kuvvet
+  anahtarlarına uygulanır, Abs(u) anahtarına uygulanmaz. |u|'da iddianın yazılı tanımlılığı u < 0 yarısında da ayrıca okunur; tanımsız olduğu
+  kanıtlanırsa (hedef türev orada var) RK-8 gereği INCORRECT, kanıtlanamazsa UNKNOWN; CORRECT ancak iki yarıda da tanımlılık kanıtlıysa.
+  Örnek: |x − cos x|' iddiası + 0·log(x − cos x) CORRECT olmamalı (a0a0829'da UNKNOWN'dı). Kesin düzeltme (fail-closed değil).
+- D4E4-YO-2 (orta, önceden var, yapay): u^r türevinde taban sıfırı x₀'ın katlılığı m ve r·m > 1 ise f x₀'da türevlidir (f'(x₀) = 0); iddia
+  orada yazıldığı biçimde tanımsızsa (0/0) RK-8 gereği CORRECT verilmez: x₀ kesin bulunursa INCORRECT, aile/çözülemeyen sıfır ya da katlılığı
+  kanıtlanamayan sıfır varsa UNKNOWN. DAR kural: yalnız r·m > 1 kanıtlı ya da r·m ≤ 1 kanıtlanamayan sıfırlar; r·m ≤ 1 kanıtlı sıfırlarda
+  (√(sin x): m = 1; √(1+sin x): m = 2, r·m = 1, köşe) davranış değişmez. Örnek: ((x − 1/2)²·sin πx)^(3/4) türevinde ders kitabı iddiası
+  CORRECT olmamalı.
+- D4E4-YO-3 (orta, önceden var, yapay): f'nin çözülemeyen g ≥ 0 koşulunda bölge açık kısım (g > 0) alınıyorsa, g'nin dokunan sıfırları
+  (g = 0 ve g' = 0) iddianın yazılı tanımlılık denetimine girer. Dokunan sıfırlar g = g' = 0 sisteminin kesin çözümüyle bulunur; sistem kesin
+  çözülemiyorsa ve iddianın yazılı tanımsız noktası olabilecekse UNKNOWN. g'nin dokunan sıfırı yoksa (kanıtlı) davranış değişmez:
+  √(x − cos x)' (g = x − cos x, g' = 1 + sin x: ortak sıfır yok) CORRECT kalır. Örnek: x² + 0·√(x sin x) için 2x + 0/x CORRECT olmamalı
+  (x = 0 dokunan sıfır, f orada türevli, iddia tanımsız: INCORRECT ya da UNKNOWN).
+- D4E4-RK-1 (düşük, önceden var, haksız ret): türev ifadesinde ret yalnız SymPy türev formülünün nan olduğu taban sıfırındaki random_point
+  "defined_on_one_side_only" kanıtına dayanıyorsa INCORRECT → UNKNOWN (yalnız yumuşatma; CORRECT üretmez). (1 − cos x)^(3/4) için her yerde
+  tanımlı doğru iddia INCORRECT olmamalı.
+- D4E4-U2 (gerçekçi kapsama, tur 4 getirdi): YO-6'nın _piecewise_conditions'ı sembolsüz (yerine koyma sonrası kapalı) Piecewise'ı kararsız
+  saymaz: koşullar kesin işaretle (`certified_sign`; birleşimde d4b tur 10'un sertleştirdiği hâli; SymPy'nin yuvarlama gürültüsüyle
+  değerlendirmesi değil) değerlendirilir, seçilen dalın yazılı
+  tanımlılığı okunur; bir koşul kararsızsa kararsız. Sabitlenmiş parametre önce yerine konur. Parçalı f'nin f(2) değeri (evaluate) ve "f
+  parçalı, verilen x = 2" a0a0829'daki gibi CORRECT; yanlış değer INCORRECT. İki ve daha çok serbest sembollü Piecewise tur 4'teki gibi.
+- D4E4-U3 (çökme): _family_members tam sayı aralığını kurmadan önce uzunluğunu sınırla karşılaştırır; sınırı aşan aile listesi UNKNOWN
+  (MemoryError/OverflowError yok).
+- D4E4-U4 (süre): _value_holes'un her derivative_at_point çağrısı aynı hücre bütçesine (_KINK_BUDGET ve süre) bağlanır; bütçe biterse UNKNOWN.
+- D4E4-U5 (önceden var, haksız ret): tam sayı bildirilmiş sembolik üs (positive_integer/nonnegative_integer: koşul yok; integer: taban ≠ 0)
+  yazılı tanımlılıkta taban > 0 üretmez. n ∈ ℤ⁺ iken (x²)ⁿ' = 2n·x^(2n−1) INCORRECT olmamalı (kanıtlanırsa CORRECT, değilse UNKNOWN);
+  x^n → n·x^(n−1) CORRECT kalmalı. Tam sayı bildirilmemiş sembolik üste davranış değişmez.
+- D4E4-U1 (doğrulanmadı; envanterde regresyon olarak yeniden üretilemedi): kapsam dışı, yalnız kayıt.
