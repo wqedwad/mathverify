@@ -35,8 +35,8 @@ from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
-from .domain import (definedness_conditions, written_definedness, written_undefined_in, relation_holds_at,
-                     in_domain)
+from .domain import (convention_null_on, definedness_conditions, written_definedness, written_undefined_in,
+                     relation_holds_at, in_domain)
 from .limits import membership_conditions, membership_holds_on, neighbourhoods, written_undefined_everywhere
 
 LAYER = "certify.calculus"
@@ -168,6 +168,12 @@ def _exact_conditions(e, var) -> list | None:
                   and node.base.has(var) and node.exp.is_Rational and not node.exp.is_Integer}
     out: list = []
     for c in conds:
+        if isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and c.args[1].kind == "zero_power":
+            # 0**sqrt(2): 0 by the strict rule, undefined as written; a point with no one value, read like a pole (an
+            # improper integral's point when finitely many, the primitive's at an end only: `_checked_difference`).
+            # Held as no rule, it left ∫_0^1 x**sqrt(2) dx = sqrt(2) - 1 without a certificate, on [1, 2] too (merge
+            # of d4b round 10 with d4c round 4)
+            c = Ne(c.args[0], 0)
         if c is sp.true:
             continue
         if isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and c.args[1].kind == "odd_root" \
@@ -2341,11 +2347,15 @@ def _unreadable_task_expression(src, expr, var, ns, ms, regions=(), pins=None):
     (limits.written_undefined_everywhere) or carries a membership condition on it
     (limits.membership_conditions) that does not hold on one of `regions` for certain (the integral's
     interval, a neighbourhood of the derivative's point: `limits.membership_holds_on`), read at the values the givens
-    fix (`pins`); None otherwise."""
+    fix (`pins`); None otherwise. A convention condition that fails at finitely many points of a region at most
+    (`domain.convention_null_on`) does not stop it: an integral does not read its integrand on a finite set (0**0 at
+    the end of ∫_0^1 x**x dx), and a derivative's neighbourhood shrinks past such a point; its own point is read as
+    written by the callers (`f_undefined_at_point_as_written`)."""
     if written_undefined_everywhere(src, ns):
         return unknown(LAYER, "expression_undefined_as_written", ms, {"expr": src},
                        flags=["expression_undefined_as_written"])
-    members = [c for c in membership_conditions(src, expr, var, ns, pins) if not membership_holds_on(c, var, regions)]
+    members = [c for c in membership_conditions(src, expr, var, ns, pins) if not membership_holds_on(c, var, regions)
+               and not any(convention_null_on(c, var, r) for r in regions)]
     if members:
         return unknown(LAYER, "membership_condition_on_variable", ms, {"conditions": [str(c) for c in members]},
                        flags=["membership_condition"])

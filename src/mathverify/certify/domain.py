@@ -352,6 +352,32 @@ def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
     return fwd, back
 
 
+# where a convention condition on the operand u may fail (`convention_split`'s `back`), by kind; an integer exponent
+# or bound and a binomial argument fail between the integers, on every piece of positive length (a Sum's range on the
+# variable comes with its integer bound)
+_MAY_FAIL = {"odd_root": lambda u: sp.Lt(u, 0), "mod_divisor": lambda u: sp.Le(u, 0), "zero_power": lambda u: Eq(u, 0),
+             "origin": lambda u: Eq(u, 0), "real_power": lambda u: sp.Le(u[0], 0)}
+
+
+def convention_null_on(c, var, region) -> bool:
+    """Does the convention condition `c` on `var` (`is_convention`) fail, or stay undecided, at finitely many points of
+    `region` (an integral's [a, b]) at most, for certain (the set exact, sandbox.exactsets)? An integral does not read
+    its integrand on a finite set, where it is an improper integral (the isolated points of `calculus.
+    integrand_undefined_on_a_subinterval`): ∫_0^1 x**x dx, ∫_0^1 x**sqrt(2) dx and ∫_{-1}^{1} x**0 dx are one number
+    whatever 0**0 and 0**sqrt(2) are, and the wrong claim 100 for the first was UNKNOWN (merge of d4b round 10 with d4c
+    round 4). A piece of positive length where the convention fails (x**x on (-1, 0)) is no null set: the integral
+    has two readings there. The operand's own poles are its definedness conditions, not this one's."""
+    st = c.args[1] if isinstance(c, sp.Contains) else None
+    fails = _MAY_FAIL.get(st.kind) if isinstance(st, Convention) else None
+    if fails is None:
+        return False
+    try:
+        pts = exact_solveset(fails(c.args[0]), var, region)
+    except Exception:  # noqa: BLE001 - a set not found exactly proves nothing
+        return False
+    return isinstance(pts, (sp.FiniteSet, type(S.EmptySet)))
+
+
 # The index values of a Sum/Product checked one by one, and the work one top-level reading may spend
 # on binders (a solveset counts as _SOLVE_COST points): a nested finite sum is checked at every
 # (outer, inner) pair, and 150 x 150 of them held verify() 33 s, three levels over 400 s (review of
