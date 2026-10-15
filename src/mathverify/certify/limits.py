@@ -24,7 +24,7 @@ from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
-from .domain import (Convention, _violations, closed_condition_undecided, definedness_conditions,
+from .domain import (Convention, _violations, closed_condition_undecided, convention_null_on, definedness_conditions,
                      open_conditions_empty, written_definedness)
 
 LAYER = "certify.limits"
@@ -749,9 +749,13 @@ def verify(ir, solution, ctx: Ctx):
         unpinned = sorted({str(s_) for c in written for s_ in getattr(c, "free_symbols", set()) - {var}})
         if unpinned:
             return unknown(LAYER, "parametric_limit", t.ms, {"parameters": unpinned}, flags=["parametric_limit"])
+        # a limit does not read the point itself: a convention failing at finitely many points of a punctured
+        # neighbourhood is passed by a smaller one (`domain.convention_null_on`): 0**0 had left lim_{x->0+} x**x = 1
+        # UNKNOWN since d4b round 10 (merge of 15 Oct 2026)
+        near = approach_regions(point, side)
         members = [c for c in membership_conditions(p["expr"], expr, var, ctx.ns, pins)
-                   if not holds_on_the_tail(c, var, point)
-                   and not membership_holds_on(c, var, approach_regions(point, side))]
+                   if not holds_on_the_tail(c, var, point) and not membership_holds_on(c, var, near)
+                   and not any(convention_null_on(c, var, r) for r in near)]
         if members:
             return unknown(LAYER, "membership_condition_on_variable", t.ms,
                            {"conditions": [str(c) for c in members]}, flags=["membership_condition"])

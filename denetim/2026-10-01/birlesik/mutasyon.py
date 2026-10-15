@@ -1,6 +1,8 @@
 """Mutation check of the merged state of the fourth audit's fixes (A+, 15 Oct 2026; DECISIONS §89): the guards the
-merge itself added (`equiv.numeric._monotone_sign`, d4c round 3's `_stands` inside d4b round 10's `_evalf_sign`). The
-machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is the one of denetim/2026-09-26/mutasyon.py.
+merge itself added (`equiv.numeric._monotone_sign`, d4c round 3's `_stands` inside d4b round 10's `_evalf_sign`;
+`certify.domain.convention_null_on` in the integral, derivative and limit gates, the zero_power point of
+`certify.calculus._exact_conditions`). The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
+the one of denetim/2026-09-26/mutasyon.py.
 
     .venv/bin/python denetim/2026-10-01/birlesik/mutasyon.py [-j N] [--list] [name ...]
 
@@ -19,7 +21,14 @@ _spec.loader.exec_module(base)
 
 NUM = "src/mathverify/equiv/numeric.py"
 TB = "tests/test_d4_birlesik.py::"
-T3 = "tests/test_d4_d4c_tur3.py::test_a_sign_must_stand_at_a_higher_precision"
+# M06/M07: the d4c round 3 test no longer reaches the filter (d4b round 10 does not read its case strictly); the
+# mechanism is checked directly (survived on 5e88d41 with T3 as their test)
+STANDS = TB + "test_a_strict_reading_that_does_not_stand_higher_is_dropped"
+DOM = "src/mathverify/certify/domain.py"
+CAL = "src/mathverify/certify/calculus.py"
+LIM = "src/mathverify/certify/limits.py"
+NULL = TB + "test_a_convention_on_finitely_many_points_does_not_stop_an_integral"
+PTS = TB + "test_the_points_where_a_convention_may_fail"
 
 MUTATIONS = [
     ("M01 tekdüze işlev kuralı yok", NUM, "    s = _monotone_sign(e, timeout)\n    if s is not None:\n        return s\n",
@@ -37,9 +46,27 @@ MUTATIONS = [
      TB + "test_monotone_functions_take_their_arguments_sign"),
     ("M06 okuma yüksek hassasiyette denetlenmez", NUM,
      "    reads = [p for p in (_evalf_strict(e),) if p is not None and _stands(e, p)]\n",
-     "    reads = [p for p in (_evalf_strict(e),) if p is not None]\n", T3),
+     "    reads = [p for p in (_evalf_strict(e),) if p is not None]\n", STANDS),
     ("M07 negatif okuma yüksek hassasiyette denetlenmez", NUM,
-     "        if q is not None and _stands(-e, q):\n", "        if q is not None:\n", T3),
+     "        if q is not None and _stands(-e, q):\n", "        if q is not None:\n", STANDS),
+    ("M08 integral ve türev sonlu kümeyi atlamaz", CAL,
+     "\n               and not any(convention_null_on(c, var, r) for r in regions)]", "]", NULL),
+    ("M09 limit sonlu kümeyi atlamaz", LIM,
+     "\n                   and not any(convention_null_on(c, var, r) for r in near)]", "]",
+     TB + "test_a_limit_does_not_read_its_point"),
+    ("M10 yalnız boş küme ihmal edilir", DOM, "    return isinstance(pts, (sp.FiniteSet, type(S.EmptySet)))\n",
+     "    return pts is S.EmptySet\n", NULL),
+    ("M11 pozitif uzunluklu küme de ihmal edilir", DOM,
+     "    return isinstance(pts, (sp.FiniteSet, type(S.EmptySet)))\n", "    return True\n", PTS),
+    ("M12 kesin bulunmayan küme ihmal edilir", DOM, "    return isinstance(pts, (sp.FiniteSet, type(S.EmptySet)))\n",
+     "    return isinstance(pts, (sp.FiniteSet, type(S.EmptySet), sp.ConditionSet))\n", PTS),
+    ("M13 real_power okunmaz", DOM, ', "real_power": lambda u: sp.Le(u[0], 0)}', "}", NULL),
+    ("M14 zero_power okunmaz", DOM, ' "zero_power": lambda u: Eq(u, 0),\n', "\n", NULL),
+    ("M15 origin okunmaz", DOM, '"origin": lambda u: Eq(u, 0), ', "", PTS),
+    ("M16 mod_divisor okunmaz", DOM, ' "mod_divisor": lambda u: sp.Le(u, 0),', "", PTS),
+    ("M17 odd_root okunmaz", DOM, '{"odd_root": lambda u: sp.Lt(u, 0),', "{", NULL),
+    ("M18 TTK'da zero_power noktası kural değil", CAL, "            c = Ne(c.args[0], 0)\n", "            pass\n",
+     TB + "test_the_fundamental_theorem_with_an_irrational_power"),
 ]
 
 if __name__ == "__main__":
