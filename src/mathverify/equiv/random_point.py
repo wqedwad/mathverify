@@ -191,6 +191,7 @@ _NONSMOOTH = (sp.Abs, sp.sign, sp.Max, sp.Min, sp.floor, sp.ceiling, sp.frac, sp
               sp.Piecewise, sp.Heaviside, sp.re, sp.im, sp.arg, sp.conjugate)
 _BREAKPOINT_LIMIT = 40
 _CELL_LIMIT = 24
+_CELL_FAILURES = 3           # failed symbolic attempts one cell proof may spend (deterministic: round 4, RK-9)
 _PERIOD_LIMIT = 5000
 
 
@@ -464,6 +465,8 @@ def _cell_proof(a, b, sym, dom, ev) -> bool | None:
             ev["counterexample"] = c
             return False
     edges = [-sp.oo] + bps + [sp.oo]
+    failures = [0]
+    order = [0, 1]               # 0: the plain identity, 1: the one on the cell's parameter
     for lo, hi in zip(edges[:-1], edges[1:]):
         if lo == -sp.oo and hi == sp.oo:
             q = sp.Rational(1, 3)
@@ -496,9 +499,23 @@ def _cell_proof(a, b, sym, dom, ev) -> bool | None:
             xt = lo + t
         else:
             xt = lo + (hi - lo) * t / (1 + t)
-        ok, _ = sym_equal(sa.subs(sym, xt), sb_.subs(sym, xt))
-        if ok is not True:
-            ok, _ = sym_equal(sa, sb_)
+        # the plain identity first (cheap when it holds), the one on the cell's parameter after it; a failed attempt
+        # spends the proof's budget (`_CELL_FAILURES`, a count, not a clock): five cells of |x**4 - 10x**2 + 1| *
+        # |x**3 - 3x + 1| each spent 10 s on a failing parametrised attempt first, 62 s for one verify (attack on d4e
+        # round 3, D4E3-RK-9). The form that proved a cell is tried first on the next ones: 2*log(|x|) for log(x**2)
+        # needs the cell's sign in each of four cells, and four failed plain attempts spent the budget (round 4)
+        ok = None
+        forms = ((sa, sb_), (sa.subs(sym, xt), sb_.subs(sym, xt)))
+        for i in list(order):
+            if failures[0] >= _CELL_FAILURES:
+                ev["nonsmooth_proof"] = "cell_proof_budget"
+                return None
+            ok, _ = sym_equal(*forms[i])
+            if ok is True:
+                if i != order[0]:
+                    order.reverse()
+                break
+            failures[0] += 1
         if ok is not True:
             ev["nonsmooth_proof"] = f"no_symbolic_proof_on_({lo}, {hi})"
             return None

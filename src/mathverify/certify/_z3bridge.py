@@ -153,13 +153,30 @@ class _Tr:
             self.side.append(a > z3.ToReal(t) - 1)
             return t
         if isinstance(e, sp.Piecewise):
-            expr = None
-            for val, cond in reversed(e.args):
+            # the first branch whose condition holds is the value; each branch's side conditions (a denominator,
+            # a root) hold where it is taken, its condition's where it is reached, and a point no condition covers
+            # has no value. The last branch was the value everywhere else, so the gap 0 of
+            # Piecewise((x**2 - 1, x < 1), (x**2 - 1, x > 1)) was a root (attack on d4e round 3, D4E3-YO-7)
+            branches, prior = [], []
+            for val, cond in e.args:
+                reach = z3.And(*prior) if prior else z3.BoolVal(True)
+                n0 = len(self.side)
+                zc = z3.BoolVal(True) if cond is sp.true else self.tr(cond)
+                if len(self.side) > n0:
+                    self.side[n0:] = [z3.Implies(reach, z3.And(*self.side[n0:]))]
+                n1 = len(self.side)
                 v = self.tr(val)
-                if expr is None or cond is sp.true:
-                    expr = v
-                else:
-                    expr = z3.If(self.tr(cond), v, expr)
+                if len(self.side) > n1:
+                    self.side[n1:] = [z3.Implies(z3.And(reach, zc), z3.And(*self.side[n1:]))]
+                branches.append((zc, v))
+                prior.append(z3.Not(zc))
+                if cond is sp.true:
+                    break
+            else:
+                self.side.append(z3.Or(*[zc for zc, _ in branches]))
+            expr = branches[-1][1]
+            for zc, v in reversed(branches[:-1]):
+                expr = z3.If(zc, v, expr)
             return expr
         if isinstance(e, sp.Equality):
             return self.tr(e.lhs) == self.tr(e.rhs)
