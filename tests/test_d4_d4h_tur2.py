@@ -409,6 +409,14 @@ def test_rk6_singletons_and_numbers_still_read():
     assert parse_as_written("S = {-2, 2}") is None
 
 
+@pytest.mark.parametrize("text", ["Limit = 1", "at = 2", "P = 2", "simplify = 1"])
+def test_rk6_a_written_reading_of_a_bare_helper_is_none(text):
+    """A helper named bare is no value either (a Python function SymPy cannot take): the reading as written says
+    None, it raises nothing (principle 13)."""
+    from mathverify.normalize.parse import parse_as_written
+    assert parse_as_written(text) is None
+
+
 @pytest.mark.parametrize("text", ["S", "{S}", "[S, 1]", "(S, 1)", "{S: 2}"])
 def test_rk6_the_reader_refuses_the_registry_itself(text):
     """No reader hands the registry on as a value: `S` came back as SymPy's S (or a list holding it) and each caller
