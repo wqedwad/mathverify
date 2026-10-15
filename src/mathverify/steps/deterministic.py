@@ -2121,6 +2121,29 @@ def _is_polynomial(rel, syms) -> bool:
         return False
 
 
+# the task kinds whose own relation may stand in `params` instead of givens[0] (docs/SOLVER_FORMAT.md; trig_solve's
+# certificate reads `equation` or givens[0] the same way, `certify.trig.verify`)
+_TASK_RELATION_PARAMS = {"solve_equation": "equation", "solve_inequality": "inequality", "trig_solve": "equation"}
+
+
+def _task_relations(ir, ctx: Ctx) -> list:
+    """The task's own relation when it is written in `params` (solve_equation's and trig_solve's `equation`,
+    solve_inequality's `inequality`): a premise as it is when written as givens[0], the other form SOLVER_FORMAT
+    gives. Left out, a step derived from it had no premise and was refuted at a random point: x + 2 = x**2 for
+    x**2 - x - 2 = 0, and the right solution {-1, 2} was INCORRECT (fourth audit PRE-RK-4); for 2 sin x = 1 in
+    trig_solve's params every step was skipped, the wrong sin x = 1/3 too, which givens[0] refutes (round 2 of
+    d4h, the same mechanism). Unreadable: no premise (as before)."""
+    key = _TASK_RELATION_PARAMS.get(ir.task.kind)
+    src = (ir.task.params or {}).get(key) if key else None
+    if not isinstance(src, str) or not src.strip():
+        return []
+    try:
+        rel = ctx.rel(src)
+    except Exception:  # noqa: BLE001 - LeakageError cannot come from a parse; unread: no premise
+        return []
+    return [rel] if _is_relation(rel) and rel not in (sp.true, sp.false) else []
+
+
 def _task_window(ir, ctx: Ctx) -> list:
     """The task's own interval for its variable (`params.interval` of `trig_solve` and `extremum`)
     as relations. It was not a premise: "x = pi/3" from tan x = sqrt(3) on [0, pi) was refuted with
@@ -2646,6 +2669,7 @@ def check_steps(ir, solution, ctx: Ctx):
             givens, restrictions = ctx.givens(), ctx.var_constraints()
         except Exception:
             pass
+        givens = givens + [r for r in _task_relations(ir, ctx) if r not in givens]
         window = _task_window(ir, ctx)
         objects = _task_objects(ir, ctx)
         first_bad = None

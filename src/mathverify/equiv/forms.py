@@ -24,7 +24,7 @@ from typing import Any
 
 import sympy as sp
 
-from ..normalize.parse import unhold
+from ..normalize.parse import entries, map_entries, unhold
 
 __all__ = ["UnverifiedForm", "has_closed_form", "has_parametric_form", "checked_forms"]
 
@@ -42,7 +42,10 @@ def _closed(n) -> bool:
 
 
 def has_closed_form(e) -> bool:
-    return isinstance(e, sp.Basic) and any(_closed(n) for n in sp.preorder_traversal(e))
+    """Does `e`, or an entry of it (a matrix, a list or a tuple: `normalize.parse.entries`), hold a closed
+    form? A Matrix is no Basic, and Matrix([[Limit(2*n*sin(pi/n), n, oo)]]) was compared with SymPy's 0 for
+    its entry unconfirmed (fourth audit H1)."""
+    return any(_closed(n) for x in entries(e) for n in sp.preorder_traversal(x))
 
 
 def _innermost(e) -> list:
@@ -84,8 +87,8 @@ def has_parametric_form(e) -> bool:
     """Does `e` hold an Integral or a Limit with a free symbol (a parameter, or the variable of an
     antiderivative)? No number checks SymPy's value of one: agreement at sample points of the
     parameter is no proof (DECISIONS §80, principle 4)."""
-    return isinstance(e, sp.Basic) and any(isinstance(n, (sp.Integral, sp.Limit)) and n.free_symbols
-                                           for n in sp.preorder_traversal(e))
+    return any(isinstance(n, (sp.Integral, sp.Limit)) and n.free_symbols
+               for x in entries(e) for n in sp.preorder_traversal(x))
 
 
 def checked_forms(e, timeout: float = 8.0):
@@ -96,6 +99,8 @@ def checked_forms(e, timeout: float = 8.0):
     from .numeric import num_equal
     if not has_closed_form(e):
         return e
+    if not isinstance(e, sp.Basic):
+        return map_entries(e, lambda x: checked_forms(x, timeout))
     for _ in range(8):
         inner = _innermost(e)
         if not inner:

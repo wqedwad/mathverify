@@ -282,6 +282,10 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     return flags
 
 
+# the task kinds whose answer is a set of values of the task's variable
+_SET_TASKS = ("solve_equation", "solve_inequality", "domain_of")
+
+
 def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]:
     """Notation only, never values (principle 3): for a set/interval answer, "x ∈ S" is S, a bare
     list "2, 3" is {2, 3}, and a condition on the task variable alone ("x >= 3") is its exact
@@ -289,8 +293,7 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     also the Turkish decimal 2.3 and is left alone: the decimal-comma check abstains on it."""
     ca = solution.claimed_answer
     # the claim's own kind says it is a set; the IR's answer_shape is often left at its default
-    set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in ("solve_equation", "solve_inequality",
-                                                                          "domain_of")
+    set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in _SET_TASKS
     if not set_task or ca.kind not in ("set", "interval", "condition") \
             or not isinstance(ca.payload, str) or ca.payload_source == "option_letter":
         return []
@@ -308,20 +311,70 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
             and not re.search(r"[{}\[\]()]", text) and not re.search(r"\d,\d", text):
         text = "{" + text + "}"
         flags.append("payload_notation_normalized")
-    if isinstance(tvar, str) and re.search(r"[<>]", text) and not re.search(r"[{}\[\]]", text):
-        from .normalize.parse import parse_relation
-        try:
-            rel = parse_relation(text, ctx.ns)
-            if {str(x) for x in rel.free_symbols} == {tvar}:
-                text = str(rel.as_set())
-                flags.append("payload_notation_normalized")
-        except Exception:  # noqa: BLE001 - left as written; the certificates report it
-            pass
+    if isinstance(tvar, str) and not flags:
+        named = _notation_set(text, ctx.ns.get(tvar), ctx)
+        if named is not None:
+            text = named
+            flags.append("payload_notation_normalized")
     if flags:
         ca.payload = text
         if ca.kind == "condition":
             ca.kind = "set"
     return flags
+
+
+def _notation_set(text: str, v, ctx) -> str | None:
+    """The set a claim written as a condition on the task variable `v` NAMES, as set text, or None: relations that
+    compare `v` itself with a closed real number (x >= 3, 1 <= x <= 3, x != 1, x = 2), memberships of `v` in a
+    closed set of reals (x ∈ [1, 3], x ∈ {-2, 2}, x ∈ ℝ), and their and/or/not. The same tree for LaTeX and plain
+    text: `$x \\in \\{-2, 2\\}$` was read as the set {x ∈ {-2, 2}} and refuted, `$1 \\leq x \\leq 3$` and `$x \\neq 1$`
+    too (fourth audit PRE-RK-5). Notation only, never a solution: x**2 < 4 is no notation (it was solved, and the
+    question itself certified as its answer), and is left as written."""
+    from .normalize.parse import parse_relation
+    if not isinstance(v, sp.Symbol):
+        return None
+    try:
+        # the claim's namespace: no operator computes a bound (x < simplify(...) is no notation)
+        named = _condition_set(parse_relation(text, ctx.claim_ns()), v)
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not such a condition: left as written
+        return None
+    return None if named is None else str(named)
+
+
+def _condition_set(c, v):
+    """The set of the condition `c` on `v` (see `_notation_set`), or None."""
+    if isinstance(c, (sp.And, sp.Or)):
+        parts = [_condition_set(a, v) for a in c.args]
+        if any(p is None for p in parts):
+            return None
+        return sp.Intersection(*parts) if isinstance(c, sp.And) else sp.Union(*parts)
+    if isinstance(c, sp.Not):
+        inner = _condition_set(c.args[0], v)
+        return None if inner is None else sp.Complement(sp.S.Reals, inner)
+    if isinstance(c, sp.Contains):
+        el, st = c.args[:2]
+        return st if el == v and isinstance(st, sp.Set) else None
+    if not isinstance(c, sp.core.relational.Relational):
+        return None
+    # the variable itself on one side; a bound that still names it (x <= x**2) leaves the claim naming the unknown,
+    # which `_claim_not_a_value` does not read
+    op = c.rel_op
+    if c.lhs == v:
+        k = c.rhs
+    elif c.rhs == v:
+        k = c.lhs
+        op = {"<": ">", "<=": ">=", ">": "<", ">=": "<="}.get(op, op)
+    else:
+        return None
+    if op == "==" and isinstance(k, sp.Set):        # x = FiniteSet(-2, 2): x ∈ {-2, 2}, as latex2sympy's `x = \{...\}`
+        return k
+    if not isinstance(k, sp.Expr):                  # x = (1, 2), x < {1}: no notation
+        return None
+    return {"==": lambda: sp.FiniteSet(k), "!=": lambda: sp.Complement(sp.S.Reals, sp.FiniteSet(k)),
+            "<": lambda: sp.Interval.open(-sp.oo, k), "<=": lambda: sp.Interval(-sp.oo, k),
+            ">": lambda: sp.Interval.open(k, sp.oo), ">=": lambda: sp.Interval(k, sp.oo)}[op]()
 
 
 def _claim_texts(solution: Solution, raw_payload, options) -> list[str]:
@@ -539,7 +592,12 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
     # "evaluate a" restates a given (audit of 25 Sep 2026). The unknown is the task's variable
     # when it names one; otherwise a variable the givens pin down. A free parameter (`k` in
     # "solve x² = k") may appear in a right answer.
-    if ir.answer_shape in ("scalar", "set", "count") and ca.kind in ("value", "set", "count"):
+    # an interval answer too, and a condition left for a set task (no notation reading took it, see
+    # `_normalize_set_notation`): x**2 - 4*x + 3 <= 0 for that inequality was read as some set and refuted, as a
+    # condition solved and certified (PRE-RK-5)
+    set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in _SET_TASKS
+    if (ir.answer_shape in ("scalar", "set", "count", "interval") and ca.kind in ("value", "set", "count", "interval")) \
+            or (set_task and ca.kind == "condition"):
         tvar = (ir.task.params or {}).get("var")
         if isinstance(tvar, str):
             unknowns = {tvar}
@@ -553,8 +611,10 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
             names = set()
         hit = sorted(names & unknowns)
         if hit:
+            # no value is claimed: no certificate refutes it either (a condition of a set task no notation reading
+            # took, `_notation_set`, read as the set {x ∈ {-2, 2}} was refuted, PRE-RK-5); the steps are checked
             return unknown("intake.claim", f"claimed answer {ca.payload!r} still contains the unknown(s) {hit}",
-                           flags=["claim_is_not_a_value"])
+                           evidence={"claim_not_read": hit}, flags=["claim_is_not_a_value"])
     if ir.task.kind == "evaluate":
         target = (ir.task.params or {}).get("expr") or ir.unknown_of_interest
         if target and _same_structure(str(ca.payload), str(target), ctx):
@@ -567,39 +627,82 @@ def _claim_computes_integer_op(solution: Solution, ctx) -> LayerResult | None:
     """A gcd/lcm of numbers is evaluated by the parser, so a claim written as one is a computation the
     verifier would do itself (principle 2): for "evaluate gcd(84, 120)" the claims gcd(120, 84),
     igcd(84, 120) and \\gcd(84, 120) were certified; only the literal restatement was caught (GCD-10,
-    30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays."""
+    30 Sep 2026). A gcd of the problem's symbols (gcd(4, n) for gcd(n, 4)) is a value and stays.
+
+    The decision is read off the parse, not the text (fourth audit CAP-G1): a regex on the text missed
+    \\mathit{gcd}, \\mathbf{gcd}, \\textit{lcm}, \\textbf{gcd}, (gcd)(24, 18), and a closed gcd next to a symbol
+    (gcd(120, 84)*a, {gcd(120, 84)*a}) was taken because the claim as a whole was not closed. Every gcd/lcm the
+    parse of the claim computes from closed arguments (`normalize.parse.recording_integer_ops`) makes it one."""
+    from .normalize.parse import parse_answer, recording_integer_ops
     ca = solution.claimed_answer
-    texts = ca.payload if isinstance(ca.payload, list) else [ca.payload]
-    if any(_INTEGER_OP_TEXT.search(str(t)) for t in texts):
+    with recording_integer_ops() as computed:
         try:
-            closed = not getattr(ctx.claimed(solution), "free_symbols", {None})
+            parse_answer(ca.kind, ca.payload, ctx.claim_ns(solution))
         except LeakageError:
             raise
         except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
-            closed = False
-        if closed:
-            return unknown("intake.claim", f"claimed answer {ca.payload!r} computes a gcd/lcm, not a value",
-                           flags=["claim_is_not_a_value"])
+            pass
+    if computed:
+        return unknown("intake.claim", f"claimed answer {ca.payload!r} computes {computed[0]}, not a value",
+                       flags=["claim_is_not_a_value"])
     return None
 
 
-_INTEGER_OP_TEXT = re.compile(r"(?<![A-Za-z_])i?(?:gcd|lcm)\s*\(|\\(?:gcd|lcm)(?![A-Za-z])|"
-                              r"\\(?:operatorname|mathrm|text|textrm)\s*\{\s*(?:gcd|lcm)\s*\}")
+def _structure(text: str, ctx):
+    """`text` read as written for `_same_structure`. LaTeX is read by latex2sympy with evaluation off, its
+    binomial, factorial, gcd and lcm made the inert functions `formal.statement.structural_ns` writes: the
+    structural parse fell back to the evaluated one for LaTeX, so \\binom{6}{3} was 20 and the restatement of
+    "evaluate binomial(6, 3)" was certified while C(6, 3) was caught (fourth audit CAP-G1)."""
+    from .formal.statement import _INERT, parse_structural
+    from .normalize.parse import _latex_to_sympy, _strip_invisible, is_latex, strip_presentation
+    t = strip_presentation(_strip_invisible(text))
+    if not is_latex(t):
+        # strict: the evaluated reading the structural parse falls back to is a value, and a claim of that value
+        # was "the question restated" (eigmax(M) and its value 2 + √2, PRE-RK-8); the matrix operations stay
+        # operations, computed with evaluation off det of a matrix holding an integral ran ~23 s per call and
+        # one verify 132-192 s (PRE-RK-7)
+        ns = dict(ctx.ns, **{n: sp.Function(n) for n in _MATRIX_OPS})
+        return parse_structural(text, ns, strict=True)
+    with sp.evaluate(False):
+        e = _latex_to_sympy(t, ctx.ns)
+        return e.replace(lambda n: isinstance(n, sp.Function) and type(n).__name__ in _INERT,
+                         lambda n: sp.Function(type(n).__name__)(*n.args))
+
+
+# the operations on a matrix the parse computes (normalize.parse._SAFE_NAMES)
+_MATRIX_OPS = ("det", "trace", "rank", "eigmax", "eigmin")
+
+
+def _syntax(text: str, ctx) -> str:
+    """`text`'s bare syntax tree (the code the parser would run, as its Python AST: nothing evaluated, no call
+    computed), for texts with no structural reading (`_structure`; a bare number or name always has one). The code is
+    checked as the parser checks it (`_check_code`) and never run."""
+    import ast
+    from sympy.parsing.sympy_parser import stringify_expr
+    from .normalize.parse import _TRANSFORMS, _check_code, _strip_invisible, preclean, strip_presentation
+    code = stringify_expr(preclean(strip_presentation(_strip_invisible(text))), dict(ctx.ns), {}, _TRANSFORMS)
+    _check_code(code, text, set(ctx.ns))
+    return ast.dump(ast.parse(code, mode="eval").body)
 
 
 def _same_structure(a: str, b: str, ctx) -> bool:
-    """Same UNEVALUATED expression tree — `gcd(84, 120)` vs `gcd(84,120)`, but not `12`."""
+    """Same UNEVALUATED expression tree — `gcd(84, 120)` vs `gcd(84,120)`, but not `12`. A text with no structural
+    reading is compared as its bare syntax tree (`_syntax`), never as its value: the target eigmax(M) fell back to
+    its value 2 + √2, and the claim 2 + √2 was "the question restated" (fourth audit PRE-RK-8)."""
     try:
-        from .formal.statement import parse_structural
-        ta, tb = parse_structural(a, ctx.ns), parse_structural(b, ctx.ns)
-    except Exception:  # noqa: BLE001
-        return False
-    try:
+        ta, tb = _structure(a, ctx), _structure(b, ctx)
         if not getattr(tb, "args", None):
             return False                    # a bare number or symbol target cannot be restated
+        # srepr too: InconsistentAssumptions escaped here (third audit, 30 Sep 2026), and a tree with no printed
+        # form (Interval + Interval read with evaluation off) is no reading either
         return sp.srepr(ta) == sp.srepr(tb)
-    except Exception:  # noqa: BLE001 - InconsistentAssumptions escaped here (third audit, 30 Sep 2026)
+    except Exception:  # noqa: BLE001 - no structural reading of one of them: their syntax
+        pass
+    try:
+        sa, sb = _syntax(a, ctx), _syntax(b, ctx)
+    except Exception:  # noqa: BLE001 - LaTeX, or no text the parser takes: not compared
         return False
+    return sa == sb
 
 
 SCOPE_FLAGS = ("answer_level_only", "steps_not_checked", "answer_from_option_letter")
@@ -736,16 +839,46 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     if zero == "clash":
         return [unknown("intake.naturals", "naturals_convention: N is a declared variable and a set here",
                         flags=["naturals_convention"])], []
-    layers, flags = _verify_layers(problem_ir, solution, seed, timeout, run_steps)
+    layers, flags = _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
     if zero is None:
         return layers, flags
-    layers0, flags0 = _verify_layers(zero[0], zero[1], seed, timeout, run_steps)
+    layers0, flags0 = _verify_layers_read(zero[0], zero[1], seed, timeout, run_steps)
     v_pos = fuse(layers, extra_flags=flags)["verdict"]
     v_zero = fuse(layers0, extra_flags=flags0)["verdict"]
     if v_pos == v_zero:
         return layers, flags + ["naturals_readings_agree"]
     return [unknown("intake.naturals", f"naturals_convention: with ℕ = {{1, 2, ...}} {v_pos}, with ℕ = "
                     f"{{0, 1, 2, ...}} {v_zero}", flags=["naturals_convention"])], flags
+
+
+def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
+                        timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
+    """`_verify_layers`, with a function's domain that lists a set next to another condition on the same argument
+    (`(0, 3), (1, 5)`: a union as often as an intersection, `normalize.parse.DomainListAmbiguous`) read both ways:
+    the verdict when the two readings agree, UNKNOWN when they do not. Refused outright, the right {2} for
+    x² + 1 = 5 on (0, 3), (1, 5) (both readings: {2}) was UNKNOWN (attack on d4h, RK-2)."""
+    import copy
+    from .normalize.parse import domain_list_reading
+    try:
+        ir_d = copy.deepcopy(problem_ir if isinstance(problem_ir, dict) else problem_ir.to_dict())
+        sol_d = copy.deepcopy(solution if isinstance(solution, dict) else solution.to_dict())
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not readable as dicts: read once, as given
+        ir_d = sol_d = None
+    layers, flags = _verify_layers(problem_ir, solution, seed, timeout, run_steps)
+    if ir_d is None or not any("domain_list_ambiguous" in la.flags for la in layers):
+        return layers, flags
+    runs = {}
+    for which in ("union", "intersection"):
+        with domain_list_reading(which):
+            runs[which] = _verify_layers(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
+    verdicts = {which: fuse(lr, extra_flags=fl)["verdict"] for which, (lr, fl) in runs.items()}
+    if verdicts["union"] == verdicts["intersection"]:
+        lr, fl = runs["intersection"]
+        return lr, fl + ["domain_list_readings_agree"]
+    return [unknown("intake.domain", f"domain_list_ambiguous: read as a union {verdicts['union']}, as an "
+                    f"intersection {verdicts['intersection']}", flags=["domain_list_ambiguous"])], flags
 
 
 def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
@@ -767,7 +900,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     try:
         ctx = make_ctx(problem_ir, seed=seed, timeout=timeout)
     except Exception as e:  # noqa: BLE001
-        layers.append(unknown("ir.parse", f"ir_namespace_error: {type(e).__name__}: {e}", flags=["parse_error"]))
+        from .normalize.parse import DomainListAmbiguous
+        more = ["domain_list_ambiguous"] if isinstance(e, DomainListAmbiguous) else []
+        layers.append(unknown("ir.parse", f"ir_namespace_error: {type(e).__name__}: {e}", flags=["parse_error"] + more))
         return layers, []
 
     # fill payload from option letter if the solver only gave a letter
@@ -920,6 +1055,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         # the certificates would read these claims one way and refute them: nothing to check
         if {"decimal_comma_ambiguous", "claim_unreadable"} & set(not_a_value.flags):
             return layers, clean_flags
+    # a claim that still names the unknown (above): the certificates run, their refutation of it is withdrawn; the
+    # right answer of x² = 4 written `$x \in \{-2, 2\}$` was refuted as the set {x ∈ {-2, 2}} (PRE-RK-5)
+    claim_not_read = not_a_value is not None and bool(not_a_value.evidence.get("claim_not_read"))
 
     mc = _mc_consistency(problem_ir, solution, ctx)
     if mc is not None:
@@ -948,6 +1086,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         if solution.claimed_answer.payload_source == "recovered_text" and lr.verdict == "fail":
             lr = unknown(name, "recovered_claim_refuted: the reconstructed payload is advisory, not refuted",
                          lr.latency_ms, lr.evidence, flags=["recovered_answer_refuted"])
+        if claim_not_read and lr.verdict == "fail":
+            lr = unknown(name, "claim_not_read_refuted: a claim naming the unknown is no value, not refuted",
+                         lr.latency_ms, lr.evidence, flags=["claim_is_not_a_value"])
         layers.append(lr)
 
     if run_steps and solution.steps:
