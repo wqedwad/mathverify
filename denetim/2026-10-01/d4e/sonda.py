@@ -29,6 +29,8 @@ TAN-06, TAN-07 of the `tanimlilik` angle, `denetim/2026-10-01/d4/`).
     U  round 4: the unjust-rejection and coverage probes (tur4/sonda_r2.py's own groups)
     V  round 4: the same, tur4/sonda_rk.py's groups
     W  round 4: the repros, the validators' variants and controls, the cases the decisions name (tur4/tekrar.py)
+    X  round 5 (the attack on round 4): its false-accept probes as they ran (tur5/p1..p10)
+    Z  round 5: the repros, their variants and the controls the decisions name (tur5/tekrar5.py)
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4e/sonda.py [out.json] [groups]
@@ -1442,13 +1444,42 @@ def cases_w():
     return importlib.import_module("tekrar").cases()
 
 
+def _tur5():
+    import os
+    _tur4()
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tur5")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+
+
+# round 5: a probe's expectation the decisions (d4e4/kararlar_tur5.txt) changed, with the decision named
+ROUND5_EXPECT: dict = {}
+
+
+def cases_x():
+    _tur5()
+    import importlib
+    out = []
+    for m in [f"p{i}" for i in range(1, 11)]:
+        for label, q, s, verdicts, statuses in importlib.import_module(m).cases():
+            verdicts = ROUND5_EXPECT.get(label, (verdicts,))[0]
+            out.append((f"{m}: {label}", q, s, verdicts, statuses))
+    return out
+
+
+def cases_z():
+    _tur5()
+    import importlib
+    return importlib.import_module("tekrar5").cases()
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
           "H": cases_h, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n, "P": cases_p,
           "Q": cases_q, "R": cases_r, "S": cases_s, "T": cases_t, "U": cases_u, "V": cases_v, "W": cases_w,
-          "Y": cases_y}
+          "X": cases_x, "Y": cases_y, "Z": cases_z}
 
 
-def main(out_path=None, groups="ABCDEFGHKLMNPQRSTUVWY"):
+def main(out_path=None, groups="ABCDEFGHKLMNPQRSTUVWXYZ"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -1484,5 +1515,5 @@ def main(out_path=None, groups="ABCDEFGHKLMNPQRSTUVWY"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHKLMNPQRSTUVWY"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHKLMNPQRSTUVWXYZ"
     sys.exit(1 if main(out, grp) else 0)

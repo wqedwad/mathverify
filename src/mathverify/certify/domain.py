@@ -1330,6 +1330,10 @@ def _piecewise_conditions(pw, var, add) -> None:
         vc = definedness_conditions(val, var)
         cc = [] if cond in (sp.true, sp.false) else definedness_conditions(cond, var)
         branches.append((cond, vc, cc))
+    if all(not (cond.free_symbols if cond not in (sp.true, sp.false) else set())
+           and not any(getattr(c, "free_symbols", None) for c in cc) for cond, _, cc in branches):
+        _closed_piecewise_conditions(branches, add)
+        return
     rel: list = []
     for _, vc, cc in branches:
         for c in vc + cc:
@@ -1378,6 +1382,54 @@ def _piecewise_conditions(pw, var, add) -> None:
         add(DEFINEDNESS_UNDECIDED)
         return
     add(sp.Contains(v, D))
+
+
+def _closed_piecewise_conditions(branches, add) -> None:
+    """A Piecewise whose conditions name no symbol (f(2) for a piecewise f, or x = 2 put in): the branch taken is read
+    exactly, condition by condition (`_closed_truth`), each condition up to it having a value; the taken branch's
+    expression has its own conditions (a symbol a given leaves free among them); no branch taken: no value. Read as
+    a Piecewise on one symbol, it was undecided and f(2) = 4 left UNKNOWN (attack on d4e round 4, D4E4-U2)."""
+    for cond, vc, cc in branches:
+        for c in cc:
+            t = _closed_truth(c)
+            if t is None:
+                add(DEFINEDNESS_UNDECIDED)
+                return
+            if t is False:
+                _no_value_off(add, sp.false)             # a condition with no value stops the evaluation
+                return
+        t = _closed_truth(cond)
+        if t is None:
+            add(DEFINEDNESS_UNDECIDED)
+            return
+        if t:
+            for c in vc:
+                add(c)
+            return
+    _no_value_off(add, sp.false)                         # no branch is taken (SymPy's nan)
+
+
+def _closed_truth(c) -> bool | None:
+    """Does the closed condition c hold, by the exact sign of each relation (`certified_sign`: never SymPy's own
+    evaluation, which reads rounding noise)? None when a sign or a membership is not decided."""
+    if c is sp.true or c is sp.false:
+        return c is sp.true
+    if isinstance(c, (sp.And, sp.Or)):
+        parts = [_closed_truth(a) for a in c.args]
+        stop = isinstance(c, sp.Or)                      # the value that decides: True for Or, False for And
+        if any(t is stop for t in parts):
+            return stop
+        return None if any(t is None for t in parts) else not stop
+    if isinstance(c, sp.Not):
+        t = _closed_truth(c.args[0])
+        return None if t is None else not t
+    if not isinstance(c, (Eq, Ne, sp.StrictLessThan, sp.LessThan, sp.StrictGreaterThan, sp.GreaterThan)):
+        return None
+    sg = certified_sign(c.lhs - c.rhs)
+    if sg not in (-1, 0, 1):
+        return None
+    return {Eq: sg == 0, Ne: sg != 0, sp.StrictLessThan: sg < 0, sp.LessThan: sg <= 0,
+            sp.StrictGreaterThan: sg > 0, sp.GreaterThan: sg >= 0}[type(c)]
 
 
 def _binder_conditions(n, var) -> list[Any]:
@@ -1483,6 +1535,13 @@ def _no_value_off(add, c):
         add(NO_VALUE)
 
 
+def _plus_one_positive(e) -> bool:
+    """Is e + 1 > 0, read with SymPy's evaluation on (an exponent written n - 1 is an unevaluated sum, and under an
+    as-written reading even e + 1 stays one)?"""
+    with sp.evaluate(True):
+        return (e + 1).is_positive is True
+
+
 def _node_conditions(node, var, add) -> None:
     """The definedness conditions of one node of the as-written tree (see `_definedness_conditions`)."""
     if node is S.ComplexInfinity or node is S.NaN:
@@ -1527,7 +1586,15 @@ def _node_conditions(node, var, add) -> None:
         elif ex.is_number and not ex.is_rational:
             add(base > 0)
         elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
-            add(base > 0)          # x^y style real power (var None: every symbol counts)
+            if ex.is_integer is not True:
+                add(base > 0)      # x^y style real power (var None: every symbol counts)
+            elif not (ex.is_nonnegative is True or _plus_one_positive(ex)):
+                # an exponent declared an integer is a power of the curriculum for every base: x != 0 when it may
+                # be negative, nothing when it may not (n a positive integer: (x**2)**n and x**(2*n - 1); an integer
+                # e is >= 0 when e + 1 > 0, which SymPy reads on the unevaluated n - 1 as written). Read as
+                # x > 0, the textbook derivative 2*n*x**(2*n - 1) of (x**2)**n was refuted (attack on d4e round 4,
+                # D4E4-U5)
+                add(Ne(base, 0))
         elif not ex.is_number and base.is_number and base.is_zero is False and base.is_positive is not True \
                 and ex.is_integer is not True:
             # a negative base, a variable exponent: the curriculum's value at an integer exponent only

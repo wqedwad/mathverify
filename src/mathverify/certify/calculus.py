@@ -893,7 +893,9 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
         ok, rev = random_point_equal(dF, integrand, var, domain, seed=0, n=40)
         ev["random_point"] = rev
         ev["method"] = "random_point"
-        if ok is None and wide is not None and discourse != S.Reals:
+        if ok is False and _formula_hole_refutation(ev, F, var, side="lhs"):
+            ok, ev["formula_hole"] = None, True      # F's derivative formula alone has no value there (D4E4-RK-1)
+        if ok is None and wide is not None and discourse != S.Reals and not ev.get("formula_hole"):
             # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not inside, and
             # log|x| was left undecided for 1/x under x > 1. Agreement where both are defined is agreement on
             # the region too; a disagreement there may lie outside it and refutes nothing
@@ -1135,10 +1137,10 @@ def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
     return "corner"
 
 
-def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout) -> str | None:
+def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, cache=None) -> str | None:
     """'value' (f has a derivative of `order` at the zero p of the switch or root base u), 'corner' (none: a corner,
     a cusp, a jump, an infinite slope) or None (undecided, or the reading's budget of `derivative_at_point` calls
-    spent)."""
+    spent). A call's result is kept in `cache` (p -> result) for `_value_holes`."""
     st = _linear_switch_rule(fa, var, p, u, switches, fconds)
     if st is None:
         st = _power_rule(fa, var, p, u, switches, fconds)
@@ -1151,7 +1153,10 @@ def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout) -
     if budget[0] <= 0:
         return None
     budget[0] -= 1
-    st = derivative_at_point(f, var, order, p, timeout=timeout)["status"]
+    dap = derivative_at_point(f, var, order, p, timeout=timeout)
+    if cache is not None:
+        cache[p] = dap
+    st = dap["status"]
     return "value" if st == "value" else "corner" if st in ("corner", "cusp", "discontinuous", "infinite") else None
 
 
@@ -1432,16 +1437,21 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fcon
       convention), kink_undecided (a kink left out but not classified), kinks_not_solved (a switch whose zeros are
       not read, or f's switch has no u: they stay in the comparison, and a refutation needs a point where f is
       analytic, `smooth_at`), kink_budget (zeros not classified, left in the comparison: the same);
-    * switches, fa: the switches and f in `abs_form`, for `smooth_at`."""
+    * switches, fa: the switches and f in `abs_form`, for `smooth_at`;
+    * pzeros: the u whose zeros, not solved, are proved points with no derivative at once
+      (`_power_zeros_without_derivative`); rzeros: those of them that are a root's base (u >= 0 f's own condition);
+    * budget, dap: the calls of `derivative_at_point` left to the reading and their results by point (`_value_holes`
+      spends and reads them too)."""
     fa = abs_form(f)
     switches = switch_arguments(fa, var)
+    budget = [_KINK_BUDGET]
     out: dict[str, Any] = {"kinks": [], "values": [], "families": [], "value_families": [], "opens": [],
-                           "signs": [], "reasons": set(), "switches": switches, "fa": fa, "pzeros": []}
+                           "signs": [], "reasons": set(), "switches": switches, "fa": fa, "pzeros": [], "rzeros": [],
+                           "budget": budget, "dap": {}}
     reasons = out["reasons"]
     if switches is None:
         reasons.add("kinks_not_solved")
         return out
-    budget = [_KINK_BUDGET]
     # the zeros of a root's base too (sqrt(x**2 + x**4) at 0: a corner; `power_bases`, round 4 RK-1)
     powers = [u for u in power_bases(fa, var, order) if u not in switches]
     for u in list(switches) + powers:
@@ -1455,7 +1465,11 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fcon
                 # have no value at them; SymPy's sign(u) is read as u/|u| there (`signs`)
                 out["opens"].append(Ne(u, 0))
                 out["pzeros"].append(u)
-                if not power:
+                if power:
+                    # a root's base: f's own u >= 0 makes u > 0 fail at the zeros alone; |u| is defined on u < 0
+                    # too, and has a derivative there (attack on d4e round 4, D4E4-YO-1)
+                    out["rzeros"].append(u)
+                else:
                     out["signs"].append(u)
                 if not _undefined_on_zeros(claim_conds, nowhere, u, var):
                     reasons.add("kink_undecided")
@@ -1475,7 +1489,7 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fcon
                 off_inside = in_domain(region, p_) is False
             if off_inside or p_ in out["kinks"] or p_ in out["values"]:
                 continue
-            st = _classify_kink(f, fa, var, order, p_, u, switches, fconds, budget, timeout)
+            st = _classify_kink(f, fa, var, order, p_, u, switches, fconds, budget, timeout, out["dap"])
             if st == "value":
                 out["values"].append(p_)
                 continue
@@ -1548,7 +1562,10 @@ def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool
     `derivative_at_point` (True: all, False: one differs, None: undecided); evidence). sqrt(x**2 + x**4) beside |x|
     cancels its corner: f'(0) = 0, the formula is sign(0) - 0/0, and the right claim sign(x)*(1 - (1 + 2x**2)/
     sqrt(1 + x**2)), 0 at 0, was refuted there (round 4, after RK-1). A claim with no value there is
-    `claim_where_derivative`'s."""
+    `claim_where_derivative`'s. Each read spends the reading's budget (`kink_reading`: `_KINK_BUDGET` calls of
+    `derivative_at_point`, each within `timeout`), a classification's own result read again for free: one call per
+    hole, unbounded, let eight holes hold a verify for eight timeouts (attack on d4e round 4, D4E4-U4); spent, the
+    hole is undecided."""
     holes, state, ev = [], True, {}
     for p_ in kr["values"]:
         try:
@@ -1565,7 +1582,14 @@ def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool
             cv = sp.nan
         if cv.has(sp.nan, sp.zoo) or _real_finite(cv) is not True:
             continue                             # no value of the claim: `claim_where_derivative` decides
-        dap = derivative_at_point(f, var, order, p_, timeout=timeout)
+        dap = kr["dap"].get(p_)
+        if dap is None:
+            if kr["budget"][0] <= 0:
+                ev[str(p_)] = {"status": "budget_spent", "claimed": str(cv)}
+                state = None if state is True else state
+                continue
+            kr["budget"][0] -= 1
+            dap = kr["dap"][p_] = derivative_at_point(f, var, order, p_, timeout=timeout)
         ev[str(p_)] = {"status": str(dap.get("status")), "value": str(dap.get("value")), "claimed": str(cv)}
         if dap.get("status") != "value":
             state = None if state is True else state
@@ -1578,6 +1602,31 @@ def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool
     return holes, state, ev
 
 
+_NO_VALUE_TEXT = re.compile(r"\b(nan|zoo|oo|None)\b")
+
+
+def _formula_hole_refutation(cev: dict, f, var, side: str = "rhs") -> bool:
+    """Does the refutation `cev` rest only on random_point's point where SymPy's derivative formula (the `side` of
+    the comparison: the truth's for a derivative, the claim's for a primitive) has no value and the other side has one,
+    at a zero of the base of a power of `f` (no natural exponent)? There f may have a derivative SymPy's formula does
+    not give: (1 - cos(x))**(3/4) has f'(0) = 0, its formula 3*sin(x)/(4*(1 - cos(x))**(1/4)) is 0/0 at 0, and the
+    right derivative 3*2**(3/4)*sign(sin(x/2))*sqrt(|sin(x/2)|)*cos(x/2)/4, defined everywhere, was refuted there, as
+    was (1 - cos(x))**(3/4) as its primitive (attack on d4e round 4, D4E4-RK-1). Only softened: such a claim is left
+    UNKNOWN, never certified."""
+    from ..normalize.parse import parse_expr_str
+    ce = (cev.get("random_point") or {}).get("counterexample") or {}
+    if cev.get("method") != "random_point" or ce.get("exact") != "defined_on_one_side_only":
+        return False
+    if not _NO_VALUE_TEXT.search(str(ce.get(side))):
+        return False                                 # the other side has no value there: RK-8's business
+    try:
+        p = parse_expr_str(str(ce["point"][var.name]))
+    except Exception:  # noqa: BLE001 - a point not read: the refutation stands as it was
+        return False
+    return any(isinstance(n, sp.Pow) and var in n.base.free_symbols and not (n.exp.is_Integer and n.exp >= 0)
+               and _is_zero_at(n.base, var, p) for n in sp.preorder_traversal(f))
+
+
 def _has_derivative_at(kr, var, p, fconds) -> bool:
     """Has f (read by `kink_reading`) a derivative at the number p: analytic there, or a zero of a switch where it
     was classified as having one?"""
@@ -1587,8 +1636,30 @@ def _has_derivative_at(kr, var, p, fconds) -> bool:
 
 
 def _no_derivative_at(kr, var, p) -> bool:
-    """Is p (a number, or a family's generic point) a kink `kink_reading` left out (f has no derivative there)?"""
-    return p in kr["kinks"] or any(_is_zero_at(u, var, p) for u, _ in kr["families"])
+    """Is p (a number, or a family's generic point) a kink `kink_reading` left out (f has no derivative there)? A zero
+    classified as having one (`values`) never is, nor a family of points one of which is: the base of
+    ((x**2 - x + 1/4)*sin(pi*x))**(3/4) vanishes at the corners n and at 1/2, where f has the derivative 0 (r*m = 3/2),
+    and the textbook claim, 0/0 at 1/2, was certified as a zero of a family's u (attack on d4e round 4, D4E4-YO-2)."""
+    if p in kr["values"]:
+        return False
+    if p in kr["kinks"]:
+        return True
+    if not any(_is_zero_at(u, var, p) for u, _ in kr["families"]):
+        return False
+    return not (getattr(p, "free_symbols", None) and any(_maybe_member(v, p) for v in kr["values"]))
+
+
+def _maybe_member(v, q) -> bool:
+    """May the number v be a member of the family q (alpha*n + beta, n its integer Dummy)? False only when
+    (v - beta)/alpha is proved no integer."""
+    try:
+        (n,) = q.free_symbols
+        alpha, beta = sp.diff(q, n), q.subs(n, 0)
+        if sp.diff(q, n, 2) != 0 or alpha.free_symbols or beta.free_symbols:
+            return True
+        return sp.simplify((v - beta) / alpha).is_integer is not False
+    except Exception:  # noqa: BLE001
+        return True
 
 
 def _in_comparison(dom, loose, var, p) -> bool | None:
@@ -1602,11 +1673,44 @@ def _in_comparison(dom, loose, var, p) -> bool | None:
         return inside
     for c in loose:
         # the comparison is drawn on the open part of each (`comparison_region`): sin(x) >= 0 is sin(x) > 0 there
-        if relation_holds_at(c, var, p) is False or relation_holds_at(_open_condition(c), var, p) is False:
+        if relation_holds_at(c, var, p) is False:
             return False
+        if relation_holds_at(_open_condition(c), var, p) is False:
+            # a zero of c's g: out when it is an end of c's region or an isolated point of it; a touching zero
+            # (g' = 0, g >= 0 on both sides: x*sin(x) at 0) may be an interior point of f's domain, where f has a
+            # derivative and a claim with no value is wrong (attack on d4e round 4, D4E4-YO-3)
+            st = _loose_zero(c, var, p)
+            if st == "end":
+                return False
+            if st is None:
+                return None
+            continue
         if not strict_at(_open_condition(c), var, p):
             return None
     return True
+
+
+def _loose_zero(c, var, p) -> str | None:
+    """At a zero p of g, for the condition c: g >= 0 (or g <= 0) left unsolved: 'end' when p is proved no interior
+    point of the points where c holds (g'(p) != 0: g changes sign there; or g'(p) = 0 and g''(p) of the wrong sign: an
+    isolated point), 'inside' when it is proved one (g analytic at p, g'(p) = 0, g''(p) of the right sign: a strict
+    minimum of g, g > 0 around it), None otherwise. p may be a family's generic point (only 'end' by g' then). Only a
+    non-strict c has such zeros in its region (its open part fails there, c does not)."""
+    g = c.lhs - c.rhs if isinstance(c, sp.GreaterThan) else c.rhs - c.lhs
+    try:
+        d1 = _zero_state(sp.diff(g, var), var, p)
+        if d1 is True:
+            return "end"
+        if d1 is not False or getattr(p, "free_symbols", None):
+            return None
+        s2 = certified_sign(sp.diff(g, var, 2).subs(var, p))
+        if s2 == -1:
+            return "end"
+        if s2 == 1 and smooth_at(g, var, p, switch_arguments(g, var), definedness_conditions(g, var)):
+            return "inside"
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def _zero_factors(w) -> list:
@@ -1652,7 +1756,10 @@ def _interval_parts(dom) -> list | None:
 def _family_outside(q, var, loose) -> bool:
     """Does the open part of one of the unsolved conditions `loose` fail at the family's generic point q (n an integer
     Dummy), so at every member: sin(x) > 0 at (2*n + 1)*pi? The zeros of sin(x) in the claim of (sqrt(sin(x))**3)' were
-    no point of the comparison, the family's members could not all be listed, and the claim was left undecided."""
+    no point of the comparison, the family's members could not all be listed, and the claim was left undecided. Where
+    the closed condition holds (g = 0 at each member) the members must be ends of its region (`_loose_zero`): the
+    touching zeros n*pi of sin(x)**2*(x - cos(x)) >= 0 are interior points of f's domain for n >= 1 (attack on d4e
+    round 4, D4E4-YO-3)."""
     for c in loose:
         try:
             v = _open_condition(c).subs(var, q)
@@ -1662,9 +1769,16 @@ def _family_outside(q, var, loose) -> bool:
                      sp.LessThan: v <= 0}.get(type(_open_condition(c)), None)
         except Exception:  # noqa: BLE001
             continue
-        if v is sp.false:
+        if v is sp.false and (_closed_fails_on_family(c, var, q) or _loose_zero(c, var, q) == "end"):
             return True
     return False
+
+
+def _closed_fails_on_family(c, var, q) -> bool:
+    """Does the (closed) condition c fail at the family's generic point q: g(q) proved nonzero, the open part failing?"""
+    if not isinstance(c, (sp.GreaterThan, sp.LessThan)):
+        return True
+    return _zero_state(c.lhs - c.rhs, var, q) is True
 
 
 def _family_members(q, dom, limit: int = 6) -> tuple[list, bool] | None:
@@ -1701,7 +1815,9 @@ def _family_members(q, dom, limit: int = 6) -> tuple[list, bool] | None:
         if lo_k is not None and hi_k is not None:
             if lo_k > hi_k:
                 continue
-            ks = list(range(int(lo_k), int(hi_k) + 1))
+            # at most `limit` of them built: the whole range of (1, 10**12) held a list of 3*10**11 integers (a
+            # MemoryError, an OverflowError past 2**63; attack on d4e round 4, D4E4-U3)
+            ks = list(range(int(lo_k), int(min(hi_k, lo_k + limit)) + 1))
         elif lo_k is not None:
             ks = list(range(int(lo_k), int(lo_k) + limit))
         elif hi_k is not None:
@@ -1869,12 +1985,20 @@ def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose
             continue
         if isinstance(c, (sp.StrictGreaterThan, sp.StrictLessThan)) and any(
                 _proportional(c.lhs - c.rhs if isinstance(c, sp.StrictGreaterThan) else c.rhs - c.lhs, u,
-                              positive=True) for u in kr.get("pzeros", ())):
-            continue                     # u > 0 with u >= 0 f's own: it fails at u's zeros alone, none with one (RK-6)
+                              positive=True) for u in kr.get("rzeros", ())):
+            # u > 0 with u >= 0 f's own (a root's base): it fails at u's zeros alone, none with one (RK-6). Not for
+            # |u|, defined on u < 0 too: |x - cos(x)|' + 0*log(x - cos(x)) was certified (D4E4-YO-1)
+            continue
         bad = sp.Not(c)
         rr = sb_run("mathverify.sandbox.ops:solveset_in", bad, var, S.Reals, timeout=ctx.timeout)
         F = rr.value if rr.ok and isinstance(rr.value, sp.Set) and not rr.value.has(sp.ConditionSet) else None
         if F is None:
+            # not solved: a point of the region where it fails exactly and f has a derivative refutes the claim
+            # (x - cos(x) > 0 fails at 0, where |x - cos(x)| has the derivative -1: D4E4-YO-1)
+            for q in _candidates(dom, var):
+                if _has_derivative_at(kr, var, q, fconds) and relation_holds_at(c, var, q) is False \
+                        and _in_comparison(dom, loose, var, q) is True:
+                    return "undefined", f"claim_undefined_at {q} (condition {c}), where f has a derivative"
             state, why = "undecided", f"claim_condition_undecided: {c}"
             continue
         try:
@@ -2835,11 +2959,13 @@ def verify(ir, solution, ctx: Ctx):
                         ok, cev = False, {"method": "value_at_a_kink", "values": hole_ev}
                     else:
                         ok, cev = answers_equivalent(claimed, truth_k, shape="expression", domain=cdom, var=var)
+                        if ok is False and _formula_hole_refutation(cev, kr["fa"], var):
+                            ok, cev["formula_hole"] = None, True
                         if hole_ok is None and ok is True:
                             ok = None
                         if holes:
                             cev["values_apart"] = hole_ev
-                    if ok is None and ctx.domain_for(var) != S.Reals:
+                    if ok is None and ctx.domain_for(var) != S.Reals and not cev.get("formula_hole"):
                         # the proof at a kink reads its whole cell: on (1, oo) the cell (0, oo) of log|x| is not
                         # inside, and 1/x was left undecided under x > 1. Agreement where f is defined is agreement
                         # on the region too; a disagreement may lie outside it and refutes nothing
