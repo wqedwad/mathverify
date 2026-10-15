@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 7 Ekim 2026, gece (bulut)**, dal `claude/upbeat-mccarthy-ef2oub` (`d342778`'in üstündeki belge commit'i; birleşmedi): `master` (`#14`) + dördüncü denetimin düzeltmeleri (d4a, d4b tur 8, d4c tur 2, d4d, d4e tur 3, d4f tur 2, d4g); yarım işler bundle'da (§3 adım 1, DECISIONS §86).
+> **Son güncelleme: 15 Ekim 2026, akşam (bulut)**, dal `claude/focused-albattani-jlomk1` (= `claude/amazing-edison-0g21ci` + kayıt; kodu `d342778`; birleşmedi): `master` (`#14`) + dördüncü denetimin düzeltmeleri (d4a, d4b tur 8, d4c tur 2, d4d, d4e tur 3, d4f tur 2, d4g); süren turlar bundle'da. **Durdurma kararı: A+** (kullanıcı, 15 Ekim; DECISIONS §89; plan §3 adım 2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -8,7 +8,7 @@
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§86; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§89; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (birleşmemiş dal, §6); bulut klonunda `git fetch origin master` (yerel
    `master`/`origin/master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs` → bulutta **3212 passed / 5 skipped** (`1775b3f`, `--full` içinde; düz `pytest` soğuk
@@ -26,13 +26,14 @@ arşiv §2–§3 ve `docs/ARCHITECTURE.md`'de; kilitli kararlar D1–D6 (`DECISI
 Giriş: `verifier.verify` (deterministik), `pipeline.run_pipeline` (LLM'li), `scripts/verify_cli.py`,
 `scripts/check.py`. Değerlendirme seti 280 sentetik öğe (A/B/C/D = %30/%25/%30/%15).
 
-## 2. Durum (7 Ekim 2026)
+## 2. Durum (15 Ekim 2026)
 
 **Kod.** `master` = `wqedwad/asd#14`'ün birleşmesi (öncesi `aa67b20` = `#13`; `#9`, `#10`, `#12`–`#14` öncesi yedeksiz, kullanıcı talimatı;
 `#11` öncesi `yedek/master-2026-09-28`, §6). Geçmiş PR'ların içeriği DECISIONS §59–§84'te (`#11` §63, `#12` §64–§70, `#13` §72–§74,
-`#14` §75–§84). **Oturum dalı** `claude/upbeat-mccarthy-ef2oub` (birleşmedi; `claude/trusting-lovelace-vp1boa`'yı içerir; DECISIONS §85–§86):
-dördüncü bağımsız denetimin düzeltmeleri; her birleşik ölçümde 558 çözümde karar farkı 0, tam takım (Lean'siz) temiz. **Dalda bilinen açık
-yanlış onay var** (d4b tur 8'in getirdiği d4b8-YO-1, §3 adım 2 (i)) ve doğrulanmamış iki önceden var aday (V20); `--full` koşulmadı.
+`#14` §75–§84). **Oturum dalı** `claude/focused-albattani-jlomk1` (birleşmedi; `claude/amazing-edison-0g21ci`'yi ve onun içerdiği
+`-upbeat-mccarthy-…`, `-trusting-lovelace-…` dallarını içerir; DECISIONS §85–§89): dördüncü bağımsız denetimin düzeltmeleri; her birleşik ölçümde
+558 çözümde karar farkı 0, tam takım (Lean'siz) temiz. **Dalda bilinen açık sorunlar var:** gerçekçi 19 madde (3 yanlış onay, 5 haksız ret, 11
+kapsama kaybı; 13'ünü dördüncü denetim getirdi) ve yapay yanlış onaylar (V20); dal bu hâliyle birleştirilmez. `--full` koşulmadı.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam ve ölçüldü. F3 (LLM ön yüzü,
 L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam,
@@ -47,25 +48,27 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** `git fetch origin claude/upbeat-mccarthy-ef2oub && git merge --ff-only FETCH_HEAD` (oturumun dalına; push yalnız oturumun
-   dalına). Yarım işler (`denetim/2026-10-01/d4/wip/`, DECISIONS §86 son madde): `git fetch denetim/2026-10-01/d4/wip/wip-2026-10-07.bundle
-   'refs/heads/wip/*:refs/remotes/wip/*'` (`wip/d4b-tur9` `f05d5c2`, `wip/d4c-tur3` `d9a7bb3`); d4b tur 9'un kirli ağacı `wip/d4b-tur9` + `git apply
-   d4b-tur9-yarim.diff`; d4h ağacı `62a40e9` + `git apply d4h-yama.diff` + `tar -xzf d4h-yeni-dosyalar.tar.gz` (kökte; uygulama denendi, ajanın
-   ağacını birebir verir). Ajan notları, sondalar, saldırı dizinleri, `fark_taban/taban.json`: `tar -xzf
-   denetim/2026-10-01/d4/wip/scratch-2026-10-07.tar.gz -C <scratchpad>` (içindeki mutlak yollar eski scratchpad'i gösterir). Ölçüm betikleri
-   `d4/araclar/` (aynı not; `birlesik_olc.sh` `git archive` kopyası bırakır, içinde `.env` var: iş bitince `rm -rf`). Okunur kopyalar: `d4/notlar/`,
-   `d4/saldiri/*/kararlar_*.txt`, `d4/kararlar_fhi.txt`, `d4/kosular.txt`. `--plan` koş. Oturum sınırı ~5 saatte bir doluyor, konteyner de yeniden
-   başlayabiliyor: ajanlar `SendMessage` ile sürdürülür, mutasyon `--kayit` ile kaldığı yerden.
-2. **Sıradaki iş (dördüncü denetimin düzeltmeleri, DECISIONS §85–§86):** yöntem `denetim/2026-10-01/d4/duzeltme_kurallari.txt` ve Ek'i (düzeltici
-   ajan yeniden üretir ve matematik kararını yazar, ana oturum denetler; her tura bağımsız saldırgan, bulguları bağımsız doğrulanır; aynı anda en
-   çok 3 worktree'li ajan, ≤2 ağır süreç; yeni tur taze ajanla; beklemeler ≤10 dk; her birleşimde `birlesik_olc.sh`: sondalar 0, `fark_parca.py`
-   karar 0). Sıra: (i) **d4b tur 9** (dalda açık yanlış onay d4b8-YO-1; kararlar `saldiri/d4b8/kararlar_tur9.txt`), sonra saldırgan; (ii) **d4c tur
-   3** (`d9a7bb3`): kalan ölçüm (`62a40e9`'da K–P sondası ve yeni testler, tam takım, Y08; sondalar ve `fark.py` 0), dalla birleşme, saldırgan; (iii) **d4e tur 3
-   saldırısı yeniden** (v2 kesildi; yarım çıktı `saldiri/d4e3-yarim/`): D4E3-YO-2 ve YO-3'ü bağımsız doğrula ve düzelt, KINK grubunun beklenti
-   hatası olduğunu doğrulat, `d342778`'e de saldır; (iv) **d4h**: yamayı al (ajanın commit'i izin sınıflandırıcısına takıldı; ana oturum commit
-   eder), kalan ölçümler (DECISIONS §86), saldırgan; (v) d4f tur 2 saldırısı; (vi) d4i (CAP-K1, karar `kararlar_fhi.txt`); (vii) birleşik hâle
-   tamlık eleştirmeni; (viii) **yerel kalite:** V15 S1, R1 (karar: UNKNOWN, d4f YO-3), L1; V16'nın kalanı; (ix) `--full`, belgeler, `--plan`;
-   birleştirme kullanıcı onayıyla. V19'a dokunulmaz (kullanıcı "sonra" dedi). `franklin`'in silinmesi kullanıcıya sorulur (§74).
+1. **Yeni sohbet:** `git fetch origin claude/focused-albattani-jlomk1 && git merge --ff-only FETCH_HEAD` (oturumun dalına; push yalnız oturumun
+   dalına; dal adı değiştiyse `git ls-remote origin` ile en yeni oturum dalı). Yarım işler (A+ ilerledikçe bu satır güncellenir): `git fetch denetim/2026-10-01/d4/wip/wip-2026-10-09.bundle 'refs/heads/wip/*:refs/heads/wip/*'` (`wip/d4b-tur9`
+   d4b tur 10, `wip/d4c-tur3` d4c tur 4, `wip/d4e-tur4` d4e tur 4 (bitti), `wip/d4h` d4h tur 2, `wip/birlesik` = `443e078` d4c tur 3 +
+   oturum dalı); her biri için `git worktree add /home/user/wt/<ad> wip/<dal>` (ajan notları worktree yolu olarak bunları anar).
+   Ajan notları, sondalar, saldırı dizinleri, `fark_taban/taban.json`, `agir.sh` (iki slotlu sıra adaletli ağır süreç semaforu),
+   `olc_sira.sh`: `tar -xzf denetim/2026-10-01/d4/wip/scratch-2026-10-09.tar.gz -C <scratchpad>`; eski scratchpad yolları
+   (`…/0a3a0f70-…`, `…/e165cf01-…`, `…/fce620cb-…`) yeni scratchpad'e sembolik bağlanır. `--plan` koş. Oturum sınırı ~3–5 saatte bir
+   doluyor ve konteyner yeniden başlıyor (8–9 Ekim'de 4 kez): ajanlar `SendMessage`, iş akışları resume, mutasyon `--kayit` ile sürer.
+2. **Sıradaki iş: A+ (kullanıcı kararı 15 Ekim, DECISIONS §89).** Yöntem `denetim/2026-10-01/d4/duzeltme_kurallari.txt` ve Ek'leri (düzeltici
+   ajan yeniden üretir ve matematik kararını yazar, ana oturum denetler; en çok 3 worktree'li ajan, ağır süreçler `agir.sh` ile en çok 2;
+   beklemeler ≤10 dk; parçanın son hâlinde tam ölçüm). Bulgu envanteri `d4/a_arti/envanter.json` (263 kayıt), kural etkisi
+   `kural_etkisi.json` (R01–R29). Sıra: (i) **d4b tur 10** bitir (`saldiri/d4b9/kararlar_tur10.txt`; d4b9-YO-1, RK-1 dahil);
+   (ii) **d4c tur 4** son ölçümler (mutasyon T ve T4 partileri, tam takım; `saldiri/d4c3/kararlar_tur4.txt`); (iii) **d4e tur 5** = tur 4 +
+   kendi getirdikleri (`saldiri/d4e4/bulgular.json`: YO-1, U2, U3, U4; RK-1 ve U5 yalnız INCORRECT → UNKNOWN; YO-2, YO-3 dar fail-closed, geniş
+   hâlleri ders kitabı türevlerini bozar: §89); (iv) **d4h tur 2** bitir (`saldiri/d4h/kararlar_tur2.txt`; D1, PRE-RK-4/5 dahil; kendi getirdiği
+   D4H-RK-1, D4H-YO-5 kapanır); (v) dördünü oturum dalında birleştir, birleşik ölçüm; (vi) **d4f'nin üç gerçekçi maddesi** kesin düzeltme
+   (D4F2B-RK-1, RK-2, ONCEKI-1; `saldiri/d4f2/kararlar_tur3.txt`); (vii) kalan yapay açıklar dar fail-closed (d4f 3. turun geri kalanı, d4i
+   CAP-K1, R01–R29'un açıkları), her kural derlemde ölçülür; (viii) **son saldırı** birleşik hâle, parça mercekli (d4d ve d4g 2. turları ve
+   saldırılmamış son diff'ler dahil); gerçekçi bulgu kesin düzeltilir, yapay bulgu fail-closed; (ix) **yerel kalite:** V15 S1, R1 (karar:
+   UNKNOWN), L1; V16'nın kalanı; (x) `--full`, belgeler, `--plan` TAMAM; birleştirme ve yedek kullanıcı onayıyla. V19'a dokunulmaz.
+   `franklin`'in silinmesi kullanıcıya sorulur (§74).
 3. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 4. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir): önce kalibrasyon (`run_f3
    --limit 10 --workers 3 --max-cost 5`), sonra tam koşu.
@@ -135,16 +138,18 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), (ters aralık noktasında ad
   geleneğe bağlı durumda CORRECT yerine UNKNOWN (§80). Başlıcaları: serbest parametreli integral/limit, iç içe kapalı integral, yalnız
   `vars.constraints` ile sabitlenen parametre, tam sayı değişkende doğru türev, kısıt ucunda türev, gerçel değişkende gcd/n!'li kalkülüs, ters
   aralığa düşen değerler. Veri setinde etkisi 0. Yalnız kanıtlı yolla geri kazanılır.
-- **V20. Dördüncü denetimin kalanları** (DECISIONS §85–§86; §3 adım 2). **Dalda açık yanlış onay:** d4b8-YO-1 (`Ctx.domain_for` kesişimdeki
-  istisnayı yutup kısıtı düşürüyor; tur 9 yarım). **Doğrulanmamış adaylar** (önceden var; d4e tur 3'ün yarım saldırısı): D4E3-YO-2 (türev iddiasının
-  tanımsız ailesi yalnız n = 0, ±1, 2'de deneniyor: x > 10 iken (x²)' = 2x + 0·cot 4x CORRECT), D4E3-YO-3 (yazılı tanımlılığı kararsız kısıt/tanım
-  evreni/verilen koşulsuz okunuyor). Birleşmeyen: d4b tur 9, d4c tur 3, d4h (commit'siz). Başlamayan: d4i, tamlık eleştirmeni. Saldırı bekleyen: d4b
-  tur 9, d4c tur 3, d4e tur 3 (yeniden) ve `d342778`, d4f tur 2, d4h. Küçük açıklar: G14 testi yük altında zaman bütçesiyle UNKNOWN (güvenli yön);
-  türev/limit/ekstremumda 2a = 4 ile sabitlenen parametre UNKNOWN (`solved_pins` yalnız seri/özyinelemede); ∫_ℝ e^{−x²} = √π UNKNOWN (d4c RK-A);
-  `relation_holds_at(Ne)` sayısal eşitliği kanıt sayıyor; wordproblem `ctx.givens()` bileşik metni okuyamıyor; x**a = 4 (a = 2 verilen) yeniden
-  yazılmıyor; d4g süre bütçesi işbirlikçi; evaluate Limit(|x|/x) bildirimle CORRECT, kısıtla UNKNOWN (tutarsız, yalnız UNKNOWN yönü); d4h'de
-  `\lfloor\frac{17}{5}\rfloor` yeniden yazımı ve `rank`'ın Python int dönüp `layer_exception` vermesi (önceden var). Bulgu listesi ve doğrulamalar
-  `denetim/2026-10-01/d4/`.
+- **V20. Dördüncü denetimin kalanları** (DECISIONS §85–§89; §3 adım 2; tam liste `d4/a_arti/envanter.json`: 263 kayıt, açık 115).
+  **Gerçekçi 19** (§89): yanlış onay D4C2-YO-4 (`rel_tol`; düzeltmesi d4c tur 4'te), D4E3-YO-7 (parçalı boşluk; d4e tur 4), D1 (`x ∉ [0,3]`;
+  d4h); haksız ret D4E3-RK-1, RK-3 (d4e tur 4), PRE-RK-4, PRE-RK-5 (d4h tur 2), D4F2B-ONCEKI-1 (hiçbir dalda); kapsama d4b8-RK-1 (d4b tur 10),
+  D4C2-RK-A, D4C3R-KK-1, Gauss ∫_ℝ e^{−x²} (d4c tur 4), D4E3-RK-4/5/6 (d4e tur 4), D4E4-U2 (d4e tur 4 getirdi), D4H-RK-1 (d4h tur 1 getirdi),
+  D4F2B-RK-1/2 (hiçbir dalda). **Parçanın getirdiği açık yanlış onaylar (yapay):** d4b8-YO-1 (d4b tur 9'da kapalı), d4b9-YO-1, D4B10-LINEAR
+  (tur 10), D4C3-YO-A/R-YO-1 (zarf; d4c tur 4), D4E4-YO-1 (d4e tur 4 getirdi), D4F2A-YO-1, D4F2B-YO-1, D4H-YO-5. **Önceden var yapay yanlış
+  onaylar:** d4e3 YO-2–YO-6 ve RK-2 (d4e tur 4'te kapalı), D4E4-YO-2/3, d4f2 (ℂ söylemi, ∞ argümanı, sıfır üs), d4h YO-1–YO-4, D4C-T4-PI,
+  CAP-K1 (gizli; d4i). Kapsama: BİRLEŞİK-1 (d4c tur 4). Küçük açıklar: G14 testi yük altında zaman bütçesiyle UNKNOWN; d4g süre bütçesi
+  işbirlikçi (tek süreç içi çağrı yalnız sandbox'ta kesilir); `relation_holds_at(Ne)` sayısal eşitliği kanıt sayıyor (envanter: kesin sabitler
+  `exact_equal`'la karşılaştırılıyor, geçersiz olabilir **[DOĞRULANMADI]**); wordproblem bileşik verilenleri ("x**2 = 9 ve x < 0") okuyamıyor
+  (doğru cevap da UNKNOWN, gerçekçi kapsama); x**a = 4 (a = 2 verilen) yeniden yazılmıyor; evaluate Limit(|x|/x) bildirimle CORRECT, kısıtla
+  UNKNOWN; d4h'de `\lfloor\frac{17}{5}\rfloor` yeniden yazımı ve `rank`'ın `layer_exception`'ı. (PRE-RK-6 `5eb38f8`'de kapalı: §89.)
 
 ### 4.3 Kredili ölçüm
 
@@ -182,7 +187,6 @@ Doğru cevabı reddedenler: V11, V13, V15 (S1, R1), (ters aralık noktasında ad
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
 8. **Karar (8 Ekim, DECISIONS §87): depo kimseyle paylaşılmayacak, açılmayacak.** Karar değişirse önce anahtarlar yenilenir; `.env` ve YKS kaynak PDF'leri geçmişten temizlenir.
 9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 5)?
-10. **Açık (8 Ekim, DECISIONS §87):** dördüncü denetimde durdurma kuralı. Öneri: d4b tur 9 + d4c tur 3, `--full`, birleştir; kalan yapay sınıflar geniş fail-closed kuralla UNKNOWN; birleşik hâle tek son saldırı, sonra kod dondurma ve F3/F4. Kullanıcı henüz karar vermedi.
 
 ### 4.5 Teknik borç
 
@@ -231,9 +235,9 @@ Süre: `--full` bulutta **~25–40 dk** (4 süreçli adversaryal 661–1084 s; s
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (1 Ekim akşam, `git merge-base --is-ancestor` ile): `master` = `wqedwad/asd#14`'ün birleşmesi (öncesi `aa67b20`). **Oturum dalları**
-  (birleşmedi): `claude/upbeat-mccarthy-ef2oub` (güncel), onun içerdiği `claude/trusting-lovelace-vp1boa` `782431c`+belge; `wip/*` dalları yalnız
-  bundle'larda (§3 adım 1). **Öteki birleşmeyen dal** `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel sürümü; bilerek: parçası ve
+- **Dallar** (15 Ekim, `git merge-base --is-ancestor` ile): `master` = `wqedwad/asd#14`'ün birleşmesi (öncesi `aa67b20`). **Oturum dalları**
+  (birleşmedi): `claude/focused-albattani-jlomk1` (güncel), onun içerdiği `claude/amazing-edison-0g21ci`, `-upbeat-mccarthy-ef2oub` ve
+  `-trusting-lovelace-vp1boa`; `wip/*` dalları yalnız bundle'larda (§3 adım 1). **Öteki birleşmeyen dal** `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel sürümü; bilerek: parçası ve
   testleri taşındı, §73, bilgisi §74; silinmesi kullanıcıya sorulacak, §3). Öteki hepsi `master`da: `claude/loving-bardeen-ninmoo` (`#13`, `#14`),
   `claude/sharp-lamport-f9m2w3` `d68070c`, `claude/inspiring-cori-xcgjld` (`#12`), `claude/busy-bardeen-ckr5bw` (`#11`),
   `claude/dreamy-meitner-rvrwlj` `60d539c` (`#9`, `#10`), `claude/keen-ramanujan-oqseru` (`#8`), `claude/trusting-curie-76slml`,
@@ -296,5 +300,5 @@ Kurulum (Linux; bulutta kanca yapar): `docs/BULUT.md` §4, Lean `docs/LEAN_SETUP
 ## 9. Nerede ne var
 
 Arşiv `docs/arsiv/HANDOFF-2026-09-26.md` (§0 bulut tarihçesi, §2 mimari, **§4 tekrar denenmeyecekler**, §11 tuzaklar);
-`DECISIONS.md` (§1 kilitli kararlar, §7–§16 tarih sırasıyla, son §86); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
+`DECISIONS.md` (§1 kilitli kararlar, §7–§16 tarih sırasıyla, son §88); `docs/` (`ARCHITECTURE`, `QUALITY`, `SOLVER_FORMAT`,
 `LLM_LAYERS`, `LEAN_SETUP`, `BULUT`, `sartname/`); `reports/arsiv/`; `denetim/` (ölçüm ve mutasyon betikleri).

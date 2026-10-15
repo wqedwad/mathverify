@@ -10,10 +10,10 @@ from sympy import S, Eq, FiniteSet, ConditionSet, And, oo
 
 from ..equiv import answers_equivalent
 from ..equiv.random_point import sample_points
-from ..equiv.numeric import real_odd_roots
+from ..equiv.numeric import read_tolerance, real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
-from ..sandbox.exactsets import at_risk, exact_complement, exact_intersection, set_is_empty
+from ..sandbox.exactsets import at_risk, certified_degree, exact_complement, exact_intersection, set_is_empty
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
@@ -37,7 +37,7 @@ def _poly_in(expr, var):
 
 def _real_roots_worker(num, var):
     """Sandbox worker: every real root of a polynomial, exactly (rationals / radicals / CRootOf)."""
-    return list(sp.Poly(num, var).real_roots())
+    return list(certified_degree(sp.Poly(num, var)).real_roots())
 
 
 def _bounded_hull(dom):
@@ -397,17 +397,61 @@ def _endpoints(sset: sp.Set) -> tuple[list, list]:
     return members, non
 
 
-def _sample_inequality(rel, var, claimed_set: sp.Set, dom: sp.Set, seed: int, n: int = 40) -> tuple[bool | None, dict]:
+def _split_conditions(s_, var):
+    """(`s_` with every ConditionSet on `var` replaced by its base set, the conditions so taken out), or None when
+    a ConditionSet sits inside another operation (a union, a complement): `Ctx._periodic_conditions` cuts a domain
+    by intersections only."""
+    if isinstance(s_, sp.ConditionSet):
+        inner = _split_conditions(s_.base_set, var)
+        if inner is None:
+            return None
+        return inner[0], [s_.condition.xreplace({s_.sym: var})] + inner[1]
+    if isinstance(s_, sp.Intersection) and s_.has(sp.ConditionSet):
+        bases, conds = [], []
+        for a in s_.args:
+            r = _split_conditions(a, var)
+            if r is None:
+                return None
+            bases.append(r[0])
+            conds += r[1]
+        return exact_intersection(*bases), conds
+    if isinstance(s_, sp.Set) and s_.has(sp.ConditionSet):
+        return None
+    return s_, []
+
+
+def _sample_inequality(rel, var, claimed_set: sp.Set, dom: sp.Set, seed: int, n: int = 40,
+                       written=()) -> tuple[bool | None, dict]:
     """Inside the claimed set the relation must hold; in dom \\ claimed it must fail.
-    Endpoints are checked explicitly (continuous sampling never hits them)."""
+    Endpoints are checked explicitly (continuous sampling never hits them).
+
+    A condition that cuts `dom` unsolved (a ConditionSet: `Ctx.unsolved_conditions`) is decided at each point
+    here, exactly (`relation_holds_at`), never by SymPy's membership of a ConditionSet: the points are drawn from
+    the domain without them. SymPy read the conditions in an order PYTHONHASHSEED set, and one rejection took 2 s
+    or 62 s (round 9 of part d4b, RK-6). Inside the claim a point needs only the conditions that are not `written`
+    (the definedness of the problem's expressions as written): where the relation's own is not real the relation
+    fails, and the claim [0, 2] of acos(2**x + x - 2) >= 0 is refuted at 2 (acos 4), where it was drawn from the
+    domain alone and never refuted (round 9, RK-2). Outside the claim a point needs every condition."""
     ev: dict[str, Any] = {}
+    split = _split_conditions(dom, var)
+    if split is None:
+        base, conds = dom, []
+    else:
+        base, conds = split
+    keep = [k for k in conds if k not in written]
+
+    def holds(ks, c) -> bool:
+        return all(relation_holds_at(k, var, c) is True for k in ks)
     # the endpoints proved equal written one way (round 7, RK6: (3, 4) against dom (log(8)/log(2), oo))
-    inside = [pt[var] for pt in sample_points({var: exact_intersection(claimed_set, dom)}, n, seed, special=True)]
-    outside_set = exact_complement(dom, claimed_set)
+    inside = [pt[var] for pt in sample_points({var: exact_intersection(claimed_set, base)}, n, seed, special=True)]
+    outside_set = exact_complement(base, claimed_set)
     outside = [pt[var] for pt in sample_points({var: outside_set}, n, seed + 1, special=True)]
     members, non = _endpoints(claimed_set)
-    inside += [m for m in members if in_domain(dom, m) is not False]
-    outside += [m for m in non if in_domain(dom, m) is True]
+    inside += [m for m in members if in_domain(base, m) is not False]
+    outside += [m for m in non if in_domain(base, m) is True]
+    if conds:
+        inside = [c for c in inside if holds(keep, c)]
+        outside = [c for c in outside if holds(conds, c)]
     ev["n_inside"], ev["n_outside"] = len(inside), len(outside)
     for c in inside:
         h = relation_holds_at(rel, var, c)
@@ -523,7 +567,10 @@ def _verify_solve_inequality(ir, solution, ctx: Ctx, t):
             dom = exact_intersection(dom, rr.value)
     ev: dict[str, Any] = {"claimed": str(claimed), "domain": str(dom)}
     # (1) direct refutation of the claim by sampling (incl. endpoints)
-    okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed)
+    # the definedness of the problem's expressions as written (see _sample_inequality), read as `Ctx.domain_for`
+    # puts them in the domain
+    written = [ctx._with_bound_values(c, var) for c in ctx.written_conditions()[0]] + list(definedness_conditions(rel, var))
+    okS, sev = _sample_inequality(rel, var, claimed, dom, ctx.seed, written=written)
     ev["sampling"] = sev
     if okS is False:
         ev["reason"] = "sampling_counterexample"
@@ -876,6 +923,13 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
     expr_src = p.get("expr") or ir.unknown_of_interest
     if not expr_src:
         return unknown(LAYER, "no_target_expression")
+    # a declared tolerance is read once, |c - v|/|v| <= t against the true value v (equiv.numeric.read_tolerance);
+    # rel_tol >= 1 accepted any claim, a negative one refuted the exact value (YO-4, RK-F)
+    rel_tol, bad_rel = read_tolerance(p.get("rel_tol"))
+    abs_tol, bad_abs = read_tolerance(p.get("abs_tol"), relative=False)
+    if bad_rel or bad_abs:
+        return unknown(LAYER, "malformed_tolerance", 0, {"rel_tol": str(p.get("rel_tol")), "abs_tol": str(p.get("abs_tol"))},
+                       flags=["malformed_tolerance"])
     target, err = parse_or_unknown(LAYER, ctx.expr, expr_src)
     if err:
         return err
@@ -897,7 +951,7 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
             if und is None:
                 return unknown(LAYER, f"claim_as_written_undecided: {why}", 0, ev)
         ok, cev = answers_equivalent(claimed, target, shape=shape, domain=dom,
-                                     rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
+                                     rel_tol=rel_tol, abs_tol=abs_tol)
         ev["compare"] = cev
         ev["method"] = "direct"
         if dom and ok is not False:
@@ -963,7 +1017,7 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         if len(values) > 1:
             return unknown(LAYER, "target_not_unique", 0, ev, flags=["ir_incomplete"])
         ok, cev = answers_equivalent(claimed, values[0], shape="scalar",
-                                     rel_tol=p.get("rel_tol"), abs_tol=p.get("abs_tol"))
+                                     rel_tol=rel_tol, abs_tol=abs_tol)
         ev["compare"] = cev
         ev["method"] = "solve_system"
     if ok is True:
@@ -1001,7 +1055,7 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
     defined? The claim is parsed with SymPy's automatic simplification, which erases its own
     undefined points: `sqrt(x)**2` becomes x, and was certified as a simplification of x on ℝ
     (Lean audit E10, 25 Sep 2026). True -> the claim is not equal to the expression on its domain."""
-    from .domain import written_definedness
+    from .domain import Convention, _violations, written_definedness
     payload = solution.claimed_answer.payload
     if not isinstance(payload, str):
         return False, "payload_not_text"
@@ -1027,6 +1081,14 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
         if len(fs) > 1:
             return None, f"multivariate_claim_condition: {c}"
         (v,) = tuple(fs)
+        if isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and c.args[1].kind in (
+                "real_power", "zero_power"):
+            # the base of x**(x + 1) or x**sqrt(2) read where it is a convention point, on the problem's domain
+            # (an interval rule before: base > 0; round 9 attack on part d4b, RK-1)
+            out = _violations(c, v, dom[v])
+            if out is None or set_is_empty(out) is not True:
+                return None, f"claim_condition_undecided: {c}"
+            continue
         bad = sp.Eq(c.lhs, c.rhs) if isinstance(c, sp.Ne) else sp.Not(c)
         rr = sb_run("mathverify.sandbox.ops:solveset_in", bad, v, dom[v], timeout=ctx.timeout)
         if not rr.ok or isinstance(rr.value, ConditionSet):

@@ -52,6 +52,8 @@ class Ctx:
         # conditions on var that name a symbol no given fixes: dropped here, listed for the
         # certificates (unapplied_conditions)
         unapplied: list = []
+        # declared constraints that could not be applied (see `constraints_not_applied`)
+        failed: list = []
         # relations with a trigonometric function: solved last, on the domain the others leave
         # (sandbox.exactsets: SymPy reads them on one period only)
         deferred: list = []
@@ -102,8 +104,12 @@ class Ctx:
                             dom = exact_intersection(dom, sp.solveset(r, var, S.Reals))
                         elif var in r.free_symbols:
                             unapplied.append(c)
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 - never dropped: the verifier abstains on it
+                        # an intersection whose endpoints are not ordered (3 and log(8)/log(2) + exp(-exp(10))) raised
+                        # here and the constraint x >= 3 was dropped: {-2, 2} was certified for x**2 = 4 and 0 for
+                        # max(-x**2) (round 9 of part d4b, YO-1). See `constraints_not_applied`
+                        unapplied.append(c)
+                        failed.append(c)
         # A given inequality on this variable alone restricts it like a declared constraint when
         # the task carries its own relation in params: "x² < 4" with the given "x > 0" is (0, 2),
         # but only the parameter was solved and (−2, 2) was certified (audit of 25 Sep 2026). When
@@ -176,6 +182,7 @@ class Ctx:
         self.cache[f"unsolved_side:{var.name}"] = [r for r in unsolved if r in side]
         self.cache[f"reversed:{var.name}"] = back
         self.cache[f"unapplied:{var.name}"] = unapplied
+        self.cache[f"failed:{var.name}"] = failed
         self.cache[key] = dom
         return dom
 
@@ -299,7 +306,7 @@ class Ctx:
         Convention`), the points where one does not): see `convention_region`. A condition solveset
         cannot split keeps `dom` as it was (the condition was not applied before either) and makes
         every point undecided."""
-        from .domain import convention_split
+        from .domain import convention_split, finite_points
         if not spans:
             return dom, S.EmptySet
         fwd_all, back_all = S.Reals, S.EmptySet
@@ -312,7 +319,19 @@ class Ctx:
             empty = back.is_empty
         except Exception:  # noqa: BLE001
             empty = None
-        return sp.Intersection(dom, fwd_all), (S.EmptySet if empty is True else back)
+        dom = sp.Intersection(dom, fwd_all)
+        pts = finite_points(back) if empty is not True else None
+        if pts is not None:
+            back = pts
+            # a point of a finite region where every condition holds read at the point itself (x**x at x = -2:
+            # Convention real_power, whose split by the base's sign is an interval rule) belongs to the domain
+            # (round 9 attack on part d4b, RK-1)
+            from .domain import relation_holds_at
+            held = [p for p in back.args if all(relation_holds_at(c, var, p) is True for c in spans)]
+            if held:
+                dom, back = sp.Union(dom, sp.FiniteSet(*held)), sp.Complement(back, sp.FiniteSet(*held))
+                empty = back.is_empty
+        return dom, (S.EmptySet if empty is True else back)
 
     def convention_region(self, var: sp.Symbol) -> sp.Set:
         """The points of `var`'s domain where the value of one of the problem's expressions is a
@@ -862,6 +881,25 @@ class Ctx:
                     ok = False
                 if not ok:
                     out.append(c)
+        return out
+
+    def constraints_not_applied(self) -> list[str]:
+        """Declared constraints (`vars[].constraints`) that read as relations but could not be applied to their
+        variable's domain: the exact intersection raised (two endpoints neither proved equal nor certainly
+        ordered, too many of them) or the relation failed to solve. The domain left them out silently, and
+        every certificate and the step layer read a larger domain than the problem's: {-2, 2} was certified
+        for x**2 = 4 under x <= log(8)/log(2) + exp(-exp(10)), x >= 3 (round 9 of part d4b, YO-1). The
+        verifier abstains on them. A domain that cannot be built at all raises for each of its readers."""
+        out: list[str] = []
+        for v in self.ir.vars:
+            s_ = self.ns.get(v.name)
+            if not v.constraints or not isinstance(s_, sp.Symbol):
+                continue
+            try:
+                self.domain_for(s_)
+            except Exception:  # noqa: BLE001 - every reader of this domain raises too: none is used
+                continue
+            out += [str(c) for c in self.cache.get(f"failed:{v.name}", [])]
         return out
 
     # Params that hold the problem's own expression, per task kind. `limit` is absent on purpose,

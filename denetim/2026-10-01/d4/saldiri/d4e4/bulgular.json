@@ -1,0 +1,128 @@
+[
+ {
+  "id": "D4E4-YO-1",
+  "klass": "false_accept",
+  "severity": "high",
+  "introduced_by_piece": "yes",
+  "verified_by_attack_workflow": true,
+  "title": "RK-6'nın 'u > 0 koşulu yalnız u'nun sıfırlarında düşer' atlaması |u| anahtarlarına da uygulanıyor: |x − cos x| türevinde u < 0 yarı doğrusunda yazıldığı gibi ta[nımsız iddia CORRECT] (başlık sohbet kaydında kesik)",
+  "envanter_15_ekim": {
+   "status": "open",
+   "realistic": "no",
+   "evidence": "Kaynak transkript (bağımsız doğrulandı, depoda yok). Envanter ölçümü wf/d4e/probe/p_k.py: |x−cos x|' ders kitabı + 0·log(x−cos x) wip'te CORRECT, edison'da UNKNOWN; scr/saldiri/d4e4/yanlis-onay/sonda/p1_yeni.json, p2_yeni.json, p9_yeni.json (+0·log(u) varyantları wip CORRECT, a0a0829 UNKNOWN)."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-YO-2",
+  "klass": "false_accept",
+  "severity": "medium",
+  "introduced_by_piece": "no",
+  "verified_by_attack_workflow": true,
+  "title": "RK-1 ailesi kök tabanında kapanmadı: ((x−½)²·sin πx)^{3/4} (açık yazım) ½'de türevli (f'(½) = 0), ders kitabı iddiası ½'de 0/0 iken CORRECT",
+  "envanter_15_ekim": {
+   "status": "open",
+   "realistic": "no",
+   "evidence": "Kaynak transkript (doğrulandı): RK-1 ailesi kök tabanında kapanmamış, f'(1/2)=0 var, iddia 0/0 iken CORRECT. Envanter kontrolü wf/d4e/probe/p_k.py: (x⁴)^(1/3)' zincir kuralı iddiası iki dalda INCORRECT (tek kesin sıfırda sorun yok)."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-YO-3",
+  "klass": "false_accept",
+  "severity": "medium",
+  "introduced_by_piece": "no",
+  "verified_by_attack_workflow": true,
+  "title": "Çözülemeyen ≥ koşulunun açık kısmı, iç noktadaki dokunma sıfırını iddianın yazılı tanımlılık denetiminden siliyor: x² + 0·√(x sin x) için 2x + 0/x, (x sin x)^{3…} (başlık kesik)",
+  "envanter_15_ekim": {
+   "status": "open",
+   "realistic": "no",
+   "evidence": "Kaynak transkript (doğrulandı): çözülemeyen ≥ koşulunun açık kısmı iç dokunan sıfırı (x=0) iddianın yazılı tanımlılık denetiminden siliyor."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-RK-1",
+  "klass": "unjust_reject",
+  "severity": "low",
+  "introduced_by_piece": "no",
+  "verified_by_attack_workflow": true,
+  "title": "Değer ailesinde (r = 3/4, u'' ≠ 0) SymPy türev formülü nan: her yerde doğru ve tanımlı iddia random_point 'defined_on_one_side_only' ile INCORRECT ((1 − cos x)^…)",
+  "envanter_15_ekim": {
+   "status": "open",
+   "realistic": "unclear",
+   "evidence": "Kaynak transkript (doğrulandı; r=3/4, u''≠0). Envanter: (1−cos x)^(3/4)' zincir kuralı iddiası (0'da tanımsız) wip'te INCORRECT (RK-8 geleneğine uygun), edison'da UNKNOWN; her yerde tanımlı iddia ölçülmedi."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-U1",
+  "klass": "coverage_loss",
+  "severity": "medium",
+  "introduced_by_piece": "yes",
+  "verified_by_attack_workflow": false,
+  "title": "YO-4/RK-2 majorant kuralı, parametreli ama her parametre değerinde yakınsak improper integralleri kaybettiriyor: FTC türevleri ve çürütmeler CORRECT/INCORRECT't[en UNKNOWN'a]",
+  "envanter_15_ekim": {
+   "status": "unverified",
+   "realistic": "unclear",
+   "evidence": "Kaynak transkript: 'YO-4/RK-2 majorant kuralı her parametre değerinde yakınsak parametreli integralleri kaybediyor' (doğrulayıcı sınırda öldü). Envanter wf/d4e/probe/p_u.py: ∫_0^∞dt/(t²+a²), ∫_0^∞e^{−at}dt (a>0) evaluate iki dalda da UNKNOWN; d/dx∫_x^∞dt/(t²+a²) iki dalda CORRECT: regresyon yeniden üretilemedi."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-U2",
+  "klass": "coverage_loss",
+  "severity": "medium",
+  "introduced_by_piece": "yes",
+  "verified_by_attack_workflow": false,
+  "title": "YO-6 _piecewise_conditions, sembol sayısı 1 olmayan her Piecewise'a DEFINEDNESS_UNDECIDED veriyor. Parçalı bir fonksiyonun noktadaki değeri (f(2); kapalı Piecew[ise])",
+  "envanter_15_ekim": {
+   "status": "open",
+   "realistic": "yes",
+   "evidence": "Kaynak transkript (doğrulanmadı); envanter ölçümüyle gerçek: wf/d4e/probe/p_u.py, f parçalı iken evaluate f(2)=4 ve 'PW, verilen x=2' edison'da CORRECT (yanlış 3 INCORRECT), wip'te UNKNOWN (intake.definedness). Tek değişkenli denklem/limit etkilenmiyor (ölçüldü)."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-U3",
+  "klass": "crash_or_timeout",
+  "severity": "low",
+  "introduced_by_piece": "yes",
+  "verified_by_attack_workflow": false,
+  "title": "YO-2 _family_members tam sayı aralığını uzunluk sınırından önce bütünüyle list(range(...)) olarak kuruyor: geniş sınırlı bölgede MemoryError/OverflowError layer[_exception]",
+  "envanter_15_ekim": {
+   "status": "unverified",
+   "realistic": "no",
+   "evidence": "Kaynak transkript (doğrulanmadı). Kod okuması mekanizmayı doğruluyor: wip calculus.py _family_members'ta 'ks = list(range(int(lo_k), int(hi_k) + 1))' ks[:limit] kesiminden önce kuruluyor; koşulmadı."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-U4",
+  "klass": "crash_or_timeout",
+  "severity": "low",
+  "introduced_by_piece": "yes",
+  "verified_by_attack_workflow": false,
+  "title": "_value_holes her 'value' kırık noktası için bütçesiz derivative_at_point çağırıyor (_KINK_BUDGET = 3'ün dışında)",
+  "envanter_15_ekim": {
+   "status": "unverified",
+   "realistic": "unclear",
+   "evidence": "Kaynak transkript (doğrulanmadı). Kod: her delikte derivative_at_point(timeout=timeout) çağrılıyor, toplam bütçe yok; koşulmadı."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ },
+ {
+  "id": "D4E4-U5",
+  "klass": "unjust_reject",
+  "severity": "medium",
+  "introduced_by_piece": "no",
+  "verified_by_attack_workflow": false,
+  "title": "(Önceden var) Sembolik tam sayı üs, yazılı tanımlılıkta x > 0 okunuyor: n ∈ ℤ⁺ iken (x²)ⁿ'in ders kitabı türevi 2n·x^(2n−1) INCORRECT",
+  "envanter_15_ekim": {
+   "status": "open",
+   "realistic": "unclear",
+   "evidence": "Kaynak transkript (doğrulanmadı); envanter ölçümüyle gerçek: wf/d4e/probe/p_u.py, n positive_integer, (x²)^n türevi 2n·x^(2n−1) edison'da ve wip'te INCORRECT; kontrol x^n -> n·x^(n−1) CORRECT."
+  },
+  "kaynak": "d4e 4. tur saldırısı (iş akışı v3 wf_e32146de-940, commit 8025acb, taban a0a0829), 9 Ekim 10:31 UTC; sonuç yalnız oturum session_GIZLI kaydındaydı (yanlış onay lensi doğrulandı; ret-kapsama lensinin doğrulayıcısı haftalık sınırda düştü)."
+ }
+]

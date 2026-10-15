@@ -46,9 +46,8 @@ MUTATIONS = [
      "            if False:", TP),
     ("Z07 sertifikada SymPy'nin sıfırı göreli", CAL, "            exact_zero = exact is not None and exact == 0",
      "            exact_zero = False", TP),
-    ("Z08 sertifikada iddia 0 göreli", CAL,
-     "            claimed_zero = isinstance(claimed, sp.Basic) and claimed.is_Rational and claimed == 0",
-     "            claimed_zero = False", TP),
+    # Z08 ("sertifikada iddia 0 göreli") dropped in d4c round 3 (7 Oct 2026): the claim 0 is no special case any
+    # more, every definite integral's value is the certificate's or none (d4c's Y01/Y02/Y04 mutate that)
     ("Z09 integral adımı göreli reddedilir", DET, "                      abs_tol=float(100 * slack))",
      "                      abs_tol=None)", TP),
     ("Z10 kesin kesir farkının işareti yok", DET, "    elif isinstance(d, sp.Rational):", "    elif False:", TP),

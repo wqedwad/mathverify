@@ -73,6 +73,22 @@ def _rational_multiple(a, P):
     return q if isinstance(q, sp.Rational) else None
 
 
+def _k_range(lo_v, hi_v):
+    """(ceiling(lo_v), floor(hi_v)) as Python ints, each read from a CERTIFIED floor, or None. SymPy's floor of a
+    constant reads it off rounding noise (round 9 of part d4b, YO-4): an index at the window's edge was lost or
+    added where c/a is an integer written as an exact 0 no evaluation separates."""
+    from ..equiv.numeric import certified_floor
+    f_hi, f_lo = certified_floor(hi_v), certified_floor(-lo_v)
+    if f_hi is None or f_lo is None:
+        return None
+    return -int(f_lo), int(f_hi)
+
+
+def _certain(rel) -> bool | None:
+    """The truth of a relation of two numbers, or None when undecided."""
+    return True if rel is sp.true else False if rel is sp.false else None
+
+
 def _enumerate_on_window(progs, W) -> FiniteSet | None:
     elems = []
     for c, a in progs:
@@ -80,18 +96,22 @@ def _enumerate_on_window(progs, W) -> FiniteSet | None:
             elems.append(c)
             continue
         # n range such that 0 <= c + a n < W
-        lo = sp.ceiling(-c / a) if a > 0 else sp.ceiling((W - c) / a)
-        hi = sp.floor((W - c) / a) if a > 0 else sp.floor(-c / a)
-        try:
-            lo_i, hi_i = int(lo), int(hi)
-        except TypeError:
+        ks = _k_range(-c / a, (W - c) / a) if a > 0 else _k_range((W - c) / a, -c / a)
+        if ks is None:
             return None
+        lo_i, hi_i = ks
         if hi_i - lo_i > 10000:
             return None
         for k in range(lo_i, hi_i + 1):
             v = sp.simplify(c + a * k)
-            if v == W or (v.is_number and (v < 0 or v >= W)):
+            if v == W:
                 continue
+            if v.is_number:
+                out = [_certain(sp.Lt(v, 0)), _certain(sp.Ge(v, W))]
+                if True in out:
+                    continue
+                if None in out:
+                    return None           # an edge no comparison decides
             elems.append(v)               # exact; nsimplify would snap it
     return FiniteSet(*elems)
 
@@ -254,12 +274,18 @@ def _enumerate_window_of_interval(progs, window: Interval):
             if window.contains(c) == True:  # noqa: E712
                 elems.append(c)
             continue
-        klo = sp.ceiling((lo - c) / a) if a > 0 else sp.ceiling((hi - c) / a)
-        khi = sp.floor((hi - c) / a) if a > 0 else sp.floor((lo - c) / a)
-        for k in range(int(klo), int(khi) + 1):
+        ks = _k_range((lo - c) / a, (hi - c) / a) if a > 0 else _k_range((hi - c) / a, (lo - c) / a)
+        if ks is None:
+            return None
+        if ks[1] - ks[0] > 10000:
+            return None
+        for k in range(ks[0], ks[1] + 1):
             v = sp.simplify(c + a * k)         # exact; nsimplify would snap it
-            if window.contains(v) == True:  # noqa: E712
+            inside = window.contains(v)
+            if inside == True:  # noqa: E712
                 elems.append(v)
+            elif inside != False:  # noqa: E712
+                return None                    # an edge no comparison decides
     return FiniteSet(*elems)
 
 

@@ -29,6 +29,12 @@ def sym_equal(a, b, timeout: float = 5.0) -> tuple[bool | None, dict[str, Any]]:
     if d == 0:
         ev["method"] = "structural_diff"
         return True, ev
+    from .numeric import undecided_jumps
+    if undecided_jumps(a, b):
+        # simplify reads a jump at a constant off rounding noise: sign((gd(1) - gd(1))**2) - 1 "was" 0
+        # (round 9 of part d4b, YO-4)
+        ev["method"] = "jump_undecided"
+        return None, ev
     r = sb_run("mathverify.sandbox.ops:zero_test_battery", d, timeout=timeout)
     ev["battery"] = {"ok": r.ok, "ms": round(r.ms, 1), "flags": r.flags}
     if r.ok and r.value is True:

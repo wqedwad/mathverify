@@ -388,8 +388,20 @@ def _verified_where_conventions(claim, ctx: Ctx, status: str, ev: dict) -> tuple
     return "unknown", {**ev, "reason": "not_verified_where_a_value_is_a_convention", "recheck": ev2}
 
 
+def _jump_undecided(*rels) -> bool:
+    """Does one of `rels` hold a jump (ceiling, floor, sign, frac, Mod, Heaviside, a Piecewise of constant
+    conditions) of a number no certified sign settles (equiv.numeric.undecided_jumps)? doit, simplify and the
+    solvers read it off rounding noise: with Z = gd(1) - gd(1) exactly 0, the step "Piecewise((1, Z**2 > 0),
+    (0, Z**2 <= 0)) = 1" was verified, and "x = ceiling(Z**2)" refuted under x = 0, the right answer then
+    INCORRECT (round 9 of part d4b, YO-4). Such a step decides nothing."""
+    from ..equiv.numeric import undecided_jumps
+    return undecided_jumps(*[r for r in rels if isinstance(r, sp.Basic)])
+
+
 def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict]:
     ev: dict[str, Any] = {}
+    if _jump_undecided(claim):
+        return "unknown", {"reason": "jump_of_an_unproved_number"}
     if not isinstance(claim, Eq):
         if isinstance(claim, (sp.core.relational.Relational, And, Or, sp.logic.boolalg.BooleanAtom)) \
                 and not getattr(claim, "free_symbols", None):
@@ -1925,6 +1937,8 @@ def _integrals_refute(claim, ctx: Ctx) -> bool:
 
 
 def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:
+    if _jump_undecided(claim, *premises):
+        return "unknown", {"reason": "jump_of_an_unproved_number"}
     if not getattr(claim, "free_symbols", None):
         return _closed_claim(claim, ctx), {"n_premises": len(premises), "route": "closed_claim"}
     syms = set(claim.free_symbols)

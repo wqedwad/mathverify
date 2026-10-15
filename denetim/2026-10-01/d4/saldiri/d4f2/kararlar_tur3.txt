@@ -1,0 +1,44 @@
+# d4f 3. tur: ana oturumun kararları (8 Ekim 2026; 2. tur saldırısının 13 gerçek bulgusu)
+Bulgular: d4/saldiri/d4f2/bulgular.json (saldırgan + bağımsız doğrulayıcı; e0983d0, taban 62a40e9). Kimlikler iki lens çakışmasın diye
+D4F2A-* (yanlış onay lensi) ve D4F2B-* (ret/kapsama lensi). Önce yanlış onaylar. Kural mekanizmaya konur; aynanın haksız reddi de kapanır.
+DİKKAT (eşgüdüm): A-YO-4 (kısıtların yazılı tanımlılığı) d4e 4. turun YO-3/YO-5'iyle aynı mekanizmaya (Ctx.written_conditions,
+domain_for) dokunur: d4e 4. tur birleştikten sonra onun üstüne kur; aynı işi iki kez yapma, yalnız eksik kalan yolları kapat.
+
+- A-YO-1 (orta, bu parça getirdi): yazılı okumada hesaplanan det/trace/rank girdisindeki 0**0 (ve Pow(1−1, 0), 1/0**0) gelenektir;
+  _rational_as_written sıfır tabanlı sıfır üssü (ve tanımsız/gelenek alt ifadesini) "rasyonel" saymaz; matris işlemi o girdide
+  hesaplanmaz. Beklenen: 0⁰ girdili matrisin trace/det'i için 1 CORRECT asla (UNKNOWN), adım verified asla.
+- A-YO-2 (düşük, önceden var): sıfır üs özdeş sıfır olan sembolik ifadeyle de tanınır (x − x, ⌊x⌋ − ⌊x⌋, x² − x²: kesin sadeleştirme
+  ya da simplify farkı 0): taban ∞ ya da 0 ise ∞⁰/0⁰ geleneği → UNKNOWN. x**0, x**(x − x) → 1 ve 2**(x − x) → 1 CORRECT kalabilir.
+- A-YO-3 (orta, önceden var): domain_of_discourse ℂ iken yalnız gerçele özgü koşullar düşer (√ negatif, log negatif: sqrt(-4) → 2I,
+  log(-1) → Iπ CORRECT kalır); NO_VALUE (Γ'nın kutbu, zoo, 1/zoo), 0⁰, ∞⁰, Mod'un negatif bölen geleneği ℂ'de de geçerlidir. Beklenen:
+  1/(−1)! = 0, 1/Γ(0) = 0, 0⁰ = 1, ∞⁰ = 1, Mod(7, −5) = −3: ℂ söyleminde UNKNOWN.
+- A-YO-4 (orta, önceden var): değişken kısıtları (vars[].constraints) ve limit görevinin verilenleri de yazıldığı biçimde okunur
+  (ilke 12): kapalı tanımsız alt ifade (√−1, log(−1), asin 2) → problem yazıldığı biçimde tanımsız → UNKNOWN; kısıtın yazılı tanımlılık
+  koşulu (x/x > 0 → x ≠ 0; sqrt(x)**2 ≥ −1 → x ≥ 0; log x − log x ≥ 0 → x > 0)
+  bölgeye girer. Beklenen: x³ = x için kısıt x/x > 0 → {−1, 1} CORRECT ({−1,0,1} CORRECT asla), sqrt(x)**2 ≥ −1 → {0, 1}, log x − log x ≥ 0
+  → {1}; dört kapalı tanımsız vaka UNKNOWN.
+- A-YO-5 (düşük, önceden var): kapalı argümanı ±∞ olan işlem gerçel sayı değeri vermez: 0·sin(∞) (SymPy'nin AccumBounds hurdası),
+  sin/cos/frac(±∞) → değer yok → UNKNOWN; 1/∞ kuralıyla tutarlılık: 2**(−oo), exp(−oo), (1/2)**oo, E**(−oo), atan(oo) gibi kapalı ∞'lu
+  değer ifadeleri de UNKNOWN (∞'u sayı sayan geleneği sessizce seçmeyiz). Limit görevleri (lim) bu kuraldan etkilenmez.
+- A-RK-1 (düşük, bu parça getirdi): tam sayı bildirilmemiş sınırın gelenek kuralı doğrusal olmayan sınıra da uygulanır (Σ_{k=n²}^{n²+2} k,
+  Σ_{k=√n}^{√n+2} k): ℤ dışı noktada karar UNKNOWN (INCORRECT asla); her okumada yanlış iddia (3n² + 4) INCORRECT kalabilir.
+- B-YO-1 (orta, yanlış onay, bu parça getirdi) + B-RK-3 (düşük, kapsama): \log_b a sınırlı LaTeX Σ/Π yazılı okumada RecursionError
+  atıyor: kök nedeni (evaluate(False) altında Sum.doit/evalf_log döngüsü) gider. _convention_as_written'ın "okunamayan → gelenek" dalı
+  çürütmeyi yalnız gelenek gerçekten kararı etkileyebiliyorsa geri çeker: sınırın değer okumasında kesin tam sayılığı kanıtlıysa (log_3 27
+  = 3) çürütme durur. "Okunamadı" bayrağı "tanımsız" diye adlandırılmaz. Beklenen: '\sum_{k=1}^{\log_3 27} k = 7' adımlı çözüm INCORRECT
+  (first_bad_step 1); '= 6' verified; doğru cevap CORRECT, yanlış (7) INCORRECT.
+- B-RK-1 (orta, kapsama, bu parça getirdi): liste/sözlük parametresindeki yalın ad (nokta 'P', 'S', olasılık öğesi, 'det', 'sqrt',
+  'Sum' gibi ad alanındaki işlev/sınıf nesnesine denk gelen tek tanımlayıcı) matematik metni olarak yazılı tanımlılığa okunmaz (etiket).
+  Beklenen: geometride PQR, ABS, ABC+S orta noktası; olasılıkta {S,K}, {P,Q} vakaları CORRECT; yanlış cevaplar INCORRECT.
+- B-RK-2 (orta, kapsama, bu parça getirdi): kuyruk kapısı (holds_on_the_tail) ihlal kümesi ℝ'de sonlu ya da üstten sınırlıysa kuyrukta
+  tutma kanıtlıdır (2ⁿ ≠ 1000, n! ≠ 100, n − ln n > 0 …); kararsızlık "tanımsız" diye bayraklanmaz. Beklenen: 1/(2ⁿ − 1000), 1/(3ⁿ − 7),
+  1/(n! − 100), n²/(n² − 2ⁿ) ve bulgudaki öteki ders kitabı dizi limitleri CORRECT; yanlış iddialar INCORRECT.
+- B-RK-4 (düşük, kapsama, bu parça getirdi): tam sayı bildirilmiş n'in tam sayı değerli polinomu olan sınır (n(n+1)/2, n(n−1)/2,
+  n(n+1)(n+2)/6) tam sayıdır (binom tabanında tam sayı katsayı ya da derece+1 ardışık tam sayıda tam değer): gelenek değil. n/2 sınırı
+  gelenek kalır. Beklenen: bulgudaki 6 vaka CORRECT, adım verified.
+- B-RK-5 (düşük, kapsama, bu parça getirdi): girdileri kapalı ve kendi koşulları kanıtlı matriste tutulan det/trace/eigmax kesin
+  değerlendirilip payda/log koşulu karara bağlanır (değişkenli girdide √x·√x katlanmaz, A-YO-1 korunur); det = 0 olan kapalı matris
+  UNKNOWN kalır. Beklenen: 1/det[[√2,1],[1,√2]] = 1, 1/det[[√4,1],[1,1]] = 1, 1/trace[[√2,0],[0,√2]] = √2/4 … CORRECT; yanlışlar INCORRECT.
+- B-ONCEKI-1 (orta, haksız ret, önceden var): çoktan seçmeli şık metni cevap biçimiyle (answer_shape) iddia gibi okunur: tek ilişki biçimli
+  şık ('x > -2', 'x ≥ 1', 'x < 3', LaTeX \ge) çözüm kümesi olarak; ondalık virgüllü şık ('1,5') tahmin edilmez → UNKNOWN
+  (decimal_comma_ambiguous). Beklenen: ilişki biçimli doğru şık CORRECT, '1,5' UNKNOWN; hiçbiri INCORRECT değil.

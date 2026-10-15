@@ -1,0 +1,1 @@
+[["max sqrt x [0,4]", "CORRECT", "CORRECT", "CORRECT"], ["max x/(x^2+1)", "CORRECT", "CORRECT", "CORRECT"], ["max x e^-x", "CORRECT", "CORRECT", "CORRECT"], ["pw max", "UNKNOWN", "UNKNOWN", "UNKNOWN"]]

@@ -131,3 +131,46 @@ SP yeni: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scrat
   (Piecewise dal koşulu), YO-7 (Piecewise boşluğu), RK-1 (yüksek haksız ret, d4e 3. tur getirdi: sqrt(x²+x⁴) 0'da analitik sayılıyor),
   RK-3 (2a = 4 türevde okunmuyor), RK-4..RK-8, RK-10 kapsama (d4e 3. tur/d342778), RK-9 süre. Kararlar saldiri/d4e3/kararlar_tur4.txt.
 - 14:46 makine çapında iki slotlu ağır süreç semaforu: $SP/agir.sh (flock; kayıt $SP/agir/kayit.txt); d4b9 ve d4c4 ajanlarına bildirildi.
+- 14:50 d4e tur 4 taze ajan (worktree /home/user/wt/d4e4, dal d4e-tur4, a0a0829). Worktree'li ajanlar: d4b9, d4c4, d4e4 (3/3).
+- 15:37 d4h saldırısı BİTTİ: 13 bulgu, 13 gerçek (d4h getirdi: YO-5 pinli m aile indisi, RK-1 LaTeX x ∈ ℝ okunmuyor, RK-2 D2 iki okuma
+  aynıyken de ret, RK-3 sonda beklentisi; önceden var: YO-1 işleç/kurucu yolları kapalı formu evalf ile kararlaştırıyor, YO-2 Leibniz
+  yazımları, YO-3 anahtar kelimeli argüman, YO-4 iki argümanlı alan; PRE-RK-4 yüksek haksız ret: params.equation adım öncülü değil,
+  PRE-RK-5 ilişki biçimli cevap INCORRECT, PRE-RK-6 SympifyError sızıyor, PRE-RK-7 132–149 s, PRE-RK-8 yeniden yazım). Kararlar
+  saldiri/d4h/kararlar_tur2.txt. d4h 2. tur worktree slotu boşalınca.
+- 15:42 saldırgan d4f2 (iş akışı v3, wf_568f6d87-023), commit e0983d0 taban 62a40e9.
+- 16:20 oturum sınırı (sıfırlanma 18:20) + konteyner yeniden başladı: d4b9, d4c4, d4e4 ajanları kesildi (ağaçlar commit'li ve temiz: fecc2be, b99f0ca, bfdc5ff); d4f2 saldırısında ret-kapsama lensi ve yanlış onay doğrulayıcısı düştü. 18:22 ajanlar SendMessage ile, d4f2 resume ile sürdürülüyor.
+- 18:40 d4b tur 9 BİTTİ (fecc2be, dal d4b-tur9; e03ea1f ile birleşik): YO-1, YO-4, RK-1..RK-6 kapandı; asılma kök nedeni (SymPy evalf_add
+  hassasiyeti tavansız, ~4e64 bit) için yeni src/mathverify/_sympy_guards.py (süreç çapında: evalf ≤ 2**16 bit, relational._n2 katı fark).
+  Sonda L 105 vakada 56cec1d'de 65 → 0; d4b 0/541, öteki sondalar 0 (d4a 316, d4c 203, d4d 340, d4e 942, d4f 335, d4g 229); test_d4_d4b_tur9
+  85 testin 66'sı 56cec1d'de düşer; mutasyon d4b 170/170, d4a 51/51; fark tabana 0/0/86/0 (782431c'ye 0/0/0/0); tam takım 4063 passed /
+  93 skipped / 4 (.git'siz kural testleri). Ana oturum: matematik kararları NOTLAR'da denetlendi (sabit ilişki ve Piecewise koşulu yalnız
+  kesin işaretle; RK-2'de izinli bölge dışındaki iç nokta karşı örnek değil): uygun.
+- 18:42 saldırgan d4b9 (iş akışı v3, wf_8799629a-c86), commit fecc2be taban e03ea1f (SymPy yamasının yan etkileri özellikle).
+- 18:45 d4h 2. tur taze ajan (worktree /home/user/wt/d4h; önce c4ca9dc ile birleşir).
+- 19:22 d4f2 saldırısı BİTTİ (resume sonrası): 13 bulgu, 13 gerçek (d4f 2. tur getirdi: matriste 0**0, doğrusal olmayan sınır,
+  RecursionError'lu LaTeX adımı çürütülmüyor (yanlış onay), yalın ad etiketleri, kuyruk kapısı, tam sayı değerli polinom sınır, tutulan
+  det payda; önceden var: ℂ söyleminde NO_VALUE/gelenek, kısıt/limit verileninin yazılı okunmaması, ∞ argümanlı işlemler, sıfır üs
+  yazımları, ÇS şık okuması). Kararlar saldiri/d4f2/kararlar_tur3.txt. d4f 3. tur slot boşalınca (d4e 4. turdan sonra: aynı mekanizma).
+- 20:05 d4b9 saldırısı BİTTİ: 6 bulgu, 6 gerçek. YO-1 (yüksek, 9. tur getirdi: certified_sign evalf_table dışı fonksiyonların (asin,
+  sinh, tanh, erf, atan2) strict evalf'ine güveniyor; kesin 0'ın asin'i ±1 işaret alıyor), YO-2 (önceden var: is_gt/is_ge'nin
+  is_extended_positive yedeği _n2 korumasını atlıyor), RK-1 (yüksek haksız ret, 9. tur: noktada tanımlılık aralık kuralıyla), RK-2 (bütçe
+  istisnası ayrıştırmayı düşürüyor), RK-3 (sin x > 0 [0,1000] 219 s), RK-4 (UNKNOWN kilitleyen iki test). Kararlar
+  saldiri/d4b9/kararlar_tur10.txt. d4b 10. tur ilk boşalan worktree slotunda (öncelik), sonra d4f 3. tur.
+- 20:15 ikinci oturum sınırı (sıfırlanma 23:20) + konteyner yeniden başladı: d4c4 (b99f0ca), d4e4 (b666163) temiz commit'li; d4h2
+  birleşme commit'i 88d68df + commit'siz 2. tur çalışması ağaçta (8 dosya). 23:22 d4c4 ve d4e4 SendMessage ile sürdürüldü; üçüncü slota
+  öncelikli d4b 10. tur taze ajan (worktree /home/user/wt/d4b9, fecc2be); d4h2 slot boşalınca sürdürülecek (ağacı diskte).
+- 02:20 üçüncü oturum sınırı (sıfırlanma 04:20) + yeniden başlatma: d4b10 (f3a6ff3 + 3 commit'siz), d4c4 (c32cdad), d4e4 (9561c9a). 04:23 üçü SendMessage ile sürdürüldü; d4h2 bekliyor (88d68df + commit'siz ağaç).
+- 05:45 agir.sh sıra adaletli (bilet kuyruğu) yapıldı: d4e/d4c'nin 30000 s'lik tek mutasyon koşuları iki slotu tutup d4b 10. turu (kritik yol) 04:25'ten beri bekletiyordu; kural eki: tek agir.sh çağrısı ≤~20 dk, mutasyon ≤10'luk partilerle.
+- 07:35 d4e tur 4 BİTTİ (8025acb, dal d4e-tur4, a0a0829 üstü; src son 1a82e0c): 17 bulgu kapandı (KINK kontrol olarak sondada). Sonda yeni
+  W/T/U/V/Y 1476 vakada a0a0829'da 288 → 0; d4e 2418/0, öteki sondalar 0 (d4a 316, d4b 436, d4c 203, d4d 340, d4f 335, d4g 229);
+  test_d4_d4e_tur4 21 testin 20'si a0a0829'da düşer; mutasyon 186/193 (7 eşdeğer: P01, W05, D02, M21, V06, V22, V38; gerekçeler
+  NOTLAR'da); fark tabana 0/0/86/0, 782431c'ye 0/0/0/0; tam takım 3999 passed / 93 skipped / 4 (.git'siz kural testleri); 89 ders
+  kitabı vakasında kayıp 0, kazanç 3. Kapsama: acos(1 − x⁴) yanlış iddiası UNKNOWN; 6'dan uzun kısmi aile listesi UNKNOWN. Ana oturum:
+  kararlar kararlar_tur4.txt'e uygun; acos(1 − 2x²) ders kitabı türevi INCORRECT → UNKNOWN (önceden var haksız ret kapandı).
+- 07:37 saldırgan d4e4 (v3, wf_e32146de-940), commit 8025acb taban a0a0829. d4h 2. tur sürdürüldü (boşalan slot).
+- 07:55 dördüncü oturum sınırı (sıfırlanma 09:20) + yeniden başlatma: d4b10 (9d60d17), d4c4 (c32cdad), d4h2 (1aa422f) kesildi; d4e4
+  saldırısının iki lensi de düştü (resume edilecek).
+- 09:35 yarım işler güvenceye alındı: wip/wip-2026-10-09.bundle (wip/d4b-tur9 9d60d17, wip/d4c-tur3 c32cdad, wip/d4e-tur4 8025acb,
+  wip/d4h 1aa422f, wip/birlesik 443e078; önkoşul origin/claude/amazing-edison-0g21ci; verify geçti) ve wip/scratch-2026-10-09.tar.gz
+  (ajan notları, sondalar, saldırı dizinleri; git archive kopyaları ve .env hariç; .env'deki gerçek anahtar değerleri arşivde yok,
+  taranarak doğrulandı).
