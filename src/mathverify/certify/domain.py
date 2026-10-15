@@ -183,6 +183,14 @@ class Convention(sp.Set):
       x + (-1)**x - (-1)**x the primitive x certified (attack on d4e, YO-5).
     * `origin`: the operand (y**2 + x**2 of atan2(y, x), u of arg(u)) is not 0: atan2(0, 0) and arg(0)
       are undefined in mathematics and 0 in some conventions (round 8 of part d4b, YO-1).
+    * `real_power`: the operand is the pair (b, e) of a power b**e whose exponent is a variable of the base's
+      (x**x, (x - 4)**x): where b > 0 it has its one value; elsewhere its definedness is read from the exact
+      values of b and e at the point, BEFORE the power is formed ((x**x).subs(x, 0) is SymPy's 1): an integer
+      e and b != 0, or b = 0 and e a positive rational, have the one value ((-2)**(-2) = 1/4, 0**2 = 0); 0**0,
+      a negative b at a non-integer e (the real root, the principal value or none) are left undecided. The
+      interval rule b > 0 read at a point dropped -2 from {-2, 2}, the solution of (x + 2)(x - 2) = 0 with
+      x**x (2 + sin x) > 0 on {-3, ..., 3}, and certified {2} (round 9 attack on part d4b, RK-1). `zero_power`
+      covers 0**e of an irrational e > 0 too (0**sqrt(2): 0 by the strict rule, undefined as written).
 
     As `Contains(operand, CONVENTION)` the condition holds where the operand is proved inside and is
     left standing (undecided) elsewhere, never false: `decide_membership` and `relation_holds_at` leave
@@ -200,6 +208,8 @@ class Convention(sp.Set):
         return str(self.args[0])
 
     def _contains(self, other):
+        if self.kind == "real_power":
+            return _real_power_holds(other)
         if not isinstance(other, sp.Expr):
             return None
         k = self.kind
@@ -241,6 +251,26 @@ MOD_DIVISOR = Convention("mod_divisor")
 INTEGER_BOUND = Convention("integer_bound")
 NEGATIVE_BASE_EXPONENT = Convention("negative_base")
 ORIGIN = Convention("origin")
+REAL_POWER = Convention("real_power")
+
+
+def _real_power_holds(pair):
+    """`Convention` `real_power` at the pair (b, e) of a power's base and exponent: true where b**e certainly has its
+    one real value, None (undecided) elsewhere, never false (see `Convention`)."""
+    if not isinstance(pair, sp.Tuple) or len(pair) != 2:
+        return None
+    b, e = pair
+    if not (isinstance(b, sp.Expr) and isinstance(e, sp.Expr)) or e.is_extended_real is not True:
+        return None
+    if b.is_extended_positive is True:
+        ok = True
+    elif b.is_extended_real is True and b.is_zero is False:
+        ok = e.is_integer is True
+    elif b.is_zero is True:
+        ok = e.is_rational is True and e.is_extended_positive is True
+    else:
+        ok = False
+    return sp.true if ok else None
 
 
 def is_convention(c) -> bool:
@@ -257,7 +287,7 @@ def is_value_convention(c) -> bool:
     either, so a refutation stands (an undefined claim is no true step, `steps.deterministic`)."""
     return is_convention(c) and (c.args[1] == FORWARD_SPANS
                                  or c.args[1].kind in ("odd_root", "mod_divisor", "negative_base", "origin",
-                                                       "integer_bound"))
+                                                       "integer_bound", "real_power"))
 
 
 def is_integer_bound(c) -> bool:
@@ -289,6 +319,11 @@ def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
             if e != var:
                 return S.Reals, S.Reals
             fwd, back = S.Integers, sp.Complement(S.Reals, S.Integers)
+        elif kind == "real_power":
+            # the base's sign splits the line; a point of `back` may still hold (an integer exponent): the
+            # caller reads such a point exactly where `back` is finite (Ctx._forward_ranges)
+            base = e[0]
+            fwd, back = solveset(sp.Gt(base, 0), var, S.Reals), solveset(sp.Le(base, 0), var, S.Reals)
         elif kind == "binomial":
             # e = ±var + k with k an integer: an integer exactly where var is one
             k = e - var if (e - var).free_symbols == set() else e + var
@@ -352,6 +387,20 @@ def _named_conditions(body, bound, var):
     return [c for c in definedness_conditions(b, var) if getattr(c, "free_symbols", set()) & dummies], plain
 
 
+def finite_points(region, limit: int = 400):
+    """`region` as a FiniteSet when it is one of at most `limit` points (a FiniteSet, or a finite Range: the
+    integers -3 <= x <= -1 are Range(-3, 0)), else None."""
+    if isinstance(region, sp.FiniteSet):
+        return region if len(region) <= limit else None
+    if isinstance(region, sp.Range):
+        try:
+            if region.is_finite_set is True and int(region.size) <= limit:
+                return sp.FiniteSet(*region)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 def _violations(c, d, region):
     """Where in `region` the condition `c` on `d` fails, computed in the sandbox under a time limit;
     None when that is not known exactly (solveset over a Range of a transcendental condition did not
@@ -379,6 +428,13 @@ def _violations(c, d, region):
                 return None
             out = sp.Complement(region, S.Integers)
             return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
+        elif kind == "real_power":
+            # x**x: each point of a finite region read exactly (an integer exponent of a nonzero base holds);
+            # elsewhere the base's sign (RK-1)
+            pts = finite_points(region)
+            if pts is not None:
+                return sp.FiniteSet(*[q for q in pts.args if relation_holds_at(c, d, q) is not True])
+            bad = sp.Le(e[0], 0)
         else:
             bad = {"odd_root": sp.Lt(e, 0), "zero_power": Eq(e, 0), "mod_divisor": sp.Le(e, 0),
                    "origin": Eq(e, 0)}.get(kind)
@@ -1336,9 +1392,20 @@ def _node_conditions(node, var, add) -> None:
         elif ex.is_zero is True:
             add(sp.Contains(base, ZERO_POWER_BASE))     # 0**0: 1 or undefined (Convention)
         elif ex.is_number and not ex.is_rational:
-            add(base > 0)
+            if ex.is_extended_positive is True:
+                # 0**sqrt(2): 0 by the strict rule, undefined as written: a convention point; a negative base
+                # has no real value either way (round 9 attack on part d4b, RK-1)
+                add(base >= 0)
+                add(sp.Contains(base, ZERO_POWER_BASE))
+            else:
+                add(base > 0)
         elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
-            add(base > 0)          # x^y style real power (var None: every symbol counts)
+            if ex.free_symbols <= base.free_symbols:
+                # x**x: b > 0 is the rule on an interval; at a point the exact base and exponent decide (an
+                # integer exponent of a nonzero base has its value): Convention real_power (RK-1)
+                add(sp.Contains(sp.Tuple(base, ex), REAL_POWER))
+            else:
+                add(base > 0)          # x^y style real power (var None: every symbol counts)
         elif not ex.is_number and base.is_number and base.is_zero is False and base.is_positive is not True \
                 and ex.is_integer is not True:
             # a negative base, a variable exponent: the curriculum's value at an integer exponent only
@@ -2012,10 +2079,11 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins
         except Exception:  # noqa: BLE001
             return None
         if isinstance(s, sp.ConditionSet) or s.has(sp.ConditionSet):
-            # no proof that the condition holds on the whole region is no proof of definedness: the
-            # callers abstain only on True, and the maximum 0 of -(x - pi)**2 + (x + 1)Q/((x + 1)Q) - 1 on
-            # [2, 4] (undefined at pi) was certified (review of 2 Oct 2026, B5)
-            return True if at_risk(bad, var) else None
+            # no proof that the condition holds on the whole region is no proof of definedness: the maximum 0
+            # of -(x - pi)**2 + (x + 1)Q/((x + 1)Q) - 1 on [2, 4] (undefined at pi) was certified (review of
+            # 2 Oct 2026, B5). Undecided: every caller abstains on None as on True (d4e round 3), and a
+            # trigonometric condition read True here added nothing (round 9 of part d4b, mutation K10)
+            return None
         if s != S.EmptySet:
             return True
     return False

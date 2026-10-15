@@ -1622,15 +1622,16 @@ def _line_equal(claimed, truth, var, dep) -> tuple[bool | None, dict[str, Any]]:
 _TRAILING_C = re.compile(r"\s*\+\s*[Cc]\s*$")
 
 
-def _unreadable_task_expression(src, expr, var, ns, ms, regions=()):
+def _unreadable_task_expression(src, expr, var, ns, ms, regions=(), pins=None):
     """UNKNOWN when the task's function or integrand is undefined as written for every value of `var`
     (limits.written_undefined_everywhere) or carries a membership condition on it
     (limits.membership_conditions) that does not hold on one of `regions` for certain (the integral's
-    interval, a neighbourhood of the derivative's point: `limits.membership_holds_on`); None otherwise."""
+    interval, a neighbourhood of the derivative's point: `limits.membership_holds_on`), read at the values the givens
+    fix (`pins`); None otherwise."""
     if written_undefined_everywhere(src, ns):
         return unknown(LAYER, "expression_undefined_as_written", ms, {"expr": src},
                        flags=["expression_undefined_as_written"])
-    members = [c for c in membership_conditions(src, expr, var, ns) if not membership_holds_on(c, var, regions)]
+    members = [c for c in membership_conditions(src, expr, var, ns, pins) if not membership_holds_on(c, var, regions)]
     if members:
         return unknown(LAYER, "membership_condition_on_variable", ms, {"conditions": [str(c) for c in members]},
                        flags=["membership_condition"])
@@ -2023,7 +2024,7 @@ def verify(ir, solution, ctx: Ctx):
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:
                 return err
-            bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms)
+            bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms, pins=pins)
             if bad is not None:
                 return bad
             integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)
@@ -2086,7 +2087,7 @@ def verify(ir, solution, ctx: Ctx):
             if err:
                 return err
             bad = _unreadable_task_expression(p["integrand"], integrand, var, ns_i, t.ms,
-                                              _interval_regions(p, ctx, pins))
+                                              _interval_regions(p, ctx, pins), pins)
             if bad is not None:
                 return bad
             # a symbol a given or a declared constraint fixes is read as its value in the integrand, the
@@ -2224,7 +2225,7 @@ def verify(ir, solution, ctx: Ctx):
             if err:
                 return err
             bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms,
-                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)))
+                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)), pins)
             if bad is not None:
                 return bad
             f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
@@ -2368,7 +2369,7 @@ def verify(ir, solution, ctx: Ctx):
             if err:
                 return err
             bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms,
-                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)))
+                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)), pins)
             if bad is not None:
                 return bad
             f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)

@@ -440,20 +440,27 @@ def verify(ir, solution, ctx: Ctx):
         f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
         if err:
             return err
-        from .limits import membership_conditions, written_undefined_everywhere
+        from .limits import membership_conditions, membership_holds_on, written_undefined_everywhere
         if written_undefined_everywhere(p["f"], ctx.ns):
             # log(-1) - log(-1) + 2 is 2 after parsing: its maximum 2 on [0, 1] was certified
             return unknown(LAYER, "f_undefined_as_written", t.ms, {"f": p["f"]}, flags=["written_domain"])
-        members = membership_conditions(p["f"], f, var, ctx.ns)
-        if members:
-            # x + x! - x! is x after parsing: its maximum -1 on [-3, -1] was certified (30 Sep 2026)
-            return unknown(LAYER, "membership_condition_on_variable", t.ms,
-                           {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
         from ..normalize.parse import parse_set_str
         iv = parse_set_str(p.get("interval", "Reals"), ctx.ns) if p.get("interval") else ctx.domain_for(var)
         iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)
         if err:
             return err
+        # read at the values the givens fix; the origin convention of atan2/arg on the interval (atan2(x, y) with
+        # y = 1 on [0, 1]: its operand x**2 + 1 is never 0; round 9 of part d4b, RK-5), and the base of a power
+        # x**x or x**sqrt(2) away from 0 and the negative numbers (round 9 attack, RK-1)
+        from .domain import Convention
+        members = [c for c in membership_conditions(p["f"], f, var, ctx.ns, pins)
+                   if not (isinstance(iv, sp.Set) and isinstance(c.args[1], Convention)
+                           and c.args[1].kind in ("origin", "zero_power", "real_power")
+                           and membership_holds_on(c, var, [iv]))]
+        if members:
+            # x + x! - x! is x after parsing: its maximum -1 on [-3, -1] was certified (30 Sep 2026)
+            return unknown(LAYER, "membership_condition_on_variable", t.ms,
+                           {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
         free = sorted({str(s_) for e in [f, iv] for s_ in getattr(e, "free_symbols", set())} - {str(var)})
         if free:
             # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare. One in a written

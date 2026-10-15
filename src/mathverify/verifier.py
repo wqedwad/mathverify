@@ -465,6 +465,40 @@ def _claim_without_value(solution: Solution, ctx, raw_payload=None, options=None
     return out
 
 
+def _claim_outside_superset(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
+    """A claimed solution of an equation certainly outside the domain read WITHOUT the constraints that could not be
+    applied (that domain holds the true one: every other restriction is in it), or failing one of those constraints
+    read alone at the point, solves nothing. -3 of {-3, 3} for x**2 = 9 under x >= 3 and x <= 3 + gd(1) - gd(1)
+    (two writings of 3 no check orders) is below 3; the problem abstained on the dropped constraint (round 9 attack
+    on part d4b, RK-4). A convention point (the domain leaves it out, it is not outside) refutes nothing."""
+    from .certify.domain import in_domain, relation_holds_at
+    if ir.task.kind != "solve_equation" or solution.claimed_answer.kind != "set":
+        return None
+    with Timer() as t:
+        try:
+            var = ctx.sym((ir.task.params or {}).get("var", "x"))
+            claimed = ctx.claimed(solution)
+            dom, conv = ctx.domain_for(var), ctx.convention_region(var)
+        except Exception:  # noqa: BLE001 - nothing read, nothing refuted
+            return None
+        if not isinstance(claimed, sp.FiniteSet):
+            return None
+        alone = []                     # each constraint that could not be applied, read on its own at the point
+        for src in ctx.constraints_not_applied():
+            try:
+                rel = ctx.rel(src)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(rel, sp.core.relational.Relational) and rel.free_symbols == {var}:
+                alone.append(rel)
+        out = next((c for c in claimed.args if in_domain(conv, c) is False and (
+            in_domain(dom, c) is False or any(relation_holds_at(r, var, c) is False for r in alone))), None)
+    if out is None:
+        return None
+    return result("intake.domain", "fail", 0.99, True,
+                  {"reason": f"claimed_root_outside_the_applied_domain: {out}", "domain": str(dom)}, t.ms, primary=True)
+
+
 def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     from .normalize.parse import ClaimNotAValue, check_claim_is_value
     ca = solution.claimed_answer
@@ -817,6 +851,16 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     if unreadable:
         layers.append(unknown("intake.domain", f"constraint_unreadable: {unreadable[:3]}",
                               flags=["constraint_unreadable"]))
+        return layers, clean_flags
+    # ... or reads but could not be applied to the domain (an intersection whose endpoints are not ordered): it
+    # was dropped, and {-2, 2} was certified for x**2 = 4 under x >= 3 (round 9 of part d4b, YO-1)
+    not_applied = ctx.constraints_not_applied()
+    if not_applied:
+        layers.append(unknown("intake.domain", f"constraint_not_applied: {not_applied[:3]}",
+                              flags=["constraint_not_applied"]))
+        outside = _claim_outside_superset(problem_ir, solution, ctx)
+        if outside is not None:
+            layers.append(outside)
         return layers, clean_flags
 
     # The problem's own expression is undefined as written at a point with nothing left to choose

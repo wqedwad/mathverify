@@ -6,6 +6,7 @@ genuine difference.
 """
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import mpmath as mp
@@ -228,39 +229,155 @@ def _evalf_strict(e):
     return re_, im_, _part_state(re_), _part_state(im_)
 
 
-_JUMPS = (sp.sign, sp.Abs, sp.floor, sp.ceiling, sp.frac)
+_JUMPS = (sp.sign, sp.Abs, sp.floor, sp.ceiling, sp.frac, sp.Heaviside, sp.Mod)
+
+
+def _closed_jump(n) -> bool:
+    """Is `n` a sign, Abs, floor, ceiling, frac, Heaviside or Mod node whose arguments are constants, or a
+    Piecewise whose conditions are (its branch is chosen by numbers: a jump too)?"""
+    if isinstance(n, sp.Piecewise):
+        return not any(getattr(c, "free_symbols", None) for _, c in n.args)
+    return isinstance(n, _JUMPS) and not any(getattr(a, "free_symbols", None) for a in n.args)
+
+
+def _jump_inputs(n) -> list:
+    """What decides the jump node `n`: the conditions of a Piecewise, the arguments of the others."""
+    return [c for _, c in n.args] if isinstance(n, sp.Piecewise) else list(n.args)
+
+
+def _closed_truth(c, timeout: float):
+    """The truth of a condition between constants (`Piecewise`), from CERTIFIED signs only; None when one is
+    undecided. A relation of two numbers that are not certainly real decides only == and !=."""
+    if c is sp.true or c is sp.false:
+        return bool(c)
+    if isinstance(c, sp.Not):
+        t = _closed_truth(c.args[0], timeout)
+        return None if t is None else not t
+    if isinstance(c, (sp.And, sp.Or)):
+        ts = [_closed_truth(a, timeout) for a in c.args]
+        stop = isinstance(c, sp.Or)                # the value that decides the whole
+        if stop in ts:
+            return stop
+        return (not stop) if all(t is (not stop) for t in ts) else None
+    if not isinstance(c, sp.core.relational.Relational) or not isinstance(c.lhs, sp.Expr) \
+            or not isinstance(c.rhs, sp.Expr):
+        return None
+    s = certified_sign(c.lhs - c.rhs, timeout)
+    if s is None:
+        return None
+    if s == NONREAL:
+        return False if isinstance(c, sp.Eq) else True if isinstance(c, sp.Ne) else None
+    if isinstance(c, sp.Eq):
+        return s == 0
+    if isinstance(c, sp.Ne):
+        return s != 0
+    if isinstance(c, sp.StrictLessThan):
+        return s < 0
+    if isinstance(c, sp.LessThan):
+        return s <= 0
+    if isinstance(c, sp.StrictGreaterThan):
+        return s > 0
+    if isinstance(c, sp.GreaterThan):
+        return s >= 0
+    return None
+
+
+def jump_value(n, timeout: float = 5.0):
+    """The exact value of the jump node `n` (sign, floor, ceiling, frac, Heaviside, Mod of constant arguments;
+    see `_closed_jump`), read from CERTIFIED signs and floors only; None when one is undecided. SymPy reads such
+    a node off rounding noise: (2*atan(tanh(1/2)) - atan(sinh(1)))**2 is exactly 0 and its ceiling came out 1,
+    its sign 1 (round 9 of part d4b, YO-4). Heaviside(0) is a convention (0, 1/2 or 1): undecided; so is a
+    jump of a number not certainly real. A Piecewise takes the first branch whose condition is certainly true
+    (Piecewise((1, Z**2 > 0), (0, Z**2 <= 0)) was certified 1 off the noise: a sibling of YO-4); no branch
+    is undefined: undecided too."""
+    if isinstance(n, sp.Piecewise):
+        for v, c in n.args:
+            t = _closed_truth(c, timeout)
+            if t is None:
+                return None
+            if t:
+                return v
+        return None
+    if isinstance(n, sp.Mod):
+        p, q = n.args
+        if certified_sign(q, timeout) not in (-1, 1):
+            return None
+        k = _certified_floor(p / q, timeout)
+        return None if k is None else p - q * k
+    u = n.args[0]
+    if isinstance(n, (sp.sign, sp.Heaviside)):
+        s = certified_sign(u, timeout)
+        if s is None or s == NONREAL or (s == 0 and isinstance(n, sp.Heaviside)):
+            return None
+        return sp.Integer(s) if isinstance(n, sp.sign) else sp.Integer(1 if s > 0 else 0)
+    k = _certified_floor(u, timeout)
+    if k is None:
+        return None
+    if isinstance(n, sp.floor):
+        return k
+    if isinstance(n, sp.frac):
+        return u - k
+    return k if certified_sign(u - k, timeout) == 0 else k + 1
+
+
+def undecided_jumps(*es, timeout: float = 5.0) -> bool:
+    """Does one of `es` hold a sign, floor, ceiling, frac, Heaviside or Mod of constant arguments, or a Piecewise
+    of constant conditions (`_closed_jump`), whose value no certified sign gives (`jump_value`)? Its rounded or simplified value is noise: sign((gd(1) - gd(1))**2) = 1
+    was "proved" by simplify and 1 certified (round 9 of part d4b, YO-4); an equality with it decides nothing."""
+    for e in es:
+        try:
+            e = sp.sympify(e)
+        except (sp.SympifyError, TypeError):
+            continue
+        if not isinstance(e, sp.Basic):
+            continue
+        if any(_closed_jump(n) and not isinstance(n, sp.Abs) for n in sp.preorder_traversal(e)) \
+                and _jumps_resolved(e, timeout) is None:
+            return True
+    return False
+
+
+def _replaced(e, rep: dict):
+    """`e` with the nodes of `rep` replaced, every jump node above them rebuilt unevaluated: a rebuilt ceiling of
+    a constant would be read off rounding noise by SymPy again (it is resolved on the next pass instead)."""
+    if e in rep:
+        return rep[e]
+    if not e.args:
+        return e
+    args = [_replaced(a, rep) for a in e.args]
+    if all(a is b for a, b in zip(args, e.args)):
+        return e
+    return e.func(*args, evaluate=False) if isinstance(e, _JUMPS + (sp.Piecewise,)) else e.func(*args)
 
 
 def _jumps_resolved(e, timeout: float):
-    """`e` with every sign, Abs, floor, ceiling, frac of a closed argument replaced by its exact value, read
-    from the CERTIFIED sign of the argument (innermost first); None when one is undecided. Strict evalf of
-    sign(z) gave 1.0 for a z that is exactly 0 written log(8)/log(2) - 3 (no precision is left to tell), so
-    sign(x - 3) > 0 held at x = log(8)/log(2), and Abs of such a z left -1 + |z| undecided (round 8 of part
-    d4b, RK-1 and RK-3). An Abs whose argument's sign is undecided is left to evalf (it is continuous)."""
+    """`e` with every sign, Abs, floor, ceiling, frac, Heaviside, Mod of constant arguments and every Piecewise of
+    constant conditions replaced by its exact value, read from the CERTIFIED sign of the argument (innermost first); None when one is undecided. Strict
+    evalf of sign(z) gave 1.0 for a z that is exactly 0 written log(8)/log(2) - 3 (no precision is left to tell),
+    so sign(x - 3) > 0 held at x = log(8)/log(2), and Abs of such a z left -1 + |z| undecided (round 8 of part
+    d4b, RK-1 and RK-3). An Abs whose argument's sign is undecided is left to evalf (it is continuous), but not
+    inside a jump: sign(|z|) for that z was read 1 off the noise, and the right 0 refuted (round 9, YO-4)."""
     for _ in range(64):
-        nodes = [n for n in sp.preorder_traversal(e) if isinstance(n, _JUMPS) and not n.args[0].free_symbols
-                 and not any(isinstance(m, _JUMPS) for m in sp.preorder_traversal(n.args[0]))]
-        if not nodes:
-            return e
+        nodes = [n for n in sp.preorder_traversal(e) if _closed_jump(n)
+                 and not any(isinstance(m, _JUMPS + (sp.Piecewise,)) for a in _jump_inputs(n)
+                             for m in sp.preorder_traversal(a))]
         rep = {}
         for n in dict.fromkeys(nodes):
-            u = n.args[0]
-            if isinstance(n, (sp.sign, sp.Abs)):
-                s = certified_sign(u, timeout)
-                if s is None or s == NONREAL:
-                    if isinstance(n, sp.Abs):
-                        continue
-                    return None
-                rep[n] = sp.Integer(s) if isinstance(n, sp.sign) else s * u
+            if isinstance(n, sp.Abs):
+                s = certified_sign(n.args[0], timeout)
+                if s in (-1, 0, 1):
+                    rep[n] = s * n.args[0]
                 continue
-            k = _certified_floor(u, timeout)
-            if k is None:
+            v = jump_value(n, timeout)
+            if v is None:
                 return None
-            rep[n] = (k if isinstance(n, sp.floor) else u - k if isinstance(n, sp.frac)
-                      else k if certified_sign(u - k, timeout) == 0 else k + 1)
+            rep[n] = v
         if not rep:
+            # left: undecided Abs nodes only; no jump may stand above them
+            if any(_closed_jump(n) and not isinstance(n, sp.Abs) for n in sp.preorder_traversal(e)):
+                return None
             return e
-        e = e.xreplace(rep)
+        e = _replaced(e, rep)
     return None
 
 
@@ -279,6 +396,9 @@ def _certified_floor(u, timeout: float):
     return None
 
 
+_SESSION = threading.local()     # the certified signs read so far in one outermost call (nested readers ask again)
+
+
 def certified_sign(e, timeout: float = 5.0):
     """Sign of a constant: -1, 0 or 1 when certified, NONREAL when it is certainly not real,
     None when it cannot be decided. Never a sign read off rounding noise."""
@@ -286,6 +406,71 @@ def certified_sign(e, timeout: float = 5.0):
         e = sp.sympify(e)
     except (sp.SympifyError, TypeError):
         return None
+    memo = getattr(_SESSION, "memo", None)
+    if memo is None:
+        _SESSION.memo = {}
+        try:
+            return _certified_sign(e, timeout)
+        finally:
+            _SESSION.memo = None
+    try:
+        return memo[e]
+    except KeyError:
+        s = memo[e] = _certified_sign(e, timeout)
+        return s
+    except TypeError:
+        return _certified_sign(e, timeout)
+
+
+def _zero_arguments_resolved(e, timeout: float):
+    """`e` with every node SymPy's evalf does not track the accuracy of (asin, sinh, tanh, erf, ...: see
+    `_sympy_guards`) whose argument is CERTIFIED 0 replaced by its exact value there (asin 0 = sinh 0 = tanh 0 =
+    erf 0 = 0, cosh 0 = 1, acos 0 = pi/2), innermost first; a Max/Min whose arguments certified signs order, and
+    an atan2 on an axis, by their value. Strict evalf read asin(log(6) - log(2) - log(3)) off rounding noise of
+    its argument (a sign that changed with the precision), and ceiling(asin(Q)) = 1 was certified (round 9
+    attack, YO-1); a guarded strict evaluation reads such a node only where its argument has a certified sign,
+    and an argument that is exactly 0 has none there: its exact zero test is here."""
+    from .._sympy_guards import tracked
+
+    def picked(n):
+        best = n.args[0]
+        for a in n.args[1:]:
+            s = certified_sign(a - best, timeout)
+            if s not in (-1, 0, 1):
+                return None
+            if (s != 0 and (s > 0) == isinstance(n, sp.Max)) or (s == 0 and a.is_Rational):
+                best = a                    # of two equal arguments the rational one (sin(Q) = 0)
+        return best
+
+    def go(n):
+        if not isinstance(n, sp.Expr) or not n.args or isinstance(n, (sp.CRootOf, sp.AlgebraicNumber)):
+            return n
+        args = [go(a) for a in n.args]
+        if any(a is not b for a, b in zip(args, n.args)):
+            try:
+                n = n.func(*args)
+            except Exception:  # noqa: BLE001 - a node SymPy will not rebuild so: the original stands
+                return n
+        if tracked(n) or n.free_symbols or not isinstance(n, (sp.Function, sp.Max, sp.Min)):
+            return n
+        if isinstance(n, (sp.Max, sp.Min)):
+            v = picked(n)
+        elif isinstance(n, sp.atan2):
+            sy, sx = certified_sign(n.args[0], timeout), certified_sign(n.args[1], timeout)
+            v = {(0, 1): sp.S.Zero, (0, -1): sp.pi, (1, 0): sp.pi / 2, (-1, 0): -sp.pi / 2}.get((sy, sx))
+        elif len(n.args) == 1 and not isinstance(n, sp.acot) and certified_sign(n.args[0], timeout) == 0:
+            # (SymPy writes acot(-u) as -acot(u): at u = 0 that is -pi/2 where acot(0) is pi/2; no value is read there)
+            v = n.func(sp.S.Zero)
+        else:
+            v = None
+        if v is None or not v.is_number or v.has(type(n), sp.oo, sp.S.NegativeInfinity, sp.zoo, sp.nan):
+            return n
+        return v
+
+    return go(e)
+
+
+def _certified_sign(e, timeout: float):
     if getattr(e, "free_symbols", None):
         return None
     if e.has(sp.nan, sp.zoo):
@@ -302,19 +487,14 @@ def certified_sign(e, timeout: float = 5.0):
     e = _jumps_resolved(e, timeout)
     if e is None:
         return None
+    e = _zero_arguments_resolved(e, timeout)
     if isinstance(e, sp.Rational):
         return int(sp.sign(e))
-    parts = _evalf_strict(e)
-    if parts is not None:
-        re_, im_, s_re, s_im = parts
-        if s_im == "value":
-            return NONREAL
-        if s_im == "unknown" and not _imaginary_part_is_zero(e, timeout):
-            return None
-        if s_re == "value":
-            return 1 if re_ > 0 else -1
-        if s_re == "zero" and s_im == "zero" and e.is_zero is True:
-            return 0
+    s = _evalf_sign(e, timeout)
+    if s is not _NOT_READ:
+        return s
+    if e.is_extended_real is not True and _imaginary_part_nonzero(e, timeout):
+        return NONREAL
     if _in_sandbox_worker():
         # already inside the worker (e.g. the z3 translation): its caller holds the timeout, and
         # a daemonic worker cannot start a worker of its own
@@ -327,6 +507,50 @@ def certified_sign(e, timeout: float = 5.0):
     if r.ok and r.value is True:
         return 0
     return None
+
+
+_NOT_READ = object()       # strict evalf decided nothing: the exact zero test is left
+
+
+def _evalf_sign(e, timeout: float):
+    """The sign strict evalf certifies for `e`, read off `e` AND off `-e` when `e` is a sum: SymPy evaluates
+    the two writings of one sum differently, and 3 - log(8)/log(2) - exp(-exp(10)) had no certified sign while
+    its negation had 1, so exact_equal(3, b) was undecided and exact_equal(b, 3) False; an intersection then
+    raised in one order only, and the domain dropped the constraint x >= 3 (round 9 of part d4b, YO-1). Two
+    readings that disagree decide nothing (None). NONREAL for a part certainly not real; `_NOT_READ` when
+    neither reading decides (the caller's exact zero test is left)."""
+    reads = [p for p in (_evalf_strict(e),) if p is not None]
+    if isinstance(e, sp.Add):
+        q = _evalf_strict(-e)
+        if q is not None:
+            reads.append((-q[0], -q[1], q[2], q[3]))
+    if not reads:
+        return _NOT_READ
+    ims = {p[3] for p in reads}
+    if "value" in ims:
+        return None if "zero" in ims else NONREAL
+    if "zero" not in ims and not _imaginary_part_is_zero(e, timeout):
+        return None
+    signs = {1 if p[0] > 0 else -1 for p in reads if p[2] == "value"}
+    if signs:
+        # an exact zero against a sign, or two signs: no reading is certified
+        return signs.pop() if len(signs) == 1 and not any(p[2] == "zero" for p in reads) else None
+    if any(p[2] == "zero" and p[3] == "zero" for p in reads) and e.is_zero is True:
+        return 0
+    return _NOT_READ
+
+
+def _imaginary_part_nonzero(e, timeout: float) -> bool:
+    """Is the imaginary part of `e` certainly not 0, read from a closed real form (inverse functions written as
+    logarithms)? 2*atan(1 - sqrt(2)*I), a complex root of sin(x) - cos(x) = 2, has no strict evaluation (SymPy's atan
+    of a complex number has none) and was kept as a real root."""
+    try:
+        im_e = sp.expand_complex(sp.im(e.rewrite(sp.log)))
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(im_e, sp.Expr) or im_e.has(sp.im, sp.re) or im_e.free_symbols or im_e.has(sp.I):
+        return False
+    return certified_sign(im_e, timeout) in (-1, 1)
 
 
 def _in_sandbox_worker() -> bool:
@@ -391,6 +615,9 @@ def certified_integer(c, timeout: float = 5.0):
         return None, None
     if c.is_integer is False:
         return False, None
+    c = _zero_arguments_resolved(c, timeout)        # asin(Q) + 2 of an exact 0 Q: 2 (round 10, YO-1)
+    if isinstance(c, sp.Rational):
+        return (True, c) if c.is_Integer else (False, None)
     parts = _evalf_strict(real_odd_roots(c))
     if parts is None or parts[2] != "value":
         return None, None
@@ -421,6 +648,9 @@ def certified_floor(v, timeout: float = 5.0):
         return sp.floor(v)
     if getattr(v, "free_symbols", None) or v.has(sp.oo, sp.S.NegativeInfinity, sp.zoo, sp.nan):
         return None
+    v = _zero_arguments_resolved(v, timeout)        # asin(Q) + 2 of an exact 0 Q: 2 (round 10, YO-1)
+    if isinstance(v, sp.Rational):
+        return sp.floor(v)
     parts = _evalf_strict(real_odd_roots(v))
     if parts is None or parts[2] != "value" or parts[3] == "value" or (
             parts[3] == "unknown" and not _imaginary_part_is_zero(real_odd_roots(v), timeout)):
@@ -535,6 +765,10 @@ def num_equal(a, b, rel_tol: float | None = None, abs_tol: float | None = None,
             return bool(sa == sb), ev
     except (sp.SympifyError, TypeError):
         pass
+    if undecided_jumps(a, b):
+        # a jump at a constant no certified sign settles: its value at any precision is the noise's
+        ev["decided_by"] = "jump_undecided"
+        return None, ev
     prev_rel = None
     # Without a declared tolerance, EQUALITY must survive every rung: a true identity's
     # computed difference is rounding noise that shrinks as precision grows, a genuine small

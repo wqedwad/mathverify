@@ -486,6 +486,87 @@ def _integrate(*args, **kwargs):
 _integrate.binds_range = True  # type: ignore[attr-defined]
 
 
+_JUMP_CACHE: dict = {}
+_JUMP_CACHE_LOCK = threading.Lock()
+
+
+def _jump_eval(cls, base, args):
+    """The evaluation of a jump function of the namespace (`floor`, `ceiling`, `frac`, `sign`, `Mod` below): with
+    constant arguments not all rational, the value from CERTIFIED signs and floors (equiv.numeric.jump_value), or
+    None (the node stays as written) when they do not settle it; SymPy's own evaluation otherwise. SymPy reads a
+    constant argument off rounding noise: (2*atan(tanh(1/2)) - atan(sinh(1)))**2 is exactly 0, and the parse
+    made its ceiling 1 and the floor of its negative -1, so 1 and -1 were certified and the right 0 refuted
+    (round 9 of part d4b, YO-4). The class is SymPy's subclass, so a rebuilt node (subs, a sandbox worker's
+    unpickling) is held the same way."""
+    if all(isinstance(a, sp.Expr) and a.is_number is True and not a.free_symbols for a in args) \
+            and not all(a.is_Rational for a in args) \
+            and not any(a.has(sp.oo, -sp.oo, sp.zoo, sp.nan) for a in args):
+        key = (base.__name__, tuple(args))
+        with _JUMP_CACHE_LOCK:
+            if key in _JUMP_CACHE:
+                return _JUMP_CACHE[key]
+        from ..equiv.numeric import jump_value
+        v = jump_value(base(*args, evaluate=False))
+        with _JUMP_CACHE_LOCK:
+            if len(_JUMP_CACHE) > 512:
+                _JUMP_CACHE.clear()
+            _JUMP_CACHE[key] = v
+        return v
+    return base.eval.__func__(cls, *args)
+
+
+class floor(sp.floor):  # noqa: N801 - the name is the notation
+    """SymPy's floor, evaluated at a constant only exactly (`_jump_eval`)."""
+
+    @classmethod
+    def eval(cls, arg):
+        return _jump_eval(cls, sp.floor, (arg,))
+
+
+class ceiling(sp.ceiling):  # noqa: N801 - the name is the notation
+    """SymPy's ceiling, evaluated at a constant only exactly (`_jump_eval`)."""
+
+    @classmethod
+    def eval(cls, arg):
+        return _jump_eval(cls, sp.ceiling, (arg,))
+
+
+class frac(sp.frac):  # noqa: N801 - the name is the notation
+    """SymPy's frac, evaluated at a constant only exactly (`_jump_eval`)."""
+
+    @classmethod
+    def eval(cls, arg):
+        return _jump_eval(cls, sp.frac, (arg,))
+
+
+class sign(sp.sign):  # noqa: N801 - the name is the notation
+    """SymPy's sign, evaluated at a constant only exactly (`_jump_eval`)."""
+
+    @classmethod
+    def eval(cls, arg):
+        return _jump_eval(cls, sp.sign, (arg,))
+
+
+class Mod(sp.Mod):
+    """SymPy's Mod, evaluated at constants only exactly (`_jump_eval`)."""
+
+    @classmethod
+    def eval(cls, p, q):
+        return _jump_eval(cls, sp.Mod, (p, q))
+
+
+JUMP_CLASSES = {sp.floor: floor, sp.ceiling: ceiling, sp.frac: frac, sp.sign: sign, sp.Mod: Mod}
+
+
+def held_jumps(e):
+    """`e` with SymPy's own floor, ceiling, frac, sign and Mod nodes (latex2sympy builds them) as the namespace's
+    (`_jump_eval`), rebuilt as they stand: evaluated only where certified signs settle them."""
+    if not isinstance(e, sp.Basic) or not e.has(*JUMP_CLASSES):
+        return e
+    return e.replace(lambda n: type(n) in JUMP_CLASSES,
+                     lambda n: JUMP_CLASSES[type(n)](*n.args, evaluate=global_parameters.evaluate))
+
+
 class arccot(sp.Function):  # noqa: N801 - the name is the notation
     """arccot with values in (0, pi), the convention of the Turkish curriculum (AYT). SymPy's `acot`
     takes values in (-pi/2, pi/2]: acot(-1) = -pi/4 where AYT reads 3*pi/4, so the right answer was
@@ -525,7 +606,7 @@ def _real_root(b, n=3, *k, **_kw):
     n = sp.sympify(n)
     ni = int(n) if isinstance(n, Integer) else None        # Python ints: read as written, n > 1 is a Gt
     if not k and ni is not None and ni > 1 and ni % 2 == 1:
-        return sp.sign(b) * sp.Abs(b) ** Rational(1, ni)
+        return sign(b) * sp.Abs(b) ** Rational(1, ni)
     return sp.root(b, n, *k)
 
 
@@ -543,8 +624,8 @@ _SAFE_NAMES: dict[str, Any] = {
     "sinh": sp.sinh, "cosh": sp.cosh, "tanh": sp.tanh,
     "exp": sp.exp, "log": sp.log, "ln": sp.log, "sqrt": sp.sqrt, "cbrt": _cbrt, "root": _real_root,
     "real_root": _real_root,
-    "Abs": sp.Abs, "abs": sp.Abs, "floor": sp.floor, "ceiling": sp.ceiling, "ceil": sp.ceiling,
-    "frac": sp.frac, "sign": sp.sign, "Mod": sp.Mod, "mod": sp.Mod,
+    "Abs": sp.Abs, "abs": sp.Abs, "floor": floor, "ceiling": ceiling, "ceil": ceiling,
+    "frac": frac, "sign": sign, "Mod": Mod, "mod": Mod,
     "gcd": _integer_op(gcd), "lcm": _integer_op(lcm), "igcd": _integer_only_op(gcd, "igcd"),
     "ilcm": _integer_only_op(lcm, "ilcm"),
     "factorial": sp.factorial, "binomial": sp.binomial, "C": sp.binomial, "comb": sp.binomial,
@@ -1828,6 +1909,7 @@ def _latex_to_sympy(s: str, ns: dict[str, Any]):
                           lambda n: ops[_LATEX_INTEGER_OPS[n.func.__name__]](*n.args))
             # the only other UnevaluatedExpr latex2sympy writes is the 1/100 of a percent
             e = e.replace(lambda n: isinstance(n, sp.UnevaluatedExpr), lambda n: n.args[0])
+            e = held_jumps(e)                          # \lfloor, \lceil, \bmod: the namespace's (round 9, YO-4)
             return e.replace(sp.acot, arccot) if e.has(sp.acot) else e   # (0, pi), as in the canonical branch
         expr = _on_sides(expr, lambda e: _latex_limit_variables(_integer_indices(convert(e)), ns))
         _refuse_reversed_ranges(expr, s)
