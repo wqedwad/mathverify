@@ -224,6 +224,9 @@ def test_integer_exponent_written_domain():
     assert _v(_der("(x**2)**n", vars_=[X, NP]), "2*n*x**(2*n)", E) == "INCORRECT"         # control
     assert _v(_der("x**n", vars_=[X, NP]), "n*x**(n - 1)", E) == "CORRECT"                # control
     assert _v(_der("(x**2)**n", vars_=[X, NR]), "2*n*x**(2*n - 1)", E) != "CORRECT"       # control
+    # controls: log(x**n) is defined where x**n > 0 for every n, and that makes x != 0 (the claim's own condition)
+    assert _v(_der("log(x**n)", vars_=[X, NP]), "n/x", E) == "CORRECT"
+    assert _v(_der("log(x**n)", vars_=[X, NP]), "n/(2*x)", E) == "INCORRECT"
 
 
 def test_exact_cell_proof_is_not_overruled_by_equals():

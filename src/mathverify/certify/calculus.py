@@ -1852,14 +1852,14 @@ def _loose_zero(c, var, p) -> str | None:
 
 
 def _zero_factors(w) -> list:
-    """The factors of w whose zeros are w's (|u| and u**k read as u; a positive power's base; a nonzero number and
-    a negative power dropped)."""
+    """The factors of w whose zeros are w's (|u| and u**k read as u; a positive power's base, its exponent a number or
+    a symbol declared positive: x**n with n a positive integer; a nonzero number and a negative power dropped)."""
     out: list = []
     for a in sp.Mul.make_args(w):
         while True:
             if isinstance(a, sp.Abs):
                 a = a.args[0]
-            elif isinstance(a, sp.Pow) and a.args[1].is_number and a.args[1].is_positive:
+            elif isinstance(a, sp.Pow) and a.args[1].is_positive is True:
                 a = a.args[0]
             else:
                 break
@@ -2197,6 +2197,9 @@ def _orient(fconds, var) -> list:
         elif isinstance(c, (sp.StrictGreaterThan, sp.StrictLessThan)):
             v = c.lhs - c.rhs if isinstance(c, sp.StrictGreaterThan) else c.rhs - c.lhs
             out.append((v, "pos"))
+            # ... and v > 0 makes each factor whose zeros are its own nonzero: x**n > 0 (log(x**n), n a positive
+            # integer) gives x != 0, the condition of the claim n/x (round 5: the integer power read as written, U5)
+            out += [(z, "ne") for z in _zero_factors(v) if z != v and var in z.free_symbols]
         elif isinstance(c, (sp.GreaterThan, sp.LessThan)):
             v = c.lhs - c.rhs if isinstance(c, sp.GreaterThan) else c.rhs - c.lhs
             out.append((v, "pos" if _linear_factors(v, var) is not None else "nonneg"))
