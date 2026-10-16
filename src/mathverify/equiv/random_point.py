@@ -793,6 +793,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
             ev["reason"] = "nonsmooth_without_proof"
             ev.setdefault("nonsmooth_proof", "multivariate" if len(syms) > 1 else "none")
             return None, ev
+        ev["proved"] = True          # exactly, cell by cell or on one period: no sampling (`answers_equivalent`)
         return True, ev
     # Agreement within tolerance is not yet equality. Evaluating each side and subtracting can
     # only see differences above the working precision; the DIFFERENCE itself, evaluated by
