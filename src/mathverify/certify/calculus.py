@@ -1565,7 +1565,8 @@ def _proportional(z, u, positive: bool = False) -> bool:
     return bool(k.is_number and (k.is_positive if positive else k.is_zero is False))
 
 
-def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fconds, timeout: float = 8.0) -> dict:
+def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fconds, timeout: float = 8.0,
+                 loose=()) -> dict:
     """Where a switch u of f (`switch_arguments`: |u|, sign(u), Heaviside(u), Max, Min, Piecewise) has u = 0, f may
     have no derivative (|x| at 0: a corner), and the derivative function lives off those points. Compared on all of
     f's domain, the derivative x/|x| of |x| was refuted against SymPy's sign(0) = 0, and sign(x) itself certified
@@ -1585,7 +1586,14 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fcon
     * pzeros: the u whose zeros, not solved, are proved points with no derivative at once
       (`_power_zeros_without_derivative`); rzeros: those of them that are a root's base (u >= 0 f's own condition);
     * budget, dap: the calls of `derivative_at_point` left to the reading and their results by point (`_value_holes`
-      spends and reads them too)."""
+      spends and reads them too).
+
+    A family of zeros that is no part of the comparison region (the open part of the unsolved conditions `loose` fails
+    at each member, `_family_outside`) is no family of kinks, as a finite zero off the region's interior is none: off
+    f's domain (log(sqrt(sin(x))) at k*pi) or an end of it (sqrt(sin(x)) at k*pi, where sin(x) changes sign), the
+    derivative function does not live there, and a claim with or without a value there is the same claim. Read as
+    kinks, such families left (x*sqrt(sin(x)))', (log(sqrt(sin(x))))' = cot(x)/2 and (sqrt(sin(x)))'' undecided
+    (attack on d4e round 4, its coverage lens; round 6)."""
     fa = abs_form(f)
     switches = switch_arguments(fa, var)
     budget = [_KINK_BUDGET]
@@ -1649,6 +1657,8 @@ def kink_reading(f, var, order: int, region, claimed, claim_conds, nowhere, fcon
         if power:
             # a zero naming a parameter (sqrt(x - a) at a, an end of the domain for every a) is read as before
             family = [q for q in family if all(getattr(d, "is_integer", None) for d in q.free_symbols)]
+        # a family off the comparison region (each member off f's domain or an end of it) is no family of kinks
+        family = [q for q in family if not _family_outside(q, var, loose)]
         if not family:
             continue
         if power:
@@ -3052,7 +3062,7 @@ def verify(ir, solution, ctx: Ctx):
                                        flags=["point_not_interior"])
                     # ... and off the points where f has no derivative (`kink_reading`, R8)
                     kr = kink_reading(f, var, order, dom, claimed, claim_conds, claim_nowhere, fconds,
-                                      timeout=ctx.timeout)
+                                      timeout=ctx.timeout, loose=loose)
                     kinks, kopen, reasons = kr["kinks"], kr["opens"], kr["reasons"]
                     cstate, cwhy = claim_where_derivative(ctx, claim_conds, claim_nowhere, var, dom, loose, kr,
                                                           fconds)

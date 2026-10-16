@@ -44,6 +44,7 @@ VER = "src/mathverify/verifier.py"
 T = "tests/test_d4_d4e_gorev.py::"
 T4 = "tests/test_d4_d4e_tur4.py::"
 T5 = "tests/test_d4_d4e_tur5.py::"
+T6 = "tests/test_d4_d4e_tur6.py::"
 RP = "src/mathverify/equiv/random_point.py"
 Z3 = "src/mathverify/certify/_z3bridge.py"
 
@@ -665,6 +666,12 @@ MUTATIONS = [
      "            elif isinstance(a, sp.Pow) and a.args[1].is_positive is True:",
      "            elif isinstance(a, sp.Pow) and a.args[1].is_number and a.args[1].is_positive:",
      T5 + "test_integer_exponent_written_domain"),
+    ("Z37 karşılaştırma bölgesi dışındaki aile kırık sayılır", CAL,
+     "        family = [q for q in family if not _family_outside(q, var, loose)]\n", "",
+     T6 + "test_textbook_root_derivatives_restored"),
+    ("Z38 kırık okuması bölgenin gevşek koşullarını almaz", CAL,
+     "                                      timeout=ctx.timeout, loose=loose)", "                                      timeout=ctx.timeout)",
+     T6 + "test_textbook_root_derivatives_restored"),
     ("Z17 aile aralığı sınırsız kurulur", CAL,
      "            ks = list(range(int(lo_k), int(min(hi_k, lo_k + limit)) + 1))",
      "            ks = list(range(int(lo_k), int(hi_k) + 1))", T5 + "test_family_members_bounded"),
