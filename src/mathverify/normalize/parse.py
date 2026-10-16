@@ -930,6 +930,59 @@ for _name in ("Abs", "abs", "floor", "ceiling", "ceil", "frac", "sign", "Mod", "
     _SAFE_NAMES[_name] = _form_unevaluated(_SAFE_NAMES[_name])
 del _name
 
+
+# How arg is read: None, SymPy's principal value in (-pi, pi]; "zero_two_pi", the curriculum's in [0, 2*pi). The two
+# differ where the imaginary part is negative (arg(-1 - i): -3*pi/4 or 5*pi/4), and the right answer of one reading
+# was refuted (A+ final attack, SON-G3-RK-3): the verifier reads a problem that writes arg both ways and decides only
+# where the readings agree (`verifier.verify_layers`). atan2, a programming function, keeps (-pi, pi].
+_ARG_READING: contextvars.ContextVar = contextvars.ContextVar("arg_reading", default=None)
+
+
+class arg_reading:  # noqa: N801 - used as a context manager
+    """Within it, arg is read in [0, 2*pi) ("zero_two_pi") instead of SymPy's (-pi, pi]."""
+
+    def __init__(self, which: str):
+        if which != "zero_two_pi":
+            raise ValueError(which)
+        self.which = which
+
+    def __enter__(self):
+        self._token = _ARG_READING.set(self.which)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        _ARG_READING.reset(self._token)
+
+
+def _arg_in_zero_two_pi(u, a):
+    """arg(u) in [0, 2*pi): SymPy's value `a`, 2*pi above it where the imaginary part of u is negative; for a number
+    whose imaginary part has no certified sign, no reading (ParseError)."""
+    im_u = sp.im(u)
+    if im_u.is_zero is True:
+        return a
+    if not getattr(u, "free_symbols", None):
+        from ..equiv.numeric import certified_sign
+        s = certified_sign(im_u)
+        if s == -1:
+            return a + 2 * sp.pi
+        if s in (0, 1):
+            return a
+        raise ParseError(f"arg({u}): the sign of its imaginary part is not certified, no reading in [0, 2*pi)")
+    return sp.Piecewise((a + 2 * sp.pi, sp.StrictLessThan(im_u, 0)), (a, True))
+
+
+def _arg_read(base):
+    def call(*args, **kwargs):
+        a = base(*args, **kwargs)
+        if _ARG_READING.get() != "zero_two_pi" or kwargs or len(args) != 1 or not global_parameters.evaluate \
+                or not isinstance(a, sp.Expr):
+            return a                     # as written (definedness only: the readings share it) or SymPy's reading
+        return _arg_in_zero_two_pi(sympify_nontext(args[0]), a)
+    return _ClassCall(sp.arg, call)
+
+
+_SAFE_NAMES["arg"] = _arg_read(_SAFE_NAMES["arg"])
+
 # ----------------------------------------------------------------------------
 # claims are values, not computations
 # ----------------------------------------------------------------------------

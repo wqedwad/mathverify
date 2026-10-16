@@ -906,16 +906,65 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     if zero == "clash":
         return [unknown("intake.naturals", "naturals_convention: N is a declared variable and a set here",
                         flags=["naturals_convention"])], []
-    layers, flags = _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
+    layers, flags = _verify_arg_readings(problem_ir, solution, seed, timeout, run_steps)
     if zero is None:
         return layers, flags
-    layers0, flags0 = _verify_layers_read(zero[0], zero[1], seed, timeout, run_steps)
+    layers0, flags0 = _verify_arg_readings(zero[0], zero[1], seed, timeout, run_steps)
     v_pos = fuse(layers, extra_flags=flags)["verdict"]
     v_zero = fuse(layers0, extra_flags=flags0)["verdict"]
     if v_pos == v_zero:
         return layers, flags + ["naturals_readings_agree"]
     return [unknown("intake.naturals", f"naturals_convention: with ℕ = {{1, 2, ...}} {v_pos}, with ℕ = "
                     f"{{0, 1, 2, ...}} {v_zero}", flags=["naturals_convention"])], flags
+
+
+# arg written as a function (`arg(`, LaTeX `\\arg`) in any text of the problem or the solution (not a key: an operator's
+# field is named "arg")
+_ARG_WRITTEN = re.compile(r"(?<![A-Za-z_])arg\s*\(|\\arg(?![A-Za-z])")
+
+
+def _writes_arg(*objs) -> bool:
+    def walk(o) -> bool:
+        if isinstance(o, str):
+            return bool(_ARG_WRITTEN.search(o))
+        if isinstance(o, dict):
+            return any(walk(v) for v in o.values())
+        if isinstance(o, (list, tuple)):
+            return any(walk(v) for v in o)
+        return False
+    return any(walk(o) for o in objs)
+
+
+def _verify_arg_readings(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
+                         timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
+    """`_verify_layers_read`, with a problem or solution that writes arg read both ways: SymPy's principal value in
+    (-pi, pi] and the curriculum's [0, 2*pi) (`normalize.parse.arg_reading`). The verdict when the two readings agree
+    (arg(1 + i) = pi/4; pi/4 for arg(-1 - i) is wrong in both), UNKNOWN when they do not: 5*pi/4 for arg(-1 - i) was
+    refuted, -3*pi/4 certified (A+ final attack, SON-G3-RK-3)."""
+    import copy
+    from .normalize.parse import arg_reading
+    try:
+        ir_d = copy.deepcopy(problem_ir if isinstance(problem_ir, dict) else problem_ir.to_dict())
+        sol_d = copy.deepcopy(solution if isinstance(solution, dict) else solution.to_dict())
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not readable as dicts: read once, as given
+        ir_d = sol_d = None
+    if ir_d is None or not _writes_arg(ir_d, sol_d):
+        return _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
+    layers, flags = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
+    with arg_reading("zero_two_pi"):
+        layers_b, flags_b = _verify_layers_read(ir_d, sol_d, seed, timeout, run_steps)
+    f_a, f_b = fuse(layers, extra_flags=flags), fuse(layers_b, extra_flags=flags_b)
+    inconsistent_a, inconsistent_b = "ir_inconsistent" in f_a["flags"], "ir_inconsistent" in f_b["flags"]
+    if inconsistent_a != inconsistent_b:
+        # the givens hold under one reading only (0 <= arg(z) < 2*pi with Im z < 0): the problem writes its range
+        return (layers_b, flags_b + ["arg_range_declared"]) if inconsistent_a else (layers, flags + ["arg_range_declared"])
+    v_a, v_b = f_a["verdict"], f_b["verdict"]
+    if v_a == v_b:
+        return layers, flags + ["arg_readings_agree"]
+    return [unknown("intake.convention", f"arg_convention: with arg in (-pi, pi] {v_a}, with arg in [0, 2pi) {v_b}",
+                    flags=["arg_convention"])], flags
 
 
 def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
