@@ -135,3 +135,92 @@ def test_a_series_step_in_a_free_parameter_stays_undecided():
     r = _run(_ev("Sum(a**k, (k, 0, oo))", []), "1/(1 - a)", "expression",
              steps=[("compute", "Sum(a**k, (k, 0, oo)) = 1/(1 + a)")])
     assert _steps(r) == ["unknown"]
+
+
+# --- the attack on these changes (16 Oct 2026): Y1, Y2, Y3 ------------------------------------------
+
+V = [{"name": "a"}, {"name": "x"}, {"name": "k", "domain": "nonneg_integer"}]
+
+
+def _expr(expr, claim, task="evaluate"):
+    ir = {"task": {"kind": task, "params": {"expr": expr}}, "vars": V, "answer_shape": "expression"}
+    return _run(ir, claim, "expression")
+
+
+@pytest.mark.parametrize("expr,claim", [
+    ("Sum(x**k/factorial(k), (k, 0, oo))", "exp(x)"),
+    ("Sum(binomial(3, k)*a**k, (k, 0, 3))", "(1 + a)**3"),
+    ("Sum(a**k, (k, 0, 3))", "1 + a + a**2 + a**3"),
+    ("Sum(k*a**(k - 1), (k, 1, 3))", "1 + 2*a + 3*a**2"),
+    ("Sum(a**(k - 1), (k, 1, 4))", "1 + a + a**2 + a**3"),
+    ("x**0 + x", "1 + x"),
+])
+def test_a_claim_right_under_both_readings_of_zero_to_the_zero_is_certified(expr, claim):
+    """Y1: at a 0**0 point the claim, defined there, has the value 0**0 = 1 gives; under the other reading it
+    extends the expression where it has no value, as x/x + x -> 1 + x."""
+    assert _expr(expr, claim).verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("expr,claim,verdict", [
+    ("x**0 + x", "x/x + x", "UNKNOWN"),                          # undefined where 0**0 = 1 gives a value
+    ("Sum(a**k, (k, 0, 3))", "a + a**2 + a**3", "INCORRECT"),
+    ("Sum(a**k, (k, 0, 3))", "a + a**2 + a**3 + 1 + 0**a", "INCORRECT"),  # undefined for a < 0
+    ("Sum(x**k/factorial(k), (k, 0, oo))", "exp(x) - 1", "INCORRECT"),
+])
+def test_a_claim_that_differs_at_the_zero_to_the_zero_point_is_not_certified(expr, claim, verdict):
+    assert _expr(expr, claim).verdict == verdict
+
+
+@pytest.mark.parametrize("expr,claim,task", [
+    ("Sum(x**k, (k, 0, oo))", "1/(1 - x)", "evaluate"),
+    ("Sum(x**k, (k, 0, oo))", "1/(1 - x)", "simplify_expression"),
+    ("Sum(a**k, (k, 1, oo))", "a/(1 - a)", "evaluate"),
+    ("Sum(a**k/k, (k, 1, oo))", "-log(1 - a)", "evaluate"),
+    ("Sum(k*a**k, (k, 1, oo))", "a/(1 - a)**2", "evaluate"),
+])
+def test_a_series_claim_undefined_only_where_the_series_diverges_is_not_refuted(expr, claim, task):
+    """Y3 (preexisting): 1/(1 - x) is undefined at x = 1, where Σ x**k diverges and has no value either."""
+    assert _expr(expr, claim, task).verdict != "INCORRECT"
+
+
+@pytest.mark.parametrize("expr,claim", [
+    ("Sum(x**k, (k, 0, oo))", "1/(1 - x) + 0/(2*x - 1)"),       # undefined at 1/2, where the series is 2
+    ("Sum(x**k, (k, 0, oo))", "1/(1 + x)"),
+    ("Sum(x**k, (k, 0, oo))", "x/(1 - x)"),
+])
+def test_a_series_claim_undefined_where_the_series_converges_is_refuted(expr, claim):
+    assert _expr(expr, claim).verdict == "INCORRECT"
+
+
+def test_the_variable_of_an_inner_binder_is_no_zero_power_point():
+    """Y2: t of Σ_k ∫_1^2 t**k dt is bound by the integral."""
+    t = sp.Symbol("t", real=True)
+    j = sp.Symbol("j", integer=True)
+    assert definedness_conditions(sp.Sum(sp.Integral(t ** j, (t, 1, 2)), (j, 0, 3)), None) == []
+
+
+@pytest.mark.parametrize("vars_,expr,claim", [
+    # 2 - sign(a)**2 is 1 off 0 and 2 at 0, where 0**0 = 1 gives 1: right only under the other reading
+    (V, "Sum(a**k, (k, 0, 3))", "2 + a + a**2 + a**3 - sign(a)**2"),
+    # n = -2, -1 run the range backwards (Karr's value or the empty sum: another value), n = 0 is 0**0
+    ([{"name": "n", "domain": "integer", "constraints": ["n**2 <= 4"]}, {"name": "k", "domain": "integer"}],
+     "Sum(k, (k, 1, n)) + n**0", "n*(n + 1)/2 + 1"),
+])
+def test_only_a_point_whose_other_reading_is_undefined_is_read_with_sympys_value(vars_, expr, claim):
+    ir = {"task": {"kind": "evaluate", "params": {"expr": expr}}, "vars": vars_, "answer_shape": "expression"}
+    assert _run(ir, claim, "expression").verdict == "UNKNOWN"
+
+
+def test_a_geometric_series_diverges_at_one_and_converges_at_a_half():
+    from mathverify.certify.algebra import _converges_somewhere
+    from mathverify.certify.base import Ctx
+    from mathverify.intake.structured import load_problem_ir
+    from mathverify.normalize.parse import build_namespace
+    ir = {"task": {"kind": "evaluate", "params": {"expr": "x"}}, "vars": V, "answer_shape": "expression"}
+    obj = load_problem_ir(ir)
+    ctx = Ctx(obj, build_namespace(obj))
+    j = sp.Symbol("j", integer=True)
+    series = sp.Sum(x ** j, (j, 0, sp.oo))
+    assert _converges_somewhere(series, x, sp.FiniteSet(1), ctx) is False
+    assert _converges_somewhere(series, x, sp.FiniteSet(1, sp.Rational(1, 2)), ctx) is True
+    assert _converges_somewhere(series, x, sp.Interval(1, 2), ctx) is None

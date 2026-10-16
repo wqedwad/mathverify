@@ -944,7 +944,7 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         if target.free_symbols:
             dom = {s_: ctx.domain_for(s_) for s_ in target.free_symbols}
             shape = "expression"
-            und, why = _claim_undefined_where_expr_defined(solution, ctx, dom)
+            und, why = _claim_undefined_where_expr_defined(solution, ctx, dom, target)
             if und is True:
                 ev["reason"] = f"claim_as_written: {why}"
                 return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
@@ -960,7 +960,8 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         # (the constraint n**2 = 4 next to Σ_{k=1}^{n} k): those values are candidates, neither kept
         # nor dropped (_filter_solutions); a formula's variable (n an integer) is compared where the
         # value is no convention (DECISIONS §80)
-        if ok is True and dom and any(_finite_nonempty(ctx.reversed_region(s_)) for s_ in dom):
+        if ok is True and dom and any(_finite_nonempty(ctx.reversed_region(s_)) for s_ in dom) \
+                and not _undefined_conventions_agree(solution, ctx, claimed, target, dom, ev):
             ev["reversed_range_at"] = {str(s_): str(ctx.reversed_region(s_)) for s_ in dom}
             return unknown(LAYER, "reversed_range_candidate", 0, ev)
     else:
@@ -1054,7 +1055,54 @@ def _beyond_value_conventions(ctx: Ctx, claimed, truth, syms, ok, ev: dict):
     return None
 
 
-def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[bool | None, str]:
+def _undefined_conventions_agree(solution, ctx: Ctx, claimed, target, dom: dict, ev: dict) -> bool:
+    """Is every convention point of the expression's one variable a point whose other reading is "undefined"
+    (0**0, a binomial off its range: `Ctx.undefined_convention_region`), with the claim, as written, defined
+    there and equal to SymPy's value (1, 0)? Then both readings accept the claim: under SymPy's the two agree
+    everywhere, under the other the claim extends the expression at a point where it has no value, which an
+    evaluation accepts (x/x + x is 1 + x). Σ_{k>=0} x**k/k! = exp(x) and (1 + a)**3 for Σ C(3, k) a**k were
+    UNKNOWN at x = 0, a = 0 once the index was read as an integer (local quality, 16 Oct 2026). A point
+    whose other reading is another value (a range run backwards, an odd root) is left as it was."""
+    from ..equiv.forms import UnverifiedForm, checked_forms
+    from ..equiv.numeric import exact_equal
+    from .domain import decide_membership, is_convention, with_signed_indices, written_definedness
+    if len(dom) != 1 or not isinstance(solution.claimed_answer.payload, str):
+        return False
+    (v,) = tuple(dom)
+    pts = ctx.reversed_region(v)
+    undef = ctx.undefined_convention_region(v)
+    if not isinstance(pts, FiniteSet) or not isinstance(undef, FiniteSet) or len(pts) > 20 \
+            or not set(pts.args) <= set(undef.args):
+        return False
+    try:
+        conds, nowhere = written_definedness(solution.claimed_answer.payload, ctx.claim_ns(solution))
+    except Exception:  # noqa: BLE001
+        return False
+    if nowhere:
+        return False
+    for p in pts.args:
+        for c in conds:
+            if is_convention(c):
+                return False                       # the claim's own convention: not read here
+            cc = c.xreplace({v: p}) if hasattr(c, "xreplace") else c
+            if isinstance(cc, sp.Contains):
+                held = decide_membership(cc.args[0], cc.args[1]) if not cc.args[0].free_symbols else None
+            else:
+                held = relation_holds_at(cc, v, p)
+            if held is not True:
+                return False
+        try:
+            want = checked_forms(with_signed_indices(target.xreplace({v: p})), ctx.timeout)
+            got = checked_forms(with_signed_indices(claimed.xreplace({v: p})), ctx.timeout)
+        except UnverifiedForm:
+            return False
+        if exact_equal(got, want) is not True:
+            return False
+    ev["undefined_conventions_agree"] = {str(v): str(pts)}
+    return True
+
+
+def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict, target=None) -> tuple[bool | None, str]:
     """Is the CLAIM, read as written, undefined at some point where the problem's expression is
     defined? The claim is parsed with SymPy's automatic simplification, which erases its own
     undefined points: `sqrt(x)**2` becomes x, and was certified as a simplification of x on ℝ
@@ -1102,8 +1150,54 @@ def _claim_undefined_where_expr_defined(solution, ctx: Ctx, dom: dict) -> tuple[
             # a set of progressions SymPy cannot decide (sandbox.exactsets): no proof either way
             return None, f"claim_condition_undecided: {c} on {rr.value}"
         if not empty:
+            if target is not None and _has_infinite_range(target):
+                # a series has no value where it diverges, and its written conditions do not say where: the
+                # claim may be undefined only there (1/(1 - x) for Σ_{k>=0} x**k at x = 1). A point where the
+                # series converges, checked by numbers, refutes; anywhere else nothing is decided (Y3 of the
+                # attack on the local quality changes, 16 Oct 2026: four textbook series were INCORRECT)
+                held = _converges_somewhere(target, v, rr.value, ctx)
+                if held is not True:
+                    if held is None:
+                        return None, f"claim_undefined_where_the_series_may_diverge: {rr.value} (condition {c})"
+                    continue
             return True, f"claim_undefined_on {rr.value} (condition {c})"
     return False, "claim_defined_on_expression_domain"
+
+
+def _has_infinite_range(e) -> bool:
+    """Does `e` hold a Sum/Product with an infinite bound (a series, whose value may not exist)?"""
+    return any(isinstance(n, (sp.Sum, sp.Product)) and any(x_.has(oo, -oo) for lim in n.limits for x_ in lim[1:])
+               for n in sp.preorder_traversal(e))
+
+
+def _converges_somewhere(target, v, points, ctx: Ctx) -> bool | None:
+    """Has the expression `target` a value at one of the finitely many `points`: True when SymPy's value there is
+    confirmed by numbers and finite, False when at each of them one of its series diverges by SymPy's convergence
+    test (no value), None otherwise (more than 20 points, an interval, nothing decided)."""
+    from ..equiv.forms import UnverifiedForm, checked_forms
+    from .domain import with_signed_indices
+    if not isinstance(points, FiniteSet) or len(points) > 20:
+        return None
+    out: bool | None = False
+    for p in points.args:
+        e = with_signed_indices(target.xreplace({v: p}))
+        try:
+            val = checked_forms(e, ctx.timeout)
+        except UnverifiedForm:
+            val = None
+        if val is not None and val.is_extended_real is True and val.is_finite is True:
+            return True
+        series = [n for n in sp.preorder_traversal(e) if isinstance(n, (sp.Sum, sp.Product))
+                  and not n.free_symbols and _has_infinite_range(n)]
+        diverges = False
+        for n in series:
+            r = sb_run("mathverify.sandbox.ops:series_convergent", n, timeout=ctx.timeout)
+            if r.ok and r.value is False:
+                diverges = True
+                break
+        if not diverges:
+            out = None
+    return out
 
 
 def _verify_simplify(ir, solution, ctx: Ctx, t):
@@ -1140,7 +1234,7 @@ def _verify_simplify(ir, solution, ctx: Ctx, t):
         if okS is True:
             return result(LAYER, "pass", 0.99, True, ev, t.ms, primary=True)
         return unknown(LAYER, "multivariate_definedness_needs_symbolic_proof", 0, ev)
-    und, why = _claim_undefined_where_expr_defined(solution, ctx, dom)
+    und, why = _claim_undefined_where_expr_defined(solution, ctx, dom, expr)
     if und is True:
         ev = {"expr": str(expr), "claimed": str(claimed), "reason": f"claim_as_written: {why}"}
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)

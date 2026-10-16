@@ -168,7 +168,7 @@ class Ctx:
         # domain, and sin(x) > 0 cuts the negative bases of x**(1/3) too
         dom, unsolved = self._periodic_conditions(dom, deferred, var)
         self.cache[f"unsolved:{var.name}"] = unsolved
-        from .domain import is_integer_bound, is_value_convention
+        from .domain import is_integer_bound, is_undefined_convention, is_value_convention
         # the points where a value of the problem is ANOTHER value under the other reading (an odd root:
         # the principal value; Mod: Euclidean): see value_convention_region
         _, vback = self._forward_ranges(dom, [c for c in spans if is_value_convention(c)
@@ -177,6 +177,9 @@ class Ctx:
         # the points where a Sum/Product bound is not an integer: see integer_bound_region
         _, iback = self._forward_ranges(dom, [c for c in spans if is_integer_bound(c)], var)
         self.cache[f"intbound:{var.name}"] = iback
+        # the points where the other reading of a value is "undefined" (0**0): see undefined_convention_region
+        _, uback = self._forward_ranges(dom, [c for c in spans if is_undefined_convention(c)], var)
+        self.cache[f"undefconv:{var.name}"] = uback
         dom, back = self._forward_ranges(dom, spans, var)
         if back is not S.EmptySet:
             unapplied += [c for c in spans if c not in unapplied]
@@ -350,6 +353,12 @@ class Ctx:
         `convention_counterexample`. A Sum range that runs backwards is left to §80's own rules."""
         self.domain_for(var)
         return self.cache.get(f"valueconv:{var.name}", S.EmptySet)
+
+    def undefined_convention_region(self, var: sp.Symbol) -> sp.Set:
+        """The part of `convention_region` where the other reading of a value is "undefined", not another value:
+        0**0 (1 or undefined) and C(n, r) outside 0 <= r <= n (0 or undefined)."""
+        self.domain_for(var)
+        return self.cache.get(f"undefconv:{var.name}", S.EmptySet)
 
     def integer_bound_region(self, var: sp.Symbol) -> sp.Set:
         """The part of `convention_region` where a Sum/Product bound of the problem is not an integer
