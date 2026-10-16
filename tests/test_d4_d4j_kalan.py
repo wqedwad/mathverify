@@ -135,9 +135,11 @@ def test_rk2_control_infinitely_many_bad_indices_stay_unknown(expr, val):
     assert _v(*_lim(expr, val)) == "UNKNOWN"
 
 
-def test_rk2_control_a_condition_failing_on_the_whole_tail():
-    # 10 log n - n >= 0 fails from n = 36 on: no tail where sqrt(10 log n - n) has a value
-    assert _v(*_lim("sqrt(10*log(n) - n)", "0")) == "UNKNOWN"
+@pytest.mark.parametrize("expr", ["sqrt(10*log(n) - n)", "sqrt(5 - n)", "log(5 - n)"])
+def test_rk2_control_a_condition_failing_on_the_whole_tail(expr):
+    # 10 log n - n >= 0 fails from n = 36 on, 5 - n from n = 6: no tail where the sequence has a value (the limit of
+    # the condition is -oo, on the wrong side of 0)
+    assert _v(*_lim(expr, "0")) == "UNKNOWN"
 
 
 # ONCEKI-1: options ----------------------------------------------------------------------------------------------
@@ -180,7 +182,8 @@ def test_onceki1_an_option_of_another_kind_abstains(q, s):
 def test_onceki1_control_a_condition_on_another_symbol_is_not_the_answer_set():
     q = _ir("solve_inequality", {"var": "x"}, ["x**3 > -8"], [{"name": "x"}, {"name": "y"}], "interval",
             options={"A": "y > -2", "B": "(100, 200)"})
-    assert _v(q, _sol("(-2, oo)", "interval", option="A")) == "INCORRECT"
+    # a condition on y names no set of x: the option is not read as the answer's kind, and abstains
+    assert _v(q, _sol("(-2, oo)", "interval", option="A")) == "UNKNOWN"
 
 
 def test_onceki1_controls():

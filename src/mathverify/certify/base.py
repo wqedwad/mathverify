@@ -1255,7 +1255,7 @@ class Ctx:
         The as-written reading refused Σ_{k=√1}^{3} k alone, and read as "no condition" the text around it
         lost x/x, √x², 1/(-1)!: {0} was certified for x²/x + Σ = 6 (review of d4f, YO-1)."""
         from ..normalize.parse import parse_expr_str, parse_relation, parse_set_str, read_condition
-        if not isinstance(src, str) or _is_label(src, self.ns):
+        if not isinstance(src, str) or _is_label(src):
             return None
         for read in (parse_expr_str, parse_relation, read_condition, parse_set_str):
             try:
@@ -1618,14 +1618,13 @@ def decimal_comma(text) -> bool:
     return isinstance(text, str) and not re.search(r"[{}\[\]()]", text) and re.search(r"\d,\d", text) is not None
 
 
-def _is_label(src: str, ns: dict) -> bool:
-    """A bare name that the namespace binds to a function or a class, not to a value: `P` (the permutation
-    count), `S` (SymPy's registry), `C`, `det`, `sqrt`, `Sum`. In a list of points or of outcomes ('P', 'Q', 'R';
-    'S', 'K') it is a label with no value, so no definedness rests on it; the value reading took it as that
-    function and the problem was "undecided" (attack on d4f round 2, RK-1). A name bound to a value (E, pi, a
-    declared symbol) is no label."""
-    name = src.strip()
-    return name.isidentifier() and name in ns and not isinstance(ns[name], sp.Basic)
+def _is_label(src: str) -> bool:
+    """A bare name the as-written reading does not take: one the namespace binds to a function or a class, not to a
+    value (`P` the permutation count, `S` SymPy's registry, `C`, `det`, `sqrt`, `Sum`; a name bound to a value, E,
+    pi, zoo or a declared symbol, is read as written and never comes here, an unknown one is read by nobody). In a
+    list of points or of outcomes ('P', 'Q', 'R'; 'S', 'K') it is a label with no value, so no definedness rests on
+    it; the value reading took it as that function and the problem was "undecided" (attack on d4f round 2, RK-1)."""
+    return src.strip().isidentifier()
 
 
 def _texts(v) -> list[str]:

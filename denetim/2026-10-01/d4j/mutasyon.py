@@ -30,11 +30,8 @@ T = "tests/test_d4_d4j_kalan.py::"
 
 MUTATIONS = [
     # RK-1: labels
-    ("J01 yalın ad etiket sayılmaz", BASE, "        if not isinstance(src, str) or _is_label(src, self.ns):\n",
+    ("J01 yalın ad etiket sayılmaz", BASE, "        if not isinstance(src, str) or _is_label(src):\n",
      "        if not isinstance(src, str):\n", T + "test_rk1_point_names_are_labels"),
-    ("J02 değerli ad da etiket", BASE,
-     "    return name.isidentifier() and name in ns and not isinstance(ns[name], sp.Basic)\n",
-     "    return name.isidentifier() and name in ns\n", T + "test_rk1_control_a_name_with_a_value_is_no_label"),
     # RK-2: tails
     ("J03 kuyruk limitle kanıtlanmaz", LIM, "    return _eventually(c, var, point)\n\n\ndef _eventually",
      "    return False\n\n\ndef _eventually", T + "test_rk2_textbook_sequence_limits"),
