@@ -54,6 +54,21 @@ def _index_symbols(n) -> dict:
     return out
 
 
+def with_signed_indices(e):
+    """`e` with the index of every Sum/Product renamed to the integer of its range (`_index_symbols`): the
+    same value (every term has its index in the range), which SymPy's evalf reads where it could not read
+    the parser's plain integer index (Σ_{k>=0} 0**k/k!: no number for k an integer, 1 for k >= 0)."""
+    if not isinstance(e, sp.Basic):
+        return e
+    reps = {}
+    for n in sp.preorder_traversal(e):
+        if isinstance(n, (sp.Sum, sp.Product)) and n not in reps:
+            plain = _index_symbols(n)
+            if plain:
+                reps[n] = n.xreplace(plain)
+    return e.xreplace(reps) if reps else e
+
+
 def _zero_powers_in_range(n, body, plain) -> list:
     """0**0 inside a Sum/Product: the base b of a power b**e(k), b free of the indices, is a zero_power
     convention point when e vanishes at an index of the range, or may (a symbolic bound, an exponent that
@@ -61,6 +76,7 @@ def _zero_powers_in_range(n, body, plain) -> list:
     read on an integer index the term has no condition left to say so."""
     out: list = []
     idx = set(plain.values())
+    outer = n.free_symbols
     lims = {plain[lim[0]]: lim for lim in n.limits if lim[0] in plain and len(lim) == 3}
     for p in sp.preorder_traversal(body):
         if not isinstance(p, sp.Pow):
@@ -69,6 +85,8 @@ def _zero_powers_in_range(n, body, plain) -> list:
         ks = e.free_symbols & idx
         if not ks or (b.free_symbols & idx) or not b.free_symbols or b.is_zero is False or e.is_zero is False:
             continue
+        if not b.free_symbols <= outer:
+            continue                  # the variable of an inner binder (Σ_k ∫_1^2 t**k dt): that binder's own reading
         if len(ks) == 1 and next(iter(ks)) in lims and e.is_polynomial(*ks):
             k = next(iter(ks))
             poly = sp.Poly(e, k)
@@ -357,6 +375,12 @@ def is_value_convention(c) -> bool:
     return is_convention(c) and (c.args[1] == FORWARD_SPANS
                                  or c.args[1].kind in ("odd_root", "mod_divisor", "negative_base", "origin",
                                                        "integer_bound", "real_power"))
+
+
+def is_undefined_convention(c) -> bool:
+    """Is `c` a convention condition whose other reading is "undefined", not another value: 0**0 and C(n, r)
+    outside 0 <= r <= n (SymPy's value: 1 and 0)?"""
+    return is_convention(c) and c.args[1] != FORWARD_SPANS and not is_value_convention(c)
 
 
 def is_integer_bound(c) -> bool:

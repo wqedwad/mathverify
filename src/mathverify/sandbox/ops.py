@@ -136,6 +136,15 @@ def doit_expr(expr):
     return expr.doit()
 
 
+def series_convergent(series):
+    """SymPy's convergence test of a closed infinite Sum/Product: True, False, or None when it gives none."""
+    try:
+        r = series.is_convergent()
+    except Exception:  # noqa: BLE001 - no test applies
+        return None
+    return True if r is sp.true or r is True else False if r is sp.false or r is False else None
+
+
 def diff_expr(expr, var, n=1):
     return sp.diff(expr, var, n)
 
