@@ -205,3 +205,20 @@ def _count_roots(expr, n, steps, **kw):
 ])
 def test_count_roots_reads_its_expression_as_a_premise(steps, n, kw, verdict, statuses):
     assert _count_roots("x**2 - x - 2", n, steps, **kw) == (verdict, statuses)
+
+
+# --- a gcd or lcm of numbers written unevaluated (d4b round 10) -----------------------------------------------------
+def test_a_gcd_of_numbers_written_unevaluated_has_its_exact_value():
+    # \\gcd(2^{2}, 6) is read with 2^{2} as written; d4b round 10 tracks no evaluation of the class, and the wrong
+    # claim 4 had fallen from INCORRECT (81acaff) to UNKNOWN
+    from mathverify.normalize.parse import gcd, lcm
+    four = sp.Pow(2, 2, evaluate=False)
+    with sp.evaluate(False):
+        g, m = gcd(6, four), lcm(6, four)
+    assert certified_sign(g - 4) == -1 and certified_sign(g - 2) == 0 and certified_sign(m - 12) == 0
+    near = 3 + sp.exp(-sp.exp(10))                      # no integer: its numeric value (_imp_) rounds it to 3
+    with sp.evaluate(False):
+        assert certified_sign(gcd(near, 6) - 3) != 0
+        assert certified_sign(gcd(sp.log(8) / sp.log(2), 6) - 3) in (0, None)      # exactly 3: proved, or undecided
+    ir = _ir("evaluate", {"expr": "\\gcd(2^{2}, 6)"})
+    assert _run(ir, "4").verdict == "INCORRECT" and _run(ir, "2").verdict == "CORRECT"

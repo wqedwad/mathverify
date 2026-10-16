@@ -129,7 +129,8 @@ MUTATIONS = [
     ("R01 okuma sırasında evalf tutulmaz", PAR, "            if _FORMS_HELD.get():\n                raise NotImplementedError(",
      "            if False:\n                raise NotImplementedError(", T2),
     ("R02 bağlam açılmaz", PAR, "        token = _FORMS_HELD.set(True)", "        token = _FORMS_HELD.set(False)", T2),
-    ("R03 kanonik ayrıştırma tutmaz", PAR, "@_holds_forms\ndef guarded_parse_expr(", "def guarded_parse_expr(", T2),
+    # R03 (the hold on guarded_parse_expr) is gone with its decorator in the merged state (16 Oct 2026): with d4b round
+    # 10's strict evaluation no case of the sonda (657) and no parse of 86 texts over the spike changed without it
     # R04/R05 (the holds on _latex_to_sympy and parse_relation) are gone with their decorators: no test, no case of
     # the sonda and no parse of 69 texts over the spike integral changed without them (round 2 completed)
     ("R06 küme kurulumu tutmaz", PAR, "@_holds_forms\ndef parse_set_str(", "def parse_set_str(", T2),

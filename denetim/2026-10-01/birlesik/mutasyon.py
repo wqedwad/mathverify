@@ -32,6 +32,7 @@ PAR = "src/mathverify/normalize/parse.py"
 DET = "src/mathverify/steps/deterministic.py"
 FORM = TB + "test_a_form_has_the_sign_of_its_checked_value"
 CR = TB + "test_count_roots_reads_its_expression_as_a_premise"
+GCD = TB + "test_a_gcd_of_numbers_written_unevaluated_has_its_exact_value"
 NULL = TB + "test_a_convention_on_finitely_many_points_does_not_stop_an_integral"
 PTS = TB + "test_the_points_where_a_convention_may_fail"
 
@@ -82,6 +83,11 @@ MUTATIONS = [
      CR),
     ("M23 count_roots ifadesi ilişki diye okunur", DET, "        rel = Eq(ctx.expr(src), 0) if zero else ctx.rel(src)\n",
      "        rel = ctx.rel(src)\n", CR),
+    ("M24 sayıların gcd/lcm'i kesin değerlenmez", NUM,
+     "            v = n.func(*[_evaluated(a) for a in n.args])        # the class evaluates at rationals only\n",
+     "            v = None\n", GCD),
+    ("M25 gcd argümanı yazıldığı gibi okunur", NUM, "    with sp.evaluate(True):\n        return e.func(*[_evaluated(a)",
+     "    with sp.evaluate(False):\n        return e.func(*[_evaluated(a)", GCD),
 ]
 
 if __name__ == "__main__":

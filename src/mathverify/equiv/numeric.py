@@ -441,6 +441,12 @@ def certified_sign(e, timeout: float = 5.0):
         return _certified_sign(e, timeout)
 
 
+def _evaluated(e):
+    """`e` rebuilt with SymPy's evaluation on: 2**2 written unevaluated is 4 (a closed form is not computed)."""
+    with sp.evaluate(True):
+        return e.func(*[_evaluated(a) for a in e.args]) if isinstance(e, sp.Basic) and e.args else e
+
+
 def _zero_arguments_resolved(e, timeout: float):
     """`e` with every node SymPy's evalf does not track the accuracy of (asin, sinh, tanh, erf, ...: see
     `_sympy_guards`) whose argument is CERTIFIED 0 replaced by its exact value there (asin 0 = sinh 0 = tanh 0 =
@@ -448,8 +454,12 @@ def _zero_arguments_resolved(e, timeout: float):
     an atan2 on an axis, by their value. Strict evalf read asin(log(6) - log(2) - log(3)) off rounding noise of
     its argument (a sign that changed with the precision), and ceiling(asin(Q)) = 1 was certified (round 9
     attack, YO-1); a guarded strict evaluation reads such a node only where its argument has a certified sign,
-    and an argument that is exactly 0 has none there: its exact zero test is here."""
+    and an argument that is exactly 0 has none there: its exact zero test is here. A gcd or lcm of numbers
+    (normalize.parse) takes its exact value where its arguments, evaluated, are rational: \\gcd(2^{2}, 6) is read
+    with 2^{2} as written, untracked it had no sign, and the wrong claim 4 was UNKNOWN (merged state; d4b round 10).
+    Their numeric value (`_imp_`) is no reading: it rounds each argument to an integer."""
     from .._sympy_guards import tracked
+    from ..normalize.parse import gcd as gcd_of_numbers, lcm as lcm_of_numbers
 
     def picked(n):
         best = n.args[0]
@@ -474,6 +484,8 @@ def _zero_arguments_resolved(e, timeout: float):
             return n
         if isinstance(n, (sp.Max, sp.Min)):
             v = picked(n)
+        elif isinstance(n, (gcd_of_numbers, lcm_of_numbers)):
+            v = n.func(*[_evaluated(a) for a in n.args])        # the class evaluates at rationals only
         elif isinstance(n, sp.atan2):
             sy, sx = certified_sign(n.args[0], timeout), certified_sign(n.args[1], timeout)
             v = {(0, 1): sp.S.Zero, (0, -1): sp.pi, (1, 0): sp.pi / 2, (-1, 0): -sp.pi / 2}.get((sy, sx))
@@ -591,7 +603,7 @@ _NOT_READ = object()       # strict evalf decided nothing: the exact zero test i
 def _forms_valued(e, timeout: float):
     """`e` with its closed integrals, sums, products and limits replaced by the values `equiv.forms.checked_forms`
     takes (an integral's symbolic certificate, a sum's SymPy value confirmed by numbers), or None when it holds no
-    closed form, one is not confirmed, or a text is being read (its forms stay as written there, part d4h). Strict
+    closed form, one is not confirmed, or a set is being read (its forms stay as written there, part d4h). Strict
     evalf reads no form (d4b round 10: their evaluation is not tracked), and d4h keeps a form unevaluated wherever a
     value decides (floor, a comparison) so that its value comes from `checked_forms` alone: merged, the step
     floor(∫_0^3 x dx) = 3 and the given x > ∫_0^3 x dx with x = 5 had no sign at all and were left undecided, while

@@ -72,11 +72,13 @@ _install_form_evalf_hold()
 
 def _holds_forms(fn):
     """`fn` (a reader of text) run with the closed forms' numeric evaluation held (`_install_form_evalf_hold`): the
-    readers that build a tree with evaluation on (`guarded_parse_expr`, `parse_set_str`, `parse_domain`). latex2sympy
-    and `parse_relation` need no hold of their own: SymPy takes a form with a bound symbol for a symbolic term, the
-    relations are built unevaluated, and the deciding nodes rebuilt over a form stay so (`rebuilt`): with or without a
-    hold there, no case of the d4h sonda and no parse of 69 texts over the spike integral differed (round 2 of d4h,
-    completed)."""
+    readers that build a set with evaluation on (`parse_set_str`, `parse_domain`: the ends of an interval over a form are
+    not compared). latex2sympy and `parse_relation` need no hold of their own: SymPy takes a form with a bound symbol for
+    a symbolic term, the relations are built unevaluated, and the deciding nodes rebuilt over a form stay so (`rebuilt`):
+    with or without a hold there, no case of the d4h sonda and no parse of 69 texts over the spike integral differed
+    (round 2 of d4h, completed). Nor does `guarded_parse_expr` once merged with d4b round 10, whose strict evaluation
+    reads no number off a form (`_sympy_guards`): without its hold the 657 cases of the d4h sonda and 86 texts over the
+    spike read the same (merge of 16 Oct 2026), and the hold was removed."""
     def call(*args, **kwargs):
         token = _FORMS_HELD.set(True)
         try:
@@ -1847,7 +1849,6 @@ def _refuse_reversed_ranges(expr, raw: str) -> None:
                         pass
 
 
-@_holds_forms
 def guarded_parse_expr(s: str, *, local_dict: dict[str, Any], global_dict: dict[str, Any],
                        transformations, evaluate: bool = True, rebind: bool = True,
                        rebind_points: bool | None = None):
