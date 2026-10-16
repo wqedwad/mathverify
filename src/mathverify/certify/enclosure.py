@@ -15,6 +15,7 @@ unbounded one that decides nothing. No infinite range is enclosed.
 """
 from __future__ import annotations
 
+import threading
 import time
 
 import mpmath as mp
@@ -78,6 +79,22 @@ def _monotone(fn, x, increasing=True, limits=None):
             a, b = b, a
         eps = mp.mpf(10) ** (-(_DPS + 5))
         return _hull(a - eps * (1 + abs(a)), b + eps * (1 + abs(b)))
+
+
+def _lipschitz(fn, x, bound=1):
+    """fn(lo) ± bound·(hi - lo) for an fn with |fn'| <= bound on the whole real line, widened by the margin of
+    `_monotone` and by the rounding of the argument to the working precision. Si (Si' = sin t/t), the Fresnel
+    integrals S and C (S' = sin(πt²/2), C' = cos(πt²/2)): |fn'| <= 1. Without them the value ∫_0^1 sin(x²) dx =
+    S(√2/√π)·√(π/2) of a certificate had no interval, and no declared tolerance was decided against it (son saldırı
+    G2RK-2)."""
+    lo, hi = _ends(x)
+    if not (mp.isfinite(lo) and mp.isfinite(hi)):
+        raise Unsupported("unbounded argument")
+    with mp.workdps(_DPS + 15):
+        v = fn(lo)
+        eps = mp.mpf(10) ** (-(_DPS + 5))
+        r = bound * ((hi - lo) * (1 + eps) + eps * (1 + abs(lo) + abs(hi)))
+        return _hull(v - r - eps * (1 + abs(v)), v + r + eps * (1 + abs(v)))
 
 
 def _neg(v):
@@ -152,6 +169,11 @@ def _iv_node(e, env: dict, an: bool):
         if ex.is_Rational:
             b = iv_eval(base, env, an)
             lo, hi = _ends(b)
+            if _EVEN_ROOTS.on and ex.q % 2 == 0 and lo < 0 <= hi:
+                # (an edge cell of a range on which the integrand is defined almost everywhere: see
+                # `rigorous_enclosure`) the base of an even root is >= 0 at almost every point of the range
+                b = _hull(mp.mpf(0), hi)
+                lo = mp.mpf(0)
             if an and not lo > 0:
                 raise NotAnalytic("a fractional power of a base that may be 0")
             if ex == sp.S.Half and lo >= 0:
@@ -211,6 +233,16 @@ def _iv_node(e, env: dict, an: bool):
         if an and not (-1 < lo and hi < 1):
             raise NotAnalytic("asin/acos at -1 or 1")
         return _monotone(mp.asin, x) if isinstance(e, sp.asin) else _monotone(mp.acos, x, increasing=False)
+    if isinstance(e, sp.erf):
+        return _monotone(mp.erf, x, limits=(lambda: mp.mpf(-1), lambda: mp.mpf(1)))
+    if isinstance(e, sp.erfc):
+        return iv.mpf(1) - _monotone(mp.erf, x, limits=(lambda: mp.mpf(-1), lambda: mp.mpf(1)))
+    if isinstance(e, sp.Si):
+        return _lipschitz(mp.si, x)
+    if isinstance(e, sp.fresnels):
+        return _lipschitz(mp.fresnels, x)
+    if isinstance(e, sp.fresnelc):
+        return _lipschitz(mp.fresnelc, x)
     if isinstance(e, sp.sinh):
         return _monotone(mp.sinh, x)
     if isinstance(e, sp.tanh):
@@ -368,8 +400,15 @@ def from_raw(t):
     return mp.make_mpf(tuple(t))
 
 
+class _EvenRoots(threading.local):
+    on = False
+
+
+_EVEN_ROOTS = _EvenRoots()
+
+
 def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cells: int = 4000,
-                       seconds: float = 120.0):
+                       seconds: float = 120.0, defined: bool = False):
     """Sandbox worker: (lo, hi), the ends of an interval holding ∫_a^b f as exact binary numbers (see
     `from_raw`), refined until it misses `outside` (an interval holding the claim, as (lo, hi) of `_raw`
     ends), lies within `inside` (a tolerance window) or `max_cells` cells are reached. None when there is
@@ -455,7 +494,15 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
 
         # an end that is not a binary number (π) is an interval [lo, hi]: ∫ from the true end to the
         # interval's inner end is (a number in [0, hi - lo])·f([lo, hi])
-        edge = [iv.mpf([0, 1]) * cell(lo_, hi_, None) for lo_, hi_ in (ia, ib) if hi_ > lo_]
+        # with `defined` (the caller proved the integrand's conditions fail on a null set of [a, b] at most), the base
+        # of an even root is >= 0 almost everywhere on the part of the end's interval inside [a, b], and is read so
+        # there: √cos x at the end π/2 had an interval value past π/2, where cos x < 0, the edge had none, and the
+        # enclosure of ∫_0^{π/2} √(cos x)·sin x dx was (-oo, oo) (son saldırı G2RK-7)
+        _EVEN_ROOTS.on = bool(defined)
+        try:
+            edge = [iv.mpf([0, 1]) * cell(lo_, hi_, None) for lo_, hi_ in (ia, ib) if hi_ > lo_]
+        finally:
+            _EVEN_ROOTS.on = False
         cells = [(ia[1], ib[0], cell(ia[1], ib[0], df))]
         out_lo, out_hi = (from_raw(outside[0]), from_raw(outside[1])) if outside else (None, None)
         in_lo, in_hi = (from_raw(inside[0]), from_raw(inside[1])) if inside else (None, None)

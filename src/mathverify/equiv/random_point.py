@@ -284,9 +284,42 @@ def _far_safe(e) -> bool:
     return not any(f.args and f.args[0].free_symbols for f in e.atoms(*bad))
 
 
-def _breakpoints(exprs, sym, dom, timeout: float = 5.0) -> list | None:
+def _argument_edges(g, sym, timeout: float) -> list | None:
+    """The points where the argument `g` of a non-smooth function stops or starts being a real number: its poles
+    (1/(x - 1/3) at 1/3) and the ends of the pieces of ℝ where it has no value, from its exact conditions
+    (`certify.calculus._exact_conditions`); None when that set is not found exactly or not finite. An argument changes
+    sign across a pole without a zero: Max(x, x + 1/(x - 1/3) - 10^6) = x was 'proved' on a cell holding the pole 1/3,
+    with the branch of its far side (son saldırı G2YO-3)."""
+    from ..certify.calculus import _exact_conditions
+    from ..sandbox import run as sb_run
+    conds = _exact_conditions(g, sym)
+    if conds is None:
+        return None
+    out: list = []
+    for c in conds:
+        neg = sp.Eq(c.lhs, c.rhs) if isinstance(c, sp.Ne) else c.negated
+        r = sb_run("mathverify.sandbox.ops:solveset_in", neg, sym, sp.S.Reals, timeout=timeout)
+        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+            return None
+        try:
+            edge = r.value.boundary
+        except Exception:  # noqa: BLE001 - a set with no boundary SymPy computes
+            return None
+        if not isinstance(edge, (sp.FiniteSet, type(sp.S.EmptySet))):
+            return None
+        for v in edge:
+            if not (getattr(v, "is_number", False) and v.is_real is True and v.is_finite is True):
+                if v in (sp.oo, sp.S.NegativeInfinity):
+                    continue
+                return None
+            out.append(v)
+    return out
+
+
+def _breakpoints(exprs, sym, dom, timeout: float = 5.0, poles: bool = False) -> list | None:
     """Points where a non-smooth function in `exprs` can switch branch (exact, finite), or None
-    when that set cannot be computed (floor/ceiling/Mod on an unbounded domain, a solver failure)."""
+    when that set cannot be computed (floor/ceiling/Mod on an unbounded domain, a solver failure).
+    With `poles`, also where an argument stops being a real number (`_argument_edges`): a cell proof's cells."""
     from ..sandbox import run as sb_run
     eqs = []
     for e in exprs:
@@ -310,7 +343,13 @@ def _breakpoints(exprs, sym, dom, timeout: float = 5.0) -> list | None:
         r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(g, 0), sym, sp.S.Reals, timeout=timeout)
         if not r.ok or not isinstance(r.value, sp.FiniteSet):
             return None
-        for v in r.value.args:
+        found = list(r.value.args)
+        if poles:
+            edges = _argument_edges(g, sym, timeout)
+            if edges is None:
+                return None
+            found += edges
+        for v in found:
             if not getattr(v, "is_number", False) or v.is_real is False:
                 continue
             if not any(v == u for u in pts):
@@ -370,6 +409,26 @@ def _written_out(e):
     return None if e.has(*_FORMS) else e
 
 
+_POWER_PARTS = 1000          # a rational exponent past it, on a base the point gives, is not written out exactly
+
+
+def _heavy_power_at(e, pt) -> bool:
+    """Does `e` at `pt` raise a base the point gives to a rational exponent with a numerator or denominator past
+    `_POWER_PARTS`? SymPy writes (p/q)**(r/s) out exactly (an integer power p**r, then its root by factoring), and at the
+    sample point 7579840/1000039, x**x held one comparison in this process for over twenty minutes, with no time limit:
+    (x^x)' = x^x·ln x under x > 0 (son saldırı, integral group; positive_real had it before). Read innermost first."""
+    keys = set(pt)
+    try:
+        for n in sp.postorder_traversal(e):
+            if isinstance(n, sp.Pow) and n.base.free_symbols & keys and n.exp.free_symbols & keys:
+                ex = n.exp.xreplace(pt)
+                if isinstance(ex, sp.Rational) and (abs(ex.p) > _POWER_PARTS or ex.q > _POWER_PARTS):
+                    return True
+    except Exception:  # noqa: BLE001 - no reading: let the substitution decide
+        return False
+    return False
+
+
 def _exact_counterexample(a, b, syms, pt, budget: list | None = None) -> dict[str, Any] | None | bool:
     """Is `pt` an EXACT counterexample? dict when it is, False when the two sides are equal
     there (or both undefined), None when undecided.
@@ -382,6 +441,8 @@ def _exact_counterexample(a, b, syms, pt, budget: list | None = None) -> dict[st
     numbers' tolerance."""
     from .numeric import certified_sign, exact_equal, real_odd_roots, to_mp, NONREAL
     via_forms = False
+    if _heavy_power_at(a, pt) or _heavy_power_at(b, pt):
+        return None                     # no exact value written out here: the point decides nothing
     try:
         da = real_odd_roots(a.subs(pt, simultaneous=True))
         db = real_odd_roots(b.subs(pt, simultaneous=True))
@@ -492,7 +553,7 @@ def _cell_proof(a, b, sym, dom, ev) -> bool | None:
     breakpoints every non-smooth function is one analytic branch, so the identity is proved
     there symbolically; at each breakpoint it is checked exactly."""
     from .symbolic import sym_equal
-    bps = _breakpoints([a, b], sym, dom)
+    bps = _breakpoints([a, b], sym, dom, poles=True)
     if bps is None:
         ev["nonsmooth_proof"] = "breakpoints_not_computable"
         return None
@@ -847,24 +908,70 @@ def nonzero_sign_points(d, syms, pts) -> list[int]:
     return out
 
 
+def point_signs(d, syms, pts) -> tuple[list[int], list[int]]:
+    """Sandbox worker: (the indices of the points where the closed value of `d` has a sign certified by interval
+    arithmetic, read as written or expanded; the indices of the points where it has none and is not proved 0 either).
+    A point where `d` has no closed value (a form, no value, a symbol) is read as `nonzero_sign_points` reads it: no
+    witness. Where the interval holds 0 the point was skipped as if it were a zero: x² + 10^-300·sin(Nπx) =
+    (x - 1)(x + 1) + 1 was certified on x > 0, the claim's (x - 1)(x + 1) cancelling against x² no closer than 10^-234
+    at 240 digits (son saldırı G2YO-6, the sibling writing of d4c round 3's YO-B). Such a point is now proved 0
+    (`numeric.exact_zero_test`), or read expanded (the cancellation made exact: 10^-300·sin(Nπ√2/2) has a sign), or it
+    is undecided; the zero tests stop at the first point left undecided, and are not run once a sign is found."""
+    from ..certify.enclosure import constant_sign
+    from .numeric import exact_zero_test, real_odd_roots
+    nonzero: list = []
+    undecided: list = []
+    later: list = []
+    for i, pt in enumerate(pts):
+        at = {s_: pt[s_] for s_ in syms}
+        if _heavy_power_at(d, at):
+            undecided.append(i)
+            continue
+        try:
+            dp = real_odd_roots(d.subs(at, simultaneous=True))
+            if dp == 0 or dp.has(*_FORMS) or dp.has(sp.zoo, sp.nan, sp.oo, -sp.oo) or dp.free_symbols:
+                continue
+            if constant_sign(dp) is not None:
+                nonzero.append(i)
+            else:
+                later.append((i, dp))
+        except Exception:  # noqa: BLE001
+            continue
+    for i, dp in later:
+        if nonzero or undecided:
+            break
+        try:
+            if exact_zero_test(dp) is True:
+                continue
+            if constant_sign(sp.expand(dp)) is not None:
+                nonzero.append(i)
+                continue
+        except Exception:  # noqa: BLE001
+            pass
+        undecided.append(i)
+    return nonzero, undecided
+
+
 _ELSEWHERE_TIMEOUT = 30.0
 
 
 def _nonzero_elsewhere(d, syms, pts, a, b, budget) -> tuple[dict[str, Any] | None, bool]:
-    """(witness, undecided): a point of `pts` where a and b certainly differ (`nonzero_sign_points`, confirmed by
-    `_exact_counterexample`), else None; undecided when the points could not be read (the worker failed)."""
+    """(witness, undecided): a point of `pts` where a and b certainly differ (`point_signs`, confirmed by
+    `_exact_counterexample`), else None; undecided when the points could not be read (the worker failed), when a
+    point's difference has no certified sign and is not proved 0, or when a signed point is not confirmed exactly."""
     if not pts:
         return None, False
     from ..sandbox import run as sb_run
-    r = sb_run("mathverify.equiv.random_point:nonzero_sign_points", sp.sympify(d), syms, pts, timeout=_ELSEWHERE_TIMEOUT)
-    if not r.ok or not isinstance(r.value, list):
+    r = sb_run("mathverify.equiv.random_point:point_signs", sp.sympify(d), syms, pts, timeout=_ELSEWHERE_TIMEOUT)
+    if not r.ok or not isinstance(r.value, tuple) or len(r.value) != 2:
         return None, True
-    for i in r.value:
+    nonzero, undecided = r.value
+    for i in nonzero:
         pt = pts[i]
         cx = _exact_counterexample(a, b, syms, pt, budget)
         if isinstance(cx, dict):
             return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "exact": cx["exact"]}, False
-    return None, False
+    return None, bool(nonzero or undecided)
 
 
 def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None) -> tuple[dict[str, Any] | None, int]:
@@ -885,6 +992,9 @@ def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None)
         return None, 0
     unsure = 0
     for pt in pts:
+        if _heavy_power_at(d, pt):
+            unsure += 1                           # no exact value written out here (`_heavy_power_at`)
+            continue
         try:
             dp = d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True)
             if dp.has(*_FORMS):

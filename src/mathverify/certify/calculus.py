@@ -30,7 +30,8 @@ import sympy as sp
 from sympy import S, Eq, Ne, Interval, oo
 
 from ..equiv import _equals_false_stands, answers_equivalent
-from ..equiv.numeric import NONREAL, certified_sign, is_number_expr, num_equal, read_tolerance, to_mp, within_rel_tol
+from ..equiv.numeric import (NONREAL, certified_sign, is_number_expr, num_equal, read_tolerance, to_mp,
+                             within_tolerance)
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
@@ -114,8 +115,16 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
         ladder.append((dps, val_s, err_s))
         ev["ladder"].append({"dps": dps, "value": val_s, "err": err_s})
         with mp.workdps(dps + 10):
-            v = mp.mpf(val_s)
-            err = abs(mp.mpf(err_s)) if err_s not in (None, "None") else mp.mpf(1)
+            try:
+                v = mp.mpf(val_s)
+                err = abs(mp.mpf(err_s)) if err_s not in (None, "None") else mp.mpf(1)
+            except (TypeError, ValueError):
+                # a complex or unreadable value (√cos x near an end π/2 rounded past it: '(0.666… + 4e-78j)') is
+                # no value of the real integral: the ladder did not converge, and the certificate decides; it raised
+                # here, and the certificate that proves 2/3 was never tried (son saldırı G2RK-7)
+                ev["error"] = "nonreal_or_unreadable_value"
+                ev["converged"] = False
+                return None, ev
             scale = max(abs(v), mp.mpf(1))
             if prev is not None:
                 pv, perr, pdps = prev
@@ -159,9 +168,15 @@ def _exact_conditions(e, var) -> list | None:
     SymPy's x**(1/3) is complex for x < 0, and no condition said so. The odd-root convention of such a power
     (`Contains(b, Convention(odd_root))`: the real root or the principal value at b < 0) is met by that rule
     for that very base: on b >= 0 the two readings are one value. It had made every certificate with t**(1/3)
-    fail, ∫_0^∞ e^(-t^(1/3)) dt = 6 among them (merge of d4c round 3 with d4a, BİRLEŞİK-1)."""
+    fail, ∫_0^∞ e^(-t^(1/3)) dt = 6 among them (merge of d4c round 3 with d4a, BİRLEŞİK-1). A power whose base and
+    exponent both hold the variable (x**x) is read as real only for a base > 0: its conditions are those of
+    exp(g·log b), the one value it has there (the real-power convention, `Convention(real_power)`, is met by that
+    rule); the strict rules have none for it, and ∫_1^2 x^x (1 + ln x) dx = 3 had no certificate (son saldırı
+    G2RK-9)."""
     from .domain import Convention, definedness_conditions_strict
-    conds = definedness_conditions_strict(e, var)
+    real_powers = {node: sp.exp(node.exp * sp.log(node.base)) for node in sp.preorder_traversal(e)
+                   if isinstance(node, sp.Pow) and node.base.has(var) and node.exp.has(var)}
+    conds = definedness_conditions_strict(e.xreplace(real_powers) if real_powers else e, var)
     if conds is None:
         return None
     fractional = {node.base for node in sp.preorder_traversal(e) if isinstance(node, sp.Pow)
@@ -187,6 +202,8 @@ def _exact_conditions(e, var) -> list | None:
     for node in sp.preorder_traversal(e):
         if isinstance(node, sp.Pow) and node.base.has(var):
             ex = node.exp
+            if node in real_powers:
+                continue                              # read above: base > 0
             if not ex.is_number:
                 return None
             if ex.is_Rational and not ex.is_Integer:
@@ -220,7 +237,12 @@ def _bad_points(e, var, lo, hi, timeout) -> list | None:
 
 
 def _switch_points(e, var, lo, hi, timeout) -> list | None:
-    """Points of (lo, hi) where Abs/sign/Max/Min in `e` can change branch (finite), or None."""
+    """Points of (lo, hi) where Abs/sign/Max/Min/Piecewise in `e` can change branch (finite), or None. An argument
+    changes sign at its zeros AND where it is no real number (a pole: (x - 1)/(x + 1) at -1): sign((x - 1)/(x + 1)) on
+    [-2, 4] was cut at 1 alone, the branch -1 of (-1, 1) was carried onto (-2, -1), and the wrong 0 was certified for
+    the integral 2 (son saldırı G2YO-1). Those points are the argument's `_bad_points`; an argument that is no real
+    number on a piece of positive length, or a set not found exactly, leaves no cut list (None). A Piecewise switches
+    where a relation of its conditions turns (son saldırı G2RK-5)."""
     from ..equiv.random_point import _nonsmooth
     eqs = []
     for n in _nonsmooth(e):
@@ -229,6 +251,13 @@ def _switch_points(e, var, lo, hi, timeout) -> list | None:
         elif isinstance(n, (sp.Max, sp.Min)):
             args = list(n.args)
             eqs += [args[i] - args[j] for i in range(len(args)) for j in range(i + 1, len(args))]
+        elif isinstance(n, sp.Piecewise):
+            for _, cond in n.args:
+                for r_ in sp.preorder_traversal(cond):
+                    if isinstance(r_, sp.core.relational.Relational):
+                        eqs.append(r_.lhs - r_.rhs)
+                    elif not isinstance(r_, (sp.Expr, sp.And, sp.Or, sp.Not)) and r_ not in (sp.true, sp.false):
+                        return None                   # a condition no relation spells (Contains, ...)
         else:
             return None
     pts: list = []
@@ -238,7 +267,10 @@ def _switch_points(e, var, lo, hi, timeout) -> list | None:
         r = sb_run("mathverify.sandbox.ops:solveset_in", Eq(g, 0), var, sp.Interval.open(lo, hi), timeout=timeout)
         if not r.ok or not isinstance(r.value, (sp.FiniteSet, type(S.EmptySet))):
             return None
-        for p in r.value:
+        poles = _bad_points(g, var, lo, hi, timeout)
+        if poles is None:
+            return None
+        for p in list(r.value) + [q for q in poles if q != lo and q != hi]:
             if not (getattr(p, "is_number", False) and p.is_real):
                 return None
             if not any(p == q for q in pts):
@@ -555,10 +587,12 @@ def _raw_pair(lo, hi):
 _ENCLOSURE_SAFETY = 120.0       # seconds: past it an enclosure is abandoned (UNKNOWN), never cut short
 
 
-def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0):
+def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0, defined: bool = False):
     """(lo, hi) mpf: an interval holding ∫_a^b f, refined until it misses `outside` or lies within
     `inside` ((lo, hi) mpf pairs) or the budget is spent; None without an enclosure (an infinite range,
-    an operation with no interval extension). The ends may be infinite (a singularity)."""
+    an operation with no interval extension). The ends may be infinite (a singularity). `defined`: the caller has
+    proved that the integrand's conditions fail on a null set of [a, b] at most (`integrand_undefined_on_a_subinterval`
+    False), so a square root's base is >= 0 almost everywhere there (`enclosure.rigorous_enclosure`)."""
     from .enclosure import from_raw
     try:
         f, a, b = sp.sympify(integrand), sp.sympify(a), sp.sympify(b)
@@ -569,20 +603,21 @@ def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: 
     # the budget is the number of cells (deterministic); the time is only a safety stop (RK-C)
     r = sb_run("mathverify.certify.enclosure:rigorous_enclosure", f, var, a, b,
                _raw_pair(*outside) if outside else None, _raw_pair(*inside) if inside else None,
-               4000, _ENCLOSURE_SAFETY, timeout=_ENCLOSURE_SAFETY + 10)
+               4000, _ENCLOSURE_SAFETY, defined, timeout=_ENCLOSURE_SAFETY + 10)
     if not r.ok or r.value is None:
         return None
     return from_raw(r.value[0]), from_raw(r.value[1])
 
 
-def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0) -> tuple[bool, dict[str, Any]]:
+def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0, defined: bool = False
+                      ) -> tuple[bool, dict[str, Any]]:
     """Is the claimed number certainly not ∫_a^b f (outside a rigorous enclosure)?"""
     ev: dict[str, Any] = {}
     c = claim_interval(claimed)
     if c is None:
         ev["claim_interval"] = None
         return False, ev
-    enc = rigorous_integral(integrand, var, a, b, outside=c, timeout=timeout)
+    enc = rigorous_integral(integrand, var, a, b, outside=c, timeout=timeout, defined=defined)
     ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
     if enc is None:
         return False, ev
@@ -590,7 +625,7 @@ def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0) -> tu
     return bool(hi < c[0] or lo > c[1]), ev
 
 
-def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: float = 8.0
+def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: float = 8.0, defined: bool = False
                            ) -> tuple[bool | None, dict[str, Any]]:
     """The declared relative tolerance decided over a rigorous enclosure E of the integral: |c - v| <= t·|v|
     for every v in E (True), for none (False), or undecided (None; also when E holds 0, where a relative
@@ -601,7 +636,7 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     c = claim_interval(claimed)
     if c is not None and not (mp.isfinite(c[0]) and mp.isfinite(c[1])):
         # an infinite claim: any finite enclosure refutes it (SG-1)
-        no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=timeout)
+        no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=timeout, defined=defined)
         ev.update(xev)
         return (False if no else None), ev
     if c is None:
@@ -613,7 +648,8 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
             t_ = sp.Rational(rel_tol)
             with mp.workdps(30):
                 far = abs(to_mp(im_c, 30)) * (1 - mp.mpf(10) ** -10) / mp.mpf(t_.p) * t_.q
-            enc = rigorous_integral(integrand, var, a, b, outside=(-far, far), inside=(-far, far), timeout=timeout)
+            enc = rigorous_integral(integrand, var, a, b, outside=(-far, far), inside=(-far, far), timeout=timeout,
+                                    defined=defined)
             ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
             if enc is not None and mp.isfinite(enc[0]) and mp.isfinite(enc[1]):
                 B = max(_mpf_rational(abs(enc[0])), _mpf_rational(abs(enc[1])))
@@ -637,7 +673,7 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     finally:
         iv.dps = saved
     enc = rigorous_integral(integrand, var, a, b, outside=outside, inside=inside if inside[0] <= inside[1] else None,
-                            timeout=timeout)
+                            timeout=timeout, defined=defined)
     ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
     ev["values_within_tolerance"] = [mp.nstr(outside[0], 15), mp.nstr(outside[1], 15)]
     if enc is None:
@@ -651,6 +687,146 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     if hi < outside[0] or lo > outside[1]:
         return False, ev
     return None, ev
+
+
+def abs_tolerance_by_enclosure(integrand, var, a, b, claimed, abs_tol, timeout: float = 8.0, defined: bool = False
+                               ) -> tuple[bool | None, dict[str, Any]]:
+    """A declared absolute tolerance T decided over a rigorous enclosure E of the integral: |c - v| <= T for every v
+    in E (True), for none (False), or undecided (None). The windows are computed with interval arithmetic over the
+    claim's own interval: every v in [c_hi - T, c_lo + T] is within T of every c, no v outside [c_lo - T, c_hi + T]
+    is within T of any (son saldırı G2YO-4: a declared abs_tol of a definite integral was not read at all)."""
+    ev: dict[str, Any] = {}
+    c = claim_interval(claimed)
+    if c is not None and not (mp.isfinite(c[0]) and mp.isfinite(c[1])):
+        no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=timeout, defined=defined)
+        ev.update(xev)
+        return (False if no else None), ev
+    if c is None:
+        ev["reason"] = "claim_not_a_real_number"
+        return None, ev
+    iv, saved = mp.iv, mp.iv.dps
+    try:
+        iv.dps = 60
+        with mp.workdps(60):
+            C = iv.mpf([c[0], c[1]])
+            t_ = sp.Rational(abs_tol)
+            T = iv.mpf(int(t_.p)) / int(t_.q)
+            down, up = C - T, C + T
+            inside = (mp.make_mpf(down._mpi_[1]), mp.make_mpf(up._mpi_[0]))
+            outside = (mp.make_mpf(down._mpi_[0]), mp.make_mpf(up._mpi_[1]))
+    finally:
+        iv.dps = saved
+    enc = rigorous_integral(integrand, var, a, b, outside=outside, inside=inside if inside[0] <= inside[1] else None,
+                            timeout=timeout, defined=defined)
+    ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+    ev["values_within_tolerance"] = [mp.nstr(outside[0], 15), mp.nstr(outside[1], 15)]
+    if enc is None:
+        return None, ev
+    lo, hi = enc
+    if inside[0] <= lo and hi <= inside[1]:
+        return True, ev
+    if hi < outside[0] or lo > outside[1]:
+        return False, ev
+    return None, ev
+
+
+def declared_tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, abs_tol, timeout: float = 8.0,
+                                    defined: bool = False) -> tuple[bool | None, dict[str, Any]]:
+    """The declared tolerances over a rigorous enclosure: one holding is enough (`numeric.within_tolerance`)."""
+    if abs_tol is None:
+        return tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout=timeout, defined=defined)
+    ok, ev = abs_tolerance_by_enclosure(integrand, var, a, b, claimed, abs_tol, timeout=timeout, defined=defined)
+    if ok is True or rel_tol is None:
+        return ok, {"absolute": ev}
+    okr, evr = tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout=timeout, defined=defined)
+    both = {"absolute": ev, "relative": evr}
+    if okr is True:
+        return True, both
+    return (False if ok is False and okr is False else None), both
+
+
+def _stable_ladder_holds(ladder, c) -> bool:
+    """Do the last two rungs of a ladder that did not converge by its error estimates agree to 10^-20 (relative to
+    max(1, |v|)), and does the interval `c` of a certified value meet [v - r, v + r] around the last value v, r ten times
+    their difference plus the rounding of the last printed value?"""
+    if len(ladder) < 2:
+        return False
+    try:
+        with mp.workdps(100):
+            v1, v2 = mp.mpf(ladder[-2]["value"]), mp.mpf(ladder[-1]["value"])
+            scale = max(abs(v2), 1)
+            spread = abs(v2 - v1)
+            if not spread <= mp.mpf(10) ** -20 * scale:
+                return False
+            r = 10 * spread + mp.mpf(10) ** (-(int(ladder[-1]["dps"]) - 5)) * scale
+            return bool(c[0] <= v2 + r and c[1] >= v2 - r)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _certificate_check(integrand, var, a, b, cval, val, nev: dict, timeout: float, defined: bool = False
+                       ) -> tuple[str, dict[str, Any]]:
+    """Is the certificate's value `cval` taken? 'agrees', 'disagreement' (UNKNOWN), 'excluded' (a rigorous enclosure
+    misses it: the certificate is wrong and the claim is read against the enclosure alone) or 'unconfirmed'.
+
+    With a converged quadrature value v: they agree within its own error (an absolute one when cval is 0: a relative
+    comparison with 0 means nothing, and the check was skipped there, so the wrong 0 for ∫_{-2}^{4} sgn((x - 1)/(x +
+    1)) dx stood against v = 2.0; son saldırı G2YO-1), or an enclosure shows v wrong (a peak the quadrature missed: the
+    proof stands); otherwise an enclosure that misses cval refutes the certificate, and nothing else decides.
+    Without one (no convergence: a divergent integral, a complex value at an end), cval is taken only inside a
+    rigorous enclosure that says something (not (-oo, oo)), refined until it misses cval or lies within 10^-6 of it:
+    the wrong -log 2 - 15/32 for the divergent ∫_{-2}^{1/4} max(x, 1/x) dx stood alone (G2YO-2)."""
+    ev: dict[str, Any] = {}
+    c = claim_interval(cval)
+    converged = val is not None and bool(nev.get("converged", False))
+    if converged:
+        rel_err = mp.mpf(str(nev.get("rel_err", "1e-25")))
+        if certified_sign(cval, timeout=timeout) == 0:
+            with mp.workdps(60):
+                v = mp.mpf(str(val))
+                differ = abs(v) > rel_err * max(abs(v), 1)
+            ev["zero_against"] = mp.nstr(v, 15)
+        else:
+            differ = num_equal(cval, val, rel_tol=float(rel_err))[0] is False
+        if not differ:
+            return "agrees", ev
+        cv = claim_interval(val)
+        enc = rigorous_integral(integrand, var, a, b, outside=cv, timeout=timeout, defined=defined) \
+            if cv is not None else None
+        ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+        if enc is not None and (enc[1] < cv[0] or enc[0] > cv[1]):
+            ev["numeric_value"] = "outside_the_enclosure"
+            return "agrees", ev
+        if enc is not None and c is not None and (enc[1] < c[0] or enc[0] > c[1]):
+            return "excluded", ev
+        return "disagreement", ev
+    if not nev.get("ladder") and not (sp.sympify(a).is_finite and sp.sympify(b).is_finite):
+        # an infinite range has no quadrature at all (the ladder does not run there) and no enclosure: the fundamental
+        # theorem with its end limits decides as before (d4c, 6 Oct 2026: the coverage given back); the rule above is
+        # for a ladder that ran and did not converge
+        ev["unchecked"] = "infinite_range_has_no_numbers"
+        return "agrees", ev
+    if c is None:
+        ev["reason"] = "certified_value_has_no_interval"
+        return "unconfirmed", ev
+    if _stable_ladder_holds(nev.get("ladder") or [], c):
+        # the ladder's own test failed on its error estimates, not on its values: they settle to 10^-20 and the
+        # certificate's value lies within their last step (∫_{-1}^{8} x^(-1/3) dx = 9/2, an interior singularity the
+        # error estimates misjudge and no enclosure bounds); a divergent integral's values do not settle (77.8, 123.8,
+        # 193.0 for max(x, 1/x) on [-2, 1/4])
+        ev["stable_ladder"] = True
+        return "agrees", ev
+    with mp.workdps(60):
+        w = mp.mpf(10) ** -6 * (1 + max(abs(c[0]), abs(c[1])))
+        inside = (c[0] - w, c[1] + w)
+    enc = rigorous_integral(integrand, var, a, b, outside=c, inside=inside, timeout=timeout, defined=defined)
+    ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+    if enc is None or not (mp.isfinite(enc[0]) or mp.isfinite(enc[1])):
+        ev["reason"] = "no_converged_value_and_no_enclosure"
+        return "unconfirmed", ev
+    if enc[1] < c[0] or enc[0] > c[1]:
+        return "excluded", ev
+    return "agrees", ev
 
 
 def _imaginary_part(claimed):
@@ -774,6 +950,8 @@ def _integrand_region(cf, var, discourse, timeout):
     found (a relation SymPy reads on one period only is solved by `sandbox.exactsets`)."""
     region = discourse
     for cc in cf:
+        if isinstance(cc, sp.Contains) and _contains_met_on(cc, var, discourse):
+            continue                    # a convention that cannot fail on the region (x**(1/3), x > 0: son saldırı G2RK-4)
         rr = sb_run("mathverify.sandbox.ops:solveset_in", cc, var, discourse, timeout=timeout)
         if not rr.ok or not isinstance(rr.value, sp.Set) or rr.value.has(sp.ConditionSet):
             return None
@@ -889,6 +1067,79 @@ def _one_constant(F, f, var, region, timeout) -> tuple[bool | None, dict[str, An
     return None, ev
 
 
+def _contains_met_on(c, var, region) -> bool:
+    """Can the convention or membership condition `c` (a Contains) fail nowhere on `region`, for certain? A convention
+    (`domain.Convention`): the set where it may fail (`domain._MAY_FAIL`: a negative base of an odd root, ...) is
+    exactly empty there; a membership: `limits.membership_holds_on`."""
+    from ..sandbox.exactsets import exact_solveset
+    from .domain import _MAY_FAIL, Convention
+    st = c.args[1] if len(c.args) == 2 else None
+    if isinstance(st, Convention):
+        fails = _MAY_FAIL.get(st.kind)
+        if fails is None:
+            return False
+        try:
+            return exact_solveset(fails(c.args[0]), var, region) is S.EmptySet
+        except Exception:  # noqa: BLE001 - a set not found exactly proves nothing
+            return False
+    return membership_holds_on(c, var, [region])
+
+
+def _sign_jump_at(F, s_, var, z) -> bool | None:
+    """Does F jump at z, a zero of the argument of its sign(u) `s_`? Near z, on either side, F is F with sign(u) put
+    to +1 or to -1 (continuous at z when no other sign of F vanishes there), and F(z) itself carries sign(0) = 0. True
+    when both those values differ from F(z), whichever side is which; False when the three are one number; None
+    otherwise. The real cube root is sign(u)·|u|^(1/3) (normalize.parse), so (3/4)·x·∛x, which is (3/4)|x|^(4/3) and
+    continuous, carried a sign(x) and every such primitive was refuted at 0 (son saldırı G2RK-1)."""
+    from ..equiv.numeric import exact_equal
+    for t_ in F.atoms(sp.sign):
+        if t_ != s_ and t_.args[0].has(var) and certified_sign(t_.args[0].subs(var, z)) not in (1, -1):
+            return None
+    vals = []
+    for e in (F.xreplace({s_: S.One}), F.xreplace({s_: S.NegativeOne}), F):
+        try:
+            v = e.subs(var, z)
+        except Exception:  # noqa: BLE001
+            return None
+        if _real_finite(v) is not True:
+            return None
+        vals.append(v)
+    up, down = exact_equal(vals[0], vals[2]), exact_equal(vals[1], vals[2])
+    if up is True and down is True:
+        return False
+    if up is False and down is False:
+        return True
+    return None
+
+
+def _sign_jumps(F, s_, f, cf, var, discourse, timeout) -> tuple[bool | None, Any]:
+    """(jump, point) for the sign(u) `s_` of F at the zeros of u in `discourse` where f is defined: True with a point
+    where F certainly jumps, False when it jumps at none (a finite set of zeros, each read by `_sign_jump_at`), None
+    when undecided (an infinite set of zeros with no jump found is undecided too)."""
+    u = s_.args[0]
+    r = sb_run("mathverify.sandbox.ops:solveset_in", Eq(u, 0), var, discourse, timeout=timeout)
+    if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+        return None, None
+    zs = r.value
+    if zs is S.EmptySet:
+        return False, None
+    finite = isinstance(zs, sp.FiniteSet)
+    for z in (list(zs) if finite else _points_of(zs)):
+        if not (getattr(z, "is_number", False) and z.is_real is True):
+            if finite:
+                return None, z
+            continue
+        here = _defined_at(f, cf, var, z)
+        if here is False:
+            continue                                    # f has no value there: F owes it nothing
+        j = _sign_jump_at(F, s_, var, z) if here is True else None
+        if j is True:
+            return True, z
+        if j is None and finite:
+            return None, z
+    return (False, None) if finite else (None, None)
+
+
 def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extra=(),
                                 timeout: float = 8.0) -> tuple[bool | None, dict[str, Any]]:
     """F' = f is not enough: F must be real and continuous at every point where f is defined.
@@ -922,14 +1173,21 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
                     return False, ev
         ev["reason"] = "antiderivative_condition_undecided"
         return None, ev
-    for s_ in F.atoms(sp.sign):                   # sign(u) jumps where u changes sign
-        if s_.args[0].has(var):
-            c = Ne(s_.args[0], 0)
-            if c not in cF:
-                cF.append(c)
+    # sign(u) of F may jump where u changes sign: read at those zeros below (`_sign_jumps`), unless F (a condition of
+    # its own) or f (no requirement there) has no value there anyway
+    signs = [s_ for s_ in F.atoms(sp.sign) if s_.args[0].has(var)
+             and Ne(s_.args[0], 0) not in cF and Ne(s_.args[0], 0) not in cf]
     todo = [c for c in cF if c not in cf]
-    ev["checked_conditions"] = [str(c) for c in todo]
+    ev["checked_conditions"] = [str(c) for c in todo] + [f"no jump of {s_}" for s_ in signs]
     for c in todo:
+        if isinstance(c, sp.Contains):
+            # a convention (the odd root of 3*x**(4/3)/4, `domain.Convention`) or a membership is no relation to
+            # negate (it raised AttributeError: son saldırı G2RK-10): met when it cannot fail on the region (x > 0:
+            # no negative base), otherwise undecided
+            if _contains_met_on(c, var, discourse):
+                continue
+            ev["reason"] = f"undecided: {c} on {discourse}"
+            return None, ev
         neg = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else c.negated
         r = sb_run("mathverify.sandbox.ops:solveset_in", neg, var, discourse, timeout=timeout)
         if not r.ok or isinstance(r.value, sp.ConditionSet):
@@ -958,6 +1216,15 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
                 return False, ev
         ev["reason"] = f"undecided: {c} on {inter}"
         return None, ev
+    for s_ in signs:
+        jump, where = _sign_jumps(F, s_, f, cf, var, discourse, timeout)
+        if jump is True:
+            ev["reason"] = "antiderivative_not_defined_or_continuous_where_integrand_is"
+            ev["witness"] = {"x": str(where), "condition": f"no jump of {s_}"}
+            return False, ev
+        if jump is None:
+            ev["reason"] = f"undecided: jump of {s_}" + (f" at {where}" if where is not None else "")
+            return None, ev
     if df is None:
         df = _integrand_region(cf, var, discourse, timeout)
     # F real where f is: a complex constant (x + I for 1, log(x) + I*pi for 1/x) is no real primitive. Its
@@ -2377,6 +2644,18 @@ def _unreadable_task_expression(src, expr, var, ns, ms, regions=(), pins=None):
     return None
 
 
+def _declared_regions(ctx: Ctx, var) -> list:
+    """[the variable's declared region] (`Ctx.domain_for`) when it is narrower than ℝ, for a task with no point and no
+    range (an antiderivative, a derivative function): the convention gate read no region there, and under the
+    constraint x > 0 every variable-base power (x**x, x**pi, x**(1/3)) was UNKNOWN, although no base is negative or 0
+    there (son saldırı G2RK-3, G2RK-4). On all of ℝ nothing changes: [] as before."""
+    try:
+        region = ctx.domain_for(var)
+    except Exception:  # noqa: BLE001 - no region read: none given
+        return []
+    return [] if region == S.Reals or not isinstance(region, sp.Set) else [region]
+
+
 def _closed_real(txt, ctx, pins):
     """The task's number `txt` (a bound, a point) read at the values the givens fix; None when it is not a real
     number or not read."""
@@ -2806,7 +3085,8 @@ def verify(ir, solution, ctx: Ctx):
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:
                 return err
-            bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms, pins=pins)
+            bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms,
+                                              _declared_regions(ctx, var), pins=pins)
             if bad is not None:
                 return bad
             integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)
@@ -2901,8 +3181,12 @@ def verify(ir, solution, ctx: Ctx):
             # a declared tolerance, read once: |c - v|/|v| <= t against the true value v, t in (0, 1); anything
             # else is a malformed input (equiv.numeric.read_tolerance; YO-4, RK-E, RK-F)
             declared, bad_tol = read_tolerance(p.get("rel_tol"))
-            if bad_tol:
-                return unknown(LAYER, "malformed_tolerance", t.ms, {"rel_tol": str(p.get("rel_tol"))},
+            # a declared absolute tolerance, read the same way (|c - v| <= t, t > 0); it was not read here, and the
+            # exact comparison refuted an approximate claim it holds (son saldırı G2YO-4, the sibling path)
+            declared_abs, bad_abs = read_tolerance(p.get("abs_tol"), relative=False)
+            if bad_tol or bad_abs:
+                return unknown(LAYER, "malformed_tolerance", t.ms, {"rel_tol": str(p.get("rel_tol")),
+                                                                    "abs_tol": str(p.get("abs_tol"))},
                                flags=["malformed_tolerance"])
             undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ns_i,
                                                              timeout=ctx.timeout, pins=pins)
@@ -2912,7 +3196,6 @@ def verify(ir, solution, ctx: Ctx):
                                flags=["written_domain"] if undefined else [])
             val, ev = definite_integral_numeric(integrand, var, a, b, timeout=ctx.timeout * 1.5)
             ev["claimed"] = str(claimed)
-            converged = val is not None and bool(ev.get("converged", False))
             # SymPy's value is evidence only. It is taken with a symbolic certificate (below) or not at all: a
             # quadrature that agrees with it may share its blind spot (a narrow peak: SymPy's wrong π for
             # ∫_0^π (atan(tan x) + 1 + peak) and tanh-sinh agreed, and 3.14159265358979 was accepted with
@@ -2927,35 +3210,49 @@ def verify(ir, solution, ctx: Ctx):
             cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)
             ev["certificate"] = cev
             if cval is not None:
-                if converged and certified_sign(cval, timeout=ctx.timeout) != 0 and \
-                        num_equal(cval, val, rel_tol=float(ev.get("rel_err", "1e-25")))[0] is False and \
-                        not integral_excludes(integrand, var, a, b, val, timeout=ctx.timeout * 1.5)[0]:
-                    # a proof that a converged numeric value contradicts, and no rigorous enclosure that shows the
-                    # numeric value wrong: something is wrong (never the declared tolerance here: it let SymPy's
-                    # wrong value "agree", YO-2). A quadrature that missed a narrow peak (1/3 for ∫_0^1 (x² +
-                    # e^(-10^8 (x - 1/3)²)) dx, which the erf primitive proves) is shown wrong and the proof stands
+                # a proof that a converged numeric value contradicts, and no rigorous enclosure that shows the numeric
+                # value wrong: something is wrong (never the declared tolerance here: it let SymPy's wrong value
+                # "agree", YO-2). A quadrature that missed a narrow peak (1/3 for ∫_0^1 (x² + e^(-10^8 (x - 1/3)²)) dx,
+                # which the erf primitive proves) is shown wrong and the proof stands. A 0 is checked too, and without
+                # converged numbers the value is taken inside a rigorous enclosure only (`_certificate_check`)
+                state, xev = _certificate_check(integrand, var, a, b, cval, val, ev, ctx.timeout * 1.5, defined=True)
+                ev["certificate_check"] = dict(xev, state=state)
+                if state == "disagreement":
                     return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
                                    flags=["symbolic_numeric_disagreement"])
+                if state == "unconfirmed":
+                    return unknown(LAYER, "certified_value_unconfirmed", t.ms, ev,
+                                   flags=["certified_value_unconfirmed"])
+                if state == "excluded":
+                    cval = None                     # the certificate is wrong: the claim meets the enclosure alone
+            if cval is not None:
                 ev["decided_by"] = "certified_value"
-                if declared is not None:
-                    ok = within_rel_tol(claimed, cval, declared, timeout=ctx.timeout)
+                if declared is not None or declared_abs is not None:
+                    ok = within_tolerance(claimed, cval, declared, declared_abs, timeout=ctx.timeout)
+                    if ok is None and a.is_finite and b.is_finite:
+                        # the value has no certified distance to the claim (erf, S, Si of an irrational argument):
+                        # the integral's own enclosure decides the tolerance (son saldırı G2RK-2)
+                        ok, tev = declared_tolerance_by_enclosure(integrand, var, a, b, claimed, declared, declared_abs,
+                                                                  timeout=ctx.timeout * 1.5, defined=True)
+                        ev["enclosure"] = tev
                     if ok is None:
                         return unknown(LAYER, "relative_tolerance_undecided", t.ms, ev,
                                        flags=["relative_tolerance_undecided"])
                 else:
                     ok, sev = answers_equivalent(claimed, cval, shape="scalar")
                     ev["compare_exact"] = sev
-            elif declared is not None:
+            elif declared is not None or declared_abs is not None:
                 # an approximate claim and no proved value: a rigorous enclosure inside the tolerance accepts,
                 # one outside it refutes
-                ok, tev = tolerance_by_enclosure(integrand, var, a, b, claimed, declared, timeout=ctx.timeout * 1.5)
+                ok, tev = declared_tolerance_by_enclosure(integrand, var, a, b, claimed, declared, declared_abs,
+                                                          timeout=ctx.timeout * 1.5, defined=True)
                 ev["enclosure"] = tev
                 ev["decided_by"] = "rigorous_enclosure_and_tolerance"
                 if ok is None:
                     return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])
             else:
                 # no value proved: a claim outside a rigorous enclosure is refuted, nothing is accepted
-                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5)
+                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5, defined=True)
                 ev["enclosure"] = xev
                 if not no:
                     return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])
@@ -2971,7 +3268,8 @@ def verify(ir, solution, ctx: Ctx):
             if err:
                 return err
             bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms,
-                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)), pins)
+                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)) if "at" in p
+                                              else _declared_regions(ctx, var), pins)
             if bad is not None:
                 return bad
             f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
