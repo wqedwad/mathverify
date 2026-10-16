@@ -175,6 +175,8 @@ def test_a_form_has_the_sign_of_its_checked_value():
     finally:
         parse._FORMS_HELD.reset(token)
     assert isinstance(parse.floor(I3), sp.floor)           # not evaluated when built; checked_forms gives 4
+    k = sp.Symbol("k", integer=True)
+    assert parse.floor(sp.Sum(k, (k, 3, 5))) == 12          # a sum strict evaluation reads is (the step at n = 5)
     ev = {"task": {"kind": "evaluate", "params": {"expr": "x"}}, "vars": [{"name": "x", "domain": "real"}],
           "givens": [f"x > {I3}", "x = 5"], "answer_shape": "scalar"}
     assert _run(ev, "5").verdict == "CORRECT"

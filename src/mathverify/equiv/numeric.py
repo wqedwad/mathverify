@@ -600,6 +600,22 @@ def _certified_sign(e, timeout: float):
 _NOT_READ = object()       # strict evalf decided nothing: the exact zero test is left
 
 
+_UNVALUED = threading.local()
+
+
+class forms_unvalued:  # noqa: N801 - used as a context manager
+    """Within it no certified sign reads a closed form's checked value (`_forms_valued`): a jump built from its
+    arguments (`normalize.parse._jump_eval`) reads them by strict evaluation alone."""
+
+    def __enter__(self):
+        self._prev = getattr(_UNVALUED, "on", False)
+        _UNVALUED.on = True
+        return self
+
+    def __exit__(self, *exc) -> None:
+        _UNVALUED.on = self._prev
+
+
 def _forms_valued(e, timeout: float):
     """`e` with its closed integrals, sums, products and limits replaced by the values `equiv.forms.checked_forms`
     takes (an integral's symbolic certificate, a sum's SymPy value confirmed by numbers), or None when it holds no
@@ -613,7 +629,7 @@ def _forms_valued(e, timeout: float):
     sign -1."""
     from ..normalize.parse import _FORMS_HELD
     from .forms import checked_forms, has_closed_form
-    if _FORMS_HELD.get() or not has_closed_form(e):
+    if _FORMS_HELD.get() or getattr(_UNVALUED, "on", False) or not has_closed_form(e):
         return None
     try:
         return checked_forms(e, timeout)

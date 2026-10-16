@@ -732,11 +732,12 @@ def _jump_eval(cls, base, args):
     constant argument off rounding noise: (2*atan(tanh(1/2)) - atan(sinh(1)))**2 is exactly 0, and the parse
     made its ceiling 1 and the floor of its negative -1, so 1 and -1 were certified and the right 0 refuted
     (round 9 of part d4b, YO-4). The class is SymPy's subclass, so a rebuilt node (subs, a sandbox worker's
-    unpickling) is held the same way. Over a closed integral, sum, product or limit it stays as written too: a form's
-    value comes from `equiv.forms.checked_forms` alone, as for the namespace's helpers (`_form_unevaluated`, part
-    d4h), and a certified sign now reads it (merge of d4h round 2)."""
-    if has_closed_form_node(list(args)):
-        return None
+    unpickling) is held the same way. A closed integral, sum, product or limit among the arguments is read by strict
+    evaluation alone here, not by its checked value (`equiv.numeric.forms_unvalued`): a form's value comes from
+    `equiv.forms.checked_forms` where a certificate reads it, and a jump over the spike integral stays as written,
+    while floor(Σ_{k=3}^{5} k), a sum strict evaluation reads, is 12 at the point a step is checked at (merge of d4h
+    round 2; refused outright over every form, the wrong step floor(Σ_{k=3}^{n} k) = 0 under n² = 25 was no longer
+    refuted at n = 5: tests/test_parca11_ters_aralik_adim.py)."""
     if all(isinstance(a, sp.Expr) and a.is_number is True and not a.free_symbols for a in args) \
             and not all(a.is_Rational for a in args) \
             and not any(a.has(sp.oo, -sp.oo, sp.zoo, sp.nan) for a in args):
@@ -744,8 +745,9 @@ def _jump_eval(cls, base, args):
         with _JUMP_CACHE_LOCK:
             if key in _JUMP_CACHE:
                 return _JUMP_CACHE[key]
-        from ..equiv.numeric import jump_value
-        v = jump_value(base(*args, evaluate=False))
+        from ..equiv.numeric import forms_unvalued, jump_value
+        with forms_unvalued():
+            v = jump_value(base(*args, evaluate=False))
         with _JUMP_CACHE_LOCK:
             if len(_JUMP_CACHE) > 512:
                 _JUMP_CACHE.clear()
