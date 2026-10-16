@@ -2472,20 +2472,96 @@ def _kinks(a, v) -> list:
     return [sp.Or(sp.Ne(a, 0), sp.Eq(da, 0))]
 
 
+_SWITCH_TIMEOUT = 8.0          # each sandbox call of a switch zero's reading (certify.calculus's default)
+_SWITCH_CACHE: dict = {}
+_SWITCH_CACHE_LOCK = threading.Lock()
+
+
+def _switch_differentiability(u, v, fconds) -> list | None:
+    """Where `u` has a derivative in `v` at the zeros of its switches, read as certify.calculus.kink_reading reads
+    them (the derivative task's twin path): the switches are `switch_arguments`' (|a|, sign, Heaviside, Max/Min, the
+    relations of a Piecewise, the branch cut of atan2/arg), and each finite zero p is classified on u ITSELF by
+    `_classify_kink` (exact rules, then `derivative_at_point` within the reading's budget: u continuous at p and its
+    two one-sided derivatives equal, exactly). A derivative there adds no condition (a C1 junction of a Piecewise,
+    x*|x| at 0); none (a corner, a jump, a cusp, the branch cut) adds v != p; undecided adds v - p in the
+    `Convention` ORIGIN (atan2(0, 0)'s: no value, or a value; undecided at p alone, true elsewhere, the certificates
+    neither keep nor drop such a point), never v != p: read as "no value", a point where the derivative exists left
+    the solution set, and the empty set was certified for (x*|x|)' = 0 (|x|'s rule read alone: SON-G3-YO-1's
+    sibling). Zeros not solved one by one (a family, a parameter, more than `_KINK_POINTS`) are undecided at each
+    (the switch's argument in ORIGIN). An Or with DEFINEDNESS_UNDECIDED was no such condition: SymPy's solveset read
+    it as v != p. The Piecewise switch points and atan2/arg's branch cut were not read at all: the
+    derivative of the piecewise |x| had f'(0) = 1, a jump f'(1) = 2 and atan2(x, -1)'(0) = -1 certified
+    (SON-G3-YO-1). None when u holds a switch with no such argument (floor, frac, Mod, a Piecewise condition that
+    is no relation)."""
+    from ..certify.calculus import (_KINK_BUDGET, _KINK_POINTS, _classify_kink, _generic_points, abs_form,
+                                    switch_arguments)
+    from ..certify.domain import ORIGIN
+    from ..sandbox import run as sb_run
+    # the cache's key names the variable by a fixed symbol of its assumptions (at()'s variable is a fresh one at
+    # each reading of the same text); the name is no identifier a text can write
+    canon = sp.Symbol("switch·var", **v.assumptions0)
+    key = (u.xreplace({v: canon}), tuple(c.xreplace({v: canon}) for c in fconds))
+    with _SWITCH_CACHE_LOCK:
+        hit = _SWITCH_CACHE.get(key, _SWITCH_CACHE)
+    if hit is not _SWITCH_CACHE:
+        return None if hit is None else [c.xreplace({canon: v}) for c in hit]
+    # arg(z) is atan2(im z, re z) (z != 0; both have no value at 0): the limits that classify a zero are SymPy's
+    # for atan2, which it takes, and not for arg, which it leaves (arg(-1 + I*x) at 0 was undecided)
+    u = u.replace(lambda n: isinstance(n, sp.arg), lambda n: sp.atan2(sp.im(n.args[0]), sp.re(n.args[0])))
+    fa = abs_form(u)
+    switches = switch_arguments(fa, v)
+    out: list | None = None
+    if switches is not None:
+        out = []
+        budget = [_KINK_BUDGET]
+        for s in switches:
+            r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(s, 0), v, S.Reals, timeout=_SWITCH_TIMEOUT)
+            K = r.value if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet) else None
+            pts = _generic_points(K, s, v) if K is not None else None
+            if pts is None or len(pts) > _KINK_POINTS or any(
+                    getattr(p_, "free_symbols", None) or getattr(p_, "is_real", None) is not True for p_ in pts):
+                out.append(sp.Contains(s, ORIGIN))
+                continue
+            for p_ in pts:
+                try:
+                    st = _classify_kink(u, fa, v, 1, p_, s, switches, fconds, budget, _SWITCH_TIMEOUT)
+                except Exception:  # noqa: BLE001 - a reading that fails proves nothing
+                    st = None
+                if st == "value":
+                    continue
+                c = sp.Ne(v, p_) if st == "corner" else sp.Contains(v - p_, ORIGIN)
+                if c not in out:
+                    out.append(c)
+    with _SWITCH_CACHE_LOCK:
+        if len(_SWITCH_CACHE) > 256:
+            _SWITCH_CACHE.clear()
+        _SWITCH_CACHE[key] = None if out is None else [c.xreplace({v: canon}) for c in out]
+    return out
+
+
 def _differentiability(u, v) -> list:
     """Where the operand `u` has a derivative in `v`: its own written conditions made strict (a
     derivative needs a neighbourhood: x*sqrt(x) has none at 0, formal.statement.interior_defined_at)
-    and the kinks and jumps of |a|, sign, Heaviside, Max/Min and floor/ceiling/frac. Without them
-    the derivative of |x - 2| was read as defined on all of R, and f'(0) of x*sqrt(x) was certified
-    (third audit of 30 Sep 2026)."""
-    from ..certify.domain import definedness_conditions
+    and the kinks and jumps of its switches (`_switch_differentiability`: |a|, sign, Heaviside, Max/Min,
+    Piecewise, atan2/arg, each zero read on u itself). Where a switch has no argument to read (floor,
+    frac, Mod), the kinks and jumps of |a|, sign, Heaviside, Max/Min and floor/ceiling/frac node by node,
+    and a Piecewise or an atan2/arg undecided. Without them the derivative of |x - 2| was read as defined
+    on all of R, and f'(0) of x*sqrt(x) was certified (third audit of 30 Sep 2026)."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED, definedness_conditions
     out = []
-    for c in definedness_conditions(u, None):
+    own = definedness_conditions(u, None)
+    for c in own:
         if isinstance(c, sp.Ge) and v in c.free_symbols:
             c = sp.Gt(c.lhs, c.rhs)
         elif isinstance(c, sp.Le) and v in c.free_symbols:
             c = sp.Lt(c.lhs, c.rhs)
         out.append(c)
+    try:
+        sw = _switch_differentiability(u, v, own)
+    except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+        sw = [DEFINEDNESS_UNDECIDED]
+    if sw is not None:
+        return [c for c in out + sw if c is not sp.true]
     for n in sp.preorder_traversal(u):
         if not getattr(n, "args", None) or v not in n.free_symbols:
             continue
@@ -2498,6 +2574,9 @@ def _differentiability(u, v) -> list:
             out.append(sp.Or(sp.Ne(a, b), sp.Eq(sp.diff(a, v), sp.diff(b, v))))
         elif isinstance(n, (sp.floor, sp.ceiling, sp.frac)):
             out.append(sp.Ne(sp.sin(sp.pi * n.args[0]), 0))
+        elif isinstance(n, (sp.Piecewise, sp.atan2, sp.arg, sp.Max, sp.Min)):
+            # a switch whose zeros are not read here (beside floor): undecided (SON-G3-YO-1)
+            out.append(DEFINEDNESS_UNDECIDED)
     return [c for c in out if c is not sp.true]
 
 

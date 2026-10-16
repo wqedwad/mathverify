@@ -456,7 +456,7 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
         # for a derivative at a point (sign(0) = 0 is not a derivative). Every such atom is
         # replaced by its certified value, wherever it sits in the claim.
         from ..certify.limits import classify_limit
-        from ..certify.calculus import derivative_at_point
+        from ..certify.calculus import point_derivative
         if any(L.free_symbols for L in lims):
             # a limit with a parameter has no value (DECISIONS §80): with n an integer SymPy gives 0
             # for the limit of a*n*sin(pi/n) at oo (a*pi), so "... = 0" was verified and "... = pi*a"
@@ -477,7 +477,7 @@ def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict
             der = D.expr
             v_ = der.variables[0]
             f_ = der.expr
-            dap = derivative_at_point(f_, v_, len(der.variables), D.point[0], timeout=ctx.timeout)
+            dap = point_derivative(f_, v_, len(der.variables), D.point[0], timeout=ctx.timeout)
             ev.setdefault("derivative_at_point", []).append({k: str(v) for k, v in dap.items()})
             if dap["status"] in ("corner", "discontinuous", "cusp"):
                 return "refuted", {**ev, "reason": "derivative_does_not_exist"}
