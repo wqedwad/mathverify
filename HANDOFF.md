@@ -1,6 +1,6 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 15 Ekim 2026, akşam (bulut)**, dal `claude/focused-albattani-jlomk1` (= `claude/amazing-edison-0g21ci` + kayıt; kodu `d342778`; birleşmedi): `master` (`#14`) + dördüncü denetimin düzeltmeleri (d4a, d4b tur 8, d4c tur 2, d4d, d4e tur 3, d4f tur 2, d4g); süren turlar bundle'da. **Durdurma kararı: A+** (kullanıcı, 15 Ekim; DECISIONS §89; plan §3 adım 2).
+> **Son güncelleme: 16 Ekim 2026, akşam (bulut; ara kayıt)**, dal `claude/focused-albattani-jlomk1` (birleşmedi): `master` (`#14`) + dördüncü denetimin bütün parçaları (A+ adım i–vii, DECISIONS §90) + yerel kalite (adım ix, §91). **A+ adım viii (son saldırı) sürüyor:** 31+ bulgu, düzeltici ajanlar `wip/son-{sayisal,integral,adim,kalkulus}`'ta; kararlar `denetim/2026-10-01/d4/saldiri/son/kararlar.txt`. **Durdurma kararı: A+** (kullanıcı, 15 Ekim; DECISIONS §89; plan §3 adım 2).
 > Bu belge yalnız **bugünün** durumunu, açık işleri ve sırayı taşır; ~300 satırı geçmez. Tarihçe burada birikmez: 26 Eylül'e kadarki 2102 satırlık belge
 > `docs/arsiv/HANDOFF-2026-09-26.md`'de (§0–§12). Kararlar ve gerekçeleri `DECISIONS.md`'de, kalıcı kurallar `CLAUDE.md`'de, bulut işletimi `docs/BULUT.md`'de.
 > **[DOĞRULANMADI]** = ölçülmedi ya da yalnız çıkarım; işaretsiz her sayı ölçümden gelir. DECISIONS ve BULUT'taki "HANDOFF §N" göndermeleri yazıldıkları
@@ -49,7 +49,7 @@ L4, L5): kod tamam, **ölçüm yarım ve eski** (18 Eylül, 218 öğenin 64'ü).
 ## 3. Sıradaki adımlar (sırayla)
 
 1. **Yeni sohbet:** `git fetch origin claude/focused-albattani-jlomk1 && git merge --ff-only FETCH_HEAD` (oturumun dalına; push yalnız oturumun
-   dalına; dal adı değiştiyse `git ls-remote origin` ile en yeni oturum dalı). **A+ yarım işleri (15 Ekim):** `git fetch denetim/2026-10-01/d4/wip/wip-2026-10-16.bundle 'refs/heads/wip/*:refs/heads/wip/*'` (`wip/birlesik-a` birleşik dal, `wip/d4e-tur4` d4e tur 6, `wip/d4j` kalanlar, `wip/d4b-kapanis` d4b'nin yaşayan mutasyonları; worktree'ler `/home/user/wt/{birlesik-a,d4e4,d4j,d4bk,d4h,d4b9,d4c3}`), ajan notları `wip/notlar-2026-10-16.tar.gz` (`-C <scratchpad>`). Daha eski yarım işler (9 Ekim hâli): `git fetch denetim/2026-10-01/d4/wip/wip-2026-10-09.bundle 'refs/heads/wip/*:refs/heads/wip/*'` (`wip/d4b-tur9`
+   dalına; dal adı değiştiyse `git ls-remote origin` ile en yeni oturum dalı). **A+ yarım işleri (16 Ekim akşam):** `git fetch denetim/2026-10-01/d4/wip/wip-2026-10-16b.bundle 'refs/heads/wip/*:refs/heads/wip/*'` (`wip/yerel` = oturum dalının kodu, `wip/fark`, `wip/birlesik-a`; düzelticilerin `wip/son-*` dalları bu bundle'da yok, ölçülünce oturum dalına birleşir), notlar `wip/notlar-2026-10-16b.tar.gz` (`-C <scratchpad>`: son saldırının bulguları ve sondaları, yerel kalite notları, d4 NOTLAR). Önceki hâl: `wip-2026-10-16.bundle`, `notlar-2026-10-16.tar.gz`. Daha eski yarım işler (9 Ekim hâli): `git fetch denetim/2026-10-01/d4/wip/wip-2026-10-09.bundle 'refs/heads/wip/*:refs/heads/wip/*'` (`wip/d4b-tur9`
    d4b tur 10, `wip/d4c-tur3` d4c tur 4, `wip/d4e-tur4` d4e tur 4 (bitti), `wip/d4h` d4h tur 2, `wip/birlesik` = `443e078` d4c tur 3 +
    oturum dalı); her biri için `git worktree add /home/user/wt/<ad> wip/<dal>` (ajan notları worktree yolu olarak bunları anar).
    Ajan notları, sondalar, saldırı dizinleri, `fark_taban/taban.json`, `agir.sh` (iki slotlu sıra adaletli ağır süreç semaforu),

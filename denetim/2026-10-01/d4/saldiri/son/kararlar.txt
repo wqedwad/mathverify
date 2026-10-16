@@ -1,0 +1,78 @@
+A+ son saldırı (birleşik 7892190; DECISIONS §89–§91) kararları — ana oturum, 16 Ekim 2026. Bulgu metinleri
+son_saldiri/tum_bulgular.json (saldırgan raporları; doğrulayıcı kararları gelince ayrı). Genel ilke değişmedi: yanlış
+olabilecek cevaba CORRECT yok; doğru cevabın haksız reddi de hata; kanıtlanamıyorsa UNKNOWN; gerçekçi bulgu KESİN düzeltilir,
+yapay bulgu DAR fail-closed kuralla kapanır; kapsama kaybı en dar biçimde. Taban: wip/yerel 0e93ed5 (birleşik hâl + yerel kalite).
+
+MERCEK 1 (sayısal işaret)
+- G1YO-1 (yüksek, gerçekçi, A+ getirdi, YANLIŞ ONAY): _sympy_guards.strict_sign, katı evalf'in anlamlı biti olmayan sanal kısmını
+  (0.e-22, 1 bit) "nonreal" sayıyor; yamalı varsayım yedeği gerçel bir karmaşık kuvvete hem pozitif değil hem negatif değil diyor,
+  SymPy is_zero=True çıkarıyor: (1+i√3)³ = 5 CORRECT, De Moivre ailesinde her yanlış cevap/şık/adım onaylanıyor. Karar: bir parçanın
+  işareti yalnız doğruluğu yeterliyse (aynı dosyadaki `_sign` ve numeric._part_state ile aynı eşik, ≥ 20 bit) karar verir; sanal
+  kısım gürültüyse "nonreal" değil, kararsız (None). Aynı katı evalf parçasını okuyan bütün kardeş yollar (strict_value'nun
+  tüketicileri, yamalı is_positive/is_negative/is_zero, Eq kuruluşu, Abs/sqrt/cbrt katlanması) aynı eşikle denetlenir. Beklenen:
+  bulgudaki bütün doğru cevaplar CORRECT, yanlışlar INCORRECT; |(1+i√3)³+30| = 22, ∛(...+35) = 3, max = −7 CORRECT; 'eq' adımı
+  refuted. SymPy düzeyi: (X − 5).is_zero None ya da False, asla True.
+- G1YO-2 (düşük, yapay, d4 öncesi): exactsets._on ilerleme indis aralığını float ile hesaplıyor; pencere ~10^16 periyodu aşınca kök
+  düşüyor. Karar: indis sınırları kesin tam sayı aritmetiğiyle (kesin floor/ceiling) ya da büyüklük float'ın kesin tam sayı
+  aralığını (2^52) aşınca fail-closed (karar yok).
+
+MERCEK 2 (integral, tolerans)
+- G2YO-1 (yüksek, belirsiz-gerçekçi, d4 öncesi, YANLIŞ ONAY + HAKSIZ RET): calculus._switch_points sgn/Abs/Max/Min argümanının yalnız
+  sıfırlarını dal değişim noktası sayıyor; argüman kutuptan geçerken de işaret değiştirir. ∫_{-2}^{4} sgn((x−1)/(x+1)) dx: 0 CORRECT,
+  doğrusu 2 INCORRECT. Karar (kesin): geçiş noktaları argümanın sıfırları VE kutupları (paydanın gerçel sıfırları, tanımsız noktaları);
+  kutupların bulunamadığı/kesin olmadığı durumda TTK karar vermez. Ayrıca definite_integral'ın sayısal çapraz denetimi cval = 0 iken
+  de yapılır (certified_sign(cval) != 0 şartı sıfır değeri denetimsiz bırakıyordu): sayısal değer yakınsamış ve kesin zarf cval'i
+  dışlıyorsa ya da kesin olarak farklıysa sertifika kabul edilmez.
+- G2YO-2 (orta, yapay, A+): sayısal merdiven yakınsamazken (ıraksak) sertifikalı değer tek başına karar veriyor. Karar: kabulden önce
+  cval kesin zarfın içinde olmalı (integral_excludes(integrand, var, a, b, cval) True ise sertifika yanlış: kabul yok); merdiven
+  yakınsamıyor ve zarf kurulamıyorsa CORRECT yok (UNKNOWN). Iraksak ∫ max(x, 1/x) = sonlu iddia CORRECT olmamalı.
+- G2RK-1 (yüksek, gerçekçi, d4 öncesi d4a getirdi, HAKSIZ RET): antiderivative_domain_check F'deki her sign(u)'yu sıçrama sayıp
+  Ne(u, 0) koşulu ekliyor; cbrt ayrıştırması sign(u)|u|^{1/3} olduğundan (3/4)u∛u = (3/4)|u|^{4/3} sürekli ama sıçramalı sayılıyor:
+  ∫∛x dx = (3/4)x∛x ve 12 kardeşi INCORRECT. Karar (kesin): sign(u)'nun sıfırı u0'da F'nin iki yan limiti ve değeri kesin eşitse
+  (sign → ±1 konup u0'da değerlendirilir; kesin) sıçrama yok, koşul eklenmez; eşit değilse sıçrama (bugünkü gibi); kararsızsa UNKNOWN
+  (INCORRECT değil). Beklenen: bulgudaki 13 doğru ilkel CORRECT (en az UNKNOWN), x∛x INCORRECT; d/dx(x∛x) = 4∛x/3 CORRECT.
+- G2RK-7 (orta, gerçekçi, önceden var, ÇÖKME): definite_integral_numeric karmaşık dizgide mp.mpf ValueError → layer_exception;
+  sertifika hiç denenmiyor. Karar: karmaşık/okunamayan sayısal değer "yakınsamadı" (None); sertifika karar verir.
+- G2RK-10 (düşük, gerçekçi, d4 öncesi, ÇÖKME): antiderivative_domain_check Contains koşulunda .negated AttributeError. Karar: gelenek
+  koşulu (Contains) ayrı ele alınır: bölgede kesin boşsa (x > 0 iken odd_root) koşul yok, değilse gerekçeli UNKNOWN; istisna yok.
+- G2YO-3 (düşük, yapay, önceden var): random_point hücre kanıtı kutupları hücre sınırı saymıyor. Karar: kutuplar (paydanın gerçel
+  sıfırları) hücre sınırına eklenir; bulunamazsa "proved" yok.
+- G2YO-4 (düşük, yapay, önceden var): abs_tol kesin okunmuyor (30 basamağa yuvarlama, 1e-20 göreli taban). Karar: |c − v| ≤ abs_tol
+  kesin (tam ya da kesin aralık) karşılaştırılır; yuvarlama payı kabul yönünde kullanılmaz.
+- Kapsama (A+ getirdi; dar yolla geri al, olmuyorsa gerekçeyle kayıt): G2RK-2 (erf/fresnel/Si'li sertifikalı değer toleransla
+  karşılaştırılamıyor: kesin aralık zarfıyla ya da mpmath yüksek hassasiyetle kesin karşılaştırma), G2RK-3 (x > 0 kısıtlı noktasız
+  türev/ilkelde değişken tabanlı gerçel kuvvet UNKNOWN: gelenek kapısı bölge ile çağrılır), G2RK-5 (Piecewise integrand TTK'de
+  kırılma noktasında bölünür), G2RK-9, G2RK-11, G2RK-12 (zarf bütçesi). Önceden var kapsama (G2RK-4, G2RK-6, G2RK-8): yalnız kayıt,
+  G2RK-3'ün düzeltmesi G2RK-4'ü de kapatıyorsa ölçülür.
+
+MERCEK 1/4 (adım, çoktan seçmeli)
+- G1RK-2 (orta, gerçekçi, A+ getirdi, HAKSIZ RET): solve_inequality'nin params.inequality'si adım öncülü olunca (d4h tur 2) kesin
+  eşitsizlikte kritik nokta adımları (x² − 5x + 6 = 0, (x − 2)(x − 3) = 0, x = 2 ∨ x = 3) refuted, doğru (2, 3) INCORRECT. Karar: bir
+  eq adımı eşitsizlik öncülünün (görevin eşitsizliği ya da eşitsizlik verileni) HİÇBİR noktasında sağlanmıyorsa öncülün sonucu
+  olarak okunmaz; öncül yerine onun sınır denklemi (aynı iki taraf, '=') alınıp yeniden denetlenir: orada çürütülürse refuted
+  (x = 5), aksi hâlde unknown (verified asla bu yoldan). Eşitsizlik verilenli biçim (önceden var) de aynı kurala girer.
+- G1RK-3 (yüksek, gerçekçi, önceden var, HAKSIZ RET): '%' ve '°' birim işaretidir. Şıkta ya da iddiada % ya da ° var, karşı taraf
+  (iddia, IR değeri) birimsizse: iki okuma (birimli: %20 = 1/5, 30° = π/6; birimsiz sayı: 20, 30) ile karşılaştır; ikisinde de
+  farklıysa INCORRECT (veto), birinde eşitse UNKNOWN (birim geleneği), hiçbir zaman CORRECT bu yoldan. synthetic_geometry angle(
+  kuralı (25 Eylül) aynen. İddia '%20' ya da '30°' yazılıp IR birimsiz değer verince de aynı.
+- G1RK-1 (orta, gerçekçi, A+ getirdi, KAPSAMA): d4j'nin option_claim_undecided engelleyicisi şık metni ayrıştırılamadığında da
+  CORRECT'i engelliyor; iddia olarak okunan gösterim (log_2 5, log₂5, ln 2, x ∈ (2, 3), ]2, 3[, Ç = {2, 3} …) şık olarak okunmuyor.
+  Karar: şık metni iddiayla AYNI okuyucudan geçer (iddianın ad alanı, answer_shape, gösterim kümeleri); yine okunamazsa engel kalır.
+- G1RK-8 (düşük): her 0⁰ okumasında yanlış olan sayım ('3') INCORRECT kanıtlanabiliyorsa test/sonda beklentisi "INCORRECT ya da
+  UNKNOWN" olur; kod değişikliği yalnız iki okumada da yanlışlık kesin gösterilebiliyorsa.
+- Önceden var kapsama (G1RK-4 çok açılı trig, G1RK-5 parçalı bileşke, G1RK-6 asin/acos/cosh, G1RK-7 basamak integralleri): kayıt;
+  ucuz ve kesin bir yol varsa ölçülerek.
+
+MERCEK 3 (kalkülüs, tanımlılık)
+- SON-G3-YO-1 (yüksek, belirsiz-gerçekçi, önceden var, YANLIŞ ONAY): normalize.parse._written_diff/_differentiability at(diff(·))
+  ve sabitlenmiş diff(·) yolunda Piecewise geçiş noktalarını ve atan2/arg dal kesimini türevsizlik noktası saymıyor: parçalı |x|
+  için f'(0) = 1, sıçrama/köşe f'(1), f''(1) = 0, atan2(x, −1)'(0) = −1 CORRECT. Karar (kesin, certify.calculus'taki ikiz yolla
+  aynı): Piecewise koşul sınırları ve atan2/arg dal kesimi yazılı türevin tanımlılık koşuluna girer; noktada türevin varlığı
+  kanıtlanmadıkça değer yok (derivative_at_point/kink_reading ile aynı ölçüt: iki yan türev ve süreklilik kesin); C¹ birleşimde
+  (her iki yan eşit, sürekli) değer verilir.
+- SON-G3-YO-2 (orta, yapay): tangent_line iddiasının yazılı tanımlılığı okunmuyor. Karar: teğet iddiası yazıldığı biçimde okunur;
+  teğet noktasında ya da bir aralıkta tanımsızsa CORRECT yok (RK-8 aynası: noktada tanımsızsa INCORRECT, kararsızsa UNKNOWN).
+- SON-G3-YO-3, SON-G3-YO-4 (düşük, yapay; D4F2A-YO-5 ve YO-3'ün kardeş yazımları): kapalı ±∞ argümanı limit olarak yazılınca da değer
+  değildir; ℂ söyleminde kapalı sıfıra bölme/kutup bir sarmalayıcıdan geçince de NO_VALUE: mekanizmaya kural, yazıma değil.
+- SON-G3-YO-5 (tartışmalı): karar D4E4-U5'tir (tam sayı bildirilmiş sembolik üs her taban için müfredatın kuvveti; (xⁿ)' = n·x^(n−1)
+  CORRECT kalır). Değişiklik yok, kayıt.
