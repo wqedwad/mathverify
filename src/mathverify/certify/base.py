@@ -1447,8 +1447,9 @@ class Ctx:
 
     def option_condition_set(self, letter: str):
         """The solution set an option of a set answer names when it is written as a condition on the task's variable
-        alone ('x > -2', 'x ≥ 1', 'x \\geq 1'), as `verifier._normalize_set_notation` reads such a claim; None for
-        any other text. Read as a set it was {x > -2}, and the right letter was refuted against the claim (-2, oo)."""
+        ('x > -2', 'x ≥ 1', 'x \\geq 1', '-1 < x < 1'), as `verifier._normalize_set_notation` reads such a claim; None
+        for any other text. Read as a set it was {x > -2}, and the right letter was refuted against the claim (-2, oo).
+        Notation only: the variable itself against a closed bound (`_names_a_set`); x**2 < 4 is solved by nobody."""
         tvar = (self.ir.task.params or {}).get("var")
         set_task = self.ir.answer_shape in ("set", "interval") or self.ir.task.kind in (
             "solve_equation", "solve_inequality", "domain_of")
@@ -1457,8 +1458,7 @@ class Ctx:
             return None
         try:
             rel = parse_relation(text, self.ns)
-            if isinstance(rel, (sp.core.relational.Relational, sp.And, sp.Or)) \
-                    and {str(x) for x in rel.free_symbols} == {tvar}:
+            if _names_a_set(rel, self.ns.get(tvar)):
                 return rel.as_set()
         except Exception:  # noqa: BLE001 - no condition: read as the answer's shape
             pass
@@ -1602,6 +1602,14 @@ def parse_or_unknown(layer: str, fn, *args, **kw):
 
 
 _OPERATIONS = (sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs)
+
+
+def _names_a_set(rel, v) -> bool:
+    """Is `rel` a condition that names a set of the symbol `v` by notation alone: `v` itself against a bound (x > -2,
+    1 <= x), or an and/or of such (-1 < x < 1)? A bound naming another symbol has no set of `v` (`as_set` refuses it)."""
+    if isinstance(rel, (sp.And, sp.Or)):
+        return all(_names_a_set(a, v) for a in rel.args)
+    return isinstance(rel, sp.core.relational.Relational) and v in (rel.lhs, rel.rhs)
 
 
 def decimal_comma(text) -> bool:

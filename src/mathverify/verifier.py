@@ -62,6 +62,16 @@ def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
     return ctx.option_value(ca.option), ctx.claimed(solution)
 
 
+def _option_out_of_kind(ov, cv) -> bool:
+    """Is the option's value `ov` of another kind than the claim `cv`: no set (or a set of conditions) for a set
+    claim, a set or a condition for a number? (A pair or a vector is the matrix branch's, an equation the equation
+    branch's.)"""
+    if isinstance(cv, sp.Set):
+        return not isinstance(ov, sp.Set) or (isinstance(ov, sp.FiniteSet)
+                                              and any(not isinstance(e, sp.Expr) for e in ov.args))
+    return isinstance(ov, sp.Set) or (isinstance(ov, sp.Basic) and not isinstance(ov, sp.Expr))
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
@@ -118,11 +128,21 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv)}
         elif _as_matrix(cv) is not None or _as_matrix(ov) is not None:
             mc_, mo_ = _as_matrix(cv), _as_matrix(ov)
-            ok = False if (mc_ is None) != (mo_ is None) else matrices_equal(mc_, mo_)[0]
+            if (mc_ is None) != (mo_ is None):
+                # a pair or a vector against a number (the option '(1, 5)' for 3): another kind, see below
+                return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
+                               t.ms, flags=["option_unreadable"])
+            ok = matrices_equal(mc_, mo_)[0]
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": "matrix_entrywise"}
         elif isinstance(cv, sp.Equality) or isinstance(ov, sp.Equality):
             ok, cev = answers_equivalent(cv, ov, shape="equation", var=next(iter(ctx.syms()), None))
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
+        elif _option_out_of_kind(ov, cv):
+            # the option read as another kind than the claim (a pair for a number, a set of conditions for a set):
+            # what the letter names is not read, so it neither refutes the claim nor stands for it (fourth audit
+            # D4F2B-ONCEKI-1: the option 'x**2 < 4' read as {x**2 < 4} refuted the claim (-2, 2))
+            return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
+                           t.ms, flags=["option_unreadable"])
         else:
             ok, cev = answers_equivalent(cv, ov, shape=shape)
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}

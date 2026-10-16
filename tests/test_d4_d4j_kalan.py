@@ -168,6 +168,15 @@ def test_onceki1_decimal_comma_option_is_not_guessed(payload):
     assert "decimal_comma_ambiguous" in {f for la in r.layers for f in la.flags}
 
 
+@pytest.mark.parametrize("q,s", [
+    (_ev("1 + 2", [], options={"A": "(1, 5)", "B": "3"}), _sol("3", option="A")),
+    _ineq("x**2 < 4", {"A": "x**2 < 4", "B": "(100, 200)"}, "(-2, 2)", "A")])
+def test_onceki1_an_option_of_another_kind_abstains(q, s):
+    # a pair for a number, the question's own inequality for a set: what the letter names is not read
+    r = verify(q, s)
+    assert r.verdict == "UNKNOWN" and "option_unreadable" in r.flags
+
+
 def test_onceki1_control_a_condition_on_another_symbol_is_not_the_answer_set():
     q = _ir("solve_inequality", {"var": "x"}, ["x**3 > -8"], [{"name": "x"}, {"name": "y"}], "interval",
             options={"A": "y > -2", "B": "(100, 200)"})
@@ -178,6 +187,7 @@ def test_onceki1_controls():
     assert _v(_ev("3/2 + 0", [], options={"A": "1.5", "B": "7"}), _sol("3/2", option="A")) == "CORRECT"
     assert _v(_ev("1 + 2", [], options={"A": "7", "B": "3"}), _sol("3", option="A")) == "INCORRECT"
     assert _v(*_ineq("x**2 < 1", {"A": "-1 < x < 1", "B": "(100, 200)"}, "(-1, 1)", "A")) == "CORRECT"
+    assert _v(*_ineq("x**3 > -8", {"A": "-2 < x", "B": "(100, 200)"}, "(-2, oo)", "A")) == "CORRECT"
 
 
 # A-YO-1: a 0**0 entry -------------------------------------------------------------------------------------------

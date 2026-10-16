@@ -174,7 +174,17 @@ def cases_c():
         ("ctl dot 1.5", *mc_ev("3/2 + 0", {"A": "1.5", "B": "7"}, "3/2", "A"), OK, None),
         ("ctl option 3", *mc_ev("1 + 2", {"A": "3", "B": "7"}, "3", "A"), OK, None),
         ("ctl option 7 wrong", *mc_ev("1 + 2", {"A": "7", "B": "3"}, "3", "A"), NO, None),
-        ("ctl tuple option (1, 5)", *mc_ev("1 + 2", {"A": "(1, 5)", "B": "3"}, "3", "A"), NO, None),
+        ("tuple option (1, 5) for 3: not read as a number", *mc_ev("1 + 2", {"A": "(1, 5)", "B": "3"}, "3", "A"), UNK,
+         None, None, "option_unreadable"),
+        ("option x**2 < 4 restating the question", *ineq("x**2 < 4", {"A": "x**2 < 4", "B": "(100, 200)"}, "(-2, 2)", "A"),
+         UNK, None, None, "option_unreadable"),
+        ("option -2 < x (bound first)", *ineq("x**3 > -8", {"A": "-2 < x", "B": "(100, 200)"}, "(-2, oo)", "A"), OK, None),
+        ("option x < -1 or x > 1", *ineq("x**2 > 1", {"A": "x < -1 or x > 1", "B": "(100, 200)"},
+                                         "Union(Interval.open(-oo, -1), Interval.open(1, oo))", "A"), OK, None),
+        ("option y > -2 (another symbol)", ir("solve_inequality", {"var": "x"}, ["x**3 > -8"], [{"name": "x"},
+                                                                                              {"name": "y"}],
+                                              "interval", options={"A": "y > -2", "B": "(100, 200)"}),
+         sol("(-2, oo)", "interval", option="A"), NOTOK, None),
     ]
 
 

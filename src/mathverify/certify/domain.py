@@ -1560,10 +1560,10 @@ def _infinite_argument(node) -> bool:
     """Is a closed argument of the function `node` (or the exponent of a power) infinite? sin(oo) is no real number
     (SymPy's AccumBounds: 0*sin(oo) was its 0, and certified), and exp(-oo), atan(oo), 2**(-oo), (1/2)**oo are values
     only where oo is read as a number, as 1/oo already is not (attack on d4f round 2, A-YO-5). A limit's point and
-    a binder's bound are no arguments; an undefined function (a held operation) is not read."""
+    a binder's bound are no arguments."""
     if isinstance(node, sp.Pow):
         args = (node.exp,)
-    elif isinstance(node, sp.Function) and not isinstance(node.func, sp.core.function.UndefinedFunction):
+    elif isinstance(node, sp.Function):
         args = node.args
     else:
         return False
