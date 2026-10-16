@@ -388,8 +388,20 @@ def _verified_where_conventions(claim, ctx: Ctx, status: str, ev: dict) -> tuple
     return "unknown", {**ev, "reason": "not_verified_where_a_value_is_a_convention", "recheck": ev2}
 
 
+def _jump_undecided(*rels) -> bool:
+    """Does one of `rels` hold a jump (ceiling, floor, sign, frac, Mod, Heaviside, a Piecewise of constant
+    conditions) of a number no certified sign settles (equiv.numeric.undecided_jumps)? doit, simplify and the
+    solvers read it off rounding noise: with Z = gd(1) - gd(1) exactly 0, the step "Piecewise((1, Z**2 > 0),
+    (0, Z**2 <= 0)) = 1" was verified, and "x = ceiling(Z**2)" refuted under x = 0, the right answer then
+    INCORRECT (round 9 of part d4b, YO-4). Such a step decides nothing."""
+    from ..equiv.numeric import undecided_jumps
+    return undecided_jumps(*[r for r in rels if isinstance(r, sp.Basic)])
+
+
 def _check_compute(claim, ctx: Ctx, doms: dict | None = None) -> tuple[str, dict]:
     ev: dict[str, Any] = {}
+    if _jump_undecided(claim):
+        return "unknown", {"reason": "jump_of_an_unproved_number"}
     if not isinstance(claim, Eq):
         if isinstance(claim, (sp.core.relational.Relational, And, Or, sp.logic.boolalg.BooleanAtom)) \
                 and not getattr(claim, "free_symbols", None):
@@ -1925,6 +1937,8 @@ def _integrals_refute(claim, ctx: Ctx) -> bool:
 
 
 def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: list) -> tuple[str, dict]:
+    if _jump_undecided(claim, *premises):
+        return "unknown", {"reason": "jump_of_an_unproved_number"}
     if not getattr(claim, "free_symbols", None):
         return _closed_claim(claim, ctx), {"n_premises": len(premises), "route": "closed_claim"}
     syms = set(claim.free_symbols)
@@ -2107,6 +2121,34 @@ def _is_polynomial(rel, syms) -> bool:
         return False
 
 
+# the task kinds whose own relation may stand in `params` instead of givens[0] (docs/SOLVER_FORMAT.md; trig_solve's
+# certificate reads `equation` or givens[0] the same way, `certify.trig.verify`)
+_TASK_RELATION_PARAMS = {"solve_equation": "equation", "solve_inequality": "inequality", "trig_solve": "equation"}
+# the task kinds that count the roots of an expression in `params`: their relation is expr = 0
+_TASK_ZERO_PARAMS = {"count_roots": "expr"}
+
+
+def _task_relations(ir, ctx: Ctx) -> list:
+    """The task's own relation when it is written in `params` (solve_equation's and trig_solve's `equation`,
+    solve_inequality's `inequality`): a premise as it is when written as givens[0], the other form SOLVER_FORMAT
+    gives. Left out, a step derived from it had no premise and was refuted at a random point: x + 2 = x**2 for
+    x**2 - x - 2 = 0, and the right solution {-1, 2} was INCORRECT (fourth audit PRE-RK-4); for 2 sin x = 1 in
+    trig_solve's params every step was skipped, the wrong sin x = 1/3 too, which givens[0] refutes (round 2 of
+    d4h, the same mechanism). count_roots counts the roots of its `expr`, the equation expr = 0: x + 2 = x**2 for
+    x**2 - x - 2 was refuted and the right count 2 INCORRECT (merge of d4h round 2). Unreadable: no premise (as
+    before)."""
+    zero = ir.task.kind in _TASK_ZERO_PARAMS
+    key = _TASK_ZERO_PARAMS.get(ir.task.kind) or _TASK_RELATION_PARAMS.get(ir.task.kind)
+    src = (ir.task.params or {}).get(key) if key else None
+    if not isinstance(src, str) or not src.strip():
+        return []
+    try:
+        rel = Eq(ctx.expr(src), 0) if zero else ctx.rel(src)
+    except Exception:  # noqa: BLE001 - LeakageError cannot come from a parse; unread: no premise
+        return []
+    return [rel] if _is_relation(rel) and rel not in (sp.true, sp.false) else []
+
+
 def _task_window(ir, ctx: Ctx) -> list:
     """The task's own interval for its variable (`params.interval` of `trig_solve` and `extremum`)
     as relations. It was not a premise: "x = pi/3" from tan x = sqrt(3) on [0, pi) was refuted with
@@ -2223,7 +2265,7 @@ def _with_undeclared(text: str, ns: dict[str, Any], names) -> dict[str, Any]:
     return out
 
 
-def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool = False) -> bool:
+def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool | str = False) -> bool | str:
     """Is the claim, read AS WRITTEN, undefined whatever its free symbols are (a closed condition
     that fails, e.g. a term of a finite sum at one of its indices)? The value parse folds j/j to 1,
     and the compute step `Sum(j/j, (j, -1, 1)) = 3` was verified (V14 tests, 30 Sep 2026). Undeclared
@@ -2632,6 +2674,7 @@ def check_steps(ir, solution, ctx: Ctx):
             givens, restrictions = ctx.givens(), ctx.var_constraints()
         except Exception:
             pass
+        givens = givens + [r for r in _task_relations(ir, ctx) if r not in givens]
         window = _task_window(ir, ctx)
         objects = _task_objects(ir, ctx)
         first_bad = None
@@ -2801,8 +2844,12 @@ def check_steps(ir, solution, ctx: Ctx):
                     status, ev = "unknown", {"reason": "counterexample_where_the_claim_is_undefined", "withdrawn": ev}
                 why = None
                 if status != "refuted":
-                    if _undefined_as_written(st.claim, step_ns, unread=status == "verified"):
-                        why = "claim_undefined_as_written"
+                    written = _undefined_as_written(st.claim, step_ns,
+                                                    unread="unread" if status == "verified" else False)
+                    if written:
+                        # a text the as-written reading does not take is not read, not undefined (attack on d4f
+                        # round 2, RK-3)
+                        why = "claim_not_read_as_written" if written == "unread" else "claim_undefined_as_written"
                     else:
                         try:
                             undefined = _undefined_at_premises(st.claim, step_ns, list(givens) + [

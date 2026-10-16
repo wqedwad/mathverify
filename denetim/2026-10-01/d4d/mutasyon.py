@@ -36,8 +36,8 @@ MUTATIONS = [
      '_OR_JOIN_RE = re.compile(r"(?!x)x")', T),
     ("M02 üyelik okunmaz", PAR, "            m = _DOMAIN_MEMBER_RE.match(p)\n            n = _NOT_IN_RE.match(p)",
      "            m = None\n            n = _NOT_IN_RE.match(p)", T),
-    ("M03 LaTeX x \\in S okunmaz", PAR,
-     "        return sp.Contains(c.lhs, _reals_set(c.rhs, spec), evaluate=False)", "        return c", T),
+    # M03 (LaTeX x \\in S okunmaz) kaldırıldı: d4h'de LaTeX üyeliği ayrıştırmanın kendisinde okunur
+    # (`_latex_membership`, d4h D16-D19); `_condition_atom`'un Eq(x, küme) dalı silindi
     ("M04 okunamayan yan koşul düşer", BAS,
      "                except Exception:  # noqa: BLE001 - UndeclaredSymbolError, ParseError: not applied\n"
      "                    unapplied.append(g)\n",
@@ -132,7 +132,9 @@ MUTATIONS = [
      "    except ZeroDivisionError as e:  # noqa: BLE001 - `[2]` raised AttributeError", T),
     ("N04 true/false'a inen metin okunur", PAR,
      "    if (rel is sp.true or rel is sp.false) and _mentions_variable(spec, ns):", "    if False:", T),
-    ("N05 LaTeX notin okunmaz", PAR, "        m = _LATEX_NOTIN_RE.match(spec)", "        m = None", T),
+    # d4h: aralık dışı küme (\\mathbb{Z}) yalnız bu yolla okunur; öldüren test d4h'nin dosyasında
+    ("N05 LaTeX notin okunmaz", PAR, "        m = _LATEX_NOTIN_RE.match(strip_presentation(_strip_invisible(spec)))",
+     "        m = None", "tests/test_d4_d4h_ayristirici.py"),
     ("N06 'not in' okunmaz", PAR, "            n = _NOT_IN_RE.match(p)", "            n = None", T),
     ("N07 denklik okunur", PAR, "    if is_latex(spec) and _LATEX_CONGRUENCE_RE.search(spec):", "    if False:", T),
     ("N08 Ctx.rel çökmeyi geçirir", BAS,

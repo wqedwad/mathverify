@@ -133,7 +133,48 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
                          # other family's meta-verification. It abstains, never flips to INCORRECT:
                          # an LLM signal may not veto a hard certificate (§4), and [10] measures
                          # 75-85% false rejection when step checkers are trusted outright.
-                         "critic_error_confirmed"}
+                         "critic_error_confirmed",
+                         # the chosen option and the claim are not shown to be one object (verifier._mc_undecided): a
+                         # wrong letter beside a right value is a wrong solution (fourth audit, d4j addendum)
+                         "option_claim_undecided"}
+# The abstentions of a layer that decided nothing (verdict unknown), in two written kinds (fourth audit CAP-K1, d4i;
+# denetim/2026-10-01/d4/kararlar_fhi.txt). A MEANING or convention abstention (the problem's meaning, a convention,
+# a free parameter) keeps its UNKNOWN when the only CORRECT comes from a layer outside the deterministic ones (Lean,
+# L7, a cross-family re-solve): that layer's template picks a meaning too (Lean's Finset.sum is 0 on a reversed range,
+# intervalIntegral is defined at a free parameter), and a stand-in Lean pass turned the reversed series_sum -2, the
+# derivative of x**2 at the end 0 of x > 0 and the limit of factorial(x) at 0 into CORRECT. A NOT PROVED abstention
+# (no certificate, a membership or a solve left undecided) does not: another layer's proof stands, as the 3 Lean
+# rescues of 89 runs did (count_integers with Mod, recurrences). A flag of neither list blocks like a meaning one
+# (fail-closed); `tests/test_d4_d4j_kalan.py` catches a flag the code emits that no list here names.
+_MEANING_FLAGS = {"point_not_interior", "membership_condition", "reversed_bounds", "condition_not_applied",
+                  "constraint_not_applied", "parametric_limit", "parametric_form", "sequence_undefined_on_the_tail",
+                  "approach_outside_declared_domain", "expression_undefined_as_written", "naturals_convention",
+                  "claim_convention", "claim_unreadable", "variable_declared_integer", "written_domain",
+                  "malformed_tolerance", "domain_list_ambiguous"}
+_NOT_PROVEN_FLAGS = {"cas_failed", "cas_unreliable", "cas_timeout", "completeness_uncertified", "no_certified_value",
+                     "no_exact_value", "brute_force_limit", "symbolic_numeric_disagreement", "numeric_not_converged",
+                     "relative_tolerance_undecided", "z3_unsupported", "condition_unsolved", "unsupported_task_kind",
+                     "l4_undecided", "l4_disagree_uncertified", "l5_inconclusive", "l5_method_failed", "lean_unproved",
+                     "lean_audit_failed", "lean_unavailable", "critic_cannot_judge", "critic_unavailable",
+                     "ir_unavailable", "solver_family_unknown"}
+# what a layer notes, no abstention: the scope of a verdict, a notation read, the pipeline's steps, a layer's own result
+_NOTE_FLAGS = {"answer_from_option_letter", "answer_level_only", "steps_not_checked", "payload_cleaned",
+               "payload_notation_normalized", "naturals_readings_agree", "domain_list_readings_agree", "ir_extracted",
+               "ir_repaired_once", "ir_repaired_twice", "roundtrip_borderline", "restructure_deterministic_only",
+               "l4_agree", "l4_confirms_refutation", "l5_method_ok", "lean_proved", "critic_clean",
+               "critic_overruled_by_certificate", "calibrated_below_threshold", "layer_contradiction", "step_refuted"}
+# the layers of `verifier.verify_layers`: a CORRECT one of them grounds is theirs, whatever the others abstained on
+_DETERMINISTIC_LAYERS = ("certify.", "intake.", "steps.", "mc.", "ir.", "router", "sanity")
+
+
+def _meaning_blocks(flags: list[str], primary_pass: list[LayerResult]) -> list[str]:
+    """The flags that keep a CORRECT grounded only by layers outside the deterministic ones (see `_MEANING_FLAGS`):
+    every one that is no NOT PROVED kind and no note."""
+    if any(l.layer.startswith(_DETERMINISTIC_LAYERS) for l in primary_pass):
+        return []
+    return [f for f in flags if f not in _NOT_PROVEN_FLAGS and f not in _NOTE_FLAGS]
+
+
 # Soft confidence reducers (handoff §4: long repair trajectories, timeouts, contradictions,
 # L4 disagreement, L5 method failure). Never averaged with hard layers.
 _CONFIDENCE_PENALTY = {"cas_timeout": 0.03, "symbolic_numeric_disagreement": 0.10,
@@ -192,7 +233,7 @@ def fuse(layers: list[LayerResult], extra_flags: list[str] | None = None) -> dic
 
     # 3. positive evidence must be grounded by a primary certificate
     if primary_pass:
-        blocked = [f for f in flags if f in _BLOCK_POSITIVE_FLAGS]
+        blocked = [f for f in flags if f in _BLOCK_POSITIVE_FLAGS] or _meaning_blocks(flags, primary_pass)
         if blocked:
             fbs = next((l.first_bad_step for l in layers if l.first_bad_step is not None and not l.hard), None)
             trace.append(f"Pozitif sertifika var ama engelleyici bayrak(lar) mevcut: {blocked} -> UNKNOWN."

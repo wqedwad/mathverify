@@ -1,6 +1,7 @@
 """Shared helpers for certificate modules."""
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -52,6 +53,8 @@ class Ctx:
         # conditions on var that name a symbol no given fixes: dropped here, listed for the
         # certificates (unapplied_conditions)
         unapplied: list = []
+        # declared constraints that could not be applied (see `constraints_not_applied`)
+        failed: list = []
         # relations with a trigonometric function: solved last, on the domain the others leave
         # (sandbox.exactsets: SymPy reads them on one period only)
         deferred: list = []
@@ -102,8 +105,12 @@ class Ctx:
                             dom = exact_intersection(dom, sp.solveset(r, var, S.Reals))
                         elif var in r.free_symbols:
                             unapplied.append(c)
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 - never dropped: the verifier abstains on it
+                        # an intersection whose endpoints are not ordered (3 and log(8)/log(2) + exp(-exp(10))) raised
+                        # here and the constraint x >= 3 was dropped: {-2, 2} was certified for x**2 = 4 and 0 for
+                        # max(-x**2) (round 9 of part d4b, YO-1). See `constraints_not_applied`
+                        unapplied.append(c)
+                        failed.append(c)
         # A given inequality on this variable alone restricts it like a declared constraint when
         # the task carries its own relation in params: "x² < 4" with the given "x > 0" is (0, 2),
         # but only the parameter was solved and (−2, 2) was certified (audit of 25 Sep 2026). When
@@ -176,6 +183,7 @@ class Ctx:
         self.cache[f"unsolved_side:{var.name}"] = [r for r in unsolved if r in side]
         self.cache[f"reversed:{var.name}"] = back
         self.cache[f"unapplied:{var.name}"] = unapplied
+        self.cache[f"failed:{var.name}"] = failed
         self.cache[key] = dom
         return dom
 
@@ -299,7 +307,7 @@ class Ctx:
         Convention`), the points where one does not): see `convention_region`. A condition solveset
         cannot split keeps `dom` as it was (the condition was not applied before either) and makes
         every point undecided."""
-        from .domain import convention_split
+        from .domain import convention_split, finite_points
         if not spans:
             return dom, S.EmptySet
         fwd_all, back_all = S.Reals, S.EmptySet
@@ -312,7 +320,19 @@ class Ctx:
             empty = back.is_empty
         except Exception:  # noqa: BLE001
             empty = None
-        return sp.Intersection(dom, fwd_all), (S.EmptySet if empty is True else back)
+        dom = sp.Intersection(dom, fwd_all)
+        pts = finite_points(back) if empty is not True else None
+        if pts is not None:
+            back = pts
+            # a point of a finite region where every condition holds read at the point itself (x**x at x = -2:
+            # Convention real_power, whose split by the base's sign is an interval rule) belongs to the domain
+            # (round 9 attack on part d4b, RK-1)
+            from .domain import relation_holds_at
+            held = [p for p in back.args if all(relation_holds_at(c, var, p) is True for c in spans)]
+            if held:
+                dom, back = sp.Union(dom, sp.FiniteSet(*held)), sp.Complement(back, sp.FiniteSet(*held))
+                empty = back.is_empty
+        return dom, (S.EmptySet if empty is True else back)
 
     def convention_region(self, var: sp.Symbol) -> sp.Set:
         """The points of `var`'s domain where the value of one of the problem's expressions is a
@@ -766,6 +786,46 @@ class Ctx:
                     out[s_] = val
         return out
 
+    def parameter_regions(self, params) -> tuple[list[str], dict | None]:
+        """(the givens and declared constraints that name one of the parameters `params`, each other value a given
+        fixes read as its value; each parameter's region, `_declared_region` with the givens, or None when one of
+        those texts is not read on its parameter alone: not read, naming two free symbols (a = b, a > b), or a region
+        not solved exactly). A certificate refutes a claim on such a parameter only at an allowed value of it, never
+        against the general symbol: with 2*a = 4 the derivative 4*x of a*x**2 was refuted against 2*a*x (attack on
+        d4e round 3, D4E3-RK-3)."""
+        from ..normalize.parse import read_condition
+        params = set(params)
+        named: list[str] = []
+        applied = True
+        bind = self.bindings()
+        texts = list(self.ir.givens) + [c for v in self.ir.vars if self.sym(v.name) in params for c in v.constraints]
+        for t in texts:
+            try:
+                cond = read_condition(t, self.ns)
+            except Exception:  # noqa: BLE001 - a text not read applies nothing
+                named.append(t)
+                applied = False
+                continue
+            fs = getattr(cond.xreplace({s_: v for s_, v in bind.items() if s_ not in params}), "free_symbols", set())
+            if fs & params:
+                named.append(t)
+                if len(fs) != 1:
+                    applied = False
+        if not named:
+            return named, {}
+        if not applied:
+            return named, None
+        regions: dict = {}
+        for p_ in params:
+            try:
+                reg = self._declared_region(p_, givens=True)
+            except Exception:  # noqa: BLE001
+                reg = None
+            if reg is None or reg.free_symbols:
+                return named, None
+            regions[p_] = reg
+        return named, regions
+
     def with_pins(self, e, pins: dict):
         """`e` with the values `pins` holds put in (never a bound variable: `substitute_free`), and the closed
         forms this makes (Σ_{k=1}^{n} k with n = 3: 6) by values numbers confirm (`_confirmed`, ParseError
@@ -822,6 +882,25 @@ class Ctx:
                     ok = False
                 if not ok:
                     out.append(c)
+        return out
+
+    def constraints_not_applied(self) -> list[str]:
+        """Declared constraints (`vars[].constraints`) that read as relations but could not be applied to their
+        variable's domain: the exact intersection raised (two endpoints neither proved equal nor certainly
+        ordered, too many of them) or the relation failed to solve. The domain left them out silently, and
+        every certificate and the step layer read a larger domain than the problem's: {-2, 2} was certified
+        for x**2 = 4 under x <= log(8)/log(2) + exp(-exp(10)), x >= 3 (round 9 of part d4b, YO-1). The
+        verifier abstains on them. A domain that cannot be built at all raises for each of its readers."""
+        out: list[str] = []
+        for v in self.ir.vars:
+            s_ = self.ns.get(v.name)
+            if not v.constraints or not isinstance(s_, sp.Symbol):
+                continue
+            try:
+                self.domain_for(s_)
+            except Exception:  # noqa: BLE001 - every reader of this domain raises too: none is used
+                continue
+            out += [str(c) for c in self.cache.get(f"failed:{v.name}", [])]
         return out
 
     # Params that hold the problem's own expression, per task kind. `limit` is absent on purpose,
@@ -1019,6 +1098,11 @@ class Ctx:
             cs, nw = written_definedness(s_, self.ns, pins)
             nowhere |= nw
             conds += [c for c in cs if c not in conds]
+            # ... and a closed condition no exact check decides leaves them undecided, as a given's does: dropped,
+            # 0*∫_x^1 dt/t >= 0 (x > 0 as written) read as no condition, and {-1/2, 1/2} was certified for
+            # x**2 = 1/4 under it as a constraint; x + 0*tan(acot(2) + acot(1/2)) > 0, defined nowhere, too
+            # (attack on d4e round 3, D4E3-YO-3)
+            note(s_, self._undefined_constant(s_, pins))
         cs, nw, calls = self._function_call_conditions(srcs)
         nowhere |= nw
         conds += [c for c in cs if c not in conds]
@@ -1048,11 +1132,11 @@ class Ctx:
         `log(-1) - log(-1) - 1`, or `f(-1)` for f(x) = log(x) − log(x) + x. The closed condition
         fails, but `nowhere` only records free symbols, so the value SymPy simplified to (−1) was
         certified (audit of 25 Sep 2026). Also any text with a closed operation that has no value
-        (`certify.domain.NO_VALUE`: x + 1/(-1)! = 2 is no equation defined nowhere, CAP-F1). Empty over the
-        complex numbers, where the conditions are the real ones."""
+        (`certify.domain.NO_VALUE`: x + 1/(-1)! = 2 is no equation defined nowhere, CAP-F1). Over the complex
+        numbers only the texts with such an operation (`_complex_states`)."""
         self.written_conditions()
         if (self.ir.domain_of_discourse or "").lower() in ("complex", "c", "ℂ"):
-            return []
+            return self._complex_states()[0]
         return list(self.cache.get("written_undefined", []))
 
     def written_undecided(self) -> list[str]:
@@ -1060,11 +1144,33 @@ class Ctx:
         decides: a binder not proved to exist over its range (DEFINEDNESS_UNDECIDED), a convention value
         (0**0), a comparison left standing (tan(arccot(2) + arccot(1/2))). The callers abstain as on
         `written_undefined`, but the problem is not proved undefined: Π_{k=1}^{n} Σ_{j=1}^{k} 1 with n free
-        was "problem_undefined_as_written" (fourth audit, TAN-12)."""
+        was "problem_undefined_as_written" (fourth audit, TAN-12). Over the complex numbers only the closed
+        conventions (`_complex_states`)."""
         self.written_conditions()
         if (self.ir.domain_of_discourse or "").lower() in ("complex", "c", "ℂ"):
-            return []
+            return self._complex_states()[1]
         return list(self.cache.get("written_undecided", []))
+
+    def _complex_states(self) -> tuple[list[str], list[str]]:
+        """Over the complex numbers the real conditions drop (sqrt(-4) is 2i, log(-1) is iπ), not an operation with
+        no value (Γ's pole: 1/(-1)!, 1/Γ(0); zoo; 1/(1/0)) nor a closed convention (0**0, oo**0, Mod(7, -5)): read
+        as SymPy's 1/zoo = 0 and 1, they were certified over ℂ (attack on d4f round 2, A-YO-3). The texts the real
+        reading found, read again: (undefined, undecided)."""
+        from ..normalize.parse import parse_set_as_written
+        from .domain import definedness_conditions, is_convention, is_no_value
+        pins = self.parameter_pins()
+        undefined: list[str] = []
+        undecided: list[str] = []
+        for src in self.cache.get("written_undefined", []) + self.cache.get("written_undecided", []):
+            try:
+                conds = definedness_conditions(self._pinned(parse_set_as_written(src, self.ns), pins), None)
+            except Exception:  # noqa: BLE001 - not read as written: the real conditions it may hold drop
+                continue
+            if any(is_no_value(c) for c in conds):
+                undefined.append(src)
+            elif any(is_convention(c) for c in conds):
+                undecided.append(src)
+        return undefined, undecided
 
     @staticmethod
     def _pinned(e, pins: dict | None):
@@ -1149,7 +1255,7 @@ class Ctx:
         The as-written reading refused Σ_{k=√1}^{3} k alone, and read as "no condition" the text around it
         lost x/x, √x², 1/(-1)!: {0} was certified for x²/x + Σ = 6 (review of d4f, YO-1)."""
         from ..normalize.parse import parse_expr_str, parse_relation, parse_set_str, read_condition
-        if not isinstance(src, str):
+        if not isinstance(src, str) or _is_label(src):
             return None
         for read in (parse_expr_str, parse_relation, read_condition, parse_set_str):
             try:
@@ -1328,10 +1434,36 @@ class Ctx:
         return v
 
     def option_value(self, letter: str):
+        """The option's value, read as a claim of the answer's shape is (fourth audit D4F2B-ONCEKI-1): a condition on
+        the task's variable is the set it names (`option_condition_set`). A decimal comma ('1,5') is the verifier's
+        (`decimal_comma`), which abstains before any reading of it is compared."""
         if not self.ir.options or letter not in self.ir.options:
             return None
+        named = self.option_condition_set(letter)
+        if named is not None:
+            return named
         return parse_answer(self.ir.answer_shape if self.ir.answer_shape in ("set", "interval") else "value",
                             self.ir.options[letter], self.ns)
+
+    def option_condition_set(self, letter: str):
+        """The solution set an option of a set answer names when it is written as a condition on the task's variable
+        ('x > -2', 'x ≥ 1', 'x \\geq 1', '-1 < x < 1'), as `verifier._normalize_set_notation` reads such a claim; None
+        for any other text. Read as a set it was {x > -2}, and the right letter was refuted against the claim (-2, oo).
+        Notation only: the variable itself against a closed bound (`_names_a_set`); x**2 < 4 is solved by nobody."""
+        tvar = (self.ir.task.params or {}).get("var")
+        set_task = self.ir.answer_shape in ("set", "interval") or self.ir.task.kind in (
+            "solve_equation", "solve_inequality", "domain_of")
+        text = self.ir.options[letter]
+        if not (set_task and isinstance(tvar, str) and isinstance(text, str)):
+            return None
+        try:
+            from ..normalize.parse import read_condition
+            rel = read_condition(text, self.ns)          # 'x < -1 or x > 1' too
+            if _names_a_set(rel, self.ns.get(tvar)):
+                return rel.as_set()
+        except Exception:  # noqa: BLE001 - no condition: read as the answer's shape
+            pass
+        return None
 
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:
@@ -1471,6 +1603,29 @@ def parse_or_unknown(layer: str, fn, *args, **kw):
 
 
 _OPERATIONS = (sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs)
+
+
+def _names_a_set(rel, v) -> bool:
+    """Is `rel` a condition that names a set of the symbol `v` by notation alone: `v` itself against a bound (x > -2,
+    1 <= x), or an and/or of such (-1 < x < 1)? A bound naming another symbol has no set of `v` (`as_set` refuses it)."""
+    if isinstance(rel, (sp.And, sp.Or)):
+        return all(_names_a_set(a, v) for a in rel.args)
+    return isinstance(rel, sp.core.relational.Relational) and v in (rel.lhs, rel.rhs)
+
+
+def decimal_comma(text) -> bool:
+    """'1,5' with no bracket around it: 3/2 in Turkish, the pair (1, 5) in the structured syntax. Reading it either
+    way would be a guess (principle 3)."""
+    return isinstance(text, str) and not re.search(r"[{}\[\]()]", text) and re.search(r"\d,\d", text) is not None
+
+
+def _is_label(src: str) -> bool:
+    """A bare name the as-written reading does not take: one the namespace binds to a function or a class, not to a
+    value (`P` the permutation count, `S` SymPy's registry, `C`, `det`, `sqrt`, `Sum`; a name bound to a value, E,
+    pi, zoo or a declared symbol, is read as written and never comes here, an unknown one is read by nobody). In a
+    list of points or of outcomes ('P', 'Q', 'R'; 'S', 'K') it is a label with no value, so no definedness rests on
+    it; the value reading took it as that function and the problem was "undecided" (attack on d4f round 2, RK-1)."""
+    return src.strip().isidentifier()
 
 
 def _texts(v) -> list[str]:

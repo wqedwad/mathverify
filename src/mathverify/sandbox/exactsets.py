@@ -57,6 +57,11 @@ from sympy.functions.elementary.trigonometric import TrigonometricFunction
 
 # more points (zeros, poles, cells) on one window than this: the set is left unsolved
 LIMIT = 400
+# more intervals than this in one set, or a set operation that would make more: left unsolved (undecided). SymPy
+# joins and meets the intervals of a Union pair by pair, each comparison of two endpoints an evaluation: the 160
+# intervals of sin(x) > 0 on [0, 1000] took 170 s to join, 220 s for one verify (round 9 attack on part d4b, RK-3);
+# 32 take 3 s
+SET_PIECES = 32
 _TRIG = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
 # the functions whose poles cut the cells: (pole function, the function whose zeros they are)
 _POLES = ((sp.tan, sp.cos), (sp.sec, sp.cos), (sp.cot, sp.sin), (sp.csc, sp.sin))
@@ -159,12 +164,59 @@ def exact_setop(op, sets) -> sp.Set:
     (sqrt(3 + 2*sqrt(2)), 1 + sqrt(2)] that holds no number, from which the sampler drew a point and
     refuted the right (1 + sqrt(2), 2 + sqrt(2)) (round 8, RK-4). A pair neither proved equal nor certainly
     different raises TypeError: the caller abstains."""
-    from ..equiv.sets import EndpointsIncomparable, unify_endpoints
+    from ..equiv.sets import EndpointsIncomparable, TooManyEndpoints, endpoints_apart, unify_endpoints
+    sets = list(sets)
+    if _pieces(op, sets) > SET_PIECES:
+        raise TypeError(f"a set operation over more than {SET_PIECES} intervals: undecided (its cost has no bound)")
     try:
-        sets = unify_endpoints(list(sets))
+        sets = unify_endpoints(sets)
+    except TooManyEndpoints as err:
+        # more endpoints than are compared pair by pair: still read when no two of them are close (the
+        # 300 zeros of sin(x) on [0, 940]; round 9 of part d4b, RK-3), so none needs another writing
+        if not endpoints_apart(sets, 2 * LIMIT + 4):
+            raise TypeError(f"endpoints not ordered: {err}") from None
     except EndpointsIncomparable as err:
         raise TypeError(f"endpoints not ordered: {err}") from None
     return op(*sets)
+
+
+def _pieces(op, sets) -> int:
+    """The intervals `op` of `sets` works through (`SET_PIECES`): every interval of every operand, and, for a join or a
+    complement, every point too (one cuts an interval in two, and points join an interval pair by pair)."""
+    n_int = n_pt = 0
+    for st in sets:
+        for a in (st.args if isinstance(st, (sp.Union, sp.Intersection, sp.Complement)) else (st,)):
+            if isinstance(a, sp.Interval):
+                n_int += 1
+            elif isinstance(a, sp.FiniteSet):
+                n_pt += len(a)
+            elif isinstance(a, (sp.Union, sp.Intersection, sp.Complement)):
+                n_int += _pieces(sp.Union, [a])
+    return n_int if op is sp.Intersection or not n_int else n_int + n_pt
+
+
+def _joined(edges, cell_holds, point_holds):
+    """The union of the cells (edges[i], edges[i+1]) where `cell_holds[i]` and the edges where `point_holds[i]`, joined
+    in one pass along the sorted edges (SymPy's Union joins pair by pair: `SET_PIECES`; every caller meets the union
+    with its domain through `exact_setop`, which holds the budget)."""
+    runs: list = []
+    start = None
+    for i, e in enumerate(edges):
+        prev = i > 0 and cell_holds[i - 1]
+        nxt = i < len(cell_holds) and cell_holds[i]
+        p = point_holds[i]
+        if prev and p and nxt:
+            continue
+        if prev:
+            runs.append(sp.Interval(start[0], e, not start[1], not p))
+            start = (e, False) if nxt else None
+        elif nxt:
+            start = (e, p)
+        elif p:
+            runs.append(sp.FiniteSet(e))
+    if not runs:
+        return S.EmptySet
+    return runs[0] if len(runs) == 1 else sp.Union(*runs, evaluate=False)
 
 
 def _hull(domain):
@@ -195,10 +247,25 @@ def _poly_roots(base, var):
     return _real_roots(p)
 
 
+def certified_degree(p):
+    """`p` itself when its degree is certain: rational coefficients, or a leading coefficient whose certified sign
+    is not 0; ValueError otherwise. With a constant such as asin(log(6) - log(2) - log(3)) in its coefficients,
+    Poly takes it as a generator of the domain and never asks whether it is 0: x*asin(Q) = 0, an identity
+    (asin(Q) is exactly 0), was solved {0} and that root certified complete (round 9 attack, YO-1)."""
+    if p.domain.is_ZZ or p.domain.is_QQ:
+        return p
+    from ..equiv.numeric import NONREAL, certified_sign
+    if certified_sign(p.LC()) in (-1, 1, NONREAL):
+        return p
+    raise ValueError(f"the degree of a polynomial over {p.domain} is not certain: its leading coefficient may be 0")
+
+
 def _real_roots(p) -> list:
     """All the real roots of a polynomial with exact coefficients, exactly: `real_roots` over the
     rationals; over an algebraic field (sqrt(3) - t) every root `roots` finds, when they are all of them
-    (multiplicities summing to the degree), the real ones kept by a certified sign."""
+    (multiplicities summing to the degree), the real ones kept by a certified sign. Of a certain degree only
+    (`certified_degree`)."""
+    certified_degree(p)
     try:
         return list(dict.fromkeys(p.real_roots()))
     except Exception:  # noqa: BLE001 - not over ZZ/QQ
@@ -225,13 +292,10 @@ def _trig_parts(base, var):
     T = atoms[0]                               # another one left in g makes it no polynomial in t
     if type(T) not in _TRIG:
         return None
-    try:
-        arg = sp.Poly(T.args[0], var)
-    except sp.PolynomialError:
+    ab = _linear(T.args[0], var)
+    if ab is None:
         return None
-    if arg.degree() != 1 or not arg.domain.is_Exact or arg.free_symbols_in_domain:
-        return None
-    a, b = arg.coeff_monomial(var), arg.coeff_monomial(1)
+    a, b = ab
     t = sp.Dummy("t")
     bt = base.xreplace({T: t})
     if bt.free_symbols != {t}:
@@ -276,12 +340,18 @@ def _u_solutions(f, r) -> list[tuple]:
 
 
 def _linear(arg, var):
-    """(a, b) with arg = a*var + b, a != 0, exact numbers; or None."""
+    """(a, b) with arg = a*var + b, a CERTAINLY not 0 (`certified_degree`), exact numbers; or None. Poly takes a
+    constant such as log(6) - log(2) - log(3) for a generator and gives x*(that) degree 1: exp(x*Q) = 1, true for
+    every x (Q is exactly 0), was solved {0} (round 10 of part d4b, the class readers of YO-1)."""
     try:
         p = sp.Poly(arg, var)
     except sp.PolynomialError:
         return None
     if p.degree() != 1 or not p.domain.is_Exact or p.free_symbols_in_domain:
+        return None
+    try:
+        certified_degree(p)
+    except ValueError:
         return None
     return p.coeff_monomial(var), p.coeff_monomial(1)
 
@@ -969,7 +1039,10 @@ def _piecewise(rel, var, lo, hi):
         elif cell is sp.false:
             got = S.EmptySet
         else:
-            got = sp.Intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))
+            # the cell's own set may end at a zero PROVED equal to a cut but written another way (2**x - 8 on
+            # (-oo, 3) of |x - 3|*(2**x - 8) <= 0 ends at log(8)/log(2)): one writing first, or SymPy raised
+            # and the right (-oo, 3] was left unsolved (round 9 of part d4b, RK-1)
+            got = exact_intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))
         pieces.append(got)
     for p_ in edges:                           # each cut point and window end on `rel` as written
         if not p_.is_finite or _same(p_, bad) or outside(p_):
@@ -980,7 +1053,9 @@ def _piecewise(rel, var, lo, hi):
             continue
         if _holds(type(rel), _real_sign(val)):
             pieces.append(sp.FiniteSet(p_))
-    out = sp.Union(*pieces) if pieces else S.EmptySet
+    # the pieces end at cuts and zeros written one way per cell: |x|*(x - 3) <= 0 under x <= log(8)/log(2) met
+    # (0, log(8)/log(2)) and {3}, and SymPy's union of them was left unsolved (round 9 of part d4b, RK-1)
+    out = exact_setop(sp.Union, pieces) if pieces else S.EmptySet
     return exact_intersection(out, _defined_by(conds, var, lo, hi)) if conds else out
 
 
@@ -1051,23 +1126,24 @@ def _on_window(rel, var, lo, hi):
     # a window end PROVED equal to a zero, pole or cut takes its writing: sqrt(x - 3) - 1 at the end
     # log(8)/log(2) of x > log(8)/log(2) had no certified sign (round 8, RK-3)
     edges = _edges_on(lo, hi, zeros + poles + cuts)
-    pieces: list = []
+    cell_holds: list = []
     for a, b in zip(edges[:-1], edges[1:]):
         mid = (a + b) / 2 if a.is_finite and b.is_finite else (b - 1 if b.is_finite else a + 1 if a.is_finite else S.Zero)
         if outside(mid):
-            continue                                    # a log is not real on this cell: nothing holds
+            cell_holds.append(False)                    # a log is not real on this cell: nothing holds
+            continue
         s_ = 0 if ident else _real_sign(e.subs(var, mid))
         if s_ == 0 and not ident:
             raise _Unsolved("a zero inside a cell")       # cannot happen with the classes: refuse
-        if _holds(op, s_):
-            pieces.append(sp.Interval.open(a, b))
+        cell_holds.append(_holds(op, s_))
+    point_holds: list = []
     for p in edges:
         if not p.is_finite or _same(p, poles) or outside(p):
+            point_holds.append(False)
             continue
         s_ = 0 if ident or _same(p, zeros) else _real_sign(e.subs(var, p))
-        if _holds(op, s_):
-            pieces.append(sp.FiniteSet(p))
-    return cut(sp.Union(*pieces) if pieces else S.EmptySet), zeros, poles
+        point_holds.append(_holds(op, s_))
+    return cut(_joined(edges, cell_holds, point_holds)), zeros, poles
 
 
 def period(e, var):
@@ -1239,7 +1315,7 @@ def _rebuilt(rel, var, domain):
             return sp.Union(*[sp.FiniteSet(p0) if step == 0 else sp.ImageSet(sp.Lambda(n, p0 + step * n), S.Integers)
                               for p0, step in progs]) if progs else S.EmptySet
         zs = union(zp)
-        return sp.Intersection(sp.Complement(zs, union(pp)) if pp else zs, domain)
+        return exact_intersection(exact_complement(zs, union(pp)) if pp else zs, domain)
     if P is None:
         # not periodic: with finitely many zeros and poles, the cells cover the whole line
         return exact_intersection(_on_window(rel, var, wlo, whi)[0], domain)
@@ -1438,6 +1514,20 @@ def _on_periodic_points(rel, var, domain, P):
     return sp.Union(*[sp.ImageSet(sp.Lambda(n, p + L * n), S.Integers) for p in keep])
 
 
+def _defined_at_point(e, var, p) -> bool:
+    """Is `e` defined at var = p, every definedness condition (certify.domain) decided there? False where one
+    certainly fails; raise _Unsolved where one is undecided, a convention among them (Mod by a negative number,
+    (-1)**x at a non-integer: part d4a)."""
+    from ..certify.domain import definedness_conditions, is_convention, relation_holds_at
+    for c in definedness_conditions(e, var):
+        h = relation_holds_at(c, var, p)
+        if h is False and not is_convention(c):
+            return False
+        if h is not True:
+            raise _Unsolved(f"definedness undecided at {p}: {c}")
+    return True
+
+
 def _on_points(rel, var, pts):
     """The points of the finite set `pts` where `rel` holds, each sign certified; a pole is no point
     of the set. None when a point cannot be decided (or there are too many)."""
@@ -1450,13 +1540,22 @@ def _on_points(rel, var, pts):
         # a point where a log, an even root or an acos is not real is no point, though its value may fold
         # (0*acos(4) is 0); an odd root of a negative number there is a convention (round 8, YO-1)
         outside = _log_outside(e, var)
-        conds = _function_conditions(e, var)
+        try:
+            conds = _function_conditions(e, var)
+        except _Unsolved:
+            # factorial, Mod, (-1)**x, ...: no interval rule, but at a point their definedness is decided exactly
+            # (`_defined_at_point`); {3} of x**2 - 5x + 6 = 0 with sin(pi*x/2)*x! != 0 on {1, ..., 6} was left
+            # unsolved (round 9 of part d4b, RK-4)
+            conds = None
         odd = [n.base for n in _roots_of(e, var) if n.exp.q % 2 == 1]
         for p in pts:
             if any(_certified(u.subs(var, p)) == 0 for u in poles) or outside(p):
                 continue
-            if not all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds
-                       if c is not sp.true):
+            if conds is None:
+                if not _defined_at_point(e, var, p):
+                    continue
+            elif not all(_holds(type(c), _certified((c.lhs - c.rhs).subs(var, p))) for c in conds
+                         if c is not sp.true):
                 continue
             if any(_certified(r_.subs(var, p)) < 0 for r_ in odd):
                 if not _PRINCIPAL[0]:

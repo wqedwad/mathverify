@@ -24,6 +24,15 @@ TAN-06, TAN-07 of the `tanimlilik` angle, `denetim/2026-10-01/d4/`).
        on an undecided term, the claim's written domain in a derivative, kinks of Max/Min/sign, written givens)
     R  round 3: RK-8, a claim undefined as written where the derivative exists is INCORRECT
     S  round 3: coverage and robustness RK-1..RK-7, decided by proof only
+    T  round 4 (the attack on round 3): the false-accept probes of its second pass (tur4/t1..t18)
+    Y  round 4: the false-accept probes of its first pass (tur4/s1..s12)
+    U  round 4: the unjust-rejection and coverage probes (tur4/sonda_r2.py's own groups)
+    V  round 4: the same, tur4/sonda_rk.py's groups
+    W  round 4: the repros, the validators' variants and controls, the cases the decisions name (tur4/tekrar.py)
+    X  round 5 (the attack on round 4): its false-accept probes as they ran (tur5/p1..p10)
+    Z  round 5: the repros, their variants and the controls the decisions name (tur5/tekrar5.py)
+    O  round 6: the textbook derivatives round 4 lost (its attack's coverage lens, tur6/k3..k6, k18) and the controls
+       of the reading that restores them (tur6/tekrar6.py)
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \
         .venv/bin/python denetim/2026-10-01/d4e/sonda.py [out.json] [groups]
@@ -1361,12 +1370,128 @@ def cases_s():
     return out
 
 
+# --- round 4 (8 Oct 2026): the attack on round 3 (`d4/saldiri/d4e3/`) and the decisions `d4e3/kararlar_tur4.txt` -------
+# The probes of the attack and of its validators are kept as they ran, in tur4/ (their own helpers, ortak.py), and read
+# here: T the second-pass false-accept probes (t1..t18), Y the first-pass ones (s1..s12), U and V the unjust-rejection
+# and coverage probes (sonda_r2 and sonda_rk groups), W the repros, the validators' variants and controls and the cases
+# the decisions name (tur4/tekrar.py). A probe's expectation the decisions changed is overridden in ROUND4_EXPECT, with
+# the decision named.
+def _tur4():
+    import os
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tur4")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+
+
+# label -> (accepted verdicts, the decision): the five KINK cases are right as CORRECT (f has a derivative at 0 and the
+# claim gives it, or neither has a value there)
+ROUND4_EXPECT = {
+    "KINK derivative Piecewise((exp(x), x > 0), (1 + x, x <= 0)): Piecewise((exp(x), x > 0), (1, x <= 0)) "
+    "[value at a corner]": (OK | UNK, "KINK"),
+    "KINK derivative Max(x, -x)*Max(x, -x): 2*x [value at a corner]": (OK | UNK, "KINK"),
+    "KINK derivative Max(x**3, -x**3): 3*x**2*sign(x) [value at a corner]": (OK | UNK, "KINK"),
+    "KINK derivative x*Max(x, -x): 2*Max(x, -x) [value at a corner]": (OK | UNK, "KINK"),
+    "KINK derivative Max(x, -x)**(1/2): sign(x)/(2*sqrt(Abs(x))) [value at a corner]": (OK | UNK, "KINK"),
+    # robustness probes whose claim is wrong (measured: 2 against f' = 1; 0.190 against 0.342 at x = 0.7): INCORRECT is
+    # right, never CORRECT
+    "der Abs(x)*sign(x): 2*Abs(x)/x*0 + 2*x/x*Abs(x)/Abs(x)": (NOTOK, "wrong claim"),
+    "der Abs(sin(x))**(1/3): cos(x)*sin(x)/(3*Abs(sin(x))**(7/3))*Abs(sin(x))**2": (NOTOK, "wrong claim"),
+}
+
+
+def _probe_cases(modules):
+    _tur4()
+    import importlib
+    out = []
+    for m in modules:
+        for label, q, s, verdicts, statuses in importlib.import_module(m).cases():
+            verdicts = ROUND4_EXPECT.get(label, (verdicts,))[0]
+            out.append((f"{m}: {label}", q, s, verdicts, statuses))
+    return out
+
+
+def cases_t():
+    return _probe_cases([f"t{i}" for i in range(1, 19)])
+
+
+def cases_y():
+    return _probe_cases([f"s{i}" for i in range(1, 13)])
+
+
+def _rk_cases(names, module):
+    _tur4()
+    import importlib
+    r2 = importlib.import_module("sonda_r2")
+    mod = importlib.import_module(module)
+    out = []
+    for g in names:
+        fn = r2.GROUPS[g] if module == "sonda_r2" else getattr(mod, f"cases_{g.lower()}")
+        for grp, label, q, s, verdicts in fn():
+            verdicts = ROUND4_EXPECT.get(label, (verdicts,))[0]
+            out.append((f"{module} {grp}: {label}", q, r2._fill(s, q), verdicts, None))
+    return out
+
+
+def cases_u():
+    return _rk_cases(["K", "P", "D", "W", "R", "M", "S", "Q", "F2", "X", "Z", "L", "K2", "T"], "sonda_r2")
+
+
+def cases_v():
+    return _rk_cases(list("ABCDEFGHIJ"), "sonda_rk")
+
+
+def cases_w():
+    _tur4()
+    import importlib
+    return importlib.import_module("tekrar").cases()
+
+
+def _tur5():
+    import os
+    _tur4()
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tur5")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+
+
+# round 5: a probe's expectation the decisions (d4e4/kararlar_tur5.txt) changed, with the decision named
+ROUND5_EXPECT: dict = {}
+
+
+def cases_x():
+    _tur5()
+    import importlib
+    out = []
+    for m in [f"p{i}" for i in range(1, 11)]:
+        for label, q, s, verdicts, statuses in importlib.import_module(m).cases():
+            verdicts = ROUND5_EXPECT.get(label, (verdicts,))[0]
+            out.append((f"{m}: {label}", q, s, verdicts, statuses))
+    return out
+
+
+def cases_z():
+    _tur5()
+    import importlib
+    return importlib.import_module("tekrar5").cases()
+
+
+def cases_o():
+    import os
+    _tur5()
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tur6")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    import importlib
+    return importlib.import_module("tekrar6").cases()
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
           "H": cases_h, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n, "P": cases_p,
-          "Q": cases_q, "R": cases_r, "S": cases_s}
+          "Q": cases_q, "R": cases_r, "S": cases_s, "T": cases_t, "U": cases_u, "V": cases_v, "W": cases_w,
+          "O": cases_o, "X": cases_x, "Y": cases_y, "Z": cases_z}
 
 
-def main(out_path=None, groups="ABCDEFGHKLMNPQRS"):
+def main(out_path=None, groups="ABCDEFGHKLMNOPQRSTUVWXYZ"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -1402,5 +1527,5 @@ def main(out_path=None, groups="ABCDEFGHKLMNPQRS"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHKLMNPQRS"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHKLMNOPQRSTUVWXYZ"
     sys.exit(1 if main(out, grp) else 0)
