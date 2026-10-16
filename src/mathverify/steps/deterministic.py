@@ -2621,6 +2621,13 @@ def _with_sequence_terms(ir, ctx: Ctx, text: str, ns: dict[str, Any]):
     return None if out.atoms(AppliedUndef) else out
 
 
+# An undecided identity check that the premises' values may decide: a parameter with no value, Karr's value
+# of a backward range, or an operation SymPy cannot close while a symbol is free. With a = 1/2 given,
+# "Sum(a**k, (k, 0, oo)) = 3" stayed unknown (SymPy's sum is a Piecewise in |a| < 1), and the right
+# "= 2" was never verified (V16, DECISIONS §79)
+_RECHECKED_WHERE_PINNED = ("parametric_form", _KARR_ONLY, "cas_could_not_evaluate", "cas_could_not_evaluate_rhs")
+
+
 def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[str, dict]:
     """A `compute` claim checked as an identity (`_check_compute`), then where the premises `pool` put its
     symbols when the identity failed: its counterexample is no instance of the problem when the premises
@@ -2631,7 +2638,7 @@ def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[s
     status, ev = _check_compute(claim, ctx)
     if status == "verified":
         status, ev = _verified_where_conventions(claim, ctx, status, ev)
-    if status == "refuted" or (status == "unknown" and ev.get("reason") in ("parametric_form", _KARR_ONLY)):
+    if status == "refuted" or (status == "unknown" and ev.get("reason") in _RECHECKED_WHERE_PINNED):
         pins = _pins(claim, pool)
         if not pins:
             # the premises confine the symbols to finitely many values, or narrow them; a failure there
