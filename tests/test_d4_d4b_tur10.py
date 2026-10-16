@@ -128,6 +128,10 @@ def test_a_rewritten_node_has_room_for_its_own_cancellation():
     # asin(tanh(486)): 1 - tanh(486)**2 = 4e^(-972), a cancellation past SymPy's 332 bits of evalf(30)
     assert certified_sign(sp.asin(sp.tanh(sp.Integer(486)))) == 1
     assert certified_sign(sp.acos(sp.tanh(sp.Integer(486)))) == 1
+    # the merged state reads those two signs off the argument (numeric._monotone_sign); a difference still needs the
+    # value: asin(tanh 486) = pi/2 - 2e^(-486) > 1, acos(tanh 486) = 2e^(-486) < 1/1000 (V39, V46 lived without it)
+    assert certified_sign(sp.asin(sp.tanh(sp.Integer(486))) - 1) == 1
+    assert certified_sign(sp.acos(sp.tanh(sp.Integer(486))) - sp.Rational(1, 1000)) == -1
 
 
 def test_complex_numbers_read_off_the_cut():
