@@ -76,3 +76,35 @@ MERCEK 3 (kalkülüs, tanımlılık)
   değildir; ℂ söyleminde kapalı sıfıra bölme/kutup bir sarmalayıcıdan geçince de NO_VALUE: mekanizmaya kural, yazıma değil.
 - SON-G3-YO-5 (tartışmalı): karar D4E4-U5'tir (tam sayı bildirilmiş sembolik üs her taban için müfredatın kuvveti; (xⁿ)' = n·x^(n−1)
   CORRECT kalır). Değişiklik yok, kayıt.
+
+EK (16 Ekim akşam; g3 ikinci saldırganı ve g4 saldırganlarının bulguları)
+- G2YO-5 (orta, belirsiz, önceden var, YANLIŞ ONAY): bildirilen toleranslı çoktan seçmeli soruda pencereye birden çok şık giriyorsa
+  seçilen şık CORRECT olmaz (ayırt edilemez: UNKNOWN). G2YO-7 (orta, belirsiz, önceden var, HAKSIZ RET): toleranslı soruda çözücü kesin
+  değeri yazıp yuvarlanmış doğru şıkkı seçince INCORRECT olmaz: şık–iddia karşılaştırması bildirilen toleransla yapılır (şık kesin
+  değerin penceresindeyse ve iddia kesin değerse tutarlı). (düzeltici: adim)
+- G2YO-6 (düşük, yapay, A+): d4c3 YO-B'nin kardeş yazımı (iddiadaki iptal, aralık aritmetiğinin farkın işaretini kesemediği yer):
+  mekanizmaya kural; kesin işaret yoksa karar yok. (düzeltici: integral)
+- G2RK-13/14/15 (orta, gerçekçi, d4 öncesi d4a getirdi, KAPSAMA): (∛x)' = 1/(3∛x²) gibi ders kitabı türevleri, x > 0 bildirilmişken
+  iddianın kendi tek kök geleneği, kapalı negatif olmayan aralıkta kesirli/irrasyonel kuvvetin ekstremumu UNKNOWN. Karar: gerçel
+  kökün x = 0 kırığı türevin olmadığı yerdir (RK-8: orada değer veren iddia UNKNOWN, tanımsız doğru iddia CORRECT); bildirilen kısıt
+  bölgesinde gelenek noktası yoksa gelenek kapısı durmaz (G2RK-3 ile aynı bölgeli kapı). SON-G3-RK-1 (A+, d4b tur 10 real_power,
+  kısıtsız x'te x^x/x^π türevi ve ilkeli UNKNOWN) aynı kapı: noktasız türev/ilkelde gelenek noktaları sonlu ve iddia orada yazıldığı
+  biçimde değerlendirilebiliyorsa (convention_null_on'un integral kuralı gibi) kapı durmaz. (düzeltici: kalkulus; G2RK-3 integral'de)
+- SON-G3-RK-3 (orta, belirsiz, önceden var, HAKSIZ RET): esas argüman geleneği: [0, 2π) (müfredat) ile (−π, π] (SymPy) farklı. Karar:
+  arg/esas argüman cevabı iki aralıktan birindeki doğru temsilciyse UNKNOWN (gelenek), hiçbirinde değilse ya da 2π katı farkla
+  eşleşmiyorsa INCORRECT; problem aralığı yazıyorsa o aralık. (düzeltici: sayisal)
+- G4YO-1 (orta, gerçekçi, önceden var, YANLIŞ ONAY): '{∅}' (boş kümeyi içeren küme) "çözüm yok" okunmaz: _NO_SOLUTION düzenli ifadesi
+  yalnız boş kümenin kendisini (∅, {}, Ø, "çözüm yok", "boş küme") tanır; '{∅}' ve '{Ø}' bir elemanlı küme olarak ya okunur ya UNKNOWN.
+- G4YO-2 (orta, belirsiz, önceden var, YANLIŞ ONAY): '1/2π', '1/2√x', 'x/2π' gibi bölmeden sonra yan yana yazım belirsizdir (π/2 mi
+  1/(2π) mi): metin bu biçimdeyse iddia okunmaz (UNKNOWN; claim_ambiguous_juxtaposition); LaTeX \frac ve açık parantez etkilenmez.
+- G4YO-3 (düşük, belirsiz, önceden var): yük temizleyici Türkçe olumsuzlama/şüphe eklerini (değildir, yanlıştır, olmayabilir, olamaz,
+  belki, sanırım …) görürse iddia okunmaz (UNKNOWN).
+- G4-RK-5 (orta, gerçekçi, önceden var, HAKSIZ RET): çözümsüz denklemde çelişki adımı ('0 = 2', '1 = 3') geçerli bir türetmedir: öncüller
+  (görevin denklemi) hiçbir noktada sağlanmıyorsa (kanıtlı) kapalı yanlış ilişki adımı çürütülmez (unknown ya da verified: öncül
+  kümesi boşsa her sonuç geçerli); öncül kümesi boş olduğu kanıtlanamazsa bugünkü gibi.
+- G4-K-4 (düşük, gerçekçi, kapsama): tek gerçel noktalı verilende yanlış adım çürütülmüyor: sonlu örnek yolu (_finite_instances)
+  kareler toplamı/√+|·| = 0 verilenini çözebiliyorsa okur; değilse kayıt.
+- Önceden var kapsama (SON-G3-RK-4 Türkçe/LaTeX tanım kümesi yazımları, RK-5 trig ekstremum, RK-6 (−1)ⁿ dizileri, RK-7 logaritmik limitler,
+  RK-8 parçalı kırık noktada 'yok' cevabı, RK-9 trig tanım koşullu noktada türev/teğet/limit, RK-10): kayıt; RK-9 (yüksek kapsama:
+  (ln sin x)'(π/4) = 1 karar almıyor) ve RK-4 ucuz ve kesin yolla düzeltilebiliyorsa ölçerek düzeltilir. SON-G3-RK-2 (A+, U5: n ≥ 2
+  bildirilmiş üste ikinci türev): U5'in dar genişlemesi (n − k ≥ 0 kanıtlıysa taban koşulu yok) ölçülerek.
