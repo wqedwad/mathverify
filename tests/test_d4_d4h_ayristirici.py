@@ -388,7 +388,8 @@ def test_values_and_symbolic_gcds_stay_claims():
     assert _run(_ev("gcd(84, 120)", []), "12").verdict == "CORRECT"
     assert _run(_ev("gcd(84, 120)*a", [a]), "12*a").verdict == "CORRECT"
     assert _run(_ev("gcd(n, 4)", [n], ["n = 12"]), "4").verdict == "CORRECT"
-    assert _run(_ev("binomial(6, 3)", []), "binomial(6, 6 - 3)").verdict == "CORRECT"
+    # merged with d4j (GAP-LFLOOR): binomial applied to closed arguments for the target binomial(6, 3) computes it
+    assert _run(_ev("binomial(6, 3)", []), "binomial(6, 6 - 3)").verdict == "UNKNOWN"
     assert _run(_ev("2*10", []), r"\binom{6}{3}").verdict == "CORRECT"
     from mathverify.normalize.parse import parse_expr_str, recording_integer_ops
     with recording_integer_ops() as seen:

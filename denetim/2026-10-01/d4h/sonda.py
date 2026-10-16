@@ -295,8 +295,10 @@ def cases_g():
                 ir("simplify_expression", {"expr": "gcd(n, 4)"}, (), NI, "expression"), sol("gcd(4, n)", "expression"),
                 NOTNO, None))
     out.append(("G1 ctl evaluate binomial(6, 3): 20", ev("binomial(6, 3)", []), sol("20"), OK, None))
-    out.append(("G1 ctl evaluate binomial(6, 3): binomial(6, 6 - 3) (DECISIONS 28)", ev("binomial(6, 3)", []),
-                sol("binomial(6, 6 - 3)"), OK, None))
+    # merged with d4j (GAP-LFLOOR): the target's own operation applied to closed arguments is a computation the
+    # verifier would do, not a value (claim_is_not_a_value); a closed binomial stays a value for any other target
+    out.append(("G1 ctl evaluate binomial(6, 3): binomial(6, 6 - 3) (DECISIONS 28; d4j GAP-LFLOOR)",
+                ev("binomial(6, 3)", []), sol("binomial(6, 6 - 3)"), UNK, None))
     out.append(("G1 ctl evaluate 2*10: \\binom{6}{3}", ev("2*10", []), sol(r"\binom{6}{3}"), OK, None))
     out.append(("G1 ctl evaluate floor(17/5): 3", ev("floor(17/5)", []), sol("3"), OK, None))
     return out
