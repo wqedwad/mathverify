@@ -20,6 +20,9 @@ pinned here by an input it still decides or, where a process-wide guard now shad
   ConditionSet by certified comparisons at the point, never by SymPy's `contains` (which reads the condition by
   substitution, without the definedness at the point).
 
+And a coverage loss of round 10 in the merged state (W01, W02): a polar number had no strict reading, and the sum of
+(-1)**k/k! = 1/e was UNKNOWN; on its principal sheet it is read as exp(z), off it not at all.
+
 The tests marked "kapanış" fail with the mutation of the guard they name (measured: see the commit message).
 """
 from __future__ import annotations
@@ -133,3 +136,31 @@ def test_membership_in_a_condition_set_is_not_sympys(monkeypatch):              
     monkeypatch.setattr(sp.ConditionSet, "_contains", lambda self, other: sp.true)   # a reading SymPy could get wrong
     assert in_domain(cs, sp.Integer(-7)) is False and in_domain(cs, sp.Integer(7)) is True
     assert in_domain(sp.Intersection(sp.Interval(-10, 10), cs, evaluate=False), sp.Integer(-7)) is False
+
+
+# --- the merged state: a polar number on its principal sheet (d4e sonda W, RK-4; 16 Oct 2026) -----------------------
+# Summation (hyperexpand, polar_lift) asks arg.eval whether Mod(im(exp_polar(I*pi)), 2*pi) > pi. Round 10 reads a
+# relation of numbers from a strict evaluation only, and exp_polar had none: the relation stood, SymPy's cache turned
+# the TypeError into an AttributeError, and the sum of (-1)**k/k! = 1/e (CORRECT on 9d60d17's predecessors) fell to
+# UNKNOWN. On its principal sheet a polar number is the complex number exp(z), exactly (SymPy's evalf reads it so too).
+
+@pytest.mark.parametrize("term,claim,want", [
+    ("(-1)**k/factorial(k)", "exp(-1)", "CORRECT"), ("(-1)**k/factorial(k)", "1/E", "CORRECT"),
+    ("(-1)**k/factorial(k)", "E", "INCORRECT"), ("(-2)**k/factorial(k)", "exp(-2)", "CORRECT"),
+    ("(-2)**k/factorial(k)", "exp(2)", "INCORRECT"),
+])
+def test_an_alternating_exponential_series_is_summed(term, claim, want):                    # kapanış: W01
+    q = _ir("series_sum", {"term": term, "var": "k", "lo": "0", "hi": "oo"}, ({"name": "k", "domain": "integer"},))
+    assert verify(q, {"claimed_answer": {"kind": "value", "payload": claim}, "steps": []}).verdict == want
+
+
+def test_a_polar_number_is_read_on_its_principal_sheet_only():                              # kapanış: W01 W02
+    from mathverify._sympy_guards import strict_value
+    i_pi = sp.I * sp.pi
+    assert strict_value(sp.im(sp.exp_polar(i_pi)), 15) == 0
+    assert sp.Mod(sp.im(sp.exp_polar(i_pi)), 2 * sp.pi) == 0
+    # off it a root or a log is not the principal one: sqrt(exp_polar(2*I*pi)) is exp_polar(I*pi) = -1, not
+    # sqrt(exp(2*I*pi)) = 1
+    assert sp.sqrt(sp.exp_polar(2 * i_pi)) == sp.exp_polar(i_pi)
+    assert strict_value(sp.Pow(sp.exp_polar(2 * i_pi), sp.S.Half, evaluate=False), 15) is None
+    assert strict_value(sp.exp_polar(-i_pi), 15) is None

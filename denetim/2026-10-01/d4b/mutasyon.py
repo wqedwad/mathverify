@@ -617,6 +617,12 @@ MUTATIONS += [
      "                r = None\n", T10 + "test_a_special_function_of_exact_arguments"),
     ("V52 floor/ceiling kuruluşta gürültüden", GRD, "        _integers.get_integer_part = _strict_integer_part\n",
      "        pass\n", T10 + "test_floor_and_ceiling_of_a_number_are_not_formed_from_noise"),
+    # the close of round 10: a polar number on its principal sheet (merged state, d4e sonda W)
+    ("W01 exp_polar okunmaz", GRD, "    if isinstance(x, sp.exp_polar):\n", "    if False:\n",
+     TK + "test_an_alternating_exponential_series_is_summed"),
+    ("W02 exp_polar tabakası denetlenmez", GRD,
+     "        if _sign(iz + sp.pi, options) != 1 or _sign(sp.pi - iz, options) not in (0, 1):     # SymPy's exact sums\n"
+     "            return None\n", "", TK + "test_a_polar_number_is_read_on_its_principal_sheet_only"),
     # RK-4: a constraint that could not be applied
     ("V35 uygulanamayan kısıtta üst küme çürütmesi yok", VER,
      "        outside = _claim_outside_superset(problem_ir, solution, ctx)", "        outside = None",
