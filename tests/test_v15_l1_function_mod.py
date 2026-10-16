@@ -81,6 +81,19 @@ def test_a_function_mod_outside_the_safe_subset_is_still_refused(label, ir, kind
     assert _build(ir, claim, kind) is None, label
 
 
+def test_only_the_domain_question_accepts_a_real_mod():
+    """The template's own check keeps refusing a real Mod (C4); the printer refuses it too, so this is the
+    first of two guards and is tested on its own."""
+    import sympy as sp
+    from mathverify.formal.statement import LeanPrintError, _definedness
+    x = sp.Symbol("x", real=True)
+    with pytest.raises(LeanPrintError):
+        _definedness(sp.Mod(x, 2))
+    assert _definedness(sp.Mod(x, 2), real_mod=True) == []
+    with pytest.raises(LeanPrintError):
+        _definedness(sp.Mod(x, -2), real_mod=True)                     # no positive literal divisor
+
+
 def test_a_body_whose_parse_changes_its_domain_is_still_refused():
     ir = _ir("evaluate", {"expr": "f(3)"}, [{"name": "x", "domain": "positive_real"}], "x**2/x + 1", ("x",))
     assert _build(ir, "4") is None

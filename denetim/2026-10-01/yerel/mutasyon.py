@@ -49,7 +49,7 @@ MUTATIONS = [
      "        wc, pc = _open(_definedness(w[0])), _open(_definedness(body))\n",
      L + "test_a_function_mod_by_a_positive_literal_is_stated_in_the_integers"),
     ("Y09 gerçel Mod her yerde kabul", STM, "            if not (_safe_mod(m) or real_mod and literal):\n",
-     "            if not (_safe_mod(m) or literal):\n", L + "test_a_function_mod_outside_the_safe_subset_is_still_refused"),
+     "            if not (_safe_mod(m) or literal):\n", L + "test_only_the_domain_question_accepts_a_real_mod"),
 ]
 
 if __name__ == "__main__":
