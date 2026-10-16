@@ -171,6 +171,10 @@ def test_the_deciding_helpers_are_built_unevaluated_only_over_a_closed_form():
     assert isinstance(held, sp.atan2) and held.has(sp.Integral)
     m = parse_expr_str("Max(Sum(1/k**2, (k, 1, oo)), 1)", _ns(X, {"name": "k", "domain": "integer"}))
     assert isinstance(m, sp.Max) and m.has(sp.Sum)
+    # read without a hold (merged: guarded_parse_expr holds no form), an atan2 over a form evaluated would be -I*log(...)
+    assert isinstance(parse_expr_str(f"atan2({SPK} - 1, 1)", ns), sp.atan2)
+    t = parse_expr_str("atan2(Sum(1/k**2, (k, 1, oo)) - 2, 1)", _ns(X, {"name": "k", "domain": "integer"}))
+    assert isinstance(t, sp.atan2) and t.has(sp.Sum)
 
 
 def test_a_helper_named_bare_is_its_sympy_class():
