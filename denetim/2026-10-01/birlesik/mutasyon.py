@@ -1,7 +1,8 @@
 """Mutation check of the merged state of the fourth audit's fixes (A+, 15 Oct 2026; DECISIONS §89): the guards the
 merge itself added (`equiv.numeric._monotone_sign`, d4c round 3's `_stands` inside d4b round 10's `_evalf_sign`;
 `certify.domain.convention_null_on` in the integral, derivative and limit gates, the zero_power point of
-`certify.calculus._exact_conditions`). The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
+`certify.calculus._exact_conditions`; with d4h round 2: a closed form's checked value in a certified sign, a jump over a
+form built unevaluated, count_roots' expression as a step premise). The machinery (throwaway clones of the committed HEAD, exit codes, clean-up) is
 the one of denetim/2026-09-26/mutasyon.py.
 
     .venv/bin/python denetim/2026-10-01/birlesik/mutasyon.py [-j N] [--list] [name ...]
@@ -27,6 +28,10 @@ STANDS = TB + "test_a_strict_reading_that_does_not_stand_higher_is_dropped"
 DOM = "src/mathverify/certify/domain.py"
 CAL = "src/mathverify/certify/calculus.py"
 LIM = "src/mathverify/certify/limits.py"
+PAR = "src/mathverify/normalize/parse.py"
+DET = "src/mathverify/steps/deterministic.py"
+FORM = TB + "test_a_form_has_the_sign_of_its_checked_value"
+CR = TB + "test_count_roots_reads_its_expression_as_a_premise"
 NULL = TB + "test_a_convention_on_finitely_many_points_does_not_stop_an_integral"
 PTS = TB + "test_the_points_where_a_convention_may_fail"
 
@@ -67,6 +72,16 @@ MUTATIONS = [
     ("M17 odd_root okunmaz", DOM, '{"odd_root": lambda u: sp.Lt(u, 0),', "{", NULL),
     ("M18 TTK'da zero_power noktası kural değil", CAL, "            c = Ne(c.args[0], 0)\n", "            pass\n",
      TB + "test_the_fundamental_theorem_with_an_irrational_power"),
+    ("M19 kapalı biçimin işareti okunmaz", NUM,
+     "    v = _forms_valued(e, timeout)\n    if v is not None:\n        return certified_sign(v, timeout)\n", "", FORM),
+    ("M20 metin okunurken de biçim değerlenir", NUM, "    if _FORMS_HELD.get() or not has_closed_form(e):\n",
+     "    if not has_closed_form(e):\n", FORM),
+    ("M21 biçim üzerindeki sıçrama kurulurken değerlenir", PAR,
+     "    if has_closed_form_node(list(args)):\n        return None\n", "", FORM),
+    ("M22 count_roots ifadesi öncül değil", DET, '_TASK_ZERO_PARAMS = {"count_roots": "expr"}', "_TASK_ZERO_PARAMS = {}",
+     CR),
+    ("M23 count_roots ifadesi ilişki diye okunur", DET, "        rel = Eq(ctx.expr(src), 0) if zero else ctx.rel(src)\n",
+     "        rel = ctx.rel(src)\n", CR),
 ]
 
 if __name__ == "__main__":

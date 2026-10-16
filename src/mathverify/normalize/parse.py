@@ -730,7 +730,11 @@ def _jump_eval(cls, base, args):
     constant argument off rounding noise: (2*atan(tanh(1/2)) - atan(sinh(1)))**2 is exactly 0, and the parse
     made its ceiling 1 and the floor of its negative -1, so 1 and -1 were certified and the right 0 refuted
     (round 9 of part d4b, YO-4). The class is SymPy's subclass, so a rebuilt node (subs, a sandbox worker's
-    unpickling) is held the same way."""
+    unpickling) is held the same way. Over a closed integral, sum, product or limit it stays as written too: a form's
+    value comes from `equiv.forms.checked_forms` alone, as for the namespace's helpers (`_form_unevaluated`, part
+    d4h), and a certified sign now reads it (merge of d4h round 2)."""
+    if has_closed_form_node(list(args)):
+        return None
     if all(isinstance(a, sp.Expr) and a.is_number is True and not a.free_symbols for a in args) \
             and not all(a.is_Rational for a in args) \
             and not any(a.has(sp.oo, -sp.oo, sp.zoo, sp.nan) for a in args):

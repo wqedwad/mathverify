@@ -566,6 +566,9 @@ def _certified_sign(e, timeout: float):
     s = _evalf_sign(e, timeout)
     if s is not _NOT_READ:
         return s
+    v = _forms_valued(e, timeout)
+    if v is not None:
+        return certified_sign(v, timeout)
     if e.is_extended_real is not True and _imaginary_part_nonzero(e, timeout):
         return NONREAL
     if _in_sandbox_worker():
@@ -583,6 +586,27 @@ def _certified_sign(e, timeout: float):
 
 
 _NOT_READ = object()       # strict evalf decided nothing: the exact zero test is left
+
+
+def _forms_valued(e, timeout: float):
+    """`e` with its closed integrals, sums, products and limits replaced by the values `equiv.forms.checked_forms`
+    takes (an integral's symbolic certificate, a sum's SymPy value confirmed by numbers), or None when it holds no
+    closed form, one is not confirmed, or a text is being read (its forms stay as written there, part d4h). Strict
+    evalf reads no form (d4b round 10: their evaluation is not tracked), and d4h keeps a form unevaluated wherever a
+    value decides (floor, a comparison) so that its value comes from `checked_forms` alone: merged, the step
+    floor(∫_0^3 x dx) = 3 and the given x > ∫_0^3 x dx with x = 5 had no sign at all and were left undecided, while
+    an `evaluate` task read the same form (merge of d4h round 2, 15 Oct 2026). A form is valued innermost first, so
+    no form reaches this again from within. The spike ∫_{-1}^{1} 1000·exp(-10⁶(x - 1/3)²) dx is valued by its
+    certificate (√π·erf): SymPy's evalf, the read d4h's branch took, gave 2.9e-834 and its difference with 1 the
+    sign -1."""
+    from ..normalize.parse import _FORMS_HELD
+    from .forms import checked_forms, has_closed_form
+    if _FORMS_HELD.get() or not has_closed_form(e):
+        return None
+    try:
+        return checked_forms(e, timeout)
+    except Exception:  # noqa: BLE001 - UnverifiedForm, or a check that failed: no value
+        return None
 
 
 def _stands(e, parts) -> bool:

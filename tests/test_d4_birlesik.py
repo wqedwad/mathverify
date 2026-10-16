@@ -154,3 +154,54 @@ def test_the_fundamental_theorem_with_an_irrational_power():
     assert sp.simplify(certified_integral_value(x**sp.sqrt(2), x, 1, 2)[0] - (2**r2 - 1) / r2) == 0
     assert certified_integral_value(x**sp.sqrt(2), x, 0, 1)[0] == 1 / r2
     assert certified_integral_value(x**sp.sqrt(2), x, -1, 1)[0] is None                    # undefined on [-1, 0)
+
+
+# --- a closed form's sign (d4b round 10 x d4h round 2) ------------------------------------------------------------
+# d4b round 10 reads no strict sign off a form (its evaluation is not tracked); d4h keeps a form unevaluated wherever a
+# value decides, its value from `equiv.forms.checked_forms` alone. Merged, the step floor(∫_0^3 x dx) = 3 and the given
+# x > ∫_0^3 x dx with x = 5 had no sign; a certified sign now reads a form through its checked value, never while a
+# text is read, and a jump over a form is not evaluated when it is built (`numeric._forms_valued`, `parse._jump_eval`).
+I3 = sp.Integral(x, (x, 0, 3))                                                       # 9/2
+SPK = sp.Integral(1000 * sp.exp(-10**6 * (x - sp.Rational(1, 3))**2), (x, -1, 1))   # sqrt(pi)*(erf + erf)/2 ~ 1.77
+
+
+def test_a_form_has_the_sign_of_its_checked_value():
+    from mathverify.normalize import parse
+    assert certified_sign(5 - I3) == 1 and certified_sign(I3 - 5) == -1 and certified_sign(I3 - sp.Rational(9, 2)) == 0
+    assert certified_sign(SPK - 1) == 1                    # SymPy's evalf of it is 2.9e-834: the sign was -1
+    token = parse._FORMS_HELD.set(True)
+    try:
+        assert certified_sign(5 - I3) is None              # a text being read keeps its forms as written
+    finally:
+        parse._FORMS_HELD.reset(token)
+    assert isinstance(parse.floor(I3), sp.floor)           # not evaluated when built; checked_forms gives 4
+    ev = {"task": {"kind": "evaluate", "params": {"expr": "x"}}, "vars": [{"name": "x", "domain": "real"}],
+          "givens": [f"x > {I3}", "x = 5"], "answer_shape": "scalar"}
+    assert _run(ev, "5").verdict == "CORRECT"
+    one = _ir("evaluate", {"expr": "1"})
+    for step, status in ((f"floor({I3}) = 4", "verified"), (f"floor({I3}) = 3", "refuted")):
+        r = verify(one, {"claimed_answer": {"kind": "value", "payload": "1"},
+                         "steps": [{"id": "s1", "kind": "compute", "claim": step, "from": [], "text": ""}]})
+        assert [s["status"] for layer in r.layers if layer.layer == "steps.refute"
+                for s in layer.evidence.get("steps", [])] == [status], step
+
+
+# --- count_roots: its expression = 0 is a premise of the steps (d4h's _TASK_RELATION_PARAMS) ---------------------
+def _count_roots(expr, n, steps, **kw):
+    ir = {"task": {"kind": "count_roots", "params": {"expr": expr, "var": "x", **kw}},
+          "vars": [{"name": "x", "domain": "real"}], "givens": [], "answer_shape": "count"}
+    r = verify(ir, {"claimed_answer": {"kind": "count", "payload": n},
+                    "steps": [{"id": f"s{i}", "kind": "eq", "claim": c, "from": [], "text": ""}
+                              for i, c in enumerate(steps)]})
+    return r.verdict, [s["status"] for layer in r.layers if layer.layer == "steps.refute"
+                       for s in layer.evidence.get("steps", [])]
+
+
+@pytest.mark.parametrize("steps, n, kw, verdict, statuses", [
+    (["x + 2 = x**2"], 2, {}, "CORRECT", ["verified"]),          # refuted and INCORRECT without the premise
+    (["(x - 2)*(x + 1) = 0"], 2, {}, "CORRECT", ["verified"]),
+    (["x + 2 = x**2"], 1, {"lo": "0"}, "CORRECT", ["verified"]),
+    (["x + 2 = x**3"], 2, {}, "INCORRECT", ["refuted"]),
+])
+def test_count_roots_reads_its_expression_as_a_premise(steps, n, kw, verdict, statuses):
+    assert _count_roots("x**2 - x - 2", n, steps, **kw) == (verdict, statuses)
