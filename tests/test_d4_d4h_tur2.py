@@ -107,13 +107,20 @@ def test_yo1_every_reader_that_builds_a_tree_holds_the_form():
     ns = build_namespace(ProblemIR.from_dict(_ev("1", [X])))
     x = ns["x"]
     assert not isinstance(parse_relation(f"{SPK} < 1", ns), sp.logic.boolalg.BooleanAtom)       # the relation itself
-    try:                                                                                      # the ends of a set
-        assert parse_set_str(f"(1, {SPK})", ns) is not sp.S.EmptySet
-    except ParseError:
-        pass                                    # ends compared exactly: not read
+    # the ends of a set are compared exactly: with the form held they are not read (unheld, merged with d4b round 10,
+    # the reading is undecided, not EmptySet: the hold is checked as such, here and below)
+    with pytest.raises(ParseError):
+        parse_set_str(f"(1, {SPK})", ns)
     assert parse_domain(f"x > {SPK} and x < 1", x, ns) is not sp.S.EmptySet                    # a domain's parts
     r = _run(_ev("1", [X, T]), "1", steps=[("compute", f"{SPK} < 1")])
     assert _step(r) != "verified"
+    from mathverify.normalize import parse
+    spk = parse.parse_expr_str(SPK, ns)
+    token = parse._FORMS_HELD.set(True)
+    try:
+        assert isinstance(spk.evalf(), sp.Integral)                 # no number while a text is read (SymPy's: 2.9e-834)
+    finally:
+        parse._FORMS_HELD.reset(token)
 
 
 def test_yo1_controls_decide_as_before():
