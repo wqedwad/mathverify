@@ -163,6 +163,14 @@ def test_the_deciding_helpers_are_built_unevaluated_only_over_a_closed_form():
     # the index of the sum becomes an integer after the call: the rebuilt floor stays unevaluated
     s = parse_expr_str("floor(Sum(1/k**2, (k, 1, oo)))", _ns(X, {"name": "k", "domain": "integer"}))
     assert isinstance(s, sp.floor) and s.has(sp.Sum)
+    # merged with d4b round 10 a floor, ceiling, sign, frac or Mod over a form is held when it is built
+    # (normalize.parse._jump_eval): the rebuilds are checked on the other deciding helpers too
+    w = substitute_free(parse_expr_str(f"atan2(a*{SPK} - 1, 1)", ns), {a: 1})
+    assert isinstance(w, sp.atan2) and w.has(sp.Integral)
+    held = hold_parametric(parse_expr_str(f"atan2({SPK.replace('1000*exp', 'a*1000*exp')} - 1, 1)", ns), {a: 1})
+    assert isinstance(held, sp.atan2) and held.has(sp.Integral)
+    m = parse_expr_str("Max(Sum(1/k**2, (k, 1, oo)), 1)", _ns(X, {"name": "k", "domain": "integer"}))
+    assert isinstance(m, sp.Max) and m.has(sp.Sum)
 
 
 def test_a_helper_named_bare_is_its_sympy_class():
