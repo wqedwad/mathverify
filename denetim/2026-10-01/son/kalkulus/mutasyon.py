@@ -149,6 +149,9 @@ MUTATIONS = [
     ("K42 yazıldığı gibi okumada R - küme yok", PAR,
      "    if diff_ is not None and number_set_named(diff_.group(1)) is not None:\n", "    if False:\n",
      T + "test_textbook_set_notation"),
+    ("K43 gerçel kök kuralının eğimi okunmaz", CAL,
+     '            cache[p] = {"status": "value", "value": slope["value"], "by": "real_root_rule"}\n',
+     "            pass\n", T + "test_the_real_root_rules_slope_is_read_where_sympys_formula_has_none"),
 ]
 
 if __name__ == "__main__":

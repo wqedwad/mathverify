@@ -317,10 +317,12 @@ def cases_f():
     out = []
     for f, c in [("cbrt(x)", "1/(3*cbrt(x)**2)"), ("cbrt(x)", "1/(3*cbrt(x**2))"), ("cbrt(x)", "cbrt(x)/(3*x)"),
                  ("cbrt(2*x + 1)", "2/(3*cbrt((2*x + 1)**2))"), ("cbrt(x)**4", "4*cbrt(x)/3"),
-                 ("root(x, 3)", "1/(3*root(x, 3)**2)"), ("cbrt(x)**2", "2/(3*cbrt(x))")]:
+                 ("root(x, 3)", "1/(3*root(x, 3)**2)"), ("cbrt(x)**2", "2/(3*cbrt(x))"), ("x*cbrt(x)", "4*cbrt(x)/3"),
+                 ("x**2*cbrt(x)", "7*x*cbrt(x)/3")]:
         out.append((f"G2RK-13 ({f})' = {c}", der(f), E_(c), OK, None))
     out += [("G2RK-13 (cbrt x)' = 1/(3 cbrt x) wrong", der("cbrt(x)"), E_("1/(3*cbrt(x))"), NO, None),
-            ("G2RK-13 (x cbrt x)' = cbrt x wrong", der("x*cbrt(x)"), E_("cbrt(x)"), NO, None)]
+            ("G2RK-13 (x cbrt x)' = cbrt x wrong", der("x*cbrt(x)"), E_("cbrt(x)"), NO, None),
+            ("G2RK-13 (x cbrt x)' wrong at 0 alone", der("x*cbrt(x)"), E_("4*cbrt(x)/3 + 1 - Abs(sign(x))"), NO, None)]
     for f, c in [("cbrt(x)", "1/(3*x**(2/3))"), ("cbrt(x)", "x**(-2/3)/3"), ("cbrt(x**2)", "2/(3*x**(1/3))"),
                  ("x*cbrt(x)", "4*x**(1/3)/3")]:
         out.append((f"G2RK-14 [x>0] ({f})' = {c}", der(f, vars_=[XP]), E_(c), OK, None))

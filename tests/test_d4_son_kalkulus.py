@@ -382,6 +382,14 @@ def test_a_wrong_real_root_derivative_stays_wrong():
     assert _v(_der("cbrt(x)"), _sol("cbrt(x)**2/3", "expression")) == "INCORRECT"
 
 
+def test_the_real_root_rules_slope_is_read_where_sympys_formula_has_none():
+    # x*∛x has f'(0) = 0 (g(0) = 0): read by the rule, where SymPy's formula holds a DiracDelta; the limits decided nothing
+    assert _v(_der("x*cbrt(x)"), _sol("4*cbrt(x)/3", "expression")) == "CORRECT"
+    assert _v(_der("x**2*cbrt(x)"), _sol("7*x*cbrt(x)/3", "expression")) == "CORRECT"
+    # a claim with another value at 0 alone: wrong there
+    assert _v(_der("x*cbrt(x)"), _sol("4*cbrt(x)/3 + 1 - Abs(sign(x))", "expression")) == "INCORRECT"
+
+
 def test_the_real_root_rule():
     from mathverify.certify.calculus import _real_root_rule, abs_form, switch_arguments
     x = sp.Symbol("x", real=True)

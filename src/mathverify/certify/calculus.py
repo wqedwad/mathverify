@@ -1302,7 +1302,7 @@ def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
     return "corner"
 
 
-def _real_root_rule(fa, var, p, u, switches, fconds) -> str | None:
+def _real_root_rule(fa, var, p, u, switches, fconds, out: dict | None = None) -> str | None:
     """f = h + g*sign(u)**a*|u|**r at a zero p of u: a real root (cbrt(u) parses to sign(u)*|u|**(1/3), its powers to
     sign(u)**k*|u|**(k/3)) or a power of |u|, r > 0 a number, a >= 0 an integer, g, h and u analytic at p
     (`smooth_at`). Off p, sign(u)**a is 1 for an even a, and the term is 0 at p, so a's parity alone counts. r > 1,
@@ -1310,7 +1310,9 @@ def _real_root_rule(fa, var, p, u, switches, fconds) -> str | None:
     is g*u ('value'); r = 1 with an even a, g(p) != 0 and u'(p) != 0: |u|'s corner; 0 < r < 1, g(p) != 0 and
     u'(p) != 0: an infinite slope (odd a) or a cusp (even a): no derivative ('corner'). Exact, no limit taken:
     SymPy's limits did not decide the continuity of sign(x)*|x|**(1/3) at 0, and the textbook (∛x)' = 1/(3∛x²) was
-    UNKNOWN (son saldırı G2RK-13). None when the rule does not apply or decides nothing."""
+    UNKNOWN (son saldırı G2RK-13). With 'value', f'(p) itself goes to `out` ("value"): SymPy's formula has none at p
+    (a DiracDelta, 0*oo), and (x∛x)' = 4∛x/3 was compared there by limits that decided nothing. None when the rule
+    does not apply or decides nothing."""
     signs = [s_ for s_ in fa.atoms(sp.sign) if s_.args[0] == u]
     absolutes = [a_ for a_ in fa.atoms(sp.Abs) if a_.args[0] == u]
     if len(signs) > 1 or len(absolutes) != 1:
@@ -1332,13 +1334,24 @@ def _real_root_rule(fa, var, p, u, switches, fconds) -> str | None:
         return None
     if not all(smooth_at(e, var, p, others, fconds, root_of=u) for e in (g, h, u)):
         return None
-    if certified_sign(r - 1) == 1:
+
+    def value(term_slope=S.Zero):
+        # f'(p) = h'(p) + the term's: 0 when the term is o(x - p), g(p)*u'(p) for g*u (r = 1, odd a)
+        if out is not None:
+            try:
+                v = sp.simplify(sp.diff(h, var).subs(var, p) + term_slope)
+                if _real_finite(v) is True:
+                    out["value"] = v
+            except Exception:  # noqa: BLE001 - the status alone
+                pass
         return "value"
+    if certified_sign(r - 1) == 1:
+        return value()
     gp = _nonzero_at(g, var, p, root_of=u)
     if gp is False:
-        return "value"
+        return value()
     if r == 1 and a % 2 == 1:
-        return "value"
+        return value(g.subs(var, p) * sp.diff(u, var).subs(var, p))
     if gp is not True or _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
         return None
     return "corner" if r == 1 or certified_sign(1 - r) == 1 else None
@@ -1421,7 +1434,11 @@ def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, c
     if st is None:
         st = _power_rule(fa, var, p, u, switches, fconds)
     if st is None:
-        st = _real_root_rule(fa, var, p, u, switches, fconds)
+        slope: dict = {}
+        st = _real_root_rule(fa, var, p, u, switches, fconds, slope)
+        if st == "value" and order == 1 and cache is not None and p not in cache and "value" in slope:
+            # f'(p) by the rule, exactly: `_value_holes` reads it where SymPy's formula has no value (G2RK-13)
+            cache[p] = {"status": "value", "value": slope["value"], "by": "real_root_rule"}
     if st is None and order == 1 and f.has(sp.Piecewise):
         st = _piecewise_rule(f, var, p)
     if order == 1 and st is not None:
