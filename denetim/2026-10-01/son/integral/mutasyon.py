@@ -157,6 +157,13 @@ MUTATIONS = [
     ("I46 ıraksayan merdiven de durmuş sayılır", CAL,
      "            if not spread <= mp.mpf(10) ** -20 * scale:\n                return False\n", "",
      T + "test_a_ladder_whose_values_settle_confirms_the_certificate"),
+    # --- G2YO-6
+    ("I47 açılmış okuma yok", RP, "            if ex != dp and ex != 0 and constant_sign(ex) is not None:\n",
+     "            if False:\n", T + "test_a_point_whose_difference_has_no_sign_is_no_agreement"),
+    ("I48 büyük kuvvetli nokta okunur", RP, "        if _heavy_power_at(d, at):\n            unread.append(i)\n",
+     "        if False:\n            unread.append(i)\n", T + "test_a_point_whose_difference_has_no_sign_is_no_agreement"),
+    ("I49 doğrulanamayan işaretli nokta uyum sayılır", RP, "    return None, bool(nonzero or undecided)\n",
+     "    return None, bool(undecided)\n", T + "test_a_difference_below_every_interval_is_not_certified"),
 ]
 
 if __name__ == "__main__":

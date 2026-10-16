@@ -431,3 +431,33 @@ def test_x_to_the_x_in_the_fundamental_theorem():
     assert _v(_dint("x**x*(1 + log(x))", 1, 2), "3") == "CORRECT"
     assert _v(_dint("x**x*(1 + log(x))", 1, "E"), "exp(E) - 1") == "CORRECT"
     assert _v(_dint("x**x*(1 + log(x))", 1, 2), "4") == "INCORRECT"
+
+
+# G2YO-6 ---------------------------------------------------------------------------------------------------------
+NPR = 6 * 1000003 * 999983 * 1000033 * 999979 * 1000037 * 999961 * 1000039 * 999959
+XPOS = {"name": "x", "domain": "positive_real"}
+
+
+def test_a_point_whose_difference_has_no_sign_is_no_agreement():
+    from mathverify.equiv.random_point import point_signs
+    tiny = sp.Integer(10) ** -300 * sp.sin(NPR * sp.pi * x)
+    pts = [{x: sp.sqrt(2) / 2}, {x: sp.pi / 7}]
+    # the claim's (x - 1)(x + 1) cancels against x² no closer than 10^-234: read expanded, the 10^-300 term has a sign
+    assert point_signs(x ** 2 + tiny - ((x - 1) * (x + 1) + 1), [x], pts) == ([0, 1], [])
+    # a true identity's difference is proved 0 at each point
+    assert point_signs((x - 1) * (x + 1) + 1 - x ** 2, [x], pts) == ([], [])
+    # a point too large to write out is not read
+    assert point_signs(x ** x - x ** x, [x], [{x: sp.Rational(7579840, 1000039)}]) == ([], [])
+    assert point_signs(x ** x * sp.log(x) - x ** x * (sp.log(x) + 1), [x], [{x: sp.Rational(7579840, 1000039)}]) == ([], [0])
+
+
+@pytest.mark.parametrize("q,claim", [
+    (_ir("simplify_expression", {"expr": f"x**2 + 10**(-300)*sin({NPR}*pi*x)"}, (XPOS,), shape="expression"),
+     "(x - 1)*(x + 1) + 1"),
+    (_ir("simplify_expression", {"expr": f"2*x + 10**(-300)*sin({NPR}*pi*x)"}, (XPOS,), shape="expression"),
+     "(x + 1)**2 - x**2 - 1"),
+    (_ir("derivative", {"f": f"x**3/3 - 10**(-300)*cos({NPR}*pi*x)/({NPR}*pi)", "var": "x"}, (XPOS,),
+         shape="expression"), "(x - 1)*(x + 1) + 1"),
+])
+def test_a_difference_below_every_interval_is_not_certified(q, claim):
+    assert _v(q, claim, kind="expression") != "CORRECT"

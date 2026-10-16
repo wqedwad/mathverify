@@ -910,22 +910,22 @@ def nonzero_sign_points(d, syms, pts) -> list[int]:
 
 def point_signs(d, syms, pts) -> tuple[list[int], list[int]]:
     """Sandbox worker: (the indices of the points where the closed value of `d` has a sign certified by interval
-    arithmetic, read as written or expanded; the indices of the points where it has none and is not proved 0 either).
-    A point where `d` has no closed value (a form, no value, a symbol) is read as `nonzero_sign_points` reads it: no
-    witness. Where the interval holds 0 the point was skipped as if it were a zero: x² + 10^-300·sin(Nπx) =
-    (x - 1)(x + 1) + 1 was certified on x > 0, the claim's (x - 1)(x + 1) cancelling against x² no closer than 10^-234
-    at 240 digits (son saldırı G2YO-6, the sibling writing of d4c round 3's YO-B). Such a point is now proved 0
-    (`numeric.exact_zero_test`), or read expanded (the cancellation made exact: 10^-300·sin(Nπ√2/2) has a sign), or it
-    is undecided; the zero tests stop at the first point left undecided, and are not run once a sign is found."""
+    arithmetic, read as written or, where that interval holds 0, expanded; the indices of the points not read). A
+    point where `d` has no closed value (a form, no value, a symbol) is no witness, as in `nonzero_sign_points`. The
+    expanded reading makes a cancellation of the claim exact: x² + 10^-300·sin(Nπx) = (x - 1)(x + 1) + 1 was
+    certified on x > 0, the claim's (x - 1)(x + 1) cancelling against x² no closer than 10^-234 at 240 digits, while
+    expanded the difference is 10^-300·sin(Nπx), whose sign the interval certifies (son saldırı G2YO-6, the sibling
+    writing of d4c round 3's YO-B). A point whose interval holds 0 both ways stays no witness: demanding a proof of 0
+    there left five textbook identities undecided (tan(x/2) = sin x/(1 + cos x), the atan addition formulas, measured
+    16 Oct 2026). A point with a base and an exponent of the variable too large to write out is not read."""
     from ..certify.enclosure import constant_sign
-    from .numeric import exact_zero_test, real_odd_roots
+    from .numeric import real_odd_roots
     nonzero: list = []
-    undecided: list = []
-    later: list = []
+    unread: list = []
     for i, pt in enumerate(pts):
         at = {s_: pt[s_] for s_ in syms}
         if _heavy_power_at(d, at):
-            undecided.append(i)
+            unread.append(i)
             continue
         try:
             dp = real_odd_roots(d.subs(at, simultaneous=True))
@@ -933,45 +933,41 @@ def point_signs(d, syms, pts) -> tuple[list[int], list[int]]:
                 continue
             if constant_sign(dp) is not None:
                 nonzero.append(i)
-            else:
-                later.append((i, dp))
+                continue
+            ex = sp.expand(dp)
+            if ex != dp and ex != 0 and constant_sign(ex) is not None:
+                nonzero.append(i)
         except Exception:  # noqa: BLE001
             continue
-    for i, dp in later:
-        if nonzero or undecided:
-            break
-        try:
-            if exact_zero_test(dp) is True:
-                continue
-            if constant_sign(sp.expand(dp)) is not None:
-                nonzero.append(i)
-                continue
-        except Exception:  # noqa: BLE001
-            pass
-        undecided.append(i)
-    return nonzero, undecided
+    return nonzero, unread
 
 
 _ELSEWHERE_TIMEOUT = 30.0
+_CONFIRMED_POINTS = 4        # signed points `_nonzero_elsewhere` confirms exactly, the simplest first
 
 
 def _nonzero_elsewhere(d, syms, pts, a, b, budget) -> tuple[dict[str, Any] | None, bool]:
     """(witness, undecided): a point of `pts` where a and b certainly differ (`point_signs`, confirmed by
-    `_exact_counterexample`), else None; undecided when the points could not be read (the worker failed), when a
-    point's difference has no certified sign and is not proved 0, or when a signed point is not confirmed exactly."""
+    `_exact_counterexample`), else None; undecided when the points could not be read (the worker failed, a point too
+    large to write out) or a signed point is not confirmed exactly (a difference seen and not refuted is no
+    agreement)."""
     if not pts:
         return None, False
     from ..sandbox import run as sb_run
     r = sb_run("mathverify.equiv.random_point:point_signs", sp.sympify(d), syms, pts, timeout=_ELSEWHERE_TIMEOUT)
     if not r.ok or not isinstance(r.value, tuple) or len(r.value) != 2:
         return None, True
-    nonzero, undecided = r.value
-    for i in nonzero:
+    nonzero, unread = r.value
+    # the simplest points first, a few of them: each exact confirmation may spend a sign's timeout, and 30 shifted
+    # points of x² + 10^-300·sin(Nπx) held one verify for 70 s before √2/2 confirmed it (G2YO-6); one not confirmed
+    # among them leaves the comparison undecided below
+    order = sorted(nonzero, key=lambda i: (sum(sp.count_ops(v) + len(str(v)) for v in pts[i].values()), i))
+    for i in order[:_CONFIRMED_POINTS]:
         pt = pts[i]
         cx = _exact_counterexample(a, b, syms, pt, budget)
         if isinstance(cx, dict):
             return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "exact": cx["exact"]}, False
-    return None, bool(nonzero or undecided)
+    return None, bool(nonzero or unread)
 
 
 def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None) -> tuple[dict[str, Any] | None, int]:

@@ -8,6 +8,7 @@
     B  G2YO-2  without converged numbers the certificate's value is taken only inside a rigorous enclosure (planted
                wrong certificates, the divergent max(x, 1/x))
     F  G2YO-3  the cell proof of random_point cuts at the poles of a non-smooth function's argument
+    M  G2YO-6  a sample point whose difference has no certified sign is no agreement (d4c round 3 YO-B, sibling)
     G  G2YO-4  a declared absolute tolerance is decided exactly (evaluate, and definite_integral, which did not read it)
   Unjust rejections, crashes, coverage:
     C  G2RK-1  the real cube root sign(u)|u|^(1/3) in a primitive is no jump where the primitive is continuous
@@ -438,8 +439,43 @@ def cases_k():
     ]
 
 
+# M: G2YO-6 ------------------------------------------------------------------------------------------------------
+NPR = 6 * 1000003 * 999983 * 1000033 * 999979 * 1000037 * 999961 * 1000039 * 999959
+
+
+def cases_m():
+    tiny = f"10**(-300)*sin({NPR}*pi*x)"
+    return [
+        ("simplify x² + 10^-300 sin(Nπx) = (x-1)(x+1)+1 (x > 0)", simp(f"x**2 + {tiny}", (XPOS,)),
+         sol("(x - 1)*(x + 1) + 1", kind="expression"), NOTOK, None),
+        ("simplify 2x + 10^-300 sin(Nπx) = (x+1)² - x² - 1 (x > 0)", simp(f"2*x + {tiny}", (XPOS,)),
+         sol("(x + 1)**2 - x**2 - 1", kind="expression"), NOTOK, None),
+        ("simplify x² + 10^-300 sin(Nπx) = x(x+1) - x (x > 0)", simp(f"x**2 + {tiny}", (XPOS,)),
+         sol("x*(x + 1) - x", kind="expression"), NOTOK, None),
+        ("d/dx (x³/3 - 10^-300 cos(Nπx)/(Nπ)) = (x-1)(x+1)+1 (x > 0)",
+         der(f"x**3/3 - 10**(-300)*cos({NPR}*pi*x)/({NPR}*pi)", (XPOS,)), sol("(x - 1)*(x + 1) + 1"), NOTOK, None),
+        ("simplify x² + 10^-300 sin(Nπx) = x² (control)", simp(f"x**2 + {tiny}", (XPOS,)), sol("x**2", kind="expression"),
+         NO, None),
+        ("simplify (x+1)² - x² - 1 = 2x (control: true)", simp("(x + 1)**2 - x**2 - 1", (XPOS,)), sol("2*x", kind="expression"),
+         OK, None),
+        ("simplify sin(atan x) = x/sqrt(1+x²) (control: true)", simp("sin(atan(x))"), sol("x/sqrt(1 + x**2)", kind="expression"),
+         OK, None),
+        ("simplify cos(2 atan x) = (1-x²)/(1+x²) (control: true)", simp("cos(2*atan(x))"),
+         sol("(1 - x**2)/(1 + x**2)", kind="expression"), OK, None),
+        ("simplify atan x - atan(x/2) = atan(x/(x²+2)) (control: true)", simp("atan(x) - atan(x/2)"),
+         sol("atan(x/(x**2 + 2))", kind="expression"), OK, None),
+        ("simplify asin(tanh x) = atan(sinh x) on x > 0 (control: true)", simp("asin(tanh(x))", (XPOS,)),
+         sol("atan(sinh(x))", kind="expression"), OK, None),
+        ("simplify tan(x/2) = sin x/(1 + cos x) (control: true)", simp("sin(x)/(1 + cos(x))"),
+         sol("tan(x/2)", kind="expression"), OK, None),
+        ("residual (record): a 10^-300 term behind exp = cosh + sinh in the claim, which no expansion exposes",
+         simp(f"x**2 + {tiny}", (XPOS,)), sol("x**2 + 10**(-300)*(exp(x) - cosh(x) - sinh(x))", kind="expression"), ANY,
+         None),
+    ]
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "I": cases_i, "J": cases_j, "L": cases_l, "K": cases_k}
+          "H": cases_h, "I": cases_i, "J": cases_j, "L": cases_l, "M": cases_m, "K": cases_k}
 
 
 CASE_LIMIT = 300            # seconds per case: the old code held (x^x)' = x^x·ln x for over twenty minutes
@@ -453,7 +489,7 @@ def _alarm(signum, frame):
     raise CaseTimeout(f"over {CASE_LIMIT} s")
 
 
-def main(out_path=None, groups="ABCDEFGHIJLK"):
+def main(out_path=None, groups="ABCDEFGHIJLMK"):
     import os
     import signal
     import mathverify
@@ -505,5 +541,5 @@ def main(out_path=None, groups="ABCDEFGHIJLK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJLK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJLMK"
     sys.exit(1 if main(out, grp) else 0)
