@@ -37,6 +37,7 @@ NUM = "src/mathverify/equiv/numeric.py"
 T = "tests/test_d4_d4b_periyodik.py::"
 T9 = "tests/test_d4_d4b_tur9.py::"
 T10 = "tests/test_d4_d4b_tur10.py::"
+TK = "tests/test_d4_d4b_kapanis.py::"      # the close of round 10: guards of round 9 shadowed by round 10
 SYM = "src/mathverify/equiv/symbolic.py"
 SETS = "src/mathverify/equiv/sets.py"
 GRD = "src/mathverify/_sympy_guards.py"
@@ -316,7 +317,7 @@ MUTATIONS = [
     ("D05 domain_of çözülmemiş koşulda çekimser değil", DOM, "        if ctx.unsolved_conditions(var):\n            # the domain is cut",
      "        if False:\n            # the domain is cut", T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
     ("D08 ConditionSet üyeliği SymPy'ye sorulur", DOM, "    if isinstance(dom, sp.Set) and dom.has(sp.ConditionSet):\n        try:\n            if certified_sign(c) == NONREAL:",
-     "    if False:\n        try:\n            if certified_sign(c) == NONREAL:", T + "test_a_wrong_zero_of_a_non_periodic_condition_is_not_trusted"),
+     "    if False:\n        try:\n            if certified_sign(c) == NONREAL:", TK + "test_membership_in_a_condition_set_is_not_sympys"),
     ("D07 çelişki denetimi ℝ'de tümleyen alır", DOM, "        out = sp.Complement(sp.Intersection(within, sign_range(var)), s)",
      "        out = sp.Complement(sp.Intersection(S.Reals, sign_range(var)), s)",
      T + "test_domain_of_under_a_periodic_condition_solved_on_a_bounded_domain"),
@@ -413,19 +414,20 @@ MUTATIONS += [
     ("N07 num_equal kararsız sıçramada karar verir", NUM, "    if undecided_jumps(a, b):\n        # a jump at a constant",
      "    if False:\n        # a jump at a constant", T9 + "test_num_equal_does_not_read_a_jump_off_the_noise"),
     ("N08 sym_equal kararsız sıçramada karar verir", SYM, "    if undecided_jumps(a, b):", "    if False:",
-     T9 + "test_jumps_of_an_unproved_zero"),
+     TK + "test_sym_equal_does_not_take_sympys_jump_of_a_nonreal_number"),
     ("N09 belirsiz Abs üstündeki sıçrama evalf'e kalır", NUM,
      "            if any(_closed_jump(n) and not isinstance(n, sp.Abs) for n in sp.preorder_traversal(e)):\n"
      "                return None\n            return e",
-     "            return e", T9 + "test_sign_of_an_undecided_abs_is_undecided"),
+     "            return e", TK + "test_a_jump_above_an_undecided_abs_stays_a_jump"),
     ("N10 sabit koşullu Piecewise sıçrama değil", NUM,
      "    if isinstance(n, sp.Piecewise):\n        return not any(getattr(c, \"free_symbols\", None) for _, c in n.args)",
-     "    if isinstance(n, sp.Piecewise):\n        return False", T9 + "test_a_piecewise_of_numbers_is_a_jump"),
+     "    if isinstance(n, sp.Piecewise):\n        return False",
+     TK + "test_a_piecewise_of_numbers_takes_the_branch_certified_signs_choose"),
     ("N11 yeniden kurulan sıçrama değerlendirilir", NUM,
      "    return e.func(*args, evaluate=False) if isinstance(e, _JUMPS + (sp.Piecewise,)) else e.func(*args)",
-     "    return e.func(*args)", T9 + "test_a_rebuilt_jump_is_resolved_again_not_read_off_the_noise"),
+     "    return e.func(*args)", TK + "test_a_rebuilt_jump_is_held_without_sympys_strict_integer_part"),
     ("N12 LaTeX sıçraması tutulmaz", PARSE, "            e = held_jumps(e)  ", "            e = e  ",
-     T9 + "test_a_latex_jump_is_held_through_substitution"),
+     TK + "test_a_latex_jump_is_the_namespaces_without_sympys_strict_integer_part"),
     ("N13 hassasiyet bütçesi yok", GRD, "        if prec > PREC_CEILING:\n", "        if False:\n",
      T9 + "test_evalf_precision_has_a_ceiling"),
     ("N14 ilişki farkı katı değil", GRD, "        v = strict_value(dif, 2)", "        v = dif.evalf(2)",
@@ -433,9 +435,9 @@ MUTATIONS += [
     ("N15 ilişki farkı tek yazımdan", GRD, "    for dif, sign in ((a - b, 1), (b - a, -1)):", "    for dif, sign in ((a - b, 1),):",
      T9 + "test_relations_of_numbers_need_significant_digits"),
     ("N40 hesap adımı kararsız sıçramada karar verir", DET, "    if _jump_undecided(claim):\n        return \"unknown\"",
-     "    if False:\n        return \"unknown\"", T9 + "test_steps_with_a_jump_of_an_unproved_zero"),
+     "    if False:\n        return \"unknown\"", TK + "test_a_true_closed_step_with_a_jump_of_an_unproved_zero_is_not_refuted"),
     ("N41 eşitlik adımı kararsız sıçramada karar verir", DET, "    if _jump_undecided(claim, *premises):", "    if False:",
-     T9 + "test_steps_with_a_jump_of_an_unproved_zero"),
+     TK + "test_a_true_closed_step_with_a_jump_of_an_unproved_zero_is_not_refuted"),
     # RK-1
     ("N16 hücre kesişimi SymPy'nin", EX, "            got = exact_intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",
      "            got = sp.Intersection(_on_window(cell, var, a, b)[0], sp.Interval.open(a, b))",
@@ -615,6 +617,12 @@ MUTATIONS += [
      "                r = None\n", T10 + "test_a_special_function_of_exact_arguments"),
     ("V52 floor/ceiling kuruluşta gürültüden", GRD, "        _integers.get_integer_part = _strict_integer_part\n",
      "        pass\n", T10 + "test_floor_and_ceiling_of_a_number_are_not_formed_from_noise"),
+    # the close of round 10: a polar number on its principal sheet (merged state, d4e sonda W)
+    ("W01 exp_polar okunmaz", GRD, "    if isinstance(x, sp.exp_polar):\n", "    if False:\n",
+     TK + "test_an_alternating_exponential_series_is_summed"),
+    ("W02 exp_polar tabakası denetlenmez", GRD,
+     "        if _sign(iz + sp.pi, options) != 1 or _sign(sp.pi - iz, options) not in (0, 1):     # SymPy's exact sums\n"
+     "            return None\n", "", TK + "test_a_polar_number_is_read_on_its_principal_sheet_only"),
     # RK-4: a constraint that could not be applied
     ("V35 uygulanamayan kısıtta üst küme çürütmesi yok", VER,
      "        outside = _claim_outside_superset(problem_ir, solution, ctx)", "        outside = None",

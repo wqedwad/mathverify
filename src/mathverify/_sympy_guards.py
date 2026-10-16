@@ -19,7 +19,8 @@
    -1.6e-201 at 15, 30 and 60 digits, and the sign of an exact 0 was certified (round 9 attack, YO-1). In strict
    mode such a node is now rewritten EXACTLY into tracked nodes on the part of its domain where its arguments
    are read with a certified sign (sinh u = (e^u - e^-u)/2, asin u = atan(u/sqrt(1 - u^2)) for |u| < 1,
-   Max(a, b) = (a + b + |a - b|)/2, f(0) where the argument is exactly 0, ...), or the evaluation raises
+   Max(a, b) = (a + b + |a - b|)/2, f(0) where the argument is exactly 0, exp_polar(z) = exp(z) on the principal
+   sheet -pi < im z <= pi, ...), or the evaluation raises
    PrecisionExhausted. Sum, Product and Integral are not tracked either (a quadrature's error estimate is no
    proof): a Sum or Product over finitely many integer indices is written out. sin, cos, tan, atan and log read a complex argument by an untracked path or on a branch cut (log of
    -1 + i*noise is ±i*pi by the sign of the noise), and so does a non-integer power of a complex base: in
@@ -209,6 +210,20 @@ def _rewritten(x, options):
         if sz == 1:
             return a
         return _u(sp.Add, a, sp.pi) if sy >= 0 else _sub(a, sp.pi)
+    if isinstance(x, sp.exp_polar):
+        # a polar number on the principal sheet (-pi < im z <= pi) is the complex number exp(z), there and only there
+        # (SymPy's own evalf of exp_polar reads it so): SymPy's exact exp (exp(I*pi) = -1). Off that sheet a log or a
+        # root of it is not the principal one: undecided. Summation (hyperexpand, polar_lift) asks arg.eval whether
+        # Mod(im(exp_polar(I*pi)), 2*pi) > pi; left standing, the sum of (-1)**k/k! = 1/e fell to UNKNOWN (merged
+        # state of the fourth audit, d4e sonda W, 16 Oct 2026)
+        z = x.args[0]
+        try:
+            iz = sp.im(z)
+        except Exception:  # noqa: BLE001
+            return None
+        if _sign(iz + sp.pi, options) != 1 or _sign(sp.pi - iz, options) not in (0, 1):     # SymPy's exact sums
+            return None
+        return sp.exp(z)
     if not isinstance(x, sp.Function) or len(x.args) != 1:
         return None
     u = x.args[0]
