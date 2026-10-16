@@ -242,7 +242,7 @@ def verify(ir, solution, ctx: Ctx):
                 options = {}
                 for letter in ir.options:
                     try:
-                        options[letter] = ctx.option_value(letter)
+                        options[letter] = ctx.option_as_claim(letter)      # the claim's reader (G1RK-1)
                     except Exception:
                         options[letter] = None
                     if options[letter] is not None and odd_root_powers(options[letter]):

@@ -136,7 +136,10 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
                          "critic_error_confirmed",
                          # the chosen option and the claim are not shown to be one object (verifier._mc_undecided): a
                          # wrong letter beside a right value is a wrong solution (fourth audit, d4j addendum)
-                         "option_claim_undecided"}
+                         "option_claim_undecided",
+                         # a '%' or '°' read as the unit and as the plain number decides differently: the question's
+                         # convention (verifier._certify, final attack G1RK-3)
+                         "unit_convention"}
 # The abstentions of a layer that decided nothing (verdict unknown), in two written kinds (fourth audit CAP-K1, d4i;
 # denetim/2026-10-01/d4/kararlar_fhi.txt). A MEANING or convention abstention (the problem's meaning, a convention,
 # a free parameter) keeps its UNKNOWN when the only CORRECT comes from a layer outside the deterministic ones (Lean,
@@ -150,7 +153,7 @@ _MEANING_FLAGS = {"point_not_interior", "membership_condition", "reversed_bounds
                   "constraint_not_applied", "parametric_limit", "parametric_form", "sequence_undefined_on_the_tail",
                   "approach_outside_declared_domain", "expression_undefined_as_written", "naturals_convention",
                   "claim_convention", "claim_unreadable", "variable_declared_integer", "written_domain",
-                  "malformed_tolerance", "domain_list_ambiguous"}
+                  "malformed_tolerance", "domain_list_ambiguous", "unit_convention"}
 _NOT_PROVEN_FLAGS = {"cas_failed", "cas_unreliable", "cas_timeout", "completeness_uncertified", "no_certified_value",
                      "no_exact_value", "brute_force_limit", "symbolic_numeric_disagreement", "numeric_not_converged",
                      "relative_tolerance_undecided", "z3_unsupported", "condition_unsolved", "unsupported_task_kind",

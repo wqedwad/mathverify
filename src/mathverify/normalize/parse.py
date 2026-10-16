@@ -1139,6 +1139,25 @@ class written_domain(sp.Function):  # noqa: N801 - a marker read by certify.doma
         return written_domain(self.args[0].diff(s), self.args[1])
 
 
+def _closed_branches(a):
+    """`a` with each Piecewise of closed conditions in it taken to its branch, as written, where certified signs decide
+    the conditions (`equiv.numeric.jump_value`); left as it is where one is undecided. Put into a condition of the outer
+    body unevaluated, the inner Piecewise of f(f(1)) (f piecewise) made SymPy's Piecewise raise ("pop from an empty
+    set") and the problem's definedness was undecided: f(f(1)) = 1 UNKNOWN (final attack G1RK-5)."""
+    if not isinstance(a, sp.Basic) or a.free_symbols or not a.has(sp.Piecewise):
+        return a
+    from ..equiv.numeric import jump_value
+
+    def branch(n):
+        with sp.evaluate(True):                     # the signs are certified on the values; the branch stays as written
+            v = jump_value(n)
+        return n if v is None else v
+    try:
+        return a.replace(lambda n: isinstance(n, sp.Piecewise) and not n.free_symbols, branch)
+    except Exception:  # noqa: BLE001 - left as it is: the reading fails as before
+        return a
+
+
 def _written_call(fn, ns, depth=0):
     """An IR function called inside a text read as written: its body AS WRITTEN (so its conditions,
     x**2/x at 0, survive) with the arguments substituted unevaluated, inner calls expanded the same
@@ -1151,7 +1170,7 @@ def _written_call(fn, ns, depth=0):
         w = parse_as_written(fn.fdef.expr, dict(ns, **dict(zip(fn.fdef.args, fn.argsyms))), _depth=depth + 1)
         if w is None or len(w) != 1:
             return fn(*args)
-        sub = dict(zip(fn.argsyms, args))
+        sub = dict(zip(fn.argsyms, (_closed_branches(a) for a in args)))
         with sp.evaluate(False):
             out = w[0].xreplace(sub)
             if fn.domain_rel is not None:
@@ -1178,6 +1197,33 @@ _UNI_VALUE_RE = re.compile(r"([0-9)\]])\s*([π∞√∛ℝℤℕ∅])")
 _DEG_NUM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:°|\bderece\b|\bdeg\b)")
 _DEG_PAREN_RE = re.compile(r"\(([^()]*)\)\s*°")
 _PCT_RE = re.compile(r"%\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*%")
+# LaTeX's degree mark: latex2sympy drops it, so 30^\circ was the number 30 and \sin(30^\circ) was sin(30) (final
+# attack, G1RK-3); it is read as the plain-text mark is, a factor pi/180
+_LATEX_DEG_RE = re.compile(r"(?:\^|\*\*)\s*(?:\{\s*\\circ\s*\}|\\circ(?![A-Za-z]))|\\degree(?![A-Za-z])")
+
+
+def unit_marks(text) -> frozenset[str]:
+    """The unit marks of `text` the parser reads as a conversion: '°' (30°, 30 derece, 30 deg, (a+b)°, 30^\\circ) is
+    a factor pi/180, '%' (%20, 20%, 20\\%) a factor 1/100. Each is the unit of the number it marks: whether the other
+    side of a comparison counts in that unit or in plain numbers is the question's (`Ctx.open_unit_marks`)."""
+    if not isinstance(text, str):
+        return frozenset()
+    out = set()
+    if _DEG_NUM_RE.search(text) or _DEG_PAREN_RE.search(text) or _LATEX_DEG_RE.search(text):
+        out.add("°")
+    if _PCT_RE.search(text) or "\\%" in text:
+        out.add("%")
+    return frozenset(out)
+
+
+def without_unit_marks(text: str, marks) -> str:
+    """`text` with the unit marks `marks` (`unit_marks`) dropped: the plain number each one is the unit of (%20 is 20,
+    30° is 30)."""
+    if "°" in marks:
+        text = _LATEX_DEG_RE.sub("", _DEG_NUM_RE.sub(r"\1", _DEG_PAREN_RE.sub(r"(\1)", text)))
+    if "%" in marks:
+        text = _PCT_RE.sub(lambda m: m.group(1) or m.group(2), text.replace("\\%", ""))
+    return text
 _SQRT_BARE_RE = re.compile(r"(sqrt|cbrt)\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)(?![\w(])")
 
 
@@ -2077,6 +2123,7 @@ def _latex2sympy(s: str):
                 return lim
         _LATEX_CONVERTER = _TwoSidedLimits
     converter = _LATEX_CONVERTER(None, None, False, config=ConversionConfig())
+    s = _LATEX_DEG_RE.sub(r"\\cdot\\frac{\\pi}{180}", s)          # a degree is pi/180, as 30° (G1RK-3)
     return converter.parse(normalize_latex(s, NormalizationConfig()))
 
 

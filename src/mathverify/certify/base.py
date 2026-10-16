@@ -9,11 +9,11 @@ from typing import Any
 import sympy as sp
 from sympy import S
 
-from ..ir import ProblemIR
+from ..ir import LeakageError, ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
                                claim_namespace, given_bindings, not_collapsed, same_value,
-                               substitute_free, task_variables)
+                               substitute_free, task_variables, unit_marks)
 from ..sandbox.exactsets import at_risk, exact_intersection, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
@@ -1442,19 +1442,75 @@ class Ctx:
             raise ClaimNotAValue(f"claimed answer {ca.payload!r} is an unevaluated computation")
         return v
 
-    def option_value(self, letter: str):
+    def option_value(self, letter: str, text: str | None = None):
         """The option's value, read as a claim of the answer's shape is (fourth audit D4F2B-ONCEKI-1): a condition on
         the task's variable is the set it names (`option_condition_set`). A decimal comma ('1,5') is the verifier's
-        (`decimal_comma`), which abstains before any reading of it is compared."""
+        (`decimal_comma`), which abstains before any reading of it is compared. `text`: read in place of the option's
+        own text (another reading of it, `verifier._mc_unit_reading`)."""
         if not self.ir.options or letter not in self.ir.options:
             return None
-        named = self.option_condition_set(letter)
+        named = self.option_condition_set(letter, text)
         if named is not None:
             return named
         return parse_answer(self.ir.answer_shape if self.ir.answer_shape in ("set", "interval") else "value",
-                            self.ir.options[letter], self.ns)
+                            self.ir.options[letter] if text is None else text, self.ns)
 
-    def option_condition_set(self, letter: str):
+    # ---- unit marks ('%', '°'; final attack G1RK-3) -------------------------------------------------------------
+    def angles_in_radians(self) -> bool:
+        """trig_solve whose variable enters every trigonometric function of its relations as k*x + c with k rational:
+        the variable is the radian measure SymPy's sin and cos read, so a degree mark on its value is that unit (30° is
+        pi/6, {30°, 150°} for sin x = 1/2); a count of degrees would enter as pi*x/180."""
+        if self.ir.task.kind != "trig_solve":
+            return False
+        p = self.ir.task.params or {}
+        try:
+            v = self.sym(p.get("var", "x"))
+            rels = list(self.givens()) + ([self.rel(p["equation"])] if isinstance(p.get("equation"), str) else [])
+        except LeakageError:
+            raise
+        except Exception:  # noqa: BLE001 - not read: nothing fixes the unit
+            return False
+        apps = [a for r in rels if isinstance(r, sp.Basic) for a in r.atoms(*_TRIG_FUNCS) if v in a.free_symbols]
+        if not apps:
+            return False
+        for a in apps:
+            try:
+                poly = sp.Poly(a.args[0], v)
+            except Exception:  # noqa: BLE001 - not a polynomial in the variable
+                return False
+            if poly.degree() != 1 or not poly.LC().is_Rational:
+                return False
+        return True
+
+    def open_unit_marks(self, text) -> frozenset:
+        """The unit marks of `text` (a claim, an option, a step; `normalize.parse.unit_marks`) whose unit the question
+        does not fix: a question may count in the unit (an angle in radians: 30° is pi/6) or in plain numbers of it
+        (x + 2x + 3x = 180 is 30, (p2 - p1)/p1*100 is 20), and such a mark is read both ways (`verifier._certify`,
+        `verifier._mc_unit_reading`, the steps). Not a mark the IR itself writes (its own '°' converts like the
+        claim's), not the degrees of synthetic_geometry's angle() (its certificate measures in degrees: 70° is 70,
+        25 Sep 2026), not the radians of trig_solve's variable (`angles_in_radians`)."""
+        marks = unit_marks(text)
+        if not marks:
+            return marks
+        key = "unit_marks:ir"
+        if key not in self.cache:
+            self.cache[key] = frozenset().union(*(unit_marks(t) for t in _ir_texts(self.ir)))
+        marks = marks - self.cache[key]
+        if "°" in marks:
+            target = str((self.ir.task.params or {}).get("target", ""))
+            if (self.ir.task.kind == "synthetic_geometry" and "angle(" in target) or self.angles_in_radians():
+                marks = marks - {"°"}
+        return marks
+
+    def option_as_claim(self, letter: str):
+        """The option read by the claim's own reader, which the verifier registers (`verifier._option_claim_value`:
+        notation, namespace and cleaning of the claim; final attack G1RK-1); the option's own reader (`option_value`)
+        where none is registered. wordproblem's check of the options against the givens read '6 cm' with no value,
+        found no option satisfiable and blocked the right letter as an inconsistent IR."""
+        reader = self.cache.get(OPTION_READER)
+        return reader(letter) if reader is not None else self.option_value(letter)
+
+    def option_condition_set(self, letter: str, text: str | None = None):
         """The solution set an option of a set answer names when it is written as a condition on the task's variable
         ('x > -2', 'x ≥ 1', 'x \\geq 1', '-1 < x < 1'), as `verifier._normalize_set_notation` reads such a claim; None
         for any other text. Read as a set it was {x > -2}, and the right letter was refuted against the claim (-2, oo).
@@ -1462,7 +1518,7 @@ class Ctx:
         tvar = (self.ir.task.params or {}).get("var")
         set_task = self.ir.answer_shape in ("set", "interval") or self.ir.task.kind in (
             "solve_equation", "solve_inequality", "domain_of")
-        text = self.ir.options[letter]
+        text = self.ir.options[letter] if text is None else text
         if not (set_task and isinstance(tvar, str) and isinstance(text, str)):
             return None
         try:
@@ -1473,6 +1529,33 @@ class Ctx:
         except Exception:  # noqa: BLE001 - no condition: read as the answer's shape
             pass
         return None
+
+
+_TRIG_FUNCS = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
+
+
+def _ir_texts(ir: ProblemIR) -> list[str]:
+    """The IR's own texts (task parameters, givens, functions, constraints; not its options)."""
+    out: list[str] = []
+
+    def walk(o):
+        if isinstance(o, str):
+            out.append(o)
+        elif isinstance(o, dict):
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, (list, tuple)):
+            for v in o:
+                walk(v)
+    walk(ir.task.params or {})
+    walk(list(ir.givens))
+    walk([[f.expr, f.domain] for f in ir.functions])
+    walk([list(v.constraints) for v in ir.vars])
+    return out
+
+
+# the cache key of the verifier's option reader (`Ctx.option_as_claim`)
+OPTION_READER = "verifier:option_reader"
 
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:

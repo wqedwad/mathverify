@@ -15,7 +15,7 @@ import time
 import sympy as sp
 
 from .certify import MODULES
-from .certify.base import decimal_comma, make_ctx, result, unknown, Timer
+from .certify.base import OPTION_READER, decimal_comma, make_ctx, result, unknown, Timer
 from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
 from .ir import MalformedIR, ProblemIR, LeakageError
@@ -41,6 +41,70 @@ _NO_SOLUTION = re.compile(r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s
                           re.IGNORECASE)
 
 
+def _from_letter(ir: ProblemIR, solution: Solution, ctx, text: str | None = None) -> bool:
+    """Fill the claim from the option its letter names (or from `text`, another reading of that option), as a letter
+    alone is read: the option read as a claim of the answer's shape is (`Ctx.option_value`), 'x > -2' names (-2, oo),
+    and '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1): False then, the payload left at the text."""
+    ca = solution.claimed_answer
+    ca.payload = ir.options[ca.option] if text is None else text
+    if ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
+        ca.payload = "{}"
+    named = ctx.option_condition_set(ca.option, text)
+    if named is not None:
+        ca.payload = str(named)
+    elif ir.answer_shape != "interval" and decimal_comma(ca.payload):
+        return False
+    ca.payload_source = "option_letter"
+    if ir.answer_shape in ("set", "interval"):
+        ca.kind = ir.answer_shape
+    elif ir.answer_shape == "count":
+        n_opt = exact_integer(ca.payload)
+        if n_opt is not None:
+            ca.kind, ca.payload = "count", n_opt
+        else:
+            ca.kind = "value"
+    return True
+
+
+def _option_read_as_claim(ir: ProblemIR, solution: Solution, ctx, text: str | None = None) -> Solution | None:
+    """A copy of the solution whose claim is the chosen option (or `text` in its place), read by the claim's own reader:
+    filled as a letter alone is (`_from_letter`), its notation normalized and the junk around it cleaned as the
+    claim's (`_normalize_set_notation`, `_sanitize_payload`); None for a decimal comma (not guessed). The option was
+    read by another reader than the claim: 'x ∈ (2, 3)' (and 'Ç = ...', '$...$', '6 cm') was a claim the certificates
+    read and an option they did not, and since the d4j addendum an option not read blocks the CORRECT of a right letter
+    (final attack G1RK-1)."""
+    import copy as _copy
+    sol2 = _copy.deepcopy(solution)
+    sol2.claimed_answer.payload = None
+    if not _from_letter(ir, sol2, ctx, text):
+        return None
+    _normalize_set_notation(ir, sol2, ctx)
+    _sanitize_payload(sol2, ctx)
+    return sol2
+
+
+def _lettered(solution: Solution, letter: str) -> Solution:
+    """A copy of the solution that picked the option `letter`."""
+    import copy as _copy
+    sol2 = _copy.deepcopy(solution)
+    sol2.claimed_answer.option = letter
+    return sol2
+
+
+def _option_claim_value(ir: ProblemIR, solution: Solution, ctx, text: str | None = None):
+    """The chosen option's value (or that of `text`, another reading of it) read as the claim is
+    (`_option_read_as_claim`); what that reader does not take, the option's own reader (`Ctx.option_value`) may."""
+    sol2 = _option_read_as_claim(ir, solution, ctx, text)
+    if sol2 is not None:
+        try:
+            return ctx.claimed(sol2)
+        except LeakageError:
+            raise
+        except Exception:  # noqa: BLE001 - not read as a claim: the option's own reader
+            pass
+    return ctx.option_value(solution.claimed_answer.option, text)
+
+
 def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
     """The chosen option's value and the claim, in the same units. For an angle target of
     synthetic_geometry the certificate measures in degrees, so a degree mark is the unit of the
@@ -52,14 +116,15 @@ def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
         from .certify.geometry_numeric import has_degree_mark, strip_degree_marks
         from .normalize.parse import parse_expr_str
         opt = str(ir.options[ca.option])
-        ov = parse_expr_str(strip_degree_marks(opt), ctx.ns) if has_degree_mark(opt) else ctx.option_value(ca.option)
+        ov = (parse_expr_str(strip_degree_marks(opt), ctx.ns) if has_degree_mark(opt)
+              else _option_claim_value(ir, solution, ctx))
         pay = ca.payload
         if isinstance(pay, str) and has_degree_mark(pay):
             cv = parse_expr_str(strip_degree_marks(pay), ctx.claim_ns(solution))
         else:
             cv = ctx.claimed(solution)
         return ov, cv
-    return ctx.option_value(ca.option), ctx.claimed(solution)
+    return _option_claim_value(ir, solution, ctx), ctx.claimed(solution)
 
 
 def _option_out_of_kind(ov) -> bool:
@@ -82,6 +147,44 @@ def _mc_undecided(reason: str, ms: float, ev: dict | None = None) -> LayerResult
     and the letter of pi/6 (fourth audit, d4j addendum). Read off the option itself (only a letter was given), the
     claim is the option's text, and the certificates read the two as one (`_option_as_claim`)."""
     return unknown("mc.consistency", reason, ms, ev, flags=[OPTION_UNDECIDED])
+
+
+def _compare_option(ir: ProblemIR, solution: Solution, ctx, ov, cv, t) -> tuple[bool | None, dict] | LayerResult:
+    """mc.consistency's comparison of the option's value `ov` with the claim's `cv`: (equal or not, undecided None;
+    the evidence), or the layer itself when the two are not read as one kind."""
+    ca = solution.claimed_answer
+    from .certify.linalg import _as_matrix, matrices_equal
+    if isinstance(cv, sp.Set) != isinstance(ov, sp.Set) and all(
+            isinstance(v, (sp.Set, sp.Expr)) and _as_matrix(v) is None for v in (cv, ov)):
+        # a value against a set (a set answer): the certificates read a value claim as {value}, and so is the
+        # value here (pi/3 against the option {pi/6} was undecided, and the wrong letter stood)
+        cv, ov = (v if isinstance(v, sp.Set) else sp.FiniteSet(v) for v in (cv, ov))
+    shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
+    if shape == "count":
+        ci, oi = exact_integer(cv), exact_integer(ov)   # never int(): it truncates 3.5 to 3
+        ok = None if oi is None else (ci is not None and ci == oi)
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv)}
+    elif _as_matrix(cv) is not None or _as_matrix(ov) is not None:
+        mc_, mo_ = _as_matrix(cv), _as_matrix(ov)
+        if (mc_ is None) != (mo_ is None):
+            # a pair or a vector against a number (the option '(1, 5)' for 3): another kind, see below
+            return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
+                           t.ms, flags=["option_unreadable"])
+        ok = matrices_equal(mc_, mo_)[0]
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": "matrix_entrywise"}
+    elif isinstance(cv, sp.Equality) or isinstance(ov, sp.Equality):
+        ok, cev = answers_equivalent(cv, ov, shape="equation", var=next(iter(ctx.syms()), None))
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
+    elif _option_out_of_kind(ov):
+        # the option read as another kind than the claim (a pair for a number, a set of conditions for a set):
+        # what the letter names is not read, so it neither refutes the claim nor stands for it (fourth audit
+        # D4F2B-ONCEKI-1: the option 'x**2 < 4' read as {x**2 < 4} refuted the claim (-2, 2))
+        return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
+                       t.ms, flags=["option_unreadable"])
+    else:
+        ok, cev = answers_equivalent(cv, ov, shape=shape)
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
+    return ok, ev
 
 
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
@@ -135,37 +238,18 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             ov, cv = _option_and_claim(ir, solution, ctx)
         except Exception as e:  # noqa: BLE001
             return _mc_undecided(f"option_parse_error: {e}", t.ms)
-        from .certify.linalg import _as_matrix, matrices_equal
-        if isinstance(cv, sp.Set) != isinstance(ov, sp.Set) and all(
-                isinstance(v, (sp.Set, sp.Expr)) and _as_matrix(v) is None for v in (cv, ov)):
-            # a value against a set (a set answer): the certificates read a value claim as {value}, and so is the
-            # value here (pi/3 against the option {pi/6} was undecided, and the wrong letter stood)
-            cv, ov = (v if isinstance(v, sp.Set) else sp.FiniteSet(v) for v in (cv, ov))
-        shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
-        if shape == "count":
-            ci, oi = exact_integer(cv), exact_integer(ov)   # never int(): it truncates 3.5 to 3
-            ok = None if oi is None else (ci is not None and ci == oi)
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv)}
-        elif _as_matrix(cv) is not None or _as_matrix(ov) is not None:
-            mc_, mo_ = _as_matrix(cv), _as_matrix(ov)
-            if (mc_ is None) != (mo_ is None):
-                # a pair or a vector against a number (the option '(1, 5)' for 3): another kind, see below
-                return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
-                               t.ms, flags=["option_unreadable"])
-            ok = matrices_equal(mc_, mo_)[0]
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": "matrix_entrywise"}
-        elif isinstance(cv, sp.Equality) or isinstance(ov, sp.Equality):
-            ok, cev = answers_equivalent(cv, ov, shape="equation", var=next(iter(ctx.syms()), None))
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
-        elif _option_out_of_kind(ov):
-            # the option read as another kind than the claim (a pair for a number, a set of conditions for a set):
-            # what the letter names is not read, so it neither refutes the claim nor stands for it (fourth audit
-            # D4F2B-ONCEKI-1: the option 'x**2 < 4' read as {x**2 < 4} refuted the claim (-2, 2))
-            return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
-                           t.ms, flags=["option_unreadable"])
-        else:
-            ok, cev = answers_equivalent(cv, ov, shape=shape)
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
+        got = _compare_option(ir, solution, ctx, ov, cv, t)
+        if isinstance(got, LayerResult):
+            return got
+        ok, ev = got
+        other = _mc_unit_reading(ir, solution, ctx, ov, cv, t)
+        if other is not None:
+            ok2, ev["unit_reading"] = other
+            if ok2 is not ok or ok is None:
+                # the mark is a unit or the plain number's, and the two readings decide differently (or one is
+                # undecided): a convention of the question, never CORRECT this way, never refuted (G1RK-3)
+                ev["reason"] = "unit_mark_read_as_a_unit_and_as_a_plain_number_decide_differently"
+                return unknown("mc.consistency", ev["reason"], t.ms, ev, flags=[UNIT_CONVENTION])
     if ok is True:
         return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
     if ok is False:
@@ -338,8 +422,9 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     ca = solution.claimed_answer
     # the claim's own kind says it is a set; the IR's answer_shape is often left at its default
     set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in _SET_TASKS
-    if not set_task or ca.kind not in ("set", "interval", "condition") \
-            or not isinstance(ca.payload, str) or ca.payload_source == "option_letter":
+    # an option's text is read as the claim's (`_from_letter`): 'x ∈ (2, 3)' was a claim the certificates read and a
+    # letter they did not (final attack G1RK-1)
+    if not set_task or ca.kind not in ("set", "interval", "condition") or not isinstance(ca.payload, str):
         return []
     names = {v.name for v in ir.vars}
     tvar = (ir.task.params or {}).get("var")
@@ -438,10 +523,26 @@ def _payload_texts(solution: Solution, raw_payload) -> list[str]:
 
 
 def _option_texts(solution: Solution, options) -> list[str]:
+    """The text of the option the solution picked; with `_options_as_read`, also that text as the claim's reader takes
+    it ('6 cm' is 6, 'x ∈ (2, 3)' is (2, 3)): it is read as written like the claim's own (G1RK-1)."""
     ca = solution.claimed_answer
-    if ca.option and isinstance(options, dict) and isinstance(options.get(ca.option), str):
-        return [options[ca.option]]
-    return []
+    v = options.get(ca.option) if ca.option and isinstance(options, dict) else None
+    return [t for t in dict.fromkeys(v if isinstance(v, list) else [v]) if isinstance(t, str)]
+
+
+def _options_as_read(ir: ProblemIR, solution: Solution, ctx) -> dict | None:
+    """The IR's options, the picked one as [its text, its text as the claim's reader takes it] (`_option_read_as_claim`)."""
+    ca = solution.claimed_answer
+    if not ir.options or ca.option not in ir.options:
+        return ir.options
+    try:
+        sol2 = _option_read_as_claim(ir, solution, ctx)
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: the option's text alone
+        sol2 = None
+    read = sol2.claimed_answer.payload if sol2 is not None else None
+    return dict(ir.options, **{ca.option: [ir.options[ca.option]] + ([read] if isinstance(read, str) else [])})
 
 
 def _claim_pins(ctx) -> dict:
@@ -976,15 +1077,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     ca = solution.claimed_answer
     scope_flags: list[str] = []
     if ca.option and ca.payload in (None, "") and problem_ir.options and ca.option in problem_ir.options:
-        ca.payload = problem_ir.options[ca.option]
-        if problem_ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
-            ca.payload = "{}"
-        # the option read as a claim of the answer's shape is (`Ctx.option_value`): 'x > -2' names (-2, oo), and
-        # '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1)
-        named = ctx.option_condition_set(ca.option)
-        if named is not None:
-            ca.payload = str(named)
-        elif problem_ir.answer_shape != "interval" and decimal_comma(ca.payload):
+        if not _from_letter(problem_ir, solution, ctx):
             layers.append(unknown("intake.claim", f"option {ca.payload!r}: decimal comma or pair? not guessed",
                                   flags=["decimal_comma_ambiguous"]))
             return layers, ["answer_from_option_letter"]
@@ -993,15 +1086,6 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         # evidence as a worked solution. That is legitimate answer-level verification, but it
         # is not what CORRECT means at solution level (DECISIONS §2), so it is disclosed.
         scope_flags.append("answer_from_option_letter")
-        ca.payload_source = "option_letter"
-        if problem_ir.answer_shape in ("set", "interval"):
-            ca.kind = problem_ir.answer_shape
-        elif problem_ir.answer_shape == "count":
-            n_opt = exact_integer(ca.payload)
-            if n_opt is not None:
-                ca.kind, ca.payload = "count", n_opt
-            else:
-                ca.kind = "value"
 
     raw_payload = list(ca.payload) if isinstance(ca.payload, list) else ca.payload    # before its notation is normalized
     scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
@@ -1108,7 +1192,8 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     # The claim itself, read as written, holds a value that is a convention (0**0, C(2, 5), Mod(7, -5)):
     # the parse computed it SymPy's way, and "0**0" for 5**0 was certified like 1 (part d4a). An odd
     # root of a negative number is compared under both readings instead (equiv.conventions).
-    conv = _claim_convention(solution, ctx, problem_ir.task.kind, raw_payload, problem_ir.options)
+    read_options = _options_as_read(problem_ir, solution, ctx)
+    conv = _claim_convention(solution, ctx, problem_ir.task.kind, raw_payload, read_options)
     if conv:
         layers.append(unknown("intake.definedness", f"claim_value_is_a_convention: {conv[:3]}",
                               flags=["claim_convention"]))
@@ -1116,7 +1201,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     # ... or has no value at all as written ((-1)!, zoo, 1/(x - x)): SymPy's value of it (1/zoo = 0) is no
     # value of what was written, so the claim is never CORRECT; a refutation with that value stands (the
     # claim is no right answer under any reading), so the certificates still run (CAP-F1)
-    no_value = _claim_without_value(solution, ctx, raw_payload, problem_ir.options)
+    no_value = _claim_without_value(solution, ctx, raw_payload, read_options)
     if no_value:
         layers.append(unknown("intake.claim", f"claimed answer has no value as written: {no_value[:3]}",
                               flags=["claim_is_not_a_value"]))
@@ -1147,6 +1232,24 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         why = DEFERRED_KINDS.get(problem_ir.task.kind, "unknown task kind")
         layers.append(unknown("router", f"unsupported_task_kind:{problem_ir.task.kind} ({why})",
                               flags=["unsupported_task_kind"]))
+    # every option a certificate reads is read as the claim is (G1RK-1)
+    ctx.cache[OPTION_READER] = lambda letter: _option_claim_value(problem_ir, _lettered(solution, letter), ctx)
+    certs = _certify(problem_ir, solution, ctx, modules, claim_not_read)
+    layers.extend(certs)
+    if mc is not None and OPTION_UNDECIDED in mc.flags:
+        layers[layers.index(mc)] = _option_as_claim(problem_ir, solution, ctx, modules, certs, mc)
+
+    if run_steps and solution.steps:
+        try:
+            layers.append(check_steps(problem_ir, solution, ctx))
+        except Exception as e:  # noqa: BLE001
+            layers.append(unknown("steps.refute", f"layer_exception: {type(e).__name__}: {str(e)[:200]}",
+                                  flags=["layer_exception"]))
+
+    return layers, clean_flags
+
+
+def _certify_once(problem_ir: ProblemIR, solution: Solution, ctx, modules: list, claim_not_read: bool) -> list:
     certs = []
     for name in modules:
         lr = _run_module(name, problem_ir, solution, ctx)
@@ -1160,19 +1263,77 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         if claim_not_read and lr.verdict == "fail":
             lr = unknown(name, "claim_not_read_refuted: a claim naming the unknown is no value, not refuted",
                          lr.latency_ms, lr.evidence, flags=["claim_is_not_a_value"])
-        layers.append(lr)
         certs.append(lr)
-    if mc is not None and OPTION_UNDECIDED in mc.flags:
-        layers[layers.index(mc)] = _option_as_claim(problem_ir, solution, ctx, modules, certs, mc)
+    return certs
 
-    if run_steps and solution.steps:
-        try:
-            layers.append(check_steps(problem_ir, solution, ctx))
-        except Exception as e:  # noqa: BLE001
-            layers.append(unknown("steps.refute", f"layer_exception: {type(e).__name__}: {str(e)[:200]}",
-                                  flags=["layer_exception"]))
 
-    return layers, clean_flags
+def _decided(layers: list) -> str | None:
+    """'pass' when a hard primary layer passes and none fails, 'fail' when one fails and none passes, else None."""
+    passed = any(l.hard and l.primary and l.verdict == "pass" for l in layers)
+    failed = any(l.hard and l.verdict == "fail" for l in layers)
+    return "pass" if passed and not failed else "fail" if failed and not passed else None
+
+
+def _certify(problem_ir: ProblemIR, solution: Solution, ctx, modules: list, claim_not_read: bool = False) -> list:
+    """The certificates of `modules` on the claim. A unit mark of the claim the question does not fix
+    (`Ctx.open_unit_marks`: %20, 30°) is read both ways, as the unit and as the plain number (%20 as 1/5 and as 20):
+    they decide the claim only where the two readings agree; otherwise each decision is withdrawn (UNKNOWN,
+    `unit_convention`). The IR's value of a percentage computed as `(p2 - p1)/p1*100`, or of an angle in degrees from
+    x + 2x + 3x = 180, is the plain number, and the right '%20' and '30°' were INCORRECT (final attack G1RK-3)."""
+    certs = _certify_once(problem_ir, solution, ctx, modules, claim_not_read)
+    marks = ctx.open_unit_marks(solution.claimed_answer.payload)
+    if not marks:
+        return certs
+    plain = _certify_once(problem_ir, _plain_claim(solution, marks), ctx, modules, claim_not_read)
+    unit_state, plain_state = _decided(certs), _decided(plain)
+    if unit_state == plain_state:
+        return certs
+    why = (f"unit_convention: the claim's {''.join(sorted(marks))} read as a unit ({unit_state}) and as a plain number "
+           f"({plain_state}) decide differently")
+    return [unknown(l.layer, why, l.latency_ms, l.evidence, flags=[UNIT_CONVENTION]) if l.verdict in ("pass", "fail")
+            else l for l in certs]
+
+
+# ---- '%' and '°' are unit marks (final attack G1RK-3) -------------------------------------------------------------
+# A question may count in the unit (an angle in radians: 30° is pi/6) or in plain numbers of it (x + 2x + 3x = 180 is
+# 30, (p2 - p1)/p1*100 is 20): where nothing fixes which, a mark on one side only is read both ways (`_certify`,
+# `_mc_unit_reading`); they decide only where they agree, never CORRECT where they do not
+UNIT_CONVENTION = "unit_convention"
+
+
+def _plain_claim(solution: Solution, marks) -> Solution:
+    """A copy of the solution whose claim has the unit marks `marks` dropped (%20 is 20, 30° is 30)."""
+    import copy as _copy
+    from .normalize.parse import without_unit_marks
+    sol2 = _copy.deepcopy(solution)
+    sol2.claimed_answer.payload = without_unit_marks(sol2.claimed_answer.payload, marks)
+    return sol2
+
+
+def _mc_unit_reading(ir: ProblemIR, solution: Solution, ctx, ov, cv, t) -> tuple[bool | None, str] | None:
+    """mc.consistency under the other reading of a unit mark on one side only (the option '%20' against the claim 20,
+    the claim '30°' against the option 30): (equal or not, undecided None; what was read), None when no side carries
+    a mark of its own the question does not fix (`Ctx.open_unit_marks`). Both marked, the units are one."""
+    from .normalize.parse import unit_marks, without_unit_marks
+    ca = solution.claimed_answer
+    opt = str(ir.options[ca.option])
+    pay = ca.payload if isinstance(ca.payload, str) else None
+    mo, mp = ctx.open_unit_marks(opt), ctx.open_unit_marks(pay)
+    try:
+        if mo and not unit_marks(pay) & mo:
+            what = f"option {opt!r} as {without_unit_marks(opt, mo)!r}"
+            ov, cv = _option_claim_value(ir, solution, ctx, without_unit_marks(opt, mo)), cv
+        elif mp and not unit_marks(opt) & mp:
+            what = f"claim {pay!r} as {without_unit_marks(pay, mp)!r}"
+            ov, cv = ov, ctx.claimed(_plain_claim(solution, mp))
+        else:
+            return None
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - the other reading is not read: undecided
+        return None, "plain_reading_not_read"
+    got = _compare_option(ir, solution, ctx, ov, cv, t)
+    return (None, what) if isinstance(got, LayerResult) else (got[0], what)
 
 
 def _run_module(name: str, problem_ir: ProblemIR, solution: Solution, ctx) -> LayerResult:
@@ -1191,20 +1352,14 @@ def _option_as_claim(problem_ir: ProblemIR, solution: Solution, ctx, modules: li
     against 'x*log(x) - x + C', the families pi/6 + 2*k*pi. A certificate that proves the option and proves the claim
     proves them one object (consistent). One that refutes the option shows the letter names a wrong answer, whatever
     the claim's certificate said: the veto. Anything else leaves `mc` (undecided: no CORRECT)."""
-    import copy as _copy
-
-    def decided(layers):
-        passed = any(l.hard and l.primary and l.verdict == "pass" for l in layers)
-        failed = any(l.hard and l.verdict == "fail" for l in layers)
-        return "pass" if passed and not failed else "fail" if failed and not passed else None
     if not problem_ir.options:
         return mc                      # a letter and no options: nothing to read it in
-    sol2 = _copy.deepcopy(solution)
-    ca = sol2.claimed_answer
-    ca.payload, ca.payload_source = problem_ir.options[ca.option], "option_letter"
-    state = decided([_run_module(name, problem_ir, sol2, ctx) for name in modules])
+    sol2 = _option_read_as_claim(problem_ir, solution, ctx)        # the claim's own reader (G1RK-1)
+    if sol2 is None:
+        return mc
+    state = _decided(_certify(problem_ir, sol2, ctx, modules))
     ev = dict(mc.evidence, option=solution.claimed_answer.option, read_as_claim=state)
-    if state == "pass" and decided(certs) == "pass":
+    if state == "pass" and _decided(certs) == "pass":
         return result("mc.consistency", "pass", 0.99, True, ev, mc.latency_ms, primary=False)
     if state == "fail":
         ev["reason"] = "the chosen option, read as the claim, is refuted"
