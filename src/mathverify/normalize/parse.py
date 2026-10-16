@@ -3050,6 +3050,10 @@ def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     s2 = preclean(strip_presentation(_strip_invisible(s))).strip()
     if number_set_named(s2) is not None or number_set_named(s) is not None:
         return sp.Tuple()                           # ℕ⁺, Z+, N0: a set by its name, no condition
+    diff_ = _SET_DIFFERENCE_RE.match(s2)
+    if diff_ is not None and number_set_named(diff_.group(1)) is not None:
+        # ℝ minus a set (R - {2}, ℝ∖{2}: `parse_set_str`): the set taken out, as written
+        return parse_set_as_written(re.sub(r"\\([{}])", r"\1", diff_.group(2)), ns)
     parts = _COMPOUND_RE.split(s2)
     if len(parts) > 1:
         # a compound condition (x < -1 or x > 3, x = 1 or x = 2): each part as written
@@ -3080,6 +3084,11 @@ def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     return sp.Tuple(*[a for w in read for a in w.args])
 
 
+_SET_DIFFERENCE_RE = re.compile(r"^\s*(\\mathbb\{?R\}?|R|Reals)\s*(?:-|∖|\\setminus(?![A-Za-z])|\\backslash(?![A-Za-z])|\\(?=[\s{\[(]))"
+                                r"\s*(.+?)\s*$", re.S)
+_LATEX_CUP_RE = re.compile(r"\s*\\cup(?![A-Za-z])\s*")
+
+
 @_holds_forms
 def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
     """Parse set notation: {a, b}, (a, b], [a,b) U (c, d), EmptySet, Reals, sympy Set syntax."""
@@ -3091,7 +3100,15 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
         except (sp.SympifyError, TypeError) as e:
             raise ParseError(f"not a set: {type(s).__name__}") from e
         return val if isinstance(val, sp.Set) else FiniteSet(val)
-    sets = [_parse_single_set(p, ns) for p in _union_parts(preclean(s)) if p.strip()]
+    s2 = preclean(s)
+    # ℝ minus a set, the way a textbook writes a domain: R - {2}, \mathbb{R} - \{2\}, ℝ∖{2}, \mathbb{R} \setminus
+    # \{2\}, R - [2, 3]; and LaTeX's \cup between intervals. Not read, they were UNKNOWN (son saldırı SON-G3-RK-4)
+    m = _SET_DIFFERENCE_RE.match(s2)
+    whole = number_set_named(m.group(1)) if m else None
+    if whole is not None:
+        rest = re.sub(r"\\([{}])", r"\1", m.group(2))
+        return sp.Complement(whole, parse_set_str(rest, ns))
+    sets = [_parse_single_set(p, ns) for p in _union_parts(_LATEX_CUP_RE.sub(" U ", s2)) if p.strip()]
     from ..equiv.sets import unify_endpoints, EndpointsIncomparable
     try:
         sets = unify_endpoints(sets)

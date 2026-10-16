@@ -161,7 +161,7 @@ def test_off_the_switch_point_the_derivative_is_read_as_before():
 
 
 def test_a_family_of_zeros_is_undecided_at_its_members_alone():
-    # |sin x| has a corner at each k*pi (sin(x) in ORIGIN): at pi/2 the condition, put in by at() unevaluated, is read
+    # control (a regression of c92f19d, the branch's first commit): |sin x| has a corner at each k*pi (sin(x) in ORIGIN): at pi/2 the condition, put in by at() unevaluated, is read
     # with its element evaluated (sin(pi/2) = 1); left standing, the derivative was undecided there too
     assert _v(_ev("at(diff(Abs(sin(x)), x), x, pi/2)"), _sol("0")) == "CORRECT"
     assert _v(_ev("at(diff(Abs(sin(x)), x), x, pi/2)"), _sol("1")) == "INCORRECT"
@@ -180,6 +180,13 @@ def test_arg_is_read_as_atan2_at_its_zero():
     # arg(1 + I*x) has no cut at 0 (re > 0): its derivative 1 there; SymPy takes no limit of arg (undecided before
     # the rewrite, which only the classification uses)
     assert _v(_ev("at(diff(arg(1 + I*x), x), x, 0)"), _sol("1")) == "CORRECT"
+    # arg(-1 + I*x) jumps at 0 (read as atan2: discontinuous; left as arg, undecided): f' = -1 nowhere
+    from mathverify.normalize.parse import _differentiability
+    x = sp.Symbol("x", real=True)
+    assert _differentiability(sp.arg(-1 + sp.I * x), x) == [sp.Ne(x, 0)]
+    q = _se("diff(f(x), x) = -1", "arg(-1 + I*x)")
+    assert _v(q, _sol("EmptySet", "set")) == "CORRECT"
+    assert _v(q, _sol("{0}", "set")) == "INCORRECT"
 
 
 def test_the_differentiability_conditions():
@@ -340,3 +347,162 @@ def test_the_power_rule_with_an_integer_exponent_stays_correct():
     assert _v(_der("x**n", vars_=[X, NP]), _sol("n*x**(n - 1)", "expression")) == "CORRECT"
     assert _v(_der("x**(n + 1)", vars_=[X, NN]), _sol("(n + 1)*x**n", "expression")) == "CORRECT"
     assert _v(_der("x**n", vars_=[X, NP]), _sol("x**(n - 1)", "expression")) == "INCORRECT"
+
+
+# The additions of the evening (kararlar "EK (16 Ekim akşam)"): G2RK-13/14/15, SON-G3-RK-1/2/4/9 -----------------------
+XP = {"name": "x", "domain": "real", "constraints": ["x > 0"]}
+NP2 = {"name": "n", "domain": "positive_integer", "constraints": ["n >= 2"]}
+NP3 = {"name": "n", "domain": "positive_integer", "constraints": ["n >= 3"]}
+
+
+def _anti(f, vars_=None):
+    return _ir("antiderivative", {"integrand": f, "var": "x"}, (), vars_, "expression")
+
+
+def _ext(f, which, interval):
+    return _ir("extremum", {"f": f, "var": "x", "which": which, "interval": interval})
+
+
+def _derk(f, order, vars_):
+    return _ir("derivative", {"f": f, "var": "x", "order": order}, (), vars_, "expression")
+
+
+@pytest.mark.parametrize("f,claim", [
+    ("cbrt(x)", "1/(3*cbrt(x)**2)"), ("cbrt(x)", "1/(3*cbrt(x**2))"), ("cbrt(x)", "cbrt(x)/(3*x)"),
+    ("cbrt(2*x + 1)", "2/(3*cbrt((2*x + 1)**2))"), ("cbrt(x)**4", "4*cbrt(x)/3"), ("root(x, 3)", "1/(3*root(x, 3)**2)"),
+])
+def test_a_real_root_has_no_derivative_at_its_zero_and_its_textbook_derivative_elsewhere(f, claim):
+    # G2RK-13: sign(u)*|u|**(1/3) at a simple zero of u is an infinite slope, read exactly (`_real_root_rule`)
+    assert _v(_der(f), _sol(claim, "expression")) == "CORRECT"
+
+
+def test_a_wrong_real_root_derivative_stays_wrong():
+    # control
+    assert _v(_der("cbrt(x)"), _sol("1/(3*cbrt(x))", "expression")) == "INCORRECT"
+    assert _v(_der("cbrt(x)"), _sol("cbrt(x)**2/3", "expression")) == "INCORRECT"
+
+
+def test_the_real_root_rule():
+    from mathverify.certify.calculus import _real_root_rule, abs_form, switch_arguments
+    x = sp.Symbol("x", real=True)
+    third = sp.Rational(1, 3)
+
+    def rule(f, p):
+        sw = switch_arguments(f, x)
+        u = next(s_ for s_ in sw if s_.subs(x, p) == 0)
+        return _real_root_rule(abs_form(f), x, sp.sympify(p), u, sw, [])
+    assert rule(sp.sign(x) * sp.Abs(x) ** third, 0) == "corner"                  # ∛x: an infinite slope
+    assert rule(1 + sp.sign(x - 1) * sp.Abs(x - 1) ** third, 1) == "corner"
+    assert rule(sp.sign(x) ** 2 * sp.Abs(x) ** (2 * third), 0) == "corner"        # ∛(x²): a cusp
+    assert rule(x**2 * sp.sign(x) * sp.Abs(x) ** third, 0) == "value"             # g(0) = 0
+    assert rule(sp.sign(x) * sp.Abs(x) ** (4 * third), 0) == "value"              # r > 1
+    assert rule(sp.sign(x) ** 2 * sp.Abs(x), 0) == "corner"                       # |x|
+
+
+@pytest.mark.parametrize("f,claim", [("cbrt(x)", "1/(3*x**(2/3))"), ("cbrt(x)", "x**(-2/3)/3"),
+                                     ("cbrt(x**2)", "2/(3*x**(1/3))"), ("x*cbrt(x)", "4*x**(1/3)/3")])
+def test_a_claims_odd_root_convention_is_read_on_the_declared_region(f, claim):
+    # G2RK-14: x > 0 declared, x**(2/3) has its one value there
+    assert _v(_der(f, vars_=[XP]), _sol(claim, "expression")) == "CORRECT"
+
+
+def test_a_claims_odd_root_convention_off_the_declared_region():
+    # controls: a wrong claim stays wrong; on all of ℝ the claim's principal value is a convention for x < 0
+    assert _v(_der("cbrt(x)", vars_=[XP]), _sol("1/(3*x**(1/3))", "expression")) == "INCORRECT"
+    assert _v(_der("cbrt(x)"), _sol("1/(3*x**(2/3))", "expression")) == "UNKNOWN"
+
+
+@pytest.mark.parametrize("f,which,interval,claim,verdict", [
+    ("x**(1/3)*(1 - x)", "max", "[0, 1]", "3/(4*4**(1/3))", "CORRECT"), ("x**(2/3)", "max", "[1, 8]", "4", "CORRECT"),
+    ("x**(1/3) - x/3", "max", "[0, 8]", "2/3", "CORRECT"), ("x**(1/3) - x/3", "min", "[0, 8]", "-2/3", "CORRECT"),
+    ("x**(2/3)*(5 - x)", "max", "[0, 5]", "3*cbrt(4)", "CORRECT"), ("x**(1/3)*(1 - x)", "max", "[0, 1]", "1/2", "INCORRECT"),
+    ("x**pi", "max", "[1, 2]", "2**pi", "CORRECT"), ("x**pi", "min", "[1, 2]", "1", "CORRECT"),
+    ("x**sqrt(2)", "max", "[1, 2]", "2**sqrt(2)", "CORRECT"), ("x**pi", "max", "[1, 2]", "4", "INCORRECT"),
+    ("x**x", "max", "[1, 2]", "4", "CORRECT"),
+])
+def test_the_extremum_of_a_fractional_or_irrational_power(f, which, interval, claim, verdict):
+    # G2RK-15: an odd root's base not negative on the interval; f strictly monotone, proved by intervals
+    assert _v(_ext(f, which, interval), _sol(claim)) == verdict
+
+
+def test_strict_monotonicity_by_intervals():
+    from mathverify.certify.extremum import _strictly_monotone
+    x = sp.Symbol("x", real=True)
+    assert _strictly_monotone(x**sp.pi, x, 1, 2) == 1
+    assert _strictly_monotone(-x**3 - x, x, -1, 1) == -1
+    assert _strictly_monotone(x**sp.pi, x, 0, 1) is None          # not analytic at 0
+    assert _strictly_monotone(sp.sin(x), x, 0, sp.pi) is None      # f' changes sign
+
+
+@pytest.mark.parametrize("q,claim,verdict", [
+    (_der("x**pi"), "pi*x**(pi - 1)", "CORRECT"), (_der("x**pi"), "x**(pi - 1)", "INCORRECT"),
+    (_der("x**sqrt(2)"), "sqrt(2)*x**(sqrt(2) - 1)", "CORRECT"), (_der("(2*x + 1)**pi"), "2*pi*(2*x + 1)**(pi - 1)", "CORRECT"),
+    (_anti("x**pi"), "x**(pi + 1)/(pi + 1)", "CORRECT"), (_anti("x**sqrt(2)"), "x**(sqrt(2) + 1)/(sqrt(2) + 1)", "CORRECT"),
+])
+def test_an_irrational_power_on_an_unconstrained_variable(q, claim, verdict):
+    # SON-G3-RK-1: the convention point 0 of x**pi is an end of its domain, never read by a derivative function
+    assert _v(q, _sol(claim, "expression")) == verdict
+
+
+def test_a_convention_on_more_than_the_ends_of_the_domain_still_stops_the_gate():
+    # controls (the decision reads finitely many ends only): x**x fails on all of x <= 0, (x**2)**pi at the interior 0
+    assert _v(_der("x**x"), _sol("x**x*(log(x) + 1)", "expression")) == "UNKNOWN"
+    assert _v(_der("(x**2)**pi"), _sol("2*pi*x*(x**2)**(pi - 1)", "expression")) == "UNKNOWN"
+
+
+@pytest.mark.parametrize("f,order,vars_,claim,verdict", [
+    ("x**n", 2, [X, NP2], "n*(n - 1)*x**(n - 2)", "CORRECT"),
+    ("x**n", 3, [X, NP3], "n*(n - 1)*(n - 2)*x**(n - 3)", "CORRECT"),
+    ("(x + 1)**n", 2, [X, NP2], "n*(n - 1)*(x + 1)**(n - 2)", "CORRECT"),
+    ("x**n", 2, [X, NP2], "n**2*x**(n - 2)", "INCORRECT"),
+    # control: with n = 1 allowed the claim is 0*x**(-1), undefined at 0 where f'' = 0 exists
+    ("x**n", 2, [X, NP], "n*(n - 1)*x**(n - 2)", "UNKNOWN"),
+])
+def test_an_integer_exponent_bounded_below_by_a_constraint(f, order, vars_, claim, verdict):
+    # SON-G3-RK-2: n >= 2 read on the claim's exponent (n = 2 + k, k >= 0)
+    assert _v(_derk(f, order, vars_), _sol(claim, "expression")) == verdict
+
+
+@pytest.mark.parametrize("q,claim,verdict", [
+    (_der("log(sin(x))", "pi/4"), "1", "CORRECT"), (_der("sqrt(sin(x))", "pi/6"), "sqrt(6)/4", "CORRECT"),
+    (_der("sqrt(cos(x))", "0"), "0", "CORRECT"), (_der("log(cos(x))", "pi/3"), "-sqrt(3)", "CORRECT"),
+    (_der("log(tan(x))", "pi/4"), "2", "CORRECT"), (_der("log(sin(x))", "pi/4"), "0", "INCORRECT"),
+    (_ir("limit", {"expr": "log(cos(x))/x**2", "var": "x", "to": "0"}), "-1/2", "CORRECT"),
+    (_ir("limit", {"expr": "log(cos(x))/x**2", "var": "x", "to": "0"}), "1/2", "INCORRECT"),
+    (_ir("limit", {"expr": "log(1 + sin(x))/x", "var": "x", "to": "0"}), "1", "CORRECT"),
+])
+def test_a_trigonometric_condition_holding_strictly_at_the_point(q, claim, verdict):
+    # SON-G3-RK-9: sin(x) > 0 at pi/4, continuous: it holds on a neighbourhood (`calculus.strict_at`)
+    assert _v(q, _sol(claim)) == verdict
+
+
+def test_a_trigonometric_condition_failing_at_the_point_is_still_undecided():
+    # control: x*log(sin(x)) at 0+ (sin(0) = 0): no strict reading at the point
+    q = _ir("limit", {"expr": "x*log(sin(x))", "var": "x", "to": "0", "side": "+"})
+    assert _v(q, _sol("0")) == "UNKNOWN"
+
+
+@pytest.mark.parametrize("kind,text,claim,verdict", [
+    ("domain_of", "1/(x - 2)", "R - {2}", "CORRECT"), ("domain_of", "1/(x - 2)", r"\mathbb{R} - \{2\}", "CORRECT"),
+    ("domain_of", "1/(x - 2)", r"\mathbb{R} \setminus \{2\}", "CORRECT"), ("domain_of", "1/(x - 2)", "ℝ∖{2}", "CORRECT"),
+    ("domain_of", "1/(x - 2)", r"(-\infty, 2) \cup (2, \infty)", "CORRECT"),
+    ("domain_of", "log(x**2 - 1)", r"(-\infty, -1) \cup (1, \infty)", "CORRECT"),
+    ("domain_of", "1/(x - 2)", "R - {3}", "INCORRECT"),
+    ("solve_inequality", "x**2 - 5*x + 6 > 0", r"(-\infty, 2) \cup (3, \infty)", "CORRECT"),
+    ("solve_inequality", "x**2 - 5*x + 6 > 0", "R - [2, 3]", "CORRECT"),
+    ("solve_inequality", "x**2 - 5*x + 6 > 0", r"(-\infty, 2) \cup (4, \infty)", "INCORRECT"),
+])
+def test_textbook_set_notation(kind, text, claim, verdict):
+    # SON-G3-RK-4: ℝ minus a set and LaTeX's \cup
+    params = {"expr": text, "var": "x"} if kind == "domain_of" else {"inequality": text, "var": "x"}
+    q = _ir(kind, params, (), None, "set" if kind == "domain_of" else "interval")
+    assert _v(q, _sol(claim, "set" if kind == "domain_of" else "interval")) == verdict
+
+
+def test_set_difference_reading():
+    from mathverify.normalize.parse import parse_set_str
+    two = sp.Union(sp.Interval.open(-sp.oo, 2), sp.Interval.open(2, sp.oo))
+    for s in ("R - {2}", r"\mathbb{R} - \{2\}", r"\mathbb{R} \setminus \{2\}", "ℝ∖{2}", "Reals - {2}"):
+        assert parse_set_str(s) == two
+    assert parse_set_str("R - [2, 3]") == sp.Union(sp.Interval.open(-sp.oo, 2), sp.Interval.open(3, sp.oo))
+    assert parse_set_str("R") == sp.S.Reals                                     # control

@@ -1890,12 +1890,13 @@ def _node_conditions(node, var, add) -> None:
                 add(sp.Contains(sp.Tuple(base, ex), REAL_POWER))
             elif ex.is_integer is not True:
                 add(base > 0)          # x^y style real power (var None: every symbol counts)
-            elif not (ex.is_nonnegative is True or _plus_one_positive(ex)):
+            elif not (ex.is_nonnegative is True or _plus_one_positive(ex) or _evaluated(ex).is_nonnegative is True):
                 # an exponent declared an integer is a power of the curriculum for every base: x != 0 when it may
                 # be negative, nothing when it may not (n a positive integer: (x**2)**n and x**(2*n - 1); an integer
                 # e is >= 0 when e + 1 > 0, which SymPy reads on the unevaluated n - 1 as written). Read as
                 # x > 0, the textbook derivative 2*n*x**(2*n - 1) of (x**2)**n was refuted (attack on d4e round 4,
-                # D4E4-U5)
+                # D4E4-U5). The exponent's sign is read on its evaluated form too: (k + 2) - 2 written out for n - 2 with
+                # n = k + 2 (`calculus._claim_definedness_on_integer_bounds`, SON-G3-RK-2) is k, never negative
                 add(Ne(base, 0))
         elif not ex.is_number and base.is_number and base.is_zero is False and base.is_positive is not True \
                 and ex.is_integer is not True:

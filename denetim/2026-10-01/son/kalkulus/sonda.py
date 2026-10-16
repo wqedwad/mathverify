@@ -11,6 +11,10 @@ wip/son-kalkulus (decisions: the main session's `kararlar.txt`, "MERCEK 3"; find
     C  SON-G3-YO-3   a closed infinite argument written as a limit is no value (A-YO-5's rule on the value)
     D  SON-G3-YO-4   over ℂ a closed division by 0 or pole inside any operation has no value (A-YO-3's rule)
     E  SON-G3-YO-5   record: (x**n)' = n*x**(n - 1) for n a positive integer stays CORRECT (D4E4-U5)
+    F  the evening's additions: G2RK-13 (a real root's kink), G2RK-14 (a claim's odd root on the declared region),
+                     G2RK-15 (extremum of a fractional or irrational power), SON-G3-RK-1 (x**pi on an unconstrained x),
+                     RK-2 (n >= 2 on the claim's exponent), RK-9 (a trigonometric condition strict at the point),
+                     RK-4 (R - {2}, \\setminus, \\cup)
     K  controls whose verdict must not change
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
@@ -290,10 +294,85 @@ def cases_k():
     ]
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "K": cases_k}
+# F: the additions of the evening (G2RK-13/14/15, SON-G3-RK-1/2/4/9) ---------------------------------------------
+XP = {"name": "x", "domain": "real", "constraints": ["x > 0"]}
+NP2 = {"name": "n", "domain": "positive_integer", "constraints": ["n >= 2"]}
+NP3 = {"name": "n", "domain": "positive_integer", "constraints": ["n >= 3"]}
 
 
-def main(out_path=None, groups="ABCDEK"):
+def anti(f):
+    return ir("antiderivative", {"integrand": f, "var": "x"}, (), None, "expression")
+
+
+def ext(f, which, interval):
+    return ir("extremum", {"f": f, "var": "x", "which": which, "interval": interval})
+
+
+def derk(f, order, vars_):
+    return ir("derivative", {"f": f, "var": "x", "order": order}, (), vars_, "expression")
+
+
+def cases_f():
+    E_ = lambda v: sol(v, "expression")  # noqa: E731
+    out = []
+    for f, c in [("cbrt(x)", "1/(3*cbrt(x)**2)"), ("cbrt(x)", "1/(3*cbrt(x**2))"), ("cbrt(x)", "cbrt(x)/(3*x)"),
+                 ("cbrt(2*x + 1)", "2/(3*cbrt((2*x + 1)**2))"), ("cbrt(x)**4", "4*cbrt(x)/3"),
+                 ("root(x, 3)", "1/(3*root(x, 3)**2)"), ("cbrt(x)**2", "2/(3*cbrt(x))")]:
+        out.append((f"G2RK-13 ({f})' = {c}", der(f), E_(c), OK, None))
+    out += [("G2RK-13 (cbrt x)' = 1/(3 cbrt x) wrong", der("cbrt(x)"), E_("1/(3*cbrt(x))"), NO, None),
+            ("G2RK-13 (x cbrt x)' = cbrt x wrong", der("x*cbrt(x)"), E_("cbrt(x)"), NO, None)]
+    for f, c in [("cbrt(x)", "1/(3*x**(2/3))"), ("cbrt(x)", "x**(-2/3)/3"), ("cbrt(x**2)", "2/(3*x**(1/3))"),
+                 ("x*cbrt(x)", "4*x**(1/3)/3")]:
+        out.append((f"G2RK-14 [x>0] ({f})' = {c}", der(f, vars_=[XP]), E_(c), OK, None))
+    out += [("G2RK-14 [x>0] (cbrt x)' = 1/(3 x^(1/3)) wrong", der("cbrt(x)", vars_=[XP]), E_("1/(3*x**(1/3))"), NO, None),
+            ("G2RK-14 control [R] (cbrt x)' = 1/(3 x^(2/3))", der("cbrt(x)"), E_("1/(3*x**(2/3))"), UNK, None)]
+    for f, w, iv, c, v in [("x**(1/3)*(1 - x)", "max", "[0, 1]", "3/(4*4**(1/3))", OK), ("x**(2/3)", "max", "[1, 8]", "4", OK),
+                           ("x**(1/3) - x/3", "max", "[0, 8]", "2/3", OK), ("x**(1/3) - x/3", "min", "[0, 8]", "-2/3", OK),
+                           ("x**(1/3) - x/3", "argmax", "[0, 8]", "1", OK), ("x**(2/3)*(5 - x)", "max", "[0, 5]", "3*cbrt(4)", OK),
+                           ("x**(1/3)*(1 - x)", "max", "[0, 1]", "1/2", NO), ("x**pi", "max", "[1, 2]", "2**pi", OK),
+                           ("x**pi", "min", "[1, 2]", "1", OK), ("x**sqrt(2)", "max", "[1, 2]", "2**sqrt(2)", OK),
+                           ("x**pi", "max", "[1, 2]", "4", NO), ("x**x", "max", "[1, 2]", "4", OK),
+                           ("x*exp(-x)", "max", "[0, 3]", "exp(-1)", OK), ("sin(x) + cos(x)", "max", "[0, pi/2]", "sqrt(2)", OK)]:
+        out.append((f"G2RK-15 {w} {f} on {iv} = {c}", ext(f, w, iv), sol(c), v, None))
+    out += [("RK-1 (x^pi)' = pi x^(pi-1)", der("x**pi"), E_("pi*x**(pi - 1)"), OK, None),
+            ("RK-1 (x^pi)' = x^(pi-1) wrong", der("x**pi"), E_("x**(pi - 1)"), NO, None),
+            ("RK-1 (x^sqrt2)'", der("x**sqrt(2)"), E_("sqrt(2)*x**(sqrt(2) - 1)"), OK, None),
+            ("RK-1 ((2x+1)^pi)'", der("(2*x + 1)**pi"), E_("2*pi*(2*x + 1)**(pi - 1)"), OK, None),
+            ("RK-1 int x^pi", anti("x**pi"), E_("x**(pi + 1)/(pi + 1)"), OK, None),
+            ("RK-1 int x^sqrt2", anti("x**sqrt(2)"), E_("x**(sqrt(2) + 1)/(sqrt(2) + 1)"), OK, None),
+            ("RK-1 control (x^x)' stays undecided (decision: finitely many ends)", der("x**x"), E_("x**x*(log(x) + 1)"), UNK, None),
+            ("RK-1 control ((x^2)^pi)' (0 interior)", der("(x**2)**pi"), E_("2*pi*x*(x**2)**(pi - 1)"), UNK, None),
+            ("RK-2 (x^n)'' n>=2", derk("x**n", 2, [X, NP2]), E_("n*(n - 1)*x**(n - 2)"), OK, None),
+            ("RK-2 (x^n)''' n>=3", derk("x**n", 3, [X, NP3]), E_("n*(n - 1)*(n - 2)*x**(n - 3)"), OK, None),
+            ("RK-2 ((x+1)^n)'' n>=2", derk("(x + 1)**n", 2, [X, NP2]), E_("n*(n - 1)*(x + 1)**(n - 2)"), OK, None),
+            ("RK-2 (x^n)'' wrong", derk("x**n", 2, [X, NP2]), E_("n**2*x**(n - 2)"), NO, None),
+            ("RK-2 control n in Z+ only", derk("x**n", 2, [X, NP]), E_("n*(n - 1)*x**(n - 2)"), UNK, None)]
+    for q, c, v in [(der("log(sin(x))", "pi/4"), "1", OK), (der("sqrt(sin(x))", "pi/6"), "sqrt(6)/4", OK),
+                    (der("sqrt(cos(x))", "0"), "0", OK), (der("log(cos(x))", "pi/3"), "-sqrt(3)", OK),
+                    (der("log(tan(x))", "pi/4"), "2", OK), (der("sqrt(1 + sin(x))", "0"), "1/2", OK),
+                    (der("log(sin(x))", "pi/4"), "0", NO), (lim("log(cos(x))/x**2", "0"), "-1/2", OK),
+                    (lim("log(cos(x))/x**2", "0"), "1/2", NO), (lim("log(1 + sin(x))/x", "0"), "1", OK)]:
+        out.append((f"RK-9 {q['task']['kind']} {q['task']['params']} = {c}", q, sol(c), v, None))
+    out.append(("RK-9 tangent sqrt(sin x) at pi/2: y = 1", tan("sqrt(sin(x))", "pi/2"), sol("y = 1", "equation"), OK, None))
+    for kind, text, c, v in [("domain_of", "1/(x - 2)", "R - {2}", OK), ("domain_of", "1/(x - 2)", r"\mathbb{R} - \{2\}", OK),
+                             ("domain_of", "1/(x - 2)", r"\mathbb{R} \setminus \{2\}", OK), ("domain_of", "1/(x - 2)", "ℝ∖{2}", OK),
+                             ("domain_of", "1/(x - 2)", r"(-\infty, 2) \cup (2, \infty)", OK),
+                             ("domain_of", "log(x**2 - 1)", r"(-\infty, -1) \cup (1, \infty)", OK),
+                             ("domain_of", "1/(x - 2)", "R - {3}", NO), ("domain_of", "1/(x - 2)", "ℝ - {2}", OK),
+                             ("solve_inequality", "x**2 - 5*x + 6 > 0", r"(-\infty, 2) \cup (3, \infty)", OK),
+                             ("solve_inequality", "x**2 - 5*x + 6 > 0", "R - [2, 3]", OK),
+                             ("solve_inequality", "x**2 - 5*x + 6 > 0", r"(-\infty, 2) \cup (4, \infty)", NO),
+                             ("solve_inequality", "x**2 - 5*x + 6 > 0", "(-oo, 2) U (3, oo)", OK)]:
+        params = {"expr": text, "var": "x"} if kind == "domain_of" else {"inequality": text, "var": "x"}
+        shape = "set" if kind == "domain_of" else "interval"
+        out.append((f"RK-4 {kind} {text}: {c}", ir(kind, params, (), None, shape), sol(c, shape), v, None))
+    return out
+
+
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k}
+
+
+def main(out_path=None, groups="ABCDEFK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -331,5 +410,5 @@ def main(out_path=None, groups="ABCDEK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEK"
+    grp = args[1] if len(args) > 1 else "ABCDEFK"
     sys.exit(1 if main(out, grp) else 0)

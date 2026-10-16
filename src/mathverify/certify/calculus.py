@@ -1302,6 +1302,48 @@ def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
     return "corner"
 
 
+def _real_root_rule(fa, var, p, u, switches, fconds) -> str | None:
+    """f = h + g*sign(u)**a*|u|**r at a zero p of u: a real root (cbrt(u) parses to sign(u)*|u|**(1/3), its powers to
+    sign(u)**k*|u|**(k/3)) or a power of |u|, r > 0 a number, a >= 0 an integer, g, h and u analytic at p
+    (`smooth_at`). Off p, sign(u)**a is 1 for an even a, and the term is 0 at p, so a's parity alone counts. r > 1,
+    or g(p) = 0: the term is o(x - p) (|u| <= C|x - p|), f has a derivative ('value'); r = 1 with an odd a: the term
+    is g*u ('value'); r = 1 with an even a, g(p) != 0 and u'(p) != 0: |u|'s corner; 0 < r < 1, g(p) != 0 and
+    u'(p) != 0: an infinite slope (odd a) or a cusp (even a): no derivative ('corner'). Exact, no limit taken:
+    SymPy's limits did not decide the continuity of sign(x)*|x|**(1/3) at 0, and the textbook (∛x)' = 1/(3∛x²) was
+    UNKNOWN (son saldırı G2RK-13). None when the rule does not apply or decides nothing."""
+    signs = [s_ for s_ in fa.atoms(sp.sign) if s_.args[0] == u]
+    absolutes = [a_ for a_ in fa.atoms(sp.Abs) if a_.args[0] == u]
+    if len(signs) > 1 or len(absolutes) != 1:
+        return None
+    others = [v for v in switches if v != u]
+    if any(_nonzero_at(v, var, p, root_of=u) is not True for v in others):
+        return None
+    Ds, Da = sp.Dummy("sign"), sp.Dummy("abs")
+    try:
+        F = fa.xreplace({**({signs[0]: Ds} if signs else {}), absolutes[0]: Da})
+        h, rest = F.as_independent(Ds, Da, as_Add=True)
+        c, a = rest.as_coeff_exponent(Ds)
+        g, r = c.as_coeff_exponent(Da)
+        if rest == 0 or g.has(Ds, Da) or sp.expand(rest - g * Ds**a * Da**r) != 0:
+            return None
+    except Exception:  # noqa: BLE001 - not of this form
+        return None
+    if not (a.is_Integer and a >= 0 and r.is_number and r.is_extended_positive is True):
+        return None
+    if not all(smooth_at(e, var, p, others, fconds, root_of=u) for e in (g, h, u)):
+        return None
+    if certified_sign(r - 1) == 1:
+        return "value"
+    gp = _nonzero_at(g, var, p, root_of=u)
+    if gp is False:
+        return "value"
+    if r == 1 and a % 2 == 1:
+        return "value"
+    if gp is not True or _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
+        return None
+    return "corner" if r == 1 or certified_sign(1 - r) == 1 else None
+
+
 def _piecewise_rule(f, var, p) -> str | None:
     """f (folded into one Piecewise in `var` alone) at a number p where its branch may change: the branch taken on
     each side of p and at p, read from the exact sets SymPy solves the conditions to (`as_expr_set_pairs`) at a
@@ -1378,6 +1420,8 @@ def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, c
     st = _linear_switch_rule(fa, var, p, u, switches, fconds)
     if st is None:
         st = _power_rule(fa, var, p, u, switches, fconds)
+    if st is None:
+        st = _real_root_rule(fa, var, p, u, switches, fconds)
     if st is None and order == 1 and f.has(sp.Piecewise):
         st = _piecewise_rule(f, var, p)
     if order == 1 and st is not None:
@@ -2168,6 +2212,52 @@ def _claim_condition_holds(ctx: Ctx, c, var, opens) -> bool:
     return _implied(c.xreplace(rep), [(v.xreplace(rep), k) for v, k in opens], var)
 
 
+def _claim_definedness_on_integer_bounds(ctx: Ctx, src: str, ns: dict, pins: dict | None, var) -> tuple[list, set]:
+    """`written_definedness` of the claim `src`, each integer parameter n whose region (`_parameter_region`) is the
+    integers from L on read as L + k, k a nonnegative integer Dummy (the conditions mapped back with k = n - L): with
+    n >= 2 declared, the exponent n - 2 of n*(n - 1)*x**(n - 2) is k, never negative, and x**(n - 2) needs no x != 0
+    (U5's rule reads the declaration n > 0 alone). The textbook (x**n)'' was UNKNOWN for n >= 2 (son saldırı
+    SON-G3-RK-2). The plain reading when no such parameter is read."""
+    conds, nowhere = written_definedness(src, ns, pins)
+    shift: dict = {}
+    named = {v.name for v in ctx.ir.vars if re.search(rf"(?<![A-Za-z_0-9]){re.escape(v.name)}(?![A-Za-z_0-9])", src)}
+    for s_ in sorted({q for q in (ns.get(n_) for n_ in named) if isinstance(q, sp.Symbol)} - {var} - set(pins or {}),
+                     key=lambda q: q.name):
+        if getattr(s_, "is_integer", None) is not True:
+            continue
+        reg = _parameter_region(ctx, s_)
+        try:
+            lo = reg.inf if reg is not None else None
+            if lo is None or not lo.is_Integer or reg.is_subset(sp.Range(lo, oo)) is not True:
+                continue
+        except Exception:  # noqa: BLE001 - a region not read: as written
+            continue
+        shift[s_] = (lo, sp.Dummy(f"{s_.name}_from_{lo}", integer=True, nonnegative=True))
+    if not shift:
+        return conds, nowhere
+    try:
+        conds2, nowhere2 = written_definedness(src, ns, {**(pins or {}), **{s_: lo + k for s_, (lo, k) in shift.items()}})
+    except Exception:  # noqa: BLE001 - as written
+        return conds, nowhere
+    back = {k: s_ - lo for s_, (lo, k) in shift.items()}
+    return [c.xreplace(back) for c in conds2], {back.get(q, q) for q in nowhere2} if nowhere2 else set(nowhere2)
+
+
+def _convention_holds_on(c, var, dom) -> bool:
+    """Is the convention condition `c` on `var` alone (`domain.is_convention`) met at every point of the interior of the
+    comparison region `dom`: the points where it may fail (`domain.convention_split`, exact) miss it? With x > 0
+    declared, x**(2/3) has its one value: the claim 1/(3*x**(2/3)) for (∛x)' was undecided on its odd root's convention
+    (son saldırı G2RK-14)."""
+    from .domain import convention_split, is_convention
+    if not is_convention(c) or c.free_symbols != {var} or not isinstance(dom, sp.Set):
+        return False
+    try:
+        _, back = convention_split(c, var)
+        return sp.Intersection(back, dom.interior).is_empty is True
+    except Exception:  # noqa: BLE001 - not proved
+        return False
+
+
 def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose, kr, fconds) -> tuple[str, str]:
     """Where the claim, as written, has no value, against where f has a derivative (round 3, RK-8 and YO-3):
     'undefined' when a point of the comparison region where f has one (`_has_derivative_at`) has none of the claim:
@@ -2189,7 +2279,8 @@ def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose
         if c in fconds:
             continue                     # f's own condition (a convention both read alike): holds where f does
         if fs - {var} or isinstance(c, sp.Contains):
-            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens)):
+            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens)
+                    or _convention_holds_on(c, var, dom)):
                 state, why = "undecided", f"claim_condition_not_proved: {c}"
             continue
         if isinstance(c, Ne):
@@ -2512,10 +2603,40 @@ def _unreadable_task_expression(src, expr, var, ns, ms, regions=(), pins=None):
                        flags=["expression_undefined_as_written"])
     members = [c for c in membership_conditions(src, expr, var, ns, pins) if not membership_holds_on(c, var, regions)
                and not any(convention_null_on(c, var, r) for r in regions)]
+    if members and not regions:
+        # no point and no range (a derivative function, an antiderivative): a convention that fails at finitely many
+        # points, each an end of f's written domain, is never read (son saldırı SON-G3-RK-1)
+        members = [c for c in members if not _convention_at_domain_ends(c, var, src, ns, pins)]
     if members:
         return unknown(LAYER, "membership_condition_on_variable", ms, {"conditions": [str(c) for c in members]},
                        flags=["membership_condition"])
     return None
+
+
+def _convention_at_domain_ends(c, var, src, ns, pins) -> bool:
+    """Does the convention condition `c` of f (`src`) fail at finitely many points of ℝ at most (the 0**e rule of an
+    irrational exponent: x**pi at 0), each a simple zero p of a base b whose own condition b >= 0 f writes too? Then
+    b < 0 on one side of p: p is an end of f's domain, no point of the open set where a derivative function or an
+    antiderivative lives, and the convention is never read there. x**pi, x**sqrt(2) and their primitives were UNKNOWN
+    on an unconstrained x since part d4b's round 10 (son saldırı SON-G3-RK-1). x**x fails on all of x <= 0: no."""
+    from .domain import Convention, _MAY_FAIL
+    from ..sandbox.exactsets import exact_solveset
+    st = c.args[1] if isinstance(c, sp.Contains) else None
+    if not isinstance(st, Convention) or st.kind != "zero_power":
+        return False
+    b = c.args[0]
+    if not isinstance(b, sp.Expr) or b.free_symbols != {var}:
+        return False
+    try:
+        pts = exact_solveset(_MAY_FAIL["zero_power"](b), var, S.Reals)
+        if not isinstance(pts, (sp.FiniteSet, type(S.EmptySet))):
+            return False
+        own = written_definedness(src, ns, pins)[0]
+        if not any(isinstance(o, sp.GreaterThan) and sp.expand(o.lhs - o.rhs - b) == 0 for o in own):
+            return False
+        return all(_nonzero_at(sp.diff(b, var), var, q, root_of=b) is True for q in pts)
+    except Exception:  # noqa: BLE001 - not proved
+        return False
 
 
 def _closed_real(txt, ctx, pins):
@@ -3191,7 +3312,8 @@ def verify(ir, solution, ctx: Ctx):
                 # the claim, as written, has a value wherever the derivative exists (`claim_where_derivative`):
                 # 2*x**2/x for (x**2)' was certified, 1/(x + 1/a) with a >= 0 too (round 3, RK-8 and YO-3)
                 fconds = written_definedness(p["f"], ctx.ns, pins)[0]
-                claim_conds, claim_nowhere = written_definedness(str(ca.payload), ctx.claim_ns(solution), pins)
+                claim_conds, claim_nowhere = _claim_definedness_on_integer_bounds(
+                    ctx, str(ca.payload), ctx.claim_ns(solution), pins, var)
                 if other and not _half_line_for_every_value(ctx, conds, other, var):
                     # a parameter of declared sign (a > 0: asin(x/a), log(k*x)): a domain with interior for every
                     # allowed value is proved by one point, the claim by a symbolic identity (R2)
