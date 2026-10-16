@@ -18,6 +18,7 @@ fixed (`denetim/2026-10-01/d4/a_arti/kararlar_kalan.txt`; the d4f round 2 findin
     M  GAP-NE          Eq/Ne with a Float operand: a tolerant equality decides nothing (relation_holds_at)
     N  GAP-LFLOOR      a claim that applies the target's own integer operation (\\lfloor 17/5 \\rfloor) is no value
     P  CAP-K1          the fusion: a meaning abstention is not turned CORRECT by a later layer's pass alone
+    Q  (addendum)      mc.consistency: a chosen option not shown to be the claim gives no CORRECT; a wrong one refutes
     K  controls whose verdict must not change
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
@@ -437,6 +438,69 @@ def cases_p():
     return [(f"+lean {lab}", _with_lean(q, s), None, exp, None) for lab, q, s, exp in rows]
 
 
+# Q: the chosen option against the claim (d4j addendum, 16 Oct 2026) ------------------------------------------------
+def _mcq(kind, params, vars_, shape, opts, givens=()):
+    d = ir(kind, params, givens, vars_, shape)
+    if opts is not None:
+        d["options"] = opts
+    return d
+
+
+def _mcs(kind, payload, opt, source=None):
+    d = sol(payload, kind, option=opt)
+    if source:
+        d["claimed_answer"]["payload_source"] = source
+    return d
+
+
+def cases_q():
+    xx, yy = {"name": "x"}, {"name": "y"}
+    trig = _mcq("trig_solve", {"var": "x", "interval": "[0, pi)"}, [xx], "set", {"A": "pi/6", "B": "pi/3", "C": "2*pi/3"},
+                ["tan(x) = sqrt(3)"])
+    trigk = _mcq("trig_solve", {"var": "x"}, [xx], "set", {"A": "{pi/6 + 2*k*pi}", "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}",
+                                                         "C": "{pi/6 + k*pi}"}, ["sin(x) = 1/2"])
+    integ = _mcq("antiderivative", {"integrand": "log(x)", "var": "x"}, [xx], "expression",
+                 {"A": "x*log(x) - x + C", "B": "x*log(x) + C"})
+    tan = _mcq("tangent_line", {"f": "x**2", "var": "x", "at": "1", "dep": "y"}, [xx, yy], "equation",
+               {"A": "y = 2*x - 1", "B": "y = 2*x + 1"})
+    cir = _mcq("equation_of", {"object": "circle_center_radius", "center": ["2", "-1"], "radius": "3"}, [xx, yy], "equation",
+               {"A": "(x - 2)**2 + (y + 1)**2 = 9", "B": "(x + 2)**2 + (y - 1)**2 = 9"})
+    ev3 = _mcq("evaluate", {"expr": "1 + 2"}, [], "scalar", {"A": "üç", "B": "4"})
+    ev3n = _mcq("evaluate", {"expr": "1 + 2"}, [], "scalar", None)
+    cnt = _mcq("count_integers", {"var": "n"}, [NI], "count", {"A": "3", "B": "4"}, ["n >= 1", "n <= 3"])
+    ode = _mcq("ode", {"var": "x"}, [xx], "set", {"A": "{3}", "B": "{2}"})
+    return [
+        ("trig value pi/3, letter of pi/6", trig, _mcs("value", "pi/3", "A"), NO, None),
+        ("trig value pi/3, letter of pi/3", trig, _mcs("value", "pi/3", "B"), OK, None),
+        ("trig value pi/3, letter of 2pi/3", trig, _mcs("value", "pi/3", "C"), NO, None),
+        ("trig set {pi/3}, letter of pi/6", trig, _mcs("set", "{pi/3}", "A"), NO, None),
+        ("trig families k, right letter", trigk, _mcs("set", "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}", "B"), OK, None),
+        ("trig families n, right letter (k)", trigk, _mcs("set", "{pi/6 + 2*n*pi, 5*pi/6 + 2*n*pi}", "B"), OK, None),
+        ("trig families k, wrong letter", trigk, _mcs("set", "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}", "A"), NO, None),
+        ("antiderivative F, letter of F + C", integ, _mcs("expression", "x*log(x) - x", "A"), OK, None),
+        ("antiderivative F + C, letter of F + C", integ, _mcs("expression", "x*log(x) - x + C", "A"), OK, None),
+        ("antiderivative F, wrong letter", integ, _mcs("expression", "x*log(x) - x", "B"), NO, None),
+        ("antiderivative letter only", integ, _mcs("expression", "", "A"), OK, None),
+        ("antiderivative recovered payload, wrong letter", integ, _mcs("expression", "x*log(x) - x", "B", "recovered_text"),
+         UNK, None),
+        ("antiderivative recovered payload, right letter", integ, _mcs("expression", "x*log(x) - x", "A", "recovered_text"),
+         OK, None),
+        ("tangent, right letter", tan, _mcs("equation", "y = 2*x - 1", "A"), OK, None),
+        ("tangent, other form, right letter", tan, _mcs("equation", "2*x - y = 1", "A"), OK, None),
+        ("tangent, wrong letter", tan, _mcs("equation", "y = 2*x - 1", "B"), NO, None),
+        ("circle expanded, right letter", cir, _mcs("equation", "x**2 + y**2 - 4*x + 2*y - 4 = 0", "A"), OK, None),
+        ("circle, wrong letter", cir, _mcs("equation", "(x - 2)**2 + (y + 1)**2 = 9", "B"), NO, None),
+        ("evaluate, unreadable option", ev3, _mcs("value", "3", "A"), UNK, None, None, "option_claim_undecided"),
+        ("evaluate, wrong letter", ev3, _mcs("value", "3", "B"), NO, None),
+        ("evaluate, a letter and no options", ev3n, _mcs("value", "3", "A"), UNK, None),
+        ("evaluate, no letter", ev3n, _mcs("value", "3", None), OK, None),
+        ("count, right letter", cnt, _mcs("count", 3, "A"), OK, None),
+        ("count, wrong letter", cnt, _mcs("count", 3, "B"), NO, None),
+        ("no certificate: value 2 against {3}", ode, _mcs("value", "2", "A"), NO, None),
+        ("no certificate: value 2 against {2}", ode, _mcs("value", "2", "B"), UNK, None),
+    ]
+
+
 # K: controls ----------------------------------------------------------------------------------------------------
 def cases_k():
     return [
@@ -462,10 +526,10 @@ def cases_k():
 
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
           "H": cases_h, "I": cases_i, "J": cases_j, "L": cases_l, "M": cases_m, "N": cases_n, "P": cases_p,
-          "K": cases_k}
+          "Q": cases_q, "K": cases_k}
 
 
-def main(out_path=None, groups="ABCDEFGHIJLMNPK"):
+def main(out_path=None, groups="ABCDEFGHIJLMNPQK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -510,5 +574,5 @@ def main(out_path=None, groups="ABCDEFGHIJLMNPK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJLMNPK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJLMNPQK"
     sys.exit(1 if main(out, grp) else 0)

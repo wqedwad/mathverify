@@ -150,7 +150,9 @@ def _ineq(given, opts, payload, opt, shape="interval", kind="interval"):
 
 @pytest.mark.parametrize("given,option,payload", [("x**3 > -8", "x > -2", "(-2, oo)"), ("x**3 > -8", "x>-2", "(-2, oo)"),
                                                   ("2*x - 2 >= 0", "x ≥ 1", "[1, oo)"), ("x - 3 < 0", "x < 3", "(-oo, 3)"),
-                                                  ("2*x - 2 >= 0", r"x \geq 1", "[1, oo)")])
+                                                  ("2*x - 2 >= 0", r"x \geq 1", "[1, oo)"),
+                                                  ("x**2 > 1", "x < -1 or x > 1",
+                                                   "Union(Interval.open(-oo, -1), Interval.open(1, oo))")])
 def test_onceki1_relation_option_is_the_solution_set(given, option, payload):
     assert _v(*_ineq(given, {"A": option, "B": "(100, 200)"}, payload, "A")) == "CORRECT"
 
@@ -479,3 +481,82 @@ def test_cap_k1_every_emitted_flag_is_classified():
     assert sorted(emitted - known) == []
     lists = [rules._MEANING_FLAGS, rules._NOT_PROVEN_FLAGS, rules._NOTE_FLAGS]
     assert all(not (a & b) for i, a in enumerate(lists) for b in lists[i + 1:])
+
+
+# Addendum (16 Oct 2026): the chosen option against the claim ---------------------------------------------------------
+def _mcq(kind, params, vars_, shape, opts, givens=()):
+    d = _ir(kind, params, givens, vars_, shape)
+    if opts is not None:
+        d["options"] = opts
+    return d
+
+
+def _mcs(kind, payload, opt, source=None):
+    d = _sol(payload, kind, option=opt)
+    if source:
+        d["claimed_answer"]["payload_source"] = source
+    return d
+
+
+_XX, _YY = {"name": "x"}, {"name": "y"}
+_TRIG = _mcq("trig_solve", {"var": "x", "interval": "[0, pi)"}, [_XX], "set", {"A": "pi/6", "B": "pi/3", "C": "2*pi/3"},
+             ["tan(x) = sqrt(3)"])
+_TRIGK = _mcq("trig_solve", {"var": "x"}, [_XX], "set", {"A": "{pi/6 + 2*k*pi}", "B": "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}"},
+              ["sin(x) = 1/2"])
+_INT = _mcq("antiderivative", {"integrand": "log(x)", "var": "x"}, [_XX], "expression",
+            {"A": "x*log(x) - x + C", "B": "x*log(x) + C"})
+_TAN = _mcq("tangent_line", {"f": "x**2", "var": "x", "at": "1", "dep": "y"}, [_XX, _YY], "equation",
+            {"A": "y = 2*x - 1", "B": "y = 2*x + 1"})
+_CIR = _mcq("equation_of", {"object": "circle_center_radius", "center": ["2", "-1"], "radius": "3"}, [_XX, _YY],
+            "equation", {"A": "(x - 2)**2 + (y + 1)**2 = 9", "B": "(x + 2)**2 + (y - 1)**2 = 9"})
+
+
+@pytest.mark.parametrize("q,s", [
+    (_TRIG, _mcs("value", "pi/3", "A")), (_TRIG, _mcs("value", "pi/3", "C")),
+    (_TRIGK, _mcs("set", "{pi/6 + 2*k*pi, 5*pi/6 + 2*k*pi}", "A")), (_INT, _mcs("expression", "x*log(x) - x", "B")),
+    (_TAN, _mcs("equation", "y = 2*x - 1", "B")), (_CIR, _mcs("equation", "(x - 2)**2 + (y + 1)**2 = 9", "B"))])
+def test_mc_a_wrong_letter_beside_a_right_value_is_refuted(q, s):
+    # tan x = √3 on [0, π) is π/3 alone; the letter of π/6 names another answer: the solution is wrong
+    assert _v(q, s) == "INCORRECT"
+
+
+@pytest.mark.parametrize("q,s", [
+    (_TRIG, _mcs("value", "pi/3", "B")), (_TRIGK, _mcs("set", "{pi/6 + 2*n*pi, 5*pi/6 + 2*n*pi}", "B")),
+    (_INT, _mcs("expression", "x*log(x) - x", "A")), (_INT, _mcs("expression", "", "A")),
+    (_TAN, _mcs("equation", "2*x - y = 1", "A")), (_CIR, _mcs("equation", "x**2 + y**2 - 4*x + 2*y - 4 = 0", "A"))])
+def test_mc_control_the_right_letter_in_another_notation_stays_correct(q, s):
+    # the option read as the claim through the same certificate: x*log(x) - x against x*log(x) - x + C, families
+    # named by n against k, the expanded circle, the tangent line rearranged
+    assert _v(q, s) == "CORRECT"
+
+
+def test_mc_an_option_not_shown_to_be_the_claim_gives_no_correct():
+    q = _mcq("evaluate", {"expr": "1 + 2"}, [], "scalar", {"A": "üç", "B": "4"})
+    r = verify(q, _mcs("value", "3", "A"))
+    assert r.verdict == "UNKNOWN" and "option_claim_undecided" in r.flags
+    assert _v(q, _mcs("value", "3", "B")) == "INCORRECT"
+    qn = _mcq("evaluate", {"expr": "1 + 2"}, [], "scalar", None)
+    assert _v(qn, _mcs("value", "3", "A")) == "UNKNOWN"            # a letter, and no options to read it in
+    assert _v(qn, _mcs("value", "3", None)) == "CORRECT"
+
+
+def test_mc_a_value_against_a_set_option_is_compared_as_a_set():
+    # no certificate (ode): the value 2 against the option {3} is refuted by mc.consistency alone, against {2} not shown
+    q = _mcq("ode", {"var": "x"}, [_XX], "set", {"A": "{3}", "B": "{2}"})
+    assert _v(q, _mcs("value", "2", "A")) == "INCORRECT"
+    assert _v(q, _mcs("value", "2", "B")) == "UNKNOWN"
+
+
+def test_mc_a_recovered_payload_abstains_and_never_refutes():
+    assert _v(_INT, _mcs("expression", "x*log(x) - x", "B", "recovered_text")) == "UNKNOWN"
+    assert _v(_INT, _mcs("expression", "x*log(x) - x", "A", "recovered_text")) == "CORRECT"
+
+
+def test_mc_an_unproved_claim_is_not_made_consistent_by_its_option():
+    # the claim 'üç' is read by no certificate: the right letter proves the option, not the claim; the wrong letter is
+    # refuted itself, so the solution's choice is wrong whatever its claim says
+    q = _mcq("evaluate", {"expr": "1 + 2"}, [], "scalar", {"A": "3", "B": "4"})
+    r = verify(q, _mcs("value", "üç", "A"))
+    mc = next(la for la in r.layers if la.layer == "mc.consistency")
+    assert r.verdict == "UNKNOWN" and mc.verdict != "pass"
+    assert _v(q, _mcs("value", "üç", "B")) == "INCORRECT"

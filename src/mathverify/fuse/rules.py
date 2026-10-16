@@ -133,7 +133,10 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
                          # other family's meta-verification. It abstains, never flips to INCORRECT:
                          # an LLM signal may not veto a hard certificate (§4), and [10] measures
                          # 75-85% false rejection when step checkers are trusted outright.
-                         "critic_error_confirmed"}
+                         "critic_error_confirmed",
+                         # the chosen option and the claim are not shown to be one object (verifier._mc_undecided): a
+                         # wrong letter beside a right value is a wrong solution (fourth audit, d4j addendum)
+                         "option_claim_undecided"}
 # The abstentions of a layer that decided nothing (verdict unknown), in two written kinds (fourth audit CAP-K1, d4i;
 # denetim/2026-10-01/d4/kararlar_fhi.txt). A MEANING or convention abstention (the problem's meaning, a convention,
 # a free parameter) keeps its UNKNOWN when the only CORRECT comes from a layer outside the deterministic ones (Lean,

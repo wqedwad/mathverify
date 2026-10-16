@@ -71,11 +71,27 @@ def _option_out_of_kind(ov) -> bool:
     return isinstance(ov, sp.Basic) and not isinstance(ov, (sp.Expr, sp.Set))
 
 
+# mc.consistency could not show the option and the claim to be one object: the CORRECT it would leave to the
+# certificates alone does not stand for the solution (`fuse.rules._BLOCK_POSITIVE_FLAGS`); see `_option_as_claim`
+OPTION_UNDECIDED = "option_claim_undecided"
+
+
+def _mc_undecided(reason: str, ms: float, ev: dict | None = None) -> LayerResult:
+    """The comparison of the chosen option with the claim decided nothing. The letter is a claim of the solution: a
+    wrong letter beside a right value is a wrong solution, and undecided it certified tan x = √3 on [0, π) with pi/3
+    and the letter of pi/6 (fourth audit, d4j addendum). Read off the option itself (only a letter was given), the
+    claim is the option's text, and the certificates read the two as one (`_option_as_claim`)."""
+    return unknown("mc.consistency", reason, ms, ev, flags=[OPTION_UNDECIDED])
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
-    if not ir.options or not ca.option:
+    if not ca.option:
         return None
+    if not ir.options:
+        # a letter for a question with no options: what it names is not known
+        return _mc_undecided(f"option {ca.option!r} for a question without options", 0.0)
     with Timer() as t:
         if ca.option not in ir.options:
             if not re.fullmatch(r"[A-Z]", str(ca.option)):
@@ -93,7 +109,7 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             try:
                 cv = ctx.claimed(solution) if ca.kind != "none" else sp.S.EmptySet
             except Exception as e:  # noqa: BLE001
-                return unknown("mc.consistency", f"claim_parse_error: {e}", t.ms, ev)
+                return _mc_undecided(f"claim_parse_error: {e}", t.ms, ev)
             if cv == sp.S.EmptySet or ca.kind == "none":
                 return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
             ev["reason"] = "option_says_no_solution_but_a_solution_was_claimed"
@@ -110,7 +126,7 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             ev["reason"] = "option_says_DNE_but_a_value_was_claimed"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if ca.payload in (None, ""):
-            return unknown("mc.consistency", "no_payload_to_compare", t.ms)
+            return _mc_undecided("no_payload_to_compare", t.ms)
         if ir.answer_shape != "interval" and decimal_comma(ir.options[ca.option]):
             # the option '1,5' read as the pair (1, 5) refuted the claim 3/2 (fourth audit D4F2B-ONCEKI-1)
             return unknown("mc.consistency", f"option {ir.options[ca.option]!r}: decimal comma or pair? not guessed",
@@ -118,9 +134,14 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
         try:
             ov, cv = _option_and_claim(ir, solution, ctx)
         except Exception as e:  # noqa: BLE001
-            return unknown("mc.consistency", f"option_parse_error: {e}", t.ms)
-        shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
+            return _mc_undecided(f"option_parse_error: {e}", t.ms)
         from .certify.linalg import _as_matrix, matrices_equal
+        if isinstance(cv, sp.Set) != isinstance(ov, sp.Set) and all(
+                isinstance(v, (sp.Set, sp.Expr)) and _as_matrix(v) is None for v in (cv, ov)):
+            # a value against a set (a set answer): the certificates read a value claim as {value}, and so is the
+            # value here (pi/3 against the option {pi/6} was undecided, and the wrong letter stood)
+            cv, ov = (v if isinstance(v, sp.Set) else sp.FiniteSet(v) for v in (cv, ov))
+        shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
         if shape == "count":
             ci, oi = exact_integer(cv), exact_integer(ov)   # never int(): it truncates 3.5 to 3
             ok = None if oi is None else (ci is not None and ci == oi)
@@ -158,7 +179,7 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
                            flags=["recovered_answer_mismatch"])
         ev["reason"] = "claimed_value_does_not_match_chosen_option"
         return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
-    return unknown("mc.consistency", "undecided", t.ms, ev)
+    return _mc_undecided("undecided", t.ms, ev)
 
 
 def _sanity(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
@@ -988,14 +1009,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         why = DEFERRED_KINDS.get(problem_ir.task.kind, "unknown task kind")
         layers.append(unknown("router", f"unsupported_task_kind:{problem_ir.task.kind} ({why})",
                               flags=["unsupported_task_kind"]))
+    certs = []
     for name in modules:
-        mod = MODULES[name]
-        try:
-            lr = mod.verify(problem_ir, solution, ctx)
-        except LeakageError:
-            raise
-        except Exception as e:  # noqa: BLE001
-            lr = unknown(name, f"layer_exception: {type(e).__name__}: {str(e)[:200]}", flags=["layer_exception"])
+        lr = _run_module(name, problem_ir, solution, ctx)
         # A payload reconstructed from prose is advisory (SOLVER_FORMAT.md): a recovery mistake may
         # abstain but never refute. Only mc.consistency honoured that; the certificates refuted the
         # recovered claim directly, so a solution that chose the right letter was INCORRECT when
@@ -1004,6 +1020,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
             lr = unknown(name, "recovered_claim_refuted: the reconstructed payload is advisory, not refuted",
                          lr.latency_ms, lr.evidence, flags=["recovered_answer_refuted"])
         layers.append(lr)
+        certs.append(lr)
+    if mc is not None and OPTION_UNDECIDED in mc.flags:
+        layers[layers.index(mc)] = _option_as_claim(problem_ir, solution, ctx, modules, certs, mc)
 
     if run_steps and solution.steps:
         try:
@@ -1013,6 +1032,46 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
                                   flags=["layer_exception"]))
 
     return layers, clean_flags
+
+
+def _run_module(name: str, problem_ir: ProblemIR, solution: Solution, ctx) -> LayerResult:
+    try:
+        return MODULES[name].verify(problem_ir, solution, ctx)
+    except LeakageError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        return unknown(name, f"layer_exception: {type(e).__name__}: {str(e)[:200]}", flags=["layer_exception"])
+
+
+def _option_as_claim(problem_ir: ProblemIR, solution: Solution, ctx, modules: list, certs: list,
+                     mc: LayerResult) -> LayerResult:
+    """mc.consistency undecided: the option, read as the claim (as a letter alone is read), through the same
+    certificates; the notation they read and mc.consistency does not: y = 2*x - 1 against 'y = 2*x - 1', x*log(x) - x
+    against 'x*log(x) - x + C', the families pi/6 + 2*k*pi. A certificate that proves the option and proves the claim
+    proves them one object (consistent). One that refutes the option shows the letter names a wrong answer, whatever
+    the claim's certificate said: the veto. Anything else leaves `mc` (undecided: no CORRECT)."""
+    import copy as _copy
+
+    def decided(layers):
+        passed = any(l.hard and l.primary and l.verdict == "pass" for l in layers)
+        failed = any(l.hard and l.verdict == "fail" for l in layers)
+        return "pass" if passed and not failed else "fail" if failed and not passed else None
+    if not problem_ir.options:
+        return mc                      # a letter and no options: nothing to read it in
+    sol2 = _copy.deepcopy(solution)
+    ca = sol2.claimed_answer
+    ca.payload, ca.payload_source = problem_ir.options[ca.option], "option_letter"
+    state = decided([_run_module(name, problem_ir, sol2, ctx) for name in modules])
+    ev = dict(mc.evidence, option=solution.claimed_answer.option, read_as_claim=state)
+    if state == "pass" and decided(certs) == "pass":
+        return result("mc.consistency", "pass", 0.99, True, ev, mc.latency_ms, primary=False)
+    if state == "fail":
+        ev["reason"] = "the chosen option, read as the claim, is refuted"
+        if solution.claimed_answer.payload_source == "recovered_text":
+            # a payload reconstructed from prose abstains, never refutes (see `_mc_consistency`)
+            return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=["recovered_answer_mismatch"])
+        return result("mc.consistency", "fail", 0.99, True, ev, mc.latency_ms, primary=False)
+    return mc
 
 
 def cache_key(problem_ir: dict, solution: dict) -> str:

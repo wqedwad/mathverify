@@ -1457,7 +1457,8 @@ class Ctx:
         if not (set_task and isinstance(tvar, str) and isinstance(text, str)):
             return None
         try:
-            rel = parse_relation(text, self.ns)
+            from ..normalize.parse import read_condition
+            rel = read_condition(text, self.ns)          # 'x < -1 or x > 1' too
             if _names_a_set(rel, self.ns.get(tvar)):
                 return rel.as_set()
         except Exception:  # noqa: BLE001 - no condition: read as the answer's shape
