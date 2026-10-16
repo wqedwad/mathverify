@@ -27,6 +27,64 @@ LAYER = "certify.domain"
 
 
 # ---------------------------------------------------------------------------
+def _index_symbols(n) -> dict:
+    """The index of a Sum/Product read as what it is: an integer, of the sign its numeric bound gives
+    (k >= 0 for a lower bound 0, k >= 1 for 1). Read as a real number, the term a**k asked a > 0 (a real
+    power), a condition on the problem's symbol that no index needs: the root -1/2 of
+    Sum(x**n, (n, 0, oo)) = 2/3 was dropped and {-1/2} refuted, and with a**2 = 1/4 only a = 1/2 was
+    left, so Sum(a**k, (k, 0, oo)) = 2 was certified (local quality, 16 Oct 2026). A backward range
+    runs over other indices, but its value there is a convention (ForwardSpans) and decides nothing."""
+    out = {}
+    for lim in n.limits:
+        v = lim[0]
+        if not isinstance(v, sp.Symbol):
+            continue
+        kw: dict[str, bool] = {"integer": True}
+        if len(lim) == 3:
+            lo, hi = _evaluated(lim[1]), _evaluated(lim[2])
+            if lo.is_Integer and lo > 0:
+                kw["positive"] = True
+            elif lo.is_Integer and lo == 0:
+                kw["nonnegative"] = True
+            elif hi.is_Integer and hi < 0 and not lo.free_symbols:
+                kw["negative"] = True
+            elif hi.is_Integer and hi == 0 and not lo.free_symbols:
+                kw["nonpositive"] = True
+        out[v] = sp.Symbol(v.name, **kw)
+    return out
+
+
+def _zero_powers_in_range(n, body, plain) -> list:
+    """0**0 inside a Sum/Product: the base b of a power b**e(k), b free of the indices, is a zero_power
+    convention point when e vanishes at an index of the range, or may (a symbolic bound, an exponent that
+    is not linear in one index). Σ_{k=0}^{∞} a**k at a = 0 is 0**0 + 0 + …: 1 or undefined (part d4a);
+    read on an integer index the term has no condition left to say so."""
+    out: list = []
+    idx = set(plain.values())
+    lims = {plain[lim[0]]: lim for lim in n.limits if lim[0] in plain and len(lim) == 3}
+    for p in sp.preorder_traversal(body):
+        if not isinstance(p, sp.Pow):
+            continue
+        b, e = p.args
+        ks = e.free_symbols & idx
+        if not ks or (b.free_symbols & idx) or not b.free_symbols or b.is_zero is False or e.is_zero is False:
+            continue
+        if len(ks) == 1 and next(iter(ks)) in lims and e.is_polynomial(*ks):
+            k = next(iter(ks))
+            poly = sp.Poly(e, k)
+            if poly.degree() == 1 and not (set(poly.all_coeffs()[0].free_symbols)
+                                           | set(poly.all_coeffs()[1].free_symbols)):
+                k0 = -poly.all_coeffs()[1] / poly.all_coeffs()[0]
+                lo, hi = _evaluated(lims[k][1]), _evaluated(lims[k][2])
+                if k0.is_integer is False or (k0 - lo).is_extended_negative is True \
+                        or (hi - k0).is_extended_negative is True:
+                    continue
+        c = sp.Contains(b, ZERO_POWER_BASE)
+        if c not in out:
+            out.append(c)
+    return out
+
+
 def _outer_nodes(e, var, add):
     """The nodes of `e` in preorder, a range binder's body excepted: its conditions are taken from
     `definedness_conditions` of the body, and those on the bound variable are dropped (they hold on
@@ -54,12 +112,19 @@ def _outer_nodes(e, var, add):
             # read as defined nowhere and the empty solution set of y + ∫… = 2/3 certified (V16,
             # 30 Sep 2026). Conditions on the bound variables are decided by _binder_conditions.
             # (Symbols, not Dummies: an inner binder of the body keeps one cache key across readings.)
-            plain = {v: sp.Symbol(v.name) for v in bound if isinstance(v, sp.Symbol)}
+            # A Sum/Product index is an integer of its range (`_index_symbols`).
+            if isinstance(n, (sp.Sum, sp.Product)):
+                plain = _index_symbols(n)
+            else:
+                plain = {v: sp.Symbol(v.name) for v in bound if isinstance(v, sp.Symbol)}
             with sp.evaluate(False):
                 body = body.xreplace(plain)
             hidden = bound | set(plain.values())
             for c in definedness_conditions(body, plain.get(var, var)):
                 if not (getattr(c, "free_symbols", set()) & hidden):
+                    add(c)
+            if isinstance(n, (sp.Sum, sp.Product)):
+                for c in _zero_powers_in_range(n, body, plain):
                     add(c)
             for c in _binder_conditions(n, var):
                 add(c)

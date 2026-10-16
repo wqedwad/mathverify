@@ -431,6 +431,36 @@ def _pstr(e) -> str:
     return sp.sstr(e)
 
 
+def _written_otherwise(e):
+    """`e` written as e + √(3 + 2√2) − 1 − √2: the same number (√(3 + 2√2) = 1 + √2) that SymPy does not
+    see equal on sight. SymPy merged two intervals touching at 3 and √(11 + 6√2) − √2 and swallowed the
+    point (V16, DECISIONS §74); a set answer with such an end must be judged by its value."""
+    import sympy as sp
+    return sp.Add(e, sp.sqrt(3 + 2 * sp.sqrt(2)), -1, -sp.sqrt(2), evaluate=False)
+
+
+def _endpoint_written_otherwise(iv, lower: bool = False):
+    """(the interval with its upper end, or its lower end, written otherwise, the same with that end's
+    openness flipped); None when that end is infinite."""
+    import sympy as sp
+    if not lower and iv.sup.is_finite:
+        new = _written_otherwise(iv.sup)
+        return (sp.Interval(iv.inf, new, iv.left_open, iv.right_open),
+                sp.Interval(iv.inf, new, iv.left_open, not iv.right_open))
+    if lower and iv.inf.is_finite:
+        new = _written_otherwise(iv.inf)
+        return (sp.Interval(new, iv.sup, iv.left_open, iv.right_open),
+                sp.Interval(new, iv.sup, not iv.left_open, iv.right_open))
+    return None
+
+
+def _denested(v):
+    """The variant with √(3 + 2√2) replaced by 1 + √2 (squares equal, both positive) and evaluated: the
+    proof that a `_written_otherwise` variant has the value it was built with."""
+    import sympy as sp
+    return v.xreplace({sp.sqrt(3 + 2 * sp.sqrt(2)): 1 + sp.sqrt(2)})
+
+
 def variants(gold, shape: str, kind_task: str, ns, var=None) -> tuple[list[tuple[str, Any]], list[tuple[str, Any]]]:
     """(wrong, equivalent) lists of (name, sympy object). `var` is the task's own variable: a parameter
     picked by name (a before x) made `plus_x` of an antiderivative gold + a, a constant apart, not wrong
@@ -464,6 +494,9 @@ def variants(gold, shape: str, kind_task: str, ns, var=None) -> tuple[list[tuple
             if extra not in gold:
                 wrong.append(("extra_member", sp.FiniteSet(*els, extra)))
             wrong.append(("shifted", sp.FiniteSet(*[e + 1 for e in els])))
+            equiv.append(("member_written_otherwise", sp.FiniteSet(*[_written_otherwise(e) for e in els],
+                                                                   evaluate=False)))
+            wrong.append(("member_perturbed_1e-12", sp.FiniteSet(*els[:-1], els[-1] + sp.Rational(1, 10**12))))
         return wrong, equiv
     if isinstance(gold, (sp.Interval, sp.Union)):
         ivs = list(gold.args) if isinstance(gold, sp.Union) else [gold]
@@ -479,6 +512,20 @@ def variants(gold, shape: str, kind_task: str, ns, var=None) -> tuple[list[tuple
             wrong.append(("left_endpoint_shifted",
                           sp.Union(sp.Interval(first.inf - 1, first.sup, first.left_open, first.right_open), *ivs[1:])))
         equiv.append(("same_set_rebuilt", sp.Union(*ivs)))
+        if all(isinstance(iv, sp.Interval) for iv in ivs):
+            # each finite upper end written otherwise (the first lower one when every upper end is infinite):
+            # where two intervals touch, the touching point is then written two ways, as in V16's
+            # R = √(11 + 6√2) − √2 = 3
+            rw = [_endpoint_written_otherwise(iv) for iv in ivs]
+            if all(r is None for r in rw):
+                rw = [_endpoint_written_otherwise(ivs[0], lower=True)] + [None] * (len(ivs) - 1)
+            if any(r is not None for r in rw):
+                equiv.append(("endpoint_written_otherwise",
+                              sp.Union(*[r[0] if r else iv for r, iv in zip(rw, ivs)], evaluate=False)))
+                i = next(j for j, r in enumerate(rw) if r is not None)
+                out = [r[0] if r else iv for r, iv in zip(rw, ivs)]
+                out[i] = rw[i][1]
+                wrong.append(("endpoint_written_otherwise_flipped", sp.Union(*out, evaluate=False)))
         return wrong, equiv
     if not isinstance(gold, sp.Expr):
         return wrong, equiv
@@ -705,8 +752,9 @@ def run(items, limit_unique: int | None = None) -> dict[str, Any]:
                                       "payload": payload, "gold": str(it["gold_answer"]), "verdict": verdict})
         for label, group in (("wrong", wrong), ("equiv", equiv)):
             for name, v in group:
-                ok = (_differs(v, gold, mod_constant=mod_c, var=var, admissible=adm) if label == "wrong"
-                      else _equal(v, gold, mod_constant=mod_c, var=var))
+                proof = _denested(v) if "written_otherwise" in name else v
+                ok = (_differs(proof, gold, mod_constant=mod_c, var=var, admissible=adm) if label == "wrong"
+                      else _equal(proof, gold, mod_constant=mod_c, var=var))
                 if not ok:
                     skipped[f"{label}:{name}:not_proved"] += 1
                     continue
