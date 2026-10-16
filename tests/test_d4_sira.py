@@ -30,3 +30,5 @@ def test_a_zero_product_with_a_factor_that_may_be_infinite_is_not_decided():
 
 def test_an_evaluated_product_keeps_sympys_answer():
     assert (2 * n).is_even is True and (n + 1).is_even is None and sp.Mul(3, 5).is_even is False
+    sp.core.cache.clear_cache()
+    assert sp.Mul(3, 5, evaluate=False).is_even is False and (n * x).is_even is None
