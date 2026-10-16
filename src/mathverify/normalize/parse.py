@@ -1788,6 +1788,15 @@ def _computed_bounds(lim) -> bool:
     return any(isinstance(b, sp.Basic) and b.has(*_OPERATIONS) for b in lim[1:])
 
 
+def _assumed_integer(b) -> bool:
+    """`b.is_integer` is True; asking it failed with SymPy's PolynomialError for log_3 3^4 held unevaluated (the
+    LaTeX Σ_{k=1}^{\\log_3 3^4} k was not read as written, attack on d4f round 2, RK-3): not known then."""
+    try:
+        return b.is_integer is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _integer_indices(expr):
     """The index of a Sum/Product whose limits are integers (or ±oo) runs over integers: the dummy
     becomes an integer symbol there. Without it SymPy no longer closed Σ cos(πk)/k² and the numeric
@@ -1802,7 +1811,7 @@ def _integer_indices(expr):
             if len(lim) != 3 or not isinstance(lim[0], Symbol) \
                     or lim[0].assumptions0 != Symbol(lim[0].name).assumptions0 or _computed_bounds(lim):
                 continue
-            if all(b.is_integer or b in (sp.oo, -sp.oo) for b in lim[1:]):
+            if all(b in (sp.oo, -sp.oo) or _assumed_integer(b) for b in lim[1:]):
                 reps[lim[0]] = Symbol(lim[0].name, integer=True)
         return n.xreplace(reps) if reps else n
 
@@ -2539,13 +2548,15 @@ def _matrix_entries(m) -> list:
 
 def _rational_as_written(e) -> bool:
     """Is a matrix entry, as written, a rational number made of integers by +, -, * and integer powers, with no
-    division by zero? Such an entry carries no condition a computed operation could fold away."""
+    division by zero and no 0**0? Such an entry carries no condition a computed operation could fold away. 0**0 is
+    a convention (1 or no value): computed, trace [[0**0, 0], [0, 0]] = 1 was certified (attack on d4f round 2,
+    A-YO-1)."""
     if isinstance(e, sp.Rational):
         return True
     if isinstance(e, (sp.Add, sp.Mul)):
         return all(_rational_as_written(a) for a in e.args)
     if isinstance(e, sp.Pow) and isinstance(e.exp, sp.Integer) and _rational_as_written(e.base):
-        return not (e.exp.is_negative and _evaluated_bound(e.base) == 0)
+        return not (e.exp <= 0 and _evaluated_bound(e.base) == 0)
     return False
 
 

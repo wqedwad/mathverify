@@ -339,7 +339,14 @@ def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
             # e = a*var + b, a and b rational: an integer exactly on the progression (m - b)/a, m in Z
             a, b = sp.diff(e, var), e.xreplace({var: S.Zero})
             if not (a.is_Rational and a != 0 and b.is_Rational) or sp.expand(e - a * var - b) != 0:
-                return S.Reals, S.Reals
+                # any other bound: an integer-valued polynomial (n**2, n(n + 1)/2: `_integer_valued`) is an integer
+                # at every integer var, and the rest is left undecided (n**2 at n = √2 too); otherwise (sqrt(n),
+                # n**2/2) no point is proved to read it as an integer, so the domain keeps none and every point is
+                # the convention's. Kept whole (ℝ, ℝ), a comparison on it refuted 3n² + 3 + sin(πn²) for
+                # Σ_{k=n²}^{n²+2} k at a point where n² is no integer (attack on d4f round 2, A-RK-1)
+                if _integer_valued(e, var):
+                    return S.Integers, sp.Complement(S.Reals, S.Integers)
+                return S.EmptySet, S.Reals
             t = sp.Dummy("m", integer=True)
             fwd = S.Integers if abs(a) == 1 and b.is_integer else sp.imageset(sp.Lambda(t, (t - b) / a), S.Integers)
             back = sp.Complement(S.Reals, fwd)
@@ -667,6 +674,16 @@ def _outer_index_conditions(conds, i, bounds, idx) -> list[Any] | None:
     return out
 
 
+def _proved_integer(b) -> bool | None:
+    """`b.is_integer`, with a closed bound SymPy leaves undecided proved an integer exactly when it is one
+    (`certified_integer`): ln 8/ln 2 and log_3 3^4 are 3 and 4, and Σ_{k=1}^{ln 8/ln 2} k = 6 was UNKNOWN (attack on
+    d4f round 2, RK-3; the value reading folds log(27, 3) to 3, not these). Never proved not one here."""
+    r = b.is_integer
+    if r is None and not b.free_symbols and certified_integer(_evaluated(b))[0] is True:
+        return True
+    return r
+
+
 def _one_range_conditions(lo, hi) -> list[Any] | None:
     """The open conditions of one range (see _range_span_conditions); None when it is reversed, not an
     integer apart or not on the integers for certain, or not read.
@@ -693,10 +710,10 @@ def _one_range_conditions(lo, hi) -> list[Any] | None:
         gap = hi - lo
         if gap.is_integer is False:
             return None
-        if gap.is_integer is not True:
+        if _proved_integer(gap) is not True:
             # on the bound itself when the other one is an integer
             conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, INTEGER_BOUND))
-    whole = [b.is_integer for b in finite]
+    whole = [_proved_integer(b) for b in finite]
     if False in whole:
         return None
     if finite and True not in whole:
@@ -1624,8 +1641,26 @@ def _plus_one_positive(e) -> bool:
         return (e + 1).is_positive is True
 
 
+def _infinite_argument(node) -> bool:
+    """Is a closed argument of the function `node` (or the exponent of a power) infinite? sin(oo) is no real number
+    (SymPy's AccumBounds: 0*sin(oo) was its 0, and certified), and exp(-oo), atan(oo), 2**(-oo), (1/2)**oo are values
+    only where oo is read as a number, as 1/oo already is not (attack on d4f round 2, A-YO-5). A limit's point and
+    a binder's bound are no arguments."""
+    if isinstance(node, sp.Pow):
+        args = (node.exp,)
+    elif isinstance(node, sp.Function):
+        args = node.args
+    else:
+        return False
+    return any(isinstance(a, sp.Expr) and not a.free_symbols and a.has(oo, -oo) and _no_number(_evaluated(a))
+               for a in args)
+
+
 def _node_conditions(node, var, add) -> None:
     """The definedness conditions of one node of the as-written tree (see `_definedness_conditions`)."""
+    if _infinite_argument(node):
+        add(sp.false)
+        add(NO_VALUE)
     if node is S.ComplexInfinity or node is S.NaN:
         # SymPy's zoo and nan, written out (`zoo` is in the namespace): no real number, and 1/zoo is
         # SymPy's 0 (CAP-F1)
@@ -1664,7 +1699,8 @@ def _node_conditions(node, var, add) -> None:
         elif ex.is_Integer and ex < 0:
             add(Ne(base, 0))
         elif ex.is_zero is True:
-            add(sp.Contains(base, ZERO_POWER_BASE))     # 0**0: 1 or undefined (Convention)
+            # 0**0: 1 or undefined (Convention); an infinite base (oo*x) is oo**0's convention wherever x is
+            add(sp.Contains(S.Infinity if base.has(S.Infinity, S.NegativeInfinity) else base, ZERO_POWER_BASE))
         elif ex.is_number and not ex.is_rational:
             if ex.is_extended_positive is True:
                 # 0**sqrt(2): 0 by the strict rule, undefined as written: a convention point; a negative base
@@ -1840,6 +1876,15 @@ def _numeric_exponent(ex):
             return sp.simplify(ex)
         except Exception:  # noqa: BLE001
             return ex
+    if isinstance(ex, sp.Expr) and not ex.is_Atom:
+        # an exponent with symbols that is identically 0 (x - x, floor(x) - floor(x), sin(x)**2 + cos(x)**2 - 1) is
+        # 0 as written: 0**(x - x) and oo**(x - x) are the conventions 0**0 and oo**0, and were certified 1 (attack on
+        # d4f round 2, A-YO-2); x**(x - x) is x**0, 2**(x - x) is 2**0 = 1
+        try:
+            if sp.simplify(_evaluated(ex)) == 0:
+                return S.Zero
+        except Exception:  # noqa: BLE001 - not proved 0: the exponent as written
+            pass
     return ex
 
 
@@ -1949,19 +1994,22 @@ def _num_relation_holds(rel, var, c) -> bool | None:
         return None
     lhs = real_odd_roots(rel.lhs.subs(var, c))
     rhs = real_odd_roots(rel.rhs.subs(var, c))
+    # an equality of a Float operand within its own precision is no proof (principle 4): Eq(x, 1) "held" at
+    # x = 1.00000000000001 and Ne(x, 1) failed there (fourth audit GAP-NE). A difference beyond it decides
+    tolerant = has_float(lhs, rhs)
     if isinstance(rel, Eq):
         # exact structural first, then numeric
         okS, _ = sym_equal(lhs, rhs)
         if okS:
             return True
         okN, _ = num_equal(lhs, rhs)
-        return okN
+        return None if okN and tolerant else okN
     if isinstance(rel, Ne):
         okS, _ = sym_equal(lhs, rhs)
         if okS:
             return False
         okN, _ = num_equal(lhs, rhs)
-        return None if okN is None else (not okN)
+        return None if okN is None or (okN and tolerant) else (not okN)
     if not has_float(lhs, rhs):
         s = _certified_compare(lhs, rhs)
         if s == NONREAL:
@@ -1986,6 +2034,8 @@ def _num_relation_holds(rel, var, c) -> bool | None:
     if isinstance(a, mp.mpc) or isinstance(b, mp.mpc):
         return False                      # non-real value: relation is not satisfied in R
     eq, _ = num_equal(lhs, rhs)
+    if eq and sp.sympify(lhs - rhs).is_zero is not True:
+        return None                       # equal within the Floats' precision only: the order is rounding (GAP-NE)
     if isinstance(rel, sp.StrictLessThan):
         return (a < b) and not eq
     if isinstance(rel, sp.LessThan):

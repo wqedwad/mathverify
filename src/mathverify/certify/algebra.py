@@ -1024,7 +1024,11 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
         return result(LAYER, "pass", 0.99, True, ev, t.ms, primary=True)
     if ok is False:
         return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
-    return unknown(LAYER, "undecided", 0, ev)
+    # a parametric integral or limit is held as its form (DECISIONS §80, F9): no value of it is taken, by any layer
+    # (`fuse.rules._MEANING_FLAGS`; fourth audit CAP-K1: a later layer's pass certified ∫_0^a x dx = a**2/2)
+    from ..normalize.parse import HELD_FORMS
+    held = isinstance(target, sp.Basic) and target.has(*HELD_FORMS)
+    return unknown(LAYER, "undecided", 0, ev, flags=["parametric_form"] if held else None)
 
 
 def _beyond_value_conventions(ctx: Ctx, claimed, truth, syms, ok, ev: dict):

@@ -531,17 +531,39 @@ def holds_on_the_tail(c, var, point) -> bool:
     over = sp.Range(1, oo) if point == oo else sp.Range(-oo, 0)
     try:
         bad = _violations(c, var, over)
+        if bad is not None and (bad.is_empty is True or getattr(bad.sup if point == oo else bad.inf, "is_finite",
+                                                                 None) is True):
+            return True
+    except Exception:  # noqa: BLE001 - not decided there (Intersection({log(1000)/log(2)}, Range(1, oo)) has no sup)
+        pass
+    return _eventually(c, var, point)
+
+
+def _eventually(c, var, point) -> bool:
+    """Does the relation `c` (f != g, f > g, f >= g, ...) hold on a whole real tail toward the infinite `point`?
+    So it does when the limit of f - g there is certified on the relation's side of 0 (a nonzero limit, ±oo):
+    its violation set is then bounded on that side, and the integers past it are a tail. 2**n = 1000, n! = 100,
+    n**2 = 2**n, n = 10*log(n) and floor(n/2) = 0 are no equations solveset takes over the integers, and the
+    sequences 1/(2**n - 1000), n**2/(n**2 - 2**n), log(n)/(n - log(n)), 1/floor(n/2) were "undefined on the
+    tail" (attack on d4f round 2, RK-2). Read on a plain real variable: a real limit speaks for the integers too;
+    (-1)**n or cos(pi*n/2), with no limit, prove nothing."""
+    sides = {sp.Ne: (1, -1), sp.StrictGreaterThan: (1,), sp.GreaterThan: (1,), sp.StrictLessThan: (-1,),
+             sp.LessThan: (-1,)}.get(type(c))
+    if sides is None:
+        return False
+    x = sp.Dummy(var.name, real=True)
+    try:
+        h = (c.lhs - c.rhs).xreplace({var: x})
+        cls = classify_limit(h, x, point)
+        if cls["kind"] == "INF":
+            sign = 1 if cls["value"] == oo else -1 if cls["value"] == -oo else None
+        elif cls["kind"] == "VAR":
+            sign = certified_sign(cls["value"])
+        else:
+            return False
     except Exception:  # noqa: BLE001 - not decided
         return False
-    if bad is None:
-        return False
-    try:
-        if bad.is_empty is True:
-            return True
-        end = bad.sup if point == oo else bad.inf
-    except Exception:  # noqa: BLE001 - a set SymPy cannot bound decides nothing
-        return False
-    return getattr(end, "is_finite", None) is True
+    return sign in sides
 
 
 def declared_side(var, point, side):

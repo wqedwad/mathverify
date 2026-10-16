@@ -1176,6 +1176,11 @@ def switch_arguments(f, var) -> list | None:
             continue
         if isinstance(n, (sp.Abs, sp.sign, sp.Heaviside)):
             add(n.args[0])
+        elif isinstance(n, (sp.atan2, sp.arg)):
+            # the branch cut: atan2(y, x) jumps by 2π across y = 0 where x < 0, arg(z) across im z = 0 where re z < 0.
+            # Off it, d/dx atan2(x, -1) is -1/(x**2 + 1), which was certified with a value at 0, where there is no
+            # derivative (fourth audit D4B9-E2-R1); each zero of y is classified like a kink (a jump, or a value)
+            add(n.args[0] if isinstance(n, sp.atan2) else sp.im(n.args[0]))
         elif isinstance(n, (sp.Max, sp.Min)):
             for a, b in itertools.combinations(n.args, 2):
                 add(a - b)
