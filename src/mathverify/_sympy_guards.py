@@ -515,6 +515,22 @@ _strict_integer_part.mathverify_guard = True     # type: ignore[attr-defined]
 _INTEGER_PART = _evalf.get_integer_part
 
 
+def _guarded_mul_even(inner):
+    def _eval_is_even(self):
+        """A product with an exactly-0 factor is 0, and 0 is even, when every other factor is finite; None when one
+        may be infinite (0*oo). SymPy 1.14's Mul._eval_is_even said False for the unevaluated 0*x that a reading as
+        written builds, and asked before is_zero it made the cached 0*x nonzero (not even => not zero): the
+        written definedness of later verifies then depended on what an earlier one had asked (the order of the
+        cases, PYTHONHASHSEED; d4e round 5 and the d4b closure, 16 Oct 2026). Every other assumption handler of
+        Mul agrees with 0 on such a product (measured)."""
+        if any(a is sp.S.Zero for a in self.args):
+            return True if all(a.is_finite is True for a in self.args if a is not sp.S.Zero) else None
+        return inner(self)
+    _eval_is_even.mathverify_guard = True    # type: ignore[attr-defined]
+    _eval_is_even.inner = inner              # type: ignore[attr-defined]
+    return _eval_is_even
+
+
 def install() -> None:
     """Install the guards (idempotent)."""
     import sympy.functions.elementary.integers as _integers
@@ -533,6 +549,9 @@ def install() -> None:
         Expr._random = _guarded_random(Expr._random)
     if not getattr(_integers.get_integer_part, "mathverify_guard", False):
         _integers.get_integer_part = _strict_integer_part
+    if not getattr(sp.Mul._eval_is_even, "mathverify_guard", False):
+        sp.Mul._eval_is_even = _guarded_mul_even(sp.Mul._eval_is_even)
+        sp.Mul._prop_handler["even"] = sp.Mul._eval_is_even    # the handler table is built with the class
 
 
 install()
