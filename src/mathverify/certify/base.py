@@ -1,6 +1,7 @@
 """Shared helpers for certificate modules."""
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -1131,11 +1132,11 @@ class Ctx:
         `log(-1) - log(-1) - 1`, or `f(-1)` for f(x) = log(x) − log(x) + x. The closed condition
         fails, but `nowhere` only records free symbols, so the value SymPy simplified to (−1) was
         certified (audit of 25 Sep 2026). Also any text with a closed operation that has no value
-        (`certify.domain.NO_VALUE`: x + 1/(-1)! = 2 is no equation defined nowhere, CAP-F1). Empty over the
-        complex numbers, where the conditions are the real ones."""
+        (`certify.domain.NO_VALUE`: x + 1/(-1)! = 2 is no equation defined nowhere, CAP-F1). Over the complex
+        numbers only the texts with such an operation (`_complex_states`)."""
         self.written_conditions()
         if (self.ir.domain_of_discourse or "").lower() in ("complex", "c", "ℂ"):
-            return []
+            return self._complex_states()[0]
         return list(self.cache.get("written_undefined", []))
 
     def written_undecided(self) -> list[str]:
@@ -1143,11 +1144,33 @@ class Ctx:
         decides: a binder not proved to exist over its range (DEFINEDNESS_UNDECIDED), a convention value
         (0**0), a comparison left standing (tan(arccot(2) + arccot(1/2))). The callers abstain as on
         `written_undefined`, but the problem is not proved undefined: Π_{k=1}^{n} Σ_{j=1}^{k} 1 with n free
-        was "problem_undefined_as_written" (fourth audit, TAN-12)."""
+        was "problem_undefined_as_written" (fourth audit, TAN-12). Over the complex numbers only the closed
+        conventions (`_complex_states`)."""
         self.written_conditions()
         if (self.ir.domain_of_discourse or "").lower() in ("complex", "c", "ℂ"):
-            return []
+            return self._complex_states()[1]
         return list(self.cache.get("written_undecided", []))
+
+    def _complex_states(self) -> tuple[list[str], list[str]]:
+        """Over the complex numbers the real conditions drop (sqrt(-4) is 2i, log(-1) is iπ), not an operation with
+        no value (Γ's pole: 1/(-1)!, 1/Γ(0); zoo; 1/(1/0)) nor a closed convention (0**0, oo**0, Mod(7, -5)): read
+        as SymPy's 1/zoo = 0 and 1, they were certified over ℂ (attack on d4f round 2, A-YO-3). The texts the real
+        reading found, read again: (undefined, undecided)."""
+        from ..normalize.parse import parse_set_as_written
+        from .domain import definedness_conditions, is_convention, is_no_value
+        pins = self.parameter_pins()
+        undefined: list[str] = []
+        undecided: list[str] = []
+        for src in self.cache.get("written_undefined", []) + self.cache.get("written_undecided", []):
+            try:
+                conds = definedness_conditions(self._pinned(parse_set_as_written(src, self.ns), pins), None)
+            except Exception:  # noqa: BLE001 - not read as written: the real conditions it may hold drop
+                continue
+            if any(is_no_value(c) for c in conds):
+                undefined.append(src)
+            elif any(is_convention(c) for c in conds):
+                undecided.append(src)
+        return undefined, undecided
 
     @staticmethod
     def _pinned(e, pins: dict | None):
@@ -1232,7 +1255,7 @@ class Ctx:
         The as-written reading refused Σ_{k=√1}^{3} k alone, and read as "no condition" the text around it
         lost x/x, √x², 1/(-1)!: {0} was certified for x²/x + Σ = 6 (review of d4f, YO-1)."""
         from ..normalize.parse import parse_expr_str, parse_relation, parse_set_str, read_condition
-        if not isinstance(src, str):
+        if not isinstance(src, str) or _is_label(src, self.ns):
             return None
         for read in (parse_expr_str, parse_relation, read_condition, parse_set_str):
             try:
@@ -1411,10 +1434,35 @@ class Ctx:
         return v
 
     def option_value(self, letter: str):
+        """The option's value, read as a claim of the answer's shape is (fourth audit D4F2B-ONCEKI-1): a condition on
+        the task's variable is the set it names (`option_condition_set`). A decimal comma ('1,5') is the verifier's
+        (`decimal_comma`), which abstains before any reading of it is compared."""
         if not self.ir.options or letter not in self.ir.options:
             return None
+        named = self.option_condition_set(letter)
+        if named is not None:
+            return named
         return parse_answer(self.ir.answer_shape if self.ir.answer_shape in ("set", "interval") else "value",
                             self.ir.options[letter], self.ns)
+
+    def option_condition_set(self, letter: str):
+        """The solution set an option of a set answer names when it is written as a condition on the task's variable
+        alone ('x > -2', 'x ≥ 1', 'x \\geq 1'), as `verifier._normalize_set_notation` reads such a claim; None for
+        any other text. Read as a set it was {x > -2}, and the right letter was refuted against the claim (-2, oo)."""
+        tvar = (self.ir.task.params or {}).get("var")
+        set_task = self.ir.answer_shape in ("set", "interval") or self.ir.task.kind in (
+            "solve_equation", "solve_inequality", "domain_of")
+        text = self.ir.options[letter]
+        if not (set_task and isinstance(tvar, str) and isinstance(text, str)):
+            return None
+        try:
+            rel = parse_relation(text, self.ns)
+            if isinstance(rel, (sp.core.relational.Relational, sp.And, sp.Or)) \
+                    and {str(x) for x in rel.free_symbols} == {tvar}:
+                return rel.as_set()
+        except Exception:  # noqa: BLE001 - no condition: read as the answer's shape
+            pass
+        return None
 
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:
@@ -1554,6 +1602,22 @@ def parse_or_unknown(layer: str, fn, *args, **kw):
 
 
 _OPERATIONS = (sp.Integral, sp.Sum, sp.Product, sp.Limit, sp.Derivative, sp.Subs)
+
+
+def decimal_comma(text) -> bool:
+    """'1,5' with no bracket around it: 3/2 in Turkish, the pair (1, 5) in the structured syntax. Reading it either
+    way would be a guess (principle 3)."""
+    return isinstance(text, str) and not re.search(r"[{}\[\]()]", text) and re.search(r"\d,\d", text) is not None
+
+
+def _is_label(src: str, ns: dict) -> bool:
+    """A bare name that the namespace binds to a function or a class, not to a value: `P` (the permutation
+    count), `S` (SymPy's registry), `C`, `det`, `sqrt`, `Sum`. In a list of points or of outcomes ('P', 'Q', 'R';
+    'S', 'K') it is a label with no value, so no definedness rests on it; the value reading took it as that
+    function and the problem was "undecided" (attack on d4f round 2, RK-1). A name bound to a value (E, pi, a
+    declared symbol) is no label."""
+    name = src.strip()
+    return name.isidentifier() and name in ns and not isinstance(ns[name], sp.Basic)
 
 
 def _texts(v) -> list[str]:

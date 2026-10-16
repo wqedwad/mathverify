@@ -15,7 +15,7 @@ import time
 import sympy as sp
 
 from .certify import MODULES
-from .certify.base import make_ctx, result, unknown, Timer
+from .certify.base import decimal_comma, make_ctx, result, unknown, Timer
 from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
 from .ir import MalformedIR, ProblemIR, LeakageError
@@ -102,6 +102,10 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if ca.payload in (None, ""):
             return unknown("mc.consistency", "no_payload_to_compare", t.ms)
+        if ir.answer_shape != "interval" and decimal_comma(ir.options[ca.option]):
+            # the option '1,5' read as the pair (1, 5) refuted the claim 3/2 (fourth audit D4F2B-ONCEKI-1)
+            return unknown("mc.consistency", f"option {ir.options[ca.option]!r}: decimal comma or pair? not guessed",
+                           t.ms, flags=["decimal_comma_ambiguous"])
         try:
             ov, cv = _option_and_claim(ir, solution, ctx)
         except Exception as e:  # noqa: BLE001
@@ -557,7 +561,8 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
                            flags=["claim_is_not_a_value"])
     if ir.task.kind == "evaluate":
         target = (ir.task.params or {}).get("expr") or ir.unknown_of_interest
-        if target and _same_structure(str(ca.payload), str(target), ctx):
+        if target and (_same_structure(str(ca.payload), str(target), ctx)
+                       or _applies_target_op(ca.payload, str(target), solution, ctx)):
             return unknown("intake.claim", f"claimed answer {ca.payload!r} restates the question",
                            flags=["claim_is_not_a_value"])
     return _claim_computes_integer_op(solution, ctx)
@@ -585,6 +590,28 @@ def _claim_computes_integer_op(solution: Solution, ctx) -> LayerResult | None:
 
 _INTEGER_OP_TEXT = re.compile(r"(?<![A-Za-z_])i?(?:gcd|lcm)\s*\(|\\(?:gcd|lcm)(?![A-Za-z])|"
                               r"\\(?:operatorname|mathrm|text|textrm)\s*\{\s*(?:gcd|lcm)\s*\}")
+
+
+# the integer operations whose value at closed arguments a claim may not leave to the verifier when the target is
+# one of them (gcd and lcm are `_claim_computes_integer_op`'s whatever the target)
+_TARGET_OPS = (sp.floor, sp.ceiling, sp.frac, sp.Mod, sp.factorial, sp.binomial)
+
+
+def _applies_target_op(payload, target: str, solution: Solution, ctx) -> bool:
+    """Does the claim apply, to closed arguments, an integer operation the target applies (`_TARGET_OPS`)? Then it
+    computes the answer the question asks for: for floor(17/5) the claim \\lfloor\\frac{17}{5}\\rfloor was certified,
+    the structural parse of the LaTeX having evaluated it to 3 (fourth audit GAP-LFLOOR). Read as written."""
+    from .normalize.parse import parse_as_written
+    if not isinstance(payload, str):
+        return False
+    try:
+        ops = {n.func for n in sp.preorder_traversal(parse_as_written(target, ctx.ns)) if isinstance(n, _TARGET_OPS)}
+        claim = parse_as_written(payload, ctx.claim_ns(solution))
+        return any(n.func in ops and not n.free_symbols for n in sp.preorder_traversal(claim))
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read as written: the other checks report it
+        return False
 
 
 def _same_structure(a: str, b: str, ctx) -> bool:
@@ -777,6 +804,15 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         ca.payload = problem_ir.options[ca.option]
         if problem_ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
             ca.payload = "{}"
+        # the option read as a claim of the answer's shape is (`Ctx.option_value`): 'x > -2' names (-2, oo), and
+        # '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1)
+        named = ctx.option_condition_set(ca.option)
+        if named is not None:
+            ca.payload = str(named)
+        elif problem_ir.answer_shape != "interval" and decimal_comma(ca.payload):
+            layers.append(unknown("intake.claim", f"option {ca.payload!r}: decimal comma or pair? not guessed",
+                                  flags=["decimal_comma_ambiguous"]))
+            return layers, ["answer_from_option_letter"]
         # The certificate is now about to verify the OPTION's own value, so the only thing
         # being checked is the letter the solver picked — a 1-in-5 guess carries as much
         # evidence as a worked solution. That is legitimate answer-level verification, but it

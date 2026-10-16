@@ -2237,7 +2237,7 @@ def _with_undeclared(text: str, ns: dict[str, Any], names) -> dict[str, Any]:
     return out
 
 
-def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool = False) -> bool:
+def _undefined_as_written(text: str, ns: dict[str, Any], unread: bool | str = False) -> bool | str:
     """Is the claim, read AS WRITTEN, undefined whatever its free symbols are (a closed condition
     that fails, e.g. a term of a finite sum at one of its indices)? The value parse folds j/j to 1,
     and the compute step `Sum(j/j, (j, -1, 1)) = 3` was verified (V14 tests, 30 Sep 2026). Undeclared
@@ -2815,8 +2815,12 @@ def check_steps(ir, solution, ctx: Ctx):
                     status, ev = "unknown", {"reason": "counterexample_where_the_claim_is_undefined", "withdrawn": ev}
                 why = None
                 if status != "refuted":
-                    if _undefined_as_written(st.claim, step_ns, unread=status == "verified"):
-                        why = "claim_undefined_as_written"
+                    written = _undefined_as_written(st.claim, step_ns,
+                                                    unread="unread" if status == "verified" else False)
+                    if written:
+                        # a text the as-written reading does not take is not read, not undefined (attack on d4f
+                        # round 2, RK-3)
+                        why = "claim_not_read_as_written" if written == "unread" else "claim_undefined_as_written"
                     else:
                         try:
                             undefined = _undefined_at_premises(st.claim, step_ns, list(givens) + [
