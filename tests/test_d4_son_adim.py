@@ -295,13 +295,64 @@ def test_g1rk1_a_wrong_letter_in_that_notation_is_refuted(q, s):
     assert verify(q, s).verdict == "INCORRECT"
 
 
-@pytest.mark.parametrize("opt,given,payload", [("log_2 5", "2**x = 5", "log(5)/log(2)"), ("ln 2", "exp(x) = 2", "log(2)"),
-                                               ("log₂5", "2**x = 5", "log(5)/log(2)")])
-def test_g1rk1_an_option_no_reader_takes_still_blocks(opt, given, payload):
-    """The claim's reader does not take these either (measured): the decision keeps the block."""
-    q = _mc(_ir("evaluate", {"expr": "x"}, [given]), {"A": "0", "B": opt, "C": "100", "D": "-100", "E": "1000"})
-    assert verify(q, _sol(payload, option="B")).verdict == "UNKNOWN"
-    assert verify(_ir("evaluate", {"expr": "x"}, [given]), _sol(opt)).verdict == "UNKNOWN"
+LOG = {"A": "log_5 2", "B": "log_2 5", "C": "log₂ 3", "D": "ln 5", "E": "5/2"}
+LN = {"A": "ln 3", "B": "ln 2", "C": "ln 4", "D": "2", "E": "1/2"}
+
+
+@pytest.mark.parametrize("opts,given,payload", [
+    ({"A": "0", "B": "log_2 5", "C": "1"}, "2**x = 5", "log(5)/log(2)"), ({"A": "0", "B": "log₂5", "C": "1"}, "2**x = 5", None),
+    ({"A": "0", "B": "log₂ 5", "C": "1"}, "2**x = 5", "log(5)/log(2)"), ({"A": "0", "B": "log_2(5)", "C": "1"}, "2**x = 5", None),
+    ({"A": "0", "B": "log_{2} 5", "C": "1"}, "2**x = 5", "log(5)/log(2)"), ({"A": "0", "B": "log2(5)", "C": "1"}, "2**x = 5", None),
+    ({"A": "0", "B": "ln 2", "C": "1"}, "exp(x) = 2", "log(2)"), ({"A": "0", "B": "ln5/ln2", "C": "1"}, "2**x = 5", "log(5)/log(2)"),
+    ({"A": "0", "B": "log₂32", "C": "1"}, "x = 5", "5"),
+])
+def test_g1rk1_logarithm_notations_are_read(opts, given, payload):
+    """log_b, a subscript base and ln written with a number (the verifier's corrected expectation of G1RK-1): read by the
+    one reader of claims and options."""
+    q = _mc(_ir("evaluate", {"expr": "x"}, [given]), opts)
+    assert verify(q, _sol(payload, option="B")).verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("opts,given,letter", [(LOG, "2**x = 5", "A"), (LOG, "2**x = 5", "C"), (LN, "exp(x) = 2", "A"),
+                                               (LN, "exp(x) = 2", "C")])
+def test_g1rk1_a_wrong_letter_in_a_logarithm_notation_is_refuted(opts, given, letter):
+    """The base reading: these options unread, the wrong letter beside a right value was CORRECT (log_5 2, ln 3)."""
+    q = _mc(_ir("evaluate", {"expr": "x"}, [given]), opts)
+    payload = "log(5)/log(2)" if given == "2**x = 5" else "log(2)"
+    assert verify(q, _sol(payload, option=letter)).verdict == "INCORRECT"
+    assert verify(q, _sol(None, option=letter)).verdict == "INCORRECT"
+
+
+def test_g1rk1_a_closed_interval_letter_for_an_open_answer_is_refuted():
+    q = _mc(QI, {"A": "[2, 3]", "B": "x ∈ (2, 3)", "C": "(1, 2)", "D": "(3, 4)", "E": "ℝ"})
+    assert verify(q, _sol(A23, "interval", option="A")).verdict == "INCORRECT"
+    assert verify(q, _sol(None, "interval", option="A")).verdict == "INCORRECT"
+    assert verify(q, _sol(A23, "interval", option="B")).verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("text", ["ln 2x", "ln 2/3", "log_2 8^2", "log 9", "2 log 3", "ln 2*3"])
+def test_g1rk1_an_ambiguous_logarithm_is_not_read(text):
+    """A bare number followed by what could extend it, and log without a base (ln or log10?), are read by nobody."""
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import ParseError, build_namespace, parse_answer
+    ns = build_namespace(ProblemIR.from_dict(_ir("evaluate", {"expr": "x"})))
+    with pytest.raises(ParseError):
+        parse_answer("value", text, ns)
+
+
+def test_g1rk1_the_option_as_read_is_read_as_written():
+    """The claim's reader cleans '0**0 tane' to 0**0, whose value 1 is a convention: the text so read is checked as
+    written like the claim's own (`_options_as_read`), and the letter is not CORRECT for 1 (control on the base: the
+    option was not read at all)."""
+    q = _mc(_ir("evaluate", {"expr": "x"}, ["x = 1"]), {"A": "0**0 tane", "B": "2", "C": "3"})
+    assert verify(q, _sol("1", option="A")).verdict == "UNKNOWN"
+
+
+def test_g1rk1_an_option_no_reader_takes_still_blocks():
+    q = _mc(QE, {"A": "{1, 2}", "B": "2 ve 3", "C": "{3, 4}", "D": "{-2, -3}", "E": "∅"})
+    assert verify(q, _sol("{2, 3}", "set", option="B")).verdict == "UNKNOWN"
+    q = _mc(_ir("evaluate", {"expr": "x"}, ["10**x = 9"]), {"A": "0", "B": "log 9", "C": "1"})
+    assert verify(q, _sol("log(9)/log(10)", option="B")).verdict == "UNKNOWN"
 
 
 def test_g1rk1_wordproblem_reads_the_options_as_the_claim():
@@ -314,11 +365,34 @@ def test_g1rk1_wordproblem_reads_the_options_as_the_claim():
 
 # ---------------------------------------------------------------- G1RK-8: 0**0 in a count
 
-def test_g1rk8_a_count_wrong_under_both_readings_is_never_correct():
-    ci = _ir("count_integers", {"var": "x"}, ["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI], "count")
-    for c in ("3", "6"):
-        assert verify(ci, _sol(c, "count")).verdict != "CORRECT"
-    for c in ("4", "5"):                                 # 0**0 undefined, 0**0 = 1: control
+def _ci(g, lo, hi):
+    return _ir("count_integers", {"var": "x"}, [g, f"x >= {lo}", f"x <= {hi}"], [XI], "count")
+
+
+def test_g1rk8_a_count_wrong_under_both_readings_of_zero_to_the_zero_is_refuted():
+    """x**x (2 + sin x) > 0 on -3..3: -2, 1, 2, 3 and 0 when 0**0 = 1, so 4 or 5. The count never applied the real_power
+    convention (the verifier's measure): every claim was UNKNOWN; each integer is now decided at the point."""
+    ci = _ci("x**x*(2 + sin(x)) > 0", -3, 3)
+    for c in ("2", "3", "6", "7"):
+        assert verify(ci, _sol(c, "count")).verdict == "INCORRECT"
+    for c in ("4", "5"):
+        assert verify(ci, _sol(c, "count")).verdict == "UNKNOWN"
+
+
+@pytest.mark.parametrize("g,lo,hi,right,wrong", [("x**x*(2 + sin(x)) > 0", 1, 3, "3", "2"),
+                                                  ("x**x*(2 + sin(x)) > 0", -3, -1, "1", "0"),
+                                                  ("(x - 1)**x > 0", 0, 3, "3", "4"), ("x**x > 1", -3, 3, "2", "3"),
+                                                  ("x**x*(2 + sin(x)) > 0", -100, 100, None, "100")])
+def test_g1rk8_a_count_with_no_zero_to_the_zero_is_decided(g, lo, hi, right, wrong):
+    ci = _ci(g, lo, hi)
+    if right is not None:
+        assert verify(ci, _sol(right, "count")).verdict == "CORRECT"
+    assert verify(ci, _sol(wrong, "count")).verdict == "INCORRECT"
+
+
+def test_g1rk8_controls_a_power_undecided_at_a_point_decides_nothing():
+    ci = _ci("x**(x/2) > 0", -3, 3)                      # (-3)**(-3/2): the real root, the principal value or none
+    for c in ("2", "3", "4"):
         assert verify(ci, _sol(c, "count")).verdict == "UNKNOWN"
 
 
@@ -345,3 +419,42 @@ def test_g1rk5_the_composition_of_a_piecewise_function_at_a_point(f, e, right, w
 def test_g1rk5_controls_an_undefined_composition_stays_undefined(f, e):
     r = verify(_fq(f, e), _sol("0"))
     assert r.verdict == "UNKNOWN" and "problem_undefined_as_written" in {fl for la in r.layers for fl in la.flags}
+
+
+# ---------------------------------------------------------------- G2YO-5, G2YO-7: options with a declared tolerance
+
+def _tol(options, kind="evaluate"):
+    if kind == "evaluate":
+        return _ir("evaluate", {"expr": "sqrt(50)", "rel_tol": "0.01"}, options=options)
+    return _ir("definite_integral", {"integrand": "exp(x**2)", "var": "x", "a": "0", "b": "1", "rel_tol": "0.01"},
+               options=options)
+
+
+O50 = {"A": "7.01", "B": "7.07", "C": "7.1", "D": "7.2", "E": "7.5"}            # A, B, C within 1% of √50
+O50U = {"A": "6.5", "B": "7.07", "C": "7.5", "D": "8", "E": "9"}               # B alone
+OEX = {"A": "1.25", "B": "1.46", "C": "1.47", "D": "1.72", "E": "2"}           # B, C within 1% of 1.46265...
+OEXU = {"A": "1.25", "B": "1.46", "C": "1.6", "D": "1.72", "E": "2"}
+
+
+@pytest.mark.parametrize("q,s", [
+    (_tol(O50), _sol("7.01", option="A")), (_tol(O50), _sol("7.07", option="B")), (_tol(O50), _sol("7.1", option="C")),
+    (_tol(O50), _sol(None, option="A")), (_tol(OEX, "integral"), _sol("1.47", option="C")),
+    (_tol(OEX, "integral"), _sol(None, option="C")),
+    (_ir("definite_integral", {"integrand": "x**2", "var": "x", "a": "0", "b": "1", "rel_tol": "0.05"},
+         options={"A": "1/3", "B": "0.34", "C": "1/2", "D": "1", "E": "2/3"}), _sol("0.34", option="B")),
+])
+def test_g2yo5_several_options_in_the_window_name_none(q, s):
+    r = verify(q, s)
+    assert r.verdict == "UNKNOWN" and "options_within_declared_tolerance" in {f for la in r.layers for f in la.flags}
+
+
+@pytest.mark.parametrize("q,s,verdict", [
+    (_tol(O50U), _sol("7.0711", option="B"), "CORRECT"), (_tol(O50U), _sol("7.07", option="B"), "CORRECT"),
+    (_tol(O50U), _sol(None, option="B"), "CORRECT"), (_tol(OEXU, "integral"), _sol("1.4627", option="B"), "CORRECT"),
+    (_tol(OEXU, "integral"), _sol(None, option="B"), "CORRECT"),
+    (_tol(O50U), _sol("7.0711", option="C"), "INCORRECT"), (_tol(O50U), _sol(None, option="C"), "INCORRECT"),
+    (_tol(OEXU, "integral"), _sol("1.4627", option="C"), "INCORRECT"),
+    (_tol(O50), _sol("7.0711", option="B"), "UNKNOWN"),                      # G2YO-7 with several in the window
+])
+def test_g2yo7_the_claim_and_the_option_compared_within_the_declared_tolerance(q, s, verdict):
+    assert verify(q, s).verdict == verdict

@@ -11,10 +11,14 @@
              angles of a triangle, a polygon's interior and exterior angle); trig_solve keeps its radians; LaTeX
              30^\\circ is a degree (it was the number 30, and \\sin(30^\\circ) was sin(30))
   C  G1RK-1  an option is read by the claim's own reader (namespace, answer shape, notation, cleaning): 'x ∈ (2, 3)',
-             '2, 3', '6 cm', 'π/6 rad' read as the claim reads them; an option still unread blocks CORRECT; a wrong
-             letter in a newly read notation is refuted; wordproblem's check of the options reads them the same way
-  D  G1RK-8  a count wrong under both readings of 0**0 (3, 6) is never CORRECT; the two readings (4, 5) UNKNOWN
+             '2, 3', '6 cm', 'π/6 rad' read as the claim reads them, and that reader reads log_b, a subscript base and ln
+             with a number (log_2 5, log₂5, ln 2); an option still unread blocks CORRECT; a wrong letter in a newly read
+             notation is refuted (log_5 2, ln 3, [2, 3]); wordproblem's check of the options reads them the same way
+  D  G1RK-8  a count over x**x decided at each integer, 0**0 read both ways: wrong under both (2, 3, 6, 7) INCORRECT,
+             the two readings (4, 5) UNKNOWN
   E  G1RK-5  (recorded; a cheap exact path) f(f(1)) of a piecewise f: the inner Piecewise taken to its certified branch
+  F  G2YO-5/7 (added 16 Oct evening) options with a declared tolerance: several in the window name none (UNKNOWN); the
+             chosen one outside it is refuted; inside it alone, a claim certified in the window too is the same answer
   K  controls whose verdict must not change
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
@@ -286,13 +290,31 @@ def cases_c():
          sol(None, option="D"), NO, None),
         ("letter only '6 cm'", _mc(LIN, {"A": "4 cm", "B": "5 cm", "C": "6 cm", "D": "7 cm", "E": "8 cm"}),
          sol(None, option="C"), OK, None),
-        # still not read by the claim's reader either: the block stays (decision G1RK-1)
-        ("option 'log_2 5' (read by nobody)", _mc(ir("evaluate", {"expr": "x"}, ["2**x = 5"]),
-                                                  {"A": "0", "B": "log_2 5", "C": "100", "D": "-100", "E": "1000"}),
-         sol("log(5)/log(2)", option="B"), UNK, None),
-        ("option 'ln 2' (read by nobody)", _mc(ir("evaluate", {"expr": "x"}, ["exp(x) = 2"]),
-                                               {"A": "0", "B": "ln 2", "C": "100", "D": "-100", "E": "1000"}),
-         sol("log(2)", option="B"), UNK, None),
+        # logarithms with a base and a number: read by the one reader of claims and options (the verifier's corrected
+        # expectation of G1RK-1); the wrong letter in them refuted (the base reading: CORRECT)
+    ]
+    for opt, given, pay in (("log_2 5", "2**x = 5", "log(5)/log(2)"), ("log₂5", "2**x = 5", "log(5)/log(2)"),
+                            ("log₂ 5", "2**x = 5", "log(5)/log(2)"), ("log_2(5)", "2**x = 5", "log(5)/log(2)"),
+                            ("log_{2} 5", "2**x = 5", "log(5)/log(2)"), ("log2(5)", "2**x = 5", "log(5)/log(2)"),
+                            ("ln 2", "exp(x) = 2", "log(2)"), ("ln2", "exp(x) = 2", "log(2)"),
+                            ("ln5/ln2", "2**x = 5", "log(5)/log(2)"), ("log₂32", "x = 5", "5")):
+        q = _mc(ir("evaluate", {"expr": "x"}, [given]), {"A": "0", "B": opt, "C": "100", "D": "-100", "E": "1000"})
+        out += [(f"option '{opt}', payload", q, sol(pay, option="B"), OK, None),
+                (f"option '{opt}', letter only", q, sol(None, option="B"), OK, None)]
+    LOG = {"A": "log_5 2", "B": "log_2 5", "C": "log₂ 3", "D": "ln 5", "E": "5/2"}
+    LN = {"A": "ln 3", "B": "ln 2", "C": "ln 4", "D": "2", "E": "1/2"}
+    for opts, given, pay in ((LOG, "2**x = 5", "log(5)/log(2)"), (LN, "exp(x) = 2", "log(2)")):
+        q = _mc(ir("evaluate", {"expr": "x"}, [given]), opts)
+        for letter in ("A", "C"):
+            out += [(f"wrong letter '{opts[letter]}' beside {pay}", q, sol(pay, option=letter), NO, None),
+                    (f"wrong letter '{opts[letter]}' alone", q, sol(None, option=letter), NO, None)]
+    q23 = _mc(QI, {"A": "[2, 3]", "B": "x ∈ (2, 3)", "C": "(1, 2)", "D": "(3, 4)", "E": "ℝ"})
+    out += [("wrong letter '[2, 3]' beside (2, 3)", q23, sol(A23, "interval", option="A"), NO, None),
+            ("wrong letter '[2, 3]' alone", q23, sol(None, "interval", option="A"), NO, None),
+            ("option 'log 9' (no base: ln or log10?)", _mc(ir("evaluate", {"expr": "x"}, ["10**x = 9"]),
+                                                           {"A": "0", "B": "log 9", "C": "1"}),
+             sol("log(9)/log(10)", option="B"), UNK, None)]
+    out += [
         ("option '2 ve 3' (read by nobody)", _mc(QE, {"A": "{1, 2}", "B": "2 ve 3", "C": "{3, 4}", "D": "{-2, -3}", "E": "∅"}),
          sol("{2, 3}", "set", option="B"), UNK, None),
         ("option '5 değil' (negated)", _mc(LIN, _five("6 değil")), sol("6", option="C"), UNK, None),
@@ -353,9 +375,56 @@ def _claim_notations_are_option_notations():
 
 # D: G1RK-8 --------------------------------------------------------------------------------------------------------
 def cases_d():
-    ci = ir("count_integers", {"var": "x"}, ["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI], "count")
-    return [(f"x**x(2 + sin x) > 0 on -3..3: {c}", ci, sol(c, "count"), want, None)
-            for c, want in (("3", NOTOK), ("4", UNK), ("5", UNK), ("6", NOTOK))]
+    def ci(g, lo, hi):
+        return ir("count_integers", {"var": "x"}, [g, f"x >= {lo}", f"x <= {hi}"], [XI], "count")
+    g = "x**x*(2 + sin(x)) > 0"
+    out = [(f"x**x(2 + sin x) > 0 on -3..3: {c}", ci(g, -3, 3), sol(c, "count"), want, None)
+           for c, want in (("2", NO), ("3", NO), ("4", UNK), ("5", UNK), ("6", NO), ("7", NO))]
+    for gg, lo, hi, right, wrongs in ((g, 1, 3, "3", ("2", "4")), (g, -3, -1, "1", ("0", "2")),
+                                      ("(x - 1)**x > 0", 0, 3, "3", ("2", "4")), ("x**x > 1", -3, 3, "2", ("1", "3")),
+                                      ("x**x < 0", -3, 3, "2", ("1", "3")), (g, -100, 100, None, ("100", "150", "151"))):
+        if right:
+            out.append((f"{gg} on {lo}..{hi}: {right}", ci(gg, lo, hi), sol(right, "count"), OK, None))
+        out += [(f"{gg} on {lo}..{hi}: {w} (wrong)", ci(gg, lo, hi), sol(w, "count"),
+                 UNK if (lo, hi, w) in ((-100, 100, "150"), (-100, 100, "151")) else NO, None) for w in wrongs]
+    out += [(f"x**(x/2) > 0 on -3..3: {c} (a power undecided at a point)", ci("x**(x/2) > 0", -3, 3), sol(c, "count"),
+             UNK, None) for c in ("2", "3", "4")]
+    return out
+
+
+# F: G2YO-5, G2YO-7 ------------------------------------------------------------------------------------------------
+def cases_f():
+    def tol(options, integral=False):
+        if not integral:
+            return ir("evaluate", {"expr": "sqrt(50)", "rel_tol": "0.01"}, options=options)
+        return ir("definite_integral", {"integrand": "exp(x**2)", "var": "x", "a": "0", "b": "1", "rel_tol": "0.01"},
+                  options=options)
+    o50 = {"A": "7.01", "B": "7.07", "C": "7.1", "D": "7.2", "E": "7.5"}
+    o50u = {"A": "6.5", "B": "7.07", "C": "7.5", "D": "8", "E": "9"}
+    oex = {"A": "1.25", "B": "1.46", "C": "1.47", "D": "1.72", "E": "2"}
+    oexu = {"A": "1.25", "B": "1.46", "C": "1.6", "D": "1.72", "E": "2"}
+    x2 = ir("definite_integral", {"integrand": "x**2", "var": "x", "a": "0", "b": "1", "rel_tol": "0.05"},
+            options={"A": "1/3", "B": "0.34", "C": "1/2", "D": "1", "E": "2/3"})
+    return [
+        ("YO5-a √50: A 7.01 (in the window, wrong)", tol(o50), sol("7.01", option="A"), NOTOK, None),
+        ("YO5-b √50: B 7.07 (three in the window)", tol(o50), sol("7.07", option="B"), NOTOK, None),
+        ("YO5-c √50: C 7.1 (in the window, wrong)", tol(o50), sol("7.1", option="C"), NOTOK, None),
+        ("YO5-d √50: letter A only", tol(o50), sol(None, option="A"), NOTOK, None),
+        ("YO5-e ∫e^{x²}: C 1.47", tol(oex, True), sol("1.47", option="C"), NOTOK, None),
+        ("YO5-f ∫e^{x²}: letter C only", tol(oex, True), sol(None, option="C"), NOTOK, None),
+        ("YO5-g ∫x²: B 0.34 (A = 1/3 exact)", x2, sol("0.34", option="B"), NOTOK, None),
+        ("YO7-a √50: 7.0711 letter B (three in the window)", tol(o50), sol("7.0711", option="B"), NOTNO, None),
+        ("YO7-b ∫e^{x²}: 1.4627 letter B (two in the window)", tol(oex, True), sol("1.4627", option="B"), NOTNO, None),
+        ("√50 one in the window: 7.0711 letter B", tol(o50u), sol("7.0711", option="B"), OK, None),
+        ("√50 one in the window: 7.07 letter B", tol(o50u), sol("7.07", option="B"), OK, None),
+        ("√50 one in the window: letter B only", tol(o50u), sol(None, option="B"), OK, None),
+        ("√50 one in the window: 7.0711 letter C (wrong)", tol(o50u), sol("7.0711", option="C"), NO, None),
+        ("√50 one in the window: letter C only (wrong)", tol(o50u), sol(None, option="C"), NO, None),
+        ("∫e^{x²} one in the window: 1.4627 letter B", tol(oexu, True), sol("1.4627", option="B"), OK, None),
+        ("∫e^{x²} one in the window: letter B only", tol(oexu, True), sol(None, option="B"), OK, None),
+        ("∫e^{x²} one in the window: 1.4627 letter C (wrong)", tol(oexu, True), sol("1.4627", option="C"), NO, None),
+        ("√50 no options: 7.07", ir("evaluate", {"expr": "sqrt(50)", "rel_tol": "0.01"}), sol("7.07"), OK, None),
+    ]
 
 
 # E: G1RK-5 --------------------------------------------------------------------------------------------------------
@@ -412,10 +481,10 @@ def cases_k():
     ]
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "K": cases_k}
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k}
 
 
-def main(out_path=None, groups="ABCDEK"):
+def main(out_path=None, groups="ABCDEFK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -456,5 +525,5 @@ def main(out_path=None, groups="ABCDEK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEK"
+    grp = args[1] if len(args) > 1 else "ABCDEFK"
     sys.exit(1 if main(out, grp) else 0)

@@ -1236,7 +1236,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     ctx.cache[OPTION_READER] = lambda letter: _option_claim_value(problem_ir, _lettered(solution, letter), ctx)
     certs = _certify(problem_ir, solution, ctx, modules, claim_not_read)
     layers.extend(certs)
-    if mc is not None and OPTION_UNDECIDED in mc.flags:
+    if mc is not None and _declared_tolerance(problem_ir):
+        layers[layers.index(mc)] = _options_in_tolerance(problem_ir, solution, ctx, modules, certs, mc)
+    elif mc is not None and OPTION_UNDECIDED in mc.flags:
         layers[layers.index(mc)] = _option_as_claim(problem_ir, solution, ctx, modules, certs, mc)
 
     if run_steps and solution.steps:
@@ -1367,6 +1369,51 @@ def _option_as_claim(problem_ir: ProblemIR, solution: Solution, ctx, modules: li
             # a payload reconstructed from prose abstains, never refutes (see `_mc_consistency`)
             return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=["recovered_answer_mismatch"])
         return result("mc.consistency", "fail", 0.99, True, ev, mc.latency_ms, primary=False)
+    return mc
+
+
+# several options of a question with a declared tolerance lie in its window: the letter names none of them alone
+OPTIONS_IN_TOLERANCE = "options_within_declared_tolerance"
+
+
+def _declared_tolerance(ir: ProblemIR) -> bool:
+    """Does the task declare a tolerance (`rel_tol`, `abs_tol`: the question asks for an approximate value)?"""
+    p = ir.task.params or {}
+    return bool(ir.options) and any(p.get(k) not in (None, "") for k in ("rel_tol", "abs_tol"))
+
+
+def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, modules: list, certs: list,
+                          mc: LayerResult) -> LayerResult:
+    """mc.consistency of a multiple-choice question with a declared tolerance (final attack G2YO-5, G2YO-7). Each option
+    is read as the claim (`_option_read_as_claim`) through the same certificates, which compare it with the true value
+    within the tolerance. The letter is the solution's choice of the one option in the window: chosen outside it, the
+    letter is refuted; inside it with another option there too (or another not decided out), the letter names none
+    of them alone (UNKNOWN); inside it alone, the claim certified in the window too is the same answer, though not the
+    same number (7.0711 for the option 7.07 of √50 was refuted exactly, while A = 7.01 and C = 7.1, inside the window
+    1% wide as well, were CORRECT)."""
+    ca = solution.claimed_answer
+    if ca.option not in (problem_ir.options or {}):
+        return mc
+    states: dict[str, str | None] = {}
+    for letter in problem_ir.options:
+        sol2 = _option_read_as_claim(problem_ir, _lettered(solution, letter), ctx)
+        states[letter] = None if sol2 is None else _decided(_certify(problem_ir, sol2, ctx, modules))
+    ev = dict(mc.evidence or {}, option=ca.option, options_in_window=states)
+    chosen = states[ca.option]
+    if chosen == "fail":
+        ev["reason"] = "the chosen option lies outside the declared tolerance of the value"
+        if ca.payload_source == "recovered_text":
+            return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=["recovered_answer_mismatch"])
+        return result("mc.consistency", "fail", 0.99, True, ev, mc.latency_ms, primary=False)
+    if chosen != "pass":
+        ev["reason"] = "the chosen option is not decided within the declared tolerance"
+        return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=[OPTION_UNDECIDED])
+    if any(s_ != "fail" for k, s_ in states.items() if k != ca.option):
+        ev["reason"] = "another option is not shown outside the declared tolerance"
+        return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=[OPTIONS_IN_TOLERANCE])
+    if mc.verdict == "pass" or _decided(certs) == "pass":
+        ev["reason"] = "the chosen option is the one option within the declared tolerance"
+        return result("mc.consistency", "pass", 0.99, True, ev, mc.latency_ms, primary=False)
     return mc
 
 

@@ -1122,9 +1122,9 @@ def cases_m():
         ("M3 Q4 {0,2} (0**0)", eq("x*(x - 2) = 0", ["x**x*(2 + sin(x)) > 0"], dod="{0, 1, 2, 3}"), _sol("{0, 2}", S_), UNK, None),
         ("M3 Q5 {-2}", eq("(x + 2)*(x - 3) = 0", ["(x - 3)**(x + 4)*cos(pi*x) > 0"], dod=D7), _sol("{-2}", S_), NOTNO, None),
         ("M3 Q5 {}", eq("(x + 2)*(x - 3) = 0", ["(x - 3)**(x + 4)*cos(pi*x) > 0"], dod=D7), _sol("EmptySet", S_), NOTOK, None),
-        # 3 (and 6) is wrong under both readings of 0**0 (4 or 5): INCORRECT may be proved (final attack G1RK-8)
-        ("M3 Q6 cint 3", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("3", "count"), NOTOK, None),
-        ("M3 Q6 cint 6", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("6", "count"), NOTOK, None),
+        # 3 (and 6) is wrong under both readings of 0**0 (4 or 5): refuted (final attack G1RK-8)
+        ("M3 Q6 cint 3", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("3", "count"), NO, None),
+        ("M3 Q6 cint 6", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("6", "count"), NO, None),
         ("M3 Q6 cint 4", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("4", "count"), UNK, None),
         ("M3 Q6 cint 5", cint(["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], [XI]), _sol("5", "count"), UNK, None),
         ("M3 Q7 {2,5}", eq("(x - 2)*(x - 5) = 0", ["(x - 4)**x*factorial(x)*(2 + sin(x)) > 0"], dod="{1, 2, 3, 4, 5, 6}"),

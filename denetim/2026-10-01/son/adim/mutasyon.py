@@ -22,6 +22,7 @@ VER = "src/mathverify/verifier.py"
 BAS = "src/mathverify/certify/base.py"
 WP = "src/mathverify/certify/wordproblem.py"
 PAR = "src/mathverify/normalize/parse.py"
+CNT = "src/mathverify/certify/counting.py"
 T = "tests/test_d4_son_adim.py::"
 
 MUTATIONS = [
@@ -79,6 +80,38 @@ MUTATIONS = [
      "    _normalize_set_notation(ir, sol2, ctx)\n", T + "test_g1rk1_a_notation_the_claim_reads_is_read_as_an_option"),
     ("S21 wordproblem şıkları eski okuyucuyla", WP, "options[letter] = ctx.option_as_claim(letter)",
      "options[letter] = ctx.option_value(letter)", T + "test_g1rk1_wordproblem_reads_the_options_as_the_claim"),
+    # G1RK-1 (the verifier's corrected expectation), G1RK-8, G1RK-5, G2YO-5/7
+    ("S22 log yazımı okunmaz", PAR, "    s = _log_notation(s)\n", "", T + "test_g1rk1_logarithm_notations_are_read"),
+    ("S23 çıplak sayıdan sonrası denetlenmez", PAR,
+     "            ok = n is not None and _BARE_END_RE.match(s, n.end()) is not None\n",
+     "            ok = n is not None\n", T + "test_g1rk1_an_ambiguous_logarithm_is_not_read"),
+    ("S24 log_{2} LaTeX sayılır", PAR, 'r"\\^\\{|(?<!log)_\\{|', 'r"\\^\\{|_\\{|', T + "test_g1rk1_logarithm_notations_are_read"),
+    ("S25 okunmuş şıkkın yazıldığı biçimi denetlenmez", VER,
+     "    read_options = _options_as_read(problem_ir, solution, ctx)\n", "    read_options = problem_ir.options\n",
+     T + "test_g1rk1_the_option_as_read_is_read_as_written"),
+    ("S26 sayımda iki okuma yolu yok", CNT, "                counts, why2 = _count_integers_both_readings(ctx, var, ev)\n",
+     "                counts, why2 = None, None\n",
+     T + "test_g1rk8_a_count_wrong_under_both_readings_of_zero_to_the_zero_is_refuted"),
+    ("S27 0**0 tek okuma", CNT, "    return {sure, sure + zero}, None\n", "    return {sure + zero}, None\n",
+     T + "test_g1rk8_a_count_wrong_under_both_readings_of_zero_to_the_zero_is_refuted"),
+    ("S28 başka kararsız kuvvet de okunur", CNT, '            return None, f"power_undecided_at_{k}"\n',
+     "            continue\n", T + "test_g1rk8_controls_a_power_undecided_at_a_point_decides_nothing"),
+    ("S29 iç Piecewise dalına inmez", PAR,
+     "        sub = dict(zip(fn.argsyms, (_closed_branches(a) for a in args)))\n",
+     "        sub = dict(zip(fn.argsyms, args))\n", T + "test_g1rk5_the_composition_of_a_piecewise_function_at_a_point"),
+    ("S30 dal işareti değerlendirmesiz", PAR, "        with sp.evaluate(True):                     # the signs",
+     "        with sp.evaluate(False):                     # the signs",
+     T + "test_g1rk5_the_composition_of_a_piecewise_function_at_a_point"),
+    ("S31 toleranslı şık kuralı yok", VER, "    if mc is not None and _declared_tolerance(problem_ir):\n",
+     "    if False:\n", T + "test_g2yo5_several_options_in_the_window_name_none"),
+    ("S32 penceredeki tekliğe bakılmaz", VER,
+     '    if any(s_ != "fail" for k, s_ in states.items() if k != ca.option):\n', "    if False:\n",
+     T + "test_g2yo5_several_options_in_the_window_name_none"),
+    ("S33 pencere dışı şık veto edilmez", VER, '    if chosen == "fail":\n', "    if False:\n",
+     T + "test_g2yo7_the_claim_and_the_option_compared_within_the_declared_tolerance"),
+    ("S34 pencerede tek şık tutarlı sayılmaz", VER,
+     '    if mc.verdict == "pass" or _decided(certs) == "pass":\n', '    if mc.verdict == "pass":\n',
+     T + "test_g2yo7_the_claim_and_the_option_compared_within_the_declared_tolerance"),
 ]
 
 if __name__ == "__main__":

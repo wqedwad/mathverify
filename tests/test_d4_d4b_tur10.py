@@ -400,8 +400,8 @@ def test_zero_to_the_zero_is_undecided():                                       
     ci = _ir("count_integers", {"var": "x"}, (V("x", "integer"),), ["x**x*(2 + sin(x)) > 0", "x >= -3", "x <= 3"], "count")
     for c in ("4", "5"):                    # 0**0 undefined: 4; 0**0 = 1: 5
         assert _run(ci, c, "count").verdict == "UNKNOWN"
-    for c in ("3", "6"):                    # wrong under both readings: INCORRECT may be proved (final attack G1RK-8)
-        assert _run(ci, c, "count").verdict != "CORRECT"
+    for c in ("2", "3", "6", "7"):          # wrong under both readings: refuted (final attack G1RK-8)
+        assert _run(ci, c, "count").verdict == "INCORRECT"
     si = _ir("solve_inequality", {"inequality": "x**sqrt(2)*(2 + sin(x)) >= 0", "var": "x"}, (X,), (), "set", "{0, 1, 2, 3}")
     assert _run(si, "{0, 1, 2, 3}", "set").verdict != "INCORRECT"
     assert _run(si, "{1, 2, 3}", "set").verdict != "CORRECT"

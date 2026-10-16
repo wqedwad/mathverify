@@ -1258,9 +1258,60 @@ def strip_presentation(s: str) -> str:
     return s
 
 
+# logarithms written as a base and a number (final attack G1RK-1): log_2 5, log_{2}(5), log₂5, log2(5), ln 2, ln5/ln2.
+# Neither a claim nor an option read them, and an option not read blocks a right letter's CORRECT. Only a number or a
+# parenthesized argument is taken, and a bare number only where nothing that could extend it follows (`ln 2x`,
+# `log_2 8^2`, `ln 2/3` are not read): `log` without a base (log 9: ln or log10?) is no notation of either.
+_LOG_HEAD_RE = re.compile(r"(?<![\\\w])(?:log(?:_\{\s*(\d+|e)\s*\}|_(\d+|e)(?![\w.])|([₀-₉]+)|(\d+)(?=\())|(ln))\s*")
+_BARE_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+_BARE_END_RE = re.compile(r"\s*(?:$|[-+)\],}=<>]|/\s*(?:ln|log)(?![A-Za-z]))")
+_SUBSCRIPT = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+
+
+def _closing_paren(s: str, i: int) -> int | None:
+    """The index of the parenthesis closing the one at `s[i]`, or None."""
+    depth = 0
+    for j in range(i, len(s)):
+        if s[j] == "(":
+            depth += 1
+        elif s[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return j
+    return None
+
+
+def _log_notation(s: str) -> str:
+    """`s` with each logarithm written as a base and an argument (`_LOG_HEAD_RE`) as log(argument, base); the rest as
+    it is, and a logarithm whose argument is not a number or a parenthesized group left as written (not read)."""
+    out, i = [], 0
+    while True:
+        m = _LOG_HEAD_RE.search(s, i)
+        if m is None:
+            out.append(s[i:])
+            return "".join(out)
+        base = m.group(1) or m.group(2) or (m.group(3) or "").translate(_SUBSCRIPT) or m.group(4)
+        j = m.end()
+        if j < len(s) and s[j] == "(":
+            k = _closing_paren(s, j)
+            arg, end = (s[j + 1:k], k + 1) if k is not None else (None, j)
+        else:
+            n = _BARE_NUMBER_RE.match(s, j)
+            ok = n is not None and _BARE_END_RE.match(s, n.end()) is not None
+            arg, end = (n.group(0), n.end()) if ok else (None, j)
+        if arg is None or (m.group(5) and j < len(s) and s[j] == "("):
+            out.append(s[i:m.end()])            # not read here (ln(...) is the canonical log(...))
+            i = m.end()
+            continue
+        out.append(s[i:m.start()])
+        out.append(f"log({arg})" if base in (None, "", "e") else f"log({arg}, {base})")
+        i = end
+
+
 def preclean(s: str) -> str:
     """Canonicalise unicode/degree/percent notation. Idempotent."""
     s = strip_presentation(_strip_invisible(s).strip()).strip()
+    s = _log_notation(s)
     s = _UNI_VALUE_RE.sub(r"\1*\2", s)
     for k, v in _UNICODE_MAP.items():
         s = s.replace(k, v)
@@ -1274,7 +1325,8 @@ def preclean(s: str) -> str:
 
 
 def is_latex(s: str) -> bool:
-    return "\\" in s or bool(re.search(r"\^\{|_\{|\\frac|\\sqrt|\\pi|\\infty|\\cdot", s))
+    # `log_{2} 5` without a backslash is the plain notation of `_log_notation`, not LaTeX
+    return "\\" in s or bool(re.search(r"\^\{|(?<!log)_\{|\\frac|\\sqrt|\\pi|\\infty|\\cdot", s))
 
 
 # ----------------------------------------------------------------------------
