@@ -186,6 +186,14 @@ def test_onceki1_control_a_condition_on_another_symbol_is_not_the_answer_set():
     assert _v(q, _sol("(-2, oo)", "interval", option="A")) == "UNKNOWN"
 
 
+def test_onceki1_control_a_value_claim_against_a_set_answer_option():
+    # evalset ayt-trig-004: a set answer, the claim pi/3 as a value, the option read as {pi/3}: the same kind (a first
+    # reading of "another kind" made it UNKNOWN; measured by the verdict diff)
+    q = _ir("trig_solve", {"var": "x", "interval": "[0, pi)"}, ["tan(x) = sqrt(3)"], [{"name": "x"}], "set",
+            options={"A": "pi/6", "B": "pi/3", "C": "2*pi/3"})
+    assert _v(q, _sol("pi/3", option="B")) == "CORRECT"
+
+
 def test_onceki1_controls():
     assert _v(_ev("3/2 + 0", [], options={"A": "1.5", "B": "7"}), _sol("3/2", option="A")) == "CORRECT"
     assert _v(_ev("1 + 2", [], options={"A": "7", "B": "3"}), _sol("3", option="A")) == "INCORRECT"

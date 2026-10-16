@@ -62,14 +62,13 @@ def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
     return ctx.option_value(ca.option), ctx.claimed(solution)
 
 
-def _option_out_of_kind(ov, cv) -> bool:
-    """Is the option's value `ov` of another kind than the claim `cv`: no set (or a set of conditions) for a set
-    claim, a set or a condition for a number? (A pair or a vector is the matrix branch's, an equation the equation
-    branch's.)"""
-    if isinstance(cv, sp.Set):
-        return not isinstance(ov, sp.Set) or (isinstance(ov, sp.FiniteSet)
-                                              and any(not isinstance(e, sp.Expr) for e in ov.args))
-    return isinstance(ov, sp.Set) or (isinstance(ov, sp.Basic) and not isinstance(ov, sp.Expr))
+def _option_out_of_kind(ov) -> bool:
+    """Is the option's value `ov` no value at all: a condition, or a set of conditions ('x**2 < 4' read as
+    {x**2 < 4})? A number, a set of numbers or an interval is the claim's kind (pi/3 against {pi/3} of a set answer);
+    a pair or a vector is the matrix branch's, an equation the equation branch's."""
+    if isinstance(ov, sp.FiniteSet):
+        return any(not isinstance(e, sp.Expr) for e in ov.args)
+    return isinstance(ov, sp.Basic) and not isinstance(ov, (sp.Expr, sp.Set))
 
 
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
@@ -137,7 +136,7 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
         elif isinstance(cv, sp.Equality) or isinstance(ov, sp.Equality):
             ok, cev = answers_equivalent(cv, ov, shape="equation", var=next(iter(ctx.syms()), None))
             ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
-        elif _option_out_of_kind(ov, cv):
+        elif _option_out_of_kind(ov):
             # the option read as another kind than the claim (a pair for a number, a set of conditions for a set):
             # what the letter names is not read, so it neither refutes the claim nor stands for it (fourth audit
             # D4F2B-ONCEKI-1: the option 'x**2 < 4' read as {x**2 < 4} refuted the claim (-2, 2))
