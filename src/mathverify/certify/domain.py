@@ -1830,9 +1830,19 @@ def _node_conditions(node, var, add) -> None:
         add(sp.false)
         add(NO_VALUE)
     elif type(node).__name__ == "written_domain":
-        # an IR function's declared domain at its call (normalize.parse.written_domain)
+        # an IR function's declared domain at its call (normalize.parse.written_domain), or where a written
+        # derivative exists (normalize.parse._written_diff)
         rel = node.args[1]
         for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+            if isinstance(c, sp.Contains) and not c.free_symbols and isinstance(c.args[1], Convention):
+                # put at a point unevaluated (at() reads its body with evaluation off): read with its element
+                # evaluated, kept standing unless proved inside (Convention says true only then). Left as it
+                # was, |sin x|'s zeros (sin(x) in ORIGIN) made its derivative undecided at pi/2 too
+                try:
+                    if sp.Contains(_evaluated(c.args[0]), c.args[1]) is sp.true:
+                        continue
+                except Exception:  # noqa: BLE001 - not read: left standing (undecided)
+                    pass
             add(c)
     elif isinstance(node, sp.log):
         add(node.args[0] > 0)

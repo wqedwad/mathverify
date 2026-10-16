@@ -172,6 +172,11 @@ def cases_a():
         ("atan2(x**2, -1)'(0) = 0", ev("at(diff(atan2(x**2, -1), x), x, 0)"), sol("0"), OK, None),
         ("arg(1 + I x)'(0) = 1", ev("at(diff(arg(1 + I*x), x), x, 0)"), sol("1"), OK, None),
         ("solve (x^3)' = 3: {-1, 1}", se("diff(x**3, x) = 3"), sol("{-1, 1}", "set"), OK, None),
+        ("|sin x|' at pi/2 = 0", ev("at(diff(Abs(sin(x)), x), x, pi/2)"), sol("0"), OK, None),
+        ("|sin x|' at pi = -1", ev("at(diff(Abs(sin(x)), x), x, pi)"), sol("-1"), UNK, None),
+        ("|x**2 - 4|' at 3 = 6 (1)", ev("at(diff(Abs(x**2 - 4), x), x, 3)"), sol("6"), OK, None),
+        ("|x**2 - 4|' at 3 = 6 (2)", ev("at(diff(Abs(x**2 - 4), x), x, 3)"), sol("6"), OK, None),
+        ("|x**2 - 4|' at 3 = 5", ev("at(diff(Abs(x**2 - 4), x), x, 3)"), sol("5"), NO, None),
     ]
 
 

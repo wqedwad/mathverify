@@ -160,6 +160,22 @@ def test_off_the_switch_point_the_derivative_is_read_as_before():
     assert _v(_ev("a + b", vars_=[A_, B_, X], givens=giv), _sol("4")) == "INCORRECT"
 
 
+def test_a_family_of_zeros_is_undecided_at_its_members_alone():
+    # |sin x| has a corner at each k*pi (sin(x) in ORIGIN): at pi/2 the condition, put in by at() unevaluated, is read
+    # with its element evaluated (sin(pi/2) = 1); left standing, the derivative was undecided there too
+    assert _v(_ev("at(diff(Abs(sin(x)), x), x, pi/2)"), _sol("0")) == "CORRECT"
+    assert _v(_ev("at(diff(Abs(sin(x)), x), x, pi/2)"), _sol("1")) == "INCORRECT"
+    assert _v(_ev("at(diff(Abs(sin(x)), x), x, pi)"), _sol("-1")) == "UNKNOWN"
+
+
+def test_the_written_derivative_is_read_the_same_every_time():
+    # SymPy's cache kept a power read as written (x**(2/1**1)); its minimal polynomial raised PolynomialError inside
+    # the sign guard and the as-written parse failed now and then: f'(3) = 6 of |x**2 - 4| was undecided
+    q = _ev("at(diff(Abs(x**2 - 4), x), x, 3)")
+    assert [_v(q, _sol("6")) for _ in range(3)] == ["CORRECT"] * 3
+    assert _v(q, _sol("5")) == "INCORRECT"
+
+
 def test_arg_is_read_as_atan2_at_its_zero():
     # arg(1 + I*x) has no cut at 0 (re > 0): its derivative 1 there; SymPy takes no limit of arg (undecided before
     # the rewrite, which only the classification uses)

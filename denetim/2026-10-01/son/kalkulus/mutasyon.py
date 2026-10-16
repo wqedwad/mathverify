@@ -99,6 +99,14 @@ MUTATIONS = [
      T + "test_complex_pole"),
     ("K24 ℂ'de log 0 yok", DOM, "            elif isinstance(n, sp.log):\n                if _exact_zero(n.args[0])",
      "            elif False:\n                if _exact_zero(n.args[0])", T + "test_complex_pole"),
+    # found while measuring: a closed convention membership put at a point, the sign guard's polynomial error
+    ("K25 noktadaki gelenek üyeliği okunmaz", DOM,
+     "                    if sp.Contains(_evaluated(c.args[0]), c.args[1]) is sp.true:\n                        continue\n",
+     "                    pass\n", T + "test_a_family_of_zeros_is_undecided_at_its_members_alone"),
+    ("K26 işaret korumasında polinom hatası kaçar", "src/mathverify/_sympy_guards.py",
+     "    except (BasePolynomialError, NotImplementedError, ValueError, TypeError, AttributeError):\n",
+     "    except (NotImplementedError, ValueError, TypeError, AttributeError):\n",
+     T + "test_the_written_derivative_is_read_the_same_every_time"),
 ]
 
 if __name__ == "__main__":

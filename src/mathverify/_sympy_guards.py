@@ -456,11 +456,14 @@ def _positive_negative(self, positive):
     if s is not None:
         return s == (1 if positive else -1)
     from sympy.polys.numberfields import minimal_polynomial
-    from sympy.polys.polyerrors import NotAlgebraic
+    from sympy.polys.polyerrors import BasePolynomialError
     try:
         if self._eval_is_algebraic() and not self.has(sp.Function) and minimal_polynomial(self).is_Symbol:
             return False
-    except (NotAlgebraic, NotImplementedError, ValueError, TypeError, AttributeError):
+    except (BasePolynomialError, NotImplementedError, ValueError, TypeError, AttributeError):
+        # any failure of the polynomial machinery decides nothing: its PolynomialError on a power whose exponent
+        # SymPy's cache kept from an as-written reading (x**(2/1**1)) escaped here and failed the whole
+        # as-written parse of at(diff(Abs(x**2 - 4), x), x, 3), now and then (attack on the last diff, lens 3)
         pass
     return None
 
