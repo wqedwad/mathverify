@@ -230,6 +230,9 @@ def test_extremum_parameter_of_f_fixed_by_a_given_or_a_constraint():
 
 def test_extremum_candidate_value_that_is_no_number_is_never_dropped():
     assert _v(_ext("x + x*pi**I", "max", "[0, 1]"), "0") == "UNKNOWN"
+    # nor refuted against the comparable ones: f(1) = 1 + pi**I has no real value, the maximum none (d4e round 5: on
+    # the merged branch a later reading leaves 0 undecided, and without this guard -5 was refuted)
+    assert _v(_ext("x + x*pi**I", "max", "[0, 1]"), "-5") == "UNKNOWN"
 
 
 def test_closed_form_a_pin_makes_is_read_by_numbers():

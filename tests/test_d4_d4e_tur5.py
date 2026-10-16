@@ -73,6 +73,10 @@ def test_value_point_of_a_root_base_is_no_kink():
     assert C._no_derivative_at(kr, x, sp.S.Half) is False
     assert C._no_derivative_at(kr, x, 2 * n) is True                 # the corners 2n: 1/2 is none of them
     assert C._no_derivative_at(kr, x, n / 2) is False                # a family holding 1/2
+    # a family of zeros of a family's u that holds the value point 1/2 is no family of kinks; the integers are
+    kr2 = {"values": [sp.S.Half], "kinks": [], "families": [(sp.sin(2 * sp.pi * x), [n / 2])]}
+    assert C._no_derivative_at(kr2, x, n / 2) is False
+    assert C._no_derivative_at(kr2, x, n) is True
     # controls: r*m <= 1 proved (a corner at each zero)
     assert _v(_der("sqrt(x**2 + x**4)"), "(x + 2*x**3)/sqrt(x**2 + x**4)", E) == "CORRECT"
     assert _v(_der("sqrt(1 + sin(x))"), "cos(x)/(2*sqrt(1 + sin(x)))", E) == "CORRECT"
@@ -201,6 +205,17 @@ def test_value_holes_spend_the_reading_budget(monkeypatch):
     c2 = " + ".join(f"3*sign(x - {k})*sqrt(Abs(x - {k}))/2" for k in (1, 2))
     # control: two holes within the budget, the claim's wrong value at 1 read there
     assert _v(_der(f2), c2 + " + 1 - sign(Abs(x - 1))", E) == "INCORRECT" and 0 < len(calls) <= C._KINK_BUDGET
+    # the holes' own reads stop at the budget (the six above are classified by derivative_at_point, which spends it
+    # first): four holes of a formula 0/0 at 1..4, two calls left, the other two undecided
+    x = sp.Symbol("x", real=True)
+    calls.clear()
+    monkeypatch.setattr(C, "derivative_at_point", lambda *a, **k: calls.append(1) or {"status": "value", "value": 0})
+    truth = sum((x - k) / sp.sqrt(x ** 2 - 2 * k * x + k ** 2) for k in range(1, 5))
+    kr = {"values": [sp.Integer(k) for k in range(1, 5)], "budget": [2], "dap": {}}
+    holes, state, ev = C._value_holes(x, x, 1, kr, truth, sp.S.Zero, 1.0)
+    assert holes == kr["values"] and len(calls) == 2 and state is None
+    assert [ev[str(k)]["status"] for k in range(1, 5)] == ["value", "value", "budget_spent", "budget_spent"]
+    monkeypatch.setattr(C, "derivative_at_point", counted)
     # a hole classified by derivative_at_point is read once: |x| - sqrt(x**2 + x**4) at 0
     calls.clear()
     assert _v(_der("Abs(x) - sqrt(x**2 + x**4)"), "sign(x)*(1 - (1 + 2*x**2)/sqrt(1 + x**2))", E) == "CORRECT"
