@@ -1190,28 +1190,6 @@ def _strip_invisible(s: str) -> str:
     return "".join(ch for ch in s if unicodedata.category(ch) != "Cf")
 
 
-_PRESENTATION = re.compile(r"^\s*(?:\$\$|\$|\\\(|\\\[)?\s*\\(?:boxed|text|mathrm|displaystyle)\s*\{(.*)\}\s*"
-                           r"(?:\$\$|\$|\\\)|\\\])?\s*$", re.DOTALL)
-_MATH_DELIM = re.compile(r"^\s*(?:\$\$(.*)\$\$|\$(.*)\$|\\\((.*)\\\)|\\\[(.*)\\\])\s*$", re.DOTALL)
-
-
-def strip_presentation(s: str) -> str:
-    """Remove display-only wrappers (\\boxed{}, \\text{}, $...$). They carry no mathematics, and
-    leaving them in makes an otherwise valid claim unparseable or, worse, parseable as something
-    else (measured: `\\boxed{exp(1)}` flipped a verdict)."""
-    prev = None
-    while prev != s:
-        prev = s
-        m = _PRESENTATION.match(s)
-        if m:
-            s = m.group(1).strip()
-            continue
-        m = _MATH_DELIM.match(s)
-        if m:
-            s = next(g for g in m.groups() if g is not None).strip()
-    return s
-
-
 # ---- a factor written next to a divisor (final attack G4YO-2) --------------------------------------------------------
 # '1/2π', '1/2√x', 'x/2π': read left to right it is (1/2)·π, read as many textbooks write it (and as latex2sympy reads
 # '1/2\pi') it is 1/(2π). Which one is meant is the writer's convention, so such a text is read neither way: the
@@ -1437,6 +1415,28 @@ def ambiguous_juxtaposition(text) -> bool:
     if is_latex(t):
         return _latex_divisor_juxtaposed(t)
     return any(_closes_divisor(m.string, m.start(1)) for m in _UNI_VALUE_RE.finditer(t))
+
+
+_PRESENTATION = re.compile(r"^\s*(?:\$\$|\$|\\\(|\\\[)?\s*\\(?:boxed|text|mathrm|displaystyle)\s*\{(.*)\}\s*"
+                           r"(?:\$\$|\$|\\\)|\\\])?\s*$", re.DOTALL)
+_MATH_DELIM = re.compile(r"^\s*(?:\$\$(.*)\$\$|\$(.*)\$|\\\((.*)\\\)|\\\[(.*)\\\])\s*$", re.DOTALL)
+
+
+def strip_presentation(s: str) -> str:
+    """Remove display-only wrappers (\\boxed{}, \\text{}, $...$). They carry no mathematics, and
+    leaving them in makes an otherwise valid claim unparseable or, worse, parseable as something
+    else (measured: `\\boxed{exp(1)}` flipped a verdict)."""
+    prev = None
+    while prev != s:
+        prev = s
+        m = _PRESENTATION.match(s)
+        if m:
+            s = m.group(1).strip()
+            continue
+        m = _MATH_DELIM.match(s)
+        if m:
+            s = next(g for g in m.groups() if g is not None).strip()
+    return s
 
 
 def preclean(s: str) -> str:
