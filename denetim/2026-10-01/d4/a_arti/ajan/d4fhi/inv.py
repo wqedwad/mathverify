@@ -15,7 +15,7 @@ def add(id, part, klass, introduced, status, realistic, reason, fc, rule, risk, 
 
 
 # ---------------- d4f original (6) ----------------
-E_D4F1 = ("Düzeltme 7d29714 (edison atası); kosular.txt:69 'sonda 151/225->0, test 111'; DECISIONS.md:436; "
+E_D4F1 = ("Düzeltme 7d29714 (edison atası); kosular.txt:69 'sonda 151/225->0, test 111'; DECISIONS:436; "
           "testler edison tests/test_d4_d4f_tanimlilik.py")
 add("CAP-F1", "d4f", "false_accept", "preexisting", "closed_in_branch", "unclear",
     "Negatif tam sayının faktöriyeli çözücü adımında (C(n,k) formülü, k>n) yazılabilir; problem metninde beklenmez.",
@@ -39,7 +39,7 @@ add("G14", "d4f", "coverage_loss", "preexisting", "closed_in_branch", "unclear",
 
 # ---------------- d4f attack round 1 (11), closed in e0983d0 ----------------
 E_D4F2 = ("Düzeltme e0983d0 (edison atası); kosular.txt:89 '11 bulgu kapandı; sonda L-R 135 vakada 72 -> 0'; "
-          "DECISIONS.md:436; kararlar d4/saldiri/d4f/kararlar_tur2.txt")
+          "DECISIONS:436; kararlar d4/saldiri/d4f/kararlar_tur2.txt")
 add("D4F-YO-1", "d4f", "false_accept", "preexisting", "closed_in_branch", "unclear",
     "Örnek yapay (x²/x + Σ_{k=√1}^{3}), ama okunamayan yazılı metni 'koşul yok' sayan mekanizma her girdide geçerliydi.",
     False, "", "n/a", "high", "d4f", E_D4F2 + ":3; d4/saldiri/d4f/bulgular.json d4f-YO-1.")
@@ -77,7 +77,7 @@ add("D4F-RK-F4", "d4f", "coverage_loss", "by_d4_fix", "closed_in_branch", "no",
 # ---------------- d4f attack round 2 (13): d4f round 3 NOT started ----------------
 K3 = "d4/saldiri/d4f2/kararlar_tur3.txt"
 B2 = "d4/saldiri/d4f2/bulgular.json"
-OPEN3 = "d4f 3. tur başlamadı (DECISIONS.md:457; HANDOFF.md §3 adım 2 (v)); karar yazılı, kod yok. "
+OPEN3 = "d4f 3. tur başlamadı (DECISIONS:457; HANDOFF §3 adım 2 (v)); karar yazılı, kod yok. "
 add("D4F2A-YO-1", "d4f", "false_accept", "by_d4_fix", "open", "no",
     "0⁰ girişli matrisin izi/determinantı yapay.", True,
     "normalize.parse._held_matrix_op: girdide sıfır üslü Pow (taban değerlenince 0 olabilir) ya da kendi tanımlılık/gelenek "
@@ -154,7 +154,7 @@ add("D4F2B-ONCEKI-1", "d4f", "unjust_reject", "preexisting", "open", "yes",
 # ---------------- d4h original (7): round 1 a2f5603 only in wip/d4h ----------------
 WH = "wip/d4h (a2f5603; 1aa422f ara)"
 E_H1 = ("Düzeltme a2f5603 (edison'da yok: git merge-base); kosular.txt:109,120 (sonda 301/0; ec62a68'de 186 beklenmeyen); "
-        "DECISIONS.md:456; notlar/duzeltme_d4h.txt")
+        "DECISIONS:456; notlar/duzeltme_d4h.txt")
 add("F1", "d4h", "false_accept", "preexisting", "closed_in_wip_only", "no",
     "Problem metninde simplify(Limit(...)) sarmalaması gerçek IR'da beklenmez.", True,
     "problem/adım metninde biçim sarmalayıcısı (simplify, expand, factor, ...) içinde kapalı Limit/Integral/Sum varsa UNKNOWN",
@@ -278,7 +278,7 @@ add("CAP-K1", "d4i", "other", "preexisting", "unverified", "no",
     "fuse: birincil olmayan katmanın her çekimserlik bayrağı varsayılan olarak engelleyici; yalnız yazılı listedeki 'kanıtlanamadı' "
     "türü (üyelik kararsız, sertifika yok) engellemez; listede olmayan yeni bayrak bir testte yakalanır (kararlar_fhi.txt:36)",
     "low", "low", "original-60",
-    "dogrulama.json CAP-K1: A/B yok (bağımsız doğrulanmadı); d4i başlamadı (DECISIONS.md:439; HANDOFF §3 adım 2 (vi)); kod yok. "
+    "dogrulama.json CAP-K1: A/B yok (bağımsız doğrulanmadı); d4i başlamadı (DECISIONS:439; HANDOFF §3 adım 2 (vi)); kod yok. "
     "Kapsamı büyüdü: d4e/d4f/d4h'nin yeni bayrakları (problem_definedness_undecided — d4f bunu engelleyici yaptı, kosular.txt:69 "
     "'d4i sınıflandırsın' —, sequence_undefined_on_the_tail, domain_list_ambiguous, integer_bound ...) sınıflanmadı. "
     "Kural ölçülmüş 3 Lean kurtarmasını kaybettirebilir.")
@@ -286,7 +286,7 @@ add("CAP-K1", "d4i", "other", "preexisting", "unverified", "no",
 # ---------------- unassigned original ----------------
 add("D4-ADIM-I", "kalan (atanmamış)", "unjust_reject", "preexisting", "closed_in_branch", "yes",
     "Vaka ayrımlı (case) çözüm adımları gerçek çözümlerde yaygın.", False, "", "n/a", "low", "original-60",
-    "60 adaydan hiçbir parçaya atanmamış tek bulgu (DECISIONS.md:415,424 parça listeleri; known=True, §84 (11) bilinen sınır). "
+    "60 adaydan hiçbir parçaya atanmamış tek bulgu (DECISIONS:415,424 parça listeleri; known=True, §84 (11) bilinen sınır). "
     "d4g 2. tur (195e183/0120211, edison atası) 'vaka varsayımı compute öncülü' ile kapattı (notlar/duzeltme_d4g.txt:74,81; "
     "DECISIONS §85 d4g tur 2). Sonda (" + P + ", edison): case x = 2 altında compute 'x**3 = 8' verified (eskiden refuted). A/B yok.")
 
@@ -294,52 +294,52 @@ add("D4-ADIM-I", "kalan (atanmamış)", "unjust_reject", "preexisting", "closed_
 add("V20-G14-YUK", "kalan (V20)", "coverage_loss", "by_d4_fix", "open", "unclear",
     "Faktöriyelli dizi limiti gerçekçi olabilir; karar makine yüküne bağlı.", True, NA, "n/a", "low", "HANDOFF V20",
     "kosular.txt:73: test_g14_a_sequence_limit_reads_the_tail [(x-2)!/x!, C(x,3)/x^3] yük altında UNKNOWN, tek başına 2.3 s'de geçiyor; "
-    "DECISIONS §86 (tur 8 satırı) 'güvenli yön, açık'; HANDOFF.md:138-146. Deterministik olmayan karar (--full yükünde test düşebilir).")
+    "DECISIONS §86 (tur 8 satırı) 'güvenli yön, açık'; HANDOFF:138-146. Deterministik olmayan karar (--full yükünde test düşebilir).")
 add("V20-GAUSS", "kalan (V20)", "coverage_loss", "by_d4_fix", "closed_in_wip_only", "yes",
     "Gauss integrali ∫_ℝ e^{−x²} = √π birinci sınıf klasiği.", True, NA, "n/a", "", "HANDOFF V20",
-    "d4c 2. tur (db7fb6d) getirdi (DECISIONS §86 d4c tur 2 'Kapsama'); HANDOFF.md:138-146 'd4c RK-A, tur 3'te ele alındı'; "
+    "d4c 2. tur (db7fb6d) getirdi (DECISIONS §86 d4c tur 2 'Kapsama'); HANDOFF:138-146 'd4c RK-A, tur 3'te ele alındı'; "
     "wip/d4c-tur3 697a025 'erf ailesi (RK-A)'. Ölçmedim. = D4C2-RK-A (d4c grubu raporlar; çift sayılmasın).", "wip/d4c-tur3 (697a025)")
 add("GAP-NE", "kalan (§85)", "other", "unknown", "unverified", "unclear",
     "Tolerans altı farkla eşit sayılan iki değer ancak ondalık (Float) girdide olası.", True,
     "domain._num_relation_holds: Eq/Ne yalnız sym_equal ya da kesin eşitlikle karar verir; num_equal'in toleranslı True'su "
     "(Float işlenen) None döner",
     "low", "", "DECISIONS §85",
-    "DECISIONS.md:424 'relation_holds_at(Ne) sayısal eşitliği kanıt sayıyor'; repro kaydı yok, bağımsız doğrulanmadı. Edison "
+    "DECISIONS:424 'relation_holds_at(Ne) sayısal eşitliği kanıt sayıyor'; repro kaydı yok, bağımsız doğrulanmadı. Edison "
     "certify/domain.py:1584-1595 Eq/Ne hâlâ num_equal ile karar veriyor; ama equiv/numeric.py:546-557 iki kesin sabiti toleranssız "
     "kesin karşılaştırıyor, kalan yol yalnız Float işlenen. Hiçbir wip dalı bu satırları değiştirmiyor.")
 add("GAP-WORDPROBLEM", "kalan (§85)", "coverage_loss", "unknown", "unverified", "unclear",
     "Sözel problemde 'x ∈ (0,3)' ya da 'veya' içeren verilen olası.", True, NA, "n/a", "", "DECISIONS §85",
-    "DECISIONS.md:424 'wordproblem katmanı ctx.givens() bileşik metin verilenleri okuyamıyor'; DECISIONS §85 d4d satırı bunu "
+    "DECISIONS:424 'wordproblem katmanı ctx.givens() bileşik metin verilenleri okuyamıyor'; DECISIONS §85 d4d satırı bunu "
     "'Kapsama' altında sayıyor (UNKNOWN yönü). Repro yok, bağımsız doğrulanmadı.")
 add("GAP-XA", "kalan (§85)", "coverage_loss", "unknown", "open", "unclear",
     "'a = 2 için x^a = 4' biçimli parametreli soru olası; IR yazarı çoğunlukla x² = 4 yazar.", True, NA, "n/a", "",
-    "DECISIONS §85", "DECISIONS.md:424; HANDOFF.md:138-146. Sonda (" + P + ", edison): solve x**a = 4, verilen a = 2, {-2, 2} "
+    "DECISIONS §85", "DECISIONS:424; HANDOFF:138-146. Sonda (" + P + ", edison): solve x**a = 4, verilen a = 2, {-2, 2} "
     "UNKNOWN (z3_unsupported).")
 add("GAP-D4G-BUTCE", "kalan (§85)", "crash_or_timeout", "preexisting", "unverified", "unclear",
     "Ağır SymPy çağrısı gerçek girdide de olabilir; kesilemeyen çağrı takılma demek.", True,
     "her verify çağrısı sandbox'ta sert duvar saatiyle; aşımda UNKNOWN", "low", "", "DECISIONS §85",
-    "DECISIONS.md:424 'd4g'nin süre bütçesi işbirlikçi (tek süreç içi çağrı yalnız sandbox'ta kesilebiliyor)'; notlar/saldiri_d4g.txt:13 "
+    "DECISIONS:424 'd4g'nin süre bütçesi işbirlikçi (tek süreç içi çağrı yalnız sandbox'ta kesilebiliyor)'; notlar/saldiri_d4g.txt:13 "
     "(S8 >400 s). d4g 2. tur sert sınır ekledi (answers_equivalent sandbox 40 s, çözüm 300 s); wip/d4b-tur9 _sympy_guards evalf "
     "tavanı bir kök nedeni kapatıyor. HANDOFF V20 listesinde yok (sessiz düşmüş).")
 add("GAP-LIMABS", "kalan (V20)", "coverage_loss", "unknown", "open", "unclear",
     "Sağ limiti kısıtla (x > 0) ve evaluate Limit ile kodlamak alışılmadık ama olası.", True, NA, "n/a", "",
-    "HANDOFF V20", "HANDOFF.md:138-146; kosular.txt:62 (d4e açıkları). Sonda (" + P + ", edison): evaluate Limit(Abs(x)/x, x, 0) "
+    "HANDOFF V20", "HANDOFF:138-146; kosular.txt:62 (d4e açıkları). Sonda (" + P + ", edison): evaluate Limit(Abs(x)/x, x, 0) "
     "x positive_real ile 1 CORRECT, kısıt x > 0 ile UNKNOWN (parse_error). Yalnız UNKNOWN yönü.")
 add("GAP-LFLOOR", "kalan (V20)", "other", "preexisting", "unverified", "no",
     "Değer doğru; yalnız soruyu yeniden yazma kuralı (§28, ilke 2).", True,
     "iddianın yapısal ağacı hedefin işlemini (floor) içeriyorsa claim_is_not_a_value", "none", "", "HANDOFF V20",
-    "notlar/duzeltme_d4h.txt:76 '\\lfloor\\frac{17}{5}\\rfloor yeniden yazımı açık bırakıldı'; HANDOFF.md:138-146. 1aa422f "
+    "notlar/duzeltme_d4h.txt:76 '\\lfloor\\frac{17}{5}\\rfloor yeniden yazımı açık bırakıldı'; HANDOFF:138-146. 1aa422f "
     "_structure/AST değişikliği etkilemiş olabilir (ölçülmedi).")
 add("GAP-RANK", "kalan (V20)", "crash_or_timeout", "preexisting", "unverified", "unclear",
     "Matris rankı sorusu birinci sınıfta olası; sonuç layer_exception → UNKNOWN (güvenli).", True, NA, "n/a", "",
-    "HANDOFF V20", "notlar/duzeltme_d4h.txt:75 'rank Python int döndürür -> layer_exception, ec62a68'de de'; HANDOFF.md:138-146. "
+    "HANDOFF V20", "notlar/duzeltme_d4h.txt:75 'rank Python int döndürür -> layer_exception, ec62a68'de de'; HANDOFF:138-146. "
     "1aa422f matris işlemlerini eylemsiz yaptı (etkisi ölçülmedi).")
 add("A05", "kalan (§85)", "other", "unknown", "closed_in_branch", "no",
     "Mutasyon düzeneği sorusu; davranış bulgusu değil.", False, "", "n/a", "", "DECISIONS §85",
-    "DECISIONS.md:424 (Açık), DECISIONS.md:429: koruma gerekli, (x−8)(x^(2/3)−x^(1/3)+1)=0 öldürücü testi, A05 öldü (9c6fbdb).")
+    "DECISIONS:424 (Açık), DECISIONS:429: koruma gerekli, (x−8)(x^(2/3)−x^(1/3)+1)=0 öldürücü testi, A05 öldü (9c6fbdb).")
 add("TEST-REVIEW", "kalan (§85)", "coverage_loss", "by_d4_fix", "closed_in_branch", "unclear",
     "a = log(8)/log(2) gibi verilen nadir.", False, "", "n/a", "", "DECISIONS §85",
-    "DECISIONS.md:424 (birleşimde düşen test_review_constraint_and_given_write_one_value_twice); DECISIONS.md:428 kök neden "
+    "DECISIONS:424 (birleşimde düşen test_review_constraint_and_given_write_one_value_twice); DECISIONS:428 kök neden "
     "Poly log(8) vs Intersection TypeError, certify.base.exact_intersection (9c6fbdb, edison atası).")
 
 ids = [f["id"] for f in F]

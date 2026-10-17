@@ -144,7 +144,7 @@ add("D4C3R-KK-2", "d4c", "coverage_loss", "by_d4_fix", "closed_in_wip_only", "un
     "low", "d4c3", W4)
 add("BIRLESIK-1", "d4c", "coverage_loss", "by_d4_fix", "closed_in_wip_only", "unclear",
     "∫₀^∞ e^{-t^(1/3)} dt = 6 (Gamma) üniversite alıştırması olabilir; yalnız d4a + d4c tur 3 birleşiminde UNKNOWN.",
-    "d4/kosular.txt 13:29 satırı; DECISIONS.md:450; kararlar_tur4.txt:36; düzeltme 728226f (_exact_conditions odd_root); rep U: 6 CORRECT, 5 INCORRECT.",
+    "d4/kosular.txt 13:29 satırı; DECISIONS:450; kararlar_tur4.txt:36; düzeltme 728226f (_exact_conditions odd_root); rep U: 6 CORRECT, 5 INCORRECT.",
     "low", "birlesik 443e078", W4)
 
 # ---------------- d4c fixer-found ----------------
@@ -246,7 +246,7 @@ add("D4D-6b", "d4d", "false_accept", "preexisting", "closed_in_branch", "unclear
     "low", "d4d")
 add("D4D-KAPSAMA-ESIT", "d4d", "coverage_loss", "by_d4_fix", "closed_in_branch", "unclear",
     "Aynı değerin iki yazımı (a = 3, a = log(8)/log(2)) seyrek ama olası.",
-    "d4/notlar/saldiri_d4d.txt:8,16 (given_binding_undecided); d4d tur 2 same_value; birleşimdeki test düşüşü d4b tur 6 9c6fbdb exact_intersection ile kapandı (DECISIONS.md:428).",
+    "d4/notlar/saldiri_d4d.txt:8,16 (given_binding_undecided); d4d tur 2 same_value; birleşimdeki test düşüşü d4b tur 6 9c6fbdb exact_intersection ile kapandı (DECISIONS:428).",
     "low", "d4d")
 add("D4D-GCD00", "d4d", "other", "preexisting", "closed_in_branch", "no",
     "gcd(0,0) + 1 bağlaması yapay.",
@@ -256,21 +256,21 @@ add("D4D-GCD00", "d4d", "other", "preexisting", "closed_in_branch", "no",
 # ---------------- d4d residual / small items ----------------
 add("D4D-KAPSAMA-KALAN", "d4d", "coverage_loss", "by_d4_fix", "open", "unclear",
     "Serbest parametreli yazılı koşul (x/a = 3, a bildirilmemiş) gerçek parametrik sorularda olabilir; sonuç güvenli yönde UNKNOWN.",
-    "d4/notlar/duzeltme_d4d.txt:52 (saldırganın 556 vakası 72 -> 9: 3 beklenti hatası, 5 kapsama, 1 doğru karar); DECISIONS.md:421 'Kapsama: serbest parametreli yazılı koşul, B1 belirsiz metinler, wordproblem in/or'. Bilinen sınır, düzeltme yok.",
+    "d4/notlar/duzeltme_d4d.txt:52 (saldırganın 556 vakası 72 -> 9: 3 beklenti hatası, 5 kapsama, 1 doğru karar); DECISIONS:421 'Kapsama: serbest parametreli yazılı koşul, B1 belirsiz metinler, wordproblem in/or'. Bilinen sınır, düzeltme yok.",
     "low", "d4d")
 add("D4D-NE", "d4d", "other", "unknown", "unverified", "unclear",
     "Kaynağı ve hâlâ geçerli olup olmadığı belgelenmemiş; edison'da kesin sabitler exact_equal ile karşılaştırılıyor, yalnız Float'lı dal toleranslı.",
-    "DECISIONS.md:424 ('relation_holds_at(Ne) sayısal eşitliği kanıt sayıyor'), HANDOFF.md:143 V20; edison src/mathverify/certify/domain.py:1591-1596 (Ne: sym_equal, sonra num_equal) ve equiv/numeric.py:551-561 (kesin sabitlerde exact_equal). Hiç bağımsız doğrulanmadı.",
+    "DECISIONS:424 ('relation_holds_at(Ne) sayısal eşitliği kanıt sayıyor'), HANDOFF:143 V20; edison src/mathverify/certify/domain.py:1591-1596 (Ne: sym_equal, sonra num_equal) ve equiv/numeric.py:551-561 (kesin sabitlerde exact_equal). Hiç bağımsız doğrulanmadı.",
     "low", "DECISIONS §85 Açık (d4d raporu, G10 bağlamı; kesin değil)", "",
     True, "relation_holds_at'te Eq/Ne kararı yalnız kesin yoldan (sym_equal/exact_equal); Float işlenenli toleranslı eşitlik Ne'yi False, Eq'yi True yapmaz -> None", "low")
 add("D4D-WP", "d4d", "other", "preexisting", "unverified", "unclear",
     "Bileşik metin verilenler gerçekçi; wordproblem'in bunları atlayıp pass verip vermediği ölçülmedi.",
-    "DECISIONS.md:424 ('wordproblem katmanı ctx.givens() bileşik metin verilenleri okuyamıyor'); HANDOFF.md:143 V20; scr/d4/v/gorev-G7-A/NOTLAR.md:10 (wordproblem._equation_givens). Hiç bağımsız doğrulanmadı.",
+    "DECISIONS:424 ('wordproblem katmanı ctx.givens() bileşik metin verilenleri okuyamıyor'); HANDOFF:143 V20; scr/d4/v/gorev-G7-A/NOTLAR.md:10 (wordproblem._equation_givens). Hiç bağımsız doğrulanmadı.",
     "low", "DECISIONS §85 Açık (d4d raporu)", "",
     True, "wordproblem katmanı ctx.givens()'ten okuyamadığı ya da bileşik (zincir/And/Or/in) bir verilen varsa pass vermez (çekimser)", "low")
 add("D4D-XA", "d4d", "coverage_loss", "preexisting", "open", "unclear",
     "a = 2 verilmişken x**a = 4 gibi parametrik IR olası; sonuç güvenli yönde UNKNOWN (eskiden haksız INCORRECT'ti).",
-    "DECISIONS.md:424 ('x**a = 4 (a = 2 verilen) ana denklem bağlamayla yeniden yazılmıyor (UNKNOWN)'); HANDOFF.md:143 V20; TAN-09'un kalan kapsaması.",
+    "DECISIONS:424 ('x**a = 4 (a = 2 verilen) ana denklem bağlamayla yeniden yazılmıyor (UNKNOWN)'); HANDOFF:143 V20; TAN-09'un kalan kapsaması.",
     "low", "DECISIONS §85 Açık (d4d raporu)")
 
 # ---------------- d4g original ----------------
@@ -338,7 +338,7 @@ add("D4G-Q", "d4g", "false_accept", "preexisting", "closed_in_branch", "unclear"
 # ---------------- d4g residual ----------------
 add("D4G-BUTCE", "d4g", "crash_or_timeout", "preexisting", "unverified", "unclear",
     "Süreç içi tek SymPy çağrısı bütçeyi aşabilir; gerçek girdide görülüp görülmediği ölçülmedi.",
-    "DECISIONS.md:424 ('d4g'nin süre bütçesi işbirlikçi (tek süreç içi çağrı yalnız sandbox'ta kesilebiliyor)'); HANDOFF V20'de artık yok (sessizce düşmüş); d4b tur 9 _sympy_guards (evalf <= 2**16 bit) ana asılma kökünü hafifletti (DECISIONS.md:454). Bağımsız yeniden ölçülmedi.",
+    "DECISIONS:424 ('d4g'nin süre bütçesi işbirlikçi (tek süreç içi çağrı yalnız sandbox'ta kesilebiliyor)'); HANDOFF V20'de artık yok (sessizce düşmüş); d4b tur 9 _sympy_guards (evalf <= 2**16 bit) ana asılma kökünü hafifletti (DECISIONS:454). Bağımsız yeniden ölçülmedi.",
     "low", "DECISIONS §85 Açık (d4g raporu)", "",
     True, "verify çağrısının tamamı süreç düzeyinde sert süre sınırıyla (alt süreç, aşımda UNKNOWN); kilitli D3 'süre sınırı yok' ile çelişir, kişi kararı gerekir", "low")
 
