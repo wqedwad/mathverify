@@ -128,6 +128,9 @@ def test_g4rk5_a_step_from_premises_with_no_instance_is_not_refuted(q, steps):
     (_ir("solve_equation", {"var": "x"}, ["x + y = 1", "x - y = 3"], [X, Y], "set"), "{2}", [("eq", "2 = 3")]),
     (_ir("evaluate", {"expr": "x + y"}, ["x**2 - y**2 + 1 = 0"], [X, Y]), "1", [("eq", "1 = 2")]),
     (_ir("evaluate", {"expr": "x + y"}, ["x + y + 1 = 0"], [X, Y]), "-1", [("eq", "1 = 2")]),
+    # five unknowns (more than `_finite_instances` links): the system's one point is proved, the premises are not empty
+    (_ir("evaluate", {"expr": "x + y + z + u + w"}, ["x + y = 3", "x - y = 1", "z = 3", "u = 4", "w = 5"],
+         [X, Y] + [{"name": n, "domain": "real"} for n in "zuw"]), "15", [("eq", "1 = 2")]),
     (_ir("trig_solve", {"equation": "cos(x) = -1", "var": "x", "interval": "[0, pi)"}, shape="set"), "{}",
      [("eq", "cos(x) = -1"), ("eq", "x = 0")]),
 ])
@@ -187,16 +190,18 @@ def test_g4yo2_an_ambiguous_option_or_step_decides_nothing():
 
 def test_g4yo2_the_parser_reads_neither_way():
     import sympy as sp
-    from mathverify.normalize.parse import ParseError, ambiguous_juxtaposition, parse_expr_str
+    from mathverify.normalize.parse import _SAFE_NAMES, ParseError, ambiguous_juxtaposition, parse_expr_str
+    ns = dict(_SAFE_NAMES, x=sp.Symbol("x"), k=sp.Symbol("k", integer=True))
     for t in ("1/2π", "1/2 π", "x/2π", "1/2√3", "1/(2)π", "1/-2π", "1/2**3π", "$1/2\\pi$", "\\pi/2x", "1/2\\,\\pi",
               "\\ln 2/2", "\\sin x/2", "1/2\\left(x+1\\right)", "1/2%", "3/4 %", "180/2°", "1/(30)°", "1/2 derece"):
         assert ambiguous_juxtaposition(t), t
         with pytest.raises(ParseError):
-            parse_expr_str(t, {"x": sp.Symbol("x"), "pi": sp.pi, "sqrt": sp.sqrt, "sin": sp.sin, "log": sp.log})
+            parse_expr_str(t, ns)
     for t in ("π/2", "2π/3", "(1/2)π", "1/2·π", "1/(2π)", "√2π", "\\frac{1}{2}\\pi", "\\pi/2 + k\\pi", "1/\\sin x",
               "\\sin(x)/2", "e^{x/2}", "x \\in [\\pi/2, \\pi)", "\\{\\pi/6, 5\\pi/6\\}", "2/3\\cdot x", "\\pi/2 \\le x",
               "50%", "%50", "30°/2", "(1/2)·%50"):
         assert not ambiguous_juxtaposition(t), t
+        parse_expr_str(t, ns)                       # read as before
 
 
 # ---- G4YO-3 -------------------------------------------------------------------------------------------------------
