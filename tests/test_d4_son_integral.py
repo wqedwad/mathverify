@@ -316,8 +316,10 @@ def test_a_convention_of_the_primitive_on_the_region(f, claim, verdict):
 
 
 def test_a_convention_of_the_primitive_that_can_fail_is_undecided():
+    # on ℝ, 3x^(4/3)/4 is a primitive of ∛x under the real root and complex at x < 0 under the principal value: the two
+    # readings differ, the reasoned UNKNOWN of the decision (neither CORRECT nor INCORRECT)
     r = verify(_anti("cbrt(x)"), _sol("3*x**(4/3)/4"))
-    assert r.verdict != "CORRECT" and _no_exception(r)
+    assert r.verdict == "UNKNOWN" and _no_exception(r)
 
 
 # G2RK-2 ---------------------------------------------------------------------------------------------------------

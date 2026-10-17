@@ -241,7 +241,7 @@ def cases_e():
         ("∫ cbrt x = 3x^(4/3)/4 (x > 0)", anti("cbrt(x)", (XP,)), sol("3*x**(4/3)/4"), OK, None, EXC),
         ("∫ 1/cbrt x = 3x^(2/3)/2 (x > 0)", anti("1/cbrt(x)", (XP,)), sol("3*x**(2/3)/2"), OK, None, EXC),
         ("∫ cbrt x = x^(4/3) (x > 0, wrong)", anti("cbrt(x)", (XP,)), sol("x**(4/3)"), NO, None, EXC),
-        ("∫ cbrt x = 3x^(4/3)/4 (real: the convention at x < 0)", anti("cbrt(x)"), sol("3*x**(4/3)/4"), NOTOK, None, EXC),
+        ("∫ cbrt x = 3x^(4/3)/4 (real: the convention at x < 0)", anti("cbrt(x)"), sol("3*x**(4/3)/4"), UNK, None, EXC),
     ]
 
 
