@@ -90,6 +90,11 @@ MUTATIONS = [
      "        if k >= len(s):\n            continue\n", T + "test_g4yo2_control_explicit_operators_and_brackets_are_read"),
     ("C09 \\cdot çarpan sayılır", PAR, '    "cdot", "times", "div",', '    "times", "div",',
      T + "test_g4yo2_control_explicit_operators_and_brackets_are_read"),
+    ("C10 bölenden sonra yüzde dönüştürülür", PAR, "    s = _PCT_RE.sub(lambda m: m.group(0) if m.group(2) and _closes_divisor(m.string, m.end(2) - 1)\n",
+     "    s = _PCT_RE.sub(lambda m: m.group(0) if False\n", T + "test_g4yo2_the_parser_reads_neither_way"),
+    ("C11 bölenden sonra derece dönüştürülür", PAR,
+     "    s = _DEG_NUM_RE.sub(lambda m: m.group(0) if _closes_divisor(m.string, m.end(1) - 1) else",
+     "    s = _DEG_NUM_RE.sub(lambda m: m.group(0) if False else", T + "test_g4yo2_the_parser_reads_neither_way"),
     # G4YO-3
     ("D01 Türkçe kökler ek almaz", VER,
      '    r"belki|muhtemel|sanırım|sanirim|sanmı|sanmi|sanki|zannet|zanned|galiba|herhalde|tahmin|şüphe|kuşku|imkans|imkâns)\\w*"',

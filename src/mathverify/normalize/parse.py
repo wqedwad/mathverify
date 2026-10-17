@@ -1408,13 +1408,17 @@ def _latex_divisor_juxtaposed(s: str) -> bool:
 
 def ambiguous_juxtaposition(text) -> bool:
     """Does `text` write a factor right after the operand of a division, with no operator ('1/2π', '1/2√x', 'x/2π',
-    '$1/2\\pi$')? It reads (1/2)·π left to right and 1/(2π) as the textbooks write it: it is read neither way (G4YO-2)."""
+    '$1/2\\pi$'), a unit mark included ('1/2%', '180/2°')? It reads (1/2)·π left to right and 1/(2π) as the textbooks
+    write it: it is read neither way (G4YO-2)."""
     if not isinstance(text, str):
         return False
     t = strip_presentation(_strip_invisible(text))
     if is_latex(t):
         return _latex_divisor_juxtaposed(t)
-    return any(_closes_divisor(m.string, m.start(1)) for m in _UNI_VALUE_RE.finditer(t))
+    return any(_closes_divisor(m.string, m.start(1)) for m in _UNI_VALUE_RE.finditer(t)) \
+        or any(_closes_divisor(m.string, m.end(1)) for m in _DEG_PAREN_RE.finditer(t)) \
+        or any(_closes_divisor(m.string, m.end(1) - 1) for m in _DEG_NUM_RE.finditer(t)) \
+        or any(m.group(2) and _closes_divisor(m.string, m.end(2) - 1) for m in _PCT_RE.finditer(t))
 
 
 _PRESENTATION = re.compile(r"^\s*(?:\$\$|\$|\\\(|\\\[)?\s*\\(?:boxed|text|mathrm|displaystyle)\s*\{(.*)\}\s*"
@@ -1445,9 +1449,11 @@ def preclean(s: str) -> str:
     s = _UNI_VALUE_RE.sub(_juxtaposed_product, s)
     for k, v in _UNICODE_MAP.items():
         s = s.replace(k, v)
-    s = _DEG_PAREN_RE.sub(r"((\1)*pi/180)", s)
-    s = _DEG_NUM_RE.sub(r"((\1)*pi/180)", s)
-    s = _PCT_RE.sub(lambda m: f"(({m.group(1) or m.group(2)})/100)", s)
+    # a unit mark is a factor too: 1/2% is not 1/(2/100) = 50, 180/2° not 180/(2°) (sibling of G4YO-2)
+    s = _DEG_PAREN_RE.sub(lambda m: m.group(0) if _closes_divisor(m.string, m.end(1)) else f"(({m.group(1)})*pi/180)", s)
+    s = _DEG_NUM_RE.sub(lambda m: m.group(0) if _closes_divisor(m.string, m.end(1) - 1) else f"(({m.group(1)})*pi/180)", s)
+    s = _PCT_RE.sub(lambda m: m.group(0) if m.group(2) and _closes_divisor(m.string, m.end(2) - 1)
+                    else f"(({m.group(1) or m.group(2)})/100)", s)
     s = _SQRT_BARE_RE.sub(r"\1(\2)", s)            # "sqrt 3" -> sqrt(3), "∛8" -> cbrt(8)
     s = re.sub(r"\bln\s*\(", "log(", s)
     s = s.replace("^", "**")

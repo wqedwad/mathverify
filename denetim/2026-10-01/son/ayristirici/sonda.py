@@ -183,7 +183,9 @@ def cases_c():
             ("√x/2 LaTeX", _der("x*sqrt(x)/3"), "$1/2\\sqrt{x}$"), ("1/(2√x) LaTeX", _der("sqrt(x)"), "$1/2\\sqrt{x}$"),
             ("π/(2x) LaTeX", _der("pi*log(x)/2"), "$\\pi/2x$"), ("π/2 LaTeX thin space", _ev("asin(1)"), "1/2\\,\\pi"),
             ("(ln 2)/2 \\ln 2/2", _ev("log(sqrt(2))"), "$\\ln 2/2$"), ("(ln 2)/2 \\ln{2}/2", _ev("log(sqrt(2))"), "\\ln{2}/2"),
-            ("0 \\ln 2/2", _ev("sin(pi)"), "\\ln 2/2"), ("cos(π/3) \\cos \\pi/3", _ev("sin(pi/6)"), "\\cos \\pi/3")):
+            ("0 \\ln 2/2", _ev("sin(pi)"), "\\ln 2/2"), ("cos(π/3) \\cos \\pi/3", _ev("sin(pi/6)"), "\\cos \\pi/3"),
+            ("1/200 (half a percent)", _ev("asin(1)/(100*pi)"), "1/2%"), ("50", _ev("acos(-1)*50/pi"), "1/2%"),
+            ("π/2 (90°)", _ev("asin(1)"), "180/2°")):
         out.append((f"{name}: claim {claim!r} (not read)", q, sol(claim, "expression" if q["answer_shape"] == "expression"
                                                                   else "value"), UNK, None))
     for name, q, claim, want in (
