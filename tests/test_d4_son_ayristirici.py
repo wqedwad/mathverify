@@ -192,7 +192,7 @@ def test_g4yo2_the_parser_reads_neither_way():
     import sympy as sp
     from mathverify.normalize.parse import _SAFE_NAMES, ParseError, ambiguous_juxtaposition, parse_expr_str
     ns = dict(_SAFE_NAMES, x=sp.Symbol("x"), k=sp.Symbol("k", integer=True))
-    for t in ("1/2π", "1/2 π", "x/2π", "1/2√3", "1/(2)π", "1/-2π", "1/2**3π", "$1/2\\pi$", "\\pi/2x", "1/2\\,\\pi",
+    for t in ("1/2π", "1/2 π", "x/2π", "1/2√3", "1/(2)π", "1/-2π", "1/2**3π", "1/2^3π", "$1/2\\pi$", "\\pi/2x", "1/2\\,\\pi",
               "\\ln 2/2", "\\sin x/2", "1/2\\left(x+1\\right)", "1/2%", "3/4 %", "180/2°", "1/(30)°", "1/2 derece"):
         assert ambiguous_juxtaposition(t), t
         with pytest.raises(ParseError):
