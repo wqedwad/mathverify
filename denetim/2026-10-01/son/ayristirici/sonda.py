@@ -135,9 +135,9 @@ def cases_b():
         ("|x|+1=0: compute 'Abs(x) = -1'", ab, sol("{}", "set", [("compute", "Abs(x) = -1")]), OK, NEITHER),
         ("x²+2<2x: eq '(x - 1)**2 + 1 < 0'", ineq, sol("{}", "set", [("eq", "(x - 1)**2 + 1 < 0")]), OK, NEITHER),
         ("x²+2<2x: eq '1 < 0'", ineq, sol("{}", "set", [("eq", "1 < 0")]), OK, NEITHER),
-        ("x+y=1, 2x+2y=3: eq '2 = 3' (sibling)", sys2, sol("{}", "set", [("eq", "2 = 3")]), OK, NEITHER),
+        ("x+y=1, 2x+2y=3: eq '2 = 3' (sibling)", sys2, sol("{}", "set", [("eq", "2 = 3")]), NOTNO, NEITHER),
         ("x+y=1, 2x+2y=3: compute '2*(x + y) = 2' (sibling)", sys2, sol("{}", "set", [("compute", "2*(x + y) = 2")]),
-         OK, NEITHER),
+         NOTNO, NEITHER),
         # the premises have instances: a closed false step stays refuted
         ("2x+1=5: eq '2 = 3' (wrong)", eqn("2*x + 1 = 5"), sol("{2}", "set", [("eq", "2 = 3")]), NO, REF),
         ("2x+1=5: compute '5 - 1 = 3' (wrong)", eqn("2*x + 1 = 5"), sol("{2}", "set", [("compute", "5 - 1 = 3")]), NO, REF),
@@ -175,27 +175,27 @@ def cases_c():
     for name, q, claim in (
             ("(x√x/3)' = √x/2", _der("x*sqrt(x)/3"), "1/2√x"), ("(√x)' = 1/(2√x)", _der("sqrt(x)"), "1/2√x"),
             ("(πx²/4)' = πx/2", _der("pi*x**2/4", X), "x/2π"), ("(x²/(4π))' = x/(2π)", _der("x**2/(4*pi)", X), "x/2π"),
-            ("π/2", _ev("pi/2"), "1/2π"), ("1/(2π)", _ev("1/(2*pi)"), "1/2π"), ("√3/2", _ev("sqrt(3)/2"), "1/2√3"),
-            ("√3/6", _ev("sqrt(3)/6"), "1/2√3"), ("3π/4", _ev("3*pi/4"), "3/4π"), ("3/(4π)", _ev("3/(4*pi)"), "3/4π"),
-            ("π/8", _ev("pi/8"), "1/2^3π"), ("π/2", _ev("pi/2"), "1/2 π"), ("-√3/2", _ev("-sqrt(3)/2"), "-1/2√3"),
-            ("π/2 LaTeX", _ev("pi/2"), "$1/2\\pi$"), ("1/(2π) LaTeX", _ev("1/(2*pi)"), "$1/2\\pi$"),
-            ("3√2/4 LaTeX", _ev("3*sqrt(2)/4"), "3/4\\sqrt{2}"), ("3/(4√2) LaTeX", _ev("3/(4*sqrt(2))"), "3/4\\sqrt{2}"),
+            ("π/2", _ev("asin(1)"), "1/2π"), ("1/(2π)", _ev("asin(1)/pi**2"), "1/2π"), ("√3/2", _ev("sin(pi/3)"), "1/2√3"),
+            ("√3/6", _ev("sin(pi/3)/3"), "1/2√3"), ("3π/4", _ev("acos(-sqrt(2)/2)"), "3/4π"), ("3/(4π)", _ev("3*asin(1)/(2*pi**2)"), "3/4π"),
+            ("π/8", _ev("asin(1)/4"), "1/2^3π"), ("π/2", _ev("asin(1)"), "1/2 π"), ("-√3/2", _ev("-sin(pi/3)"), "-1/2√3"),
+            ("π/2 LaTeX", _ev("asin(1)"), "$1/2\\pi$"), ("1/(2π) LaTeX", _ev("asin(1)/pi**2"), "$1/2\\pi$"),
+            ("3√2/4 LaTeX", _ev("3*sin(pi/4)/2"), "3/4\\sqrt{2}"), ("3/(4√2) LaTeX", _ev("3*sin(pi/4)/4"), "3/4\\sqrt{2}"),
             ("√x/2 LaTeX", _der("x*sqrt(x)/3"), "$1/2\\sqrt{x}$"), ("1/(2√x) LaTeX", _der("sqrt(x)"), "$1/2\\sqrt{x}$"),
-            ("π/(2x) LaTeX", _der("pi*log(x)/2"), "$\\pi/2x$"), ("π/2 LaTeX thin space", _ev("pi/2"), "1/2\\,\\pi"),
-            ("(ln 2)/2 \\ln 2/2", _ev("log(2)/2"), "$\\ln 2/2$"), ("(ln 2)/2 \\ln{2}/2", _ev("log(2)/2"), "\\ln{2}/2"),
-            ("0 \\ln 2/2", _ev("0"), "\\ln 2/2"), ("cos(π/3) \\cos \\pi/3", _ev("cos(pi/3)"), "\\cos \\pi/3")):
+            ("π/(2x) LaTeX", _der("pi*log(x)/2"), "$\\pi/2x$"), ("π/2 LaTeX thin space", _ev("asin(1)"), "1/2\\,\\pi"),
+            ("(ln 2)/2 \\ln 2/2", _ev("log(sqrt(2))"), "$\\ln 2/2$"), ("(ln 2)/2 \\ln{2}/2", _ev("log(sqrt(2))"), "\\ln{2}/2"),
+            ("0 \\ln 2/2", _ev("sin(pi)"), "\\ln 2/2"), ("cos(π/3) \\cos \\pi/3", _ev("sin(pi/6)"), "\\cos \\pi/3")):
         out.append((f"{name}: claim {claim!r} (not read)", q, sol(claim, "expression" if q["answer_shape"] == "expression"
                                                                   else "value"), UNK, None))
     for name, q, claim, want in (
             ("(√x)' = 1/(2√x)", _der("sqrt(x)"), "1/(2√x)", OK), ("(√x)' = 1/(2√x)", _der("sqrt(x)"), "√x/2", NO),
-            ("(x√x/3)' = √x/2", _der("x*sqrt(x)/3"), "√x/2", OK), ("π/2", _ev("pi/2"), "π/2", OK),
-            ("π/2", _ev("pi/2"), "(1/2)π", OK), ("π/2", _ev("pi/2"), "1/2·π", OK), ("π/2", _ev("pi/2"), "1/2*π", OK),
-            ("1/(2π)", _ev("1/(2*pi)"), "1/(2π)", OK), ("2π/3", _ev("2*pi/3"), "2π/3", OK), ("5π/6", _ev("5*pi/6"), "5π/6", OK),
-            ("2√3/3", _ev("2*sqrt(3)/3"), "2√3/3", OK), ("π/2", _ev("pi/2"), "\\frac{1}{2}\\pi", OK),
-            ("1/(2π)", _ev("1/(2*pi)"), "\\frac{1}{2\\pi}", OK), ("π/2", _ev("pi/2"), "$1/2 \\cdot \\pi$", OK),
-            ("2π/3", _ev("2*pi/3"), "$2\\pi/3$", OK), ("√3/2", _ev("sqrt(3)/2"), "\\sqrt{3}/2", OK),
-            ("(ln 2)/2", _ev("log(2)/2"), "\\ln(2)/2", OK), ("(ln 2)/2", _ev("log(2)/2"), "\\frac{\\ln 2}{2}", OK),
-            ("1/sin(1)", _ev("1/sin(1)"), "1/\\sin 1", OK), ("π/2", _ev("pi/2"), "1/(2π)", NO)):
+            ("(x√x/3)' = √x/2", _der("x*sqrt(x)/3"), "√x/2", OK), ("π/2", _ev("asin(1)"), "π/2", OK),
+            ("π/2", _ev("asin(1)"), "(1/2)π", OK), ("π/2", _ev("asin(1)"), "1/2·π", OK), ("π/2", _ev("asin(1)"), "1/2*π", OK),
+            ("1/(2π)", _ev("asin(1)/pi**2"), "1/(2π)", OK), ("2π/3", _ev("acos(-1/2)"), "2π/3", OK), ("5π/6", _ev("acos(-sqrt(3)/2)"), "5π/6", OK),
+            ("2√3/3", _ev("2*tan(pi/3)/3"), "2√3/3", OK), ("π/2", _ev("asin(1)"), "\\frac{1}{2}\\pi", OK),
+            ("1/(2π)", _ev("asin(1)/pi**2"), "\\frac{1}{2\\pi}", OK), ("π/2", _ev("asin(1)"), "$1/2 \\cdot \\pi$", OK),
+            ("2π/3", _ev("acos(-1/2)"), "$2\\pi/3$", OK), ("√3/2", _ev("sin(pi/3)"), "\\sqrt{3}/2", OK),
+            ("(ln 2)/2", _ev("log(sqrt(2))"), "\\ln(2)/2", OK), ("(ln 2)/2", _ev("log(sqrt(2))"), "\\frac{\\ln 2}{2}", OK),
+            ("1/sin(1)", _ev("csc(1)"), "1/\\sin 1", OK), ("π/2", _ev("asin(1)"), "1/(2π)", NO)):
         out.append((f"{name}: claim {claim!r}", q, sol(claim, "expression" if q["answer_shape"] == "expression" else "value"),
                     want, None))
     mc = _der("sqrt(x)")

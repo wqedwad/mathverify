@@ -113,8 +113,10 @@ _SYS = _ir("solve_equation", {"var": "x"}, ["x + y = 1", "2*x + 2*y = 3"], [X, Y
     (_SYS, [("compute", "2*(x + y) = 2")]),
 ])
 def test_g4rk5_a_step_from_premises_with_no_instance_is_not_refuted(q, steps):
+    """The system's ∅ has no certificate of its own (UNKNOWN at the answer level): its step is what changed."""
     r = verify(q, _sol("{}", "set", steps))
-    assert r.verdict == "CORRECT" and "refuted" not in _statuses(r) and "verified" not in _statuses(r), \
+    want = {"CORRECT", "UNKNOWN"} if q is _SYS else {"CORRECT"}
+    assert r.verdict in want and "refuted" not in _statuses(r) and "verified" not in _statuses(r), \
         (r.verdict, _statuses(r))
 
 
@@ -152,10 +154,10 @@ def _ev(e):
 
 @pytest.mark.parametrize("q,claim", [
     (_der("x*sqrt(x)/3"), "1/2√x"), (_der("sqrt(x)"), "1/2√x"), (_der("pi*x**2/4", X), "x/2π"),
-    (_der("x**2/(4*pi)", X), "x/2π"), (_ev("pi/2"), "1/2π"), (_ev("1/(2*pi)"), "1/2π"), (_ev("sqrt(3)/2"), "1/2√3"),
-    (_ev("sqrt(3)/6"), "1/2√3"), (_ev("pi/8"), "1/2^3π"), (_ev("pi/2"), "$1/2\\pi$"), (_ev("1/(2*pi)"), "$1/2\\pi$"),
-    (_ev("3*sqrt(2)/4"), "3/4\\sqrt{2}"), (_ev("log(2)/2"), "$\\ln 2/2$"), (_ev("log(2)/2"), "\\ln{2}/2"),
-    (_ev("0"), "\\ln{2}/2"),
+    (_der("x**2/(4*pi)", X), "x/2π"), (_ev("asin(1)"), "1/2π"), (_ev("asin(1)/pi**2"), "1/2π"), (_ev("sin(pi/3)"), "1/2√3"),
+    (_ev("sin(pi/3)/3"), "1/2√3"), (_ev("asin(1)/4"), "1/2^3π"), (_ev("asin(1)"), "$1/2\\pi$"), (_ev("asin(1)/pi**2"), "$1/2\\pi$"),
+    (_ev("3*sin(pi/4)/2"), "3/4\\sqrt{2}"), (_ev("log(sqrt(2))"), "$\\ln 2/2$"), (_ev("log(sqrt(2))"), "\\ln{2}/2"),
+    (_ev("sin(pi)"), "\\ln{2}/2"),
 ])
 def test_g4yo2_a_factor_right_after_a_divisor_is_not_read(q, claim):
     r = verify(q, _sol(claim, "expression" if q["answer_shape"] == "expression" else "value"))
@@ -163,11 +165,11 @@ def test_g4yo2_a_factor_right_after_a_divisor_is_not_read(q, claim):
 
 
 @pytest.mark.parametrize("q,claim,want", [
-    (_der("sqrt(x)"), "1/(2√x)", "CORRECT"), (_der("sqrt(x)"), "√x/2", "INCORRECT"), (_ev("pi/2"), "(1/2)π", "CORRECT"),
-    (_ev("pi/2"), "1/2·π", "CORRECT"), (_ev("1/(2*pi)"), "1/(2π)", "CORRECT"), (_ev("2*pi/3"), "2π/3", "CORRECT"),
-    (_ev("2*sqrt(3)/3"), "2√3/3", "CORRECT"), (_ev("pi/2"), "\\frac{1}{2}\\pi", "CORRECT"),
-    (_ev("1/(2*pi)"), "\\frac{1}{2\\pi}", "CORRECT"), (_ev("pi/2"), "$1/2 \\cdot \\pi$", "CORRECT"),
-    (_ev("log(2)/2"), "\\ln(2)/2", "CORRECT"), (_ev("1/sin(1)"), "1/\\sin 1", "CORRECT"), (_ev("pi/2"), "1/(2π)", "INCORRECT"),
+    (_der("sqrt(x)"), "1/(2√x)", "CORRECT"), (_der("sqrt(x)"), "√x/2", "INCORRECT"), (_ev("asin(1)"), "(1/2)π", "CORRECT"),
+    (_ev("asin(1)"), "1/2·π", "CORRECT"), (_ev("asin(1)/pi**2"), "1/(2π)", "CORRECT"), (_ev("acos(-1/2)"), "2π/3", "CORRECT"),
+    (_ev("2*tan(pi/3)/3"), "2√3/3", "CORRECT"), (_ev("asin(1)"), "\\frac{1}{2}\\pi", "CORRECT"),
+    (_ev("asin(1)/pi**2"), "\\frac{1}{2\\pi}", "CORRECT"), (_ev("asin(1)"), "$1/2 \\cdot \\pi$", "CORRECT"),
+    (_ev("log(sqrt(2))"), "\\ln(2)/2", "CORRECT"), (_ev("csc(1)"), "1/\\sin 1", "CORRECT"), (_ev("asin(1)"), "1/(2π)", "INCORRECT"),
 ])
 def test_g4yo2_control_explicit_operators_and_brackets_are_read(q, claim, want):
     r = verify(q, _sol(claim, "expression" if q["answer_shape"] == "expression" else "value"))
