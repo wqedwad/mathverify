@@ -695,30 +695,38 @@ def _real_symbols(syms, ctx: Ctx) -> bool:
 
 
 def _completed_squares(d, syms) -> list | None:
-    """`d` = 0 for a quadratic `d` in `syms` with number coefficients, no product of two symbols and a positive
-    square coefficient for each symbol, read over the reals by completing the squares:
-    d = Σ a_q (q + b_q/(2 a_q))² + r. r = 0: its one real point, [q + b_q/(2 a_q) = 0, ...]; r > 0: no real point,
-    [false]; otherwise None (an ellipse: not finite)."""
+    """`d` = 0 for a quadratic `d` = vᵀAv + bᵀv + c in `syms` with exact number coefficients and A positive definite
+    (every leading principal minor > 0: a sum of squares once completed, x**2 + 2*x*y + 2*y**2 = (x + y)**2 + y**2),
+    read over the reals: d = (v - v0)ᵀA(v - v0) + r with v0 = -A⁻¹b/2 and r = c + bᵀv0/2. r = 0: its one real point,
+    [q = v0_q, ...]; r > 0: no real point, [false]; otherwise None (an ellipse: not finite). Exact arithmetic only."""
+    order = sorted(syms, key=lambda q: q.name)
     try:
-        poly = sp.Poly(d, *sorted(syms, key=lambda q: q.name))
+        poly = sp.Poly(d, *order)
     except Exception:  # noqa: BLE001
         return None
     if poly.total_degree() != 2 or any(not c.is_number or c.is_real is not True or c.has(sp.Float)
                                        for c in poly.coeffs()):
         return None
-    if any(sum(1 for e in m if e) > 1 for m in poly.monoms()):
-        return None                                  # a product of two symbols (x*y): not separable
-    r = poly.coeff_monomial(1)
-    parts = []
-    for q in poly.gens:
-        a = poly.coeff_monomial(q ** 2)
-        b = poly.coeff_monomial(q)
-        if a.is_positive is not True:
-            return None
-        r -= b ** 2 / (4 * a)
-        parts.append(Eq(q + b / (2 * a), 0))
+    n = len(order)
+    A = sp.zeros(n, n)
+    b = sp.zeros(n, 1)
+    for mono, c in poly.terms():
+        idx = [i for i, e in enumerate(mono) for _ in range(e)]
+        if len(idx) == 2:
+            i, j = idx
+            if i == j:
+                A[i, i] += c
+            else:
+                A[i, j] += c / 2
+                A[j, i] += c / 2
+        elif len(idx) == 1:
+            b[idx[0]] += c
+    if any(A[:k, :k].det().is_positive is not True for k in range(1, n + 1)):
+        return None                                  # not positive definite: a line, a hyperbola, a parabola
+    v0 = -A.inv() * b / 2
+    r = sp.simplify(poly.coeff_monomial(1) + (b.T * v0)[0, 0] / 2)
     if r.is_zero is True:
-        return parts
+        return [Eq(q, v0[i, 0]) for i, q in enumerate(order)]
     if r.is_positive is True:
         return [sp.false]
     return None

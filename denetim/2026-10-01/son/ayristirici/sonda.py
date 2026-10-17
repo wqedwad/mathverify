@@ -268,9 +268,11 @@ def cases_e():
     # a circle is no point: 'x = 1' is a choice, not refuted by this route
     add("x²+y²=1: eq 'x = 1' (a point of the circle)", _xy("x**2 + y**2", ["x**2 + y**2 = 1"], [("eq", "x = 1")], "1"),
         OK, NOTREF)
-    # a cross term: not separable, left as before
-    add("x²+2xy+2y²=0 (cross term): eq 'x = 1'", _xy("x + y", ["x**2 + 2*x*y + 2*y**2 = 0"], [("eq", "x = 1")], "0"),
-        NOTOK, None)
+    # a cross term: (x + y)^2 + y^2, positive definite; (x + y)^2 = 0 is a line, no point
+    add("x²+2xy+2y²=0 (cross term): wrong eq 'x = 1'", _xy("x + y", ["x**2 + 2*x*y + 2*y**2 = 0"], [("eq", "x = 1")], "0"),
+        NO, REF)
+    add("x²+2xy+y²=0 (a line): eq 'x = 1' (a choice)", _xy("x + y", ["x**2 + 2*x*y + y**2 = 0"], [("eq", "x = 1")], "0"),
+        NOTNO, NOTREF)
     # a hyperbola and a line have real points: a wrong closed step stays refuted (no square to complete, no
     # nonnegative terms)
     add("x²-y²+1=0 (hyperbola): eq '1 = 2' (wrong)", _xy("x + y", ["x**2 - y**2 + 1 = 0"], [("eq", "1 = 2")], "1"), NO, REF)

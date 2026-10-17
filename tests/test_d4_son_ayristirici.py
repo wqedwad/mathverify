@@ -226,6 +226,7 @@ _G4 = ["x**2 + 4*y**2 - 2*x + 8*y + 5 = 0"]         # (x - 1)^2 + 4(y + 1)^2 = 0
     (_G1, "1", ("eq", "x = 1")), (_G1, "1", ("eq", "x + y = 3")), (_G1, "1", ("compute", "x*y = 2")),
     (_G1, "1", ("eq", "(x - 1)**2 + (y + 2)**2 = 0")), (_G2, "-1", ("eq", "x = -2")), (_G2, "-1", ("compute", "x*y = 6")),
     (_G4, "0", ("eq", "y = 1")), (["x**2 + y**2 = 0"], "0", ("eq", "x = 1")),
+    (["x**2 + 2*x*y + 2*y**2 = 0"], "0", ("eq", "x = 1")),          # (x + y)^2 + y^2: a cross term
 ])
 def test_g4k4_a_wrong_step_under_a_one_point_given_is_refuted(g, answer, step):
     r = verify(_ir("evaluate", {"expr": "x + y"}, g, [X, Y]), _sol(answer, steps=[step]))
@@ -247,9 +248,12 @@ def test_g4k4_completed_squares():
     import sympy as sp
     from mathverify.steps.deterministic import _completed_squares
     x, y = sp.symbols("x y", real=True)
-    assert _completed_squares(x**2 + y**2 + 2*x - 4*y + 5, {x, y}) == [sp.Eq(x + 1, 0), sp.Eq(y - 2, 0)]
+    assert _completed_squares(x**2 + y**2 + 2*x - 4*y + 5, {x, y}) == [sp.Eq(x, -1), sp.Eq(y, 2)]
     assert _completed_squares(x**2 + y**2 + 2*x + 2, {x, y}) == [sp.false]          # (x + 1)^2 + y^2 + 1
+    assert _completed_squares(x**2 + 2*x*y + 2*y**2, {x, y}) == [sp.Eq(x, 0), sp.Eq(y, 0)]    # (x + y)^2 + y^2
+    assert _completed_squares(2*x**2 + 2*x*y + y**2 - 2*x + 1, {x, y}) == [sp.Eq(x, 1), sp.Eq(y, -1)]
+    assert _completed_squares(x**2 + x*y + y**2 + 1, {x, y}) == [sp.false]
     assert _completed_squares(x**2 + y**2 - 1, {x, y}) is None                      # a circle
     assert _completed_squares(x**2 - y**2 + 1, {x, y}) is None                      # a hyperbola
-    assert _completed_squares(x**2 + 2*x*y + 2*y**2, {x, y}) is None                # a cross term
+    assert _completed_squares(x**2 + 2*x*y + y**2, {x, y}) is None                  # (x + y)^2: a line
     assert _completed_squares(x + y + 1, {x, y}) is None
