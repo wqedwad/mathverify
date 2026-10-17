@@ -145,6 +145,8 @@ def cases_b():
         ("x²=4: compute 'x**2 = -4' (wrong)", eqn("x**2 = 4"), sol("{-2, 2}", "set", [("compute", "x**2 = -4")]), NO, REF),
         ("x+y=1, x-y=3: eq '2 = 3' (wrong)", ir("solve_equation", {"var": "x"}, ["x + y = 1", "x - y = 3"], [X, Y], "set"),
          sol("{2}", "set", [("eq", "2 = 3")]), NO, REF),
+        # a closed computation is true or false whatever the premises: a wrong one stays refuted
+        ("x²+1=0: compute '0 - 4 = 4' (wrong arithmetic)", sq, sol("{}", "set", [("compute", "0 - 4 = 4")]), NO, REF),
         # empty premises, a wrong answer: the certificate refutes it all the same
         ("x²+1=0: {1} after '0 = 2'", sq, sol("{1}", "set", [("eq", "0 = 2")]), NO, NEITHER),
         # an IR domain that leaves the equation no instance: x positive, x + 1 = 0

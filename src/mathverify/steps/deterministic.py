@@ -1972,7 +1972,8 @@ def _vacuous(status: str, ev: dict, ctx: Ctx) -> tuple[str, dict]:
     with no instance every relation follows, so no step is refuted there, as no point is a counterexample (principle
     5). '0 = 2' from 2x + 1 = 2x + 3 and x**2 = -1 from x**2 + 1 = 0 are how the empty solution set is shown, and they
     were refuted as a closed false relation and a false identity: the right ∅ was INCORRECT (final attack G4-RK-5).
-    Unknown, never verified."""
+    Unknown, never verified. A closed `compute` claim is a computation, not a consequence, and keeps its refutation
+    (`_compute_status`): 0 - 4 = 4 is wrong whatever the premises."""
     if status != "refuted" or not _premises_hold_nowhere(ctx):
         return status, ev
     return "unknown", {"reason": "premises_hold_nowhere: the problem's premises have no instance, no point refutes "
@@ -2836,7 +2837,9 @@ def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[s
             else:
                 status, pev = _check_compute(pinned, ctx)
             ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()}, "identity_refuted": ev}
-    return _vacuous(status, ev, ctx)      # premises with no instance refute nothing (G4-RK-5)
+    if not getattr(claim, "free_symbols", None):
+        return status, ev                   # a closed computation is true or false whatever the premises
+    return _vacuous(status, ev, ctx)        # checked where premises with no instance put its symbols: nowhere (G4-RK-5)
 
 
 def _counterexample_where_undefined(claim, ev: dict, conds, ctx: Ctx) -> bool:

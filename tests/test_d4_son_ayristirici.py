@@ -122,6 +122,7 @@ def test_g4rk5_a_step_from_premises_with_no_instance_is_not_refuted(q, steps):
     (_eqn("2*x + 1 = 5"), "{2}", [("eq", "2 = 3")]),
     (_eqn("2*x + 1 = 5"), "{2}", [("compute", "5 - 1 = 3")]),
     (_eqn("x**2 = 4"), "{-2, 2}", [("compute", "x**2 = -4")]),
+    (_eqn("x**2 + 1 = 0"), "{}", [("compute", "0 - 4 = 4")]),          # a closed computation, premises or not
     (_ir("solve_equation", {"var": "x"}, ["x + y = 1", "x - y = 3"], [X, Y], "set"), "{2}", [("eq", "2 = 3")]),
     (_ir("evaluate", {"expr": "x + y"}, ["x**2 - y**2 + 1 = 0"], [X, Y]), "1", [("eq", "1 = 2")]),
     (_ir("evaluate", {"expr": "x + y"}, ["x + y + 1 = 0"], [X, Y]), "-1", [("eq", "1 = 2")]),
