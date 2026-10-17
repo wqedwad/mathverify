@@ -1984,7 +1984,10 @@ def _finite_counterexample(claim, premises: list, syms: list, ctx: Ctx) -> dict 
     """A point of the finitely many exact ones the premises allow (`_finite_instances`) where every premise holds, the
     point is in the domains and the claim is false, all exactly; None otherwise. The premises' equations solved over ℂ
     (x = -1 ± i(y - 2) for x**2 + y**2 + 2*x - 4*y + 5 = 0) gave no real point to refute at, and a wrong step under
-    such a given was never refuted (final attack G4-K-4)."""
+    such a given was never refuted (final attack G4-K-4). Only where such an equation is read (`_real_parts`): the
+    other systems are left to the routes of `_check_eq_in`, as before."""
+    if _real_parts(premises, ctx) == _premise_parts(premises):
+        return None
     inst = _finite_instances(set(syms), premises, ctx)
     if not inst:
         return None
