@@ -37,8 +37,23 @@ def _versions() -> dict[str, str]:
     return dict(_VERSIONS)
 
 
-_NO_SOLUTION = re.compile(r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s*küme|no\s*(real\s*)?solution|∅|emptyset",
-                          re.IGNORECASE)
+# A text that IS the empty set or says "no solution", as a whole (wrappers, 'Ç = ', 'x ∈ ' and a final '.' aside): '∅',
+# '{}', 'Ø', '\emptyset', 'Çözüm yok', 'Gerçel kök yoktur', 'Boş küme', 'No real solution'. Searched anywhere in the
+# text, '{∅}' (the set holding the empty set, a classic distractor), '∅ ∪ {1}' and 'Çözüm yok değil' were read as
+# "no solution", and the wrong letter beside the right ∅ was CORRECT (final attack G4YO-1). A text that only names the
+# empty set or those words (`_NO_SOLUTION_MENTION`) is read as written, by the option's reader.
+_EMPTY_SET_TEXT = r"(?:∅|ø|\\emptyset|\\varnothing|emptyset|\\?\{\s*\\?\})(?:\s*\(\s*boş\s+küme\s*\))?"
+_NO_SOLUTION_WORDS = (r"(?:(?:denklemin|eşitsizliğin|hiçbir|hiç)\s+)*(?:(?:gerçel|reel)\s+)?"
+                      r"(?:çözüm(?:ü|leri)?|kök(?:ü|leri)?)(?:\s+kümesi)?\s*(?:yok(?:tur)?|boş(?:tur|\s+küme(?:dir)?)?)"
+                      r"|boş\s+küme(?:dir)?|no\s+(?:real\s+)?(?:solutions?|roots?)|(?:the\s+)?empty\s+set")
+_NO_SOLUTION = re.compile(
+    r"^\s*(?:\$+|\\\()?\s*"
+    r"(?:(?:ç(?:\s*\.\s*k\s*\.?)?|çözüm\s+kümesi|s|[a-z])\s*(?:=|:|∈|\\in(?![a-z]))\s*|çözüm\s+kümesi\s+)?"
+    rf"(?:{_EMPTY_SET_TEXT}|{_NO_SOLUTION_WORDS})"
+    r"\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
+_NO_SOLUTION_MENTION = re.compile(
+    r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s*küme|no\s*(real\s*)?solution|∅|ø|emptyset|varnothing",
+    re.IGNORECASE)
 
 
 def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
@@ -102,6 +117,9 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             return result("mc.consistency", "fail", 0.99, True,
                           {"reason": "option_letter_not_in_question", "option": ca.option}, t.ms)
         opt_text = str(ir.options[ca.option]).strip().lower()
+        # the empty set or "no solution" named inside something more ('{∅}', '∅ ∪ {1}', 'Çözüm yok değil'): read as
+        # written below by the option's reader, never by its words (final attack G4YO-1)
+        mention = not _NO_SOLUTION.search(opt_text) and bool(_NO_SOLUTION_MENTION.search(opt_text))
         if _NO_SOLUTION.search(opt_text):
             # "Çözüm yok" is the empty solution set, not "does not exist": the generic "yok" test
             # below refuted a correct empty-set answer that chose it (audit of 25 Sep 2026)
@@ -114,14 +132,14 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
                 return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
             ev["reason"] = "option_says_no_solution_but_a_solution_was_claimed"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
-        if ca.kind == "dne":
+        if ca.kind == "dne" and not mention:
             ok = bool(re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text))
             ev = {"option": ca.option, "option_text": opt_text, "claimed": "DNE"}
             if ok:
                 return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
             ev["reason"] = "claimed_DNE_but_option_is_a_value"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
-        if re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text):
+        if not mention and re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text):
             ev = {"option": ca.option, "option_text": opt_text, "claimed": str(ca.payload)}
             ev["reason"] = "option_says_DNE_but_a_value_was_claimed"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
@@ -232,10 +250,17 @@ _MATHY = re.compile(r"[0-9+\-*/^=<>≤≥≠∞√πα-ωΑ-Ω]|\\[A-Za-z]+")
 _TAGLIKE = re.compile(r"^<[^<>]*>(?:[^<>]*</[^<>]*>)?$")
 
 
+# Negation or doubt in the prose after the value. Turkish adds its suffixes to the word (değil-dir, yanlış-tır,
+# hariç-tir, olma-yabilir, san-mıyorum, mi-dir): matched as whole words only, '5 değildir' and '5 yanlıştır' were cleaned
+# to 5 and certified (final attack G4YO-3). The Turkish stems match with any suffix, a verb's negative suffix (-maz/-mez,
+# -mıyor, -mayabilir, -mamış, -mamalı) on any word, the question particle (mi, midir, mısınız) alone; English words whole.
 _NEGATION = re.compile(
-    r"(?<!\w)(değil|degil|olamaz|olmaz|yanlış|yanlis|hariç|haric|dışında|disinda|hayır|hayir|yok|"
-    r"belki|muhtemelen|sanırım|sanirim|galiba|not|no|never|cannot|can't|isn't|wrong|except|maybe|"
-    r"perhaps|probably)(?!\w)|\?", re.IGNORECASE)
+    r"(?<!\w)(?:değil|degil|yanlış|yanlis|hariç|haric|dışında|disinda|hayır|hayir|yok|olamaz|olmaz|olma[dmy]|olabil|"
+    r"belki|muhtemel|sanırım|sanirim|sanmı|sanmi|sanki|zannet|zanned|galiba|herhalde|tahmin|şüphe|kuşku|imkans|imkâns)\w*"
+    r"|(?<!\w)\w*?(?:m[ae]z|m[ıiuü]yor|m[ae]y[ae]bil|m[ae]m[ıiuü]ş|m[ae]m[ae]l[ıi])\w*"
+    r"|(?<!\w)m[ıiuü](?:d[ıiuü]r|s[ıiuü]n(?:[ıiuü]z)?|y[ıiuü]m|y[ıiuü]z)?(?!\w)"
+    r"|(?<!\w)(?:not|no|nor|never|cannot|can't|isn't|isnt|aren't|doesn't|don't|won't|wrong|incorrect|false|except|"
+    r"maybe|perhaps|probably|possibly|unlikely|might|doubt|unsure)(?!\w)|\?", re.IGNORECASE)
 
 
 def _is_prose_token(tok: str) -> bool:
@@ -631,6 +656,12 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
             and re.search(r"\d,\d", ca.payload):
         return unknown("intake.claim", f"claimed answer {ca.payload!r}: decimal comma or pair? not guessed",
                        flags=["decimal_comma_ambiguous"])
+    # '1/2π', '1/2√x': (1/2)·π or 1/(2π)? A factor written right after a divisor is a convention of the writer; the
+    # parser reads it neither way (`normalize.parse.ambiguous_juxtaposition`), and the claim is not read (G4YO-2)
+    from .normalize.parse import ambiguous_juxtaposition
+    if ambiguous_juxtaposition(ca.payload):
+        return unknown("intake.claim", f"claimed answer {ca.payload!r}: a factor right after a divisor, (1/2)·π or "
+                       "1/(2π)? not guessed", flags=["claim_ambiguous_juxtaposition"])
     # A value-shaped answer that still contains the problem's unknowns is not a value: `{x}` for
     # "solve x**2 - 5x + 6 = 0" was certified (z3 found Eq(x, x) satisfiable), and `10 - b` for
     # "evaluate a" restates a given (audit of 25 Sep 2026). The unknown is the task's variable
