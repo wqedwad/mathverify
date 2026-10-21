@@ -85,7 +85,7 @@ MUTATIONS = [
     # --- G2RK-10
     ("I20 gelenek koşulu hep karşılanır", CAL,
      "            if _contains_met_on(c, var, discourse):\n                continue\n",
-     "            if True:\n                continue\n", T + "test_a_convention_of_the_primitive_that_can_fail_is_undecided"),
+     "            if True:\n                continue\n", T + "test_a_convention_condition_of_the_primitive_is_read_on_the_region"),
     ("I21 gelenek koşulu hiç karşılanmaz", CAL,
      "            return exact_solveset(fails(c.args[0]), var, region) is S.EmptySet\n", "            return False\n",
      T + "test_a_convention_of_the_primitive_on_the_region"),

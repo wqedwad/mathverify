@@ -129,7 +129,8 @@ def test_a_numeric_refutation_needs_a_rigorous_enclosure():
     assert integral_excludes(f, x, 0, 1, sp.Rational(1, 3))[0] is True
     lo, hi = rigorous_integral(sp.exp(sp.cos(x)), x, 0, 1)
     assert lo <= mp.mpf("2.341574841713053164922975186216") <= hi and hi - lo < 1e-9
-    assert rigorous_integral(sp.erf(x), x, 0, 1) is None                 # no interval extension
+    # no interval extension (erf has one since the last attack's G2RK-2: monotone, 16 Oct 2026; asinh has none)
+    assert rigorous_integral(sp.asinh(x), x, 0, 1) is None
     assert rigorous_integral(sp.exp(-x), x, 0, sp.oo) is None            # no infinite range
     lo, hi = rigorous_integral(1 / x, x, -1, 1)                          # a singularity: unbounded
     assert not (mp.isfinite(lo) and mp.isfinite(hi))

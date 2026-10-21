@@ -315,6 +315,15 @@ def test_a_convention_of_the_primitive_on_the_region(f, claim, verdict):
     assert r.verdict == verdict and _no_exception(r)
 
 
+def test_a_convention_condition_of_the_primitive_is_read_on_the_region():
+    from mathverify.certify.calculus import antiderivative_domain_check
+    F = 3 * x ** sp.Rational(4, 3) / 4
+    f = sp.sign(x) * sp.Abs(x) ** sp.Rational(1, 3)
+    ok, ev = antiderivative_domain_check(F, f, x, sp.S.Reals)
+    assert ok is None and "Contains" in ev["reason"]
+    assert antiderivative_domain_check(F, f, x, sp.Interval.open(0, sp.oo))[0] is True
+
+
 def test_a_convention_of_the_primitive_that_can_fail_is_undecided():
     # on ℝ, 3x^(4/3)/4 is a primitive of ∛x under the real root and complex at x < 0 under the principal value: the two
     # readings differ, the reasoned UNKNOWN of the decision (neither CORRECT nor INCORRECT)

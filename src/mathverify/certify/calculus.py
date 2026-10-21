@@ -3221,8 +3221,9 @@ def verify(ir, solution, ctx: Ctx):
                     return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
                                    flags=["symbolic_numeric_disagreement"])
                 if state == "unconfirmed":
-                    return unknown(LAYER, "certified_value_unconfirmed", t.ms, ev,
-                                   flags=["certified_value_unconfirmed"])
+                    # no converged numbers and no enclosure that says something: the certificate stands alone, and
+                    # is not taken (G2YO-2); a NOT PROVED abstention (`fuse.rules`)
+                    return unknown(LAYER, "certified_value_unconfirmed", t.ms, ev, flags=["numeric_not_converged"])
                 if state == "excluded":
                     cval = None                     # the certificate is wrong: the claim meets the enclosure alone
             if cval is not None:
