@@ -452,6 +452,23 @@ def test_an_irrational_power_on_an_unconstrained_variable(q, claim, verdict):
     assert _v(q, _sol(claim, "expression")) == verdict
 
 
+def test_the_convention_at_the_ends_of_the_domain():
+    # the gate's rule alone (the certificate abstains on (x**2)**pi by its convention region too): 0**e at 0 is an end of
+    # x**pi's domain (x >= 0, a simple zero) and not of (x**2)**pi's (x**2 >= 0 holds on both sides)
+    from mathverify.certify.calculus import _convention_at_domain_ends
+    from mathverify.certify.domain import ZERO_POWER_BASE
+    from mathverify.normalize.parse import build_namespace
+    from mathverify.ir import ProblemIR
+    ns = build_namespace(ProblemIR.from_dict(_der("x**pi")))
+    x = ns["x"]
+    assert _convention_at_domain_ends(sp.Contains(x, ZERO_POWER_BASE), x, "x**pi", ns, {}) is True
+    assert _convention_at_domain_ends(sp.Contains(2 * x + 1, ZERO_POWER_BASE), x, "(2*x + 1)**pi", ns, {}) is True
+    assert _convention_at_domain_ends(sp.Contains(x**2, ZERO_POWER_BASE), x, "(x**2)**pi", ns, {}) is False
+    # x**2*(x + 1) >= 0 written, its zero 0 double: x**2*(x + 1) >= 0 on both sides of 0, an interior point
+    b = x**2 * (x + 1)
+    assert _convention_at_domain_ends(sp.Contains(b, ZERO_POWER_BASE), x, "(x**2*(x + 1))**pi", ns, {}) is False
+
+
 def test_a_convention_on_more_than_the_ends_of_the_domain_still_stops_the_gate():
     # controls (the decision reads finitely many ends only): x**x fails on all of x <= 0, (x**2)**pi at the interior 0
     assert _v(_der("x**x"), _sol("x**x*(log(x) + 1)", "expression")) == "UNKNOWN"
