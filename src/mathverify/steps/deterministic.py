@@ -1863,12 +1863,16 @@ def _continuum(s, ctx: Ctx) -> bool:
     return bool(r.ok and r.value is True)
 
 
-def _free_choice(claim, v, premises: list, ctx: Ctx) -> dict | None:
+def _free_choice(claim, v, premises: list, ctx: Ctx, every: bool = False) -> dict | None:
     """A witness when the premises leave `v` free over a continuum and the claim's value of `v` is
     one of those they allow; None otherwise. "x = 0" after the line y = 2x − 1 is then a CHOICE (the
     point where the line meets the y-axis), not a consequence: it was refuted and a right solution
     was INCORRECT (V13, 28 Sep 2026). A value the premises exclude is still refuted, and so is one
-    picked from a finite or discrete set (a root of x² = 4, of tan x = sqrt(3))."""
+    picked from a finite or discrete set (a root of x² = 4, of tan x = sqrt(3)). `every`: each value
+    the claim names must be allowed. A list of values one of which the premises exclude is no choice
+    ("x = 1 or x = -5" for x**2 - 4x - 5 < 0 is a wrong list of its roots; skipped for its 1, a right
+    solution with it was CORRECT once its root equation was no longer refuted, audit of the branch);
+    nor is a claim refuted on the boundary of an inequality ("x = 2 or x = 4" for x**2 - 5x + 6 <= 0)."""
     if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
         return None
     syms = set().union({v}, *(p.free_symbols for p in premises))
@@ -1896,6 +1900,7 @@ def _free_choice(claim, v, premises: list, ctx: Ctx) -> dict | None:
             params |= s_[v].free_symbols if v in s_ else {v}
         if not any(_continuum(ctx.domain_for(q), ctx) for q in params):
             return None
+    first = None
     for part in (claim.args if isinstance(claim, Or) else (claim,)):
         c = part.rhs if part.lhs == v else part.lhs
         rest = sorted(syms - {v}, key=lambda s_: s_.name)
@@ -1913,11 +1918,14 @@ def _free_choice(claim, v, premises: list, ctx: Ctx) -> dict | None:
                         cands.append({q: s_.get(q, q).subs(free) for q in rest})
             if not sub:
                 cands = sample_points({q: ctx.domain_for(q) for q in rest}, 24, ctx.seed)
-        for pt in cands:
-            point = {v: c, **pt}
-            if _in_domains(ctx, point) and all(_decide(p, point, ctx) is True for p in premises):
-                return point
-    return None
+        found = next((point for point in ({v: c, **pt} for pt in cands)
+                      if _in_domains(ctx, point) and all(_decide(p, point, ctx) is True for p in premises)), None)
+        if found is not None and not every:
+            return found
+        if found is None and every:
+            return None
+        first = first or found
+    return first if every else None
 
 
 def _premises_hold_nowhere(ctx: Ctx) -> bool:
@@ -2308,8 +2316,10 @@ def _relation_set(c, v, ctx: Ctx) -> sp.Set | None:
 
 def _nowhere_inside(claim, p, ctx: Ctx) -> bool:
     """Is the claim PROVED to hold at no point of the problem's domain where the inequality `p` holds strictly (off its
-    boundary equation)? One variable only; a set not solved exactly, or an emptiness SymPy does not decide, proves
-    nothing (False)."""
+    boundary equation), that strict part proved to have a point? One variable only; a set not solved exactly, or an
+    emptiness SymPy does not decide, proves nothing (False). With no point inside (x**2 - 6*x + 9 < 0, (2, 3) of an
+    integer), "nowhere inside" held of every claim, and the right restatement (x - 3)**2 < 0 was refuted on the boundary
+    (audit of the branch, SA-RK-1)."""
     syms = set(getattr(claim, "free_symbols", set())) | p.free_symbols
     if len(syms) != 1:
         return False
@@ -2320,46 +2330,120 @@ def _nowhere_inside(claim, p, ctx: Ctx) -> bool:
     held = _relation_set(claim, v, ctx)
     if inside is None or held is None:
         return False
-    e = sb_run("mathverify.steps.deterministic:_emptiness", sp.Intersection(ctx.domain_for(v), inside, held),
-               timeout=ctx.timeout)
+    inside = sp.Intersection(ctx.domain_for(v), inside)
+    e = sb_run("mathverify.steps.deterministic:_emptiness", inside, timeout=ctx.timeout)
+    if not (e.ok and e.value is False):
+        return False
+    e = sb_run("mathverify.steps.deterministic:_emptiness", sp.Intersection(inside, held), timeout=ctx.timeout)
     return bool(e.ok and e.value is True)
 
 
-def _boundary_premises(claim, premises: list, swappable: list, ctx: Ctx) -> tuple[list, list] | None:
-    """The premises with each inequality among `swappable` (the problem's own: the task's, a given; and the earlier
-    claims that restate them) inside which the claim holds nowhere replaced by its boundary equation (the same two
-    sides, '='), and those inequalities; None when there is none, or when the premises so changed are proved to have no
-    common point (the claim is then no boundary of theirs: x = -2 under x > 0 and x**2 = 4 stays refuted). Such a claim
-    is no consequence of the inequality: x**2 - 5*x + 6 = 0, (x - 2)*(x - 3) = 0 and "x = 2 or x = 3" of the sign-table
-    method for x**2 - 5*x + 6 < 0 were refuted at every point of (2, 3), and the right (2, 3) was INCORRECT (final
-    attack G1RK-2, once the task's inequality in params became a premise). Checked on the boundary equation instead, a
-    wrong critical point (x = 5) is still refuted. A non-strict inequality is read off its boundary the same way:
-    x**2 = 9 for x**2 >= 9 holds only where the boundary does."""
+def _critical_equations(p, v) -> list | None:
+    """The critical point equations of the inequality `p` in `v`, as the sign table reads them, each with whether it is
+    a denominator's: its numerator = 0 and, where it has one, its denominator = 0 ((x - 1)/(x + 2) >= 0: x - 1 = 0 and
+    x + 2 = 0; the root of a denominator is a point of the table where the expression is undefined, and the step
+    "x + 2 = 0" was refuted, SA-RK-7), each kept as written (an evaluated x**2 + 1 = 0 of a real x folds to False). A
+    part free of `v` has no root; None when neither names `v`."""
+    num, den = sp.together(p.lhs - p.rhs).as_numer_denom()
+    out = [(Eq(e, 0, evaluate=False), is_den) for e, is_den in ((num, False), (den, True)) if v in e.free_symbols]
+    return [(e, d_) for e, d_ in out if not isinstance(e, sp.logic.boolalg.BooleanAtom)] or None
+
+
+def _is_equation_claim(claim) -> bool:
+    """An equation, or a choice of equations (x = 2 or x = 3): the shape of a critical point step. An inequality step is
+    checked against the inequality as it stands (x <= 2 or x >= 3 for x**2 - 5x + 6 < 0 is the wrong region, SA-YO-3)."""
+    return isinstance(claim, Eq) or (isinstance(claim, Or) and all(isinstance(a, Eq) for a in claim.args))
+
+
+def _boundary_region(v, premises: list, ctx: Ctx, restrictions: list, undefined_ok: bool):
+    """The points of `v` the premises leave (None when one is not solved exactly). `undefined_ok`: on the domain the
+    problem declares, without the definedness of its expressions (the root of a denominator is no point of
+    `Ctx.domain_for`); its other restrictions still bound it."""
+    if undefined_ok:
+        region = ctx.discourse(v)
+        vd = next((d_ for d_ in ctx.ir.vars if d_.name == v.name), None)
+        if vd is not None and vd.domain in ctx._DECLARED_SETS:
+            region = sp.Intersection(region, ctx._DECLARED_SETS[vd.domain])
+        bounds = list(premises) + list(restrictions)
+    else:
+        region, bounds = ctx.domain_for(v), list(premises)
+    for p in bounds:
+        if not p.free_symbols <= {v}:
+            continue                        # a premise of other symbols only: no bound on v
+        s_ = _relation_set(p, v, ctx)
+        if s_ is None:
+            return None
+        region = sp.Intersection(region, s_)
+    return region
+
+
+def _boundary_premises(claim, premises: list, swappable: list, ctx: Ctx,
+                       restrictions: list = ()) -> tuple[list, list] | None:
+    """The (premises, restrictions) lists in which each inequality among `swappable` (the problem's own: the task's, a
+    given; and the earlier claims that restate them) inside which the equation claim holds nowhere is replaced by one of
+    its critical point equations (`_critical_equations`; on a denominator's, without the problem's definedness
+    conditions, which exclude that very point), and those inequalities; None when there is none, when a premise or
+    restriction naming the claim's variable names another symbol too (a > 0 next to x**2 - a*x - 6 = 0: no boundary is
+    read in a system, SA-YO-4), or when every list so changed is proved to have no common point (the claim is then no
+    boundary of theirs: x = -2 under x > 0 and x**2 = 4 stays refuted). Such a claim is no consequence of the
+    inequality: x**2 - 5*x + 6 = 0, (x - 2)*(x - 3) = 0 and "x = 2 or x = 3" of the sign-table method for
+    x**2 - 5*x + 6 < 0 were refuted at every point of (2, 3), and the right (2, 3) was INCORRECT (final attack G1RK-2).
+    Checked on each critical equation instead, a wrong critical point (x = 5) is still refuted."""
+    from itertools import product
+    if not _is_equation_claim(claim):
+        return None
     hit = [p for p in swappable if type(p) in _STRICT_PART and p in premises and _nowhere_inside(claim, p, ctx)]
     if not hit:
         return None
-    out = [Eq(p.lhs, p.rhs) if p in hit else p for p in premises]
     (v,) = hit[0].free_symbols
-    region = ctx.domain_for(v)
-    for p in out:
-        if not p.free_symbols <= {v}:
-            continue                        # another symbol: the set in v is a superset, left out
-        s_ = _relation_set(p, v, ctx)
-        if s_ is None:
-            return out, hit                 # not solved: not proved empty
-        region = sp.Intersection(region, s_)
-    e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
-    return None if e.ok and e.value is True else (out, hit)
+    if any(v in p.free_symbols and not p.free_symbols <= {v} for p in list(premises) + list(restrictions)):
+        return None
+    crit = [_critical_equations(p, v) for p in hit]
+    if any(c is None for c in crit):
+        return None
+    written = ctx.written_conditions()[0]
+    alts = []
+    for choice in product(*crit):
+        swap = {p: e for p, (e, _) in zip(hit, choice)}
+        out = [swap.get(p, p) for p in premises]
+        undefined_ok = any(d_ for _, d_ in choice)
+        restr = [r for r in restrictions if not (undefined_ok and r in written and v in r.free_symbols)]
+        region = _boundary_region(v, out, ctx, restr, undefined_ok)
+        if region is not None:
+            e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
+            if e.ok and e.value is True:
+                continue
+        alts.append((out, restr, (v, region) if undefined_ok else None))
+    return (alts, hit) if alts else None
 
 
-def _on_boundary(status: str, ev: dict, bounds: list) -> tuple[str, dict]:
-    """The status of a claim checked on the boundary equations of `bounds` (`_boundary_premises`): a refutation there
-    stands; anything else is unknown, never verified (the claim is no consequence of the problem's inequality, and its
-    boundary is no premise the solution was given)."""
-    ev = {**ev, "boundary_of": [str(p) for p in bounds]}
-    if status == "refuted":
+def _check_boundary(claim, alt: tuple, ctx: Ctx, window: list) -> tuple[str, dict]:
+    """The claim checked on one premise list of `_boundary_premises`. On a denominator's root, a point outside the
+    problem's domain that `_check_eq` never draws, it is read at each point of the finite set the list leaves: false at
+    one, refuted (x = 5 for (x - 1)/(x + 2) >= 0 is no root of x + 2 either); anything else is unknown."""
+    premises, restrictions, at = alt
+    if at is None:
+        return _check_eq(claim, premises, ctx, restrictions, window)
+    v, region = at
+    ev: dict[str, Any] = {"n_premises": len(premises) + len(restrictions), "route": "undefined_point"}
+    if not isinstance(region, sp.FiniteSet) or not region.args or len(region.args) > 16:
+        return "unknown", {**ev, "reason": "undefined_points_not_listed"}
+    for x0 in region.args:
+        pt = {v: x0}
+        if all(_holds(p, pt) is True for p in list(premises) + list(restrictions)) and _holds(claim, pt) is False:
+            return "refuted", {**ev, "counterexample": {str(v): str(x0)}}
+    return "unknown", ev
+
+
+def _on_boundary(checked: list, bounds: list) -> tuple[str, dict]:
+    """The status of a claim checked on the critical equations of `bounds` (`_boundary_premises`), one (status,
+    evidence) per premise list: refuted on every one, refuted; anything else is unknown, never verified (the claim is no
+    consequence of the problem's inequality, and its boundary is no premise the solution was given)."""
+    ev = {**checked[0][1], "boundary_of": [str(p) for p in bounds]}
+    if all(st == "refuted" for st, _ in checked):
         return "refuted", ev
-    return "unknown", {**ev, "reason": "claim_holds_nowhere_inside_an_inequality_premise", "on_boundary": status}
+    return "unknown", {**ev, "reason": "claim_holds_nowhere_inside_an_inequality_premise",
+                       "on_boundary": [st for st, _ in checked]}
 
 
 def _window_domains(doms: dict, window: list, ctx: Ctx) -> dict:
@@ -3009,7 +3093,8 @@ def check_steps(ir, solution, ctx: Ctx):
                 continue
             step_ns = _step_namespace(ctx.ns) if st.kind == "compute" else ctx.ns
             try:
-                claim = _parse_claim(st.claim, step_ns)
+                # a unit mark whose unit the IR's `units` names is the plain number (SA-RK-4)
+                claim = _parse_claim(ctx.plain_unit_reading(st.claim), step_ns)
             except UndeclaredSymbolError as e:
                 # A term of the task's own sequence at an integer index (`a(3) = 6`) is not the
                 # solver's symbol: it is read with the term's exact value (audit of 25 Sep 2026).
@@ -3066,7 +3151,7 @@ def check_steps(ir, solution, ctx: Ctx):
                 n_unk += 1
                 per_step.append(entry)
                 continue
-            chosen = False
+            chosen = on_boundary = False
             conds: list = []
             token = _deadline.set(time.monotonic() + min(_STEP_BUDGET, left))
             try:
@@ -3111,16 +3196,22 @@ def check_steps(ir, solution, ctx: Ctx):
                         if status in ("refuted", "unknown"):
                             # a claim that holds nowhere inside an inequality of the problem is no consequence
                             # of it: the boundary equation of the sign-table method (G1RK-2)
-                            swapped = _boundary_premises(claim, used, [p for p in premises if p not in my_cases], ctx)
+                            swapped = _boundary_premises(claim, used, [p for p in premises if p not in my_cases], ctx,
+                                                         list(restrictions))
                             if swapped is not None:
-                                used, bounds_ = swapped
-                                status, ev = _on_boundary(*_check_eq(claim, used, ctx, restrictions, window), bounds_)
+                                alts, bounds_ = swapped
+                                status, ev = _on_boundary([_check_boundary(claim, a_, ctx, window) for a_ in alts],
+                                                          bounds_)
+                                used, on_boundary = alts[0][0], True
                         range_premises = used + list(restrictions)
 
-                        def recheck(c, prem=used):
+                        def recheck(c, prem=used, alts=alts if on_boundary else None):
+                            if alts is not None:
+                                return _on_boundary([_check_boundary(c, a_, ctx, window) for a_ in alts], [])[0]
                             return _check_eq(c, prem, ctx, restrictions, window)[0]
                         if point is not None and status == "refuted":
-                            w = _free_choice(claim, point, premises + extra + list(restrictions), ctx)
+                            w = _free_choice(claim, point, premises + extra + list(restrictions), ctx,
+                                             every=on_boundary or isinstance(claim, Or))
                             if w is not None:
                                 status, chosen = "skipped", True
                                 ev = {"reason": "choice_of_a_free_symbol", "witness": {str(k): str(v) for k, v in w.items()}}
@@ -3202,8 +3293,10 @@ def check_steps(ir, solution, ctx: Ctx):
             elif status == "skipped":
                 n_skip += 1
             # only `eq` claims join the premise pool: compute claims (Derivative/Integral
-            # equations) are statements about operations, not constraints on the unknowns
-            if st.kind == "eq" and isinstance(claim, (sp.core.relational.Relational, And, Or)):
+            # equations) are statements about operations, not constraints on the unknowns. A claim read on the
+            # boundary of an inequality is no consequence of the premises: it joins no pool (the empty {p < 0, p = 0}
+            # left every later wrong step unrefuted, the set {2, 3} of p <= 0 verified them; audit, SA-YO-2/SA-RK-2)
+            if st.kind == "eq" and not on_boundary and isinstance(claim, (sp.core.relational.Relational, And, Or)):
                 parsed[st.id] = claim
                 parsed_cases[st.id] = my_case_ids
         ev_all = {"steps": per_step, "n_refuted": n_ref, "n_verified": n_ver, "n_unknown": n_unk,

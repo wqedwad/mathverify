@@ -15,7 +15,7 @@ import time
 import sympy as sp
 
 from .certify import MODULES
-from .certify.base import OPTION_READER, decimal_comma, make_ctx, result, unknown, Timer
+from .certify.base import OPTION_READER, TOLERANCE_WINDOW, decimal_comma, make_ctx, result, unknown, Timer
 from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
 from .ir import MalformedIR, ProblemIR, LeakageError
@@ -61,7 +61,9 @@ def _from_letter(ir: ProblemIR, solution: Solution, ctx, text: str | None = None
     alone is read: the option read as a claim of the answer's shape is (`Ctx.option_value`), 'x > -2' names (-2, oo),
     and '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1): False then, the payload left at the text."""
     ca = solution.claimed_answer
-    ca.payload = ir.options[ca.option] if text is None else text
+    # a unit mark whose unit the IR's `units` names is the plain number ('%20' is 20 when the question counts in
+    # percent; SA-RK-4)
+    ca.payload = ctx.plain_unit_reading(ir.options[ca.option] if text is None else text)
     if ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
         ca.payload = "{}"
     named = ctx.option_condition_set(ca.option, text)
@@ -108,16 +110,27 @@ def _lettered(solution: Solution, letter: str) -> Solution:
 
 def _option_claim_value(ir: ProblemIR, solution: Solution, ctx, text: str | None = None):
     """The chosen option's value (or that of `text`, another reading of it) read as the claim is
-    (`_option_read_as_claim`); what that reader does not take, the option's own reader (`Ctx.option_value`) may."""
+    (`_option_read_as_claim`); what that reader does not take, the option's own reader (`Ctx.option_value`) may. An
+    option that names the task's unknown ('{x}', 'x') is no value: not read (SA-RK-8)."""
     sol2 = _option_read_as_claim(ir, solution, ctx, text)
+    v = None
     if sol2 is not None:
         try:
-            return ctx.claimed(sol2)
+            v = ctx.claimed(sol2)
         except LeakageError:
             raise
         except Exception:  # noqa: BLE001 - not read as a claim: the option's own reader
-            pass
-    return ctx.option_value(solution.claimed_answer.option, text)
+            v = None
+    if v is None:
+        v = ctx.option_value(solution.claimed_answer.option, text)
+    # a condition ('x**2 < 4' read as {x**2 < 4}) is another kind, which mc.consistency reports itself
+    # (`_option_out_of_kind`: option_unreadable)
+    hit = _names_the_unknown(ir, ctx, v) if _value_shaped(ir, sol2.claimed_answer if sol2 is not None
+                                                          else solution.claimed_answer) \
+        and not _option_out_of_kind(v) else []
+    if hit:
+        raise ValueError(f"the option names the unknown(s) {hit}: no value")
+    return v
 
 
 def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
@@ -360,6 +373,16 @@ def _is_prose_token(tok: str) -> bool:
     return not _MATHY.search(t)
 
 
+# words after an option's number that carry no meaning: a count word, a copula, a generic unit (SA-YO-1)
+_FILLER_WORD = re.compile(r"tane|adet|olur|bulunur|d[ıiuü]r|t[ıiuü]r|br|birim|br²|birimkare")
+
+
+def _declared_unit(ctx, word: str) -> bool:
+    """Is `word` the unit the IR declares (`ProblemIR.units`: 'cm', 'km/sa'), so that an option's number is in it?"""
+    units = str(getattr(ctx.ir, "units", None) or "").strip().lower()
+    return bool(units) and word.strip(".,;:!").lower() == units
+
+
 def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     """Adversarial robustness (§9): junk prefixes/suffixes around the claimed answer must not
     flip a verdict. Cleaning is conservative and only attempted when the raw payload does
@@ -411,6 +434,14 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     # Dropping "+ 1" would silently rewrite the claim into a different one and hand the attacker
     # a verdict for an answer the solver never gave (measured on the value_bump attack).
     toks = t.split()
+    # An option's text is the problem author's: a word after its number may carry its meaning ('3 azalır', '5 ten
+    # büyük', '(2, 3) aralığının dışı', '6 m' against a value in cm), and dropping it read a wrong letter as the right
+    # value (audit of the branch, SA-YO-1). Only filler goes ('6 tane'), and a unit word only where the IR declares
+    # that unit (SA-RK-3: '1/2 saat' for 30 minutes was refuted); any other word leaves the option unread.
+    strict = ca.payload_source == "option_letter"
+    if strict and len(toks) > 1 and _declared_unit(ctx, toks[-1]):
+        toks = toks[:-1]
+        cands.append(" ".join(toks))
     for k in range(len(toks) - 1, 0, -1):
         if not _is_prose_token(toks[k]):
             break
@@ -419,6 +450,8 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
         if _NEGATION.search(" ".join(toks[k:])):
             flags.append("payload_negated")
             return flags
+        if strict and not (_FILLER_WORD.fullmatch(toks[k].strip(".,;:!'’").lower()) or _declared_unit(ctx, toks[k])):
+            break
         cands.append(" ".join(toks[:k]))
     original = ca.payload
     for c in cands:
@@ -722,11 +755,43 @@ def _claim_outside_superset(ir: ProblemIR, solution: Solution, ctx) -> LayerResu
                   {"reason": f"claimed_root_outside_the_applied_domain: {out}", "domain": str(dom)}, t.ms, primary=True)
 
 
+def _task_unknowns(ir: ProblemIR) -> set[str]:
+    """The task's unknown: its variable when it names one; otherwise the variables the givens pin down."""
+    tvar = (ir.task.params or {}).get("var")
+    if isinstance(tvar, str):
+        return {tvar}
+    in_givens = set(re.findall(r"[A-Za-z_]\w*", " ".join(str(g) for g in ir.givens)))
+    return {v.name for v in ir.vars} & in_givens
+
+
+def _value_shaped(ir: ProblemIR, ca) -> bool:
+    """Is the answer a value (a number, a set or an interval of numbers, a count), not an expression in the unknown?"""
+    return ir.answer_shape in ("scalar", "set", "count", "interval") and ca.kind in ("value", "set", "count", "interval")
+
+
+def _claim_value_or_none(solution: Solution, ctx):
+    try:
+        return ctx.claimed(solution)
+    except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
+        return None
+
+
+def _names_the_unknown(ir: ProblemIR, ctx, value) -> list[str]:
+    """The task's unknowns a value-shaped answer (a claim, an option) still names: no value is claimed by it."""
+    names = {s_.name for s_ in getattr(value, "free_symbols", set())}
+    return sorted(names & _task_unknowns(ir))
+
+
 def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     from .normalize.parse import ClaimNotAValue, check_claim_is_value
     ca = solution.claimed_answer
     if ca.payload_source == "option_letter":
-        return None                         # the option's own text is the problem's, not a claim
+        # the option's own text is the problem's, not a claim; one that names the task's unknown ('{x}', 'x') is no
+        # value all the same (audit of the branch, SA-RK-8: the letter alone was CORRECT)
+        hit = _names_the_unknown(ir, ctx, _claim_value_or_none(solution, ctx)) if _value_shaped(ir, ca) else []
+        return None if not hit else unknown(
+            "intake.claim", f"the chosen option {ca.payload!r} names the unknown(s) {hit}",
+            evidence={"claim_not_read": hit}, flags=["claim_is_not_a_value"])
     if ca.kind in ("value", "count", "expression", "interval", "condition", "equation") \
             and isinstance(ca.payload, list):
         # only a set may be written as a list of elements; any other kind would be read as a set
@@ -774,18 +839,7 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
     set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in _SET_TASKS
     if (ir.answer_shape in ("scalar", "set", "count", "interval") and ca.kind in ("value", "set", "count", "interval")) \
             or (set_task and ca.kind == "condition"):
-        tvar = (ir.task.params or {}).get("var")
-        if isinstance(tvar, str):
-            unknowns = {tvar}
-        else:
-            in_givens = set(re.findall(r"[A-Za-z_]\w*", " ".join(str(g) for g in ir.givens)))
-            unknowns = {v.name for v in ir.vars} & in_givens
-        try:
-            claimed = ctx.claimed(solution)
-            names = {s.name for s in getattr(claimed, "free_symbols", set())}
-        except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
-            names = set()
-        hit = sorted(names & unknowns)
+        hit = _names_the_unknown(ir, ctx, _claim_value_or_none(solution, ctx))
         if hit:
             # no value is claimed: no certificate refutes it either (a condition of a set task no notation reading
             # took, `_notation_set`, read as the set {x ∈ {-2, 2}} was refuted, PRE-RK-5); the steps are checked
@@ -1167,6 +1221,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         # is not what CORRECT means at solution level (DECISIONS §2), so it is disclosed.
         scope_flags.append("answer_from_option_letter")
 
+    # a unit mark whose unit the IR's `units` names is the plain number: '30°' is 30 when the question counts in degrees
+    # (x + 2x + 3x = 180), and was read both ways and left UNKNOWN (audit of the branch, SA-RK-4)
+    ca.payload = ctx.plain_unit_reading(ca.payload)
     raw_payload = list(ca.payload) if isinstance(ca.payload, list) else ca.payload    # before its notation is normalized
     scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
 
@@ -1437,8 +1494,9 @@ def _option_as_claim(problem_ir: ProblemIR, solution: Solution, ctx, modules: li
     if not problem_ir.options:
         return mc                      # a letter and no options: nothing to read it in
     sol2 = _option_read_as_claim(problem_ir, solution, ctx)        # the claim's own reader (G1RK-1)
-    if sol2 is None:
-        return mc
+    if sol2 is None or (_value_shaped(problem_ir, sol2.claimed_answer)
+                        and _names_the_unknown(problem_ir, ctx, _claim_value_or_none(sol2, ctx))):
+        return mc                      # no option read, or one naming the unknown ('{x}': z3 holds it, SA-RK-8)
     state = _decided(_certify(problem_ir, sol2, ctx, modules))
     ev = dict(mc.evidence, option=solution.claimed_answer.option, read_as_claim=state)
     if state == "pass" and _decided(certs) == "pass":
@@ -1474,10 +1532,16 @@ def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, module
     ca = solution.claimed_answer
     if ca.option not in (problem_ir.options or {}):
         return mc
+    windows = list((ctx.cache.get(TOLERANCE_WINDOW) or {}).values())
     states: dict[str, str | None] = {}
     for letter in problem_ir.options:
-        sol2 = _option_read_as_claim(problem_ir, _lettered(solution, letter), ctx)
-        states[letter] = None if sol2 is None else _decided(_certify(problem_ir, sol2, ctx, modules))
+        if letter != ca.option and _META_OPTION.fullmatch(str(problem_ir.options[letter]).strip().lower()):
+            states[letter] = "fail"        # 'Hiçbiri', 'Belirlenemez': no value, none in the window (SA-RK-6)
+        elif letter != ca.option and len(windows) == 1:
+            states[letter] = _in_window(windows[0], problem_ir, _lettered(solution, letter), ctx)
+        else:
+            sol2 = _option_read_as_claim(problem_ir, _lettered(solution, letter), ctx)
+            states[letter] = None if sol2 is None else _decided(_certify(problem_ir, sol2, ctx, modules))
     ev = dict(mc.evidence or {}, option=ca.option, options_in_window=states)
     chosen = states[ca.option]
     if chosen == "fail":
@@ -1495,6 +1559,26 @@ def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, module
         ev["reason"] = "the chosen option is the one option within the declared tolerance"
         return result("mc.consistency", "pass", 0.99, True, ev, mc.latency_ms, primary=False)
     return mc
+
+
+# an option that names no value: none of the answers, or that there is none ("none of the above"); never inside a
+# tolerance window. Not '7 ile 8 arasında' (a true statement about the value: it stays undecided, SA-RK-6)
+_META_OPTION = re.compile(r"(?:(?:yukarıdakilerin\s+)?hiçbiri(?:si)?|belirlenemez|bulunamaz|hesaplanamaz|"
+                          r"none of the above|none|cannot be determined)[.!]?")
+
+
+def _in_window(compare, ir: ProblemIR, solution: Solution, ctx) -> str | None:
+    """'pass' when the chosen option, read as the claim (`_option_claim_value`), lies inside the certificate's declared
+    tolerance window (`certify.base.TOLERANCE_WINDOW`: the value it proved, compared once), 'fail' outside, None when
+    the option is not read or the comparison undecided."""
+    try:
+        ov = _option_claim_value(ir, solution, ctx)
+        got = compare(ov) if ov is not None else None
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: undecided
+        got = None
+    return "pass" if got is True else "fail" if got is False else None
 
 
 def cache_key(problem_ir: dict, solution: dict) -> str:
