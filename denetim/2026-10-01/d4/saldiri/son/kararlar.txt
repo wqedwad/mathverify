@@ -108,3 +108,30 @@ EK (16 Ekim akşam; g3 ikinci saldırganı ve g4 saldırganlarının bulguları)
   RK-8 parçalı kırık noktada 'yok' cevabı, RK-9 trig tanım koşullu noktada türev/teğet/limit, RK-10): kayıt; RK-9 (yüksek kapsama:
   (ln sin x)'(π/4) = 1 karar almıyor) ve RK-4 ucuz ve kesin yolla düzeltilebiliyorsa ölçerek düzeltilir. SON-G3-RK-2 (A+, U5: n ≥ 2
   bildirilmiş üste ikinci türev): U5'in dar genişlemesi (n − k ≥ 0 kanıtlıysa taban koşulu yok) ölçülerek.
+
+EK 2 (21 Ekim; wip/son-adim'in bağımsız denetimi, son_denetim/son-adim/bulgular.json; doğrulayıcı 14/14 gerçek)
+- SA-YO-1 (yüksek, gerçekçi, dal getirdi, YANLIŞ ONAY): şık iddianın okuyucusundan geçerken sondaki anlamlı sözcükler atılıyor
+  ('3 azalır', '5 ten büyük', '(2, 3) aralığının dışı', '6 m'). Karar: okuyucu yalnız bilinen süs sözcüklerini (tane, adet, birim
+  olmayan dolgu: "olur", "bulunur", "dır" ekleri vb.) atar; anlamı değiştirebilecek her artık metin (karşılaştırma, yön, "dışı",
+  "değil", birim) şıkkı OKUNMAZ yapar (UNKNOWN, engel kalır). Birim sözcüğü (cm, m, km, kg, sa, km/sa …) yalnız IR'ın units alanı
+  aynı birimi bildiriyorsa atılır; değilse şık okunmaz (SA-RK-3: başka birimde yazılmış şık INCORRECT olmamalı).
+- SA-YO-2, SA-RK-2 (orta, gerçekçi, dal): sınır yolundan unknown kalan adım öncül havuzuna GİRMEZ (sonraki adımların öncülü olamaz).
+- SA-YO-3 (orta, gerçekçi, dal): sınır kuralı yalnız eşitlik adımlarına (Eq ve Eq'lerin Or'u) uygulanır; eşitsizlik adımı
+  ('x ≤ 2 ∨ x ≥ 3', 'x² − 5x + 6 ≥ 0', '2 ≤ x ≤ 3') öncüle karşı normal denetlenir (iç noktada yanlışsa refuted).
+- SA-YO-4 (orta, gerçekçi, dal): sınır kuralı yalnız adımın sembollerini anan bütün öncüller tek değişkenliyken uygulanır;
+  parametreli sistemde (a > 0 ve denklem) eski davranış.
+- SA-RK-1 (yüksek, gerçekçi, dal, HAKSIZ RET): eşitsizlik öncülünün kesin kısmı BOŞSA (çözümü boş eşitsizlik) sınır kuralı
+  uygulanmaz ("hiçbir iç noktada sağlanmıyor" boşuna doğru); öncül kümesi boşsa G4-RK-5'in kuralı (son-ayristirici) geçerlidir.
+- SA-RK-4 (orta, gerçekçi, dal, KAPSAMA): open_unit_marks IR'ın units alanını okur: birim bildirilmişse tek okuma (bildirilen birim).
+- SA-RK-5 (onaylandı): IR'ın kendi trig ilişkisinin (görev ilişkisi ya da verilen; argümanı rasyonel katsayılı kx + c) bağladığı
+  değişkende ° birimdir (trig_solve istisnasının genellemesi).
+- SA-RK-6 (orta, belirsiz, dal): toleranslı çoktan seçmelide sayı olmayan şık ('Hiçbiri', 'Belirlenemez') pencerede sayılmaz;
+  pencere karşılaştırması sertifikanın kesin değerinden bir kez yapılır (her şık için bütün sertifikalar yeniden koşulmaz; süre).
+- SA-RK-7 (önceden var, gerçekçi haksız ret): işaret tablosu kardeşlerinden paydanın kökü (x − 1 = 0, (x − 2)/(x − 1) < 0 için) sınır
+  kuralına girer (kritik nokta denklemi: pay = 0 ve payda = 0); Δ < 0 sınır denklemi, dışarıdaki deneme noktası ve tam sayı
+  değişkende irrasyonel sınır: ucuz ve kesin yol yoksa kayıt.
+- SA-RK-8 (düşük, yapay, önceden var): görevin bilinmeyenini içeren şık ('{x}', 'x') değer değildir: okunmaz (UNKNOWN).
+- SA-RK-9: integral düzelticisinin G2YO-4 kardeşi (definite_integral abs_tol) wip/son-integral'de kapandı; birleşimde doğrulanır.
+- SA-RK-10 (önceden var kapsama): '3 ln 2', bileşik birim, değer sorusunda 'x = 6': kayıt (ucuz yol varsa ölçerek).
+- g3 doğrulayıcısı: 15 bulgunun 14'ü gerçek; SON-G3-YO-5 gerçek değil (kararla aynı: CORRECT doğru cevabı onaylıyor).
+  g4 doğrulayıcısı: 5/5 gerçek.

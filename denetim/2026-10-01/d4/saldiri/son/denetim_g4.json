@@ -1,0 +1,122 @@
+[
+ {
+  "id": "G4YO-1",
+  "klass": "false_accept",
+  "severity": "medium",
+  "realistic": "yes",
+  "title": "Çoktan seçmelide '{∅}' şıkkı (boş kümeyi içeren küme, bilinen bir çeldirici) verifier._NO_SOLUTION düzenli ifadesince 'çözüm yok' okunuyor. Doğru boş küme cevabının yanında yanlış harf seçilince sonuç CORRECT.",
+  "repro": "S=/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_saldiri/g4-ayristirici-adim-fuzyon/yanlis-onay; mkdir -p $S/new && git -C /home/user/asd archive 7892190 | tar -x -C $S/new && $S/sonda/run.sh new f1_bos_kume.py   (vakalar: \"x^2+1=0, payload ∅, letter D='{∅}'\", \"x^2+1=0, letter only D='{∅}'\", \"... D='$\\\\{\\\\emptyset\\\\}$'\", \"ineq x^2<0, payload ∅, letter D={∅}\"). Tek başına: from mathverify.verifier import verify; ir={'task':{'kind':'solve_equation','params':{'var':'x','equation':'x**2 + 1 = 0'}},'vars':[{'name':'x','domain':'real'}],'givens':[],'answer_shape':'set','options':{'A':'{0}','B':'{-1}','C':'{1}','D':'{∅}','E':'∅'}}; print(verify(ir,{'claimed_answer':{'kind':'set','payload':'∅','option':'D'},'steps':[]}).verdict)  # CORRECT",
+  "expected": "D harfi (yük ∅ ya da yalnız harf) INCORRECT. En azından UNKNOWN olmalı, CORRECT asla. Aynı metin harfsiz yük '{∅}' olarak verilince zaten INCORRECT çıkıyor.",
+  "actual_new": "7892190: '{∅}', '{ ∅ }', '$\\{\\emptyset\\}$', '\\{\\emptyset\\}', '{\\emptyset}' D şıkları; yük ∅ ya da yalnız harf; kind none; |x|+1=0 ve x²<0 eşitsizliği: hepsi CORRECT (mc.consistency=pass, certify.algebra=pass). Kontrol: harfsiz '{∅}' yükü INCORRECT. '$\\{\\varnothing\\}$' UNKNOWN (d4j'nin option_claim_undecided engeli).",
+  "actual_base": "1df0558: aynı vakalar CORRECT. Tek fark: |x|+1=0 tabanda UNKNOWN, çünkü taban algebra o denklemin boş kümesini sertifikalayamıyordu; mc katmanı orada da pass. Tabanda '$\\{\\varnothing\\}$' + yük ∅ da CORRECT idi; d4j bunu kapattı.",
+  "math": "x² + 1 = 0'ın gerçel çözüm kümesi ∅. {∅} tek elemanlı bir kümedir (elemanı ∅), yani {∅} ≠ ∅. D şıkkı yanlış cevaptır; yük ∅ olsa da seçilen harf yanlış.",
+  "introduced": "preexisting",
+  "mechanism": "verifier.py:40 _NO_SOLUTION = …|∅|emptyset. _mc_consistency (satır ~105) şık metninde bu ifadeyi ARIYOR (search, fullmatch değil) ve iddia ∅ ise şıkkı kümeye ayrıştırmadan 'pass' veriyor. _verify_layers'ın yalnız harf yolu (satır ~980) da set/interval cevapta eşleşen şık metnini '{}' yüküne çeviriyor. Böylece '{∅}' (ve LaTeX \\{\\emptyset\\}) hiç ayrıştırılmadan 'çözüm yok' sayılıyor. Koruma mekanizmaya değil yazıma konmuş: kısa yol yalnız metnin TAMAMI boş küme yazımıysa (∅, \\emptyset, {}, 'çözüm yok', 'kök yoktur' …) uygulanmalı; geri kalan şık parse_set_str ile okunup karşılaştırılmalı. Harfsiz '{∅}' zaten FiniteSet(EmptySet) okunup reddediliyor.",
+  "verdict": {
+   "id": "G4YO-1",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "realistic": "yes",
+   "severity": "high",
+   "corrected_expectation": "Seçilen şıkkın metni BÜTÜNÜYLE boş küme yazımı değilse (∅, Ø, {}, \\emptyset, 'çözüm kümesi boş', 'çözüm yok') 'çözüm yok' kısa yolu uygulanmaz; şık kümeye ayrıştırılıp iddiayla karşılaştırılır. x²+1=0 için D='{∅}' ya da '$\\{\\emptyset\\}$' (yük ∅, '{}' ya da yalnız harf), D='{0, ∅}', D='ℝ \\ ∅', D='{1} ∪ ∅', D='Çözüm kümesi boş değildir': INCORRECT (şık ∅ değil); okunamıyorsa UNKNOWN; hiçbirinde CORRECT değil. E='∅' kontrolü CORRECT kalır.",
+   "note": "Yeni ve tabanda birebir: '{∅}', '$\\{\\emptyset\\}$', '{\\emptyset}' D şıkları yük ∅/'{}'/yalnız harfle CORRECT, x²<0'da da. Delik bulgudan geniş: _NO_SOLUTION.search şık metninde ∅ ya da 'çözüm kümesi boş' GEÇEN her şıkkı kabul ediyor ('{0, ∅}', 'ℝ \\ ∅', '{1} ∪ ∅', 'Çözüm kümesi boş değildir' CORRECT). {∅}≠∅ klasik çeldirici: yanlış onay, yüksek."
+  }
+ },
+ {
+  "id": "G4YO-2",
+  "klass": "false_accept",
+  "severity": "medium",
+  "realistic": "unclear",
+  "title": "Bölmeden sonra yan yana yazım: '1/2π', '1/2√x', 'x/2π' unicode metinde soldan sağa (π/2, √x/2, πx/2) okunuyor. Aynı metnin LaTeX hâli ('1/2\\pi') 1/(2π) okunuyor, ASCII hâli ('1/2pi') reddediliyor. Gelenek tahmin ediliyor; okunuşu doğru cevaba denk gelen yanlış cevap CORRECT, doğru cevap INCORRECT.",
+  "repro": "S=/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_saldiri/g4-ayristirici-adim-fuzyon/yanlis-onay; mkdir -p $S/new && git -C /home/user/asd archive 7892190 | tar -x -C $S/new && $S/sonda/run.sh new f3_carpim_onceligi.py   (YO vakaları: \"YO  d/dx(x*sqrt(x)/3) = sqrt(x)/2, claim '1/2√x'\", \"YO  d/dx(pi*x^2/4) = pi*x/2, claim 'x/2π'\", \"YO  evaluate pi/2, claim '1/2π'\"; RK vakaları aynı dosyada). Yol (b): intake.restructure.extract_final_answer('Cevap: 1/2√x') yükü '1/2√x' çıkarıyor.",
+  "expected": "'1/2π', '1/2√x', 'x/2π', '1/2√3' iki okumalıdır ((1/2)·π ile 1/(2π)); ikisinde de eşitse karar, değilse UNKNOWN. Bu vakalarda doğru karar: x√x/3 türevi için '1/2√x' UNKNOWN, √x türevi için '1/2√x' UNKNOWN (INCORRECT değil).",
+  "actual_new": "7892190: parse_expr_str('1/2√x') = sqrt(x)/2, '1/2π' = pi/2, 'x/2π' = pi*x/2. (x√x/3)' için '1/2√x' CORRECT; (√x)' için '1/2√x' INCORRECT; (πx²/4)' için 'x/2π' CORRECT; (x²/(4π))' için 'x/2π' INCORRECT; π/2'ye '1/2π' CORRECT; 1/(2π)'ye '1/2π' INCORRECT; √3/2'ye '1/2√3' CORRECT, √3/6'ya INCORRECT. Aynı metin LaTeX '$1/2\\pi$' olarak π/2'ye INCORRECT (1/(2π) okunuyor), ASCII '1/2pi' ise UNKNOWN (reddediliyor). Şık olarak '1/2√x' (1/(2√x) kastıyla) ve doğru yük 1/(2√x) INCORRECT.",
+  "actual_base": "1df0558: birebir aynı (bütün CORRECT/INCORRECT/UNKNOWN değerleri aynı).",
+  "math": "d/dx(x^{3/2}/3) = √x/2; d/dx √x = 1/(2√x); d/dx(πx²/4) = πx/2; d/dx(x²/(4π)) = x/(2π). '1/2√x' yazımı yaygın olarak 1/(2√x) anlamında kullanılır (√x türevinin ders kitabı yazımı), ama katı soldan sağa öncelikle (1/2)√x de okunabilir. Anlam bir geleneğe bağlı; ilke gereği karar verilmemeli. Doğrulayıcının kendi iki okuyucusu (unicode ve LaTeX) da bu metni farklı okuyor.",
+  "introduced": "preexisting",
+  "mechanism": "normalize/parse.py:1177 _UNI_VALUE_RE = ([0-9)\\]])\\s*([π∞√∛ℝℤℕ∅]) ve preclean (satır ~1218): rakam ile unicode değer simgesi arasına '*' konuyor. Yorumdaki gerekçe ('5π/6' gibi yazımlarda bu her zaman çarpımdır) bölen konumundaki rakam için doğru değil: '1/2π' → '1/2*pi'. Örtük çarpım kasıtla kapalı ('1/2x', '1/2pi' ParseError) ve latex2sympy aynı metni 1/(2π) okuyor; yani koruma yalnız ASCII yazımda. Kapanış: '/' sonrasındaki rakama bitişik değer simgesi geldiğinde ya reddedilmeli ya da iki okuma karşılaştırılmalı (ayrışırsa UNKNOWN). Not: bulgu iki yönlü; haksız ret tarafı (√x türevi için '1/2√x' INCORRECT) gerçekçi.",
+  "verdict": {
+   "id": "G4YO-2",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "realistic": "yes",
+   "severity": "medium",
+   "corrected_expectation": "Bölmeden sonra rakama bitişik değer simgesi ('1/2π', '1/2√x', 'x/2π', '1/2√3') iki okumalıdır: (1/2)·π ve 1/(2π). İki okuma da hedefe eşitse karar, değilse UNKNOWN. Ölçülen vakalarda okumalar ayrışıyor: (x√x/3)' ve (√x)' için '1/2√x', (πx²/4)' ve (x²/(4π))' için 'x/2π', π/2 ve 1/(2π) için '1/2π', √3/2 ve √3/6 için '1/2√3' hepsi UNKNOWN. Aynısı LaTeX satır içi yazım için de: '$1/2\\pi$', '$1/2\\sqrt{x}$' bugün 1/(2π), 1/(2√x) okunuyor (π/2'ye INCORRECT). \\frac ve açık parantez ('1/(2√x)') etkilenmez.",
+   "note": "Yeni ve tabanda birebir: '1/2√x'→√x/2, '1/2π'→π/2, 'x/2π'→πx/2; (√x)' için '1/2√x' INCORRECT, (x√x/3)' için CORRECT. LaTeX '$1/2\\sqrt{x}$' tersini veriyor ((√x)' CORRECT, (x√x/3)' INCORRECT); ASCII '1/2pi' UNKNOWN. Doğrulayıcının iki okuyucusu çelişiyor; gelenek tahmini hem yanlış onay hem haksız ret üretiyor. Ret yanı (düz metin 1/2√x) gerçekçi."
+  }
+ },
+ {
+  "id": "G4YO-3",
+  "klass": "false_accept",
+  "severity": "low",
+  "realistic": "unclear",
+  "title": "Yük temizleyicinin olumsuzlama ve şüphe denetimi Türkçe ekli biçimleri görmüyor: '5 değildir', '5 yanlıştır', '5 olmayabilir', '5 sanmıyorum', '5 midir', '5 hariçtir' sondaki düzyazı atılarak 5 olarak sertifikalanıyor (CORRECT). '5 değil' ve '5 olamaz' ise UNKNOWN.",
+  "repro": "S=/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_saldiri/g4-ayristirici-adim-fuzyon/yanlis-onay; mkdir -p $S/new && git -C /home/user/asd archive 7892190 | tar -x -C $S/new && $S/sonda/run.sh new f2_olumsuzlama.py   (vakalar \"2+3: payload '5 değildir'\" … ; dosya ayrıca extract_final_answer('Cevap: 5 değildir') sonucunu yazar: yük '5 değildir')",
+  "expected": "Kardeş yazım '5 değil' gibi payload_negated: UNKNOWN (CORRECT değil).",
+  "actual_new": "7892190: '5 değildir', '5 değildir.', '5 yanlıştır', '5 olmayabilir', '5 sanmıyorum', '5 midir', '5 hariçtir' → CORRECT (certify.algebra=pass). '5 değil' ve '5 olamaz' → UNKNOWN. Yol (b) 'Cevap: 5 değildir' metninden '5 değildir' yükünü çıkarıyor.",
+  "actual_base": "1df0558: birebir aynı.",
+  "math": "Hedef 2 + 3 = 5. Yük, değerin 5 OLMADIĞINI ('değildir', 'yanlıştır') ya da 5 olduğundan şüpheyi ('olmayabilir', 'sanmıyorum', soru eki 'midir') söylüyor; bu yük 5 iddiası değil.",
+  "introduced": "preexisting",
+  "mechanism": "verifier.py _NEGATION = (?<!\\w)(değil|olamaz|olmaz|yanlış|hariç|…|sanırım|…)(?!\\w)|\\?: kelime sonu (?!\\w) Türkçe çekim/bildirme ekinde tutmuyor (değil+dir, yanlış+tır, hariç+tir); 'olmayabilir', 'sanmıyorum', 'mi/midir' listede yok. _sanitize_payload sondaki düzyazı belirtecini atıyor, olumsuzlama görülmediği için 5 kalıyor. 25 Eylül düzeltmesi tek yazıma konmuş. Kök/ek temelli eşleşme gerekli: değil\\w*, yanlış\\w*, olma\\w*, san(?:mı|mi)\\w*, \\bmi(?:dir)?\\b … Yapay bir yük sayılabilir, ama yol (b) 'Cevap: 5 değildir' metninden bu yükü üretiyor.",
+  "verdict": {
+   "id": "G4YO-3",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "realistic": "unclear",
+   "severity": "low",
+   "corrected_expectation": "Sondaki düzyazı olumsuzlama/şüphe kökü taşıyorsa (değil-dir, yanlış-tır, hariç-tir, olma-yabilir, san-mıyorum, soru eki mi/midir, '… kesin değildir') yük okunmaz: payload_negated, UNKNOWN. 2+3 için '5 değildir', '5 değildir.', '5 yanlıştır', '5 olmayabilir', '5 sanmıyorum', '5 midir', '5 hariçtir', '5 olduğu kesin değildir' UNKNOWN. Olumlu düzyazı ('5 doğrudur', '5 olur') temizlenip CORRECT kalabilir.",
+   "note": "Yeni ve tabanda birebir: yukarıdaki yedi yük ve '5 olduğu kesin değildir' CORRECT; '5 değil', '5 olamaz', '5 değildir sanırım', '5 midir?' UNKNOWN. extract_final_answer('Cevap: 5 değildir') yükü '5 değildir' veriyor. Yanlış onay, ama son cevabı 'değildir' diye yazan çözücü olağan değil: düşük."
+  }
+ },
+ {
+  "id": "G4-K-4",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "realistic": "yes",
+  "title": "Tek gerçel noktası olan verilende (kareler toplamı, √ + |·| = 0) açıkça yanlış eq/compute adımı çürütülmüyor (unknown). Yanlış adımlı ama doğru cevaplı çözüm CORRECT. d4g 2. tur yalnız doğrulama yönünü (x² + y² = 0'da verified) kapatmıştı.",
+  "repro": "S=/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_saldiri/g4-ayristirici-adim-fuzyon/yanlis-onay; mkdir -p $S/new && git -C /home/user/asd archive 7892190 | tar -x -C $S/new && $S/sonda/run.sh new f4_kare_toplami.py   (vakalar \"G1 right answer 1, wrong eq step x = 1\", \"... x + y = 3\", \"... compute x*y = 2\", \"G2 right answer -1, wrong eq step x = -2\")",
+  "expected": "Adım tek gerçel noktada çürütülür (refuted, first_bad_step = 1), çözüm INCORRECT.",
+  "actual_new": "7892190: G1 (x² + y² + 2x − 4y + 5 = 0, hedef x + y, cevap 1) eq 'x = 1', eq 'x + y = 3', eq '(x−1)² + (y+2)² = 0', compute 'x*y = 2' → adım unknown, karar CORRECT. G2 (√(x−2) + |y+3| = 0, cevap −1) eq 'x = −2' → unknown (premises_inconsistent_or_unsolved), CORRECT. Kontrol: adımsız yanlış cevap 3 INCORRECT. x² + y² = 0 altında eq 'x = 1' de unknown.",
+  "actual_base": "1df0558: G1 vakaları aynı (CORRECT, adım unknown). G2 tabanda UNKNOWN (taban sertifikası G2'yi kanıtlayamıyordu); adım yine unknown. 5eb38f8 de aynı (CORRECT).",
+  "math": "x² + y² + 2x − 4y + 5 = (x + 1)² + (y − 2)² = 0 ⟹ x = −1, y = 2 (tek gerçel nokta); x + y = 1, xy = −2. Bu yüzden 'x = 1', 'x + y = 3', 'xy = 2' yanlış. √(x − 2) + |y + 3| = 0 ⟹ x = 2, y = −3; 'x = −2' yanlış (−2 √(x − 2)'nin tanım kümesinde bile değil). Klasik TYT/AYT kalıbı.",
+  "introduced": "preexisting",
+  "mechanism": "steps.deterministic._check_eq_in: yol 1 solve_system, SymPy'nin karmaşık parametrik çözümlerini (x = −1 ± i(y − 2)) örnekliyor; noktalar gerçel değil, atlanıyor. Yol 2 reddetmeli örnekleme sıfır ölçülü kümede nokta bulamıyor. Compute adımında _finite_instances kompleks boyutu 1 olan varyeteyi sonlu saymıyor. Yanlış onay değil (verified yok), ama CORRECT'in 'hiçbir adım çürütülmedi' yarısı çürütülebilir bir adımı kaçırıyor (K4'ün ilk kötü adımı). Kareler toplamının (ya da negatif olmayan terimler toplamının) sıfır olduğu yerde her terim sıfırdır kuralıyla gerçel nokta kesin elde edilebilir.",
+  "verdict": {
+   "id": "G4-K-4",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "realistic": "yes",
+   "severity": "low",
+   "corrected_expectation": "(x+1)²+(y−2)²=0 verileninin tek gerçel noktası (−1, 2): x+y=1, xy=−2. 'x = 1', 'x + y = 3', compute 'x*y = 2' orada yanlış: adım refuted (first_bad_step=1), çözüm INCORRECT (doğrusal verilendeki kontrol gibi). √(x−2)+|y+3|=0 → (2, −3): 'x = −2', 'y = 3' refuted, INCORRECT. Doğru adımlar ('x = −1', '(x+1)²+(y−2)²=0') unknown/verified kalır. Noktayı kesin bulamayan yol bugünkü gibi unknown kalabilir (kapsama, yanlış onay değil).",
+   "note": "Yeni: G1 'x = 1', 'x + y = 3', compute 'x*y = 2', çarpanlı (x−3)²+(y+1)²=0'da 'x = 1' adım unknown, CORRECT; G2 'x = −2', 'y = 3' unknown(premises_inconsistent_or_unsolved), CORRECT. Taban: G1 aynı, G2 UNKNOWN. Kontrol: doğrusal verilende 'x = 1' refuted, INCORRECT. Somut karşı örnek (tek gerçel nokta) var; kapsama kaybı."
+  }
+ },
+ {
+  "id": "G4-RK-5",
+  "klass": "unjust_reject",
+  "severity": "medium",
+  "realistic": "yes",
+  "title": "(Lens dışı, rastlantısal) Çözümsüz denklemde geçerli çelişki adımı reddediliyor: 2x + 1 = 2x + 3 için eq '0 = 2' ya da '1 = 3', x² + 1 = 0 için compute 'x**2 = -1' refuted; doğru Ç = ∅ cevabı INCORRECT.",
+  "repro": "S=/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_saldiri/g4-ayristirici-adim-fuzyon/yanlis-onay; mkdir -p $S/new && git -C /home/user/asd archive 7892190 | tar -x -C $S/new && $S/sonda/run.sh new f5_celiski_adimi.py   (vakalar \"2x+1=2x+3: eq '0 = 2' then {}\", \"2x+1=2x+3: eq '1 = 3' then answer {}\", \"x^2+1=0: compute 'x**2 = -1' then {}\")",
+  "expected": "Öncüller tutarsızken (gerçel örneği yok) türetilen kapalı yanlış bağıntı karşı örnek değildir: adım unknown ya da verified, çözüm CORRECT (kontrol: adımsız {} CORRECT).",
+  "actual_new": "7892190: '1 = 3', '0 = 2', '2*x - 2*x = 3 - 1' → refuted, INCORRECT; compute 'x**2 = -1' → refuted, INCORRECT; eq 'x**2 = -1' → unknown, CORRECT (A+'ın görev ilişkisi öncülü bunu düzeltti).",
+  "actual_base": "1df0558: '1 = 3', '0 = 2', compute 'x**2 = -1' → refuted, INCORRECT; eq 'x**2 = -1' de refuted (no_value_of_the_domain_satisfies_the_claim), INCORRECT.",
+  "math": "2x + 1 = 2x + 3 ⟺ 0 = 2: gerçel çözüm yok, Ç = ∅. '0 = 2' adımı denklemin geçerli bir sonucudur (iki taraftan 2x + 1 çıkarılır) ve çözümün kendisi bu çelişkiye dayanır. x² + 1 = 0 ⟹ x² = −1 de geçerli türetmedir.",
+  "introduced": "preexisting",
+  "mechanism": "steps.deterministic._check_eq_in → _closed_claim: serbest sembolü olmayan iddia 'öncüllerden bağımsız' doğru ya da yanlış sayılıyor (29 Eylül gcd kuralı), öncüllerin gerçel örneği olmasa da. Compute yolu: _on_premises 'no_premise_instance' döndürünce özdeşlik reddi duruyor. Öncüllerin örneği olmadığı kesinse kapalı iddia ve özdeşlik reddi geri çekilmeli (ilke 5: hiçbir yerde tutmayan öncül hiçbir şeyi çürütmez; wordproblem._claim_status'taki CAP-Z1 kuralının adım katmanındaki aynası).",
+  "verdict": {
+   "id": "G4-RK-5",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "realistic": "yes",
+   "severity": "medium",
+   "corrected_expectation": "Öncül kümesi (görevin denklemi) gerçelde boşsa ve bu kanıtlıysa karşı örnek yoktur (ilke 5): 2x+1=2x+3 altında '0 = 2', '1 = 3', '2*x − 2*x = 3 − 1', compute '0 = 2'; x²+1=0 altında compute 'x**2 = −1' adımları unknown ya da verified, çözüm {} CORRECT. Öncül kümesi boş değilse (x+1=3 altında '1 = 3') bugünkü gibi refuted, INCORRECT.",
+   "note": "Yeni: eq '0 = 2', '1 = 3', '2*x - 2*x = 3 - 1', compute '0 = 2', compute 'x**2 = -1' refuted, INCORRECT; eq 'x**2 = -1' unknown, CORRECT. Taban: eq 'x**2 = -1' de refuted. Kontrol: adımsız {} CORRECT; x+1=3'te '1 = 3' doğru biçimde refuted. Çözümsüz doğrusal denklemin ders kitabı çözümü (çelişki) reddediliyor: haksız ret, gerçekçi."
+  }
+ }
+]
