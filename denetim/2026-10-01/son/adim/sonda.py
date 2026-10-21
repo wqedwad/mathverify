@@ -20,6 +20,18 @@
   F  G2YO-5/7 (added 16 Oct evening) options with a declared tolerance: several in the window name none (UNKNOWN); the
              chosen one outside it is refuted; inside it alone, a claim certified in the window too is the same answer
   K  controls whose verdict must not change
+  -- second round (21 Oct 2026): the independent audit of the branch (14 findings, SA-*) --
+  L  SA-YO-2/3/4, SA-RK-1/2/7  the boundary rule narrowed: a step read on the boundary joins no premise pool (the
+             wrong step after it refuted, the right one verified); only an equation or a choice of equations is a
+             critical point step (the closed wrong region refuted); no boundary in a system (a > 0 next to
+             x**2 - a*x - 6 = 0); none for an inequality with no point inside ((x - 3)**2 < 0, (2, 3) of an integer);
+             the root of a denominator is a critical point, read where the expression is undefined; a wrong list of
+             roots with a value outside the solution is no choice
+  M  SA-RK-4/5  a unit the IR's units names ('derece', '°', '%', 'yüzde') is read as the plain number; a degree mark on
+             a radian measure (the variable sin and cos of the IR's own relations read, an inverse trigonometric
+             value) is that unit; an option word the IR's units does not name leaves it unread (SA-YO-1, SA-RK-3)
+  N  SA-RK-6  with a declared tolerance, an option that names no value ('Hiçbiri', 'Belirlenemez') is outside the
+             window; '7 ile 8 arasında' stays undecided; the window is read once from the certificate's value
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/adim/sonda.py [out.json] [groups]
@@ -190,8 +202,9 @@ def cases_b():
         ("fraction IR: letter %25 only (wrong)", _mc(frac, PCT), sol(None, option="C"), NO, None),
         ("radian IR: payload pi/6, letter 30°", _mc(tri_r, DEG), sol("pi/6", option="B"), UNK, None),
         ("radian IR: letter 40° only (wrong)", _mc(tri_r, DEG), sol(None, option="C"), NO, None),
+        # an inverse trigonometric value is a radian measure: 30° is its unit (second round, SA-RK-5)
         ("asin(1/2): payload pi/6, letter 30°", _mc(ir("evaluate", {"expr": "asin(1/2)"}), DEG), sol("pi/6", option="B"),
-         UNK, None),
+         OK, None),
         ("asin(1/2): payload pi/6, letter 40° (wrong)", _mc(ir("evaluate", {"expr": "asin(1/2)"}), DEG),
          sol("pi/6", option="C"), NO, None),
         # spellings of the marks
@@ -251,6 +264,8 @@ QE = ir("solve_equation", {"equation": "x**2 - 5*x + 6 = 0", "var": "x"}, shape=
 OI = {"A": "x ∈ (1, 2)", "B": "x ∈ (2, 3)", "C": "x ∈ (3, 4)", "D": "x ∈ [2, 3]", "E": "x ∈ ℝ"}
 OE = {"A": "x ∈ {1, 2}", "B": "x ∈ {2, 3}", "C": "x ∈ {3, 4}", "D": "x ∈ {-2, -3}", "E": "x ∈ ∅"}
 LIN = ir("evaluate", {"expr": "x"}, ["x + y = 10", "x - y = 2"], [X, {"name": "y", "domain": "real"}])
+LINU = dict(LIN, units="cm")
+CM = {"A": "4 cm", "B": "5 cm", "C": "6 cm", "D": "7 cm", "E": "8 cm"}
 
 
 def _five(c):
@@ -268,14 +283,21 @@ def cases_c():
          sol("{2, 3}", "set", option="B"), OK, None),
         ("option '$x \\in (2, 3)$' (LaTeX)", _mc(QI, dict(OI, B="$x \\in (2, 3)$")), sol(A23, "interval", option="B"), OK, None),
         ("option '2 < x < 3' (as before)", _mc(QI, dict(OI, B="2 < x < 3")), sol(A23, "interval", option="B"), OK, None),
-        ("K01 option '6 cm'", _mc(LIN, _five("6 cm")), sol("6", option="C"), OK, None),
-        ("K03 option '6 TL'", _mc(LIN, _five("6 TL")), sol("6", option="C"), OK, None),
+        # a unit word of an option is dropped only where the IR's units names it (second round, SA-YO-1, SA-RK-3)
+        ("K01 option '6 cm' (units 'cm')", _mc(dict(LIN, units="cm"), _five("6 cm")), sol("6", option="C"), OK, None),
+        ("K01 option '6 cm' (no units: not read)", _mc(LIN, _five("6 cm")), sol("6", option="C"), UNK, None),
+        ("K03 option '6 TL' (units 'TL')", _mc(dict(LIN, units="TL"), _five("6 TL")), sol("6", option="C"), OK, None),
+        ("K03 option '6 TL' (no units: not read)", _mc(LIN, _five("6 TL")), sol("6", option="C"), UNK, None),
         ("K12 option '6 tane'", _mc(LIN, _five("6 tane")), sol("6", option="C"), OK, None),
-        ("K19 option '6 cm²'", _mc(LIN, _five("6 cm²")), sol("6", option="C"), OK, None),
+        ("K19 option '6 cm²' (units 'cm²')", _mc(dict(LIN, units="cm²"), _five("6 cm²")), sol("6", option="C"), OK, None),
+        ("K19 option '6 cm²' (no units: not read)", _mc(LIN, _five("6 cm²")), sol("6", option="C"), UNK, None),
         ("K05 option '$6$' (as before)", _mc(LIN, _five("$6$")), sol("6", option="C"), OK, None),
-        ("KP4 option 'π/6 rad'", _mc(ir("evaluate", {"expr": "asin(1/2)"}), {"A": "π/6 rad", "B": "π/4", "C": "π/3",
-                                                                              "D": "π/2", "E": "π"}),
+        ("KP4 option 'π/6 rad' (units 'rad')", _mc(ir("evaluate", {"expr": "asin(1/2)"}, units="rad"),
+                                                   {"A": "π/6 rad", "B": "π/4", "C": "π/3", "D": "π/2", "E": "π"}),
          sol("pi/6", option="A"), OK, None),
+        ("KP4 option 'π/6 rad' (no units: not read)", _mc(ir("evaluate", {"expr": "asin(1/2)"}),
+                                                          {"A": "π/6 rad", "B": "π/4", "C": "π/3", "D": "π/2", "E": "π"}),
+         sol("pi/6", option="A"), UNK, None),
         ("\\log_2 5 option (as before)", _mc(ir("evaluate", {"expr": "x"}, ["2**x = 5"]),
                                              {"A": "0", "B": "\\log_2 5", "C": "100", "D": "-100", "E": "1000"}),
          sol("log(5)/log(2)", option="B"), OK, None),
@@ -284,12 +306,11 @@ def cases_c():
         ("letter only 'x ∈ (1, 2)'", _mc(QI, OI), sol(None, "interval", option="A"), NO, None),
         ("letter only 'x ∈ [2, 3]'", _mc(QI, OI), sol(None, "interval", option="D"), NO, None),
         ("option 'x ∈ {1, 2}' chosen for {2, 3}", _mc(QE, OE), sol("{2, 3}", "set", option="A"), NO, None),
-        ("option '7 cm' chosen for 6", _mc(LIN, {"A": "4 cm", "B": "5 cm", "C": "6 cm", "D": "7 cm", "E": "8 cm"}),
-         sol("6", option="D"), NO, None),
-        ("letter only '7 cm'", _mc(LIN, {"A": "4 cm", "B": "5 cm", "C": "6 cm", "D": "7 cm", "E": "8 cm"}),
-         sol(None, option="D"), NO, None),
-        ("letter only '6 cm'", _mc(LIN, {"A": "4 cm", "B": "5 cm", "C": "6 cm", "D": "7 cm", "E": "8 cm"}),
-         sol(None, option="C"), OK, None),
+        ("option '7 cm' chosen for 6 (units 'cm')", _mc(LINU, CM), sol("6", option="D"), NO, None),
+        ("letter only '7 cm' (units 'cm')", _mc(LINU, CM), sol(None, option="D"), NO, None),
+        ("letter only '6 cm' (units 'cm')", _mc(LINU, CM), sol(None, option="C"), OK, None),
+        ("option '7 cm' chosen for 6 (no units)", _mc(LIN, CM), sol("6", option="D"), NOTOK, None),
+        ("letter only '6 cm' (no units: not read)", _mc(LIN, CM), sol(None, option="C"), UNK, None),
         # logarithms with a base and a number: read by the one reader of claims and options (the verifier's corrected
         # expectation of G1RK-1); the wrong letter in them refuted (the base reading: CORRECT)
     ]
@@ -328,17 +349,18 @@ NOTATIONS = [  # (IR, claim kind, a text the claim's reader takes)
     (QI, "interval", "x \\in (2, 3)"), (QI, "interval", "Interval.open(2, 3)"), (QI, "interval", "\\boxed{(2, 3)}"),
     (QE, "set", "{2, 3}"), (QE, "set", "x ∈ {2, 3}"), (QE, "set", "2, 3"), (QE, "set", "x = 2 or x = 3"),
     (QE, "set", "$x \\in \\{2, 3\\}$"), (QE, "set", "{3, 2}"),
-    (LIN, "value", "6"), (LIN, "value", "6 cm"), (LIN, "value", "$6$"), (LIN, "value", "\\frac{12}{2}"), (LIN, "value", "6.0"),
+    (LIN, "value", "6"), (LINU, "value", "6 cm"), (LIN, "value", "$6$"), (LIN, "value", "\\frac{12}{2}"), (LIN, "value", "6.0"),
     (LIN, "value", "+6"), (LIN, "value", "\\boxed{6}"), (LIN, "value", "6 tane"),
     (ir("evaluate", {"expr": "sqrt(12)"}), "value", "2√3"), (ir("evaluate", {"expr": "sqrt(12)"}), "value", "2\\sqrt{3}"),
-    (ir("evaluate", {"expr": "asin(1/2)"}), "value", "π/6"), (ir("evaluate", {"expr": "asin(1/2)"}), "value", "π/6 rad"),
+    (ir("evaluate", {"expr": "asin(1/2)"}), "value", "π/6"), (ir("evaluate", {"expr": "asin(1/2)"}, units="rad"), "value", "π/6 rad"),
     (ir("evaluate", {"expr": "log(2)"}), "value", "ln(2)"), (ir("evaluate", {"expr": "log(2)"}), "value", "\\ln 2"),
     (ir("evaluate", {"expr": "exp(-1)"}), "value", "1/e"), (ir("evaluate", {"expr": "exp(-1)"}), "value", "e^{-1}"),
 ]
 
 
 def _claim_notations_are_option_notations():
-    """Every notation the claim's reader takes is taken as an option too, and to the same value."""
+    """Every notation the claim's reader takes is taken as an option too, and to the same value. A unit word only
+    where the IR's units names it: an option's word may carry its meaning ('6 m' against cm; SA-YO-1)."""
     import copy
     from mathverify.certify.base import make_ctx
     from mathverify.ir import ProblemIR
@@ -481,10 +503,168 @@ def cases_k():
     ]
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k}
+# L: second round, the boundary rule narrowed (SA-YO-2/3/4, SA-RK-1/2/7) ---------------------------------------------
+GE = "Union(Interval(-oo, 2), Interval(3, oo))"
+RGE = "Union(Interval.open(-oo, -2), Interval(1, oo))"
 
 
-def main(out_path=None, groups="ABCDEFK"):
+def cases_l():
+    lt, le, ge = ineq("x**2 - 5*x + 6 < 0"), ineq("x**2 - 5*x + 6 <= 0"), ineq("x**2 - 5*x + 6 >= 0")
+    lt2, rat, rge, rle = (ineq("x**2 - 4*x - 5 < 0"), ineq("(x - 1)/(x + 2) < 0"), ineq("(x - 1)/(x + 2) >= 0"),
+                          ineq("(x + 3)/(x - 1) <= 0"))
+    a15 = "Interval.open(-1, 5)"
+    par = ir("evaluate", {"expr": "a"}, ["a > 0", "x**2 - a*x - 6 = 0", "x = 3"], [X, {"name": "a", "domain": "real"}])
+    sys_ = ir("evaluate", {"expr": "x - y"}, ["x > 0", "y > 0", "x + y = 5", "x*y = 6", "x > y"],
+              [X, {"name": "y", "domain": "real"}])
+    cnt = ir("count_integers", {"var": "x"}, ["x**2 - 5*x + 6 < 0"], [XI], "count")
+    cnt4 = ir("count_integers", {"var": "x"}, ["x**2 - 5*x + 4 < 0"], [XI], "count")
+    return [
+        # SA-YO-2/SA-RK-2: a step read on the boundary joins no premise pool
+        ("YO2 >= 0: roots, Or roots, then wrong 2 <= x <= 3", ge,
+         sol(GE, "interval", [("eq", "x**2 - 5*x + 6 = 0"), ("eq", "Or(Eq(x, 2), Eq(x, 3))"), ("eq", "And(x >= 2, x <= 3)")]),
+         NO, REF),
+        ("YO2 <= 0: roots then x in {2, 5/2, 3} (a choice, never verified)", le,
+         sol("Interval(2, 3)", "interval", [("eq", "x**2 - 5*x + 6 = 0"), ("eq", "Or(Eq(x, 2), Eq(x, 3), Eq(x, 5/2))")]),
+         NOTNO, NEITHER),
+        ("YO2 <= 0: roots then x != 11/5", le, sol("Interval(2, 3)", "interval", [("eq", "x**2 - 5*x + 6 = 0"),
+                                                                                ("eq", "Ne(x, 11/5)")]), NO, REF),
+        ("YO2 < 0: Or roots then x > 0", lt2, sol(a15, "interval", [("eq", "Or(Eq(x, -1), Eq(x, 5))"), ("eq", "x > 0")]),
+         NO, REF),
+        ("YO2 < 0: roots then -1 < x < 4", lt2, sol(a15, "interval", [("eq", "x**2 - 4*x - 5 = 0"),
+                                                                   ("eq", "And(x > -1, x < 4)")]), NO, REF),
+        ("YO2 rational: x - 1 = 0 then x < 0", rat, sol("Interval.open(-2, 1)", "interval", [("eq", "x - 1 = 0"),
+                                                                                           ("eq", "x < 0")]), NO, REF),
+        ("RK2 < 0: critical steps then x < 5/2", lt, sol(A23, "interval", CRIT + [("eq", "x < 5/2")]), NO, REF),
+        ("RK2 < 0: roots then x > 5/2", lt, sol(A23, "interval", CRIT[:1] + [("eq", "x > 5/2")]), NO, REF),
+        ("RK2 < 0: roots then Or(x < 3/2, x > 5/2)", lt, sol(A23, "interval", CRIT[:1] + [("eq", "Or(x < 3/2, x > 5/2)")]),
+         NO, REF),
+        ("RK2 rational >= 0: Or zeros then x >= 2", rge, sol(RGE, "interval", [("eq", "Or(Eq(x, 1), Eq(x, -2))"),
+                                                                             ("eq", "x >= 2")]), NO, REF),
+        ("RK2 rational >= 0: Or zeros then Or(x < -2, x > 5)", rge,
+         sol(RGE, "interval", [("eq", "Or(Eq(x, 1), Eq(x, -2))"), ("eq", "Or(x < -2, x > 5)")]), NO, REF),
+        ("RK2 count: roots then wrong Or(x = 2, x = 5)", cnt4,
+         sol("2", "count", [("eq", "x**2 - 5*x + 4 = 0"), ("eq", "Or(Eq(x, 2), Eq(x, 5))")]), NO, REF),
+        ("RK2 < 0: roots then the right 2 < x < 3 verified", lt, sol(A23, "interval", CRIT[:1] + [("eq", "And(x > 2, x < 3)")]),
+         OK, VER),
+        ("RK2 < 0: critical steps then 2 < x < 3 verified", lt, sol(A23, "interval", CRIT + [("eq", "2 < x < 3")]), OK, VER),
+        # SA-YO-3: only an equation (or a choice of equations) is a critical point step
+        ("YO3 < 0: wrong region Or(x <= 2, x >= 3)", lt, sol(A23, "interval", [("eq", "Or(x <= 2, x >= 3)")]), NO, REF),
+        ("YO3 < 0: wrong region x**2 - 5x + 6 >= 0", lt, sol(A23, "interval", [("eq", "x**2 - 5*x + 6 >= 0")]), NO, REF),
+        ("YO3 < 0 givens: wrong region (x - 2)(x - 3) >= 0", gineq("x**2 - 5*x + 6 < 0"),
+         sol(A23, "interval", [("eq", "(x - 2)*(x - 3) >= 0")]), NO, REF),
+        ("YO3 >= 0: wrong region 2 <= x <= 3", ge, sol(GE, "interval", [("eq", "And(x >= 2, x <= 3)")]), NO, REF),
+        # SA-YO-4: no boundary in a system
+        ("YO4 a > 0: 9 + 3a - 6 = 0 (sign error)", par, sol("1", steps=[("eq", "9 + 3*a - 6 = 0")]), NO, REF),
+        ("YO4 a > 0: a = -1", par, sol("1", steps=[("eq", "a = -1")]), NO, REF),
+        ("YO4 a > 0: a < 0", par, sol("1", steps=[("eq", "a < 0")]), NO, REF),
+        ("YO4 system: y = -2", sys_, sol("1", steps=[("eq", "y = -2")]), NO, REF),
+        ("YO4 system: x = -3", sys_, sol("1", steps=[("eq", "x = -3")]), NO, REF),
+        ("YO4 a > 0: the right a = 1", par, sol("1", steps=[("eq", "a = 1")]), OK, None),
+        # SA-RK-1: an inequality with no point inside has no boundary
+        ("RK1 (x - 3)**2 < 0 = ∅: restated", ineq("x**2 - 6*x + 9 < 0"), sol("EmptySet", "set", [("eq", "(x - 3)**2 < 0")]),
+         OK, NEITHER),
+        ("RK1 -x**2 + 4x - 4 > 0 = ∅: -(x - 2)**2 > 0", ineq("-x**2 + 4*x - 4 > 0"),
+         sol("EmptySet", "set", [("eq", "-(x - 2)**2 > 0")]), OK, NEITHER),
+        ("RK1 x**2 + 1 < 0 = ∅: x**2 < -1", ineq("x**2 + 1 < 0"), sol("EmptySet", "set", [("eq", "x**2 < -1")]), OK, NEITHER),
+        ("RK1 |x - 1| < 0 = ∅", ineq("Abs(x - 1) < 0"), sol("EmptySet", "set", [("eq", "Abs(x - 1) < 0")]), OK, NEITHER),
+        ("RK1 count 0 integers in (2, 3): 2 < x < 3", cnt, sol("0", "count", [("eq", "And(x > 2, x < 3)")]), OK, NEITHER),
+        ("RK1 count 0 integers: (x - 2)(x - 3) < 0", cnt, sol("0", "count", [("eq", "(x - 2)*(x - 3) < 0")]), OK, NEITHER),
+        ("RK1 control (x - 3)**2 <= 0 = {3}", ineq("x**2 - 6*x + 9 <= 0"), sol("FiniteSet(3)", "set",
+                                                                             [("eq", "(x - 3)**2 <= 0")]), OK, VER),
+        # SA-RK-7 (the root of a denominator)
+        ("RK7 rational >= 0: x + 2 = 0", rge, sol(RGE, "interval", [("eq", "x + 2 = 0")]), OK, NEITHER),
+        ("RK7 rational >= 0: x = 1 then x = -2", rge, sol(RGE, "interval", [("eq", "x = 1"), ("eq", "x = -2")]), OK, NEITHER),
+        ("RK7 rational >= 0: x - 1 = 0, x + 2 = 0", rge, sol(RGE, "interval", [("eq", "x - 1 = 0"), ("eq", "x + 2 = 0")]),
+         OK, NEITHER),
+        ("RK7 rational <= 0: x + 3 = 0, x - 1 = 0", rle, sol("Interval.Ropen(-3, 1)", "interval",
+                                                             [("eq", "x + 3 = 0"), ("eq", "x - 1 = 0")]), OK, NEITHER),
+        ("RK7 1/(x - 2) > 0: x - 2 = 0", ineq("1/(x - 2) > 0"), sol("Interval.open(2, oo)", "interval",
+                                                                   [("eq", "x - 2 = 0")]), OK, NEITHER),
+        ("RK7 rational >= 0: wrong point x = -1", rge, sol(RGE, "interval", [("eq", "x = -1")]), NO, REF),
+        ("RK7 rational <= 0: wrong point x = 3", rle, sol("Interval.Ropen(-3, 1)", "interval", [("eq", "x = 3")]), NO, REF),
+        ("RK7 x > 0 given: x = -2 is no boundary", ir("solve_inequality", {"inequality": "(x - 1)/(x + 2) >= 0", "var": "x"},
+                                                      ["x > 0"], shape="set"),
+         sol("Interval(1, oo)", "interval", [("eq", "x = -2")]), NO, REF),
+        # a wrong list of roots with a value outside the solution is no choice (yanlis-onay c1 s4)
+        ("Or list: roots then x = 1 or x = -5", lt2, sol(a15, "interval", [("eq", "x**2 - 4*x - 5 = 0"),
+                                                                          ("eq", "Or(Eq(x, 1), Eq(x, -5))")]), NO, REF),
+        ("Or list: x = 1 or x = -5 alone", lt2, sol(a15, "interval", [("eq", "Or(Eq(x, 1), Eq(x, -5))")]), NO, REF),
+        ("Or list: <= 0 roots then x = 2 or x = 4", le, sol("Interval(2, 3)", "interval",
+                                                           CRIT[:1] + [("eq", "Or(Eq(x, 2), Eq(x, 4))")]), NO, REF),
+    ]
+
+
+# M: second round, units (SA-RK-4, SA-RK-5) --------------------------------------------------------------------------
+def cases_m():
+    tri = ir("evaluate", {"expr": "x"}, ["x + 2*x + 3*x = 180"])
+    tri_u, tri_d = dict(tri, units="derece"), dict(tri, units="°")
+    inc = ir("evaluate", {"expr": "(p2 - p1)/p1*100"}, ["p1 = 50", "p2 = 60"], P12)
+    inc_u, inc_y = dict(inc, units="%"), dict(inc, units="yüzde")
+    acute = ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"])
+    return [
+        ("RK4 units derece: 30°", tri_u, sol("30°"), OK, None),
+        ("RK4 units derece: 30^\\circ", tri_u, sol("30^\\circ"), OK, None),
+        ("RK4 units derece: \\boxed{30^\\circ}", tri_u, sol("\\boxed{30^\\circ}"), OK, None),
+        ("RK4 units °: 30°", tri_d, sol("30°"), OK, None),
+        ("RK4 units derece: letter B 30°", _mc(tri_u, DEG), sol(None, option="B"), OK, None),
+        ("RK4 units derece: 30 letter B 30°", _mc(tri_u, DEG), sol("30", option="B"), OK, None),
+        ("RK4 units %: %20", inc_u, sol("%20"), OK, None),
+        ("RK4 units %: letter B %20", _mc(inc_u, PCT), sol(None, option="B"), OK, None),
+        ("RK4 units yüzde: 20 letter B %20", _mc(inc_y, PCT), sol("20", option="B"), OK, None),
+        ("RK4 units derece: step x = 30°", tri_u, sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 30°")]), OK, VER),
+        ("RK4 units derece: 40° (wrong)", tri_u, sol("40°"), NO, None),
+        ("RK4 units derece: letter C 40° (wrong)", _mc(tri_u, DEG), sol(None, option="C"), NO, None),
+        ("RK4 units %: %25 (wrong)", inc_u, sol("%25"), NO, None),
+        ("RK4 units derece: step x = 40° (wrong)", tri_u, sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 40°")]), NO, REF),
+        ("RK4 no units: 30^\\circ (both readings)", tri, sol("30^\\circ"), UNK, None),
+        ("RK4 the IR's own mark with units: x = 30° given, 30°", dict(ir("evaluate", {"expr": "x"}, ["x = 30°"]),
+                                                                    units="derece"), sol("30°"), OK, None),
+        ("RK5 acute sin x = 1/2: 30°", acute, sol("30°"), OK, None),
+        ("RK5 acute sin x = 1/2: pi/6", acute, sol("pi/6"), OK, None),
+        ("RK5 acute sin x = 1/2: 30 (wrong)", acute, sol("30"), NO, None),
+        ("RK5 acute sin x = 1/2: 60° (wrong)", acute, sol("60°"), NO, None),
+        ("RK5 acute with units derece: 30° (radians win)", dict(acute, units="derece"), sol("30°"), OK, None),
+        ("RK5 cos x = 0 on (0, pi): {90°}", ir("solve_equation", {"equation": "cos(x) = 0", "var": "x"},
+                                               vars_=[dict(X, constraints=["0 < x", "x < pi"])], shape="set"),
+         sol("{90°}", "set"), OK, None),
+        ("RK5 degrees as pi*x/180: 30° read both ways", ir("evaluate", {"expr": "x"}, ["sin(pi*x/180) = 1/2", "0 < x",
+                                                                                         "x < 90"]),
+         sol("30°"), NOTOK, None),
+        ("RK3 option '1/2 saat' for 30 (minutes)", _mc(ir("evaluate", {"expr": "t"}, ["t = 60/2"],
+                                                          [{"name": "t", "domain": "real"}]),
+                                                       {"A": "20 dk", "B": "1/2 saat", "C": "45 dk"}),
+         sol("30", option="B"), NOTNO, None),
+        ("RK3 option '6 m' for 600 (cm)", _mc(ir("evaluate", {"expr": "L"}, ["L = 600"], [{"name": "L", "domain": "real"}]),
+                                              {"A": "6 m", "B": "60 m", "C": "600 m"}), sol("600", option="A"), NOTOK, None),
+    ]
+
+
+# N: second round, the tolerance window (SA-RK-6) --------------------------------------------------------------------
+def cases_n():
+    def tol(options):
+        return ir("evaluate", {"expr": "sqrt(50)", "rel_tol": "0.01"}, options=options)
+    o50u = {"A": "6.5", "B": "7.07", "C": "7.5", "D": "8"}
+    ex = ir("definite_integral", {"integrand": "exp(x**2)", "var": "x", "a": "0", "b": "1", "rel_tol": "0.01"},
+            options={"A": "1.25", "B": "1.46", "C": "1.6", "D": "1.72", "E": "Hiçbiri"})
+    return [
+        ("RK6 E 'Hiçbiri': 7.07 letter B", tol(dict(o50u, E="Hiçbiri")), sol("7.07", option="B"), OK, None),
+        ("RK6 E 'Belirlenemez': letter B only", tol(dict(o50u, E="Belirlenemez")), sol(None, option="B"), OK, None),
+        ("RK6 E 'Yukarıdakilerin hiçbiri.': 7.07 letter B", tol(dict(o50u, E="Yukarıdakilerin hiçbiri.")),
+         sol("7.07", option="B"), OK, None),
+        ("RK6 E 'Hiçbiri': 6.5 letter A (wrong)", tol(dict(o50u, E="Hiçbiri")), sol("6.5", option="A"), NO, None),
+        ("RK6 E 'Hiçbiri' chosen: not read", tol(dict(o50u, E="Hiçbiri")), sol(None, option="E"), UNK, None),
+        ("RK6 E '7 ile 8 arasında': undecided", tol(dict(o50u, E="7 ile 8 arasında")), sol("7.07", option="B"), UNK, None),
+        ("RK6 E '5√2' (√50 itself): two in the window", tol(dict(o50u, E="5√2")), sol("7.07", option="B"), UNK, None),
+        ("RK6 ∫e^{x²} E 'Hiçbiri': 1.4627 letter B", ex, sol("1.4627", option="B"), OK, None),
+        ("RK6 ∫e^{x²} E 'Hiçbiri': letter C (wrong)", ex, sol(None, option="C"), NO, None),
+    ]
+
+
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k,
+          "L": cases_l, "M": cases_m, "N": cases_n}
+
+
+def main(out_path=None, groups="ABCDEFKLMN"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -525,5 +705,5 @@ def main(out_path=None, groups="ABCDEFK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFK"
+    grp = args[1] if len(args) > 1 else "ABCDEFKLMN"
     sys.exit(1 if main(out, grp) else 0)
