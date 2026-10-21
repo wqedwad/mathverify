@@ -14,7 +14,7 @@ from ..equiv.numeric import read_tolerance, real_odd_roots
 from ..equiv.sets import set_equal, scalar_equal, normalize_set
 from ..sandbox import run as sb_run
 from ..sandbox.exactsets import at_risk, certified_degree, exact_complement, exact_intersection, set_is_empty
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved, tolerance_window
 from .domain import guard_roots, relation_holds_at, definedness_conditions, in_domain
 
 LAYER = "certify.algebra"
@@ -954,6 +954,9 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
                                      rel_tol=rel_tol, abs_tol=abs_tol)
         ev["compare"] = cev
         ev["method"] = "direct"
+        if not dom and (rel_tol is not None or abs_tol is not None):
+            tolerance_window(ctx, LAYER, lambda c, v=target: answers_equivalent(c, v, shape="scalar", rel_tol=rel_tol,
+                                                                                 abs_tol=abs_tol)[0])
         if dom and ok is not False:
             ok = _beyond_value_conventions(ctx, claimed, target, sorted(dom, key=lambda s_: s_.name), ok, ev)
         # a variable the problem confines to finitely many values where a range runs backwards
@@ -1021,6 +1024,9 @@ def _verify_evaluate(ir, solution, ctx: Ctx, t):
                                      rel_tol=rel_tol, abs_tol=abs_tol)
         ev["compare"] = cev
         ev["method"] = "solve_system"
+        if rel_tol is not None or abs_tol is not None:
+            tolerance_window(ctx, LAYER, lambda c, v=values[0]: answers_equivalent(c, v, shape="scalar", rel_tol=rel_tol,
+                                                                                    abs_tol=abs_tol)[0])
     if ok is True:
         return result(LAYER, "pass", 0.99, True, ev, t.ms, primary=True)
     if ok is False:

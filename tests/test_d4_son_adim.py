@@ -133,9 +133,105 @@ def test_g1rk2_the_mechanism():
     assert _nowhere_inside(sp.Eq(x, sp.Rational(5, 2)), p, ctx) is False             # inside: a consequence's matter
     assert _nowhere_inside(sp.Eq(x**2 - 5*x + 6, 0), sp.Le(x**2 - 5*x + 6, 0), ctx) is True   # off the boundary
     swapped = _boundary_premises(sp.Eq(x, 5), [p], [p], ctx)
-    assert swapped is not None and swapped[0] == [sp.Eq(x**2 - 5*x + 6, 0)]
+    assert swapped is not None and [a[0] for a in swapped[0]] == [[sp.Eq(x**2 - 5*x + 6, 0)]]
     # the boundary meets the other premises nowhere: no swap
     assert _boundary_premises(sp.Eq(x, -2), [sp.Gt(x, 0), sp.Eq(x**2, 4)], [sp.Gt(x, 0), sp.Eq(x**2, 4)], ctx) is None
+    # an inequality claim is no critical point step (SA-YO-3)
+    assert _boundary_premises(sp.Ge(x**2 - 5*x + 6, 0), [p], [p], ctx) is None
+    # a premise naming the variable and another symbol: no boundary in a system (SA-YO-4)
+    a = sp.Symbol("a", real=True)
+    assert _boundary_premises(sp.Eq(x, 5), [p, sp.Eq(x**2 - a*x - 6, 0)], [p], ctx) is None
+    # an inequality with no point inside: nothing holds "nowhere inside" it (SA-RK-1)
+    assert _nowhere_inside(sp.Eq(x, 3), sp.Lt(x**2 - 6*x + 9, 0), ctx) is False
+
+
+def test_g1rk2_the_critical_equations():
+    from mathverify.steps.deterministic import _critical_equations
+    x = sp.Symbol("x", real=True)
+    assert _critical_equations(sp.Ge((x - 1)/(x + 2), 0), x) == [(sp.Eq(x - 1, 0, evaluate=False), False),
+                                                               (sp.Eq(x + 2, 0, evaluate=False), True)]
+    eqs = _critical_equations(sp.Gt(x**2 + 1, 0, evaluate=False), x)    # kept as written: no False to fold
+    assert len(eqs) == 1 and not isinstance(eqs[0][0], sp.logic.boolalg.BooleanAtom)
+    assert _critical_equations(sp.Gt(1/(x - 2), 0), x) == [(sp.Eq(x - 2, 0, evaluate=False), True)]
+
+
+# ---------------------------------------------------------------- audit of the branch: SA-YO-2/3/4, SA-RK-1/2/7
+
+GE = "Union(Interval(-oo, 2), Interval(3, oo))"
+RGE = "Union(Interval.open(-oo, -2), Interval(1, oo))"
+
+
+@pytest.mark.parametrize("e,answer,steps", [
+    # SA-YO-2/SA-RK-2: a claim read on the boundary joins no premise pool; the wrong step after it is refuted
+    ("x**2 - 5*x + 6 >= 0", GE, [("eq", "x**2 - 5*x + 6 = 0"), ("eq", "Or(Eq(x, 2), Eq(x, 3))"),
+                                 ("eq", "And(x >= 2, x <= 3)")]),
+    ("x**2 - 4*x - 5 < 0", "Interval.open(-1, 5)", [("eq", "Or(Eq(x, -1), Eq(x, 5))"), ("eq", "x > 0")]),
+    ("x**2 - 4*x - 5 < 0", "Interval.open(-1, 5)", [("eq", "x**2 - 4*x - 5 = 0"), ("eq", "And(x > -1, x < 4)")]),
+    ("(x - 1)/(x + 2) < 0", "Interval.open(-2, 1)", [("eq", "x - 1 = 0"), ("eq", "x < 0")]),
+    ("x**2 - 5*x + 6 < 0", A23, CRIT + [("eq", "x < 5/2")]),
+    ("x**2 - 5*x + 6 < 0", A23, CRIT[:1] + [("eq", "Or(x < 3/2, x > 5/2)")]),
+    ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "Or(Eq(x, 1), Eq(x, -2))"), ("eq", "x >= 2")]),
+    # SA-YO-3: the closed complement is the wrong region, as the open one is
+    ("x**2 - 5*x + 6 < 0", A23, [("eq", "Or(x <= 2, x >= 3)")]),
+    ("x**2 - 5*x + 6 < 0", A23, [("eq", "x**2 - 5*x + 6 >= 0")]),
+    ("x**2 - 5*x + 6 < 0", A23, [("eq", "(x - 2)*(x - 3) >= 0")]),
+    ("x**2 - 5*x + 6 >= 0", GE, [("eq", "And(x >= 2, x <= 3)")]),
+    # SA-RK-7: a wrong point is no root of the denominator either
+    ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "x = -1")]),
+    ("(x + 3)/(x - 1) <= 0", "Interval.Ropen(-3, 1)", [("eq", "x = 3")]),
+])
+def test_sa_a_wrong_step_near_a_boundary_is_refuted(e, answer, steps):
+    r = verify(_ineq(e), _sol(answer, "interval", steps))
+    assert r.verdict == "INCORRECT" and _statuses(r)[-1] == "refuted"
+
+
+def test_sa_rk2_a_right_step_after_the_boundary_stays_verified():
+    r = verify(_ineq("x**2 - 5*x + 6 < 0"), _sol(A23, "interval", CRIT[:1] + [("eq", "And(x > 2, x < 3)")]))
+    assert r.verdict == "CORRECT" and _statuses(r) == ["unknown", "verified"]
+
+
+@pytest.mark.parametrize("givens,steps", [
+    (["a > 0", "x**2 - a*x - 6 = 0", "x = 3"], [("eq", "9 + 3*a - 6 = 0")]),
+    (["a > 0", "x**2 - a*x - 6 = 0", "x = 3"], [("eq", "a = -1")]),
+    (["x > 0", "y > 0", "x + y = 5", "x*y = 6", "x > y"], [("eq", "y = -2")]),
+    (["x > 0", "y > 0", "x + y = 5", "x*y = 6", "x > y"], [("eq", "x = -3")]),
+])
+def test_sa_yo4_no_boundary_in_a_system(givens, steps):
+    syms = sorted({c for g in givens for c in "axy" if c in g})
+    q = _ir("evaluate", {"expr": "a" if "a" in syms else "x - y"}, givens, [{"name": c, "domain": "real"} for c in syms])
+    r = verify(q, _sol("1", steps=steps))
+    assert r.verdict == "INCORRECT" and _statuses(r) == ["refuted"]
+
+
+@pytest.mark.parametrize("q,answer,kind,steps", [
+    (_ineq("x**2 - 6*x + 9 < 0"), "EmptySet", "set", [("eq", "(x - 3)**2 < 0")]),
+    (_ineq("-x**2 + 4*x - 4 > 0"), "EmptySet", "set", [("eq", "-(x - 2)**2 > 0")]),
+    (_ineq("x**2 + 1 < 0"), "EmptySet", "set", [("eq", "x**2 < -1")]),
+    (_ineq("Abs(x - 1) < 0"), "EmptySet", "set", [("eq", "Abs(x - 1) < 0")]),
+    (_ir("count_integers", {"var": "x"}, ["x**2 - 5*x + 6 < 0"], [XI], "count"), "0", "count", [("eq", "And(x > 2, x < 3)")]),
+    (_ir("count_integers", {"var": "x"}, ["x**2 - 5*x + 6 < 0"], [XI], "count"), "0", "count",
+     [("eq", "(x - 2)*(x - 3) < 0")]),
+])
+def test_sa_rk1_an_inequality_with_no_point_inside_has_no_boundary(q, answer, kind, steps):
+    r = verify(q, _sol(answer, kind, steps))
+    assert r.verdict == "CORRECT" and _statuses(r) == ["unknown"]
+
+
+@pytest.mark.parametrize("e,answer,steps", [
+    ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "x + 2 = 0")]),
+    ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "x = 1"), ("eq", "x = -2")]),
+    ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "Or(Eq(x, 1), Eq(x, -2))")]),
+    ("(x + 3)/(x - 1) <= 0", "Interval.Ropen(-3, 1)", [("eq", "x + 3 = 0"), ("eq", "x - 1 = 0")]),
+])
+def test_sa_rk7_the_root_of_a_denominator_is_a_critical_point(e, answer, steps):
+    r = verify(_ineq(e), _sol(answer, "interval", steps))
+    assert r.verdict == "CORRECT" and _statuses(r)[-1] == "unknown"
+
+
+def test_sa_rk7_a_root_of_the_denominator_outside_a_given_is_no_boundary():
+    q = _ir("solve_inequality", {"inequality": "(x - 1)/(x + 2) >= 0", "var": "x"}, ["x > 0"], shape="set")
+    r = verify(q, _sol("Interval(1, oo)", "interval", [("eq", "x = -2")]))
+    assert r.verdict == "INCORRECT" and _statuses(r) == ["refuted"]
 
 
 # ---------------------------------------------------------------- G1RK-3: '%' and '°' are unit marks
@@ -177,7 +273,6 @@ def test_g1rk3_a_wrong_answer_with_a_unit_mark_is_refuted(q, s):
     # the IR in the unit's own reading (a fraction, radians): one reading equal, never CORRECT this way
     (_mc(_ir("evaluate", {"expr": "(p2 - p1)/p1"}, ["p1 = 50", "p2 = 60"], P12), PCT), _sol(None, option="B")),
     (_mc(_ir("evaluate", {"expr": "x"}, ["x + 2*x + 3*x = pi"]), DEG), _sol("pi/6", option="B")),
-    (_mc(_ir("evaluate", {"expr": "asin(1/2)"}), DEG), _sol("pi/6", option="B")),
 ])
 def test_g1rk3_one_reading_is_never_correct(q, s):
     assert verify(q, s).verdict == "UNKNOWN"
@@ -457,6 +552,102 @@ def test_g2yo5_several_options_in_the_window_name_none(q, s):
 ])
 def test_g2yo7_the_claim_and_the_option_compared_within_the_declared_tolerance(q, s, verdict):
     assert verify(q, s).verdict == verdict
+
+
+# ---------------------------------------------------------------- audit of the branch: SA-RK-4, SA-RK-5, SA-RK-6
+
+TRIU, INCU = dict(TRI, units="derece"), dict(INC, units="%")
+
+
+@pytest.mark.parametrize("q,s", [
+    (TRIU, _sol("30°")), (TRIU, _sol("30^\\circ")), (TRIU, _sol("30 derece")), (dict(TRI, units="°"), _sol("30°")),
+    (_mc(TRIU, DEG), _sol(None, option="B")), (_mc(TRIU, DEG), _sol("30", option="B")), (_mc(TRIU, DEG), _sol("30°", option="B")),
+    (INCU, _sol("%20")), (_mc(INCU, PCT), _sol(None, option="B")), (_mc(dict(INC, units="yüzde"), PCT), _sol("20", option="B")),
+    (TRIU, _sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 30°")])),
+])
+def test_sa_rk4_a_unit_the_ir_declares_is_read_as_the_plain_number(q, s):
+    r = verify(q, s)
+    assert r.verdict == "CORRECT", r.verdict
+    assert all(st != "refuted" for st in _statuses(r))
+
+
+@pytest.mark.parametrize("q,s", [
+    (TRIU, _sol("40°")), (_mc(TRIU, DEG), _sol(None, option="C")), (_mc(TRIU, DEG), _sol("30", option="C")),
+    (INCU, _sol("%25")), (_mc(INCU, PCT), _sol(None, option="C")),
+    (TRIU, _sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 40°")])),
+])
+def test_sa_rk4_a_wrong_answer_in_the_declared_unit_is_refuted(q, s):
+    assert verify(q, s).verdict == "INCORRECT"
+
+
+def test_sa_rk4_the_ir_own_mark_and_a_radian_measure_keep_the_unit():
+    # the IR writes '°' itself: its value is pi/6, and the claim's 30° is that too, whatever units says
+    q = _ir("evaluate", {"expr": "x"}, ["x = 30°"])
+    assert verify(dict(q, units="derece"), _sol("30°")).verdict == "CORRECT"
+    # a radian measure: 30° is pi/6 whatever units says (SA-RK-5)
+    acute = _ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"])
+    assert verify(dict(acute, units="derece"), _sol("30°")).verdict == "CORRECT"
+
+
+@pytest.mark.parametrize("q,s,verdict", [
+    (_ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"]), _sol("30°"), "CORRECT"),
+    (_ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"]), _sol("pi/6"), "CORRECT"),
+    (_ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"]), _sol("30"), "INCORRECT"),
+    (_ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"]), _sol("60°"), "INCORRECT"),
+    (_mc(_ir("evaluate", {"expr": "asin(1/2)"}), DEG), _sol("pi/6", option="B"), "CORRECT"),
+    (_mc(_ir("evaluate", {"expr": "asin(1/2)"}), DEG), _sol(None, option="C"), "INCORRECT"),
+    (_ir("solve_equation", {"equation": "cos(x) = 0", "var": "x"}, vars_=[dict(X, constraints=["0 < x", "x < pi"])],
+         shape="set"), _sol("{90°}", "set"), "CORRECT"),
+])
+def test_sa_rk5_a_degree_of_a_radian_measure_is_its_unit(q, s, verdict):
+    assert verify(q, s).verdict == verdict
+
+
+def test_sa_rk5_the_mechanism():
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+
+    def rad(q):
+        return make_ctx(ProblemIR.from_dict(q)).angles_in_radians()
+    assert rad(_ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"]))
+    assert rad(_ir("evaluate", {"expr": "asin(1/2)"})) and rad(_ir("evaluate", {"expr": "acos(1/3)"}))
+    assert not rad(_ir("evaluate", {"expr": "asin(1/2)*180/pi"}))                # a count of degrees
+    assert not rad(_ir("evaluate", {"expr": "x"}, ["sin(pi*x/180) = 1/2", "0 < x", "x < 90"]))
+    assert not rad(_ir("evaluate", {"expr": "x"}, ["x + 2*x + 3*x = 180"]))     # no trigonometric relation
+    assert not rad(_ir("evaluate", {"expr": "2*x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"]))   # not the variable
+
+
+@pytest.mark.parametrize("q,s,verdict", [
+    (_tol(dict(O50U, E="Hiçbiri")), _sol("7.07", option="B"), "CORRECT"),
+    (_tol(dict(O50U, E="Belirlenemez")), _sol(None, option="B"), "CORRECT"),
+    (_tol(dict(O50U, E="Yukarıdakilerin hiçbiri.")), _sol("7.07", option="B"), "CORRECT"),
+    (_tol(dict(O50U, E="Hiçbiri")), _sol("6.5", option="A"), "INCORRECT"),
+    (_tol(dict(O50U, E="Hiçbiri")), _sol(None, option="E"), "UNKNOWN"),          # chosen: no value, not read
+    (_tol(dict(O50U, E="7 ile 8 arasında")), _sol("7.07", option="B"), "UNKNOWN"),   # a true statement: undecided
+    (_tol(dict(O50U, E="5√2")), _sol("7.07", option="B"), "UNKNOWN"),                # √50 itself, in the window
+    (_tol(dict(OEXU, E="Hiçbiri"), "integral"), _sol("1.4627", option="B"), "CORRECT"),
+])
+def test_sa_rk6_an_option_naming_no_value_is_outside_the_window(q, s, verdict):
+    assert verify(q, s).verdict == verdict
+
+
+def test_sa_rk6_the_window_is_read_once():
+    from mathverify.certify.base import TOLERANCE_WINDOW
+    import mathverify.verifier as V
+    calls = []
+    orig = V._certify
+
+    def counting(ir, sol, ctx, modules, *a, **k):
+        calls.append(sol.claimed_answer.payload)
+        return orig(ir, sol, ctx, modules, *a, **k)
+    V._certify = counting
+    try:
+        r = verify(_tol(O50U), _sol("7.07", option="B"))
+    finally:
+        V._certify = orig
+    assert r.verdict == "CORRECT"
+    assert len(calls) == 2              # the claim, and the chosen option read as the claim; the others in the window
+    assert TOLERANCE_WINDOW
 
 
 # ---------------------------------------------------------------- audit of the branch: SA-YO-1, SA-RK-3, SA-RK-8

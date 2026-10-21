@@ -34,7 +34,7 @@ from ..equiv.numeric import NONREAL, certified_sign, is_number_expr, num_equal, 
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, tolerance_window
 from .domain import (convention_null_on, definedness_conditions, written_definedness, written_undefined_in,
                      relation_holds_at, in_domain)
 from .limits import membership_conditions, membership_holds_on, neighbourhoods, written_undefined_everywhere
@@ -2938,6 +2938,7 @@ def verify(ir, solution, ctx: Ctx):
                                    flags=["symbolic_numeric_disagreement"])
                 ev["decided_by"] = "certified_value"
                 if declared is not None:
+                    tolerance_window(ctx, LAYER, lambda c, v=cval: within_rel_tol(c, v, declared, timeout=ctx.timeout))
                     ok = within_rel_tol(claimed, cval, declared, timeout=ctx.timeout)
                     if ok is None:
                         return unknown(LAYER, "relative_tolerance_undecided", t.ms, ev,
@@ -2948,6 +2949,8 @@ def verify(ir, solution, ctx: Ctx):
             elif declared is not None:
                 # an approximate claim and no proved value: a rigorous enclosure inside the tolerance accepts,
                 # one outside it refutes
+                tolerance_window(ctx, LAYER, lambda c: tolerance_by_enclosure(integrand, var, a, b, c, declared,
+                                                                              timeout=ctx.timeout * 1.5)[0])
                 ok, tev = tolerance_by_enclosure(integrand, var, a, b, claimed, declared, timeout=ctx.timeout * 1.5)
                 ev["enclosure"] = tev
                 ev["decided_by"] = "rigorous_enclosure_and_tolerance"

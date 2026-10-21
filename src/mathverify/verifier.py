@@ -15,7 +15,7 @@ import time
 import sympy as sp
 
 from .certify import MODULES
-from .certify.base import OPTION_READER, decimal_comma, make_ctx, result, unknown, Timer
+from .certify.base import OPTION_READER, TOLERANCE_WINDOW, decimal_comma, make_ctx, result, unknown, Timer
 from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
 from .ir import MalformedIR, ProblemIR, LeakageError
@@ -46,7 +46,9 @@ def _from_letter(ir: ProblemIR, solution: Solution, ctx, text: str | None = None
     alone is read: the option read as a claim of the answer's shape is (`Ctx.option_value`), 'x > -2' names (-2, oo),
     and '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1): False then, the payload left at the text."""
     ca = solution.claimed_answer
-    ca.payload = ir.options[ca.option] if text is None else text
+    # a unit mark whose unit the IR's `units` names is the plain number ('%20' is 20 when the question counts in
+    # percent; SA-RK-4)
+    ca.payload = ctx.plain_unit_reading(ir.options[ca.option] if text is None else text)
     if ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
         ca.payload = "{}"
     named = ctx.option_condition_set(ca.option, text)
@@ -1136,6 +1138,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         # is not what CORRECT means at solution level (DECISIONS §2), so it is disclosed.
         scope_flags.append("answer_from_option_letter")
 
+    # a unit mark whose unit the IR's `units` names is the plain number: '30°' is 30 when the question counts in degrees
+    # (x + 2x + 3x = 180), and was read both ways and left UNKNOWN (audit of the branch, SA-RK-4)
+    ca.payload = ctx.plain_unit_reading(ca.payload)
     raw_payload = list(ca.payload) if isinstance(ca.payload, list) else ca.payload    # before its notation is normalized
     scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
 
@@ -1444,10 +1449,16 @@ def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, module
     ca = solution.claimed_answer
     if ca.option not in (problem_ir.options or {}):
         return mc
+    windows = list((ctx.cache.get(TOLERANCE_WINDOW) or {}).values())
     states: dict[str, str | None] = {}
     for letter in problem_ir.options:
-        sol2 = _option_read_as_claim(problem_ir, _lettered(solution, letter), ctx)
-        states[letter] = None if sol2 is None else _decided(_certify(problem_ir, sol2, ctx, modules))
+        if letter != ca.option and _META_OPTION.fullmatch(str(problem_ir.options[letter]).strip().lower()):
+            states[letter] = "fail"        # 'Hiçbiri', 'Belirlenemez': no value, none in the window (SA-RK-6)
+        elif letter != ca.option and len(windows) == 1:
+            states[letter] = _in_window(windows[0], problem_ir, _lettered(solution, letter), ctx)
+        else:
+            sol2 = _option_read_as_claim(problem_ir, _lettered(solution, letter), ctx)
+            states[letter] = None if sol2 is None else _decided(_certify(problem_ir, sol2, ctx, modules))
     ev = dict(mc.evidence or {}, option=ca.option, options_in_window=states)
     chosen = states[ca.option]
     if chosen == "fail":
@@ -1465,6 +1476,26 @@ def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, module
         ev["reason"] = "the chosen option is the one option within the declared tolerance"
         return result("mc.consistency", "pass", 0.99, True, ev, mc.latency_ms, primary=False)
     return mc
+
+
+# an option that names no value: none of the answers, or that there is none ("none of the above"); never inside a
+# tolerance window. Not '7 ile 8 arasında' (a true statement about the value: it stays undecided, SA-RK-6)
+_META_OPTION = re.compile(r"(?:(?:yukarıdakilerin\s+)?hiçbiri(?:si)?|belirlenemez|bulunamaz|hesaplanamaz|"
+                          r"none of the above|none|cannot be determined)[.!]?")
+
+
+def _in_window(compare, ir: ProblemIR, solution: Solution, ctx) -> str | None:
+    """'pass' when the chosen option, read as the claim (`_option_claim_value`), lies inside the certificate's declared
+    tolerance window (`certify.base.TOLERANCE_WINDOW`: the value it proved, compared once), 'fail' outside, None when
+    the option is not read or the comparison undecided."""
+    try:
+        ov = _option_claim_value(ir, solution, ctx)
+        got = compare(ov) if ov is not None else None
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: undecided
+        got = None
+    return "pass" if got is True else "fail" if got is False else None
 
 
 def cache_key(problem_ir: dict, solution: dict) -> str:

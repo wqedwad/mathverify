@@ -13,7 +13,7 @@ from ..ir import LeakageError, ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
                                claim_namespace, given_bindings, not_collapsed, same_value,
-                               substitute_free, task_variables, unit_marks)
+                               substitute_free, task_variables, unit_marks, without_unit_marks, parse_as_written)
 from ..sandbox.exactsets import at_risk, exact_intersection, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
@@ -1453,19 +1453,39 @@ class Ctx:
         if named is not None:
             return named
         return parse_answer(self.ir.answer_shape if self.ir.answer_shape in ("set", "interval") else "value",
-                            self.ir.options[letter] if text is None else text, self.ns)
+                            self.plain_unit_reading(self.ir.options[letter] if text is None else text), self.ns)
 
     # ---- unit marks ('%', '°'; final attack G1RK-3) -------------------------------------------------------------
     def angles_in_radians(self) -> bool:
-        """trig_solve whose variable enters every trigonometric function of its relations as k*x + c with k rational:
-        the variable is the radian measure SymPy's sin and cos read, so a degree mark on its value is that unit (30° is
-        pi/6, {30°, 150°} for sin x = 1/2); a count of degrees would enter as pi*x/180."""
-        if self.ir.task.kind != "trig_solve":
-            return False
+        """The answer is a radian measure: its variable (the task's `var`; evaluate's `expr` when it is a lone symbol)
+        enters every trigonometric function of the IR's own relations (the task's, the givens) as k*x + c with k
+        rational, at least once, so it is the radian measure SymPy's sin and cos read (30° is pi/6: {30°, 150°} for
+        sin x = 1/2 in trig_solve, x = 30° for x with sin(x) = 1/2 and 0 < x < pi/2 given, SA-RK-5; a count of degrees
+        would enter as pi*x/180); or evaluate's expression is an inverse trigonometric function, whose value is one
+        (asin(1/2) is pi/6)."""
         p = self.ir.task.params or {}
+        key = "unit_marks:radians"
+        if key in self.cache:
+            return self.cache[key]
+        self.cache[key] = False
         try:
-            v = self.sym(p.get("var", "x"))
-            rels = list(self.givens()) + ([self.rel(p["equation"])] if isinstance(p.get("equation"), str) else [])
+            if isinstance(p.get("var"), str) or self.ir.task.kind == "trig_solve":
+                v = self.sym(p.get("var", "x"))
+            elif self.ir.task.kind == "evaluate" and isinstance(p.get("expr"), str):
+                # the shape as written: asin(1/2) is evaluated to pi/6 before any reading of it
+                w = parse_as_written(p["expr"], self.ns)
+                if w is not None and len(w) == 1 and isinstance(w[0], (sp.asin, sp.acos, sp.atan, sp.acot, sp.asec,
+                                                                         sp.acsc)):
+                    self.cache[key] = True
+                    return True
+                e = self.expr(p["expr"])
+                if not isinstance(e, sp.Symbol):
+                    return False
+                v = e
+            else:
+                return False
+            rels = list(self.givens()) + [self.rel(t) for k_, t in p.items()
+                                          if k_ in ("equation", "inequality", "relation") and isinstance(t, str)]
         except LeakageError:
             raise
         except Exception:  # noqa: BLE001 - not read: nothing fixes the unit
@@ -1480,27 +1500,52 @@ class Ctx:
                 return False
             if poly.degree() != 1 or not poly.LC().is_Rational:
                 return False
+        self.cache[key] = True
         return True
+
+    def _ir_unit_marks(self) -> frozenset:
+        """The unit marks the IR's own texts write (its '30°' converts to pi/6, as the claim's does)."""
+        key = "unit_marks:ir"
+        if key not in self.cache:
+            self.cache[key] = frozenset().union(*(unit_marks(t) for t in _ir_texts(self.ir)))
+        return self.cache[key]
+
+    def declared_unit_marks(self) -> frozenset:
+        """The unit marks whose unit the IR's `units` names ('derece', '°', '%', 'yüzde'): the question counts in that
+        unit, so a number with that mark is the plain number (30° is 30 for x + 2x + 3x = 180, %20 is 20 for
+        (p2 - p1)/p1*100; audit of the branch, SA-RK-4). Not a mark the IR's own texts write (their '30°' is pi/6, as the
+        claim's must be), nor a degree of a radian measure (`angles_in_radians`: 30° is pi/6 whatever the units say)."""
+        units = str(getattr(self.ir, "units", None) or "").strip().lower()
+        marks = frozenset(m for m, names in _DECLARED_MARK_UNITS.items() if units in names) - self._ir_unit_marks()
+        if "°" in marks and self.angles_in_radians():
+            marks = marks - {"°"}
+        return marks
 
     def open_unit_marks(self, text) -> frozenset:
         """The unit marks of `text` (a claim, an option, a step; `normalize.parse.unit_marks`) whose unit the question
         does not fix: a question may count in the unit (an angle in radians: 30° is pi/6) or in plain numbers of it
         (x + 2x + 3x = 180 is 30, (p2 - p1)/p1*100 is 20), and such a mark is read both ways (`verifier._certify`,
         `verifier._mc_unit_reading`, the steps). Not a mark the IR itself writes (its own '°' converts like the
-        claim's), not the degrees of synthetic_geometry's angle() (its certificate measures in degrees: 70° is 70,
-        25 Sep 2026), not the radians of trig_solve's variable (`angles_in_radians`)."""
+        claim's), not one whose unit the IR's `units` names (`declared_unit_marks`: read as the plain number), not the
+        degrees of synthetic_geometry's angle() (its certificate measures in degrees: 70° is 70, 25 Sep 2026), not the
+        degrees of a radian measure (`angles_in_radians`)."""
         marks = unit_marks(text)
         if not marks:
             return marks
-        key = "unit_marks:ir"
-        if key not in self.cache:
-            self.cache[key] = frozenset().union(*(unit_marks(t) for t in _ir_texts(self.ir)))
-        marks = marks - self.cache[key]
+        marks = marks - self._ir_unit_marks() - self.declared_unit_marks()
         if "°" in marks:
             target = str((self.ir.task.params or {}).get("target", ""))
             if (self.ir.task.kind == "synthetic_geometry" and "angle(" in target) or self.angles_in_radians():
                 marks = marks - {"°"}
         return marks
+
+    def plain_unit_reading(self, text):
+        """`text` with the unit marks whose unit the IR's `units` names dropped (`declared_unit_marks`: 30° is 30 when
+        the question counts in degrees); any other text as it is."""
+        if not isinstance(text, str):
+            return text
+        marks = unit_marks(text) & self.declared_unit_marks()
+        return without_unit_marks(text, marks) if marks else text
 
     def option_as_claim(self, letter: str):
         """The option read by the claim's own reader, which the verifier registers (`verifier._option_claim_value`:
@@ -1533,6 +1578,10 @@ class Ctx:
 
 _TRIG_FUNCS = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
 
+# the IR `units` that name a unit mark's unit (`Ctx.declared_unit_marks`)
+_DECLARED_MARK_UNITS = {"°": ("°", "derece", "deg", "degree", "degrees", "\\circ", "^\\circ", "\\degree"),
+                        "%": ("%", "\\%", "yüzde", "yuzde", "percent", "percentage")}
+
 
 def _ir_texts(ir: ProblemIR) -> list[str]:
     """The IR's own texts (task parameters, givens, functions, constraints; not its options)."""
@@ -1556,6 +1605,15 @@ def _ir_texts(ir: ProblemIR) -> list[str]:
 
 # the cache key of the verifier's option reader (`Ctx.option_as_claim`)
 OPTION_READER = "verifier:option_reader"
+# the cache key of a certificate's declared tolerance window: {layer: the comparison with the value it proved, a
+# function of a value giving True (inside), False (outside) or None}; `verifier._options_in_tolerance` reads each
+# option against it once, not through every certificate again (audit of the branch, SA-RK-6)
+TOLERANCE_WINDOW = "certify:tolerance_window"
+
+
+def tolerance_window(ctx: "Ctx", layer: str, compare) -> None:
+    """Record `layer`'s window (`TOLERANCE_WINDOW`)."""
+    ctx.cache.setdefault(TOLERANCE_WINDOW, {})[layer] = compare
 
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:
