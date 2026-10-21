@@ -464,7 +464,9 @@ def cases_j():
         ("3 sin(1)", _ev("sin(1) + sin(1) + sin(1)"), "$\\sin 1 \\cdot 3$", OK), ("(ln 2)/2 \\frac", _ev("log(sqrt(2))"), "$\\frac{\\ln 2}{2}$", OK),
         ("log₃2 / 2 \\frac", _ev("log(2)/log(9)"), "$\\frac{\\log_3 2}{2}$", OK), ("log₂8 = 3", _ev("asin(1)*6/pi"), "$\\log_2 8$", OK),
         ("sin(x)/2 with brackets", _der("-cos(x)/2", X), "$\\sin(x)/2$", OK), ("1/(-2π)", _ev("-1/(2*asin(1)*2)"), "1/(−2π)", OK),
-        ("-π/2 Unicode minus", _ev("-asin(1)"), "−π/2", OK), ("50%", _ev("asin(1)/pi"), "50\\%", OK))]
+        ("-π/2 Unicode minus", _ev("-asin(1)"), "−π/2", OK),
+        ("50% (wip/son-adim's unit convention: UNKNOWN)", _ev("asin(1)/pi"), "50\\%", NOTNO),
+        ("40% (wrong)", _ev("asin(1)/pi"), "40\\%", NO))]
     return out
 
 

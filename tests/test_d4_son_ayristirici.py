@@ -126,6 +126,9 @@ def test_g4yo1_prose_that_only_names_no_solution_is_not_refuted():
         assert verify(q, _sol(None, "set", option="D")).verdict == "UNKNOWN", d
     q = _eqn("x**2 + 1 = 0", _opts("Reel sayılarda çözüm yok"))
     assert verify(q, _sol("∅", "set", option="D")).verdict == "CORRECT"
+    # an option that only mentions "no solution" beside a value: unread, never refuted by the DNE word test either
+    for d in ("Çözüm yok değil", "Gerçek kök yok değil"):
+        assert verify(_eqn("x - 1 = 0", _opts(d)), _sol("{1}", "set", option="D")).verdict == "UNKNOWN", d
 
 
 # ---- G4-RK-5 ------------------------------------------------------------------------------------------------------
@@ -380,6 +383,7 @@ def test_sayo1_the_empty_premise_reading():
     assert _empty_premise_reading(sp.Eq(u**2 - 1, 0), [sp.Eq(u**2 + 1, 0)], True) in ({"u": "-I"}, {"u": "I"})
     assert _empty_premise_reading(sp.Eq(u**2 - 1, 0), [sp.Eq(u**2 + 1, 0)], True, [u**2 + 1]) is None  # written poles
     assert _empty_premise_reading(sp.Eq(u**2 - 1, 0), [sp.Eq(u**2 + 1, 0)], True, [u - sp.I]) == {"u": "-I"}
+    assert _empty_premise_reading(sp.Eq(1/(u**2 + 1), 0), [sp.Eq(u**2 + 1, 0)], True) is None      # a pole of the claim
 
 
 def test_sayo1_the_written_poles():
@@ -504,11 +508,18 @@ def test_sayo3_a_latex_argument_or_unit_after_a_divisor_is_not_read(q, claim):
     (_der("sin(x)**2", X), "$3\\sin x \\cdot \\cos x$", "INCORRECT"), (_ev("sin(1) + sin(1) + sin(1)"), "$\\sin 1 \\cdot 3$", "CORRECT"),
     (_ev("log(sqrt(2))"), "$\\frac{\\ln 2}{2}$", "CORRECT"), (_ev("log(2)/log(9)"), "$\\frac{\\log_3 2}{2}$", "CORRECT"),
     (_ev("asin(1)*6/pi"), "$\\log_2 8$", "CORRECT"), (_der("-cos(x)/2", X), "$\\sin(x)/2$", "CORRECT"),
-    (_ev("-1/(2*asin(1)*2)"), "1/(−2π)", "CORRECT"), (_ev("-asin(1)"), "−π/2", "CORRECT"), (_ev("asin(1)/pi"), "50\\%", "CORRECT"),
+    (_ev("-1/(2*asin(1)*2)"), "1/(−2π)", "CORRECT"), (_ev("-asin(1)"), "−π/2", "CORRECT"),
+    (_ev("asin(1)/pi"), "40\\%", "INCORRECT"),
 ])
 def test_sayo3_control_operators_and_brackets_are_read(q, claim, want):
     """'\\sin x \\cdot \\cos x' is the sibling: latex2sympy read sin(x cos x) and refuted the right 2 sin x cos x."""
     assert verify(q, _sol(claim, "expression" if q["answer_shape"] == "expression" else "value")).verdict == want, claim
+
+
+def test_sayo3_control_a_latex_percent_is_read():
+    """'50\\%' for 1/2: CORRECT here; with wip/son-adim's unit convention (G1RK-3) a question that fixes no unit leaves
+    it UNKNOWN, never INCORRECT."""
+    assert verify(_ev("asin(1)/pi"), _sol("50\\%")).verdict != "INCORRECT"
 
 
 def test_sayo3_the_parser_reads_a_latex_argument_to_its_first_operator():

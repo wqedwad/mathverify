@@ -6,6 +6,14 @@ no-solution option's usual words (SA-RK-1, SA-RK-2), the trailing prose's allow 
 SA-RK-6) and a LaTeX function's argument read to its first operator (SA-YO-3, SA-RK-4, SA-YO-4). The machinery is
 the one of denetim/2026-09-26/mutasyon.py.
 
+Left out as equivalent (second round, measured): `_vacuous`'s flag for an undecided `eq` step (`if compute:` made
+`if True:` survived: an open `eq` step under premises with no real instance reaches `_vacuous` unrefuted, its check
+finds no premise point, 'premises_inconsistent_or_unsolved' / 'no_premise_satisfying_points' in nine probes; a false
+one with real symbols evaluates closed), the direction of `_multiple_of_premise` for an order (an `eq` step's reading
+is unknown either way), the claim's pole in the consequence test (simplification cancels a common factor), a base
+skipped in `_function_argument_divides` ('_2 8/3' sees the '/' with its base too), the symbol guard of `_tail_reading`
+(the allow list holds no single letter, i or e).
+
     .venv/bin/python denetim/2026-10-01/son/ayristirici/mutasyon.py [-j N] [--list] [name ...]
 
 Kept out of pyflakes and pytest like the rest of denetim/. No string here may name a document.
@@ -202,10 +210,6 @@ MUTATIONS = [
      '                         "step_reading_undecided",\n',
      '',
      T + 'test_sayo1_an_undecided_compute_step_leaves_the_answer_unknown'),
-    ('F06 kararsız eq adımı da bayraklı', DET,
-     '    if compute:\n        return "unknown", {"reason": f"{why}; the identity',
-     '    if True:\n        return "unknown", {"reason": f"{why}; the identity',
-     T + 'test_sayo1_control_an_undecided_eq_step_is_unknown_as_before'),
     ('F07 iddianın kutbu karşı örnek', DET,
      '    Q = sp.Poly(sp.quo(Q, sp.gcd(Q, Dp)), x)     # ... and that are no pole of the claim\n',
      '',
@@ -303,7 +307,7 @@ MUTATIONS = [
     ('H09 bütün kuyruk değil son kelime okunur', VER,
      '    reading = _tail_reading(toks[start:], ctx) if start < len(toks) else "allowed"\n',
      '    reading = _tail_reading(toks[-1:], ctx) if start < len(toks) else "allowed"\n',
-     T + 'test_sark3_control_affirmative_prose_is_cleaned'),
+     T + 'test_sayo2_a_word_off_the_allow_list_leaves_the_claim_unread'),
     # SA-YO-3, SA-RK-4, SA-YO-4 (second round)
     ('J01 argümanın tabanı atlanmaz (parantezleme)', PAR,
      'k < len(s) and s[k] in "_^":\n        k = sp_(k + 1)\n        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)\n        k = None if k is None else sp_(k)\n    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):\n        return None\n',
