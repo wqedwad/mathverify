@@ -56,6 +56,9 @@ PREC_CEILING = 1 << 17          # bits of working precision any one SymPy evalua
 _LOCAL = threading.local()      # depth of the assumption fallback below (a strict reading may ask assumptions)
 _MAX_DEPTH = 6
 _SIGN_PREC = 64                 # bits a sign read inside a strict evaluation is certified to
+# significant bits a part of a strict value needs to decide its sign: each part's accuracy measured against the error
+# of the whole number (`_part_accuracies`); the threshold of `equiv.numeric._part_state` too
+_PART_BITS = 20
 # the working precision a rewritten node may climb to (SymPy's default for evalf(30) is 332 bits): asin(tanh(x)) at
 # x = 300 asks 1 - tanh(x)**2 = 4e^(-600), some 870 bits of cancellation, to read |u| < 1
 _REWRITE_MAXPREC = 1 << 11
@@ -116,7 +119,7 @@ def _sign(u, options):
         return None
     re_, im_, _, im_acc = r
     if im_ and im_[1]:
-        return "nonreal" if im_acc is not None and im_acc >= 20 else None
+        return "nonreal" if im_acc is not None and im_acc >= _PART_BITS else None
     if not re_ or not re_[1]:
         return None if im_ else 0
     if re_ in (_evalf.fnan, _evalf.finf, _evalf.fninf):
@@ -289,9 +292,28 @@ def _rewritten(x, options):
 
 def _strict_inner(inner, x, prec, options):
     try:
-        return inner(x, prec, options)
+        return _part_accuracies(inner(x, prec, options))
     except NotImplementedError as ex:
         raise PrecisionExhausted(f"no tracked evaluation of {type(x).__name__}") from ex
+
+
+def _part_accuracies(r):
+    """A strict evaluation's complex value with each part's accuracy measured against the absolute error of the
+    WHOLE number: the bits a part has above the larger absolute error of the two (SymPy's `finalize_complex`
+    accounts so, its product does not). SymPy's product of complex factors gives both parts the relative accuracy of
+    the whole ("we aren't computing exact accuracies of the product", `evalf_mul`): -(1 + sqrt(3)*I)**3, exactly 8,
+    came out 8.0 - 2.8e-26*I with 64 bits claimed for an imaginary part that is rounding noise of an exact 0 (its
+    absolute error is the real part's, 2^-60). Read as significant it made -(1 + sqrt(3)*I)**3 "certainly not
+    real" and "certainly not an integer", and a sum holding it inherited the claim (A+ final attack, G1YO-1, 16 Oct
+    2026). The accuracy of the whole (`complex_accuracy`) is unchanged: no reading that decided fails here."""
+    if not isinstance(r, tuple) or len(r) != 4:
+        return r
+    re_, im_, re_acc, im_acc = r
+    if not (re_ and im_ and re_[1] and im_[1]) or re_acc is None or im_acc is None:
+        return r                    # a real or imaginary number, an exact 0 part, nan or an infinity: nothing to share
+    size_re, size_im = _evalf.fastlog(re_), _evalf.fastlog(im_)
+    err = max(size_re - re_acc, size_im - im_acc)
+    return re_, im_, min(re_acc, size_re - err), min(im_acc, size_im - err)
 
 
 def _read_real(z, prec, options) -> bool:
@@ -318,7 +340,7 @@ def _off_the_cut(z, prec, options) -> bool:
     if r is sp.S.ComplexInfinity:
         return False
     _, im_, _, im_acc = r
-    return bool(im_ and im_[1] and im_acc is not None and im_acc >= 20)
+    return bool(im_ and im_[1] and im_acc is not None and im_acc >= _PART_BITS)
 
 
 def _log_near_one(inner, x, prec, options):
@@ -347,6 +369,29 @@ def _log_near_one(inner, x, prec, options):
     return v._mpf_, None, prec, None
 
 
+def _evaluated_real(r) -> bool:
+    """Is the strict value `r` real: no imaginary part at all (SymPy's exact 0)?"""
+    return r is not sp.S.ComplexInfinity and not r[1]
+
+
+def _clear_of_the_cut(r) -> bool:
+    """Is the strict value `r` of a REAL base clear of the branch cut of a power: real (SymPy's power reads a real
+    base exactly, a negative one on the principal branch), or with a real part certainly positive (a part of noise
+    beside it moves the power by noise only)? A real base evaluated with an imaginary part of noise and a negative real
+    part is ±i by the sign of that noise."""
+    if r is sp.S.ComplexInfinity:
+        return False
+    re_, im_, re_acc, _ = r
+    if not im_:
+        return True
+    return bool(re_ and re_[1] and not re_[0] and re_acc is not None and re_acc >= _PART_BITS)
+
+
+# options key: (node, test, reason) a node's strict evaluation asks of the strict value of one of its arguments, read
+# where that argument is evaluated (SymPy's evaluator evaluates it with the options it was given)
+_ASKED = "mathverify_asked"
+
+
 def _guarded(inner):
     def evalf(x, prec, options):
         if prec > PREC_CEILING:
@@ -355,6 +400,13 @@ def _guarded(inner):
             prec = PREC_CEILING
         if not options.get("strict"):
             return inner(x, prec, options)
+        asked = options.get(_ASKED)
+        r = strict(x, prec, options)
+        if asked is not None and asked[0] is x and not asked[1](r):
+            raise PrecisionExhausted(asked[2])
+        return r
+
+    def strict(x, prec, options):
         t = type(x)
         if t not in _TRACKED:
             if _exact_leaf(x):
@@ -368,16 +420,31 @@ def _guarded(inner):
             # with room for the cancellation the rewriting itself makes (1 - u**2 of asin): every sum below gets it
             # (SymPy's sum lowers the bound of the sums inside it to twice its own precision)
             return evalf(y, prec, dict(options, maxprec=max(options.get("maxprec", 0), _REWRITE_MAXPREC), room=True))
-        if t in _REAL_ARGUMENT and x.args[0].is_extended_real is not True and not _read_real(x.args[0], prec, options):
-            raise PrecisionExhausted(f"{t.__name__} of an argument not certainly real")
-        if t is sp.Pow and not x.exp.is_Integer and x.base.is_extended_real is not True \
-                and not _off_the_cut(x.base, prec, options):
-            raise PrecisionExhausted("a non-integer power of a base on or near the negative real axis")
+        # An argument SymPy knows real is still evaluated as SymPy writes it: (1 + sqrt(3)*I)**3, exactly -8, is
+        # -8.0 + 0.e-22*I, and sin, cos, tan read such an argument by the untracked complex path (sin(pi*z**3/8), exactly
+        # 0, came out -6.6e-22 with 53 bits), log and a power on the branch cut by the sign of the noise
+        # (log(z**3) = log(8) - i*pi, sqrt(-z**3 - 16) = -2*sqrt(2)*i). Where it is evaluated, its strict value must
+        # be real (a power's base: real, or off the cut by a real part certainly positive); A+ final attack, G1YO-1.
+        if t in _REAL_ARGUMENT:
+            if x.args[0].is_extended_real is not True:
+                if not _read_real(x.args[0], prec, options):
+                    raise PrecisionExhausted(f"{t.__name__} of an argument not certainly real")
+            else:
+                options = dict(options, **{_ASKED: (x.args[0], _evaluated_real,
+                                                    f"{t.__name__} of a real argument evaluated with an imaginary part")})
+        if t is sp.Pow and not x.exp.is_Integer:
+            if x.base.is_extended_real is not True:
+                if not _off_the_cut(x.base, prec, options):
+                    raise PrecisionExhausted("a non-integer power of a base on or near the negative real axis")
+            else:
+                options = dict(options, **{_ASKED: (x.base, _clear_of_the_cut,
+                                                    "a non-integer power of a real base evaluated on the branch cut")})
         if t is sp.log:
             return _log_near_one(inner, x, prec, options)
         if t is sp.Add and options.get("room"):
             options = dict(options, maxprec=max(options.get("maxprec", 0), _REWRITE_MAXPREC))
         return _strict_inner(inner, x, prec, options)
+
     evalf.mathverify_guard = True        # type: ignore[attr-defined]
     evalf.inner = inner                  # type: ignore[attr-defined]
     return evalf
@@ -393,7 +460,15 @@ def strict_value(e, dps: int):
 
 
 def strict_sign(e):
-    """1, -1, 0 (strictly read), "nonreal", or None: what every guarded relation of numbers decides from."""
+    """1, -1, 0 (strictly read), "nonreal", or None: what every guarded relation of numbers decides from.
+
+    A part decides only with significant bits of its own (`_part_sign`, the threshold of `_sign` and of
+    `equiv.numeric._part_state`). SymPy measures the accuracy of a complex value by its larger part: an integer
+    power of a complex base that is real came out -8.0 + 0.e-22*I for (1 + sqrt(3)*I)**3, an imaginary part of
+    1 bit, pure rounding noise. Read as "nonreal", the assumption fallback below called the number neither positive
+    nor negative while SymPy knows it real (arg/pi rational), so (1 + sqrt(3)*I)**3 - 5 was zero: Eq(X, 5) was True,
+    simplify(X - 5) was 0, Abs(X + 30) was 0, and (1 + i*sqrt(3))**3 = 5 was certified CORRECT (A+ final attack,
+    G1YO-1, 16 Oct 2026). An imaginary part of noise is neither real nor nonreal: undecided."""
     v = strict_value(e, 15)
     if v is None:
         return None
@@ -403,9 +478,12 @@ def strict_sign(e):
         return None
     if not ((re_.is_Rational or re_.is_Float) and (im_.is_Rational or im_.is_Float)):
         return None
-    if _number_sign(im_):
+    s_im = _part_sign(im_)
+    if s_im is None:
+        return None
+    if s_im:
         return "nonreal"
-    return _number_sign(re_)
+    return _part_sign(re_)
 
 
 def _n2(a, b):
@@ -433,6 +511,19 @@ def _number_sign(v) -> int:
     return 0 if not m[1] else (-1 if m[0] else 1)
 
 
+
+def _part_sign(v):
+    """The sign of one part of a strict value: a Rational's (an exact part, evalf's exact 0 included), a Float's
+    only when it carries `_PART_BITS` significant bits; None for a Float of noise (its digits, its sign, even its
+    being nonzero, are rounding) and for a Float 0 (strict evalf writes an exact 0 as the Integer 0)."""
+    if v.is_Rational:
+        return _number_sign(v)
+    m = v._mpf_
+    if not m[1] or getattr(v, "_prec", 0) < _PART_BITS:
+        return None
+    return -1 if m[0] else 1
+
+
 _n2.mathverify_guard = True              # type: ignore[attr-defined]
 
 
@@ -440,7 +531,9 @@ def _positive_negative(self, positive):
     """SymPy's numeric fallback of `is_extended_positive`/`is_extended_negative` of a number, from a STRICT
     reading (it read a non-strict evalf(2): sin(Z) of an exact 0 Z came out -9.3e-156 with 10 bits, so
     sin(Z)**2 > 0; round 9 attack, YO-2). An algebraic number with no function whose minimal polynomial is t
-    is 0 (SymPy's own exact test, kept)."""
+    is 0 (SymPy's own exact test, kept). For a number SymPy knows real, neither positive nor negative is ZERO (its
+    deduction): a strict reading that calls such a number not real contradicts SymPy and decides nothing
+    ((1 + sqrt(3)*I)**3 - 5 was 0 so, off an imaginary part of noise; A+ final attack, G1YO-1)."""
     if not self.is_number:
         return None
     depth = getattr(_LOCAL, "depth", 0)
@@ -449,6 +542,8 @@ def _positive_negative(self, positive):
     _LOCAL.depth = depth + 1
     try:
         s = strict_sign(self)
+        if s == "nonreal" and self.is_extended_real is True:
+            s = None
     finally:
         _LOCAL.depth = depth
     if s == "nonreal":

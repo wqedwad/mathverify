@@ -157,7 +157,7 @@ _MEANING_FLAGS = {"point_not_interior", "membership_condition", "reversed_bounds
                   "approach_outside_declared_domain", "expression_undefined_as_written", "naturals_convention",
                   "claim_convention", "claim_unreadable", "variable_declared_integer", "written_domain",
                   "malformed_tolerance", "domain_list_ambiguous", "unit_convention",
-                  "options_within_declared_tolerance"}
+                  "options_within_declared_tolerance", "arg_convention"}
 _NOT_PROVEN_FLAGS = {"cas_failed", "cas_unreliable", "cas_timeout", "completeness_uncertified", "no_certified_value",
                      "no_exact_value", "brute_force_limit", "symbolic_numeric_disagreement", "numeric_not_converged",
                      "relative_tolerance_undecided", "z3_unsupported", "condition_unsolved", "unsupported_task_kind",
@@ -166,7 +166,8 @@ _NOT_PROVEN_FLAGS = {"cas_failed", "cas_unreliable", "cas_timeout", "completenes
                      "ir_unavailable", "solver_family_unknown"}
 # what a layer notes, no abstention: the scope of a verdict, a notation read, the pipeline's steps, a layer's own result
 _NOTE_FLAGS = {"answer_from_option_letter", "answer_level_only", "steps_not_checked", "payload_cleaned",
-               "payload_notation_normalized", "naturals_readings_agree", "domain_list_readings_agree", "ir_extracted",
+               "payload_notation_normalized", "naturals_readings_agree", "domain_list_readings_agree",
+               "arg_readings_agree", "arg_range_declared", "ir_extracted",
                "ir_repaired_once", "ir_repaired_twice", "roundtrip_borderline", "restructure_deterministic_only",
                "l4_agree", "l4_confirms_refutation", "l5_method_ok", "lean_proved", "critic_clean",
                "critic_overruled_by_certificate", "calibrated_below_threshold", "layer_contradiction", "step_refuted"}
