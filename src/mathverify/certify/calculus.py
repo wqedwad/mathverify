@@ -1406,7 +1406,23 @@ def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[st
     return ev
 
 
-_KINK_POINTS = 8          # the zeros of a switch of f classified one by one
+def point_derivative(f, var, order: int, at, timeout: float = 8.0) -> dict[str, Any]:
+    """`derivative_at_point`, and where its limits decide nothing at a switch point of a Piecewise, the exact
+    `_piecewise_rule`: SymPy's one-sided limits of a Piecewise there read the wrong branch, and the corner of the
+    piecewise |x| at 0 was left undecided by the derivative task, its tangent and a step (SON-G3-YO-1). The rule
+    only says 'corner' (a corner or a jump: no derivative); a value stays the limits'."""
+    dap = derivative_at_point(f, var, order, at, timeout=timeout)
+    if dap.get("status") == "unknown" and order == 1:
+        try:
+            pw = sp.sympify(f).has(sp.Piecewise)
+        except Exception:  # noqa: BLE001
+            pw = False
+        if pw and _piecewise_rule(f, var, at) == "corner":
+            dap = dict(dap, status="corner", rule="piecewise_rule")
+    return dap
+
+
+_KINK_POINTS = 8         # the zeros of a switch of f classified one by one
 _KINK_BUDGET = 3          # `derivative_at_point` calls per reading, whatever the number of kinks (round 3, RK-5)
 # analytic on the interior of the domain their written conditions give (acosh, atanh, acot have none: never read)
 _SMOOTH = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc, sp.asin, sp.acos, sp.atan, sp.sinh, sp.cosh, sp.tanh,
@@ -1553,13 +1569,145 @@ def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
     return "corner"
 
 
+def _real_root_rule(fa, var, p, u, switches, fconds, out: dict | None = None) -> str | None:
+    """f = h + g*sign(u)**a*|u|**r at a zero p of u: a real root (cbrt(u) parses to sign(u)*|u|**(1/3), its powers to
+    sign(u)**k*|u|**(k/3)) or a power of |u|, r > 0 a number, a >= 0 an integer, g, h and u analytic at p
+    (`smooth_at`). Off p, sign(u)**a is 1 for an even a, and the term is 0 at p, so a's parity alone counts. r > 1,
+    or g(p) = 0: the term is o(x - p) (|u| <= C|x - p|), f has a derivative ('value'); r = 1 with an odd a: the term
+    is g*u ('value'); r = 1 with an even a, g(p) != 0 and u'(p) != 0: |u|'s corner; 0 < r < 1, g(p) != 0 and
+    u'(p) != 0: an infinite slope (odd a) or a cusp (even a): no derivative ('corner'). Exact, no limit taken:
+    SymPy's limits did not decide the continuity of sign(x)*|x|**(1/3) at 0, and the textbook (∛x)' = 1/(3∛x²) was
+    UNKNOWN (son saldırı G2RK-13). With 'value', f'(p) itself goes to `out` ("value"): SymPy's formula has none at p
+    (a DiracDelta, 0*oo), and (x∛x)' = 4∛x/3 was compared there by limits that decided nothing. None when the rule
+    does not apply or decides nothing."""
+    signs = [s_ for s_ in fa.atoms(sp.sign) if s_.args[0] == u]
+    absolutes = [a_ for a_ in fa.atoms(sp.Abs) if a_.args[0] == u]
+    if len(signs) > 1 or len(absolutes) != 1:
+        return None
+    others = [v for v in switches if v != u]
+    if any(_nonzero_at(v, var, p, root_of=u) is not True for v in others):
+        return None
+    Ds, Da = sp.Dummy("sign"), sp.Dummy("abs")
+    try:
+        F = fa.xreplace({**({signs[0]: Ds} if signs else {}), absolutes[0]: Da})
+        h, rest = F.as_independent(Ds, Da, as_Add=True)
+        c, a = rest.as_coeff_exponent(Ds)
+        g, r = c.as_coeff_exponent(Da)
+        if rest == 0 or g.has(Ds, Da) or sp.expand(rest - g * Ds**a * Da**r) != 0:
+            return None
+    except Exception:  # noqa: BLE001 - not of this form
+        return None
+    if not (a.is_Integer and a >= 0 and r.is_number and r.is_extended_positive is True):
+        return None
+    if not all(smooth_at(e, var, p, others, fconds, root_of=u) for e in (g, h, u)):
+        return None
+
+    def value(term_slope=S.Zero):
+        # f'(p) = h'(p) + the term's: 0 when the term is o(x - p), g(p)*u'(p) for g*u (r = 1, odd a)
+        if out is not None:
+            try:
+                v = sp.simplify(sp.diff(h, var).subs(var, p) + term_slope)
+                if _real_finite(v) is True:
+                    out["value"] = v
+            except Exception:  # noqa: BLE001 - the status alone
+                pass
+        return "value"
+    if certified_sign(r - 1) == 1:
+        return value()
+    gp = _nonzero_at(g, var, p, root_of=u)
+    if gp is False:
+        return value()
+    if r == 1 and a % 2 == 1:
+        return value(g.subs(var, p) * sp.diff(u, var).subs(var, p))
+    if gp is not True or _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
+        return None
+    return "corner" if r == 1 or certified_sign(1 - r) == 1 else None
+
+
+def _piecewise_rule(f, var, p) -> str | None:
+    """f (folded into one Piecewise in `var` alone) at a number p where its branch may change: the branch taken on
+    each side of p and at p, read from the exact sets SymPy solves the conditions to (`as_expr_set_pairs`) at a
+    point of each side nearer to p than any other end of those sets, each branch analytic at p (`smooth_at`). f has
+    a derivative at p exactly when the three branches have one value there and the two sides one derivative
+    ('value', a C1 junction); a difference proved nonzero is a jump or a corner ('corner'); None otherwise. Exact,
+    no limit taken: SymPy's one-sided limit of a Piecewise at its switch point takes the branch of the wrong side
+    (Piecewise((-1, x < 0), (1, True)) from the left of 0 is 1), so `derivative_at_point` left the corner of the
+    piecewise |x| undecided (SON-G3-YO-1)."""
+    if not getattr(p, "is_number", False) or getattr(p, "is_real", None) is not True or p.free_symbols:
+        return None
+    try:
+        g = sp.piecewise_fold(f)
+        if not isinstance(g, sp.Piecewise) or g.free_symbols != {var}:
+            return None
+        pairs = g.as_expr_set_pairs()
+        ends: list = []
+        for _, set_ in pairs:
+            b = set_.boundary
+            if not isinstance(b, sp.FiniteSet) and b is not S.EmptySet:
+                return None
+            ends += [q for q in b if q.is_finite is True and q not in ends]
+        near = {-1: None, 1: None}
+        for q in ends:
+            side = certified_sign(q - p)
+            if side not in (-1, 0, 1):
+                return None
+            if side == 0:
+                continue
+            best = near[side]
+            if best is None:
+                near[side] = q
+                continue
+            closer = certified_sign((q - best) * side)
+            if closer not in (-1, 0, 1):
+                return None
+            if closer == -1:
+                near[side] = q
+        probes = [p - 1 if near[-1] is None else (p + near[-1]) / 2, p,
+                  p + 1 if near[1] is None else (p + near[1]) / 2]
+        branches = []
+        for q in probes:
+            taken = []
+            for e, set_ in pairs:
+                inside = set_.contains(q)
+                if inside not in (sp.true, sp.false):
+                    return None
+                if inside is sp.true:
+                    taken.append(e)
+            if len(taken) != 1:
+                return None                       # no branch at p: f has no value there (its own conditions)
+            branches.append(taken[0])
+        for e in set(branches):
+            if var in e.free_symbols and not smooth_at(e, var, p, switch_arguments(e, var),
+                                                       definedness_conditions(e, var)):
+                return None
+        left, mid, right = branches
+        jumps = [_nonzero_at(e - mid, var, p) for e in (left, right)]
+        if True in jumps:
+            return "corner"
+        if any(j is not False for j in jumps):
+            return None
+        slope = _nonzero_at(sp.diff(left, var) - sp.diff(right, var), var, p)
+    except Exception:  # noqa: BLE001 - a reading that fails decides nothing
+        return None
+    return "corner" if slope is True else "value" if slope is False else None
+
+
 def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, cache=None) -> str | None:
     """'value' (f has a derivative of `order` at the zero p of the switch or root base u), 'corner' (none: a corner,
     a cusp, a jump, an infinite slope) or None (undecided, or the reading's budget of `derivative_at_point` calls
-    spent). A call's result is kept in `cache` (p -> result) for `_value_holes`."""
+    spent). A call's result is kept in `cache` (p -> result) for `_value_holes`. A Piecewise's switch point is read
+    by `_piecewise_rule` (exact) before any limit is taken."""
     st = _linear_switch_rule(fa, var, p, u, switches, fconds)
     if st is None:
         st = _power_rule(fa, var, p, u, switches, fconds)
+    if st is None:
+        slope: dict = {}
+        st = _real_root_rule(fa, var, p, u, switches, fconds, slope)
+        if st == "value" and order == 1 and cache is not None and p not in cache and "value" in slope:
+            # f'(p) by the rule, exactly: `_value_holes` reads it where SymPy's formula has no value (G2RK-13)
+            cache[p] = {"status": "value", "value": slope["value"], "by": "real_root_rule"}
+    if st is None and order == 1 and f.has(sp.Piecewise):
+        st = _piecewise_rule(f, var, p)
     if order == 1 and st is not None:
         return st
     if st == "corner":
@@ -2348,6 +2496,52 @@ def _claim_condition_holds(ctx: Ctx, c, var, opens) -> bool:
     return _implied(c.xreplace(rep), [(v.xreplace(rep), k) for v, k in opens], var)
 
 
+def _claim_definedness_on_integer_bounds(ctx: Ctx, src: str, ns: dict, pins: dict | None, var) -> tuple[list, set]:
+    """`written_definedness` of the claim `src`, each integer parameter n whose region (`_parameter_region`) is the
+    integers from L on read as L + k, k a nonnegative integer Dummy (the conditions mapped back with k = n - L): with
+    n >= 2 declared, the exponent n - 2 of n*(n - 1)*x**(n - 2) is k, never negative, and x**(n - 2) needs no x != 0
+    (U5's rule reads the declaration n > 0 alone). The textbook (x**n)'' was UNKNOWN for n >= 2 (son saldırı
+    SON-G3-RK-2). The plain reading when no such parameter is read."""
+    conds, nowhere = written_definedness(src, ns, pins)
+    shift: dict = {}
+    named = {v.name for v in ctx.ir.vars if re.search(rf"(?<![A-Za-z_0-9]){re.escape(v.name)}(?![A-Za-z_0-9])", src)}
+    for s_ in sorted({q for q in (ns.get(n_) for n_ in named) if isinstance(q, sp.Symbol)} - {var} - set(pins or {}),
+                     key=lambda q: q.name):
+        if getattr(s_, "is_integer", None) is not True:
+            continue
+        reg = _parameter_region(ctx, s_)
+        try:
+            lo = reg.inf if reg is not None else None
+            if lo is None or not lo.is_Integer or reg.is_subset(sp.Range(lo, oo)) is not True:
+                continue
+        except Exception:  # noqa: BLE001 - a region not read: as written
+            continue
+        shift[s_] = (lo, sp.Dummy(f"{s_.name}_from_{lo}", integer=True, nonnegative=True))
+    if not shift:
+        return conds, nowhere
+    try:
+        conds2, nowhere2 = written_definedness(src, ns, {**(pins or {}), **{s_: lo + k for s_, (lo, k) in shift.items()}})
+    except Exception:  # noqa: BLE001 - as written
+        return conds, nowhere
+    back = {k: s_ - lo for s_, (lo, k) in shift.items()}
+    return [c.xreplace(back) for c in conds2], {back.get(q, q) for q in nowhere2} if nowhere2 else set(nowhere2)
+
+
+def _convention_holds_on(c, var, dom) -> bool:
+    """Is the convention condition `c` on `var` alone (`domain.is_convention`) met at every point of the interior of the
+    comparison region `dom`: the points where it may fail (`domain.convention_split`, exact) miss it? With x > 0
+    declared, x**(2/3) has its one value: the claim 1/(3*x**(2/3)) for (∛x)' was undecided on its odd root's convention
+    (son saldırı G2RK-14)."""
+    from .domain import convention_split, is_convention
+    if not is_convention(c) or c.free_symbols != {var} or not isinstance(dom, sp.Set):
+        return False
+    try:
+        _, back = convention_split(c, var)
+        return sp.Intersection(back, dom.interior).is_empty is True
+    except Exception:  # noqa: BLE001 - not proved
+        return False
+
+
 def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose, kr, fconds) -> tuple[str, str]:
     """Where the claim, as written, has no value, against where f has a derivative (round 3, RK-8 and YO-3):
     'undefined' when a point of the comparison region where f has one (`_has_derivative_at`) has none of the claim:
@@ -2369,7 +2563,8 @@ def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose
         if c in fconds:
             continue                     # f's own condition (a convention both read alike): holds where f does
         if fs - {var} or isinstance(c, sp.Contains):
-            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens)):
+            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens)
+                    or _convention_holds_on(c, var, dom)):
                 state, why = "undecided", f"claim_condition_not_proved: {c}"
             continue
         if isinstance(c, Ne):
@@ -2621,6 +2816,60 @@ def _line_equal(claimed, truth, var, dep) -> tuple[bool | None, dict[str, Any]]:
     return (False if ok is False else None), ev
 
 
+def _tangent_as_written(ok, truth, var, dep, conds, nowhere, point) -> tuple[bool | None, dict[str, Any]]:
+    """The tangent claim read as written (principle 12; SON-G3-YO-2): a line has a value at each of its points, and
+    the claim is the line only where it has one. y = 2x - 1 + 0*log(x - 1) was certified as the tangent of x**2 at
+    1 (it is the half-line x > 1, without the point of tangency), y = (x**2 - x)/x for log at 1 (the line with a hole
+    at 0). As the derivative's claim (RK-8, `claim_where_derivative`): a condition that fails at a point of the
+    true line, the point of tangency first, makes the claim wrong; one not proved to hold on the whole line leaves it
+    undecided; a claim defined nowhere is wrong. `ok` is the comparison's verdict; a refutation stands."""
+    from .geometry import _undefined_points_on_line
+    ev: dict[str, Any] = {}
+    if nowhere & {var, dep}:
+        ev["claim_as_written"] = "defined_nowhere"
+        return False, ev
+    if not conds or ok is False:
+        return ok, ev
+    T = sp.expand(truth.lhs - truth.rhs)
+    if T.free_symbols - {var, dep} or any(getattr(c, "free_symbols", set()) - {var, dep} for c in conds):
+        ev["claim_as_written"] = "condition_on_another_symbol"
+        return (None if ok is True else ok), ev
+    try:
+        candidates = [point] + _undefined_points_on_line(T, conds, var, dep)
+    except Exception:  # noqa: BLE001 - only the point of tangency is read
+        candidates = [point]
+    for pt in candidates:
+        try:
+            on_line = sp.simplify(T.subs({var: pt[0], dep: pt[1]})) == 0
+        except Exception:  # noqa: BLE001
+            on_line = False
+        if not on_line:
+            continue
+        for c in conds:
+            try:
+                h = relation_holds_at(c.subs(dep, pt[1]), var, pt[0])
+            except Exception:  # noqa: BLE001
+                h = None
+            if h is False:
+                ev["claim_as_written"] = f"undefined_at ({pt[0]}, {pt[1]}) of the true line: {c}"
+                return False, ev
+    # every condition proved to hold along the whole line (its points (t, y(t)), or (a, t) when it is x = a)
+    t = sp.Dummy("t", real=True)
+    try:
+        a, b = T.coeff(var, 1), T.coeff(dep, 1)
+        c0 = T.subs({var: 0, dep: 0})
+        X, Y = (t, -(a * t + c0) / b) if b != 0 else (-c0 / a, t)
+        for c in conds:
+            st = Ctx.condition_set(c.subs({var: X, dep: Y}), t)
+            if st is None or st != S.Reals:
+                ev["claim_as_written"] = f"condition_not_proved_on_the_line: {c}"
+                return (None if ok is True else ok), ev
+    except Exception:  # noqa: BLE001 - not proved
+        ev["claim_as_written"] = "conditions_not_read_on_the_line"
+        return (None if ok is True else ok), ev
+    return ok, ev
+
+
 _TRAILING_C = re.compile(r"\s*\+\s*[Cc]\s*$")
 
 
@@ -2638,6 +2887,10 @@ def _unreadable_task_expression(src, expr, var, ns, ms, regions=(), pins=None):
                        flags=["expression_undefined_as_written"])
     members = [c for c in membership_conditions(src, expr, var, ns, pins) if not membership_holds_on(c, var, regions)
                and not any(convention_null_on(c, var, r) for r in regions)]
+    if members and not regions:
+        # no point and no range (a derivative function, an antiderivative): a convention that fails at finitely many
+        # points, each an end of f's written domain, is never read (son saldırı SON-G3-RK-1)
+        members = [c for c in members if not _convention_at_domain_ends(c, var, src, ns, pins)]
     if members:
         return unknown(LAYER, "membership_condition_on_variable", ms, {"conditions": [str(c) for c in members]},
                        flags=["membership_condition"])
@@ -2654,6 +2907,32 @@ def _declared_regions(ctx: Ctx, var) -> list:
     except Exception:  # noqa: BLE001 - no region read: none given
         return []
     return [] if region == S.Reals or not isinstance(region, sp.Set) else [region]
+
+
+def _convention_at_domain_ends(c, var, src, ns, pins) -> bool:
+    """Does the convention condition `c` of f (`src`) fail at finitely many points of ℝ at most (the 0**e rule of an
+    irrational exponent: x**pi at 0), each a simple zero p of a base b whose own condition b >= 0 f writes too? Then
+    b < 0 on one side of p: p is an end of f's domain, no point of the open set where a derivative function or an
+    antiderivative lives, and the convention is never read there. x**pi, x**sqrt(2) and their primitives were UNKNOWN
+    on an unconstrained x since part d4b's round 10 (son saldırı SON-G3-RK-1). x**x fails on all of x <= 0: no."""
+    from .domain import Convention, _MAY_FAIL
+    from ..sandbox.exactsets import exact_solveset
+    st = c.args[1] if isinstance(c, sp.Contains) else None
+    if not isinstance(st, Convention) or st.kind != "zero_power":
+        return False
+    b = c.args[0]
+    if not isinstance(b, sp.Expr) or b.free_symbols != {var}:
+        return False
+    try:
+        pts = exact_solveset(_MAY_FAIL["zero_power"](b), var, S.Reals)
+        if not isinstance(pts, (sp.FiniteSet, type(S.EmptySet))):
+            return False
+        own = written_definedness(src, ns, pins)[0]
+        if not any(isinstance(o, sp.GreaterThan) and sp.expand(o.lhs - o.rhs - b) == 0 for o in own):
+            return False
+        return all(_nonzero_at(sp.diff(b, var), var, q, root_of=b) is True for q in pts)
+    except Exception:  # noqa: BLE001 - not proved
+        return False
 
 
 def _closed_real(txt, ctx, pins):
@@ -3298,7 +3577,7 @@ def verify(ir, solution, ctx: Ctx):
                 bad = _point_not_interior(ctx, p["f"], var, at, pins, t.ms)
                 if bad is not None:
                     return bad
-                dap = derivative_at_point(f, var, order, at, timeout=ctx.timeout)
+                dap = point_derivative(f, var, order, at, timeout=ctx.timeout)
                 ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
                 st = dap["status"]
                 if ca.kind == "dne":
@@ -3349,7 +3628,8 @@ def verify(ir, solution, ctx: Ctx):
                 # the claim, as written, has a value wherever the derivative exists (`claim_where_derivative`):
                 # 2*x**2/x for (x**2)' was certified, 1/(x + 1/a) with a >= 0 too (round 3, RK-8 and YO-3)
                 fconds = written_definedness(p["f"], ctx.ns, pins)[0]
-                claim_conds, claim_nowhere = written_definedness(str(ca.payload), ctx.claim_ns(solution), pins)
+                claim_conds, claim_nowhere = _claim_definedness_on_integer_bounds(
+                    ctx, str(ca.payload), ctx.claim_ns(solution), pins, var)
                 if other and not _half_line_for_every_value(ctx, conds, other, var):
                     # a parameter of declared sign (a > 0: asin(x/a), log(k*x)): a domain with interior for every
                     # allowed value is proved by one point, the claim by a symbolic identity (R2)
@@ -3453,7 +3733,7 @@ def verify(ir, solution, ctx: Ctx):
             if bad is not None:
                 return bad
             y = ctx.sym(p.get("dep", "y"))
-            dap = derivative_at_point(f, var, 1, at, timeout=ctx.timeout)
+            dap = point_derivative(f, var, 1, at, timeout=ctx.timeout)
             ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
             st = dap["status"]
             ca = solution.claimed_answer
@@ -3483,6 +3763,13 @@ def verify(ir, solution, ctx: Ctx):
                         ctx, var, ok, cev, [claimed, truth],
                         lambda inst: _line_equal(claimed.xreplace(inst), truth.xreplace(inst), var, y)[0], exclude={y})
                     ev["compare"] = cev
+                    # the claim as written: the line only where it has a value (SON-G3-YO-2)
+                    claim_conds, claim_nowhere = written_definedness(str(ca.payload), ctx.claim_ns(solution), pins) \
+                        if isinstance(ca.payload, str) else ([], set())
+                    y_at = sp.simplify(truth.rhs.subs(var, at)) if truth.lhs == y else None
+                    ok, wev = _tangent_as_written(ok, truth, var, y, claim_conds, claim_nowhere,
+                                                  (at, y_at) if y_at is not None else (at, sp.simplify(f.subs(var, at))))
+                    ev.update(wev)
                 elif st in ("corner", "discontinuous"):
                     ok = False                         # no tangent line exists at a corner
                 else:

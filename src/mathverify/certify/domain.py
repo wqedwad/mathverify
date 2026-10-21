@@ -1730,19 +1730,93 @@ def _plus_one_positive(e) -> bool:
         return (e + 1).is_positive is True
 
 
+_FORM_TYPES = (sp.Limit, sp.Integral, sp.Sum, sp.Product)
+_FORM_VALUE_CACHE: dict = {}
+_FORM_VALUE_LOCK = threading.Lock()
+
+
+def _exact_zero(e) -> bool:
+    """Is the closed expression e exactly 0 (`certified_sign`; 1 + i**2 is)?"""
+    try:
+        return certified_sign(_evaluated(e)) == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def complex_pole(e) -> bool:
+    """Has the as-written tree `e` a closed operation that has no value over ℂ either, wherever it stands: a division
+    by an exact 0 (1/0, 1/(1 + i**2)), a pole of tan, sec (cos = 0), cot, csc (sin = 0), log 0 (or a base 0 or 1)?
+    Their conditions are the plain `false` a real condition gives (sqrt(-4), log(-1)), which the complex reading drops:
+    |1/0| = oo, acot|1/0| = 0, e^{-|1/(1 + i²)|} = 0, acot|tan(π/2)| = 0 and acot|log 0| = 0 were certified over ℂ, only
+    1/(1/0) (`_node_conditions`' reciprocal of a pole) was not (SON-G3-YO-4; the rule of A-YO-3 is on the operation,
+    not on what wraps it)."""
+    for n in sp.preorder_traversal(e):
+        if not isinstance(n, sp.Basic) or not n.args or n.free_symbols:
+            continue
+        try:
+            if isinstance(n, sp.Pow):
+                ex = _numeric_exponent(n.exp)
+                if ex.is_number and ex.is_extended_negative is True and _exact_zero(n.base):
+                    return True
+            elif isinstance(n, (sp.tan, sp.sec)):
+                if _exact_zero(sp.cos(n.args[0])):
+                    return True
+            elif isinstance(n, (sp.cot, sp.csc)):
+                if _exact_zero(sp.sin(n.args[0])):
+                    return True
+            elif isinstance(n, sp.log):
+                if _exact_zero(n.args[0]) or (len(n.args) > 1 and (_exact_zero(n.args[1])
+                                                                   or _exact_zero(n.args[1] - 1))):
+                    return True
+        except Exception:  # noqa: BLE001 - a node not read: no pole proved there
+            continue
+    return False
+
+
+def _form_value_no_number(a) -> bool:
+    """Is the closed expression `a`, holding a closed limit, sum, product or integral, no number by SymPy's value of it
+    (±oo, zoo, nan, or AccumBounds: no limit)? The rule for an infinite argument read oo only where it is written:
+    lim_{x→0} 1/x² holds none, and lim_{x→∞} x is left unevaluated by the as-written reading, so arctan(lim_{x→0}
+    1/x²) = π/2, 0·sin(lim_{x→∞} x) = 0 and 1/lim_{x→0} 1/x² = 0 were certified (SON-G3-YO-3; the rule of A-YO-5 is
+    on the value, not its writing). SymPy's value is taken unconfirmed here: it only ever marks an expression as
+    having no value (the callers abstain); a finite value read wrong marks nothing, as before."""
+    if not isinstance(a, sp.Expr) or a.free_symbols or not any(isinstance(n, _FORM_TYPES)
+                                                                for n in sp.preorder_traversal(a)):
+        return False
+    with _FORM_VALUE_LOCK:
+        hit = _FORM_VALUE_CACHE.get(a)
+    if hit is not None:
+        return hit
+    from ..normalize.parse import unhold
+    from ..sandbox import run as sb_run
+    try:
+        e = _evaluated(a).replace(lambda n: isinstance(n, _FORM_TYPES), unhold)
+        r = sb_run("mathverify.sandbox.ops:doit_expr", e, timeout=8.0)
+        out = bool(r.ok and isinstance(r.value, sp.Basic) and not r.value.free_symbols
+                   and (_no_number(r.value) or r.value.has(sp.AccumBounds)))
+    except Exception:  # noqa: BLE001 - no value read: nothing marked, as before
+        out = False
+    with _FORM_VALUE_LOCK:
+        if len(_FORM_VALUE_CACHE) > 512:
+            _FORM_VALUE_CACHE.clear()
+        _FORM_VALUE_CACHE[a] = out
+    return out
+
+
 def _infinite_argument(node) -> bool:
     """Is a closed argument of the function `node` (or the exponent of a power) infinite? sin(oo) is no real number
     (SymPy's AccumBounds: 0*sin(oo) was its 0, and certified), and exp(-oo), atan(oo), 2**(-oo), (1/2)**oo are values
     only where oo is read as a number, as 1/oo already is not (attack on d4f round 2, A-YO-5). A limit's point and
-    a binder's bound are no arguments."""
+    a binder's bound are no arguments; a closed limit (sum, integral) whose value is infinite is one
+    (`_form_value_no_number`, SON-G3-YO-3)."""
     if isinstance(node, sp.Pow):
         args = (node.exp,)
     elif isinstance(node, sp.Function):
         args = node.args
     else:
         return False
-    return any(isinstance(a, sp.Expr) and not a.free_symbols and a.has(oo, -oo) and _no_number(_evaluated(a))
-               for a in args)
+    return any(isinstance(a, sp.Expr) and not a.free_symbols
+               and ((a.has(oo, -oo) and _no_number(_evaluated(a))) or _form_value_no_number(a)) for a in args)
 
 
 def _node_conditions(node, var, add) -> None:
@@ -1756,9 +1830,19 @@ def _node_conditions(node, var, add) -> None:
         add(sp.false)
         add(NO_VALUE)
     elif type(node).__name__ == "written_domain":
-        # an IR function's declared domain at its call (normalize.parse.written_domain)
+        # an IR function's declared domain at its call (normalize.parse.written_domain), or where a written
+        # derivative exists (normalize.parse._written_diff)
         rel = node.args[1]
         for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+            if isinstance(c, sp.Contains) and not c.free_symbols and isinstance(c.args[1], Convention):
+                # put at a point unevaluated (at() reads its body with evaluation off): read with its element
+                # evaluated, kept standing unless proved inside (Convention says true only then). Left as it
+                # was, |sin x|'s zeros (sin(x) in ORIGIN) made its derivative undecided at pi/2 too
+                try:
+                    if sp.Contains(_evaluated(c.args[0]), c.args[1]) is sp.true:
+                        continue
+                except Exception:  # noqa: BLE001 - not read: left standing (undecided)
+                    pass
             add(c)
     elif isinstance(node, sp.log):
         add(node.args[0] > 0)
@@ -1769,10 +1853,11 @@ def _node_conditions(node, var, add) -> None:
         base, ex = node.args
         ex = _numeric_exponent(ex)
         if ex.is_number and ex.is_extended_negative is True and not base.free_symbols \
-                and _no_number(_evaluated(base)):
+                and (_no_number(_evaluated(base)) or _form_value_no_number(base)):
             # the reciprocal of a closed pole (1/(1/0), 1/tan(pi/2), 1/log(0)): 0 under a reading that gives
             # the pole a value (the Riemann sphere, cot = 1/tan), SymPy's 1/zoo: no value, and no "defined
-            # nowhere" either, like 1/(-1)! (review of d4f, RK-F4, YO-6)
+            # nowhere" either, like 1/(-1)! (review of d4f, RK-F4, YO-6); an infinite limit too (1/lim_{x→0} 1/x²,
+            # SON-G3-YO-3)
             add(sp.false)
             add(NO_VALUE)
         if isinstance(ex, sp.Rational) and not ex.is_Integer:
@@ -1805,12 +1890,13 @@ def _node_conditions(node, var, add) -> None:
                 add(sp.Contains(sp.Tuple(base, ex), REAL_POWER))
             elif ex.is_integer is not True:
                 add(base > 0)          # x^y style real power (var None: every symbol counts)
-            elif not (ex.is_nonnegative is True or _plus_one_positive(ex)):
+            elif not (ex.is_nonnegative is True or _plus_one_positive(ex) or _evaluated(ex).is_nonnegative is True):
                 # an exponent declared an integer is a power of the curriculum for every base: x != 0 when it may
                 # be negative, nothing when it may not (n a positive integer: (x**2)**n and x**(2*n - 1); an integer
                 # e is >= 0 when e + 1 > 0, which SymPy reads on the unevaluated n - 1 as written). Read as
                 # x > 0, the textbook derivative 2*n*x**(2*n - 1) of (x**2)**n was refuted (attack on d4e round 4,
-                # D4E4-U5)
+                # D4E4-U5). The exponent's sign is read on its evaluated form too: (k + 2) - 2 written out for n - 2 with
+                # n = k + 2 (`calculus._claim_definedness_on_integer_bounds`, SON-G3-RK-2) is k, never negative
                 add(Ne(base, 0))
         elif not ex.is_number and base.is_number and base.is_zero is False and base.is_positive is not True \
                 and ex.is_integer is not True:
@@ -2400,24 +2486,44 @@ def closed_condition_undecided(conds) -> bool:
     cos(arccot(2) + arccot(1/2)) != 0 stays symbolic, carries no symbol, and was dropped, so the
     maximum of x + 0*tan(...) on [0, 1] and the root of x + tan(...) - tan(...) = 1 were certified
     (audit of 29 Sep 2026). The expression may be undefined everywhere; the caller abstains."""
-    from ..equiv.forms import checked_forms, has_closed_form
     for c in conds:
         if isinstance(c, sp.Contains) and not c.free_symbols:
             return True                     # a membership SymPy could not decide (closed, left standing)
-        if isinstance(c, sp.core.relational.Relational) and not c.free_symbols:
-            try:
-                if has_closed_form(c):
-                    # Limit(sin(2x)/x, x, 0) != 0 is read with the limit's confirmed value
-                    c = checked_forms(c)
-                    if c is sp.true:
-                        continue
-                    if c is sp.false:
-                        return True
-                if relation_holds_at(c, sp.Dummy("_closed"), 0) is not True:
-                    return True
-            except Exception:  # noqa: BLE001 - a check that fails (or a form no number confirms) proves nothing
+        if isinstance(c, (sp.core.relational.Relational, sp.And, sp.Or, sp.Not)) and not c.free_symbols:
+            # an And/Or/Not too, part by part: a derivative's condition "v != p or undecided" put at p
+            # (normalize.parse._switch_differentiability) is one, and closed it was no condition at all
+            # (SON-G3-YO-1)
+            if _closed_condition_holds(c) is not True:
                 return True
     return False
+
+
+def _closed_condition_holds(c) -> bool | None:
+    """Does the closed condition c hold (`closed_condition_undecided`'s reading of a relation: a closed form by its
+    confirmed value, then `relation_holds_at`; an And/Or/Not part by part)? None when not decided."""
+    from ..equiv.forms import checked_forms, has_closed_form
+    if c is sp.true or c is sp.false:
+        return c is sp.true
+    if isinstance(c, (sp.And, sp.Or)):
+        parts = [_closed_condition_holds(a) for a in c.args]
+        stop = isinstance(c, sp.Or)                      # the value that decides: True for Or, False for And
+        if any(t is stop for t in parts):
+            return stop
+        return None if any(t is None for t in parts) else not stop
+    if isinstance(c, sp.Not):
+        t = _closed_condition_holds(c.args[0])
+        return None if t is None else not t
+    if not isinstance(c, sp.core.relational.Relational) or is_undecided(c):
+        return None
+    try:
+        if has_closed_form(c):
+            # Limit(sin(2x)/x, x, 0) != 0 is read with the limit's confirmed value
+            c = checked_forms(c)
+            if c is sp.true or c is sp.false:
+                return c is sp.true
+        return relation_holds_at(c, sp.Dummy("_closed"), 0)
+    except Exception:  # noqa: BLE001 - a check that fails (or a form no number confirms) proves nothing
+        return None
 
 
 def hold_nowhere(cs, s_) -> bool:

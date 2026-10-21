@@ -79,7 +79,16 @@ def _side_status(conds, var, point, side):
     conditions are solved: solveset on periodic conditions is not trusted (it returns a single
     period for `1 + cos(x) != 0`, measured 25 Sep 2026)."""
     # (the trigonometric part of this rule is sandbox.exactsets.at_risk, shared with every solveset)
-    if any(at_risk(c, var) or c.has(HyperbolicFunction) for c in conds):
+    risky = [c for c in conds if at_risk(c, var) or c.has(HyperbolicFunction)]
+    if risky and point not in (oo, -oo):
+        # a condition that holds STRICTLY at a finite point, of operations continuous where defined, holds on a
+        # neighbourhood of it (`calculus.strict_at`), unsolved: sin(x) > 0 of log(sin(x)) near pi/4, cos(x) > 0 of
+        # log(cos(x)) near 0. Every such limit, derivative and tangent was UNKNOWN (son saldırı SON-G3-RK-9)
+        from .calculus import strict_at
+        if all(strict_at(c, var, point) for c in risky):
+            conds = [c for c in conds if c not in risky]
+            risky = []
+    if risky:
         return None
     bad = S.EmptySet
     good = S.Reals
@@ -424,6 +433,10 @@ def membership_holds_on(c, var, regions) -> bool:
     if isinstance(st, Convention) and st.kind == "real_power":
         # x**x: the one value where the base is positive (round 9 attack on part d4b, RK-1)
         return _base_positive(c.args[0][0], var, regions)
+    if isinstance(st, Convention) and st.kind == "odd_root":
+        # x**(1/3): the real root and the principal value agree where the base is not negative; on [0, 8] the maximum
+        # 2/3 of x**(1/3) - x/3 was UNKNOWN (son saldırı G2RK-15)
+        return _base_positive(c.args[0], var, regions, strict=False)
     if not (isinstance(st, sp.Complement) and st.args[0] == S.Reals) or not regions:
         return False
     arg, hole = c.args[0], st.args[1]
@@ -480,15 +493,15 @@ def _origin_avoided(u, var, regions) -> bool:
     return False
 
 
-def _base_positive(b, var, regions) -> bool:
-    """Is the base `b` (in `var` alone) certainly positive on the closure of one of `regions`: no point of it where
-    b <= 0, by the exact classes (sandbox.exactsets)?"""
+def _base_positive(b, var, regions, strict: bool = True) -> bool:
+    """Is the base `b` (in `var` alone) certainly positive (`strict`, else not negative) on the closure of one of
+    `regions`: no point of it where b <= 0 (b < 0), by the exact classes (sandbox.exactsets)?"""
     from ..sandbox.exactsets import exact_solveset
     if not isinstance(b, sp.Expr) or b.free_symbols != {var}:
         return False
     for region in regions:
         try:
-            if exact_solveset(sp.Le(b, 0), var, region.closure) is S.EmptySet:
+            if exact_solveset(sp.Le(b, 0) if strict else sp.Lt(b, 0), var, region.closure) is S.EmptySet:
                 return True
         except Exception:  # noqa: BLE001 - a region SymPy cannot cut proves nothing
             continue

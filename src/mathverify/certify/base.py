@@ -1166,16 +1166,18 @@ class Ctx:
         as SymPy's 1/zoo = 0 and 1, they were certified over ℂ (attack on d4f round 2, A-YO-3). The texts the real
         reading found, read again: (undefined, undecided)."""
         from ..normalize.parse import parse_set_as_written
-        from .domain import definedness_conditions, is_convention, is_no_value
+        from .domain import complex_pole, definedness_conditions, is_convention, is_no_value
         pins = self.parameter_pins()
         undefined: list[str] = []
         undecided: list[str] = []
         for src in self.cache.get("written_undefined", []) + self.cache.get("written_undecided", []):
             try:
-                conds = definedness_conditions(self._pinned(parse_set_as_written(src, self.ns), pins), None)
+                e = self._pinned(parse_set_as_written(src, self.ns), pins)
+                conds = definedness_conditions(e, None)
             except Exception:  # noqa: BLE001 - not read as written: the real conditions it may hold drop
                 continue
-            if any(is_no_value(c) for c in conds):
+            # a closed division by 0 or pole has no value over ℂ either, inside any operation (SON-G3-YO-4)
+            if any(is_no_value(c) for c in conds) or complex_pole(e):
                 undefined.append(src)
             elif any(is_convention(c) for c in conds):
                 undecided.append(src)
