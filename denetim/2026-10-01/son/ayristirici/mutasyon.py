@@ -213,7 +213,7 @@ MUTATIONS = [
     ('F07 iddianın kutbu karşı örnek', DET,
      '    Q = sp.Poly(sp.quo(Q, sp.gcd(Q, Dp)), x)     # ... and that are no pole of the claim\n',
      '',
-     T + 'test_sayo1_an_undecided_compute_step_leaves_the_answer_unknown'),
+     T + 'test_sayo1_the_empty_premise_reading'),
     ('F08 yazılı paydanın kökü karşı örnek', DET,
      '    for b in poles:                              # ... nor of the claim as written\n',
      '    for b in ():                                 # ... nor of the claim as written\n',
