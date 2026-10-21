@@ -168,6 +168,10 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if not mention and re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text):
             ev = {"option": ca.option, "option_text": opt_text, "claimed": str(ca.payload)}
+            if ca.payload_source == "option_letter" and ir.answer_shape in ("set", "interval"):
+                # the letter alone for a set: the claim is this option's own text, "no solution" in words no reading
+                # took ('Sağlayan bir x değeri yoktur' for ∅ was refuted against itself; sibling of SA-RK-1)
+                return _mc_undecided("option_text_is_the_claim_and_not_read", t.ms, ev)
             if _claims_no_solution(ir, solution, ctx):
                 # 'yok' beside the empty set of a set answer: "no solution" in words no reading above took, never a
                 # refutation of ∅ (audit SA-RK-1: 'Gerçek kökü yoktur' refuted the right ∅)

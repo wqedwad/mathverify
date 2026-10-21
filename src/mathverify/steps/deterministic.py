@@ -2051,11 +2051,14 @@ def _multiple_of_premise(claim, parts: list) -> bool:
     return False
 
 
-def _empty_premise_reading(claim, parts: list, compute: bool):
+def _empty_premise_reading(claim, parts: list, compute: bool, poles=()):
     """For an open claim under premises with no real instance: "consequence" when it is proved to follow from them
     (`_multiple_of_premise`, or every complex solution of their equations, rational and finite, makes it exactly
     true), a complex solution (as text, symbol -> value) where it is exactly false, or None. Only equations: an order
-    has no complex reading; a premise that is no rational equation (other than a `!=` condition) leaves None."""
+    has no complex reading; a premise that is no rational equation (other than a `!=` condition) leaves None. `poles`:
+    the denominators of the claim as written (`_written_poles`); a solution where one vanishes is no counterexample
+    (principle 12: (x**4 - 1)/(x**2 + 1) = 0 evaluates to x**2 - 1 = 0, false at ±i, where the claim as written is
+    0/0)."""
     if _multiple_of_premise(claim, parts):
         return "consequence"
     if not isinstance(claim, Eq):
@@ -2100,10 +2103,61 @@ def _empty_premise_reading(claim, parts: list, compute: bool):
         return "consequence"                     # the claim vanishes at every solution, none of them its pole
     Q = sp.Poly(sp.quo(P, sp.gcd(P, Np)), x)     # the solutions where the claim's numerator does not vanish
     Q = sp.Poly(sp.quo(Q, sp.gcd(Q, Dp)), x)     # ... and that are no pole of the claim
+    for b in poles:                              # ... nor of the claim as written
+        b = b.xreplace({q: x for q in b.free_symbols if q.name == x.name})
+        if b.free_symbols - {x} or not b.is_polynomial(x):
+            return None
+        if b.free_symbols:
+            Q = sp.Poly(sp.quo(Q, sp.gcd(Q, sp.Poly(b, x))), x)
     if Q.degree() <= 0:
         return None
     root = Q.all_roots()[0] if Q.degree() <= 4 else sp.CRootOf(Q.as_expr(), 0)
     return {str(x): str(root)}
+
+
+def _written_poles(text: str, ns: dict[str, Any]) -> list | None:
+    """The bases of the negative integer powers of the claim read as written (`parse_as_written`: x/x keeps its x);
+    None when it is not read so, or a symbol stands in anything but a sum, a product, an integer power or a derivative
+    (a root or a function has no value at a complex point in the real reading)."""
+    from ..normalize.parse import parse_as_written
+    try:
+        w = parse_as_written(text, ns)
+    except Exception:  # noqa: BLE001 - not read as written
+        return None
+    if w is None:
+        return None
+    poles = []
+    for n in sp.preorder_traversal(w):
+        if not getattr(n, "free_symbols", None) or isinstance(n, (sp.Symbol, sp.Tuple, sp.Add, sp.Mul,
+                                                                  sp.Derivative)):
+            continue
+        if isinstance(n, sp.Pow) and n.exp.is_Integer:
+            if n.exp.is_negative:
+                poles.append(n.base)
+            continue
+        return None
+    return poles
+
+
+def _complex_counterexample_as_written(claim, text: str, ns: dict[str, Any], kind: str, ctx: Ctx, status: str,
+                                       ev: dict):
+    """A step refuted at a complex solution of premises with no real instance (`_vacuous`), read again with the
+    denominators of its text as written (`_written_poles`): the solution must be one where the claim as written has
+    a value (principle 12), or the step is undecided (a `compute` step with `STEP_READING_UNDECIDED`, an `eq` step
+    unknown as in `_vacuous`)."""
+    try:
+        poles = _written_poles(text, ns)
+        again = None if poles is None else \
+            _empty_premise_reading(claim, _problem_premise_parts(ctx), kind == "compute", poles)
+    except _OutOfTime:
+        raise
+    except Exception:  # noqa: BLE001 - not decided
+        again = None
+    if isinstance(again, dict):
+        return status, {**ev, "complex_counterexample": again}
+    flags = {"flags": [STEP_READING_UNDECIDED]} if kind == "compute" else {}
+    return "unknown", {"reason": "complex_counterexample_where_the_claim_as_written_is_undefined", "withdrawn": ev,
+                       **flags}
 
 
 def _finite_counterexample(claim, premises: list, syms: list, ctx: Ctx) -> dict | None:
@@ -3159,6 +3213,8 @@ def check_steps(ir, solution, ctx: Ctx):
                     # the claim, read as written, has no value at the counterexample (principle 12): sqrt(x**3)
                     # = x*sqrt(x) at x = -2, where neither side is real (D4-ADIM-J)
                     status, ev = "unknown", {"reason": "counterexample_where_the_claim_is_undefined", "withdrawn": ev}
+                if status == "refuted" and isinstance(ev, dict) and ev.get("complex_counterexample"):
+                    status, ev = _complex_counterexample_as_written(claim, st.claim, step_ns, st.kind, ctx, status, ev)
                 why = None
                 if status != "refuted":
                     written = _undefined_as_written(st.claim, step_ns,

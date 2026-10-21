@@ -18,6 +18,17 @@ the branch wip/son-ayristirici.
   E  G4-K-4  a given that holds at one real point only (a sum of squares, √ + |·| = 0, squares completed): a wrong
              step is refuted there, a right one is not
   K  controls whose verdict must not change
+  Second round (21 Oct 2026; the two-lens audit of the branch, son_denetim/son-ayristirici/bulgular.json, EK 3):
+  F  SA-YO-1 premises with no real instance withdraw an open step's refutation only when the step is proved to follow
+             from them (a multiple of a premise, true at every complex solution); refuted at an exact complex solution,
+             it stays refuted (a wrong completed square); undecided, a compute step leaves the solution UNKNOWN
+  G  SA-RK-1, SA-RK-2  'gerçek', 'gerçek sayılarda', the domain and solution-set prefixes (Tanım kümesi, T.K., TK, D(f),
+             ÇK, Ç.K.), '(∅)', ''dir', 'There is no solution': the empty set; a 'yok' no reading takes is never a
+             refutation of ∅
+  H  SA-YO-2, SA-RK-3, SA-RK-5, SA-RK-6  the trailing prose: an allow list (a rejection is negated, an unknown word
+             unread, a symbol or a single letter never dropped, a final ',' punctuation)
+  J  SA-YO-3, SA-RK-4, SA-YO-4  a LaTeX function's argument to the first operator (its base skipped; a '/' in it is
+             ambiguous; the argument bracketed for latex2sympy, sibling), '\\%' and '^\\circ', the Unicode minus
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/ayristirici/sonda.py [out.json] [groups]
@@ -302,10 +313,165 @@ def cases_k():
     ]
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "K": cases_k}
+# F: SA-YO-1 -------------------------------------------------------------------------------------------------------
+def cases_f():
+    q5 = eqn("x**2 - 2*x + 5 = 0")
+    q1 = eqn("x**2 + 1 = 0")
+    qs = eqn("sqrt(x) + 1 = 0")
+    cnt = ir("count_roots", {"expr": "x**2 + x + 1", "var": "x"})
+    ineq = ir("solve_inequality", {"var": "x", "inequality": "x**2 + 2 < 2*x"}, shape="set")
+    return [
+        ("x²-2x+5=0: compute '... = (x - 1)**2 + 6' (wrong square)", q5,
+         sol("∅", "set", [("compute", "x**2 - 2*x + 5 = (x - 1)**2 + 6")]), NO, REF),
+        ("x²-2x+5=0: compute '... = (x - 1)**2 + 4' (right)", q5,
+         sol("∅", "set", [("compute", "x**2 - 2*x + 5 = (x - 1)**2 + 4")]), OK, NOTREF),
+        ("count x²+x+1: compute '(x + 1/2)**2 + 1/2' (wrong)", cnt,
+         sol("0", "count", [("compute", "x**2 + x + 1 = (x + 1/2)**2 + 1/2")]), NO, REF),
+        ("x⁴+x²+1=0: compute '= (x**2 + 1)**2' (wrong)", eqn("x**4 + x**2 + 1 = 0"),
+         sol("∅", "set", [("compute", "x**4 + x**2 + 1 = (x**2 + 1)**2")]), NO, REF),
+        ("x²+1=0: compute 'Derivative(x**2, x) = 3*x' (wrong)", q1,
+         sol("∅", "set", [("compute", "Derivative(x**2, x) = 3*x")]), NO, REF),
+        ("x²+1=0: compute 'x**2 + 1 = x**2 - 1' (wrong)", q1, sol("∅", "set", [("compute", "x**2 + 1 = x**2 - 1")]), NO, REF),
+        ("x²+1=0: compute 'x**4 = -1' (false at ±i)", q1, sol("∅", "set", [("compute", "x**4 = -1")]), NO, REF),
+        ("x²+4=0: compute '(x + 2)**2 = x**2 + 4' (wrong)", eqn("x**2 + 4 = 0"),
+         sol("∅", "set", [("compute", "(x + 2)**2 = x**2 + 4")]), NO, REF),
+        ("x²+1=0: compute '(x**3 + x)/x = x**2 - 1' (its written pole is no solution)", q1,
+         sol("∅", "set", [("compute", "(x**3 + x)/x = x**2 - 1")]), NO, REF),
+        # the decision's cases: still withdrawn
+        ("x²+1=0: compute 'x**2 = -1' (a multiple)", q1, sol("∅", "set", [("compute", "x**2 = -1")]), OK, NEITHER),
+        ("x²+1=0: eq 'x**2 = -1'", q1, sol("∅", "set", [("eq", "x**2 = -1")]), OK, NEITHER),
+        ("sqrt(x)+1=0: eq 'sqrt(x) = -1' (a multiple)", qs, sol("∅", "set", [("eq", "sqrt(x) = -1")]), OK, NEITHER),
+        ("sqrt(x)+1=0: compute 'sqrt(x) = -1' (a multiple)", qs, sol("∅", "set", [("compute", "sqrt(x) = -1")]), OK, NEITHER),
+        ("x²+1=0: compute '(x**2 + 1)*(x - 1) = 0' (true at ±i)", q1,
+         sol("∅", "set", [("compute", "(x**2 + 1)*(x - 1) = 0")]), OK, NEITHER),
+        ("x²+1=0: compute 'x**4 = 1' (true at ±i)", q1, sol("∅", "set", [("compute", "x**4 = 1")]), OK, NEITHER),
+        ("x/(x-1)=1: compute 'x = x - 1' (no complex solution either)", eqn("x/(x - 1) = 1"),
+         sol("∅", "set", [("compute", "x = x - 1")]), OK, NEITHER),
+        ("2x+1=2x+3: eq '0 = 2' (closed)", eqn("2*x + 1 = 2*x + 3"), sol("∅", "set", [("eq", "0 = 2")]), OK, NEITHER),
+        ("x²+2<2x: eq '(x - 1)**2 + 1 < 0' (a multiple of the order)", ineq,
+         sol("∅", "set", [("eq", "(x - 1)**2 + 1 < 0")]), OK, NEITHER),
+        # undecided: an order or a transcendental premise has no complex reading; the compute step blocks CORRECT
+        ("x²+2<2x: compute 'x**2 - 2*x + 2 = (x - 1)**2 + 2' (undecided)", ineq,
+         sol("∅", "set", [("compute", "x**2 - 2*x + 2 = (x - 1)**2 + 2")]), UNK, NEITHER),
+        ("2^x+3=0: compute '2**x + 3 = 2**(x + 3)' (undecided)", eqn("2**x + 3 = 0"),
+         sol("∅", "set", [("compute", "2**x + 3 = 2**(x + 3)")]), UNK, NEITHER),
+        ("|x-1|+|x+1|=1: compute '... = 2*Abs(x)' (undecided)", eqn("Abs(x - 1) + Abs(x + 1) = 1"),
+         sol("∅", "set", [("compute", "Abs(x - 1) + Abs(x + 1) = 2*Abs(x)")]), UNK, NEITHER),
+        # false at ±i only after the evaluation: the claim as written is 0/0 there (principle 12)
+        ("x²+1=0: compute '(x**4 - 1)/(x**2 + 1) = 0' (a written pole)", q1,
+         sol("∅", "set", [("compute", "(x**4 - 1)/(x**2 + 1) = 0")]), UNK, NEITHER),
+        ("x²+1=0: compute '(x**2 + 1)*(x - 1)/(x**2 + 1) = 0' (a written pole)", q1,
+         sol("∅", "set", [("compute", "(x**2 + 1)*(x - 1)/(x**2 + 1) = 0")]), UNK, NEITHER),
+        ("x²+1=0: compute '1/(x**2 + 1) = 0' (a pole)", q1, sol("∅", "set", [("compute", "1/(x**2 + 1) = 0")]), UNK, NEITHER),
+        # an eq step, undecided, is unknown as on the base
+        ("x²+2<2x: eq 'x**2 - 2*x + 2 = (x - 1)**2 + 2' (undecided, eq)", ineq,
+         sol("∅", "set", [("eq", "x**2 - 2*x + 2 = (x - 1)**2 + 2")]), OK, NEITHER),
+    ]
 
 
-def main(out_path=None, groups="ABCDEK"):
+# G: SA-RK-1, SA-RK-2 ----------------------------------------------------------------------------------------------
+NS2 = ["Gerçek kökü yoktur", "Denklemin gerçek kökü yoktur", "Gerçek kök yoktur", "Gerçek kökleri yoktur",
+       "Gerçek sayılarda çözümü yoktur", "Denklemin gerçek sayılarda çözümü yoktur", "Gerçek çözüm yoktur",
+       "Gerçel kökü yoktur", "Reel kökü yoktur", "Kökü yoktur", "Çözümü yoktur", "Reel sayılarda çözüm yoktur",
+       "Boş küme (∅)", "Çözüm yok (∅)", "ÇK = ∅", "Ç.K. = ∅", "Ç = ∅'dir", "Çözüm kümesi Ø'dir", "There is no solution",
+       "No real roots", "Çözüm kümesi { }", "{ } (boş küme)", "Çözüm kümesi boş kümedir."]
+DOM = ["Tanım kümesi boş kümedir", "T.K. = ∅", "TK = ∅", "D(f) = ∅", "Tanım kümesi ∅"]
+
+
+def cases_g():
+    out = []
+    for d in NS2:
+        q = eqn("x**2 + 4 = 0", options={"A": "{-2, 2}", "B": "{2}", "C": "{-2}", "D": "{0}", "E": d})
+        out += [(f"x²+4=0: ∅ letter E={d!r}", q, sol("∅", "set", option="E"), OK, None),
+                (f"x²+4=0: letter E={d!r} alone", q, sol(None, "set", option="E"), OK, None),
+                (f"x-2=0: {{2}} letter E={d!r} (wrong)", eqn("x - 2 = 0", options={"A": "{-2, 2}", "B": "{2}", "E": d}),
+                 sol("{2}", "set", option="E"), NO, None)]
+    for d in DOM:
+        q = ir("domain_of", {"expr": "sqrt(-x**2 - 1)", "var": "x"}, shape="set",
+               options={"A": "ℝ", "B": "[-1, 1]", "C": "(0, ∞)", "D": d, "E": "{0}"})
+        out += [(f"domain sqrt(-x²-1): ∅ letter D={d!r}", q, sol("∅", "set", option="D"), OK, None),
+                (f"domain sqrt(-x²-1): letter D={d!r} alone", q, sol(None, "set", option="D"), OK, None)]
+    for d in ("Gerçek sayılarda çözümü yoktur", "Gerçek çözümü yoktur", "Hiçbir gerçek sayı için sağlanmaz"):
+        q = ir("solve_inequality", {"var": "x", "inequality": "x**2 + 1 < 0"}, shape="interval",
+               options={"A": "(-1, 1)", "B": "ℝ", "C": "(0, ∞)", "D": d, "E": "{0}"})
+        out.append((f"x²+1<0: ∅ letter D={d!r}", q, sol("∅", "interval", option="D"), OK, None))
+    # a 'yok' no reading takes, beside ∅: undecided, never a refutation
+    for d in ("Bu denklemin reel sayılarda bir kökü yok", "Gerçek kök yok, karmaşık kökler var",
+              "Sağlayan bir x değeri yoktur", "Denklemi sağlayan sayı yok"):
+        q = eqn("x**2 + 4 = 0", options={"A": "{-2, 2}", "B": "{2}", "E": d})
+        out += [(f"x²+4=0: ∅ letter E={d!r} (prose)", q, sol("∅", "set", option="E"), NOTNO, None),
+                (f"x²+4=0: letter E={d!r} alone (prose)", q, sol(None, "set", option="E"), NOTNO, None)]
+    for d in ("{∅}", "{0} ∪ ∅", "Çözüm yok değil", "∅ değildir"):
+        q = eqn("x**2 + 4 = 0", options={"A": "{-2, 2}", "B": "{2}", "E": d})
+        out.append((f"x²+4=0: ∅ letter E={d!r} (no empty set)", q, sol("∅", "set", option="E"), NOTOK, None))
+    return out
+
+
+# H: SA-YO-2, SA-RK-3, SA-RK-5, SA-RK-6 ----------------------------------------------------------------------------
+def cases_h():
+    e = _ev("2 + 3")
+    out = [(f"2+3: payload {p!r} (rejected)", e, sol(p), UNK, None) for p in
+           ("5 sağlamadı", "5 çıkmadı", "5 tutmadı", "5 bulunamadı", "5 sağlamadığından", "5 tutmadığı için", "5 çıkmayacak",
+            "5 sağlamamaktadır", "5 geçersiz", "5 geçersizdir", "5 reddedilir", "5 reddedildi", "5 elenir", "5 hatalı",
+            "5 hatalıdır", "5 (reddedilir)", "5 ✗", "5 ❌", "5 is invalid", "5 is rejected", "5 is extraneous",
+            "5 (başka çözüm yoktur)", "5 (diğer kök tanım kümesine girmez)", "5 muhtemelen", "5 tahminen", "5 şüpheli")]
+    out += [(f"x-5=0: payload {p!r} (rejected)", eqn("x - 5 = 0"), sol(p, "set"), UNK, None)
+            for p in ("{5} reddedilir", "{5} geçersizdir", "{5} sağlamadı")]
+    out += [(f"2+3: payload {p!r} (affirmative)", e, sol(p), OK, None) for p in
+            ("5 olabilecek en büyük değerdir", "5 olabilecek en küçük değer", "5 (negatif olmayan tek değer)",
+             "5 (negatif olmayan kök)", "5 (sıfır olmayan değer)", "5 şüphesiz", "5 kuşkusuz", "5 değişmez",
+             "5 (sabit kalır, değişmez)", "5 (tahmin edilen değer)", "5 (olası en büyük değer)", "5 (en büyük değer)",
+             "5 is the largest possible value", "5 kesinlikle", "5 tamsayısıdır", "5 (tek çözüm)", "5 cevaptır")]
+    out.append(("6*6: payload '36 muhtemel durum' (affirmative)", _ev("6*6"), sol("36 muhtemel durum"), OK, None))
+    out += [(f"payload {p!r} (an unknown word: not read)", e, sol(p), UNK, None)
+            for p in ("5 civarında", "5 yaklaşık", "5 kadar", "5 falan")]
+    # a symbol of the problem is never prose (SA-RK-5)
+    out += [("e^(iπ/3): payload '1/2 + √3/2 i'", _ev("exp(I*pi/3)"), sol("1/2 + √3/2 i"), NOTNO, None),
+            ("(1+2i)(1+i): payload '-1 + 3 i'", _ev("(1 + 2*I)*(1 + I)"), sol("-1 + 3 i"), NOTNO, None),
+            ("2+3i: payload '2 + 3 i'", _ev("2 + 3*I"), sol("2 + 3 i"), NOTNO, None),
+            ("3i: payload '3 i'", _ev("3*I"), sol("3 i"), NOTNO, None),
+            ("e+e: payload '2 e'", _ev("exp(1) + exp(1)"), sol("2 e"), NOTNO, None),
+            ("(x²)': payload '2 x'", _der("x**2", X), sol("2 x", "expression"), NOTNO, None),
+            ("x+1 at x=4: payload '5 m' (a single letter)", _ev("2 + 3"), sol("5 m"), NOTNO, None)]
+    # a final comma is punctuation (SA-RK-6)
+    out += [(f"payload {p!r} (a final comma)", q, sol(p, k), OK, None) for q, p, k in
+            ((e, "5,", "value"), (e, "5, kesinlikle", "value"), (e, "5;", "value"), (e, "$5,$", "value"),
+             (_ev("sin(pi/6)"), "1/2,", "value"), (_ev("sin(pi/6)"), "$1/2,$", "value"),
+             (eqn("x**2 - 5*x + 6 = 0"), "{2, 3}, kesinlikle", "set"))]
+    out += [("payload '(5,)' (a tuple of one element)", e, sol("(5,)"), UNK, None),
+            ("payload '6,' (wrong, a final comma)", e, sol("6,"), NO, None)]
+    return out
+
+
+# J: SA-YO-3, SA-RK-4, SA-YO-4 -------------------------------------------------------------------------------------
+def cases_j():
+    out = [(f"{name}: claim {claim!r} (not read)", q, sol(claim, "expression" if q["answer_shape"] == "expression"
+                                                          else "value"), UNK, None) for name, q, claim in (
+        ("log₂(8/3)", _ev("log(8/3, 2)"), "$\\log_2 8/3$"), ("(log₂8)/3 = 1", _ev("log(8, 2)/3"), "$\\log_2 8/3$"),
+        ("log₃(9/2)", _ev("log(9/2, 3)"), "$\\log_3 9/2$"), ("(log₃2)/2", _ev("log(2)/log(9)"), "$\\log_3 2/2$"),
+        ("(log₃2)/2 braced base", _ev("log(2)/log(9)"), "$\\log_{3}2/2$"), ("(log₃2)/2 braced arg", _ev("log(2)/log(9)"), "$\\log_3{2}/2$"),
+        ("log₂3", _ev("log(3, 2)"), "$\\log_2 9/2$"), ("sin(3π/2)", _ev("sin(3*pi/2)"), "$\\sin 3\\pi/2$"),
+        ("sin x", _der("-cos(x)", X), "$\\sin 2x/2$"), ("ln x", _der("x*log(x) - x"), "$\\ln 2x/2$"),
+        ("(1/2)% = 1/200", _ev("asin(1)/(100*pi)"), "$1/2\\%$"), ("50", _ev("acos(-1)*50/pi"), "1/2\\%"),
+        ("3/400", _ev("3*asin(1)/(200*pi)"), "$3/4\\%$"), ("90° = π/2", _ev("asin(1)"), "$180/2^\\circ$"),
+        ("-π/2", _ev("-asin(1)"), "1/−2π"), ("-π/2 en dash", _ev("-asin(1)"), "1/–2π"), ("-√3/2", _ev("-sin(pi/3)"), "1/−2√3"))]
+    sin2 = _der("sin(x)**2", X)
+    out += [(f"{name}: claim {claim!r}", q, sol(claim, "expression" if q["answer_shape"] == "expression" else "value"),
+             want, None) for name, q, claim, want in (
+        ("(sin²x)' = 2 sin x cos x", sin2, "$2\\sin x \\cdot \\cos x$", OK), ("(sin²x)' = sin 2x", sin2, "$\\sin 2x$", OK),
+        ("(sin²x)' wrong 3 sin x cos x", sin2, "$3\\sin x \\cdot \\cos x$", NO),
+        ("3 sin(1)", _ev("sin(1) + sin(1) + sin(1)"), "$\\sin 1 \\cdot 3$", OK), ("(ln 2)/2 \\frac", _ev("log(sqrt(2))"), "$\\frac{\\ln 2}{2}$", OK),
+        ("log₃2 / 2 \\frac", _ev("log(2)/log(9)"), "$\\frac{\\log_3 2}{2}$", OK), ("log₂8 = 3", _ev("asin(1)*6/pi"), "$\\log_2 8$", OK),
+        ("sin(x)/2 with brackets", _der("-cos(x)/2", X), "$\\sin(x)/2$", OK), ("1/(-2π)", _ev("-1/(2*asin(1)*2)"), "1/(−2π)", OK),
+        ("-π/2 Unicode minus", _ev("-asin(1)"), "−π/2", OK), ("50%", _ev("asin(1)/pi"), "50\\%", OK))]
+    return out
+
+
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
+          "H": cases_h, "J": cases_j, "K": cases_k}
+
+
+def main(out_path=None, groups="ABCDEFGHJK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -343,5 +509,5 @@ def main(out_path=None, groups="ABCDEK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHJK"
     sys.exit(1 if main(out, grp) else 0)
