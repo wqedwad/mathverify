@@ -269,6 +269,7 @@ OI = {"A": "x ∈ (1, 2)", "B": "x ∈ (2, 3)", "C": "x ∈ (3, 4)", "D": "x ∈
 OE = {"A": "x ∈ {1, 2}", "B": "x ∈ {2, 3}", "C": "x ∈ {3, 4}", "D": "x ∈ {-2, -3}", "E": "x ∈ ∅"}
 LIN = _ir("evaluate", {"expr": "x"}, ["x + y = 10", "x - y = 2"], [X, {"name": "y", "domain": "real"}])
 CM = {"A": "4 cm", "B": "5 cm", "C": "6 cm", "D": "7 cm", "E": "8 cm"}
+LINU = dict(LIN, units="cm")                     # the IR declares the unit of its value (SA-YO-1, SA-RK-3)
 
 
 @pytest.mark.parametrize("q,s", [
@@ -277,10 +278,8 @@ CM = {"A": "4 cm", "B": "5 cm", "C": "6 cm", "D": "7 cm", "E": "8 cm"}
     (_mc(QE, OE), _sol("{2, 3}", "set", option="B")),
     (_mc(QE, {"A": "{1, 2}", "B": "2, 3", "C": "{3, 4}", "D": "{-2, -3}", "E": "∅"}), _sol("{2, 3}", "set", option="B")),
     (_mc(QI, dict(OI, B="$x \\in (2, 3)$")), _sol(A23, "interval", option="B")),
-    (_mc(LIN, CM), _sol("6", option="C")), (_mc(LIN, CM), _sol(None, option="C")),
-    (_mc(LIN, dict(CM, C="6 TL")), _sol("6", option="C")),
-    (_mc(_ir("evaluate", {"expr": "asin(1/2)"}), {"A": "π/6 rad", "B": "π/4", "C": "π/3", "D": "π/2", "E": "π"}),
-     _sol("pi/6", option="A")),
+    (_mc(LINU, CM), _sol("6", option="C")), (_mc(LINU, CM), _sol(None, option="C")),
+    (_mc(LIN, dict(CM, C="6 tane")), _sol("6", option="C")),
 ])
 def test_g1rk1_a_notation_the_claim_reads_is_read_as_an_option(q, s):
     assert verify(q, s).verdict == "CORRECT"
@@ -289,7 +288,7 @@ def test_g1rk1_a_notation_the_claim_reads_is_read_as_an_option(q, s):
 @pytest.mark.parametrize("q,s", [
     (_mc(QI, OI), _sol(A23, "interval", option="A")), (_mc(QI, OI), _sol(None, "interval", option="A")),
     (_mc(QI, OI), _sol(None, "interval", option="D")), (_mc(QE, OE), _sol("{2, 3}", "set", option="A")),
-    (_mc(LIN, CM), _sol("6", option="D")), (_mc(LIN, CM), _sol(None, option="D")),
+    (_mc(LINU, CM), _sol("6", option="D")), (_mc(LINU, CM), _sol(None, option="D")),
 ])
 def test_g1rk1_a_wrong_letter_in_that_notation_is_refuted(q, s):
     assert verify(q, s).verdict == "INCORRECT"
@@ -358,7 +357,7 @@ def test_g1rk1_an_option_no_reader_takes_still_blocks():
 def test_g1rk1_wordproblem_reads_the_options_as_the_claim():
     """wordproblem checks the options against the givens: '6 cm' read with no value left no option satisfiable, and the
     right letter was blocked as an inconsistent IR."""
-    r = verify(_mc(LIN, CM), _sol("6", option="C"))
+    r = verify(_mc(LINU, CM), _sol("6", option="C"))
     wp = next(la for la in r.layers if la.layer == "certify.wordproblem")
     assert wp.verdict == "pass" and "ir_inconsistent" not in wp.flags
 
@@ -458,3 +457,51 @@ def test_g2yo5_several_options_in_the_window_name_none(q, s):
 ])
 def test_g2yo7_the_claim_and_the_option_compared_within_the_declared_tolerance(q, s, verdict):
     assert verify(q, s).verdict == verdict
+
+
+# ---------------------------------------------------------------- audit of the branch: SA-YO-1, SA-RK-3, SA-RK-8
+
+TYT = _ir("evaluate", {"expr": "3*(x + 2)/2 + 1 - (3*x/2 + 1)"})                                      # +3
+CNT9 = _ir("count_integers", {"var": "x"}, ["x**2 < 9"], [XI], "count")                                 # 5
+SQ36 = _ir("evaluate", {"expr": "sqrt(36)"})                                                            # 6
+
+
+@pytest.mark.parametrize("q,s", [
+    (_mc(TYT, {"A": "3 artar", "B": "3 azalır", "C": "6 artar", "D": "6 azalır", "E": "Değişmez"}), _sol("3", option="B")),
+    (_mc(TYT, {"A": "3 artar", "B": "3 azalır", "C": "6 artar", "D": "6 azalır", "E": "Değişmez"}), _sol(None, option="B")),
+    (_mc(CNT9, {"A": "3", "B": "4", "C": "7", "D": "9", "E": "5 ten büyük"}), _sol("5", "count", option="E")),
+    (_mc(CNT9, {"A": "3", "B": "4", "C": "7", "D": "9", "E": "5 ve üzeri"}), _sol(None, "count", option="E")),
+    (_mc(SQ36, {"A": "2", "B": "4", "C": "8", "D": "10", "E": "6 dan büyük"}), _sol("6", option="E")),
+    (_mc(SQ36, {"A": "6 m", "B": "6 cm", "C": "12 cm", "D": "3 cm", "E": "60 cm"}), _sol("6", option="A")),
+    (_mc(SQ36, {"A": "6 m", "B": "6 cm", "C": "12 cm", "D": "3 cm", "E": "60 cm"}), _sol(None, option="A")),
+    (_mc(QI, {"A": "(2, 3) aralığının dışı", "B": "(2, 3)", "C": "[2, 3]"}), _sol(A23, "interval", option="A")),
+    (_mc(QI, {"A": "(2, 3) aralığının dışı", "B": "(2, 3)", "C": "[2, 3]"}), _sol(None, "interval", option="A")),
+])
+def test_sa_yo1_a_word_that_may_carry_meaning_leaves_the_option_unread(q, s):
+    """'3 azalır' (the value increases by 3), '5 ten büyük', '6 m' for 6 cm, '(2, 3) aralığının dışı' were read as their
+    bare number or set and the wrong letter was CORRECT."""
+    assert verify(q, s).verdict != "CORRECT"
+
+
+@pytest.mark.parametrize("opts,payload,letter", [
+    ({"A": "20 dk", "B": "1/2 saat", "C": "45 dk"}, "30", "B"), ({"A": "20 dk", "B": "1/2 saat", "C": "45 dk"}, None, "B"),
+    ({"A": "500 g", "B": "1 kg", "C": "2 kg"}, None, "B"),
+])
+def test_sa_rk3_an_option_in_another_unit_is_not_refuted(opts, payload, letter):
+    q = _mc(_ir("evaluate", {"expr": "t"}, ["t = 1000*(1/2)" if "kg" in opts["B"] else "t = 60/2"],
+                [{"name": "t", "domain": "real"}]), opts)
+    assert verify(q, _sol(payload, option=letter)).verdict != "INCORRECT"
+
+
+def test_sa_rk3_a_unit_the_ir_declares_is_read():
+    q = _mc(dict(_ir("evaluate", {"expr": "t"}, ["t = 60/2"], [{"name": "t", "domain": "real"}]), units="dk"),
+            {"A": "20 dk", "B": "30 dk", "C": "45 dk"})
+    assert verify(q, _sol("30", option="B")).verdict == "CORRECT"
+    assert verify(q, _sol(None, option="C")).verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("opt", ["{x}", "x"])
+def test_sa_rk8_an_option_naming_the_unknown_is_no_value(opt):
+    q = _mc(QE, {"A": "{1, 2}", "B": opt})
+    assert verify(q, _sol(None, "set", option="B")).verdict == "UNKNOWN"
+    assert verify(q, _sol("{2, 3}", "set", option="B")).verdict == "UNKNOWN"
