@@ -400,3 +400,100 @@ def test_a_point_of_undecided_realness_leaves_the_list_incomplete(monkeypatch):
     assert complete is False and 1 in pts
     ok, ev = extremum.certify_local_extremum(x**2, x, sp.Interval(-2, 2), "local_min", "0")
     assert ok is None and ev["reason"] in ("critical_point_realness_undecided", "critical_points_failed")
+
+
+# --- second round of the arg readings: RK-SAY-1, RK-ARG-STEP, RK-SAY-2, RK-SAY-3 ----------------------------------
+
+def _run(ir, claim, steps=(), option=None):
+    ca = {"kind": "value", "payload": claim}
+    if option:
+        ca["option"] = option
+    r = verify(ir, {"claimed_answer": ca, "steps": [{"id": f"s{i + 1}", "kind": k, "claim": c, "from": [], "text": ""}
+                                                   for i, (k, c) in enumerate(steps)]})
+    layer = next((la for la in r.layers if la.layer == "steps.refute"), None)
+    sts = [e.get("status") for e in (layer.evidence.get("steps", []) if layer is not None else [])]
+    return r.verdict, sts, r.first_bad_step, r.flags
+
+
+def _evc(expr, options=None):
+    d = {"task": {"kind": "evaluate", "params": {"expr": expr}}, "vars": [], "givens": [], "answer_shape": "scalar",
+         "domain_of_discourse": "complex"}
+    if options:
+        d["options"] = options
+    return d
+
+
+def _pointwise(kind, f, pt):
+    key, pk = ("f", "at") if kind == "derivative" else ("expr", "to")
+    return {"task": {"kind": kind, "params": {key: f, "var": "x", pk: pt}}, "vars": [X], "givens": [],
+            "answer_shape": "scalar" if kind == "derivative" else "dne_or_scalar"}
+
+
+def test_a_pointwise_task_reads_the_shift_of_arg_at_its_point():
+    """Coverage (RK-SAY-1): the derivative and the limit of arg(a + x*i) at a point off the axis are the same in both
+    readings (the 2*pi shift is constant near the point) and were UNKNOWN; a wrong value is refuted again."""
+    assert _run(_pointwise("derivative", "arg(1 + x*I)", "1"), "1/2")[0] == "CORRECT"
+    assert _run(_pointwise("derivative", "arg(1 + x*I)", "-1"), "1/2")[0] == "CORRECT"
+    assert _run(_pointwise("derivative", "arg(2 + x*I)", "2"), "1/4")[0] == "CORRECT"
+    assert _run(_pointwise("limit", "arg(1 + x*I)", "1"), "pi/4")[0] == "CORRECT"
+    assert _run(_pointwise("derivative", "arg(1 + x*I)", "1"), "1")[0] == "INCORRECT"
+    assert _run(_pointwise("limit", "arg(1 + x*I)", "1"), "pi/2")[0] == "INCORRECT"
+    # below the axis the value itself is the convention's; on it a reading decides nothing (not a convention)
+    assert _run(_pointwise("limit", "arg(1 + x*I)", "-1"), "7*pi/4")[0] == "UNKNOWN"
+    r = _run(_pointwise("derivative", "arg(1 + x*I)", "0"), "1")
+    assert r[0] == "UNKNOWN" and "arg_reading_undecided" in r[3] and "arg_convention" not in r[3]
+
+
+def test_a_step_refuted_in_one_arg_reading_only_is_unknown():
+    """Unjust refutation (RK-ARG-STEP): with the answer wrong in both readings, the curriculum's step
+    arg(-1 - i) = 5*pi/4 was shown refuted and the first bad step; it is unknown, the first bad step is the one
+    refuted in both."""
+    v, sts, fbs, _ = _run(_evc("(-1 - I)**4"), "4", [("eq", "arg(-1 - I) = 5*pi/4"), ("eq", "(-1 - I)**4 = 4")])
+    assert (v, sts, fbs) == ("INCORRECT", ["unknown", "refuted"], 2)
+
+
+def test_two_incorrect_readings_agree_only_on_a_failure_of_both():
+    """Unjust refutation (RK-SAY-2): the principal value reached by a step and shifted by 2*pi to the answer was
+    INCORRECT in both readings, each time on the other reading's arg alone; a value wrong in both stays INCORRECT."""
+    steps = [("eq", "arg(-1 - I) = -3*pi/4"), ("eq", "-3*pi/4 + 2*pi = 5*pi/4")]
+    assert _run(_evc("arg(-1 - I)"), "5*pi/4", steps)[0] == "UNKNOWN"
+    steps = [("eq", "arg(-1 - I) = 5*pi/4"), ("eq", "5*pi/4 - 2*pi = -3*pi/4")]
+    assert _run(_evc("arg(-1 - I)"), "-3*pi/4", steps)[0] == "UNKNOWN"
+    assert _run(_evc("arg(1 - I)"), "7*pi/4", [("eq", "arg(1 - I) = -pi/4")])[0] == "UNKNOWN"
+    assert _run(_evc("arg(-1 - I)"), "pi/4")[0] == "INCORRECT"
+    assert _run(_evc("arg(-1 - I)"), "pi/4", [("eq", "arg(-1 - I) = -3*pi/4")])[:2] == ("INCORRECT", ["unknown"])
+
+
+O02 = {"A": "pi/4", "B": "3*pi/4", "C": "5*pi/4", "D": "7*pi/4", "E": "3*pi/2"}
+OPP = {"A": "-3*pi/4", "B": "-pi/4", "C": "pi/4", "D": "3*pi/4", "E": "pi"}
+
+
+def test_options_of_one_range_declare_it():
+    """Coverage and unjust refutation (RK-SAY-3): the options hold the value of one reading only: the question's
+    range. The right option was UNKNOWN (or INCORRECT before the two readings); a wrong one stays INCORRECT."""
+    assert _run(_evc("arg(-1 - I)", O02), "5*pi/4", option="C")[0] == "CORRECT"
+    assert _run(_evc("arg(-1 - I)", O02), "pi/4", option="A")[0] == "INCORRECT"
+    assert _run(_evc("arg(-1 - I)", OPP), "-3*pi/4", option="A")[0] == "CORRECT"
+    assert _run(_evc("arg(-1 - I)", OPP), "pi/4", option="C")[0] == "INCORRECT"
+    o5 = {"A": "pi/3", "B": "2*pi/3", "C": "4*pi/3", "D": "5*pi/3", "E": "pi/6"}
+    assert _run(_evc("arg(1 - sqrt(3)*I)", o5), "5*pi/3", option="D")[0] == "CORRECT"
+
+
+def test_options_that_do_not_pick_a_range_leave_the_convention():
+    """No range from the options: both values among them, an option that is no number, degrees (G1RK-3's units)."""
+    both = {"A": "-3*pi/4", "B": "5*pi/4", "C": "pi/4", "D": "3*pi/4", "E": "pi"}
+    assert _run(_evc("arg(-1 - I)", both), "5*pi/4", option="B")[0] == "UNKNOWN"
+    assert _run(_evc("arg(-1 - I)", both), "-3*pi/4", option="A")[0] == "UNKNOWN"
+    none_ = dict(O02, E="Hiçbiri")
+    assert _run(_evc("arg(-1 - I)", none_), "5*pi/4", option="C")[0] == "UNKNOWN"
+    deg = {"A": "45°", "B": "135°", "C": "225°", "D": "315°", "E": "270°"}
+    assert _run(_evc("arg(-1 - I)", deg), "225°", option="C")[0] != "CORRECT"
+
+
+def test_the_options_reading_of_arg():
+    """Mechanism (RK-SAY-3): `_arg_options_reading` names the reading whose value alone the options hold."""
+    from mathverify.verifier import _arg_options_reading
+    assert _arg_options_reading(_evc("arg(-1 - I)", O02)) == "b"
+    assert _arg_options_reading(_evc("arg(-1 - I)", OPP)) == "a"
+    assert _arg_options_reading(_evc("arg(1 + I)", O02)) is None              # pi/4 in both readings
+    assert _arg_options_reading(_evc("arg(-1 - I)")) is None
