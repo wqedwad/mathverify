@@ -916,10 +916,15 @@ def _tolerance_sign(e, timeout: float):
     return s
 
 
+def _modulus_squared(z):
+    """|z|² as Re(z)² + Im(z)², a real expression whose sign `_tolerance_sign` can certify."""
+    return sp.re(z) ** 2 + sp.im(z) ** 2
+
+
 def within_rel_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
     """|c - v| <= t·|v| decided with certified signs, for constants c and v (v the true value): True or
-    False when certain, None when undecided or v = 0 (no relative error there). A claim with an imaginary part,
-    against a real v: |c - v| >= |Im c|, so |Im c| > t·|v| refutes it (SG-1)."""
+    False when certain, None when undecided or v = 0 (no relative error there). A complex difference or value is read
+    as |c - v|² against t²·|v|²; failing that, against a real v, |c - v| >= |Im c|: |Im c| > t·|v| refutes (SG-1)."""
     try:
         c, v, t = sp.sympify(claimed), sp.sympify(value), sp.sympify(t)
     except (sp.SympifyError, TypeError):
@@ -933,9 +938,18 @@ def within_rel_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
     if sd == 0:
         return True                           # the claim is the value
     sv = _tolerance_sign(v, timeout)
-    if sv not in (1, -1):
+    if sv not in (1, -1, NONREAL):
         return None
-    if sd == NONREAL:
+    if NONREAL in (sd, sv):
+        # |c - v| <= t·|v| exactly when t²·|v|² - |c - v|² >= 0, read by real and imaginary parts: a complex claim was
+        # only ever refuted here, never accepted (son denetim SON-INT-RK-1)
+        s_ = _tolerance_sign(t ** 2 * _modulus_squared(v) - _modulus_squared(c - v), timeout)
+        if s_ in (0, 1):
+            return True
+        if s_ == -1:
+            return False
+        if sd != NONREAL or sv == NONREAL:
+            return None
         im_c = sp.im(c)
         si = _tolerance_sign(im_c, timeout)
         if si in (1, -1) and _tolerance_sign(si * im_c - t * sv * v, timeout) == 1:
@@ -953,7 +967,8 @@ def within_abs_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
     """|c - v| <= t decided with certified signs, for constants c and v: True or False when certain, None when
     undecided. A declared absolute tolerance was read through 30-digit values with a relative floor of 1e-20 (the
     ladder of `num_equal`), and e^(π√163) = 262537412640768743.99999999999925… was 262537412640768744 within
-    abs_tol 1e-15 (son saldırı G2YO-4); no rounding counts toward acceptance here."""
+    abs_tol 1e-15 (son saldırı G2YO-4); no rounding counts toward acceptance here. A complex difference d is read as
+    |d|² = Re(d)² + Im(d)² against t² (SON-INT-RK-1)."""
     try:
         c, v, t = sp.sympify(claimed), sp.sympify(value), sp.sympify(t)
     except (sp.SympifyError, TypeError):
@@ -966,6 +981,14 @@ def within_abs_tol(claimed, value, t, timeout: float = 5.0) -> bool | None:
     if sd == 0:
         return True
     if sd == NONREAL:
+        # |d| <= t exactly when t² - Re(d)² - Im(d)² >= 0: 0.5 + 0.866i against e^(iπ/3) within abs_tol 1e-3 (|d| =
+        # 2.5e-5) was only ever refuted here, never accepted, and the ladder that had accepted it is not reached for
+        # constants (son denetim SON-INT-RK-1)
+        s_ = _tolerance_sign(t ** 2 - _modulus_squared(d), timeout)
+        if s_ in (0, 1):
+            return True
+        if s_ == -1:
+            return False
         im_d = sp.im(d)
         si = _tolerance_sign(im_d, timeout)
         if si in (1, -1) and _tolerance_sign(si * im_d - t, timeout) == 1:

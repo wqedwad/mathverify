@@ -3,7 +3,10 @@ the poles of a switch's argument (G2YO-1), the certificate's check against numbe
 the cell proof's poles (G2YO-3), the exact absolute tolerance (G2YO-4), the jump of a real root's sign (G2RK-1),
 a complex quadrature value and the edge reading of an even root (G2RK-7), a convention of the primitive (G2RK-10),
 the interval extensions of erf/Si/S/C and the enclosure fallback (G2RK-2), the declared region in the convention gate
-(G2RK-3/4), Piecewise cuts (G2RK-5) and x**x (G2RK-9). The machinery is the one of denetim/2026-09-26/mutasyon.py.
+(G2RK-3/4), Piecewise cuts (G2RK-5) and x**x (G2RK-9); second round (21 Oct 2026): the settled ladder's error
+estimates (SI-YO-3), a half-infinite enclosure next to the last rung and the weight rule of a power at an end (SI-YO-2),
+complex differences against a tolerance (SON-INT-RK-1), the settling enclosure of the certificate's check
+(SON-INT-RK-2). The machinery is the one of denetim/2026-09-26/mutasyon.py.
 
     MATHVERIFY_LEAN_REPL=/nonexistent .venv/bin/python denetim/2026-10-01/son/integral/mutasyon.py [-j N] [--list] [name ...]
 
@@ -42,8 +45,10 @@ MUTATIONS = [
     ("I04 sertifikalı 0 sayıyla denetlenmez", CAL, "                differ = abs(v) > rel_err * max(abs(v), 1)\n",
      "                differ = False\n", T + "test_a_certified_zero_is_checked_against_converged_numbers"),
     ("I05 yakınsamayan sayıda zarf sorulmaz", CAL,
-     "    enc = rigorous_integral(integrand, var, a, b, outside=c, inside=inside, timeout=timeout, defined=defined)\n",
-     "    return \"agrees\", ev\n", T + "test_without_numbers_the_certificate_needs_an_enclosure"),
+     "    enc = rigorous_integral(integrand, var, a, b, outside=c, inside=inside, timeout=timeout, defined=defined,\n",
+     "    return \"agrees\", ev\n"
+     "    enc = rigorous_integral(integrand, var, a, b, outside=c, inside=inside, timeout=timeout, defined=defined,\n",
+     T + "test_without_numbers_the_certificate_needs_an_enclosure"),
     ("I06 (-oo, oo) zarfı bilgi sayılır", CAL,
      "    if enc is None or not (mp.isfinite(enc[0]) or mp.isfinite(enc[1])):\n",
      "    if enc is None:\n", T + "test_without_numbers_and_without_an_enclosure_nothing_is_accepted"),
@@ -164,6 +169,65 @@ MUTATIONS = [
      "        if False:\n            unread.append(i)\n", T + "test_a_point_whose_difference_has_no_sign_is_no_agreement"),
     ("I49 doğrulanamayan işaretli nokta uyum sayılır", RP, "    return None, bool(nonzero or unread)\n",
      "    return None, bool(unread)\n", T + "test_a_signed_point_not_confirmed_is_no_agreement"),
+    # --- second round (independent audit of the branch, 21 Oct 2026)
+    # SI-YO-3: the settled ladder reads the rungs' error estimates
+    ("I50 duran merdiven hata tahminini okumaz", CAL,
+     "            if not (_small_error(ladder[-2]) and _small_error(ladder[-1])):\n                return False\n", "",
+     T + "test_a_ladder_that_fails_settles_nothing"),
+    ("I51 duran merdivenin hata eşiği gevşek", CAL, "_LADDER_ERR = mp.mpf(\"1e-10\")\n", "_LADDER_ERR = mp.mpf(\"10\")\n",
+     T + "test_a_ladder_that_fails_settles_nothing"),
+    ("I52 hata tahmini yoksa küçük sayılır", CAL,
+     "    return e not in (None, \"None\") and abs(mp.mpf(e)) <= bound * max(abs(v), 1)\n",
+     "    return e in (None, \"None\") or abs(mp.mpf(e)) <= bound * max(abs(v), 1)\n",
+     T + "test_a_ladder_that_fails_settles_nothing"),
+    # SI-YO-2: a half-infinite enclosure only next to a close rung
+    ("I53 yarı sonsuz zarf tek başına kabul", CAL,
+     "    if not (mp.isfinite(enc[0]) and mp.isfinite(enc[1])):\n        # a half-infinite",
+     "    if False:\n        # a half-infinite", T + "test_a_planted_finite_value_of_a_divergent_integral_is_not_taken"),
+    ("I54 son basamak yakınlığı okunmaz", CAL, "        if _near_last_rung(nev.get(\"ladder\") or [], c):\n",
+     "        if False:\n", T + "test_a_strong_integrable_singularity_keeps_its_value"),
+    ("I55 son basamağın payı geniş", CAL,
+     "            r = _RUNG_MARGIN * abs(mp.mpf(last[\"err\"])) + ", "            r = 1 + _RUNG_MARGIN * abs(mp.mpf(last[\"err\"])) + ",
+     T + "test_the_last_rung_near_the_certificate"),
+    ("I56 son basamağın hata eşiği okunmaz", CAL,
+     "            if not _small_error(last, _RUNG_ERR):\n                return False\n", "",
+     T + "test_the_last_rung_near_the_certificate"),
+    ("I57 son basamağın payı dar (10·err)", CAL, "_RUNG_MARGIN = 100\n", "_RUNG_MARGIN = 10\n",
+     T + "test_a_strong_integrable_singularity_keeps_its_value"),
+    ("I58 son basamağın hata eşiği 1e-10", CAL, "_RUNG_ERR = mp.mpf(\"1e-8\")\n", "_RUNG_ERR = mp.mpf(\"1e-10\")\n",
+     T + "test_the_last_rung_near_the_certificate"),
+    # the weight rule at an end: a bare power or |u|^p, never on u < 0
+    ("I59 tek başına kuvvet ağırlık değil", ENC, "    factors = f.args if isinstance(f, sp.Mul) else (f,)\n",
+     "    factors = f.args if isinstance(f, sp.Mul) else ()\n", T + "test_a_power_at_an_end_is_a_weight"),
+    ("I60 mutlak değerli kuvvet ağırlık değil", ENC, "            if isinstance(u, sp.Abs):\n                u, kind = u.args[0], \"abspow\"\n",
+     "", T + "test_a_power_at_an_end_is_a_weight"),
+    ("I61 u < 0 hücresinde ağırlık", ENC, "    if kind != \"abspow\" and side < 0:\n        return None\n", "",
+     T + "test_a_power_at_an_end_is_a_weight"),
+    ("I62 hücredeki u işareti ters okunur", ENC, "_weighted(g, kind, alpha, p_, var, l, r, h, s_ if at == l else -s_)",
+     "_weighted(g, kind, alpha, p_, var, l, r, h, -s_ if at == l else s_)", T + "test_a_power_at_an_end_is_a_weight"),
+    # SON-INT-RK-1: a complex difference against a tolerance
+    ("I63 karmaşık fark mutlak toleransta kabul edilmez", NUM,
+     "        s_ = _tolerance_sign(t ** 2 - _modulus_squared(d), timeout)\n        if s_ in (0, 1):\n            return True\n",
+     "        s_ = _tolerance_sign(t ** 2 - _modulus_squared(d), timeout)\n        if False:\n            return True\n",
+     T + "test_complex_differences_against_a_tolerance"),
+    ("I64 karmaşık fark mutlak toleransta reddedilmez", NUM,
+     "        if s_ == -1:\n            return False\n        im_d = sp.im(d)\n", "        im_d = sp.im(d)\n",
+     T + "test_a_complex_claim_within_a_declared_tolerance"),
+    ("I65 karmaşık değer göreli toleransta okunmaz", NUM, "    if sv not in (1, -1, NONREAL):\n",
+     "    if sv not in (1, -1):\n", T + "test_a_complex_claim_within_a_declared_tolerance"),
+    ("I66 göreli toleransta modül okunmaz", NUM,
+     "        s_ = _tolerance_sign(t ** 2 * _modulus_squared(v) - _modulus_squared(c - v), timeout)\n",
+     "        s_ = None\n", T + "test_complex_differences_against_a_tolerance"),
+    ("I67 modülün karesi sanal kısmı okumaz", NUM, "    return sp.re(z) ** 2 + sp.im(z) ** 2\n",
+     "    return sp.re(z) ** 2\n", T + "test_a_complex_claim_within_a_declared_tolerance"),
+    # SON-INT-RK-2: the certificate's enclosure settles
+    ("I68 sertifika zarfı tam bütçe", CAL, "_CHECK_BUDGET = (500, 8)\n", "_CHECK_BUDGET = (4000, 0)\n",
+     T + "test_the_certificate_check_spends_little_on_a_fast_oscillation"),
+    ("I69 zarf hiç yerleşmez", ENC, "            if settle and mp.isfinite(clo) and mp.isfinite(chi):\n",
+     "            if False:\n", T + "test_an_enclosure_that_stops_narrowing_settles"),
+    ("I70 zarf daralırken de yerleşir", ENC,
+     "                if len(widths) > settle and widths[-1] > (1 - _SETTLE_GAIN) * widths[-1 - settle]:\n",
+     "                if len(widths) > settle:\n", T + "test_an_enclosure_that_stops_narrowing_settles"),
 ]
 
 if __name__ == "__main__":

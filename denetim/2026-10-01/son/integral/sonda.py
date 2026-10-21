@@ -18,6 +18,9 @@
     I  G2RK-3/4 the convention gate reads the declared region (x > 0) of a derivative function or an antiderivative
     J  G2RK-5  a Piecewise integrand is cut at its conditions' boundaries
     L  G2RK-9  x**x is real for x > 0 in the fundamental theorem
+    N  second round (21 Oct 2026): SI-YO-2 (a planted finite value of a divergent integral; true values of strong
+               integrable singularities), SI-YO-3 (a planted 0 of a principal value), SON-INT-RK-1 (a complex claim
+               within a declared tolerance), SON-INT-RK-2 (fast oscillations: the time of the certificate's check)
     K  controls whose verdict must not change
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
@@ -478,8 +481,51 @@ def cases_m():
     ]
 
 
+# N: second round (independent audit of the branch, 21 Oct 2026) --------------------------------------------------------
+def cases_n():
+    out = []
+    # SI-YO-2: a planted finite value of a divergent integral meets a half-infinite enclosure and the real ladder
+    for f, a, b, v in [("1/x", 0, 1, "10**6"), ("1/(x*Abs(log(x)))", 0, "1/2", "10"), ("-1/x", 0, 1, "-10**6"),
+                       ("1/(1 - x)", "1/2", 1, "100")]:
+        out.append((f"SI-YO-2 planted {v} for the divergent ∫_{a}^{b} {f}, numbers", planted(dint(f, a, b), sol(v), v,
+                                                                                            numbers=True), None, NOTOK, None))
+    # SI-YO-3: a planted 0 for a divergent integral whose principal value is 0; mpmath's failed 0.0 (error 2.0)
+    for f, a, b in [("1/x", -1, 1), ("1/x**3", -1, 1), ("x/(x**2 - 1)", -2, 2), ("sign(x)/Abs(x)**(3/2)", -1, 1)]:
+        out.append((f"SI-YO-3 planted 0 for the divergent ∫_{a}^{b} {f}, numbers", planted(dint(f, a, b), sol("0"), "0",
+                                                                                           numbers=True), None, NOTOK, None))
+    # true values of strong integrable singularities: an interior one next to the last rung, a power at an end a weight
+    for f, a, b, v in [("1/cbrt((x - 1)**2)", 0, 2, "6"), ("Abs(x - 1)**(-9/10)", 0, 2, "20"),
+                       ("Abs(x)**(-9/10)", -1, 2, "10*(2**(1/10) + 1)"), ("x**(-99/100)", 0, 1, "100"),
+                       ("(1 - x)**(-19/20)", 0, 1, "20"), ("x**(-9/10)", 0, 1, "10"), ("Abs(x - 1)**(-4/5)", 0, 2, "10")]:
+        out.append((f"SI-YO-2 true ∫_{a}^{b} {f} = {v}", dint(f, a, b), sol(v), OK, None))
+    out.append(("SI-YO-2 ∫_0^1 x^(-99/100) = 101 (wrong)", dint("x**(-99/100)", 0, 1), sol("101"), NO, None))
+    out.append(("SI-YO-2 residual (record): ∫_{-1}^{2} |x|^(-19/20) = 20(1 + 2^(1/20)), an interior singularity whose "
+                "last rung's estimate is 5e-6 of the value", dint("Abs(x)**(-19/20)", -1, 2), sol("20*(1 + 2**(1/20))"),
+                NOTNO, None))
+    # SON-INT-RK-1: a complex claim within a declared tolerance
+    for e, tol, c, v in [("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.5 + 0.866*I", OK),
+                         ("2*exp(I*pi/4)", {"abs_tol": "0.01"}, "1.41 + 1.41*I", OK),
+                         ("exp(I)", {"abs_tol": "0.0001"}, "0.5403 + 0.8415*I", OK),
+                         ("exp(I)", {"abs_tol": "0.0001", "rel_tol": "0.0001"}, "0.5403 + 0.8415*I", OK),
+                         ("exp(I)", {"rel_tol": "0.0001"}, "0.5403 + 0.8415*I", OK),
+                         ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.5 + 0.87*I", NO),
+                         ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.502 + 0.866*I", NO),
+                         ("exp(I)", {"rel_tol": "0.0001"}, "0.5403 + 0.8515*I", NO),
+                         ("sqrt(3) + I", {"abs_tol": "0.01"}, "1.73 + I", OK)]:
+        out.append((f"SON-INT-RK-1 {e} ≈ {c} {tol}", ev(e, (), **tol), sol(c), v, None))
+    # SON-INT-RK-2: fast oscillations whose ladder does not converge (the time is in the row)
+    for f, a, b, v in [("cos(500*pi*x)**2", 0, 1, "1/2"), ("cos(1000*pi*x)**2", 0, 1, "1/2"),
+                       ("sin(2000*x)**2", 0, "pi", "pi/2"), ("x**3*cos(2000*x)", 0, "2*pi", "3*pi**2/1000000"),
+                       ("sin(300*x)**4", 0, "pi", "3*pi/8"), ("cos(x)*exp(200*sin(x))", 0, "pi", "0"),
+                       ("1/(x**2 + 10**(-8))", -1, 1, "20000*atan(10000)"),
+                       ("exp(-x)*sin(2000*x)**2", 0, 1,
+                        "(-8000001 + cos(2000)**2 - 2000*sin(4000) + 8000000*E)*exp(-1)/16000001")]:
+        out.append((f"SON-INT-RK-2 ∫_{a}^{b} {f} = {v}", dint(f, a, b), sol(v), OK, None))
+    return out
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "I": cases_i, "J": cases_j, "L": cases_l, "M": cases_m, "K": cases_k}
+          "H": cases_h, "I": cases_i, "J": cases_j, "L": cases_l, "M": cases_m, "N": cases_n, "K": cases_k}
 
 
 CASE_LIMIT = 300            # seconds per case: the old code held (x^x)' = x^x·ln x for over twenty minutes
@@ -493,7 +539,7 @@ def _alarm(signum, frame):
     raise CaseTimeout(f"over {CASE_LIMIT} s")
 
 
-def main(out_path=None, groups="ABCDEFGHIJLMK"):
+def main(out_path=None, groups="ABCDEFGHIJLMNK"):
     import os
     import signal
     import mathverify
@@ -545,5 +591,5 @@ def main(out_path=None, groups="ABCDEFGHIJLMK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHIJLMK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHIJLMNK"
     sys.exit(1 if main(out, grp) else 0)
