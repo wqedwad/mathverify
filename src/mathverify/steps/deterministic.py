@@ -686,14 +686,107 @@ def _confined_values(v, rels: list, ctx: Ctx) -> list | None:
     return vals
 
 
+def _real_symbols(syms, ctx: Ctx) -> bool:
+    """Are `syms` all the problem's symbols, each with a domain inside ℝ?"""
+    try:
+        return all(ctx.ns.get(q.name) == q and ctx.domain_for(q).is_subset(S.Reals) is True for q in syms)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _completed_squares(d, syms) -> list | None:
+    """`d` = 0 for a quadratic `d` = vᵀAv + bᵀv + c in `syms` with exact number coefficients and A positive definite
+    (every leading principal minor > 0: a sum of squares once completed, x**2 + 2*x*y + 2*y**2 = (x + y)**2 + y**2),
+    read over the reals: d = (v - v0)ᵀA(v - v0) + r with v0 = -A⁻¹b/2 and r = c + bᵀv0/2. r = 0: its one real point,
+    [q = v0_q, ...]; r > 0: no real point, [false]; otherwise None (an ellipse: not finite). Exact arithmetic only."""
+    order = sorted(syms, key=lambda q: q.name)
+    try:
+        poly = sp.Poly(d, *order)
+    except Exception:  # noqa: BLE001
+        return None
+    if poly.total_degree() != 2 or any(not c.is_number or c.is_real is not True or c.has(sp.Float)
+                                       for c in poly.coeffs()):
+        return None
+    n = len(order)
+    A = sp.zeros(n, n)
+    b = sp.zeros(n, 1)
+    for mono, c in poly.terms():
+        idx = [i for i, e in enumerate(mono) for _ in range(e)]
+        if len(idx) == 2:
+            i, j = idx
+            if i == j:
+                A[i, i] += c
+            else:
+                A[i, j] += c / 2
+                A[j, i] += c / 2
+        elif len(idx) == 1:
+            b[idx[0]] += c
+    if any(A[:k, :k].det().is_positive is not True for k in range(1, n + 1)):
+        return None                                  # not positive definite: a line, a hyperbola, a parabola
+    v0 = -A.inv() * b / 2
+    r = sp.simplify(poly.coeff_monomial(1) + (b.T * v0)[0, 0] / 2)
+    if r.is_zero is True:
+        return [Eq(q, v0[i, 0]) for i, q in enumerate(order)]
+    if r.is_positive is True:
+        return [sp.false]
+    return None
+
+
+def _nonnegative_terms(d, syms) -> list | None:
+    """The terms of the sum `d` when each is nonnegative at every real point where it has a value (a square, an
+    absolute value, an even root, their positive multiples), else None: `d` = 0 holds at a real point exactly where
+    each term is 0. An even root is nonnegative where it is real; where it is not, `d` has no real value and the point
+    is no instance."""
+    if not isinstance(d, sp.Add) or len(d.args) < 2:
+        return None
+    reps = {q: sp.Dummy(q.name, real=True) for q in syms}
+    terms = []
+    for a in d.args:
+        e = a.xreplace(reps)
+        roots = {p: sp.Dummy(nonnegative=True) for p in e.atoms(sp.Pow)
+                 if p.exp.is_Rational and p.exp.q % 2 == 0 and p.base.is_real is True}
+        if e.xreplace(roots).is_nonnegative is not True:
+            return None
+        terms.append(a)
+    return terms
+
+
+def _real_parts(premises: list, ctx: Ctx) -> list:
+    """The premises (`_premise_parts`) with an equation over real symbols that holds at a real point only where each of
+    its nonnegative terms vanishes read as those terms = 0: (x + 1)**2 + (y - 2)**2 = 0, sqrt(x - 2) + Abs(y + 3) = 0,
+    and x**2 + y**2 + 2*x - 4*y + 5 = 0 once its squares are completed (`_completed_squares`); one with no real point
+    is [false]. SymPy solves them over ℂ (x = -1 ± i(y - 2)), so a wrong step under such a given was never refuted
+    (final attack G4-K-4)."""
+    out: list = []
+    for p in _premise_parts(premises):
+        if isinstance(p, Eq):
+            d = p.lhs - p.rhs
+            syms_ = d.free_symbols
+            if len(syms_) > 1 and _real_symbols(syms_, ctx):
+                sq = _completed_squares(d, syms_)
+                if sq is not None:
+                    out.extend(sq)
+                    continue
+                terms = _nonnegative_terms(d, syms_)
+                if terms is not None:
+                    out.extend(Eq(a, 0) for a in terms)
+                    continue
+        out.append(p)
+    return out
+
+
 def _finite_instances(syms, premises: list, ctx: Ctx) -> tuple[list[dict], list[dict]] | None:
     """The points the premises allow for `syms` when they confine `syms`, and every symbol a premise links
     them to, to finitely many exact values: (the points where every premise holds and every symbol is in
     its domain, the points where that is undecided). A point where a Sum/Product range of the problem runs
     backwards is undecided (`Ctx.reversed_region`, DECISIONS §80). The symbols are confined one at a time
     (n**2 = 4, then y = x + 1 at each x), or all at once by a polynomial system (`_system_points`). None when
-    a symbol is not confined to a finite set computed exactly, or the points are too many."""
-    linked, names = _linked(_premise_parts(premises), syms)
+    a symbol is not confined to a finite set computed exactly, or the points are too many. An equation of
+    nonnegative terms is read as its terms = 0 (`_real_parts`); one with no real point leaves none ([], [])."""
+    parts = _real_parts(premises, ctx)
+    if any(p is sp.false for p in parts):
+        return [], []
+    linked, names = _linked(parts, syms)
     if not linked or len(names) > _MAX_LINKED or any(ctx.ns.get(q.name) != q for q in names):
         return None
     rels = [p for p in linked if isinstance(p, sp.core.relational.Relational)]
@@ -1827,6 +1920,94 @@ def _free_choice(claim, v, premises: list, ctx: Ctx) -> dict | None:
     return None
 
 
+def _premises_hold_nowhere(ctx: Ctx) -> bool:
+    """Are the problem's own premises (its givens, the task's relation, the variables' constraints and written
+    conditions) PROVED to hold at no point (cached)? One symbol: the domain (with its convention points) cut by the
+    exactly solved sets of the premises, proved empty; a premise with a trigonometric function (`at_risk`) or not
+    solved exactly is left out (the set stays a superset). Several: no point by `_finite_instances`, or equations with
+    no real solution by a proved complete list (`_proved_points`). The steps the solution takes are no premise here: a
+    step may be wrong."""
+    key = "steps:premises_hold_nowhere"
+    if key not in ctx.cache:
+        try:
+            ctx.cache[key] = _premises_proved_empty(ctx)
+        except _OutOfTime:
+            raise
+        except Exception:  # noqa: BLE001 - a failed proof proves nothing
+            ctx.cache[key] = False
+    return ctx.cache[key]
+
+
+def _premises_proved_empty(ctx: Ctx) -> bool:
+    from ..equiv.numeric import real_odd_roots
+    from ..sandbox.exactsets import at_risk
+    premises = list(ctx.givens()) + _task_relations(ctx.ir, ctx) + list(ctx.var_constraints())
+    parts = _premise_parts(premises)
+    if not parts:
+        return False
+    syms = set().union(*(p.free_symbols for p in parts))
+    if any(ctx.ns.get(q.name) != q for q in syms):
+        return False
+    if len(syms) > 1:
+        inst = _finite_instances(syms, parts, ctx)
+        if inst is not None:
+            return not inst[0] and not inst[1]
+        # equations with no real solution, proved (`_proved_points`: x + y = 1 and 2x + 2y = 3)
+        eqs = [p for p in _real_parts(parts, ctx) if isinstance(p, Eq) or p is sp.false]
+        if any(p is sp.false for p in eqs):
+            return True
+        if not eqs:
+            return False
+        return _proved_points(eqs, sorted(set().union(*(p.free_symbols for p in eqs)), key=lambda q: q.name),
+                              ctx) == []
+    (v,) = syms
+    region = sp.Union(ctx.domain_for(v), ctx.reversed_region(v))
+    solved = False
+    for p in parts:
+        if not isinstance(p, sp.core.relational.Relational) or (at_risk(p, v) and real_odd_roots(p) == p):
+            continue
+        s_ = _solved_both_readings(p, v, ctx)
+        if s_ is not None:
+            region, solved = sp.Intersection(region, s_), True
+    if not solved:
+        return False
+    e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
+    return bool(e.ok and e.value is True)
+
+
+def _vacuous(status: str, ev: dict, ctx: Ctx) -> tuple[str, dict]:
+    """A refutation withdrawn where the problem's own premises hold nowhere (`_premises_hold_nowhere`): from premises
+    with no instance every relation follows, so no step is refuted there, as no point is a counterexample (principle
+    5). '0 = 2' from 2x + 1 = 2x + 3 and x**2 = -1 from x**2 + 1 = 0 are how the empty solution set is shown, and they
+    were refuted as a closed false relation and a false identity: the right ∅ was INCORRECT (final attack G4-RK-5).
+    Unknown, never verified. A closed `compute` claim is a computation, not a consequence, and keeps its refutation
+    (`_compute_status`): 0 - 4 = 4 is wrong whatever the premises."""
+    if status != "refuted" or not _premises_hold_nowhere(ctx):
+        return status, ev
+    return "unknown", {"reason": "premises_hold_nowhere: the problem's premises have no instance, no point refutes "
+                                 "a step", "withdrawn": ev}
+
+
+def _finite_counterexample(claim, premises: list, syms: list, ctx: Ctx) -> dict | None:
+    """A point of the finitely many exact ones the premises allow (`_finite_instances`) where every premise holds, the
+    point is in the domains and the claim is false, all exactly; None otherwise. The premises' equations solved over ℂ
+    (x = -1 ± i(y - 2) for x**2 + y**2 + 2*x - 4*y + 5 = 0) gave no real point to refute at, and a wrong step under
+    such a given was never refuted (final attack G4-K-4). Only where such an equation is read (`_real_parts`): the
+    other systems are left to the routes of `_check_eq_in`, as before."""
+    if _real_parts(premises, ctx) == _premise_parts(premises):
+        return None
+    inst = _finite_instances(set(syms), premises, ctx)
+    if not inst:
+        return None
+    spans = _range_spans(claim)
+    for pt in inst[0]:
+        if set(pt) < set(syms) or not _in_domains(ctx, pt) or _runs_backwards_at(spans, pt):
+            continue
+        if all(_holds_exactly(p, pt, ctx) is True for p in premises) and _decide(claim, pt, ctx) is False:
+            return pt
+    return None
+
+
 def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: list = ()) -> tuple[str, dict]:
     """`premises`: the givens, earlier claims and case assumptions. `restrictions`: the variables'
     domain constraints (`var_constraints`). `window`: the task's own interval for its variable
@@ -1840,7 +2021,7 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     if ev.pop("_window_without_instance", False):
         status, ev = _check_eq_in(claim, premises, ctx, restrictions, ())
         ev["window_dropped"] = "no_premise_instance_inside_the_task_interval"
-    return status, ev
+    return _vacuous(status, ev, ctx)
 
 
 def _closed_claim(claim, ctx: Ctx) -> str:
@@ -2003,6 +2184,14 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
             return "verified", ev
         if empty and window:
             return "unknown", {**ev, "_window_without_instance": True}
+    elif premises:
+        # several unknowns the premises confine to finitely many exact real points (a sum of squares = 0): the claim
+        # is checked at each (G4-K-4); anything else is left to the routes below
+        w = _finite_counterexample(claim, premises, syms, ctx)
+        if w is not None:
+            ev["counterexample"] = {str(k): str(v) for k, v in w.items()}
+            ev["route"] = "finite_instances"
+            return "refuted", ev
     eqs = [p for p in premises if isinstance(p, Eq)]
     others = [p for p in base if not isinstance(p, Eq)]
     bounds = [p for p in window if not isinstance(p, Eq)]
@@ -2733,7 +2922,9 @@ def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[s
             else:
                 status, pev = _check_compute(pinned, ctx)
             ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()}, "identity_refuted": ev}
-    return status, ev
+    if not getattr(claim, "free_symbols", None):
+        return status, ev                   # a closed computation is true or false whatever the premises
+    return _vacuous(status, ev, ctx)        # checked where premises with no instance put its symbols: nowhere (G4-RK-5)
 
 
 def _counterexample_where_undefined(claim, ev: dict, conds, ctx: Ctx) -> bool:

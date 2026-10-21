@@ -1289,6 +1289,237 @@ def _strip_invisible(s: str) -> str:
     return "".join(ch for ch in s if unicodedata.category(ch) != "Cf")
 
 
+# ---- a factor written next to a divisor (final attack G4YO-2) --------------------------------------------------------
+# '1/2π', '1/2√x', 'x/2π': read left to right it is (1/2)·π, read as many textbooks write it (and as latex2sympy reads
+# '1/2\pi') it is 1/(2π). Which one is meant is the writer's convention, so such a text is read neither way: the
+# canonical branch makes no product of it (`preclean` leaves '1/2pi', which no parse takes, as the ASCII '1/2pi' always
+# was), the LaTeX branch refuses it (`_latex_to_sympy`), and the verifier names it (`ambiguous_juxtaposition`). An
+# explicit operator (1/2·π, 1/2 \cdot \pi), parentheses ((1/2)π, 1/(2π)) and \frac are read as before.
+
+def _atom_start(s: str, j: int) -> int | None:
+    """The index where the canonical operand atom ending at `s[j]` starts: a run of letters, digits, '_' and '.' (2, 2.5,
+    x2), or a bracket group with the function name before it (sqrt(2), (x + 1)); None when `s[j]` ends no atom."""
+    if s[j] in ")]":
+        depth, k = 0, j
+        while k >= 0:
+            if s[k] in ")]":
+                depth += 1
+            elif s[k] in "([":
+                depth -= 1
+                if depth == 0:
+                    break
+            k -= 1
+        if k < 0:
+            return None
+    elif s[j].isalnum() or s[j] in "_.":
+        k = j
+    else:
+        return None
+    while k > 0 and (s[k - 1].isalnum() or s[k - 1] in "_."):
+        k -= 1
+    return k
+
+
+def _closes_divisor(s: str, i: int) -> bool:
+    """Does `s[i]` (a digit or a closing bracket a unicode value symbol follows) end the right operand of a '/' (or
+    '÷') in the canonical text `s`? The operand is an atom (`_atom_start`) with a root sign before it and powers after
+    it (√2, 2^3, (x + 1)**2), and a sign (1/-2π)."""
+    j = i
+    while True:
+        k = _atom_start(s, j)
+        if k is None:
+            return False
+        k -= 1
+        while k >= 0 and s[k] in "√∛":
+            k -= 1
+        while k >= 0 and s[k].isspace():
+            k -= 1
+        if k >= 0 and s[k] == "^":
+            j = k - 1
+        elif k >= 1 and s[k - 1:k + 1] == "**":
+            j = k - 2
+        else:
+            break
+        while j >= 0 and s[j].isspace():
+            j -= 1
+        if j < 0:
+            return False
+    if k >= 0 and s[k] in "+-":
+        k -= 1
+        while k >= 0 and s[k].isspace():
+            k -= 1
+    return k >= 0 and s[k] in "/÷"
+
+
+def _juxtaposed_product(m) -> str:
+    """`_UNI_VALUE_RE`'s product of a digit (or a bracket) and a value symbol, except after a divisor (G4YO-2)."""
+    if _closes_divisor(m.string, m.start(1)):
+        return m.group(0)
+    return f"{m.group(1)}*{m.group(2)}"
+
+
+# LaTeX macros that start no factor: operators, relations, spacing, closing delimiters, prose
+_LATEX_NO_FACTOR = frozenset({
+    "cdot", "times", "div", "pm", "mp", "ast", "le", "leq", "leqslant", "ge", "geq", "geqslant", "ne", "neq", "lt", "gt",
+    "approx", "equiv", "sim", "simeq", "cong", "to", "rightarrow", "Rightarrow", "leftarrow", "Leftarrow",
+    "leftrightarrow", "Leftrightarrow", "iff", "implies", "in", "notin", "ni", "cup", "cap", "setminus", "land", "lor",
+    "wedge", "vee", "neg", "lnot", "right", "rbrace", "rangle", "rfloor", "rceil", "rvert", "rVert", "end", "quad",
+    "qquad", "mid", "colon", "dots", "ldots", "cdots", "text", "textrm", "mbox", "circ", "degree", "%"})
+# LaTeX function macros: the atom after one is its argument (1/\sin x is 1/sin(x), no product)
+_LATEX_FUNCTIONS = frozenset({
+    "sin", "cos", "tan", "cot", "sec", "csc", "arcsin", "arccos", "arctan", "arccot", "sinh", "cosh", "tanh", "coth",
+    "log", "ln", "lg", "exp"})
+# LaTeX macros with braced arguments: how many
+_LATEX_ARGS = {"sqrt": 1, "frac": 2, "dfrac": 2, "tfrac": 2, "binom": 2, "dbinom": 2, "tbinom": 2, "mathrm": 1,
+               "operatorname": 1, "mathbb": 1, "overline": 1, "bar": 1, "hat": 1, "vec": 1}
+_LATEX_SPACE = re.compile(r"(?:\s|~|\\[,;:! ])*")
+_LATEX_MACRO = re.compile(r"\\([A-Za-z]+)")
+
+
+_LATEX_LEFT = re.compile(r"\\left(?![A-Za-z])")
+_LATEX_RIGHT = re.compile(r"\\right(?![A-Za-z])")
+
+
+def _latex_delimiter_end(s: str, k: int) -> int | None:
+    """The index after the delimiter at `s[k]` that follows \\left or \\right ('(', '.', '\\{', '\\rangle')."""
+    if k >= len(s):
+        return None
+    if s[k] != "\\":
+        return k + 1
+    m = _LATEX_MACRO.match(s, k)
+    return m.end() if m is not None else (k + 2 if k + 1 < len(s) else None)
+
+
+def _latex_group_end(s: str, j: int) -> int | None:
+    """The index after the bracket group opening at `s[j]` ('(', '[', '{'), or after '\\left<d> ... \\right<d>'."""
+    if _LATEX_LEFT.match(s, j):
+        depth, k = 0, j
+        while k < len(s):
+            if _LATEX_LEFT.match(s, k):
+                depth += 1
+                k += 5
+            elif _LATEX_RIGHT.match(s, k):
+                depth -= 1
+                k += 6
+                if depth == 0:
+                    return _latex_delimiter_end(s, k)
+            else:
+                k += 1
+        return None
+    close = {"(": ")", "[": "]", "{": "}"}.get(s[j])
+    if close is None:
+        return None
+    depth, k = 0, j
+    while k < len(s):
+        if s[k] == "\\":
+            k += 2
+            continue
+        if s[k] == s[j]:
+            depth += 1
+        elif s[k] == close:
+            depth -= 1
+            if depth == 0:
+                return k + 1
+        k += 1
+    return None
+
+
+def _latex_atom_end(s: str, j: int) -> int | None:
+    """The index after the LaTeX atom starting at `s[j]` (a number, a letter, a constant or a macro with its arguments,
+    a bracket group), its powers and subscripts after it; None when none starts there."""
+    if j >= len(s):
+        return None
+    c = s[j]
+    if c.isdigit() or c == ".":
+        k = j
+        while k < len(s) and (s[k].isdigit() or s[k] == "."):
+            k += 1
+    elif c.isalpha():
+        k = j + 1
+    elif c in "({[" or _LATEX_LEFT.match(s, j):
+        k = _latex_group_end(s, j)
+    elif c == "\\":
+        m = _LATEX_MACRO.match(s, j)
+        if m is None or m.group(1) in _LATEX_NO_FACTOR:
+            return None
+        k = m.end()
+        name = m.group(1)
+        if name in _LATEX_ARGS:
+            k = k + len(_LATEX_SPACE.match(s, k).group(0))
+            if k < len(s) and s[k] == "[":
+                k = _latex_group_end(s, k)
+            for _ in range(_LATEX_ARGS[name]):
+                if k is None:
+                    return None
+                k = k + len(_LATEX_SPACE.match(s, k).group(0))
+                k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else (k + 1 if k < len(s) else None)
+        elif name in _LATEX_FUNCTIONS:
+            k = k + len(_LATEX_SPACE.match(s, k).group(0))
+            if k < len(s) and s[k] == "^":            # \sin^2 x
+                k = _latex_atom_end(s, k + 1)
+                if k is None:
+                    return None
+                k = k + len(_LATEX_SPACE.match(s, k).group(0))
+            k = _latex_atom_end(s, k)                 # its argument
+    else:
+        return None
+    while k is not None and k < len(s) and s[k] in "^_":
+        k = k + 1 + len(_LATEX_SPACE.match(s, k + 1).group(0))
+        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)
+    return k
+
+
+def _latex_divisor_juxtaposed(s: str) -> bool:
+    """Does a LaTeX text write a factor right after the operand of a '/' (1/2\\pi, x/2\\pi, 3/4\\sqrt{2}, \\pi/2x), or a
+    '/' right after a function's argument written without parentheses (\\ln 2/2, \\sin x/2)?"""
+    for p in [m.start() for m in re.finditer(r"(?<!\\)/", s)]:
+        j = p + 1 + len(_LATEX_SPACE.match(s, p + 1).group(0))
+        if j < len(s) and s[j] in "+-":
+            j += 1 + len(_LATEX_SPACE.match(s, j + 1).group(0))
+        end = _latex_atom_end(s, j)
+        if end is None:
+            continue
+        k = end + len(_LATEX_SPACE.match(s, end).group(0))
+        if k < len(s) and (s[k].isalpha() or s[k] in "({√∛∞" or _LATEX_LEFT.match(s, k)):
+            return True
+        if k < len(s) and s[k] == "\\":
+            m = _LATEX_MACRO.match(s, k)
+            if m is not None and m.group(1) not in _LATEX_NO_FACTOR:
+                return True
+    # the dual: a function's argument written without parentheses, then a '/' (\ln 2/2: (ln 2)/2 or ln(2/2)?);
+    # latex2sympy took the division into the argument, \ln{2}/2 too, and read 0 for (ln 2)/2 (sibling of G4YO-2)
+    for m in _LATEX_MACRO.finditer(s):
+        if m.group(1) not in _LATEX_FUNCTIONS:
+            continue
+        k = m.end() + len(_LATEX_SPACE.match(s, m.end()).group(0))
+        if k < len(s) and s[k] == "^":
+            k = _latex_atom_end(s, k + 1)
+            if k is None:
+                continue
+            k += len(_LATEX_SPACE.match(s, k).group(0))
+        if k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):
+            continue
+        end = _latex_atom_end(s, k)
+        if end is not None and s[end + len(_LATEX_SPACE.match(s, end).group(0)):].startswith("/"):
+            return True
+    return False
+
+
+def ambiguous_juxtaposition(text) -> bool:
+    """Does `text` write a factor right after the operand of a division, with no operator ('1/2π', '1/2√x', 'x/2π',
+    '$1/2\\pi$'), a unit mark included ('1/2%', '180/2°')? It reads (1/2)·π left to right and 1/(2π) as the textbooks
+    write it: it is read neither way (G4YO-2)."""
+    if not isinstance(text, str):
+        return False
+    t = strip_presentation(_strip_invisible(text))
+    if is_latex(t):
+        return _latex_divisor_juxtaposed(t)
+    return any(_closes_divisor(m.string, m.start(1)) for m in _UNI_VALUE_RE.finditer(t)) \
+        or any(_closes_divisor(m.string, m.end(1)) for m in _DEG_PAREN_RE.finditer(t)) \
+        or any(_closes_divisor(m.string, m.end(1) - 1) for m in _DEG_NUM_RE.finditer(t)) \
+        or any(m.group(2) and _closes_divisor(m.string, m.end(2) - 1) for m in _PCT_RE.finditer(t))
+
+
 _PRESENTATION = re.compile(r"^\s*(?:\$\$|\$|\\\(|\\\[)?\s*\\(?:boxed|text|mathrm|displaystyle)\s*\{(.*)\}\s*"
                            r"(?:\$\$|\$|\\\)|\\\])?\s*$", re.DOTALL)
 _MATH_DELIM = re.compile(r"^\s*(?:\$\$(.*)\$\$|\$(.*)\$|\\\((.*)\\\)|\\\[(.*)\\\])\s*$", re.DOTALL)
@@ -1365,12 +1596,14 @@ def preclean(s: str) -> str:
     """Canonicalise unicode/degree/percent notation. Idempotent."""
     s = strip_presentation(_strip_invisible(s).strip()).strip()
     s = _log_notation(s)
-    s = _UNI_VALUE_RE.sub(r"\1*\2", s)
+    s = _UNI_VALUE_RE.sub(_juxtaposed_product, s)
     for k, v in _UNICODE_MAP.items():
         s = s.replace(k, v)
-    s = _DEG_PAREN_RE.sub(r"((\1)*pi/180)", s)
-    s = _DEG_NUM_RE.sub(r"((\1)*pi/180)", s)
-    s = _PCT_RE.sub(lambda m: f"(({m.group(1) or m.group(2)})/100)", s)
+    # a unit mark is a factor too: 1/2% is not 1/(2/100) = 50, 180/2° not 180/(2°) (sibling of G4YO-2)
+    s = _DEG_PAREN_RE.sub(lambda m: m.group(0) if _closes_divisor(m.string, m.end(1)) else f"(({m.group(1)})*pi/180)", s)
+    s = _DEG_NUM_RE.sub(lambda m: m.group(0) if _closes_divisor(m.string, m.end(1) - 1) else f"(({m.group(1)})*pi/180)", s)
+    s = _PCT_RE.sub(lambda m: m.group(0) if m.group(2) and _closes_divisor(m.string, m.end(2) - 1)
+                    else f"(({m.group(1) or m.group(2)})/100)", s)
     s = _SQRT_BARE_RE.sub(r"\1(\2)", s)            # "sqrt 3" -> sqrt(3), "∛8" -> cbrt(8)
     s = re.sub(r"\bln\s*\(", "log(", s)
     s = s.replace("^", "**")
@@ -2496,6 +2729,11 @@ def _latex_membership(expr):
 
 
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
+    if _latex_divisor_juxtaposed(s):
+        # latex2sympy reads 1/2\pi as 1/(2π) and \ln 2/2 as ln(2/2); left to right they are (1/2)π and (ln 2)/2: a
+        # convention of the writer, not guessed (G4YO-2)
+        raise ParseError(f"{s!r} writes a product or a function's argument next to a '/' without brackets "
+                         "((1/2)\\pi or 1/(2\\pi)?): not read")
     s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
     _refuse_latex_ranges(s)
     expr = _latex2sympy(_exact_latex_decimals(s))
