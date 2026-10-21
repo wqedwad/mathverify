@@ -424,7 +424,8 @@ def cases_h():
              "5 is the largest possible value", "5 kesinlikle", "5 tamsayısıdır", "5 (tek çözüm)", "5 cevaptır")]
     out.append(("6*6: payload '36 muhtemel durum' (affirmative)", _ev("6*6"), sol("36 muhtemel durum"), OK, None))
     out += [(f"payload {p!r} (an unknown word: not read)", e, sol(p), UNK, None)
-            for p in ("5 civarında", "5 yaklaşık", "5 kadar", "5 falan")]
+            for p in ("5 civarında", "5 yaklaşık", "5 kadar", "5 falan", "5 civarında kesinlikle",
+                      "5 yaklaşık olarak bulunur")]
     # a symbol of the problem is never prose (SA-RK-5)
     out += [("e^(iπ/3): payload '1/2 + √3/2 i'", _ev("exp(I*pi/3)"), sol("1/2 + √3/2 i"), NOTNO, None),
             ("(1+2i)(1+i): payload '-1 + 3 i'", _ev("(1 + 2*I)*(1 + I)"), sol("-1 + 3 i"), NOTNO, None),

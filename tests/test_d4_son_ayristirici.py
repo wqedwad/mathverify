@@ -445,7 +445,8 @@ def test_sayo2_a_rejected_set_is_a_negation(p):
     assert r.verdict == "UNKNOWN" and "payload_negated" in _flags(r), (p, r.verdict)
 
 
-@pytest.mark.parametrize("p", ["5 civarında", "5 yaklaşık", "5 kadar", "5 falan"])
+@pytest.mark.parametrize("p", ["5 civarında", "5 yaklaşık", "5 kadar", "5 falan", "5 civarında kesinlikle",
+                               "5 yaklaşık olarak bulunur"])
 def test_sayo2_a_word_off_the_allow_list_leaves_the_claim_unread(p):
     assert verify(_ev("2 + 3"), _sol(p)).verdict == "UNKNOWN", p
 
