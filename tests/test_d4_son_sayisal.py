@@ -323,7 +323,9 @@ def test_an_interior_maximum_of_an_abs_or_max_of_trig_is_found(f, interval, true
     """False acceptance and unjust refutation (SS-YO-1; son-kalkulus RK-EXT-1): SymPy's raw solveset of
     sign(sin x)*cos(x) + 1/2 raised, the interior critical points were lost (11 of the 14), and the larger endpoint
     value was certified the maximum while the true one was refuted (not_attained)."""
-    assert _ext(f, interval, "max", true_max) != "INCORRECT"
+    # 13 CORRECT (6 were INCORRECT, 1 UNKNOWN in 0e93ed5); Max(sin x, cos x) + x/4 is UNKNOWN there and here, its
+    # candidate set not called complete
+    assert _ext(f, interval, "max", true_max) == ("UNKNOWN" if f.startswith("Max(") else "CORRECT")
     if endpoint is not None:
         assert _ext(f, interval, "max", endpoint) == "INCORRECT"
 
@@ -386,6 +388,32 @@ def test_critical_points_are_the_complete_set_or_none():
             assert cps is None, (text, cps)
     assert set(ops.critical_points(A_(S_(x)) + x / 2, x, sp.Interval(0, 2 * sp.pi))) == {2 * sp.pi / 3, 5 * sp.pi / 3}
     assert ops.critical_points(x**2 / 2 + C_(x), x, sp.Interval(-1, 2)) is None       # x = sin(x): not solved
+
+
+def test_critical_points_report_a_failure_as_none(monkeypatch):
+    """Mechanism (SS-YO-1): a solver that raises is a failure (None), not an empty list."""
+    import sys
+    from mathverify.sandbox import ops
+    sing = sys.modules["sympy.calculus.singularities"]        # the attribute of sympy.calculus is the function
+
+    def raising(*a, **k):
+        raise NotImplementedError("no singularities here")
+    monkeypatch.setattr(sing, "singularities", raising)
+    assert ops.critical_points(x + 2 * C_(x), x, sp.Interval(0, sp.pi)) is None
+
+
+def test_a_failed_candidate_search_is_never_complete(monkeypatch):
+    """Mechanism (SS-YO-1): critical points not found whole (None) leave the candidate set incomplete: the endpoints
+    alone, called complete, certified the endpoint value 2 the maximum of x + 2*cos(x) on [0, pi]."""
+    from mathverify.certify import extremum
+    from mathverify.sandbox.pool import CasResult
+    real = extremum.sb_run
+
+    def run(fn, *a, **k):
+        return CasResult(ok=True, value=None) if fn.endswith(":critical_points") else real(fn, *a, **k)
+    monkeypatch.setattr(extremum, "sb_run", run)
+    ok, ev = extremum.certify_extremum(x + 2 * C_(x), x, sp.Interval(0, sp.pi), "max", sp.Integer(2))
+    assert ok is not True and ev["complete_candidates"] is False
 
 
 def test_a_point_of_undecided_realness_leaves_the_list_incomplete(monkeypatch):

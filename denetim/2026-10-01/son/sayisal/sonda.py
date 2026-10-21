@@ -360,7 +360,8 @@ def cases_g():
         ("arg(-1 - I) = 5pi/4, no domain of discourse", ev("arg(-1 - I)"), sol("5*pi/4"), UNK, None),
         ("arg(-1 - I) = 5pi/4 with its step", ev("arg(-1 - I)", dod=C), sol("5*pi/4", [("eq", "arg(-1 - I) = 5*pi/4")]),
          UNK, None),
-        ("MC arg(-1 - I): B 5pi/4", ev("arg(-1 - I)", dod=C, options=opts), sol("5*pi/4", option="B"), UNK, None),
+        # only the [0, 2*pi) value 5*pi/4 is among the options: they write the range (second round, RK-SAY-3)
+        ("MC arg(-1 - I): B 5pi/4", ev("arg(-1 - I)", dod=C, options=opts), sol("5*pi/4", option="B"), OK, None),
         ("MC arg(-1 - I): A pi/4 (wrong)", ev("arg(-1 - I)", dod=C, options=opts), sol("pi/4", option="A"), NO, None),
         ("(-pi, pi] written: -3pi/4", ev("arg(-1 - I)", givens=dec_a, dod=C), sol("-3*pi/4"), OK, None),
         ("(-pi, pi] written: 5pi/4 (wrong)", ev("arg(-1 - I)", givens=dec_a, dod=C), sol("5*pi/4"), NO, None),

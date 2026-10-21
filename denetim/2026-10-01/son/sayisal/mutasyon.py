@@ -87,7 +87,7 @@ MUTATIONS = [
      T + "test_a_principal_argument_wrong_in_both_conventions_is_refuted"),
     # second round (son-sayisal audit, 21 Oct 2026)
     ("S24 critical_points hatada boş liste", O, "    except Exception:\n        return None\n    cps = []\n",
-     "    except Exception:\n        return []\n    cps = []\n", T + "test_critical_points_are_the_complete_set_or_none"),
+     "    except Exception:\n        return []\n    cps = []\n", T + "test_critical_points_report_a_failure_as_none"),
     ("S25 sıfırlar yine ham solveset'ten", O, "        sets = (exact_solveset(classical(d), var, interval), singularities(d, var, interval))\n",
      "        sets = (sp.solveset(d, var, interval), singularities(d, var, interval))\n",
      T + "test_an_interior_maximum_of_an_abs_or_max_of_trig_is_found"),
@@ -97,7 +97,7 @@ MUTATIONS = [
      T + "test_critical_points_are_the_complete_set_or_none"),
     ("S27 None aday kümesi tam sayılır", X, "    if r.ok and r.value is None:\n",
      "    if r.ok and r.value is None:\n        r = CasResult(ok=True, value=[])\n    if False:\n",
-     T + "test_an_endpoint_is_no_extremum_where_an_interior_point_beats_it"),
+     T + "test_a_failed_candidate_search_is_never_complete"),
     ("S28 kırık noktasının gerçelliği okunmaz", X,
      "                complete = complete and all(p.is_number and p.is_real is True for p in r.value)\n", "",
      T + "test_a_point_of_undecided_realness_leaves_the_list_incomplete"),
