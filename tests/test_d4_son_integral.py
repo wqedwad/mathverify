@@ -472,3 +472,13 @@ def test_a_point_whose_difference_has_no_sign_is_no_agreement():
 ])
 def test_a_difference_below_every_interval_is_not_certified(q, claim):
     assert _v(q, claim, kind="expression") != "CORRECT"
+
+
+def test_a_signed_point_not_confirmed_is_no_agreement(monkeypatch):
+    # a difference the interval signs at a point, which the exact values cannot confirm there: no witness, and no
+    # agreement either (it was skipped, as if the sides agreed)
+    from mathverify.equiv import random_point
+    monkeypatch.setattr(random_point, "_exact_counterexample", lambda *a, **k: None)
+    d = x - x + sp.Integer(1) / 10 ** 300
+    assert random_point._nonzero_elsewhere(d, [x], [{x: sp.sqrt(2) / 2}], x, x, [0]) == (None, True)
+    assert random_point._nonzero_elsewhere(x - x, [x], [{x: sp.sqrt(2) / 2}], x, x, [0]) == (None, False)

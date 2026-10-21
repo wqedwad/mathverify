@@ -162,8 +162,8 @@ MUTATIONS = [
      "            if False:\n", T + "test_a_point_whose_difference_has_no_sign_is_no_agreement"),
     ("I48 büyük kuvvetli nokta okunur", RP, "        if _heavy_power_at(d, at):\n            unread.append(i)\n",
      "        if False:\n            unread.append(i)\n", T + "test_a_point_whose_difference_has_no_sign_is_no_agreement"),
-    ("I49 doğrulanamayan işaretli nokta uyum sayılır", RP, "    return None, bool(nonzero or undecided)\n",
-     "    return None, bool(undecided)\n", T + "test_a_difference_below_every_interval_is_not_certified"),
+    ("I49 doğrulanamayan işaretli nokta uyum sayılır", RP, "    return None, bool(nonzero or unread)\n",
+     "    return None, bool(unread)\n", T + "test_a_signed_point_not_confirmed_is_no_agreement"),
 ]
 
 if __name__ == "__main__":
