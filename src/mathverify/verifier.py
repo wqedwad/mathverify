@@ -108,8 +108,11 @@ def _option_claim_value(ir: ProblemIR, solution: Solution, ctx, text: str | None
             v = None
     if v is None:
         v = ctx.option_value(solution.claimed_answer.option, text)
+    # a condition ('x**2 < 4' read as {x**2 < 4}) is another kind, which mc.consistency reports itself
+    # (`_option_out_of_kind`: option_unreadable)
     hit = _names_the_unknown(ir, ctx, v) if _value_shaped(ir, sol2.claimed_answer if sol2 is not None
-                                                          else solution.claimed_answer) else []
+                                                          else solution.claimed_answer) \
+        and not _option_out_of_kind(v) else []
     if hit:
         raise ValueError(f"the option names the unknown(s) {hit}: no value")
     return v
