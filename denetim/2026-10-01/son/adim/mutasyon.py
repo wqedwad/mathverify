@@ -124,7 +124,7 @@ MUTATIONS = [
      "    if any(v in p.free_symbols and not p.free_symbols <= {v} for p in list(premises) + list(restrictions)):\n"
      "        return None\n", "    if False:\n        return None\n", T + "test_sa_yo4_no_boundary_in_a_system"),
     ("S38 içi boş eşitsizlikte de sınır (SA-RK-1)", DET, "    if not (e.ok and e.value is False):\n        return False\n",
-     "    if False:\n        return False\n", T + "test_sa_rk1_an_inequality_with_no_point_inside_has_no_boundary"),
+     "    if False:\n        return False\n", T + "test_sa_rk1_no_boundary_reading_when_nothing_is_inside"),
     ("S39 payda kökü kritik nokta değil (SA-RK-7)", DET, "for e, is_den in ((num, False), (den, True))",
      "for e, is_den in ((num, False),)", T + "test_sa_rk7_the_root_of_a_denominator_is_a_critical_point"),
     ("S40 payda kökünde tanımlılık düşmez (SA-RK-7)", DET,

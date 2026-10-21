@@ -228,6 +228,18 @@ def test_sa_rk1_an_inequality_with_no_point_inside_has_no_boundary(q, answer, ki
     assert r.verdict == "CORRECT" and _statuses(r) == ["unknown"]
 
 
+@pytest.mark.parametrize("step", ["x = 3", "x = 5", "(x - 3)**2 = 0"])
+def test_sa_rk1_no_boundary_reading_when_nothing_is_inside(step):
+    """The decision of SA-RK-1: an inequality whose strict part has no point of the domain has no boundary rule. An
+    equation step is then checked against the premise itself, which no point satisfies: unknown, never refuted (also the
+    wrong critical point x = 5, as before the branch; the boundary reading would refute it at x = 3)."""
+    r = verify(_ineq("x**2 - 6*x + 9 < 0"), _sol("EmptySet", "set", [("eq", step)]))
+    layer = next(la for la in r.layers if la.layer == "steps.refute")
+    (st,) = layer.evidence["steps"]
+    assert r.verdict == "CORRECT" and st["status"] == "unknown"
+    assert "boundary_of" not in (st.get("evidence") or {})
+
+
 @pytest.mark.parametrize("e,answer,steps", [
     ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "x + 2 = 0")]),
     ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "x = 1"), ("eq", "x = -2")]),
