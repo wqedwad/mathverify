@@ -23,6 +23,10 @@
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/integral/sonda.py [out.json] [groups]
 
+Measured (21 Oct 2026): 189 cases, 110 not as expected on 0e93ed5 (A 17, B 6, C 13, D 9, E 3, F 3, G 8, H 19, I 21,
+J 5, L 2, M 4; one held over 300 s), 0 on 4f294aa. The derivative of x·∛x (group C) is G2RK-13's, the calculus group's:
+here only no false verdict. Group M's last case is a recorded residual of the narrow G2YO-6 rule.
+
 Kept out of pyflakes and pytest like the rest of denetim/.
 """
 from __future__ import annotations
