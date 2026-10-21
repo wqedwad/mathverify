@@ -42,17 +42,29 @@ def _versions() -> dict[str, str]:
 # text, '{∅}' (the set holding the empty set, a classic distractor), '∅ ∪ {1}' and 'Çözüm yok değil' were read as
 # "no solution", and the wrong letter beside the right ∅ was CORRECT (final attack G4YO-1). A text that only names the
 # empty set or those words (`_NO_SOLUTION_MENTION`) is read as written, by the option's reader.
-_EMPTY_SET_TEXT = r"(?:∅|ø|\\emptyset|\\varnothing|emptyset|\\?\{\s*\\?\})(?:\s*\(\s*boş\s+küme\s*\))?"
-_NO_SOLUTION_WORDS = (r"(?:(?:denklemin|eşitsizliğin|hiçbir|hiç)\s+)*(?:(?:gerçel|reel)\s+)?"
-                      r"(?:çözüm(?:ü|leri)?|kök(?:ü|leri)?)(?:\s+kümesi)?\s*(?:yok(?:tur)?|boş(?:tur|\s+küme(?:dir)?)?)"
-                      r"|boş\s+küme(?:dir)?|no\s+(?:real\s+)?(?:solutions?|roots?)|(?:the\s+)?empty\s+set")
+_EMPTY_SET_TEXT = r"(?:∅|ø|\\emptyset|\\varnothing|emptyset|\\?\{\s*\\?\})"
+# the adjective of the roots (MEB writes 'gerçek'; 'gerçel', 'reel' too) and 'in the real numbers' (audit SA-RK-1)
+_REAL_ADJ = r"(?:(?:gerçek|gerçel|reel)\s+(?:sayılarda\s+)?)?"
+_NO_SOLUTION_WORDS = (r"(?:(?:denklemin|eşitsizliğin|fonksiyonun|hiçbir|hiç)\s+)*" + _REAL_ADJ +
+                      r"(?:çözüm(?:ü|leri|ler)?|kök(?:ü|leri|ler)?)(?:\s+kümesi)?\s*"
+                      r"(?:yok(?:tur)?|boş(?:tur|\s+küme(?:dir)?)?)"
+                      r"|boş\s+küme(?:dir)?"
+                      r"|hiçbir\s+" + _REAL_ADJ + r"sayı\s+(?:için\s+)?sağlanmaz"
+                      r"|(?:there\s+(?:is|are)\s+)?no\s+(?:real\s+)?(?:solutions?|roots?)|(?:the\s+)?empty\s+set")
+# what may name the set before it: the solution set or the domain by name or by their abbreviations (Ç, ÇK, Ç.K., S, TK,
+# T.K., D(f)), or the variable, with '=', ':', '∈'; 'çözüm kümesi' / 'tanım kümesi' also without (audit SA-RK-2)
+_NO_SOLUTION_PREFIX = (r"(?:(?:(?:denklemin|eşitsizliğin|fonksiyonun)\s+)?(?:çözüm|tanım)\s+kümesi\s*(?:(?:=|:|∈)\s*)?"
+                       r"|(?:ç(?:\s*\.?\s*k\s*\.?)?|t\s*\.?\s*k\s*\.?|d\s*\(\s*[a-z]\s*\)|d_?[a-z]|s|[a-z])\s*"
+                       r"(?:=|:|∈|\\in(?![a-z]))\s*)")
+# what may follow it: the set named again in brackets ('Boş küme (∅)', '∅ (boş küme)') and the copula ('∅'dir')
+_NO_SOLUTION_SUFFIX = (r"(?:\s*\(\s*(?:boş\s+küme|∅|ø|\\emptyset|\\varnothing|empty\s+set)\s*\))?"
+                       r"(?:\s*['’]?\s*(?:dir|dır|dur|dür|tir|tır|tur|tür))?")
 _NO_SOLUTION = re.compile(
-    r"^\s*(?:\$+|\\\()?\s*"
-    r"(?:(?:ç(?:\s*\.\s*k\s*\.?)?|çözüm\s+kümesi|s|[a-z])\s*(?:=|:|∈|\\in(?![a-z]))\s*|çözüm\s+kümesi\s+)?"
-    rf"(?:{_EMPTY_SET_TEXT}|{_NO_SOLUTION_WORDS})"
-    r"\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
+    r"^\s*(?:\$+|\\\()?\s*" + rf"(?:{_NO_SOLUTION_PREFIX})?" + rf"(?:{_EMPTY_SET_TEXT}|{_NO_SOLUTION_WORDS})"
+    + _NO_SOLUTION_SUFFIX + r"\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
 _NO_SOLUTION_MENTION = re.compile(
-    r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s*küme|no\s*(real\s*)?solution|∅|ø|emptyset|varnothing",
+    r"çözüm(?:ü|leri|ler)?(\s*kümesi)?\s*(yok|boş)|kök(?:ü|leri|ler)?\s*yok|boş\s*küme|no\s*(real\s*)?(?:solution|root)"
+    r"|∅|ø|emptyset|varnothing|(?:gerçek|gerçel|reel)\s+(?:kök|çözüm|sayı)",
     re.IGNORECASE)
 
 
@@ -99,6 +111,21 @@ def _mc_undecided(reason: str, ms: float, ev: dict | None = None) -> LayerResult
     return unknown("mc.consistency", reason, ms, ev, flags=[OPTION_UNDECIDED])
 
 
+def _claims_no_solution(ir: ProblemIR, solution: Solution, ctx) -> bool:
+    """Does the solution claim the empty set (or "none") for a set answer?"""
+    ca = solution.claimed_answer
+    if ca.kind == "none":
+        return True
+    if ir.answer_shape not in ("set", "interval") and ca.kind not in ("set", "interval"):
+        return False
+    try:
+        return ctx.claimed(solution) == sp.S.EmptySet
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: not the empty set
+        return False
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
@@ -141,6 +168,10 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if not mention and re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text):
             ev = {"option": ca.option, "option_text": opt_text, "claimed": str(ca.payload)}
+            if _claims_no_solution(ir, solution, ctx):
+                # 'yok' beside the empty set of a set answer: "no solution" in words no reading above took, never a
+                # refutation of ∅ (audit SA-RK-1: 'Gerçek kökü yoktur' refuted the right ∅)
+                return _mc_undecided("option_says_no_value_beside_an_empty_claim", t.ms, ev)
             ev["reason"] = "option_says_DNE_but_a_value_was_claimed"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if ca.payload in (None, ""):
