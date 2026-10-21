@@ -1776,8 +1776,10 @@ def _free_choice(claim, v, premises: list, ctx: Ctx, every: bool = False) -> dic
     point where the line meets the y-axis), not a consequence: it was refuted and a right solution
     was INCORRECT (V13, 28 Sep 2026). A value the premises exclude is still refuted, and so is one
     picked from a finite or discrete set (a root of x² = 4, of tan x = sqrt(3)). `every`: each value
-    the claim names must be allowed (a claim refuted on the boundary of an inequality: "x = 2 or
-    x = 4" for x**2 - 5x + 6 <= 0 is a wrong list of its critical points, no choice in [2, 3])."""
+    the claim names must be allowed. A list of values one of which the premises exclude is no choice
+    ("x = 1 or x = -5" for x**2 - 4x - 5 < 0 is a wrong list of its roots; skipped for its 1, a right
+    solution with it was CORRECT once its root equation was no longer refuted, audit of the branch);
+    nor is a claim refuted on the boundary of an inequality ("x = 2 or x = 4" for x**2 - 5x + 6 <= 0)."""
     if any(not isinstance(p, sp.core.relational.Relational) for p in premises):
         return None
     syms = set().union({v}, *(p.free_symbols for p in premises))
@@ -3017,7 +3019,8 @@ def check_steps(ir, solution, ctx: Ctx):
                                 return _on_boundary([_check_boundary(c, a_, ctx, window) for a_ in alts], [])[0]
                             return _check_eq(c, prem, ctx, restrictions, window)[0]
                         if point is not None and status == "refuted":
-                            w = _free_choice(claim, point, premises + extra + list(restrictions), ctx, every=on_boundary)
+                            w = _free_choice(claim, point, premises + extra + list(restrictions), ctx,
+                                             every=on_boundary or isinstance(claim, Or))
                             if w is not None:
                                 status, chosen = "skipped", True
                                 ev = {"reason": "choice_of_a_free_symbol", "witness": {str(k): str(v) for k, v in w.items()}}

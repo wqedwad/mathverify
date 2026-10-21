@@ -176,6 +176,9 @@ RGE = "Union(Interval.open(-oo, -2), Interval(1, oo))"
     ("x**2 - 5*x + 6 < 0", A23, [("eq", "x**2 - 5*x + 6 >= 0")]),
     ("x**2 - 5*x + 6 < 0", A23, [("eq", "(x - 2)*(x - 3) >= 0")]),
     ("x**2 - 5*x + 6 >= 0", GE, [("eq", "And(x >= 2, x <= 3)")]),
+    # a wrong list of roots is no choice: one of its values lies outside the solution (yanlis-onay c1 s4)
+    ("x**2 - 4*x - 5 < 0", "Interval.open(-1, 5)", [("eq", "x**2 - 4*x - 5 = 0"), ("eq", "Or(Eq(x, 1), Eq(x, -5))")]),
+    ("x**2 - 4*x - 5 < 0", "Interval.open(-1, 5)", [("eq", "Or(Eq(x, 1), Eq(x, -5))")]),
     # SA-RK-7: a wrong point is no root of the denominator either
     ("(x - 1)/(x + 2) >= 0", RGE, [("eq", "x = -1")]),
     ("(x + 3)/(x - 1) <= 0", "Interval.Ropen(-3, 1)", [("eq", "x = 3")]),
@@ -183,6 +186,14 @@ RGE = "Union(Interval.open(-oo, -2), Interval(1, oo))"
 def test_sa_a_wrong_step_near_a_boundary_is_refuted(e, answer, steps):
     r = verify(_ineq(e), _sol(answer, "interval", steps))
     assert r.verdict == "INCORRECT" and _statuses(r)[-1] == "refuted"
+
+
+def test_sa_yo2_a_step_after_the_boundary_is_never_verified_by_it():
+    """x ∈ {2, 5/2, 3} after the root equation of x**2 - 5x + 6 <= 0: each value lies in [2, 3], a choice (skipped, as
+    the step alone was before the branch), never verified on the pool the root equation left."""
+    r = verify(_ineq("x**2 - 5*x + 6 <= 0"), _sol("Interval(2, 3)", "interval",
+                                                 CRIT[:1] + [("eq", "Or(Eq(x, 2), Eq(x, 3), Eq(x, 5/2))")]))
+    assert _statuses(r) == ["unknown", "skipped"]
 
 
 def test_sa_rk2_a_right_step_after_the_boundary_stays_verified():
