@@ -1139,6 +1139,25 @@ class written_domain(sp.Function):  # noqa: N801 - a marker read by certify.doma
         return written_domain(self.args[0].diff(s), self.args[1])
 
 
+def _closed_branches(a):
+    """`a` with each Piecewise of closed conditions in it taken to its branch, as written, where certified signs decide
+    the conditions (`equiv.numeric.jump_value`); left as it is where one is undecided. Put into a condition of the outer
+    body unevaluated, the inner Piecewise of f(f(1)) (f piecewise) made SymPy's Piecewise raise ("pop from an empty
+    set") and the problem's definedness was undecided: f(f(1)) = 1 UNKNOWN (final attack G1RK-5)."""
+    if not isinstance(a, sp.Basic) or a.free_symbols or not a.has(sp.Piecewise):
+        return a
+    from ..equiv.numeric import jump_value
+
+    def branch(n):
+        with sp.evaluate(True):                     # the signs are certified on the values; the branch stays as written
+            v = jump_value(n)
+        return n if v is None else v
+    try:
+        return a.replace(lambda n: isinstance(n, sp.Piecewise) and not n.free_symbols, branch)
+    except Exception:  # noqa: BLE001 - left as it is: the reading fails as before
+        return a
+
+
 def _written_call(fn, ns, depth=0):
     """An IR function called inside a text read as written: its body AS WRITTEN (so its conditions,
     x**2/x at 0, survive) with the arguments substituted unevaluated, inner calls expanded the same
@@ -1151,7 +1170,7 @@ def _written_call(fn, ns, depth=0):
         w = parse_as_written(fn.fdef.expr, dict(ns, **dict(zip(fn.fdef.args, fn.argsyms))), _depth=depth + 1)
         if w is None or len(w) != 1:
             return fn(*args)
-        sub = dict(zip(fn.argsyms, args))
+        sub = dict(zip(fn.argsyms, (_closed_branches(a) for a in args)))
         with sp.evaluate(False):
             out = w[0].xreplace(sub)
             if fn.domain_rel is not None:
@@ -1178,6 +1197,33 @@ _UNI_VALUE_RE = re.compile(r"([0-9)\]])\s*([π∞√∛ℝℤℕ∅])")
 _DEG_NUM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:°|\bderece\b|\bdeg\b)")
 _DEG_PAREN_RE = re.compile(r"\(([^()]*)\)\s*°")
 _PCT_RE = re.compile(r"%\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*%")
+# LaTeX's degree mark: latex2sympy drops it, so 30^\circ was the number 30 and \sin(30^\circ) was sin(30) (final
+# attack, G1RK-3); it is read as the plain-text mark is, a factor pi/180
+_LATEX_DEG_RE = re.compile(r"(?:\^|\*\*)\s*(?:\{\s*\\circ\s*\}|\\circ(?![A-Za-z]))|\\degree(?![A-Za-z])")
+
+
+def unit_marks(text) -> frozenset[str]:
+    """The unit marks of `text` the parser reads as a conversion: '°' (30°, 30 derece, 30 deg, (a+b)°, 30^\\circ) is
+    a factor pi/180, '%' (%20, 20%, 20\\%) a factor 1/100. Each is the unit of the number it marks: whether the other
+    side of a comparison counts in that unit or in plain numbers is the question's (`Ctx.open_unit_marks`)."""
+    if not isinstance(text, str):
+        return frozenset()
+    out = set()
+    if _DEG_NUM_RE.search(text) or _DEG_PAREN_RE.search(text) or _LATEX_DEG_RE.search(text):
+        out.add("°")
+    if _PCT_RE.search(text) or "\\%" in text:
+        out.add("%")
+    return frozenset(out)
+
+
+def without_unit_marks(text: str, marks) -> str:
+    """`text` with the unit marks `marks` (`unit_marks`) dropped: the plain number each one is the unit of (%20 is 20,
+    30° is 30)."""
+    if "°" in marks:
+        text = _LATEX_DEG_RE.sub("", _DEG_NUM_RE.sub(r"\1", _DEG_PAREN_RE.sub(r"(\1)", text)))
+    if "%" in marks:
+        text = _PCT_RE.sub(lambda m: m.group(1) or m.group(2), text.replace("\\%", ""))
+    return text
 _SQRT_BARE_RE = re.compile(r"(sqrt|cbrt)\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)(?![\w(])")
 
 
@@ -1212,9 +1258,60 @@ def strip_presentation(s: str) -> str:
     return s
 
 
+# logarithms written as a base and a number (final attack G1RK-1): log_2 5, log_{2}(5), log₂5, log2(5), ln 2, ln5/ln2.
+# Neither a claim nor an option read them, and an option not read blocks a right letter's CORRECT. Only a number or a
+# parenthesized argument is taken, and a bare number only where nothing that could extend it follows (`ln 2x`,
+# `log_2 8^2`, `ln 2/3` are not read): `log` without a base (log 9: ln or log10?) is no notation of either.
+_LOG_HEAD_RE = re.compile(r"(?<![\\\w])(?:log(?:_\{\s*(\d+|e)\s*\}|_(\d+|e)(?![\w.])|([₀-₉]+)|(\d+)(?=\())|(ln))\s*")
+_BARE_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+_BARE_END_RE = re.compile(r"\s*(?:$|[-+)\],}=<>]|/\s*(?:ln|log)(?![A-Za-z]))")
+_SUBSCRIPT = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+
+
+def _closing_paren(s: str, i: int) -> int | None:
+    """The index of the parenthesis closing the one at `s[i]`, or None."""
+    depth = 0
+    for j in range(i, len(s)):
+        if s[j] == "(":
+            depth += 1
+        elif s[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return j
+    return None
+
+
+def _log_notation(s: str) -> str:
+    """`s` with each logarithm written as a base and an argument (`_LOG_HEAD_RE`) as log(argument, base); the rest as
+    it is, and a logarithm whose argument is not a number or a parenthesized group left as written (not read)."""
+    out, i = [], 0
+    while True:
+        m = _LOG_HEAD_RE.search(s, i)
+        if m is None:
+            out.append(s[i:])
+            return "".join(out)
+        base = m.group(1) or m.group(2) or (m.group(3) or "").translate(_SUBSCRIPT) or m.group(4)
+        j = m.end()
+        if j < len(s) and s[j] == "(":
+            k = _closing_paren(s, j)
+            arg, end = (s[j + 1:k], k + 1) if k is not None else (None, j)
+        else:
+            n = _BARE_NUMBER_RE.match(s, j)
+            ok = n is not None and _BARE_END_RE.match(s, n.end()) is not None
+            arg, end = (n.group(0), n.end()) if ok else (None, j)
+        if arg is None or (m.group(5) and j < len(s) and s[j] == "("):
+            out.append(s[i:m.end()])            # not read here (ln(...) is the canonical log(...))
+            i = m.end()
+            continue
+        out.append(s[i:m.start()])
+        out.append(f"log({arg})" if base in (None, "", "e") else f"log({arg}, {base})")
+        i = end
+
+
 def preclean(s: str) -> str:
     """Canonicalise unicode/degree/percent notation. Idempotent."""
     s = strip_presentation(_strip_invisible(s).strip()).strip()
+    s = _log_notation(s)
     s = _UNI_VALUE_RE.sub(r"\1*\2", s)
     for k, v in _UNICODE_MAP.items():
         s = s.replace(k, v)
@@ -1228,7 +1325,8 @@ def preclean(s: str) -> str:
 
 
 def is_latex(s: str) -> bool:
-    return "\\" in s or bool(re.search(r"\^\{|_\{|\\frac|\\sqrt|\\pi|\\infty|\\cdot", s))
+    # `log_{2} 5` without a backslash is the plain notation of `_log_notation`, not LaTeX
+    return "\\" in s or bool(re.search(r"\^\{|(?<!log)_\{|\\frac|\\sqrt|\\pi|\\infty|\\cdot", s))
 
 
 # ----------------------------------------------------------------------------
@@ -2077,6 +2175,7 @@ def _latex2sympy(s: str):
                 return lim
         _LATEX_CONVERTER = _TwoSidedLimits
     converter = _LATEX_CONVERTER(None, None, False, config=ConversionConfig())
+    s = _LATEX_DEG_RE.sub(r"\\cdot\\frac{\\pi}{180}", s)          # a degree is pi/180, as 30° (G1RK-3)
     return converter.parse(normalize_latex(s, NormalizationConfig()))
 
 

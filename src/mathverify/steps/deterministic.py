@@ -2099,6 +2099,80 @@ def _check_eq_in(claim, premises: list, ctx: Ctx, restrictions: list, window: li
     return "unknown", ev
 
 
+# the strict part of an inequality: where it holds off its boundary equation
+_STRICT_PART = {sp.StrictLessThan: sp.StrictLessThan, sp.LessThan: sp.StrictLessThan,
+                sp.StrictGreaterThan: sp.StrictGreaterThan, sp.GreaterThan: sp.StrictGreaterThan}
+
+
+def _relation_set(c, v, ctx: Ctx) -> sp.Set | None:
+    """The set over ℝ where the relation `c` on `v` holds (an And/Or of relations too), under both readings of an odd
+    root (`_solved_both_readings`); None when a part is not solved exactly."""
+    if isinstance(c, (And, Or)):
+        parts = [_relation_set(a, v, ctx) for a in c.args]
+        if any(p is None for p in parts):
+            return None
+        return sp.Intersection(*parts) if isinstance(c, And) else sp.Union(*parts)
+    if not isinstance(c, sp.core.relational.Relational):
+        return None
+    return _solved_both_readings(c, v, ctx)
+
+
+def _nowhere_inside(claim, p, ctx: Ctx) -> bool:
+    """Is the claim PROVED to hold at no point of the problem's domain where the inequality `p` holds strictly (off its
+    boundary equation)? One variable only; a set not solved exactly, or an emptiness SymPy does not decide, proves
+    nothing (False)."""
+    syms = set(getattr(claim, "free_symbols", set())) | p.free_symbols
+    if len(syms) != 1:
+        return False
+    (v,) = syms
+    if ctx.ns.get(v.name) != v:
+        return False
+    inside = _solved_both_readings(_STRICT_PART[type(p)](p.lhs, p.rhs, evaluate=False), v, ctx)
+    held = _relation_set(claim, v, ctx)
+    if inside is None or held is None:
+        return False
+    e = sb_run("mathverify.steps.deterministic:_emptiness", sp.Intersection(ctx.domain_for(v), inside, held),
+               timeout=ctx.timeout)
+    return bool(e.ok and e.value is True)
+
+
+def _boundary_premises(claim, premises: list, swappable: list, ctx: Ctx) -> tuple[list, list] | None:
+    """The premises with each inequality among `swappable` (the problem's own: the task's, a given; and the earlier
+    claims that restate them) inside which the claim holds nowhere replaced by its boundary equation (the same two
+    sides, '='), and those inequalities; None when there is none, or when the premises so changed are proved to have no
+    common point (the claim is then no boundary of theirs: x = -2 under x > 0 and x**2 = 4 stays refuted). Such a claim
+    is no consequence of the inequality: x**2 - 5*x + 6 = 0, (x - 2)*(x - 3) = 0 and "x = 2 or x = 3" of the sign-table
+    method for x**2 - 5*x + 6 < 0 were refuted at every point of (2, 3), and the right (2, 3) was INCORRECT (final
+    attack G1RK-2, once the task's inequality in params became a premise). Checked on the boundary equation instead, a
+    wrong critical point (x = 5) is still refuted. A non-strict inequality is read off its boundary the same way:
+    x**2 = 9 for x**2 >= 9 holds only where the boundary does."""
+    hit = [p for p in swappable if type(p) in _STRICT_PART and p in premises and _nowhere_inside(claim, p, ctx)]
+    if not hit:
+        return None
+    out = [Eq(p.lhs, p.rhs) if p in hit else p for p in premises]
+    (v,) = hit[0].free_symbols
+    region = ctx.domain_for(v)
+    for p in out:
+        if not p.free_symbols <= {v}:
+            continue                        # another symbol: the set in v is a superset, left out
+        s_ = _relation_set(p, v, ctx)
+        if s_ is None:
+            return out, hit                 # not solved: not proved empty
+        region = sp.Intersection(region, s_)
+    e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
+    return None if e.ok and e.value is True else (out, hit)
+
+
+def _on_boundary(status: str, ev: dict, bounds: list) -> tuple[str, dict]:
+    """The status of a claim checked on the boundary equations of `bounds` (`_boundary_premises`): a refutation there
+    stands; anything else is unknown, never verified (the claim is no consequence of the problem's inequality, and its
+    boundary is no premise the solution was given)."""
+    ev = {**ev, "boundary_of": [str(p) for p in bounds]}
+    if status == "refuted":
+        return "refuted", ev
+    return "unknown", {**ev, "reason": "claim_holds_nowhere_inside_an_inequality_premise", "on_boundary": status}
+
+
 def _window_domains(doms: dict, window: list, ctx: Ctx) -> dict:
     """`doms` with the window's variable restricted to the window; `doms` itself when the window
     cannot be read as a set."""
@@ -2671,6 +2745,28 @@ def _counterexample_where_undefined(claim, ev: dict, conds, ctx: Ctx) -> bool:
     return pt is not None and _undefined_at(conds, pt, ctx)
 
 
+def _both_unit_readings(text: str, kind: str, ns: dict[str, Any], ctx: Ctx, status: str, ev: dict, recheck):
+    """A step's status when its claim carries a unit mark the question does not fix (`Ctx.open_unit_marks`): the
+    claim read with the marks as units decided `status`; read with them as plain numbers (`recheck` of that reading)
+    it must decide the same, or the step is unknown. "x = 30°" after 6x = 180 and "(60 - 50)/50*100 = %20" were
+    refuted, and right solutions INCORRECT (final attack G1RK-3, the step layer's sibling)."""
+    marks = ctx.open_unit_marks(text)
+    if not marks:
+        return status, ev
+    from ..normalize.parse import without_unit_marks
+    try:
+        plain = _parse_claim(without_unit_marks(text, marks), ns)
+        other = recheck(_neutralized(plain) if kind == "compute" else plain) if _is_relation(plain) else None
+    except _OutOfTime:
+        raise
+    except Exception:  # noqa: BLE001 - the plain reading is not read: it confirms nothing
+        other = None
+    if other == status:
+        return status, ev
+    return "unknown", {"reason": "unit_mark_read_as_a_unit_and_as_a_plain_number_decide_differently",
+                       "withdrawn": ev, "plain_reading": other}
+
+
 def check_steps(ir, solution, ctx: Ctx):
     with Timer() as t:
         per_step: list[dict[str, Any]] = []
@@ -2819,10 +2915,18 @@ def check_steps(ir, solution, ctx: Ctx):
                         # OTHER symbols: "y = -1" after the choice "x = 0" is a fact about that point
                         point = _point_symbol(claim, ctx)
                         extra = [c for s_, c in choices.items() if s_ != point] if point is not None else []
-                        status, ev = _check_eq(claim, premises + extra, ctx, restrictions, window)
-                        range_premises = premises + extra + list(restrictions)
+                        used = premises + extra
+                        status, ev = _check_eq(claim, used, ctx, restrictions, window)
+                        if status in ("refuted", "unknown"):
+                            # a claim that holds nowhere inside an inequality of the problem is no consequence
+                            # of it: the boundary equation of the sign-table method (G1RK-2)
+                            swapped = _boundary_premises(claim, used, [p for p in premises if p not in my_cases], ctx)
+                            if swapped is not None:
+                                used, bounds_ = swapped
+                                status, ev = _on_boundary(*_check_eq(claim, used, ctx, restrictions, window), bounds_)
+                        range_premises = used + list(restrictions)
 
-                        def recheck(c, prem=premises + extra):
+                        def recheck(c, prem=used):
                             return _check_eq(c, prem, ctx, restrictions, window)[0]
                         if point is not None and status == "refuted":
                             w = _free_choice(claim, point, premises + extra + list(restrictions), ctx)
@@ -2836,6 +2940,8 @@ def check_steps(ir, solution, ctx: Ctx):
                 except Exception as e:  # noqa: BLE001
                     status, ev = "unknown", {"reason": f"checker_exception: {type(e).__name__}: {str(e)[:120]}"}
                     range_premises, recheck = [], None
+                if status in ("refuted", "verified") and recheck is not None:
+                    status, ev = _both_unit_readings(st.claim, st.kind, step_ns, ctx, status, ev, recheck)
                 if status == "refuted" and _convention_as_written(st.claim, step_ns):
                     # a closed value of the claim is a convention (Mod(7, -5): -3 floored, 2 Euclidean);
                     # SymPy's reading refutes nothing (part d4a, DECISIONS §80)
