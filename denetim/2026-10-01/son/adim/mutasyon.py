@@ -175,6 +175,9 @@ MUTATIONS = [
      T + "test_sa_rk8_an_option_naming_the_unknown_is_no_value"),
     ("S56 koşul şıkkı bilinmeyen korumasına düşer", VER, "        and not _option_out_of_kind(v) else []\n", "        else []\n",
      "tests/test_d4_d4j_kalan.py::test_onceki1_an_option_of_another_kind_abstains"),
+    ("S57 okunmayan şık IR'ı tutarsız yapar", "src/mathverify/certify/wordproblem.py",
+     '        if n == 0 and any(v == "unparsed" for v in out["option_status"].values()):\n',
+     "        if False:\n", T + "test_sa_yo1_options_not_read_say_nothing_about_the_ir"),
 ]
 
 if __name__ == "__main__":

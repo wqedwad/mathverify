@@ -702,6 +702,21 @@ def test_sa_rk3_a_unit_the_ir_declares_is_read():
     assert verify(q, _sol(None, option="C")).verdict == "INCORRECT"
 
 
+def test_sa_yo1_options_not_read_say_nothing_about_the_ir():
+    """'6 cm' with no declared unit is not read; wordproblem found no option READ satisfiable and called the IR
+    inconsistent, which blocked the right value given without a letter (UNKNOWN, ir_inconsistent)."""
+    q = _mc(_ir("evaluate", {"expr": "a"}, ["a = 3*2"], [{"name": "a", "domain": "real"}]),
+            {"A": "4 cm", "B": "6 cm", "C": "8 cm"})
+    r = verify(q, _sol("6"))
+    assert r.verdict == "CORRECT" and "ir_inconsistent" not in r.flags
+    assert verify(q, _sol("4")).verdict == "INCORRECT"
+    assert verify(q, _sol(None, option="B")).verdict == "UNKNOWN"             # the letter: still not read
+    # every option read and none satisfiable: the true value is missing from them (as before)
+    r = verify(_mc(_ir("evaluate", {"expr": "a"}, ["a = 3*2"], [{"name": "a", "domain": "real"}]),
+                   {"A": "4", "B": "5", "C": "8"}), _sol("6"))
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in r.flags
+
+
 @pytest.mark.parametrize("opt", ["{x}", "x"])
 def test_sa_rk8_an_option_naming_the_unknown_is_no_value(opt):
     q = _mc(QE, {"A": "{1, 2}", "B": opt})

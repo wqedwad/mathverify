@@ -66,6 +66,12 @@ def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_va
         if any(v == "unknown" for v in out["option_status"].values()):
             out["status"] = "unknown"
             return out
+        if n == 0 and any(v == "unparsed" for v in out["option_status"].values()):
+            # no option READ is satisfiable, and one is not read ('6 cm' where the IR declares no unit: the option
+            # reader leaves it, audit of the branch SA-YO-1): the value may be that one. Nothing about the IR follows;
+            # the claim is decided on its own, as with no options
+            out["status"] = _claim_status(out)
+            return out
         if n == 0:
             out["status"] = "ir_inconsistent"
             return out
