@@ -251,22 +251,26 @@ def continuous_domain(expr, var, domain=S.Reals):
 
 
 def critical_points(expr, var, interval):
+    """The points of `interval` where expr' is 0 (the guarded solver's set of the classical derivative: the one
+    certify.extremum calls complete) or singular (|x|**(2/3), sqrt(x) at 0), or None when either set is not found
+    whole as a finite set of numbers. SymPy's raw solveset of expr' raised (sign(sin(x))*cos(x): NotImplementedError;
+    x + 2*cos(x) with a complex-written coefficient: an invalid comparison of a number with an imaginary part of
+    noise), and the empty or partial list that was left lost the interior critical points while the extremum
+    certificate called its candidates complete: the endpoint value 2 of x + 2*cos(x) on [0, pi] and pi of
+    x + |sin 2x| on [0, pi] were certified maxima, the true ones refuted (son-sayisal audit, SS-YO-1)."""
+    from sympy.calculus.singularities import singularities
+    from ..certify.calculus import classical
+    from .exactsets import exact_solveset
     d = sp.diff(expr, var)
+    try:
+        sets = (exact_solveset(classical(d), var, interval), singularities(d, var, interval))
+    except Exception:
+        return None
     cps = []
-    try:
-        for c in sp.solveset(d, var, interval):
-            if c.is_number:
-                cps.append(c)
-    except Exception:
-        pass
-    # points where derivative is undefined (e.g. |x|, cbrt)
-    try:
-        from sympy.calculus.singularities import singularities
-        for s_ in singularities(d, var, interval):
-            if s_.is_number:
-                cps.append(s_)
-    except Exception:
-        pass
+    for s_ in sets:
+        if not (s_ is S.EmptySet or isinstance(s_, sp.FiniteSet)) or not all(c.is_number for c in s_):
+            return None
+        cps += list(s_)
     return cps
 
 

@@ -286,3 +286,117 @@ def test_arg_is_read_in_zero_two_pi_within_its_reading():
         assert parse_expr_str("arg(-1)") == sp.pi
     assert _writes_arg({"expr": "2*arg(z)"}) and _writes_arg(["\\arg(z)"])
     assert not _writes_arg({"arg": "x**2", "args": ["x"]}) and not _writes_arg("args(z)")
+
+
+# --- SS-YO-1 (second round): the extremum's candidates are the set it calls complete ----------------------------
+
+def _ext(f, interval, which, claim):
+    return _task("extremum", {"f": f, "var": "x", "which": which, "interval": interval}, claim)
+
+
+K1 = "(2 + I)*(2 - I)/5"                  # exactly 1, written with complex numbers
+A_, S_, C_ = sp.Abs, sp.sin, sp.cos
+
+# the auditors' 14 functions with Abs/Max of trigonometric functions, with the maximum found independently (mpmath, a
+# 20001-point grid and the exact candidates): (f, interval, the true maximum, the larger endpoint value when it is
+# not the maximum)
+ABS_TRIG = [
+    ("Abs(sin(x)) + x/2", "[0, 2*pi]", "sqrt(3)/2 + 5*pi/6", "pi"),
+    ("Abs(cos(x)) + x/2", "[0, 2*pi]", "1 + pi", None),
+    ("x - 2*Abs(sin(x))", "[0, 2*pi]", "2*pi", None),
+    ("Abs(sin(x)) + cos(x)", "[0, 2*pi]", "sqrt(2)", "1"),
+    ("Abs(sin(x)) - x/2", "[0, 2*pi]", "sqrt(3)/2 - pi/6", "0"),
+    ("2*Abs(cos(x)) + x", "[0, pi]", "2 + pi", None),
+    ("sin(x) + Abs(cos(x))", "[0, 2*pi]", "sqrt(2)", "1"),
+    ("Abs(x - 1) + sin(x)", "[0, 3]", "2 + sin(3)", None),
+    ("Abs(sin(x)) + Abs(cos(x))", "[0, pi]", "sqrt(2)", "1"),
+    ("Abs(x) - cos(x)", "[-2, 2]", "2 - cos(2)", None),
+    ("x*Abs(x - 2)", "[0, 3]", "3", None),
+    ("Abs(x**2 - 2*x) + x", "[-1, 3]", "6", None),
+    ("Max(sin(x), cos(x)) + x/4", "[0, 2*pi]", "1 + pi/2", None),
+    ("x + Abs(sin(2*x))", "[0, pi]", "5*pi/6 + sqrt(3)/2", "pi"),
+]
+
+
+@pytest.mark.parametrize("f,interval,true_max,endpoint", ABS_TRIG)
+def test_an_interior_maximum_of_an_abs_or_max_of_trig_is_found(f, interval, true_max, endpoint):
+    """False acceptance and unjust refutation (SS-YO-1; son-kalkulus RK-EXT-1): SymPy's raw solveset of
+    sign(sin x)*cos(x) + 1/2 raised, the interior critical points were lost (11 of the 14), and the larger endpoint
+    value was certified the maximum while the true one was refuted (not_attained)."""
+    assert _ext(f, interval, "max", true_max) != "INCORRECT"
+    if endpoint is not None:
+        assert _ext(f, interval, "max", endpoint) == "INCORRECT"
+
+
+def test_an_endpoint_is_no_extremum_where_an_interior_point_beats_it():
+    """False acceptance (SS-YO-1): x + 2*cos(x) with a coefficient written (2 + i)(2 - i)/5 (SymPy's raw solveset
+    compared a number with an imaginary part of noise and raised): max 2, argmax 0, min pi - 2 were CORRECT; argmin 0
+    of e^x + (1 + i*sqrt(3))**3*x/4 on [0, 2] too."""
+    f = f"{K1}*x + 2*cos(x)"
+    assert _ext(f, "[0, pi]", "max", "2") == "INCORRECT"
+    assert _ext(f, "[0, pi]", "argmax", "0") == "INCORRECT"
+    assert _ext(f, "[0, pi]", "min", "pi - 2") == "INCORRECT"
+    assert _ext(f"exp(x) + {C3}*x/4", "[0, 2]", "argmin", "0") == "INCORRECT"
+    assert _ext("Abs(sin(x)) + x/2", "[0, 2*pi]", "argmax", "2*pi") == "INCORRECT"
+
+
+def test_the_true_interior_extremum_is_certified():
+    """Unjust refutation (SS-YO-1): the true extrema were INCORRECT (not_attained) or, for the quadratic, lost."""
+    f = f"{K1}*x + 2*cos(x)"
+    assert _ext(f, "[0, pi]", "max", "pi/6 + sqrt(3)") == "CORRECT"
+    assert _ext(f, "[0, pi]", "min", "5*pi/6 - sqrt(3)") == "CORRECT"
+    assert _ext(f"exp(x) + {C3}*x/4", "[0, 2]", "argmin", "log(2)") == "CORRECT"
+    assert _ext(f"x**2 + {C3}*x", "[-10, 10]", "min", "-16") == "CORRECT"
+    assert _ext(f"-x**2 - {C3}*x", "[-10, 10]", "max", "16") == "CORRECT"
+
+
+PLAIN = [
+    ("x + 2*cos(x)", (0, sp.pi)), ("x - 2*sin(x)", (0, sp.pi)), ("x + 2*sin(x)", (0, 2 * sp.pi)),
+    ("sin(x) + cos(x)", (0, 2 * sp.pi)), ("sin(x)*cos(x)", (0, sp.pi)), ("sin(x) + sqrt(3)*cos(x)", (0, sp.pi)),
+    ("2*sin(x) + sin(2*x)", (0, 2 * sp.pi)), ("cos(x) + sin(x)**2", (0, sp.pi)), ("x - tan(x)", (-1, 1)),
+    ("sin(x)/(2 + cos(x))", (0, 2 * sp.pi)), ("exp(x)*sin(x)", (0, sp.pi)), ("exp(-x)*cos(x)", (0, sp.pi)),
+    ("x*sin(x) + cos(x)", (0, sp.pi)), ("sin(x)**3 + cos(x)**3", (0, sp.pi / 2)), ("x**3 - 3*x", (-3, 2)),
+    ("x**4 - 4*x**3 + 4*x**2", (-1, 3)), ("x/(x**2 + 1)", (-3, 3)), ("x*log(x)", (sp.Rational(1, 10), 2)),
+    ("sqrt(x)*(3 - x)", (0, 3)), ("x**(2/3)*(5 - x)", (0, 5)), ("Abs(x**2 - 4) - x", (-3, 3)),
+    ("exp(x) - 2*x", (0, 2)), ("x - 2*log(x)", (1, 4)), ("cos(x)**2 - sin(x)", (0, sp.pi)),
+    ("sin(2*x) + 2*cos(x)", (0, sp.pi)), ("3*sin(x) - 4*cos(x)", (0, 2 * sp.pi)), ("x + cos(2*x)", (0, sp.pi)),
+    ("2*x - tan(x)", (0, sp.pi / 3)), ("sin(x) - x*cos(x)", (0, sp.pi)), ("x - sin(2*x)", (0, sp.pi)),
+    ("x**2 - 2*cos(x)", (-2, 2)), ("x*exp(-x**2)", (-2, 2)), ("log(x**2 + 1) - x", (-2, 2)),
+    ("cos(x) + cos(2*x)", (0, sp.pi)), ("x - 2*atan(x)", (0, 3)),
+    ("Abs(sin(x)) + x/2", (0, 2 * sp.pi)), ("Abs(sin(2*x)) + x", (0, sp.pi)), ("Max(sin(x), cos(x)) + x/4", (0, 2 * sp.pi)),
+]
+
+
+def test_critical_points_are_the_complete_set_or_none():
+    """Mechanism (SS-YO-1): `ops.critical_points` is the guarded solver's zero set of the classical f' (the set the
+    certificate calls complete) with the singular points, or None; never a raw solveset's empty or partial list. The
+    auditors' 36 plain functions and the Abs/Max family: wherever the complete set is found, every point of it is a
+    candidate."""
+    from mathverify.certify.calculus import classical
+    from mathverify.sandbox import ops
+    from mathverify.sandbox.exactsets import exact_solveset
+    for text, (a, b) in PLAIN:
+        f = sp.sympify(text, locals={"x": x})
+        iv = sp.Interval(a, b)
+        cps = ops.critical_points(f, x, iv)
+        rd = exact_solveset(classical(sp.diff(f, x)), x, iv)
+        if isinstance(rd, sp.FiniteSet) or rd is sp.S.EmptySet:
+            assert cps is not None and set(rd) <= set(cps), (text, cps, rd)
+        else:
+            assert cps is None, (text, cps)
+    assert set(ops.critical_points(A_(S_(x)) + x / 2, x, sp.Interval(0, 2 * sp.pi))) == {2 * sp.pi / 3, 5 * sp.pi / 3}
+    assert ops.critical_points(x**2 / 2 + C_(x), x, sp.Interval(-1, 2)) is None       # x = sin(x): not solved
+
+
+def test_a_point_of_undecided_realness_leaves_the_list_incomplete(monkeypatch):
+    """Mechanism (SS-YO-1): a kink or critical point whose realness SymPy does not decide is not dropped from a
+    complete list (`p.is_real` filtered it, and the list stayed complete)."""
+    from mathverify.certify import extremum
+    from mathverify.sandbox.pool import CasResult
+    undecided = sp.sqrt(sp.log(8) / sp.log(2) - 3)        # exactly 0; its realness is not decided
+    assert undecided.is_real is None
+    monkeypatch.setattr(extremum, "sb_run", lambda *a, **k: CasResult(ok=True, value=sp.FiniteSet(1, undecided)))
+    pts, complete = extremum._kinks(A_(x - 1), x, sp.Interval(-2, 2), 5.0)
+    assert complete is False and 1 in pts
+    ok, ev = extremum.certify_local_extremum(x**2, x, sp.Interval(-2, 2), "local_min", "0")
+    assert ok is None and ev["reason"] in ("critical_point_realness_undecided", "critical_points_failed")
