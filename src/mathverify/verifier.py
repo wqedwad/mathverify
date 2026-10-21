@@ -287,11 +287,66 @@ _TAGLIKE = re.compile(r"^<[^<>]*>(?:[^<>]*</[^<>]*>)?$")
 # -mıyor, -mayabilir, -mamış, -mamalı) on any word, the question particle (mi, midir, mısınız) alone; English words whole.
 _NEGATION = re.compile(
     r"(?<!\w)(?:değil|degil|yanlış|yanlis|hariç|haric|dışında|disinda|hayır|hayir|yok|olamaz|olmaz|olma[dmy]|olabil|"
-    r"belki|muhtemel|sanırım|sanirim|sanmı|sanmi|sanki|zannet|zanned|galiba|herhalde|tahmin|şüphe|kuşku|imkans|imkâns)\w*"
-    r"|(?<!\w)\w*?(?:m[ae]z|m[ıiuü]yor|m[ae]y[ae]bil|m[ae]m[ıiuü]ş|m[ae]m[ae]l[ıi])\w*"
+    r"belki|muhtemelen|sanırım|sanirim|sanmı|sanmi|sanki|zannet|zanned|galiba|herhalde|tahmin|şüphe|kuşku|imkans|imkâns)\w*"
+    r"|(?<!\w)\w*?(?:m[ae]z|m[ıiuü]yor|m[ae]y[ae]bil|m[ae]m[ıiuü]ş|m[ae]m[ae]l[ıi]|m[ae]d[ıi]|m[ae]y[ae]c[ae]k"
+    r"|m[ae]m[ae]kt[ae])\w*"
+    # a rejection of the value (audit SA-YO-2): reddedilir, geçersiz, hatalı, elenir, invalid, rejected, ✗
+    r"|(?<!\w)(?:redded|reddet|geçersiz|gecersiz|hatalı|hatali|elen|yanıl|yanil)\w*|[✗✘❌]"
+    r"|(?<!\w)(?:invalid|rejected|reject|extraneous|discarded|false)(?!\w)"
     r"|(?<!\w)m[ıiuü](?:d[ıiuü]r|s[ıiuü]n(?:[ıiuü]z)?|y[ıiuü]m|y[ıiuü]z)?(?!\w)"
     r"|(?<!\w)(?:not|no|nor|never|cannot|can't|isn't|isnt|aren't|doesn't|don't|won't|wrong|incorrect|false|except|"
     r"maybe|perhaps|probably|possibly|unlikely|might|doubt|unsure)(?!\w)|\?", re.IGNORECASE)
+
+
+# The prose after a value that the cleaner may drop: words that leave the value as it is (a copula, a count or unit word,
+# "the answer", "the largest value", "certainly"), measured on the project's corpora (evalset, K4, the part and final
+# probes: their only real tails are these) and the two audit lenses' affirmative lists. Any other word leaves the payload
+# unread (UNKNOWN), a negation or a rejection marks it negated: a list of what is refused let '5 sağlamadı', '5 geçersiz',
+# '5 ✗' through, and a widened one refused '5 olabilecek en büyük değerdir' and '5 şüphesiz' (audit SA-YO-2, SA-RK-3).
+_TAIL_ALLOWED = frozenset("""
+bulunur bulunmuştur bulunmaktadır olur olarak elde edilir edildi olmalıdır olmalı eşittir eşit doğrudur doğru dır dir dur
+dür tır tir tur tür tane adet birim birimkare br br² cevap cevaptır cevabı cevabıdır sonuç sonuçtur sonucu sonucudur sonucuna
+ulaşılır bu çözüm çözümdür çözümü değer değerdir değeri değeridir en büyük büyüğü küçük küçüğü fazla az çok olabilecek
+alabileceği olası mümkün olan tek eşsiz kesin kesindir kesinlikle şüphesiz kuşkusuz muhtemel durum durumdur farklı vardır
+tamsayı tamsayıdır tamsayısıdır tam sayı sayıdır pozitif negatif sıfır sıfırdan kök köktür kökü çift katlı sabit sabittir
+kalır değişmez tamamı beklendiği gibi tahmin edilen edildiği olasılık olasılıkla olduğu için alınır nokta noktası noktasıdır
+derece radyan rad cm mm km kg gr ton lt litre ml cm² cm2 m² m2 cm³ m³ km² saat sa dakika dk saniye sn gün hafta ay yıl lira tl
+kuruş kişi metre santimetre kilometre gram kilogram km/sa m/sn m/s
+is the answer final value largest smallest maximum minimum units unit equals yani yüzden budur dolayısıyla böylece
+""".split())
+# phrases of words the negation test would read wrongly: 'negatif olmayan' (nonnegative), 'olabilecek en büyük', 'muhtemel
+# durum' (a possible outcome), 'şüphesiz' (doubtless), 'değişmez' (constant), 'tahmin edilen' (the estimated one)
+_AFFIRMATIVE_PHRASES = re.compile(
+    r"(?<!\w)(?:(?:negatif|pozitif|sıfır|boş)\s+olmayan|olabilecek|alabileceği|olası|muhtemel\s+(?:durum|sonuç)\w*"
+    r"|şüphesiz|kuşkusuz|değişmez|tahmin\s+edil(?:en|diği)|largest\s+possible|smallest\s+possible)(?!\w)",
+    re.IGNORECASE)
+_TAIL_PUNCT = "()[]{}\"'«»“”.,;:!"
+
+
+def _tail_reading(words: list, ctx) -> str:
+    """'negated', 'allowed' (every word is one the cleaner may drop, `_TAIL_ALLOWED`) or 'unknown' for the trailing prose
+    `words` of a payload. A symbol of the problem (a variable, i, I, e, E, any name of its namespace) or a single Latin
+    letter is never prose: '1/2 + √3/2 i' and '2 x' were cleaned to 1/2 + √3/2 and 2 and refuted (audit SA-RK-5,
+    principle 3)."""
+    for w in words:
+        n = w.strip(_TAIL_PUNCT)
+        if n and (n in ctx.ns or n.lower() in ("i", "e") or (len(n) == 1 and n.isascii() and n.isalpha())):
+            return "unknown"
+    text = _AFFIRMATIVE_PHRASES.sub(" ", " ".join(words).lower().replace("\u0307", ""))
+    if _NEGATION.search(text):
+        return "negated"
+    return "allowed" if all(n in _TAIL_ALLOWED for n in (w.strip(_TAIL_PUNCT) for w in text.split()) if n) \
+        else "unknown"
+
+
+def _one_tuple(v) -> bool:
+    """Is `v` a tuple of one element (or a set holding only one): '5,' read as (5,), '{2, 3},' as {({2, 3},)}? A comma
+    there is punctuation, never a value (audit SA-RK-6)."""
+    if isinstance(v, (tuple, sp.Tuple)):
+        return len(v) == 1
+    if isinstance(v, sp.FiniteSet) and len(v) == 1:
+        return _one_tuple(next(iter(v)))
+    return False
 
 
 def _is_prose_token(tok: str) -> bool:
@@ -318,8 +373,8 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     if ca.payload is None or not isinstance(ca.payload, str):
         return flags
     try:
-        ctx.claimed(solution)
-        return flags
+        if not _one_tuple(ctx.claimed(solution)):
+            return flags
     except Exception:  # noqa: BLE001
         pass
     s = _ZERO_WIDTH.sub("", ca.payload).strip()
@@ -358,22 +413,28 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     # Dropping "+ 1" would silently rewrite the claim into a different one and hand the attacker
     # a verdict for an answer the solver never gave (measured on the value_bump attack).
     toks = t.split()
-    for k in range(len(toks) - 1, 0, -1):
-        if not _is_prose_token(toks[k]):
-            break
-        # prose that negates or doubts the value ("5 değil", "5 olamaz", "belki 5") is not junk:
-        # dropping it turned "not 5" into 5 and certified it (audit of 25 Sep 2026). Abstain.
-        if _NEGATION.search(" ".join(toks[k:])):
-            flags.append("payload_negated")
-            return flags
+    # prose that negates or doubts the value ("5 değil", "5 olamaz", "belki 5") is not junk: dropping it
+    # turned "not 5" into 5 and certified it (audit of 25 Sep 2026). Abstain. Only a tail of words known to
+    # leave the value as it is is dropped, read as a whole (`_tail_reading`, audit SA-YO-2, SA-RK-3, SA-RK-5).
+    start = len(toks)
+    while start > 1 and _is_prose_token(toks[start - 1]):
+        start -= 1
+    reading = _tail_reading(toks[start:], ctx) if start < len(toks) else "allowed"
+    if reading == "negated":
+        flags.append("payload_negated")
+        return flags
+    for k in range(len(toks) - 1, start - 1 if reading == "allowed" else len(toks), -1):
         cands.append(" ".join(toks[:k]))
     original = ca.payload
+    # a final ',' or ';' is punctuation ('5,', '5, kesinlikle'): the text before it is tried (audit SA-RK-6)
+    cands = [re.sub(r"\s*[,;]\s*$", "", c) if isinstance(c, str) else c for c in cands]
     for c in cands:
         if not c or c == original:
             continue
         ca.payload = c
         try:
-            ctx.claimed(solution)
+            if _one_tuple(ctx.claimed(solution)):
+                continue
             flags.append("payload_cleaned")
             return flags
         except Exception:  # noqa: BLE001
@@ -687,6 +748,16 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
             and re.search(r"\d,\d", ca.payload):
         return unknown("intake.claim", f"claimed answer {ca.payload!r}: decimal comma or pair? not guessed",
                        flags=["decimal_comma_ambiguous"])
+    # a tuple of one element ('(5,)', or '5,' that no cleaning took) is no value (audit SA-RK-6)
+    try:
+        one = _one_tuple(ctx.claimed(solution))
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: the certificates report it
+        one = False
+    if one:
+        return unknown("intake.claim", f"claimed answer {ca.payload!r} is a tuple of one element: not read",
+                       flags=["parse_error", "claim_unreadable"])
     # '1/2π', '1/2√x': (1/2)·π or 1/(2π)? A factor written right after a divisor is a convention of the writer; the
     # parser reads it neither way (`normalize.parse.ambiguous_juxtaposition`), and the claim is not read (G4YO-2)
     from .normalize.parse import ambiguous_juxtaposition
