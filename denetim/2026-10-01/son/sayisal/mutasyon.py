@@ -19,6 +19,8 @@ base = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(base)
 
 G = "src/mathverify/_sympy_guards.py"
+O = "src/mathverify/sandbox/ops.py"
+X = "src/mathverify/certify/extremum.py"
 E = "src/mathverify/sandbox/exactsets.py"
 P = "src/mathverify/normalize/parse.py"
 V = "src/mathverify/verifier.py"
@@ -83,6 +85,43 @@ MUTATIONS = [
     ("S23 üst yarı düzlem de kaydırılır", P, "        if s in (0, 1):\n            return a\n",
      "        if s in (0, 1):\n            return a + 2 * sp.pi\n",
      T + "test_a_principal_argument_wrong_in_both_conventions_is_refuted"),
+    # second round (son-sayisal audit, 21 Oct 2026)
+    ("S24 critical_points hatada boş liste", O, "    except Exception:\n        return None\n    cps = []\n",
+     "    except Exception:\n        return []\n    cps = []\n", T + "test_critical_points_report_a_failure_as_none"),
+    ("S25 sıfırlar yine ham solveset'ten", O, "        sets = (exact_solveset(classical(d), var, interval), singularities(d, var, interval))\n",
+     "        sets = (sp.solveset(d, var, interval), singularities(d, var, interval))\n",
+     T + "test_an_interior_maximum_of_an_abs_or_max_of_trig_is_found"),
+    ("S26 kısmi küme de kabul", O,
+     "        if not (s_ is S.EmptySet or isinstance(s_, sp.FiniteSet)) or not all(c.is_number for c in s_):\n            return None\n",
+     "        if not (s_ is S.EmptySet or isinstance(s_, sp.FiniteSet)):\n            continue\n",
+     T + "test_critical_points_are_the_complete_set_or_none"),
+    ("S27 None aday kümesi tam sayılır", X, "    if r.ok and r.value is None:\n",
+     "    if r.ok and r.value is None:\n        r = CasResult(ok=True, value=[])\n    if False:\n",
+     T + "test_a_failed_candidate_search_is_never_complete"),
+    ("S28 kırık noktasının gerçelliği okunmaz", X,
+     "                complete = complete and all(p.is_number and p.is_real is True for p in r.value)\n", "",
+     T + "test_a_point_of_undecided_realness_leaves_the_list_incomplete"),
+    ("S29 yerel ekstremumda gerçellik okunmaz", X,
+     "    if not all(c.is_number and c.is_real is True for c in list(rd.value) + list(rs.value)):\n",
+     "    if False:\n", T + "test_a_point_of_undecided_realness_leaves_the_list_incomplete"),
+    ("S30 noktada kayma çözülmez", P, "    if at and all(s_.name in at for s_ in u.free_symbols):\n", "    if False:\n",
+     T + "test_a_pointwise_task_reads_the_shift_of_arg_at_its_point"),
+    ("S31 görevin noktası okunmaz", V, "    return {var: v}\n", "    return {}\n",
+     T + "test_a_pointwise_task_reads_the_shift_of_arg_at_its_point"),
+    ("S32 kararsız okuma gelenek sayılır", V, '    if "UNKNOWN" in (v_a, v_b):\n', "    if False:\n",
+     T + "test_a_pointwise_task_reads_the_shift_of_arg_at_its_point"),
+    ("S33 ortak başarısızlıksız INCORRECT uyuşur", V, "    if not common and not both:\n        return None\n",
+     "    if False:\n        return None\n", T + "test_two_incorrect_readings_agree_only_on_a_failure_of_both"),
+    ("S34 tek okumada çürütülen adım çürütülmüş kalır", V, '                    e["status"] = "unknown"\n',
+     '                    e["status"] = e["status"]\n', T + "test_a_step_refuted_in_one_arg_reading_only_is_unknown"),
+    ("S35 ilk kötü adım A okumasından", V, "                la = replace(la, evidence=ev, first_bad_step=both[0])\n",
+     "                la = replace(la, evidence=ev)\n", T + "test_a_step_refuted_in_one_arg_reading_only_is_unknown"),
+    ("S36 şıklar aralık bildirmez", V, "    if by_options is not None:\n", "    if False:\n",
+     T + "test_options_of_one_range_declare_it"),
+    ("S37 derece şıkları da aralık bildirir", V, " or _UNIT_MARK.search(str(o)) for o in opts.values()):",
+     " for o in opts.values()):", T + "test_options_that_do_not_pick_a_range_leave_the_convention"),
+    ("S38 iki değer de şıklardayken A okunur", V, "    if held == [True, False]:\n", "    if held[0]:\n",
+     T + "test_options_that_do_not_pick_a_range_leave_the_convention"),
 ]
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ INCORRECT; where the ranges agree the value is CORRECT; a problem that writes it
     R  a real argument written with complex numbers (sin, log, sqrt of it)
     P  a progression's window far from 0 (G1YO-2)
     G  the principal argument's two conventions (SON-G3-RK-3, added the same evening)
+    X  the extremum's candidates (second round, SS-YO-1)    M  the arg readings, second round (RK-SAY-1/2/3, RK-ARG-STEP)
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/sayisal/sonda.py [out.json] [groups]
@@ -359,7 +360,8 @@ def cases_g():
         ("arg(-1 - I) = 5pi/4, no domain of discourse", ev("arg(-1 - I)"), sol("5*pi/4"), UNK, None),
         ("arg(-1 - I) = 5pi/4 with its step", ev("arg(-1 - I)", dod=C), sol("5*pi/4", [("eq", "arg(-1 - I) = 5*pi/4")]),
          UNK, None),
-        ("MC arg(-1 - I): B 5pi/4", ev("arg(-1 - I)", dod=C, options=opts), sol("5*pi/4", option="B"), UNK, None),
+        # only the [0, 2*pi) value 5*pi/4 is among the options: they write the range (second round, RK-SAY-3)
+        ("MC arg(-1 - I): B 5pi/4", ev("arg(-1 - I)", dod=C, options=opts), sol("5*pi/4", option="B"), OK, None),
         ("MC arg(-1 - I): A pi/4 (wrong)", ev("arg(-1 - I)", dod=C, options=opts), sol("pi/4", option="A"), NO, None),
         ("(-pi, pi] written: -3pi/4", ev("arg(-1 - I)", givens=dec_a, dod=C), sol("-3*pi/4"), OK, None),
         ("(-pi, pi] written: 5pi/4 (wrong)", ev("arg(-1 - I)", givens=dec_a, dod=C), sol("5*pi/4"), NO, None),
@@ -374,8 +376,98 @@ def cases_g():
     return rows
 
 
+def cases_x():
+    """SS-YO-1 (second round): the extremum's candidates are the set it calls complete. An endpoint value is no maximum
+    where an interior critical point beats it; the true interior extremum is not refuted."""
+    def ext(f, iv, which):
+        return task("extremum", {"f": f, "var": "x", "which": which, "interval": iv})
+
+    K = "(2 + I)*(2 - I)/5"
+    rows = []
+    for f, iv, right, wrong in [
+        ("Abs(sin(x)) + x/2", "[0, 2*pi]", "sqrt(3)/2 + 5*pi/6", "pi"),
+        ("Abs(sin(x)) + cos(x)", "[0, 2*pi]", "sqrt(2)", "1"),
+        ("Abs(sin(x)) - x/2", "[0, 2*pi]", "sqrt(3)/2 - pi/6", "0"),
+        ("sin(x) + Abs(cos(x))", "[0, 2*pi]", "sqrt(2)", "1"),
+        ("Abs(sin(x)) + Abs(cos(x))", "[0, pi]", "sqrt(2)", "1"),
+        ("x + Abs(sin(2*x))", "[0, pi]", "5*pi/6 + sqrt(3)/2", "pi"),
+        (f"{K}*x + 2*cos(x)", "[0, pi]", "pi/6 + sqrt(3)", "2"),
+        ("x + 2*cos(x)", "[0, pi]", "pi/6 + sqrt(3)", "2"),
+        (f"-x**2 - {C3}*x", "[-10, 10]", "16", "20"),
+        ("Abs(cos(x)) + x/2", "[0, 2*pi]", "1 + pi", "pi/2"),
+        ("Max(sin(x), cos(x)) + x/4", "[0, 2*pi]", "1 + pi/2", "pi/2"),
+    ]:
+        # the maximum 1 + pi/2 of Max(sin x, cos x) + x/4 is UNKNOWN in 0e93ed5 and 4153cc1 too (its candidate set is
+        # not called complete): not this finding's
+        want = NOTNO if f.startswith("Max(") else OK
+        rows.append((f"max {f} on {iv}: {right}", ext(f, iv, "max"), sol(right), want, None))
+        rows.append((f"max {f} on {iv}: {wrong} (wrong)", ext(f, iv, "max"), sol(wrong), NO, None))
+    rows += [
+        ("argmax |sin x| + x/2 on [0, 2pi]: 5pi/3", ext("Abs(sin(x)) + x/2", "[0, 2*pi]", "argmax"), sol("5*pi/3"), OK, None),
+        ("argmax |sin x| + x/2 on [0, 2pi]: 2pi (wrong)", ext("Abs(sin(x)) + x/2", "[0, 2*pi]", "argmax"), sol("2*pi"), NO,
+         None),
+        ("argmax Kx + 2cos x on [0, pi]: 0 (wrong)", ext(f"{K}*x + 2*cos(x)", "[0, pi]", "argmax"), sol("0"), NO, None),
+        ("min Kx + 2cos x on [0, pi]: 5pi/6 - sqrt3", ext(f"{K}*x + 2*cos(x)", "[0, pi]", "min"), sol("5*pi/6 - sqrt(3)"),
+         OK, None),
+        ("min Kx + 2cos x on [0, pi]: pi - 2 (wrong)", ext(f"{K}*x + 2*cos(x)", "[0, pi]", "min"), sol("pi - 2"), NO, None),
+        ("argmin e^x + C3 x/4 on [0, 2]: log 2", ext(f"exp(x) + {C3}*x/4", "[0, 2]", "argmin"), sol("log(2)"), OK, None),
+        ("argmin e^x + C3 x/4 on [0, 2]: 0 (wrong)", ext(f"exp(x) + {C3}*x/4", "[0, 2]", "argmin"), sol("0"), NO, None),
+        ("min x^2 + C3 x on [-10, 10]: -16", ext(f"x**2 + {C3}*x", "[-10, 10]", "min"), sol("-16"), OK, None),
+        # where the complete set is not found (x = sin x): no certificate either way, as before
+        ("max x^2/2 + cos x on [-1, 2]: 2 + cos 2", ext("x**2/2 + cos(x)", "[-1, 2]", "max"), sol("2 + cos(2)"), NOTNO,
+         None),
+        ("max sin x cos x on [0, pi]: 0 (wrong)", ext("sin(x)*cos(x)", "[0, pi]", "max"), sol("0"), NO, None),
+    ]
+    return rows
+
+
+def cases_m():
+    """The arg readings, second round: pointwise tasks (RK-SAY-1), steps (RK-ARG-STEP), INCORRECT in both readings
+    only on a failure of both (RK-SAY-2), options of one range (RK-SAY-3)."""
+    C = "complex"
+
+    def pw(kind, f, pt):
+        key, pk = ("f", "at") if kind == "derivative" else ("expr", "to")
+        return task(kind, {key: f, "var": "x", pk: pt}, shape="scalar" if kind == "derivative" else "dne_or_scalar")
+
+    o02 = {"A": "pi/4", "B": "3*pi/4", "C": "5*pi/4", "D": "7*pi/4", "E": "3*pi/2"}
+    opp = {"A": "-3*pi/4", "B": "-pi/4", "C": "pi/4", "D": "3*pi/4", "E": "pi"}
+    deg = {"A": "45°", "B": "135°", "C": "225°", "D": "315°", "E": "270°"}
+    both = {"A": "-3*pi/4", "B": "5*pi/4", "C": "pi/4", "D": "3*pi/4", "E": "pi"}
+    return [
+        ("d/dx arg(1 + xi) at 1: 1/2", pw("derivative", "arg(1 + x*I)", "1"), sol("1/2"), OK, None),
+        ("d/dx arg(1 + xi) at -1: 1/2", pw("derivative", "arg(1 + x*I)", "-1"), sol("1/2"), OK, None),
+        ("d/dx arg(2 + xi) at 2: 1/4", pw("derivative", "arg(2 + x*I)", "2"), sol("1/4"), OK, None),
+        ("d/dx arg(1 + xi) at 1: 1 (wrong)", pw("derivative", "arg(1 + x*I)", "1"), sol("1"), NO, None),
+        ("lim arg(1 + xi), x -> 1: pi/4", pw("limit", "arg(1 + x*I)", "1"), sol("pi/4"), OK, None),
+        ("lim arg(1 + xi), x -> 1: pi/2 (wrong)", pw("limit", "arg(1 + x*I)", "1"), sol("pi/2"), NO, None),
+        ("lim arg(1 + xi), x -> -1: 7pi/4 (one convention)", pw("limit", "arg(1 + x*I)", "-1"), sol("7*pi/4"), UNK, None),
+        ("(-1-i)^4 = 4 with the [0, 2pi) arg step", ev("(-1 - I)**4", dod=C),
+         sol("4", [("eq", "arg(-1 - I) = 5*pi/4"), ("eq", "(-1 - I)**4 = 4")]), NO, ["unknown", "refuted"]),
+        ("arg(-1-i) = 5pi/4 from the principal value", ev("arg(-1 - I)", dod=C),
+         sol("5*pi/4", [("eq", "arg(-1 - I) = -3*pi/4"), ("eq", "-3*pi/4 + 2*pi = 5*pi/4")]), UNK, None),
+        ("arg(-1-i) = -3pi/4 from the [0, 2pi) value", ev("arg(-1 - I)", dod=C),
+         sol("-3*pi/4", [("eq", "arg(-1 - I) = 5*pi/4"), ("eq", "5*pi/4 - 2*pi = -3*pi/4")]), UNK, None),
+        ("arg(1-i) = 7pi/4 from the principal value", ev("arg(1 - I)", dod=C),
+         sol("7*pi/4", [("eq", "arg(1 - I) = -pi/4")]), UNK, None),
+        ("arg(-1-i) = pi/4 with a principal step (wrong)", ev("arg(-1 - I)", dod=C),
+         sol("pi/4", [("eq", "arg(-1 - I) = -3*pi/4")]), NO, ["unknown"]),
+        ("MC [0, 2pi) options: C 5pi/4", ev("arg(-1 - I)", dod=C, options=o02), sol("5*pi/4", option="C"), OK, None),
+        ("MC [0, 2pi) options: A pi/4 (wrong)", ev("arg(-1 - I)", dod=C, options=o02), sol("pi/4", option="A"), NO, None),
+        ("MC (-pi, pi] options: A -3pi/4", ev("arg(-1 - I)", dod=C, options=opp), sol("-3*pi/4", option="A"), OK, None),
+        ("MC (-pi, pi] options: C pi/4 (wrong)", ev("arg(-1 - I)", dod=C, options=opp), sol("pi/4", option="C"), NO, None),
+        ("MC both values: B 5pi/4", ev("arg(-1 - I)", dod=C, options=both), sol("5*pi/4", option="B"), UNK, None),
+        ("MC 'Hiçbiri': C 5pi/4", ev("arg(-1 - I)", dod=C, options=dict(o02, E="Hiçbiri")), sol("5*pi/4", option="C"),
+         UNK, None),
+        ("MC degrees: C 225°", ev("arg(-1 - I)", dod=C, options=deg), sol("225°", option="C"), NOTOK, None),
+        ("MC arg(1 - sqrt3 i), [0, 2pi): D 5pi/3", ev("arg(1 - sqrt(3)*I)", dod=C,
+                                                     options={"A": "pi/3", "B": "2*pi/3", "C": "4*pi/3", "D": "5*pi/3",
+                                                              "E": "pi/6"}), sol("5*pi/3", option="D"), OK, None),
+    ]
+
+
 GROUPS = {"B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "K": cases_k, "R": cases_r, "P": cases_p,
-          "G": cases_g}
+          "G": cases_g, "X": cases_x, "M": cases_m}
 
 
 def _statuses_ok(want, got):
@@ -386,7 +478,7 @@ def _statuses_ok(want, got):
     return all(g in want for g in got)
 
 
-def main(out_path=None, groups="BCDEKRPG"):
+def main(out_path=None, groups="BCDEKRPGXM"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -424,5 +516,5 @@ def main(out_path=None, groups="BCDEKRPG"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "BCDEKRPG"
+    grp = args[1] if len(args) > 1 else "BCDEKRPGXM"
     sys.exit(1 if main(out, grp) else 0)

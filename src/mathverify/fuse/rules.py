@@ -169,11 +169,11 @@ _NOT_PROVEN_FLAGS = {"cas_failed", "cas_unreliable", "cas_timeout", "completenes
                      "relative_tolerance_undecided", "z3_unsupported", "condition_unsolved", "unsupported_task_kind",
                      "l4_undecided", "l4_disagree_uncertified", "l5_inconclusive", "l5_method_failed", "lean_unproved",
                      "lean_audit_failed", "lean_unavailable", "critic_cannot_judge", "critic_unavailable",
-                     "ir_unavailable", "solver_family_unknown"}
+                     "ir_unavailable", "solver_family_unknown", "arg_reading_undecided"}
 # what a layer notes, no abstention: the scope of a verdict, a notation read, the pipeline's steps, a layer's own result
 _NOTE_FLAGS = {"answer_from_option_letter", "answer_level_only", "steps_not_checked", "payload_cleaned",
                "payload_notation_normalized", "naturals_readings_agree", "domain_list_readings_agree",
-               "arg_readings_agree", "arg_range_declared", "ir_extracted",
+               "arg_readings_agree", "arg_range_declared", "arg_range_from_options", "ir_extracted",
                "ir_repaired_once", "ir_repaired_twice", "roundtrip_borderline", "restructure_deterministic_only",
                "l4_agree", "l4_confirms_refutation", "l5_method_ok", "lean_proved", "critic_clean",
                "critic_overruled_by_certificate", "calibrated_below_threshold", "layer_contradiction", "step_refuted"}

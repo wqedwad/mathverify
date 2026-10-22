@@ -1235,7 +1235,10 @@ def _verify_arg_readings(problem_ir: ProblemIR | dict, solution: Solution | dict
     """`_verify_layers_read`, with a problem or solution that writes arg read both ways: SymPy's principal value in
     (-pi, pi] and the curriculum's [0, 2*pi) (`normalize.parse.arg_reading`). The verdict when the two readings agree
     (arg(1 + i) = pi/4; pi/4 for arg(-1 - i) is wrong in both), UNKNOWN when they do not: 5*pi/4 for arg(-1 - i) was
-    refuted, -3*pi/4 certified (A+ final attack, SON-G3-RK-3)."""
+    refuted, -3*pi/4 certified (A+ final attack, SON-G3-RK-3). A range the problem writes decides: its givens hold
+    under one reading only, or its options hold the value of one reading only (`_arg_options_reading`). Two
+    INCORRECTs agree only on a failure of both readings (`_incorrect_in_both`); a reading that decides nothing
+    (UNKNOWN) against one that does is no convention but an unproved reading (son-sayisal audit, second round)."""
     import copy
     from .normalize.parse import arg_reading
     try:
@@ -1248,18 +1251,133 @@ def _verify_arg_readings(problem_ir: ProblemIR | dict, solution: Solution | dict
     if ir_d is None or not _writes_arg(ir_d, sol_d):
         return _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
     layers, flags = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
-    with arg_reading("zero_two_pi"):
-        layers_b, flags_b = _verify_layers_read(ir_d, sol_d, seed, timeout, run_steps)
+    with arg_reading("zero_two_pi", at=_arg_point(ir_d)):
+        layers_b, flags_b = _verify_layers_read(copy.deepcopy(ir_d), sol_d, seed, timeout, run_steps)
     f_a, f_b = fuse(layers, extra_flags=flags), fuse(layers_b, extra_flags=flags_b)
     inconsistent_a, inconsistent_b = "ir_inconsistent" in f_a["flags"], "ir_inconsistent" in f_b["flags"]
     if inconsistent_a != inconsistent_b:
         # the givens hold under one reading only (0 <= arg(z) < 2*pi with Im z < 0): the problem writes its range
         return (layers_b, flags_b + ["arg_range_declared"]) if inconsistent_a else (layers, flags + ["arg_range_declared"])
+    by_options = _arg_options_reading(ir_d)
+    if by_options is not None:
+        # the options hold the value of one reading only: the question writes its range there (RK-SAY-3)
+        return (layers_b, flags_b + ["arg_range_from_options"]) if by_options == "b" \
+            else (layers, flags + ["arg_range_from_options"])
     v_a, v_b = f_a["verdict"], f_b["verdict"]
+    if v_a == v_b == "INCORRECT":
+        both = _incorrect_in_both(layers, layers_b)
+        if both is None:
+            return [unknown("intake.convention", "arg_convention: INCORRECT in each arg reading, each time on a "
+                            "statement of the other reading's arg alone", flags=["arg_convention"])], flags
+        return both, flags + ["arg_readings_agree"]
     if v_a == v_b:
         return layers, flags + ["arg_readings_agree"]
+    if "UNKNOWN" in (v_a, v_b):
+        return [unknown("intake.convention", f"arg_reading_undecided: with arg in (-pi, pi] {v_a}, with arg in "
+                        f"[0, 2pi) {v_b}", flags=["arg_reading_undecided"])], flags
     return [unknown("intake.convention", f"arg_convention: with arg in (-pi, pi] {v_a}, with arg in [0, 2pi) {v_b}",
                     flags=["arg_convention"])], flags
+
+
+def _arg_point(ir_d: dict) -> dict:
+    """{variable name: closed number}: the point of a pointwise task (a derivative at a point, a limit at a finite
+    point), where the [0, 2*pi) reading's shift of an arg is locally constant (`normalize.parse.arg_reading`)."""
+    from .normalize.parse import parse_expr_str
+    task = ir_d.get("task") if isinstance(ir_d, dict) else None
+    p = (task or {}).get("params") or {}
+    kind = (task or {}).get("kind")
+    pt = p.get("at") if kind == "derivative" else p.get("to") if kind == "limit" else None
+    var = p.get("var")
+    if pt is None or not isinstance(var, str) or isinstance(pt, bool):
+        return {}
+    try:
+        v = parse_expr_str(str(pt))
+    except Exception:  # noqa: BLE001 - not a point: no resolution
+        return {}
+    if not isinstance(v, sp.Expr) or not v.is_number or v.has(sp.oo, -sp.oo, sp.zoo, sp.nan):
+        return {}
+    return {var: v}
+
+
+_UNIT_MARK = re.compile(r"°|\\circ|\bdeg|derece", re.IGNORECASE)      # a degree option: G1RK-3's units
+
+
+def _arg_options_reading(ir_d: dict) -> str | None:
+    """"a" ((-pi, pi]) or "b" ([0, 2*pi)) when every option of an evaluate task reads as a number and the options hold
+    the value of exactly one reading: the question writes its range there, as givens do (RK-SAY-3; `A) pi/4 ...
+    E) 3*pi/2` for arg(-1 - i)). None otherwise: an option that is no number ("Hiçbiri"), both values or neither
+    among the options, a value not read; an option with a unit (degrees) is the unit decision's (G1RK-3)."""
+    from .equiv.numeric import exact_equal
+    from .normalize.parse import arg_reading, parse_expr_str
+    task = ir_d.get("task") or {}
+    opts = ir_d.get("options")
+    expr = (task.get("params") or {}).get("expr")
+    if task.get("kind") != "evaluate" or not isinstance(opts, dict) or not opts or not isinstance(expr, str):
+        return None
+    if any(not isinstance(o, (str, int)) or isinstance(o, bool) or _UNIT_MARK.search(str(o)) for o in opts.values()):
+        return None
+    try:
+        values = [parse_expr_str(str(o)) for o in opts.values()]
+        va = parse_expr_str(expr)
+        with arg_reading("zero_two_pi"):
+            vb = parse_expr_str(expr)
+    except Exception:  # noqa: BLE001 - an option or the value not read: no range from the options
+        return None
+    if not all(isinstance(v, sp.Expr) and v.is_number for v in values + [va, vb]):
+        return None
+    held = []
+    for v in (va, vb):
+        eq = [exact_equal(v, o) for o in values]
+        if None in eq and True not in eq:
+            return None
+        held.append(True in eq)
+    if held == [True, False]:
+        return "a"
+    if held == [False, True]:
+        return "b"
+    return None
+
+
+def _incorrect_in_both(layers_a: list[LayerResult], layers_b: list[LayerResult]) -> list[LayerResult] | None:
+    """Two INCORRECT readings that share a failure independent of the convention: a layer failing in both readings
+    (the answer's certificate, an option's consistency) or a step refuted in both. The layers of the first reading
+    with what fails in it alone withdrawn: a step refuted in one reading only is "unknown", and the first bad step
+    is the first refuted in both. None without such a failure: each reading refuted a statement of the other's arg
+    alone, 5*pi/4 for arg(-1 - i) reached from the principal -3*pi/4 by a step was INCORRECT in both readings
+    (RK-SAY-2), and the right [0, 2*pi) step was shown refuted, the first bad step (RK-ARG-STEP)."""
+    from dataclasses import replace
+
+    def failing(ls):
+        return {la.layer for la in ls if la.hard and la.verdict == "fail" and la.layer != "steps.refute"}
+
+    def statuses(ls):
+        st = next((la for la in ls if la.layer == "steps.refute"), None)
+        return {e.get("index"): e.get("status") for e in ((st.evidence or {}).get("steps", []) if st else [])}
+
+    common = failing(layers_a) & failing(layers_b)
+    sa, sb = statuses(layers_a), statuses(layers_b)
+    both = sorted(i for i, s_ in sa.items() if s_ == "refuted" and sb.get(i) == "refuted")
+    if not common and not both:
+        return None
+    out = []
+    for la in layers_a:
+        if la.layer == "steps.refute":
+            ev = json.loads(json.dumps(la.evidence, default=str))
+            for e in ev.get("steps", []):
+                if (e.get("status") == "refuted") != (sb.get(e.get("index")) == "refuted") \
+                        and "refuted" in (e.get("status"), sb.get(e.get("index"))):
+                    e["status"] = "unknown"
+                    e["arg_convention"] = "refuted in one arg reading only"
+            ev["n_refuted"] = sum(e.get("status") == "refuted" for e in ev.get("steps", []))
+            if both:
+                la = replace(la, evidence=ev, first_bad_step=both[0])
+            else:
+                la = unknown(la.layer, "no_step_refuted_in_both_arg_readings", la.latency_ms, ev)
+        elif la.hard and la.verdict == "fail" and la.layer not in common:
+            la = unknown(la.layer, "fails in one arg reading only: a convention", la.latency_ms, la.evidence,
+                         flags=["arg_convention"])
+        out.append(la)
+    return out
 
 
 def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,

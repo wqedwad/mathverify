@@ -939,35 +939,49 @@ _ARG_READING: contextvars.ContextVar = contextvars.ContextVar("arg_reading", def
 
 
 class arg_reading:  # noqa: N801 - used as a context manager
-    """Within it, arg is read in [0, 2*pi) ("zero_two_pi") instead of SymPy's (-pi, pi]."""
+    """Within it, arg is read in [0, 2*pi) ("zero_two_pi") instead of SymPy's (-pi, pi]. `at` ({variable name: closed
+    number}) is the point of a pointwise task (a derivative at a point, a limit at a finite point): there the 2*pi
+    shift of an arg of a variable is resolved by the certified sign of the imaginary part AT the point, where it is
+    locally constant (son-sayisal audit, RK-SAY-1: the Piecewise left standing decided nothing, and the derivative
+    1/2 of arg(1 + x*i) at 1, the same in both readings, fell to UNKNOWN)."""
 
-    def __init__(self, which: str):
+    def __init__(self, which: str, at: dict | None = None):
         if which != "zero_two_pi":
             raise ValueError(which)
-        self.which = which
+        self.which, self.at = which, dict(at or {})
 
     def __enter__(self):
-        self._token = _ARG_READING.set(self.which)
+        self._tokens = (_ARG_READING.set(self.which), _ARG_POINT.set(self.at))
         return self
 
     def __exit__(self, *exc) -> None:
-        _ARG_READING.reset(self._token)
+        _ARG_POINT.reset(self._tokens[1])
+        _ARG_READING.reset(self._tokens[0])
+
+
+_ARG_POINT: contextvars.ContextVar = contextvars.ContextVar("arg_point", default={})
 
 
 def _arg_in_zero_two_pi(u, a):
     """arg(u) in [0, 2*pi): SymPy's value `a`, 2*pi above it where the imaginary part of u is negative; for a number
-    whose imaginary part has no certified sign, no reading (ParseError)."""
+    whose imaginary part has no certified sign, no reading (ParseError). An arg of variables is a Piecewise, resolved
+    at the point of a pointwise task (`arg_reading`) where the imaginary part has a certified nonzero sign there."""
+    from ..equiv.numeric import certified_sign
     im_u = sp.im(u)
     if im_u.is_zero is True:
         return a
     if not getattr(u, "free_symbols", None):
-        from ..equiv.numeric import certified_sign
         s = certified_sign(im_u)
         if s == -1:
             return a + 2 * sp.pi
         if s in (0, 1):
             return a
         raise ParseError(f"arg({u}): the sign of its imaginary part is not certified, no reading in [0, 2*pi)")
+    at = _ARG_POINT.get()
+    if at and all(s_.name in at for s_ in u.free_symbols):
+        s = certified_sign(im_u.xreplace({s_: at[s_.name] for s_ in u.free_symbols}))
+        if s in (-1, 1):
+            return a + 2 * sp.pi if s == -1 else a
     return sp.Piecewise((a + 2 * sp.pi, sp.StrictLessThan(im_u, 0)), (a, True))
 
 

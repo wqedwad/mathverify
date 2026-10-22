@@ -23,6 +23,7 @@ from ..equiv import answers_equivalent
 from ..equiv.numeric import certified_sign, num_equal, to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
+from ..sandbox.pool import CasResult
 from ..sandbox.exactsets import at_risk, exact_solveset
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 
@@ -94,6 +95,8 @@ def _kinks(f, var, region, timeout) -> tuple[list, bool]:
             r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(u, 0), var, region, timeout=timeout)
             if r.ok and (r.value is S.EmptySet or isinstance(r.value, FiniteSet)):
                 pts += [p for p in r.value if p.is_number and p.is_real]
+                # a point of undecided realness is not dropped from a complete list (SS-YO-1)
+                complete = complete and all(p.is_number and p.is_real is True for p in r.value)
             else:
                 complete = False
     return list(dict.fromkeys(pts)), complete
@@ -167,6 +170,10 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
     f = sp.sympify(f)
     is_max = which in ("max", "argmax")
     r = sb_run("mathverify.sandbox.ops:critical_points", f, var, interval, timeout=timeout)
+    if r.ok and r.value is None:
+        # not found whole: never complete. The zeros are rd's very set (`ops.critical_points`), not a raw solveset's
+        # partial list beside it (SS-YO-1)
+        r = CasResult(ok=False, error="critical points not found whole")
     cands = list(r.value) if r.ok else []
     rd = sb_run("mathverify.sandbox.ops:solveset_in", _classical(sp.diff(f, var)), var, interval, timeout=timeout)
     kinks, kinks_complete = _kinks(f, var, interval, timeout)
@@ -356,14 +363,14 @@ def certify_local_extremum(f, var, domain: sp.Set, which: str, claimed, timeout:
     if not kc:
         ev["reason"] = "non_differentiable_points_not_enumerated"
         return None, ev
-    cps = [c for c in rd.value if c.is_real] + kinks
     rs = sb_run("mathverify.sandbox.ops:critical_points", f, var, region, timeout=timeout)
-    if not rs.ok:
+    if not rs.ok or rs.value is None:
         ev["reason"] = "critical_points_failed"
         return None, ev
-    for c in rs.value:
-        if c.is_number and c.is_real:
-            cps.append(c)
+    if not all(c.is_number and c.is_real is True for c in list(rd.value) + list(rs.value)):
+        ev["reason"] = "critical_point_realness_undecided"     # not dropped from a complete list (SS-YO-1)
+        return None, ev
+    cps = list(rd.value) + kinks + list(rs.value)
     cps = sorted(dict.fromkeys(cps), key=lambda c: float(c))
     ev["critical_points"] = [str(c) for c in cps]
     lo = region.inf if region.inf != -oo else None
