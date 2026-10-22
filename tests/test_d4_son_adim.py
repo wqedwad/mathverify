@@ -251,6 +251,52 @@ def test_sa_rk7_the_root_of_a_denominator_is_a_critical_point(e, answer, steps):
     assert r.verdict == "CORRECT" and _statuses(r)[-1] == "unknown"
 
 
+RESTATED = ["(x + 1)/(x - 2) - 2 >= 0", "(5 - x)/(x - 2) >= 0", "(x - 5)/(x - 2) <= 0", "-(x - 5)/(x - 2) >= 0",
+            "(10 - 2*x)/(2*x - 4) >= 0", "(2*x - 10)/(x - 2) <= 0", "(15 - 3*x)/(3*x - 6) >= 0", "(3*x - 15)/(x - 2) <= 0",
+            "(x - 5)/(2*x - 4) <= 0", "(20 - 4*x)/(x - 2) >= 0", "(5 - x)/(x - 2) + 0 >= 0", "(x - 5)/(x - 2) - 0 <= 0"]
+
+
+def test_t2_rk4_restatements_take_one_choice_together():
+    """Each step restating the inequality was one more inequality inside which 'x - 5 = 0' holds nowhere, its numerator
+    and denominator chosen apart: 2**13 lists, 265 s for one step (second audit of the branch, T2-RK-4). Restatements
+    with the same critical roots choose together: two lists, whatever their number."""
+    import time
+    from mathverify.steps import deterministic as d
+    calls = []
+    orig = d._boundary_region
+
+    def counting(*a, **k):
+        calls.append(1)
+        return orig(*a, **k)
+    d._boundary_region = counting
+    try:
+        t0 = time.monotonic()
+        r = verify(_ineq("(x + 1)/(x - 2) >= 2"), _sol("Interval.Lopen(2, 5)", "interval",
+                                                       [("eq", f) for f in RESTATED] + [("eq", "x - 5 = 0")]))
+        took = time.monotonic() - t0
+    finally:
+        d._boundary_region = orig
+    assert r.verdict == "CORRECT" and _statuses(r)[-1] == "unknown"
+    assert len(calls) <= 2 and took < 60, (len(calls), took)
+
+
+def test_t2_rk4_too_many_choices_read_no_boundary():
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    from mathverify.steps import deterministic as d
+    ctx = make_ctx(ProblemIR.from_dict(_ineq("x**2 < 1")))
+    x = ctx.ns["x"]
+    prem = [sp.Lt((x - 2*k - 1)/(x - 2*k - 2), 0) for k in range(5)]        # five apart: (1, 2), (3, 4), ...
+    calls = []
+    orig = d._boundary_region
+    d._boundary_region = lambda *a, **k: calls.append(1) or orig(*a, **k)
+    try:
+        assert d._boundary_premises(sp.Eq(x, 100), prem, prem, ctx) is None
+    finally:
+        d._boundary_region = orig
+    assert calls == []                                    # 2**5 > _BOUNDARY_CHOICES: none built
+
+
 def test_sa_rk7_a_root_of_the_denominator_outside_a_given_is_no_boundary():
     q = _ir("solve_inequality", {"inequality": "(x - 1)/(x + 2) >= 0", "var": "x"}, ["x > 0"], shape="set")
     r = verify(q, _sol("Interval(1, oo)", "interval", [("eq", "x = -2")]))
@@ -272,8 +318,7 @@ def _mc(q, opts):
 
 
 @pytest.mark.parametrize("q,s", [
-    (_mc(INC, PCT), _sol("20", option="B")), (_mc(INC, PCT), _sol("%20", option="B")), (_mc(INC, PCT), _sol(None, option="B")),
-    (INC, _sol("%20")), (INC, _sol("20%")), (INC, _sol("20\\%")),
+    # INC ((p2 - p1)/p1*100) counts in percent, proved: one marked number there is the plain number (EK 8; below)
     (_mc(TRI, DEG), _sol("30", option="B")), (_mc(TRI, DEG), _sol("30°", option="B")), (_mc(TRI, DEG), _sol(None, option="B")),
     (TRI, _sol("30°")), (TRI, _sol("30 derece")), (TRI, _sol("30^\\circ")),
     (_mc(HEX, OH), _sol("120", option="B")), (_mc(HEX, OH), _sol(None, option="B")),
@@ -478,6 +523,7 @@ def test_g1rk1_wordproblem_reads_the_options_as_the_claim():
     r = verify(_mc(LINU, CM), _sol("6", option="C"))
     wp = next(la for la in r.layers if la.layer == "certify.wordproblem")
     assert wp.verdict == "pass" and "ir_inconsistent" not in wp.flags
+    assert wp.evidence["z3"]["sat_options"] == ["C"]           # read, not carried as an unread option (SA2-YO-3)
 
 
 # ---------------------------------------------------------------- G1RK-8: 0**0 in a count
@@ -580,27 +626,93 @@ def test_g2yo7_the_claim_and_the_option_compared_within_the_declared_tolerance(q
 # ---------------------------------------------------------------- audit of the branch: SA-RK-4, SA-RK-5, SA-RK-6
 
 TRIU, INCU = dict(TRI, units="derece"), dict(INC, units="%")
+RATIO = _ir("evaluate", {"expr": "(p2 - p1)/p1"}, ["p1 = 50", "p2 = 60"], P12)            # 1/5, as the extractor writes %
+RATE = _ir("evaluate", {"expr": "r"}, ["1000*(1 + r) = 1200"], [{"name": "r", "domain": "positive_real"}])   # 1/5
+DEGV = _ir("evaluate", {"expr": "C"}, ["cos(pi*C/180) = 1/2", "0 < C", "C < 180"], [{"name": "C", "domain": "real"}])  # 60
 
 
 @pytest.mark.parametrize("q,s", [
-    (TRIU, _sol("30°")), (TRIU, _sol("30^\\circ")), (TRIU, _sol("30 derece")), (dict(TRI, units="°"), _sol("30°")),
-    (_mc(TRIU, DEG), _sol(None, option="B")), (_mc(TRIU, DEG), _sol("30", option="B")), (_mc(TRIU, DEG), _sol("30°", option="B")),
-    (INCU, _sol("%20")), (_mc(INCU, PCT), _sol(None, option="B")), (_mc(dict(INC, units="yüzde"), PCT), _sol("20", option="B")),
-    (TRIU, _sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 30°")])),
+    # the value proved to count in the unit, the claim or the option one marked number: the plain number (EK 8)
+    (INC, _sol("%20")), (INC, _sol("20%")), (INC, _sol("20\\%")), (INCU, _sol("%20")), (dict(INC, units="yüzde"), _sol("%20")),
+    (_mc(INC, PCT), _sol("20", option="B")), (_mc(INC, PCT), _sol("%20", option="B")), (_mc(INC, PCT), _sol(None, option="B")),
+    (_ir("evaluate", {"expr": "asin(1/2)*180/pi"}), _sol("30°")), (_mc(_ir("evaluate", {"expr": "180*acos(1/2)/pi"}), DEG),
+                                                                    _sol(None, option="B" if False else "E")),
+    (DEGV, _sol("60°")), (DEGV, _sol("60")), (_ir("evaluate", {"expr": "x"}, ["cos(deg(x)) = 1/2", "0 < x", "x < 90"]),
+                                              _sol("60^\\circ")),
 ])
-def test_sa_rk4_a_unit_the_ir_declares_is_read_as_the_plain_number(q, s):
+def test_ek8_one_marked_number_in_a_proved_unit_is_the_plain_number(q, s):
     r = verify(q, s)
-    assert r.verdict == "CORRECT", r.verdict
-    assert all(st != "refuted" for st in _statuses(r))
+    assert r.verdict == "CORRECT", (r.verdict, r.flags)
+
+
+@pytest.mark.parametrize("q,s", [
+    # not proved: units is free text (the extractor writes a percentage as a fraction, SymPy's angles are radians);
+    # the two readings decide apart, UNKNOWN (EK 8; the right '%20' and '180°' were INCORRECT, the wrong '%0.2' CORRECT)
+    (TRIU, _sol("30°")), (TRIU, _sol("30^\\circ")), (dict(TRI, units="°"), _sol("30°")), (_mc(TRIU, DEG), _sol(None, option="B")),
+    (dict(RATIO, units="%"), _sol("%20")), (dict(RATE, units="%"), _sol("%20")), (dict(RATE, units="%"), _sol("%0.2")),
+    (dict(RATE, units="yüzde"), _sol("%0.2")), (_mc(dict(RATE, units="%"), PCT), _sol(None, option="B")),
+    (dict(_ir("evaluate", {"expr": "atan(1) + atan(2) + atan(3)"}), units="derece"), _sol("180°")),
+    (dict(_ir("evaluate", {"expr": "2*asin(1/2)"}), units="derece"), _sol("60°")),
+    (dict(RATIO, units="%"), _sol("20\\%")),                           # LaTeX's percent is a mark too
+    # a mark inside an expression is a factor of it: read both ways even where the unit is proved
+    (INC, _sol("2*%10")),
+])
+def test_ek8_a_unit_not_proved_is_read_both_ways(q, s):
+    r = verify(q, s)
+    assert r.verdict == "UNKNOWN" and "unit_convention" in {f for la in r.layers for f in la.flags}, (r.verdict, r.flags)
 
 
 @pytest.mark.parametrize("q,s", [
     (TRIU, _sol("40°")), (_mc(TRIU, DEG), _sol(None, option="C")), (_mc(TRIU, DEG), _sol("30", option="C")),
-    (INCU, _sol("%25")), (_mc(INCU, PCT), _sol(None, option="C")),
+    (INCU, _sol("%25")), (_mc(INCU, PCT), _sol(None, option="C")), (INC, _sol("%0.2")), (DEGV, _sol("30°")),
     (TRIU, _sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 40°")])),
 ])
-def test_sa_rk4_a_wrong_answer_in_the_declared_unit_is_refuted(q, s):
+def test_ek8_a_wrong_answer_is_refuted_under_both_readings(q, s):
     assert verify(q, s).verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("q,steps", [
+    # a step reads its marks both ways, whatever unit the answer counts in: a right one is never refuted (T2-RK-1)
+    (INCU, [("compute", "60 - 50 = 10"), ("compute", "10/50 = %20")]), (INCU, [("compute", "%20 = 20/100")]),
+    (INC, [("eq", "p2 = p1 + %20*p1")]), (dict(TRI, units="derece"), [("eq", "6*x = 180"), ("eq", "x = 30"),
+                                                                     ("compute", "sin(30°) = 1/2")]),
+    (dict(DEGV, units="derece"), [("compute", "cos(60°) = 1/2"), ("eq", "C = 60")]),
+    (TRIU, [("eq", "6*x = 180"), ("eq", "x = 30°")]),
+])
+def test_ek8_a_right_step_with_a_mark_is_never_refuted(q, steps):
+    r = verify(q, _sol("60" if q.get("task", {}).get("params", {}).get("expr") == "C" else
+                       "30" if "x + 2*x" in str(q) else "20", steps=steps))
+    assert r.verdict == "CORRECT", (r.verdict, _statuses(r))
+    assert "refuted" not in _statuses(r)
+
+
+@pytest.mark.parametrize("q,steps", [
+    # refuted under both readings: refuted
+    (INCU, [("compute", "10/50 = %25")]), (TRIU, [("eq", "6*x = 180"), ("eq", "x = 40°")]),
+])
+def test_ek8_a_step_wrong_under_both_readings_is_refuted(q, steps):
+    r = verify(q, _sol("30" if q is TRIU else "20", steps=steps))
+    assert r.verdict == "INCORRECT" and _statuses(r)[-1] == "refuted"
+
+
+ABC = [{"name": n, "domain": "positive_real"} for n in "ABC"]
+
+
+@pytest.mark.parametrize("givens,target,payload,steps,wrong", [
+    (["A = 40", "B = C", "A + B + C = 180"], "B", "70", [("eq", "A = 40°"), ("eq", "B = C"), ("eq", "C = 2*B")], 2),
+    (["A = 50", "B = 60", "A + B + C = 180"], "C", "70", [("eq", "A = 50°"), ("eq", "A + B = 100")], 1),
+    (["A = 2*B", "C = 3*B", "A + B + C = 180"], "B", "30", [("eq", "A + B + C = 180°"), ("eq", "2*B + B + 3*B = 180°"),
+                                                           ("eq", "5*B = 180")], 2),
+])
+def test_sa2_yo1_a_step_read_both_ways_is_no_premise(givens, target, payload, steps, wrong):
+    """'A = 40°' (unknown: 2*pi/9 and 40 decide apart) joined the pool read as A = 2*pi/9 beside A = 40: the pool had no
+    point, and the wrong 'C = 2*B' after it was unknown; the solution was CORRECT (second audit, SA2-YO-1)."""
+    q = _ir("evaluate", {"expr": target}, givens, ABC)
+    r = verify(q, _sol(payload, steps=steps))
+    st = _statuses(r)
+    assert r.verdict == "INCORRECT" and st[wrong] == "refuted" and st[0] == "unknown", st
+    if target == "B" and "B = C" in str(steps):
+        assert st[1] == "verified"
 
 
 def test_sa_rk4_the_ir_own_mark_and_a_radian_measure_keep_the_unit():
@@ -610,6 +722,21 @@ def test_sa_rk4_the_ir_own_mark_and_a_radian_measure_keep_the_unit():
     # a radian measure: 30° is pi/6 whatever units says (SA-RK-5)
     acute = _ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"])
     assert verify(dict(acute, units="derece"), _sol("30°")).verdict == "CORRECT"
+
+
+def test_ek8_the_mechanism():
+    from mathverify.certify.base import make_ctx
+    from mathverify.ir import ProblemIR
+    from mathverify.normalize.parse import single_marked_number as one
+
+    def counted(q):
+        return make_ctx(ProblemIR.from_dict(q)).counted_unit_marks()
+    assert counted(INC) == {"%"} and counted(INCU) == {"%"} and counted(RATIO) == set() and counted(dict(RATIO, units="%")) == set()
+    assert counted(_ir("evaluate", {"expr": "asin(1/2)*180/pi"})) == {"°"} and counted(DEGV) == {"°"}
+    assert counted(TRIU) == set() and counted(_ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"])) == set()
+    assert counted(_ir("evaluate", {"expr": "%20*50"})) == set()                    # a factor 1/100, not 100
+    assert one("%20") == ("%", "20") and one("\\boxed{30^\\circ}") == ("°", "30") and one("-4%") == ("%", "-4")
+    assert one("2*%10") is None and one("sin(30°)") is None and one("%0,2") is None and one("30") is None
 
 
 @pytest.mark.parametrize("q,s,verdict", [
@@ -652,6 +779,34 @@ def test_sa_rk5_the_mechanism():
 ])
 def test_sa_rk6_an_option_naming_no_value_is_outside_the_window(q, s, verdict):
     assert verify(q, s).verdict == verdict
+
+
+@pytest.mark.parametrize("options,payload,letter,verdict", [
+    # a decimal comma, a range, another kind: undecided in the window, never outside it (SA2-YO-2): √99 = 9.9499 has
+    # 10 and 9,95 within 1%
+    ({"A": "9", "B": "9,5", "C": "9,95", "D": "10", "E": "10,5"}, "10", "D", "UNKNOWN"),
+    ({"A": "9", "B": "9,5", "C": "9,95", "D": "10", "E": "10,5"}, None, "D", "UNKNOWN"),
+    ({"A": "9", "B": "[9, 11]", "C": "11", "D": "10", "E": "12"}, "10", "D", "UNKNOWN"),
+    ({"A": "9", "B": "9–11", "C": "11", "D": "10", "E": "12"}, "10", "D", "UNKNOWN"),
+    ({"A": "9", "B": "9.5", "C": "9.95", "D": "10", "E": "10.5"}, "10", "D", "UNKNOWN"),          # control: two read
+    ({"A": "9", "B": "8", "C": "11", "D": "10", "E": "12"}, "10", "D", "CORRECT"),                 # control: one
+    # 'Hiçbiri' written every way: no value, outside (T2-RK-6)
+])
+def test_sa2_yo2_an_option_not_read_as_a_number_is_undecided_in_the_window(options, payload, letter, verdict):
+    q = _ir("evaluate", {"expr": "sqrt(99)", "rel_tol": "0.01"}, options=options)
+    assert verify(q, _sol(payload, option=letter)).verdict == verdict
+
+
+@pytest.mark.parametrize("meta", ["Yukarıdakilerden hiçbiri", "HİÇBİRİ", "Hiçbiri değil", "Hiçbiri değildir", "Bilinemez",
+                                  "Belirsiz", "YUKARIDAKİLERİN HİÇBİRİ", "hicbiri"])
+def test_t2_rk6_a_meta_option_written_any_way_is_outside_the_window(meta):
+    q = _tol({"A": "7.07", "B": "7.5", "C": "8", "D": "6.5", "E": meta})
+    assert verify(q, _sol("7.07", option="A")).verdict == "CORRECT"
+
+
+def test_t2_rk6_not_meta():
+    from mathverify.verifier import _meta_option
+    assert not any(_meta_option(t) for t in ("7 ile 8 arasında", "5√2", "Tanımsız", "0", "Hiç"))
 
 
 def test_sa_rk6_the_window_is_read_once():
@@ -727,6 +882,47 @@ def test_sa_yo1_options_not_read_say_nothing_about_the_ir():
     r = verify(_mc(_ir("evaluate", {"expr": "a"}, ["a = 3*2"], [{"name": "a", "domain": "real"}]),
                    {"A": "4", "B": "5", "C": "8"}), _sol("6"))
     assert r.verdict == "UNKNOWN" and "ir_inconsistent" in r.flags
+
+
+@pytest.mark.parametrize("givens,options,payload", [
+    (["t = 1/6 + 1/12"], {"A": "3 gün", "B": "4 gün", "C": "5 gün", "D": "6 gün", "E": "8 gün"}, "1/4"),
+    (["t = 3*2"], {"A": "4 cm", "B": "8 cm", "C": "10 cm"}, "6"),
+])
+def test_sa2_yo3_options_not_read_must_carry_the_claim(givens, options, payload):
+    """A mis-formulated IR (t = 1/6 + 1/12 for 'together in how many days', answer 4) and the claim 1/4 that fits it:
+    no option's number is 1/4, so the IR is no formulation of the question the options answer (ir_inconsistent), never
+    CORRECT (e65a8b4 had opened it; second audit of the branch, SA2-YO-3)."""
+    q = _mc(_ir("evaluate", {"expr": "t"}, givens, [{"name": "t", "domain": "positive_real"}]), options)
+    r = verify(q, _sol(payload))
+    assert r.verdict == "UNKNOWN" and "ir_inconsistent" in r.flags, (r.verdict, r.flags)
+
+
+def test_sa2_yo3_the_leading_number():
+    from mathverify.certify.wordproblem import _leading_number as lead
+    assert lead("6 cm") == 6 and lead("1/2 saat") == sp.Rational(1, 2) and lead("4") == 4 and lead("-3 °C") == -3
+    assert lead("6π cm²") is None and lead("6√2 cm") is None and lead("1,5 saat") is None and lead("cm 6") is None
+    assert lead("1/0 x") is None
+
+
+XEQ = {"A": "x = 4", "B": "x = 6", "C": "x = 8", "D": "x = 9"}
+
+
+@pytest.mark.parametrize("q,s,verdict", [
+    # one value asked for: the option 'x = 6' names 6 (T2-RK-3; read as {{6}} it vetoed the right letter)
+    (_mc(_ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"}), XEQ), _sol("6", option="B"), "CORRECT"),
+    (_mc(_ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"}), XEQ), _sol(None, option="B"), "CORRECT"),
+    (_mc(_ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"}),
+         {"A": "x=4", "B": "x=6", "C": "x=8", "D": "x=9"}), _sol("6", option="B"), "CORRECT"),
+    (_mc(_ir("solve_equation", {"equation": "sqrt(x + 2) = 3", "var": "x"}),
+         {"A": "x = 1", "B": "x = 7", "C": "x = 9", "D": "x = 11"}), _sol("7", option="B"), "CORRECT"),
+    (_mc(_ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"}), {"A": "{4}", "B": "{6}"}), _sol("6", option="B"),
+     "CORRECT"),                                          # the reader's Python set {6} is the set {6}
+    (_mc(_ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"}), XEQ), _sol("6", option="A"), "INCORRECT"),
+    (_mc(_ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"}), XEQ), _sol(None, option="C"), "INCORRECT"),
+    (_mc(_ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"}), XEQ), _sol("x = 6", option="B"), "UNKNOWN"),
+])
+def test_t2_rk3_an_option_naming_one_value_of_the_variable(q, s, verdict):
+    assert verify(q, s).verdict == verdict
 
 
 @pytest.mark.parametrize("opt", ["{x}", "x"])

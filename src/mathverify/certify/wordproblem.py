@@ -6,6 +6,7 @@ reasoning; >= 2 sat -> IR incomplete; 0 sat -> IR wrong / inconsistent question.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import sympy as sp
@@ -26,8 +27,28 @@ def _check(constraints, syms_info, extra, timeout_ms):
     return r.value
 
 
+# the number an option's text starts with, followed by a space or nothing ('6 cm', '1/2 saat', '3 gün'): not '6π cm²',
+# '6√2', a decimal comma (`_leading_number`)
+_LEADING_NUMBER = re.compile(r"^\s*([+-]?\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)?)(?=\s|$)")
+
+
+def _leading_number(text):
+    """The exact number `text` starts with (`_LEADING_NUMBER`), or None."""
+    m = _LEADING_NUMBER.match(str(text))
+    if m is None:
+        return None
+    try:
+        a, _, b = m.group(1).partition("/")
+        den = sp.Rational(b) if b else sp.Integer(1)
+        return None if den == 0 else sp.Rational(a) / den
+    except (ValueError, TypeError, ZeroDivisionError):
+        return None
+
+
 def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_value,
-                           options: dict[str, Any] | None = None, timeout_ms: int = 4000) -> dict[str, Any]:
+                           options: dict[str, Any] | None = None, timeout_ms: int = 4000,
+                           unread_carry: bool = False) -> dict[str, Any]:
+    """`unread_carry`: an option not read (None in `options`) starts with the claimed number ('6 cm' for 6)."""
     out: dict[str, Any] = {"status": "unknown", "claim_sat": None, "other_unsat": None,
                            "sat_options": [], "option_status": {}, "unsupported": None}
     givens = list(givens)
@@ -66,10 +87,12 @@ def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_va
         if any(v == "unknown" for v in out["option_status"].values()):
             out["status"] = "unknown"
             return out
-        if n == 0 and any(v == "unparsed" for v in out["option_status"].values()):
-            # no option READ is satisfiable, and one is not read ('6 cm' where the IR declares no unit: the option
-            # reader leaves it, audit of the branch SA-YO-1): the value may be that one. Nothing about the IR follows;
-            # the claim is decided on its own, as with no options
+        if n == 0 and unread_carry and any(v == "unparsed" for v in out["option_status"].values()):
+            # no option READ is satisfiable, and one not read ('6 cm' where the IR declares no unit: the option reader
+            # leaves it, audit of the branch SA-YO-1) starts with the claimed number: the value may be that one, and
+            # the claim is decided on its own, as with no options. When no unread option carries it, the IR is no
+            # formulation of the question the options answer (1/4 for 't = 1/6 + 1/12' beside '3 gün' ... '8 gün':
+            # CORRECT; second audit of the branch, SA2-YO-3): inconsistent, as before
             out["status"] = _claim_status(out)
             return out
         if n == 0:
@@ -262,7 +285,10 @@ def verify(ir, solution, ctx: Ctx):
                 for c in definedness_conditions(target, v):
                     if c not in cons:
                         cons.append(c)
-            cert = uniqueness_certificate(cons, target, syms_info, claimed, options)
+            carry = bool(options) and any(v is None and _leading_number(ir.options[k]) is not None
+                                          and sp.simplify(_leading_number(ir.options[k]) - claimed) == 0
+                                          for k, v in options.items())
+            cert = uniqueness_certificate(cons, target, syms_info, claimed, options, unread_carry=carry)
             ev.update({"target": str(target), "claimed": str(claimed), "constraints": [str(c) for c in cons], "z3": cert})
         else:  # solve_equation: each claimed root sat; all-other unsat (completeness by z3)
             var = ctx.sym(p.get("var", "x"))

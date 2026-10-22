@@ -1291,6 +1291,30 @@ def without_unit_marks(text: str, marks) -> str:
     if "%" in marks:
         text = _PCT_RE.sub(lambda m: m.group(1) or m.group(2), text.replace("\\%", ""))
     return text
+# a claim or an option that is nothing but one number with its unit mark ('30°', '%20', '20\\%', '30^\\circ',
+# '\\boxed{30^\\circ}', '30 derece'): the only text whose mark may be read as the plain number, and only where the IR's
+# value is proved to count in that unit (`Ctx.counted_unit_marks`; final attack, EK 8). A mark inside an expression
+# ('10/50 = %20', 'sin(30°)') is a factor of it
+_SINGLE_MARKED = (
+    ("%", re.compile(r"^(?P<s>[+-]?)\s*(?:%|\\%)\s*(?P<n>\d+(?:\.\d+)?)$|^(?P<s2>[+-]?)\s*(?P<n2>\d+(?:\.\d+)?)\s*(?:%|\\%)$")),
+    ("°", re.compile(r"^(?P<s>[+-]?)\s*(?P<n>\d+(?:\.\d+)?)\s*"
+                     r"(?:°|\bderece\b|\bdeg\b|(?:\^|\*\*)\s*(?:\{\s*\\circ\s*\}|\\circ)|\\degree)$")),
+)
+
+
+def single_marked_number(text) -> tuple[str, str] | None:
+    """(the mark, the plain number) when `text` is one number with its unit mark and nothing else (`_SINGLE_MARKED`)."""
+    if not isinstance(text, str):
+        return None
+    t = strip_presentation(_strip_invisible(text).strip()).strip()
+    for mark, rx in _SINGLE_MARKED:
+        m = rx.match(t)
+        if m:
+            g = m.groupdict()
+            return mark, f"{g.get('s') or g.get('s2') or ''}{g.get('n') or g.get('n2')}"
+    return None
+
+
 _SQRT_BARE_RE = re.compile(r"(sqrt|cbrt)\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)(?![\w(])")
 
 

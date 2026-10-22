@@ -32,6 +32,14 @@
              value) is that unit; an option word the IR's units does not name leaves it unread (SA-YO-1, SA-RK-3)
   N  SA-RK-6  with a declared tolerance, an option that names no value ('Hiçbiri', 'Belirlenemez') is outside the
              window; '7 ile 8 arasında' stays undecided; the window is read once from the certificate's value
+  -- third round (22 Oct 2026): the second independent audit (son-adim-t2), decisions EK 7/EK 8 --
+  P  EK 8     a claim or an option is read as the plain number only when it is one marked number AND the IR's value is
+             proved to count in that unit (×100, ×180/pi, angle(), a degree variable); units proves nothing; a step
+             reads its marks both ways and is refuted only under both (T2-RK-1/2, T2-OT-1, SA2-YO-4)
+  Q  SA2-YO-1 a step whose two readings decide apart joins no premise pool: the wrong step after it is refuted
+  R  SA2-YO-2/3, T2-RK-3/4/6  the tolerance window (a decimal comma, a range, a set undecided; 'Hiçbiri' written any
+             way outside), wordproblem's unread options must carry the claim, 'x = 6' names one value, restatements
+             choose together
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/adim/sonda.py [out.json] [groups]
@@ -184,11 +192,14 @@ def cases_b():
                                        ("hexagon interior", hexa, oh, "B", "C"), ("octagon exterior", octo, oo, "D", "E")):
         rv = opts[right].replace("%", "").replace("°", "")
         wv = opts[wrong].replace("%", "").replace("°", "")
+        # a percentage written as ×100 counts in percent, proved: one marked number is the plain number (third round,
+        # EK 8); an angle count from x + 2x + 3x = 180 or (n - 2)*180/n is not proved to be degrees: both readings
+        mark = OK if lab in ("increase", "discount", "profit") else UNK
         out += [
-            (f"{lab}: payload {rv}, right letter {opts[right]}", _mc(q, opts), sol(rv, option=right), UNK, None),
-            (f"{lab}: payload {opts[right]}, right letter", _mc(q, opts), sol(opts[right], option=right), UNK, None),
-            (f"{lab}: right letter only", _mc(q, opts), sol(None, option=right), UNK, None),
-            (f"{lab}: payload {opts[right]}, no options", q, sol(opts[right]), UNK, None),
+            (f"{lab}: payload {rv}, right letter {opts[right]}", _mc(q, opts), sol(rv, option=right), mark, None),
+            (f"{lab}: payload {opts[right]}, right letter", _mc(q, opts), sol(opts[right], option=right), mark, None),
+            (f"{lab}: right letter only", _mc(q, opts), sol(None, option=right), mark, None),
+            (f"{lab}: payload {opts[right]}, no options", q, sol(opts[right]), mark, None),
             (f"{lab}: payload {rv}, no options", q, sol(rv), OK, None),
             (f"{lab}: payload {wv}, its letter {opts[wrong]} (wrong)", _mc(q, opts), sol(wv, option=wrong), NO, None),
             (f"{lab}: payload {rv}, wrong letter {opts[wrong]}", _mc(q, opts), sol(rv, option=wrong), NO, None),
@@ -212,9 +223,10 @@ def cases_b():
         ("triangle: payload 30^\\circ (LaTeX)", tri, sol("30^\\circ"), UNK, None),
         ("triangle: payload 30^{\\circ} (LaTeX)", tri, sol("30^{\\circ}"), UNK, None),
         ("triangle: payload 40^\\circ (LaTeX, wrong)", tri, sol("40^\\circ"), NO, None),
-        ("increase: payload 20% (mark after)", _mc(inc, PCT), sol("20%", option="B"), UNK, None),
-        ("increase: payload 20\\% (LaTeX)", inc, sol("20\\%"), UNK, None),
-        ("increase: option '% 20', payload 20", _mc(inc, dict(PCT, B="% 20")), sol("20", option="B"), UNK, None),
+        ("increase: payload 20% (mark after)", _mc(inc, PCT), sol("20%", option="B"), OK, None),
+        ("increase: payload 20\\% (LaTeX)", inc, sol("20\\%"), OK, None),
+        ("increase: option '% 20', payload 20", _mc(inc, dict(PCT, B="% 20")), sol("20", option="B"), OK, None),
+        ("increase: payload 2*%10 (a mark inside an expression: both readings)", inc, sol("2*%10"), UNK, None),
         # the unit fixed by the question: decided as before
         ("synthetic_geometry angle(): 70 against 70° (25 Sep rule)", *_geo_angle("70", "D"), OK, None),
         ("synthetic_geometry angle(): 70° payload", *_geo_angle("70°", None), OK, None),
@@ -602,16 +614,18 @@ def cases_m():
     inc_u, inc_y = dict(inc, units="%"), dict(inc, units="yüzde")
     acute = ir("evaluate", {"expr": "x"}, ["sin(x) = 1/2", "0 < x", "x < pi/2"])
     return [
-        ("RK4 units derece: 30°", tri_u, sol("30°"), OK, None),
-        ("RK4 units derece: 30^\\circ", tri_u, sol("30^\\circ"), OK, None),
-        ("RK4 units derece: \\boxed{30^\\circ}", tri_u, sol("\\boxed{30^\\circ}"), OK, None),
-        ("RK4 units °: 30°", tri_d, sol("30°"), OK, None),
-        ("RK4 units derece: letter B 30°", _mc(tri_u, DEG), sol(None, option="B"), OK, None),
-        ("RK4 units derece: 30 letter B 30°", _mc(tri_u, DEG), sol("30", option="B"), OK, None),
+        # third round (EK 8): units is free text and proves nothing; x + 2x + 3x = 180 is no proved count of degrees
+        ("RK4 units derece: 30° (EK 8: both readings)", tri_u, sol("30°"), UNK, None),
+        ("RK4 units derece: 30^\\circ (EK 8)", tri_u, sol("30^\\circ"), UNK, None),
+        ("RK4 units derece: \\boxed{30^\\circ} (EK 8)", tri_u, sol("\\boxed{30^\\circ}"), UNK, None),
+        ("RK4 units °: 30° (EK 8)", tri_d, sol("30°"), UNK, None),
+        ("RK4 units derece: letter B 30° (EK 8)", _mc(tri_u, DEG), sol(None, option="B"), UNK, None),
+        ("RK4 units derece: 30 letter B 30° (EK 8)", _mc(tri_u, DEG), sol("30", option="B"), UNK, None),
         ("RK4 units %: %20", inc_u, sol("%20"), OK, None),
         ("RK4 units %: letter B %20", _mc(inc_u, PCT), sol(None, option="B"), OK, None),
         ("RK4 units yüzde: 20 letter B %20", _mc(inc_y, PCT), sol("20", option="B"), OK, None),
-        ("RK4 units derece: step x = 30°", tri_u, sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 30°")]), OK, VER),
+        ("RK4 units derece: step x = 30° (EK 8: both readings)", tri_u,
+         sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 30°")]), OK, NEITHER),
         ("RK4 units derece: 40° (wrong)", tri_u, sol("40°"), NO, None),
         ("RK4 units derece: letter C 40° (wrong)", _mc(tri_u, DEG), sol(None, option="C"), NO, None),
         ("RK4 units %: %25 (wrong)", inc_u, sol("%25"), NO, None),
@@ -627,9 +641,10 @@ def cases_m():
         ("RK5 cos x = 0 on (0, pi): {90°}", ir("solve_equation", {"equation": "cos(x) = 0", "var": "x"},
                                                vars_=[dict(X, constraints=["0 < x", "x < pi"])], shape="set"),
          sol("{90°}", "set"), OK, None),
-        ("RK5 degrees as pi*x/180: 30° read both ways", ir("evaluate", {"expr": "x"}, ["sin(pi*x/180) = 1/2", "0 < x",
-                                                                                         "x < 90"]),
-         sol("30°"), NOTOK, None),
+        # a count of degrees, proved (pi*x/180 inside sin): one marked number is the plain number (third round, EK 8)
+        ("RK5 degrees as pi*x/180: 30° is 30 (EK 8)", ir("evaluate", {"expr": "x"}, ["sin(pi*x/180) = 1/2", "0 < x",
+                                                                                     "x < 90"]),
+         sol("30°"), OK, None),
         ("RK3 option '1/2 saat' for 30 (minutes)", _mc(ir("evaluate", {"expr": "t"}, ["t = 60/2"],
                                                           [{"name": "t", "domain": "real"}]),
                                                        {"A": "20 dk", "B": "1/2 saat", "C": "45 dk"}),
@@ -660,11 +675,149 @@ def cases_n():
     ]
 
 
+# P/Q/R: third round (EK 8; the second independent audit, son-adim-t2) ---------------------------------------------
+def cases_p():
+    inc = ir("evaluate", {"expr": "(p2 - p1)/p1*100"}, ["p1 = 50", "p2 = 60"], P12)
+    inc_u = dict(inc, units="%")
+    ratio_u = dict(ir("evaluate", {"expr": "(p2 - p1)/p1"}, ["p1 = 50", "p2 = 60"], P12), units="%")
+    rate = ir("evaluate", {"expr": "r"}, ["1000*(1 + r) = 1200"], [{"name": "r", "domain": "positive_real"}])
+    rate_u = dict(rate, units="%")
+    tri_u = dict(ir("evaluate", {"expr": "x"}, ["x + 2*x + 3*x = 180"]), units="derece")
+    degv = ir("evaluate", {"expr": "C"}, ["cos(pi*C/180) = 1/2", "0 < C", "C < 180"], [{"name": "C", "domain": "real"}])
+    machin = dict(ir("evaluate", {"expr": "atan(1) + atan(2) + atan(3)"}), units="derece")
+    tri_geo = ir("synthetic_geometry", {"points": ["A", "B", "C"], "constraints": ["angle(A,B,C) = 90", "dist(A,C) = 10",
+                                                                                   "dist(B,C) = 5"],
+                                        "target": "angle(B,A,C)"}, vars_=[], units="derece")
+    return [
+        # claims and options: one marked number, the unit proved
+        ("P1 ×100: %20", inc_u, sol("%20"), OK, None),
+        ("P1 ×100: 20%", inc, sol("20%"), OK, None),
+        ("P1 ×100: letter %20 only", _mc(inc_u, PCT), sol(None, option="B"), OK, None),
+        ("P1 ×100: %25 (wrong)", inc_u, sol("%25"), NO, None),
+        ("P1 ×100: %0.2 (wrong)", inc, sol("%0.2"), NO, None),
+        ("P1 ×180/pi: asin(1/2)*180/pi, 30°", ir("evaluate", {"expr": "asin(1/2)*180/pi"}), sol("30°"), OK, None),
+        ("P1 degree variable cos(pi*C/180) = 1/2: 60°", degv, sol("60°"), OK, None),
+        ("P1 degree variable deg(x): 60^\\circ", ir("evaluate", {"expr": "x"}, ["cos(deg(x)) = 1/2", "0 < x", "x < 90"]),
+         sol("60^\\circ"), OK, None),
+        ("P1 degree variable: 30° (wrong)", degv, sol("30°"), NO, None),
+        # not proved: both readings, UNKNOWN where they decide apart (T2-RK-2, T2-OT-1, SA2-YO-4)
+        ("P2 fraction IR units %: %20", ratio_u, sol("%20"), UNK, None),
+        ("P2 fraction IR units %: letter %20", _mc(ratio_u, PCT), sol(None, option="B"), UNK, None),
+        ("P2 rate units %: %20", rate_u, sol("%20"), UNK, None),
+        ("P2 rate units %: %0.2 (wrong, never CORRECT)", rate_u, sol("%0.2"), UNK, None),
+        ("P2 rate units yüzde: %0.2", dict(rate, units="yüzde"), sol("%0.2"), UNK, None),
+        ("P2 rate: 0.2 (no mark)", rate_u, sol("0.2"), OK, None),
+        ("P2 atan1 + atan2 + atan3 units derece: 180°", machin, sol("180°"), UNK, None),
+        ("P2 2*asin(1/2) units derece: 60°", dict(ir("evaluate", {"expr": "2*asin(1/2)"}), units="derece"), sol("60°"),
+         UNK, None),
+        ("P2 acos(-1/2): 120° (an inverse trigonometric value: radians)", dict(ir("evaluate", {"expr": "acos(-1/2)"}),
+                                                                               units="derece"), sol("120°"), OK, None),
+        ("P2 triangle units derece: 40° (wrong under both)", tri_u, sol("40°"), NO, None),
+        # steps: both readings, refuted only under both (T2-RK-1)
+        ("P3 step 10/50 = %20", inc_u, sol("20", steps=[("compute", "60 - 50 = 10"), ("compute", "10/50 = %20")]), OK,
+         NEITHER),
+        ("P3 step %20 = 20/100", inc_u, sol("20", steps=[("compute", "%20 = 20/100")]), OK, NEITHER),
+        ("P3 step p2 = p1 + %20*p1", inc_u, sol("20", steps=[("eq", "p2 = p1 + %20*p1")]), OK, NEITHER),
+        ("P3 step (1 + %20)*(1 - %20) = 0.96", dict(ir("evaluate", {"expr": "((1 + 20/100)*(1 - 20/100) - 1)*100"}),
+                                                    units="%"),
+         sol("-4", steps=[("compute", "(1 + %20)*(1 - %20) = 0.96")]), OK, NEITHER),
+        ("P3 step sin(30°) = 1/2 (triangle, units derece)", tri_u,
+         sol("30", steps=[("eq", "6*x = 180"), ("eq", "x = 30"), ("compute", "sin(30°) = 1/2")]), OK, NEITHER),
+        ("P3 step cos(60°) = 1/2 (degree variable)", dict(degv, units="derece"),
+         sol("60", steps=[("compute", "cos(60°) = 1/2"), ("eq", "C = 60")]), OK, None),
+        ("P3 geometry angle(), units derece: step sin(30°) = 1/2", tri_geo,
+         sol("30", steps=[("compute", "5/10 = 1/2"), ("compute", "sin(30°) = 1/2")]), OK, None),
+        ("P3 step 50/250 = %0.2 (wrong as a unit, right as a number: unknown)",
+         dict(ir("evaluate", {"expr": "(300 - 250)/250*100"}), units="%"),
+         sol("20", steps=[("compute", "300 - 250 = 50"), ("compute", "50/250 = %0.2")]), OK, NEITHER),
+        ("P3 step 10/50 = %25 (wrong under both)", inc_u, sol("20", steps=[("compute", "10/50 = %25")]), NO, REF),
+        ("P3 step sin(30°) = 1/3 (wrong under both)", tri_u,
+         sol("30", steps=[("eq", "6*x = 180"), ("compute", "sin(30°) = 1/3")]), NO, REF),
+    ]
+
+
+def cases_q():
+    abc = [{"name": n, "domain": "positive_real"} for n in "ABC"]
+    q2 = ir("evaluate", {"expr": "B"}, ["A = 40", "B = C", "A + B + C = 180"], abc)
+    q1 = ir("evaluate", {"expr": "C"}, ["A = 50", "B = 60", "A + B + C = 180"], abc)
+    tri = ir("evaluate", {"expr": "B"}, ["A = 2*B", "C = 3*B", "A + B + C = 180"], abc)
+    pv = [{"name": n, "domain": "positive_real"} for n in ("a", "b", "r")]
+    pct = ir("evaluate", {"expr": "r"}, ["a = 50", "b = 60", "r = (b - a)/a*100"], pv)
+    return [
+        ("Q1 A = 40°, B = C, then wrong C = 2*B", q2, sol("70", steps=[("eq", "A = 40°"), ("eq", "B = C"),
+                                                                       ("eq", "C = 2*B")]), NO, REF),
+        ("Q1 A = 40°, B = C (right steps)", q2, sol("70", steps=[("eq", "A = 40°"), ("eq", "B = C")]), OK, VER),
+        ("Q1 A = 50°, then wrong A + B = 100", q1, sol("70", steps=[("eq", "A = 50°"), ("eq", "A + B = 100")]), NO, REF),
+        ("Q1 A + B + C = 180°, 6B = 180°, then wrong 5B = 180", tri,
+         sol("30", steps=[("eq", "A + B + C = 180°"), ("eq", "2*B + B + 3*B = 180°"), ("eq", "5*B = 180")]), NO, REF),
+        ("Q1 r = %20, then wrong b - a = 15", pct, sol("20", steps=[("eq", "r = %20"), ("eq", "b - a = 15")]), NO, REF),
+        ("Q1 control: no marks, wrong C = 2*B", q2, sol("70", steps=[("eq", "A = 40"), ("eq", "B = C"), ("eq", "C = 2*B")]),
+         NO, REF),
+    ]
+
+
+def cases_r():
+    def tol(expr, options, t="0.01"):
+        return ir("evaluate", {"expr": expr, "rel_tol": t}, options=options)
+    o99 = {"A": "9", "B": "9,5", "C": "9,95", "D": "10", "E": "10,5"}
+    xeq = {"A": "x = 4", "B": "x = 6", "C": "x = 8", "D": "x = 9"}
+    lin = ir("solve_equation", {"equation": "2*x + 3 = 15", "var": "x"})
+    days = ir("evaluate", {"expr": "t"}, ["t = 1/6 + 1/12"], [{"name": "t", "domain": "positive_real"}])
+    out = [
+        # SA2-YO-2: undecided in the window, never outside it
+        ("R1 √99: decimal comma 9,95 beside 10, letter 10", tol("sqrt(99)", o99), sol("10", option="D"), UNK, None),
+        ("R1 √99: letter 10 only", tol("sqrt(99)", o99), sol(None, option="D"), UNK, None),
+        ("R1 pi: 3,14 beside 22/7", tol("pi", {"A": "3", "B": "3,14", "C": "22/7", "D": "3,2", "E": "4"}),
+         sol("22/7", option="C"), UNK, None),
+        ("R1 √99: range 9–11 beside 10", tol("sqrt(99)", {"A": "9", "B": "9–11", "C": "11", "D": "10", "E": "12"}),
+         sol("10", option="D"), UNK, None),
+        ("R1 √99: set [9, 11] beside 10", tol("sqrt(99)", {"A": "9", "B": "[9, 11]", "C": "11", "D": "10", "E": "12"}),
+         sol("10", option="D"), UNK, None),
+        ("R1 √99 control: one in the window", tol("sqrt(99)", {"A": "9", "B": "8", "C": "11", "D": "10", "E": "12"}),
+         sol("10", option="D"), OK, None),
+        # SA2-YO-3
+        ("R2 days IR mis-formulated: 1/4 beside '3 gün' ... (no option carries it)",
+         _mc(days, {"A": "3 gün", "B": "4 gün", "C": "5 gün", "D": "6 gün", "E": "8 gün"}), sol("1/4"), UNK, None),
+        ("R2 a = 3*2: 6 beside '4 cm', '8 cm', '10 cm'", _mc(ir("evaluate", {"expr": "a"}, ["a = 3*2"],
+                                                                 [{"name": "a", "domain": "real"}]),
+                                                              {"A": "4 cm", "B": "8 cm", "C": "10 cm"}), sol("6"), UNK, None),
+        ("R2 a = 3*2: 6 beside '4 cm', '6 cm' (carried)", _mc(ir("evaluate", {"expr": "a"}, ["a = 3*2"],
+                                                                  [{"name": "a", "domain": "real"}]),
+                                                               {"A": "4 cm", "B": "6 cm", "C": "8 cm"}), sol("6"), OK, None),
+        # T2-RK-3
+        ("R3 'x = 6' option: payload 6, letter B", _mc(lin, xeq), sol("6", option="B"), OK, None),
+        ("R3 'x = 6' option: letter B only ({{6}} before)", _mc(lin, xeq), sol(None, option="B"), OK, None),
+        ("R3 'x=6' option", _mc(lin, {"A": "x=4", "B": "x=6", "C": "x=8", "D": "x=9"}), sol("6", option="B"), OK, None),
+        ("R3 sqrt(x + 2) = 3: 'x = 7'", _mc(ir("solve_equation", {"equation": "sqrt(x + 2) = 3", "var": "x"}),
+                                            {"A": "x = 1", "B": "x = 7", "C": "x = 9"}), sol("7", option="B"), OK, None),
+        ("R3 log2: 'x = 4'", _mc(ir("solve_equation", {"equation": "log(x, 2) + log(x - 2, 2) = 3", "var": "x"}),
+                                 {"A": "x = -2", "B": "x = 4", "C": "x = 2", "D": "x = 8"}), sol("4", option="B"), OK, None),
+        ("R3 payload 'x = 6', letter B", _mc(lin, xeq), sol("x = 6", option="B"), UNK, None),
+        ("R3 wrong letter 'x = 4'", _mc(lin, xeq), sol("6", option="A"), NO, None),
+        ("R3 letter 'x = 8' only (wrong)", _mc(lin, xeq), sol(None, option="C"), NO, None),
+        # T2-RK-4
+        ("R4 seven restatements, three critical steps", ineq("(x + 1)/(x - 2) >= 2", "interval"),
+         sol("Interval.Lopen(2, 5)", "interval",
+             [("eq", f) for f in ("(x + 1)/(x - 2) - 2 >= 0", "(5 - x)/(x - 2) >= 0", "(x - 5)/(x - 2) <= 0",
+                                  "-(x - 5)/(x - 2) >= 0", "(10 - 2*x)/(2*x - 4) >= 0", "(2*x - 10)/(x - 2) <= 0",
+                                  "(15 - 3*x)/(3*x - 6) >= 0")] + [("eq", "x - 5 = 0"), ("eq", "x - 2 = 0"),
+                                                                  ("eq", "Or(Eq(x, 5), Eq(x, 2))")]), OK, NEITHER),
+        ("R4 restatements then wrong x = 6", ineq("(x + 1)/(x - 2) >= 2", "interval"),
+         sol("Interval.Lopen(2, 5)", "interval",
+             [("eq", "(5 - x)/(x - 2) >= 0"), ("eq", "(x - 5)/(x - 2) <= 0"), ("eq", "x = 6")]), NO, REF),
+    ]
+    # T2-RK-6
+    for meta in ("Yukarıdakilerden hiçbiri", "HİÇBİRİ", "Hiçbiri değil", "Hiçbiri değildir", "Bilinemez", "Belirsiz"):
+        out.append((f"R5 meta option '{meta}'", tol("sqrt(50)", {"A": "7.07", "B": "7.5", "C": "8", "D": "6.5", "E": meta}),
+                    sol("7.07", option="A"), OK, None))
+    return out
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k,
-          "L": cases_l, "M": cases_m, "N": cases_n}
+          "L": cases_l, "M": cases_m, "N": cases_n, "P": cases_p, "Q": cases_q, "R": cases_r}
 
 
-def main(out_path=None, groups="ABCDEFKLMN"):
+def main(out_path=None, groups="ABCDEFKLMNPQR"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -705,5 +858,5 @@ def main(out_path=None, groups="ABCDEFKLMN"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFKLMN"
+    grp = args[1] if len(args) > 1 else "ABCDEFKLMNPQR"
     sys.exit(1 if main(out, grp) else 0)
