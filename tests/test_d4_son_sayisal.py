@@ -525,3 +525,68 @@ def test_the_options_reading_of_arg():
     assert _arg_options_reading(_evc("arg(-1 - I)", OPP)) == "a"
     assert _arg_options_reading(_evc("arg(1 + I)", O02)) is None              # pi/4 in both readings
     assert _arg_options_reading(_evc("arg(-1 - I)")) is None
+
+
+# --- third round: a convention step, an oversized option, the point at infinity and a pinned parameter -----------
+
+PRINCIPAL_STEPS = [("eq", "Abs(1 - I) = sqrt(2)"), ("eq", "arg(1 - I) = -pi/4"),
+                   ("eq", "(1 - I)**10 = 32*(cos(-5*pi/2) + I*sin(-5*pi/2))")]
+
+
+def test_a_principal_value_step_is_no_refutation_in_any_reading():
+    """Coverage (SS2-RK-1): a De Moivre solution writes the principal arg(1 - i) = -pi/4, refuted in the [0, 2*pi)
+    reading by no counterexample of its own: the right (1 - i)**10 = -32*i was UNKNOWN. The step is unknown in every
+    reading; the answer's certificate decides, and the wrong 32*i stays INCORRECT."""
+    v, sts, fbs, _ = _run(_evc("(1 - I)**10"), "-32*I", PRINCIPAL_STEPS)
+    assert (v, sts, fbs) == ("CORRECT", ["verified", "unknown", "verified"], None)
+    v, sts, fbs, _ = _run(_evc("(1 - I)**10"), "32*I", PRINCIPAL_STEPS)
+    assert (v, sts, fbs) == ("INCORRECT", ["verified", "unknown", "verified"], None)
+    st6 = [("eq", "arg(sqrt(3) - I) = -pi/6"), ("eq", "2**6*(cos(-pi) + I*sin(-pi)) = -64")]
+    assert _run(_evc("(sqrt(3) - I)**6"), "-64", st6)[0] == "CORRECT"
+    assert _run(_evc("(sqrt(3) - I)**6"), "64", st6)[0] == "INCORRECT"
+
+
+def test_a_declared_range_does_not_refute_the_principal_step():
+    """Unjust refutation (SS2-RK-2): with [0, 2*pi) options the principal value plus 2*pi, the right option D, was
+    INCORRECT, its first bad step the true principal value; a step wrong in both readings is still the first bad
+    one, and a wrong option stays INCORRECT."""
+    o = {"A": "pi/4", "B": "3*pi/4", "C": "5*pi/4", "D": "7*pi/4", "E": "3*pi/2"}
+    steps = [("eq", "arg(1 - I) = -pi/4"), ("eq", "-pi/4 + 2*pi = 7*pi/4")]
+    assert _run(_evc("arg(1 - I)", o), "7*pi/4", steps, option="D")[:3] == ("CORRECT", ["unknown", "verified"], None)
+    steps = [("eq", "arg(1 - I) = -pi/4"), ("eq", "-pi/4 + 2*pi = 3")]
+    assert _run(_evc("arg(1 - I)", o), "7*pi/4", steps, option="D")[:3] == ("INCORRECT", ["unknown", "refuted"], 2)
+    o2 = {"A": "pi/6", "B": "5*pi/6", "C": "7*pi/6", "D": "11*pi/6", "E": "3*pi/2"}
+    assert _run(_evc("arg(sqrt(3) - I)", o2), "5*pi/6", [("eq", "arg(sqrt(3) - I) = -pi/6")], option="B")[0] == \
+        "INCORRECT"
+
+
+def test_an_oversized_option_reads_no_range_within_the_budget():
+    """Time (SS2-CR-1): the options were read in this process with no time limit, and an option 10**10**10 held the
+    verifier past 60 s; read in the sandbox, past its limit no range comes from the options."""
+    import time
+    o = {"A": "pi/4", "B": "3*pi/4", "C": "5*pi/4", "D": "7*pi/4", "E": "10**10**10"}
+    t = time.time()
+    v = _run(_evc("arg(-1 - I)", o), "5*pi/4", option="C")[0]
+    assert time.time() - t < 40 and v != "INCORRECT"
+
+
+def test_the_shift_of_arg_is_read_at_infinity_and_at_a_pinned_parameter():
+    """Coverage (SS2-RK-3): the limit at oo of arg(1 + x*i) and the derivative of arg(1 + a*x*i) with a = 2 are the
+    same in both readings (no shift where the imaginary part is eventually or locally positive) and were UNKNOWN;
+    at -oo the shift is 2*pi and the value is the convention's."""
+    xa = [X, {"name": "a", "domain": "real"}]
+
+    def lim(f, to, givens=(), vars_=(X,)):
+        return {"task": {"kind": "limit", "params": {"expr": f, "var": "x", "to": to}}, "vars": list(vars_),
+                "givens": list(givens), "answer_shape": "dne_or_scalar"}
+
+    def der(f, at, givens=(), vars_=(X,)):
+        return {"task": {"kind": "derivative", "params": {"f": f, "var": "x", "at": at}}, "vars": list(vars_),
+                "givens": list(givens), "answer_shape": "scalar"}
+    assert _run(lim("arg(1 + x*I)", "oo"), "pi/2")[0] == "CORRECT"
+    assert _run(lim("arg(1 + x*I)", "oo"), "0")[0] == "INCORRECT"
+    assert _run(lim("arg(2 + x*I)", "oo"), "pi/2")[0] == "CORRECT"
+    assert _run(lim("arg(1 + x*I)", "-oo"), "-pi/2")[0] == "UNKNOWN"
+    assert _run(der("arg(1 + a*x*I)", "1", ["a = 2"], xa), "2/5")[0] == "CORRECT"
+    assert _run(der("arg(1 + a*x*I)", "1", ["a = 2"], xa), "1/5")[0] == "INCORRECT"
+    assert _run(lim("arg(a + x*I)", "1", ["a = 1"], xa), "pi/4")[0] == "CORRECT"
