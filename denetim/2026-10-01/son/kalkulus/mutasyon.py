@@ -219,6 +219,9 @@ MUTATIONS += [
     ("K62 ilkelin gelenek koşulu istisna sızdırır", CAL,
      "        except AttributeError as e:\n", "        except ZeroDivisionError as e:\n",
      T + "test_a_convention_of_a_primitive_raises_nothing"),
+    ("K63 değer denetimi hata verince koşul düşer", PAR,
+     "                conds.append(DEFINEDNESS_UNDECIDED)\n                patches = []\n", "                raise\n",
+     T + "test_a_failed_value_check_is_undecided"),
 ]
 
 if __name__ == "__main__":

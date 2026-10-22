@@ -2757,6 +2757,7 @@ def _written_diff(e, *args, **kwargs):
     (YO-K1). The order is read the same in every notation (`_diff_sequence`): diff(f, (x, 1)) and Derivative(f,
     x) took SymPy's derivative with no condition, and |x - 2|'(2) = 0 was certified (YO-K3); `Derivative`, whose
     value reading keeps the form, is `_written_derivative`."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED
     seq = _diff_sequence(args)
     if not seq or kwargs:
         with sp.evaluate(True):
@@ -2766,9 +2767,13 @@ def _written_diff(e, *args, **kwargs):
         for v in seq:
             values: list = []
             conds += _differentiability(cur, v, values)
-            read, canon = _value_reading(cur, v)
-            d_val, patches = _value_step(read, canon)
-            conds += _formula_values_unproved(d_val.xreplace({canon: v}), v, values)
+            try:
+                read, canon = _value_reading(cur, v)
+                d_val, patches = _value_step(read, canon)
+                conds += _formula_values_unproved(d_val.xreplace({canon: v}), v, values)
+            except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+                conds.append(DEFINEDNESS_UNDECIDED)
+                patches = []
             cur = sp.diff(cur, v)
             for p_, s_ in patches:
                 cur = sp.Piecewise((s_, sp.Eq(v, p_)), (cur, True))
@@ -2783,6 +2788,7 @@ def _written_derivative(e, *args, **kwargs):
     (sp.Derivative, whose value is SymPy's own: d/da of a bound integral with a given a = 2 stays a question of
     reading, part d4d), so the value checked at a switch point where the operand has a derivative is SymPy's
     formula, nothing put in (YO-K3)."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED
     seq = _diff_sequence(args)
     if not seq or kwargs:
         with sp.evaluate(True):
@@ -2792,8 +2798,11 @@ def _written_derivative(e, *args, **kwargs):
         for v in seq:
             values: list = []
             conds += _differentiability(cur, v, values)
-            read, canon = _value_reading(cur, v)
-            conds += _formula_values_unproved(sp.diff(read, canon).xreplace({canon: v}), v, values)
+            try:
+                read, canon = _value_reading(cur, v)
+                conds += _formula_values_unproved(sp.diff(read, canon).xreplace({canon: v}), v, values)
+            except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+                conds.append(DEFINEDNESS_UNDECIDED)
             cur = sp.diff(cur, v)
         cond = sp.And(*conds)
     if cond is sp.true:

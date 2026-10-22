@@ -795,3 +795,20 @@ def test_a_convention_of_a_primitive_raises_nothing(f, F):
     wrong = F.replace("+ 1)/", "+ 2)/", 1)
     assert _v(_ir("antiderivative", {"integrand": f, "var": "x"}, (), None, "expression"),
               _sol(wrong, "expression")) == "INCORRECT"
+
+
+def test_a_failed_value_check_is_undecided(monkeypatch):
+    # the check of the value at a zero with a derivative fails closed: a failure there kept no condition at all
+    # (the reading as written returned None), so a corner's condition would have been lost
+    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED
+    from mathverify.normalize import parse as P
+
+    def boom(*a, **k):
+        raise RuntimeError("no reading")
+    monkeypatch.setattr(P, "_value_reading", boom)
+    x = sp.Symbol("x", real=True)
+    for written in (P._written_diff, P._written_derivative):
+        w = written(sp.Abs(x - 2), x)
+        assert isinstance(w, P.written_domain)
+        conds = w.args[1].args if isinstance(w.args[1], sp.And) else (w.args[1],)
+        assert sp.Ne(x, 2) in conds and DEFINEDNESS_UNDECIDED in conds
