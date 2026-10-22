@@ -819,3 +819,16 @@ def test_a_failed_value_check_is_undecided(monkeypatch):
         assert isinstance(w, P.written_domain)
         conds = w.args[1].args if isinstance(w.args[1], sp.And) else (w.args[1],)
         assert sp.Ne(x, 2) in conds and DEFINEDNESS_UNDECIDED in conds
+
+
+def test_a_written_derivative_carries_only_conditions_beyond_its_operand():
+    # Derivative(1/x, x) is the form with the operand's own pole (the reading of a step's poles takes it there,
+    # steps.deterministic._written_poles); |x - 2| at its corner gets the condition put on the form
+    from mathverify.normalize.parse import _SAFE_NAMES, parse_as_written, written_domain
+    x = sp.Symbol("x", real=True)
+    ns = dict(_SAFE_NAMES, x=x)
+    bare = parse_as_written("Derivative(1/x, x)", ns)[0]
+    assert isinstance(bare, sp.Derivative)
+    w = parse_as_written("Derivative(Abs(x - 2), x)", ns)[0]
+    assert isinstance(w, written_domain) and sp.Ne(x, 2) in (w.args[1].args if isinstance(w.args[1], sp.And)
+                                                              else (w.args[1],))

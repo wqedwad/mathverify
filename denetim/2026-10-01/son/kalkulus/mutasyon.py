@@ -218,6 +218,8 @@ MUTATIONS += [
     ("K63 değer denetimi hata verince koşul düşer", PAR,
      "                conds.append(DEFINEDNESS_UNDECIDED)\n                patches = []\n", "                raise\n",
      T + "test_a_failed_value_check_is_undecided"),
+    ("K64 Derivative işlenen kendi koşuluyla da sarılır", PAR, "    if cond is sp.true or not beyond:\n",
+     "    if cond is sp.true:\n", T + "test_a_written_derivative_carries_only_conditions_beyond_its_operand"),
 ]
 
 if __name__ == "__main__":

@@ -2789,7 +2789,7 @@ def _written_derivative(e, *args, **kwargs):
     d/da of a bound integral with a given a = 2 is a question of reading (the pins' check, part d4d), and computed here
     it was no longer seen. The value checked at a switch point where the operand has a derivative is SymPy's formula,
     nothing put in."""
-    from ..certify.domain import DEFINEDNESS_UNDECIDED
+    from ..certify.domain import DEFINEDNESS_UNDECIDED, definedness_conditions
     form = sp.Derivative(e, *args, **kwargs)
     seq = _diff_sequence(args)
     if not seq or kwargs:
@@ -2806,7 +2806,14 @@ def _written_derivative(e, *args, **kwargs):
                 conds.append(DEFINEDNESS_UNDECIDED)
             cur = sp.diff(cur, v)
         cond = sp.And(*conds)
-    if cond is sp.true:
+        # the operand's own written conditions the form carries itself (1/x of Derivative(1/x, x): its pole stays a pole
+        # of the text, `steps.deterministic._written_poles`); only a condition beyond them is put on it
+        try:
+            own = definedness_conditions(e, None)
+        except Exception:  # noqa: BLE001 - not read: every condition is put on it
+            own = []
+        beyond = [c for c in conds if c is not sp.true and c not in own]
+    if cond is sp.true or not beyond:
         return form
     return written_domain(form, cond)
 
