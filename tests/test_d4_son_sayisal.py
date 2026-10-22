@@ -590,3 +590,28 @@ def test_the_shift_of_arg_is_read_at_infinity_and_at_a_pinned_parameter():
     assert _run(der("arg(1 + a*x*I)", "1", ["a = 2"], xa), "2/5")[0] == "CORRECT"
     assert _run(der("arg(1 + a*x*I)", "1", ["a = 2"], xa), "1/5")[0] == "INCORRECT"
     assert _run(lim("arg(a + x*I)", "1", ["a = 1"], xa), "pi/4")[0] == "CORRECT"
+
+
+def _steps_layer(statuses):
+    from mathverify.certify.base import result, unknown
+    ev = {"steps": [{"id": f"s{i}", "index": i, "status": s_} for i, s_ in enumerate(statuses, start=1)]}
+    refuted = [i for i, s_ in enumerate(statuses, start=1) if s_ == "refuted"]
+    if refuted:
+        return result("steps.refute", "fail", 0.97, True, ev, 0.0, first_bad_step=refuted[0], flags=["step_refuted"])
+    return unknown("steps.refute", "no_step_refuted", 0.0, ev)
+
+
+def test_two_incorrect_readings_merge_their_steps():
+    """Mechanism (RK-SAY-2, RK-ARG-STEP), what the third round's convention steps leave to it: steps refuted in one
+    reading and unknown (not verified) in the other. Two INCORRECTs with no failure of both are no agreement; with
+    one, a step refuted in one reading only is unknown and the first bad step is the first refuted in both."""
+    from mathverify.certify.base import result
+    from mathverify.verifier import _incorrect_in_both
+    passing = result("certify.algebra", "pass", 0.99, True, {}, 0.0, primary=True)
+    failing = result("certify.algebra", "fail", 0.99, True, {}, 0.0, primary=True)
+    assert _incorrect_in_both([passing, _steps_layer(["refuted"])], [failing, _steps_layer(["unknown"])]) is None
+    out = _incorrect_in_both([failing, _steps_layer(["refuted", "refuted"])],
+                             [failing, _steps_layer(["unknown", "refuted"])])
+    steps = next(la for la in out if la.layer == "steps.refute")
+    assert [e["status"] for e in steps.evidence["steps"]] == ["unknown", "refuted"]
+    assert steps.first_bad_step == 2
