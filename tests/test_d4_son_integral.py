@@ -557,6 +557,13 @@ def test_a_strong_integrable_singularity_keeps_its_value(f, a, b, claim):
     assert _v(_dint(f, a, b), claim) == "CORRECT"
 
 
+def test_an_enclosure_of_the_whole_line_says_nothing_even_next_to_a_close_rung():
+    # G2YO-2: (-oo, oo) says nothing; the rule of the last rung is for a half-infinite enclosure only (SI-YO-2). The
+    # cost the audit recorded: the true 5 for a sign-changing strong singularity stays UNKNOWN (its last rung is
+    # 5 - 6.8e-17 with an estimate of 2e-17)
+    assert _v(_dint("sign(x)*Abs(x)**(-4/5)", -1, 32), "5") == "UNKNOWN"
+
+
 def test_a_power_at_an_end_is_a_weight():
     from mathverify.certify.enclosure import from_raw, rigorous_enclosure
     R = sp.Rational
@@ -591,6 +598,9 @@ def test_a_wrong_value_of_a_power_at_an_end_is_refuted():
     ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.502 + 0.866*I", "INCORRECT"),     # |Im d| < t < |d| = 2.0e-3
     ("exp(I)", {"rel_tol": "0.0001"}, "0.5403 + 0.8515*I", "INCORRECT"),
     ("sqrt(3) + I", {"abs_tol": "0.01"}, "1.73 + I", "CORRECT"),              # a real difference, as before
+    ("E", {"abs_tol": "0.001"}, "2.71828 + I/10**9", "UNKNOWN"),               # a nonreal claim for a real value (SG-1)
+    ("E", {"rel_tol": "0.001"}, "2.71828 + I/10**9", "UNKNOWN"),
+    ("E", {"abs_tol": "0.001"}, "2.71828 + I/10**2", "INCORRECT"),
 ])
 def test_a_complex_claim_within_a_declared_tolerance(expr, tol, claim, verdict):
     assert _v(_ev(expr, (), **tol), claim) == verdict
@@ -603,9 +613,13 @@ def test_complex_differences_against_a_tolerance():
     assert within_abs_tol(c, v, sp.Rational(1, 100000)) is False
     assert within_rel_tol(c, v, sp.Rational(1, 1000)) is True              # |v| = 1
     assert within_rel_tol(c, 2 * v, sp.Rational(1, 1000)) is False
-    # a real value, a complex claim: |c - v|² = Re² + Im² against t²·v²
-    assert within_rel_tol(2 + sp.I / 10 ** 4, sp.Integer(2), sp.Rational(1, 1000)) is True
+    # a real value, a complex claim: |c - v|² = Re² + Im² against t²·v² refutes; within it, what the answer may be is
+    # undecided (d4c SG-1: e ≈ 2.71828 + 10^-9 i is UNKNOWN)
+    assert within_rel_tol(2 + sp.I / 10 ** 4, sp.Integer(2), sp.Rational(1, 1000)) is None
     assert within_rel_tol(2 + sp.I / 10 ** 2, sp.Integer(2), sp.Rational(1, 1000)) is False
+    assert within_rel_tol(sp.Rational(201, 100) + sp.I / 10 ** 4, sp.Integer(2), sp.Rational(1, 1000)) is False
+    assert within_abs_tol(2 + sp.I / 10 ** 9, sp.Integer(2), sp.Rational(1, 1000)) is None
+    assert within_abs_tol(2 + sp.I / 10 ** 2, sp.Integer(2), sp.Rational(1, 1000)) is False
     assert within_rel_tol(sp.I, sp.Integer(0), sp.Rational(1, 1000)) is None  # no relative error against 0
 
 

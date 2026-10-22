@@ -29,6 +29,9 @@
 Measured (21 Oct 2026): 189 cases, 110 not as expected on 0e93ed5 (A 17, B 6, C 13, D 9, E 3, F 3, G 8, H 19, I 21,
 J 5, L 2, M 4; one held over 300 s), 0 on 4f294aa. The derivative of x·∛x (group C) is G2RK-13's, the calculus group's:
 here only no false verdict. Group M's last case is a recorded residual of the narrow G2YO-6 rule.
+Second round (22 Oct 2026): 223 cases with group N, not as expected 120 on 0e93ed5 (N 10), 15 on 3afddba (all N: 8
+planted, 7 complex tolerances), 0 on 14769a8; group N then gained the three SG-1 cases (226 cases, measured in the
+commit that adds them). Group N's |x|^(-19/20) case is a recorded residual of SI-YO-2.
 
 Kept out of pyflakes and pytest like the rest of denetim/.
 """
@@ -511,7 +514,11 @@ def cases_n():
                          ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.5 + 0.87*I", NO),
                          ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.502 + 0.866*I", NO),
                          ("exp(I)", {"rel_tol": "0.0001"}, "0.5403 + 0.8515*I", NO),
-                         ("sqrt(3) + I", {"abs_tol": "0.01"}, "1.73 + I", OK)]:
+                         ("sqrt(3) + I", {"abs_tol": "0.01"}, "1.73 + I", OK),
+                         # a nonreal claim for a real value within the tolerance: undecided (d4c SG-1)
+                         ("E", {"abs_tol": "0.001"}, "2.71828 + I/10**9", UNK),
+                         ("E", {"rel_tol": "0.001"}, "2.71828 + I/10**9", UNK),
+                         ("E", {"abs_tol": "0.001"}, "2.71828 + I/10**2", NO)]:
         out.append((f"SON-INT-RK-1 {e} ≈ {c} {tol}", ev(e, (), **tol), sol(c), v, None))
     # SON-INT-RK-2: fast oscillations whose ladder does not converge (the time is in the row)
     for f, a, b, v in [("cos(500*pi*x)**2", 0, 1, "1/2"), ("cos(1000*pi*x)**2", 0, 1, "1/2"),

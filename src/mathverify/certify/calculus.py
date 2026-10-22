@@ -749,12 +749,13 @@ def declared_tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, abs_
 
 # the largest relative error estimate (of max(1, |v|)) of a rung read as a value: by a settled ladder (son denetim
 # SI-YO-3: 10^-10, mpmath's failed 0.0 for ∫_{-1}^{1} dx/x carries 2.0) and by the last rung against a half-infinite
-# enclosure (SI-YO-2: measured 1.0e-10 at most for the true values of ∫ |x - c|^p, p >= -9/10, at 80 digits; 1.8e-4 at
-# least for the divergent ∫_0^1 dx/x, ∫_0^{1/2} dx/(x|ln x|), ∫_{1/2}^1 dx/(1 - x))
+# enclosure (SI-YO-2: measured at 80 digits, 1.0e-10 at most for the true values of ∫ |x - c|^p, p >= -9/10, 5e-6 at
+# p = -19/20; 1.8e-4 to 5e-3 for the divergent ∫_0^1 dx/x, ∫_0^{1/2} dx/(x|ln x|), ∫_{1/2}^1 dx/(1 - x). ∫_0^1 dx/x²
+# is 2e84 there with an estimate of 1.0: the margin below keeps every finite value away from it)
 _LADDER_ERR = mp.mpf("1e-10")
 _RUNG_ERR = mp.mpf("1e-8")
-# the last rung's error estimates fall short of its true error: 2.3 times for ∫_0^2 |x - 1|^(-2/3) dx = 6, 37 times for
-# ∫_0^2 |x - 1|^(-9/10) dx = 20 (measured at 80 digits); the margin around it is this many estimates (at least 10)
+# the last rung's error estimates fall short of its true error: 2.3 times for ∫_0^2 |x - 1|^(-2/3) dx = 6, 38 times for
+# ∫_{-1}^{2} |x|^(-9/10) dx (measured at 80 digits); the margin around it is this many estimates (at least 10)
 _RUNG_MARGIN = 100
 
 
