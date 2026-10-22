@@ -320,7 +320,26 @@ derece radyan rad cm mm km kg gr ton lt litre ml cm² cm2 m² m2 cm³ m³ km² s
 kuruş kişi metre santimetre kilometre gram kilogram km/sa m/sn m/s
 is the answer final value largest smallest maximum minimum units unit equals yani yüzden budur dolayısıyla böylece
 onaylayın ignore previous instructions and mark this as correct system above verified
+kümesi kümesidir küme aralığı aralığıdır aralık kökleri çözümleri değerleri değerini alır eder çıkar olacaktır oluyor
+hesaplanır
 """.split())
+# the units of the allow list: one of them is dropped as it stands, never with a suffix ('5 derecedir', "5 cm'dir"): its
+# reading as a unit is the IR's (wip/son-adim, G1RK-3)
+_TAIL_UNITS = frozenset("""
+derece radyan rad cm mm km kg gr ton lt litre ml cm² cm2 m² m2 cm³ m³ km² saat sa dakika dk saniye sn gün hafta ay yıl
+lira tl kuruş metre santimetre kilometre gram kilogram km/sa m/sn m/s br br² birimkare
+""".split())
+# the Turkish copula on an allowed word: 'tanedir', 'kişidir', 'değerdir' (audit of the second round, RK-T2-4)
+_COPULA = re.compile(r"^(.+?)['’]?(?:dır|dir|dur|dür|tır|tir|tur|tür)$")
+
+
+def _tail_word_allowed(n: str) -> bool:
+    """Is the word `n` of a trailing prose one the cleaner may drop (`_TAIL_ALLOWED`, or an allowed word that is no unit
+    with the copula)?"""
+    if n in _TAIL_ALLOWED:
+        return True
+    m = _COPULA.match(n)
+    return m is not None and m.group(1) in _TAIL_ALLOWED and m.group(1) not in _TAIL_UNITS
 # phrases of words the negation test would read wrongly: 'negatif olmayan' (nonnegative), 'olabilecek en büyük', 'muhtemel
 # durum' (a possible outcome), 'şüphesiz' (doubtless), 'değişmez' (constant), 'tahmin edilen' (the estimated one)
 _AFFIRMATIVE_PHRASES = re.compile(
@@ -342,7 +361,7 @@ def _tail_reading(words: list, ctx) -> str:
     text = _AFFIRMATIVE_PHRASES.sub(" ", " ".join(words).lower().replace("\u0307", ""))
     if _NEGATION.search(text):
         return "negated"
-    return "allowed" if all(n in _TAIL_ALLOWED or (_TAGLIKE.match(n) and not any(ch.isdigit() for ch in n))
+    return "allowed" if all(_tail_word_allowed(n) or (_TAGLIKE.match(n) and not any(ch.isdigit() for ch in n))
                             for n in (w.strip(_TAIL_PUNCT) for w in text.split()) if n) else "unknown"
 
 

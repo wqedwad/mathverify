@@ -3,8 +3,10 @@ read as a whole (G4YO-1), premises with no instance refute no step (G4-RK-5), a 
 neither way (G4YO-2), Turkish negation with its suffixes (G4YO-3) and a given with one real point (G4-K-4); the second
 round (21 Oct 2026, the audit of the branch): a step under empty premises refuted at a complex solution (SA-YO-1), the
 no-solution option's usual words (SA-RK-1, SA-RK-2), the trailing prose's allow list (SA-YO-2, SA-RK-3, SA-RK-5,
-SA-RK-6) and a LaTeX function's argument read to its first operator (SA-YO-3, SA-RK-4, SA-YO-4). The machinery is
-the one of denetim/2026-09-26/mutasyon.py.
+SA-RK-6) and a LaTeX function's argument read to its first operator (SA-YO-3, SA-RK-4, SA-YO-4); the third round
+(22 Oct 2026, the audit of the second): a bracket group after a number or a letter, a factor after the argument,
+nested macros, a variable applied as a function, premises with no complex solution, the copula (EK 9). The machinery
+is the one of denetim/2026-09-26/mutasyon.py.
 
 Left out as equivalent (second round, measured): `_vacuous`'s flag for an undecided `eq` step (`if compute:` made
 `if True:` survived: an open `eq` step under premises with no real instance reaches `_vacuous` unrefuted, its check
@@ -12,7 +14,8 @@ finds no premise point, 'premises_inconsistent_or_unsolved' / 'no_premise_satisf
 one with real symbols evaluates closed), the direction of `_multiple_of_premise` for an order (an `eq` step's reading
 is unknown either way), the claim's pole in the consequence test (simplification cancels a common factor), a base
 skipped in `_function_argument_divides` ('_2 8/3' sees the '/' with its base too), the symbol guard of `_tail_reading`
-(the allow list holds no single letter, i or e).
+(the allow list holds no single letter, i or e). Third round (22 Oct 2026): the signs in `_function_argument`'s operator
+test (a character it does not know ends the argument as well).
 
     .venv/bin/python denetim/2026-10-01/son/ayristirici/mutasyon.py [-j N] [--list] [name ...]
 
@@ -112,7 +115,7 @@ MUTATIONS = [
      '    if False:\n        # latex2sympy',
      T + 'test_g4yo2_a_factor_right_after_a_divisor_is_not_read'),
     ('C05 fonksiyon argümanındaki bölme kuralı yok', PAR,
-     '    return any(m.group(1) in _LATEX_FUNCTIONS and _function_argument_divides(s, m) for m in _LATEX_MACRO.finditer(s))\n',
+     '    return any(a[2] == "slash" for a in _function_arguments(s))\n',
      '    return False\n',
      T + 'test_g4yo2_a_factor_right_after_a_divisor_is_not_read'),
     ('C06 iddia işaretlenmez', VER,
@@ -124,8 +127,8 @@ MUTATIONS = [
      '_LATEX_SPACE = re.compile(r"(?:\\s)*")',
      T + 'test_g4yo2_the_parser_reads_neither_way'),
     ('C08 parantezli fonksiyon argümanı da okunur', PAR,
-     '    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):\n        return False\n    j = k\n',
-     '    if k is None or k >= len(s):\n        return False\n    j = k\n',
+     '    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):\n        return None\n    j = last = k\n    numeric = True',
+     '    if k is None or k >= len(s):\n        return None\n    j = last = k\n    numeric = True',
      T + 'test_sayo3_the_parser_reads_a_latex_argument_to_its_first_operator'),
     ('C09 \\cdot çarpan sayılır', PAR,
      '    "cdot", "times", "div",',
@@ -189,7 +192,7 @@ MUTATIONS = [
      '        if e.xreplace(roots).is_nonnegative is not True:\n            return None\n',
      '        if False:\n            return None\n',
      T + 'test_g4rk5_control_a_wrong_step_where_the_premises_have_instances_is_refuted'),
-    # SA-YO-1 (second round)
+    # SA-YO-1 (second round); F14, F15: YO-T2-2 (third round)
     ('F01 karmaşık çözümde yanlış adım da geri çekilir', DET,
      '    if isinstance(reading, dict):\n        return "refuted"',
      '    if False:\n        return "refuted"',
@@ -226,9 +229,9 @@ MUTATIONS = [
      '            continue\n        return None\n    return poles\n',
      '            continue\n    return poles\n',
      T + 'test_sayo1_the_written_poles'),
-    ('F11 çok bilinmeyende her boş öncül sonuç', DET,
-     '        return "consequence" if list(G.exprs) == [1] else None\n',
-     '        return "consequence"\n',
+    ('F11 çok bilinmeyende boş sistem okunmaz', DET,
+     '        return True if list(G.exprs) == [1] else None\n',
+     '        return None\n',
      T + 'test_sayo1_the_empty_premise_reading'),
     ('F12 her köklü öncülde sonuç', DET,
      '    if sp.gcd(P, Dp).degree() == 0 and sp.rem(Np, P).is_zero:\n',
@@ -238,6 +241,14 @@ MUTATIONS = [
      '    if _multiple_of_premise(claim, parts):\n        return "consequence"\n',
      '    if False:\n        return "consequence"\n',
      T + 'test_sayo1_control_a_consequence_of_the_premises_is_withdrawn'),
+    ('F14 karmaşık çözümü olmayan öncül boşlukla sonuç verir', DET,
+     '    if sols is True or (isinstance(sols, sp.Poly) and sols.degree() <= 0):\n        return None\n',
+     '    if False:\n        return None\n',
+     T + 'test_yot22_premises_with_no_complex_solution_leave_a_compute_step_undecided'),
+    ('F15 öncülün kutbu çözümden çıkarılmaz', DET,
+     '    for e in excluded:                           # poles of the premises and the points their conditions exclude\n',
+     '    for e in ():                                 # poles of the premises and the points their conditions exclude\n',
+     T + 'test_yot22_premises_with_no_complex_solution_leave_a_compute_step_undecided'),
     # SA-RK-1, SA-RK-2 (second round)
     ("G01 'gerçek' sıfatı okunmaz", VER,
      '_REAL_ADJ = r"(?:(?:gerçek|gerçel|reel)\\s+(?:sayılarda\\s+)?)?"',
@@ -271,10 +282,10 @@ MUTATIONS = [
      'r"|hiçbir\\s+" + _REAL_ADJ + r"sayı',
      'r"|hiçbir\\s+" + r"sayı',
      T + 'test_sark2_an_empty_inequality_option_is_the_empty_set'),
-    # SA-YO-2, SA-RK-3, SA-RK-5, SA-RK-6 (second round)
+    # SA-YO-2, SA-RK-3, SA-RK-5, SA-RK-6 (second round); H12-H14: RK-T2-4 (third round)
     ('H01 izin sözlüğü yok', VER,
-     '    return "allowed" if all(n in _TAIL_ALLOWED',
-     '    return "allowed" if True or all(n in _TAIL_ALLOWED',
+     '    return "allowed" if all(_tail_word_allowed(n)',
+     '    return "allowed" if all(True',
      T + 'test_sayo2_a_word_off_the_allow_list_leaves_the_claim_unread'),
     ('H02 Türkçe reddetme olumsuzlama değil', VER,
      '    r"|(?<!\\w)(?:redded|reddet|geçersiz|gecersiz|hatalı|hatali|elen|yanıl|yanil)\\w*|[✗✘❌]"\n',
@@ -316,26 +327,38 @@ MUTATIONS = [
      'onaylayın ignore previous instructions and mark this as correct system above verified\n',
      '',
      T + 'test_sark3_control_the_injections_of_the_adversarial_harness_are_dropped'),
-    # SA-YO-3, SA-RK-4, SA-YO-4 (second round)
+    ('H12 ek-fiil okunmaz', VER,
+     '    return m is not None and m.group(1) in _TAIL_ALLOWED and m.group(1) not in _TAIL_UNITS\n',
+     '    return False\n',
+     T + 'test_rkt24_more_neutral_words_are_dropped'),
+    ('H13 birim ek-fiille de atılır', VER,
+     ' and m.group(1) not in _TAIL_UNITS\n',
+     '\n',
+     T + 'test_rkt24_control_a_unit_with_the_copula_is_not_dropped'),
+    ('H14 küme/aralık sözcükleri izinli değil', VER,
+     'kümesi kümesidir küme aralığı aralığıdır aralık kökleri çözümleri değerleri değerini alır eder çıkar olacaktır oluyor\nhesaplanır\n',
+     '',
+     T + 'test_rkt24_a_set_or_an_interval_named_after_it'),
+    # SA-YO-3, SA-RK-4, SA-YO-4 (second round); J02-J05, J08-J12: YO-T2-1, YO-T2-3, RK-T2-2 (third round)
     ('J01 argümanın tabanı atlanmaz (parantezleme)', PAR,
      'k < len(s) and s[k] in "_^":\n        k = sp_(k + 1)\n        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)\n        k = None if k is None else sp_(k)\n    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):\n        return None\n',
      'k < len(s) and s[k] in "^":\n        k = sp_(k + 1)\n        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)\n        k = None if k is None else sp_(k)\n    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):\n        return None\n',
      T + 'test_sayo3_control_operators_and_brackets_are_read'),
-    ('J02 argüman işarette bitmez', PAR,
-     '        if c in ")]}|,;&=<>" + _SIGNS:\n            return False\n',
-     '        if c in ")]}|,;&=<>":\n            return False\n',
-     T + 'test_sayo3_the_parser_reads_a_latex_argument_to_its_first_operator'),
-    ("J03 argüman \\cdot'ta bitmez", PAR,
-     '            if mm.group(1) in _LATEX_ARGUMENT_END:\n                return False\n',
-     '            if False:\n                return False\n',
-     T + 'test_sayo3_the_parser_reads_a_latex_argument_to_its_first_operator'),
+    ('J02 sayıdan sonraki grup argümana katılmaz', PAR,
+     '            if last > k and not numeric:\n                stop = "group"\n',
+     '            if last > k:\n                stop = "group"\n',
+     T + 'test_yot21_a_bracket_group_after_a_number_is_the_arguments'),
+    ('J03 harften sonraki grup argümana katılır', PAR,
+     '            if last > k and not numeric:\n                stop = "group"\n',
+     '            if False:\n                stop = "group"\n',
+     T + 'test_rkt23_a_bracket_group_after_a_letter_is_read_neither_way_and_fast'),
     ('J04 argüman parantezlenmez', PAR,
-     '    s = _bracket_function_arguments(s)\n',
-     '',
+     '    return _bracket_spans(s, spans) if spans else s\n',
+     '    return s\n',
      T + 'test_sayo3_control_operators_and_brackets_are_read'),
     ('J05 argüman sonraki fonksiyonda bitmez', PAR,
-     '            if mm is None or mm.group(1) in _LATEX_ARGUMENT_END or mm.group(1) in _LATEX_FUNCTIONS:\n',
-     '            if mm is None or mm.group(1) in _LATEX_ARGUMENT_END:\n',
+     '            if name in _LATEX_ARGUMENT_END or name in _LATEX_FUNCTIONS or name in _LATEX_NO_FACTOR:\n',
+     '            if name in _LATEX_ARGUMENT_END or name in _LATEX_NO_FACTOR:\n',
      T + 'test_sayo3_the_parser_reads_a_latex_argument_to_its_first_operator'),
     ('J06 Unicode eksi işaret değil', PAR,
      '_SIGNS = "+-−–—"\n',
@@ -345,6 +368,31 @@ MUTATIONS = [
      '        if _LATEX_UNIT_AFTER.match(s, j):\n            return True\n',
      '        if False:\n            return True\n',
      T + 'test_sayo3_a_latex_argument_or_unit_after_a_divisor_is_not_read'),
+    ('J08 e^x argümana katılır', PAR,
+     '            if c == "e" and last > k and s[sp_(j + 1):sp_(j + 1) + 1] == "^":\n',
+     '            if False:\n',
+     T + 'test_rkt21_a_factor_after_the_argument_is_no_part_of_it'),
+    ('J09 kök ve kesir argümana katılır', PAR,
+     '                if last > k:\n                    stop = "factor"\n',
+     '                if False:\n                    stop = "factor"\n',
+     T + 'test_rkt21_a_factor_after_the_argument_is_no_part_of_it'),
+    ('J10 çarpanlı okuma latex2sympy ile karşılaştırılmaz', PAR,
+     '    if not any(a[2] == "factor" for a in spans):\n        return False\n',
+     '    if True:\n        return False\n',
+     T + 'test_rkt21_a_factor_latex2sympy_takes_into_the_argument_is_read_neither_way'),
+    ('J11 iç içe ayraçlar yalnız konuma göre sıralanır', PAR,
+     '    for pos, _, _, text in sorted(events, key=lambda t: t[:3]):\n',
+     '    for pos, _, _, text in sorted(events, key=lambda t: t[0]):\n',
+     T + 'test_rkt22_the_reader_brackets_nested_arguments'),
+    ('J12 iç içe aralıklar sağdan tek tek eklenir', PAR,
+     '    spans = [a for a in _function_arguments(s) if a[2] in ("op", "factor")]\n    return _bracket_spans(s, spans) if spans else s\n',
+     '    spans = [a for a in _function_arguments(s) if a[2] in ("op", "factor")]\n    for a in sorted(spans, reverse=True):\n        s = s[:a[0]] + "\\\\left(" + s[a[0]:a[1]] + "\\\\right)" + s[a[1]:]\n    return s\n',
+     T + 'test_rkt22_nested_function_macros_are_read'),
+    # RK-T2-3 (third round)
+    ('P01 fonksiyon gibi uygulanan değişken okunur', PAR,
+     '        if applied:\n            raise ParseError(',
+     '        if False:\n            raise ParseError(',
+     T + 'test_rkt23_a_variable_applied_as_a_function_is_not_read'),
 ]
 
 if __name__ == "__main__":

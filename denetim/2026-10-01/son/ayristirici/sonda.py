@@ -29,6 +29,12 @@ the branch wip/son-ayristirici.
              unread, a symbol or a single letter never dropped, a final ',' punctuation)
   J  SA-YO-3, SA-RK-4, SA-YO-4  a LaTeX function's argument to the first operator (its base skipped; a '/' in it is
              ambiguous; the argument bracketed for latex2sympy, sibling), '\\%' and '^\\circ', the Unicode minus
+  Third round (22 Oct 2026; the audit of the second round, son_denetim/son-ayristirici-t2/bulgular.json, EK 9):
+  L  YO-T2-1, YO-T2-3 = RK-T2-1, RK-T2-2, RK-T2-3  a LaTeX function's argument: a bracket group after a number is the
+             argument's (\\sin 2(x + \\frac{\\pi}{4}) is sin(2x + pi/2)), a factor written after it (e^x, \\sqrt{2}) is
+             not, a bracket group after a letter is read neither way (\\tan x(1 + \\tan^2 x), fast), nested macros
+  M  YO-T2-2  rational premises with no complex solution (every root a pole): no vacuous consequence, undecided
+  N  RK-T2-4  the allow list: 'kümesi', 'aralığı', 'tanedir', 'değerini alır', 'eder', the copula on a word that is no unit
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/ayristirici/sonda.py [out.json] [groups]
@@ -345,8 +351,8 @@ def cases_f():
         ("x²+1=0: compute '(x**2 + 1)*(x - 1) = 0' (true at ±i)", q1,
          sol("∅", "set", [("compute", "(x**2 + 1)*(x - 1) = 0")]), OK, NEITHER),
         ("x²+1=0: compute 'x**4 = 1' (true at ±i)", q1, sol("∅", "set", [("compute", "x**4 = 1")]), OK, NEITHER),
-        ("x/(x-1)=1: compute 'x = x - 1' (no complex solution either)", eqn("x/(x - 1) = 1"),
-         sol("∅", "set", [("compute", "x = x - 1")]), OK, NEITHER),
+        ("x/(x-1)=1: compute 'x = x - 1' (no complex solution either: undecided, EK 9 YO-T2-2)", eqn("x/(x - 1) = 1"),
+         sol("∅", "set", [("compute", "x = x - 1")]), UNK, NEITHER),
         ("2x+1=2x+3: eq '0 = 2' (closed)", eqn("2*x + 1 = 2*x + 3"), sol("∅", "set", [("eq", "0 = 2")]), OK, NEITHER),
         ("x²+2<2x: eq '(x - 1)**2 + 1 < 0' (a multiple of the order)", ineq,
          sol("∅", "set", [("eq", "(x - 1)**2 + 1 < 0")]), OK, NEITHER),
@@ -479,11 +485,119 @@ def cases_j():
     return out
 
 
+# L: YO-T2-1, YO-T2-3 = RK-T2-1, RK-T2-2, RK-T2-3 ---------------------------------------------------------------
+def _se(e):
+    return ir("simplify_expression", {"expr": e}, vars_=[X], shape="expression")
+
+
+def cases_l():
+    S4 = r"$\sin 2(x + \frac{\pi}{4})$"
+    out = [(f"{name}: claim {claim!r}", q, sol(claim, "expression" if q["answer_shape"] == "expression" else "value"),
+            want, None) for name, q, claim, want in (
+        # a bracket group after a number is the argument's (latex2sympy, the textbook's A sin B(x - C))
+        ("sin(2x + pi/4) (a phase-shift error)", _se("sin(2*x + pi/4)"), S4, NO),
+        ("cos 2x (the writer's reading)", _se("cos(2*x)"), S4, OK),
+        ("sin(2x + 1)", _se("sin(2*x + 1)"), r"$\sin 2(x+1)$", NO), ("sin(2x + 2)", _se("sin(2*x + 2)"), r"$\sin 2(x+1)$", OK),
+        ("ln(3x - 1)", _se("log(3*x - 1)"), r"$\ln 3(x-1)$", NO), ("ln(3x - 3)", _se("log(3*x - 3)"), r"$\ln 3(x-1)$", OK),
+        ("cos(3x - 2)", _se("cos(3*x - 2)"), r"$\cos 3(x-2)$", NO), ("log2(2x + 3)", _se("log(2*x + 3, 2)"), r"$\log_2 2(x+3)$", NO),
+        ("log2(2x + 6)", _se("log(2*x + 6, 2)"), r"$\log_2 2(x+3)$", OK), ("tan(2x - 1)", _se("tan(2*x - 1)"), r"$\tan 2(x - 1)$", NO),
+        ("sin(2x + pi/3), a space", _se("sin(2*x + pi/3)"), r"$\sin 2 (x + \frac{\pi}{3})$", NO),
+        ("sin(x/2 + pi)", _se("sin(x/2 + pi)"), r"$\sin \frac{1}{2}(x + \pi)$", NO),
+        ("sin(x/2 + pi/2)", _se("sin(x/2 + pi/2)"), r"$\sin \frac{1}{2}(x + \pi)$", OK),
+        ("(-cos(2x + 1)/2)'", _der("-cos(2*x + 1)/2", X), r"$\sin 2(x+1)$", NO),
+        ("\\left( control", _se("sin(2*x + pi/4)"), r"$\sin 2\left(x + \frac{\pi}{4}\right)$", NO),
+        ("ln(2|x|) (a bar group after a number)", _se("log(2*Abs(x))"), r"$\ln 2|x|$", OK),
+        ("(ln 2)|x|", _se("log(2)*Abs(x)"), r"$\ln 2|x|$", NO),
+        # a factor written right after the argument is no part of it (RK-T2-1, YO-T2-3)
+        ("(e^x (sin x - cos x)/2)'", _der("exp(x)*(sin(x) - cos(x))/2", X), r"$\sin x e^x$", OK),
+        ("(e^x (sin x - cos x)/2)' braced", _der("exp(x)*(sin(x) - cos(x))/2", X), r"$\sin x e^{x}$", OK),
+        ("(e^x sin x)'", _der("exp(x)*sin(x)", X), r"$\sin x e^x + \cos x e^x$", OK),
+        ("(e^x cos x)'", _der("exp(x)*cos(x)", X), r"$\cos x e^x - \sin x e^x$", OK),
+        ("(e^x ln x)'", _der("exp(x)*log(x)"), r"$\ln x e^{x} + \frac{e^{x}}{x}$", OK),
+        ("(sin x sqrt x)'", _der("sin(x)*sqrt(x)"), r"$\cos x \sqrt{x} + \frac{\sin x}{2\sqrt{x}}$", OK),
+        ("(-sqrt2 cos x)'", _der("-sqrt(2)*cos(x)", X), r"$\sin x \sqrt{2}$", OK),
+        ("(-cos(sqrt2 x)/sqrt2)' (wrong)", _der("-cos(sqrt(2)*x)/sqrt(2)", X), r"$\sin x \sqrt{2}$", NO),
+        ("(2x^(3/2) ln x/3 - 4x^(3/2)/9)'", _der("2*x**(3/2)*log(x)/3 - 4*x**(3/2)/9"), r"$\ln x \sqrt{x}$", OK),
+        ("2 sin x cos x, \\cdot kept", _der("sin(x)**2", X), r"$2\sin x \cdot \cos x$", OK),
+        # nested function macros (RK-T2-2)
+        ("(e^(sin x))'", _der("exp(sin(x))", X), r"$\cos x e^{\sin x}$", OK),
+        ("(e^(cos x))'", _der("exp(cos(x))", X), r"$-\sin x e^{\cos x}$", OK),
+        ("(e^(sin x))' wrong", _der("exp(sin(x))", X), r"$\sin x e^{\cos x}$", NO),
+        # (open forms such as \ln \frac{1}{\cos x} are read; their verdict waits on their domain: the tests read them)
+        ("ln 2 as ln(1/cos(pi/3))", _ev("log(2)"), r"$\ln \frac{1}{\cos \frac{\pi}{3}}$", OK),
+        ("0 as ln sqrt(sin(pi/2))", _ev("0"), r"$\ln \sqrt{\sin \frac{\pi}{2}}$", OK),
+        ("cos(ln 1 / 2) = 1", _ev("cos(log(1)/2)"), r"$\cos \frac{\ln 1}{2}$", OK),
+        ("ln sqrt 3 as ln((1 + sin(pi/6))/cos(pi/6))", _ev("log(sqrt(3))"), r"$\ln \frac{1 + \sin \frac{\pi}{6}}{\cos \frac{\pi}{6}}$", OK),
+        ("ln tan(pi/8)", _ev("log(tan(pi/8))"), r"$\ln \tan \frac{\pi}{8}$", OK),
+        ("ln 3 as ln(1/cos(pi/3)) (wrong)", _ev("log(3)"), r"$\ln \frac{1}{\cos \frac{\pi}{3}}$", NO),
+        # a bracket group after a letter: a convention of the writer, read neither way (RK-T2-3)
+        ("(tan^2 x/2)'", _der("tan(x)**2/2", X), r"$\tan x(1 + \tan^2 x)$", UNK),
+        ("(tan^2 x/2)' a space", _der("tan(x)**2/2", X), r"$\tan x (1 + \tan^2 x)$", UNK),
+        ("(-cos x - cos^2 x/2)'", _der("-cos(x) - cos(x)**2/2", X), r"$\sin x(1+\cos x)$", UNK),
+        ("(sin^2 x - sin x)'", _der("sin(x)**2 - sin(x)", X), r"$\cos x(2\sin x - 1)$", UNK),
+        ("(x ln^2 x/2)'", _der("x*log(x)**2/2"), r"$\ln x(1 + \frac{1}{2}\ln x)$", UNK),
+        ("(tan^2 x/2)' with \\cdot", _der("tan(x)**2/2", X), r"$\tan x \cdot (1 + \tan^2 x)$", OK),
+        ("(tan^2 x/2)' bracketed", _der("tan(x)**2/2", X), r"$\tan(x)(1 + \tan^2 x)$", OK))]
+    opts = {"A": r"$\sin(2x + \frac{\pi}{4})$", "B": S4, "C": r"$\sin(2x - \frac{\pi}{4})$", "D": r"$\cos(2x + \frac{\pi}{4})$",
+            "E": r"$\sin(x + \frac{\pi}{8})$"}
+    q = _se("sin(2*x + pi/4)")
+    q["options"] = opts
+    out += [("MC sin(2x + pi/4): letter B alone (wrong)", q, sol(None, "expression", option="B"), NO, None),
+            ("MC sin(2x + pi/4): letter A alone", q, sol(None, "expression", option="A"), OK, None)]
+    st = [(_se("sin(2*x + pi/4)"), "sin(2*x + pi/4)", r"$\sin 2(x + \frac{\pi}{4}) = \sin(2x + \frac{\pi}{4})$", "compute", NO, REF),
+          (_se("sin(2*x + 1)"), "sin(2*x + 1)", r"$\sin 2(x+1) = \sin(2x + 1)$", "compute", NO, REF),
+          (ir("trig_solve", {"equation": "exp(x)*sin(x) = 0", "var": "x", "interval": "[0, 2*pi)"}, shape="set"), "{0, pi}",
+           r"$\sin x e^x = 0$", "eq", OK, NOTREF),
+          (_ev("sqrt(2)*sin(pi/4)"), "1", r"$\sin \frac{\pi}{4} \sqrt{2} = 1$", "compute", OK, NOTREF),
+          (_ev("log(8, 2)*sqrt(4)"), "6", r"$\log_2 8 \sqrt{4} = 6$", "compute", OK, NOTREF),
+          (_ev("log(1/cos(pi/3))"), "$\\ln 2$", r"$\ln \frac{1}{\cos \frac{\pi}{3}} = \ln 2$", "compute", OK, NOTREF),
+          (_ev("log(sqrt(sin(pi/2)))"), "0", r"$\ln \sqrt{\sin \frac{\pi}{2}} = \ln 1 = 0$", "compute", OK, NOTREF)]
+    for qq, ans, claim, kind, want, stw in st:
+        k = "expression" if qq["answer_shape"] == "expression" else ("set" if qq["answer_shape"] == "set" else "value")
+        out.append((f"step {kind} {claim!r}", qq, sol(ans, k, [(kind, claim)]), want, stw))
+    return out
+
+
+# M: YO-T2-2 --------------------------------------------------------------------------------------------------------
+def cases_m():
+    return [(f"{e}: compute {st!r} (no complex solution: undecided)", eqn(e), sol("∅", "set", [("compute", st)]), UNK, NEITHER)
+            for e, st in (("(x**2 - 4)/(x - 2) = 4", "x**2 - 4 = (x - 2)*(x + 4)"),
+                          ("x/(x - 1) = 1/(x - 1)", "x/(x - 1) - 1/(x - 1) = (x + 1)/(x - 1)"),
+                          ("2*x/(x - 3) = 6/(x - 3)", "2*x/(x - 3) - 6/(x - 3) = 2*(x + 3)/(x - 3)"),
+                          ("(x**2 - 1)/(x - 1) = 2", "x**2 - 1 - 2*(x - 1) = x**2 - 2*x - 1"))] + [
+        ("count (x²-1)/(x-1) - 2: compute 'x**2 - 1 = (x - 1)**2'", ir("count_roots", {"expr": "(x**2 - 1)/(x - 1) - 2", "var": "x"}),
+         sol("0", "count", [("compute", "x**2 - 1 = (x - 1)**2")]), UNK, NEITHER),
+        ("x²+1=0: compute 'x**2 = -1' (a multiple, complex solutions ±i: withdrawn)", eqn("x**2 + 1 = 0"),
+         sol("∅", "set", [("compute", "x**2 = -1")]), OK, NEITHER),
+        ("x²-4=0: compute 'x**2 - 4 = (x - 2)*(x + 4)' (premises with instances: refuted)", eqn("x**2 - 4 = 0"),
+         sol("{-2, 2}", "set", [("compute", "x**2 - 4 = (x - 2)*(x + 4)")]), NO, REF)]
+
+
+# N: RK-T2-4 --------------------------------------------------------------------------------------------------------
+def cases_n():
+    e = _ev("2 + 3")
+    out = [(f"2+3: payload {p!r}", e, sol(p), OK, None) for p in
+           ("5 tanedir", "5 kişidir", "5 birimdir", "5 değerini alır", "5 eder", "5 çıkar", "5 olacaktır", "5 oluyor",
+            "5 olarak hesaplanır", "5 değerdir")]
+    out += [(f"2+3: payload {p!r} (a unit with the copula: unread)", e, sol(p), UNK, None)
+            for p in ("5 derecedir", "5 cm'dir", "5 metredir")]
+    out += [("2+3: payload '6 tanedir' (wrong)", e, sol("6 tanedir"), NO, None),
+            ("2+3: payload '5 almaz' (negated)", e, sol("5 almaz"), UNK, None)]
+    q = eqn("x**2 - 5*x + 6 = 0")
+    out += [(f"x²-5x+6=0: payload {p!r}", q, sol(p, "set"), want, None) for p, want in
+            (("{2, 3} kümesi", OK), ("{2, 3} kümesidir", OK), ("{2, 3} çözüm kümesidir", OK), ("{2, 3} kökleri", OK),
+             ("{2, 3} çözümleri", OK), ("{2, 3} değerleri", OK), ("{2, 4} kümesi", NO))]
+    qi = ir("solve_inequality", {"var": "x", "inequality": "(x - 2)*(x - 3) < 0"}, shape="interval")
+    out += [(f"(x-2)(x-3)<0: payload {p!r}", qi, sol(p, "interval"), want, None) for p, want in
+            (("(2, 3) aralığı", OK), ("(2, 3) aralığıdır", OK), ("(2, 4) aralığı", NO))]
+    return out
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "J": cases_j, "K": cases_k}
+          "H": cases_h, "J": cases_j, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n}
 
 
-def main(out_path=None, groups="ABCDEFGHJK"):
+def main(out_path=None, groups="ABCDEFGHJKLMN"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -521,5 +635,5 @@ def main(out_path=None, groups="ABCDEFGHJK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHJK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHJKLMN"
     sys.exit(1 if main(out, grp) else 0)

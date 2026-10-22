@@ -42,6 +42,20 @@ H, J of the same `sonda.py`.
   with a subscripted base ('\\log_2 8/3', '\\log_{3}2/2'), a multi-token argument ('\\sin 3\\pi/2'), '\\%', '^\\circ'
   and the Unicode minus ('1/−2π'). The argument is read to its first operator; the sibling: latex2sympy read
   '\\sin x \\cdot \\cos x' as sin(x cos x), so the argument is now bracketed for it.
+
+Third round (22 Oct 2026; the audit of the second round, `son_denetim/son-ayristirici-t2/bulgular.json`, decisions
+"EK 9"): each test below the "third round" line failed on d9527f7 unless it is marked as a control. Probe groups L, M, N.
+
+* YO-T2-1 (realistic, false acceptance): the bracketing took '(' for a character, '\\sin 2(x + \\frac{\\pi}{4})' was
+  sin(2x + pi/4) and a phase-shift error CORRECT. A bracket group after a number is the argument's, as latex2sympy
+  reads it; after a letter it is read neither way ('\\tan x(1 + \\tan^2 x)', which took 47-58 s as x(1), RK-T2-3).
+* YO-T2-3 = RK-T2-1 (realistic, unjust rejection): a factor written after the argument (e^x, \\sqrt{2}) was taken into
+  it, and right derivatives were INCORRECT. It is no part of it; the bracketing departs from latex2sympy's reading only
+  where the decision gives it (an operator), the two must agree anywhere else.
+* RK-T2-2: nested function macros: the brackets of an inner argument shifted the outer one's and cut '\\left' in two.
+* YO-T2-2 (realistic, false acceptance): rational premises with no complex solution (every root a pole) made every step
+  a vacuous consequence; now undecided (decision iii).
+* RK-T2-4: 'kümesi', 'aralığı', 'tanedir', 'değerini alır', 'eder' (the copula on an allowed word that is no unit).
 """
 import pytest
 
@@ -326,7 +340,7 @@ def test_sayo1_a_wrong_square_under_a_count_is_refuted():
 @pytest.mark.parametrize("q,steps", [
     (_Q5, [("compute", "x**2 - 2*x + 5 = (x - 1)**2 + 4")]), (_Q1, [("compute", "x**2 = -1")]), (_Q1, [("eq", "x**2 = -1")]),
     (_QS, [("eq", "sqrt(x) = -1")]), (_QS, [("compute", "sqrt(x) = -1")]), (_Q1, [("compute", "(x**2 + 1)*(x - 1) = 0")]),
-    (_Q1, [("compute", "x**4 = 1")]), (_eqn("x/(x - 1) = 1"), [("compute", "x = x - 1")]),
+    (_Q1, [("compute", "x**4 = 1")]),
     (_eqn("2*x + 1 = 2*x + 3"), [("eq", "0 = 2")]), (_INEQ, [("eq", "(x - 1)**2 + 1 < 0")]),
 ])
 def test_sayo1_control_a_consequence_of_the_premises_is_withdrawn(q, steps):
@@ -340,6 +354,8 @@ def test_sayo1_control_a_consequence_of_the_premises_is_withdrawn(q, steps):
     (_eqn("Abs(x - 1) + Abs(x + 1) = 1"), "Abs(x - 1) + Abs(x + 1) = 2*Abs(x)"),
     # false at ±i only after the evaluation: the claim as written is 0/0 there (principle 12)
     (_Q1, "(x**4 - 1)/(x**2 + 1) = 0"), (_Q1, "(x**2 + 1)*(x - 1)/(x**2 + 1) = 0"), (_Q1, "1/(x**2 + 1) = 0"),
+    # no complex solution at all: x - (x - 1) = 1 (third round, YO-T2-2; it was withdrawn as a vacuous consequence)
+    (_eqn("x/(x - 1) = 1"), "x = x - 1"),
 ])
 def test_sayo1_an_undecided_compute_step_leaves_the_answer_unknown(q, step):
     """An order or a transcendental premise has no complex reading, a pole of the claim no value: neither refuted nor
@@ -378,7 +394,8 @@ def test_sayo1_the_empty_premise_reading():
     assert _empty_premise_reading(sp.Eq(x**2, 2*x - 5), parts, True) == "consequence"   # a multiple of the premise
     assert _empty_premise_reading(sp.Eq(2**x, 3), [sp.Eq(2**x + 3, 0)], True) is None
     u, v = sp.symbols("u v")
-    assert _empty_premise_reading(sp.Eq(u, 1), [sp.Eq(u + v, 1), sp.Eq(2*u + 2*v, 3)], True) == "consequence"
+    assert _empty_premise_reading(sp.Eq(u, 1), [sp.Eq(u + v, 1), sp.Eq(2*u + 2*v, 3)], True) is None   # no solution
+    assert _empty_premise_reading(sp.Eq(2*u + 2*v, 2), [sp.Eq(u + v, 1), sp.Eq(2*u + 2*v, 3)], True) is None  # a multiple
     assert _empty_premise_reading(sp.Eq(u**2, v), [sp.Eq(u**2 + v**2 + 1, 0)], True) is None   # complex solutions
     assert _empty_premise_reading(sp.Eq(u**2 - 1, 0), [sp.Eq(u**2 + 1, 0)], True) in ({"u": "-I"}, {"u": "I"})
     assert _empty_premise_reading(sp.Eq(u**2 - 1, 0), [sp.Eq(u**2 + 1, 0)], True, [u**2 + 1]) is None  # written poles
@@ -557,3 +574,170 @@ def test_sayo3_the_parser_reads_a_latex_argument_to_its_first_operator():
                     ("\\frac{\\log_3 2}{2}", sp.log(2) / sp.log(3) / 2), ("−π/2", -sp.pi / 2), ("50\\%", sp.Rational(1, 2))):
         assert not ambiguous_juxtaposition(t), t
         assert sp.simplify(parse_expr_str(t, ns) - want) == 0, t
+
+
+# ==== third round (22 Oct 2026) ====================================================================================
+def _se(e):
+    return _ir("simplify_expression", {"expr": e}, vars_=[X], shape="expression")
+
+
+_S4 = "$\\sin 2(x + \\frac{\\pi}{4})$"
+
+
+# ---- YO-T2-1 ------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("q,claim", [
+    (_se("sin(2*x + pi/4)"), _S4), (_se("sin(2*x + 1)"), "$\\sin 2(x+1)$"), (_se("log(3*x - 1)"), "$\\ln 3(x-1)$"),
+    (_se("cos(3*x - 2)"), "$\\cos 3(x-2)$"), (_se("log(2*x + 3, 2)"), "$\\log_2 2(x+3)$"), (_se("tan(2*x - 1)"), "$\\tan 2(x - 1)$"),
+    (_se("sin(2*x + pi/3)"), "$\\sin 2 (x + \\frac{\\pi}{3})$"), (_se("sin(x/2 + pi)"), "$\\sin \\frac{1}{2}(x + \\pi)$"),
+    (_der("-cos(2*x + 1)/2", X), "$\\sin 2(x+1)$"),
+])
+def test_yot21_a_bracket_group_after_a_number_is_the_arguments(q, claim):
+    """sin 2(x + pi/4) is sin(2x + pi/2): a phase-shift error is no sin(2x + pi/4)."""
+    assert verify(q, _sol(claim, "expression")).verdict == "INCORRECT", claim
+
+
+@pytest.mark.parametrize("q,claim", [
+    (_se("cos(2*x)"), _S4), (_se("sin(2*x + 2)"), "$\\sin 2(x+1)$"), (_se("log(3*x - 3)"), "$\\ln 3(x-1)$"),
+    (_se("log(2*x + 6, 2)"), "$\\log_2 2(x+3)$"), (_se("sin(x/2 + pi/2)"), "$\\sin \\frac{1}{2}(x + \\pi)$"),
+    (_se("log(2*Abs(x))"), "$\\ln 2|x|$"),
+])
+def test_yot21_control_the_writers_reading_is_correct(q, claim):
+    assert verify(q, _sol(claim, "expression")).verdict == "CORRECT", claim
+
+
+def test_yot21_a_wrong_letter_or_step_is_refuted():
+    q = _se("sin(2*x + pi/4)")
+    q["options"] = {"A": "$\\sin(2x + \\frac{\\pi}{4})$", "B": _S4, "C": "$\\sin(2x - \\frac{\\pi}{4})$",
+                    "D": "$\\cos(2x + \\frac{\\pi}{4})$", "E": "$\\sin(x + \\frac{\\pi}{8})$"}
+    assert verify(q, _sol(None, "expression", option="B")).verdict == "INCORRECT"
+    assert verify(q, _sol(None, "expression", option="A")).verdict == "CORRECT"          # control
+    for st in (_S4[:-1] + " = \\sin(2x + \\frac{\\pi}{4})$", "$\\sin 2(x+1) = \\sin(2x + 1)$"):
+        r = verify(_se("sin(2*x + pi/4)"), _sol("sin(2*x + pi/4)", "expression", [("compute", st)]))
+        assert r.verdict == "INCORRECT" and _statuses(r) == ["refuted"], (st, r.verdict, _statuses(r))
+
+
+# ---- YO-T2-3 = RK-T2-1 --------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("q,claim", [
+    (_der("exp(x)*(sin(x) - cos(x))/2", X), "$\\sin x e^x$"), (_der("exp(x)*(sin(x) - cos(x))/2", X), "$\\sin x e^{x}$"),
+    (_der("exp(x)*sin(x)", X), "$\\sin x e^x + \\cos x e^x$"), (_der("exp(x)*cos(x)", X), "$\\cos x e^x - \\sin x e^x$"),
+    (_der("exp(x)*log(x)"), "$\\ln x e^{x} + \\frac{e^{x}}{x}$"),
+    (_der("sin(x)*sqrt(x)"), "$\\cos x \\sqrt{x} + \\frac{\\sin x}{2\\sqrt{x}}$"), (_der("-sqrt(2)*cos(x)", X), "$\\sin x \\sqrt{2}$"),
+    (_der("2*x**(3/2)*log(x)/3 - 4*x**(3/2)/9"), "$\\ln x \\sqrt{x}$"), (_der("sin(x)**2", X), "$2\\sin x \\cdot \\cos x$"),
+])
+def test_rkt21_a_factor_after_the_argument_is_no_part_of_it(q, claim):
+    assert verify(q, _sol(claim, "expression")).verdict == "CORRECT", claim
+
+
+def test_rkt21_control_the_other_reading_is_refuted():
+    assert verify(_der("-cos(sqrt(2)*x)/sqrt(2)", X), _sol("$\\sin x \\sqrt{2}$", "expression")).verdict == "INCORRECT"
+    assert verify(_se("log(2)*Abs(x)"), _sol("$\\ln 2|x|$", "expression")).verdict == "INCORRECT"
+
+
+@pytest.mark.parametrize("q,answer,kind,step", [
+    (_ir("trig_solve", {"equation": "exp(x)*sin(x) = 0", "var": "x", "interval": "[0, 2*pi)"}, shape="set"), "{0, pi}", "eq",
+     "$\\sin x e^x = 0$"),
+    (_ev("sqrt(2)*sin(pi/4)"), "1", "compute", "$\\sin \\frac{\\pi}{4} \\sqrt{2} = 1$"),
+    (_ev("log(8, 2)*sqrt(4)"), "6", "compute", "$\\log_2 8 \\sqrt{4} = 6$"),
+])
+def test_rkt21_a_right_step_with_a_factor_after_the_argument_is_not_refuted(q, answer, kind, step):
+    r = verify(q, _sol(answer, "set" if answer.startswith("{") else "value", [(kind, step)]))
+    assert r.verdict == "CORRECT" and "refuted" not in _statuses(r), (step, r.verdict, _statuses(r))
+
+
+# ---- RK-T2-2 ------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("q,answer,step", [
+    (_ev("log(1/cos(pi/3))"), "$\\ln 2$", "$\\ln \\frac{1}{\\cos \\frac{\\pi}{3}} = \\ln 2$"),
+    (_ev("cos(log(1)/2)"), "1", "$\\cos \\frac{\\ln 1}{2} = \\cos 0 = 1$"),
+    (_ev("log(log(8)/log(2), 3)"), "1", "$\\log_3 \\frac{\\ln 8}{\\ln 2} = \\log_3 3 = 1$"),
+    (_ev("log(sqrt(sin(pi/2)))"), "0", "$\\ln \\sqrt{\\sin \\frac{\\pi}{2}} = \\ln 1 = 0$"),
+])
+def test_rkt22_nested_function_macros_are_read(q, answer, step):
+    r = verify(q, _sol(answer, steps=[("compute", step)]))
+    assert r.verdict == "CORRECT" and "malformed_step_claim" not in _flags(r), (step, r.verdict, _statuses(r))
+
+
+def test_rkt22_the_reader_brackets_nested_arguments():
+    import sympy as sp
+    from mathverify.normalize.parse import _SAFE_NAMES, _bracket_spans, parse_expr_str
+    x = sp.Symbol("x")
+    ns = dict(_SAFE_NAMES, x=x)
+    for t, want in (("\\ln \\frac{1}{\\cos x}", sp.log(1 / sp.cos(x))), ("\\ln \\sqrt{\\sin x}", sp.log(sp.sqrt(sp.sin(x)))),
+                    ("\\cos x e^{\\sin x}", sp.cos(x) * sp.exp(sp.sin(x))), ("\\ln \\tan \\frac{x}{2}", sp.log(sp.tan(x / 2))),
+                    ("\\ln \\frac{1 + \\sin x}{\\cos x}", sp.log((1 + sp.sin(x)) / sp.cos(x))),
+                    ("\\exp \\sqrt{\\ln x}", sp.exp(sp.sqrt(sp.log(x)))), ("\\sin \\sqrt{\\cos x}", sp.sin(sp.sqrt(sp.cos(x))))):
+        assert sp.simplify(parse_expr_str(t, ns) - want) == 0, t
+    assert _bracket_spans("abcdef", [(1, 5, "op"), (2, 4, "op")]) == "a\\left(b\\left(cd\\right)e\\right)f"
+    assert _bracket_spans("abcd", [(1, 3, "op"), (1, 2, "op")]) == "a\\left(\\left(b\\right)c\\right)d"
+    assert _bracket_spans("abc", [(2, 3, "op"), (1, 2, "op")]) == "a\\left(b\\right)\\left(c\\right)"
+
+
+# ---- RK-T2-3 ------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("f,claim", [
+    ("tan(x)**2/2", "$\\tan x(1 + \\tan^2 x)$"), ("tan(x)**2/2", "$\\tan x (1 + \\tan^2 x)$"),
+    ("-cos(x) - cos(x)**2/2", "$\\sin x(1+\\cos x)$"), ("sin(x)**2 - sin(x)", "$\\cos x(2\\sin x - 1)$"),
+    ("x*log(x)**2/2", "$\\ln x(1 + \\frac{1}{2}\\ln x)$"), ("-cos(x) - cos(x)**2/2", "$\\sin x\\left(1+\\cos x\\right)$"),
+])
+def test_rkt23_a_bracket_group_after_a_letter_is_read_neither_way_and_fast(f, claim):
+    import time
+    t = time.monotonic()
+    r = verify(_der(f, X), _sol(claim, "expression"))
+    assert r.verdict == "UNKNOWN" and "claim_ambiguous_juxtaposition" in _flags(r), (claim, r.verdict, _flags(r))
+    assert time.monotonic() - t < 10, claim
+
+
+@pytest.mark.parametrize("q,claim", [(_se("sin(2*x/3)"), "$\\sin 2 \\frac{x}{3}$"), (_se("sin(2)*x/3"), "$\\sin 2 \\frac{x}{3}$"),
+                                     (_se("sin(x)*pi/2"), "$\\sin x \\frac{\\pi}{2}$")])
+def test_rkt21_a_factor_latex2sympy_takes_into_the_argument_is_read_neither_way(q, claim):
+    """latex2sympy reads \\sin 2 \\frac{x}{3} as sin(2x/3), the argument read to its first item sin(2)·x/3: the two
+    readings disagree, and neither is taken."""
+    r = verify(q, _sol(claim, "expression"))
+    assert r.verdict == "UNKNOWN" and "claim_ambiguous_juxtaposition" in _flags(r), (claim, r.verdict)
+
+
+@pytest.mark.parametrize("claim", ["$\\tan x \\cdot (1 + \\tan^2 x)$", "$\\tan(x)(1 + \\tan^2 x)$"])
+def test_rkt23_control_an_operator_or_brackets_decide(claim):
+    assert verify(_der("tan(x)**2/2", X), _sol(claim, "expression")).verdict == "CORRECT", claim
+
+
+def test_rkt23_a_variable_applied_as_a_function_is_not_read():
+    import sympy as sp
+    from mathverify.normalize.parse import _SAFE_NAMES, ParseError, parse_expr_str
+    ns = dict(_SAFE_NAMES, x=sp.Symbol("x"))
+    with pytest.raises(ParseError):
+        parse_expr_str("$\\frac{x(2)}{2}$", ns)
+
+
+# ---- YO-T2-2 ------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("q,answer,kind,step", [
+    (_eqn("(x**2 - 4)/(x - 2) = 4"), "∅", "set", "x**2 - 4 = (x - 2)*(x + 4)"),
+    (_eqn("x/(x - 1) = 1/(x - 1)"), "∅", "set", "x/(x - 1) - 1/(x - 1) = (x + 1)/(x - 1)"),
+    (_eqn("2*x/(x - 3) = 6/(x - 3)"), "∅", "set", "2*x/(x - 3) - 6/(x - 3) = 2*(x + 3)/(x - 3)"),
+    (_eqn("(x**2 - 1)/(x - 1) = 2"), "∅", "set", "x**2 - 1 - 2*(x - 1) = x**2 - 2*x - 1"),
+    (_ir("count_roots", {"expr": "(x**2 - 1)/(x - 1) - 2", "var": "x"}), "0", "count", "x**2 - 1 = (x - 1)**2"),
+])
+def test_yot22_premises_with_no_complex_solution_leave_a_compute_step_undecided(q, answer, kind, step):
+    r = verify(q, _sol(answer, kind, [("compute", step)]))
+    assert r.verdict == "UNKNOWN" and "step_reading_undecided" in _flags(r), (step, r.verdict, _flags(r))
+
+
+# ---- RK-T2-4 ------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("p", ["5 tanedir", "5 kişidir", "5 birimdir", "5 değerini alır", "5 eder", "5 çıkar",
+                               "5 olacaktır", "5 oluyor", "5 olarak hesaplanır"])
+def test_rkt24_more_neutral_words_are_dropped(p):
+    assert verify(_ev("2 + 3"), _sol(p)).verdict == "CORRECT", p
+    assert verify(_ev("2 + 4"), _sol(p)).verdict == "INCORRECT", p
+
+
+@pytest.mark.parametrize("q,p,kind", [
+    (_eqn("x**2 - 5*x + 6 = 0"), "{2, 3} kümesi", "set"), (_eqn("x**2 - 5*x + 6 = 0"), "{2, 3} çözüm kümesidir", "set"),
+    (_eqn("x**2 - 5*x + 6 = 0"), "{2, 3} kökleri", "set"),
+    (_ir("solve_inequality", {"var": "x", "inequality": "(x - 2)*(x - 3) < 0"}, shape="interval"), "(2, 3) aralığı", "interval"),
+    (_ir("solve_inequality", {"var": "x", "inequality": "(x - 2)*(x - 3) < 0"}, shape="interval"), "(2, 3) aralığıdır", "interval"),
+])
+def test_rkt24_a_set_or_an_interval_named_after_it(q, p, kind):
+    assert verify(q, _sol(p, kind)).verdict == "CORRECT", p
+
+
+@pytest.mark.parametrize("p", ["5 derecedir", "5 cm'dir", "5 metredir"])
+def test_rkt24_control_a_unit_with_the_copula_is_not_dropped(p):
+    assert verify(_ev("2 + 3"), _sol(p)).verdict == "UNKNOWN", p

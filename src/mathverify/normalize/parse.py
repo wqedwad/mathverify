@@ -1380,52 +1380,50 @@ _LATEX_ARGUMENT_END = frozenset({"cdot", "times", "div", "pm", "mp", "le", "leq"
                                  "ne", "neq", "lt", "gt", "approx", "equiv", "to", "in", "notin", "cup", "cap", "right",
                                  "rbrace", "rangle", "rfloor", "rceil", "end", "quad", "qquad", "text", "mbox", "mid",
                                  "land", "lor", "wedge", "vee", "implies", "iff"})
+# a factor of its own: after the argument's first item it is no part of the argument, as latex2sympy reads it
+# (\sin x \sqrt{2} is sin(x)·√2; audit of the second round, RK-T2-1, YO-T2-3)
+_LATEX_FACTOR_MACROS = frozenset({"sqrt", "frac", "dfrac", "tfrac", "binom", "dbinom", "tbinom", "mathrm", "operatorname",
+                                  "mathbb", "overline", "bar", "hat", "vec", "int", "iint", "oint", "sum", "prod", "lim"})
+_NUMERIC_GROUP = re.compile(r"\{\s*\d+(?:\.\d+)?\s*\}")
+_NUMERIC_FRAC = re.compile(r"\\[dt]?frac\s*\{\s*\d+(?:\.\d+)?\s*\}\s*\{\s*\d+(?:\.\d+)?\s*\}")
 
 
-def _function_argument_divides(s: str, m) -> bool:
-    """Does the argument of the LaTeX function macro matched by `m`, written without brackets, hold a '/' before it ends?
-    Its base and power are skipped (\\log_2, \\log_{10}, \\sin^2); it runs to the first operator (+, -, =, <, >, ',',
-    \\cdot, a relation) or closing bracket, a braced group or a macro with its arguments read whole: \\log_2 8/3,
-    \\sin 2x/2, \\sin 3\\pi/2, \\ln 2x/2, \\ln{2}/2 do; \\sin(x)/2, \\frac{\\ln 2}{2}, \\sin x + 1 do not (audit SA-YO-3,
-    SA-RK-4)."""
-    sp_ = lambda i: i + len(_LATEX_SPACE.match(s, i).group(0))  # noqa: E731
-    k = sp_(m.end())
-    while k is not None and k < len(s) and s[k] in "_^":
-        k = sp_(k + 1)
-        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)
-        k = None if k is None else sp_(k)
-    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):
-        return False
-    j = k
-    while j < len(s):
-        c = s[j]
-        if c == "/":
-            return True
-        if c in ")]}|,;&=<>" + _SIGNS:
-            return False
-        if c == "{" or c == "[":
-            j = _latex_group_end(s, j)
-            if j is None:
-                return False
-            continue
-        if c == "\\":
-            mm = _LATEX_MACRO.match(s, j)
-            if mm is None:
-                return False                     # \{, \,: a delimiter or a space ends nothing read here
-            if mm.group(1) in _LATEX_ARGUMENT_END:
-                return False
-            e = _latex_atom_end(s, j)
-            j = mm.end() if e is None else e
-            continue
-        j += 1
-    return False
+def _latex_script_end(s: str, j: int) -> int | None:
+    """The index after the power or subscript at `s[j]` ('^' or '_'): a braced group, a macro with its arguments
+    (^\\circ too) or one character."""
+    k = j + 1 + len(_LATEX_SPACE.match(s, j + 1).group(0))
+    if k >= len(s):
+        return None
+    if s[k] == "{":
+        return _latex_group_end(s, k)
+    if s[k] == "\\":
+        m = _LATEX_MACRO.match(s, k)
+        if m is None:
+            return k + 2 if k + 1 < len(s) else None
+        return (_latex_atom_end(s, k) if m.group(1) not in _LATEX_NO_FACTOR else None) or m.end()
+    return k + 1
 
 
-def _function_argument_span(s: str, m) -> tuple[int, int] | None:
-    """(start, end) of the argument of the LaTeX function macro matched by `m` when it is written without brackets,
-    its base and power skipped (\\log_2 8, \\sin^2 x): it runs to the first operator (+, -, =, <, >, ',', \\cdot,
-    \\times, a relation), closing bracket or next function macro, its trailing space left out; None when it is
-    bracketed ((x), \\left(x\\right)) or empty (\\ln|x|)."""
+def _bar_group_end(s: str, j: int) -> int | None:
+    """The index after the '|...|' group opening at `s[j]`."""
+    k = s.find("|", j + 1)
+    return None if k < 0 else k + 1
+
+
+def _function_argument(s: str, m) -> tuple[int, int, str] | None:
+    """The argument of the LaTeX function macro matched by `m` when it is written without brackets, its base and power
+    skipped (\\log_2 8, \\sin^2 x): (start, end, how it ends); None when it is bracketed ((x), \\left(x\\right)) or empty.
+    It is a term: numbers, letters and constants (2x, 3\\pi, x y) with their powers, subscripts, braced groups and
+    factorials; a fraction, a root or a bracket group only as its first item, a bracket group after a number too
+    ('\\sin 2(x + 1)' is sin(2(x + 1)), '\\ln 2|x|' ln(2|x|): latex2sympy's reading and the A sin B(x - C) of the
+    textbook; YO-T2-1). How it ends:
+      'op'     at an operator or a relation (+, -, =, ',', \\cdot, \\times, ...), a closing bracket, the next function
+               macro or the end: the argument is read to the first operator (EK 3)
+      'slash'  at a '/' (\\ln 2/2: (ln 2)/2 or ln(2/2)? `_latex_divisor_juxtaposed`)
+      'factor' before a factor of its own written right after it (e^x, \\sqrt{2}, \\frac{..}{..}): no part of it, as
+               latex2sympy reads it (\\sin x e^x is sin(x)·e^x; RK-T2-1, YO-T2-3)
+      'group'  before a bracket or '|...|' group right after a term with a letter (\\tan x(1 + \\tan^2 x): tan(x)·(1 +
+               tan²x) in the textbook, tan(x(1 + tan²x)) for latex2sympy): a convention of the writer (RK-T2-3)."""
     sp_ = lambda i: i + len(_LATEX_SPACE.match(s, i).group(0))  # noqa: E731
     k = sp_(m.end())
     while k is not None and k < len(s) and s[k] in "_^":
@@ -1435,39 +1433,127 @@ def _function_argument_span(s: str, m) -> tuple[int, int] | None:
     if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):
         return None
     j = last = k
-    while j < len(s):
-        c = s[j]
-        if c in ")]}|,;&=<>/" + _SIGNS:
+    numeric = True                               # the term so far is a number
+    stop = "op"
+    while True:
+        j = sp_(j)
+        if j >= len(s):
             break
-        if c.isspace():
-            j += 1
+        c = s[j]
+        if c == "/":
+            stop = "slash"
+            break
+        if c in ")]}&=<>,;:+*" or c in _SIGNS:
+            break
+        if c == "!":
+            j = last = j + 1
             continue
-        if c in "{[":
-            e = _latex_group_end(s, j)
+        if c in "^_":
+            e = _latex_script_end(s, j)
             if e is None:
                 return None
             j = last = e
             continue
+        if c.isdigit() or c == ".":
+            while j < len(s) and (s[j].isdigit() or s[j] == "."):
+                j += 1
+            last = j
+            continue
+        if c.isalpha():
+            if c == "e" and last > k and s[sp_(j + 1):sp_(j + 1) + 1] == "^":
+                stop = "factor"                  # e^x
+                break
+            j = last = j + 1
+            numeric = False
+            continue
+        if c == "{":
+            e = _latex_group_end(s, j)
+            if e is None:
+                return None
+            numeric = numeric and bool(_NUMERIC_GROUP.fullmatch(s, j, e))
+            j = last = e
+            continue
+        if c in "([|" or _LATEX_LEFT.match(s, j):
+            if last > k and not numeric:
+                stop = "group"
+                break
+            e = _bar_group_end(s, j) if c == "|" else _latex_group_end(s, j)
+            if e is None:
+                return None
+            j = last = e
+            numeric = False
+            continue
         if c == "\\":
             mm = _LATEX_MACRO.match(s, j)
-            if mm is None or mm.group(1) in _LATEX_ARGUMENT_END or mm.group(1) in _LATEX_FUNCTIONS:
+            if mm is None:
+                break                            # \{, \|, \\: a delimiter
+            name = mm.group(1)
+            if name in _LATEX_ARGUMENT_END or name in _LATEX_FUNCTIONS or name in _LATEX_NO_FACTOR:
                 break
-            e = _latex_atom_end(s, j)
-            j = last = mm.end() if e is None else e
+            if name in _LATEX_FACTOR_MACROS:
+                if last > k:
+                    stop = "factor"
+                    break
+                e = _latex_atom_end(s, j)
+                if e is None:
+                    return None
+                numeric = bool(_NUMERIC_FRAC.fullmatch(s, j, e))
+                j = last = e
+                continue
+            j = last = mm.end()                  # a constant or a letter: \pi, \theta, \infty
+            numeric = False
             continue
-        j = last = j + 1
-    return (k, last) if last > k else None
+        break
+    return (k, last, stop) if last > k else None
+
+
+def _function_arguments(s: str) -> list[tuple[int, int, str]]:
+    """`_function_argument` of every LaTeX function macro of `s` whose argument is written without brackets."""
+    return [a for m in _LATEX_MACRO.finditer(s) if m.group(1) in _LATEX_FUNCTIONS
+            for a in [_function_argument(s, m)] if a is not None]
+
+
+def _bracket_spans(s: str, spans) -> str:
+    """`s` with each span (start, end, ...) put in \\left( ... \\right), an inner one inside its outer one: inserted
+    one after another from the right, an inner span shifted the outer's end and '\\left' was cut in two
+    (\\cos x e^{\\sin x}; audit of the second round, RK-T2-2)."""
+    events = []
+    for a in spans:
+        events.append((a[0], 1, -a[1], "\\left("))       # at one place: the closings first, the longer opening first
+        events.append((a[1], 0, -a[0], "\\right)"))      # ... the inner closing first
+    out, i = [], 0
+    for pos, _, _, text in sorted(events, key=lambda t: t[:3]):
+        out.append(s[i:pos])
+        out.append(text)
+        i = pos
+    out.append(s[i:])
+    return "".join(out)
+
+
+def _latex_argument_ambiguous(s: str) -> bool:
+    """Is a function's argument written without brackets followed by a bracket group after a letter (`_function_argument`
+    'group': \\tan x(1 + \\tan^2 x)), or by a factor latex2sympy does not read as a factor of its own? A reading of the
+    argument other than latex2sympy's is taken only where the decision (EK 3: to the first operator) gives it; anywhere
+    else the two must agree, or the text is read neither way (audit of the second round, YO-T2-1, YO-T2-3)."""
+    spans = _function_arguments(s)
+    if any(a[2] == "group" for a in spans):
+        return True
+    if not any(a[2] == "factor" for a in spans):
+        return False
+    try:
+        return _latex2sympy(_latex_prepared(_bracket_spans(s, [a for a in spans if a[2] != "slash"]))) != \
+            _latex2sympy(_latex_prepared(_bracket_spans(s, [a for a in spans if a[2] == "op"])))
+    except Exception:  # noqa: BLE001 - not read either way: no reading is taken
+        return True
 
 
 def _bracket_function_arguments(s: str) -> str:
-    """`s` with each function argument written without brackets (`_function_argument_span`) bracketed: latex2sympy
-    took a product after it into the argument, \\sin x \\cdot \\cos x was sin(x*cos(x)) and \\sin x \\cdot 3 was sin(3x);
-    the argument is read up to the first operator (audit SA-YO-3, SA-RK-4: the decision's reading)."""
-    spans = [sp_ for m in _LATEX_MACRO.finditer(s) if m.group(1) in _LATEX_FUNCTIONS
-             for sp_ in [_function_argument_span(s, m)] if sp_ is not None]
-    for k, e in sorted(spans, reverse=True):
-        s = s[:k] + "\\left(" + s[k:e] + "\\right)" + s[e:]
-    return s
+    """`s` with each function argument written without brackets (`_function_argument`) bracketed: latex2sympy took a
+    product after it into the argument, \\sin x \\cdot \\cos x was sin(x*cos(x)) and \\sin x \\cdot 3 was sin(3x); the
+    argument is read up to the first operator (audit SA-YO-3, SA-RK-4: the decision's reading). An argument a factor
+    follows is bracketed as latex2sympy reads it (`_latex_argument_ambiguous` refuses the text otherwise)."""
+    spans = [a for a in _function_arguments(s) if a[2] in ("op", "factor")]
+    return _bracket_spans(s, spans) if spans else s
 
 
 def _latex_divisor_juxtaposed(s: str) -> bool:
@@ -1492,7 +1578,7 @@ def _latex_divisor_juxtaposed(s: str) -> bool:
                 return True
     # the dual: a function's argument written without brackets holding a '/' (\ln 2/2: (ln 2)/2 or ln(2/2)?);
     # latex2sympy took the division into the argument, \ln{2}/2 too, and read 0 for (ln 2)/2 (sibling of G4YO-2)
-    return any(m.group(1) in _LATEX_FUNCTIONS and _function_argument_divides(s, m) for m in _LATEX_MACRO.finditer(s))
+    return any(a[2] == "slash" for a in _function_arguments(s))
 
 
 def ambiguous_juxtaposition(text) -> bool:
@@ -1503,7 +1589,7 @@ def ambiguous_juxtaposition(text) -> bool:
         return False
     t = strip_presentation(_strip_invisible(text))
     if is_latex(t):
-        return _latex_divisor_juxtaposed(t)
+        return _latex_divisor_juxtaposed(t) or _latex_argument_ambiguous(t)
     return any(_closes_divisor(m.string, m.start(1)) for m in _UNI_VALUE_RE.finditer(t)) \
         or any(_closes_divisor(m.string, m.end(1)) for m in _DEG_PAREN_RE.finditer(t)) \
         or any(_closes_divisor(m.string, m.end(1) - 1) for m in _DEG_NUM_RE.finditer(t)) \
@@ -2328,6 +2414,12 @@ _LATEX_GCD = re.compile(r"\\(?:(gcd|lcm)(?![A-Za-z])|operatorname\s*\{\s*(gcd|lc
 _LATEX_INTEGER_OPS = {"\\text{gcd}": "gcd", "\\text{lcm}": "lcm"}
 
 
+def _latex_prepared(s: str) -> str:
+    """A LaTeX text as `_latex_to_sympy` gives it to latex2sympy (\\gcd, \\operatorname{arccot}, exact decimals)."""
+    return _exact_latex_decimals(_LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)),
+                                                _LATEX_ARCCOT.sub(r"\\arccot ", s)))
+
+
 _LATEX_CONVERTER = None
 
 
@@ -2671,8 +2763,13 @@ def _latex_to_sympy(s: str, ns: dict[str, Any]):
         # convention of the writer, not guessed (G4YO-2)
         raise ParseError(f"{s!r} writes a product or a function's argument next to a '/' without brackets "
                          "((1/2)\\pi or 1/(2\\pi)?): not read")
-    s = _bracket_function_arguments(s)
-    s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
+    if _latex_argument_ambiguous(s):
+        # \tan x(1 + \tan^2 x): tan(x)·(1 + tan²x) or tan(x(1 + tan²x))? a convention of the writer (audit of the second
+        # round, YO-T2-1, YO-T2-3, RK-T2-3)
+        raise ParseError(f"{s!r} writes a factor right after a function's argument without brackets "
+                         "(\\tan x(1 + \\tan^2 x): inside the argument or after it?): not read")
+    s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)),
+                       _LATEX_ARCCOT.sub(r"\\arccot ", _bracket_function_arguments(s)))
     _refuse_latex_ranges(s)
     expr = _latex2sympy(_exact_latex_decimals(s))
     # the names are checked before the IR's symbols bring their declarations too (and again after): with
@@ -2696,6 +2793,11 @@ def _latex_to_sympy(s: str, ns: dict[str, Any]):
             return e.replace(sp.acot, arccot) if e.has(sp.acot) else e   # (0, pi), as in the canonical branch
         expr = _on_sides(expr, lambda e: _latex_limit_variables(_integer_indices(convert(e)), ns))
         _refuse_reversed_ranges(expr, s)
+        # a variable applied as a function: latex2sympy reads x(1) as the undefined function x at 1, which no certificate
+        # decides (it took 47-58 s on \tan \left(x(1\right) + \tan^2 x); audit of the second round, RK-T2-3)
+        applied = sorted({n.func.__name__ for n in expr.atoms(AppliedUndef) if isinstance(ns.get(n.func.__name__), Symbol)})
+        if applied:
+            raise ParseError(f"LaTeX {s!r} applies the variable(s) {applied} as a function: not read")
     # rebind free symbols to the IR symbols (assumptions)
     reps = {}
     for fs in expr.free_symbols:
