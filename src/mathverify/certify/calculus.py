@@ -587,12 +587,14 @@ def _raw_pair(lo, hi):
 _ENCLOSURE_SAFETY = 120.0       # seconds: past it an enclosure is abandoned (UNKNOWN), never cut short
 
 
-def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0, defined: bool = False):
+def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0, defined: bool = False,
+                      max_cells: int = 4000, settle: int = 0):
     """(lo, hi) mpf: an interval holding ∫_a^b f, refined until it misses `outside` or lies within
     `inside` ((lo, hi) mpf pairs) or the budget is spent; None without an enclosure (an infinite range,
     an operation with no interval extension). The ends may be infinite (a singularity). `defined`: the caller has
     proved that the integrand's conditions fail on a null set of [a, b] at most (`integrand_undefined_on_a_subinterval`
-    False), so a square root's base is >= 0 almost everywhere there (`enclosure.rigorous_enclosure`)."""
+    False), so a square root's base is >= 0 almost everywhere there (`enclosure.rigorous_enclosure`). `max_cells` and
+    `settle`: the budget of cells and the rounds a finite sum may go without narrowing (`rigorous_enclosure`)."""
     from .enclosure import from_raw
     try:
         f, a, b = sp.sympify(integrand), sp.sympify(a), sp.sympify(b)
@@ -603,7 +605,7 @@ def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: 
     # the budget is the number of cells (deterministic); the time is only a safety stop (RK-C)
     r = sb_run("mathverify.certify.enclosure:rigorous_enclosure", f, var, a, b,
                _raw_pair(*outside) if outside else None, _raw_pair(*inside) if inside else None,
-               4000, _ENCLOSURE_SAFETY, defined, timeout=_ENCLOSURE_SAFETY + 10)
+               max_cells, _ENCLOSURE_SAFETY, defined, settle, timeout=_ENCLOSURE_SAFETY + 10)
     if not r.ok or r.value is None:
         return None
     return from_raw(r.value[0]), from_raw(r.value[1])
@@ -745,14 +747,36 @@ def declared_tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, abs_
     return (False if ok is False and okr is False else None), both
 
 
+# the largest relative error estimate (of max(1, |v|)) of a rung read as a value: by a settled ladder (son denetim
+# SI-YO-3: 10^-10, mpmath's failed 0.0 for ∫_{-1}^{1} dx/x carries 2.0) and by the last rung against a half-infinite
+# enclosure (SI-YO-2: measured at 80 digits, 1.0e-10 at most for the true values of ∫ |x - c|^p, p >= -9/10, 5e-6 at
+# p = -19/20; 1.8e-4 to 5e-3 for the divergent ∫_0^1 dx/x, ∫_0^{1/2} dx/(x|ln x|), ∫_{1/2}^1 dx/(1 - x). ∫_0^1 dx/x²
+# is 2e84 there with an estimate of 1.0: the margin below keeps every finite value away from it)
+_LADDER_ERR = mp.mpf("1e-10")
+_RUNG_ERR = mp.mpf("1e-8")
+# the last rung's error estimates fall short of its true error: 2.3 times for ∫_0^2 |x - 1|^(-2/3) dx = 6, 38 times for
+# ∫_{-1}^{2} |x|^(-9/10) dx (measured at 80 digits); the margin around it is this many estimates (at least 10)
+_RUNG_MARGIN = 100
+
+
+def _small_error(rung, bound=_LADDER_ERR) -> bool:
+    """Is a rung's own error estimate at most `bound` of max(1, |v|)? mpmath's quad returns 0.0 with an error
+    estimate of 2.0 for ∫_{-1}^{1} dx/x at every precision: a failure, not a value (son denetim SI-YO-3)."""
+    v, e = mp.mpf(rung["value"]), rung.get("err")
+    return e not in (None, "None") and abs(mp.mpf(e)) <= bound * max(abs(v), 1)
+
+
 def _stable_ladder_holds(ladder, c) -> bool:
     """Do the last two rungs of a ladder that did not converge by its error estimates agree to 10^-20 (relative to
-    max(1, |v|)), and does the interval `c` of a certified value meet [v - r, v + r] around the last value v, r ten times
-    their difference plus the rounding of the last printed value?"""
+    max(1, |v|)), with error estimates of their own at most 10^-10 of it (`_small_error`), and does the interval `c` of
+    a certified value meet [v - r, v + r] around the last value v, r ten times their difference plus the rounding of
+    the last printed value?"""
     if len(ladder) < 2:
         return False
     try:
         with mp.workdps(100):
+            if not (_small_error(ladder[-2]) and _small_error(ladder[-1])):
+                return False
             v1, v2 = mp.mpf(ladder[-2]["value"]), mp.mpf(ladder[-1]["value"])
             scale = max(abs(v2), 1)
             spread = abs(v2 - v1)
@@ -762,6 +786,31 @@ def _stable_ladder_holds(ladder, c) -> bool:
             return bool(c[0] <= v2 + r and c[1] >= v2 - r)
     except (KeyError, TypeError, ValueError):
         return False
+
+
+def _near_last_rung(ladder, c) -> bool:
+    """Does the interval `c` of a certified value meet [v - r, v + r] around the last rung's value v, r `_RUNG_MARGIN`
+    times its error estimate plus the rounding of its printed value, with that estimate at most `_RUNG_ERR` of
+    max(1, |v|)? ∫_0^2 |x - 1|^(-2/3) dx = 6 is 6 - 4.6e-28 at 80 digits with an estimate of 2e-28; ∫_0^1 dx/x is 79,
+    125 and 194 with estimates of 1.0."""
+    if not ladder:
+        return False
+    try:
+        with mp.workdps(100):
+            last = ladder[-1]
+            if not _small_error(last, _RUNG_ERR):
+                return False
+            v = mp.mpf(last["value"])
+            r = _RUNG_MARGIN * abs(mp.mpf(last["err"])) + mp.mpf(10) ** (-(int(last["dps"]) - 5)) * max(abs(v), 1)
+            return bool(c[0] <= v + r and c[1] >= v - r)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+# the enclosure of a certificate without converged numbers: its budget of cells and the rounds a finite sum holding the
+# value may go without narrowing (`rigorous_enclosure`'s `settle`). 4000 cells and no settling spent 4 to 30 s on fast
+# oscillations (cos² 1000πx on [0, 1]) and changed no decision (son denetim SON-INT-RK-2)
+_CHECK_BUDGET = (500, 8)
 
 
 def _certificate_check(integrand, var, a, b, cval, val, nev: dict, timeout: float, defined: bool = False
@@ -774,8 +823,9 @@ def _certificate_check(integrand, var, a, b, cval, val, nev: dict, timeout: floa
     1)) dx stood against v = 2.0; son saldırı G2YO-1), or an enclosure shows v wrong (a peak the quadrature missed: the
     proof stands); otherwise an enclosure that misses cval refutes the certificate, and nothing else decides.
     Without one (no convergence: a divergent integral, a complex value at an end), cval is taken only inside a
-    rigorous enclosure that says something (not (-oo, oo)), refined until it misses cval or lies within 10^-6 of it:
-    the wrong -log 2 - 15/32 for the divergent ∫_{-2}^{1/4} max(x, 1/x) dx stood alone (G2YO-2)."""
+    rigorous enclosure that says something, refined until it misses cval or lies within 10^-6 of it: the wrong
+    -log 2 - 15/32 for the divergent ∫_{-2}^{1/4} max(x, 1/x) dx stood alone (G2YO-2). A finite one says something; a
+    half-infinite one only with the ladder's last rung near cval (`_near_last_rung`, SI-YO-2); (-oo, oo) nothing."""
     ev: dict[str, Any] = {}
     c = claim_interval(cval)
     converged = val is not None and bool(nev.get("converged", False))
@@ -819,13 +869,24 @@ def _certificate_check(integrand, var, a, b, cval, val, nev: dict, timeout: floa
     with mp.workdps(60):
         w = mp.mpf(10) ** -6 * (1 + max(abs(c[0]), abs(c[1])))
         inside = (c[0] - w, c[1] + w)
-    enc = rigorous_integral(integrand, var, a, b, outside=c, inside=inside, timeout=timeout, defined=defined)
+    cells, settle = _CHECK_BUDGET
+    enc = rigorous_integral(integrand, var, a, b, outside=c, inside=inside, timeout=timeout, defined=defined,
+                            max_cells=cells, settle=settle)
     ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
     if enc is None or not (mp.isfinite(enc[0]) or mp.isfinite(enc[1])):
         ev["reason"] = "no_converged_value_and_no_enclosure"
         return "unconfirmed", ev
     if enc[1] < c[0] or enc[0] > c[1]:
         return "excluded", ev
+    if not (mp.isfinite(enc[0]) and mp.isfinite(enc[1])):
+        # a half-infinite enclosure (L, oo) holds every number past L, a divergent integral's planted 10^6 for
+        # ∫_0^1 dx/x among them (son denetim SI-YO-2): cval is taken only near the last rung of the ladder, whose own
+        # error estimate is small (∫_0^2 |x - 1|^(-2/3) dx = 6, enclosed in (4.85, oo))
+        if _near_last_rung(nev.get("ladder") or [], c):
+            ev["near_last_rung"] = True
+            return "agrees", ev
+        ev["reason"] = "half_infinite_enclosure_and_no_close_rung"
+        return "unconfirmed", ev
     return "agrees", ev
 
 

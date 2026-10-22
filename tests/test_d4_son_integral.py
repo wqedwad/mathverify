@@ -9,6 +9,11 @@ continuous), G2RK-7 (a complex quadrature value is no value), G2RK-10 (a convent
 Coverage: G2RK-2 (tolerance against erf/S/C/Si values), G2RK-3/4 (the declared region x > 0 in the convention gate),
 G2RK-5 (Piecewise integrands), G2RK-9 (x**x in the fundamental theorem).
 
+Second round (independent audit of the branch, 21 Oct 2026): SI-YO-3 (a settled ladder reads its rungs' error
+estimates), SI-YO-2 (a half-infinite enclosure says something only next to a close last rung; a power at an end is a
+weight of the enclosure), SON-INT-RK-1 (a complex claim within a declared tolerance), SON-INT-RK-2 (the certificate's
+enclosure settles once it stops narrowing).
+
 New names are imported inside the tests, so that the old code fails each test on its own.
 """
 from __future__ import annotations
@@ -142,11 +147,12 @@ def test_without_numbers_the_certificate_needs_an_enclosure(monkeypatch):
 def test_a_ladder_whose_values_settle_confirms_the_certificate():
     # the error estimates misjudge an interior singularity and the ladder fails its own test, but its values settle
     from mathverify.certify.calculus import _stable_ladder_holds
-    lad = [{"dps": 50, "value": "4.4999999999999999999999999999999999999091245780504"},
-           {"dps": 80, "value": "4.4999999999999999999999999999999999999999999999999999999964569206801977790531049"}]
+    lad = [{"dps": 50, "value": "4.4999999999999999999999999999999999999091245780504", "err": "1.1e-60"},
+           {"dps": 80, "value": "4.4999999999999999999999999999999999999999999999999999999964569206801977790531049",
+            "err": "1.1e-104"}]
     assert _stable_ladder_holds(lad, (mp.mpf("4.5"), mp.mpf("4.5"))) is True
     assert _stable_ladder_holds(lad, (mp.mpf("4.5000000001"), mp.mpf("4.5000000001"))) is False
-    diverging = [{"dps": 30, "value": "123.81"}, {"dps": 50, "value": "193.01"}]
+    diverging = [{"dps": 30, "value": "123.81", "err": "1e-30"}, {"dps": 50, "value": "193.01", "err": "1e-30"}]
     assert _stable_ladder_holds(diverging, (mp.mpf("193.01"), mp.mpf("193.01"))) is False
     assert _v(_dint("1/cbrt(x)", -1, 8), "9/2") == "CORRECT"
     assert _v(_dint("1/cbrt(x)", -1, 8), "5") == "INCORRECT"
@@ -482,3 +488,167 @@ def test_a_signed_point_not_confirmed_is_no_agreement(monkeypatch):
     d = x - x + sp.Integer(1) / 10 ** 300
     assert random_point._nonzero_elsewhere(d, [x], [{x: sp.sqrt(2) / 2}], x, x, [0]) == (None, True)
     assert random_point._nonzero_elsewhere(x - x, [x], [{x: sp.sqrt(2) / 2}], x, x, [0]) == (None, False)
+
+
+# Second round (independent audit of the branch, 21 Oct 2026) -------------------------------------------------------
+# SI-YO-3: the settled ladder reads the rungs' own error estimates
+def test_a_ladder_that_fails_settles_nothing():
+    from mathverify.certify.calculus import _stable_ladder_holds
+    # mpmath's quad returns 0.0 with an error estimate of 2.0 for ∫_{-1}^{1} dx/x at every precision: a failure
+    failed = [{"dps": 30, "value": "0.0", "err": "2.0"}, {"dps": 50, "value": "0.0", "err": "0.2"},
+              {"dps": 80, "value": "0.0", "err": "2.0"}]
+    assert _stable_ladder_holds(failed, (mp.mpf(0), mp.mpf(0))) is False
+    small = [dict(r, err="1.1e-60") for r in failed]
+    assert _stable_ladder_holds(small, (mp.mpf(0), mp.mpf(0))) is True
+    # one rung's estimate past 10^-10 of max(1, |v|) is enough to refuse; a missing estimate refuses
+    assert _stable_ladder_holds(small[:2] + [dict(small[2], err="2e-10")], (mp.mpf(0), mp.mpf(0))) is False
+    assert _stable_ladder_holds(small[:1] + [dict(small[1], err="2e-10")] + small[2:], (mp.mpf(0), mp.mpf(0))) is False
+    assert _stable_ladder_holds([{"dps": 50, "value": "0.0"}, {"dps": 80, "value": "0.0"}], (mp.mpf(0), mp.mpf(0))) \
+        is False
+
+
+@pytest.mark.parametrize("f,a,b", [
+    ("1/x", -1, 1), ("1/x**3", -1, 1), ("x/(x**2 - 1)", -2, 2), ("sign(x)/Abs(x)**(3/2)", -1, 1),
+])
+def test_a_planted_zero_of_a_principal_value_is_not_taken(monkeypatch, f, a, b):
+    # the improper integral diverges (only its principal value is 0): a wrong certificate 0 meets the real ladder
+    _planted(monkeypatch, "0", numbers=True)
+    assert _v(_dint(f, a, b), "0") != "CORRECT"
+
+
+# SI-YO-2: a half-infinite enclosure says something only next to a close rung of the ladder
+def test_the_last_rung_near_the_certificate():
+    from mathverify.certify.calculus import _near_last_rung
+    six = [{"dps": 30, "value": "5.99999999997790565034", "err": "2.0e-12"},
+           {"dps": 50, "value": "5.99999999999999999520", "err": "2.0e-19"},
+           {"dps": 80, "value": "5.9999999999999999999999999995400000000000000000000000000000000000000000000000",
+            "err": "2.0e-28"}]
+    assert _near_last_rung(six, (mp.mpf(6), mp.mpf(6))) is True
+    with mp.workdps(60):
+        off = mp.mpf("6.0000000000000000000000001")               # 1e-25 from 6: five times the margin, 100·err
+    assert _near_last_rung(six, (off, off)) is False
+    # the last rung's estimate: at most 10^-8 of max(1, |v|)
+    assert _near_last_rung([{"dps": 80, "value": "20.0", "err": "1.9e-7"}], (mp.mpf(20), mp.mpf(20))) is True
+    assert _near_last_rung([{"dps": 80, "value": "20.0", "err": "2.1e-7"}], (mp.mpf(20), mp.mpf(20))) is False
+    diverging = [{"dps": 30, "value": "78.97", "err": "1.0"}, {"dps": 50, "value": "125.0", "err": "0.1"},
+                 {"dps": 80, "value": "194.2", "err": "1.0"}]
+    assert _near_last_rung(diverging, (mp.mpf("194.2"), mp.mpf("194.2"))) is False
+    assert _near_last_rung([], (mp.mpf(6), mp.mpf(6))) is False
+
+
+@pytest.mark.parametrize("f,a,b,plant", [
+    ("1/x", 0, 1, "10**6"), ("1/(x*Abs(log(x)))", 0, "1/2", "10"), ("-1/x", 0, 1, "-10**6"),
+    ("1/(1 - x)", "1/2", 1, "100"),
+])
+def test_a_planted_finite_value_of_a_divergent_integral_is_not_taken(monkeypatch, f, a, b, plant):
+    # the enclosure is (L, oo): every number past L meets it
+    _planted(monkeypatch, plant, numbers=True)
+    assert _v(_dint(f, a, b), plant) != "CORRECT"
+
+
+@pytest.mark.parametrize("f,a,b,claim", [
+    # interior singularities: half-infinite enclosures, ladders whose error estimates fall short (2.3 and 37 times)
+    ("1/cbrt((x - 1)**2)", 0, 2, "6"), ("Abs(x - 1)**(-2/3)", 0, 2, "6"),
+    ("Abs(x)**(-9/10)", -1, 2, "10*(2**(1/10) + 1)"), ("Abs(x - 1)**(-9/10)", 0, 2, "20"),
+    # a power at an end: the weight rule bounds the end cell (no ladder converges to 100)
+    ("x**(-99/100)", 0, 1, "100"), ("(1 - x)**(-19/20)", 0, 1, "20"), ("x**(-9/10)", 0, 1, "10"),
+])
+def test_a_strong_integrable_singularity_keeps_its_value(f, a, b, claim):
+    assert _v(_dint(f, a, b), claim) == "CORRECT"
+
+
+def test_an_enclosure_of_the_whole_line_says_nothing_even_next_to_a_close_rung():
+    # G2YO-2: (-oo, oo) says nothing; the rule of the last rung is for a half-infinite enclosure only (SI-YO-2). The
+    # cost the audit recorded: the true 5 for a sign-changing strong singularity stays UNKNOWN (its last rung is
+    # 5 - 6.8e-17 with an estimate of 2e-17)
+    assert _v(_dint("sign(x)*Abs(x)**(-4/5)", -1, 32), "5") == "UNKNOWN"
+
+
+def test_a_power_at_an_end_is_a_weight():
+    from mathverify.certify.enclosure import from_raw, rigorous_enclosure
+    R = sp.Rational
+
+    def enc(f, a, b):
+        r = rigorous_enclosure(f, x, a, b, None, None, 600, 120.0)
+        return None if r is None else tuple(from_raw(v) for v in r)
+    lo, hi = enc(x ** R(-99, 100), 0, 1)
+    assert lo <= 100 <= hi and hi - lo < mp.mpf("1e-6")
+    lo, hi = enc(sp.Abs(x - 1) ** R(-99, 100), 0, 1)
+    assert lo <= 100 <= hi and hi - lo < mp.mpf("1e-6")
+    # u < 0 on the cell: no weight (the principal power is not real there, the real cube root has the other sign)
+    assert enc(2 * x ** R(-1, 3), -1, 0) == (-mp.inf, mp.inf)
+    assert enc(x ** R(-1, 2), -1, 0) == (-mp.inf, mp.inf)
+    # a divergent power is no weight
+    assert enc(1 / x, 0, 1)[1] == mp.inf
+
+
+def test_a_wrong_value_of_a_power_at_an_end_is_refuted():
+    assert _v(_dint("x**(-99/100)", 0, 1), "101") == "INCORRECT"
+    assert _v(_dint("x**(-99/100)", 0, 1, rel_tol="0.001"), "100.05") == "CORRECT"
+
+
+# SON-INT-RK-1: a complex claim within a declared tolerance
+@pytest.mark.parametrize("expr,tol,claim,verdict", [
+    ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.5 + 0.866*I", "CORRECT"),
+    ("2*exp(I*pi/4)", {"abs_tol": "0.01"}, "1.41 + 1.41*I", "CORRECT"),
+    ("exp(I)", {"abs_tol": "0.0001"}, "0.5403 + 0.8415*I", "CORRECT"),
+    ("exp(I)", {"abs_tol": "0.0001", "rel_tol": "0.0001"}, "0.5403 + 0.8415*I", "CORRECT"),
+    ("exp(I)", {"rel_tol": "0.0001"}, "0.5403 + 0.8415*I", "CORRECT"),
+    ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.5 + 0.87*I", "INCORRECT"),        # |Im d| = 4.0e-3
+    ("exp(I*pi/3)", {"abs_tol": "0.001"}, "0.502 + 0.866*I", "INCORRECT"),     # |Im d| < t < |d| = 2.0e-3
+    ("exp(I)", {"rel_tol": "0.0001"}, "0.5403 + 0.8515*I", "INCORRECT"),
+    ("sqrt(3) + I", {"abs_tol": "0.01"}, "1.73 + I", "CORRECT"),              # a real difference, as before
+    ("E", {"abs_tol": "0.001"}, "2.71828 + I/10**9", "UNKNOWN"),               # a nonreal claim for a real value (SG-1)
+    ("E", {"rel_tol": "0.001"}, "2.71828 + I/10**9", "UNKNOWN"),
+    ("E", {"abs_tol": "0.001"}, "2.71828 + I/10**2", "INCORRECT"),
+])
+def test_a_complex_claim_within_a_declared_tolerance(expr, tol, claim, verdict):
+    assert _v(_ev(expr, (), **tol), claim) == verdict
+
+
+def test_complex_differences_against_a_tolerance():
+    from mathverify.equiv.numeric import within_abs_tol, within_rel_tol
+    c, v = sp.Rational(1, 2) + sp.Float("0.866") * sp.I, sp.exp(sp.I * sp.pi / 3)
+    assert within_abs_tol(c, v, sp.Rational(1, 1000)) is True
+    assert within_abs_tol(c, v, sp.Rational(1, 100000)) is False
+    assert within_rel_tol(c, v, sp.Rational(1, 1000)) is True              # |v| = 1
+    assert within_rel_tol(c, 2 * v, sp.Rational(1, 1000)) is False
+    # a real value, a complex claim: |c - v|² = Re² + Im² against t²·v² refutes; within it, what the answer may be is
+    # undecided (d4c SG-1: e ≈ 2.71828 + 10^-9 i is UNKNOWN)
+    assert within_rel_tol(2 + sp.I / 10 ** 4, sp.Integer(2), sp.Rational(1, 1000)) is None
+    assert within_rel_tol(2 + sp.I / 10 ** 2, sp.Integer(2), sp.Rational(1, 1000)) is False
+    assert within_rel_tol(sp.Rational(201, 100) + sp.I / 10 ** 4, sp.Integer(2), sp.Rational(1, 1000)) is False
+    assert within_abs_tol(2 + sp.I / 10 ** 9, sp.Integer(2), sp.Rational(1, 1000)) is None
+    assert within_abs_tol(2 + sp.I / 10 ** 2, sp.Integer(2), sp.Rational(1, 1000)) is False
+    assert within_rel_tol(sp.I, sp.Integer(0), sp.Rational(1, 1000)) is None  # no relative error against 0
+
+
+# SON-INT-RK-2: the certificate's enclosure settles once a finite sum holding the value stops narrowing
+def test_an_enclosure_that_stops_narrowing_settles():
+    from mathverify.certify.calculus import _raw_pair
+    from mathverify.certify.enclosure import from_raw, rigorous_enclosure
+    half = _raw_pair(mp.mpf("0.5"), mp.mpf("0.5"))
+    # the cells of cos² 1000πx are [0, 1]·h until they are shorter than its period: the sum stays [0, 1] and settles
+    lo, hi = (from_raw(v) for v in rigorous_enclosure(sp.cos(1000 * sp.pi * x) ** 2, x, 0, 1, half, None, 4000, 120.0,
+                                                      False, 8))
+    assert lo <= mp.mpf("0.5") <= hi and hi - lo > mp.mpf("0.5")
+    # a sum that keeps narrowing is not stopped
+    lo, hi = (from_raw(v) for v in rigorous_enclosure(x ** 2 * sp.exp(x), x, 0, 1, None, None, 300, 120.0, False, 8))
+    assert hi - lo < mp.mpf("1e-4")
+
+
+def test_the_certificate_check_spends_little_on_a_fast_oscillation():
+    from mathverify.certify.calculus import _certificate_check
+    nev = {"converged": False, "ladder": [{"dps": 30, "value": "0.4886", "err": "1.0"}]}
+    state, ev = _certificate_check(sp.cos(1000 * sp.pi * x) ** 2, x, 0, 1, sp.Rational(1, 2), None, nev, 8.0,
+                                   defined=True)
+    # a small budget and settling: the enclosure is still [0, 1] (4000 cells narrowed it to [0.4786, 0.5214] in 11 s)
+    assert state == "agrees" and mp.mpf(ev["enclosure"][1]) - mp.mpf(ev["enclosure"][0]) > mp.mpf("0.5")
+
+
+def test_a_settling_enclosure_still_refutes_a_close_wrong_certificate(monkeypatch):
+    # e - 2 + 10^-4: the sum narrows past it in some 25 rounds, without settling
+    _planted(monkeypatch, "E - 2 + 1/10000")
+    assert _v(_dint("x**2*exp(x)", 0, 1), "E - 2 + 1/10000") == "INCORRECT"
+    _planted(monkeypatch, "E - 2")
+    assert _v(_dint("x**2*exp(x)", 0, 1), "E - 2") == "CORRECT"
