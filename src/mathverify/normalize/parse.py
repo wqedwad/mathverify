@@ -2784,15 +2784,16 @@ def _written_diff(e, *args, **kwargs):
 
 
 def _written_derivative(e, *args, **kwargs):
-    """`Derivative` read as written: where it exists, as `_written_diff` reads it. The value reading keeps the form
-    (sp.Derivative, whose value is SymPy's own: d/da of a bound integral with a given a = 2 stays a question of
-    reading, part d4d), so the value checked at a switch point where the operand has a derivative is SymPy's
-    formula, nothing put in (YO-K3)."""
+    """`Derivative` read as written: the form itself, as the value reading keeps it (sp.Derivative, whose value is
+    SymPy's own), with where it exists as `_written_diff` reads it (YO-K3). Kept as the form, its binders stay readable:
+    d/da of a bound integral with a given a = 2 is a question of reading (the pins' check, part d4d), and computed here
+    it was no longer seen. The value checked at a switch point where the operand has a derivative is SymPy's formula,
+    nothing put in."""
     from ..certify.domain import DEFINEDNESS_UNDECIDED
+    form = sp.Derivative(e, *args, **kwargs)
     seq = _diff_sequence(args)
     if not seq or kwargs:
-        with sp.evaluate(True):
-            return sp.diff(e, *args, **kwargs)
+        return form
     with sp.evaluate(True):
         conds, cur = [], e
         for v in seq:
@@ -2806,8 +2807,8 @@ def _written_derivative(e, *args, **kwargs):
             cur = sp.diff(cur, v)
         cond = sp.And(*conds)
     if cond is sp.true:
-        return cur
-    return written_domain(cur, cond)
+        return form
+    return written_domain(form, cond)
 
 
 def _written_integrate(*args, **kwargs):

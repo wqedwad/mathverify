@@ -2402,19 +2402,6 @@ def _claim_definedness_on_integer_bounds(ctx: Ctx, src: str, ns: dict, pins: dic
     return [c.xreplace(back) for c in conds2], {back.get(q, q) for q in nowhere2} if nowhere2 else set(nowhere2)
 
 
-def _definedness_on_integer_bounds(f, var, shift: dict) -> list:
-    """`definedness_conditions` of the expression f, read with each integer parameter of `shift` (`_integer_shift`) as
-    L + k, mapped back (YO-K5: x**n with n >= 1 declared has no condition x != 0, as with n a positive integer)."""
-    if not shift:
-        return definedness_conditions(f, var)
-    try:
-        g = f.xreplace({s_: lo + k for s_, (lo, k) in shift.items()})
-        back = {k: s_ - lo for s_, (lo, k) in shift.items()}
-        return [c.xreplace(back) for c in definedness_conditions(g, var)]
-    except Exception:  # noqa: BLE001 - as written
-        return definedness_conditions(f, var)
-
-
 def _integer_shift(ctx: Ctx, src: str, ns: dict, pins: dict | None, var) -> dict:
     """{n: (L, k)} for each integer parameter n named in `src` whose region (`_parameter_region`) is the integers from
     L on, k a nonnegative integer Dummy (n = L + k)."""
@@ -3504,7 +3491,6 @@ def verify(ir, solution, ctx: Ctx):
                     return condition_not_applied(LAYER, unapplied, t.ms)
                 # f's conditions read on the integer parameters' regions, as the claim's are (`fconds` below)
                 conds, other = task_conditions(ctx, p["f"], var, pins, regions=True)
-                shift = _integer_shift(ctx, p["f"], ctx.ns, pins, var)
                 # the claim, as written, has a value wherever the derivative exists (`claim_where_derivative`):
                 # 2*x**2/x for (x**2)' was certified, 1/(x + 1/a) with a >= 0 too (round 3, RK-8 and YO-3)
                 # f's own conditions are read on the integer parameters' regions too, as the claim's are: read with
@@ -3522,7 +3508,7 @@ def verify(ir, solution, ctx: Ctx):
                     if cev.get("reason") == "no_interior_point_for_every_value":
                         return condition_not_applied(LAYER, _names(other, var), t.ms)
                 else:
-                    conds += [c for c in _definedness_on_integer_bounds(f, var, shift) if c not in conds
+                    conds += [c for c in definedness_conditions(f, var) if c not in conds
                               and getattr(c, "free_symbols", set()) == {var} and not isinstance(c, sp.Contains)]
                     dom, loose = task_region(ctx, conds, var)
                     if interior_point(ctx, conds, var, dom) is None:

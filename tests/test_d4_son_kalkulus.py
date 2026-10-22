@@ -734,9 +734,16 @@ def test_an_integer_exponent_bounded_below_by_two_reads_f_on_its_region(nv):
 
 
 # SK-RK-1: the structural reading of a computing target is not taken in process
-def test_a_computing_target_is_not_read_structurally():
+def test_a_computing_target_is_not_read_structurally(monkeypatch):
     import time
+    import mathverify.verifier as V
     from mathverify.verifier import _computes
+    seen: list = []
+    structure = V._structure
+    monkeypatch.setattr(V, "_structure", lambda text, ctx: seen.append(text) or structure(text, ctx))
+    assert _v(_at("Abs(x**2 - 4)", "3"), _sol("2*3")) == "CORRECT"
+    assert "at(diff(f(x), x), x, 3)" not in seen                      # a claim with a tree does not make it read
+    monkeypatch.undo()
     t = time.time()
     assert _v(_at("Abs(x**2 - 4)", "3"), _sol("6")) == "CORRECT"
     assert _v(_at("Abs(x**4 - 5*x**2 + 4)", "3"), _sol("78")) == "CORRECT"
