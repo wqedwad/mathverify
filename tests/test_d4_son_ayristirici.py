@@ -671,6 +671,20 @@ def test_rkt22_the_reader_brackets_nested_arguments():
     assert _bracket_spans("abc", [(2, 3, "op"), (1, 2, "op")]) == "a\\left(b\\right)\\left(c\\right)"
 
 
+def test_rkt22_control_a_closing_bar_ends_the_argument():
+    """'|' closes an absolute value after an argument (|\\cos x|) and opens one after a number (\\ln 2|x|): read by the
+    parity of the bars before it; taken for an opening bar it refused a closed integral of |\\cos x|."""
+    import sympy as sp
+    from mathverify.normalize.parse import _SAFE_NAMES, parse_expr_str
+    x = sp.Symbol("x")
+    ns = dict(_SAFE_NAMES, x=x)
+    for t, want in (("$|\\cos x|$", sp.Abs(sp.cos(x))), ("$\\ln|\\cos x|$", sp.log(sp.Abs(sp.cos(x)))),
+                    ("$|\\ln x| + 1$", sp.Abs(sp.log(x)) + 1), ("$\\ln 2|x|$", sp.log(2 * sp.Abs(x)))):
+        assert sp.simplify(parse_expr_str(t, ns) - want) == 0, t
+    v = parse_expr_str("$\\left\\lfloor \\int_{-1}^{1} |\\cos x| \\, dx \\right\\rfloor$", ns)
+    assert str(v) == "floor(Integral(Abs(cos(x)), (x, -1, 1)))"            # the namespace's floor
+
+
 # ---- RK-T2-3 ------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("f,claim", [
     ("tan(x)**2/2", "$\\tan x(1 + \\tan^2 x)$"), ("tan(x)**2/2", "$\\tan x (1 + \\tan^2 x)$"),

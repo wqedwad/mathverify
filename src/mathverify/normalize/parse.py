@@ -1410,6 +1410,14 @@ def _bar_group_end(s: str, j: int) -> int | None:
     return None if k < 0 else k + 1
 
 
+_PLAIN_BAR = re.compile(r"(?<!\\)(?<!\\left)(?<!\\right)\|")
+
+
+def _bar_closes(s: str, j: int) -> bool:
+    """Does the '|' at `s[j]` close an absolute value ('|\\cos x|'), an odd number of plain bars before it?"""
+    return len(_PLAIN_BAR.findall(s, 0, j)) % 2 == 1
+
+
 def _function_argument(s: str, m) -> tuple[int, int, str] | None:
     """The argument of the LaTeX function macro matched by `m` when it is written without brackets, its base and power
     skipped (\\log_2 8, \\sin^2 x): (start, end, how it ends); None when it is bracketed ((x), \\left(x\\right)) or empty.
@@ -1473,6 +1481,8 @@ def _function_argument(s: str, m) -> tuple[int, int, str] | None:
             numeric = numeric and bool(_NUMERIC_GROUP.fullmatch(s, j, e))
             j = last = e
             continue
+        if c == "|" and _bar_closes(s, j):
+            break                                # the end of |\cos x|
         if c in "([|" or _LATEX_LEFT.match(s, j):
             if last > k and not numeric:
                 stop = "group"
