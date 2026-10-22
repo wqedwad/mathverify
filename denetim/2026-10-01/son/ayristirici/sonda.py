@@ -581,6 +581,8 @@ def cases_n():
             "5 olarak hesaplanır", "5 değerdir")]
     out += [(f"2+3: payload {p!r} (a unit with the copula: unread)", e, sol(p), UNK, None)
             for p in ("5 derecedir", "5 cm'dir", "5 metredir")]
+    out += [(f"2+3: payload {p!r} (a likelihood with the copula: unread)", e, sol(p), UNK, None)
+            for p in ("5 muhtemeldir", "5 olasıdır", "5 mümkündür")]
     out += [("2+3: payload '6 tanedir' (wrong)", e, sol("6 tanedir"), NO, None),
             ("2+3: payload '5 almaz' (negated)", e, sol("5 almaz"), UNK, None)]
     q = eqn("x**2 - 5*x + 6 = 0")

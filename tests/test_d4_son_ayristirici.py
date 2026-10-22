@@ -752,6 +752,7 @@ def test_rkt24_a_set_or_an_interval_named_after_it(q, p, kind):
     assert verify(q, _sol(p, kind)).verdict == "CORRECT", p
 
 
-@pytest.mark.parametrize("p", ["5 derecedir", "5 cm'dir", "5 metredir"])
-def test_rkt24_control_a_unit_with_the_copula_is_not_dropped(p):
+@pytest.mark.parametrize("p", ["5 derecedir", "5 cm'dir", "5 metredir", "5 muhtemeldir", "5 olasıdır", "5 mümkündür"])
+def test_rkt24_control_a_unit_or_a_likelihood_with_the_copula_is_not_dropped(p):
+    """'5 muhtemeldir' (5 is probable) was UNKNOWN before the copula was read: a doubt stays unread."""
     assert verify(_ev("2 + 3"), _sol(p)).verdict == "UNKNOWN", p
