@@ -13,7 +13,7 @@ from ..ir import LeakageError, ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
                                claim_namespace, given_bindings, not_collapsed, same_value,
-                               substitute_free, task_variables, unit_marks, without_unit_marks, parse_as_written)
+                               substitute_free, task_variables, unit_marks, parse_as_written, single_marked_number)
 from ..sandbox.exactsets import at_risk, exact_intersection, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
@@ -1510,29 +1510,87 @@ class Ctx:
             self.cache[key] = frozenset().union(*(unit_marks(t) for t in _ir_texts(self.ir)))
         return self.cache[key]
 
-    def declared_unit_marks(self) -> frozenset:
-        """The unit marks whose unit the IR's `units` names ('derece', '°', '%', 'yüzde'): the question counts in that
-        unit, so a number with that mark is the plain number (30° is 30 for x + 2x + 3x = 180, %20 is 20 for
-        (p2 - p1)/p1*100; audit of the branch, SA-RK-4). Not a mark the IR's own texts write (their '30°' is pi/6, as the
-        claim's must be), nor a degree of a radian measure (`angles_in_radians`: 30° is pi/6 whatever the units say)."""
-        units = str(getattr(self.ir, "units", None) or "").strip().lower()
-        marks = frozenset(m for m, names in _DECLARED_MARK_UNITS.items() if units in names) - self._ir_unit_marks()
-        if "°" in marks and self.angles_in_radians():
-            marks = marks - {"°"}
-        return marks
+    def counted_unit_marks(self) -> frozenset:
+        """The unit marks the IR's value is PROVED to count in, so that a claim or an option that is one number with
+        that mark is the plain number (`plain_unit_reading`; final attack EK 8, which replaced the reading by the IR's
+        `units`: that field is free text, the extractor writes a percentage as a fraction ('%25' -> 25/100) and SymPy's
+        trigonometric values are radians, so the right '%20', '180°', '45°' were INCORRECT and the wrong '%0.2' CORRECT;
+        T2-RK-2, T2-OT-1):
+          '%'  evaluate's expression written as a product with the factor 100 ((p2 - p1)/p1*100);
+          '°'  evaluate's expression written with the factors 180 and 1/pi (asin(1/2)*180/pi); the angle() target of
+               synthetic_geometry (its certificate measures in degrees); the answer's variable entering every
+               trigonometric function of the IR's relations as pi*(k*x + c)/180, k rational (deg(x), (x)°,
+               cos(pi*C/180) = 1/2: a count of degrees)."""
+        key = "unit_marks:counted"
+        if key in self.cache:
+            return self.cache[key]
+        marks: set[str] = set()
+        p = self.ir.task.params or {}
+        if self.ir.task.kind == "synthetic_geometry" and "angle(" in str(p.get("target", "")):
+            marks.add("°")
+        if self.ir.task.kind == "evaluate" and isinstance(p.get("expr"), str):
+            try:
+                w = parse_as_written(p["expr"], self.ns)
+            except LeakageError:
+                raise
+            except Exception:  # noqa: BLE001 - not read: nothing proved
+                w = None
+            if w is not None and len(w) == 1:
+                f = _written_factors(w[0])
+                if any(isinstance(x, sp.Integer) and x == 100 for x in f):
+                    marks.add("%")
+                if any(isinstance(x, sp.Integer) and x == 180 for x in f) and any(
+                        isinstance(x, sp.Pow) and x.base is sp.pi and x.exp == -1 for x in f):
+                    marks.add("°")
+        if self._trig_measure() == "degrees":
+            marks.add("°")
+        self.cache[key] = frozenset(marks)
+        return self.cache[key]
+
+    def _trig_measure(self) -> str | None:
+        """'degrees' when the answer's variable (the task's `var`; evaluate's `expr` when it is a lone symbol) enters
+        every trigonometric function of the IR's own relations, at least one, as pi*(k*x + c)/180 with k rational."""
+        p = self.ir.task.params or {}
+        try:
+            if isinstance(p.get("var"), str) or self.ir.task.kind == "trig_solve":
+                v = self.sym(p.get("var", "x"))
+            elif self.ir.task.kind == "evaluate" and isinstance(p.get("expr"), str):
+                v = self.expr(p["expr"])
+                if not isinstance(v, sp.Symbol):
+                    return None
+            else:
+                return None
+            rels = list(self.givens()) + [self.rel(t) for k_, t in p.items()
+                                          if k_ in ("equation", "inequality", "relation") and isinstance(t, str)]
+        except LeakageError:
+            raise
+        except Exception:  # noqa: BLE001 - not read: nothing proved
+            return None
+        apps = [a for r in rels if isinstance(r, sp.Basic) for a in r.atoms(*_TRIG_FUNCS) if v in a.free_symbols]
+        if not apps:
+            return None
+        for a in apps:
+            try:
+                poly = sp.Poly(a.args[0], v)
+            except Exception:  # noqa: BLE001 - not a polynomial in the variable
+                return None
+            if poly.degree() != 1 or not sp.simplify(poly.LC() * 180 / sp.pi).is_Rational:
+                return None
+        return "degrees"
 
     def open_unit_marks(self, text) -> frozenset:
         """The unit marks of `text` (a claim, an option, a step; `normalize.parse.unit_marks`) whose unit the question
         does not fix: a question may count in the unit (an angle in radians: 30° is pi/6) or in plain numbers of it
         (x + 2x + 3x = 180 is 30, (p2 - p1)/p1*100 is 20), and such a mark is read both ways (`verifier._certify`,
         `verifier._mc_unit_reading`, the steps). Not a mark the IR itself writes (its own '°' converts like the
-        claim's), not one whose unit the IR's `units` names (`declared_unit_marks`: read as the plain number), not the
-        degrees of synthetic_geometry's angle() (its certificate measures in degrees: 70° is 70, 25 Sep 2026), not the
-        degrees of a radian measure (`angles_in_radians`)."""
+        claim's) unless its value is proved to count in that unit (`counted_unit_marks`: sin((x)°) = 1/2 for x), not
+        the degrees of synthetic_geometry's angle() (its certificate measures in degrees: 70° is 70, 25 Sep 2026), not
+        the degrees of a radian measure (`angles_in_radians`). A claim or an option that is one marked number in a
+        counted unit was read as that number before (`plain_unit_reading`)."""
         marks = unit_marks(text)
         if not marks:
             return marks
-        marks = marks - self._ir_unit_marks() - self.declared_unit_marks()
+        marks = marks - (self._ir_unit_marks() - self.counted_unit_marks())
         if "°" in marks:
             target = str((self.ir.task.params or {}).get("target", ""))
             if (self.ir.task.kind == "synthetic_geometry" and "angle(" in target) or self.angles_in_radians():
@@ -1540,12 +1598,12 @@ class Ctx:
         return marks
 
     def plain_unit_reading(self, text):
-        """`text` with the unit marks whose unit the IR's `units` names dropped (`declared_unit_marks`: 30° is 30 when
-        the question counts in degrees); any other text as it is."""
-        if not isinstance(text, str):
-            return text
-        marks = unit_marks(text) & self.declared_unit_marks()
-        return without_unit_marks(text, marks) if marks else text
+        """`text` read as the plain number when it is one number with a unit mark (`normalize.parse.
+        single_marked_number`: '%20', '30°', '\\boxed{30^\\circ}') in a unit the IR's value is proved to count in
+        (`counted_unit_marks`): '%20' is 20 for (p2 - p1)/p1*100. Any other text as it is: a mark inside an expression
+        is a factor of it, and the claim with it is read both ways (`open_unit_marks`)."""
+        one = single_marked_number(text)
+        return one[1] if one is not None and one[0] in self.counted_unit_marks() else text
 
     def option_as_claim(self, letter: str):
         """The option read by the claim's own reader, which the verifier registers (`verifier._option_claim_value`:
@@ -1578,9 +1636,13 @@ class Ctx:
 
 _TRIG_FUNCS = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
 
-# the IR `units` that name a unit mark's unit (`Ctx.declared_unit_marks`)
-_DECLARED_MARK_UNITS = {"°": ("°", "derece", "deg", "degree", "degrees", "\\circ", "^\\circ", "\\degree"),
-                        "%": ("%", "\\%", "yüzde", "yuzde", "percent", "percentage")}
+
+
+def _written_factors(e) -> list:
+    """The factors of a product as written (`parse_as_written`: the nested products of `a/b*100` flattened)."""
+    if isinstance(e, sp.Mul):
+        return [f for a in e.args for f in _written_factors(a)]
+    return [e]
 
 
 def _ir_texts(ir: ProblemIR) -> list[str]:

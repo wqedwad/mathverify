@@ -2131,6 +2131,7 @@ def _nowhere_inside(claim, p, ctx: Ctx) -> bool:
     emptiness SymPy does not decide, proves nothing (False). With no point inside (x**2 - 6*x + 9 < 0, (2, 3) of an
     integer), "nowhere inside" held of every claim, and the right restatement (x - 3)**2 < 0 was refuted on the boundary
     (audit of the branch, SA-RK-1)."""
+    _tick()
     syms = set(getattr(claim, "free_symbols", set())) | p.free_symbols
     if len(syms) != 1:
         return False
@@ -2142,10 +2143,10 @@ def _nowhere_inside(claim, p, ctx: Ctx) -> bool:
     if inside is None or held is None:
         return False
     inside = sp.Intersection(ctx.domain_for(v), inside)
-    e = sb_run("mathverify.steps.deterministic:_emptiness", inside, timeout=ctx.timeout)
+    e = sb_run("mathverify.steps.deterministic:_emptiness", inside, timeout=_bounded(ctx.timeout))
     if not (e.ok and e.value is False):
         return False
-    e = sb_run("mathverify.steps.deterministic:_emptiness", sp.Intersection(inside, held), timeout=ctx.timeout)
+    e = sb_run("mathverify.steps.deterministic:_emptiness", sp.Intersection(inside, held), timeout=_bounded(ctx.timeout))
     return bool(e.ok and e.value is True)
 
 
@@ -2179,6 +2180,7 @@ def _boundary_region(v, premises: list, ctx: Ctx, restrictions: list, undefined_
     else:
         region, bounds = ctx.domain_for(v), list(premises)
     for p in bounds:
+        _tick()
         if not p.free_symbols <= {v}:
             continue                        # a premise of other symbols only: no bound on v
         s_ = _relation_set(p, v, ctx)
@@ -2199,7 +2201,12 @@ def _boundary_premises(claim, premises: list, swappable: list, ctx: Ctx,
     boundary of theirs: x = -2 under x > 0 and x**2 = 4 stays refuted). Such a claim is no consequence of the
     inequality: x**2 - 5*x + 6 = 0, (x - 2)*(x - 3) = 0 and "x = 2 or x = 3" of the sign-table method for
     x**2 - 5*x + 6 < 0 were refuted at every point of (2, 3), and the right (2, 3) was INCORRECT (final attack G1RK-2).
-    Checked on each critical equation instead, a wrong critical point (x = 5) is still refuted."""
+    Checked on each critical equation instead, a wrong critical point (x = 5) is still refuted.
+
+    Inequalities whose critical equations have the same roots (the task's and each step restating it: '(x + 1)/(x - 2)
+    >= 2', '(5 - x)/(x - 2) >= 0', '(x - 5)/(x - 2) <= 0') take the same choice together: chosen apart, the lists
+    doubled with every restatement, and a step took 265 s past its budget (second audit of the branch, T2-RK-4). More
+    than `_BOUNDARY_CHOICES` lists: no boundary is read (the claim is checked as it stands)."""
     from itertools import product
     if not _is_equation_claim(claim):
         return None
@@ -2212,20 +2219,49 @@ def _boundary_premises(claim, premises: list, swappable: list, ctx: Ctx,
     crit = [_critical_equations(p, v) for p in hit]
     if any(c is None for c in crit):
         return None
+    # each critical equation by its roots: (the roots as text, a denominator's) names one choice of every
+    # inequality with those roots
+    groups: dict[frozenset, list[int]] = {}
+    named: list[list[tuple]] = []
+    for i, c in enumerate(crit):
+        _tick()
+        keys = []
+        for e, is_den in c:
+            roots = _relation_set(e, v, ctx)
+            keys.append((str(roots) if roots is not None else f"unsolved:{e}", is_den))
+        named.append(keys)
+        groups.setdefault(frozenset(keys), []).append(i)
+    reps = list(groups.values())
+    n_lists = 1
+    for g in reps:
+        n_lists *= len(crit[g[0]])
+    if n_lists > _BOUNDARY_CHOICES:
+        return None
     written = ctx.written_conditions()[0]
     alts = []
-    for choice in product(*crit):
-        swap = {p: e for p, (e, _) in zip(hit, choice)}
+    for picks in product(*(range(len(crit[g[0]])) for g in reps)):
+        _tick()
+        swap, choice = {}, []
+        for g, k in zip(reps, picks):
+            key = named[g[0]][k]
+            for i in g:
+                e, is_den = crit[i][named[i].index(key)]
+                swap[hit[i]] = e
+                choice.append(is_den)
         out = [swap.get(p, p) for p in premises]
-        undefined_ok = any(d_ for _, d_ in choice)
+        undefined_ok = any(choice)
         restr = [r for r in restrictions if not (undefined_ok and r in written and v in r.free_symbols)]
         region = _boundary_region(v, out, ctx, restr, undefined_ok)
         if region is not None:
-            e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=ctx.timeout)
+            e = sb_run("mathverify.steps.deterministic:_emptiness", region, timeout=_bounded(ctx.timeout))
             if e.ok and e.value is True:
                 continue
         alts.append((out, restr, (v, region) if undefined_ok else None))
     return (alts, hit) if alts else None
+
+
+# at most this many premise lists are read on the boundary of a claim (`_boundary_premises`)
+_BOUNDARY_CHOICES = 16
 
 
 def _check_boundary(claim, alt: tuple, ctx: Ctx, window: list) -> tuple[str, dict]:
@@ -2832,8 +2868,11 @@ def _counterexample_where_undefined(claim, ev: dict, conds, ctx: Ctx) -> bool:
 def _both_unit_readings(text: str, kind: str, ns: dict[str, Any], ctx: Ctx, status: str, ev: dict, recheck):
     """A step's status when its claim carries a unit mark the question does not fix (`Ctx.open_unit_marks`): the
     claim read with the marks as units decided `status`; read with them as plain numbers (`recheck` of that reading)
-    it must decide the same, or the step is unknown. "x = 30°" after 6x = 180 and "(60 - 50)/50*100 = %20" were
-    refuted, and right solutions INCORRECT (final attack G1RK-3, the step layer's sibling)."""
+    it must decide the same, or the step is unknown: refuted only when refuted under both readings. "x = 30°" after
+    6x = 180 and "(60 - 50)/50*100 = %20" were refuted, and right solutions INCORRECT (final attack G1RK-3, the step
+    layer's sibling). Always both readings in a step: a mark in it is a factor of its arithmetic ('10/50 = %20',
+    'cos(60°) = 1/2'), whatever unit the answer counts in (T2-RK-1). Unknown this way, the step is no premise
+    (`check_steps`, SA2-YO-1)."""
     marks = ctx.open_unit_marks(text)
     if not marks:
         return status, ev
@@ -2902,8 +2941,7 @@ def check_steps(ir, solution, ctx: Ctx):
                 continue
             step_ns = _step_namespace(ctx.ns) if st.kind == "compute" else ctx.ns
             try:
-                # a unit mark whose unit the IR's `units` names is the plain number (SA-RK-4)
-                claim = _parse_claim(ctx.plain_unit_reading(st.claim), step_ns)
+                claim = _parse_claim(st.claim, step_ns)
             except UndeclaredSymbolError as e:
                 # A term of the task's own sequence at an integer index (`a(3) = 6`) is not the
                 # solver's symbol: it is read with the term's exact value (audit of 25 Sep 2026).
@@ -3079,12 +3117,17 @@ def check_steps(ir, solution, ctx: Ctx):
             entry["status"] = status
             entry["evidence"] = ev
             per_step.append(entry)
+            # a claim with a unit mark read both ways (`_both_unit_readings`) and not verified under both is no premise
+            # under either reading: 'A = 40°' (unknown) joined the pool read as A = 2*pi/9 next to the given A = 40,
+            # the pool had no point, and every later step, the wrong 'C = 2*B' too, was left unknown: CORRECT
+            # (second audit of the branch, SA2-YO-1)
+            unit_open = status != "verified" and bool(ctx.open_unit_marks(st.claim))
             if chosen:
                 # neither refuted nor a premise of the pool; it stands for its symbol until the next choice
                 n_skip += status == "skipped"
                 n_ver += status == "verified"
                 n_unk += status == "unknown"
-                if isinstance(claim, Eq):
+                if isinstance(claim, Eq) and not unit_open:
                     choices[point] = claim
                 continue
             if status == "refuted":
@@ -3105,7 +3148,8 @@ def check_steps(ir, solution, ctx: Ctx):
             # equations) are statements about operations, not constraints on the unknowns. A claim read on the
             # boundary of an inequality is no consequence of the premises: it joins no pool (the empty {p < 0, p = 0}
             # left every later wrong step unrefuted, the set {2, 3} of p <= 0 verified them; audit, SA-YO-2/SA-RK-2)
-            if st.kind == "eq" and not on_boundary and isinstance(claim, (sp.core.relational.Relational, And, Or)):
+            if st.kind == "eq" and not on_boundary and not unit_open \
+                    and isinstance(claim, (sp.core.relational.Relational, And, Or)):
                 parsed[st.id] = claim
                 parsed_cases[st.id] = my_case_ids
         ev_all = {"steps": per_step, "n_refuted": n_ref, "n_verified": n_ver, "n_unknown": n_unk,

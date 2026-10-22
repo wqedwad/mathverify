@@ -46,13 +46,18 @@ def _from_letter(ir: ProblemIR, solution: Solution, ctx, text: str | None = None
     alone is read: the option read as a claim of the answer's shape is (`Ctx.option_value`), 'x > -2' names (-2, oo),
     and '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1): False then, the payload left at the text."""
     ca = solution.claimed_answer
-    # a unit mark whose unit the IR's `units` names is the plain number ('%20' is 20 when the question counts in
-    # percent; SA-RK-4)
+    # one marked number in a unit the IR's value is proved to count in is the plain number ('%20' is 20 for
+    # (p2 - p1)/p1*100; `Ctx.plain_unit_reading`, final attack EK 8)
     ca.payload = ctx.plain_unit_reading(ir.options[ca.option] if text is None else text)
     if ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
         ca.payload = "{}"
     named = ctx.option_condition_set(ca.option, text)
-    if named is not None:
+    if named is not None and ir.answer_shape not in ("set", "interval") and isinstance(named, sp.FiniteSet) \
+            and len(named) == 1:
+        # one value asked for: 'x = 6' names 6. Read as the set {6}, a Python set beside the claim 6, it was refuted by
+        # the certificates as a set of a set, and the right letter vetoed (second audit of the branch, T2-RK-3)
+        ca.payload = str(next(iter(named)))
+    elif named is not None:
         ca.payload = str(named)
     elif ir.answer_shape != "interval" and decimal_comma(ca.payload):
         return False
@@ -108,6 +113,8 @@ def _option_claim_value(ir: ProblemIR, solution: Solution, ctx, text: str | None
             v = None
     if v is None:
         v = ctx.option_value(solution.claimed_answer.option, text)
+    if isinstance(v, (set, frozenset)):
+        v = sp.FiniteSet(*v)            # the reader's Python set (T2-RK-3)
     # a condition ('x**2 < 4' read as {x**2 < 4}) is another kind, which mc.consistency reports itself
     # (`_option_out_of_kind`: option_unreadable)
     hit = _names_the_unknown(ir, ctx, v) if _value_shaped(ir, sol2.claimed_answer if sol2 is not None
@@ -1141,8 +1148,9 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         # is not what CORRECT means at solution level (DECISIONS §2), so it is disclosed.
         scope_flags.append("answer_from_option_letter")
 
-    # a unit mark whose unit the IR's `units` names is the plain number: '30°' is 30 when the question counts in degrees
-    # (x + 2x + 3x = 180), and was read both ways and left UNKNOWN (audit of the branch, SA-RK-4)
+    # a claim that is one marked number in a unit the IR's value is proved to count in is the plain number: '%20' is 20
+    # for (p2 - p1)/p1*100 (`Ctx.plain_unit_reading`); any other mark is read both ways (`_certify`). Read by the IR's
+    # `units`, the right '%20' of a fraction and '180°' of a radian value were INCORRECT (final attack EK 8, T2-RK-2)
     ca.payload = ctx.plain_unit_reading(ca.payload)
     raw_payload = list(ca.payload) if isinstance(ca.payload, list) else ca.payload    # before its notation is normalized
     scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
@@ -1455,7 +1463,7 @@ def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, module
     windows = list((ctx.cache.get(TOLERANCE_WINDOW) or {}).values())
     states: dict[str, str | None] = {}
     for letter in problem_ir.options:
-        if letter != ca.option and _META_OPTION.fullmatch(str(problem_ir.options[letter]).strip().lower()):
+        if letter != ca.option and _meta_option(problem_ir.options[letter]):
             states[letter] = "fail"        # 'Hiçbiri', 'Belirlenemez': no value, none in the window (SA-RK-6)
         elif letter != ca.option and len(windows) == 1:
             states[letter] = _in_window(windows[0], problem_ir, _lettered(solution, letter), ctx)
@@ -1482,17 +1490,44 @@ def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, module
 
 
 # an option that names no value: none of the answers, or that there is none ("none of the above"); never inside a
-# tolerance window. Not '7 ile 8 arasında' (a true statement about the value: it stays undecided, SA-RK-6)
-_META_OPTION = re.compile(r"(?:(?:yukarıdakilerin\s+)?hiçbiri(?:si)?|belirlenemez|bulunamaz|hesaplanamaz|"
-                          r"none of the above|none|cannot be determined)[.!]?")
+# tolerance window. Not '7 ile 8 arasında' (a true statement about the value: it stays undecided, SA-RK-6). Matched on
+# the text folded to ASCII lowercase (`_fold`): 'HİÇBİRİ'.lower() carries a combining dot, and the Turkish ablative
+# 'Yukarıdakilerden hiçbiri', 'Hiçbiri değildir', 'Bilinemez', 'Belirsiz' were not recognised (T2-RK-6)
+_META_OPTION = re.compile(r"(?:(?:yukaridakiler(?:in|den)\s+)?hicbiri(?:si)?(?:\s+degil(?:dir)?)?|belirlenemez|"
+                          r"bulunamaz|hesaplanamaz|bilinemez|belirsiz(?:dir)?|none of the above|none|"
+                          r"cannot be determined)[.!]?")
+_ASCII_FOLD = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "\u0307": None})
+
+
+def _fold(text) -> str:
+    """`text` lowercased the Turkish way (İ -> i, I -> ı) and folded to ASCII letters, its spaces collapsed."""
+    t = str(text).replace("İ", "i").replace("I", "ı").lower().translate(_ASCII_FOLD)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _meta_option(text) -> bool:
+    """Does the option name no value (`_META_OPTION`)?"""
+    return _META_OPTION.fullmatch(_fold(text)) is not None
+
+
+# an option written as a range of numbers ('7–8', '7 - 8'): a statement about the value, no value (SA2-YO-2)
+_RANGE_OPTION = re.compile(r"^\s*[+-]?\d+(?:[.,]\d+)?\s*[-–—]\s*\d+(?:[.,]\d+)?\s*$")
 
 
 def _in_window(compare, ir: ProblemIR, solution: Solution, ctx) -> str | None:
     """'pass' when the chosen option, read as the claim (`_option_claim_value`), lies inside the certificate's declared
     tolerance window (`certify.base.TOLERANCE_WINDOW`: the value it proved, compared once), 'fail' outside, None when
-    the option is not read or the comparison undecided."""
+    the option is not read as one number or the comparison undecided. A decimal comma ('9,95') is not guessed (the
+    option's own reader took it as the pair (9, 95), which lay outside the window, and the second option inside it was
+    missed: the farther one was CORRECT); nor is a range ('7–8', read as 7 - 8) or another kind ('[7, 8]', a set):
+    each is undecided, never outside (second audit of the branch, SA2-YO-2)."""
+    text = str((ir.options or {}).get(solution.claimed_answer.option, ""))
+    if decimal_comma(text) or _RANGE_OPTION.match(text):
+        return None
     try:
         ov = _option_claim_value(ir, solution, ctx)
+        if not (isinstance(ov, sp.Expr) and ov.is_number and not isinstance(ov, sp.Tuple)):
+            ov = None
         got = compare(ov) if ov is not None else None
     except LeakageError:
         raise
