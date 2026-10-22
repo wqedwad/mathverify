@@ -979,10 +979,28 @@ def _arg_in_zero_two_pi(u, a):
         raise ParseError(f"arg({u}): the sign of its imaginary part is not certified, no reading in [0, 2*pi)")
     at = _ARG_POINT.get()
     if at and all(s_.name in at for s_ in u.free_symbols):
-        s = certified_sign(im_u.xreplace({s_: at[s_.name] for s_ in u.free_symbols}))
+        ends = [s_ for s_ in u.free_symbols if at[s_.name] in (sp.oo, -sp.oo)]
+        v = im_u.xreplace({s_: at[s_.name] for s_ in u.free_symbols if s_ not in ends})
+        s = certified_sign(v) if not ends else _eventual_sign(v, ends[0], at[ends[0].name]) if len(ends) == 1 else None
         if s in (-1, 1):
             return a + 2 * sp.pi if s == -1 else a
     return sp.Piecewise((a + 2 * sp.pi, sp.StrictLessThan(im_u, 0)), (a, True))
+
+
+def _eventual_sign(v, x, end):
+    """The sign of the polynomial `v` in `x` as x -> end (+-oo): its leading coefficient's certified sign, turned for
+    an odd degree at -oo; None for anything else (SS2-RK-3: lim arg(1 + x*i) at oo)."""
+    from ..equiv.numeric import certified_sign
+    try:
+        p = sp.Poly(v, x)
+    except Exception:  # noqa: BLE001 - not a polynomial in x
+        return None
+    if not all(c.is_number for c in p.all_coeffs()):
+        return None
+    s = certified_sign(p.LC())
+    if s not in (-1, 1):
+        return None
+    return -s if end == -sp.oo and p.degree() % 2 else s
 
 
 def _arg_read(base):

@@ -24,6 +24,7 @@ INCORRECT; where the ranges agree the value is CORRECT; a problem that writes it
     P  a progression's window far from 0 (G1YO-2)
     G  the principal argument's two conventions (SON-G3-RK-3, added the same evening)
     X  the extremum's candidates (second round, SS-YO-1)    M  the arg readings, second round (RK-SAY-1/2/3, RK-ARG-STEP)
+    T  third round: convention steps, an oversized option, the point at oo and a pinned parameter (SS2-RK-1/2/3, SS2-CR-1)
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/sayisal/sonda.py [out.json] [groups]
@@ -466,8 +467,52 @@ def cases_m():
     ]
 
 
+def cases_t():
+    """Third round (22 Oct 2026): a step refuted in one reading and verified in the other is unknown in every reading
+    (SS2-RK-1/2); an oversized option reads no range (SS2-CR-1); the shift at oo and at a pinned parameter (SS2-RK-3)."""
+    C = "complex"
+    xa = [X, {"name": "a", "domain": "real"}]
+    o = {"A": "pi/4", "B": "3*pi/4", "C": "5*pi/4", "D": "7*pi/4", "E": "3*pi/2"}
+    o2 = {"A": "pi/6", "B": "5*pi/6", "C": "7*pi/6", "D": "11*pi/6", "E": "3*pi/2"}
+    p10 = [("eq", "Abs(1 - I) = sqrt(2)"), ("eq", "arg(1 - I) = -pi/4"),
+           ("eq", "(1 - I)**10 = 32*(cos(-5*pi/2) + I*sin(-5*pi/2))")]
+    rows = [
+        ("(1 - i)^10 = -32i with the principal arg step", ev("(1 - I)**10", dod=C), sol("-32*I", p10), OK,
+         ["verified", "unknown", "verified"]),
+        ("(1 - i)^10 = 32i with the principal arg step (wrong)", ev("(1 - I)**10", dod=C), sol("32*I", p10), NO, None),
+        ("(sqrt3 - i)^6 = -64 with the principal arg step", ev("(sqrt(3) - I)**6", dod=C),
+         sol("-64", [("eq", "arg(sqrt(3) - I) = -pi/6"), ("eq", "2**6*(cos(-pi) + I*sin(-pi)) = -64")]), OK, None),
+        ("(sqrt3 - i)^6 = 64 with the principal arg step (wrong)", ev("(sqrt(3) - I)**6", dod=C),
+         sol("64", [("eq", "arg(sqrt(3) - I) = -pi/6")]), NO, None),
+        ("(-1 - i)^4 = -4 with the principal arg step", ev("(-1 - I)**4", dod=C),
+         sol("-4", [("eq", "arg(-1 - I) = -3*pi/4"), ("eq", "(-1 - I)**4 = 4*(cos(-3*pi) + I*sin(-3*pi))")]), OK, None),
+        ("MC [0, 2pi): D 7pi/4 from the principal value", ev("arg(1 - I)", dod=C, options=o),
+         sol("7*pi/4", [("eq", "arg(1 - I) = -pi/4"), ("eq", "-pi/4 + 2*pi = 7*pi/4")], option="D"), OK,
+         ["unknown", "verified"]),
+        ("MC [0, 2pi): D 11pi/6 for sqrt3 - i from the principal value", ev("arg(sqrt(3) - I)", dod=C, options=o2),
+         sol("11*pi/6", [("eq", "arg(sqrt(3) - I) = -pi/6"), ("eq", "-pi/6 + 2*pi = 11*pi/6")], option="D"), OK, None),
+        ("MC [0, 2pi): B 5pi/6 for sqrt3 - i (wrong)", ev("arg(sqrt(3) - I)", dod=C, options=o2),
+         sol("5*pi/6", [("eq", "arg(sqrt(3) - I) = -pi/6")], option="B"), NO, None),
+        ("MC option 10**10**10: C 5pi/4 in the budget", ev("arg(-1 - I)", dod=C, options=dict(o, E="10**10**10")),
+         sol("5*pi/4", option="C"), NOTNO, None),
+        ("lim x -> oo arg(1 + xi): pi/2", task("limit", {"expr": "arg(1 + x*I)", "var": "x", "to": "oo"},
+                                                shape="dne_or_scalar"), sol("pi/2"), OK, None),
+        ("lim x -> oo arg(1 + xi): 0 (wrong)", task("limit", {"expr": "arg(1 + x*I)", "var": "x", "to": "oo"},
+                                                    shape="dne_or_scalar"), sol("0"), NO, None),
+        ("lim x -> -oo arg(1 + xi): -pi/2 (one convention)",
+         task("limit", {"expr": "arg(1 + x*I)", "var": "x", "to": "-oo"}, shape="dne_or_scalar"), sol("-pi/2"), UNK, None),
+        ("d/dx arg(1 + a x i) at 1, a = 2: 2/5", task("derivative", {"f": "arg(1 + a*x*I)", "var": "x", "at": "1"}, xa,
+                                                      givens=["a = 2"]), sol("2/5"), OK, None),
+        ("d/dx arg(1 + a x i) at 1, a = 2: 1/5 (wrong)",
+         task("derivative", {"f": "arg(1 + a*x*I)", "var": "x", "at": "1"}, xa, givens=["a = 2"]), sol("1/5"), NO, None),
+        ("lim x -> 1 arg(a + xi), a = 1: pi/4", task("limit", {"expr": "arg(a + x*I)", "var": "x", "to": "1"}, xa,
+                                                     shape="dne_or_scalar", givens=["a = 1"]), sol("pi/4"), OK, None),
+    ]
+    return rows
+
+
 GROUPS = {"B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "K": cases_k, "R": cases_r, "P": cases_p,
-          "G": cases_g, "X": cases_x, "M": cases_m}
+          "G": cases_g, "X": cases_x, "M": cases_m, "T": cases_t}
 
 
 def _statuses_ok(want, got):
@@ -478,7 +523,7 @@ def _statuses_ok(want, got):
     return all(g in want for g in got)
 
 
-def main(out_path=None, groups="BCDEKRPGXM"):
+def main(out_path=None, groups="BCDEKRPGXMT"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -516,5 +561,5 @@ def main(out_path=None, groups="BCDEKRPGXM"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "BCDEKRPGXM"
+    grp = args[1] if len(args) > 1 else "BCDEKRPGXMT"
     sys.exit(1 if main(out, grp) else 0)

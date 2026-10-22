@@ -1260,6 +1260,9 @@ def _verify_arg_readings(problem_ir: ProblemIR | dict, solution: Solution | dict
     layers, flags = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
     with arg_reading("zero_two_pi", at=_arg_point(ir_d)):
         layers_b, flags_b = _verify_layers_read(copy.deepcopy(ir_d), sol_d, seed, timeout, run_steps)
+    # a step refuted in one reading and verified in the other is a statement of the convention: unknown in every
+    # reading, the declared one included, never a refutation (son-sayisal third round, SS2-RK-1/2)
+    layers, layers_b = _convention_steps_unknown(layers, layers_b)
     f_a, f_b = fuse(layers, extra_flags=flags), fuse(layers_b, extra_flags=flags_b)
     inconsistent_a, inconsistent_b = "ir_inconsistent" in f_a["flags"], "ir_inconsistent" in f_b["flags"]
     if inconsistent_a != inconsistent_b:
@@ -1286,24 +1289,81 @@ def _verify_arg_readings(problem_ir: ProblemIR | dict, solution: Solution | dict
                     flags=["arg_convention"])], flags
 
 
+def _step_statuses(ls: list[LayerResult]) -> dict:
+    st = next((la for la in ls if la.layer == "steps.refute"), None)
+    return {e.get("index"): e.get("status") for e in ((st.evidence or {}).get("steps", []) if st else [])}
+
+
+def _convention_steps_unknown(layers_a: list[LayerResult], layers_b: list[LayerResult]):
+    """Both readings' layers with every step refuted in one reading and verified in the other made "unknown": the
+    step states the arg of one convention (arg(1 - i) = -pi/4, the principal value a De Moivre solution writes before
+    it shifts to [0, 2*pi) or not), true in one reading and refuted in the other by no counterexample of its own; the
+    answer's certificate decides. Read as a refutation, the right (1 - i)**10 = -32*i with that step was UNKNOWN, and
+    the right option 7*pi/4 of an arg question with [0, 2*pi) options INCORRECT, its first bad step the true principal
+    value (son-sayisal third round, SS2-RK-1, SS2-RK-2)."""
+    from dataclasses import replace
+    sa, sb = _step_statuses(layers_a), _step_statuses(layers_b)
+    conv = {i for i in set(sa) | set(sb) if {sa.get(i), sb.get(i)} == {"refuted", "verified"}}
+    if not conv:
+        return layers_a, layers_b
+
+    def neutral(ls):
+        out = []
+        for la in ls:
+            if la.layer == "steps.refute":
+                ev = json.loads(json.dumps(la.evidence, default=str))
+                for e in ev.get("steps", []):
+                    if e.get("index") in conv:
+                        e["status"] = "unknown"
+                        e["arg_convention"] = "refuted in one arg reading, verified in the other"
+                left = sorted(e.get("index") for e in ev.get("steps", []) if e.get("status") == "refuted")
+                ev["n_refuted"] = len(left)
+                if left:
+                    la = replace(la, evidence=ev, first_bad_step=left[0])
+                else:
+                    la = unknown(la.layer, "no_step_refuted", la.latency_ms, ev)
+            out.append(la)
+        return out
+    return neutral(layers_a), neutral(layers_b)
+
+
 def _arg_point(ir_d: dict) -> dict:
-    """{variable name: closed number}: the point of a pointwise task (a derivative at a point, a limit at a finite
-    point), where the [0, 2*pi) reading's shift of an arg is locally constant (`normalize.parse.arg_reading`)."""
+    """{name: value}: where the [0, 2*pi) reading's shift of an arg is locally constant (`normalize.parse.arg_reading`):
+    the point of a pointwise task (a derivative at a point, a limit at a point or at +-oo, RK-SAY-1 and SS2-RK-3) and the
+    values the givens pin (`a = 2`: a parameter fixed by a given, SS2-RK-3)."""
     from .normalize.parse import parse_expr_str
     task = ir_d.get("task") if isinstance(ir_d, dict) else None
     p = (task or {}).get("params") or {}
     kind = (task or {}).get("kind")
+    out: dict = {}
+    names = {str(v.get("name")) for v in ir_d.get("vars") or [] if isinstance(v, dict)}
+    pins: dict = {}
+    for g in ir_d.get("givens") or []:
+        if not isinstance(g, str) or g.count("=") != 1 or any(t in g for t in ("<", ">", "!")):
+            continue
+        lhs, rhs = (t.strip() for t in g.split("="))
+        if lhs not in names:
+            continue
+        try:
+            v = parse_expr_str(rhs)
+        except Exception:  # noqa: BLE001 - no value: no pin
+            continue
+        if isinstance(v, sp.Expr) and v.is_number and v.is_finite is True:
+            pins.setdefault(lhs, []).append(v)
+    out.update({k: vs[0] for k, vs in pins.items() if len(vs) == 1})
     pt = p.get("at") if kind == "derivative" else p.get("to") if kind == "limit" else None
     var = p.get("var")
     if pt is None or not isinstance(var, str) or isinstance(pt, bool):
-        return {}
+        return out
     try:
         v = parse_expr_str(str(pt))
     except Exception:  # noqa: BLE001 - not a point: no resolution
-        return {}
-    if not isinstance(v, sp.Expr) or not v.is_number or v.has(sp.oo, -sp.oo, sp.zoo, sp.nan):
-        return {}
-    return {var: v}
+        return out
+    if v in (sp.oo, -sp.oo) and kind == "limit":
+        out[var] = v
+    elif isinstance(v, sp.Expr) and v.is_number and not v.has(sp.oo, -sp.oo, sp.zoo, sp.nan):
+        out[var] = v
+    return out
 
 
 _UNIT_MARK = re.compile(r"°|\\circ|\bdeg|derece", re.IGNORECASE)      # a degree option: G1RK-3's units
@@ -1313,9 +1373,10 @@ def _arg_options_reading(ir_d: dict) -> str | None:
     """"a" ((-pi, pi]) or "b" ([0, 2*pi)) when every option of an evaluate task reads as a number and the options hold
     the value of exactly one reading: the question writes its range there, as givens do (RK-SAY-3; `A) pi/4 ...
     E) 3*pi/2` for arg(-1 - i)). None otherwise: an option that is no number ("Hiçbiri"), both values or neither
-    among the options, a value not read; an option with a unit (degrees) is the unit decision's (G1RK-3)."""
-    from .equiv.numeric import exact_equal
-    from .normalize.parse import arg_reading, parse_expr_str
+    among the options, a value not read; an option with a unit (degrees) is the unit decision's (G1RK-3). Read in the
+    sandbox under its time limit (None past it): an option 10**10**10 held the verifier past 60 s in this process
+    (son-sayisal third round, SS2-CR-1)."""
+    from .sandbox import run as sb_run
     task = ir_d.get("task") or {}
     opts = ir_d.get("options")
     expr = (task.get("params") or {}).get("expr")
@@ -1323,8 +1384,17 @@ def _arg_options_reading(ir_d: dict) -> str | None:
         return None
     if any(not isinstance(o, (str, int)) or isinstance(o, bool) or _UNIT_MARK.search(str(o)) for o in opts.values()):
         return None
+    r = sb_run("mathverify.verifier:arg_options_worker", expr, [str(o) for o in opts.values()], timeout=8.0)
+    return r.value if r.ok and r.value in ("a", "b") else None
+
+
+def arg_options_worker(expr: str, texts: list) -> str | None:
+    """Sandbox worker of `_arg_options_reading`: the expression read in both readings and the options, compared
+    exactly."""
+    from .equiv.numeric import exact_equal
+    from .normalize.parse import arg_reading, parse_expr_str
     try:
-        values = [parse_expr_str(str(o)) for o in opts.values()]
+        values = [parse_expr_str(t) for t in texts]
         va = parse_expr_str(expr)
         with arg_reading("zero_two_pi"):
             vb = parse_expr_str(expr)
