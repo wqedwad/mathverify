@@ -189,8 +189,8 @@ MUTATIONS += [
      "            if which is None:\n                raise SetDifferenceAmbiguous(",
      "            if False:\n                raise SetDifferenceAmbiguous(", T + "test_the_two_readings_of_a_set_difference"),
     ("K54 doğrulayıcı iki okumayı koşmaz", "src/mathverify/verifier.py",
-     "        ambiguous = any(writes_ambiguous_set_difference(t) for t in _texts(ir_d) + _texts(sol_d))\n",
-     "        ambiguous = False\n", T + "test_a_set_difference_before_a_union"),
+     "        return any(writes_ambiguous_set_difference(t) for t in _texts(ir_d) + _texts(sol_d))\n",
+     "        return False\n", T + "test_a_set_difference_before_a_union"),
     ("K55 soldan okuma bütün gibi", PAR, '            if which == "left":\n', "            if False:\n",
      T + "test_a_set_difference_before_a_union"),
     ("K56 parantezli fark okunmaz", PAR,
@@ -216,6 +216,9 @@ MUTATIONS += [
      '        by = "piecewise_rule"\n        st = _piecewise_rule(f, var, p, slope)\n',
      '        by = "piecewise_rule"\n        st = _piecewise_rule(f, var, p, {})\n',
      T + "test_the_derivative_function_at_a_kink_with_a_derivative"),
+    ("K62 ilkelin gelenek koşulu istisna sızdırır", CAL,
+     "        except AttributeError as e:\n", "        except ZeroDivisionError as e:\n",
+     T + "test_a_convention_of_a_primitive_raises_nothing"),
 ]
 
 if __name__ == "__main__":

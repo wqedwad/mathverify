@@ -1048,7 +1048,13 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
             ok = None
             ev["conflict"] = "sympy_equals_false"
     if ok is True:
-        okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
+        try:
+            okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
+        except AttributeError as e:
+            # a membership or a convention (Contains(2*x + 1, Convention(zero_power)) of (2*x + 1)**(pi + 1)) is no
+            # relation to negate: it raised out of the layer (layer_exception; son-kalkulus second round, SK-RK-7,
+            # read there by the merge's G2RK-10 rule). Undecided, never a verdict
+            okd, dev = None, {"reason": f"condition_not_read: {type(e).__name__}"}
         ev["domain_check"] = dev
         if okd is not True:
             if okd is False:

@@ -784,3 +784,14 @@ def test_a_sign_formula_at_a_kink_with_a_derivative():
     assert _v(_at("Abs(x)*sign(x)", "0"), _sol("0")) == "INCORRECT"
     assert _v(_at("cbrt(x)**3", "0"), _sol("1")) == "CORRECT"
     assert _v(_at("Abs(x)", "0"), _sol("0")) == "UNKNOWN"                     # control: a corner
+
+
+@pytest.mark.parametrize("f,F", [("(2*x + 1)**pi", "(2*x + 1)**(pi + 1)/(2*(pi + 1)) + C"),
+                                 ("(x + 1)**sqrt(2)", "(x + 1)**(sqrt(2) + 1)/(sqrt(2) + 1) + C")])
+def test_a_convention_of_a_primitive_raises_nothing(f, F):
+    # SK-RK-7: the convention of (2*x + 1)**(pi + 1) is no relation to negate; it raised out of the layer
+    r = verify(_ir("antiderivative", {"integrand": f, "var": "x"}, (), None, "expression"), _sol(F, "expression"))
+    assert r.verdict == "UNKNOWN" and "layer_exception" not in r.flags
+    wrong = F.replace("+ 1)/", "+ 2)/", 1)
+    assert _v(_ir("antiderivative", {"integrand": f, "var": "x"}, (), None, "expression"),
+              _sol(wrong, "expression")) == "INCORRECT"
