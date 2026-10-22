@@ -919,57 +919,16 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     if zero == "clash":
         return [unknown("intake.naturals", "naturals_convention: N is a declared variable and a set here",
                         flags=["naturals_convention"])], []
-    layers, flags = _verify_layers_sets(problem_ir, solution, seed, timeout, run_steps)
+    layers, flags = _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
     if zero is None:
         return layers, flags
-    layers0, flags0 = _verify_layers_sets(zero[0], zero[1], seed, timeout, run_steps)
+    layers0, flags0 = _verify_layers_read(zero[0], zero[1], seed, timeout, run_steps)
     v_pos = fuse(layers, extra_flags=flags)["verdict"]
     v_zero = fuse(layers0, extra_flags=flags0)["verdict"]
     if v_pos == v_zero:
         return layers, flags + ["naturals_readings_agree"]
     return [unknown("intake.naturals", f"naturals_convention: with ℕ = {{1, 2, ...}} {v_pos}, with ℕ = "
                     f"{{0, 1, 2, ...}} {v_zero}", flags=["naturals_convention"])], flags
-
-
-def _texts(o) -> list[str]:
-    """Every string in a nested dict/list/tuple."""
-    if isinstance(o, str):
-        return [o]
-    if isinstance(o, dict):
-        return [t for v in o.values() for t in _texts(v)]
-    if isinstance(o, (list, tuple)):
-        return [t for v in o for t in _texts(v)]
-    return []
-
-
-def _verify_layers_sets(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
-                        timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
-    """`_verify_layers_read`, with ℝ − A ∪ B written without brackets (`normalize.parse.SetDifferenceAmbiguous`) read
-    both ways, ℝ − (A ∪ B) and (ℝ − A) ∪ B: the verdict when the two readings agree (both right: CORRECT, both wrong:
-    INCORRECT), UNKNOWN when they do not. Read one way, 'R - {2} ∪ {3}' was certified as the domain of
-    1/((x - 2)(x - 3)) and refuted as that of 1/(x - 2) (son-kalkulus second round, YO-K4)."""
-    import copy
-    from .normalize.parse import set_difference_reading, writes_ambiguous_set_difference
-    try:
-        ir_d = copy.deepcopy(problem_ir if isinstance(problem_ir, dict) else problem_ir.to_dict())
-        sol_d = copy.deepcopy(solution if isinstance(solution, dict) else solution.to_dict())
-        ambiguous = any(writes_ambiguous_set_difference(t) for t in _texts(ir_d) + _texts(sol_d))
-    except LeakageError:
-        raise
-    except Exception:  # noqa: BLE001 - not readable as dicts: read once (an ambiguous text is then not read)
-        ambiguous = False
-    if not ambiguous:
-        return _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
-    runs = {}
-    for which in ("whole", "left"):
-        with set_difference_reading(which):
-            runs[which] = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
-    verdicts = {which: fuse(lr, extra_flags=fl)["verdict"] for which, (lr, fl) in runs.items()}
-    if verdicts["whole"] == verdicts["left"]:
-        lr, fl = runs["whole"]
-        return lr, fl + ["set_difference_readings_agree"]
-    return [unknown("intake.claim", f"set_difference_ambiguous: R - A U B read as R - (A U B) {verdicts['whole']}, "
-                    f"as (R - A) U B {verdicts['left']}", flags=["set_difference_ambiguous"])], runs["whole"][1]
 
 
 def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
@@ -987,6 +946,8 @@ def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict,
         raise
     except Exception:  # noqa: BLE001 - not readable as dicts: read once, as given
         ir_d = sol_d = None
+    if ir_d is not None and _writes_ambiguous_set_difference(ir_d, sol_d):
+        return _verify_set_difference_readings(ir_d, sol_d, seed, timeout, run_steps)
     layers, flags = _verify_layers(problem_ir, solution, seed, timeout, run_steps)
     if ir_d is None or not any("domain_list_ambiguous" in la.flags for la in layers):
         return layers, flags
@@ -1000,6 +961,49 @@ def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict,
         return lr, fl + ["domain_list_readings_agree"]
     return [unknown("intake.domain", f"domain_list_ambiguous: read as a union {verdicts['union']}, as an "
                     f"intersection {verdicts['intersection']}", flags=["domain_list_ambiguous"])], flags
+
+
+def _texts(o) -> list[str]:
+    """Every string in a nested dict/list/tuple."""
+    if isinstance(o, str):
+        return [o]
+    if isinstance(o, dict):
+        return [t for v in o.values() for t in _texts(v)]
+    if isinstance(o, (list, tuple)):
+        return [t for v in o for t in _texts(v)]
+    return []
+
+
+def _writes_ambiguous_set_difference(ir_d: dict, sol_d: dict) -> bool:
+    """Does a text of the problem or the solution write ℝ − A ∪ B without brackets
+    (`normalize.parse.writes_ambiguous_set_difference`), and is no reading of it chosen yet?"""
+    from .normalize.parse import set_difference_reading_chosen, writes_ambiguous_set_difference
+    if set_difference_reading_chosen():
+        return False
+    try:
+        return any(writes_ambiguous_set_difference(t) for t in _texts(ir_d) + _texts(sol_d))
+    except Exception:  # noqa: BLE001 - not read: an ambiguous text is then not read (SetDifferenceAmbiguous)
+        return False
+
+
+def _verify_set_difference_readings(ir_d: dict, sol_d: dict, seed: int, timeout: float,
+                                    run_steps: bool) -> tuple[list[LayerResult], list[str]]:
+    """`_verify_layers_read` with ℝ − A ∪ B written without brackets (`normalize.parse.SetDifferenceAmbiguous`) read
+    both ways, ℝ − (A ∪ B) and (ℝ − A) ∪ B: the verdict when the two readings agree (both right: CORRECT, both wrong:
+    INCORRECT), UNKNOWN when they do not. Read one way, 'R - {2} ∪ {3}' was certified as the domain of
+    1/((x - 2)(x - 3)) and refuted as that of 1/(x - 2) (son-kalkulus second round, YO-K4)."""
+    import copy
+    from .normalize.parse import set_difference_reading
+    runs = {}
+    for which in ("whole", "left"):
+        with set_difference_reading(which):
+            runs[which] = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
+    verdicts = {which: fuse(lr, extra_flags=fl)["verdict"] for which, (lr, fl) in runs.items()}
+    if verdicts["whole"] == verdicts["left"]:
+        lr, fl = runs["whole"]
+        return lr, fl + ["set_difference_readings_agree"]
+    return [unknown("intake.claim", f"set_difference_ambiguous: R - A U B read as R - (A U B) {verdicts['whole']}, "
+                    f"as (R - A) U B {verdicts['left']}", flags=["set_difference_ambiguous"])], runs["whole"][1]
 
 
 def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,

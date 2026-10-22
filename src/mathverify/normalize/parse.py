@@ -3295,6 +3295,11 @@ class SetDifferenceAmbiguous(ParseError):
 _SET_DIFFERENCE_READING: contextvars.ContextVar = contextvars.ContextVar("set_difference_reading", default=None)
 
 
+def set_difference_reading_chosen() -> bool:
+    """Is a reading of ℝ − A ∪ B chosen (inside `set_difference_reading`)?"""
+    return _SET_DIFFERENCE_READING.get() is not None
+
+
 class set_difference_reading:  # noqa: N801 - a context manager used like a function
     """Within it, ℝ − A ∪ B is read as ℝ − (A ∪ B) ("whole") or as (ℝ − A) ∪ B ("left")."""
 
