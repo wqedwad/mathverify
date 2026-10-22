@@ -65,7 +65,7 @@ MUTATIONS = [
     ("S14 LaTeX derecesi sayı", PAR, '    s = _LATEX_DEG_RE.sub(r"\\\\cdot\\\\frac{\\\\pi}{180}", s)',
      "    s = s", T + "test_g1rk3_latex_degree_is_a_degree"),
     ("S15 LaTeX yüzdesi işaret değil", PAR, '    if _PCT_RE.search(text) or "\\\\%" in text:',
-     "    if _PCT_RE.search(text):", T + "test_g1rk3_a_right_answer_with_a_unit_mark_is_not_refuted"),
+     "    if _PCT_RE.search(text):", T + "test_ek8_a_unit_not_proved_is_read_both_ways"),
     ("S16 adımda iki okuma yok", DET,
      '                if status in ("refuted", "verified") and recheck is not None:\n',
      "                if False:\n", T + "test_g1rk3_a_step_with_a_unit_mark_is_read_both_ways"),
