@@ -339,7 +339,7 @@ MUTATIONS = [
      'kümesi kümesidir küme aralığı aralığıdır aralık kökleri çözümleri değerleri değerini alır eder çıkar olacaktır oluyor\nhesaplanır\n',
      '',
      T + 'test_rkt24_a_set_or_an_interval_named_after_it'),
-    # SA-YO-3, SA-RK-4, SA-YO-4 (second round); J02-J05, J08-J12: YO-T2-1, YO-T2-3, RK-T2-2 (third round)
+    # SA-YO-3, SA-RK-4, SA-YO-4 (second round); J02-J05, J08-J13: YO-T2-1, YO-T2-3, RK-T2-2 (third round)
     ('J01 argümanın tabanı atlanmaz (parantezleme)', PAR,
      'k < len(s) and s[k] in "_^":\n        k = sp_(k + 1)\n        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)\n        k = None if k is None else sp_(k)\n    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):\n        return None\n',
      'k < len(s) and s[k] in "^":\n        k = sp_(k + 1)\n        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)\n        k = None if k is None else sp_(k)\n    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):\n        return None\n',
@@ -388,6 +388,10 @@ MUTATIONS = [
      '    spans = [a for a in _function_arguments(s) if a[2] in ("op", "factor")]\n    return _bracket_spans(s, spans) if spans else s\n',
      '    spans = [a for a in _function_arguments(s) if a[2] in ("op", "factor")]\n    for a in sorted(spans, reverse=True):\n        s = s[:a[0]] + "\\\\left(" + s[a[0]:a[1]] + "\\\\right)" + s[a[1]:]\n    return s\n',
      T + 'test_rkt22_nested_function_macros_are_read'),
+    ('J13 kapanan çubuk argümanı bitirmez', PAR,
+     '        if c == "|" and _bar_closes(s, j):\n            break',
+     '        if False:\n            break',
+     T + 'test_rkt22_control_a_closing_bar_ends_the_argument'),
     # RK-T2-3 (third round)
     ('P01 fonksiyon gibi uygulanan değişken okunur', PAR,
      '        if applied:\n            raise ParseError(',
