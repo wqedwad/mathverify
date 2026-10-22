@@ -30,8 +30,8 @@ Measured (21 Oct 2026): 189 cases, 110 not as expected on 0e93ed5 (A 17, B 6, C 
 J 5, L 2, M 4; one held over 300 s), 0 on 4f294aa. The derivative of x·∛x (group C) is G2RK-13's, the calculus group's:
 here only no false verdict. Group M's last case is a recorded residual of the narrow G2YO-6 rule.
 Second round (22 Oct 2026): 223 cases with group N, not as expected 120 on 0e93ed5 (N 10), 15 on 3afddba (all N: 8
-planted, 7 complex tolerances), 0 on 14769a8; group N then gained the three SG-1 cases (226 cases, measured in the
-commit that adds them). Group N's |x|^(-19/20) case is a recorded residual of SI-YO-2.
+planted, 7 complex tolerances), 0 on 14769a8; with the three SG-1 cases of group N, 226 cases, 0 on cbaea02 (197 s).
+Group N's |x|^(-19/20) case is a recorded residual of SI-YO-2.
 
 Kept out of pyflakes and pytest like the rest of denetim/.
 """
