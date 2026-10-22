@@ -523,6 +523,7 @@ def test_g1rk1_wordproblem_reads_the_options_as_the_claim():
     r = verify(_mc(LINU, CM), _sol("6", option="C"))
     wp = next(la for la in r.layers if la.layer == "certify.wordproblem")
     assert wp.verdict == "pass" and "ir_inconsistent" not in wp.flags
+    assert wp.evidence["z3"]["sat_options"] == ["C"]           # read, not carried as an unread option (SA2-YO-3)
 
 
 # ---------------------------------------------------------------- G1RK-8: 0**0 in a count
@@ -652,6 +653,7 @@ def test_ek8_one_marked_number_in_a_proved_unit_is_the_plain_number(q, s):
     (dict(RATE, units="yüzde"), _sol("%0.2")), (_mc(dict(RATE, units="%"), PCT), _sol(None, option="B")),
     (dict(_ir("evaluate", {"expr": "atan(1) + atan(2) + atan(3)"}), units="derece"), _sol("180°")),
     (dict(_ir("evaluate", {"expr": "2*asin(1/2)"}), units="derece"), _sol("60°")),
+    (dict(RATIO, units="%"), _sol("20\\%")),                           # LaTeX's percent is a mark too
     # a mark inside an expression is a factor of it: read both ways even where the unit is proved
     (INC, _sol("2*%10")),
 ])
