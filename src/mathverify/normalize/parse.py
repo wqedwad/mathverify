@@ -1344,7 +1344,7 @@ def _closes_divisor(s: str, i: int) -> bool:
             j -= 1
         if j < 0:
             return False
-    if k >= 0 and s[k] in "+-":
+    if k >= 0 and s[k] in _SIGNS:
         k -= 1
         while k >= 0 and s[k].isspace():
             k -= 1
@@ -1469,13 +1469,116 @@ def _latex_atom_end(s: str, j: int) -> int | None:
     return k
 
 
+# signs before a divisor's operand: ASCII and the Unicode minus, en and em dashes (audit SA-YO-4: '1/−2π')
+_SIGNS = "+-−–—"
+# a unit mark on a divisor's operand in LaTeX: 1/2\%, 180/2^\circ, 180/2^{\circ}, 180/2\degree (audit SA-YO-4)
+_LATEX_UNIT_AFTER = re.compile(r"(?:\d+(?:\.\d+)?|[A-Za-z]|\{[^{}]*\}|\([^()]*\))\s*"
+                               r"(?:\^\s*\{?\s*\\circ\s*\}?|\\degree(?![A-Za-z])|\\%|%)")
+# what ends a function's argument written without brackets
+_LATEX_ARGUMENT_END = frozenset({"cdot", "times", "div", "pm", "mp", "le", "leq", "leqslant", "ge", "geq", "geqslant",
+                                 "ne", "neq", "lt", "gt", "approx", "equiv", "to", "in", "notin", "cup", "cap", "right",
+                                 "rbrace", "rangle", "rfloor", "rceil", "end", "quad", "qquad", "text", "mbox", "mid",
+                                 "land", "lor", "wedge", "vee", "implies", "iff"})
+
+
+def _function_argument_divides(s: str, m) -> bool:
+    """Does the argument of the LaTeX function macro matched by `m`, written without brackets, hold a '/' before it ends?
+    Its base and power are skipped (\\log_2, \\log_{10}, \\sin^2); it runs to the first operator (+, -, =, <, >, ',',
+    \\cdot, a relation) or closing bracket, a braced group or a macro with its arguments read whole: \\log_2 8/3,
+    \\sin 2x/2, \\sin 3\\pi/2, \\ln 2x/2, \\ln{2}/2 do; \\sin(x)/2, \\frac{\\ln 2}{2}, \\sin x + 1 do not (audit SA-YO-3,
+    SA-RK-4)."""
+    sp_ = lambda i: i + len(_LATEX_SPACE.match(s, i).group(0))  # noqa: E731
+    k = sp_(m.end())
+    while k is not None and k < len(s) and s[k] in "_^":
+        k = sp_(k + 1)
+        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)
+        k = None if k is None else sp_(k)
+    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):
+        return False
+    j = k
+    while j < len(s):
+        c = s[j]
+        if c == "/":
+            return True
+        if c in ")]}|,;&=<>" + _SIGNS:
+            return False
+        if c == "{" or c == "[":
+            j = _latex_group_end(s, j)
+            if j is None:
+                return False
+            continue
+        if c == "\\":
+            mm = _LATEX_MACRO.match(s, j)
+            if mm is None:
+                return False                     # \{, \,: a delimiter or a space ends nothing read here
+            if mm.group(1) in _LATEX_ARGUMENT_END:
+                return False
+            e = _latex_atom_end(s, j)
+            j = mm.end() if e is None else e
+            continue
+        j += 1
+    return False
+
+
+def _function_argument_span(s: str, m) -> tuple[int, int] | None:
+    """(start, end) of the argument of the LaTeX function macro matched by `m` when it is written without brackets,
+    its base and power skipped (\\log_2 8, \\sin^2 x): it runs to the first operator (+, -, =, <, >, ',', \\cdot,
+    \\times, a relation), closing bracket or next function macro, its trailing space left out; None when it is
+    bracketed ((x), \\left(x\\right)) or empty (\\ln|x|)."""
+    sp_ = lambda i: i + len(_LATEX_SPACE.match(s, i).group(0))  # noqa: E731
+    k = sp_(m.end())
+    while k is not None and k < len(s) and s[k] in "_^":
+        k = sp_(k + 1)
+        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)
+        k = None if k is None else sp_(k)
+    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):
+        return None
+    j = last = k
+    while j < len(s):
+        c = s[j]
+        if c in ")]}|,;&=<>/" + _SIGNS:
+            break
+        if c.isspace():
+            j += 1
+            continue
+        if c in "{[":
+            e = _latex_group_end(s, j)
+            if e is None:
+                return None
+            j = last = e
+            continue
+        if c == "\\":
+            mm = _LATEX_MACRO.match(s, j)
+            if mm is None or mm.group(1) in _LATEX_ARGUMENT_END or mm.group(1) in _LATEX_FUNCTIONS:
+                break
+            e = _latex_atom_end(s, j)
+            j = last = mm.end() if e is None else e
+            continue
+        j = last = j + 1
+    return (k, last) if last > k else None
+
+
+def _bracket_function_arguments(s: str) -> str:
+    """`s` with each function argument written without brackets (`_function_argument_span`) bracketed: latex2sympy
+    took a product after it into the argument, \\sin x \\cdot \\cos x was sin(x*cos(x)) and \\sin x \\cdot 3 was sin(3x);
+    the argument is read up to the first operator (audit SA-YO-3, SA-RK-4: the decision's reading)."""
+    spans = [sp_ for m in _LATEX_MACRO.finditer(s) if m.group(1) in _LATEX_FUNCTIONS
+             for sp_ in [_function_argument_span(s, m)] if sp_ is not None]
+    for k, e in sorted(spans, reverse=True):
+        s = s[:k] + "\\left(" + s[k:e] + "\\right)" + s[e:]
+    return s
+
+
 def _latex_divisor_juxtaposed(s: str) -> bool:
-    """Does a LaTeX text write a factor right after the operand of a '/' (1/2\\pi, x/2\\pi, 3/4\\sqrt{2}, \\pi/2x), or a
-    '/' right after a function's argument written without parentheses (\\ln 2/2, \\sin x/2)?"""
+    """Does a LaTeX text write a factor (a unit mark included: \\%, ^\\circ) right after the operand of a '/' (1/2\\pi,
+    x/2\\pi, 3/4\\sqrt{2}, \\pi/2x, 1/2\\%, 180/2^\\circ), or a '/' inside a function's argument written without brackets
+    (\\ln 2/2, \\sin x/2, \\log_2 8/3, `_function_argument_divides`)?"""
     for p in [m.start() for m in re.finditer(r"(?<!\\)/", s)]:
         j = p + 1 + len(_LATEX_SPACE.match(s, p + 1).group(0))
-        if j < len(s) and s[j] in "+-":
+        if j < len(s) and s[j] in _SIGNS:
             j += 1 + len(_LATEX_SPACE.match(s, j + 1).group(0))
+        if _LATEX_UNIT_AFTER.match(s, j):
+            return True
         end = _latex_atom_end(s, j)
         if end is None:
             continue
@@ -1486,23 +1589,9 @@ def _latex_divisor_juxtaposed(s: str) -> bool:
             m = _LATEX_MACRO.match(s, k)
             if m is not None and m.group(1) not in _LATEX_NO_FACTOR:
                 return True
-    # the dual: a function's argument written without parentheses, then a '/' (\ln 2/2: (ln 2)/2 or ln(2/2)?);
+    # the dual: a function's argument written without brackets holding a '/' (\ln 2/2: (ln 2)/2 or ln(2/2)?);
     # latex2sympy took the division into the argument, \ln{2}/2 too, and read 0 for (ln 2)/2 (sibling of G4YO-2)
-    for m in _LATEX_MACRO.finditer(s):
-        if m.group(1) not in _LATEX_FUNCTIONS:
-            continue
-        k = m.end() + len(_LATEX_SPACE.match(s, m.end()).group(0))
-        if k < len(s) and s[k] == "^":
-            k = _latex_atom_end(s, k + 1)
-            if k is None:
-                continue
-            k += len(_LATEX_SPACE.match(s, k).group(0))
-        if k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):
-            continue
-        end = _latex_atom_end(s, k)
-        if end is not None and s[end + len(_LATEX_SPACE.match(s, end).group(0)):].startswith("/"):
-            return True
-    return False
+    return any(m.group(1) in _LATEX_FUNCTIONS and _function_argument_divides(s, m) for m in _LATEX_MACRO.finditer(s))
 
 
 def ambiguous_juxtaposition(text) -> bool:
@@ -2734,6 +2823,7 @@ def _latex_to_sympy(s: str, ns: dict[str, Any]):
         # convention of the writer, not guessed (G4YO-2)
         raise ParseError(f"{s!r} writes a product or a function's argument next to a '/' without brackets "
                          "((1/2)\\pi or 1/(2\\pi)?): not read")
+    s = _bracket_function_arguments(s)
     s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
     _refuse_latex_ranges(s)
     expr = _latex2sympy(_exact_latex_decimals(s))

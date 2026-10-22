@@ -122,6 +122,9 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
                          "decimal_comma_ambiguous", "recovered_answer_refuted",
                          # '1/2π': a factor right after a divisor, (1/2)·π or 1/(2π)? (final attack G4YO-2)
                          "claim_ambiguous_juxtaposition",
+                         # a compute step under premises with no real instance, neither shown to follow from them nor
+                         # refuted at a complex solution: a wrong identity or a vacuous consequence (audit SA-YO-1)
+                         "step_reading_undecided",
                          # the prose around the value negates or doubts it ("5 değil")
                          "payload_negated", "problem_undefined_as_written", "var_domain_unsupported", "ir_malformed", "given_not_applied",
                          # the problem's definedness rests on a closed condition no exact check decides
@@ -154,7 +157,7 @@ _BLOCK_POSITIVE_FLAGS = {"ir_incomplete", "ir_inconsistent", "contradiction", "p
 # (no certificate, a membership or a solve left undecided) does not: another layer's proof stands, as the 3 Lean
 # rescues of 89 runs did (count_integers with Mod, recurrences). A flag of neither list blocks like a meaning one
 # (fail-closed); `tests/test_d4_d4j_kalan.py` catches a flag the code emits that no list here names.
-_MEANING_FLAGS = {"claim_ambiguous_juxtaposition",
+_MEANING_FLAGS = {"claim_ambiguous_juxtaposition", "step_reading_undecided",
                   "point_not_interior", "membership_condition", "reversed_bounds", "condition_not_applied",
                   "constraint_not_applied", "parametric_limit", "parametric_form", "sequence_undefined_on_the_tail",
                   "approach_outside_declared_domain", "expression_undefined_as_written", "naturals_convention",

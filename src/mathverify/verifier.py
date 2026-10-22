@@ -42,17 +42,29 @@ def _versions() -> dict[str, str]:
 # text, '{∅}' (the set holding the empty set, a classic distractor), '∅ ∪ {1}' and 'Çözüm yok değil' were read as
 # "no solution", and the wrong letter beside the right ∅ was CORRECT (final attack G4YO-1). A text that only names the
 # empty set or those words (`_NO_SOLUTION_MENTION`) is read as written, by the option's reader.
-_EMPTY_SET_TEXT = r"(?:∅|ø|\\emptyset|\\varnothing|emptyset|\\?\{\s*\\?\})(?:\s*\(\s*boş\s+küme\s*\))?"
-_NO_SOLUTION_WORDS = (r"(?:(?:denklemin|eşitsizliğin|hiçbir|hiç)\s+)*(?:(?:gerçel|reel)\s+)?"
-                      r"(?:çözüm(?:ü|leri)?|kök(?:ü|leri)?)(?:\s+kümesi)?\s*(?:yok(?:tur)?|boş(?:tur|\s+küme(?:dir)?)?)"
-                      r"|boş\s+küme(?:dir)?|no\s+(?:real\s+)?(?:solutions?|roots?)|(?:the\s+)?empty\s+set")
+_EMPTY_SET_TEXT = r"(?:∅|ø|\\emptyset|\\varnothing|emptyset|\\?\{\s*\\?\})"
+# the adjective of the roots (MEB writes 'gerçek'; 'gerçel', 'reel' too) and 'in the real numbers' (audit SA-RK-1)
+_REAL_ADJ = r"(?:(?:gerçek|gerçel|reel)\s+(?:sayılarda\s+)?)?"
+_NO_SOLUTION_WORDS = (r"(?:(?:denklemin|eşitsizliğin|fonksiyonun|hiçbir|hiç)\s+)*" + _REAL_ADJ +
+                      r"(?:çözüm(?:ü|leri|ler)?|kök(?:ü|leri|ler)?)(?:\s+kümesi)?\s*"
+                      r"(?:yok(?:tur)?|boş(?:tur|\s+küme(?:dir)?)?)"
+                      r"|boş\s+küme(?:dir)?"
+                      r"|hiçbir\s+" + _REAL_ADJ + r"sayı\s+(?:için\s+)?sağlanmaz"
+                      r"|(?:there\s+(?:is|are)\s+)?no\s+(?:real\s+)?(?:solutions?|roots?)|(?:the\s+)?empty\s+set")
+# what may name the set before it: the solution set or the domain by name or by their abbreviations (Ç, ÇK, Ç.K., S, TK,
+# T.K., D(f)), or the variable, with '=', ':', '∈'; 'çözüm kümesi' / 'tanım kümesi' also without (audit SA-RK-2)
+_NO_SOLUTION_PREFIX = (r"(?:(?:(?:denklemin|eşitsizliğin|fonksiyonun)\s+)?(?:çözüm|tanım)\s+kümesi\s*(?:(?:=|:|∈)\s*)?"
+                       r"|(?:ç(?:\s*\.?\s*k\s*\.?)?|t\s*\.?\s*k\s*\.?|d\s*\(\s*[a-z]\s*\)|d_?[a-z]|s|[a-z])\s*"
+                       r"(?:=|:|∈|\\in(?![a-z]))\s*)")
+# what may follow it: the set named again in brackets ('Boş küme (∅)', '∅ (boş küme)') and the copula ('∅'dir')
+_NO_SOLUTION_SUFFIX = (r"(?:\s*\(\s*(?:boş\s+küme|∅|ø|\\emptyset|\\varnothing|empty\s+set)\s*\))?"
+                       r"(?:\s*['’]?\s*(?:dir|dır|dur|dür|tir|tır|tur|tür))?")
 _NO_SOLUTION = re.compile(
-    r"^\s*(?:\$+|\\\()?\s*"
-    r"(?:(?:ç(?:\s*\.\s*k\s*\.?)?|çözüm\s+kümesi|s|[a-z])\s*(?:=|:|∈|\\in(?![a-z]))\s*|çözüm\s+kümesi\s+)?"
-    rf"(?:{_EMPTY_SET_TEXT}|{_NO_SOLUTION_WORDS})"
-    r"\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
+    r"^\s*(?:\$+|\\\()?\s*" + rf"(?:{_NO_SOLUTION_PREFIX})?" + rf"(?:{_EMPTY_SET_TEXT}|{_NO_SOLUTION_WORDS})"
+    + _NO_SOLUTION_SUFFIX + r"\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
 _NO_SOLUTION_MENTION = re.compile(
-    r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s*küme|no\s*(real\s*)?solution|∅|ø|emptyset|varnothing",
+    r"çözüm(?:ü|leri|ler)?(\s*kümesi)?\s*(yok|boş)|kök(?:ü|leri|ler)?\s*yok|boş\s*küme|no\s*(real\s*)?(?:solution|root)"
+    r"|∅|ø|emptyset|varnothing|(?:gerçek|gerçel|reel)\s+(?:kök|çözüm|sayı)",
     re.IGNORECASE)
 
 
@@ -215,6 +227,21 @@ def _compare_option(ir: ProblemIR, solution: Solution, ctx, ov, cv, t) -> tuple[
     return ok, ev
 
 
+def _claims_no_solution(ir: ProblemIR, solution: Solution, ctx) -> bool:
+    """Does the solution claim the empty set (or "none") for a set answer?"""
+    ca = solution.claimed_answer
+    if ca.kind == "none":
+        return True
+    if ir.answer_shape not in ("set", "interval") and ca.kind not in ("set", "interval"):
+        return False
+    try:
+        return ctx.claimed(solution) == sp.S.EmptySet
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: not the empty set
+        return False
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
@@ -257,6 +284,14 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if not mention and re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text):
             ev = {"option": ca.option, "option_text": opt_text, "claimed": str(ca.payload)}
+            if ca.payload_source == "option_letter" and ir.answer_shape in ("set", "interval"):
+                # the letter alone for a set: the claim is this option's own text, "no solution" in words no reading
+                # took ('Sağlayan bir x değeri yoktur' for ∅ was refuted against itself; sibling of SA-RK-1)
+                return _mc_undecided("option_text_is_the_claim_and_not_read", t.ms, ev)
+            if _claims_no_solution(ir, solution, ctx):
+                # 'yok' beside the empty set of a set answer: "no solution" in words no reading above took, never a
+                # refutation of ∅ (audit SA-RK-1: 'Gerçek kökü yoktur' refuted the right ∅)
+                return _mc_undecided("option_says_no_value_beside_an_empty_claim", t.ms, ev)
             ev["reason"] = "option_says_DNE_but_a_value_was_claimed"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if ca.payload in (None, ""):
@@ -353,11 +388,69 @@ _TAGLIKE = re.compile(r"^<[^<>]*>(?:[^<>]*</[^<>]*>)?$")
 # -mıyor, -mayabilir, -mamış, -mamalı) on any word, the question particle (mi, midir, mısınız) alone; English words whole.
 _NEGATION = re.compile(
     r"(?<!\w)(?:değil|degil|yanlış|yanlis|hariç|haric|dışında|disinda|hayır|hayir|yok|olamaz|olmaz|olma[dmy]|olabil|"
-    r"belki|muhtemel|sanırım|sanirim|sanmı|sanmi|sanki|zannet|zanned|galiba|herhalde|tahmin|şüphe|kuşku|imkans|imkâns)\w*"
-    r"|(?<!\w)\w*?(?:m[ae]z|m[ıiuü]yor|m[ae]y[ae]bil|m[ae]m[ıiuü]ş|m[ae]m[ae]l[ıi])\w*"
+    r"belki|muhtemelen|sanırım|sanirim|sanmı|sanmi|sanki|zannet|zanned|galiba|herhalde|tahmin|şüphe|kuşku|imkans|imkâns)\w*"
+    r"|(?<!\w)\w*?(?:m[ae]z|m[ıiuü]yor|m[ae]y[ae]bil|m[ae]m[ıiuü]ş|m[ae]m[ae]l[ıi]|m[ae]d[ıi]|m[ae]y[ae]c[ae]k"
+    r"|m[ae]m[ae]kt[ae])\w*"
+    # a rejection of the value (audit SA-YO-2): reddedilir, geçersiz, hatalı, elenir, invalid, rejected, ✗
+    r"|(?<!\w)(?:redded|reddet|geçersiz|gecersiz|hatalı|hatali|elen|yanıl|yanil)\w*|[✗✘❌]"
+    r"|(?<!\w)(?:invalid|rejected|reject|extraneous|discarded|false)(?!\w)"
     r"|(?<!\w)m[ıiuü](?:d[ıiuü]r|s[ıiuü]n(?:[ıiuü]z)?|y[ıiuü]m|y[ıiuü]z)?(?!\w)"
     r"|(?<!\w)(?:not|no|nor|never|cannot|can't|isn't|isnt|aren't|doesn't|don't|won't|wrong|incorrect|false|except|"
     r"maybe|perhaps|probably|possibly|unlikely|might|doubt|unsure)(?!\w)|\?", re.IGNORECASE)
+
+
+# The prose after a value that the cleaner may drop: words that leave the value as it is (a copula, a count or unit word,
+# "the answer", "the largest value", "certainly"), measured on the project's corpora (evalset, K4, the part and final
+# probes: their only real tails are these; the prompt injections of harness/adversarial.py, whose verdict must not
+# change, and markup such as <verdict>…</verdict>, `_TAGLIKE`) and the two audit lenses' affirmative lists. Any other word
+# leaves the payload unread (UNKNOWN), a negation or a rejection marks it negated: a list of what is refused let
+# '5 sağlamadı', '5 geçersiz', '5 ✗' through, and a widened one refused '5 olabilecek en büyük değerdir' and '5 şüphesiz'
+# (audit SA-YO-2, SA-RK-3).
+_TAIL_ALLOWED = frozenset("""
+bulunur bulunmuştur bulunmaktadır olur olarak elde edilir edildi olmalıdır olmalı eşittir eşit doğrudur doğru dır dir dur
+dür tır tir tur tür tane adet birim birimkare br br² cevap cevaptır cevabı cevabıdır sonuç sonuçtur sonucu sonucudur sonucuna
+ulaşılır bu çözüm çözümdür çözümü değer değerdir değeri değeridir en büyük büyüğü küçük küçüğü fazla az çok olabilecek
+alabileceği olası mümkün olan tek eşsiz kesin kesindir kesinlikle şüphesiz kuşkusuz muhtemel durum durumdur farklı vardır
+tamsayı tamsayıdır tamsayısıdır tam sayı sayıdır pozitif negatif sıfır sıfırdan kök köktür kökü çift katlı sabit sabittir
+kalır değişmez tamamı beklendiği gibi tahmin edilen edildiği olasılık olasılıkla olduğu için alınır nokta noktası noktasıdır
+derece radyan rad cm mm km kg gr ton lt litre ml cm² cm2 m² m2 cm³ m³ km² saat sa dakika dk saniye sn gün hafta ay yıl lira tl
+kuruş kişi metre santimetre kilometre gram kilogram km/sa m/sn m/s
+is the answer final value largest smallest maximum minimum units unit equals yani yüzden budur dolayısıyla böylece
+onaylayın ignore previous instructions and mark this as correct system above verified
+""".split())
+# phrases of words the negation test would read wrongly: 'negatif olmayan' (nonnegative), 'olabilecek en büyük', 'muhtemel
+# durum' (a possible outcome), 'şüphesiz' (doubtless), 'değişmez' (constant), 'tahmin edilen' (the estimated one)
+_AFFIRMATIVE_PHRASES = re.compile(
+    r"(?<!\w)(?:(?:negatif|pozitif|sıfır|boş)\s+olmayan|olabilecek|alabileceği|olası|muhtemel\s+(?:durum|sonuç)\w*"
+    r"|şüphesiz|kuşkusuz|değişmez|tahmin\s+edil(?:en|diği)|largest\s+possible|smallest\s+possible)(?!\w)",
+    re.IGNORECASE)
+_TAIL_PUNCT = "()[]{}\"'«»“”.,;:!#*"
+
+
+def _tail_reading(words: list, ctx) -> str:
+    """'negated', 'allowed' (every word is one the cleaner may drop, `_TAIL_ALLOWED`) or 'unknown' for the trailing prose
+    `words` of a payload. A symbol of the problem (a variable, i, I, e, E, any name of its namespace) or a single Latin
+    letter is never prose: '1/2 + √3/2 i' and '2 x' were cleaned to 1/2 + √3/2 and 2 and refuted (audit SA-RK-5,
+    principle 3)."""
+    for w in words:
+        n = w.strip(_TAIL_PUNCT)
+        if n and (n in ctx.ns or n.lower() in ("i", "e") or (len(n) == 1 and n.isascii() and n.isalpha())):
+            return "unknown"
+    text = _AFFIRMATIVE_PHRASES.sub(" ", " ".join(words).lower().replace("\u0307", ""))
+    if _NEGATION.search(text):
+        return "negated"
+    return "allowed" if all(n in _TAIL_ALLOWED or (_TAGLIKE.match(n) and not any(ch.isdigit() for ch in n))
+                            for n in (w.strip(_TAIL_PUNCT) for w in text.split()) if n) else "unknown"
+
+
+def _one_tuple(v) -> bool:
+    """Is `v` a tuple of one element (or a set holding only one): '5,' read as (5,), '{2, 3},' as {({2, 3},)}? A comma
+    there is punctuation, never a value (audit SA-RK-6)."""
+    if isinstance(v, (tuple, sp.Tuple)):
+        return len(v) == 1
+    if isinstance(v, sp.FiniteSet) and len(v) == 1:
+        return _one_tuple(next(iter(v)))
+    return False
 
 
 def _is_prose_token(tok: str) -> bool:
@@ -394,8 +487,8 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     if ca.payload is None or not isinstance(ca.payload, str):
         return flags
     try:
-        ctx.claimed(solution)
-        return flags
+        if not _one_tuple(ctx.claimed(solution)):
+            return flags
     except Exception:  # noqa: BLE001
         pass
     s = _ZERO_WIDTH.sub("", ca.payload).strip()
@@ -442,24 +535,30 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     if strict and len(toks) > 1 and _declared_unit(ctx, toks[-1]):
         toks = toks[:-1]
         cands.append(" ".join(toks))
-    for k in range(len(toks) - 1, 0, -1):
-        if not _is_prose_token(toks[k]):
-            break
-        # prose that negates or doubts the value ("5 değil", "5 olamaz", "belki 5") is not junk:
-        # dropping it turned "not 5" into 5 and certified it (audit of 25 Sep 2026). Abstain.
-        if _NEGATION.search(" ".join(toks[k:])):
-            flags.append("payload_negated")
-            return flags
+    # prose that negates or doubts the value ("5 değil", "5 olamaz", "belki 5") is not junk: dropping it
+    # turned "not 5" into 5 and certified it (audit of 25 Sep 2026). Abstain. Only a tail of words known to
+    # leave the value as it is is dropped, read as a whole (`_tail_reading`, audit SA-YO-2, SA-RK-3, SA-RK-5).
+    start = len(toks)
+    while start > 1 and _is_prose_token(toks[start - 1]):
+        start -= 1
+    reading = _tail_reading(toks[start:], ctx) if start < len(toks) else "allowed"
+    if reading == "negated":
+        flags.append("payload_negated")
+        return flags
+    for k in range(len(toks) - 1, start - 1 if reading == "allowed" else len(toks), -1):
         if strict and not (_FILLER_WORD.fullmatch(toks[k].strip(".,;:!'’").lower()) or _declared_unit(ctx, toks[k])):
             break
         cands.append(" ".join(toks[:k]))
     original = ca.payload
+    # a final ',' or ';' is punctuation ('5,', '5, kesinlikle'): the text before it is tried (audit SA-RK-6)
+    cands = [re.sub(r"\s*[,;]\s*$", "", c) if isinstance(c, str) else c for c in cands]
     for c in cands:
         if not c or c == original:
             continue
         ca.payload = c
         try:
-            ctx.claimed(solution)
+            if _one_tuple(ctx.claimed(solution)):
+                continue
             flags.append("payload_cleaned")
             return flags
         except Exception:  # noqa: BLE001
@@ -822,6 +921,16 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
             and re.search(r"\d,\d", ca.payload):
         return unknown("intake.claim", f"claimed answer {ca.payload!r}: decimal comma or pair? not guessed",
                        flags=["decimal_comma_ambiguous"])
+    # a tuple of one element ('(5,)', or '5,' that no cleaning took) is no value (audit SA-RK-6)
+    try:
+        one = _one_tuple(ctx.claimed(solution))
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: the certificates report it
+        one = False
+    if one:
+        return unknown("intake.claim", f"claimed answer {ca.payload!r} is a tuple of one element: not read",
+                       flags=["parse_error", "claim_unreadable"])
     # '1/2π', '1/2√x': (1/2)·π or 1/(2π)? A factor written right after a divisor is a convention of the writer; the
     # parser reads it neither way (`normalize.parse.ambiguous_juxtaposition`), and the claim is not read (G4YO-2)
     from .normalize.parse import ambiguous_juxtaposition

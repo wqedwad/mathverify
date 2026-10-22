@@ -1329,7 +1329,9 @@ def _on_premises(claim, text: str, premises: list, ctx: Ctx, status: str, ev: di
       checked at each. Refuted at one where every premise holds: refuted there. Verified at every point
       not excluded: verified. Otherwise unknown; a point where a range of the problem runs backwards, or
       a premise is undecided, decides nothing (DECISIONS §80). No point at all (premises that contradict
-      each other, a = 3 and a = 2): the identity check stands, as before.
+      each other, a = 3 and a = 2): the identity check stands here, and `_compute_status` reads it against the
+      problem's own premises when they hold nowhere in ℝ (`_vacuous`: withdrawn only where the step is proved to follow
+      from them, kept where it is false at their exact complex solution, undecided otherwise).
     * Otherwise (a Limit or a Derivative in the claim, a premise linking a symbol that is not confined,
       too many values) a refutation stands when its point satisfies every premise on the claim's symbols
       alone. When it does not, the claim is compared again on the region those premises leave each
@@ -1946,11 +1948,16 @@ def _premises_hold_nowhere(ctx: Ctx) -> bool:
     return ctx.cache[key]
 
 
+def _problem_premise_parts(ctx: Ctx) -> list:
+    """The problem's own premises (`_premise_parts` of the givens, the task's relation, the variables' constraints and
+    written conditions); never a step of the solution."""
+    return _premise_parts(list(ctx.givens()) + _task_relations(ctx.ir, ctx) + list(ctx.var_constraints()))
+
+
 def _premises_proved_empty(ctx: Ctx) -> bool:
     from ..equiv.numeric import real_odd_roots
     from ..sandbox.exactsets import at_risk
-    premises = list(ctx.givens()) + _task_relations(ctx.ir, ctx) + list(ctx.var_constraints())
-    parts = _premise_parts(premises)
+    parts = _problem_premise_parts(ctx)
     if not parts:
         return False
     syms = set().union(*(p.free_symbols for p in parts))
@@ -1983,17 +1990,182 @@ def _premises_proved_empty(ctx: Ctx) -> bool:
     return bool(e.ok and e.value is True)
 
 
-def _vacuous(status: str, ev: dict, ctx: Ctx) -> tuple[str, dict]:
-    """A refutation withdrawn where the problem's own premises hold nowhere (`_premises_hold_nowhere`): from premises
-    with no instance every relation follows, so no step is refuted there, as no point is a counterexample (principle
-    5). '0 = 2' from 2x + 1 = 2x + 3 and x**2 = -1 from x**2 + 1 = 0 are how the empty solution set is shown, and they
-    were refuted as a closed false relation and a false identity: the right ∅ was INCORRECT (final attack G4-RK-5).
-    Unknown, never verified. A closed `compute` claim is a computation, not a consequence, and keeps its refutation
-    (`_compute_status`): 0 - 4 = 4 is wrong whatever the premises."""
+# a `compute` step refuted as an identity under premises with no instance, neither shown to follow from them nor refuted
+# at one of their complex solutions: its reading is undecided (a wrong identity, or a vacuous consequence), and the
+# solution is never CORRECT with it (final attack, audit of the lens-4 branch SA-YO-1)
+STEP_READING_UNDECIDED = "step_reading_undecided"
+
+
+def _vacuous(status: str, ev: dict, ctx: Ctx, claim=None, compute: bool = False) -> tuple[str, dict]:
+    """A refutation where the problem's own premises hold nowhere in ℝ (`_premises_hold_nowhere`). There no real point is
+    a counterexample (principle 5), and how the empty solution set is shown is a step that is false everywhere in ℝ:
+    '0 = 2' from 2x + 1 = 2x + 3, x**2 = -1 from x**2 + 1 = 0 were refuted and the right ∅ INCORRECT (final attack
+    G4-RK-5). A closed relation is withdrawn (unknown). An open one only when it is proved a consequence of the premises
+    (`_empty_premise_reading`): then unknown; refuted at an exact complex solution of the premises, it stays refuted
+    there ((x - 1)**2 + 6 for x**2 - 2*x + 5 at 1 + 2i: a wrong identity, not a consequence; audit SA-YO-1);
+    undecided, an `eq` step is unknown as before and a `compute` step unknown with `STEP_READING_UNDECIDED` (no
+    CORRECT). Never verified. A closed `compute` claim is a computation, not a consequence: its caller keeps its
+    refutation (`_compute_status`)."""
     if status != "refuted" or not _premises_hold_nowhere(ctx):
         return status, ev
-    return "unknown", {"reason": "premises_hold_nowhere: the problem's premises have no instance, no point refutes "
-                                 "a step", "withdrawn": ev}
+    why = "premises_hold_nowhere: the problem's premises have no real instance"
+    if claim is None or not getattr(claim, "free_symbols", None):
+        return "unknown", {"reason": f"{why}, no point refutes a step", "withdrawn": ev}
+    try:
+        reading = _empty_premise_reading(claim, _problem_premise_parts(ctx), compute)
+    except _OutOfTime:
+        raise
+    except Exception:  # noqa: BLE001 - not decided
+        reading = None
+    if reading == "consequence":
+        return "unknown", {"reason": f"{why}, and the step follows from them", "withdrawn": ev}
+    if isinstance(reading, dict):
+        return "refuted", {**ev, "reason": f"{why}; the step is false at an exact complex solution of them",
+                           "complex_counterexample": reading}
+    if compute:
+        return "unknown", {"reason": f"{why}; the identity is not shown to follow from them nor refuted at a complex "
+                                     "solution: undecided", "withdrawn": ev, "flags": [STEP_READING_UNDECIDED]}
+    return "unknown", {"reason": f"{why}; the step is not shown to follow from them", "withdrawn": ev}
+
+
+_ORDER_SIGN = {sp.StrictLessThan: (-1, True), sp.LessThan: (-1, False), sp.StrictGreaterThan: (1, True),
+               sp.GreaterThan: (1, False)}
+
+
+def _multiple_of_premise(claim, parts: list) -> bool:
+    """Is the relation `claim` a premise multiplied by a nonzero number: its difference of sides k times the premise's
+    (an order keeps or turns its direction with the sign of k, and a strict premise gives a strict or a non-strict
+    one)? sqrt(x) = -1 from sqrt(x) + 1 = 0, 2*(x + y) = 2 from x + y = 1, (x - 1)**2 + 1 < 0 from x**2 + 2 < 2*x."""
+    if not isinstance(claim, sp.core.relational.Relational) or isinstance(claim, sp.Ne):
+        return False
+    dc = claim.lhs - claim.rhs
+    for p in parts:
+        if not isinstance(p, sp.core.relational.Relational) or isinstance(p, sp.Ne):
+            continue
+        if isinstance(claim, Eq) != isinstance(p, Eq):
+            continue
+        dp = p.lhs - p.rhs
+        if dp == 0:
+            continue
+        _tick()
+        k = sp.simplify(dc / dp)
+        if not (k.is_number and k.is_real is True and k.is_zero is False):
+            continue
+        if isinstance(claim, Eq):
+            return True
+        (sign_p, strict_p), (sign_c, strict_c) = _ORDER_SIGN[type(p)], _ORDER_SIGN[type(claim)]
+        if sign_p * (1 if k.is_positive else -1) == sign_c and (strict_p or not strict_c):
+            return True
+    return False
+
+
+def _empty_premise_reading(claim, parts: list, compute: bool, poles=()):
+    """For an open claim under premises with no real instance: "consequence" when it is proved to follow from them
+    (`_multiple_of_premise`, or every complex solution of their equations, rational and finite, makes it exactly
+    true), a complex solution (as text, symbol -> value) where it is exactly false, or None. Only equations: an order
+    has no complex reading; a premise that is no rational equation (other than a `!=` condition) leaves None. `poles`:
+    the denominators of the claim as written (`_written_poles`); a solution where one vanishes is no counterexample
+    (principle 12: (x**4 - 1)/(x**2 + 1) = 0 evaluates to x**2 - 1 = 0, false at ±i, where the claim as written is
+    0/0)."""
+    if _multiple_of_premise(claim, parts):
+        return "consequence"
+    if not isinstance(claim, Eq):
+        return None
+    eqs = [p for p in parts if isinstance(p, Eq)]
+    conds = [p for p in parts if isinstance(p, sp.Ne)]
+    if not eqs or len(eqs) + len(conds) != len(parts):
+        return None
+    syms = sorted(set().union(*(p.free_symbols for p in eqs + conds)), key=lambda q: q.name)
+    d = (_doit(claim.lhs - claim.rhs) if compute else claim.lhs - claim.rhs)
+    if not syms or not d.free_symbols <= set(syms) or any(not (p.lhs - p.rhs).is_rational_function(*syms)
+                                                          for p in eqs + conds) \
+            or not d.is_rational_function(*syms):
+        return None
+    nums, dens = [], []
+    for p in eqs:
+        n_, d_ = sp.fraction(sp.together(p.lhs - p.rhs))
+        nums.append(sp.expand(n_))
+        dens.append(d_)
+    excluded = list(dens) + [sp.fraction(sp.together(c.lhs - c.rhs))[0] for c in conds]
+    N, D = sp.fraction(sp.together(d))
+    if len(syms) > 1:
+        # several unknowns: only equations with no complex solution at all are read (x + y = 1, 2x + 2y = 3)
+        _tick()
+        G = sp.groebner([n_ for n_ in nums if n_ != 0], *syms, order="lex")
+        return "consequence" if list(G.exprs) == [1] else None
+    (x,) = syms
+    P = sp.Poly(0, x)
+    for n_ in nums:
+        P = sp.Poly(n_, x) if P.is_zero else sp.gcd(P, sp.Poly(n_, x))
+    if P.is_zero:
+        return None
+    P = P.sqf_part()
+    for e in excluded:                           # poles of the premises and the points their conditions exclude
+        ep = sp.Poly(e, x)
+        if not ep.is_zero:
+            P = sp.Poly(sp.quo(P, sp.gcd(P, ep)), x)
+    if P.degree() <= 0:
+        return "consequence"                     # no complex solution either
+    Np, Dp = sp.Poly(N, x), sp.Poly(D, x)
+    if sp.gcd(P, Dp).degree() == 0 and sp.rem(Np, P).is_zero:
+        return "consequence"                     # the claim vanishes at every solution, none of them its pole
+    Q = sp.Poly(sp.quo(P, sp.gcd(P, Np)), x)     # the solutions where the claim's numerator does not vanish
+    Q = sp.Poly(sp.quo(Q, sp.gcd(Q, Dp)), x)     # ... and that are no pole of the claim
+    for b in poles:                              # ... nor of the claim as written
+        b = b.xreplace({q: x for q in b.free_symbols if q.name == x.name})
+        if b.free_symbols - {x} or not b.is_polynomial(x):
+            return None
+        if b.free_symbols:
+            Q = sp.Poly(sp.quo(Q, sp.gcd(Q, sp.Poly(b, x))), x)
+    if Q.degree() <= 0:
+        return None
+    root = Q.all_roots()[0] if Q.degree() <= 4 else sp.CRootOf(Q.as_expr(), 0)
+    return {str(x): str(root)}
+
+
+def _written_poles(text: str, ns: dict[str, Any]) -> list | None:
+    """The bases of the negative integer powers of the claim read as written (`parse_as_written`: x/x keeps its x);
+    None when it is not read so, or a symbol stands in anything but a sum, a product, an integer power or a derivative
+    (a root or a function has no value at a complex point in the real reading)."""
+    from ..normalize.parse import parse_as_written
+    try:
+        w = parse_as_written(text, ns)
+    except Exception:  # noqa: BLE001 - not read as written
+        return None
+    if w is None:
+        return None
+    poles = []
+    for n in sp.preorder_traversal(w):
+        if not getattr(n, "free_symbols", None) or isinstance(n, (sp.Symbol, sp.Tuple, sp.Add, sp.Mul,
+                                                                  sp.Derivative)):
+            continue
+        if isinstance(n, sp.Pow) and n.exp.is_Integer:
+            if n.exp.is_negative:
+                poles.append(n.base)
+            continue
+        return None
+    return poles
+
+
+def _complex_counterexample_as_written(claim, text: str, ns: dict[str, Any], kind: str, ctx: Ctx, status: str,
+                                       ev: dict):
+    """A step refuted at a complex solution of premises with no real instance (`_vacuous`), read again with the
+    denominators of its text as written (`_written_poles`): the solution must be one where the claim as written has
+    a value (principle 12), or the step is undecided (a `compute` step with `STEP_READING_UNDECIDED`, an `eq` step
+    unknown as in `_vacuous`)."""
+    try:
+        poles = _written_poles(text, ns)
+        again = None if poles is None else \
+            _empty_premise_reading(claim, _problem_premise_parts(ctx), kind == "compute", poles)
+    except _OutOfTime:
+        raise
+    except Exception:  # noqa: BLE001 - not decided
+        again = None
+    if isinstance(again, dict):
+        return status, {**ev, "complex_counterexample": again}
+    flags = {"flags": [STEP_READING_UNDECIDED]} if kind == "compute" else {}
+    return "unknown", {"reason": "complex_counterexample_where_the_claim_as_written_is_undefined", "withdrawn": ev,
+                       **flags}
 
 
 def _finite_counterexample(claim, premises: list, syms: list, ctx: Ctx) -> dict | None:
@@ -2029,7 +2201,7 @@ def _check_eq(claim, premises: list, ctx: Ctx, restrictions: list = (), window: 
     if ev.pop("_window_without_instance", False):
         status, ev = _check_eq_in(claim, premises, ctx, restrictions, ())
         ev["window_dropped"] = "no_premise_instance_inside_the_task_interval"
-    return _vacuous(status, ev, ctx)
+    return _vacuous(status, ev, ctx, claim)
 
 
 def _closed_claim(claim, ctx: Ctx) -> str:
@@ -3008,7 +3180,7 @@ def _compute_status(claim, text: str, pool: list, ctx: Ctx, conds=()) -> tuple[s
             ev = {**pev, "pinned_by_premises": {str(k): str(v) for k, v in pins.items()}, "identity_refuted": ev}
     if not getattr(claim, "free_symbols", None):
         return status, ev                   # a closed computation is true or false whatever the premises
-    return _vacuous(status, ev, ctx)        # checked where premises with no instance put its symbols: nowhere (G4-RK-5)
+    return _vacuous(status, ev, ctx, claim, compute=True)   # premises with no real instance (G4-RK-5, SA-YO-1)
 
 
 def _counterexample_where_undefined(claim, ev: dict, conds, ctx: Ctx) -> bool:
@@ -3056,6 +3228,7 @@ def check_steps(ir, solution, ctx: Ctx):
         window = _task_window(ir, ctx)
         objects = _task_objects(ir, ctx)
         first_bad = None
+        step_flags: set = set()                   # a step's own abstention flags (`STEP_READING_UNDECIDED`)
         started = time.monotonic()
         n_ref = n_ver = n_unk = n_skip = n_malformed = 0
         case_claims: dict[str, Any] = {}          # id -> relation assumed in a case branch
@@ -3237,6 +3410,8 @@ def check_steps(ir, solution, ctx: Ctx):
                     # the claim, read as written, has no value at the counterexample (principle 12): sqrt(x**3)
                     # = x*sqrt(x) at x = -2, where neither side is real (D4-ADIM-J)
                     status, ev = "unknown", {"reason": "counterexample_where_the_claim_is_undefined", "withdrawn": ev}
+                if status == "refuted" and isinstance(ev, dict) and ev.get("complex_counterexample"):
+                    status, ev = _complex_counterexample_as_written(claim, st.claim, step_ns, st.kind, ctx, status, ev)
                 why = None
                 if status != "refuted":
                     written = _undefined_as_written(st.claim, step_ns,
@@ -3258,6 +3433,7 @@ def check_steps(ir, solution, ctx: Ctx):
                 status, ev, why, chosen = "unknown", {"reason": "step_time_budget_exceeded"}, None, False
             finally:
                 _deadline.reset(token)
+            step_flags.update((ev or {}).get("flags", ()) if isinstance(ev, dict) else ())
             if why is not None:
                 # the value SymPy checked is not the value of what was written: neither verified
                 # nor a premise (principle 12). A refutation stands: the checkers refute only a
@@ -3305,5 +3481,5 @@ def check_steps(ir, solution, ctx: Ctx):
         return result(LAYER, "fail", 0.97, True, ev_all, t.ms, primary=False, first_bad_step=first_bad,
                       flags=["step_refuted"])
     if n_malformed:
-        return unknown(LAYER, "malformed_step_claim", t.ms, ev_all, flags=["malformed_step_claim"])
-    return unknown(LAYER, "no_step_refuted", t.ms, ev_all)
+        return unknown(LAYER, "malformed_step_claim", t.ms, ev_all, flags=["malformed_step_claim"] + sorted(step_flags))
+    return unknown(LAYER, "no_step_refuted", t.ms, ev_all, flags=sorted(step_flags))
