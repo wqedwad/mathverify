@@ -1162,6 +1162,7 @@ def _plainly_smooth(f, var, at) -> bool:
     """Is f analytic at the number `at` (`smooth_at` with f's own switches and written conditions)? Then SymPy's
     derivative formulas have the derivatives' values there."""
     try:
+        at = sp.sympify(at)
         return smooth_at(f, var, at, switch_arguments(abs_form(f), var), definedness_conditions(f, var))
     except Exception:  # noqa: BLE001 - not proved
         return False

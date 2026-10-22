@@ -385,7 +385,8 @@ def _at(e, v, val):
 
     def taken(n):
         for ex, c in n.args:
-            cv = c.subs(v, val) if isinstance(c, sp.Basic) and v in c.free_symbols else c
+            with sp.evaluate(True):             # the condition's truth at the point (a reading as written too)
+                cv = c.subs(v, val) if isinstance(c, sp.Basic) and v in c.free_symbols else c
             if cv is sp.true:
                 return ex
             if cv is not sp.false:
@@ -2634,7 +2635,8 @@ def _diff_sequence(args) -> list | None:
                 return None
             v, n = v
         else:
-            n = rest.pop(0) if rest and getattr(rest[0], "is_Integer", False) else 1
+            n = rest.pop(0) if rest and (getattr(rest[0], "is_Integer", False)
+                                         or (isinstance(rest[0], int) and not isinstance(rest[0], bool))) else 1
         try:
             n = int(n) if getattr(sp.sympify(n), "is_Integer", False) else None
         except Exception:  # noqa: BLE001
@@ -2683,6 +2685,9 @@ def _value_step(e, v) -> tuple:
         for p_, s_ in slopes:
             try:
                 fv = d.subs(v, p_)
+                # the right value read through sign(0) = 0 is left as it is: (x*|x|)' = |x| + x*sign(x) keeps 0 as a
+                # root SymPy solves (put in as a branch, the empty set for (x*|x|)' = 0 was no longer refuted); `_at`
+                # refuses to read it there
                 same = False if fv.has(sp.nan, sp.zoo, sp.oo, -sp.oo) else scalar_equal(fv, s_)
             except Exception:  # noqa: BLE001
                 same = None

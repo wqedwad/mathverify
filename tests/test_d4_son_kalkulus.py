@@ -757,3 +757,30 @@ def test_an_even_power_of_an_absolute_value_is_smooth(f, p, right, wrong):
     assert _v(_at(f, p), _sol(right)) == "CORRECT"
     assert _v(_at(f, p), _sol(wrong)) == "INCORRECT"
     assert _v(_at("Abs(sin(x))", "pi"), _sol("0")) == "UNKNOWN"          # control: an odd power keeps its corners
+
+
+def test_an_unproved_formula_value_is_undecided(monkeypatch):
+    # the reading of definedness checks the value the reading of the value has at a zero with a derivative: where no
+    # exact rule put the proved value in, the point is undecided (never the point branch's 0)
+    import mathverify.certify.calculus as calc
+    from mathverify.certify.domain import ORIGIN
+    from mathverify.normalize import parse as P
+    x = sp.Symbol("x", real=True)
+    pt = sp.Piecewise((x**2, x < 1), (1, sp.Eq(x, 1)), (2*x - 1, x > 1))
+    formula = sp.diff(pt, x)
+    assert P._formula_values_unproved(formula, x, [(1, 2)]) == [sp.Contains(x - 1, ORIGIN)]
+    assert P._formula_values_unproved(P._value_step(pt, x)[0], x, [(1, 2)]) == []
+    assert P._formula_values_unproved(2 * x, x, [(1, None)]) == []                   # analytic there: its own value
+    monkeypatch.setattr(calc, "exact_point_slopes", lambda f, var: [])
+    monkeypatch.setattr(P, "_VALUE_STEP_CACHE", {})
+    monkeypatch.setattr(P, "_SWITCH_CACHE", {})
+    w = P._written_diff(pt, x)
+    assert isinstance(w, P.written_domain) and sp.Contains(x - 1, ORIGIN) in sp.And(w.args[1]).args + (w.args[1],)
+
+
+def test_a_sign_formula_at_a_kink_with_a_derivative():
+    # (|x|*sign(x))' = 1 everywhere: the value put in at 0 is read (`_at` takes the branch first), sign(0) never
+    assert _v(_at("Abs(x)*sign(x)", "0"), _sol("1")) == "CORRECT"
+    assert _v(_at("Abs(x)*sign(x)", "0"), _sol("0")) == "INCORRECT"
+    assert _v(_at("cbrt(x)**3", "0"), _sol("1")) == "CORRECT"
+    assert _v(_at("Abs(x)", "0"), _sol("0")) == "UNKNOWN"                     # control: a corner
