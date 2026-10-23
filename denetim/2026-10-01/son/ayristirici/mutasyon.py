@@ -397,6 +397,19 @@ MUTATIONS = [
      '        if applied:\n            raise ParseError(',
      '        if False:\n            raise ParseError(',
      T + 'test_rkt23_a_variable_applied_as_a_function_is_not_read'),
+    # EK 11: a value that is only a word for "does not exist"
+    ('Y01 DNE sözcüğü değer kalır', VER,
+     '            and _DNE_ONLY.match(ca.payload):\n        ca.kind = "dne"\n',
+     '            and _DNE_ONLY.match(ca.payload):\n        pass\n',
+     T + 'test_ek11_a_value_that_is_only_a_dne_word_is_the_claim_dne'),
+    ('Y02 kuyruğu DNE sözcüğü olan değer de dne', VER,
+     '            and _DNE_ONLY.match(ca.payload):\n',
+     '            and _DNE_ONLY.search(ca.payload.split()[-1]):\n',
+     T + 'test_ek11_control_a_wrong_dne_word_or_a_value_with_it'),
+    ('Y03 küme cevabında da dne', VER,
+     '    if ca.kind == "value" and ir.answer_shape not in ("set", "interval") and isinstance(ca.payload, str) \\\n',
+     '    if ca.kind == "value" and isinstance(ca.payload, str) \\\n',
+     T + 'test_ek11_control_a_wrong_dne_word_or_a_value_with_it'),
 ]
 
 if __name__ == "__main__":
