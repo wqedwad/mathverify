@@ -785,6 +785,8 @@ def test_ek11_control_a_wrong_dne_word_or_a_value_with_it():
     assert verify(_der_at("Abs(x)", "1", _YOK), _sol("1", option="C")).verdict == "CORRECT"
     r = verify(_der_at("Abs(x)", "0"), _sol("5 yoktur"))                                               # no such claim
     assert r.verdict != "CORRECT"
-    # a set answer: 'yok' is the empty set, not "does not exist"
+    # a set answer: the value 'Yok' beside the option 'Yok' was refuted by the DNE word test; as 'dne' it is undecided
+    opts = {"A": "{1}", "B": "{-1}", "C": "{0}", "D": "{2}", "E": "Yok"}
     for kind in ("set", "value"):
         assert verify(_eqn("x**2 + 1 = 0"), _sol("Yok", kind)).verdict != "INCORRECT", kind
+    assert verify(_eqn("x**2 + 1 = 0", opts), _sol("Yok", option="E")).verdict == "UNKNOWN"

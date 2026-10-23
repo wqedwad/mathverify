@@ -615,7 +615,10 @@ def cases_p():
             ("(|x|)' at 1: value 'Yoktur' (wrong)", d("Abs(x)", "1"), sol("Yoktur"), NO, None),
             ("(|x|)' at 0: value '5 yoktur' (no such claim)", d("Abs(x)", "0"), sol("5 yoktur"), NOTOK, None),
             ("x²+1=0: set 'Yok' (the empty set)", eqn("x**2 + 1 = 0"), sol("Yok", "set"), NOTNO, None),
-            ("x²+1=0: value 'Yok' (a set answer: no dne)", eqn("x**2 + 1 = 0"), sol("Yok"), NOTNO, None)]
+            ("x²+1=0: value 'Yok'", eqn("x**2 + 1 = 0"), sol("Yok"), NOTNO, None),
+            ("x²+1=0: value 'Yok' letter E 'Yok' (was refuted)",
+             eqn("x**2 + 1 = 0", options={"A": "{1}", "B": "{-1}", "C": "{0}", "D": "{2}", "E": "Yok"}),
+             sol("Yok", option="E"), UNK, None)]
     return out
 
 
