@@ -177,6 +177,10 @@ _NOTE_FLAGS = {"answer_from_option_letter", "answer_level_only", "steps_not_chec
                "ir_repaired_once", "ir_repaired_twice", "roundtrip_borderline", "restructure_deterministic_only",
                "l4_agree", "l4_confirms_refutation", "l5_method_ok", "lean_proved", "critic_clean",
                "critic_overruled_by_certificate", "calibrated_below_threshold", "layer_contradiction", "step_refuted"}
+# R - A U B written without brackets, read both ways (verifier._verify_set_difference_readings; son-kalkulus second
+# round, YO-K4): the readings disagree, a meaning abstention; they agree, a note
+_MEANING_FLAGS |= {"set_difference_ambiguous"}
+_NOTE_FLAGS |= {"set_difference_readings_agree"}
 # the layers of `verifier.verify_layers`: a CORRECT one of them grounds is theirs, whatever the others abstained on
 _DETERMINISTIC_LAYERS = ("certify.", "intake.", "steps.", "mc.", "ir.", "router", "sanity")
 

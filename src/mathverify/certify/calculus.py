@@ -1376,7 +1376,13 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
             ok = None
             ev["conflict"] = "sympy_equals_false"
     if ok is True:
-        okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
+        try:
+            okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
+        except AttributeError as e:
+            # a membership or a convention (Contains(2*x + 1, Convention(zero_power)) of (2*x + 1)**(pi + 1)) is no
+            # relation to negate: it raised out of the layer (layer_exception; son-kalkulus second round, SK-RK-7,
+            # read there by the merge's G2RK-10 rule). Undecided, never a verdict
+            okd, dev = None, {"reason": f"condition_not_read: {type(e).__name__}"}
         ev["domain_check"] = dev
         if okd is not True:
             if okd is False:
@@ -1408,15 +1414,33 @@ def _constant_not_additive(F_full, var, C, timeout) -> tuple[bool | None, dict[s
 
 
 # ---------------------------------------------------------------------------
-def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[str, Any]:
+def derivative_at_point(f, var, order: int, at, timeout: float = 8.0, lower=None) -> dict[str, Any]:
     """Is f^(order) defined at `at`, and what is it? Certificate (mean value theorem): with
     g = f^(order-1) continuous at a and differentiable around it, the one-sided derivatives of g
     at a are the one-sided limits of g'. Returns {"status": value | infinite | cusp | corner |
     discontinuous | unknown, "value": ...}. Substituting a into SymPy's derivative is NOT a
-    certificate: sign(0) = 0 made "d/dx |x| at 0 = 0" CORRECT (audit of 25 Sep 2026)."""
+    certificate: sign(0) = 0 made "d/dx |x| at 0 = 0" CORRECT (audit of 25 Sep 2026).
+
+    g(a) is f^(order-1)(a), proved: SymPy's formula for it, read at a point where f is not plainly analytic
+    (`smooth_at`), may have a value where f^(order-1) has none (Piecewise((x**2, x < 1), (x**2 + 5, x >= 1)) jumps
+    at 1, and its formula 2*x for f' made f''(1) = 2 certified and DNE refuted) or another one (the point branch's
+    0). There it is `point_derivative` of order - 1 (or `lower`, a value the caller proved), and none means none of
+    this order either (son-kalkulus second round, YO-K1's sibling)."""
     from .limits import classify_limit
     ev: dict[str, Any] = {"status": "unknown"}
     f = sp.sympify(f)
+    if order > 1 and lower is None and not _plainly_smooth(f, var, at):
+        low = point_derivative(f, var, order - 1, at, timeout=timeout)
+        ev["lower"] = {k: str(v) for k, v in low.items()}
+        if low.get("status") in ("corner", "cusp", "discontinuous", "infinite"):
+            ev["status"], ev["reason"] = "corner", "no_lower_derivative"
+            return ev
+        if low.get("status") != "value":
+            ev["reason"] = "lower_derivative_undecided"
+            return ev
+        lower = low["value"]
+    if lower is not None:
+        ev["lower_value"] = lower
     if order > 1:
         r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order - 1, timeout=timeout)
         if not r.ok:
@@ -1429,7 +1453,8 @@ def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[st
         return ev
     gp = classical(r.value)
     ev["derivative"] = str(gp)
-    rg = sb_run("mathverify.sandbox.ops:simplify_diff", g.subs(var, at), 0, timeout=timeout)
+    rg = sb_run("mathverify.sandbox.ops:simplify_diff", g.subs(var, at) if lower is None else lower, 0,
+                timeout=timeout)
     if not rg.ok or _real_finite(rg.value) is not True:
         ev["reason"] = "lower_derivative_not_a_real_number_at_point"
         return ev
@@ -1467,19 +1492,47 @@ def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[st
     return ev
 
 
+def _plainly_smooth(f, var, at) -> bool:
+    """Is f analytic at the number `at` (`smooth_at` with f's own switches and written conditions)? Then SymPy's
+    derivative formulas have the derivatives' values there."""
+    try:
+        at = sp.sympify(at)
+        return smooth_at(f, var, at, switch_arguments(abs_form(f), var), definedness_conditions(f, var))
+    except Exception:  # noqa: BLE001 - not proved
+        return False
+
+
 def point_derivative(f, var, order: int, at, timeout: float = 8.0) -> dict[str, Any]:
-    """`derivative_at_point`, and where its limits decide nothing at a switch point of a Piecewise, the exact
-    `_piecewise_rule`: SymPy's one-sided limits of a Piecewise there read the wrong branch, and the corner of the
-    piecewise |x| at 0 was left undecided by the derivative task, its tangent and a step (SON-G3-YO-1). The rule
-    only says 'corner' (a corner or a jump: no derivative); a value stays the limits'."""
+    """`derivative_at_point`, and at a switch point of a Piecewise first the exact `_piecewise_rule`: SymPy's one-sided
+    limits of a Piecewise there read the wrong branch, and the corner of the piecewise |x| at 0 was left undecided by
+    the derivative task, its tangent and a step (SON-G3-YO-1). The rule gives a value too, the sides' one derivative
+    (a C1 junction, or a point branch that fills the sides' value: son-kalkulus second round, YO-K1). Of a higher
+    order the rule reads f^(order-1), SymPy's formula with its proved value at `at` (`derivative_at_point`'s
+    `lower_value`): the formula's own value there is no derivative's (the point branch's 0)."""
+    try:
+        pw = sp.sympify(f).has(sp.Piecewise)
+    except Exception:  # noqa: BLE001
+        pw = False
+    if pw and order == 1:
+        slope: dict = {}
+        st = _piecewise_rule(f, var, at, slope)
+        if st == "corner":
+            return {"status": "corner", "rule": "piecewise_rule"}
+        if st == "value" and "value" in slope:
+            return {"status": "value", "value": slope["value"], "rule": "piecewise_rule"}
     dap = derivative_at_point(f, var, order, at, timeout=timeout)
-    if dap.get("status") == "unknown" and order == 1:
+    if dap.get("status") == "unknown" and order > 1 and pw and "lower_value" in dap:
         try:
-            pw = sp.sympify(f).has(sp.Piecewise)
+            r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order - 1, timeout=timeout)
+            g = sp.Piecewise((dap["lower_value"], sp.Eq(var, at)), (classical(r.value), True)) if r.ok else None
         except Exception:  # noqa: BLE001
-            pw = False
-        if pw and _piecewise_rule(f, var, at) == "corner":
+            g = None
+        slope = {}
+        st = _piecewise_rule(g, var, at, slope) if g is not None else None
+        if st == "corner":
             dap = dict(dap, status="corner", rule="piecewise_rule")
+        elif st == "value" and "value" in slope:
+            dap = dict(dap, status="value", value=slope["value"], rule="piecewise_rule")
     return dap
 
 
@@ -1595,14 +1648,30 @@ def smooth_at(f, var, p, switches, fconds, root_of=None) -> bool:
     return all(strict_at(c, var, p) for c in fconds if getattr(c, "free_symbols", None))
 
 
-def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
+def _put_slope(out: dict | None, h, var, p, term_slope=S.Zero) -> None:
+    """f'(p) = h'(p) + the switch term's slope, exactly, into `out` ("value") when it is a real number: a rule that
+    proves f has a derivative at p gives its value too (`_classify_kink` keeps it). SymPy's formula may have another
+    value there: the point branch of a Piecewise is differentiated as a constant (Piecewise((x**3, Ne(x, 2)), (8,
+    True)) has the formula's 0 at 2, f'(2) = 12), sign(0) = 0 makes (|x|*sign(x))' read 0 at 0 (it is 1), and the
+    wrong 0 was certified while the right value was refuted (son-kalkulus second round, YO-K1, YO-K2, SK-RK-3)."""
+    if out is None:
+        return
+    try:
+        v = sp.simplify(sp.diff(h, var).subs(var, p) + term_slope)
+        if _real_finite(v) is True:
+            out["value"] = v
+    except Exception:  # noqa: BLE001 - the status alone
+        pass
+
+
+def _linear_switch_rule(fa, var, p, u, switches, fconds, out: dict | None = None) -> str | None:
     """f = h + g*S**r near p for the one switch S = |u|, sign(u) or Heaviside(u) at p (f read with `abs_form`), r a
     positive rational (1 for sign and Heaviside), g, h and u analytic at p (`smooth_at`; p is a zero of u by its
     solution). |u|**r with r > 1, and g*|u| with g(p) = 0, add nothing to h'(p): f has a derivative. With g(p) != 0
     and u'(p) != 0 (a simple zero) |u| makes a corner (one-sided derivatives h'(p) ± g(p)*|u'(p)|), |u|**r with
     r < 1 an infinite slope, sign(u) and Heaviside(u) a jump: none. Exact, no limit taken: |log x| at 1 was
-    undecided by SymPy's one-sided limits (round 3, RK-1), and 7 radical kinks took 186 s (RK-5). None when the
-    rule does not apply or decides nothing."""
+    undecided by SymPy's one-sided limits (round 3, RK-1), and 7 radical kinks took 186 s (RK-5). With 'value',
+    f'(p) = h'(p) goes to `out` (`_put_slope`). None when the rule does not apply or decides nothing."""
     others = [v for v in switches if v != u]
     if any(_nonzero_at(v, var, p, root_of=u) is not True for v in others):
         return None
@@ -1621,10 +1690,14 @@ def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
     if not all(smooth_at(e, var, p, others, fconds, root_of=u) for e in (g, h, u)):
         return None
     if isinstance(A, sp.Abs) and r > 1:
+        _put_slope(out, h, var, p)
         return "value"
     gp = _nonzero_at(g, var, p, root_of=u)
     if gp is False:
-        return "value" if isinstance(A, sp.Abs) and r == 1 else None
+        if isinstance(A, sp.Abs) and r == 1:
+            _put_slope(out, h, var, p)            # g*|u| = O((x - p)**2)
+            return "value"
+        return None
     if gp is not True or _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
         return None
     return "corner"
@@ -1665,13 +1738,7 @@ def _real_root_rule(fa, var, p, u, switches, fconds, out: dict | None = None) ->
 
     def value(term_slope=S.Zero):
         # f'(p) = h'(p) + the term's: 0 when the term is o(x - p), g(p)*u'(p) for g*u (r = 1, odd a)
-        if out is not None:
-            try:
-                v = sp.simplify(sp.diff(h, var).subs(var, p) + term_slope)
-                if _real_finite(v) is True:
-                    out["value"] = v
-            except Exception:  # noqa: BLE001 - the status alone
-                pass
+        _put_slope(out, h, var, p, term_slope)
         return "value"
     if certified_sign(r - 1) == 1:
         return value()
@@ -1685,7 +1752,7 @@ def _real_root_rule(fa, var, p, u, switches, fconds, out: dict | None = None) ->
     return "corner" if r == 1 or certified_sign(1 - r) == 1 else None
 
 
-def _piecewise_rule(f, var, p) -> str | None:
+def _piecewise_rule(f, var, p, out: dict | None = None) -> str | None:
     """f (folded into one Piecewise in `var` alone) at a number p where its branch may change: the branch taken on
     each side of p and at p, read from the exact sets SymPy solves the conditions to (`as_expr_set_pairs`) at a
     point of each side nearer to p than any other end of those sets, each branch analytic at p (`smooth_at`). f has
@@ -1693,7 +1760,11 @@ def _piecewise_rule(f, var, p) -> str | None:
     ('value', a C1 junction); a difference proved nonzero is a jump or a corner ('corner'); None otherwise. Exact,
     no limit taken: SymPy's one-sided limit of a Piecewise at its switch point takes the branch of the wrong side
     (Piecewise((-1, x < 0), (1, True)) from the left of 0 is 1), so `derivative_at_point` left the corner of the
-    piecewise |x| undecided (SON-G3-YO-1)."""
+    piecewise |x| undecided (SON-G3-YO-1). A side's branch that is a rational function is read cancelled: on the side
+    (p excluded) (x**2 - 1)/(x - 1) is x + 1, the textbook removable point filled by its own branch. With 'value',
+    f'(p) (the sides' one derivative) goes to `out` ("value"): SymPy differentiates the point branch of
+    Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1)) as a constant, and its 0 at 1 was certified for f'(1)
+    while the right 2 was refuted (son-kalkulus second round, YO-K1)."""
     if not getattr(p, "is_number", False) or getattr(p, "is_real", None) is not True or p.free_symbols:
         return None
     try:
@@ -1737,6 +1808,10 @@ def _piecewise_rule(f, var, p) -> str | None:
             if len(taken) != 1:
                 return None                       # no branch at p: f has no value there (its own conditions)
             branches.append(taken[0])
+        # a side's branch is taken off p alone: a rational one is read cancelled there (x + 1 for (x**2 - 1)/(x - 1));
+        # its other poles are isolated, so near p it is defined off p and equal to the cancelled form
+        branches = [sp.cancel(e) if i != 1 and var in e.free_symbols and e.is_rational_function(var) else e
+                    for i, e in enumerate(branches)]
         for e in set(branches):
             if var in e.free_symbols and not smooth_at(e, var, p, switch_arguments(e, var),
                                                        definedness_conditions(e, var)):
@@ -1748,6 +1823,8 @@ def _piecewise_rule(f, var, p) -> str | None:
         if any(j is not False for j in jumps):
             return None
         slope = _nonzero_at(sp.diff(left, var) - sp.diff(right, var), var, p)
+        if slope is False:
+            _put_slope(out, left, var, p)
     except Exception:  # noqa: BLE001 - a reading that fails decides nothing
         return None
     return "corner" if slope is True else "value" if slope is False else None
@@ -1758,17 +1835,22 @@ def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, c
     a cusp, a jump, an infinite slope) or None (undecided, or the reading's budget of `derivative_at_point` calls
     spent). A call's result is kept in `cache` (p -> result) for `_value_holes`. A Piecewise's switch point is read
     by `_piecewise_rule` (exact) before any limit is taken."""
-    st = _linear_switch_rule(fa, var, p, u, switches, fconds)
+    slope: dict = {}
+    by = "linear_switch_rule"
+    st = _linear_switch_rule(fa, var, p, u, switches, fconds, slope)
     if st is None:
-        st = _power_rule(fa, var, p, u, switches, fconds)
+        by = "power_rule"
+        st = _power_rule(fa, var, p, u, switches, fconds, slope)
     if st is None:
-        slope: dict = {}
+        by = "real_root_rule"
         st = _real_root_rule(fa, var, p, u, switches, fconds, slope)
-        if st == "value" and order == 1 and cache is not None and p not in cache and "value" in slope:
-            # f'(p) by the rule, exactly: `_value_holes` reads it where SymPy's formula has no value (G2RK-13)
-            cache[p] = {"status": "value", "value": slope["value"], "by": "real_root_rule"}
-    if st is None and order == 1 and f.has(sp.Piecewise):
-        st = _piecewise_rule(f, var, p)
+    if st is None and f.has(sp.Piecewise):
+        by = "piecewise_rule"
+        st = _piecewise_rule(f, var, p, slope)
+    if st == "value" and order == 1 and cache is not None and p not in cache and "value" in slope:
+        # f'(p) by the rule, exactly: `_value_holes` reads it where SymPy's formula has no value (G2RK-13) or
+        # another one (the point branch's 0, sign(0) = 0: YO-K2, SK-RK-3)
+        cache[p] = {"status": "value", "value": slope["value"], "by": by}
     if order == 1 and st is not None:
         return st
     if st == "corner":
@@ -1778,11 +1860,67 @@ def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, c
     if budget[0] <= 0:
         return None
     budget[0] -= 1
-    dap = derivative_at_point(f, var, order, p, timeout=timeout)
+    # f' at p by the rule is the lower derivative of the second (`derivative_at_point` needs it, YO-K1's sibling)
+    lower = slope.get("value") if st == "value" and order == 2 else None
+    dap = derivative_at_point(f, var, order, p, timeout=timeout, lower=lower)
     if cache is not None:
         cache[p] = dap
     st = dap["status"]
     return "value" if st == "value" else "corner" if st in ("corner", "cusp", "discontinuous", "infinite") else None
+
+
+_EXACT_ROOT_DEGREE = 6     # switch arguments whose rational zeros `exact_point_slopes` reads (a factorization over QQ)
+
+
+def exact_point_slopes(f, var) -> list[tuple]:
+    """(p, f'(p)) at each rational zero p of a switch argument of f (`switch_arguments`; a polynomial with rational
+    coefficients, read by its linear factors over QQ, no solving) where an exact rule (`_linear_switch_rule`,
+    `_power_rule`, `_real_root_rule`, `_piecewise_rule`) proves f has a derivative and gives its value. In process,
+    no sandbox and no limit: the reading of a derivative's value (`normalize.parse`'s `diff`) puts these values in
+    where SymPy's formula has another one (the point branch differentiated as a constant, sign(0) = 0), and the
+    reading of its definedness checks the same values, so the two cannot disagree (son-kalkulus second round, YO-K1)."""
+    try:
+        fa = abs_form(f)
+        switches = switch_arguments(fa, var)
+    except Exception:  # noqa: BLE001
+        return []
+    if not switches:
+        return []
+    try:
+        fconds = definedness_conditions(f, var)
+    except Exception:  # noqa: BLE001
+        return []
+    out: list = []
+    seen: set = set()
+    for u in switches:
+        P = _poly(u, var)
+        if P is None or not 0 < P.degree() <= _EXACT_ROOT_DEGREE:
+            continue
+        try:
+            factors = P.factor_list()[1]
+        except Exception:  # noqa: BLE001
+            continue
+        for q, _ in factors:
+            if q.degree() != 1:
+                continue
+            p = -q.nth(0) / q.nth(1)
+            if p in seen:
+                continue
+            seen.add(p)
+            slope: dict = {}
+            try:
+                st = _linear_switch_rule(fa, var, p, u, switches, fconds, slope)
+                if st is None:
+                    st = _power_rule(fa, var, p, u, switches, fconds, slope)
+                if st is None:
+                    st = _real_root_rule(fa, var, p, u, switches, fconds, slope)
+                if st is None and f.has(sp.Piecewise):
+                    st = _piecewise_rule(f, var, p, slope)
+            except Exception:  # noqa: BLE001 - a rule that fails proves nothing
+                st = None
+            if st == "value" and "value" in slope:
+                out.append((p, slope["value"]))
+    return out
 
 
 def _generic_points(K, u=None, var=None) -> list | None:
@@ -1968,7 +2106,7 @@ def _analytic_where_defined(e, var) -> bool:
     return True
 
 
-def _power_rule(fa, var, p, u, switches, fconds) -> str | None:
+def _power_rule(fa, var, p, u, switches, fconds, out: dict | None = None) -> str | None:
     """f = h + g*u**r (`_power_form`) at a zero p of u (a number, or a family's generic point), of order 1, g and h
     analytic there, g(p) != 0: u'(p) != 0 gives an end of the domain or an infinite slope ('corner': no derivative);
     u'(p) = 0 with u''(p) != 0 makes u**r a |x - p|**(2r): a corner or a cusp for r <= 1/2, a derivative for
@@ -1994,7 +2132,11 @@ def _power_rule(fa, var, p, u, switches, fconds) -> str | None:
     if d1 is True:
         return "corner"
     if d1 is False and _zero_state(sp.diff(u, var, 2), var, p) is True:
-        return "corner" if r <= S.Half else "value"
+        if r <= S.Half:
+            return "corner"
+        if not generic:
+            _put_slope(out, h, var, p)            # g*u**r = O(|x - p|**(2r)), 2r > 1
+        return "value"
     return None
 
 
@@ -2200,7 +2342,14 @@ def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool
     `claim_where_derivative`'s. Each read spends the reading's budget (`kink_reading`: `_KINK_BUDGET` calls of
     `derivative_at_point`, each within `timeout`), a classification's own result read again for free: one call per
     hole, unbounded, let eight holes hold a verify for eight timeouts (attack on d4e round 4, D4E4-U4); spent, the
-    hole is undecided."""
+    hole is undecided.
+
+    A value the formula has there is the derivative's only when proved: equal to f'(p) as the classifying rule gave it
+    (`_classify_kink`'s cache), or, with none given, the formula analytic at p (`_plainly_smooth`: then it is the
+    limit of f' there, which is f'(p)). Else p is a hole too: the point branch's 0 of Piecewise((2*x + 1, x < 1), (3,
+    Eq(x, 1)), (x**2 + 2, x > 1)) refuted the right derivative (2 for x <= 1, 2x after) and certified the branch-wise
+    one, and sign(0) = 0 refuted (|x|*sign(x))' = 1 and certified sign(x)**2 (son-kalkulus second round, YO-K2,
+    SK-RK-3)."""
     holes, state, ev = [], True, {}
     for p_ in kr["values"]:
         try:
@@ -2209,7 +2358,13 @@ def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool
         except Exception:  # noqa: BLE001
             bad = True
         if not bad:
-            continue
+            known = kr["dap"].get(p_)
+            known = known.get("value") if isinstance(known, dict) and known.get("status") == "value" else None
+            if known is not None:
+                if scalar_equal(tv, known) is True:
+                    continue
+            elif _plainly_smooth(truth, var, p_):
+                continue
         holes.append(p_)
         try:
             cv = sp.sympify(claimed).subs(var, p_)
@@ -2558,12 +2713,26 @@ def _claim_condition_holds(ctx: Ctx, c, var, opens) -> bool:
 
 
 def _claim_definedness_on_integer_bounds(ctx: Ctx, src: str, ns: dict, pins: dict | None, var) -> tuple[list, set]:
-    """`written_definedness` of the claim `src`, each integer parameter n whose region (`_parameter_region`) is the
+    """`written_definedness` of the claim (or f) `src`, each integer parameter n whose region (`_parameter_region`) is the
     integers from L on read as L + k, k a nonnegative integer Dummy (the conditions mapped back with k = n - L): with
     n >= 2 declared, the exponent n - 2 of n*(n - 1)*x**(n - 2) is k, never negative, and x**(n - 2) needs no x != 0
     (U5's rule reads the declaration n > 0 alone). The textbook (x**n)'' was UNKNOWN for n >= 2 (son saldırı
     SON-G3-RK-2). The plain reading when no such parameter is read."""
     conds, nowhere = written_definedness(src, ns, pins)
+    shift = _integer_shift(ctx, src, ns, pins, var)
+    if not shift:
+        return conds, nowhere
+    try:
+        conds2, nowhere2 = written_definedness(src, ns, {**(pins or {}), **{s_: lo + k for s_, (lo, k) in shift.items()}})
+    except Exception:  # noqa: BLE001 - as written
+        return conds, nowhere
+    back = {k: s_ - lo for s_, (lo, k) in shift.items()}
+    return [c.xreplace(back) for c in conds2], {back.get(q, q) for q in nowhere2} if nowhere2 else set(nowhere2)
+
+
+def _integer_shift(ctx: Ctx, src: str, ns: dict, pins: dict | None, var) -> dict:
+    """{n: (L, k)} for each integer parameter n named in `src` whose region (`_parameter_region`) is the integers from
+    L on, k a nonnegative integer Dummy (n = L + k)."""
     shift: dict = {}
     named = {v.name for v in ctx.ir.vars if re.search(rf"(?<![A-Za-z_0-9]){re.escape(v.name)}(?![A-Za-z_0-9])", src)}
     for s_ in sorted({q for q in (ns.get(n_) for n_ in named) if isinstance(q, sp.Symbol)} - {var} - set(pins or {}),
@@ -2578,14 +2747,7 @@ def _claim_definedness_on_integer_bounds(ctx: Ctx, src: str, ns: dict, pins: dic
         except Exception:  # noqa: BLE001 - a region not read: as written
             continue
         shift[s_] = (lo, sp.Dummy(f"{s_.name}_from_{lo}", integer=True, nonnegative=True))
-    if not shift:
-        return conds, nowhere
-    try:
-        conds2, nowhere2 = written_definedness(src, ns, {**(pins or {}), **{s_: lo + k for s_, (lo, k) in shift.items()}})
-    except Exception:  # noqa: BLE001 - as written
-        return conds, nowhere
-    back = {k: s_ - lo for s_, (lo, k) in shift.items()}
-    return [c.xreplace(back) for c in conds2], {back.get(q, q) for q in nowhere2} if nowhere2 else set(nowhere2)
+    return shift
 
 
 def _convention_holds_on(c, var, dom) -> bool:
@@ -3034,13 +3196,15 @@ def _open_condition(c):
     return c
 
 
-def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list]:
+def task_conditions(ctx: Ctx, src, var, pins, regions: bool = False) -> tuple[list, list]:
     """(the written definedness conditions of the task's function on `var`, with the values `pins` holds put in;
     the ones that name another symbol). A membership (n!, gcd) is `_unreadable_task_expression`'s business, and
     so is a function defined nowhere (a closed condition that fails, with or without the values:
     `Ctx.binding_issues`). A condition naming a parameter was dropped, so the derivative 1 of
-    x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e)."""
-    conds, _ = written_definedness(src, ctx.ns, pins)
+    x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e). With `regions`, each integer
+    parameter is read on its region (`_claim_definedness_on_integer_bounds`, YO-K5)."""
+    conds = (_claim_definedness_on_integer_bounds(ctx, src, ctx.ns, pins, var) if regions
+             else written_definedness(src, ctx.ns, pins))[0]
     on_var: list = []
     other: list = []
     for c in conds:
@@ -3696,10 +3860,15 @@ def verify(ir, solution, ctx: Ctx):
                 unapplied = ctx.unapplied_conditions(var)
                 if unapplied:
                     return condition_not_applied(LAYER, unapplied, t.ms)
-                conds, other = task_conditions(ctx, p["f"], var, pins)
+                # f's conditions read on the integer parameters' regions, as the claim's are (`fconds` below)
+                conds, other = task_conditions(ctx, p["f"], var, pins, regions=True)
                 # the claim, as written, has a value wherever the derivative exists (`claim_where_derivative`):
                 # 2*x**2/x for (x**2)' was certified, 1/(x + 1/a) with a >= 0 too (round 3, RK-8 and YO-3)
-                fconds = written_definedness(p["f"], ctx.ns, pins)[0]
+                # f's own conditions are read on the integer parameters' regions too, as the claim's are: read with
+                # n merely an integer, x**n kept x != 0 although n >= 1 is declared, that condition of the claim
+                # n*x**n/x counted as f's own and the claim was certified, while with n a positive integer it was
+                # UNKNOWN (son-kalkulus second round, YO-K5)
+                fconds = _claim_definedness_on_integer_bounds(ctx, p["f"], ctx.ns, pins, var)[0]
                 claim_conds, claim_nowhere = _claim_definedness_on_integer_bounds(
                     ctx, str(ca.payload), ctx.claim_ns(solution), pins, var)
                 if other and not _half_line_for_every_value(ctx, conds, other, var):

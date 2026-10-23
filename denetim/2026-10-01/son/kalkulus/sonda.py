@@ -15,6 +15,8 @@ wip/son-kalkulus (decisions: the main session's `kararlar.txt`, "MERCEK 3"; find
                      G2RK-15 (extremum of a fractional or irrational power), SON-G3-RK-1 (x**pi on an unconstrained x),
                      RK-2 (n >= 2 on the claim's exponent), RK-9 (a trigonometric condition strict at the point),
                      RK-4 (R - {2}, \\setminus, \\cup)
+    G  the second round (kararlar.txt "EK 6"): YO-K1..K5, SK-RK-1, SK-RK-6, SK-RK-7 and their siblings (cases in
+       tur2.py)
     K  controls whose verdict must not change
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
@@ -371,10 +373,15 @@ def cases_f():
     return out
 
 
-GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "K": cases_k}
+def cases_g():
+    import tur2
+    return [(label, q, s, tur2.expected(label, verdicts), None) for label, q, s, verdicts in tur2.cases()]
 
 
-def main(out_path=None, groups="ABCDEFK"):
+GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g, "K": cases_k}
+
+
+def main(out_path=None, groups="ABCDEFGK"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -412,5 +419,5 @@ def main(out_path=None, groups="ABCDEFK"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFK"
+    grp = args[1] if len(args) > 1 else "ABCDEFGK"
     sys.exit(1 if main(out, grp) else 0)

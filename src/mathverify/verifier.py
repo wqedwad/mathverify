@@ -963,11 +963,21 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
                            evidence={"claim_not_read": hit}, flags=["claim_is_not_a_value"])
     if ir.task.kind == "evaluate":
         target = (ir.task.params or {}).get("expr") or ir.unknown_of_interest
-        if target and (_same_structure(str(ca.payload), str(target), ctx)
+        if target and ((not _computes(str(target)) and _same_structure(str(ca.payload), str(target), ctx))
                        or _applies_target_op(ca.payload, str(target), solution, ctx)):
             return unknown("intake.claim", f"claimed answer {ca.payload!r} restates the question",
                            flags=["claim_is_not_a_value"])
     return _claim_computes_integer_op(solution, ctx)
+
+
+def _computes(target: str) -> bool:
+    """Does the target call a computing operator (`normalize.parse.COMPUTING_OPERATORS`: diff, at, integrate, a limit,
+    a sum, ...) or write one in LaTeX? A claim that restates it would call one too, and such a claim is refused before
+    (`check_claim_is_value`), so its structure is not read: read with evaluation off in process, at(diff(f(x), x), x, 3)
+    with f = |x**2 - 4| took 13-48 s, and the right 6 waited for it (son-kalkulus second round, SK-RK-1)."""
+    from .normalize.parse import _CALL_RE, _LATEX_COMPUTING, COMPUTING_OPERATORS
+    return any(m.group(1) in COMPUTING_OPERATORS for m in _CALL_RE.finditer(target)) \
+        or _LATEX_COMPUTING.search(target) is not None
 
 
 def _claim_computes_integer_op(solution: Solution, ctx) -> LayerResult | None:
@@ -1059,7 +1069,10 @@ def _same_structure(a: str, b: str, ctx) -> bool:
     reading is compared as its bare syntax tree (`_syntax`), never as its value: the target eigmax(M) fell back to
     its value 2 + √2, and the claim 2 + √2 was "the question restated" (fourth audit PRE-RK-8)."""
     try:
-        ta, tb = _structure(a, ctx), _structure(b, ctx)
+        ta = _structure(a, ctx)
+        if not getattr(ta, "args", None):
+            return False                    # a bare number or symbol claim restates no tree (the target is one)
+        tb = _structure(b, ctx)
         if not getattr(tb, "args", None):
             return False                    # a bare number or symbol target cannot be restated
         # srepr too: InconsistentAssumptions escaped here (third audit, 30 Sep 2026), and a tree with no printed
@@ -1472,6 +1485,8 @@ def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict,
         raise
     except Exception:  # noqa: BLE001 - not readable as dicts: read once, as given
         ir_d = sol_d = None
+    if ir_d is not None and _writes_ambiguous_set_difference(ir_d, sol_d):
+        return _verify_set_difference_readings(ir_d, sol_d, seed, timeout, run_steps)
     layers, flags = _verify_layers(problem_ir, solution, seed, timeout, run_steps)
     if ir_d is None or not any("domain_list_ambiguous" in la.flags for la in layers):
         return layers, flags
@@ -1485,6 +1500,49 @@ def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict,
         return lr, fl + ["domain_list_readings_agree"]
     return [unknown("intake.domain", f"domain_list_ambiguous: read as a union {verdicts['union']}, as an "
                     f"intersection {verdicts['intersection']}", flags=["domain_list_ambiguous"])], flags
+
+
+def _texts(o) -> list[str]:
+    """Every string in a nested dict/list/tuple."""
+    if isinstance(o, str):
+        return [o]
+    if isinstance(o, dict):
+        return [t for v in o.values() for t in _texts(v)]
+    if isinstance(o, (list, tuple)):
+        return [t for v in o for t in _texts(v)]
+    return []
+
+
+def _writes_ambiguous_set_difference(ir_d: dict, sol_d: dict) -> bool:
+    """Does a text of the problem or the solution write ℝ − A ∪ B without brackets
+    (`normalize.parse.writes_ambiguous_set_difference`), and is no reading of it chosen yet?"""
+    from .normalize.parse import set_difference_reading_chosen, writes_ambiguous_set_difference
+    if set_difference_reading_chosen():
+        return False
+    try:
+        return any(writes_ambiguous_set_difference(t) for t in _texts(ir_d) + _texts(sol_d))
+    except Exception:  # noqa: BLE001 - not read: an ambiguous text is then not read (SetDifferenceAmbiguous)
+        return False
+
+
+def _verify_set_difference_readings(ir_d: dict, sol_d: dict, seed: int, timeout: float,
+                                    run_steps: bool) -> tuple[list[LayerResult], list[str]]:
+    """`_verify_layers_read` with ℝ − A ∪ B written without brackets (`normalize.parse.SetDifferenceAmbiguous`) read
+    both ways, ℝ − (A ∪ B) and (ℝ − A) ∪ B: the verdict when the two readings agree (both right: CORRECT, both wrong:
+    INCORRECT), UNKNOWN when they do not. Read one way, 'R - {2} ∪ {3}' was certified as the domain of
+    1/((x - 2)(x - 3)) and refuted as that of 1/(x - 2) (son-kalkulus second round, YO-K4)."""
+    import copy
+    from .normalize.parse import set_difference_reading
+    runs = {}
+    for which in ("whole", "left"):
+        with set_difference_reading(which):
+            runs[which] = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
+    verdicts = {which: fuse(lr, extra_flags=fl)["verdict"] for which, (lr, fl) in runs.items()}
+    if verdicts["whole"] == verdicts["left"]:
+        lr, fl = runs["whole"]
+        return lr, fl + ["set_difference_readings_agree"]
+    return [unknown("intake.claim", f"set_difference_ambiguous: R - A U B read as R - (A U B) {verdicts['whole']}, "
+                    f"as (R - A) U B {verdicts['left']}", flags=["set_difference_ambiguous"])], runs["whole"][1]
 
 
 def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,

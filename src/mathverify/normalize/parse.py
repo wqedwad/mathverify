@@ -378,8 +378,22 @@ def _route_set_arithmetic(code: str, names: dict[str, Any]):
 def _at(e, v, val):
     """e at v = val. A derivative at a corner is no derivative: diff(Abs(x), x) is sign(x), and
     sign(0) = 0 certified "the derivative of |x| at 0 is 0" (audit of 29 Sep 2026). A sign, Heaviside
-    or DiracDelta whose argument vanishes at the point is refused, not read."""
+    or DiracDelta whose argument vanishes at the point is refused, not read. A Piecewise whose conditions
+    decide at the point is its branch there first: only what is taken is read (`diff` puts a derivative's
+    proved value at a point in as such a branch, `_value_step`)."""
     e = sp.sympify(e)
+
+    def taken(n):
+        for ex, c in n.args:
+            with sp.evaluate(True):             # the condition's truth at the point (a reading as written too)
+                cv = c.subs(v, val) if isinstance(c, sp.Basic) and v in c.free_symbols else c
+            if cv is sp.true:
+                return ex
+            if cv is not sp.false:
+                return n
+        return n
+    if e.has(sp.Piecewise):
+        e = e.replace(lambda n: isinstance(n, sp.Piecewise), taken)
     for n in e.atoms(sp.sign, sp.Heaviside, sp.DiracDelta):
         if n.args[0].subs(v, val).is_zero:
             raise ParseError(f"at({e}, {v}, {val}): {n} is taken where its argument is 0")
@@ -855,6 +869,15 @@ def _cbrt(b, **_kw):           # `evaluate=False` is passed by a parse as writte
     return _real_root(b, 3)
 
 
+def _diff_value(*args, **kwargs):
+    """`diff` in a value reading (`_diff`, defined with the reading of derivatives below); with SymPy's evaluation
+    off (a structural reading, `formal.statement.parse_structural`) SymPy's own, as before."""
+    from sympy.core.parameters import global_parameters
+    if not global_parameters.evaluate:
+        return sp.diff(*args, **kwargs)
+    return _diff(*args, **kwargs)
+
+
 class _SingletonNames:
     """`S` in a text: its singletons (S.Reals, S.Half, ... `_ALLOWED_DOTTED`) and S(2), a number; never a value
     itself. SymPy's registry named bare is no expression: the claim `S = {-2, 2}` read it as the left side and
@@ -903,7 +926,7 @@ _SAFE_NAMES: dict[str, Any] = {
     "re": sp.re, "im": sp.im, "conjugate": sp.conjugate, "arg": sp.arg,
     # calculus (unevaluated forms allowed in step claims)
     "Sum": sp.Sum, "Product": sp.Product, "Integral": sp.Integral, "Derivative": sp.Derivative,
-    "Limit": _Limit, "diff": sp.diff, "integrate": _integrate, "limit": _limit,
+    "Limit": _Limit, "diff": _diff_value, "integrate": _integrate, "limit": _limit,
     # numbers
     "Rational": Rational, "Integer": Integer, "Float": sp.Float, "S": _SINGLETON_NAMES,
     "nsimplify": _form_kept(sp.nsimplify),
@@ -3013,7 +3036,7 @@ _SWITCH_CACHE: dict = {}
 _SWITCH_CACHE_LOCK = threading.Lock()
 
 
-def _switch_differentiability(u, v, fconds) -> list | None:
+def _switch_differentiability(u, v, fconds, values: list | None = None) -> list | None:
     """Where `u` has a derivative in `v` at the zeros of its switches, read as certify.calculus.kink_reading reads
     them (the derivative task's twin path): the switches are `switch_arguments`' (|a|, sign, Heaviside, Max/Min, the
     relations of a Piecewise, the branch cut of atan2/arg), and each finite zero p is classified on u ITSELF by
@@ -3028,7 +3051,9 @@ def _switch_differentiability(u, v, fconds) -> list | None:
     it as v != p. The Piecewise switch points and atan2/arg's branch cut were not read at all: the
     derivative of the piecewise |x| had f'(0) = 1, a jump f'(1) = 2 and atan2(x, -1)'(0) = -1 certified
     (SON-G3-YO-1). None when u holds a switch with no such argument (floor, frac, Mod, a Piecewise condition that
-    is no relation)."""
+    is no relation). The zeros classified as having a derivative go to `values` as (p, f'(p)), its value as the
+    classification proved it (None when it gave none): `_written_diff` checks the value the derivative's reading has
+    there (son-kalkulus second round, YO-K1)."""
     from ..certify.calculus import (_KINK_BUDGET, _KINK_POINTS, _classify_kink, _generic_points, abs_form,
                                     switch_arguments)
     from ..certify.domain import ORIGIN
@@ -3040,16 +3065,28 @@ def _switch_differentiability(u, v, fconds) -> list | None:
     with _SWITCH_CACHE_LOCK:
         hit = _SWITCH_CACHE.get(key, _SWITCH_CACHE)
     if hit is not _SWITCH_CACHE:
-        return None if hit is None else [c.xreplace({canon: v}) for c in hit]
+        if hit is None:
+            return None
+        if values is not None:
+            values += hit[1]
+        return [c.xreplace({canon: v}) for c in hit[0]]
     # arg(z) is atan2(im z, re z) (z != 0; both have no value at 0): the limits that classify a zero are SymPy's
     # for atan2, which it takes, and not for arg, which it leaves (arg(-1 + I*x) at 0 was undecided)
     u = u.replace(lambda n: isinstance(n, sp.arg), lambda n: sp.atan2(sp.im(n.args[0]), sp.re(n.args[0])))
+    # |a|**(2k) of a real a is a**(2k), no switch: |cos(x)|**2 as written read the zeros of cos as a family of
+    # switch points, undecided, and its derivative 0 at pi/2 was no longer certified (son-kalkulus second round,
+    # SK-RK-6)
+    u = u.replace(lambda n: isinstance(n, sp.Pow) and isinstance(n.base, sp.Abs) and n.exp.is_Integer
+                  and n.exp.is_even and n.exp > 0 and n.base.args[0].is_extended_real is True,
+                  lambda n: n.base.args[0] ** n.exp)
     fa = abs_form(u)
     switches = switch_arguments(fa, v)
     out: list | None = None
+    found: list = []
     if switches is not None:
         out = []
         budget = [_KINK_BUDGET]
+        slopes: dict = {}
         for s in switches:
             r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(s, 0), v, S.Reals, timeout=_SWITCH_TIMEOUT)
             K = r.value if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet) else None
@@ -3060,10 +3097,14 @@ def _switch_differentiability(u, v, fconds) -> list | None:
                 continue
             for p_ in pts:
                 try:
-                    st = _classify_kink(u, fa, v, 1, p_, s, switches, fconds, budget, _SWITCH_TIMEOUT)
+                    st = _classify_kink(u, fa, v, 1, p_, s, switches, fconds, budget, _SWITCH_TIMEOUT, slopes)
                 except Exception:  # noqa: BLE001 - a reading that fails proves nothing
                     st = None
                 if st == "value":
+                    got = slopes.get(p_)
+                    got = got.get("value") if isinstance(got, dict) and got.get("status") == "value" else None
+                    if all(q != p_ for q, _ in found):
+                        found.append((p_, got))
                     continue
                 c = sp.Ne(v, p_) if st == "corner" else sp.Contains(v - p_, ORIGIN)
                 if c not in out:
@@ -3071,11 +3112,13 @@ def _switch_differentiability(u, v, fconds) -> list | None:
     with _SWITCH_CACHE_LOCK:
         if len(_SWITCH_CACHE) > 256:
             _SWITCH_CACHE.clear()
-        _SWITCH_CACHE[key] = None if out is None else [c.xreplace({v: canon}) for c in out]
+        _SWITCH_CACHE[key] = None if out is None else ([c.xreplace({v: canon}) for c in out], list(found))
+    if values is not None and out is not None:
+        values += found
     return out
 
 
-def _differentiability(u, v) -> list:
+def _differentiability(u, v, values: list | None = None) -> list:
     """Where the operand `u` has a derivative in `v`: its own written conditions made strict (a
     derivative needs a neighbourhood: x*sqrt(x) has none at 0, formal.statement.interior_defined_at)
     and the kinks and jumps of its switches (`_switch_differentiability`: |a|, sign, Heaviside, Max/Min,
@@ -3093,7 +3136,7 @@ def _differentiability(u, v) -> list:
             c = sp.Lt(c.lhs, c.rhs)
         out.append(c)
     try:
-        sw = _switch_differentiability(u, v, own)
+        sw = _switch_differentiability(u, v, own, values)
     except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
         sw = [DEFINEDNESS_UNDECIDED]
     if sw is not None:
@@ -3116,31 +3159,199 @@ def _differentiability(u, v) -> list:
     return [c for c in out if c is not sp.true]
 
 
+def _diff_sequence(args) -> list | None:
+    """The variables of diff(e, *args) or Derivative(e, *args), one per order: (x, 2), (x, (x, 2)) and (x, x) all
+    read [x, x]. None when a variable is no Symbol or an order no natural number (SymPy's own reading then)."""
+    seq: list = []
+    rest = list(args)
+    while rest:
+        v = rest.pop(0)
+        if isinstance(v, (tuple, list, sp.Tuple)):
+            if len(v) != 2:
+                return None
+            v, n = v
+        else:
+            n = rest.pop(0) if rest and (getattr(rest[0], "is_Integer", False)
+                                         or (isinstance(rest[0], int) and not isinstance(rest[0], bool))) else 1
+        try:
+            n = int(n) if getattr(sp.sympify(n), "is_Integer", False) else None
+        except Exception:  # noqa: BLE001
+            n = None
+        if n is None or n < 0 or n > 20 or not isinstance(v, sp.Symbol):
+            return None
+        seq += [v] * n
+    return seq
+
+
+_VALUE_STEP_CACHE: dict = {}
+_VALUE_STEP_CACHE_LOCK = threading.Lock()
+_VALUE_SWITCHES = (sp.Piecewise, sp.Abs, sp.sign, sp.Heaviside, sp.Max, sp.Min)
+
+
+def _value_step(e, v) -> tuple:
+    """d e/dv as the value of `diff` reads it: SymPy's derivative and, at each rational zero of a switch where an exact
+    rule proves e has a derivative (`certify.calculus.exact_point_slopes`) and the formula has another value there
+    (or none), that value, as a branch of its own: Piecewise((f'(p), Eq(v, p)), (formula, True)). SymPy
+    differentiates a point branch as a constant: with f = Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1))
+    its formula is 0 at 1, f'(1) = 0 was certified and the right 2 refuted, f'(x) = 0 had the false root 1 (son-
+    kalkulus second round, YO-K1); sign(0) = 0 made (|x|*sign(x))' = 0 at 0 (it is 1, SK-RK-3). Read on e with v
+    as a real symbol of fixed name (the reading of definedness, `_written_diff`, reads the same rules on the same
+    text and checks these values). Returns (the derivative, [(p, f'(p)) put in])."""
+    from ..certify.calculus import exact_point_slopes
+    from ..equiv.sets import scalar_equal
+    with sp.evaluate(True):
+        e = sp.sympify(e)
+        d = sp.diff(e, v)
+        if not isinstance(v, sp.Symbol) or not e.has(*_VALUE_SWITCHES):
+            return d, []
+        canon = sp.Symbol("switch·var", real=True)
+        key = e.xreplace({v: canon})
+        with _VALUE_STEP_CACHE_LOCK:
+            slopes = _VALUE_STEP_CACHE.get(key)
+        if slopes is None:
+            try:
+                slopes = exact_point_slopes(key, canon)
+            except Exception:  # noqa: BLE001 - no value read: none put in
+                slopes = []
+            with _VALUE_STEP_CACHE_LOCK:
+                if len(_VALUE_STEP_CACHE) > 256:
+                    _VALUE_STEP_CACHE.clear()
+                _VALUE_STEP_CACHE[key] = slopes
+        patches = []
+        for p_, s_ in slopes:
+            try:
+                fv = d.subs(v, p_)
+                # the right value read through sign(0) = 0 is left as it is: (x*|x|)' = |x| + x*sign(x) keeps 0 as a
+                # root SymPy solves (put in as a branch, the empty set for (x*|x|)' = 0 was no longer refuted); `_at`
+                # refuses to read it there
+                same = False if fv.has(sp.nan, sp.zoo, sp.oo, -sp.oo) else scalar_equal(fv, s_)
+            except Exception:  # noqa: BLE001
+                same = None
+            if same is not True:
+                patches.append((p_, s_))
+        for p_, s_ in patches:
+            d = sp.Piecewise((s_, sp.Eq(v, p_)), (d, True))
+    return d, patches
+
+
+def _diff(e, *args, **kwargs):
+    """`diff` as a value: SymPy's derivative order by order (`_value_step`: a value an exact rule proves at a switch
+    point where SymPy's formula has another one is put in)."""
+    seq = _diff_sequence(args)
+    if not seq or kwargs:
+        return sp.diff(e, *args, **kwargs)
+    cur = e
+    for v in seq:
+        cur = _value_step(cur, v)[0]
+    return cur
+
+
+def _value_reading(cur, v):
+    """The value reading of the as-written tree `cur` (its markers dropped, evaluated) with v as `_value_step`'s real
+    symbol of fixed name, and that symbol."""
+    canon = sp.Symbol("switch·var", real=True)
+    with sp.evaluate(True):
+        bare = cur.replace(lambda n: isinstance(n, written_domain), lambda n: n.args[0])
+        return _evaluated_bound(bare.xreplace({v: canon})), canon
+
+
+def _formula_values_unproved(formula, v, values) -> list:
+    """For each zero p of a switch where the operand has a derivative ((p, f'(p)) from `_switch_differentiability`), v
+    - p in ORIGIN (undecided at p) unless the derivative's reading `formula` has that value there, proved (equal to
+    the classification's value, or, with none given, `formula` analytic at p, so its value is f'(p)): a 'value' kink
+    said nothing of the value SymPy's formula has there."""
+    from ..certify.calculus import _plainly_smooth
+    from ..certify.domain import ORIGIN
+    from ..equiv.sets import scalar_equal
+    out = []
+    for p_, s_ in values:
+        try:
+            if s_ is None:
+                ok = _plainly_smooth(formula, v, p_)
+            else:
+                fv = formula.subs(v, p_)
+                ok = not fv.has(sp.nan, sp.zoo, sp.oo, -sp.oo) and scalar_equal(fv, s_) is True
+        except Exception:  # noqa: BLE001 - not proved
+            ok = False
+        c = sp.Contains(v - p_, ORIGIN)
+        if not ok and c not in out:
+            out.append(c)
+    return out
+
+
 def _written_diff(e, *args, **kwargs):
     """`diff` read as written. SymPy differentiates with evaluation off into the raw power rule,
     x**3 -> x**3*(0*log(x) + 3/x), whose log and 1/x are conditions the problem never imposed: {1}
     was certified for f'(x) = 0 with f = x**3 - 3x, and (0, 1) for f'(x) < 0 (critic of the V14
     audit, 29 Sep 2026). The derivative is taken with evaluation on, and carries where it exists
     (`_differentiability`, order by order) as a written_domain condition. The tree is for
-    definedness only."""
-    seq = []
-    rest = list(args)
-    while rest:
-        v = rest.pop(0)
-        n = rest.pop(0) if rest and getattr(rest[0], "is_Integer", False) else 1
-        seq += [v] * int(n)
-    if not seq or kwargs or not all(isinstance(v, sp.Symbol) for v in seq):
+    definedness only.
+
+    At a zero of a switch where the operand has a derivative, the value `diff` reads there (`_value_step`, the
+    same rules on the same text) must be the proved one, or the point is undecided (`_formula_values_unproved`):
+    the point branch's 0 was certified for f'(1) of Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1))
+    (YO-K1). The order is read the same in every notation (`_diff_sequence`): diff(f, (x, 1)) and Derivative(f,
+    x) took SymPy's derivative with no condition, and |x - 2|'(2) = 0 was certified (YO-K3); `Derivative`, whose
+    value reading keeps the form, is `_written_derivative`."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED
+    seq = _diff_sequence(args)
+    if not seq or kwargs:
         with sp.evaluate(True):
             return sp.diff(e, *args, **kwargs)
     with sp.evaluate(True):
         conds, cur = [], e
         for v in seq:
-            conds += _differentiability(cur, v)
+            values: list = []
+            conds += _differentiability(cur, v, values)
+            try:
+                read, canon = _value_reading(cur, v)
+                d_val, patches = _value_step(read, canon)
+                conds += _formula_values_unproved(d_val.xreplace({canon: v}), v, values)
+            except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+                conds.append(DEFINEDNESS_UNDECIDED)
+                patches = []
             cur = sp.diff(cur, v)
+            for p_, s_ in patches:
+                cur = sp.Piecewise((s_, sp.Eq(v, p_)), (cur, True))
         cond = sp.And(*conds)
     if cond is sp.true:
         return cur
     return written_domain(cur, cond)
+
+
+def _written_derivative(e, *args, **kwargs):
+    """`Derivative` read as written: the form itself, as the value reading keeps it (sp.Derivative, whose value is
+    SymPy's own), with where it exists as `_written_diff` reads it (YO-K3). Kept as the form, its binders stay readable:
+    d/da of a bound integral with a given a = 2 is a question of reading (the pins' check, part d4d), and computed here
+    it was no longer seen. The value checked at a switch point where the operand has a derivative is SymPy's formula,
+    nothing put in."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED, definedness_conditions
+    form = sp.Derivative(e, *args, **kwargs)
+    seq = _diff_sequence(args)
+    if not seq or kwargs:
+        return form
+    with sp.evaluate(True):
+        conds, cur = [], e
+        for v in seq:
+            values: list = []
+            conds += _differentiability(cur, v, values)
+            try:
+                read, canon = _value_reading(cur, v)
+                conds += _formula_values_unproved(sp.diff(read, canon).xreplace({canon: v}), v, values)
+            except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+                conds.append(DEFINEDNESS_UNDECIDED)
+            cur = sp.diff(cur, v)
+        cond = sp.And(*conds)
+        # the operand's own written conditions the form carries itself (1/x of Derivative(1/x, x): its pole stays a pole
+        # of the text, `steps.deterministic._written_poles`); only a condition beyond them is put on it
+        try:
+            own = definedness_conditions(e, None)
+        except Exception:  # noqa: BLE001 - not read: every condition is put on it
+            own = []
+        beyond = [c for c in conds if c is not sp.true and c not in own]
+    if cond is sp.true or not beyond:
+        return form
+    return written_domain(form, cond)
 
 
 def _written_integrate(*args, **kwargs):
@@ -3201,7 +3412,8 @@ def _written_rewrite(*args, **kwargs):
     return _rewritten_argument("rewrite", args, kwargs)
 
 
-_WRITTEN_COMPUTING = {"diff": (sp.diff, _written_diff), "integrate": (_integrate, _written_integrate),
+_WRITTEN_COMPUTING = {"diff": (_diff_value, _written_diff), "Derivative": (sp.Derivative, _written_derivative),
+                      "integrate": (_integrate, _written_integrate),
                       "limit": (_limit, _Limit),
                       **{name: (_SAFE_NAMES[name], _held_matrix_op(name))
                          for name in ("det", "trace", "rank", "eigmax", "eigmin")},
@@ -3586,10 +3798,11 @@ def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     s2 = preclean(strip_presentation(_strip_invisible(s))).strip()
     if number_set_named(s2) is not None or number_set_named(s) is not None:
         return sp.Tuple()                           # ℕ⁺, Z+, N0: a set by its name, no condition
-    diff_ = _SET_DIFFERENCE_RE.match(s2)
-    if diff_ is not None and number_set_named(diff_.group(1)) is not None:
-        # ℝ minus a set (R - {2}, ℝ∖{2}: `parse_set_str`): the set taken out, as written
-        return parse_set_as_written(re.sub(r"\\([{}])", r"\1", diff_.group(2)), ns)
+    diff_ = _set_difference(s2)
+    if diff_ is not None:
+        # ℝ minus a set (R - {2}, ℝ∖{2}, R - ({2} ∪ {3}): `parse_set_str`): the set taken out, as written (each
+        # reading of R - A ∪ B has the same parts)
+        return parse_set_as_written(diff_[1], ns)
     parts = _COMPOUND_RE.split(s2)
     if len(parts) > 1:
         # a compound condition (x < -1 or x > 3, x = 1 or x = 2): each part as written
@@ -3625,6 +3838,81 @@ _SET_DIFFERENCE_RE = re.compile(r"^\s*(\\mathbb\{?R\}?|R|Reals)\s*(?:-|∖|\\set
 _LATEX_CUP_RE = re.compile(r"\s*\\cup(?![A-Za-z])\s*")
 
 
+class SetDifferenceAmbiguous(ParseError):
+    """ℝ − A ∪ B written without brackets: ℝ − (A ∪ B) as often as (ℝ − A) ∪ B. Read one way only, 'R - {2} ∪ {3}'
+    was certified as the domain of 1/((x - 2)(x - 3)) and refuted as that of 1/(x - 2) (son-kalkulus second round,
+    YO-K4); the verifier reads both (`set_difference_reading`) and decides only when they agree."""
+
+
+# how ℝ − A ∪ B is read: None (not read: SetDifferenceAmbiguous), "whole" (ℝ − (A ∪ B)) or "left" ((ℝ − A) ∪ B)
+_SET_DIFFERENCE_READING: contextvars.ContextVar = contextvars.ContextVar("set_difference_reading", default=None)
+
+
+def set_difference_reading_chosen() -> bool:
+    """Is a reading of ℝ − A ∪ B chosen (inside `set_difference_reading`)?"""
+    return _SET_DIFFERENCE_READING.get() is not None
+
+
+class set_difference_reading:  # noqa: N801 - a context manager used like a function
+    """Within it, ℝ − A ∪ B is read as ℝ − (A ∪ B) ("whole") or as (ℝ − A) ∪ B ("left")."""
+
+    def __init__(self, which: str):
+        if which not in ("whole", "left"):
+            raise ValueError(which)
+        self.which = which
+
+    def __enter__(self):
+        self._token = _SET_DIFFERENCE_READING.set(self.which)
+        return self
+
+    def __exit__(self, *exc):
+        _SET_DIFFERENCE_READING.reset(self._token)
+        return False
+
+
+def _set_difference(s2: str):
+    """(ℝ, the text taken out, its parts at a top-level union) of a precleaned text ℝ − ..., or None. A text taken out
+    that is a bracket around a union is that union (ℝ − ({2} ∪ {3}): one reading)."""
+    m = _SET_DIFFERENCE_RE.match(s2)
+    whole = number_set_named(m.group(1)) if m else None
+    if whole is None:
+        return None
+    rest = _LATEX_CUP_RE.sub(" U ", re.sub(r"\\([{}])", r"\1", m.group(2))).strip()
+    parts = [p for p in _union_parts(rest) if p.strip()]
+    if len(parts) == 1 and rest.startswith("(") and rest.endswith(")") and _closing_bracket(rest, 0) == len(rest) - 1:
+        inner = [p for p in _union_parts(rest[1:-1].strip()) if p.strip()]
+        if len(inner) > 1:
+            return whole, rest[1:-1].strip(), [rest[1:-1].strip()]
+    return whole, rest, parts
+
+
+def _closing_bracket(s: str, i: int) -> int:
+    """The index of the bracket that closes the one at s[i] (any of ([{), or -1."""
+    depth = 0
+    for j in range(i, len(s)):
+        if s[j] in "([{":
+            depth += 1
+        elif s[j] in ")]}":
+            depth -= 1
+            if depth == 0:
+                return j
+    return -1
+
+
+def writes_ambiguous_set_difference(s) -> bool:
+    """Does the text write ℝ − A ∪ B with no bracket saying which comes first (`SetDifferenceAmbiguous`)?"""
+    if not isinstance(s, str):
+        return False
+    try:
+        p = preclean(s)
+        if "U" not in p and "\\cup" not in p:
+            return False
+        d = _set_difference(p)
+    except Exception:  # noqa: BLE001 - not such a text
+        return False
+    return d is not None and len(d[2]) > 1
+
+
 @_holds_forms
 def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
     """Parse set notation: {a, b}, (a, b], [a,b) U (c, d), EmptySet, Reals, sympy Set syntax."""
@@ -3638,11 +3926,18 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
         return val if isinstance(val, sp.Set) else FiniteSet(val)
     s2 = preclean(s)
     # ℝ minus a set, the way a textbook writes a domain: R - {2}, \mathbb{R} - \{2\}, ℝ∖{2}, \mathbb{R} \setminus
-    # \{2\}, R - [2, 3]; and LaTeX's \cup between intervals. Not read, they were UNKNOWN (son saldırı SON-G3-RK-4)
-    m = _SET_DIFFERENCE_RE.match(s2)
-    whole = number_set_named(m.group(1)) if m else None
-    if whole is not None:
-        rest = re.sub(r"\\([{}])", r"\1", m.group(2))
+    # \{2\}, R - [2, 3]; and LaTeX's \cup between intervals. Not read, they were UNKNOWN (son saldırı SON-G3-RK-4).
+    # ℝ − A ∪ B is read the way `set_difference_reading` says, or not at all (YO-K4)
+    diff_ = _set_difference(s2)
+    if diff_ is not None:
+        whole, rest, parts = diff_
+        if len(parts) > 1:
+            which = _SET_DIFFERENCE_READING.get()
+            if which is None:
+                raise SetDifferenceAmbiguous(f"{s!r}: ℝ − A ∪ B is ℝ − (A ∪ B) or (ℝ − A) ∪ B: not read")
+            if which == "left":
+                return Union(sp.Complement(whole, parse_set_str(parts[0], ns)),
+                             *[parse_set_str(p, ns) for p in parts[1:]])
         return sp.Complement(whole, parse_set_str(rest, ns))
     sets = [_parse_single_set(p, ns) for p in _union_parts(_LATEX_CUP_RE.sub(" U ", s2)) if p.strip()]
     from ..equiv.sets import unify_endpoints, EndpointsIncomparable

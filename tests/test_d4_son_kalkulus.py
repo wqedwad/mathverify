@@ -531,3 +531,304 @@ def test_set_difference_reading():
         assert parse_set_str(s) == two
     assert parse_set_str("R - [2, 3]") == sp.Union(sp.Interval.open(-sp.oo, 2), sp.Interval.open(3, sp.oo))
     assert parse_set_str("R") == sp.S.Reals                                     # control
+
+
+# --- second round (21-22 Oct 2026, kararlar.txt "EK 6") -------------------------------------------------------------
+# YO-K1 = RK-PW-EQ = SK-RK-2: a Piecewise with a point branch of its own. SymPy differentiates the point branch as a
+# constant, and its 0 was read as f'(p) on every path: the right value refuted, 0 certified (0e93ed5 and 4e2e4d7).
+PT = "Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1))"          # f'(1) = 2, no f''(1)
+PT6 = "Piecewise((2*x + 1, x < 1), (3, Eq(x, 1)), (x**2 + 2, x > 1))"     # f'(1) = 2
+NE1 = "Piecewise((x**2, Ne(x, 1)), (1, Eq(x, 1)))"                       # x**2
+NE3 = "Piecewise((x**2, Ne(x, 3)), (9, Eq(x, 3)))"                       # x**2, f'(3) = 6
+REM1 = "Piecewise(((x**2 - 1)/(x - 1), Ne(x, 1)), (2, Eq(x, 1)))"        # x + 1
+REM2 = "Piecewise(((x**2 - 4)/(x - 2), Ne(x, 2)), (4, Eq(x, 2)))"        # x + 2
+CUBEPT = "Piecewise((x**3, x < 1), (1, Eq(x, 1)), (x**3, x > 1))"        # x**3: f'(1) = 3, f''(1) = 6
+X3 = "Piecewise((x**3, Ne(x, 2)), (8, Eq(x, 2)))"                        # x**3, f'(2) = 12
+XE = "Piecewise((x*exp(x), Ne(x, 0)), (0, Eq(x, 0)))"                    # f'(0) = 1
+JUMP2 = "Piecewise((x**2, x < 1), (x**2 + 5, x >= 1))"                   # jumps at 1: no f'(1), no f''(1)
+
+
+@pytest.mark.parametrize("f,p,right", [(PT, "1", "2"), (PT6, "1", "2"), (NE1, "1", "2"), (NE3, "3", "6"),
+                                       (REM1, "1", "1"), (REM2, "2", "1"), (CUBEPT, "1", "3"), (X3, "2", "12"),
+                                       (XE, "0", "1")])
+def test_a_point_branch_is_no_derivative_value(f, p, right):
+    assert _v(_at(f, p), _sol(right)) == "CORRECT"
+    assert _v(_at(f, p), _sol("0")) == "INCORRECT"
+    assert _v(_der(f, p), _sol(right)) == "CORRECT"
+    assert _v(_der(f, p), _sol("0")) == "INCORRECT"
+
+
+def test_a_point_branch_on_every_path():
+    assert _v(_ev("diff(f(x), x)", PT, ("x = 1",)), _sol("2")) == "CORRECT"
+    assert _v(_ev("diff(f(x), x)", PT, ("x = 1",)), _sol("0")) == "INCORRECT"
+    mc = {"A": "0", "B": "1", "C": "2", "D": "3", "E": "4"}
+    assert _v(_ev("at(diff(f(x), x), x, 1)", PT, options=mc), _sol("0", option="A")) == "INCORRECT"
+    assert _v(_ev("at(diff(f(x), x), x, 1)", PT, options=mc), _sol("2", option="C")) == "CORRECT"
+    assert _v(_ev("at(diff(f(x), x), x, 2) + f(2)", REM2), _sol("5")) == "CORRECT"
+    assert _v(_ev("at(diff(f(x), x), x, 2) + f(2)", REM2), _sol("4")) == "INCORRECT"
+    for f, right, wrong in ((NE1, "{0}", "{0, 1}"), (PT, "{0}", "{0, 1}"), (CUBEPT, "{0}", "{0, 1}"), (X3, "{0}", "{0, 2}")):
+        assert _v(_se("diff(f(x), x) = 0", f), _sol(right, "set")) == "CORRECT"
+        assert _v(_se("diff(f(x), x) = 0", f), _sol(wrong, "set")) == "INCORRECT"
+    assert _v(_se("diff(f(x), x) = 0", PT6), _sol("{1}", "set")) == "INCORRECT"
+    assert _v(_se("diff(f(x), x) = 6", NE3), _sol("{3}", "set")) == "CORRECT"
+    q = _ir("solve_inequality", {"var": "x", "inequality": "diff(f(x), x) > 0"}, (), None, "interval", functions=_fn(X3))
+    assert _v(q, _sol("Union(Interval.open(-oo, 0), Interval.open(0, 2), Interval.open(2, oo))", "interval")) \
+        == "INCORRECT"
+    assert _v(_at(X3, "2"), _sol("12", steps=["at(diff(f(x), x), x, 2) = 12"])) == "CORRECT"
+
+
+def test_a_higher_derivative_needs_the_lower_one():
+    # a jump at 1: SymPy's formula 2*x for f' made f''(1) = 2 certified and DNE refuted (YO-K1's sibling)
+    q = _ir("derivative", {"f": JUMP2, "var": "x", "at": "1", "order": 2})
+    assert _v(q, _sol("2")) == "INCORRECT"
+    assert _v(q, DNE) == "CORRECT"
+    q = _ir("derivative", {"f": CUBEPT, "var": "x", "at": "1", "order": 2})
+    assert _v(q, _sol("6")) == "CORRECT"
+    assert _v(q, DNE) == "INCORRECT"
+    q = _ir("derivative", {"f": PT, "var": "x", "at": "1", "order": 2})
+    assert _v(q, DNE) == "CORRECT"
+    assert _v(_at(CUBEPT, "1", 2), _sol("6")) == "CORRECT"
+    assert _v(_at(CUBEPT, "1", 2), _sol("0")) == "INCORRECT"
+
+
+def test_the_point_branch_rules():
+    from mathverify.certify.calculus import (_piecewise_rule, derivative_at_point, exact_point_slopes,
+                                             point_derivative)
+    from mathverify.normalize.parse import _at as at_, _value_step
+    x = sp.Symbol("x", real=True)
+    pt = sp.Piecewise((x**2, x < 1), (1, sp.Eq(x, 1)), (2*x - 1, x > 1))
+    out: dict = {}
+    assert _piecewise_rule(pt, x, sp.Integer(1), out) == "value" and out["value"] == 2
+    out = {}
+    rem = sp.Piecewise(((x**2 - 1)/(x - 1), sp.Ne(x, 1)), (2, True))
+    assert _piecewise_rule(rem, x, sp.Integer(1), out) == "value" and out["value"] == 1       # read cancelled
+    assert point_derivative(pt, x, 1, sp.Integer(1)) == {"status": "value", "value": 2, "rule": "piecewise_rule"}
+    assert exact_point_slopes(pt, x) == [(1, 2)]
+    d, patches = _value_step(pt, x)
+    assert patches == [(1, 2)] and d.subs(x, 1) == 2 and d.subs(x, 0.5) == 1.0
+    assert at_(d, x, 1) == 2
+    jump = sp.Piecewise((x**2, x < 1), (x**2 + 5, True))
+    ev = derivative_at_point(jump, x, 2, sp.Integer(1))
+    assert ev["status"] == "corner" and ev["reason"] == "no_lower_derivative"
+    # controls: a C1 junction's formula already has the value, nothing put in; a corner has none
+    c1 = sp.Piecewise((x**2, x <= 1), (2*x - 1, True))
+    assert _value_step(c1, x)[1] == []
+    assert exact_point_slopes(sp.Piecewise((-x, x < 0), (x, True)), x) == []
+
+
+# YO-K2 + SK-RK-3: the derivative function at a kink where f has a derivative and the formula another value
+@pytest.mark.parametrize("f,right,wrong", [
+    (PT6, "Piecewise((2, x <= 1), (2*x, x > 1))", "Piecewise((2, x < 1), (0, Eq(x, 1)), (2*x, x > 1))"),
+    (PT6, "Piecewise((2, x < 1), (2*x, x >= 1))", "Piecewise((2, x < 1), (0, Eq(x, 1)), (2*x, x > 1))"),
+    (PT, "Piecewise((2*x, x < 1), (2, x >= 1))", "Piecewise((2*x, x < 1), (0, Eq(x, 1)), (2, x > 1))"),
+    (NE1, "2*x", "Piecewise((2*x, Ne(x, 1)), (0, Eq(x, 1)))"),
+    (CUBEPT, "3*x**2", "Piecewise((3*x**2, Ne(x, 1)), (0, Eq(x, 1)))"),
+    ("cbrt(x)**3", "1", "sign(x)**2"), ("cbrt(x**3)", "1", "sign(x)**2"), ("cbrt(x**3) + x**2", "1 + 2*x", "0"),
+    ("cbrt((x - 1)**3)", "1", "0"), ("cbrt(8*x**3)", "2", "sign(x)**2"), ("Abs(x)*sign(x)", "1", "sign(x)**2"),
+])
+def test_the_derivative_function_at_a_kink_with_a_derivative(f, right, wrong):
+    assert _v(_der(f), _sol(right, "expression")) == "CORRECT"
+    assert _v(_der(f), _sol(wrong, "expression")) == "INCORRECT"
+
+
+def test_a_sign_formula_at_a_kink_with_a_derivative_in_a_solution_set():
+    # (|x|*sign(x))' = 1: SymPy's sign(x)**2 is 0 at 0, the root 0 of f'(x) = 0 is no root
+    assert _v(_se("diff(f(x), x) = 0", "Abs(x)*sign(x)"), _sol("{0}", "set")) == "INCORRECT"
+    q = _ir("solve_inequality", {"var": "x", "inequality": "diff(f(x), x) > 0"}, (), None, "interval",
+            functions=_fn("Abs(x)*sign(x)"))
+    assert _v(q, _sol("Union(Interval.open(-oo, 0), Interval.open(0, oo))", "interval")) == "INCORRECT"
+    assert _v(q, _sol("Interval(-oo, oo)", "interval")) != "INCORRECT"
+
+
+# YO-K3: where a written derivative exists does not hang on the notation
+@pytest.mark.parametrize("f,p,claim", [("Abs(x - 2)", "2", "0"), ("Abs(x**2 - 4)", "2", "0"), ("Abs(sin(x))", "pi", "0"),
+                                       ("Max(x, 2 - x)", "1", "0"), ("Abs(x)", "0", "0"), (PW_ABS, "0", "1"),
+                                       (JUMP, "1", "2")])
+@pytest.mark.parametrize("d", ["Derivative(f(x), x)", "Derivative(f(x), (x, 1))", "diff(f(x), (x, 1))"])
+def test_a_derivative_in_any_notation_has_no_value_at_a_corner(f, p, claim, d):
+    assert _v(_ev(f"at({d}, x, {p})", f), _sol(claim)) == "UNKNOWN"
+
+
+def test_a_derivative_in_any_notation():
+    for e in ("at(Derivative(x*Abs(x), x, 2), x, 0)", "at(Derivative(x*Abs(x), (x, 2)), x, 0)",
+              "at(diff(x*Abs(x), (x, 2)), x, 0)", "at(diff(diff(x*Abs(x), x), x), x, 0)"):
+        assert _v(_ev(e), _sol("0")) == "UNKNOWN"
+    opts = {"A": "-4", "B": "0", "C": "4", "D": "2", "E": "Yoktur"}
+    assert _v(_ev("at(Derivative(f(x), x), x, 2)", "Abs(x - 2)", options=opts), _sol("0", option="B")) == "UNKNOWN"
+    for f, claim in (("Abs(x - 2)", "0"), ("cbrt(x - 2)", "0"), ("Abs(x - 2) + x", "1")):
+        assert _v(_ev("Derivative(f(x), x)", f, ("x = 2",)), _sol(claim)) == "UNKNOWN"
+    # controls: where the derivative exists every notation keeps its value
+    assert _v(_ev("at(Derivative(x*Abs(x), (x, 2)), x, 1)"), _sol("2")) == "CORRECT"
+    assert _v(_ev("at(diff(x**3, (x, 2)), x, 1)"), _sol("6")) == "CORRECT"
+    assert _v(_ev("at(Derivative(x**3, x), x, 2)"), _sol("12")) == "CORRECT"
+    # Derivative keeps SymPy's form as its value: at a point branch it is undecided, never the branch's 0
+    assert _v(_ev("at(Derivative(f(x), x), x, 1)", PT), _sol("0")) != "CORRECT"
+
+
+def test_the_order_of_a_written_derivative():
+    from mathverify.normalize.parse import _diff_sequence
+    x, y = sp.symbols("x y", real=True)
+    for args in ((x, 2), ((x, 2),), (x, x), (sp.Tuple(x, 2),)):
+        assert _diff_sequence(args) == [x, x]
+    assert _diff_sequence((x, y)) == [x, y]
+    assert _diff_sequence((x**2,)) is None and _diff_sequence(((x, sp.Rational(1, 2)),)) is None
+
+
+# YO-K4: R − A ∪ B written without brackets has two readings
+@pytest.mark.parametrize("expr,claim,verdict", [
+    ("1/((x - 2)*(x - 3))", "R - {2} ∪ {3}", "UNKNOWN"), ("1/((x - 2)*(x - 3))", "R - {2} U {3}", "UNKNOWN"),
+    ("1/((x - 2)*(x - 3))", r"\mathbb{R} \setminus \{2\} \cup \{3\}", "UNKNOWN"),
+    ("1/(x**2 - 9)", "ℝ∖{-3}∪{3}", "UNKNOWN"), ("sqrt(x - 1)/(x - 3)", "R - (-oo, 1) ∪ {3}", "UNKNOWN"),
+    ("1/(x - 2)", "R - {2} ∪ {3}", "UNKNOWN"), ("log(x - 2)", "R - (-oo, 2] ∪ {5}", "UNKNOWN"),
+    ("1/((x - 2)*(x - 3))", "R - {2} ∪ {4}", "INCORRECT"),                   # wrong both ways
+    ("1/((x - 2)*(x - 3))", "R - ({2} ∪ {3})", "CORRECT"), ("1/((x - 2)*(x - 3))", "R - ({2} ∪ {4})", "INCORRECT"),
+    ("1/((x - 2)*(x - 3))", "R - {2, 3}", "CORRECT"),
+])
+def test_a_set_difference_before_a_union(expr, claim, verdict):
+    assert _v(_ir("domain_of", {"expr": expr, "var": "x"}, (), None, "set"), _sol(claim, "set")) == verdict
+
+
+def test_a_set_difference_before_a_union_in_options_and_intervals():
+    mc = {"A": "R - {2}", "B": "R - {3}", "C": "R - {2, 3}", "D": "R - {2} ∪ {3}", "E": "R"}
+    q = _ir("domain_of", {"expr": "1/((x - 2)*(x - 3))", "var": "x"}, (), None, "set", options=mc)
+    assert _v(q, _sol("R - {2} ∪ {3}", "set", option="D")) == "UNKNOWN"
+    assert _v(q, _sol("R - {2, 3}", "set", option="C")) == "CORRECT"
+    q = _ir("solve_inequality", {"var": "x", "inequality": "(x - 2)*(x - 5) > 0"}, (), None, "interval")
+    assert _v(q, _sol("R - [2, 3] ∪ (3, 5]", "interval")) == "UNKNOWN"
+
+
+def test_the_two_readings_of_a_set_difference():
+    from mathverify.normalize.parse import (SetDifferenceAmbiguous, parse_set_str, set_difference_reading,
+                                            writes_ambiguous_set_difference)
+    with pytest.raises(SetDifferenceAmbiguous):
+        parse_set_str("R - {2} ∪ {3}")
+    with set_difference_reading("whole"):
+        assert parse_set_str("R - {2} ∪ {3}") == sp.Complement(sp.S.Reals, sp.FiniteSet(2, 3))
+    with set_difference_reading("left"):
+        assert parse_set_str("R - {2} ∪ {3}") == sp.Complement(sp.S.Reals, sp.FiniteSet(2))
+    assert parse_set_str("R - ({2} ∪ {3})") == sp.Complement(sp.S.Reals, sp.FiniteSet(2, 3))
+    assert writes_ambiguous_set_difference(r"\mathbb{R} \setminus \{2\} \cup \{3\}")
+    assert not writes_ambiguous_set_difference("R - ({2} ∪ {3})") and not writes_ambiguous_set_difference("R - {2}")
+    assert not writes_ambiguous_set_difference("(-oo, 2) ∪ (2, oo)")
+
+
+# YO-K5: an integer n with n >= L declared is read on that region, as a positive integer is
+@pytest.mark.parametrize("nv", [{"name": "n", "domain": "integer", "constraints": ["n >= 1"]}, NP])
+@pytest.mark.parametrize("f,claim,verdict", [
+    ("x**n", "n*x**n/x", "UNKNOWN"), ("x**n", "n*x**(n - 1) + 0/x", "UNKNOWN"),
+    ("x**(n + 1)", "(n + 1)*x**(n + 1)/x", "UNKNOWN"), ("(x - 1)**n", "n*(x - 1)**n/(x - 1)", "UNKNOWN"),
+    ("x**n", "n*x**(n - 1)", "CORRECT"),
+])
+def test_an_integer_exponent_bounded_below_reads_f_on_its_region(nv, f, claim, verdict):
+    assert _v(_ir("derivative", {"f": f, "var": "x"}, (), [X, nv], "expression"), _sol(claim, "expression")) == verdict
+
+
+@pytest.mark.parametrize("nv", [{"name": "n", "domain": "integer", "constraints": ["n >= 2"]},
+                                {"name": "n", "domain": "positive_integer", "constraints": ["n >= 2"]}])
+def test_an_integer_exponent_bounded_below_by_two_reads_f_on_its_region(nv):
+    q2 = _ir("derivative", {"f": "x**n", "var": "x", "order": 2}, (), [X, nv], "expression")
+    q3 = _ir("derivative", {"f": "x**n", "var": "x", "order": 3}, (), [X, nv], "expression")
+    assert _v(q2, _sol("n*(n - 1)*x**n/x**2", "expression")) == "UNKNOWN"
+    assert _v(q3, _sol("n*(n - 1)*(n - 2)*x**(n - 3)", "expression")) == "UNKNOWN"
+    assert _v(q2, _sol("n*(n - 1)*x**(n - 2)", "expression")) == "CORRECT"
+
+
+# SK-RK-1: the structural reading of a computing target is not taken in process
+def test_a_computing_target_is_not_read_structurally(monkeypatch):
+    import time
+    import mathverify.verifier as V
+    from mathverify.verifier import _computes
+    seen: list = []
+    structure = V._structure
+    monkeypatch.setattr(V, "_structure", lambda text, ctx: seen.append(text) or structure(text, ctx))
+    assert _v(_at("Abs(x**2 - 4)", "3"), _sol("2*3")) == "CORRECT"
+    assert "at(diff(f(x), x), x, 3)" not in seen                      # a claim with a tree does not make it read
+    monkeypatch.undo()
+    t = time.time()
+    assert _v(_at("Abs(x**2 - 4)", "3"), _sol("6")) == "CORRECT"
+    assert _v(_at("Abs(x**4 - 5*x**2 + 4)", "3"), _sol("78")) == "CORRECT"
+    assert time.time() - t < 30                    # 13-48 s each before
+    assert _computes("at(diff(f(x), x), x, 3)") and _computes(r"\int_0^1 x dx") and not _computes("binomial(6, 3)")
+    # a claim restating such a target is a computation, refused before any structure is read
+    r = verify(_at("Abs(x**2 - 4)", "3"), _sol("at(diff(f(x), x), x, 3)"))
+    assert r.verdict == "UNKNOWN" and "claim_is_not_a_value" in r.flags
+    # control: a target with no computing operator is still compared structurally
+    q = _ir("evaluate", {"expr": "binomial(6, 3)"})
+    assert "claim_is_not_a_value" in verify(q, _sol("binomial(6, 3)")).flags
+
+
+# SK-RK-6: |a|**(2k) of a real a is a**(2k), no switch
+@pytest.mark.parametrize("f,p,right,wrong", [("Abs(cos(x))**2", "pi/2", "0", "1"), ("Abs(sin(x))**2", "pi", "0", "1"),
+                                             ("Abs(sin(x))**4", "pi", "0", "1")])
+def test_an_even_power_of_an_absolute_value_is_smooth(f, p, right, wrong):
+    assert _v(_at(f, p), _sol(right)) == "CORRECT"
+    assert _v(_at(f, p), _sol(wrong)) == "INCORRECT"
+    assert _v(_at("Abs(sin(x))", "pi"), _sol("0")) == "UNKNOWN"          # control: an odd power keeps its corners
+
+
+def test_an_unproved_formula_value_is_undecided(monkeypatch):
+    # the reading of definedness checks the value the reading of the value has at a zero with a derivative: where no
+    # exact rule put the proved value in, the point is undecided (never the point branch's 0)
+    import mathverify.certify.calculus as calc
+    from mathverify.certify.domain import ORIGIN
+    from mathverify.normalize import parse as P
+    x = sp.Symbol("x", real=True)
+    pt = sp.Piecewise((x**2, x < 1), (1, sp.Eq(x, 1)), (2*x - 1, x > 1))
+    formula = sp.diff(pt, x)
+    assert P._formula_values_unproved(formula, x, [(1, 2)]) == [sp.Contains(x - 1, ORIGIN)]
+    assert P._formula_values_unproved(P._value_step(pt, x)[0], x, [(1, 2)]) == []
+    assert P._formula_values_unproved(2 * x, x, [(1, None)]) == []                   # analytic there: its own value
+    monkeypatch.setattr(calc, "exact_point_slopes", lambda f, var: [])
+    monkeypatch.setattr(P, "_VALUE_STEP_CACHE", {})
+    monkeypatch.setattr(P, "_SWITCH_CACHE", {})
+    w = P._written_diff(pt, x)
+    assert isinstance(w, P.written_domain) and sp.Contains(x - 1, ORIGIN) in sp.And(w.args[1]).args + (w.args[1],)
+
+
+def test_a_sign_formula_at_a_kink_with_a_derivative():
+    # (|x|*sign(x))' = 1 everywhere: the value put in at 0 is read (`_at` takes the branch first), sign(0) never
+    assert _v(_at("Abs(x)*sign(x)", "0"), _sol("1")) == "CORRECT"
+    assert _v(_at("Abs(x)*sign(x)", "0"), _sol("0")) == "INCORRECT"
+    assert _v(_at("cbrt(x)**3", "0"), _sol("1")) == "CORRECT"
+    assert _v(_at("Abs(x)", "0"), _sol("0")) == "UNKNOWN"                     # control: a corner
+
+
+@pytest.mark.parametrize("f,F", [("(2*x + 1)**pi", "(2*x + 1)**(pi + 1)/(2*(pi + 1)) + C"),
+                                 ("(x + 1)**sqrt(2)", "(x + 1)**(sqrt(2) + 1)/(sqrt(2) + 1) + C")])
+def test_a_convention_of_a_primitive_raises_nothing(f, F):
+    # SK-RK-7: the convention of (2*x + 1)**(pi + 1) is no relation to negate; it raised out of the layer
+    r = verify(_ir("antiderivative", {"integrand": f, "var": "x"}, (), None, "expression"), _sol(F, "expression"))
+    assert r.verdict == "UNKNOWN" and "layer_exception" not in r.flags
+    wrong = F.replace("+ 1)/", "+ 2)/", 1)
+    assert _v(_ir("antiderivative", {"integrand": f, "var": "x"}, (), None, "expression"),
+              _sol(wrong, "expression")) == "INCORRECT"
+
+
+def test_a_failed_value_check_is_undecided(monkeypatch):
+    # the check of the value at a zero with a derivative fails closed: a failure there kept no condition at all
+    # (the reading as written returned None), so a corner's condition would have been lost
+    from mathverify.certify.domain import DEFINEDNESS_UNDECIDED
+    from mathverify.normalize import parse as P
+
+    def boom(*a, **k):
+        raise RuntimeError("no reading")
+    monkeypatch.setattr(P, "_value_reading", boom)
+    x = sp.Symbol("x", real=True)
+    for written in (P._written_diff, P._written_derivative):
+        w = written(sp.Abs(x - 2), x)
+        assert isinstance(w, P.written_domain)
+        conds = w.args[1].args if isinstance(w.args[1], sp.And) else (w.args[1],)
+        assert sp.Ne(x, 2) in conds and DEFINEDNESS_UNDECIDED in conds
+
+
+def test_a_written_derivative_carries_only_conditions_beyond_its_operand():
+    # Derivative(1/x, x) is the form with the operand's own pole (the reading of a step's poles takes it there,
+    # steps.deterministic._written_poles); |x - 2| at its corner gets the condition put on the form
+    from mathverify.normalize.parse import _SAFE_NAMES, parse_as_written, written_domain
+    x = sp.Symbol("x", real=True)
+    ns = dict(_SAFE_NAMES, x=x)
+    bare = parse_as_written("Derivative(1/x, x)", ns)[0]
+    assert isinstance(bare, sp.Derivative)
+    w = parse_as_written("Derivative(Abs(x - 2), x)", ns)[0]
+    assert isinstance(w, written_domain) and sp.Ne(x, 2) in (w.args[1].args if isinstance(w.args[1], sp.And)
+                                                              else (w.args[1],))
