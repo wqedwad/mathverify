@@ -2059,40 +2059,34 @@ def _multiple_of_premise(claim, parts: list) -> bool:
     return False
 
 
-def _empty_premise_reading(claim, parts: list, compute: bool, poles=()):
-    """For an open claim under premises with no real instance: "consequence" when it is proved to follow from them
-    (`_multiple_of_premise`, or every complex solution of their equations, rational and finite, makes it exactly
-    true), a complex solution (as text, symbol -> value) where it is exactly false, or None. Only equations: an order
-    has no complex reading; a premise that is no rational equation (other than a `!=` condition) leaves None. `poles`:
-    the denominators of the claim as written (`_written_poles`); a solution where one vanishes is no counterexample
-    (principle 12: (x**4 - 1)/(x**2 + 1) = 0 evaluates to x**2 - 1 = 0, false at ±i, where the claim as written is
-    0/0)."""
-    if _multiple_of_premise(claim, parts):
-        return "consequence"
-    if not isinstance(claim, Eq):
-        return None
+def _rational_premises(parts: list):
+    """The premises `parts` as rational equations (with `!=` conditions): (their symbols, the numerators of the
+    equations, the polynomials whose roots are excluded: their poles and the points the conditions exclude); None
+    when one is no such relation (an order, a root, a transcendental function)."""
     eqs = [p for p in parts if isinstance(p, Eq)]
     conds = [p for p in parts if isinstance(p, sp.Ne)]
     if not eqs or len(eqs) + len(conds) != len(parts):
         return None
     syms = sorted(set().union(*(p.free_symbols for p in eqs + conds)), key=lambda q: q.name)
-    d = (_doit(claim.lhs - claim.rhs) if compute else claim.lhs - claim.rhs)
-    if not syms or not d.free_symbols <= set(syms) or any(not (p.lhs - p.rhs).is_rational_function(*syms)
-                                                          for p in eqs + conds) \
-            or not d.is_rational_function(*syms):
+    if not syms or any(not (p.lhs - p.rhs).is_rational_function(*syms) for p in eqs + conds):
         return None
-    nums, dens = [], []
+    nums, excluded = [], []
     for p in eqs:
         n_, d_ = sp.fraction(sp.together(p.lhs - p.rhs))
         nums.append(sp.expand(n_))
-        dens.append(d_)
-    excluded = list(dens) + [sp.fraction(sp.together(c.lhs - c.rhs))[0] for c in conds]
-    N, D = sp.fraction(sp.together(d))
+        excluded.append(d_)
+    excluded += [sp.fraction(sp.together(c.lhs - c.rhs))[0] for c in conds]
+    return syms, nums, excluded
+
+
+def _complex_solutions(syms: list, nums: list, excluded: list):
+    """For one unknown: the square-free polynomial whose roots are the complex solutions of the equations `nums` = 0
+    that no polynomial of `excluded` vanishes at (None when every number solves them). For several: True when they
+    are proved to have no complex solution (a Groebner basis [1]), else None."""
     if len(syms) > 1:
-        # several unknowns: only equations with no complex solution at all are read (x + y = 1, 2x + 2y = 3)
         _tick()
         G = sp.groebner([n_ for n_ in nums if n_ != 0], *syms, order="lex")
-        return "consequence" if list(G.exprs) == [1] else None
+        return True if list(G.exprs) == [1] else None
     (x,) = syms
     P = sp.Poly(0, x)
     for n_ in nums:
@@ -2104,8 +2098,34 @@ def _empty_premise_reading(claim, parts: list, compute: bool, poles=()):
         ep = sp.Poly(e, x)
         if not ep.is_zero:
             P = sp.Poly(sp.quo(P, sp.gcd(P, ep)), x)
-    if P.degree() <= 0:
-        return "consequence"                     # no complex solution either
+    return P
+
+
+def _empty_premise_reading(claim, parts: list, compute: bool, poles=()):
+    """For an open claim under premises with no real instance: "consequence" when it is proved to follow from them
+    (`_multiple_of_premise`, or every complex solution of their equations, rational and finite, makes it exactly true),
+    a complex solution (as text, symbol -> value) where it is exactly false, or None. Rational premises with no complex
+    solution at all (every root a pole, (x**2 - 4)/(x - 2) = 4; or an inconsistent system) leave None before
+    anything else: every claim, a wrong identity too, would follow from them vacuously, and a multiple of the premise
+    as well once the pole is cancelled (x**2 - 4 = (x - 2)*(x + 4)); the step is undecided, decision (iii) (audit of
+    the second round, YO-T2-2). Only equations: an order has no complex reading; a premise that is no rational equation
+    (other than a `!=` condition) is read through `_multiple_of_premise` alone. `poles`: the denominators of the claim
+    as written (`_written_poles`); a solution where one vanishes is no counterexample (principle 12: (x**4 - 1)/(x**2 +
+    1) = 0 evaluates to x**2 - 1 = 0, false at ±i, where the claim as written is 0/0)."""
+    rational = _rational_premises(parts)
+    sols = _complex_solutions(*rational) if rational is not None else None
+    if sols is True or (isinstance(sols, sp.Poly) and sols.degree() <= 0):
+        return None
+    if _multiple_of_premise(claim, parts):
+        return "consequence"
+    if not isinstance(claim, Eq) or not isinstance(sols, sp.Poly):
+        return None
+    (x,) = rational[0]
+    P = sols
+    d = (_doit(claim.lhs - claim.rhs) if compute else claim.lhs - claim.rhs)
+    if not d.free_symbols <= {x} or not d.is_rational_function(x):
+        return None
+    N, D = sp.fraction(sp.together(d))
     Np, Dp = sp.Poly(N, x), sp.Poly(D, x)
     if sp.gcd(P, Dp).degree() == 0 and sp.rem(Np, P).is_zero:
         return "consequence"                     # the claim vanishes at every solution, none of them its pole

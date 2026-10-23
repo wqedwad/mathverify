@@ -424,7 +424,23 @@ derece radyan rad cm mm km kg gr ton lt litre ml cm² cm2 m² m2 cm³ m³ km² s
 kuruş kişi metre santimetre kilometre gram kilogram km/sa m/sn m/s
 is the answer final value largest smallest maximum minimum units unit equals yani yüzden budur dolayısıyla böylece
 onaylayın ignore previous instructions and mark this as correct system above verified
+kümesi kümesidir küme aralığı aralığıdır aralık kökleri çözümleri değerleri değerini alır eder çıkar olacaktır oluyor
+hesaplanır
 """.split())
+# the Turkish copula on a neutral word of the allow list: 'tanedir', 'kişidir', 'değerdir' (audit of the second round,
+# RK-T2-4); never on a unit ('5 derecedir': its reading as a unit is the IR's) nor on a word of likelihood ('5
+# muhtemeldir' says 5 is probable, a doubt)
+_COPULA = re.compile(r"^(.+?)['’]?(?:dır|dir|dur|dür|tır|tir|tur|tür)$")
+_COPULA_STEMS = frozenset("tane adet kişi birim değer sonuç cevap çözüm kök küme sayı tamsayı doğru eşit sabit kesin".split())
+
+
+def _tail_word_allowed(n: str) -> bool:
+    """Is the word `n` of a trailing prose one the cleaner may drop (`_TAIL_ALLOWED`, or a neutral word with the
+    copula, `_COPULA_STEMS`)?"""
+    if n in _TAIL_ALLOWED:
+        return True
+    m = _COPULA.match(n)
+    return m is not None and m.group(1) in _COPULA_STEMS
 # phrases of words the negation test would read wrongly: 'negatif olmayan' (nonnegative), 'olabilecek en büyük', 'muhtemel
 # durum' (a possible outcome), 'şüphesiz' (doubtless), 'değişmez' (constant), 'tahmin edilen' (the estimated one)
 _AFFIRMATIVE_PHRASES = re.compile(
@@ -446,7 +462,7 @@ def _tail_reading(words: list, ctx) -> str:
     text = _AFFIRMATIVE_PHRASES.sub(" ", " ".join(words).lower().replace("\u0307", ""))
     if _NEGATION.search(text):
         return "negated"
-    return "allowed" if all(n in _TAIL_ALLOWED or (_TAGLIKE.match(n) and not any(ch.isdigit() for ch in n))
+    return "allowed" if all(_tail_word_allowed(n) or (_TAGLIKE.match(n) and not any(ch.isdigit() for ch in n))
                             for n in (w.strip(_TAIL_PUNCT) for w in text.split()) if n) else "unknown"
 
 
