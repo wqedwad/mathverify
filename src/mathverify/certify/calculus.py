@@ -30,11 +30,12 @@ import sympy as sp
 from sympy import S, Eq, Ne, Interval, oo
 
 from ..equiv import _equals_false_stands, answers_equivalent
-from ..equiv.numeric import NONREAL, certified_sign, is_number_expr, num_equal, read_tolerance, to_mp, within_rel_tol
+from ..equiv.numeric import (NONREAL, certified_sign, is_number_expr, num_equal, read_tolerance, to_mp,
+                             within_tolerance)
 from ..equiv.random_point import random_point_equal
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, tolerance_window
 from .domain import (convention_null_on, definedness_conditions, written_definedness, written_undefined_in,
                      relation_holds_at, in_domain)
 from .limits import membership_conditions, membership_holds_on, neighbourhoods, written_undefined_everywhere
@@ -114,8 +115,16 @@ def definite_integral_numeric(integrand, var, a, b, timeout: float = 12.0) -> tu
         ladder.append((dps, val_s, err_s))
         ev["ladder"].append({"dps": dps, "value": val_s, "err": err_s})
         with mp.workdps(dps + 10):
-            v = mp.mpf(val_s)
-            err = abs(mp.mpf(err_s)) if err_s not in (None, "None") else mp.mpf(1)
+            try:
+                v = mp.mpf(val_s)
+                err = abs(mp.mpf(err_s)) if err_s not in (None, "None") else mp.mpf(1)
+            except (TypeError, ValueError):
+                # a complex or unreadable value (√cos x near an end π/2 rounded past it: '(0.666… + 4e-78j)') is
+                # no value of the real integral: the ladder did not converge, and the certificate decides; it raised
+                # here, and the certificate that proves 2/3 was never tried (son saldırı G2RK-7)
+                ev["error"] = "nonreal_or_unreadable_value"
+                ev["converged"] = False
+                return None, ev
             scale = max(abs(v), mp.mpf(1))
             if prev is not None:
                 pv, perr, pdps = prev
@@ -159,9 +168,15 @@ def _exact_conditions(e, var) -> list | None:
     SymPy's x**(1/3) is complex for x < 0, and no condition said so. The odd-root convention of such a power
     (`Contains(b, Convention(odd_root))`: the real root or the principal value at b < 0) is met by that rule
     for that very base: on b >= 0 the two readings are one value. It had made every certificate with t**(1/3)
-    fail, ∫_0^∞ e^(-t^(1/3)) dt = 6 among them (merge of d4c round 3 with d4a, BİRLEŞİK-1)."""
+    fail, ∫_0^∞ e^(-t^(1/3)) dt = 6 among them (merge of d4c round 3 with d4a, BİRLEŞİK-1). A power whose base and
+    exponent both hold the variable (x**x) is read as real only for a base > 0: its conditions are those of
+    exp(g·log b), the one value it has there (the real-power convention, `Convention(real_power)`, is met by that
+    rule); the strict rules have none for it, and ∫_1^2 x^x (1 + ln x) dx = 3 had no certificate (son saldırı
+    G2RK-9)."""
     from .domain import Convention, definedness_conditions_strict
-    conds = definedness_conditions_strict(e, var)
+    real_powers = {node: sp.exp(node.exp * sp.log(node.base)) for node in sp.preorder_traversal(e)
+                   if isinstance(node, sp.Pow) and node.base.has(var) and node.exp.has(var)}
+    conds = definedness_conditions_strict(e.xreplace(real_powers) if real_powers else e, var)
     if conds is None:
         return None
     fractional = {node.base for node in sp.preorder_traversal(e) if isinstance(node, sp.Pow)
@@ -187,6 +202,8 @@ def _exact_conditions(e, var) -> list | None:
     for node in sp.preorder_traversal(e):
         if isinstance(node, sp.Pow) and node.base.has(var):
             ex = node.exp
+            if node in real_powers:
+                continue                              # read above: base > 0
             if not ex.is_number:
                 return None
             if ex.is_Rational and not ex.is_Integer:
@@ -220,7 +237,12 @@ def _bad_points(e, var, lo, hi, timeout) -> list | None:
 
 
 def _switch_points(e, var, lo, hi, timeout) -> list | None:
-    """Points of (lo, hi) where Abs/sign/Max/Min in `e` can change branch (finite), or None."""
+    """Points of (lo, hi) where Abs/sign/Max/Min/Piecewise in `e` can change branch (finite), or None. An argument
+    changes sign at its zeros AND where it is no real number (a pole: (x - 1)/(x + 1) at -1): sign((x - 1)/(x + 1)) on
+    [-2, 4] was cut at 1 alone, the branch -1 of (-1, 1) was carried onto (-2, -1), and the wrong 0 was certified for
+    the integral 2 (son saldırı G2YO-1). Those points are the argument's `_bad_points`; an argument that is no real
+    number on a piece of positive length, or a set not found exactly, leaves no cut list (None). A Piecewise switches
+    where a relation of its conditions turns (son saldırı G2RK-5)."""
     from ..equiv.random_point import _nonsmooth
     eqs = []
     for n in _nonsmooth(e):
@@ -229,6 +251,13 @@ def _switch_points(e, var, lo, hi, timeout) -> list | None:
         elif isinstance(n, (sp.Max, sp.Min)):
             args = list(n.args)
             eqs += [args[i] - args[j] for i in range(len(args)) for j in range(i + 1, len(args))]
+        elif isinstance(n, sp.Piecewise):
+            for _, cond in n.args:
+                for r_ in sp.preorder_traversal(cond):
+                    if isinstance(r_, sp.core.relational.Relational):
+                        eqs.append(r_.lhs - r_.rhs)
+                    elif not isinstance(r_, (sp.Expr, sp.And, sp.Or, sp.Not)) and r_ not in (sp.true, sp.false):
+                        return None                   # a condition no relation spells (Contains, ...)
         else:
             return None
     pts: list = []
@@ -238,7 +267,10 @@ def _switch_points(e, var, lo, hi, timeout) -> list | None:
         r = sb_run("mathverify.sandbox.ops:solveset_in", Eq(g, 0), var, sp.Interval.open(lo, hi), timeout=timeout)
         if not r.ok or not isinstance(r.value, (sp.FiniteSet, type(S.EmptySet))):
             return None
-        for p in r.value:
+        poles = _bad_points(g, var, lo, hi, timeout)
+        if poles is None:
+            return None
+        for p in list(r.value) + [q for q in poles if q != lo and q != hi]:
             if not (getattr(p, "is_number", False) and p.is_real):
                 return None
             if not any(p == q for q in pts):
@@ -555,10 +587,14 @@ def _raw_pair(lo, hi):
 _ENCLOSURE_SAFETY = 120.0       # seconds: past it an enclosure is abandoned (UNKNOWN), never cut short
 
 
-def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0):
+def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: float = 8.0, defined: bool = False,
+                      max_cells: int = 4000, settle: int = 0):
     """(lo, hi) mpf: an interval holding ∫_a^b f, refined until it misses `outside` or lies within
     `inside` ((lo, hi) mpf pairs) or the budget is spent; None without an enclosure (an infinite range,
-    an operation with no interval extension). The ends may be infinite (a singularity)."""
+    an operation with no interval extension). The ends may be infinite (a singularity). `defined`: the caller has
+    proved that the integrand's conditions fail on a null set of [a, b] at most (`integrand_undefined_on_a_subinterval`
+    False), so a square root's base is >= 0 almost everywhere there (`enclosure.rigorous_enclosure`). `max_cells` and
+    `settle`: the budget of cells and the rounds a finite sum may go without narrowing (`rigorous_enclosure`)."""
     from .enclosure import from_raw
     try:
         f, a, b = sp.sympify(integrand), sp.sympify(a), sp.sympify(b)
@@ -569,20 +605,21 @@ def rigorous_integral(integrand, var, a, b, outside=None, inside=None, timeout: 
     # the budget is the number of cells (deterministic); the time is only a safety stop (RK-C)
     r = sb_run("mathverify.certify.enclosure:rigorous_enclosure", f, var, a, b,
                _raw_pair(*outside) if outside else None, _raw_pair(*inside) if inside else None,
-               4000, _ENCLOSURE_SAFETY, timeout=_ENCLOSURE_SAFETY + 10)
+               max_cells, _ENCLOSURE_SAFETY, defined, settle, timeout=_ENCLOSURE_SAFETY + 10)
     if not r.ok or r.value is None:
         return None
     return from_raw(r.value[0]), from_raw(r.value[1])
 
 
-def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0) -> tuple[bool, dict[str, Any]]:
+def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0, defined: bool = False
+                      ) -> tuple[bool, dict[str, Any]]:
     """Is the claimed number certainly not ∫_a^b f (outside a rigorous enclosure)?"""
     ev: dict[str, Any] = {}
     c = claim_interval(claimed)
     if c is None:
         ev["claim_interval"] = None
         return False, ev
-    enc = rigorous_integral(integrand, var, a, b, outside=c, timeout=timeout)
+    enc = rigorous_integral(integrand, var, a, b, outside=c, timeout=timeout, defined=defined)
     ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
     if enc is None:
         return False, ev
@@ -590,7 +627,7 @@ def integral_excludes(integrand, var, a, b, claimed, timeout: float = 8.0) -> tu
     return bool(hi < c[0] or lo > c[1]), ev
 
 
-def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: float = 8.0
+def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: float = 8.0, defined: bool = False
                            ) -> tuple[bool | None, dict[str, Any]]:
     """The declared relative tolerance decided over a rigorous enclosure E of the integral: |c - v| <= t·|v|
     for every v in E (True), for none (False), or undecided (None; also when E holds 0, where a relative
@@ -601,7 +638,7 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     c = claim_interval(claimed)
     if c is not None and not (mp.isfinite(c[0]) and mp.isfinite(c[1])):
         # an infinite claim: any finite enclosure refutes it (SG-1)
-        no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=timeout)
+        no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=timeout, defined=defined)
         ev.update(xev)
         return (False if no else None), ev
     if c is None:
@@ -613,7 +650,8 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
             t_ = sp.Rational(rel_tol)
             with mp.workdps(30):
                 far = abs(to_mp(im_c, 30)) * (1 - mp.mpf(10) ** -10) / mp.mpf(t_.p) * t_.q
-            enc = rigorous_integral(integrand, var, a, b, outside=(-far, far), inside=(-far, far), timeout=timeout)
+            enc = rigorous_integral(integrand, var, a, b, outside=(-far, far), inside=(-far, far), timeout=timeout,
+                                    defined=defined)
             ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
             if enc is not None and mp.isfinite(enc[0]) and mp.isfinite(enc[1]):
                 B = max(_mpf_rational(abs(enc[0])), _mpf_rational(abs(enc[1])))
@@ -637,7 +675,7 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     finally:
         iv.dps = saved
     enc = rigorous_integral(integrand, var, a, b, outside=outside, inside=inside if inside[0] <= inside[1] else None,
-                            timeout=timeout)
+                            timeout=timeout, defined=defined)
     ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
     ev["values_within_tolerance"] = [mp.nstr(outside[0], 15), mp.nstr(outside[1], 15)]
     if enc is None:
@@ -651,6 +689,205 @@ def tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout: floa
     if hi < outside[0] or lo > outside[1]:
         return False, ev
     return None, ev
+
+
+def abs_tolerance_by_enclosure(integrand, var, a, b, claimed, abs_tol, timeout: float = 8.0, defined: bool = False
+                               ) -> tuple[bool | None, dict[str, Any]]:
+    """A declared absolute tolerance T decided over a rigorous enclosure E of the integral: |c - v| <= T for every v
+    in E (True), for none (False), or undecided (None). The windows are computed with interval arithmetic over the
+    claim's own interval: every v in [c_hi - T, c_lo + T] is within T of every c, no v outside [c_lo - T, c_hi + T]
+    is within T of any (son saldırı G2YO-4: a declared abs_tol of a definite integral was not read at all)."""
+    ev: dict[str, Any] = {}
+    c = claim_interval(claimed)
+    if c is not None and not (mp.isfinite(c[0]) and mp.isfinite(c[1])):
+        no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=timeout, defined=defined)
+        ev.update(xev)
+        return (False if no else None), ev
+    if c is None:
+        ev["reason"] = "claim_not_a_real_number"
+        return None, ev
+    iv, saved = mp.iv, mp.iv.dps
+    try:
+        iv.dps = 60
+        with mp.workdps(60):
+            C = iv.mpf([c[0], c[1]])
+            t_ = sp.Rational(abs_tol)
+            T = iv.mpf(int(t_.p)) / int(t_.q)
+            down, up = C - T, C + T
+            inside = (mp.make_mpf(down._mpi_[1]), mp.make_mpf(up._mpi_[0]))
+            outside = (mp.make_mpf(down._mpi_[0]), mp.make_mpf(up._mpi_[1]))
+    finally:
+        iv.dps = saved
+    enc = rigorous_integral(integrand, var, a, b, outside=outside, inside=inside if inside[0] <= inside[1] else None,
+                            timeout=timeout, defined=defined)
+    ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+    ev["values_within_tolerance"] = [mp.nstr(outside[0], 15), mp.nstr(outside[1], 15)]
+    if enc is None:
+        return None, ev
+    lo, hi = enc
+    if inside[0] <= lo and hi <= inside[1]:
+        return True, ev
+    if hi < outside[0] or lo > outside[1]:
+        return False, ev
+    return None, ev
+
+
+def declared_tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, abs_tol, timeout: float = 8.0,
+                                    defined: bool = False) -> tuple[bool | None, dict[str, Any]]:
+    """The declared tolerances over a rigorous enclosure: one holding is enough (`numeric.within_tolerance`)."""
+    if abs_tol is None:
+        return tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout=timeout, defined=defined)
+    ok, ev = abs_tolerance_by_enclosure(integrand, var, a, b, claimed, abs_tol, timeout=timeout, defined=defined)
+    if ok is True or rel_tol is None:
+        return ok, {"absolute": ev}
+    okr, evr = tolerance_by_enclosure(integrand, var, a, b, claimed, rel_tol, timeout=timeout, defined=defined)
+    both = {"absolute": ev, "relative": evr}
+    if okr is True:
+        return True, both
+    return (False if ok is False and okr is False else None), both
+
+
+# the largest relative error estimate (of max(1, |v|)) of a rung read as a value: by a settled ladder (son denetim
+# SI-YO-3: 10^-10, mpmath's failed 0.0 for ∫_{-1}^{1} dx/x carries 2.0) and by the last rung against a half-infinite
+# enclosure (SI-YO-2: measured at 80 digits, 1.0e-10 at most for the true values of ∫ |x - c|^p, p >= -9/10, 5e-6 at
+# p = -19/20; 1.8e-4 to 5e-3 for the divergent ∫_0^1 dx/x, ∫_0^{1/2} dx/(x|ln x|), ∫_{1/2}^1 dx/(1 - x). ∫_0^1 dx/x²
+# is 2e84 there with an estimate of 1.0: the margin below keeps every finite value away from it)
+_LADDER_ERR = mp.mpf("1e-10")
+_RUNG_ERR = mp.mpf("1e-8")
+# the last rung's error estimates fall short of its true error: 2.3 times for ∫_0^2 |x - 1|^(-2/3) dx = 6, 38 times for
+# ∫_{-1}^{2} |x|^(-9/10) dx (measured at 80 digits); the margin around it is this many estimates (at least 10)
+_RUNG_MARGIN = 100
+
+
+def _small_error(rung, bound=_LADDER_ERR) -> bool:
+    """Is a rung's own error estimate at most `bound` of max(1, |v|)? mpmath's quad returns 0.0 with an error
+    estimate of 2.0 for ∫_{-1}^{1} dx/x at every precision: a failure, not a value (son denetim SI-YO-3)."""
+    v, e = mp.mpf(rung["value"]), rung.get("err")
+    return e not in (None, "None") and abs(mp.mpf(e)) <= bound * max(abs(v), 1)
+
+
+def _stable_ladder_holds(ladder, c) -> bool:
+    """Do the last two rungs of a ladder that did not converge by its error estimates agree to 10^-20 (relative to
+    max(1, |v|)), with error estimates of their own at most 10^-10 of it (`_small_error`), and does the interval `c` of
+    a certified value meet [v - r, v + r] around the last value v, r ten times their difference plus the rounding of
+    the last printed value?"""
+    if len(ladder) < 2:
+        return False
+    try:
+        with mp.workdps(100):
+            if not (_small_error(ladder[-2]) and _small_error(ladder[-1])):
+                return False
+            v1, v2 = mp.mpf(ladder[-2]["value"]), mp.mpf(ladder[-1]["value"])
+            scale = max(abs(v2), 1)
+            spread = abs(v2 - v1)
+            if not spread <= mp.mpf(10) ** -20 * scale:
+                return False
+            r = 10 * spread + mp.mpf(10) ** (-(int(ladder[-1]["dps"]) - 5)) * scale
+            return bool(c[0] <= v2 + r and c[1] >= v2 - r)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _near_last_rung(ladder, c) -> bool:
+    """Does the interval `c` of a certified value meet [v - r, v + r] around the last rung's value v, r `_RUNG_MARGIN`
+    times its error estimate plus the rounding of its printed value, with that estimate at most `_RUNG_ERR` of
+    max(1, |v|)? ∫_0^2 |x - 1|^(-2/3) dx = 6 is 6 - 4.6e-28 at 80 digits with an estimate of 2e-28; ∫_0^1 dx/x is 79,
+    125 and 194 with estimates of 1.0."""
+    if not ladder:
+        return False
+    try:
+        with mp.workdps(100):
+            last = ladder[-1]
+            if not _small_error(last, _RUNG_ERR):
+                return False
+            v = mp.mpf(last["value"])
+            r = _RUNG_MARGIN * abs(mp.mpf(last["err"])) + mp.mpf(10) ** (-(int(last["dps"]) - 5)) * max(abs(v), 1)
+            return bool(c[0] <= v + r and c[1] >= v - r)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+# the enclosure of a certificate without converged numbers: its budget of cells and the rounds a finite sum holding the
+# value may go without narrowing (`rigorous_enclosure`'s `settle`). 4000 cells and no settling spent 4 to 30 s on fast
+# oscillations (cos² 1000πx on [0, 1]) and changed no decision (son denetim SON-INT-RK-2)
+_CHECK_BUDGET = (500, 8)
+
+
+def _certificate_check(integrand, var, a, b, cval, val, nev: dict, timeout: float, defined: bool = False
+                       ) -> tuple[str, dict[str, Any]]:
+    """Is the certificate's value `cval` taken? 'agrees', 'disagreement' (UNKNOWN), 'excluded' (a rigorous enclosure
+    misses it: the certificate is wrong and the claim is read against the enclosure alone) or 'unconfirmed'.
+
+    With a converged quadrature value v: they agree within its own error (an absolute one when cval is 0: a relative
+    comparison with 0 means nothing, and the check was skipped there, so the wrong 0 for ∫_{-2}^{4} sgn((x - 1)/(x +
+    1)) dx stood against v = 2.0; son saldırı G2YO-1), or an enclosure shows v wrong (a peak the quadrature missed: the
+    proof stands); otherwise an enclosure that misses cval refutes the certificate, and nothing else decides.
+    Without one (no convergence: a divergent integral, a complex value at an end), cval is taken only inside a
+    rigorous enclosure that says something, refined until it misses cval or lies within 10^-6 of it: the wrong
+    -log 2 - 15/32 for the divergent ∫_{-2}^{1/4} max(x, 1/x) dx stood alone (G2YO-2). A finite one says something; a
+    half-infinite one only with the ladder's last rung near cval (`_near_last_rung`, SI-YO-2); (-oo, oo) nothing."""
+    ev: dict[str, Any] = {}
+    c = claim_interval(cval)
+    converged = val is not None and bool(nev.get("converged", False))
+    if converged:
+        rel_err = mp.mpf(str(nev.get("rel_err", "1e-25")))
+        if certified_sign(cval, timeout=timeout) == 0:
+            with mp.workdps(60):
+                v = mp.mpf(str(val))
+                differ = abs(v) > rel_err * max(abs(v), 1)
+            ev["zero_against"] = mp.nstr(v, 15)
+        else:
+            differ = num_equal(cval, val, rel_tol=float(rel_err))[0] is False
+        if not differ:
+            return "agrees", ev
+        cv = claim_interval(val)
+        enc = rigorous_integral(integrand, var, a, b, outside=cv, timeout=timeout, defined=defined) \
+            if cv is not None else None
+        ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+        if enc is not None and (enc[1] < cv[0] or enc[0] > cv[1]):
+            ev["numeric_value"] = "outside_the_enclosure"
+            return "agrees", ev
+        if enc is not None and c is not None and (enc[1] < c[0] or enc[0] > c[1]):
+            return "excluded", ev
+        return "disagreement", ev
+    if not nev.get("ladder") and not (sp.sympify(a).is_finite and sp.sympify(b).is_finite):
+        # an infinite range has no quadrature at all (the ladder does not run there) and no enclosure: the fundamental
+        # theorem with its end limits decides as before (d4c, 6 Oct 2026: the coverage given back); the rule above is
+        # for a ladder that ran and did not converge
+        ev["unchecked"] = "infinite_range_has_no_numbers"
+        return "agrees", ev
+    if c is None:
+        ev["reason"] = "certified_value_has_no_interval"
+        return "unconfirmed", ev
+    if _stable_ladder_holds(nev.get("ladder") or [], c):
+        # the ladder's own test failed on its error estimates, not on its values: they settle to 10^-20 and the
+        # certificate's value lies within their last step (∫_{-1}^{8} x^(-1/3) dx = 9/2, an interior singularity the
+        # error estimates misjudge and no enclosure bounds); a divergent integral's values do not settle (77.8, 123.8,
+        # 193.0 for max(x, 1/x) on [-2, 1/4])
+        ev["stable_ladder"] = True
+        return "agrees", ev
+    with mp.workdps(60):
+        w = mp.mpf(10) ** -6 * (1 + max(abs(c[0]), abs(c[1])))
+        inside = (c[0] - w, c[1] + w)
+    cells, settle = _CHECK_BUDGET
+    enc = rigorous_integral(integrand, var, a, b, outside=c, inside=inside, timeout=timeout, defined=defined,
+                            max_cells=cells, settle=settle)
+    ev["enclosure"] = None if enc is None else [mp.nstr(enc[0], 15), mp.nstr(enc[1], 15)]
+    if enc is None or not (mp.isfinite(enc[0]) or mp.isfinite(enc[1])):
+        ev["reason"] = "no_converged_value_and_no_enclosure"
+        return "unconfirmed", ev
+    if enc[1] < c[0] or enc[0] > c[1]:
+        return "excluded", ev
+    if not (mp.isfinite(enc[0]) and mp.isfinite(enc[1])):
+        # a half-infinite enclosure (L, oo) holds every number past L, a divergent integral's planted 10^6 for
+        # ∫_0^1 dx/x among them (son denetim SI-YO-2): cval is taken only near the last rung of the ladder, whose own
+        # error estimate is small (∫_0^2 |x - 1|^(-2/3) dx = 6, enclosed in (4.85, oo))
+        if _near_last_rung(nev.get("ladder") or [], c):
+            ev["near_last_rung"] = True
+            return "agrees", ev
+        ev["reason"] = "half_infinite_enclosure_and_no_close_rung"
+        return "unconfirmed", ev
+    return "agrees", ev
 
 
 def _imaginary_part(claimed):
@@ -774,6 +1011,8 @@ def _integrand_region(cf, var, discourse, timeout):
     found (a relation SymPy reads on one period only is solved by `sandbox.exactsets`)."""
     region = discourse
     for cc in cf:
+        if isinstance(cc, sp.Contains) and _contains_met_on(cc, var, discourse):
+            continue                    # a convention that cannot fail on the region (x**(1/3), x > 0: son saldırı G2RK-4)
         rr = sb_run("mathverify.sandbox.ops:solveset_in", cc, var, discourse, timeout=timeout)
         if not rr.ok or not isinstance(rr.value, sp.Set) or rr.value.has(sp.ConditionSet):
             return None
@@ -889,6 +1128,79 @@ def _one_constant(F, f, var, region, timeout) -> tuple[bool | None, dict[str, An
     return None, ev
 
 
+def _contains_met_on(c, var, region) -> bool:
+    """Can the convention or membership condition `c` (a Contains) fail nowhere on `region`, for certain? A convention
+    (`domain.Convention`): the set where it may fail (`domain._MAY_FAIL`: a negative base of an odd root, ...) is
+    exactly empty there; a membership: `limits.membership_holds_on`."""
+    from ..sandbox.exactsets import exact_solveset
+    from .domain import _MAY_FAIL, Convention
+    st = c.args[1] if len(c.args) == 2 else None
+    if isinstance(st, Convention):
+        fails = _MAY_FAIL.get(st.kind)
+        if fails is None:
+            return False
+        try:
+            return exact_solveset(fails(c.args[0]), var, region) is S.EmptySet
+        except Exception:  # noqa: BLE001 - a set not found exactly proves nothing
+            return False
+    return membership_holds_on(c, var, [region])
+
+
+def _sign_jump_at(F, s_, var, z) -> bool | None:
+    """Does F jump at z, a zero of the argument of its sign(u) `s_`? Near z, on either side, F is F with sign(u) put
+    to +1 or to -1 (continuous at z when no other sign of F vanishes there), and F(z) itself carries sign(0) = 0. True
+    when both those values differ from F(z), whichever side is which; False when the three are one number; None
+    otherwise. The real cube root is sign(u)·|u|^(1/3) (normalize.parse), so (3/4)·x·∛x, which is (3/4)|x|^(4/3) and
+    continuous, carried a sign(x) and every such primitive was refuted at 0 (son saldırı G2RK-1)."""
+    from ..equiv.numeric import exact_equal
+    for t_ in F.atoms(sp.sign):
+        if t_ != s_ and t_.args[0].has(var) and certified_sign(t_.args[0].subs(var, z)) not in (1, -1):
+            return None
+    vals = []
+    for e in (F.xreplace({s_: S.One}), F.xreplace({s_: S.NegativeOne}), F):
+        try:
+            v = e.subs(var, z)
+        except Exception:  # noqa: BLE001
+            return None
+        if _real_finite(v) is not True:
+            return None
+        vals.append(v)
+    up, down = exact_equal(vals[0], vals[2]), exact_equal(vals[1], vals[2])
+    if up is True and down is True:
+        return False
+    if up is False and down is False:
+        return True
+    return None
+
+
+def _sign_jumps(F, s_, f, cf, var, discourse, timeout) -> tuple[bool | None, Any]:
+    """(jump, point) for the sign(u) `s_` of F at the zeros of u in `discourse` where f is defined: True with a point
+    where F certainly jumps, False when it jumps at none (a finite set of zeros, each read by `_sign_jump_at`), None
+    when undecided (an infinite set of zeros with no jump found is undecided too)."""
+    u = s_.args[0]
+    r = sb_run("mathverify.sandbox.ops:solveset_in", Eq(u, 0), var, discourse, timeout=timeout)
+    if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+        return None, None
+    zs = r.value
+    if zs is S.EmptySet:
+        return False, None
+    finite = isinstance(zs, sp.FiniteSet)
+    for z in (list(zs) if finite else _points_of(zs)):
+        if not (getattr(z, "is_number", False) and z.is_real is True):
+            if finite:
+                return None, z
+            continue
+        here = _defined_at(f, cf, var, z)
+        if here is False:
+            continue                                    # f has no value there: F owes it nothing
+        j = _sign_jump_at(F, s_, var, z) if here is True else None
+        if j is True:
+            return True, z
+        if j is None and finite:
+            return None, z
+    return (False, None) if finite else (None, None)
+
+
 def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extra=(),
                                 timeout: float = 8.0) -> tuple[bool | None, dict[str, Any]]:
     """F' = f is not enough: F must be real and continuous at every point where f is defined.
@@ -922,14 +1234,21 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
                     return False, ev
         ev["reason"] = "antiderivative_condition_undecided"
         return None, ev
-    for s_ in F.atoms(sp.sign):                   # sign(u) jumps where u changes sign
-        if s_.args[0].has(var):
-            c = Ne(s_.args[0], 0)
-            if c not in cF:
-                cF.append(c)
+    # sign(u) of F may jump where u changes sign: read at those zeros below (`_sign_jumps`), unless F (a condition of
+    # its own) or f (no requirement there) has no value there anyway
+    signs = [s_ for s_ in F.atoms(sp.sign) if s_.args[0].has(var)
+             and Ne(s_.args[0], 0) not in cF and Ne(s_.args[0], 0) not in cf]
     todo = [c for c in cF if c not in cf]
-    ev["checked_conditions"] = [str(c) for c in todo]
+    ev["checked_conditions"] = [str(c) for c in todo] + [f"no jump of {s_}" for s_ in signs]
     for c in todo:
+        if isinstance(c, sp.Contains):
+            # a convention (the odd root of 3*x**(4/3)/4, `domain.Convention`) or a membership is no relation to
+            # negate (it raised AttributeError: son saldırı G2RK-10): met when it cannot fail on the region (x > 0:
+            # no negative base), otherwise undecided
+            if _contains_met_on(c, var, discourse):
+                continue
+            ev["reason"] = f"undecided: {c} on {discourse}"
+            return None, ev
         neg = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else c.negated
         r = sb_run("mathverify.sandbox.ops:solveset_in", neg, var, discourse, timeout=timeout)
         if not r.ok or isinstance(r.value, sp.ConditionSet):
@@ -958,6 +1277,15 @@ def antiderivative_domain_check(F, f, var, discourse=S.Reals, f_extra=(), F_extr
                 return False, ev
         ev["reason"] = f"undecided: {c} on {inter}"
         return None, ev
+    for s_ in signs:
+        jump, where = _sign_jumps(F, s_, f, cf, var, discourse, timeout)
+        if jump is True:
+            ev["reason"] = "antiderivative_not_defined_or_continuous_where_integrand_is"
+            ev["witness"] = {"x": str(where), "condition": f"no jump of {s_}"}
+            return False, ev
+        if jump is None:
+            ev["reason"] = f"undecided: jump of {s_}" + (f" at {where}" if where is not None else "")
+            return None, ev
     if df is None:
         df = _integrand_region(cf, var, discourse, timeout)
     # F real where f is: a complex constant (x + I for 1, log(x) + I*pi for 1/x) is no real primitive. Its
@@ -1048,7 +1376,13 @@ def antiderivative_certificate(F, integrand, var, domain=None, timeout: float = 
             ok = None
             ev["conflict"] = "sympy_equals_false"
     if ok is True:
-        okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
+        try:
+            okd, dev = antiderivative_domain_check(F, integrand, var, discourse, f_extra, F_extra, timeout)
+        except AttributeError as e:
+            # a membership or a convention (Contains(2*x + 1, Convention(zero_power)) of (2*x + 1)**(pi + 1)) is no
+            # relation to negate: it raised out of the layer (layer_exception; son-kalkulus second round, SK-RK-7,
+            # read there by the merge's G2RK-10 rule). Undecided, never a verdict
+            okd, dev = None, {"reason": f"condition_not_read: {type(e).__name__}"}
         ev["domain_check"] = dev
         if okd is not True:
             if okd is False:
@@ -1080,15 +1414,33 @@ def _constant_not_additive(F_full, var, C, timeout) -> tuple[bool | None, dict[s
 
 
 # ---------------------------------------------------------------------------
-def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[str, Any]:
+def derivative_at_point(f, var, order: int, at, timeout: float = 8.0, lower=None) -> dict[str, Any]:
     """Is f^(order) defined at `at`, and what is it? Certificate (mean value theorem): with
     g = f^(order-1) continuous at a and differentiable around it, the one-sided derivatives of g
     at a are the one-sided limits of g'. Returns {"status": value | infinite | cusp | corner |
     discontinuous | unknown, "value": ...}. Substituting a into SymPy's derivative is NOT a
-    certificate: sign(0) = 0 made "d/dx |x| at 0 = 0" CORRECT (audit of 25 Sep 2026)."""
+    certificate: sign(0) = 0 made "d/dx |x| at 0 = 0" CORRECT (audit of 25 Sep 2026).
+
+    g(a) is f^(order-1)(a), proved: SymPy's formula for it, read at a point where f is not plainly analytic
+    (`smooth_at`), may have a value where f^(order-1) has none (Piecewise((x**2, x < 1), (x**2 + 5, x >= 1)) jumps
+    at 1, and its formula 2*x for f' made f''(1) = 2 certified and DNE refuted) or another one (the point branch's
+    0). There it is `point_derivative` of order - 1 (or `lower`, a value the caller proved), and none means none of
+    this order either (son-kalkulus second round, YO-K1's sibling)."""
     from .limits import classify_limit
     ev: dict[str, Any] = {"status": "unknown"}
     f = sp.sympify(f)
+    if order > 1 and lower is None and not _plainly_smooth(f, var, at):
+        low = point_derivative(f, var, order - 1, at, timeout=timeout)
+        ev["lower"] = {k: str(v) for k, v in low.items()}
+        if low.get("status") in ("corner", "cusp", "discontinuous", "infinite"):
+            ev["status"], ev["reason"] = "corner", "no_lower_derivative"
+            return ev
+        if low.get("status") != "value":
+            ev["reason"] = "lower_derivative_undecided"
+            return ev
+        lower = low["value"]
+    if lower is not None:
+        ev["lower_value"] = lower
     if order > 1:
         r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order - 1, timeout=timeout)
         if not r.ok:
@@ -1101,7 +1453,8 @@ def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[st
         return ev
     gp = classical(r.value)
     ev["derivative"] = str(gp)
-    rg = sb_run("mathverify.sandbox.ops:simplify_diff", g.subs(var, at), 0, timeout=timeout)
+    rg = sb_run("mathverify.sandbox.ops:simplify_diff", g.subs(var, at) if lower is None else lower, 0,
+                timeout=timeout)
     if not rg.ok or _real_finite(rg.value) is not True:
         ev["reason"] = "lower_derivative_not_a_real_number_at_point"
         return ev
@@ -1139,7 +1492,51 @@ def derivative_at_point(f, var, order: int, at, timeout: float = 8.0) -> dict[st
     return ev
 
 
-_KINK_POINTS = 8          # the zeros of a switch of f classified one by one
+def _plainly_smooth(f, var, at) -> bool:
+    """Is f analytic at the number `at` (`smooth_at` with f's own switches and written conditions)? Then SymPy's
+    derivative formulas have the derivatives' values there."""
+    try:
+        at = sp.sympify(at)
+        return smooth_at(f, var, at, switch_arguments(abs_form(f), var), definedness_conditions(f, var))
+    except Exception:  # noqa: BLE001 - not proved
+        return False
+
+
+def point_derivative(f, var, order: int, at, timeout: float = 8.0) -> dict[str, Any]:
+    """`derivative_at_point`, and at a switch point of a Piecewise first the exact `_piecewise_rule`: SymPy's one-sided
+    limits of a Piecewise there read the wrong branch, and the corner of the piecewise |x| at 0 was left undecided by
+    the derivative task, its tangent and a step (SON-G3-YO-1). The rule gives a value too, the sides' one derivative
+    (a C1 junction, or a point branch that fills the sides' value: son-kalkulus second round, YO-K1). Of a higher
+    order the rule reads f^(order-1), SymPy's formula with its proved value at `at` (`derivative_at_point`'s
+    `lower_value`): the formula's own value there is no derivative's (the point branch's 0)."""
+    try:
+        pw = sp.sympify(f).has(sp.Piecewise)
+    except Exception:  # noqa: BLE001
+        pw = False
+    if pw and order == 1:
+        slope: dict = {}
+        st = _piecewise_rule(f, var, at, slope)
+        if st == "corner":
+            return {"status": "corner", "rule": "piecewise_rule"}
+        if st == "value" and "value" in slope:
+            return {"status": "value", "value": slope["value"], "rule": "piecewise_rule"}
+    dap = derivative_at_point(f, var, order, at, timeout=timeout)
+    if dap.get("status") == "unknown" and order > 1 and pw and "lower_value" in dap:
+        try:
+            r = sb_run("mathverify.sandbox.ops:diff_expr", f, var, order - 1, timeout=timeout)
+            g = sp.Piecewise((dap["lower_value"], sp.Eq(var, at)), (classical(r.value), True)) if r.ok else None
+        except Exception:  # noqa: BLE001
+            g = None
+        slope = {}
+        st = _piecewise_rule(g, var, at, slope) if g is not None else None
+        if st == "corner":
+            dap = dict(dap, status="corner", rule="piecewise_rule")
+        elif st == "value" and "value" in slope:
+            dap = dict(dap, status="value", value=slope["value"], rule="piecewise_rule")
+    return dap
+
+
+_KINK_POINTS = 8         # the zeros of a switch of f classified one by one
 _KINK_BUDGET = 3          # `derivative_at_point` calls per reading, whatever the number of kinks (round 3, RK-5)
 # analytic on the interior of the domain their written conditions give (acosh, atanh, acot have none: never read)
 _SMOOTH = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc, sp.asin, sp.acos, sp.atan, sp.sinh, sp.cosh, sp.tanh,
@@ -1251,14 +1648,30 @@ def smooth_at(f, var, p, switches, fconds, root_of=None) -> bool:
     return all(strict_at(c, var, p) for c in fconds if getattr(c, "free_symbols", None))
 
 
-def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
+def _put_slope(out: dict | None, h, var, p, term_slope=S.Zero) -> None:
+    """f'(p) = h'(p) + the switch term's slope, exactly, into `out` ("value") when it is a real number: a rule that
+    proves f has a derivative at p gives its value too (`_classify_kink` keeps it). SymPy's formula may have another
+    value there: the point branch of a Piecewise is differentiated as a constant (Piecewise((x**3, Ne(x, 2)), (8,
+    True)) has the formula's 0 at 2, f'(2) = 12), sign(0) = 0 makes (|x|*sign(x))' read 0 at 0 (it is 1), and the
+    wrong 0 was certified while the right value was refuted (son-kalkulus second round, YO-K1, YO-K2, SK-RK-3)."""
+    if out is None:
+        return
+    try:
+        v = sp.simplify(sp.diff(h, var).subs(var, p) + term_slope)
+        if _real_finite(v) is True:
+            out["value"] = v
+    except Exception:  # noqa: BLE001 - the status alone
+        pass
+
+
+def _linear_switch_rule(fa, var, p, u, switches, fconds, out: dict | None = None) -> str | None:
     """f = h + g*S**r near p for the one switch S = |u|, sign(u) or Heaviside(u) at p (f read with `abs_form`), r a
     positive rational (1 for sign and Heaviside), g, h and u analytic at p (`smooth_at`; p is a zero of u by its
     solution). |u|**r with r > 1, and g*|u| with g(p) = 0, add nothing to h'(p): f has a derivative. With g(p) != 0
     and u'(p) != 0 (a simple zero) |u| makes a corner (one-sided derivatives h'(p) ± g(p)*|u'(p)|), |u|**r with
     r < 1 an infinite slope, sign(u) and Heaviside(u) a jump: none. Exact, no limit taken: |log x| at 1 was
-    undecided by SymPy's one-sided limits (round 3, RK-1), and 7 radical kinks took 186 s (RK-5). None when the
-    rule does not apply or decides nothing."""
+    undecided by SymPy's one-sided limits (round 3, RK-1), and 7 radical kinks took 186 s (RK-5). With 'value',
+    f'(p) = h'(p) goes to `out` (`_put_slope`). None when the rule does not apply or decides nothing."""
     others = [v for v in switches if v != u]
     if any(_nonzero_at(v, var, p, root_of=u) is not True for v in others):
         return None
@@ -1277,22 +1690,167 @@ def _linear_switch_rule(fa, var, p, u, switches, fconds) -> str | None:
     if not all(smooth_at(e, var, p, others, fconds, root_of=u) for e in (g, h, u)):
         return None
     if isinstance(A, sp.Abs) and r > 1:
+        _put_slope(out, h, var, p)
         return "value"
     gp = _nonzero_at(g, var, p, root_of=u)
     if gp is False:
-        return "value" if isinstance(A, sp.Abs) and r == 1 else None
+        if isinstance(A, sp.Abs) and r == 1:
+            _put_slope(out, h, var, p)            # g*|u| = O((x - p)**2)
+            return "value"
+        return None
     if gp is not True or _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
         return None
     return "corner"
 
 
+def _real_root_rule(fa, var, p, u, switches, fconds, out: dict | None = None) -> str | None:
+    """f = h + g*sign(u)**a*|u|**r at a zero p of u: a real root (cbrt(u) parses to sign(u)*|u|**(1/3), its powers to
+    sign(u)**k*|u|**(k/3)) or a power of |u|, r > 0 a number, a >= 0 an integer, g, h and u analytic at p
+    (`smooth_at`). Off p, sign(u)**a is 1 for an even a, and the term is 0 at p, so a's parity alone counts. r > 1,
+    or g(p) = 0: the term is o(x - p) (|u| <= C|x - p|), f has a derivative ('value'); r = 1 with an odd a: the term
+    is g*u ('value'); r = 1 with an even a, g(p) != 0 and u'(p) != 0: |u|'s corner; 0 < r < 1, g(p) != 0 and
+    u'(p) != 0: an infinite slope (odd a) or a cusp (even a): no derivative ('corner'). Exact, no limit taken:
+    SymPy's limits did not decide the continuity of sign(x)*|x|**(1/3) at 0, and the textbook (∛x)' = 1/(3∛x²) was
+    UNKNOWN (son saldırı G2RK-13). With 'value', f'(p) itself goes to `out` ("value"): SymPy's formula has none at p
+    (a DiracDelta, 0*oo), and (x∛x)' = 4∛x/3 was compared there by limits that decided nothing. None when the rule
+    does not apply or decides nothing."""
+    signs = [s_ for s_ in fa.atoms(sp.sign) if s_.args[0] == u]
+    absolutes = [a_ for a_ in fa.atoms(sp.Abs) if a_.args[0] == u]
+    if len(signs) > 1 or len(absolutes) != 1:
+        return None
+    others = [v for v in switches if v != u]
+    if any(_nonzero_at(v, var, p, root_of=u) is not True for v in others):
+        return None
+    Ds, Da = sp.Dummy("sign"), sp.Dummy("abs")
+    try:
+        F = fa.xreplace({**({signs[0]: Ds} if signs else {}), absolutes[0]: Da})
+        h, rest = F.as_independent(Ds, Da, as_Add=True)
+        c, a = rest.as_coeff_exponent(Ds)
+        g, r = c.as_coeff_exponent(Da)
+        if rest == 0 or g.has(Ds, Da) or sp.expand(rest - g * Ds**a * Da**r) != 0:
+            return None
+    except Exception:  # noqa: BLE001 - not of this form
+        return None
+    if not (a.is_Integer and a >= 0 and r.is_number and r.is_extended_positive is True):
+        return None
+    if not all(smooth_at(e, var, p, others, fconds, root_of=u) for e in (g, h, u)):
+        return None
+
+    def value(term_slope=S.Zero):
+        # f'(p) = h'(p) + the term's: 0 when the term is o(x - p), g(p)*u'(p) for g*u (r = 1, odd a)
+        _put_slope(out, h, var, p, term_slope)
+        return "value"
+    if certified_sign(r - 1) == 1:
+        return value()
+    gp = _nonzero_at(g, var, p, root_of=u)
+    if gp is False:
+        return value()
+    if r == 1 and a % 2 == 1:
+        return value(g.subs(var, p) * sp.diff(u, var).subs(var, p))
+    if gp is not True or _nonzero_at(sp.diff(u, var), var, p, root_of=u) is not True:
+        return None
+    return "corner" if r == 1 or certified_sign(1 - r) == 1 else None
+
+
+def _piecewise_rule(f, var, p, out: dict | None = None) -> str | None:
+    """f (folded into one Piecewise in `var` alone) at a number p where its branch may change: the branch taken on
+    each side of p and at p, read from the exact sets SymPy solves the conditions to (`as_expr_set_pairs`) at a
+    point of each side nearer to p than any other end of those sets, each branch analytic at p (`smooth_at`). f has
+    a derivative at p exactly when the three branches have one value there and the two sides one derivative
+    ('value', a C1 junction); a difference proved nonzero is a jump or a corner ('corner'); None otherwise. Exact,
+    no limit taken: SymPy's one-sided limit of a Piecewise at its switch point takes the branch of the wrong side
+    (Piecewise((-1, x < 0), (1, True)) from the left of 0 is 1), so `derivative_at_point` left the corner of the
+    piecewise |x| undecided (SON-G3-YO-1). A side's branch that is a rational function is read cancelled: on the side
+    (p excluded) (x**2 - 1)/(x - 1) is x + 1, the textbook removable point filled by its own branch. With 'value',
+    f'(p) (the sides' one derivative) goes to `out` ("value"): SymPy differentiates the point branch of
+    Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1)) as a constant, and its 0 at 1 was certified for f'(1)
+    while the right 2 was refuted (son-kalkulus second round, YO-K1)."""
+    if not getattr(p, "is_number", False) or getattr(p, "is_real", None) is not True or p.free_symbols:
+        return None
+    try:
+        g = sp.piecewise_fold(f)
+        if not isinstance(g, sp.Piecewise) or g.free_symbols != {var}:
+            return None
+        pairs = g.as_expr_set_pairs()
+        ends: list = []
+        for _, set_ in pairs:
+            b = set_.boundary
+            if not isinstance(b, sp.FiniteSet) and b is not S.EmptySet:
+                return None
+            ends += [q for q in b if q.is_finite is True and q not in ends]
+        near = {-1: None, 1: None}
+        for q in ends:
+            side = certified_sign(q - p)
+            if side not in (-1, 0, 1):
+                return None
+            if side == 0:
+                continue
+            best = near[side]
+            if best is None:
+                near[side] = q
+                continue
+            closer = certified_sign((q - best) * side)
+            if closer not in (-1, 0, 1):
+                return None
+            if closer == -1:
+                near[side] = q
+        probes = [p - 1 if near[-1] is None else (p + near[-1]) / 2, p,
+                  p + 1 if near[1] is None else (p + near[1]) / 2]
+        branches = []
+        for q in probes:
+            taken = []
+            for e, set_ in pairs:
+                inside = set_.contains(q)
+                if inside not in (sp.true, sp.false):
+                    return None
+                if inside is sp.true:
+                    taken.append(e)
+            if len(taken) != 1:
+                return None                       # no branch at p: f has no value there (its own conditions)
+            branches.append(taken[0])
+        # a side's branch is taken off p alone: a rational one is read cancelled there (x + 1 for (x**2 - 1)/(x - 1));
+        # its other poles are isolated, so near p it is defined off p and equal to the cancelled form
+        branches = [sp.cancel(e) if i != 1 and var in e.free_symbols and e.is_rational_function(var) else e
+                    for i, e in enumerate(branches)]
+        for e in set(branches):
+            if var in e.free_symbols and not smooth_at(e, var, p, switch_arguments(e, var),
+                                                       definedness_conditions(e, var)):
+                return None
+        left, mid, right = branches
+        jumps = [_nonzero_at(e - mid, var, p) for e in (left, right)]
+        if True in jumps:
+            return "corner"
+        if any(j is not False for j in jumps):
+            return None
+        slope = _nonzero_at(sp.diff(left, var) - sp.diff(right, var), var, p)
+        if slope is False:
+            _put_slope(out, left, var, p)
+    except Exception:  # noqa: BLE001 - a reading that fails decides nothing
+        return None
+    return "corner" if slope is True else "value" if slope is False else None
+
+
 def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, cache=None) -> str | None:
     """'value' (f has a derivative of `order` at the zero p of the switch or root base u), 'corner' (none: a corner,
     a cusp, a jump, an infinite slope) or None (undecided, or the reading's budget of `derivative_at_point` calls
-    spent). A call's result is kept in `cache` (p -> result) for `_value_holes`."""
-    st = _linear_switch_rule(fa, var, p, u, switches, fconds)
+    spent). A call's result is kept in `cache` (p -> result) for `_value_holes`. A Piecewise's switch point is read
+    by `_piecewise_rule` (exact) before any limit is taken."""
+    slope: dict = {}
+    by = "linear_switch_rule"
+    st = _linear_switch_rule(fa, var, p, u, switches, fconds, slope)
     if st is None:
-        st = _power_rule(fa, var, p, u, switches, fconds)
+        by = "power_rule"
+        st = _power_rule(fa, var, p, u, switches, fconds, slope)
+    if st is None:
+        by = "real_root_rule"
+        st = _real_root_rule(fa, var, p, u, switches, fconds, slope)
+    if st is None and f.has(sp.Piecewise):
+        by = "piecewise_rule"
+        st = _piecewise_rule(f, var, p, slope)
+    if st == "value" and order == 1 and cache is not None and p not in cache and "value" in slope:
+        # f'(p) by the rule, exactly: `_value_holes` reads it where SymPy's formula has no value (G2RK-13) or
+        # another one (the point branch's 0, sign(0) = 0: YO-K2, SK-RK-3)
+        cache[p] = {"status": "value", "value": slope["value"], "by": by}
     if order == 1 and st is not None:
         return st
     if st == "corner":
@@ -1302,11 +1860,67 @@ def _classify_kink(f, fa, var, order, p, u, switches, fconds, budget, timeout, c
     if budget[0] <= 0:
         return None
     budget[0] -= 1
-    dap = derivative_at_point(f, var, order, p, timeout=timeout)
+    # f' at p by the rule is the lower derivative of the second (`derivative_at_point` needs it, YO-K1's sibling)
+    lower = slope.get("value") if st == "value" and order == 2 else None
+    dap = derivative_at_point(f, var, order, p, timeout=timeout, lower=lower)
     if cache is not None:
         cache[p] = dap
     st = dap["status"]
     return "value" if st == "value" else "corner" if st in ("corner", "cusp", "discontinuous", "infinite") else None
+
+
+_EXACT_ROOT_DEGREE = 6     # switch arguments whose rational zeros `exact_point_slopes` reads (a factorization over QQ)
+
+
+def exact_point_slopes(f, var) -> list[tuple]:
+    """(p, f'(p)) at each rational zero p of a switch argument of f (`switch_arguments`; a polynomial with rational
+    coefficients, read by its linear factors over QQ, no solving) where an exact rule (`_linear_switch_rule`,
+    `_power_rule`, `_real_root_rule`, `_piecewise_rule`) proves f has a derivative and gives its value. In process,
+    no sandbox and no limit: the reading of a derivative's value (`normalize.parse`'s `diff`) puts these values in
+    where SymPy's formula has another one (the point branch differentiated as a constant, sign(0) = 0), and the
+    reading of its definedness checks the same values, so the two cannot disagree (son-kalkulus second round, YO-K1)."""
+    try:
+        fa = abs_form(f)
+        switches = switch_arguments(fa, var)
+    except Exception:  # noqa: BLE001
+        return []
+    if not switches:
+        return []
+    try:
+        fconds = definedness_conditions(f, var)
+    except Exception:  # noqa: BLE001
+        return []
+    out: list = []
+    seen: set = set()
+    for u in switches:
+        P = _poly(u, var)
+        if P is None or not 0 < P.degree() <= _EXACT_ROOT_DEGREE:
+            continue
+        try:
+            factors = P.factor_list()[1]
+        except Exception:  # noqa: BLE001
+            continue
+        for q, _ in factors:
+            if q.degree() != 1:
+                continue
+            p = -q.nth(0) / q.nth(1)
+            if p in seen:
+                continue
+            seen.add(p)
+            slope: dict = {}
+            try:
+                st = _linear_switch_rule(fa, var, p, u, switches, fconds, slope)
+                if st is None:
+                    st = _power_rule(fa, var, p, u, switches, fconds, slope)
+                if st is None:
+                    st = _real_root_rule(fa, var, p, u, switches, fconds, slope)
+                if st is None and f.has(sp.Piecewise):
+                    st = _piecewise_rule(f, var, p, slope)
+            except Exception:  # noqa: BLE001 - a rule that fails proves nothing
+                st = None
+            if st == "value" and "value" in slope:
+                out.append((p, slope["value"]))
+    return out
 
 
 def _generic_points(K, u=None, var=None) -> list | None:
@@ -1492,7 +2106,7 @@ def _analytic_where_defined(e, var) -> bool:
     return True
 
 
-def _power_rule(fa, var, p, u, switches, fconds) -> str | None:
+def _power_rule(fa, var, p, u, switches, fconds, out: dict | None = None) -> str | None:
     """f = h + g*u**r (`_power_form`) at a zero p of u (a number, or a family's generic point), of order 1, g and h
     analytic there, g(p) != 0: u'(p) != 0 gives an end of the domain or an infinite slope ('corner': no derivative);
     u'(p) = 0 with u''(p) != 0 makes u**r a |x - p|**(2r): a corner or a cusp for r <= 1/2, a derivative for
@@ -1518,7 +2132,11 @@ def _power_rule(fa, var, p, u, switches, fconds) -> str | None:
     if d1 is True:
         return "corner"
     if d1 is False and _zero_state(sp.diff(u, var, 2), var, p) is True:
-        return "corner" if r <= S.Half else "value"
+        if r <= S.Half:
+            return "corner"
+        if not generic:
+            _put_slope(out, h, var, p)            # g*u**r = O(|x - p|**(2r)), 2r > 1
+        return "value"
     return None
 
 
@@ -1724,7 +2342,14 @@ def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool
     `claim_where_derivative`'s. Each read spends the reading's budget (`kink_reading`: `_KINK_BUDGET` calls of
     `derivative_at_point`, each within `timeout`), a classification's own result read again for free: one call per
     hole, unbounded, let eight holes hold a verify for eight timeouts (attack on d4e round 4, D4E4-U4); spent, the
-    hole is undecided."""
+    hole is undecided.
+
+    A value the formula has there is the derivative's only when proved: equal to f'(p) as the classifying rule gave it
+    (`_classify_kink`'s cache), or, with none given, the formula analytic at p (`_plainly_smooth`: then it is the
+    limit of f' there, which is f'(p)). Else p is a hole too: the point branch's 0 of Piecewise((2*x + 1, x < 1), (3,
+    Eq(x, 1)), (x**2 + 2, x > 1)) refuted the right derivative (2 for x <= 1, 2x after) and certified the branch-wise
+    one, and sign(0) = 0 refuted (|x|*sign(x))' = 1 and certified sign(x)**2 (son-kalkulus second round, YO-K2,
+    SK-RK-3)."""
     holes, state, ev = [], True, {}
     for p_ in kr["values"]:
         try:
@@ -1733,7 +2358,13 @@ def _value_holes(f, var, order, kr, truth, claimed, timeout) -> tuple[list, bool
         except Exception:  # noqa: BLE001
             bad = True
         if not bad:
-            continue
+            known = kr["dap"].get(p_)
+            known = known.get("value") if isinstance(known, dict) and known.get("status") == "value" else None
+            if known is not None:
+                if scalar_equal(tv, known) is True:
+                    continue
+            elif _plainly_smooth(truth, var, p_):
+                continue
         holes.append(p_)
         try:
             cv = sp.sympify(claimed).subs(var, p_)
@@ -2081,6 +2712,59 @@ def _claim_condition_holds(ctx: Ctx, c, var, opens) -> bool:
     return _implied(c.xreplace(rep), [(v.xreplace(rep), k) for v, k in opens], var)
 
 
+def _claim_definedness_on_integer_bounds(ctx: Ctx, src: str, ns: dict, pins: dict | None, var) -> tuple[list, set]:
+    """`written_definedness` of the claim (or f) `src`, each integer parameter n whose region (`_parameter_region`) is the
+    integers from L on read as L + k, k a nonnegative integer Dummy (the conditions mapped back with k = n - L): with
+    n >= 2 declared, the exponent n - 2 of n*(n - 1)*x**(n - 2) is k, never negative, and x**(n - 2) needs no x != 0
+    (U5's rule reads the declaration n > 0 alone). The textbook (x**n)'' was UNKNOWN for n >= 2 (son saldırı
+    SON-G3-RK-2). The plain reading when no such parameter is read."""
+    conds, nowhere = written_definedness(src, ns, pins)
+    shift = _integer_shift(ctx, src, ns, pins, var)
+    if not shift:
+        return conds, nowhere
+    try:
+        conds2, nowhere2 = written_definedness(src, ns, {**(pins or {}), **{s_: lo + k for s_, (lo, k) in shift.items()}})
+    except Exception:  # noqa: BLE001 - as written
+        return conds, nowhere
+    back = {k: s_ - lo for s_, (lo, k) in shift.items()}
+    return [c.xreplace(back) for c in conds2], {back.get(q, q) for q in nowhere2} if nowhere2 else set(nowhere2)
+
+
+def _integer_shift(ctx: Ctx, src: str, ns: dict, pins: dict | None, var) -> dict:
+    """{n: (L, k)} for each integer parameter n named in `src` whose region (`_parameter_region`) is the integers from
+    L on, k a nonnegative integer Dummy (n = L + k)."""
+    shift: dict = {}
+    named = {v.name for v in ctx.ir.vars if re.search(rf"(?<![A-Za-z_0-9]){re.escape(v.name)}(?![A-Za-z_0-9])", src)}
+    for s_ in sorted({q for q in (ns.get(n_) for n_ in named) if isinstance(q, sp.Symbol)} - {var} - set(pins or {}),
+                     key=lambda q: q.name):
+        if getattr(s_, "is_integer", None) is not True:
+            continue
+        reg = _parameter_region(ctx, s_)
+        try:
+            lo = reg.inf if reg is not None else None
+            if lo is None or not lo.is_Integer or reg.is_subset(sp.Range(lo, oo)) is not True:
+                continue
+        except Exception:  # noqa: BLE001 - a region not read: as written
+            continue
+        shift[s_] = (lo, sp.Dummy(f"{s_.name}_from_{lo}", integer=True, nonnegative=True))
+    return shift
+
+
+def _convention_holds_on(c, var, dom) -> bool:
+    """Is the convention condition `c` on `var` alone (`domain.is_convention`) met at every point of the interior of the
+    comparison region `dom`: the points where it may fail (`domain.convention_split`, exact) miss it? With x > 0
+    declared, x**(2/3) has its one value: the claim 1/(3*x**(2/3)) for (∛x)' was undecided on its odd root's convention
+    (son saldırı G2RK-14)."""
+    from .domain import convention_split, is_convention
+    if not is_convention(c) or c.free_symbols != {var} or not isinstance(dom, sp.Set):
+        return False
+    try:
+        _, back = convention_split(c, var)
+        return sp.Intersection(back, dom.interior).is_empty is True
+    except Exception:  # noqa: BLE001 - not proved
+        return False
+
+
 def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose, kr, fconds) -> tuple[str, str]:
     """Where the claim, as written, has no value, against where f has a derivative (round 3, RK-8 and YO-3):
     'undefined' when a point of the comparison region where f has one (`_has_derivative_at`) has none of the claim:
@@ -2102,7 +2786,8 @@ def claim_where_derivative(ctx: Ctx, claim_conds, claim_nowhere, var, dom, loose
         if c in fconds:
             continue                     # f's own condition (a convention both read alike): holds where f does
         if fs - {var} or isinstance(c, sp.Contains):
-            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens)):
+            if not (_implied(c, opens, var) or _claim_condition_holds(ctx, c, var, opens)
+                    or _convention_holds_on(c, var, dom)):
                 state, why = "undecided", f"claim_condition_not_proved: {c}"
             continue
         if isinstance(c, Ne):
@@ -2354,6 +3039,60 @@ def _line_equal(claimed, truth, var, dep) -> tuple[bool | None, dict[str, Any]]:
     return (False if ok is False else None), ev
 
 
+def _tangent_as_written(ok, truth, var, dep, conds, nowhere, point) -> tuple[bool | None, dict[str, Any]]:
+    """The tangent claim read as written (principle 12; SON-G3-YO-2): a line has a value at each of its points, and
+    the claim is the line only where it has one. y = 2x - 1 + 0*log(x - 1) was certified as the tangent of x**2 at
+    1 (it is the half-line x > 1, without the point of tangency), y = (x**2 - x)/x for log at 1 (the line with a hole
+    at 0). As the derivative's claim (RK-8, `claim_where_derivative`): a condition that fails at a point of the
+    true line, the point of tangency first, makes the claim wrong; one not proved to hold on the whole line leaves it
+    undecided; a claim defined nowhere is wrong. `ok` is the comparison's verdict; a refutation stands."""
+    from .geometry import _undefined_points_on_line
+    ev: dict[str, Any] = {}
+    if nowhere & {var, dep}:
+        ev["claim_as_written"] = "defined_nowhere"
+        return False, ev
+    if not conds or ok is False:
+        return ok, ev
+    T = sp.expand(truth.lhs - truth.rhs)
+    if T.free_symbols - {var, dep} or any(getattr(c, "free_symbols", set()) - {var, dep} for c in conds):
+        ev["claim_as_written"] = "condition_on_another_symbol"
+        return (None if ok is True else ok), ev
+    try:
+        candidates = [point] + _undefined_points_on_line(T, conds, var, dep)
+    except Exception:  # noqa: BLE001 - only the point of tangency is read
+        candidates = [point]
+    for pt in candidates:
+        try:
+            on_line = sp.simplify(T.subs({var: pt[0], dep: pt[1]})) == 0
+        except Exception:  # noqa: BLE001
+            on_line = False
+        if not on_line:
+            continue
+        for c in conds:
+            try:
+                h = relation_holds_at(c.subs(dep, pt[1]), var, pt[0])
+            except Exception:  # noqa: BLE001
+                h = None
+            if h is False:
+                ev["claim_as_written"] = f"undefined_at ({pt[0]}, {pt[1]}) of the true line: {c}"
+                return False, ev
+    # every condition proved to hold along the whole line (its points (t, y(t)), or (a, t) when it is x = a)
+    t = sp.Dummy("t", real=True)
+    try:
+        a, b = T.coeff(var, 1), T.coeff(dep, 1)
+        c0 = T.subs({var: 0, dep: 0})
+        X, Y = (t, -(a * t + c0) / b) if b != 0 else (-c0 / a, t)
+        for c in conds:
+            st = Ctx.condition_set(c.subs({var: X, dep: Y}), t)
+            if st is None or st != S.Reals:
+                ev["claim_as_written"] = f"condition_not_proved_on_the_line: {c}"
+                return (None if ok is True else ok), ev
+    except Exception:  # noqa: BLE001 - not proved
+        ev["claim_as_written"] = "conditions_not_read_on_the_line"
+        return (None if ok is True else ok), ev
+    return ok, ev
+
+
 _TRAILING_C = re.compile(r"\s*\+\s*[Cc]\s*$")
 
 
@@ -2371,10 +3110,52 @@ def _unreadable_task_expression(src, expr, var, ns, ms, regions=(), pins=None):
                        flags=["expression_undefined_as_written"])
     members = [c for c in membership_conditions(src, expr, var, ns, pins) if not membership_holds_on(c, var, regions)
                and not any(convention_null_on(c, var, r) for r in regions)]
+    if members and not regions:
+        # no point and no range (a derivative function, an antiderivative): a convention that fails at finitely many
+        # points, each an end of f's written domain, is never read (son saldırı SON-G3-RK-1)
+        members = [c for c in members if not _convention_at_domain_ends(c, var, src, ns, pins)]
     if members:
         return unknown(LAYER, "membership_condition_on_variable", ms, {"conditions": [str(c) for c in members]},
                        flags=["membership_condition"])
     return None
+
+
+def _declared_regions(ctx: Ctx, var) -> list:
+    """[the variable's declared region] (`Ctx.domain_for`) when it is narrower than ℝ, for a task with no point and no
+    range (an antiderivative, a derivative function): the convention gate read no region there, and under the
+    constraint x > 0 every variable-base power (x**x, x**pi, x**(1/3)) was UNKNOWN, although no base is negative or 0
+    there (son saldırı G2RK-3, G2RK-4). On all of ℝ nothing changes: [] as before."""
+    try:
+        region = ctx.domain_for(var)
+    except Exception:  # noqa: BLE001 - no region read: none given
+        return []
+    return [] if region == S.Reals or not isinstance(region, sp.Set) else [region]
+
+
+def _convention_at_domain_ends(c, var, src, ns, pins) -> bool:
+    """Does the convention condition `c` of f (`src`) fail at finitely many points of ℝ at most (the 0**e rule of an
+    irrational exponent: x**pi at 0), each a simple zero p of a base b whose own condition b >= 0 f writes too? Then
+    b < 0 on one side of p: p is an end of f's domain, no point of the open set where a derivative function or an
+    antiderivative lives, and the convention is never read there. x**pi, x**sqrt(2) and their primitives were UNKNOWN
+    on an unconstrained x since part d4b's round 10 (son saldırı SON-G3-RK-1). x**x fails on all of x <= 0: no."""
+    from .domain import Convention, _MAY_FAIL
+    from ..sandbox.exactsets import exact_solveset
+    st = c.args[1] if isinstance(c, sp.Contains) else None
+    if not isinstance(st, Convention) or st.kind != "zero_power":
+        return False
+    b = c.args[0]
+    if not isinstance(b, sp.Expr) or b.free_symbols != {var}:
+        return False
+    try:
+        pts = exact_solveset(_MAY_FAIL["zero_power"](b), var, S.Reals)
+        if not isinstance(pts, (sp.FiniteSet, type(S.EmptySet))):
+            return False
+        own = written_definedness(src, ns, pins)[0]
+        if not any(isinstance(o, sp.GreaterThan) and sp.expand(o.lhs - o.rhs - b) == 0 for o in own):
+            return False
+        return all(_nonzero_at(sp.diff(b, var), var, q, root_of=b) is True for q in pts)
+    except Exception:  # noqa: BLE001 - not proved
+        return False
 
 
 def _closed_real(txt, ctx, pins):
@@ -2415,13 +3196,15 @@ def _open_condition(c):
     return c
 
 
-def task_conditions(ctx: Ctx, src, var, pins) -> tuple[list, list]:
+def task_conditions(ctx: Ctx, src, var, pins, regions: bool = False) -> tuple[list, list]:
     """(the written definedness conditions of the task's function on `var`, with the values `pins` holds put in;
     the ones that name another symbol). A membership (n!, gcd) is `_unreadable_task_expression`'s business, and
     so is a function defined nowhere (a closed condition that fails, with or without the values:
     `Ctx.binding_issues`). A condition naming a parameter was dropped, so the derivative 1 of
-    x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e)."""
-    conds, _ = written_definedness(src, ctx.ns, pins)
+    x + 0*sqrt(b - x) + 0*sqrt(x - b), defined at b alone, was certified (review of d4e). With `regions`, each integer
+    parameter is read on its region (`_claim_definedness_on_integer_bounds`, YO-K5)."""
+    conds = (_claim_definedness_on_integer_bounds(ctx, src, ctx.ns, pins, var) if regions
+             else written_definedness(src, ctx.ns, pins))[0]
     on_var: list = []
     other: list = []
     for c in conds:
@@ -2806,7 +3589,8 @@ def verify(ir, solution, ctx: Ctx):
             integrand, err = parse_or_unknown(LAYER, ctx.expr, p["integrand"])
             if err:
                 return err
-            bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms, pins=pins)
+            bad = _unreadable_task_expression(p["integrand"], integrand, var, ctx.ns, t.ms,
+                                              _declared_regions(ctx, var), pins=pins)
             if bad is not None:
                 return bad
             integrand, err = parse_or_unknown(LAYER, ctx.with_pins, integrand, pins)
@@ -2901,8 +3685,12 @@ def verify(ir, solution, ctx: Ctx):
             # a declared tolerance, read once: |c - v|/|v| <= t against the true value v, t in (0, 1); anything
             # else is a malformed input (equiv.numeric.read_tolerance; YO-4, RK-E, RK-F)
             declared, bad_tol = read_tolerance(p.get("rel_tol"))
-            if bad_tol:
-                return unknown(LAYER, "malformed_tolerance", t.ms, {"rel_tol": str(p.get("rel_tol"))},
+            # a declared absolute tolerance, read the same way (|c - v| <= t, t > 0); it was not read here, and the
+            # exact comparison refuted an approximate claim it holds (son saldırı G2YO-4, the sibling path)
+            declared_abs, bad_abs = read_tolerance(p.get("abs_tol"), relative=False)
+            if bad_tol or bad_abs:
+                return unknown(LAYER, "malformed_tolerance", t.ms, {"rel_tol": str(p.get("rel_tol")),
+                                                                    "abs_tol": str(p.get("abs_tol"))},
                                flags=["malformed_tolerance"])
             undefined = integrand_undefined_on_a_subinterval(p["integrand"], integrand, var, a, b, ns_i,
                                                              timeout=ctx.timeout, pins=pins)
@@ -2912,7 +3700,6 @@ def verify(ir, solution, ctx: Ctx):
                                flags=["written_domain"] if undefined else [])
             val, ev = definite_integral_numeric(integrand, var, a, b, timeout=ctx.timeout * 1.5)
             ev["claimed"] = str(claimed)
-            converged = val is not None and bool(ev.get("converged", False))
             # SymPy's value is evidence only. It is taken with a symbolic certificate (below) or not at all: a
             # quadrature that agrees with it may share its blind spot (a narrow peak: SymPy's wrong π for
             # ∫_0^π (atan(tan x) + 1 + peak) and tanh-sinh agreed, and 3.14159265358979 was accepted with
@@ -2927,35 +3714,61 @@ def verify(ir, solution, ctx: Ctx):
             cval, cev = certified_integral_value(integrand, var, a, b, timeout=ctx.timeout * 1.5)
             ev["certificate"] = cev
             if cval is not None:
-                if converged and certified_sign(cval, timeout=ctx.timeout) != 0 and \
-                        num_equal(cval, val, rel_tol=float(ev.get("rel_err", "1e-25")))[0] is False and \
-                        not integral_excludes(integrand, var, a, b, val, timeout=ctx.timeout * 1.5)[0]:
-                    # a proof that a converged numeric value contradicts, and no rigorous enclosure that shows the
-                    # numeric value wrong: something is wrong (never the declared tolerance here: it let SymPy's
-                    # wrong value "agree", YO-2). A quadrature that missed a narrow peak (1/3 for ∫_0^1 (x² +
-                    # e^(-10^8 (x - 1/3)²)) dx, which the erf primitive proves) is shown wrong and the proof stands
+                # a proof that a converged numeric value contradicts, and no rigorous enclosure that shows the numeric
+                # value wrong: something is wrong (never the declared tolerance here: it let SymPy's wrong value
+                # "agree", YO-2). A quadrature that missed a narrow peak (1/3 for ∫_0^1 (x² + e^(-10^8 (x - 1/3)²)) dx,
+                # which the erf primitive proves) is shown wrong and the proof stands. A 0 is checked too, and without
+                # converged numbers the value is taken inside a rigorous enclosure only (`_certificate_check`)
+                state, xev = _certificate_check(integrand, var, a, b, cval, val, ev, ctx.timeout * 1.5, defined=True)
+                ev["certificate_check"] = dict(xev, state=state)
+                if state == "disagreement":
                     return unknown(LAYER, "symbolic_numeric_disagreement", t.ms, ev,
                                    flags=["symbolic_numeric_disagreement"])
+                if state == "unconfirmed":
+                    # no converged numbers and no enclosure that says something: the certificate stands alone, and
+                    # is not taken (G2YO-2); a NOT PROVED abstention (`fuse.rules`)
+                    return unknown(LAYER, "certified_value_unconfirmed", t.ms, ev, flags=["numeric_not_converged"])
+                if state == "excluded":
+                    cval = None                     # the certificate is wrong: the claim meets the enclosure alone
+            if cval is not None:
                 ev["decided_by"] = "certified_value"
-                if declared is not None:
-                    ok = within_rel_tol(claimed, cval, declared, timeout=ctx.timeout)
+                if declared is not None or declared_abs is not None:
+                    def _within(c, v=cval):
+                        w = within_tolerance(c, v, declared, declared_abs, timeout=ctx.timeout)
+                        if w is None and a.is_finite and b.is_finite:
+                            # the value has no certified distance to the claim (erf, S, Si of an irrational
+                            # argument): the integral's own enclosure decides the tolerance (son saldırı G2RK-2)
+                            w = declared_tolerance_by_enclosure(integrand, var, a, b, c, declared, declared_abs,
+                                                                timeout=ctx.timeout * 1.5, defined=True)[0]
+                        return w
+                    tolerance_window(ctx, LAYER, _within)
+                    ok = within_tolerance(claimed, cval, declared, declared_abs, timeout=ctx.timeout)
+                    if ok is None and a.is_finite and b.is_finite:
+                        # the value has no certified distance to the claim (erf, S, Si of an irrational argument):
+                        # the integral's own enclosure decides the tolerance (son saldırı G2RK-2)
+                        ok, tev = declared_tolerance_by_enclosure(integrand, var, a, b, claimed, declared, declared_abs,
+                                                                  timeout=ctx.timeout * 1.5, defined=True)
+                        ev["enclosure"] = tev
                     if ok is None:
                         return unknown(LAYER, "relative_tolerance_undecided", t.ms, ev,
                                        flags=["relative_tolerance_undecided"])
                 else:
                     ok, sev = answers_equivalent(claimed, cval, shape="scalar")
                     ev["compare_exact"] = sev
-            elif declared is not None:
+            elif declared is not None or declared_abs is not None:
                 # an approximate claim and no proved value: a rigorous enclosure inside the tolerance accepts,
                 # one outside it refutes
-                ok, tev = tolerance_by_enclosure(integrand, var, a, b, claimed, declared, timeout=ctx.timeout * 1.5)
+                tolerance_window(ctx, LAYER, lambda c: declared_tolerance_by_enclosure(
+                    integrand, var, a, b, c, declared, declared_abs, timeout=ctx.timeout * 1.5, defined=True)[0])
+                ok, tev = declared_tolerance_by_enclosure(integrand, var, a, b, claimed, declared, declared_abs,
+                                                          timeout=ctx.timeout * 1.5, defined=True)
                 ev["enclosure"] = tev
                 ev["decided_by"] = "rigorous_enclosure_and_tolerance"
                 if ok is None:
                     return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])
             else:
                 # no value proved: a claim outside a rigorous enclosure is refuted, nothing is accepted
-                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5)
+                no, xev = integral_excludes(integrand, var, a, b, claimed, timeout=ctx.timeout * 1.5, defined=True)
                 ev["enclosure"] = xev
                 if not no:
                     return unknown(LAYER, "no_certified_value", t.ms, ev, flags=["no_certified_value"])
@@ -2971,7 +3784,8 @@ def verify(ir, solution, ctx: Ctx):
             if err:
                 return err
             bad = _unreadable_task_expression(p["f"], f, var, ctx.ns, t.ms,
-                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)), pins)
+                                              neighbourhoods(_closed_real(p.get("at"), ctx, pins)) if "at" in p
+                                              else _declared_regions(ctx, var), pins)
             if bad is not None:
                 return bad
             f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
@@ -2999,7 +3813,7 @@ def verify(ir, solution, ctx: Ctx):
                 bad = _point_not_interior(ctx, p["f"], var, at, pins, t.ms)
                 if bad is not None:
                     return bad
-                dap = derivative_at_point(f, var, order, at, timeout=ctx.timeout)
+                dap = point_derivative(f, var, order, at, timeout=ctx.timeout)
                 ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
                 st = dap["status"]
                 if ca.kind == "dne":
@@ -3046,11 +3860,17 @@ def verify(ir, solution, ctx: Ctx):
                 unapplied = ctx.unapplied_conditions(var)
                 if unapplied:
                     return condition_not_applied(LAYER, unapplied, t.ms)
-                conds, other = task_conditions(ctx, p["f"], var, pins)
+                # f's conditions read on the integer parameters' regions, as the claim's are (`fconds` below)
+                conds, other = task_conditions(ctx, p["f"], var, pins, regions=True)
                 # the claim, as written, has a value wherever the derivative exists (`claim_where_derivative`):
                 # 2*x**2/x for (x**2)' was certified, 1/(x + 1/a) with a >= 0 too (round 3, RK-8 and YO-3)
-                fconds = written_definedness(p["f"], ctx.ns, pins)[0]
-                claim_conds, claim_nowhere = written_definedness(str(ca.payload), ctx.claim_ns(solution), pins)
+                # f's own conditions are read on the integer parameters' regions too, as the claim's are: read with
+                # n merely an integer, x**n kept x != 0 although n >= 1 is declared, that condition of the claim
+                # n*x**n/x counted as f's own and the claim was certified, while with n a positive integer it was
+                # UNKNOWN (son-kalkulus second round, YO-K5)
+                fconds = _claim_definedness_on_integer_bounds(ctx, p["f"], ctx.ns, pins, var)[0]
+                claim_conds, claim_nowhere = _claim_definedness_on_integer_bounds(
+                    ctx, str(ca.payload), ctx.claim_ns(solution), pins, var)
                 if other and not _half_line_for_every_value(ctx, conds, other, var):
                     # a parameter of declared sign (a > 0: asin(x/a), log(k*x)): a domain with interior for every
                     # allowed value is proved by one point, the claim by a symbolic identity (R2)
@@ -3154,7 +3974,7 @@ def verify(ir, solution, ctx: Ctx):
             if bad is not None:
                 return bad
             y = ctx.sym(p.get("dep", "y"))
-            dap = derivative_at_point(f, var, 1, at, timeout=ctx.timeout)
+            dap = point_derivative(f, var, 1, at, timeout=ctx.timeout)
             ev["derivative_at_point"] = {k: str(v) for k, v in dap.items()}
             st = dap["status"]
             ca = solution.claimed_answer
@@ -3184,6 +4004,13 @@ def verify(ir, solution, ctx: Ctx):
                         ctx, var, ok, cev, [claimed, truth],
                         lambda inst: _line_equal(claimed.xreplace(inst), truth.xreplace(inst), var, y)[0], exclude={y})
                     ev["compare"] = cev
+                    # the claim as written: the line only where it has a value (SON-G3-YO-2)
+                    claim_conds, claim_nowhere = written_definedness(str(ca.payload), ctx.claim_ns(solution), pins) \
+                        if isinstance(ca.payload, str) else ([], set())
+                    y_at = sp.simplify(truth.rhs.subs(var, at)) if truth.lhs == y else None
+                    ok, wev = _tangent_as_written(ok, truth, var, y, claim_conds, claim_nowhere,
+                                                  (at, y_at) if y_at is not None else (at, sp.simplify(f.subs(var, at))))
+                    ev.update(wev)
                 elif st in ("corner", "discontinuous"):
                     ok = False                         # no tangent line exists at a corner
                 else:

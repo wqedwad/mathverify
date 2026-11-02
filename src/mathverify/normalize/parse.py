@@ -378,8 +378,22 @@ def _route_set_arithmetic(code: str, names: dict[str, Any]):
 def _at(e, v, val):
     """e at v = val. A derivative at a corner is no derivative: diff(Abs(x), x) is sign(x), and
     sign(0) = 0 certified "the derivative of |x| at 0 is 0" (audit of 29 Sep 2026). A sign, Heaviside
-    or DiracDelta whose argument vanishes at the point is refused, not read."""
+    or DiracDelta whose argument vanishes at the point is refused, not read. A Piecewise whose conditions
+    decide at the point is its branch there first: only what is taken is read (`diff` puts a derivative's
+    proved value at a point in as such a branch, `_value_step`)."""
     e = sp.sympify(e)
+
+    def taken(n):
+        for ex, c in n.args:
+            with sp.evaluate(True):             # the condition's truth at the point (a reading as written too)
+                cv = c.subs(v, val) if isinstance(c, sp.Basic) and v in c.free_symbols else c
+            if cv is sp.true:
+                return ex
+            if cv is not sp.false:
+                return n
+        return n
+    if e.has(sp.Piecewise):
+        e = e.replace(lambda n: isinstance(n, sp.Piecewise), taken)
     for n in e.atoms(sp.sign, sp.Heaviside, sp.DiracDelta):
         if n.args[0].subs(v, val).is_zero:
             raise ParseError(f"at({e}, {v}, {val}): {n} is taken where its argument is 0")
@@ -855,6 +869,15 @@ def _cbrt(b, **_kw):           # `evaluate=False` is passed by a parse as writte
     return _real_root(b, 3)
 
 
+def _diff_value(*args, **kwargs):
+    """`diff` in a value reading (`_diff`, defined with the reading of derivatives below); with SymPy's evaluation
+    off (a structural reading, `formal.statement.parse_structural`) SymPy's own, as before."""
+    from sympy.core.parameters import global_parameters
+    if not global_parameters.evaluate:
+        return sp.diff(*args, **kwargs)
+    return _diff(*args, **kwargs)
+
+
 class _SingletonNames:
     """`S` in a text: its singletons (S.Reals, S.Half, ... `_ALLOWED_DOTTED`) and S(2), a number; never a value
     itself. SymPy's registry named bare is no expression: the claim `S = {-2, 2}` read it as the left side and
@@ -903,7 +926,7 @@ _SAFE_NAMES: dict[str, Any] = {
     "re": sp.re, "im": sp.im, "conjugate": sp.conjugate, "arg": sp.arg,
     # calculus (unevaluated forms allowed in step claims)
     "Sum": sp.Sum, "Product": sp.Product, "Integral": sp.Integral, "Derivative": sp.Derivative,
-    "Limit": _Limit, "diff": sp.diff, "integrate": _integrate, "limit": _limit,
+    "Limit": _Limit, "diff": _diff_value, "integrate": _integrate, "limit": _limit,
     # numbers
     "Rational": Rational, "Integer": Integer, "Float": sp.Float, "S": _SINGLETON_NAMES,
     "nsimplify": _form_kept(sp.nsimplify),
@@ -929,6 +952,91 @@ for _name in ("Abs", "abs", "floor", "ceiling", "ceil", "frac", "sign", "Mod", "
               "re", "im", "conjugate", "arg", "atan2", "Piecewise", "Eq", "Ne", "Lt", "Le", "Gt", "Ge"):
     _SAFE_NAMES[_name] = _form_unevaluated(_SAFE_NAMES[_name])
 del _name
+
+
+# How arg is read: None, SymPy's principal value in (-pi, pi]; "zero_two_pi", the curriculum's in [0, 2*pi). The two
+# differ where the imaginary part is negative (arg(-1 - i): -3*pi/4 or 5*pi/4), and the right answer of one reading
+# was refuted (A+ final attack, SON-G3-RK-3): the verifier reads a problem that writes arg both ways and decides only
+# where the readings agree (`verifier.verify_layers`). atan2, a programming function, keeps (-pi, pi].
+_ARG_READING: contextvars.ContextVar = contextvars.ContextVar("arg_reading", default=None)
+
+
+class arg_reading:  # noqa: N801 - used as a context manager
+    """Within it, arg is read in [0, 2*pi) ("zero_two_pi") instead of SymPy's (-pi, pi]. `at` ({variable name: closed
+    number}) is the point of a pointwise task (a derivative at a point, a limit at a finite point): there the 2*pi
+    shift of an arg of a variable is resolved by the certified sign of the imaginary part AT the point, where it is
+    locally constant (son-sayisal audit, RK-SAY-1: the Piecewise left standing decided nothing, and the derivative
+    1/2 of arg(1 + x*i) at 1, the same in both readings, fell to UNKNOWN)."""
+
+    def __init__(self, which: str, at: dict | None = None):
+        if which != "zero_two_pi":
+            raise ValueError(which)
+        self.which, self.at = which, dict(at or {})
+
+    def __enter__(self):
+        self._tokens = (_ARG_READING.set(self.which), _ARG_POINT.set(self.at))
+        return self
+
+    def __exit__(self, *exc) -> None:
+        _ARG_POINT.reset(self._tokens[1])
+        _ARG_READING.reset(self._tokens[0])
+
+
+_ARG_POINT: contextvars.ContextVar = contextvars.ContextVar("arg_point", default={})
+
+
+def _arg_in_zero_two_pi(u, a):
+    """arg(u) in [0, 2*pi): SymPy's value `a`, 2*pi above it where the imaginary part of u is negative; for a number
+    whose imaginary part has no certified sign, no reading (ParseError). An arg of variables is a Piecewise, resolved
+    at the point of a pointwise task (`arg_reading`) where the imaginary part has a certified nonzero sign there."""
+    from ..equiv.numeric import certified_sign
+    im_u = sp.im(u)
+    if im_u.is_zero is True:
+        return a
+    if not getattr(u, "free_symbols", None):
+        s = certified_sign(im_u)
+        if s == -1:
+            return a + 2 * sp.pi
+        if s in (0, 1):
+            return a
+        raise ParseError(f"arg({u}): the sign of its imaginary part is not certified, no reading in [0, 2*pi)")
+    at = _ARG_POINT.get()
+    if at and all(s_.name in at for s_ in u.free_symbols):
+        ends = [s_ for s_ in u.free_symbols if at[s_.name] in (sp.oo, -sp.oo)]
+        v = im_u.xreplace({s_: at[s_.name] for s_ in u.free_symbols if s_ not in ends})
+        s = certified_sign(v) if not ends else _eventual_sign(v, ends[0], at[ends[0].name]) if len(ends) == 1 else None
+        if s in (-1, 1):
+            return a + 2 * sp.pi if s == -1 else a
+    return sp.Piecewise((a + 2 * sp.pi, sp.StrictLessThan(im_u, 0)), (a, True))
+
+
+def _eventual_sign(v, x, end):
+    """The sign of the polynomial `v` in `x` as x -> end (+-oo): its leading coefficient's certified sign, turned for
+    an odd degree at -oo; None for anything else (SS2-RK-3: lim arg(1 + x*i) at oo)."""
+    from ..equiv.numeric import certified_sign
+    try:
+        p = sp.Poly(v, x)
+    except Exception:  # noqa: BLE001 - not a polynomial in x
+        return None
+    if not all(c.is_number for c in p.all_coeffs()):
+        return None
+    s = certified_sign(p.LC())
+    if s not in (-1, 1):
+        return None
+    return -s if end == -sp.oo and p.degree() % 2 else s
+
+
+def _arg_read(base):
+    def call(*args, **kwargs):
+        a = base(*args, **kwargs)
+        if _ARG_READING.get() != "zero_two_pi" or kwargs or len(args) != 1 or not global_parameters.evaluate \
+                or not isinstance(a, sp.Expr):
+            return a                     # as written (definedness only: the readings share it) or SymPy's reading
+        return _arg_in_zero_two_pi(sympify_nontext(args[0]), a)
+    return _ClassCall(sp.arg, call)
+
+
+_SAFE_NAMES["arg"] = _arg_read(_SAFE_NAMES["arg"])
 
 # ----------------------------------------------------------------------------
 # claims are values, not computations
@@ -1139,6 +1247,25 @@ class written_domain(sp.Function):  # noqa: N801 - a marker read by certify.doma
         return written_domain(self.args[0].diff(s), self.args[1])
 
 
+def _closed_branches(a):
+    """`a` with each Piecewise of closed conditions in it taken to its branch, as written, where certified signs decide
+    the conditions (`equiv.numeric.jump_value`); left as it is where one is undecided. Put into a condition of the outer
+    body unevaluated, the inner Piecewise of f(f(1)) (f piecewise) made SymPy's Piecewise raise ("pop from an empty
+    set") and the problem's definedness was undecided: f(f(1)) = 1 UNKNOWN (final attack G1RK-5)."""
+    if not isinstance(a, sp.Basic) or a.free_symbols or not a.has(sp.Piecewise):
+        return a
+    from ..equiv.numeric import jump_value
+
+    def branch(n):
+        with sp.evaluate(True):                     # the signs are certified on the values; the branch stays as written
+            v = jump_value(n)
+        return n if v is None else v
+    try:
+        return a.replace(lambda n: isinstance(n, sp.Piecewise) and not n.free_symbols, branch)
+    except Exception:  # noqa: BLE001 - left as it is: the reading fails as before
+        return a
+
+
 def _written_call(fn, ns, depth=0):
     """An IR function called inside a text read as written: its body AS WRITTEN (so its conditions,
     x**2/x at 0, survive) with the arguments substituted unevaluated, inner calls expanded the same
@@ -1151,7 +1278,7 @@ def _written_call(fn, ns, depth=0):
         w = parse_as_written(fn.fdef.expr, dict(ns, **dict(zip(fn.fdef.args, fn.argsyms))), _depth=depth + 1)
         if w is None or len(w) != 1:
             return fn(*args)
-        sub = dict(zip(fn.argsyms, args))
+        sub = dict(zip(fn.argsyms, (_closed_branches(a) for a in args)))
         with sp.evaluate(False):
             out = w[0].xreplace(sub)
             if fn.domain_rel is not None:
@@ -1178,6 +1305,57 @@ _UNI_VALUE_RE = re.compile(r"([0-9)\]])\s*([π∞√∛ℝℤℕ∅])")
 _DEG_NUM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:°|\bderece\b|\bdeg\b)")
 _DEG_PAREN_RE = re.compile(r"\(([^()]*)\)\s*°")
 _PCT_RE = re.compile(r"%\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*%")
+# LaTeX's degree mark: latex2sympy drops it, so 30^\circ was the number 30 and \sin(30^\circ) was sin(30) (final
+# attack, G1RK-3); it is read as the plain-text mark is, a factor pi/180
+_LATEX_DEG_RE = re.compile(r"(?:\^|\*\*)\s*(?:\{\s*\\circ\s*\}|\\circ(?![A-Za-z]))|\\degree(?![A-Za-z])")
+
+
+def unit_marks(text) -> frozenset[str]:
+    """The unit marks of `text` the parser reads as a conversion: '°' (30°, 30 derece, 30 deg, (a+b)°, 30^\\circ) is
+    a factor pi/180, '%' (%20, 20%, 20\\%) a factor 1/100. Each is the unit of the number it marks: whether the other
+    side of a comparison counts in that unit or in plain numbers is the question's (`Ctx.open_unit_marks`)."""
+    if not isinstance(text, str):
+        return frozenset()
+    out = set()
+    if _DEG_NUM_RE.search(text) or _DEG_PAREN_RE.search(text) or _LATEX_DEG_RE.search(text):
+        out.add("°")
+    if _PCT_RE.search(text) or "\\%" in text:
+        out.add("%")
+    return frozenset(out)
+
+
+def without_unit_marks(text: str, marks) -> str:
+    """`text` with the unit marks `marks` (`unit_marks`) dropped: the plain number each one is the unit of (%20 is 20,
+    30° is 30)."""
+    if "°" in marks:
+        text = _LATEX_DEG_RE.sub("", _DEG_NUM_RE.sub(r"\1", _DEG_PAREN_RE.sub(r"(\1)", text)))
+    if "%" in marks:
+        text = _PCT_RE.sub(lambda m: m.group(1) or m.group(2), text.replace("\\%", ""))
+    return text
+# a claim or an option that is nothing but one number with its unit mark ('30°', '%20', '20\\%', '30^\\circ',
+# '\\boxed{30^\\circ}', '30 derece'): the only text whose mark may be read as the plain number, and only where the IR's
+# value is proved to count in that unit (`Ctx.counted_unit_marks`; final attack, EK 8). A mark inside an expression
+# ('10/50 = %20', 'sin(30°)') is a factor of it
+_SINGLE_MARKED = (
+    ("%", re.compile(r"^(?P<s>[+-]?)\s*(?:%|\\%)\s*(?P<n>\d+(?:\.\d+)?)$|^(?P<s2>[+-]?)\s*(?P<n2>\d+(?:\.\d+)?)\s*(?:%|\\%)$")),
+    ("°", re.compile(r"^(?P<s>[+-]?)\s*(?P<n>\d+(?:\.\d+)?)\s*"
+                     r"(?:°|\bderece\b|\bdeg\b|(?:\^|\*\*)\s*(?:\{\s*\\circ\s*\}|\\circ)|\\degree)$")),
+)
+
+
+def single_marked_number(text) -> tuple[str, str] | None:
+    """(the mark, the plain number) when `text` is one number with its unit mark and nothing else (`_SINGLE_MARKED`)."""
+    if not isinstance(text, str):
+        return None
+    t = strip_presentation(_strip_invisible(text).strip()).strip()
+    for mark, rx in _SINGLE_MARKED:
+        m = rx.match(t)
+        if m:
+            g = m.groupdict()
+            return mark, f"{g.get('s') or g.get('s2') or ''}{g.get('n') or g.get('n2')}"
+    return None
+
+
 _SQRT_BARE_RE = re.compile(r"(sqrt|cbrt)\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)(?![\w(])")
 
 
@@ -1188,6 +1366,422 @@ def _strip_invisible(s: str) -> str:
     import unicodedata
     # no NFKC here: it would turn '²' into '2' and '½' into '1⁄2' before _UNICODE_MAP runs
     return "".join(ch for ch in s if unicodedata.category(ch) != "Cf")
+
+
+# ---- a factor written next to a divisor (final attack G4YO-2) --------------------------------------------------------
+# '1/2π', '1/2√x', 'x/2π': read left to right it is (1/2)·π, read as many textbooks write it (and as latex2sympy reads
+# '1/2\pi') it is 1/(2π). Which one is meant is the writer's convention, so such a text is read neither way: the
+# canonical branch makes no product of it (`preclean` leaves '1/2pi', which no parse takes, as the ASCII '1/2pi' always
+# was), the LaTeX branch refuses it (`_latex_to_sympy`), and the verifier names it (`ambiguous_juxtaposition`). An
+# explicit operator (1/2·π, 1/2 \cdot \pi), parentheses ((1/2)π, 1/(2π)) and \frac are read as before.
+
+def _atom_start(s: str, j: int) -> int | None:
+    """The index where the canonical operand atom ending at `s[j]` starts: a run of letters, digits, '_' and '.' (2, 2.5,
+    x2), or a bracket group with the function name before it (sqrt(2), (x + 1)); None when `s[j]` ends no atom."""
+    if s[j] in ")]":
+        depth, k = 0, j
+        while k >= 0:
+            if s[k] in ")]":
+                depth += 1
+            elif s[k] in "([":
+                depth -= 1
+                if depth == 0:
+                    break
+            k -= 1
+        if k < 0:
+            return None
+    elif s[j].isalnum() or s[j] in "_.":
+        k = j
+    else:
+        return None
+    while k > 0 and (s[k - 1].isalnum() or s[k - 1] in "_."):
+        k -= 1
+    return k
+
+
+def _closes_divisor(s: str, i: int) -> bool:
+    """Does `s[i]` (a digit or a closing bracket a unicode value symbol follows) end the right operand of a '/' (or
+    '÷') in the canonical text `s`? The operand is an atom (`_atom_start`) with a root sign before it and powers after
+    it (√2, 2^3, (x + 1)**2), and a sign (1/-2π)."""
+    j = i
+    while True:
+        k = _atom_start(s, j)
+        if k is None:
+            return False
+        k -= 1
+        while k >= 0 and s[k] in "√∛":
+            k -= 1
+        while k >= 0 and s[k].isspace():
+            k -= 1
+        if k >= 0 and s[k] == "^":
+            j = k - 1
+        elif k >= 1 and s[k - 1:k + 1] == "**":
+            j = k - 2
+        else:
+            break
+        while j >= 0 and s[j].isspace():
+            j -= 1
+        if j < 0:
+            return False
+    if k >= 0 and s[k] in _SIGNS:
+        k -= 1
+        while k >= 0 and s[k].isspace():
+            k -= 1
+    return k >= 0 and s[k] in "/÷"
+
+
+def _juxtaposed_product(m) -> str:
+    """`_UNI_VALUE_RE`'s product of a digit (or a bracket) and a value symbol, except after a divisor (G4YO-2)."""
+    if _closes_divisor(m.string, m.start(1)):
+        return m.group(0)
+    return f"{m.group(1)}*{m.group(2)}"
+
+
+# LaTeX macros that start no factor: operators, relations, spacing, closing delimiters, prose
+_LATEX_NO_FACTOR = frozenset({
+    "cdot", "times", "div", "pm", "mp", "ast", "le", "leq", "leqslant", "ge", "geq", "geqslant", "ne", "neq", "lt", "gt",
+    "approx", "equiv", "sim", "simeq", "cong", "to", "rightarrow", "Rightarrow", "leftarrow", "Leftarrow",
+    "leftrightarrow", "Leftrightarrow", "iff", "implies", "in", "notin", "ni", "cup", "cap", "setminus", "land", "lor",
+    "wedge", "vee", "neg", "lnot", "right", "rbrace", "rangle", "rfloor", "rceil", "rvert", "rVert", "end", "quad",
+    "qquad", "mid", "colon", "dots", "ldots", "cdots", "text", "textrm", "mbox", "circ", "degree", "%"})
+# LaTeX function macros: the atom after one is its argument (1/\sin x is 1/sin(x), no product)
+_LATEX_FUNCTIONS = frozenset({
+    "sin", "cos", "tan", "cot", "sec", "csc", "arcsin", "arccos", "arctan", "arccot", "sinh", "cosh", "tanh", "coth",
+    "log", "ln", "lg", "exp"})
+# LaTeX macros with braced arguments: how many
+_LATEX_ARGS = {"sqrt": 1, "frac": 2, "dfrac": 2, "tfrac": 2, "binom": 2, "dbinom": 2, "tbinom": 2, "mathrm": 1,
+               "operatorname": 1, "mathbb": 1, "overline": 1, "bar": 1, "hat": 1, "vec": 1}
+_LATEX_SPACE = re.compile(r"(?:\s|~|\\[,;:! ])*")
+_LATEX_MACRO = re.compile(r"\\([A-Za-z]+)")
+
+
+_LATEX_LEFT = re.compile(r"\\left(?![A-Za-z])")
+_LATEX_RIGHT = re.compile(r"\\right(?![A-Za-z])")
+
+
+def _latex_delimiter_end(s: str, k: int) -> int | None:
+    """The index after the delimiter at `s[k]` that follows \\left or \\right ('(', '.', '\\{', '\\rangle')."""
+    if k >= len(s):
+        return None
+    if s[k] != "\\":
+        return k + 1
+    m = _LATEX_MACRO.match(s, k)
+    return m.end() if m is not None else (k + 2 if k + 1 < len(s) else None)
+
+
+def _latex_group_end(s: str, j: int) -> int | None:
+    """The index after the bracket group opening at `s[j]` ('(', '[', '{'), or after '\\left<d> ... \\right<d>'."""
+    if _LATEX_LEFT.match(s, j):
+        depth, k = 0, j
+        while k < len(s):
+            if _LATEX_LEFT.match(s, k):
+                depth += 1
+                k += 5
+            elif _LATEX_RIGHT.match(s, k):
+                depth -= 1
+                k += 6
+                if depth == 0:
+                    return _latex_delimiter_end(s, k)
+            else:
+                k += 1
+        return None
+    close = {"(": ")", "[": "]", "{": "}"}.get(s[j])
+    if close is None:
+        return None
+    depth, k = 0, j
+    while k < len(s):
+        if s[k] == "\\":
+            k += 2
+            continue
+        if s[k] == s[j]:
+            depth += 1
+        elif s[k] == close:
+            depth -= 1
+            if depth == 0:
+                return k + 1
+        k += 1
+    return None
+
+
+def _latex_atom_end(s: str, j: int) -> int | None:
+    """The index after the LaTeX atom starting at `s[j]` (a number, a letter, a constant or a macro with its arguments,
+    a bracket group), its powers and subscripts after it; None when none starts there."""
+    if j >= len(s):
+        return None
+    c = s[j]
+    if c.isdigit() or c == ".":
+        k = j
+        while k < len(s) and (s[k].isdigit() or s[k] == "."):
+            k += 1
+    elif c.isalpha():
+        k = j + 1
+    elif c in "({[" or _LATEX_LEFT.match(s, j):
+        k = _latex_group_end(s, j)
+    elif c == "\\":
+        m = _LATEX_MACRO.match(s, j)
+        if m is None or m.group(1) in _LATEX_NO_FACTOR:
+            return None
+        k = m.end()
+        name = m.group(1)
+        if name in _LATEX_ARGS:
+            k = k + len(_LATEX_SPACE.match(s, k).group(0))
+            if k < len(s) and s[k] == "[":
+                k = _latex_group_end(s, k)
+            for _ in range(_LATEX_ARGS[name]):
+                if k is None:
+                    return None
+                k = k + len(_LATEX_SPACE.match(s, k).group(0))
+                k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else (k + 1 if k < len(s) else None)
+        elif name in _LATEX_FUNCTIONS:
+            k = k + len(_LATEX_SPACE.match(s, k).group(0))
+            if k < len(s) and s[k] == "^":            # \sin^2 x
+                k = _latex_atom_end(s, k + 1)
+                if k is None:
+                    return None
+                k = k + len(_LATEX_SPACE.match(s, k).group(0))
+            k = _latex_atom_end(s, k)                 # its argument
+    else:
+        return None
+    while k is not None and k < len(s) and s[k] in "^_":
+        k = k + 1 + len(_LATEX_SPACE.match(s, k + 1).group(0))
+        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)
+    return k
+
+
+# signs before a divisor's operand: ASCII and the Unicode minus, en and em dashes (audit SA-YO-4: '1/−2π')
+_SIGNS = "+-−–—"
+# a unit mark on a divisor's operand in LaTeX: 1/2\%, 180/2^\circ, 180/2^{\circ}, 180/2\degree (audit SA-YO-4)
+_LATEX_UNIT_AFTER = re.compile(r"(?:\d+(?:\.\d+)?|[A-Za-z]|\{[^{}]*\}|\([^()]*\))\s*"
+                               r"(?:\^\s*\{?\s*\\circ\s*\}?|\\degree(?![A-Za-z])|\\%|%)")
+# what ends a function's argument written without brackets
+_LATEX_ARGUMENT_END = frozenset({"cdot", "times", "div", "pm", "mp", "le", "leq", "leqslant", "ge", "geq", "geqslant",
+                                 "ne", "neq", "lt", "gt", "approx", "equiv", "to", "in", "notin", "cup", "cap", "right",
+                                 "rbrace", "rangle", "rfloor", "rceil", "end", "quad", "qquad", "text", "mbox", "mid",
+                                 "land", "lor", "wedge", "vee", "implies", "iff"})
+# a factor of its own: after the argument's first item it is no part of the argument, as latex2sympy reads it
+# (\sin x \sqrt{2} is sin(x)·√2; audit of the second round, RK-T2-1, YO-T2-3)
+_LATEX_FACTOR_MACROS = frozenset({"sqrt", "frac", "dfrac", "tfrac", "binom", "dbinom", "tbinom", "mathrm", "operatorname",
+                                  "mathbb", "overline", "bar", "hat", "vec", "int", "iint", "oint", "sum", "prod", "lim"})
+_NUMERIC_GROUP = re.compile(r"\{\s*\d+(?:\.\d+)?\s*\}")
+_NUMERIC_FRAC = re.compile(r"\\[dt]?frac\s*\{\s*\d+(?:\.\d+)?\s*\}\s*\{\s*\d+(?:\.\d+)?\s*\}")
+
+
+def _latex_script_end(s: str, j: int) -> int | None:
+    """The index after the power or subscript at `s[j]` ('^' or '_'): a braced group, a macro with its arguments
+    (^\\circ too) or one character."""
+    k = j + 1 + len(_LATEX_SPACE.match(s, j + 1).group(0))
+    if k >= len(s):
+        return None
+    if s[k] == "{":
+        return _latex_group_end(s, k)
+    if s[k] == "\\":
+        m = _LATEX_MACRO.match(s, k)
+        if m is None:
+            return k + 2 if k + 1 < len(s) else None
+        return (_latex_atom_end(s, k) if m.group(1) not in _LATEX_NO_FACTOR else None) or m.end()
+    return k + 1
+
+
+def _bar_group_end(s: str, j: int) -> int | None:
+    """The index after the '|...|' group opening at `s[j]`."""
+    k = s.find("|", j + 1)
+    return None if k < 0 else k + 1
+
+
+_PLAIN_BAR = re.compile(r"(?<!\\)(?<!\\left)(?<!\\right)\|")
+
+
+def _bar_closes(s: str, j: int) -> bool:
+    """Does the '|' at `s[j]` close an absolute value ('|\\cos x|'), an odd number of plain bars before it?"""
+    return len(_PLAIN_BAR.findall(s, 0, j)) % 2 == 1
+
+
+def _function_argument(s: str, m) -> tuple[int, int, str] | None:
+    """The argument of the LaTeX function macro matched by `m` when it is written without brackets, its base and power
+    skipped (\\log_2 8, \\sin^2 x): (start, end, how it ends); None when it is bracketed ((x), \\left(x\\right)) or empty.
+    It is a term: numbers, letters and constants (2x, 3\\pi, x y) with their powers, subscripts, braced groups and
+    factorials; a fraction, a root or a bracket group only as its first item, a bracket group after a number too
+    ('\\sin 2(x + 1)' is sin(2(x + 1)), '\\ln 2|x|' ln(2|x|): latex2sympy's reading and the A sin B(x - C) of the
+    textbook; YO-T2-1). How it ends:
+      'op'     at an operator or a relation (+, -, =, ',', \\cdot, \\times, ...), a closing bracket, the next function
+               macro or the end: the argument is read to the first operator (EK 3)
+      'slash'  at a '/' (\\ln 2/2: (ln 2)/2 or ln(2/2)? `_latex_divisor_juxtaposed`)
+      'factor' before a factor of its own written right after it (e^x, \\sqrt{2}, \\frac{..}{..}): no part of it, as
+               latex2sympy reads it (\\sin x e^x is sin(x)·e^x; RK-T2-1, YO-T2-3)
+      'group'  before a bracket or '|...|' group right after a term with a letter (\\tan x(1 + \\tan^2 x): tan(x)·(1 +
+               tan²x) in the textbook, tan(x(1 + tan²x)) for latex2sympy): a convention of the writer (RK-T2-3)."""
+    sp_ = lambda i: i + len(_LATEX_SPACE.match(s, i).group(0))  # noqa: E731
+    k = sp_(m.end())
+    while k is not None and k < len(s) and s[k] in "_^":
+        k = sp_(k + 1)
+        k = _latex_group_end(s, k) if k < len(s) and s[k] == "{" else _latex_atom_end(s, k)
+        k = None if k is None else sp_(k)
+    if k is None or k >= len(s) or s[k] == "(" or _LATEX_LEFT.match(s, k):
+        return None
+    j = last = k
+    numeric = True                               # the term so far is a number
+    stop = "op"
+    while True:
+        j = sp_(j)
+        if j >= len(s):
+            break
+        c = s[j]
+        if c == "/":
+            stop = "slash"
+            break
+        if c in ")]}&=<>,;:+*" or c in _SIGNS:
+            break
+        if c == "!":
+            j = last = j + 1
+            continue
+        if c in "^_":
+            e = _latex_script_end(s, j)
+            if e is None:
+                return None
+            j = last = e
+            continue
+        if c.isdigit() or c == ".":
+            while j < len(s) and (s[j].isdigit() or s[j] == "."):
+                j += 1
+            last = j
+            continue
+        if c.isalpha():
+            if c == "e" and last > k and s[sp_(j + 1):sp_(j + 1) + 1] == "^":
+                stop = "factor"                  # e^x
+                break
+            j = last = j + 1
+            numeric = False
+            continue
+        if c == "{":
+            e = _latex_group_end(s, j)
+            if e is None:
+                return None
+            numeric = numeric and bool(_NUMERIC_GROUP.fullmatch(s, j, e))
+            j = last = e
+            continue
+        if c == "|" and _bar_closes(s, j):
+            break                                # the end of |\cos x|
+        if c in "([|" or _LATEX_LEFT.match(s, j):
+            if last > k and not numeric:
+                stop = "group"
+                break
+            e = _bar_group_end(s, j) if c == "|" else _latex_group_end(s, j)
+            if e is None:
+                return None
+            j = last = e
+            numeric = False
+            continue
+        if c == "\\":
+            mm = _LATEX_MACRO.match(s, j)
+            if mm is None:
+                break                            # \{, \|, \\: a delimiter
+            name = mm.group(1)
+            if name in _LATEX_ARGUMENT_END or name in _LATEX_FUNCTIONS or name in _LATEX_NO_FACTOR:
+                break
+            if name in _LATEX_FACTOR_MACROS:
+                if last > k:
+                    stop = "factor"
+                    break
+                e = _latex_atom_end(s, j)
+                if e is None:
+                    return None
+                numeric = bool(_NUMERIC_FRAC.fullmatch(s, j, e))
+                j = last = e
+                continue
+            j = last = mm.end()                  # a constant or a letter: \pi, \theta, \infty
+            numeric = False
+            continue
+        break
+    return (k, last, stop) if last > k else None
+
+
+def _function_arguments(s: str) -> list[tuple[int, int, str]]:
+    """`_function_argument` of every LaTeX function macro of `s` whose argument is written without brackets."""
+    return [a for m in _LATEX_MACRO.finditer(s) if m.group(1) in _LATEX_FUNCTIONS
+            for a in [_function_argument(s, m)] if a is not None]
+
+
+def _bracket_spans(s: str, spans) -> str:
+    """`s` with each span (start, end, ...) put in \\left( ... \\right), an inner one inside its outer one: inserted
+    one after another from the right, an inner span shifted the outer's end and '\\left' was cut in two
+    (\\cos x e^{\\sin x}; audit of the second round, RK-T2-2)."""
+    events = []
+    for a in spans:
+        events.append((a[0], 1, -a[1], "\\left("))       # at one place: the closings first, the longer opening first
+        events.append((a[1], 0, -a[0], "\\right)"))      # ... the inner closing first
+    out, i = [], 0
+    for pos, _, _, text in sorted(events, key=lambda t: t[:3]):
+        out.append(s[i:pos])
+        out.append(text)
+        i = pos
+    out.append(s[i:])
+    return "".join(out)
+
+
+def _latex_argument_ambiguous(s: str) -> bool:
+    """Is a function's argument written without brackets followed by a bracket group after a letter (`_function_argument`
+    'group': \\tan x(1 + \\tan^2 x)), or by a factor latex2sympy does not read as a factor of its own? A reading of the
+    argument other than latex2sympy's is taken only where the decision (EK 3: to the first operator) gives it; anywhere
+    else the two must agree, or the text is read neither way (audit of the second round, YO-T2-1, YO-T2-3)."""
+    spans = _function_arguments(s)
+    if any(a[2] == "group" for a in spans):
+        return True
+    if not any(a[2] == "factor" for a in spans):
+        return False
+    try:
+        return _latex2sympy(_latex_prepared(_bracket_spans(s, [a for a in spans if a[2] != "slash"]))) != \
+            _latex2sympy(_latex_prepared(_bracket_spans(s, [a for a in spans if a[2] == "op"])))
+    except Exception:  # noqa: BLE001 - not read either way: no reading is taken
+        return True
+
+
+def _bracket_function_arguments(s: str) -> str:
+    """`s` with each function argument written without brackets (`_function_argument`) bracketed: latex2sympy took a
+    product after it into the argument, \\sin x \\cdot \\cos x was sin(x*cos(x)) and \\sin x \\cdot 3 was sin(3x); the
+    argument is read up to the first operator (audit SA-YO-3, SA-RK-4: the decision's reading). An argument a factor
+    follows is bracketed as latex2sympy reads it (`_latex_argument_ambiguous` refuses the text otherwise)."""
+    spans = [a for a in _function_arguments(s) if a[2] in ("op", "factor")]
+    return _bracket_spans(s, spans) if spans else s
+
+
+def _latex_divisor_juxtaposed(s: str) -> bool:
+    """Does a LaTeX text write a factor (a unit mark included: \\%, ^\\circ) right after the operand of a '/' (1/2\\pi,
+    x/2\\pi, 3/4\\sqrt{2}, \\pi/2x, 1/2\\%, 180/2^\\circ), or a '/' inside a function's argument written without brackets
+    (\\ln 2/2, \\sin x/2, \\log_2 8/3, `_function_argument_divides`)?"""
+    for p in [m.start() for m in re.finditer(r"(?<!\\)/", s)]:
+        j = p + 1 + len(_LATEX_SPACE.match(s, p + 1).group(0))
+        if j < len(s) and s[j] in _SIGNS:
+            j += 1 + len(_LATEX_SPACE.match(s, j + 1).group(0))
+        if _LATEX_UNIT_AFTER.match(s, j):
+            return True
+        end = _latex_atom_end(s, j)
+        if end is None:
+            continue
+        k = end + len(_LATEX_SPACE.match(s, end).group(0))
+        if k < len(s) and (s[k].isalpha() or s[k] in "({√∛∞" or _LATEX_LEFT.match(s, k)):
+            return True
+        if k < len(s) and s[k] == "\\":
+            m = _LATEX_MACRO.match(s, k)
+            if m is not None and m.group(1) not in _LATEX_NO_FACTOR:
+                return True
+    # the dual: a function's argument written without brackets holding a '/' (\ln 2/2: (ln 2)/2 or ln(2/2)?);
+    # latex2sympy took the division into the argument, \ln{2}/2 too, and read 0 for (ln 2)/2 (sibling of G4YO-2)
+    return any(a[2] == "slash" for a in _function_arguments(s))
+
+
+def ambiguous_juxtaposition(text) -> bool:
+    """Does `text` write a factor right after the operand of a division, with no operator ('1/2π', '1/2√x', 'x/2π',
+    '$1/2\\pi$'), a unit mark included ('1/2%', '180/2°')? It reads (1/2)·π left to right and 1/(2π) as the textbooks
+    write it: it is read neither way (G4YO-2)."""
+    if not isinstance(text, str):
+        return False
+    t = strip_presentation(_strip_invisible(text))
+    if is_latex(t):
+        return _latex_divisor_juxtaposed(t) or _latex_argument_ambiguous(t)
+    return any(_closes_divisor(m.string, m.start(1)) for m in _UNI_VALUE_RE.finditer(t)) \
+        or any(_closes_divisor(m.string, m.end(1)) for m in _DEG_PAREN_RE.finditer(t)) \
+        or any(_closes_divisor(m.string, m.end(1) - 1) for m in _DEG_NUM_RE.finditer(t)) \
+        or any(m.group(2) and _closes_divisor(m.string, m.end(2) - 1) for m in _PCT_RE.finditer(t))
 
 
 _PRESENTATION = re.compile(r"^\s*(?:\$\$|\$|\\\(|\\\[)?\s*\\(?:boxed|text|mathrm|displaystyle)\s*\{(.*)\}\s*"
@@ -1212,15 +1806,68 @@ def strip_presentation(s: str) -> str:
     return s
 
 
+# logarithms written as a base and a number (final attack G1RK-1): log_2 5, log_{2}(5), log₂5, log2(5), ln 2, ln5/ln2.
+# Neither a claim nor an option read them, and an option not read blocks a right letter's CORRECT. Only a number or a
+# parenthesized argument is taken, and a bare number only where nothing that could extend it follows (`ln 2x`,
+# `log_2 8^2`, `ln 2/3` are not read): `log` without a base (log 9: ln or log10?) is no notation of either.
+_LOG_HEAD_RE = re.compile(r"(?<![\\\w])(?:log(?:_\{\s*(\d+|e)\s*\}|_(\d+|e)(?![\w.])|([₀-₉]+)|(\d+)(?=\())|(ln))\s*")
+_BARE_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+_BARE_END_RE = re.compile(r"\s*(?:$|[-+)\],}=<>]|/\s*(?:ln|log)(?![A-Za-z]))")
+_SUBSCRIPT = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+
+
+def _closing_paren(s: str, i: int) -> int | None:
+    """The index of the parenthesis closing the one at `s[i]`, or None."""
+    depth = 0
+    for j in range(i, len(s)):
+        if s[j] == "(":
+            depth += 1
+        elif s[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return j
+    return None
+
+
+def _log_notation(s: str) -> str:
+    """`s` with each logarithm written as a base and an argument (`_LOG_HEAD_RE`) as log(argument, base); the rest as
+    it is, and a logarithm whose argument is not a number or a parenthesized group left as written (not read)."""
+    out, i = [], 0
+    while True:
+        m = _LOG_HEAD_RE.search(s, i)
+        if m is None:
+            out.append(s[i:])
+            return "".join(out)
+        base = m.group(1) or m.group(2) or (m.group(3) or "").translate(_SUBSCRIPT) or m.group(4)
+        j = m.end()
+        if j < len(s) and s[j] == "(":
+            k = _closing_paren(s, j)
+            arg, end = (s[j + 1:k], k + 1) if k is not None else (None, j)
+        else:
+            n = _BARE_NUMBER_RE.match(s, j)
+            ok = n is not None and _BARE_END_RE.match(s, n.end()) is not None
+            arg, end = (n.group(0), n.end()) if ok else (None, j)
+        if arg is None or (m.group(5) and j < len(s) and s[j] == "("):
+            out.append(s[i:m.end()])            # not read here (ln(...) is the canonical log(...))
+            i = m.end()
+            continue
+        out.append(s[i:m.start()])
+        out.append(f"log({arg})" if base in (None, "", "e") else f"log({arg}, {base})")
+        i = end
+
+
 def preclean(s: str) -> str:
     """Canonicalise unicode/degree/percent notation. Idempotent."""
     s = strip_presentation(_strip_invisible(s).strip()).strip()
-    s = _UNI_VALUE_RE.sub(r"\1*\2", s)
+    s = _log_notation(s)
+    s = _UNI_VALUE_RE.sub(_juxtaposed_product, s)
     for k, v in _UNICODE_MAP.items():
         s = s.replace(k, v)
-    s = _DEG_PAREN_RE.sub(r"((\1)*pi/180)", s)
-    s = _DEG_NUM_RE.sub(r"((\1)*pi/180)", s)
-    s = _PCT_RE.sub(lambda m: f"(({m.group(1) or m.group(2)})/100)", s)
+    # a unit mark is a factor too: 1/2% is not 1/(2/100) = 50, 180/2° not 180/(2°) (sibling of G4YO-2)
+    s = _DEG_PAREN_RE.sub(lambda m: m.group(0) if _closes_divisor(m.string, m.end(1)) else f"(({m.group(1)})*pi/180)", s)
+    s = _DEG_NUM_RE.sub(lambda m: m.group(0) if _closes_divisor(m.string, m.end(1) - 1) else f"(({m.group(1)})*pi/180)", s)
+    s = _PCT_RE.sub(lambda m: m.group(0) if m.group(2) and _closes_divisor(m.string, m.end(2) - 1)
+                    else f"(({m.group(1) or m.group(2)})/100)", s)
     s = _SQRT_BARE_RE.sub(r"\1(\2)", s)            # "sqrt 3" -> sqrt(3), "∛8" -> cbrt(8)
     s = re.sub(r"\bln\s*\(", "log(", s)
     s = s.replace("^", "**")
@@ -1228,7 +1875,8 @@ def preclean(s: str) -> str:
 
 
 def is_latex(s: str) -> bool:
-    return "\\" in s or bool(re.search(r"\^\{|_\{|\\frac|\\sqrt|\\pi|\\infty|\\cdot", s))
+    # `log_{2} 5` without a backslash is the plain notation of `_log_notation`, not LaTeX
+    return "\\" in s or bool(re.search(r"\^\{|(?<!log)_\{|\\frac|\\sqrt|\\pi|\\infty|\\cdot", s))
 
 
 # ----------------------------------------------------------------------------
@@ -2006,6 +2654,12 @@ _LATEX_GCD = re.compile(r"\\(?:(gcd|lcm)(?![A-Za-z])|operatorname\s*\{\s*(gcd|lc
 _LATEX_INTEGER_OPS = {"\\text{gcd}": "gcd", "\\text{lcm}": "lcm"}
 
 
+def _latex_prepared(s: str) -> str:
+    """A LaTeX text as `_latex_to_sympy` gives it to latex2sympy (\\gcd, \\operatorname{arccot}, exact decimals)."""
+    return _exact_latex_decimals(_LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)),
+                                                _LATEX_ARCCOT.sub(r"\\arccot ", s)))
+
+
 _LATEX_CONVERTER = None
 
 
@@ -2077,6 +2731,7 @@ def _latex2sympy(s: str):
                 return lim
         _LATEX_CONVERTER = _TwoSidedLimits
     converter = _LATEX_CONVERTER(None, None, False, config=ConversionConfig())
+    s = _LATEX_DEG_RE.sub(r"\\cdot\\frac{\\pi}{180}", s)          # a degree is pi/180, as 30° (G1RK-3)
     return converter.parse(normalize_latex(s, NormalizationConfig()))
 
 
@@ -2344,7 +2999,18 @@ def _latex_membership(expr):
 
 
 def _latex_to_sympy(s: str, ns: dict[str, Any]):
-    s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)), _LATEX_ARCCOT.sub(r"\\arccot ", s))
+    if _latex_divisor_juxtaposed(s):
+        # latex2sympy reads 1/2\pi as 1/(2π) and \ln 2/2 as ln(2/2); left to right they are (1/2)π and (ln 2)/2: a
+        # convention of the writer, not guessed (G4YO-2)
+        raise ParseError(f"{s!r} writes a product or a function's argument next to a '/' without brackets "
+                         "((1/2)\\pi or 1/(2\\pi)?): not read")
+    if _latex_argument_ambiguous(s):
+        # \tan x(1 + \tan^2 x): tan(x)·(1 + tan²x) or tan(x(1 + tan²x))? a convention of the writer (audit of the second
+        # round, YO-T2-1, YO-T2-3, RK-T2-3)
+        raise ParseError(f"{s!r} writes a factor right after a function's argument without brackets "
+                         "(\\tan x(1 + \\tan^2 x): inside the argument or after it?): not read")
+    s = _LATEX_GCD.sub(lambda m: r"\mathrm{%s}" % (m.group(1) or m.group(2)),
+                       _LATEX_ARCCOT.sub(r"\\arccot ", _bracket_function_arguments(s)))
     _refuse_latex_ranges(s)
     expr = _latex2sympy(_exact_latex_decimals(s))
     # the names are checked before the IR's symbols bring their declarations too (and again after): with
@@ -2368,6 +3034,11 @@ def _latex_to_sympy(s: str, ns: dict[str, Any]):
             return e.replace(sp.acot, arccot) if e.has(sp.acot) else e   # (0, pi), as in the canonical branch
         expr = _on_sides(expr, lambda e: _latex_limit_variables(_integer_indices(convert(e)), ns))
         _refuse_reversed_ranges(expr, s)
+        # a variable applied as a function: latex2sympy reads x(1) as the undefined function x at 1, which no certificate
+        # decides (it took 47-58 s on \tan \left(x(1\right) + \tan^2 x); audit of the second round, RK-T2-3)
+        applied = sorted({n.func.__name__ for n in expr.atoms(AppliedUndef) if isinstance(ns.get(n.func.__name__), Symbol)})
+        if applied:
+            raise ParseError(f"LaTeX {s!r} applies the variable(s) {applied} as a function: not read")
     # rebind free symbols to the IR symbols (assumptions)
     reps = {}
     for fs in expr.free_symbols:
@@ -2472,20 +3143,116 @@ def _kinks(a, v) -> list:
     return [sp.Or(sp.Ne(a, 0), sp.Eq(da, 0))]
 
 
-def _differentiability(u, v) -> list:
+_SWITCH_TIMEOUT = 8.0          # each sandbox call of a switch zero's reading (certify.calculus's default)
+_SWITCH_CACHE: dict = {}
+_SWITCH_CACHE_LOCK = threading.Lock()
+
+
+def _switch_differentiability(u, v, fconds, values: list | None = None) -> list | None:
+    """Where `u` has a derivative in `v` at the zeros of its switches, read as certify.calculus.kink_reading reads
+    them (the derivative task's twin path): the switches are `switch_arguments`' (|a|, sign, Heaviside, Max/Min, the
+    relations of a Piecewise, the branch cut of atan2/arg), and each finite zero p is classified on u ITSELF by
+    `_classify_kink` (exact rules, then `derivative_at_point` within the reading's budget: u continuous at p and its
+    two one-sided derivatives equal, exactly). A derivative there adds no condition (a C1 junction of a Piecewise,
+    x*|x| at 0); none (a corner, a jump, a cusp, the branch cut) adds v != p; undecided adds v - p in the
+    `Convention` ORIGIN (atan2(0, 0)'s: no value, or a value; undecided at p alone, true elsewhere, the certificates
+    neither keep nor drop such a point), never v != p: read as "no value", a point where the derivative exists left
+    the solution set, and the empty set was certified for (x*|x|)' = 0 (|x|'s rule read alone: SON-G3-YO-1's
+    sibling). Zeros not solved one by one (a family, a parameter, more than `_KINK_POINTS`) are undecided at each
+    (the switch's argument in ORIGIN). An Or with DEFINEDNESS_UNDECIDED was no such condition: SymPy's solveset read
+    it as v != p. The Piecewise switch points and atan2/arg's branch cut were not read at all: the
+    derivative of the piecewise |x| had f'(0) = 1, a jump f'(1) = 2 and atan2(x, -1)'(0) = -1 certified
+    (SON-G3-YO-1). None when u holds a switch with no such argument (floor, frac, Mod, a Piecewise condition that
+    is no relation). The zeros classified as having a derivative go to `values` as (p, f'(p)), its value as the
+    classification proved it (None when it gave none): `_written_diff` checks the value the derivative's reading has
+    there (son-kalkulus second round, YO-K1)."""
+    from ..certify.calculus import (_KINK_BUDGET, _KINK_POINTS, _classify_kink, _generic_points, abs_form,
+                                    switch_arguments)
+    from ..certify.domain import ORIGIN
+    from ..sandbox import run as sb_run
+    # the cache's key names the variable by a fixed symbol of its assumptions (at()'s variable is a fresh one at
+    # each reading of the same text); the name is no identifier a text can write
+    canon = sp.Symbol("switch·var", **v.assumptions0)
+    key = (u.xreplace({v: canon}), tuple(c.xreplace({v: canon}) for c in fconds))
+    with _SWITCH_CACHE_LOCK:
+        hit = _SWITCH_CACHE.get(key, _SWITCH_CACHE)
+    if hit is not _SWITCH_CACHE:
+        if hit is None:
+            return None
+        if values is not None:
+            values += hit[1]
+        return [c.xreplace({canon: v}) for c in hit[0]]
+    # arg(z) is atan2(im z, re z) (z != 0; both have no value at 0): the limits that classify a zero are SymPy's
+    # for atan2, which it takes, and not for arg, which it leaves (arg(-1 + I*x) at 0 was undecided)
+    u = u.replace(lambda n: isinstance(n, sp.arg), lambda n: sp.atan2(sp.im(n.args[0]), sp.re(n.args[0])))
+    # |a|**(2k) of a real a is a**(2k), no switch: |cos(x)|**2 as written read the zeros of cos as a family of
+    # switch points, undecided, and its derivative 0 at pi/2 was no longer certified (son-kalkulus second round,
+    # SK-RK-6)
+    u = u.replace(lambda n: isinstance(n, sp.Pow) and isinstance(n.base, sp.Abs) and n.exp.is_Integer
+                  and n.exp.is_even and n.exp > 0 and n.base.args[0].is_extended_real is True,
+                  lambda n: n.base.args[0] ** n.exp)
+    fa = abs_form(u)
+    switches = switch_arguments(fa, v)
+    out: list | None = None
+    found: list = []
+    if switches is not None:
+        out = []
+        budget = [_KINK_BUDGET]
+        slopes: dict = {}
+        for s in switches:
+            r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(s, 0), v, S.Reals, timeout=_SWITCH_TIMEOUT)
+            K = r.value if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet) else None
+            pts = _generic_points(K, s, v) if K is not None else None
+            if pts is None or len(pts) > _KINK_POINTS or any(
+                    getattr(p_, "free_symbols", None) or getattr(p_, "is_real", None) is not True for p_ in pts):
+                out.append(sp.Contains(s, ORIGIN))
+                continue
+            for p_ in pts:
+                try:
+                    st = _classify_kink(u, fa, v, 1, p_, s, switches, fconds, budget, _SWITCH_TIMEOUT, slopes)
+                except Exception:  # noqa: BLE001 - a reading that fails proves nothing
+                    st = None
+                if st == "value":
+                    got = slopes.get(p_)
+                    got = got.get("value") if isinstance(got, dict) and got.get("status") == "value" else None
+                    if all(q != p_ for q, _ in found):
+                        found.append((p_, got))
+                    continue
+                c = sp.Ne(v, p_) if st == "corner" else sp.Contains(v - p_, ORIGIN)
+                if c not in out:
+                    out.append(c)
+    with _SWITCH_CACHE_LOCK:
+        if len(_SWITCH_CACHE) > 256:
+            _SWITCH_CACHE.clear()
+        _SWITCH_CACHE[key] = None if out is None else ([c.xreplace({v: canon}) for c in out], list(found))
+    if values is not None and out is not None:
+        values += found
+    return out
+
+
+def _differentiability(u, v, values: list | None = None) -> list:
     """Where the operand `u` has a derivative in `v`: its own written conditions made strict (a
     derivative needs a neighbourhood: x*sqrt(x) has none at 0, formal.statement.interior_defined_at)
-    and the kinks and jumps of |a|, sign, Heaviside, Max/Min and floor/ceiling/frac. Without them
-    the derivative of |x - 2| was read as defined on all of R, and f'(0) of x*sqrt(x) was certified
-    (third audit of 30 Sep 2026)."""
-    from ..certify.domain import definedness_conditions
+    and the kinks and jumps of its switches (`_switch_differentiability`: |a|, sign, Heaviside, Max/Min,
+    Piecewise, atan2/arg, each zero read on u itself). Where a switch has no argument to read (floor,
+    frac, Mod), the kinks and jumps of |a|, sign, Heaviside, Max/Min and floor/ceiling/frac node by node,
+    and a Piecewise or an atan2/arg undecided. Without them the derivative of |x - 2| was read as defined
+    on all of R, and f'(0) of x*sqrt(x) was certified (third audit of 30 Sep 2026)."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED, definedness_conditions
     out = []
-    for c in definedness_conditions(u, None):
+    own = definedness_conditions(u, None)
+    for c in own:
         if isinstance(c, sp.Ge) and v in c.free_symbols:
             c = sp.Gt(c.lhs, c.rhs)
         elif isinstance(c, sp.Le) and v in c.free_symbols:
             c = sp.Lt(c.lhs, c.rhs)
         out.append(c)
+    try:
+        sw = _switch_differentiability(u, v, own, values)
+    except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+        sw = [DEFINEDNESS_UNDECIDED]
+    if sw is not None:
+        return [c for c in out + sw if c is not sp.true]
     for n in sp.preorder_traversal(u):
         if not getattr(n, "args", None) or v not in n.free_symbols:
             continue
@@ -2498,7 +3265,130 @@ def _differentiability(u, v) -> list:
             out.append(sp.Or(sp.Ne(a, b), sp.Eq(sp.diff(a, v), sp.diff(b, v))))
         elif isinstance(n, (sp.floor, sp.ceiling, sp.frac)):
             out.append(sp.Ne(sp.sin(sp.pi * n.args[0]), 0))
+        elif isinstance(n, (sp.Piecewise, sp.atan2, sp.arg, sp.Max, sp.Min)):
+            # a switch whose zeros are not read here (beside floor): undecided (SON-G3-YO-1)
+            out.append(DEFINEDNESS_UNDECIDED)
     return [c for c in out if c is not sp.true]
+
+
+def _diff_sequence(args) -> list | None:
+    """The variables of diff(e, *args) or Derivative(e, *args), one per order: (x, 2), (x, (x, 2)) and (x, x) all
+    read [x, x]. None when a variable is no Symbol or an order no natural number (SymPy's own reading then)."""
+    seq: list = []
+    rest = list(args)
+    while rest:
+        v = rest.pop(0)
+        if isinstance(v, (tuple, list, sp.Tuple)):
+            if len(v) != 2:
+                return None
+            v, n = v
+        else:
+            n = rest.pop(0) if rest and (getattr(rest[0], "is_Integer", False)
+                                         or (isinstance(rest[0], int) and not isinstance(rest[0], bool))) else 1
+        try:
+            n = int(n) if getattr(sp.sympify(n), "is_Integer", False) else None
+        except Exception:  # noqa: BLE001
+            n = None
+        if n is None or n < 0 or n > 20 or not isinstance(v, sp.Symbol):
+            return None
+        seq += [v] * n
+    return seq
+
+
+_VALUE_STEP_CACHE: dict = {}
+_VALUE_STEP_CACHE_LOCK = threading.Lock()
+_VALUE_SWITCHES = (sp.Piecewise, sp.Abs, sp.sign, sp.Heaviside, sp.Max, sp.Min)
+
+
+def _value_step(e, v) -> tuple:
+    """d e/dv as the value of `diff` reads it: SymPy's derivative and, at each rational zero of a switch where an exact
+    rule proves e has a derivative (`certify.calculus.exact_point_slopes`) and the formula has another value there
+    (or none), that value, as a branch of its own: Piecewise((f'(p), Eq(v, p)), (formula, True)). SymPy
+    differentiates a point branch as a constant: with f = Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1))
+    its formula is 0 at 1, f'(1) = 0 was certified and the right 2 refuted, f'(x) = 0 had the false root 1 (son-
+    kalkulus second round, YO-K1); sign(0) = 0 made (|x|*sign(x))' = 0 at 0 (it is 1, SK-RK-3). Read on e with v
+    as a real symbol of fixed name (the reading of definedness, `_written_diff`, reads the same rules on the same
+    text and checks these values). Returns (the derivative, [(p, f'(p)) put in])."""
+    from ..certify.calculus import exact_point_slopes
+    from ..equiv.sets import scalar_equal
+    with sp.evaluate(True):
+        e = sp.sympify(e)
+        d = sp.diff(e, v)
+        if not isinstance(v, sp.Symbol) or not e.has(*_VALUE_SWITCHES):
+            return d, []
+        canon = sp.Symbol("switch·var", real=True)
+        key = e.xreplace({v: canon})
+        with _VALUE_STEP_CACHE_LOCK:
+            slopes = _VALUE_STEP_CACHE.get(key)
+        if slopes is None:
+            try:
+                slopes = exact_point_slopes(key, canon)
+            except Exception:  # noqa: BLE001 - no value read: none put in
+                slopes = []
+            with _VALUE_STEP_CACHE_LOCK:
+                if len(_VALUE_STEP_CACHE) > 256:
+                    _VALUE_STEP_CACHE.clear()
+                _VALUE_STEP_CACHE[key] = slopes
+        patches = []
+        for p_, s_ in slopes:
+            try:
+                fv = d.subs(v, p_)
+                # the right value read through sign(0) = 0 is left as it is: (x*|x|)' = |x| + x*sign(x) keeps 0 as a
+                # root SymPy solves (put in as a branch, the empty set for (x*|x|)' = 0 was no longer refuted); `_at`
+                # refuses to read it there
+                same = False if fv.has(sp.nan, sp.zoo, sp.oo, -sp.oo) else scalar_equal(fv, s_)
+            except Exception:  # noqa: BLE001
+                same = None
+            if same is not True:
+                patches.append((p_, s_))
+        for p_, s_ in patches:
+            d = sp.Piecewise((s_, sp.Eq(v, p_)), (d, True))
+    return d, patches
+
+
+def _diff(e, *args, **kwargs):
+    """`diff` as a value: SymPy's derivative order by order (`_value_step`: a value an exact rule proves at a switch
+    point where SymPy's formula has another one is put in)."""
+    seq = _diff_sequence(args)
+    if not seq or kwargs:
+        return sp.diff(e, *args, **kwargs)
+    cur = e
+    for v in seq:
+        cur = _value_step(cur, v)[0]
+    return cur
+
+
+def _value_reading(cur, v):
+    """The value reading of the as-written tree `cur` (its markers dropped, evaluated) with v as `_value_step`'s real
+    symbol of fixed name, and that symbol."""
+    canon = sp.Symbol("switch·var", real=True)
+    with sp.evaluate(True):
+        bare = cur.replace(lambda n: isinstance(n, written_domain), lambda n: n.args[0])
+        return _evaluated_bound(bare.xreplace({v: canon})), canon
+
+
+def _formula_values_unproved(formula, v, values) -> list:
+    """For each zero p of a switch where the operand has a derivative ((p, f'(p)) from `_switch_differentiability`), v
+    - p in ORIGIN (undecided at p) unless the derivative's reading `formula` has that value there, proved (equal to
+    the classification's value, or, with none given, `formula` analytic at p, so its value is f'(p)): a 'value' kink
+    said nothing of the value SymPy's formula has there."""
+    from ..certify.calculus import _plainly_smooth
+    from ..certify.domain import ORIGIN
+    from ..equiv.sets import scalar_equal
+    out = []
+    for p_, s_ in values:
+        try:
+            if s_ is None:
+                ok = _plainly_smooth(formula, v, p_)
+            else:
+                fv = formula.subs(v, p_)
+                ok = not fv.has(sp.nan, sp.zoo, sp.oo, -sp.oo) and scalar_equal(fv, s_) is True
+        except Exception:  # noqa: BLE001 - not proved
+            ok = False
+        c = sp.Contains(v - p_, ORIGIN)
+        if not ok and c not in out:
+            out.append(c)
+    return out
 
 
 def _written_diff(e, *args, **kwargs):
@@ -2507,25 +3397,73 @@ def _written_diff(e, *args, **kwargs):
     was certified for f'(x) = 0 with f = x**3 - 3x, and (0, 1) for f'(x) < 0 (critic of the V14
     audit, 29 Sep 2026). The derivative is taken with evaluation on, and carries where it exists
     (`_differentiability`, order by order) as a written_domain condition. The tree is for
-    definedness only."""
-    seq = []
-    rest = list(args)
-    while rest:
-        v = rest.pop(0)
-        n = rest.pop(0) if rest and getattr(rest[0], "is_Integer", False) else 1
-        seq += [v] * int(n)
-    if not seq or kwargs or not all(isinstance(v, sp.Symbol) for v in seq):
+    definedness only.
+
+    At a zero of a switch where the operand has a derivative, the value `diff` reads there (`_value_step`, the
+    same rules on the same text) must be the proved one, or the point is undecided (`_formula_values_unproved`):
+    the point branch's 0 was certified for f'(1) of Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1))
+    (YO-K1). The order is read the same in every notation (`_diff_sequence`): diff(f, (x, 1)) and Derivative(f,
+    x) took SymPy's derivative with no condition, and |x - 2|'(2) = 0 was certified (YO-K3); `Derivative`, whose
+    value reading keeps the form, is `_written_derivative`."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED
+    seq = _diff_sequence(args)
+    if not seq or kwargs:
         with sp.evaluate(True):
             return sp.diff(e, *args, **kwargs)
     with sp.evaluate(True):
         conds, cur = [], e
         for v in seq:
-            conds += _differentiability(cur, v)
+            values: list = []
+            conds += _differentiability(cur, v, values)
+            try:
+                read, canon = _value_reading(cur, v)
+                d_val, patches = _value_step(read, canon)
+                conds += _formula_values_unproved(d_val.xreplace({canon: v}), v, values)
+            except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+                conds.append(DEFINEDNESS_UNDECIDED)
+                patches = []
             cur = sp.diff(cur, v)
+            for p_, s_ in patches:
+                cur = sp.Piecewise((s_, sp.Eq(v, p_)), (cur, True))
         cond = sp.And(*conds)
     if cond is sp.true:
         return cur
     return written_domain(cur, cond)
+
+
+def _written_derivative(e, *args, **kwargs):
+    """`Derivative` read as written: the form itself, as the value reading keeps it (sp.Derivative, whose value is
+    SymPy's own), with where it exists as `_written_diff` reads it (YO-K3). Kept as the form, its binders stay readable:
+    d/da of a bound integral with a given a = 2 is a question of reading (the pins' check, part d4d), and computed here
+    it was no longer seen. The value checked at a switch point where the operand has a derivative is SymPy's formula,
+    nothing put in."""
+    from ..certify.domain import DEFINEDNESS_UNDECIDED, definedness_conditions
+    form = sp.Derivative(e, *args, **kwargs)
+    seq = _diff_sequence(args)
+    if not seq or kwargs:
+        return form
+    with sp.evaluate(True):
+        conds, cur = [], e
+        for v in seq:
+            values: list = []
+            conds += _differentiability(cur, v, values)
+            try:
+                read, canon = _value_reading(cur, v)
+                conds += _formula_values_unproved(sp.diff(read, canon).xreplace({canon: v}), v, values)
+            except Exception:  # noqa: BLE001 - a reading that fails proves nothing: undecided, never "defined"
+                conds.append(DEFINEDNESS_UNDECIDED)
+            cur = sp.diff(cur, v)
+        cond = sp.And(*conds)
+        # the operand's own written conditions the form carries itself (1/x of Derivative(1/x, x): its pole stays a pole
+        # of the text, `steps.deterministic._written_poles`); only a condition beyond them is put on it
+        try:
+            own = definedness_conditions(e, None)
+        except Exception:  # noqa: BLE001 - not read: every condition is put on it
+            own = []
+        beyond = [c for c in conds if c is not sp.true and c not in own]
+    if cond is sp.true or not beyond:
+        return form
+    return written_domain(form, cond)
 
 
 def _written_integrate(*args, **kwargs):
@@ -2586,7 +3524,8 @@ def _written_rewrite(*args, **kwargs):
     return _rewritten_argument("rewrite", args, kwargs)
 
 
-_WRITTEN_COMPUTING = {"diff": (sp.diff, _written_diff), "integrate": (_integrate, _written_integrate),
+_WRITTEN_COMPUTING = {"diff": (_diff_value, _written_diff), "Derivative": (sp.Derivative, _written_derivative),
+                      "integrate": (_integrate, _written_integrate),
                       "limit": (_limit, _Limit),
                       **{name: (_SAFE_NAMES[name], _held_matrix_op(name))
                          for name in ("det", "trace", "rank", "eigmax", "eigmin")},
@@ -2971,6 +3910,11 @@ def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     s2 = preclean(strip_presentation(_strip_invisible(s))).strip()
     if number_set_named(s2) is not None or number_set_named(s) is not None:
         return sp.Tuple()                           # ℕ⁺, Z+, N0: a set by its name, no condition
+    diff_ = _set_difference(s2)
+    if diff_ is not None:
+        # ℝ minus a set (R - {2}, ℝ∖{2}, R - ({2} ∪ {3}): `parse_set_str`): the set taken out, as written (each
+        # reading of R - A ∪ B has the same parts)
+        return parse_set_as_written(diff_[1], ns)
     parts = _COMPOUND_RE.split(s2)
     if len(parts) > 1:
         # a compound condition (x < -1 or x > 3, x = 1 or x = 2): each part as written
@@ -3001,6 +3945,86 @@ def parse_set_as_written(s: str, ns: dict[str, Any] | None = None):
     return sp.Tuple(*[a for w in read for a in w.args])
 
 
+_SET_DIFFERENCE_RE = re.compile(r"^\s*(\\mathbb\{?R\}?|R|Reals)\s*(?:-|∖|\\setminus(?![A-Za-z])|\\backslash(?![A-Za-z])|\\(?=[\s{\[(]))"
+                                r"\s*(.+?)\s*$", re.S)
+_LATEX_CUP_RE = re.compile(r"\s*\\cup(?![A-Za-z])\s*")
+
+
+class SetDifferenceAmbiguous(ParseError):
+    """ℝ − A ∪ B written without brackets: ℝ − (A ∪ B) as often as (ℝ − A) ∪ B. Read one way only, 'R - {2} ∪ {3}'
+    was certified as the domain of 1/((x - 2)(x - 3)) and refuted as that of 1/(x - 2) (son-kalkulus second round,
+    YO-K4); the verifier reads both (`set_difference_reading`) and decides only when they agree."""
+
+
+# how ℝ − A ∪ B is read: None (not read: SetDifferenceAmbiguous), "whole" (ℝ − (A ∪ B)) or "left" ((ℝ − A) ∪ B)
+_SET_DIFFERENCE_READING: contextvars.ContextVar = contextvars.ContextVar("set_difference_reading", default=None)
+
+
+def set_difference_reading_chosen() -> bool:
+    """Is a reading of ℝ − A ∪ B chosen (inside `set_difference_reading`)?"""
+    return _SET_DIFFERENCE_READING.get() is not None
+
+
+class set_difference_reading:  # noqa: N801 - a context manager used like a function
+    """Within it, ℝ − A ∪ B is read as ℝ − (A ∪ B) ("whole") or as (ℝ − A) ∪ B ("left")."""
+
+    def __init__(self, which: str):
+        if which not in ("whole", "left"):
+            raise ValueError(which)
+        self.which = which
+
+    def __enter__(self):
+        self._token = _SET_DIFFERENCE_READING.set(self.which)
+        return self
+
+    def __exit__(self, *exc):
+        _SET_DIFFERENCE_READING.reset(self._token)
+        return False
+
+
+def _set_difference(s2: str):
+    """(ℝ, the text taken out, its parts at a top-level union) of a precleaned text ℝ − ..., or None. A text taken out
+    that is a bracket around a union is that union (ℝ − ({2} ∪ {3}): one reading)."""
+    m = _SET_DIFFERENCE_RE.match(s2)
+    whole = number_set_named(m.group(1)) if m else None
+    if whole is None:
+        return None
+    rest = _LATEX_CUP_RE.sub(" U ", re.sub(r"\\([{}])", r"\1", m.group(2))).strip()
+    parts = [p for p in _union_parts(rest) if p.strip()]
+    if len(parts) == 1 and rest.startswith("(") and rest.endswith(")") and _closing_bracket(rest, 0) == len(rest) - 1:
+        inner = [p for p in _union_parts(rest[1:-1].strip()) if p.strip()]
+        if len(inner) > 1:
+            return whole, rest[1:-1].strip(), [rest[1:-1].strip()]
+    return whole, rest, parts
+
+
+def _closing_bracket(s: str, i: int) -> int:
+    """The index of the bracket that closes the one at s[i] (any of ([{), or -1."""
+    depth = 0
+    for j in range(i, len(s)):
+        if s[j] in "([{":
+            depth += 1
+        elif s[j] in ")]}":
+            depth -= 1
+            if depth == 0:
+                return j
+    return -1
+
+
+def writes_ambiguous_set_difference(s) -> bool:
+    """Does the text write ℝ − A ∪ B with no bracket saying which comes first (`SetDifferenceAmbiguous`)?"""
+    if not isinstance(s, str):
+        return False
+    try:
+        p = preclean(s)
+        if "U" not in p and "\\cup" not in p:
+            return False
+        d = _set_difference(p)
+    except Exception:  # noqa: BLE001 - not such a text
+        return False
+    return d is not None and len(d[2]) > 1
+
+
 @_holds_forms
 def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
     """Parse set notation: {a, b}, (a, b], [a,b) U (c, d), EmptySet, Reals, sympy Set syntax."""
@@ -3012,7 +4036,22 @@ def parse_set_str(s: str, ns: dict[str, Any] | None = None) -> sp.Set:
         except (sp.SympifyError, TypeError) as e:
             raise ParseError(f"not a set: {type(s).__name__}") from e
         return val if isinstance(val, sp.Set) else FiniteSet(val)
-    sets = [_parse_single_set(p, ns) for p in _union_parts(preclean(s)) if p.strip()]
+    s2 = preclean(s)
+    # ℝ minus a set, the way a textbook writes a domain: R - {2}, \mathbb{R} - \{2\}, ℝ∖{2}, \mathbb{R} \setminus
+    # \{2\}, R - [2, 3]; and LaTeX's \cup between intervals. Not read, they were UNKNOWN (son saldırı SON-G3-RK-4).
+    # ℝ − A ∪ B is read the way `set_difference_reading` says, or not at all (YO-K4)
+    diff_ = _set_difference(s2)
+    if diff_ is not None:
+        whole, rest, parts = diff_
+        if len(parts) > 1:
+            which = _SET_DIFFERENCE_READING.get()
+            if which is None:
+                raise SetDifferenceAmbiguous(f"{s!r}: ℝ − A ∪ B is ℝ − (A ∪ B) or (ℝ − A) ∪ B: not read")
+            if which == "left":
+                return Union(sp.Complement(whole, parse_set_str(parts[0], ns)),
+                             *[parse_set_str(p, ns) for p in parts[1:]])
+        return sp.Complement(whole, parse_set_str(rest, ns))
+    sets = [_parse_single_set(p, ns) for p in _union_parts(_LATEX_CUP_RE.sub(" U ", s2)) if p.strip()]
     from ..equiv.sets import unify_endpoints, EndpointsIncomparable
     try:
         sets = unify_endpoints(sets)

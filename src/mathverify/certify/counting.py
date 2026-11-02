@@ -387,6 +387,77 @@ def _count_integers(ctx: Ctx, var, ev: dict) -> tuple[int | None, str | None]:
     return count, None
 
 
+_ZERO_POWER_LIMIT = 2_000           # integers a count over real_power conventions decides one by one
+
+
+def _count_integers_both_readings(ctx: Ctx, var, ev: dict) -> tuple[set | None, str | None]:
+    """The counts of `_count_integers` under the readings of 0**0, when the only conditions the domain did not apply
+    are real_power conventions (`certify.domain.Convention`, x**x): each integer of the givens' bounded range is
+    decided at the point, where b**e is read from the exact values of b and e (an integer e of a nonzero b, a
+    positive rational e of 0: the one value); 0**0 is 1 under one reading and undefined under the other, so the
+    counts are two; any other undecided power (a negative base at a non-integer exponent) decides nothing (None).
+    The count over x**x (2 + sin x) > 0 on -3..3 was UNKNOWN for every claim, the wrong 3 and 6 too: 4 (0**0
+    undefined) or 5 (0**0 = 1) (final attack G1RK-8; the verifier's measure: the condition was never applied)."""
+    from .domain import REAL_POWER, _real_power_holds, in_domain, relation_holds_at
+    rels, unbound = ctx.on_var(ctx.givens(), var)
+    unbound = ctx.unapplied_conditions(var) + unbound
+    conv = [c for c in unbound if isinstance(c, sp.Contains) and c.args[1] == REAL_POWER
+            and isinstance(c.args[0], sp.Tuple) and len(c.args[0]) == 2]
+    if not unbound or len(conv) != len(unbound) or not rels:
+        return None, None
+    try:
+        dom = sp.Union(ctx.domain_for(var), ctx.convention_region(var))
+    except Exception as e:  # noqa: BLE001
+        return None, f"domain_failed: {type(e).__name__}"
+    lows, highs = [], []
+    dlo, dhi = _dom_int_bounds(dom)
+    lows += [dlo] if dlo is not None else []
+    highs += [dhi] if dhi is not None else []
+    solved = []                       # relations solveset reads exactly bound the range; the others are read at points
+    for rel in rels:
+        if any(isinstance(a, sp.Pow) and var in a.exp.free_symbols for a in rel.atoms(sp.Pow)):
+            continue
+        r = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(rel), var, S.Reals, timeout=ctx.timeout)
+        if not r.ok or not isinstance(r.value, Interval):
+            continue
+        a_, b_, ok = _interval_int_bounds(r.value)
+        if not ok:
+            continue
+        lows += [a_] if a_ is not None else []
+        highs += [b_] if b_ is not None else []
+        solved.append(rel)
+    if not lows or not highs:
+        return None, "infinite_or_unsupported_set"
+    lo_c, hi_c = max(lows), min(highs)
+    if hi_c - lo_c + 1 > _ZERO_POWER_LIMIT:
+        return None, "candidate_range_too_large"
+    sure = zero = 0
+    for k in range(lo_c, hi_c + 1):
+        kk = sp.Integer(k)
+        indom = in_domain(dom, kk)
+        if indom is None:
+            return None, f"domain_membership_undecided_at_{k}"
+        if not indom:
+            continue
+        pairs = [c.args[0].xreplace({var: kk}) for c in conv]
+        at_zero = False
+        for b_, e_ in pairs:
+            if _real_power_holds(sp.Tuple(b_, e_)) is sp.true:
+                continue
+            if b_ == 0 and e_ == 0:
+                at_zero = True                   # 0**0: 1 or undefined
+                continue
+            return None, f"power_undecided_at_{k}"
+        holds = [relation_holds_at(r, var, kk) for r in rels]
+        if any(h is None for h in holds):
+            return None, f"undecided_at_{k}"
+        if all(holds):
+            zero += at_zero
+            sure += not at_zero
+    ev["zero_power_readings"] = {"undefined": sure, "one": sure + zero}
+    return {sure, sure + zero}, None
+
+
 # ---------------------------------------------------------------------------------------------
 # count_solutions
 # ---------------------------------------------------------------------------------------------
@@ -531,9 +602,22 @@ def verify(ir, solution, ctx: Ctx):
         elif kind == "count_integers":
             var = ctx.sym(p.get("var", "x"))
             truth, why = _count_integers(ctx, var, ev)
+            if truth is None and (why or "").startswith("condition_not_applied"):
+                counts, why2 = _count_integers_both_readings(ctx, var, ev)
+                if counts is not None:
+                    ev["method"] = "integer_points_under_both_readings_of_0**0"
+                    if claimed not in counts:
+                        ev["reason"] = "count_wrong_under_every_reading"
+                        return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
+                    if len(counts) > 1:
+                        return unknown(LAYER, "count_depends_on_the_reading_of_0**0", t.ms, ev,
+                                       flags=["condition_not_applied"])
+                    truth, why = next(iter(counts)), None
+                elif why2:
+                    ev["both_readings"] = why2
             if truth is None:
                 return unknown(LAYER, why or "count_failed", 0, ev, flags=_why_flags(why))
-            ev["method"] = "interval_integer_count"
+            ev.setdefault("method", "interval_integer_count")
         else:  # count_solutions: exact brute force over integer boxes
             syms = ctx.syms()
             bounds = {}

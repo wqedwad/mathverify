@@ -15,7 +15,7 @@ import time
 import sympy as sp
 
 from .certify import MODULES
-from .certify.base import decimal_comma, make_ctx, result, unknown, Timer
+from .certify.base import OPTION_READER, TOLERANCE_WINDOW, decimal_comma, make_ctx, result, unknown, Timer
 from .equiv import answers_equivalent, exact_integer
 from .fuse import fuse
 from .ir import MalformedIR, ProblemIR, LeakageError
@@ -37,8 +37,119 @@ def _versions() -> dict[str, str]:
     return dict(_VERSIONS)
 
 
-_NO_SOLUTION = re.compile(r"çözüm(\s*kümesi)?\s*(yok|boş)|kök\s*yok|boş\s*küme|no\s*(real\s*)?solution|∅|emptyset",
-                          re.IGNORECASE)
+# A text that IS the empty set or says "no solution", as a whole (wrappers, 'Ç = ', 'x ∈ ' and a final '.' aside): '∅',
+# '{}', 'Ø', '\emptyset', 'Çözüm yok', 'Gerçel kök yoktur', 'Boş küme', 'No real solution'. Searched anywhere in the
+# text, '{∅}' (the set holding the empty set, a classic distractor), '∅ ∪ {1}' and 'Çözüm yok değil' were read as
+# "no solution", and the wrong letter beside the right ∅ was CORRECT (final attack G4YO-1). A text that only names the
+# empty set or those words (`_NO_SOLUTION_MENTION`) is read as written, by the option's reader.
+_EMPTY_SET_TEXT = r"(?:∅|ø|\\emptyset|\\varnothing|emptyset|\\?\{\s*\\?\})"
+# the adjective of the roots (MEB writes 'gerçek'; 'gerçel', 'reel' too) and 'in the real numbers' (audit SA-RK-1)
+_REAL_ADJ = r"(?:(?:gerçek|gerçel|reel)\s+(?:sayılarda\s+)?)?"
+_NO_SOLUTION_WORDS = (r"(?:(?:denklemin|eşitsizliğin|fonksiyonun|hiçbir|hiç)\s+)*" + _REAL_ADJ +
+                      r"(?:çözüm(?:ü|leri|ler)?|kök(?:ü|leri|ler)?)(?:\s+kümesi)?\s*"
+                      r"(?:yok(?:tur)?|boş(?:tur|\s+küme(?:dir)?)?)"
+                      r"|boş\s+küme(?:dir)?"
+                      r"|hiçbir\s+" + _REAL_ADJ + r"sayı\s+(?:için\s+)?sağlanmaz"
+                      r"|(?:there\s+(?:is|are)\s+)?no\s+(?:real\s+)?(?:solutions?|roots?)|(?:the\s+)?empty\s+set")
+# what may name the set before it: the solution set or the domain by name or by their abbreviations (Ç, ÇK, Ç.K., S, TK,
+# T.K., D(f)), or the variable, with '=', ':', '∈'; 'çözüm kümesi' / 'tanım kümesi' also without (audit SA-RK-2)
+_NO_SOLUTION_PREFIX = (r"(?:(?:(?:denklemin|eşitsizliğin|fonksiyonun)\s+)?(?:çözüm|tanım)\s+kümesi\s*(?:(?:=|:|∈)\s*)?"
+                       r"|(?:ç(?:\s*\.?\s*k\s*\.?)?|t\s*\.?\s*k\s*\.?|d\s*\(\s*[a-z]\s*\)|d_?[a-z]|s|[a-z])\s*"
+                       r"(?:=|:|∈|\\in(?![a-z]))\s*)")
+# what may follow it: the set named again in brackets ('Boş küme (∅)', '∅ (boş küme)') and the copula ('∅'dir')
+_NO_SOLUTION_SUFFIX = (r"(?:\s*\(\s*(?:boş\s+küme|∅|ø|\\emptyset|\\varnothing|empty\s+set)\s*\))?"
+                       r"(?:\s*['’]?\s*(?:dir|dır|dur|dür|tir|tır|tur|tür))?")
+_NO_SOLUTION = re.compile(
+    r"^\s*(?:\$+|\\\()?\s*" + rf"(?:{_NO_SOLUTION_PREFIX})?" + rf"(?:{_EMPTY_SET_TEXT}|{_NO_SOLUTION_WORDS})"
+    + _NO_SOLUTION_SUFFIX + r"\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
+_NO_SOLUTION_MENTION = re.compile(
+    r"çözüm(?:ü|leri|ler)?(\s*kümesi)?\s*(yok|boş)|kök(?:ü|leri|ler)?\s*yok|boş\s*küme|no\s*(real\s*)?(?:solution|root)"
+    r"|∅|ø|emptyset|varnothing|(?:gerçek|gerçel|reel)\s+(?:kök|çözüm|sayı)",
+    re.IGNORECASE)
+
+
+def _from_letter(ir: ProblemIR, solution: Solution, ctx, text: str | None = None) -> bool:
+    """Fill the claim from the option its letter names (or from `text`, another reading of that option), as a letter
+    alone is read: the option read as a claim of the answer's shape is (`Ctx.option_value`), 'x > -2' names (-2, oo),
+    and '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1): False then, the payload left at the text."""
+    ca = solution.claimed_answer
+    # one marked number in a unit the IR's value is proved to count in is the plain number ('%20' is 20 for
+    # (p2 - p1)/p1*100; `Ctx.plain_unit_reading`, final attack EK 8)
+    ca.payload = ctx.plain_unit_reading(ir.options[ca.option] if text is None else text)
+    if ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
+        ca.payload = "{}"
+    named = ctx.option_condition_set(ca.option, text)
+    if named is not None and ir.answer_shape not in ("set", "interval") and isinstance(named, sp.FiniteSet) \
+            and len(named) == 1:
+        # one value asked for: 'x = 6' names 6. Read as the set {6}, a Python set beside the claim 6, it was refuted by
+        # the certificates as a set of a set, and the right letter vetoed (second audit of the branch, T2-RK-3)
+        ca.payload = str(next(iter(named)))
+    elif named is not None:
+        ca.payload = str(named)
+    elif ir.answer_shape != "interval" and decimal_comma(ca.payload):
+        return False
+    ca.payload_source = "option_letter"
+    if ir.answer_shape in ("set", "interval"):
+        ca.kind = ir.answer_shape
+    elif ir.answer_shape == "count":
+        n_opt = exact_integer(ca.payload)
+        if n_opt is not None:
+            ca.kind, ca.payload = "count", n_opt
+        else:
+            ca.kind = "value"
+    return True
+
+
+def _option_read_as_claim(ir: ProblemIR, solution: Solution, ctx, text: str | None = None) -> Solution | None:
+    """A copy of the solution whose claim is the chosen option (or `text` in its place), read by the claim's own reader:
+    filled as a letter alone is (`_from_letter`), its notation normalized and the junk around it cleaned as the
+    claim's (`_normalize_set_notation`, `_sanitize_payload`); None for a decimal comma (not guessed). The option was
+    read by another reader than the claim: 'x ∈ (2, 3)' (and 'Ç = ...', '$...$', '6 cm') was a claim the certificates
+    read and an option they did not, and since the d4j addendum an option not read blocks the CORRECT of a right letter
+    (final attack G1RK-1)."""
+    import copy as _copy
+    sol2 = _copy.deepcopy(solution)
+    sol2.claimed_answer.payload = None
+    if not _from_letter(ir, sol2, ctx, text):
+        return None
+    _normalize_set_notation(ir, sol2, ctx)
+    _sanitize_payload(sol2, ctx)
+    return sol2
+
+
+def _lettered(solution: Solution, letter: str) -> Solution:
+    """A copy of the solution that picked the option `letter`."""
+    import copy as _copy
+    sol2 = _copy.deepcopy(solution)
+    sol2.claimed_answer.option = letter
+    return sol2
+
+
+def _option_claim_value(ir: ProblemIR, solution: Solution, ctx, text: str | None = None):
+    """The chosen option's value (or that of `text`, another reading of it) read as the claim is
+    (`_option_read_as_claim`); what that reader does not take, the option's own reader (`Ctx.option_value`) may. An
+    option that names the task's unknown ('{x}', 'x') is no value: not read (SA-RK-8)."""
+    sol2 = _option_read_as_claim(ir, solution, ctx, text)
+    v = None
+    if sol2 is not None:
+        try:
+            v = ctx.claimed(sol2)
+        except LeakageError:
+            raise
+        except Exception:  # noqa: BLE001 - not read as a claim: the option's own reader
+            v = None
+    if v is None:
+        v = ctx.option_value(solution.claimed_answer.option, text)
+    if isinstance(v, (set, frozenset)):
+        v = sp.FiniteSet(*v)            # the reader's Python set (T2-RK-3)
+    # a condition ('x**2 < 4' read as {x**2 < 4}) is another kind, which mc.consistency reports itself
+    # (`_option_out_of_kind`: option_unreadable)
+    hit = _names_the_unknown(ir, ctx, v) if _value_shaped(ir, sol2.claimed_answer if sol2 is not None
+                                                          else solution.claimed_answer) \
+        and not _option_out_of_kind(v) else []
+    if hit:
+        raise ValueError(f"the option names the unknown(s) {hit}: no value")
+    return v
 
 
 def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
@@ -52,14 +163,15 @@ def _option_and_claim(ir: ProblemIR, solution: Solution, ctx):
         from .certify.geometry_numeric import has_degree_mark, strip_degree_marks
         from .normalize.parse import parse_expr_str
         opt = str(ir.options[ca.option])
-        ov = parse_expr_str(strip_degree_marks(opt), ctx.ns) if has_degree_mark(opt) else ctx.option_value(ca.option)
+        ov = (parse_expr_str(strip_degree_marks(opt), ctx.ns) if has_degree_mark(opt)
+              else _option_claim_value(ir, solution, ctx))
         pay = ca.payload
         if isinstance(pay, str) and has_degree_mark(pay):
             cv = parse_expr_str(strip_degree_marks(pay), ctx.claim_ns(solution))
         else:
             cv = ctx.claimed(solution)
         return ov, cv
-    return ctx.option_value(ca.option), ctx.claimed(solution)
+    return _option_claim_value(ir, solution, ctx), ctx.claimed(solution)
 
 
 def _option_out_of_kind(ov) -> bool:
@@ -84,6 +196,79 @@ def _mc_undecided(reason: str, ms: float, ev: dict | None = None) -> LayerResult
     return unknown("mc.consistency", reason, ms, ev, flags=[OPTION_UNDECIDED])
 
 
+def _compare_option(ir: ProblemIR, solution: Solution, ctx, ov, cv, t) -> tuple[bool | None, dict] | LayerResult:
+    """mc.consistency's comparison of the option's value `ov` with the claim's `cv`: (equal or not, undecided None;
+    the evidence), or the layer itself when the two are not read as one kind."""
+    ca = solution.claimed_answer
+    from .certify.linalg import _as_matrix, matrices_equal
+    if isinstance(cv, sp.Set) != isinstance(ov, sp.Set) and all(
+            isinstance(v, (sp.Set, sp.Expr)) and _as_matrix(v) is None for v in (cv, ov)):
+        # a value against a set (a set answer): the certificates read a value claim as {value}, and so is the
+        # value here (pi/3 against the option {pi/6} was undecided, and the wrong letter stood)
+        cv, ov = (v if isinstance(v, sp.Set) else sp.FiniteSet(v) for v in (cv, ov))
+    shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
+    if shape == "count":
+        ci, oi = exact_integer(cv), exact_integer(ov)   # never int(): it truncates 3.5 to 3
+        ok = None if oi is None else (ci is not None and ci == oi)
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv)}
+    elif _as_matrix(cv) is not None or _as_matrix(ov) is not None:
+        mc_, mo_ = _as_matrix(cv), _as_matrix(ov)
+        if (mc_ is None) != (mo_ is None):
+            # a pair or a vector against a number (the option '(1, 5)' for 3): another kind, see below
+            return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
+                           t.ms, flags=["option_unreadable"])
+        ok = matrices_equal(mc_, mo_)[0]
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": "matrix_entrywise"}
+    elif isinstance(cv, sp.Equality) or isinstance(ov, sp.Equality):
+        ok, cev = answers_equivalent(cv, ov, shape="equation", var=next(iter(ctx.syms()), None))
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
+    elif _option_out_of_kind(ov):
+        # the option read as another kind than the claim (a pair for a number, a set of conditions for a set):
+        # what the letter names is not read, so it neither refutes the claim nor stands for it (fourth audit
+        # D4F2B-ONCEKI-1: the option 'x**2 < 4' read as {x**2 < 4} refuted the claim (-2, 2))
+        return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
+                       t.ms, flags=["option_unreadable"])
+    else:
+        ok, cev = answers_equivalent(cv, ov, shape=shape)
+        ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
+    return ok, ev
+
+
+def _claims_no_solution(ir: ProblemIR, solution: Solution, ctx) -> bool:
+    """Does the solution claim the empty set (or "none") for a set answer?"""
+    ca = solution.claimed_answer
+    if ca.kind == "none":
+        return True
+    if ir.answer_shape not in ("set", "interval") and ca.kind not in ("set", "interval"):
+        return False
+    try:
+        return ctx.claimed(solution) == sp.S.EmptySet
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: not the empty set
+        return False
+
+
+# A claim that is only a word for "does not exist" ('Yoktur', 'limit yoktur', 'türevi yoktur', 'mevcut değil',
+# 'tanımsız', 'DNE', 'does not exist'). The path (b) reader gives "Cevap: Yoktur" of a scalar question the kind 'value',
+# and mc.consistency refuted it against the option 'Yoktur' (option_says_DNE_but_a_value_was_claimed): the same claim
+# of the kind 'dne' was CORRECT (EK 11, the calculus audit's N0/4/8/12, T112). A value with it ('5 yoktur') is no such.
+_DNE_ONLY = re.compile(
+    r"^\s*(?:\$+|\\\()?\s*(?:\\text\s*\{\s*)?"
+    r"(?:(?:bu\s+)?(?:limit|limiti|türev|türevi|değer|değeri|sınır|sınırı)\s+|(?:the\s+)?(?:limit|derivative)\s+)?"
+    r"(?:yok(?:tur)?|mevcut\s+değil(?:dir)?|tanımsız(?:dır)?|dne|does\s+not\s+exist|undefined)"
+    r"\s*\}?\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
+
+
+def _dne_word_claim(solution: Solution) -> None:
+    """A claim of the kind 'value' that is only a word for "does not exist" (`_DNE_ONLY`) is the claim 'dne'. For a set
+    answer too: the value 'Yok' beside the option 'Yok' of x**2 + 1 = 0 was refuted by the same DNE word test (an unjust
+    rejection); as 'dne' it is undecided there."""
+    ca = solution.claimed_answer
+    if ca.kind == "value" and isinstance(ca.payload, str) and _DNE_ONLY.match(ca.payload):
+        ca.kind = "dne"
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
@@ -102,6 +287,9 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             return result("mc.consistency", "fail", 0.99, True,
                           {"reason": "option_letter_not_in_question", "option": ca.option}, t.ms)
         opt_text = str(ir.options[ca.option]).strip().lower()
+        # the empty set or "no solution" named inside something more ('{∅}', '∅ ∪ {1}', 'Çözüm yok değil'): read as
+        # written below by the option's reader, never by its words (final attack G4YO-1)
+        mention = not _NO_SOLUTION.search(opt_text) and bool(_NO_SOLUTION_MENTION.search(opt_text))
         if _NO_SOLUTION.search(opt_text):
             # "Çözüm yok" is the empty solution set, not "does not exist": the generic "yok" test
             # below refuted a correct empty-set answer that chose it (audit of 25 Sep 2026)
@@ -114,15 +302,23 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
                 return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
             ev["reason"] = "option_says_no_solution_but_a_solution_was_claimed"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
-        if ca.kind == "dne":
+        if ca.kind == "dne" and not mention:
             ok = bool(re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text))
             ev = {"option": ca.option, "option_text": opt_text, "claimed": "DNE"}
             if ok:
                 return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
             ev["reason"] = "claimed_DNE_but_option_is_a_value"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
-        if re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text):
+        if not mention and re.search(r"yok|dne|tanımsız|mevcut değil|does not exist", opt_text):
             ev = {"option": ca.option, "option_text": opt_text, "claimed": str(ca.payload)}
+            if ca.payload_source == "option_letter" and ir.answer_shape in ("set", "interval"):
+                # the letter alone for a set: the claim is this option's own text, "no solution" in words no reading
+                # took ('Sağlayan bir x değeri yoktur' for ∅ was refuted against itself; sibling of SA-RK-1)
+                return _mc_undecided("option_text_is_the_claim_and_not_read", t.ms, ev)
+            if _claims_no_solution(ir, solution, ctx):
+                # 'yok' beside the empty set of a set answer: "no solution" in words no reading above took, never a
+                # refutation of ∅ (audit SA-RK-1: 'Gerçek kökü yoktur' refuted the right ∅)
+                return _mc_undecided("option_says_no_value_beside_an_empty_claim", t.ms, ev)
             ev["reason"] = "option_says_DNE_but_a_value_was_claimed"
             return result("mc.consistency", "fail", 0.99, True, ev, t.ms, primary=False)
         if ca.payload in (None, ""):
@@ -135,37 +331,18 @@ def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | Non
             ov, cv = _option_and_claim(ir, solution, ctx)
         except Exception as e:  # noqa: BLE001
             return _mc_undecided(f"option_parse_error: {e}", t.ms)
-        from .certify.linalg import _as_matrix, matrices_equal
-        if isinstance(cv, sp.Set) != isinstance(ov, sp.Set) and all(
-                isinstance(v, (sp.Set, sp.Expr)) and _as_matrix(v) is None for v in (cv, ov)):
-            # a value against a set (a set answer): the certificates read a value claim as {value}, and so is the
-            # value here (pi/3 against the option {pi/6} was undecided, and the wrong letter stood)
-            cv, ov = (v if isinstance(v, sp.Set) else sp.FiniteSet(v) for v in (cv, ov))
-        shape = "set" if isinstance(cv, sp.Set) else ("count" if ca.kind == "count" else "scalar")
-        if shape == "count":
-            ci, oi = exact_integer(cv), exact_integer(ov)   # never int(): it truncates 3.5 to 3
-            ok = None if oi is None else (ci is not None and ci == oi)
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv)}
-        elif _as_matrix(cv) is not None or _as_matrix(ov) is not None:
-            mc_, mo_ = _as_matrix(cv), _as_matrix(ov)
-            if (mc_ is None) != (mo_ is None):
-                # a pair or a vector against a number (the option '(1, 5)' for 3): another kind, see below
-                return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
-                               t.ms, flags=["option_unreadable"])
-            ok = matrices_equal(mc_, mo_)[0]
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": "matrix_entrywise"}
-        elif isinstance(cv, sp.Equality) or isinstance(ov, sp.Equality):
-            ok, cev = answers_equivalent(cv, ov, shape="equation", var=next(iter(ctx.syms()), None))
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
-        elif _option_out_of_kind(ov):
-            # the option read as another kind than the claim (a pair for a number, a set of conditions for a set):
-            # what the letter names is not read, so it neither refutes the claim nor stands for it (fourth audit
-            # D4F2B-ONCEKI-1: the option 'x**2 < 4' read as {x**2 < 4} refuted the claim (-2, 2))
-            return unknown("mc.consistency", f"option {ir.options[ca.option]!r} is not read as the answer's kind",
-                           t.ms, flags=["option_unreadable"])
-        else:
-            ok, cev = answers_equivalent(cv, ov, shape=shape)
-            ev = {"option": ca.option, "option_value": str(ov), "claimed": str(cv), "compare": cev}
+        got = _compare_option(ir, solution, ctx, ov, cv, t)
+        if isinstance(got, LayerResult):
+            return got
+        ok, ev = got
+        other = _mc_unit_reading(ir, solution, ctx, ov, cv, t)
+        if other is not None:
+            ok2, ev["unit_reading"] = other
+            if ok2 is not ok or ok is None:
+                # the mark is a unit or the plain number's, and the two readings decide differently (or one is
+                # undecided): a convention of the question, never CORRECT this way, never refuted (G1RK-3)
+                ev["reason"] = "unit_mark_read_as_a_unit_and_as_a_plain_number_decide_differently"
+                return unknown("mc.consistency", ev["reason"], t.ms, ev, flags=[UNIT_CONVENTION])
     if ok is True:
         return result("mc.consistency", "pass", 0.99, True, ev, t.ms, primary=False)
     if ok is False:
@@ -232,10 +409,91 @@ _MATHY = re.compile(r"[0-9+\-*/^=<>≤≥≠∞√πα-ωΑ-Ω]|\\[A-Za-z]+")
 _TAGLIKE = re.compile(r"^<[^<>]*>(?:[^<>]*</[^<>]*>)?$")
 
 
+# Negation or doubt in the prose after the value. Turkish adds its suffixes to the word (değil-dir, yanlış-tır,
+# hariç-tir, olma-yabilir, san-mıyorum, mi-dir): matched as whole words only, '5 değildir' and '5 yanlıştır' were cleaned
+# to 5 and certified (final attack G4YO-3). The Turkish stems match with any suffix, a verb's negative suffix (-maz/-mez,
+# -mıyor, -mayabilir, -mamış, -mamalı) on any word, the question particle (mi, midir, mısınız) alone; English words whole.
 _NEGATION = re.compile(
-    r"(?<!\w)(değil|degil|olamaz|olmaz|yanlış|yanlis|hariç|haric|dışında|disinda|hayır|hayir|yok|"
-    r"belki|muhtemelen|sanırım|sanirim|galiba|not|no|never|cannot|can't|isn't|wrong|except|maybe|"
-    r"perhaps|probably)(?!\w)|\?", re.IGNORECASE)
+    r"(?<!\w)(?:değil|degil|yanlış|yanlis|hariç|haric|dışında|disinda|hayır|hayir|yok|olamaz|olmaz|olma[dmy]|olabil|"
+    r"belki|muhtemelen|sanırım|sanirim|sanmı|sanmi|sanki|zannet|zanned|galiba|herhalde|tahmin|şüphe|kuşku|imkans|imkâns)\w*"
+    r"|(?<!\w)\w*?(?:m[ae]z|m[ıiuü]yor|m[ae]y[ae]bil|m[ae]m[ıiuü]ş|m[ae]m[ae]l[ıi]|m[ae]d[ıi]|m[ae]y[ae]c[ae]k"
+    r"|m[ae]m[ae]kt[ae])\w*"
+    # a rejection of the value (audit SA-YO-2): reddedilir, geçersiz, hatalı, elenir, invalid, rejected, ✗
+    r"|(?<!\w)(?:redded|reddet|geçersiz|gecersiz|hatalı|hatali|elen|yanıl|yanil)\w*|[✗✘❌]"
+    r"|(?<!\w)(?:invalid|rejected|reject|extraneous|discarded|false)(?!\w)"
+    r"|(?<!\w)m[ıiuü](?:d[ıiuü]r|s[ıiuü]n(?:[ıiuü]z)?|y[ıiuü]m|y[ıiuü]z)?(?!\w)"
+    r"|(?<!\w)(?:not|no|nor|never|cannot|can't|isn't|isnt|aren't|doesn't|don't|won't|wrong|incorrect|false|except|"
+    r"maybe|perhaps|probably|possibly|unlikely|might|doubt|unsure)(?!\w)|\?", re.IGNORECASE)
+
+
+# The prose after a value that the cleaner may drop: words that leave the value as it is (a copula, a count or unit word,
+# "the answer", "the largest value", "certainly"), measured on the project's corpora (evalset, K4, the part and final
+# probes: their only real tails are these; the prompt injections of harness/adversarial.py, whose verdict must not
+# change, and markup such as <verdict>…</verdict>, `_TAGLIKE`) and the two audit lenses' affirmative lists. Any other word
+# leaves the payload unread (UNKNOWN), a negation or a rejection marks it negated: a list of what is refused let
+# '5 sağlamadı', '5 geçersiz', '5 ✗' through, and a widened one refused '5 olabilecek en büyük değerdir' and '5 şüphesiz'
+# (audit SA-YO-2, SA-RK-3).
+_TAIL_ALLOWED = frozenset("""
+bulunur bulunmuştur bulunmaktadır olur olarak elde edilir edildi olmalıdır olmalı eşittir eşit doğrudur doğru dır dir dur
+dür tır tir tur tür tane adet birim birimkare br br² cevap cevaptır cevabı cevabıdır sonuç sonuçtur sonucu sonucudur sonucuna
+ulaşılır bu çözüm çözümdür çözümü değer değerdir değeri değeridir en büyük büyüğü küçük küçüğü fazla az çok olabilecek
+alabileceği olası mümkün olan tek eşsiz kesin kesindir kesinlikle şüphesiz kuşkusuz muhtemel durum durumdur farklı vardır
+tamsayı tamsayıdır tamsayısıdır tam sayı sayıdır pozitif negatif sıfır sıfırdan kök köktür kökü çift katlı sabit sabittir
+kalır değişmez tamamı beklendiği gibi tahmin edilen edildiği olasılık olasılıkla olduğu için alınır nokta noktası noktasıdır
+derece radyan rad cm mm km kg gr ton lt litre ml cm² cm2 m² m2 cm³ m³ km² saat sa dakika dk saniye sn gün hafta ay yıl lira tl
+kuruş kişi metre santimetre kilometre gram kilogram km/sa m/sn m/s
+is the answer final value largest smallest maximum minimum units unit equals yani yüzden budur dolayısıyla böylece
+onaylayın ignore previous instructions and mark this as correct system above verified
+kümesi kümesidir küme aralığı aralığıdır aralık kökleri çözümleri değerleri değerini alır eder çıkar olacaktır oluyor
+hesaplanır
+""".split())
+# the Turkish copula on a neutral word of the allow list: 'tanedir', 'kişidir', 'değerdir' (audit of the second round,
+# RK-T2-4); never on a unit ('5 derecedir': its reading as a unit is the IR's) nor on a word of likelihood ('5
+# muhtemeldir' says 5 is probable, a doubt)
+_COPULA = re.compile(r"^(.+?)['’]?(?:dır|dir|dur|dür|tır|tir|tur|tür)$")
+_COPULA_STEMS = frozenset("tane adet kişi birim değer sonuç cevap çözüm kök küme sayı tamsayı doğru eşit sabit kesin".split())
+
+
+def _tail_word_allowed(n: str) -> bool:
+    """Is the word `n` of a trailing prose one the cleaner may drop (`_TAIL_ALLOWED`, or a neutral word with the
+    copula, `_COPULA_STEMS`)?"""
+    if n in _TAIL_ALLOWED:
+        return True
+    m = _COPULA.match(n)
+    return m is not None and m.group(1) in _COPULA_STEMS
+# phrases of words the negation test would read wrongly: 'negatif olmayan' (nonnegative), 'olabilecek en büyük', 'muhtemel
+# durum' (a possible outcome), 'şüphesiz' (doubtless), 'değişmez' (constant), 'tahmin edilen' (the estimated one)
+_AFFIRMATIVE_PHRASES = re.compile(
+    r"(?<!\w)(?:(?:negatif|pozitif|sıfır|boş)\s+olmayan|olabilecek|alabileceği|olası|muhtemel\s+(?:durum|sonuç)\w*"
+    r"|şüphesiz|kuşkusuz|değişmez|tahmin\s+edil(?:en|diği)|largest\s+possible|smallest\s+possible)(?!\w)",
+    re.IGNORECASE)
+_TAIL_PUNCT = "()[]{}\"'«»“”.,;:!#*"
+
+
+def _tail_reading(words: list, ctx) -> str:
+    """'negated', 'allowed' (every word is one the cleaner may drop, `_TAIL_ALLOWED`) or 'unknown' for the trailing prose
+    `words` of a payload. A symbol of the problem (a variable, i, I, e, E, any name of its namespace) or a single Latin
+    letter is never prose: '1/2 + √3/2 i' and '2 x' were cleaned to 1/2 + √3/2 and 2 and refuted (audit SA-RK-5,
+    principle 3)."""
+    for w in words:
+        n = w.strip(_TAIL_PUNCT)
+        if n and (n in ctx.ns or n.lower() in ("i", "e") or (len(n) == 1 and n.isascii() and n.isalpha())):
+            return "unknown"
+    text = _AFFIRMATIVE_PHRASES.sub(" ", " ".join(words).lower().replace("\u0307", ""))
+    if _NEGATION.search(text):
+        return "negated"
+    return "allowed" if all(_tail_word_allowed(n) or (_TAGLIKE.match(n) and not any(ch.isdigit() for ch in n))
+                            for n in (w.strip(_TAIL_PUNCT) for w in text.split()) if n) else "unknown"
+
+
+def _one_tuple(v) -> bool:
+    """Is `v` a tuple of one element (or a set holding only one): '5,' read as (5,), '{2, 3},' as {({2, 3},)}? A comma
+    there is punctuation, never a value (audit SA-RK-6)."""
+    if isinstance(v, (tuple, sp.Tuple)):
+        return len(v) == 1
+    if isinstance(v, sp.FiniteSet) and len(v) == 1:
+        return _one_tuple(next(iter(v)))
+    return False
 
 
 def _is_prose_token(tok: str) -> bool:
@@ -251,6 +509,16 @@ def _is_prose_token(tok: str) -> bool:
     return not _MATHY.search(t)
 
 
+# words after an option's number that carry no meaning: a count word, a copula, a generic unit (SA-YO-1)
+_FILLER_WORD = re.compile(r"tane|adet|olur|bulunur|d[ıiuü]r|t[ıiuü]r|br|birim|br²|birimkare")
+
+
+def _declared_unit(ctx, word: str) -> bool:
+    """Is `word` the unit the IR declares (`ProblemIR.units`: 'cm', 'km/sa'), so that an option's number is in it?"""
+    units = str(getattr(ctx.ir, "units", None) or "").strip().lower()
+    return bool(units) and word.strip(".,;:!").lower() == units
+
+
 def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     """Adversarial robustness (§9): junk prefixes/suffixes around the claimed answer must not
     flip a verdict. Cleaning is conservative and only attempted when the raw payload does
@@ -262,8 +530,8 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     if ca.payload is None or not isinstance(ca.payload, str):
         return flags
     try:
-        ctx.claimed(solution)
-        return flags
+        if not _one_tuple(ctx.claimed(solution)):
+            return flags
     except Exception:  # noqa: BLE001
         pass
     s = _ZERO_WIDTH.sub("", ca.payload).strip()
@@ -302,22 +570,38 @@ def _sanitize_payload(solution: Solution, ctx) -> list[str]:
     # Dropping "+ 1" would silently rewrite the claim into a different one and hand the attacker
     # a verdict for an answer the solver never gave (measured on the value_bump attack).
     toks = t.split()
-    for k in range(len(toks) - 1, 0, -1):
-        if not _is_prose_token(toks[k]):
+    # An option's text is the problem author's: a word after its number may carry its meaning ('3 azalır', '5 ten
+    # büyük', '(2, 3) aralığının dışı', '6 m' against a value in cm), and dropping it read a wrong letter as the right
+    # value (audit of the branch, SA-YO-1). Only filler goes ('6 tane'), and a unit word only where the IR declares
+    # that unit (SA-RK-3: '1/2 saat' for 30 minutes was refuted); any other word leaves the option unread.
+    strict = ca.payload_source == "option_letter"
+    if strict and len(toks) > 1 and _declared_unit(ctx, toks[-1]):
+        toks = toks[:-1]
+        cands.append(" ".join(toks))
+    # prose that negates or doubts the value ("5 değil", "5 olamaz", "belki 5") is not junk: dropping it
+    # turned "not 5" into 5 and certified it (audit of 25 Sep 2026). Abstain. Only a tail of words known to
+    # leave the value as it is is dropped, read as a whole (`_tail_reading`, audit SA-YO-2, SA-RK-3, SA-RK-5).
+    start = len(toks)
+    while start > 1 and _is_prose_token(toks[start - 1]):
+        start -= 1
+    reading = _tail_reading(toks[start:], ctx) if start < len(toks) else "allowed"
+    if reading == "negated":
+        flags.append("payload_negated")
+        return flags
+    for k in range(len(toks) - 1, start - 1 if reading == "allowed" else len(toks), -1):
+        if strict and not (_FILLER_WORD.fullmatch(toks[k].strip(".,;:!'’").lower()) or _declared_unit(ctx, toks[k])):
             break
-        # prose that negates or doubts the value ("5 değil", "5 olamaz", "belki 5") is not junk:
-        # dropping it turned "not 5" into 5 and certified it (audit of 25 Sep 2026). Abstain.
-        if _NEGATION.search(" ".join(toks[k:])):
-            flags.append("payload_negated")
-            return flags
         cands.append(" ".join(toks[:k]))
     original = ca.payload
+    # a final ',' or ';' is punctuation ('5,', '5, kesinlikle'): the text before it is tried (audit SA-RK-6)
+    cands = [re.sub(r"\s*[,;]\s*$", "", c) if isinstance(c, str) else c for c in cands]
     for c in cands:
         if not c or c == original:
             continue
         ca.payload = c
         try:
-            ctx.claimed(solution)
+            if _one_tuple(ctx.claimed(solution)):
+                continue
             flags.append("payload_cleaned")
             return flags
         except Exception:  # noqa: BLE001
@@ -338,8 +622,9 @@ def _normalize_set_notation(ir: ProblemIR, solution: Solution, ctx) -> list[str]
     ca = solution.claimed_answer
     # the claim's own kind says it is a set; the IR's answer_shape is often left at its default
     set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in _SET_TASKS
-    if not set_task or ca.kind not in ("set", "interval", "condition") \
-            or not isinstance(ca.payload, str) or ca.payload_source == "option_letter":
+    # an option's text is read as the claim's (`_from_letter`): 'x ∈ (2, 3)' was a claim the certificates read and a
+    # letter they did not (final attack G1RK-1)
+    if not set_task or ca.kind not in ("set", "interval", "condition") or not isinstance(ca.payload, str):
         return []
     names = {v.name for v in ir.vars}
     tvar = (ir.task.params or {}).get("var")
@@ -438,10 +723,26 @@ def _payload_texts(solution: Solution, raw_payload) -> list[str]:
 
 
 def _option_texts(solution: Solution, options) -> list[str]:
+    """The text of the option the solution picked; with `_options_as_read`, also that text as the claim's reader takes
+    it ('6 cm' is 6, 'x ∈ (2, 3)' is (2, 3)): it is read as written like the claim's own (G1RK-1)."""
     ca = solution.claimed_answer
-    if ca.option and isinstance(options, dict) and isinstance(options.get(ca.option), str):
-        return [options[ca.option]]
-    return []
+    v = options.get(ca.option) if ca.option and isinstance(options, dict) else None
+    return [t for t in dict.fromkeys(v if isinstance(v, list) else [v]) if isinstance(t, str)]
+
+
+def _options_as_read(ir: ProblemIR, solution: Solution, ctx) -> dict | None:
+    """The IR's options, the picked one as [its text, its text as the claim's reader takes it] (`_option_read_as_claim`)."""
+    ca = solution.claimed_answer
+    if not ir.options or ca.option not in ir.options:
+        return ir.options
+    try:
+        sol2 = _option_read_as_claim(ir, solution, ctx)
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: the option's text alone
+        sol2 = None
+    read = sol2.claimed_answer.payload if sol2 is not None else None
+    return dict(ir.options, **{ca.option: [ir.options[ca.option]] + ([read] if isinstance(read, str) else [])})
 
 
 def _claim_pins(ctx) -> dict:
@@ -596,11 +897,43 @@ def _claim_outside_superset(ir: ProblemIR, solution: Solution, ctx) -> LayerResu
                   {"reason": f"claimed_root_outside_the_applied_domain: {out}", "domain": str(dom)}, t.ms, primary=True)
 
 
+def _task_unknowns(ir: ProblemIR) -> set[str]:
+    """The task's unknown: its variable when it names one; otherwise the variables the givens pin down."""
+    tvar = (ir.task.params or {}).get("var")
+    if isinstance(tvar, str):
+        return {tvar}
+    in_givens = set(re.findall(r"[A-Za-z_]\w*", " ".join(str(g) for g in ir.givens)))
+    return {v.name for v in ir.vars} & in_givens
+
+
+def _value_shaped(ir: ProblemIR, ca) -> bool:
+    """Is the answer a value (a number, a set or an interval of numbers, a count), not an expression in the unknown?"""
+    return ir.answer_shape in ("scalar", "set", "count", "interval") and ca.kind in ("value", "set", "count", "interval")
+
+
+def _claim_value_or_none(solution: Solution, ctx):
+    try:
+        return ctx.claimed(solution)
+    except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
+        return None
+
+
+def _names_the_unknown(ir: ProblemIR, ctx, value) -> list[str]:
+    """The task's unknowns a value-shaped answer (a claim, an option) still names: no value is claimed by it."""
+    names = {s_.name for s_ in getattr(value, "free_symbols", set())}
+    return sorted(names & _task_unknowns(ir))
+
+
 def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     from .normalize.parse import ClaimNotAValue, check_claim_is_value
     ca = solution.claimed_answer
     if ca.payload_source == "option_letter":
-        return None                         # the option's own text is the problem's, not a claim
+        # the option's own text is the problem's, not a claim; one that names the task's unknown ('{x}', 'x') is no
+        # value all the same (audit of the branch, SA-RK-8: the letter alone was CORRECT)
+        hit = _names_the_unknown(ir, ctx, _claim_value_or_none(solution, ctx)) if _value_shaped(ir, ca) else []
+        return None if not hit else unknown(
+            "intake.claim", f"the chosen option {ca.payload!r} names the unknown(s) {hit}",
+            evidence={"claim_not_read": hit}, flags=["claim_is_not_a_value"])
     if ca.kind in ("value", "count", "expression", "interval", "condition", "equation") \
             and isinstance(ca.payload, list):
         # only a set may be written as a list of elements; any other kind would be read as a set
@@ -631,6 +964,22 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
             and re.search(r"\d,\d", ca.payload):
         return unknown("intake.claim", f"claimed answer {ca.payload!r}: decimal comma or pair? not guessed",
                        flags=["decimal_comma_ambiguous"])
+    # a tuple of one element ('(5,)', or '5,' that no cleaning took) is no value (audit SA-RK-6)
+    try:
+        one = _one_tuple(ctx.claimed(solution))
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: the certificates report it
+        one = False
+    if one:
+        return unknown("intake.claim", f"claimed answer {ca.payload!r} is a tuple of one element: not read",
+                       flags=["parse_error", "claim_unreadable"])
+    # '1/2π', '1/2√x': (1/2)·π or 1/(2π)? A factor written right after a divisor is a convention of the writer; the
+    # parser reads it neither way (`normalize.parse.ambiguous_juxtaposition`), and the claim is not read (G4YO-2)
+    from .normalize.parse import ambiguous_juxtaposition
+    if ambiguous_juxtaposition(ca.payload):
+        return unknown("intake.claim", f"claimed answer {ca.payload!r}: a factor right after a divisor, (1/2)·π or "
+                       "1/(2π)? not guessed", flags=["claim_ambiguous_juxtaposition"])
     # A value-shaped answer that still contains the problem's unknowns is not a value: `{x}` for
     # "solve x**2 - 5x + 6 = 0" was certified (z3 found Eq(x, x) satisfiable), and `10 - b` for
     # "evaluate a" restates a given (audit of 25 Sep 2026). The unknown is the task's variable
@@ -642,18 +991,7 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
     set_task = ir.answer_shape in ("set", "interval") or ir.task.kind in _SET_TASKS
     if (ir.answer_shape in ("scalar", "set", "count", "interval") and ca.kind in ("value", "set", "count", "interval")) \
             or (set_task and ca.kind == "condition"):
-        tvar = (ir.task.params or {}).get("var")
-        if isinstance(tvar, str):
-            unknowns = {tvar}
-        else:
-            in_givens = set(re.findall(r"[A-Za-z_]\w*", " ".join(str(g) for g in ir.givens)))
-            unknowns = {v.name for v in ir.vars} & in_givens
-        try:
-            claimed = ctx.claimed(solution)
-            names = {s.name for s in getattr(claimed, "free_symbols", set())}
-        except Exception:  # noqa: BLE001 - the certificates report an unreadable claim themselves
-            names = set()
-        hit = sorted(names & unknowns)
+        hit = _names_the_unknown(ir, ctx, _claim_value_or_none(solution, ctx))
         if hit:
             # no value is claimed: no certificate refutes it either (a condition of a set task no notation reading
             # took, `_notation_set`, read as the set {x ∈ {-2, 2}} was refuted, PRE-RK-5); the steps are checked
@@ -661,11 +999,21 @@ def _claim_not_a_value(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | 
                            evidence={"claim_not_read": hit}, flags=["claim_is_not_a_value"])
     if ir.task.kind == "evaluate":
         target = (ir.task.params or {}).get("expr") or ir.unknown_of_interest
-        if target and (_same_structure(str(ca.payload), str(target), ctx)
+        if target and ((not _computes(str(target)) and _same_structure(str(ca.payload), str(target), ctx))
                        or _applies_target_op(ca.payload, str(target), solution, ctx)):
             return unknown("intake.claim", f"claimed answer {ca.payload!r} restates the question",
                            flags=["claim_is_not_a_value"])
     return _claim_computes_integer_op(solution, ctx)
+
+
+def _computes(target: str) -> bool:
+    """Does the target call a computing operator (`normalize.parse.COMPUTING_OPERATORS`: diff, at, integrate, a limit,
+    a sum, ...) or write one in LaTeX? A claim that restates it would call one too, and such a claim is refused before
+    (`check_claim_is_value`), so its structure is not read: read with evaluation off in process, at(diff(f(x), x), x, 3)
+    with f = |x**2 - 4| took 13-48 s, and the right 6 waited for it (son-kalkulus second round, SK-RK-1)."""
+    from .normalize.parse import _CALL_RE, _LATEX_COMPUTING, COMPUTING_OPERATORS
+    return any(m.group(1) in COMPUTING_OPERATORS for m in _CALL_RE.finditer(target)) \
+        or _LATEX_COMPUTING.search(target) is not None
 
 
 def _claim_computes_integer_op(solution: Solution, ctx) -> LayerResult | None:
@@ -757,7 +1105,10 @@ def _same_structure(a: str, b: str, ctx) -> bool:
     reading is compared as its bare syntax tree (`_syntax`), never as its value: the target eigmax(M) fell back to
     its value 2 + √2, and the claim 2 + √2 was "the question restated" (fourth audit PRE-RK-8)."""
     try:
-        ta, tb = _structure(a, ctx), _structure(b, ctx)
+        ta = _structure(a, ctx)
+        if not getattr(ta, "args", None):
+            return False                    # a bare number or symbol claim restates no tree (the target is one)
+        tb = _structure(b, ctx)
         if not getattr(tb, "args", None):
             return False                    # a bare number or symbol target cannot be restated
         # srepr too: InconsistentAssumptions escaped here (third audit, 30 Sep 2026), and a tree with no printed
@@ -906,16 +1257,253 @@ def verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed:
     if zero == "clash":
         return [unknown("intake.naturals", "naturals_convention: N is a declared variable and a set here",
                         flags=["naturals_convention"])], []
-    layers, flags = _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
+    layers, flags = _verify_arg_readings(problem_ir, solution, seed, timeout, run_steps)
     if zero is None:
         return layers, flags
-    layers0, flags0 = _verify_layers_read(zero[0], zero[1], seed, timeout, run_steps)
+    layers0, flags0 = _verify_arg_readings(zero[0], zero[1], seed, timeout, run_steps)
     v_pos = fuse(layers, extra_flags=flags)["verdict"]
     v_zero = fuse(layers0, extra_flags=flags0)["verdict"]
     if v_pos == v_zero:
         return layers, flags + ["naturals_readings_agree"]
     return [unknown("intake.naturals", f"naturals_convention: with ℕ = {{1, 2, ...}} {v_pos}, with ℕ = "
                     f"{{0, 1, 2, ...}} {v_zero}", flags=["naturals_convention"])], flags
+
+
+# arg written as a function (`arg(`, LaTeX `\\arg`) in any text of the problem or the solution (not a key: an operator's
+# field is named "arg")
+_ARG_WRITTEN = re.compile(r"(?<![A-Za-z_])arg\s*\(|\\arg(?![A-Za-z])")
+
+
+def _writes_arg(*objs) -> bool:
+    def walk(o) -> bool:
+        if isinstance(o, str):
+            return bool(_ARG_WRITTEN.search(o))
+        if isinstance(o, dict):
+            return any(walk(v) for v in o.values())
+        if isinstance(o, (list, tuple)):
+            return any(walk(v) for v in o)
+        return False
+    return any(walk(o) for o in objs)
+
+
+def _verify_arg_readings(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
+                         timeout: float = 8.0, run_steps: bool = True) -> tuple[list[LayerResult], list[str]]:
+    """`_verify_layers_read`, with a problem or solution that writes arg read both ways: SymPy's principal value in
+    (-pi, pi] and the curriculum's [0, 2*pi) (`normalize.parse.arg_reading`). The verdict when the two readings agree
+    (arg(1 + i) = pi/4; pi/4 for arg(-1 - i) is wrong in both), UNKNOWN when they do not: 5*pi/4 for arg(-1 - i) was
+    refuted, -3*pi/4 certified (A+ final attack, SON-G3-RK-3). A range the problem writes decides: its givens hold
+    under one reading only, or its options hold the value of one reading only (`_arg_options_reading`). Two
+    INCORRECTs agree only on a failure of both readings (`_incorrect_in_both`); a reading that decides nothing
+    (UNKNOWN) against one that does is no convention but an unproved reading (son-sayisal audit, second round)."""
+    import copy
+    from .normalize.parse import arg_reading
+    try:
+        ir_d = copy.deepcopy(problem_ir if isinstance(problem_ir, dict) else problem_ir.to_dict())
+        sol_d = copy.deepcopy(solution if isinstance(solution, dict) else solution.to_dict())
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not readable as dicts: read once, as given
+        ir_d = sol_d = None
+    if ir_d is None or not _writes_arg(ir_d, sol_d):
+        return _verify_layers_read(problem_ir, solution, seed, timeout, run_steps)
+    layers, flags = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
+    with arg_reading("zero_two_pi", at=_arg_point(ir_d)):
+        layers_b, flags_b = _verify_layers_read(copy.deepcopy(ir_d), sol_d, seed, timeout, run_steps)
+    # a step refuted in one reading and verified in the other is a statement of the convention: unknown in every
+    # reading, the declared one included, never a refutation (son-sayisal third round, SS2-RK-1/2)
+    layers, layers_b = _convention_steps_unknown(layers, layers_b)
+    f_a, f_b = fuse(layers, extra_flags=flags), fuse(layers_b, extra_flags=flags_b)
+    inconsistent_a, inconsistent_b = "ir_inconsistent" in f_a["flags"], "ir_inconsistent" in f_b["flags"]
+    if inconsistent_a != inconsistent_b:
+        # the givens hold under one reading only (0 <= arg(z) < 2*pi with Im z < 0): the problem writes its range
+        return (layers_b, flags_b + ["arg_range_declared"]) if inconsistent_a else (layers, flags + ["arg_range_declared"])
+    by_options = _arg_options_reading(ir_d)
+    if by_options is not None:
+        # the options hold the value of one reading only: the question writes its range there (RK-SAY-3)
+        return (layers_b, flags_b + ["arg_range_from_options"]) if by_options == "b" \
+            else (layers, flags + ["arg_range_from_options"])
+    v_a, v_b = f_a["verdict"], f_b["verdict"]
+    if v_a == v_b == "INCORRECT":
+        both = _incorrect_in_both(layers, layers_b)
+        if both is None:
+            return [unknown("intake.convention", "arg_convention: INCORRECT in each arg reading, each time on a "
+                            "statement of the other reading's arg alone", flags=["arg_convention"])], flags
+        return both, flags + ["arg_readings_agree"]
+    if v_a == v_b:
+        return layers, flags + ["arg_readings_agree"]
+    if "UNKNOWN" in (v_a, v_b):
+        return [unknown("intake.convention", f"arg_reading_undecided: with arg in (-pi, pi] {v_a}, with arg in "
+                        f"[0, 2pi) {v_b}", flags=["arg_reading_undecided"])], flags
+    return [unknown("intake.convention", f"arg_convention: with arg in (-pi, pi] {v_a}, with arg in [0, 2pi) {v_b}",
+                    flags=["arg_convention"])], flags
+
+
+def _step_statuses(ls: list[LayerResult]) -> dict:
+    st = next((la for la in ls if la.layer == "steps.refute"), None)
+    return {e.get("index"): e.get("status") for e in ((st.evidence or {}).get("steps", []) if st else [])}
+
+
+def _convention_steps_unknown(layers_a: list[LayerResult], layers_b: list[LayerResult]):
+    """Both readings' layers with every step refuted in one reading and verified in the other made "unknown": the
+    step states the arg of one convention (arg(1 - i) = -pi/4, the principal value a De Moivre solution writes before
+    it shifts to [0, 2*pi) or not), true in one reading and refuted in the other by no counterexample of its own; the
+    answer's certificate decides. Read as a refutation, the right (1 - i)**10 = -32*i with that step was UNKNOWN, and
+    the right option 7*pi/4 of an arg question with [0, 2*pi) options INCORRECT, its first bad step the true principal
+    value (son-sayisal third round, SS2-RK-1, SS2-RK-2)."""
+    from dataclasses import replace
+    sa, sb = _step_statuses(layers_a), _step_statuses(layers_b)
+    conv = {i for i in set(sa) | set(sb) if {sa.get(i), sb.get(i)} == {"refuted", "verified"}}
+    if not conv:
+        return layers_a, layers_b
+
+    def neutral(ls):
+        out = []
+        for la in ls:
+            if la.layer == "steps.refute":
+                ev = json.loads(json.dumps(la.evidence, default=str))
+                for e in ev.get("steps", []):
+                    if e.get("index") in conv:
+                        e["status"] = "unknown"
+                        e["arg_convention"] = "refuted in one arg reading, verified in the other"
+                left = sorted(e.get("index") for e in ev.get("steps", []) if e.get("status") == "refuted")
+                ev["n_refuted"] = len(left)
+                if left:
+                    la = replace(la, evidence=ev, first_bad_step=left[0])
+                else:
+                    la = unknown(la.layer, "no_step_refuted", la.latency_ms, ev)
+            out.append(la)
+        return out
+    return neutral(layers_a), neutral(layers_b)
+
+
+def _arg_point(ir_d: dict) -> dict:
+    """{name: value}: where the [0, 2*pi) reading's shift of an arg is locally constant (`normalize.parse.arg_reading`):
+    the point of a pointwise task (a derivative at a point, a limit at a point or at +-oo, RK-SAY-1 and SS2-RK-3) and the
+    values the givens pin (`a = 2`: a parameter fixed by a given, SS2-RK-3)."""
+    from .normalize.parse import parse_expr_str
+    task = ir_d.get("task") if isinstance(ir_d, dict) else None
+    p = (task or {}).get("params") or {}
+    kind = (task or {}).get("kind")
+    out: dict = {}
+    names = {str(v.get("name")) for v in ir_d.get("vars") or [] if isinstance(v, dict)}
+    pins: dict = {}
+    for g in ir_d.get("givens") or []:
+        if not isinstance(g, str) or g.count("=") != 1 or any(t in g for t in ("<", ">", "!")):
+            continue
+        lhs, rhs = (t.strip() for t in g.split("="))
+        if lhs not in names:
+            continue
+        try:
+            v = parse_expr_str(rhs)
+        except Exception:  # noqa: BLE001 - no value: no pin
+            continue
+        if isinstance(v, sp.Expr) and v.is_number and v.is_finite is True:
+            pins.setdefault(lhs, []).append(v)
+    out.update({k: vs[0] for k, vs in pins.items() if len(vs) == 1})
+    pt = p.get("at") if kind == "derivative" else p.get("to") if kind == "limit" else None
+    var = p.get("var")
+    if pt is None or not isinstance(var, str) or isinstance(pt, bool):
+        return out
+    try:
+        v = parse_expr_str(str(pt))
+    except Exception:  # noqa: BLE001 - not a point: no resolution
+        return out
+    if v in (sp.oo, -sp.oo) and kind == "limit":
+        out[var] = v
+    elif isinstance(v, sp.Expr) and v.is_number and not v.has(sp.oo, -sp.oo, sp.zoo, sp.nan):
+        out[var] = v
+    return out
+
+
+_UNIT_MARK = re.compile(r"°|\\circ|\bdeg|derece", re.IGNORECASE)      # a degree option: G1RK-3's units
+
+
+def _arg_options_reading(ir_d: dict) -> str | None:
+    """"a" ((-pi, pi]) or "b" ([0, 2*pi)) when every option of an evaluate task reads as a number and the options hold
+    the value of exactly one reading: the question writes its range there, as givens do (RK-SAY-3; `A) pi/4 ...
+    E) 3*pi/2` for arg(-1 - i)). None otherwise: an option that is no number ("Hiçbiri"), both values or neither
+    among the options, a value not read; an option with a unit (degrees) is the unit decision's (G1RK-3). Read in the
+    sandbox under its time limit (None past it): an option 10**10**10 held the verifier past 60 s in this process
+    (son-sayisal third round, SS2-CR-1)."""
+    from .sandbox import run as sb_run
+    task = ir_d.get("task") or {}
+    opts = ir_d.get("options")
+    expr = (task.get("params") or {}).get("expr")
+    if task.get("kind") != "evaluate" or not isinstance(opts, dict) or not opts or not isinstance(expr, str):
+        return None
+    if any(not isinstance(o, (str, int)) or isinstance(o, bool) or _UNIT_MARK.search(str(o)) for o in opts.values()):
+        return None
+    r = sb_run("mathverify.verifier:arg_options_worker", expr, [str(o) for o in opts.values()], timeout=8.0)
+    return r.value if r.ok and r.value in ("a", "b") else None
+
+
+def arg_options_worker(expr: str, texts: list) -> str | None:
+    """Sandbox worker of `_arg_options_reading`: the expression read in both readings and the options, compared
+    exactly."""
+    from .equiv.numeric import exact_equal
+    from .normalize.parse import arg_reading, parse_expr_str
+    try:
+        values = [parse_expr_str(t) for t in texts]
+        va = parse_expr_str(expr)
+        with arg_reading("zero_two_pi"):
+            vb = parse_expr_str(expr)
+    except Exception:  # noqa: BLE001 - an option or the value not read: no range from the options
+        return None
+    if not all(isinstance(v, sp.Expr) and v.is_number for v in values + [va, vb]):
+        return None
+    held = []
+    for v in (va, vb):
+        eq = [exact_equal(v, o) for o in values]
+        if None in eq and True not in eq:
+            return None
+        held.append(True in eq)
+    if held == [True, False]:
+        return "a"
+    if held == [False, True]:
+        return "b"
+    return None
+
+
+def _incorrect_in_both(layers_a: list[LayerResult], layers_b: list[LayerResult]) -> list[LayerResult] | None:
+    """Two INCORRECT readings that share a failure independent of the convention: a layer failing in both readings
+    (the answer's certificate, an option's consistency) or a step refuted in both. The layers of the first reading
+    with what fails in it alone withdrawn: a step refuted in one reading only is "unknown", and the first bad step
+    is the first refuted in both. None without such a failure: each reading refuted a statement of the other's arg
+    alone, 5*pi/4 for arg(-1 - i) reached from the principal -3*pi/4 by a step was INCORRECT in both readings
+    (RK-SAY-2), and the right [0, 2*pi) step was shown refuted, the first bad step (RK-ARG-STEP)."""
+    from dataclasses import replace
+
+    def failing(ls):
+        return {la.layer for la in ls if la.hard and la.verdict == "fail" and la.layer != "steps.refute"}
+
+    def statuses(ls):
+        st = next((la for la in ls if la.layer == "steps.refute"), None)
+        return {e.get("index"): e.get("status") for e in ((st.evidence or {}).get("steps", []) if st else [])}
+
+    common = failing(layers_a) & failing(layers_b)
+    sa, sb = statuses(layers_a), statuses(layers_b)
+    both = sorted(i for i, s_ in sa.items() if s_ == "refuted" and sb.get(i) == "refuted")
+    if not common and not both:
+        return None
+    out = []
+    for la in layers_a:
+        if la.layer == "steps.refute":
+            ev = json.loads(json.dumps(la.evidence, default=str))
+            for e in ev.get("steps", []):
+                if (e.get("status") == "refuted") != (sb.get(e.get("index")) == "refuted") \
+                        and "refuted" in (e.get("status"), sb.get(e.get("index"))):
+                    e["status"] = "unknown"
+                    e["arg_convention"] = "refuted in one arg reading only"
+            ev["n_refuted"] = sum(e.get("status") == "refuted" for e in ev.get("steps", []))
+            if both:
+                la = replace(la, evidence=ev, first_bad_step=both[0])
+            else:
+                la = unknown(la.layer, "no_step_refuted_in_both_arg_readings", la.latency_ms, ev)
+        elif la.hard and la.verdict == "fail" and la.layer not in common:
+            la = unknown(la.layer, "fails in one arg reading only: a convention", la.latency_ms, la.evidence,
+                         flags=["arg_convention"])
+        out.append(la)
+    return out
 
 
 def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
@@ -933,6 +1521,8 @@ def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict,
         raise
     except Exception:  # noqa: BLE001 - not readable as dicts: read once, as given
         ir_d = sol_d = None
+    if ir_d is not None and _writes_ambiguous_set_difference(ir_d, sol_d):
+        return _verify_set_difference_readings(ir_d, sol_d, seed, timeout, run_steps)
     layers, flags = _verify_layers(problem_ir, solution, seed, timeout, run_steps)
     if ir_d is None or not any("domain_list_ambiguous" in la.flags for la in layers):
         return layers, flags
@@ -946,6 +1536,49 @@ def _verify_layers_read(problem_ir: ProblemIR | dict, solution: Solution | dict,
         return lr, fl + ["domain_list_readings_agree"]
     return [unknown("intake.domain", f"domain_list_ambiguous: read as a union {verdicts['union']}, as an "
                     f"intersection {verdicts['intersection']}", flags=["domain_list_ambiguous"])], flags
+
+
+def _texts(o) -> list[str]:
+    """Every string in a nested dict/list/tuple."""
+    if isinstance(o, str):
+        return [o]
+    if isinstance(o, dict):
+        return [t for v in o.values() for t in _texts(v)]
+    if isinstance(o, (list, tuple)):
+        return [t for v in o for t in _texts(v)]
+    return []
+
+
+def _writes_ambiguous_set_difference(ir_d: dict, sol_d: dict) -> bool:
+    """Does a text of the problem or the solution write ℝ − A ∪ B without brackets
+    (`normalize.parse.writes_ambiguous_set_difference`), and is no reading of it chosen yet?"""
+    from .normalize.parse import set_difference_reading_chosen, writes_ambiguous_set_difference
+    if set_difference_reading_chosen():
+        return False
+    try:
+        return any(writes_ambiguous_set_difference(t) for t in _texts(ir_d) + _texts(sol_d))
+    except Exception:  # noqa: BLE001 - not read: an ambiguous text is then not read (SetDifferenceAmbiguous)
+        return False
+
+
+def _verify_set_difference_readings(ir_d: dict, sol_d: dict, seed: int, timeout: float,
+                                    run_steps: bool) -> tuple[list[LayerResult], list[str]]:
+    """`_verify_layers_read` with ℝ − A ∪ B written without brackets (`normalize.parse.SetDifferenceAmbiguous`) read
+    both ways, ℝ − (A ∪ B) and (ℝ − A) ∪ B: the verdict when the two readings agree (both right: CORRECT, both wrong:
+    INCORRECT), UNKNOWN when they do not. Read one way, 'R - {2} ∪ {3}' was certified as the domain of
+    1/((x - 2)(x - 3)) and refuted as that of 1/(x - 2) (son-kalkulus second round, YO-K4)."""
+    import copy
+    from .normalize.parse import set_difference_reading
+    runs = {}
+    for which in ("whole", "left"):
+        with set_difference_reading(which):
+            runs[which] = _verify_layers_read(copy.deepcopy(ir_d), copy.deepcopy(sol_d), seed, timeout, run_steps)
+    verdicts = {which: fuse(lr, extra_flags=fl)["verdict"] for which, (lr, fl) in runs.items()}
+    if verdicts["whole"] == verdicts["left"]:
+        lr, fl = runs["whole"]
+        return lr, fl + ["set_difference_readings_agree"]
+    return [unknown("intake.claim", f"set_difference_ambiguous: R - A U B read as R - (A U B) {verdicts['whole']}, "
+                    f"as (R - A) U B {verdicts['left']}", flags=["set_difference_ambiguous"])], runs["whole"][1]
 
 
 def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed: int = 0,
@@ -976,15 +1609,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     ca = solution.claimed_answer
     scope_flags: list[str] = []
     if ca.option and ca.payload in (None, "") and problem_ir.options and ca.option in problem_ir.options:
-        ca.payload = problem_ir.options[ca.option]
-        if problem_ir.answer_shape in ("set", "interval") and _NO_SOLUTION.search(str(ca.payload).lower()):
-            ca.payload = "{}"
-        # the option read as a claim of the answer's shape is (`Ctx.option_value`): 'x > -2' names (-2, oo), and
-        # '1,5' is no value the letter picks (fourth audit D4F2B-ONCEKI-1)
-        named = ctx.option_condition_set(ca.option)
-        if named is not None:
-            ca.payload = str(named)
-        elif problem_ir.answer_shape != "interval" and decimal_comma(ca.payload):
+        if not _from_letter(problem_ir, solution, ctx):
             layers.append(unknown("intake.claim", f"option {ca.payload!r}: decimal comma or pair? not guessed",
                                   flags=["decimal_comma_ambiguous"]))
             return layers, ["answer_from_option_letter"]
@@ -993,18 +1618,14 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         # evidence as a worked solution. That is legitimate answer-level verification, but it
         # is not what CORRECT means at solution level (DECISIONS §2), so it is disclosed.
         scope_flags.append("answer_from_option_letter")
-        ca.payload_source = "option_letter"
-        if problem_ir.answer_shape in ("set", "interval"):
-            ca.kind = problem_ir.answer_shape
-        elif problem_ir.answer_shape == "count":
-            n_opt = exact_integer(ca.payload)
-            if n_opt is not None:
-                ca.kind, ca.payload = "count", n_opt
-            else:
-                ca.kind = "value"
 
+    # a claim that is one marked number in a unit the IR's value is proved to count in is the plain number: '%20' is 20
+    # for (p2 - p1)/p1*100 (`Ctx.plain_unit_reading`); any other mark is read both ways (`_certify`). Read by the IR's
+    # `units`, the right '%20' of a fraction and '180°' of a radian value were INCORRECT (final attack EK 8, T2-RK-2)
+    ca.payload = ctx.plain_unit_reading(ca.payload)
     raw_payload = list(ca.payload) if isinstance(ca.payload, list) else ca.payload    # before its notation is normalized
     scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
+    _dne_word_claim(solution)                      # 'Yoktur' as a value is the claim 'dne' (EK 11)
 
     # DECISIONS §2 defines CORRECT as "the claimed answer is right AND no step was refuted".
     # With no checkable step the second conjunct is vacuously true, so a CORRECT verdict here
@@ -1108,7 +1729,8 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     # The claim itself, read as written, holds a value that is a convention (0**0, C(2, 5), Mod(7, -5)):
     # the parse computed it SymPy's way, and "0**0" for 5**0 was certified like 1 (part d4a). An odd
     # root of a negative number is compared under both readings instead (equiv.conventions).
-    conv = _claim_convention(solution, ctx, problem_ir.task.kind, raw_payload, problem_ir.options)
+    read_options = _options_as_read(problem_ir, solution, ctx)
+    conv = _claim_convention(solution, ctx, problem_ir.task.kind, raw_payload, read_options)
     if conv:
         layers.append(unknown("intake.definedness", f"claim_value_is_a_convention: {conv[:3]}",
                               flags=["claim_convention"]))
@@ -1116,7 +1738,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     # ... or has no value at all as written ((-1)!, zoo, 1/(x - x)): SymPy's value of it (1/zoo = 0) is no
     # value of what was written, so the claim is never CORRECT; a refutation with that value stands (the
     # claim is no right answer under any reading), so the certificates still run (CAP-F1)
-    no_value = _claim_without_value(solution, ctx, raw_payload, problem_ir.options)
+    no_value = _claim_without_value(solution, ctx, raw_payload, read_options)
     if no_value:
         layers.append(unknown("intake.claim", f"claimed answer has no value as written: {no_value[:3]}",
                               flags=["claim_is_not_a_value"]))
@@ -1147,6 +1769,26 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         why = DEFERRED_KINDS.get(problem_ir.task.kind, "unknown task kind")
         layers.append(unknown("router", f"unsupported_task_kind:{problem_ir.task.kind} ({why})",
                               flags=["unsupported_task_kind"]))
+    # every option a certificate reads is read as the claim is (G1RK-1)
+    ctx.cache[OPTION_READER] = lambda letter: _option_claim_value(problem_ir, _lettered(solution, letter), ctx)
+    certs = _certify(problem_ir, solution, ctx, modules, claim_not_read)
+    layers.extend(certs)
+    if mc is not None and _declared_tolerance(problem_ir):
+        layers[layers.index(mc)] = _options_in_tolerance(problem_ir, solution, ctx, modules, certs, mc)
+    elif mc is not None and OPTION_UNDECIDED in mc.flags:
+        layers[layers.index(mc)] = _option_as_claim(problem_ir, solution, ctx, modules, certs, mc)
+
+    if run_steps and solution.steps:
+        try:
+            layers.append(check_steps(problem_ir, solution, ctx))
+        except Exception as e:  # noqa: BLE001
+            layers.append(unknown("steps.refute", f"layer_exception: {type(e).__name__}: {str(e)[:200]}",
+                                  flags=["layer_exception"]))
+
+    return layers, clean_flags
+
+
+def _certify_once(problem_ir: ProblemIR, solution: Solution, ctx, modules: list, claim_not_read: bool) -> list:
     certs = []
     for name in modules:
         lr = _run_module(name, problem_ir, solution, ctx)
@@ -1160,19 +1802,77 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
         if claim_not_read and lr.verdict == "fail":
             lr = unknown(name, "claim_not_read_refuted: a claim naming the unknown is no value, not refuted",
                          lr.latency_ms, lr.evidence, flags=["claim_is_not_a_value"])
-        layers.append(lr)
         certs.append(lr)
-    if mc is not None and OPTION_UNDECIDED in mc.flags:
-        layers[layers.index(mc)] = _option_as_claim(problem_ir, solution, ctx, modules, certs, mc)
+    return certs
 
-    if run_steps and solution.steps:
-        try:
-            layers.append(check_steps(problem_ir, solution, ctx))
-        except Exception as e:  # noqa: BLE001
-            layers.append(unknown("steps.refute", f"layer_exception: {type(e).__name__}: {str(e)[:200]}",
-                                  flags=["layer_exception"]))
 
-    return layers, clean_flags
+def _decided(layers: list) -> str | None:
+    """'pass' when a hard primary layer passes and none fails, 'fail' when one fails and none passes, else None."""
+    passed = any(l.hard and l.primary and l.verdict == "pass" for l in layers)
+    failed = any(l.hard and l.verdict == "fail" for l in layers)
+    return "pass" if passed and not failed else "fail" if failed and not passed else None
+
+
+def _certify(problem_ir: ProblemIR, solution: Solution, ctx, modules: list, claim_not_read: bool = False) -> list:
+    """The certificates of `modules` on the claim. A unit mark of the claim the question does not fix
+    (`Ctx.open_unit_marks`: %20, 30°) is read both ways, as the unit and as the plain number (%20 as 1/5 and as 20):
+    they decide the claim only where the two readings agree; otherwise each decision is withdrawn (UNKNOWN,
+    `unit_convention`). The IR's value of a percentage computed as `(p2 - p1)/p1*100`, or of an angle in degrees from
+    x + 2x + 3x = 180, is the plain number, and the right '%20' and '30°' were INCORRECT (final attack G1RK-3)."""
+    certs = _certify_once(problem_ir, solution, ctx, modules, claim_not_read)
+    marks = ctx.open_unit_marks(solution.claimed_answer.payload)
+    if not marks:
+        return certs
+    plain = _certify_once(problem_ir, _plain_claim(solution, marks), ctx, modules, claim_not_read)
+    unit_state, plain_state = _decided(certs), _decided(plain)
+    if unit_state == plain_state:
+        return certs
+    why = (f"unit_convention: the claim's {''.join(sorted(marks))} read as a unit ({unit_state}) and as a plain number "
+           f"({plain_state}) decide differently")
+    return [unknown(l.layer, why, l.latency_ms, l.evidence, flags=[UNIT_CONVENTION]) if l.verdict in ("pass", "fail")
+            else l for l in certs]
+
+
+# ---- '%' and '°' are unit marks (final attack G1RK-3) -------------------------------------------------------------
+# A question may count in the unit (an angle in radians: 30° is pi/6) or in plain numbers of it (x + 2x + 3x = 180 is
+# 30, (p2 - p1)/p1*100 is 20): where nothing fixes which, a mark on one side only is read both ways (`_certify`,
+# `_mc_unit_reading`); they decide only where they agree, never CORRECT where they do not
+UNIT_CONVENTION = "unit_convention"
+
+
+def _plain_claim(solution: Solution, marks) -> Solution:
+    """A copy of the solution whose claim has the unit marks `marks` dropped (%20 is 20, 30° is 30)."""
+    import copy as _copy
+    from .normalize.parse import without_unit_marks
+    sol2 = _copy.deepcopy(solution)
+    sol2.claimed_answer.payload = without_unit_marks(sol2.claimed_answer.payload, marks)
+    return sol2
+
+
+def _mc_unit_reading(ir: ProblemIR, solution: Solution, ctx, ov, cv, t) -> tuple[bool | None, str] | None:
+    """mc.consistency under the other reading of a unit mark on one side only (the option '%20' against the claim 20,
+    the claim '30°' against the option 30): (equal or not, undecided None; what was read), None when no side carries
+    a mark of its own the question does not fix (`Ctx.open_unit_marks`). Both marked, the units are one."""
+    from .normalize.parse import unit_marks, without_unit_marks
+    ca = solution.claimed_answer
+    opt = str(ir.options[ca.option])
+    pay = ca.payload if isinstance(ca.payload, str) else None
+    mo, mp = ctx.open_unit_marks(opt), ctx.open_unit_marks(pay)
+    try:
+        if mo and not unit_marks(pay) & mo:
+            what = f"option {opt!r} as {without_unit_marks(opt, mo)!r}"
+            ov, cv = _option_claim_value(ir, solution, ctx, without_unit_marks(opt, mo)), cv
+        elif mp and not unit_marks(opt) & mp:
+            what = f"claim {pay!r} as {without_unit_marks(pay, mp)!r}"
+            ov, cv = ov, ctx.claimed(_plain_claim(solution, mp))
+        else:
+            return None
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - the other reading is not read: undecided
+        return None, "plain_reading_not_read"
+    got = _compare_option(ir, solution, ctx, ov, cv, t)
+    return (None, what) if isinstance(got, LayerResult) else (got[0], what)
 
 
 def _run_module(name: str, problem_ir: ProblemIR, solution: Solution, ctx) -> LayerResult:
@@ -1191,20 +1891,15 @@ def _option_as_claim(problem_ir: ProblemIR, solution: Solution, ctx, modules: li
     against 'x*log(x) - x + C', the families pi/6 + 2*k*pi. A certificate that proves the option and proves the claim
     proves them one object (consistent). One that refutes the option shows the letter names a wrong answer, whatever
     the claim's certificate said: the veto. Anything else leaves `mc` (undecided: no CORRECT)."""
-    import copy as _copy
-
-    def decided(layers):
-        passed = any(l.hard and l.primary and l.verdict == "pass" for l in layers)
-        failed = any(l.hard and l.verdict == "fail" for l in layers)
-        return "pass" if passed and not failed else "fail" if failed and not passed else None
     if not problem_ir.options:
         return mc                      # a letter and no options: nothing to read it in
-    sol2 = _copy.deepcopy(solution)
-    ca = sol2.claimed_answer
-    ca.payload, ca.payload_source = problem_ir.options[ca.option], "option_letter"
-    state = decided([_run_module(name, problem_ir, sol2, ctx) for name in modules])
+    sol2 = _option_read_as_claim(problem_ir, solution, ctx)        # the claim's own reader (G1RK-1)
+    if sol2 is None or (_value_shaped(problem_ir, sol2.claimed_answer)
+                        and _names_the_unknown(problem_ir, ctx, _claim_value_or_none(sol2, ctx))):
+        return mc                      # no option read, or one naming the unknown ('{x}': z3 holds it, SA-RK-8)
+    state = _decided(_certify(problem_ir, sol2, ctx, modules))
     ev = dict(mc.evidence, option=solution.claimed_answer.option, read_as_claim=state)
-    if state == "pass" and decided(certs) == "pass":
+    if state == "pass" and _decided(certs) == "pass":
         return result("mc.consistency", "pass", 0.99, True, ev, mc.latency_ms, primary=False)
     if state == "fail":
         ev["reason"] = "the chosen option, read as the claim, is refuted"
@@ -1213,6 +1908,104 @@ def _option_as_claim(problem_ir: ProblemIR, solution: Solution, ctx, modules: li
             return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=["recovered_answer_mismatch"])
         return result("mc.consistency", "fail", 0.99, True, ev, mc.latency_ms, primary=False)
     return mc
+
+
+# several options of a question with a declared tolerance lie in its window: the letter names none of them alone
+OPTIONS_IN_TOLERANCE = "options_within_declared_tolerance"
+
+
+def _declared_tolerance(ir: ProblemIR) -> bool:
+    """Does the task declare a tolerance (`rel_tol`, `abs_tol`: the question asks for an approximate value)?"""
+    p = ir.task.params or {}
+    return bool(ir.options) and any(p.get(k) not in (None, "") for k in ("rel_tol", "abs_tol"))
+
+
+def _options_in_tolerance(problem_ir: ProblemIR, solution: Solution, ctx, modules: list, certs: list,
+                          mc: LayerResult) -> LayerResult:
+    """mc.consistency of a multiple-choice question with a declared tolerance (final attack G2YO-5, G2YO-7). Each option
+    is read as the claim (`_option_read_as_claim`) through the same certificates, which compare it with the true value
+    within the tolerance. The letter is the solution's choice of the one option in the window: chosen outside it, the
+    letter is refuted; inside it with another option there too (or another not decided out), the letter names none
+    of them alone (UNKNOWN); inside it alone, the claim certified in the window too is the same answer, though not the
+    same number (7.0711 for the option 7.07 of √50 was refuted exactly, while A = 7.01 and C = 7.1, inside the window
+    1% wide as well, were CORRECT)."""
+    ca = solution.claimed_answer
+    if ca.option not in (problem_ir.options or {}):
+        return mc
+    windows = list((ctx.cache.get(TOLERANCE_WINDOW) or {}).values())
+    states: dict[str, str | None] = {}
+    for letter in problem_ir.options:
+        if letter != ca.option and _meta_option(problem_ir.options[letter]):
+            states[letter] = "fail"        # 'Hiçbiri', 'Belirlenemez': no value, none in the window (SA-RK-6)
+        elif letter != ca.option and len(windows) == 1:
+            states[letter] = _in_window(windows[0], problem_ir, _lettered(solution, letter), ctx)
+        else:
+            sol2 = _option_read_as_claim(problem_ir, _lettered(solution, letter), ctx)
+            states[letter] = None if sol2 is None else _decided(_certify(problem_ir, sol2, ctx, modules))
+    ev = dict(mc.evidence or {}, option=ca.option, options_in_window=states)
+    chosen = states[ca.option]
+    if chosen == "fail":
+        ev["reason"] = "the chosen option lies outside the declared tolerance of the value"
+        if ca.payload_source == "recovered_text":
+            return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=["recovered_answer_mismatch"])
+        return result("mc.consistency", "fail", 0.99, True, ev, mc.latency_ms, primary=False)
+    if chosen != "pass":
+        ev["reason"] = "the chosen option is not decided within the declared tolerance"
+        return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=[OPTION_UNDECIDED])
+    if any(s_ != "fail" for k, s_ in states.items() if k != ca.option):
+        ev["reason"] = "another option is not shown outside the declared tolerance"
+        return unknown("mc.consistency", ev["reason"], mc.latency_ms, ev, flags=[OPTIONS_IN_TOLERANCE])
+    if mc.verdict == "pass" or _decided(certs) == "pass":
+        ev["reason"] = "the chosen option is the one option within the declared tolerance"
+        return result("mc.consistency", "pass", 0.99, True, ev, mc.latency_ms, primary=False)
+    return mc
+
+
+# an option that names no value: none of the answers, or that there is none ("none of the above"); never inside a
+# tolerance window. Not '7 ile 8 arasında' (a true statement about the value: it stays undecided, SA-RK-6). Matched on
+# the text folded to ASCII lowercase (`_fold`): 'HİÇBİRİ'.lower() carries a combining dot, and the Turkish ablative
+# 'Yukarıdakilerden hiçbiri', 'Hiçbiri değildir', 'Bilinemez', 'Belirsiz' were not recognised (T2-RK-6)
+_META_OPTION = re.compile(r"(?:(?:yukaridakiler(?:in|den)\s+)?hicbiri(?:si)?(?:\s+degil(?:dir)?)?|belirlenemez|"
+                          r"bulunamaz|hesaplanamaz|bilinemez|belirsiz(?:dir)?|none of the above|none|"
+                          r"cannot be determined)[.!]?")
+_ASCII_FOLD = str.maketrans({"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "\u0307": None})
+
+
+def _fold(text) -> str:
+    """`text` lowercased the Turkish way (İ -> i, I -> ı) and folded to ASCII letters, its spaces collapsed."""
+    t = str(text).replace("İ", "i").replace("I", "ı").lower().translate(_ASCII_FOLD)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _meta_option(text) -> bool:
+    """Does the option name no value (`_META_OPTION`)?"""
+    return _META_OPTION.fullmatch(_fold(text)) is not None
+
+
+# an option written as a range of numbers ('7–8', '7 - 8'): a statement about the value, no value (SA2-YO-2)
+_RANGE_OPTION = re.compile(r"^\s*[+-]?\d+(?:[.,]\d+)?\s*[-–—]\s*\d+(?:[.,]\d+)?\s*$")
+
+
+def _in_window(compare, ir: ProblemIR, solution: Solution, ctx) -> str | None:
+    """'pass' when the chosen option, read as the claim (`_option_claim_value`), lies inside the certificate's declared
+    tolerance window (`certify.base.TOLERANCE_WINDOW`: the value it proved, compared once), 'fail' outside, None when
+    the option is not read as one number or the comparison undecided. A decimal comma ('9,95') is not guessed (the
+    option's own reader took it as the pair (9, 95), which lay outside the window, and the second option inside it was
+    missed: the farther one was CORRECT); nor is a range ('7–8', read as 7 - 8) or another kind ('[7, 8]', a set):
+    each is undecided, never outside (second audit of the branch, SA2-YO-2)."""
+    text = str((ir.options or {}).get(solution.claimed_answer.option, ""))
+    if decimal_comma(text) or _RANGE_OPTION.match(text):
+        return None
+    try:
+        ov = _option_claim_value(ir, solution, ctx)
+        if not (isinstance(ov, sp.Expr) and ov.is_number and not isinstance(ov, sp.Tuple)):
+            ov = None
+        got = compare(ov) if ov is not None else None
+    except LeakageError:
+        raise
+    except Exception:  # noqa: BLE001 - not read: undecided
+        got = None
+    return "pass" if got is True else "fail" if got is False else None
 
 
 def cache_key(problem_ir: dict, solution: dict) -> str:

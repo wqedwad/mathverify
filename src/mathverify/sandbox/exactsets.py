@@ -734,6 +734,14 @@ def _structure(e, var):
     return zeros, poles, periods
 
 
+# The candidate indices of a progression on a window are read in floating point, one index of room on each side: that
+# holds while the error of (end - p0)/step, about 3*(|end| + |p0|)/step units of 2^-53, stays below a tenth of an index.
+# Past it the window's points fell out of the candidates and were never checked: on [10^18, 10^18 + 20] the indices
+# of k*pi came out 39 too low, the window's six zeros of sin x were lost, and the empty set was certified the
+# solution of sin x = 0 there (A+ final attack, G1YO-2). Such a window is left unsolved.
+_FLOAT_INDEX = 2.0 ** 48
+
+
 def _on(progs, lo, hi) -> list:
     """The points of the progressions in [lo, hi], exact, each membership certified."""
     out = []
@@ -745,6 +753,8 @@ def _on(progs, lo, hi) -> list:
             raise _Unsolved("a progression on an unbounded window")
         else:
             fp, fs = float(sp.N(p0, 30)), float(sp.N(step, 30))
+            if not (fs > 0 and (max(abs(flo), abs(fhi)) + abs(fp)) / fs < _FLOAT_INDEX):   # nan and inf fail too
+                raise _Unsolved("a window too far out for the indices of a progression")
             n0, n1 = math.floor((flo - fp) / fs) - 1, math.ceil((fhi - fp) / fs) + 1
             if n1 - n0 > LIMIT:
                 raise _Unsolved("too many points on the window")

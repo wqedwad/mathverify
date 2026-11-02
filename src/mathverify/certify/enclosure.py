@@ -15,6 +15,7 @@ unbounded one that decides nothing. No infinite range is enclosed.
 """
 from __future__ import annotations
 
+import threading
 import time
 
 import mpmath as mp
@@ -78,6 +79,22 @@ def _monotone(fn, x, increasing=True, limits=None):
             a, b = b, a
         eps = mp.mpf(10) ** (-(_DPS + 5))
         return _hull(a - eps * (1 + abs(a)), b + eps * (1 + abs(b)))
+
+
+def _lipschitz(fn, x, bound=1):
+    """fn(lo) ± bound·(hi - lo) for an fn with |fn'| <= bound on the whole real line, widened by the margin of
+    `_monotone` and by the rounding of the argument to the working precision. Si (Si' = sin t/t), the Fresnel
+    integrals S and C (S' = sin(πt²/2), C' = cos(πt²/2)): |fn'| <= 1. Without them the value ∫_0^1 sin(x²) dx =
+    S(√2/√π)·√(π/2) of a certificate had no interval, and no declared tolerance was decided against it (son saldırı
+    G2RK-2)."""
+    lo, hi = _ends(x)
+    if not (mp.isfinite(lo) and mp.isfinite(hi)):
+        raise Unsupported("unbounded argument")
+    with mp.workdps(_DPS + 15):
+        v = fn(lo)
+        eps = mp.mpf(10) ** (-(_DPS + 5))
+        r = bound * ((hi - lo) * (1 + eps) + eps * (1 + abs(lo) + abs(hi)))
+        return _hull(v - r - eps * (1 + abs(v)), v + r + eps * (1 + abs(v)))
 
 
 def _neg(v):
@@ -152,6 +169,11 @@ def _iv_node(e, env: dict, an: bool):
         if ex.is_Rational:
             b = iv_eval(base, env, an)
             lo, hi = _ends(b)
+            if _EVEN_ROOTS.on and ex.q % 2 == 0 and lo < 0 <= hi:
+                # (an edge cell of a range on which the integrand is defined almost everywhere: see
+                # `rigorous_enclosure`) the base of an even root is >= 0 at almost every point of the range
+                b = _hull(mp.mpf(0), hi)
+                lo = mp.mpf(0)
             if an and not lo > 0:
                 raise NotAnalytic("a fractional power of a base that may be 0")
             if ex == sp.S.Half and lo >= 0:
@@ -211,6 +233,16 @@ def _iv_node(e, env: dict, an: bool):
         if an and not (-1 < lo and hi < 1):
             raise NotAnalytic("asin/acos at -1 or 1")
         return _monotone(mp.asin, x) if isinstance(e, sp.asin) else _monotone(mp.acos, x, increasing=False)
+    if isinstance(e, sp.erf):
+        return _monotone(mp.erf, x, limits=(lambda: mp.mpf(-1), lambda: mp.mpf(1)))
+    if isinstance(e, sp.erfc):
+        return iv.mpf(1) - _monotone(mp.erf, x, limits=(lambda: mp.mpf(-1), lambda: mp.mpf(1)))
+    if isinstance(e, sp.Si):
+        return _lipschitz(mp.si, x)
+    if isinstance(e, sp.fresnels):
+        return _lipschitz(mp.fresnels, x)
+    if isinstance(e, sp.fresnelc):
+        return _lipschitz(mp.fresnelc, x)
     if isinstance(e, sp.sinh):
         return _monotone(mp.sinh, x)
     if isinstance(e, sp.tanh):
@@ -311,16 +343,19 @@ def _removable(f, var, c):
 
 
 def _weights(f, var, c) -> list:
-    """f = g·w near the end c with w an integrable singular weight of one sign on a cell at c: log(u) or
-    u^p (-1 < p < 0), u linear in var with u(c) = 0. Returned as (g, 'log' | 'pow', |u'|, p)."""
+    """f = g·w near the end c with w an integrable singular weight of one sign on a cell at c: log(u), u^p or
+    |u|^p (-1 < p < 0), u linear in var with u(c) = 0; f itself may be the weight (g = 1: ∫_0^1 x^(-99/100) dx = 100
+    had a half-infinite enclosure, son denetim SI-YO-2). Returned as (g, 'log' | 'pow' | 'abspow', |u'|, p, sign of
+    u')."""
     out = []
-    if not isinstance(f, sp.Mul):
-        return out
-    for w in f.args:
+    factors = f.args if isinstance(f, sp.Mul) else (f,)
+    for w in factors:
         if isinstance(w, sp.log):
             u, kind, p_ = w.args[0], "log", None
         elif isinstance(w, sp.Pow) and w.exp.is_Rational and -1 < w.exp < 0:
             u, kind, p_ = w.base, "pow", w.exp
+            if isinstance(u, sp.Abs):
+                u, kind = u.args[0], "abspow"
         else:
             continue
         try:
@@ -329,14 +364,19 @@ def _weights(f, var, c) -> list:
             continue
         if poly.degree() != 1 or not all(co.is_Rational for co in poly.all_coeffs()) or u.subs(var, c) != 0:
             continue
-        g = sp.Mul(*[a for a in f.args if a is not w])
-        out.append((g, kind, abs(poly.all_coeffs()[0]), p_))
+        g = sp.Mul(*[a for a in factors if a is not w])
+        slope = poly.all_coeffs()[0]
+        out.append((g, kind, abs(slope), p_, 1 if slope > 0 else -1))
     return out
 
 
-def _weighted(g, kind, alpha, p_, var, l, r, h):
+def _weighted(g, kind, alpha, p_, var, l, r, h, side=1):
     """∫ over the cell [l, r] at the weight's zero of g·w: g([l, r])·∫ w (w of one sign there: the mean value
-    theorem for integrals); None when the weight changes sign on the cell (log u with |u| past 1)."""
+    theorem for integrals); None when the weight changes sign on the cell (log u with |u| past 1) or u < 0 on it
+    (`side`, the sign of u on the cell): log u and u^p are no real numbers there, or have the other sign (the real
+    cube root), and ∫_{-1}^{0} 2·x^(-1/3) dx had the enclosure [3, 3] (son denetim, 21 Oct 2026)."""
+    if kind != "abspow" and side < 0:
+        return None
     iv = _iv()
     H = h * (int(alpha.p) if alpha.q == 1 else iv.mpf(int(alpha.p)) / int(alpha.q))      # |u| runs over [0, H]
     if kind == "log":
@@ -368,11 +408,22 @@ def from_raw(t):
     return mp.make_mpf(tuple(t))
 
 
+_SETTLE_GAIN = mp.mpf(1) / 8   # the narrowing a finite sum must show over `settle` rounds (`rigorous_enclosure`)
+
+
+class _EvenRoots(threading.local):
+    on = False
+
+
+_EVEN_ROOTS = _EvenRoots()
+
+
 def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cells: int = 4000,
-                       seconds: float = 120.0):
+                       seconds: float = 120.0, defined: bool = False, settle: int = 0):
     """Sandbox worker: (lo, hi), the ends of an interval holding ∫_a^b f as exact binary numbers (see
     `from_raw`), refined until it misses `outside` (an interval holding the claim, as (lo, hi) of `_raw`
-    ends), lies within `inside` (a tolerance window) or `max_cells` cells are reached. None when there is
+    ends), lies within `inside` (a tolerance window) or `max_cells` cells are reached; with `settle` > 0, also
+    once a finite sum has not narrowed by `_SETTLE_GAIN` over the last `settle` rounds. None when there is
     no enclosure: an infinite range, an end that is not a real number, an operation with no interval
     extension, or `seconds` (a safety stop, not a budget) running out."""
     iv = _iv()
@@ -443,9 +494,9 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
                     if b_ is not None and finite(b_):
                         c_ = _meet(b_, c_) if finite(c_) else b_
                 if at in (l, r) and not finite(c_):
-                    for g, kind, alpha, p_ in weights:
+                    for g, kind, alpha, p_, s_ in weights:
                         try:
-                            b_ = _weighted(g, kind, alpha, p_, var, l, r, h)
+                            b_ = _weighted(g, kind, alpha, p_, var, l, r, h, s_ if at == l else -s_)
                         except (Unsupported, ArithmeticError, ValueError, NotImplementedError):
                             continue
                         if b_ is not None and finite(b_):
@@ -455,7 +506,15 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
 
         # an end that is not a binary number (π) is an interval [lo, hi]: ∫ from the true end to the
         # interval's inner end is (a number in [0, hi - lo])·f([lo, hi])
-        edge = [iv.mpf([0, 1]) * cell(lo_, hi_, None) for lo_, hi_ in (ia, ib) if hi_ > lo_]
+        # with `defined` (the caller proved the integrand's conditions fail on a null set of [a, b] at most), the base
+        # of an even root is >= 0 almost everywhere on the part of the end's interval inside [a, b], and is read so
+        # there: √cos x at the end π/2 had an interval value past π/2, where cos x < 0, the edge had none, and the
+        # enclosure of ∫_0^{π/2} √(cos x)·sin x dx was (-oo, oo) (son saldırı G2RK-7)
+        _EVEN_ROOTS.on = bool(defined)
+        try:
+            edge = [iv.mpf([0, 1]) * cell(lo_, hi_, None) for lo_, hi_ in (ia, ib) if hi_ > lo_]
+        finally:
+            _EVEN_ROOTS.on = False
         cells = [(ia[1], ib[0], cell(ia[1], ib[0], df))]
         out_lo, out_hi = (from_raw(outside[0]), from_raw(outside[1])) if outside else (None, None)
         in_lo, in_hi = (from_raw(inside[0]), from_raw(inside[1])) if inside else (None, None)
@@ -466,6 +525,7 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
             lo, hi = _ends(c)
             return hi - lo
 
+        widths = []                               # of the finite sums of the last rounds (`settle`)
         while True:
             s = iv.mpf(0)
             for c in [c_ for _, _, c_ in cells] + edge:
@@ -480,6 +540,15 @@ def rigorous_enclosure(integrand, var, a, b, outside=None, inside=None, max_cell
                 break
             if len(cells) >= max_cells:
                 break
+            if settle and mp.isfinite(clo) and mp.isfinite(chi):
+                # a finite sum that holds `outside` and has stopped narrowing: cells of a fast oscillation (cos²
+                # 1000πx) are [0, 1]·h until they are shorter than its period, and 4000 of them spent 4 to 30 s for
+                # an enclosure that changed no decision of the certificate's check (son denetim SON-INT-RK-2)
+                widths.append(chi - clo)
+                if len(widths) > settle and widths[-1] > (1 - _SETTLE_GAIN) * widths[-1 - settle]:
+                    break
+            else:
+                widths.clear()
             if time.monotonic() - t0 > seconds:
                 # a safety stop only: the enclosure's budget is the number of cells, so that one input gets
                 # one enclosure on any machine; under load a time budget left it wider and the claim it would

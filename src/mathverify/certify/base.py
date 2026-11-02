@@ -9,11 +9,11 @@ from typing import Any
 import sympy as sp
 from sympy import S
 
-from ..ir import ProblemIR
+from ..ir import LeakageError, ProblemIR
 from ..normalize.parse import (build_namespace, parse_relation, parse_expr_str, parse_domain,
                                parse_answer, ParseError, ClaimNotAValue, check_claim_is_value,
                                claim_namespace, given_bindings, not_collapsed, same_value,
-                               substitute_free, task_variables)
+                               substitute_free, task_variables, unit_marks, parse_as_written, single_marked_number)
 from ..sandbox.exactsets import at_risk, exact_intersection, exact_solveset
 from ..solution import Solution
 from ..types import LayerResult
@@ -1166,16 +1166,18 @@ class Ctx:
         as SymPy's 1/zoo = 0 and 1, they were certified over ℂ (attack on d4f round 2, A-YO-3). The texts the real
         reading found, read again: (undefined, undecided)."""
         from ..normalize.parse import parse_set_as_written
-        from .domain import definedness_conditions, is_convention, is_no_value
+        from .domain import complex_pole, definedness_conditions, is_convention, is_no_value
         pins = self.parameter_pins()
         undefined: list[str] = []
         undecided: list[str] = []
         for src in self.cache.get("written_undefined", []) + self.cache.get("written_undecided", []):
             try:
-                conds = definedness_conditions(self._pinned(parse_set_as_written(src, self.ns), pins), None)
+                e = self._pinned(parse_set_as_written(src, self.ns), pins)
+                conds = definedness_conditions(e, None)
             except Exception:  # noqa: BLE001 - not read as written: the real conditions it may hold drop
                 continue
-            if any(is_no_value(c) for c in conds):
+            # a closed division by 0 or pole has no value over ℂ either, inside any operation (SON-G3-YO-4)
+            if any(is_no_value(c) for c in conds) or complex_pole(e):
                 undefined.append(src)
             elif any(is_convention(c) for c in conds):
                 undecided.append(src)
@@ -1442,19 +1444,178 @@ class Ctx:
             raise ClaimNotAValue(f"claimed answer {ca.payload!r} is an unevaluated computation")
         return v
 
-    def option_value(self, letter: str):
+    def option_value(self, letter: str, text: str | None = None):
         """The option's value, read as a claim of the answer's shape is (fourth audit D4F2B-ONCEKI-1): a condition on
         the task's variable is the set it names (`option_condition_set`). A decimal comma ('1,5') is the verifier's
-        (`decimal_comma`), which abstains before any reading of it is compared."""
+        (`decimal_comma`), which abstains before any reading of it is compared. `text`: read in place of the option's
+        own text (another reading of it, `verifier._mc_unit_reading`)."""
         if not self.ir.options or letter not in self.ir.options:
             return None
-        named = self.option_condition_set(letter)
+        named = self.option_condition_set(letter, text)
         if named is not None:
             return named
         return parse_answer(self.ir.answer_shape if self.ir.answer_shape in ("set", "interval") else "value",
-                            self.ir.options[letter], self.ns)
+                            self.plain_unit_reading(self.ir.options[letter] if text is None else text), self.ns)
 
-    def option_condition_set(self, letter: str):
+    # ---- unit marks ('%', '°'; final attack G1RK-3) -------------------------------------------------------------
+    def angles_in_radians(self) -> bool:
+        """The answer is a radian measure: its variable (the task's `var`; evaluate's `expr` when it is a lone symbol)
+        enters every trigonometric function of the IR's own relations (the task's, the givens) as k*x + c with k
+        rational, at least once, so it is the radian measure SymPy's sin and cos read (30° is pi/6: {30°, 150°} for
+        sin x = 1/2 in trig_solve, x = 30° for x with sin(x) = 1/2 and 0 < x < pi/2 given, SA-RK-5; a count of degrees
+        would enter as pi*x/180); or evaluate's expression is an inverse trigonometric function, whose value is one
+        (asin(1/2) is pi/6)."""
+        p = self.ir.task.params or {}
+        key = "unit_marks:radians"
+        if key in self.cache:
+            return self.cache[key]
+        self.cache[key] = False
+        try:
+            if isinstance(p.get("var"), str) or self.ir.task.kind == "trig_solve":
+                v = self.sym(p.get("var", "x"))
+            elif self.ir.task.kind == "evaluate" and isinstance(p.get("expr"), str):
+                # the shape as written: asin(1/2) is evaluated to pi/6 before any reading of it
+                w = parse_as_written(p["expr"], self.ns)
+                if w is not None and len(w) == 1 and isinstance(w[0], (sp.asin, sp.acos, sp.atan, sp.acot, sp.asec,
+                                                                         sp.acsc)):
+                    self.cache[key] = True
+                    return True
+                e = self.expr(p["expr"])
+                if not isinstance(e, sp.Symbol):
+                    return False
+                v = e
+            else:
+                return False
+            rels = list(self.givens()) + [self.rel(t) for k_, t in p.items()
+                                          if k_ in ("equation", "inequality", "relation") and isinstance(t, str)]
+        except LeakageError:
+            raise
+        except Exception:  # noqa: BLE001 - not read: nothing fixes the unit
+            return False
+        apps = [a for r in rels if isinstance(r, sp.Basic) for a in r.atoms(*_TRIG_FUNCS) if v in a.free_symbols]
+        if not apps:
+            return False
+        for a in apps:
+            try:
+                poly = sp.Poly(a.args[0], v)
+            except Exception:  # noqa: BLE001 - not a polynomial in the variable
+                return False
+            if poly.degree() != 1 or not poly.LC().is_Rational:
+                return False
+        self.cache[key] = True
+        return True
+
+    def _ir_unit_marks(self) -> frozenset:
+        """The unit marks the IR's own texts write (its '30°' converts to pi/6, as the claim's does)."""
+        key = "unit_marks:ir"
+        if key not in self.cache:
+            self.cache[key] = frozenset().union(*(unit_marks(t) for t in _ir_texts(self.ir)))
+        return self.cache[key]
+
+    def counted_unit_marks(self) -> frozenset:
+        """The unit marks the IR's value is PROVED to count in, so that a claim or an option that is one number with
+        that mark is the plain number (`plain_unit_reading`; final attack EK 8, which replaced the reading by the IR's
+        `units`: that field is free text, the extractor writes a percentage as a fraction ('%25' -> 25/100) and SymPy's
+        trigonometric values are radians, so the right '%20', '180°', '45°' were INCORRECT and the wrong '%0.2' CORRECT;
+        T2-RK-2, T2-OT-1):
+          '%'  evaluate's expression written as a product with the factor 100 ((p2 - p1)/p1*100);
+          '°'  evaluate's expression written with the factors 180 and 1/pi (asin(1/2)*180/pi); the angle() target of
+               synthetic_geometry (its certificate measures in degrees); the answer's variable entering every
+               trigonometric function of the IR's relations as pi*(k*x + c)/180, k rational (deg(x), (x)°,
+               cos(pi*C/180) = 1/2: a count of degrees)."""
+        key = "unit_marks:counted"
+        if key in self.cache:
+            return self.cache[key]
+        marks: set[str] = set()
+        p = self.ir.task.params or {}
+        if self.ir.task.kind == "synthetic_geometry" and "angle(" in str(p.get("target", "")):
+            marks.add("°")
+        if self.ir.task.kind == "evaluate" and isinstance(p.get("expr"), str):
+            try:
+                w = parse_as_written(p["expr"], self.ns)
+            except LeakageError:
+                raise
+            except Exception:  # noqa: BLE001 - not read: nothing proved
+                w = None
+            if w is not None and len(w) == 1:
+                f = _written_factors(w[0])
+                if any(isinstance(x, sp.Integer) and x == 100 for x in f):
+                    marks.add("%")
+                if any(isinstance(x, sp.Integer) and x == 180 for x in f) and any(
+                        isinstance(x, sp.Pow) and x.base is sp.pi and x.exp == -1 for x in f):
+                    marks.add("°")
+        if self._trig_measure() == "degrees":
+            marks.add("°")
+        self.cache[key] = frozenset(marks)
+        return self.cache[key]
+
+    def _trig_measure(self) -> str | None:
+        """'degrees' when the answer's variable (the task's `var`; evaluate's `expr` when it is a lone symbol) enters
+        every trigonometric function of the IR's own relations, at least one, as pi*(k*x + c)/180 with k rational."""
+        p = self.ir.task.params or {}
+        try:
+            if isinstance(p.get("var"), str) or self.ir.task.kind == "trig_solve":
+                v = self.sym(p.get("var", "x"))
+            elif self.ir.task.kind == "evaluate" and isinstance(p.get("expr"), str):
+                v = self.expr(p["expr"])
+                if not isinstance(v, sp.Symbol):
+                    return None
+            else:
+                return None
+            rels = list(self.givens()) + [self.rel(t) for k_, t in p.items()
+                                          if k_ in ("equation", "inequality", "relation") and isinstance(t, str)]
+        except LeakageError:
+            raise
+        except Exception:  # noqa: BLE001 - not read: nothing proved
+            return None
+        apps = [a for r in rels if isinstance(r, sp.Basic) for a in r.atoms(*_TRIG_FUNCS) if v in a.free_symbols]
+        if not apps:
+            return None
+        for a in apps:
+            try:
+                poly = sp.Poly(a.args[0], v)
+            except Exception:  # noqa: BLE001 - not a polynomial in the variable
+                return None
+            if poly.degree() != 1 or not sp.simplify(poly.LC() * 180 / sp.pi).is_Rational:
+                return None
+        return "degrees"
+
+    def open_unit_marks(self, text) -> frozenset:
+        """The unit marks of `text` (a claim, an option, a step; `normalize.parse.unit_marks`) whose unit the question
+        does not fix: a question may count in the unit (an angle in radians: 30° is pi/6) or in plain numbers of it
+        (x + 2x + 3x = 180 is 30, (p2 - p1)/p1*100 is 20), and such a mark is read both ways (`verifier._certify`,
+        `verifier._mc_unit_reading`, the steps). Not a mark the IR itself writes (its own '°' converts like the
+        claim's) unless its value is proved to count in that unit (`counted_unit_marks`: sin((x)°) = 1/2 for x), not
+        the degrees of synthetic_geometry's angle() (its certificate measures in degrees: 70° is 70, 25 Sep 2026), not
+        the degrees of a radian measure (`angles_in_radians`). A claim or an option that is one marked number in a
+        counted unit was read as that number before (`plain_unit_reading`)."""
+        marks = unit_marks(text)
+        if not marks:
+            return marks
+        marks = marks - (self._ir_unit_marks() - self.counted_unit_marks())
+        if "°" in marks:
+            target = str((self.ir.task.params or {}).get("target", ""))
+            if (self.ir.task.kind == "synthetic_geometry" and "angle(" in target) or self.angles_in_radians():
+                marks = marks - {"°"}
+        return marks
+
+    def plain_unit_reading(self, text):
+        """`text` read as the plain number when it is one number with a unit mark (`normalize.parse.
+        single_marked_number`: '%20', '30°', '\\boxed{30^\\circ}') in a unit the IR's value is proved to count in
+        (`counted_unit_marks`): '%20' is 20 for (p2 - p1)/p1*100. Any other text as it is: a mark inside an expression
+        is a factor of it, and the claim with it is read both ways (`open_unit_marks`)."""
+        one = single_marked_number(text)
+        return one[1] if one is not None and one[0] in self.counted_unit_marks() else text
+
+    def option_as_claim(self, letter: str):
+        """The option read by the claim's own reader, which the verifier registers (`verifier._option_claim_value`:
+        notation, namespace and cleaning of the claim; final attack G1RK-1); the option's own reader (`option_value`)
+        where none is registered. wordproblem's check of the options against the givens read '6 cm' with no value,
+        found no option satisfiable and blocked the right letter as an inconsistent IR."""
+        reader = self.cache.get(OPTION_READER)
+        return reader(letter) if reader is not None else self.option_value(letter)
+
+    def option_condition_set(self, letter: str, text: str | None = None):
         """The solution set an option of a set answer names when it is written as a condition on the task's variable
         ('x > -2', 'x ≥ 1', 'x \\geq 1', '-1 < x < 1'), as `verifier._normalize_set_notation` reads such a claim; None
         for any other text. Read as a set it was {x > -2}, and the right letter was refuted against the claim (-2, oo).
@@ -1462,7 +1623,7 @@ class Ctx:
         tvar = (self.ir.task.params or {}).get("var")
         set_task = self.ir.answer_shape in ("set", "interval") or self.ir.task.kind in (
             "solve_equation", "solve_inequality", "domain_of")
-        text = self.ir.options[letter]
+        text = self.ir.options[letter] if text is None else text
         if not (set_task and isinstance(tvar, str) and isinstance(text, str)):
             return None
         try:
@@ -1473,6 +1634,50 @@ class Ctx:
         except Exception:  # noqa: BLE001 - no condition: read as the answer's shape
             pass
         return None
+
+
+_TRIG_FUNCS = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
+
+
+
+def _written_factors(e) -> list:
+    """The factors of a product as written (`parse_as_written`: the nested products of `a/b*100` flattened)."""
+    if isinstance(e, sp.Mul):
+        return [f for a in e.args for f in _written_factors(a)]
+    return [e]
+
+
+def _ir_texts(ir: ProblemIR) -> list[str]:
+    """The IR's own texts (task parameters, givens, functions, constraints; not its options)."""
+    out: list[str] = []
+
+    def walk(o):
+        if isinstance(o, str):
+            out.append(o)
+        elif isinstance(o, dict):
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, (list, tuple)):
+            for v in o:
+                walk(v)
+    walk(ir.task.params or {})
+    walk(list(ir.givens))
+    walk([[f.expr, f.domain] for f in ir.functions])
+    walk([list(v.constraints) for v in ir.vars])
+    return out
+
+
+# the cache key of the verifier's option reader (`Ctx.option_as_claim`)
+OPTION_READER = "verifier:option_reader"
+# the cache key of a certificate's declared tolerance window: {layer: the comparison with the value it proved, a
+# function of a value giving True (inside), False (outside) or None}; `verifier._options_in_tolerance` reads each
+# option against it once, not through every certificate again (audit of the branch, SA-RK-6)
+TOLERANCE_WINDOW = "certify:tolerance_window"
+
+
+def tolerance_window(ctx: "Ctx", layer: str, compare) -> None:
+    """Record `layer`'s window (`TOLERANCE_WINDOW`)."""
+    ctx.cache.setdefault(TOLERANCE_WINDOW, {})[layer] = compare
 
 
 def make_ctx(ir: ProblemIR, seed: int = 0, timeout: float = 8.0) -> Ctx:

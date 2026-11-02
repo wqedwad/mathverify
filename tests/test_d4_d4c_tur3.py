@@ -119,11 +119,14 @@ def test_sympys_value_and_an_agreeing_quadrature_accept_nothing():
 
 def test_a_proof_that_a_converged_quadrature_contradicts_decides_nothing(monkeypatch):
     """A certificate's value (made up wrong here: sin 1 + 1 for ∫_0^1 cos x dx) that the converged quadrature
-    contradicts: something is wrong, nothing is decided."""
+    contradicts: something is wrong, and the certificate decides nothing. Since the last attack (G2YO-1, G2YO-2, 16 Oct
+    2026) a rigorous enclosure that misses the certificate's value drops it, and the claim meets the enclosure alone:
+    sin 1 + 1 lies outside it and is refuted (it was UNKNOWN); the true sin 1 is not."""
     from mathverify.certify import calculus
     monkeypatch.setattr(calculus, "certified_integral_value", lambda *a, **k: (sp.sin(1) + 1, {}))
-    assert _run(_dint("cos(x)", 0, 1), "sin(1) + 1").verdict == "UNKNOWN"
-    assert _run(_dtol("cos(x)", 0, 1, "1e-3"), "1.8414").verdict == "UNKNOWN"
+    assert _run(_dint("cos(x)", 0, 1), "sin(1) + 1").verdict == "INCORRECT"
+    assert _run(_dtol("cos(x)", 0, 1, "1e-3"), "1.8414").verdict == "INCORRECT"
+    assert _run(_dint("cos(x)", 0, 1), "sin(1)").verdict != "INCORRECT"
 
 
 def test_a_proof_stands_against_a_quadrature_the_enclosure_shows_wrong():
