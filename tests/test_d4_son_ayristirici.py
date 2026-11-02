@@ -756,3 +756,37 @@ def test_rkt24_a_set_or_an_interval_named_after_it(q, p, kind):
 def test_rkt24_control_a_unit_or_a_likelihood_with_the_copula_is_not_dropped(p):
     """'5 muhtemeldir' (5 is probable) was UNKNOWN before the copula was read: a doubt stays unread."""
     assert verify(_ev("2 + 3"), _sol(p)).verdict == "UNKNOWN", p
+
+
+# ==== EK 11 (23 Oct 2026): a value that is only a word for "does not exist" ========================================
+_YOK = {"A": "-1", "B": "0", "C": "1", "D": "2", "E": "Yoktur"}
+
+
+def _der_at(f, a, options=None):
+    d = _ir("derivative", {"f": f, "var": "x", "at": a}, vars_=[X])
+    if options is not None:
+        d["options"] = options
+    return d
+
+
+@pytest.mark.parametrize("f,a", [("Abs(x)", "0"), ("cbrt(x**2)", "0")])
+@pytest.mark.parametrize("p,option", [("Yoktur", "E"), ("Yoktur", None), ("yok", None), ("Türevi yoktur.", None),
+                                      ("mevcut değil", None), ("DNE", None), ("does not exist", None), (None, "E")])
+def test_ek11_a_value_that_is_only_a_dne_word_is_the_claim_dne(f, a, p, option):
+    """The path (b) reader gives "Cevap: Yoktur" the kind 'value': refuted against the option 'Yoktur'
+    (option_says_DNE_but_a_value_was_claimed), while the kind 'dne' was CORRECT (calculus audit N0/4/8/12, T112)."""
+    r = verify(_der_at(f, a, _YOK if option else None), _sol(p, option=option))
+    assert r.verdict == "CORRECT", (f, p, option, r.verdict)
+
+
+def test_ek11_control_a_wrong_dne_word_or_a_value_with_it():
+    assert verify(_der_at("Abs(x)", "1", _YOK), _sol("Yoktur", option="E")).verdict == "INCORRECT"       # N16
+    assert verify(_der_at("Abs(x)", "1"), _sol("Yoktur")).verdict == "INCORRECT"
+    assert verify(_der_at("Abs(x)", "1", _YOK), _sol("1", option="C")).verdict == "CORRECT"
+    r = verify(_der_at("Abs(x)", "0"), _sol("5 yoktur"))                                               # no such claim
+    assert r.verdict != "CORRECT"
+    # a set answer: the value 'Yok' beside the option 'Yok' was refuted by the DNE word test; as 'dne' it is undecided
+    opts = {"A": "{1}", "B": "{-1}", "C": "{0}", "D": "{2}", "E": "Yok"}
+    for kind in ("set", "value"):
+        assert verify(_eqn("x**2 + 1 = 0"), _sol("Yok", kind)).verdict != "INCORRECT", kind
+    assert verify(_eqn("x**2 + 1 = 0", opts), _sol("Yok", option="E")).verdict == "UNKNOWN"

@@ -249,6 +249,26 @@ def _claims_no_solution(ir: ProblemIR, solution: Solution, ctx) -> bool:
         return False
 
 
+# A claim that is only a word for "does not exist" ('Yoktur', 'limit yoktur', 'türevi yoktur', 'mevcut değil',
+# 'tanımsız', 'DNE', 'does not exist'). The path (b) reader gives "Cevap: Yoktur" of a scalar question the kind 'value',
+# and mc.consistency refuted it against the option 'Yoktur' (option_says_DNE_but_a_value_was_claimed): the same claim
+# of the kind 'dne' was CORRECT (EK 11, the calculus audit's N0/4/8/12, T112). A value with it ('5 yoktur') is no such.
+_DNE_ONLY = re.compile(
+    r"^\s*(?:\$+|\\\()?\s*(?:\\text\s*\{\s*)?"
+    r"(?:(?:bu\s+)?(?:limit|limiti|türev|türevi|değer|değeri|sınır|sınırı)\s+|(?:the\s+)?(?:limit|derivative)\s+)?"
+    r"(?:yok(?:tur)?|mevcut\s+değil(?:dir)?|tanımsız(?:dır)?|dne|does\s+not\s+exist|undefined)"
+    r"\s*\}?\s*(?:\$+|\\\))?\s*\.?\s*$", re.IGNORECASE)
+
+
+def _dne_word_claim(solution: Solution) -> None:
+    """A claim of the kind 'value' that is only a word for "does not exist" (`_DNE_ONLY`) is the claim 'dne'. For a set
+    answer too: the value 'Yok' beside the option 'Yok' of x**2 + 1 = 0 was refuted by the same DNE word test (an unjust
+    rejection); as 'dne' it is undecided there."""
+    ca = solution.claimed_answer
+    if ca.kind == "value" and isinstance(ca.payload, str) and _DNE_ONLY.match(ca.payload):
+        ca.kind = "dne"
+
+
 def _mc_consistency(ir: ProblemIR, solution: Solution, ctx) -> LayerResult | None:
     """If the solver picked an option letter, the letter's value must match the claimed value."""
     ca = solution.claimed_answer
@@ -1605,6 +1625,7 @@ def _verify_layers(problem_ir: ProblemIR | dict, solution: Solution | dict, seed
     ca.payload = ctx.plain_unit_reading(ca.payload)
     raw_payload = list(ca.payload) if isinstance(ca.payload, list) else ca.payload    # before its notation is normalized
     scope_flags += _normalize_set_notation(problem_ir, solution, ctx)
+    _dne_word_claim(solution)                      # 'Yoktur' as a value is the claim 'dne' (EK 11)
 
     # DECISIONS §2 defines CORRECT as "the claimed answer is right AND no step was refuted".
     # With no checkable step the second conjunct is vacuously true, so a CORRECT verdict here

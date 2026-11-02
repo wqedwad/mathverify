@@ -35,6 +35,8 @@ the branch wip/son-ayristirici.
              not, a bracket group after a letter is read neither way (\\tan x(1 + \\tan^2 x), fast), nested macros
   M  YO-T2-2  rational premises with no complex solution (every root a pole): no vacuous consequence, undecided
   N  RK-T2-4  the allow list: 'kümesi', 'aralığı', 'tanedir', 'değerini alır', 'eder', the copula on a word that is no unit
+  EK 11 (23 Oct 2026):
+  P  a value that is only a word for "does not exist" ('Yoktur', 'türevi yoktur', 'DNE') is the claim 'dne'
 
     PYTHONUTF8=1 PYTHONPATH=<checkout>/src:<checkout> MATHVERIFY_LEAN_REPL=/nonexistent \\
         .venv/bin/python denetim/2026-10-01/son/ayristirici/sonda.py [out.json] [groups]
@@ -595,11 +597,36 @@ def cases_n():
     return out
 
 
+# P: EK 11 ---------------------------------------------------------------------------------------------------------
+def cases_p():
+    mc = {"A": "-1", "B": "0", "C": "1", "D": "2", "E": "Yoktur"}
+
+    def d(f, a, options=None):
+        q = ir("derivative", {"f": f, "var": "x", "at": a})
+        if options is not None:
+            q["options"] = options
+        return q
+    out = []
+    for f, a in (("Abs(x)", "0"), ("cbrt(x**2)", "0")):
+        out += [(f"({f})' at {a}: value {p!r} letter {o}", d(f, a, mc if o else None), sol(p, option=o), OK, None)
+                for p, o in (("Yoktur", "E"), ("Yoktur", None), ("yok", None), ("Türevi yoktur.", None),
+                             ("mevcut değil", None), ("DNE", None), ("does not exist", None), (None, "E"))]
+    out += [("(|x|)' at 1: value 'Yoktur' letter E (wrong)", d("Abs(x)", "1", mc), sol("Yoktur", option="E"), NO, None),
+            ("(|x|)' at 1: value 'Yoktur' (wrong)", d("Abs(x)", "1"), sol("Yoktur"), NO, None),
+            ("(|x|)' at 0: value '5 yoktur' (no such claim)", d("Abs(x)", "0"), sol("5 yoktur"), NOTOK, None),
+            ("x²+1=0: set 'Yok' (the empty set)", eqn("x**2 + 1 = 0"), sol("Yok", "set"), NOTNO, None),
+            ("x²+1=0: value 'Yok'", eqn("x**2 + 1 = 0"), sol("Yok"), NOTNO, None),
+            ("x²+1=0: value 'Yok' letter E 'Yok' (was refuted)",
+             eqn("x**2 + 1 = 0", options={"A": "{1}", "B": "{-1}", "C": "{0}", "D": "{2}", "E": "Yok"}),
+             sol("Yok", option="E"), UNK, None)]
+    return out
+
+
 GROUPS = {"A": cases_a, "B": cases_b, "C": cases_c, "D": cases_d, "E": cases_e, "F": cases_f, "G": cases_g,
-          "H": cases_h, "J": cases_j, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n}
+          "H": cases_h, "J": cases_j, "K": cases_k, "L": cases_l, "M": cases_m, "N": cases_n, "P": cases_p}
 
 
-def main(out_path=None, groups="ABCDEFGHJKLMN"):
+def main(out_path=None, groups="ABCDEFGHJKLMNP"):
     import os
     import mathverify
     from mathverify.verifier import verify
@@ -637,5 +664,5 @@ def main(out_path=None, groups="ABCDEFGHJKLMN"):
 if __name__ == "__main__":
     args = sys.argv[1:]
     out = args[0] if args else None
-    grp = args[1] if len(args) > 1 else "ABCDEFGHJKLMN"
+    grp = args[1] if len(args) > 1 else "ABCDEFGHJKLMNP"
     sys.exit(1 if main(out, grp) else 0)
