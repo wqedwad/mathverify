@@ -1,0 +1,359 @@
+[
+ {
+  "findings": [
+   {
+    "id": "RK2-1",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Bildirilen birim (units %/yüzde/derece) adımlarda düz sayı okunuyor: '10/50 = %20', '%20 = 20/100', 'cos(60°) = 1/2' gibi doğru adımlar çürütülüyor, doğru çözüm INCORRECT",
+    "repro": "Sonda: probes/sonda.py grup u, p, e. (a) IR evaluate expr '(p2 - p1)/p1*100', givens p1 = 50, p2 = 60, units '%'; çözüm '20', adım compute '10/50 = %20' (U13); aynı IR, adım '%20 = 20/100' (U14); eq 'p2 = p1 + %20*p1' (U21); units 'yüzde', expr '8/40*100', adımlar '8/40 = 1/5', '1/5 = %20' (U16); expr '(50 - 40)/50*100', adım '(50 - 40)/50 = %20' (U17). (b) IR evaluate 'C', givens 'cos(pi*C/180) = 1/2', '0 < C', 'C < 180', units 'derece' (derece cinsinden IR; dalın kendi testi buna 'derece sayısı' diyor); çözüm '60', adım compute 'cos(60°) = 1/2' (E3). Üçgen 'x + 2*x + 3*x = 180', units 'derece'; adım 'sin(30°) = 1/2' (E4). (c) Faiz: 'r', '1000*(1 + r) = 1200', units '%'; adım 'r = %20' (P2d).",
+    "expected": "Bütün adımlar doğru (10/50 = 0,2 = %20; %20 = 20/100; cos 60° = 1/2; sin 30° = 1/2; r = 1/5 = %20; mpmath ile ayrıca hesaplandı), cevap 20 / 60 / 30 doğru: CORRECT. Adım için en kötü durum unknown olmalı, refuted asla.",
+    "actual_branch": "U13, U14, U16, U17, U21: INCORRECT (son adım refuted). E3: INCORRECT ['refuted','verified']. E4: INCORRECT ['verified','verified','refuted']. P2d: INCORRECT ['verified','verified','refuted'].",
+    "actual_base": "0e93ed5'te hepsi CORRECT, adımlar verified. İlk tur (d2e6dbf) da CORRECT veriyordu (adım iki okumayla unknown). Gerileme ikinci turun 4aeeb16 commit'inden geliyor.",
+    "math": "(60−50)/50 = 1/5 = 20/100 = %20; 8/40 = 1/5; (50−40)/50 = 1/5; cos(π/3) = 1/2; sin(π/6) = 1/2; 1000(1+r) = 1200 ⇒ r = 1/5. Düz okumada adımlar şöyle oluyor: 1/5 = 20, 20 = 1/5, cos(60 rad) ≈ −0,952 ≠ 1/2, sin(30 rad) ≈ −0,988 ≠ 1/2. Bunlar yanlış, karşı örnek çıkıyor.",
+    "mechanism": "check_steps her adım metnini `_parse_claim(ctx.plain_unit_reading(st.claim))` ile okuyor. `Ctx.declared_unit_marks` IR.units '%'/'yüzde'/'derece' olunca o işareti (IR'ın kendi metinlerinde geçmiyorsa ve angles_in_radians False ise) düz sayı yapıyor. Ayrıca `open_unit_marks` bildirilen işareti çıkardığı için `_both_unit_readings` artık ikinci okumayı yapmıyor. Bu yüzden adımın içindeki dönüşüm, yani '%20' = 1/5 ya da trig içindeki 60° = π/3, tek okumada düz sayıya çevriliyor ve doğru özdeşlik çürütülüyor. Cevabın birimi bildirmesi, adım içindeki özdeşliklerde işaretin anlamını değiştirmez. Düzeltme yönü: plain_unit_reading yalnız cevap/şık değerine uygulanmalı, adımda ya iki okuma korunmalı ya da düz okumada çürütülen adım unknown kalmalı."
+   },
+   {
+    "id": "RK2-2",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "units '%'/'derece' bildirilmiş ama IR'ın değeri temel birimdeyse (kesir, radyan) doğru '%20', '180°', '45°' cevabı ve şıkkı INCORRECT oluyor; tabanda CORRECT",
+    "repro": "(a) evaluate expr '(p2 - p1)/p1' (çıkarıcının kendi kılavuzunda '%25' -> 25/100), givens p1 = 50, p2 = 60, units '%': iddia '%20' (U1); şıklar '%10','%20','%25','%30', harf B (U1c, yalnız harf U19); şıklar IR'da '20/100' (kılavuza göre), iddia '%20' + B (U1d). (b) evaluate 'r', '1000*(1 + r) = 1200', units '%' ya da 'yüzde': iddia '%20' (P2, P2b). (c) evaluate 'atan(1) + atan(2) + atan(3)', units 'derece': iddia '180°' (U3), şık C '180°' (U3c, U20); 'asin(1/2) + acos(1/2)' -> '90°' (U4); '2*asin(1/2)' -> '60°' (U5); 'x' (sin x = 1/2, 0 < x < π/2) için '2*x' -> '60°' (U18); extremum f = sin x + cos x, [0, π/2], argmax, units 'derece': '45°' (E1).",
+    "expected": "Cevaplar doğru: %20 = 1/5 = (60−50)/50 = r; atan1+atan2+atan3 = π = 180° (mpmath 50 basamak: fark −5e−51); asin(1/2)+acos(1/2) = π/2 = 90°; 2·asin(1/2) = π/3 = 60°; argmax = π/4 = 45°. Beklenen CORRECT ya da en kötü UNKNOWN (birim geleneği), INCORRECT asla.",
+    "actual_branch": "U1, U1c, U1d, U19, P2, P2b, U3, U3c, U20, U4, U5, U18, E1: hepsi INCORRECT. U12 ('atan(1) = 45°' adımıyla): adımlar refuted.",
+    "actual_base": "0e93ed5'te hepsi CORRECT (işaret dönüşüm sayılıyor: %20 = 1/5, 180° = π). İlk turda (d2e6dbf) iki okuma yüzünden UNKNOWN'dı. INCORRECT ikinci turun (4aeeb16, SA-RK-4) getirisi.",
+    "math": "%20 = 1/5 = (60−50)/50 = 0,2 = r; atan(1)+atan(2)+atan(3) = π (Machin tipi özdeşlik, mpmath ile doğrulandı); π rad = 180°; π/2 = 90°; π/3 = 60°; π/4 = 45°. Düz okumada 20 ≠ 1/5 ve 180 ≠ π, bu yüzden çürütülüyor.",
+    "mechanism": "SA-RK-4 kararı 'units bildirilmişse tek okuma (bildirilen birim)' IR'ın değerinin o birimde sayıldığını varsayıyor ama bunu denetlemiyor. `declared_unit_marks` yalnız iki durumda dönüşümü koruyor: IR metninde işaret varsa ya da `angles_in_radians` True ise. angles_in_radians ise yalnız tek başına bir ters trig ifadesini (asin(1/2)) ya da ilişkilerde kx+c olarak geçen tek değişkeni tanıyor. Ters trig toplamları ya da katları, '2*x', extremum'un f'i (f bir ilişki değil) ve kesir değerli yüzde (çıkarıcı kılavuzu '%25' -> 25/100 diyor, faiz oranı r) için işaret düz sayı yapılıyor ve iki okumanın (kararın 'birinde eşitse UNKNOWN' kuralı) yerini tek yanlış okuma alıyor. Bunun sonucu INCORRECT. Kararın kendisi de sorunlu (other): units, IR'ın değerinin ölçeğini sabitlemez. Bildirilen birimde düz okuma ancak IR değeri o birimde kanıtlanabiliyorsa tek okuma olmalı, aksi hâlde eski iki okuma (UNKNOWN) kalmalı. İlişkili kapsama kaybı: units yokken extremum argmax '45°' tabanda CORRECT, dalda UNKNOWN (E1c), çünkü angles_in_radians f'i okumuyor."
+   },
+   {
+    "id": "RK2-3",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "solve_equation (answer_shape scalar) şıkları 'x = 6' / 'x=6' / 'x = 4' biçimindeyken doğru harf ve doğru değer INCORRECT; tabanda CORRECT",
+    "repro": "IR solve_equation {equation: '2*x + 3 = 15', var: 'x'} scalar, şıklar A 'x = 4', B 'x = 6', C 'x = 8', D 'x = 9'; çözüm payload '6', option 'B' (X5b; adımlarla X16). 'x=6' boşluksuz (X13). Logaritma: 'log(x, 2) + log(x - 2, 2) = 3', şıklar 'x = -2','x = 4','x = 2','x = 8', '4' + B (X15). Kök: 'sqrt(x + 2) = 3', şıklar 'x = 1','x = 7',..., '7' + B (X12). İddia 'x = 6' + B (X9).",
+    "expected": "6, 4 ve 7 doğru kökler (2·6+3 = 15; log2 4 + log2 2 = 3; √9 = 3), seçilen şık da o kök: CORRECT.",
+    "actual_branch": "X5b, X16, X13, X15, X12: INCORRECT (mc.consistency fail: 'the chosen option, read as the claim, is refuted'). X9: INCORRECT.",
+    "actual_base": "0e93ed5'te X5b, X16, X13, X15, X12 CORRECT; X9 UNKNOWN. İlk turda (d2e6dbf) da INCORRECT. G1RK-1'in şık okuyucusu getirdi, ikinci tur kapatmadı. Yalnız harf (X5) iki kopyada da INCORRECT: önceden var olan {{6}} hatası.",
+    "math": "2x + 3 = 15 ⇒ x = 6; log2 x + log2(x−2) = 3 ⇒ x(x−2) = 8, x > 2 ⇒ x = 4; √(x+2) = 3 ⇒ x = 7. Şık metni 'x = k' tam olarak o kökü adlandırıyor.",
+    "mechanism": "`_option_claim_value` şıkkı iddianın okuyucusundan geçiriyor (`_option_read_as_claim`). solve_equation _SET_TASKS içinde olduğu için `_normalize_set_notation` 'x = 6'yı '{6}'a çeviriyor, kind ise answer_shape scalar olduğundan 'value' kalıyor. `ctx.claimed` -> parse_answer('value', '{6}') bir Python `set` {6} döndürüyor, SymPy FiniteSet değil. `_compare_option` bunu küme saymıyor (isinstance(ov, sp.Set) False), skaler 6 ile {6} karşılaştırması kararsız çıkıyor ve mc undecided oluyor. Ardından `_option_as_claim` aynı şıkkı sertifikalardan geçiriyor: algebra '{6}'yı `_claimed_as_set` ile FiniteSet({6}) yapıyor (kümenin kümesi), 'claimed_root_invalid: outside_domain_of_discourse' ile fail veriyor. Bu da veto olarak mc.consistency fail üretiyor ve INCORRECT çıkıyor. Tabanda `ctx.option_value` aynı metni koşul kümesi FiniteSet{6} olarak okuyup geçiriyordu. Düzeltme yönü: okuyucunun Python set'ini sp.FiniteSet'e çevirmek ya da scalar kind'de '{k}' normalleştirmesini yapmamak. Ayrıca okuyucu hatasının veto üretmemesi (fail -> undecided)."
+   },
+   {
+    "id": "RK2-4",
+    "klass": "coverage_loss",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Toleranslı çoktan seçmelide _META_OPTION dar: 'Yukarıdakilerden hiçbiri', büyük harf 'HİÇBİRİ', 'Hiçbiri değil', 'Bilinemez', 'Belirsiz' şıkkı doğru harfi UNKNOWN yapıyor (tabanda CORRECT)",
+    "repro": "IR evaluate {expr: 'sqrt(50)', rel_tol: '0.01'}, şıklar A '7.07', B '7.5', C '8', D '6.5', E <meta>; çözüm '7.07', option 'A'. E = 'Yukarıdakilerden hiçbiri' (W1/Wm2), 'HİÇBİRİ' (Wm1), 'Hiçbiri değil' (Wm4), 'Hiçbiri değildir' (W3), 'Bilinemez' (Wm6), 'Belirsiz' (W4). Kontrol: 'Hiçbiri' ve 'Yukarıdakilerin hiçbiri' CORRECT.",
+    "expected": "√50 = 7,0710678… Pencerede (%1) yalnız A var: CORRECT (SA-RK-6 kararı: sayı olmayan şık pencerede sayılmaz).",
+    "actual_branch": "Hepsi UNKNOWN (options_within_declared_tolerance: 'another option is not shown outside the declared tolerance').",
+    "actual_base": "0e93ed5'te hepsi CORRECT. İlk turda (d2e6dbf) hepsi UNKNOWN'dı. İkinci tur yalnız 'hiçbiri' ve 'yukarıdakilerin hiçbiri' kalıplarını kurtardı.",
+    "math": "|7,07 − √50|/√50 ≈ 1,5e−4 < 0,01, şıkkın penceresinde. 7,5 (+6,1%), 8 (+13%) ve 6,5 (−8,1%) pencere dışında.",
+    "mechanism": "`_META_OPTION` fullmatch yalnız '(yukarıdakilerin )?hiçbiri(si)?|belirlenemez|bulunamaz|hesaplanamaz|none…' kalıplarını tanıyor. Türkçede yaygın ayrılma hâli 'Yukarıdakilerden hiçbiri' eşleşmiyor. Python'da 'HİÇBİRİ'.lower() = 'hi̇çbi̇ri̇' (U+0307 birleşik nokta) olduğundan büyük harfli yazım da eşleşmiyor. Eşleşmeyen şık `_in_window`a gidiyor, okunamıyor ve None dönüyor. None 'fail' olmadığından doğru harf UNKNOWN kalıyor. Kararın genel ilkesi (sayı olmayan şık pencerede değil) yazım listesiyle değil 'şık sayı olarak okunmuyor ve sayı içermiyor' ölçütüyle uygulanmalı. En azından casefold ve Türkçe İ normalleştirmesi gerekli."
+   },
+   {
+    "id": "RK2-5",
+    "klass": "crash_or_timeout",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "Payda kökü seçenek çarpımı yeniden yazılmış rasyonel eşitsizlik sayısıyla üstel büyüyor, döngüde _tick yok",
+    "repro": "IR solve_inequality '(x + 1)/(x - 2) >= 2'. Adımlar: eşitsizliğin k farklı eşdeğer yazımı ('(x + 1)/(x - 2) - 2 >= 0', '(5 - x)/(x - 2) >= 0', '(x - 5)/(x - 2) <= 0' …), ardından eq 'x - 5 = 0'; cevap Interval.Lopen(2, 5) (probes/sonda.py grup t; S1/S2 üç kritik adımla).",
+    "expected": "Taban süresine yakın, adım başına sınırlı süre.",
+    "actual_branch": "k=4: 2,36 s; k=6: 4,22 s; k=8: 15,79 s; k=9: 27,81 s (tek kritik adım). Üç kritik adım ve 7 yeniden yazım (S2): 19,4 s. Kararlar doğru (CORRECT).",
+    "actual_base": "k=4: 1,91 s; k=6: 0,83 s; k=8: 1,14 s; k=9: 1,32 s (INCORRECT, eski haksız ret). S2: 1,19 s.",
+    "math": "Her yeniden yazım bir 'hit' daha, her biri 2 kritik denklem (pay/payda) demek, yani 2^(k+1) seçenek. Seçenek başına bir sandbox _emptiness çağrısı (~25 ms) yapılıyor. Pay ve paydayı karıştıran seçeneklerin hepsi aynı eşitsizliğin yazımları olduğu için çelişkili ve boşa harcanıyor.",
+    "mechanism": "`_boundary_premises` `product(*crit)` üzerinde döngü kuruyor ve her seçenekte `sb_run(_emptiness)` çağırıyor. Döngüde `_tick()` yok, bu yüzden _STEP_BUDGET (60 s) bu bölümü kesmiyor. Yalnız sonraki `_check_eq` çağrıları kesiyor, adım ancak o zaman unknown oluyor. Ayrıca aynı eşitsizliğin yazımları için pay ve payda seçimleri bağımsız sayılıyor. Öneri: aynı kritik kümeye sahip hit'leri tek seçimde birleştirmek, çarpıma bir üst sınır koymak ve döngüde _tick() çağırmak."
+   }
+  ],
+  "probes_run": 446,
+  "summary": "wip/son-adim (0dfadd9) ile 0e93ed5'i haksız ret, kapsama ve çökme açısından karşılaştırdım. Gerektiğinde ilk turu (d2e6dbf) da ölçtüm. Sonda dosyası /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-adim-t2/ret-kapsama/probes/sonda.py, çıktılar aynı dizinde (out_dal.jsonl, out_base.jsonl, out_t1.jsonl). Toplam 446 vaka koştu, istisna 0. Kopyalar silindi.\n\nİkinci turun getirdiği iki bulgu var:\n- **RK2-1 (yüksek, gerçekçi):** units '%', 'yüzde' ya da 'derece' bildirilince adımlardaki işaret düz sayı okunuyor. '10/50 = %20', '%20 = 20/100', 'p2 = p1 + %20*p1', 'r = %20', 'cos(60°) = 1/2', 'sin(30°) = 1/2' gibi doğru adımlar refuted, doğru çözüm INCORRECT. Tabanda ve ilk turda CORRECT'ti.\n- **RK2-2 (orta):** units bildirilmiş ama IR'ın değeri kesir ya da radyansa ('(p2-p1)/p1', faiz oranı r, atan toplamı, 2·asin(1/2), extremum argmax), doğru '%20', '180°', '45°' cevabı ve şıkkı INCORRECT. Tabanda CORRECT, ilk turda UNKNOWN'dı. SA-RK-4 kararı IR değerinin ölçeğini denetlemiyor. angles_in_radians de yalnız tek başına ters trig ifadesini ve ilişkileri okuyor.\n\nDalın tamamından iki bulgu daha var:\n- **RK2-3 (yüksek, gerçekçi):** solve_equation (scalar) şıkları 'x = 6', 'x = 4', 'x = 7' biçimindeyken doğru harf ve doğru değer INCORRECT. Tabanda CORRECT. Kaynak G1RK-1 şık okuyucusu: Python set {6} dönüyor, mc kararsız kalıyor, _option_as_claim {{6}} ile veto ediyor. Logaritma ve köklü denklem şıklarında da görüldü.\n- **RK2-4 (orta, kapsama):** toleranslı çoktan seçmelide _META_OPTION dar. 'Yukarıdakilerden hiçbiri', 'HİÇBİRİ' (Türkçe İ küçültmesi), 'Hiçbiri değil', 'Bilinemez' ve 'Belirsiz' şıkları doğru harfi UNKNOWN yapıyor. Tabanda CORRECT.\n\nBir de düşük önemde süre bulgusu var:\n- **RK2-5:** payda kökü seçenek çarpımı yeniden yazım sayısıyla üstel büyüyor ve döngüde _tick yok. 9 yeniden yazımda 27,8 s, tabanda 1,3 s.\n\nGerileme bulamadığım alanlar:\n- Sınır kuralı, payda kökü ve every=Or kararları.\n- 'okunmayan şık' (wordproblem).\n- Bilinmeyeni anan şık.\n- Katı şık okuyucusu: birim sözcükleri tabanda da UNKNOWN'dı.\n- Ders kitabı trig, log, mutlak değer ve işaret tablosu taraması.\n\nBu alanlarda dal tabana göre ya aynı ya daha iyi."
+ },
+ {
+  "findings": [
+   {
+    "id": "SA2-YO-1",
+    "klass": "false_accept",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "G1RK-3 adım kardeşi: iki birim okuması 'unknown'a çektiği adım (A = 40°, A + B + C = 180°) öncül havuzuna BİRİMLİ okumasıyla giriyor; havuz çelişkili olunca sonraki her adım (yanlışlar ve hiç işaretsiz olanlar dahil) çürütülmüyor, çözüm CORRECT",
+    "repro": "IR {task: evaluate, params {expr: 'B'}, vars A,B,C positive_real, givens ['A = 40', 'B = C', 'A + B + C = 180'], answer_shape scalar, options {A:40,B:50,C:60,D:70,E:80}} (units yok). Çözüm: payload '70', option 'D', adımlar eq 'A = 40°', eq 'B = C', eq 'C = 2*B' (yanlış). Kardeşler: givens ['A = 50','B = 60','A + B + C = 180'], hedef C, payload '70' option C, adımlar 'A = 50°','B = 60°','A + B + C = 180°','A + B = 100°' (yanlış), compute '180-50-60 = 70', 'C = 70°'; TRI (A = 2B, C = 3B) 'A + B + C = 180°','2*B + B + 3*B = 180°','5*B = 180' (yanlış),'B = 30' option B; yüzde: givens ['a = 50','b = 60','r = (b - a)/a*100'], adımlar 'r = %20','b - a = 15' (yanlış). Sonda: c12.py r2/r4/r6, c9.py u1/u2/u4/u6/u7, c8.py s13.",
+    "expected": "Yanlış adım refuted, çözüm INCORRECT; en azından 'B = C' verified, 'C = 2*B' refuted (birim adımının kendisi unknown kalabilir).",
+    "actual_branch": "CORRECT; steps [unknown, unknown, unknown], sonraki adımların gerekçesi 'premises_inconsistent_or_unsolved', solutions 0 (r6). r2, r4, s13, u1, u6, u7 de CORRECT. d2e6dbf'te (ilk tur) de CORRECT (u1, u4).",
+    "actual_base": "INCORRECT; r6 [refuted, verified, refuted]: yanlış 'C = 2*B' çürütülüyor (tabanın 'A = 40°' reddi G1RK-3'ün haksız reddiydi).",
+    "math": "Verilenlerden A = 40, B = C = 70. 'C = 2*B' adımı 70 = 140 der: yanlış. Q1: A + B = 50 + 60 = 110 ≠ 100. TRI: B = 30 iken 5B = 150 ≠ 180. Yüzde: b − a = 10 ≠ 15. Hepsi kesin tam sayı aritmetiği.",
+    "mechanism": "steps/deterministic.check_steps: _both_unit_readings birimli okumanın çürütmesini düz okuma verified dediği için 'unknown'a çeviriyor, ama havuza ekleme koşulu yalnız on_boundary'yi dışlıyor (`if st.kind == 'eq' and not on_boundary ...: parsed[st.id] = claim`). claim ° işaretinin π/180 okumasıyla ayrıştırılmış hâli (A = 2π/9). Havuz {A = 40, ..., A = 2π/9} boş kalıyor, sonraki her eq adımında _check_eq 'premises_inconsistent_or_unsolved' (unknown) dönüyor. SA-RK-2'nin (sınır yolu) birim yolundaki kardeşi, ilk turdan (2cdc7da) beri açık. Gerçekçi: SOLVER_SYSTEM 'degrees as 30°' diyor; llm_cache'teki muse-spark çözümleri (a1/a18404d7…, bf/bf57b814…) tam olarak 'A = 50°', 'A + B + C = 180°' ile başlıyor; evalset'te hiçbir IR units 'derece' bildirmiyor. tests/test_d4_son_adim.py:321 ve 589 yalnız birim adımının kendisini sınıyor, sonraki adımı sınamıyor. Düzeltme yönü: iki okuması ayrışan adım havuza girmesin (sınır yolu gibi) ya da düz okumasıyla girsin; test: r6 INCORRECT, 'B = C' verified."
+   },
+   {
+    "id": "SA2-YO-2",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "Toleranslı çoktan seçmeli pencere: ondalık virgüllü şık ('9,95', '3,14', '1,41') (9, 95) çifti okunup 'fail' sayılıyor; pencereye giren ikinci şık görülmüyor ve daha uzak şık CORRECT (G2YO-5 ikinci turda yeniden açıldı)",
+    "repro": "IR {evaluate, params {expr: 'sqrt(99)', rel_tol: '0.01'}, options {A:'9',B:'9,5',C:'9,95',D:'10',E:'10,5'}}; çözüm payload '10' option 'D' (yalnız harf de aynı). Kardeşler: expr 'pi' rel_tol 0.01, options {A:3,B:'3,14',C:'22/7',D:'3,2',E:4}, payload '22/7' option C; givens ['x**2 = 2','x > 0'] expr x rel_tol 0.02, options {B:'1,41',C:'7/5'}, harf C; abs_tol 0.1 ile √99; solve_system yolu (x**2 = 99, x > 0). Sonda: c9.py d1/d2/d4/d5/d6, c8.py e1, c1_tol.py t8.",
+    "expected": "UNKNOWN (options_within_declared_tolerance): pencerede iki şık var (G2YO-5). Kastedilen cevap C (9,95).",
+    "actual_branch": "CORRECT; mc.consistency pass, options_in_window {A: fail, B: fail, C: fail, D: pass, E: fail}. d2e6dbf'te (ilk tur) UNKNOWN (C: None).",
+    "actual_base": "CORRECT (tabanda toleranslı şık tutarlılığı yoktu)",
+    "math": "mpmath 50 basamak: √99 = 9.94987437106619954734…; |10 − √99|/√99 = 5.0378e-3 ≤ 0.01 ve |9.95 − √99|/√99 = 1.2626e-5 ≤ 0.01, yani iki şık da pencerede. abs: 0.0501 ve 0.000126 ≤ 0.1. π: 22/7 göreli 4.025e-4, 3.14 göreli 5.070e-4 (ikisi de ≤ 0.01). √2: 7/5 göreli 1.00505e-2 ≤ 0.02, 1.41 göreli 2.979e-3.",
+    "mechanism": "4aeeb16 'pencere bir kez': verifier._in_window şıkkı _option_claim_value ile okuyor. Ondalık virgülde _option_read_as_claim None dönüyor (_from_letter: decimal_comma, 'tahmin edilmez'), geri dönüş Ctx.option_value ise '9,95'i Tuple(9, 95) okuyor. Pencere answers_equivalent(Tuple, √99, rel_tol)[0] = False veriyor ve sonuç None yerine 'fail' oluyor. İlk turda şık _option_read_as_claim üzerinden None (karar yok) alıyordu. Aynı düzenek başka türde okunan şıkları da 'fail' yapıyor: '[7, 8]', '(7, 8)', '7–8' (−1 okunuyor). Bunlar değer hakkında doğru önermeler ve SA-RK-6'ya göre kararsız kalmalı; bu yan d2e6dbf'te de vardı. Calculus penceresinde (within_rel_tol) çift None veriyor, açık yalnız algebra evaluate'in iki yolunda (direct, solve_system). Düzeltme yönü: _in_window'da decimal_comma(şık) ya da _option_out_of_kind/çift/aralık için None."
+   },
+   {
+    "id": "SA2-YO-3",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "wordproblem: 'okunmayan şık IR'ı tutarsız yapmaz' (e65a8b4) birim sözcüklü şıklarda IR–şık tutarlılık ağını kapatıyor; harfsiz bir iddia, değeri hiçbir şıkta olmayan yanlış biçimlendirilmiş bir IR'a uyunca CORRECT oluyor",
+    "repro": "Soru: 'Ali bir işi 6, Veli 12 günde bitiriyor; birlikte kaç günde?' (cevap 4 = B). Yanlış biçimlendirilmiş IR {evaluate, params {expr: 't'}, vars [t positive_real], givens ['t = 1/6 + 1/12'], options {A:'3 gün',B:'4 gün',C:'5 gün',D:'6 gün',E:'8 gün'}} (units yok). Çözüm payload '1/4', harf yok. Kardeş: givens ['a = 3*2'], options {A:'4 cm',B:'8 cm',C:'10 cm'}, payload '6'. Sonda: c13.py g1, c9.py w2/w3.",
+    "expected": "UNKNOWN (ir_inconsistent): okunan hiçbir şık sağlanmıyor ve okunmayan şıkların sayıları (3, 4, 5, 6, 8) iddiayı taşımıyor. Değer şıklarda yoksa IR'ın soruyu doğru biçimlendirdiği gösterilmemiştir.",
+    "actual_branch": "CORRECT (certify.wordproblem pass, certify.algebra pass). w2 ve w3 de CORRECT.",
+    "actual_base": "UNKNOWN (ir_inconsistent). d2e6dbf'te de UNKNOWN (ir_inconsistent).",
+    "math": "Gerçek cevap 1/(1/6 + 1/12) = 4; iddia edilen 1/4 yanlış ve hiçbir şıkkın sayısı (3, 4, 5, 6, 8) 1/4 değil. Kardeşte a = 6 iken şıklar 4, 8, 10 cm.",
+    "mechanism": "certify/wordproblem.uniqueness_certificate: `if n == 0 and any(v == 'unparsed' ...)` durumunda status = _claim_status(out) ve iddia şıklar yokmuş gibi sertifikalanıyor. SA-YO-1'in katı şık okuyucusu IR.units'te olmayan her birim sözcüğünü okumadığından, birimli şıklı her soruda bu dal tetikleniyor ve biçimlendirme hatasına karşı tek koruma (şıklarla tutarlılık) gidiyor. Harf verilince mc.consistency engelliyor (w1, w4 UNKNOWN). Doğru IR'da (g3) aynı yol kapsama kazancı, ama doğrulayıcı g1'i g3'ten ayıramıyor. Düzeltme yönü: okunmayan bir şıkkın değeri taşıyabileceği gösterilmedikçe (sayı başı iddiaya eşit ya da birimi dönüştürülebilir) ir_inconsistent ya da en az UNKNOWN; CORRECT değil."
+   },
+   {
+    "id": "SA2-YO-4",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "Bildirilen birim (SA-RK-4) işareti her metinde (iddia, şık, adım) aritmetiğin içinde de düz sayı yapıyor: units '%' iken yanlış '50/250 = %0.2' adımı verified; oran değerli IR'da yanlış '%0.2' CORRECT (doğru '%20' INCORRECT)",
+    "repro": "(a) IR {evaluate, params {expr: '(300 - 250)/250*100'}, units: '%'}; çözüm payload '20', adımlar compute '300 - 250 = 50', compute '50/250 = %0.2' (yanlış). (b) IR {evaluate, params {expr: '(300 - 250)/250'}, units: '%'}; payload '%0.2'. Sonda: c11.py k1/k4 (ayna: k2/k6/k8), c9.py p1/p3.",
+    "expected": "(a) '50/250 = %0.2' refuted (0.2 ≠ 0.002), INCORRECT. (b) UNKNOWN: units '%' IR'ın sayısının oran mı yüzde sayısı mı olduğunu sabitlemiyor (çıkarıcı kuralı '%25' -> 25/100). d2e6dbf'teki gibi iki okuma.",
+    "actual_branch": "(a) CORRECT, steps [verified, verified]. (b) CORRECT. Ayna: '%20' INCORRECT; '50/250 = %20' ve '250*(1 + %20) = 300' refuted; units 'derece' iken 'sin(30°) = 1/2' refuted (c6 v3/v4).",
+    "actual_base": "(a) INCORRECT [verified, refuted]. (b) INCORRECT. d2e6dbf: (a) CORRECT ama adım unknown (iki okuma), (b) UNKNOWN (unit_convention).",
+    "math": "50/250 = 1/5 = 0.2, %0.2 = 0.002, yani adım yanlış. Oran değerli IR'da artış 1/5 = %20; '%0.2' (binde 2) yanlış, '%20' doğru.",
+    "mechanism": "Ctx.plain_unit_reading (4aeeb16) units '%'/'derece' iken işareti metnin her yerinden siliyor; check_steps her adım iddiasına uyguluyor (`_parse_claim(ctx.plain_unit_reading(st.claim), …)`), _from_letter/option_value şıklara, _verify_layers iddiaya. Bir aritmetik ifadenin ya da trig argümanının içindeki işaret cevabın birimi değil bir çarpandır (1/100, π/180). Karar 'birim bildirilmişse tek okuma' diyor ama IR'ın sayısının o birimde sayıldığı denetlenmiyor. Realistiklik IR'ın oran mı yüzde sayısı mı yazdığına bağlı ve ölçülmedi (kredi). Ayna haksız ret ('%20'li doğru yüzde adımları refuted) daha gerçekçi ve ret merceğinin konusu. Düzeltme yönü: düz okuma yalnız iddianın ya da şıkkın tamamı tek bir işaretli sayıyken; adımlarda ve iç ifadelerde iki okuma (G1RK-3) kalsın."
+   }
+  ],
+  "probes_run": 263,
+  "summary": "Kapsam: wip/son-adim (0dfadd9) yanlış onay merceğiyle 0e93ed5'e karşı ölçüldü; ilk turla ayırmak için d2e6dbf de ölçüldü. Kopyaların kaynağı git archive ile doğrulandı. 14 sonda dosyasında 263 vaka koştu, aynı anda tek süreç.\n\nDört bulgu var. Hepsi en az iki kopyada ölçüldü, matematiği bağımsız hesaplandı (mpmath 50 basamak).\n\n1. **SA2-YO-1, yüksek, gerçekçi.** İki birim okuması bir adımı 'unknown'a çekiyor, ama adım öncül havuzuna yine giriyor. Havuz çelişkili kalıyor ve sonraki her adım çürütülmüyor; bunlara yanlış adımlar ve hiç işaret taşımayanlar da dahil. Örnek: 'A = 40°', 'B = C', 'C = 2*B' çözümü dalda CORRECT, tabanda INCORRECT. SA-RK-2'nin birim yolundaki kardeşi; ilk turdan (2cdc7da) beri açık. Önbellekteki gerçek çözücü çıktıları tam bu biçimde başlıyor ('A = 50°', 'A + B + C = 180°').\n2. **SA2-YO-2, orta, gerçekçi.** Toleranslı şık penceresi ondalık virgüllü şıkkı ('9,95') bir çift olarak okuyup 'fail' sayıyor, bu yüzden daha uzak şık CORRECT çıkıyor. Örnek: √99, rel 0.01, '10' seçimi. Bu tabanda da CORRECT; ilk tur (d2e6dbf) UNKNOWN veriyordu, ikinci turun 'pencere bir kez' değişikliği yeniden açtı. '[7, 8]', '(7, 8)' ve '7–8' şıkları da aynı düzenekle 'fail' alıyor.\n3. **SA2-YO-3, orta, gerçekçiliği belirsiz.** e65a8b4'ten sonra birim sözcüklü şıklar okunmuyor ve wordproblem'in IR–şık tutarlılık ağı kapanıyor. Değeri hiçbir şıkta olmayan, yanlış biçimlendirilmiş bir IR'a uyan harfsiz iddia CORRECT oluyor (1/4, şıklar '3 gün' … '8 gün'). Taban ve ilk tur UNKNOWN (ir_inconsistent) veriyor.\n4. **SA2-YO-4, düşük, gerçekçiliği belirsiz.** SA-RK-4 bildirilen birimin işaretini aritmetiğin içinden de siliyor. Units '%' iken yanlış '50/250 = %0.2' adımı verified oluyor. Oran değerli IR'da yanlış '%0.2' cevabı CORRECT, doğru '%20' INCORRECT çıkıyor.\n\nBulgu yapılmayanlar:\n- **Sınır kuralı ve payda kökü:** yanlış onaya açılmıyor. Fazladan yanlış değerli Or ('x = 3 or x = 2') çürütülmüyor, ama bu kod tabanının çıkarım anlamıyla tutarlı: x² − 5x + 6 = 0 öncülünde Or(2, 3, 7) iki kopyada da verified. Böyle bir adım tabanda da skipped'dı.\n- **Pencerenin doğruluğu:** pencere kesin değerden kuruluyor; abs_tol ve rel_tol sınırları kesin (t1–t6).\n- **_META_OPTION:** gerçek değerli bir şıkkı meta saymıyor.\n- **Log gösterimleri:** log_2 5 / log_5 2, ln 2x, ln 2/3 ve log_{2}5 doğru okunuyor ya da okunmuyor.\n- **Parçalı bileşke:** sınır noktasına kanonik olmayan biçimde düşen dal seçimi doğru (q1–q9).\n- **SA-YO-1 düzeltmesi:** sağlam; '5 olamaz', '5 tane fazla', '6 m' gibi şıklar okunmuyor.\n\nMercek dışı gözlemler (ret ve kapsama merceğine):\n- units 'derece' iken 'sin(30°) = 1/2' adımı ve 'acos(-1/2) + 0' için '120°' reddediliyor.\n- units '%' iken '%20'li doğru yüzde adımları reddediliyor.\n- 'x != 1'den sonra 'x - 1 = 0' adımı refuted.\n- 'ln 2 x' ile log(2)·x INCORRECT.\n- Parçalı vakalar sıraya bağlı: önceki vakalara göre UNKNOWN ya da kararlı çıkıyor (#7). Yanlış CORRECT görülmedi.\n\nSondalar ve çıktılar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-adim-t2/yanlis-onay altında (c*.py ve o*_{dal,taban,tur1}.txt). .env içeren kopyalar silindi; ana checkout'a yazılmadı."
+ },
+ {
+  "findings": [
+   {
+    "id": "T2-RK-1",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Bildirilen birim (units %/yüzde/derece/°) adım metninin tamamında birim işaretini düz sayıya çeviriyor: '10/50 = %20', '(1 + %20)(1 − %20) = 0.96', 'sin(30°) = 1/2', 'cos(60°) = 1/2' çürütülüyor, doğru çözümler INCORRECT",
+    "repro": "Sonda: <W>/probes/sonda.py + sonda2.py (W = scratchpad/son_denetim/son-adim-t2/ret-kapsama), run.sh <dal|base|t1> <grup>. R1a: evaluate expr '(60 - 50)/50*100', units '%', şıklar A10 B15 C20 D25 E30, payload '20', şık C, adımlar compute '60 - 50 = 10', compute '10/50 = %20'. R1e: aynı IR units 'yüzde', adımlar '10/50 = 0.2', '0.2 = %20'. R2a: evaluate '((1 + 20/100)*(1 - 20/100) - 1)*100', units '%', payload '-4', adım compute '(1 + %20)*(1 - %20) = 0.96'. U21: '(p2 - p1)/p1*100' (p1 = 50, p2 = 60) units '%', adım eq 'p2 = p1 + %20*p1'. U13/U16/U17 aynı kalıp. R5a: synthetic_geometry A,B,C; angle(A,B,C) = 90, dist(A,C) = 10, dist(B,C) = 5; hedef angle(B,A,C); units 'derece'; payload '30'; adımlar compute '5/10 = 1/2', compute 'sin(30°) = 1/2' (R5d: 'cos(60°) = 1/2'). R6a: evaluate x, verilenler 'cos(deg(x)) = 1/2', '0 < x', 'x < 90', units 'derece', payload 60, adım 'cos(60°) = 1/2'. E4: evaluate x, 'x + 2*x + 3*x = 180', units 'derece', payload 30, adımlar '6*x = 180', 'x = 30', 'sin(30°) = 1/2'.",
+    "expected": "CORRECT (adımlar doğru; en kötü adım unknown, asla refuted). Trig argümanındaki ° her zaman açı birimidir; '10/50 = %20' birim okumasında doğru bir özdeşliktir.",
+    "actual_branch": "Hepsi INCORRECT; ilgili adım refuted (R1a ['verified','refuted'], R2a ['refuted','verified'], R5a ['verified','refuted'], R5d ['refuted'], R6a ['refuted','verified'], E4 [..,'refuted']). İlk tur (d2e6dbf) hepsinde CORRECT (adım unknown/verified).",
+    "actual_base": "Hepsi CORRECT, adımlar verified (0e93ed5).",
+    "math": "10/50 = 0.2 = 20/100 (%20); 1.2·0.8 = 0.96, (0.96 − 1)·100 = −4; sin(30°) = sin(π/6) = 1/2 (mpmath 50 basamak 0.5), cos(60°) = 1/2; düz okumada sin(30 rad) = −0.98803…, cos(60 rad) = −0.95241…, 10/50 ≠ 20: düz okuma bu adımları yanlış yapar.",
+    "mechanism": "steps/deterministic.check_steps adım iddiasını `_parse_claim(ctx.plain_unit_reading(st.claim), ...)` ile okuyor (f657528/4aeeb16). Ctx.declared_unit_marks, IR.units '%'/'yüzde'/'derece'/'°' iken işareti metnin HER yerinden siliyor (trig argümanı ve kesirli özdeşlik dahil). Bildirilen birim cevabın (görevin hedefinin) birimidir, adımdaki her sayınınki değil. open_unit_marks bildirilen işaretleri düştüğü için _both_unit_readings (G1RK-3'ün adım kardeşi: iki okuma farklıysa unknown) bu adımlarda hiç çalışmıyor. synthetic_geometry açı hedefinde de (open_unit_marks istisnası yalnız iki okumalı yolda) aynı. Düzeltme yönü: adımda bildirilen birim tek okuma değil; işaret birim olarak okunur ya da iki okuma ayrışırsa unknown; trig fonksiyonunun argümanındaki ° hiçbir zaman düz sayı değil."
+   },
+   {
+    "id": "T2-RK-2",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Bildirilen birimde iddia/şık tek (düz) okunuyor; IR'ın değeri kesir (yüzde, kılavuzun '%25 -> 25/100' biçimi) ya da radyan (ters trig bileşkesi, trig'le bağlı değişkenin fonksiyonu, extremum) olunca doğru '%20' / '180°' / '60°' / '45°' INCORRECT",
+    "repro": "R3a: evaluate r, verilen '1000*(1 + r) = 1200', r positive_real, units '%', payload '%20'. R3b: şıklar %10 %15 %20 %25 %30, yalnız harf C. R3c: payload '%20' + C. R3d: şıklar '20/100' biçiminde, payload '%20' + C. R4a/b: evaluate '(s - a)/a', a = 250, s = 300, units 'yüzde', '%20' / harf C. U1/U1c/U19: '(p2 - p1)/p1' (p1 = 50, p2 = 60) units '%'. R7a/b: evaluate 'atan(1) + atan(2) + atan(3)', units 'derece', şıklar 90° 120° 135° 150° 180°, harf E (payloadlı/payloadsız); U3 '180°'. U4 'asin(1/2) + acos(1/2)' → '90°'; U5 '2*asin(1/2)' → '60°'. R8a/U18: evaluate '2*x', 'sin(x) = 1/2', '0 < x', 'x < pi/2', units 'derece', '60°'. G1: evaluate x, 'x = acos(1/2)', units 'derece', '60°'. R9a/E1: extremum f 'sin(x) + cos(x)', [0, pi/2], argmax, units 'derece', '45°'. Kontroller: R3e '0.2' iki kopyada CORRECT; U6 'acos(-1/2)' '120°' iki kopyada CORRECT (tek ters trig yakalanıyor); R8b ('x < 90°' verili, IR'ın kendi işareti) iki kopyada CORRECT.",
+    "expected": "CORRECT (taban gibi) ya da en az UNKNOWN (ilk turun G1RK-3 iki okuması); asla INCORRECT: iddianın birimli okuması IR'ın değerine kesin eşit.",
+    "actual_branch": "Hepsi INCORRECT (R3a–R3d, R4a/b, U1, U1c, U19, R7a, R7b, U3, U4, U5, R8a, G1, R9a). İlk tur (d2e6dbf): hepsi UNKNOWN.",
+    "actual_base": "Hepsi CORRECT.",
+    "math": "r = 1200/1000 − 1 = 0.2 = %20; (300 − 250)/250 = 0.2; atan1 + atan2 + atan3 − π = −5.3·10⁻⁵¹ (mpmath 50 basamak: π = 180°); 2·asin(1/2) = π/3 = 60°; asin(1/2) + acos(1/2) = π/2 = 90°; sin x = 1/2, 0 < x < π/2 ⇒ x = π/6, 2x = π/3 = 60°; acos(1/2) = π/3 = 60°; argmax(sin + cos, [0, π/2]) = π/4 = 45°.",
+    "mechanism": "Ctx.declared_unit_marks (4aeeb16, SA-RK-4) units adı geçen işareti iddiada (_verify_layers: ca.payload = ctx.plain_unit_reading), şıkta (_from_letter, option_value) ve adımda düz sayı yapıyor; bu, IR'ın sayısının o birimde sayıldığını varsayar. Varsayımın tek bekçisi angles_in_radians: yalnız görevin var'ı ya da evaluate'te TEK sembol trig ilişkisine kx + c girerse, ya da evaluate ifadesi TEK bir ters trig fonksiyonuysa True; bileşik ters trig (atan1 + atan2 + atan3, 2·asin, asin + acos), trig'le bağlı değişkenin ifadesi (2x), ters trig verilen (x = acos(1/2)), extremum'un f'i (rels yalnız givens + equation/inequality/relation; 'f' yok) kaçıyor. Yüzde için hiç bekçi yok: extract/prompts.py kılavuzu '%25 -> 25/100' yazdırıyor, yani yüzde soran IR'ın kesir biçimi kılavuzun kendi biçimi; units serbest metin (llm/schemas.py \"'' if none\"), değerin o birimde olduğuna dair sözleşme yok."
+   },
+   {
+    "id": "T2-RK-3",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "Tek değer soran solve_equation'da (answer_shape scalar) 'x = 6' biçimli şık: doğru harf + doğru değer INCORRECT (tabanda CORRECT); 'x = 6' iddiası + harf INCORRECT (tabanda UNKNOWN)",
+    "repro": "X5b: solve_equation equation '2*x + 3 = 15', var x, answer_shape scalar, şıklar A 'x = 4', B 'x = 6', C 'x = 8', D 'x = 9'; payload '6', şık B. X12: 'sqrt(x + 2) = 3', şık B 'x = 7', payload 7. X15: 'log(x, 2) + log(x - 2, 2) = 3', şık B 'x = 4', payload 4. X13: şıklar boşluksuz 'x=6'. X16: adımlarla ('2*x = 12', 'x = 6'). X9: payload 'x = 6' + B. Kontrol: X8 düz şıklar (4, 6, 8, 9) iki kopyada CORRECT; X10 answer_shape set iki kopyada CORRECT.",
+    "expected": "CORRECT (şık 'x = 6' tek değeri adlandırıyor, değer 6 doğru) ya da en az UNKNOWN.",
+    "actual_branch": "X5b, X12, X13, X15, X16, X9 INCORRECT (mc.consistency fail: 'the chosen option, read as the claim, is refuted', read_as_claim 'fail'). İlk turda (d2e6dbf) de INCORRECT: 2cdc7da'nın G1RK-1 değişikliği getirdi, önceki denetim (SA-RK-10 yalnız evaluate'te UNKNOWN) yakalamadı. Yalnız harf (X5) iki kopyada INCORRECT (önceden var).",
+    "actual_base": "X5b, X12, X13, X15, X16 CORRECT; X9 UNKNOWN; X5 INCORRECT.",
+    "math": "2x + 3 = 15 ⇒ x = 6; √(x + 2) = 3 ⇒ x = 7 (√9 = 3); log₂x + log₂(x − 2) = 3 ⇒ x(x − 2) = 8 ⇒ x = 4 (x = −2 tanım dışı); log₂4 + log₂2 = 3.",
+    "mechanism": "Dalda mc.consistency iddia '6' ile şık değeri '{6}'yı scalar biçimde kıyaslıyor ('exact_undecided'), sonra _option_as_claim şıkkı iddianın okuyucusundan geçiriyor: _from_letter → Ctx.option_condition_set ('x = 6' görev türü solve_equation olduğu için answer_shape scalar iken de {6}) → payload '{6}', kind 'value' kalıyor → ctx.claimed FiniteSet({6}) (iç içe küme) → certify.algebra 'claimed_root_invalid: outside_domain_of_discourse', certify.wordproblem z3 '{6}' unsat → durum 'fail' → veto → INCORRECT. Tabanda kıyas set biçiminde yapılıyordu (iddia {6} = şık {6}, pass). Ölçüldü: dbg_x5.py katman kanıtları."
+   },
+   {
+    "id": "T2-RK-4",
+    "klass": "crash_or_timeout",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "Sınır kuralının seçenek çarpımı eşitsizliği yeniden yazan her adımla ikiye katlanıyor; adım bütçesi (60 s) ve çözüm bütçesi (300 s) bu döngüde işlemiyor: tek adım 265 s",
+    "repro": "solve_inequality '(x + 1)/(x - 2) >= 2', iddia Interval.Lopen(2, 5); k adet eq adımı eşitsizliği yeniden yazar ('(x + 1)/(x - 2) - 2 >= 0', '(5 - x)/(x - 2) >= 0', '(x - 5)/(x - 2) <= 0', ... sonda2.cases_k listesi), ardından eq 'x - 5 = 0'. Ayrıca S2: 7 yeniden yazım + 3 kritik nokta adımı + son adım. Her koşu ayrı süreçte, agir.sh ile.",
+    "expected": "Süre tabana yakın ya da en kötü adım bütçesiyle (≤ 60 s, aşınca 'step_time_budget_exceeded' unknown) sınırlı; aynı kritik kümeyi paylaşan yeniden yazımlar tek seçenek sayılmalı (doğrusal).",
+    "actual_branch": "k=4 1.6 s, 6 2.7 s, 8 11.5 s, 9 25.2 s, 10 57.0 s, 12 265.2 s (hepsi CORRECT; her ek yeniden yazım ~2 kat). S2 16.6 s. Tek adım 'x - 5 = 0' ~250 s sürdü (_STEP_BUDGET = 60 s); k=13–14'te kestirim 550–1100 s, _SOLUTION_BUDGET'ı (300 s) aşar.",
+    "actual_base": "k=4..14 0.8–1.9 s (INCORRECT: dalın düzelttiği eski haksız ret); S2 1.1 s.",
+    "math": "Kritik noktalar 5 (pay) ve 2 (payda); doğru küme (2, 5]. Süre ölçümü: gerçek saat, yük ~3.3 (4 vCPU).",
+    "mechanism": "steps/deterministic._boundary_premises: hit = iddianın hiçbir iç noktasında tutmadığı bütün takas edilebilir eşitsizlik öncülleri (görevin eşitsizliği ve onu yeniden yazan her önceki eq adımı); her biri için _critical_equations iki seçenek (pay, payda) veriyor; product(*crit) 2^k liste kuruyor, her biri için sandbox _emptiness, sonra her liste için _check_boundary → _check_eq. _boundary_premises, _nowhere_inside, _boundary_region döngülerinde _tick() yok; sb_run çağrıları deadline yerine ctx.timeout (8 s) kullanıyor; bu yüzden adımın 60 s'lik deadline'ı yalnız _check_eq içinde, çok geç devreye giriyor. Her kritik nokta adımı bedeli yeniden ödüyor (S2'de 3 kez)."
+   },
+   {
+    "id": "T2-RK-5",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "G1RK-2 sınır kuralı trigonometrik ve üstel eşitsizliklerde tetiklenmiyor: 'sin x = 1/2', 'x = π/6 ∨ x = 5π/6', 'cos x = 0', 'x = 3' kritik nokta adımları çürütülüyor, doğru cevap iki kopyada INCORRECT",
+    "repro": "Q1: solve_inequality '2*sin(x) - 1 > 0', verilenler '0 <= x', 'x < 2*pi', iddia Interval.open(pi/6, 5*pi/6), adımlar eq 'sin(x) = 1/2', eq 'Or(Eq(x, pi/6), Eq(x, 5*pi/6))'. V1: aynı, aralık domain_of_discourse ile. V4: trig_solve, verilen eşitsizlik. V3: 'cos(x) <= 0' [0, 2π), iddia Interval(pi/2, 3*pi/2), adımlar 'cos(x) = 0', 'Or(Eq(x, pi/2), Eq(x, 3*pi/2))' (adımsız kontrol V3n iki kopyada CORRECT). V2: '2**x > 8', adımlar '2**x = 8', 'x = 3'.",
+    "expected": "CORRECT (G1RK-2 kararı: eşitsizlik öncülünün hiçbir iç noktasında tutmayan eq adımı sınır denkleminde denetlenir; burada sınırda doğrular, unknown kalır).",
+    "actual_branch": "Q1, V1, V3, V4 INCORRECT (iki adım refuted, karşı örnek x = π/2); V2 INCORRECT ('2**x = 8' sınır yolundan unknown, 'x = 3' refuted, karşı örnek x = 4). Kontrol: log ve kesirli eşitsizliklerde (V5, B4b, S grubu) dal CORRECT.",
+    "actual_base": "Hepsi INCORRECT (önceden var).",
+    "math": "2 sin x − 1 > 0, [0, 2π) ⇒ (π/6, 5π/6); sınır sin x = 1/2 ⇒ π/6, 5π/6 (iç noktalarda sin x > 1/2, adım hiçbir iç noktada tutmaz). cos x ≤ 0 ⇒ [π/2, 3π/2]. 2^x > 8 ⇒ x > 3, sınır x = 3.",
+    "mechanism": "_nowhere_inside eşitsizliğin kesin kısmını ℝ üzerinde _solved_both_readings ile çözüyor: trig için None (periyodik küme), oysa ctx.domain_for(x) = [0, 2π) biliniyor; üstelde Interval.open(log(8)/log(2), oo) sadeleşmemiş dönüyor ve {3} ile kesişimin boşluğu karar almıyor → False → sınır yolu yok → eski çürütme. Ölçüldü: dbg_bnd.py (inside None / log(8)/log(2), nowhere_inside False). Düzelticinin kayıt listesinde (Δ<0, deneme noktası, K1) yok."
+   },
+   {
+    "id": "T2-RK-6",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "_META_OPTION en yaygın Türkçe 'hiçbiri' yazımlarını tanımıyor ('Yukarıdakilerden hiçbiri', büyük harf 'HİÇBİRİ', 'Hiçbiri değildir', 'Belirsiz', 'Bilinemez'): toleranslı çoktan seçmelide doğru harf UNKNOWN",
+    "repro": "evaluate 'sqrt(50)', rel_tol 0.01, şıklar A 7.07, B 7.5, C 8, D 6.5, E <metin>; payload 7.07, şık A. E = 'Yukarıdakilerden hiçbiri' (W1/Wm2), 'HİÇBİRİ' (Wm1), 'Hiçbiri değildir' (W3), 'Hiçbiri değil' (Wm4), 'Belirsiz' (W4), 'Bilinemez' (Wm6). Kontrol: 'Hiçbiri', 'Yukarıdakilerin hiçbiri' dalda CORRECT.",
+    "expected": "CORRECT (pencerede yalnız 7.07 var; meta şık değer adlandırmaz).",
+    "actual_branch": "UNKNOWN (options_within_declared_tolerance: 'another option is not shown outside the declared tolerance').",
+    "actual_base": "CORRECT.",
+    "math": "√50 = 7.0710678…; ±%1 penceresi [7.00036, 7.14178]: 7.5, 8, 6.5 dışarıda.",
+    "mechanism": "verifier._META_OPTION fullmatch'i str.lower() üstünde: ayrılma hâli 'yukarıdakilerden' desende yok (yalnız 'yukarıdakilerin'); Python'da 'İ'.lower() = 'i' + U+0307 olduğundan büyük harfli Türkçe metin hiç eşleşmiyor; 'değil/değildir', 'belirsiz', 'bilinemez', 'tanımsız' yok. Eşleşmeyen şık _in_window'da okunmuyor (None) ve tek pencere içi şıkkın CORRECT'ini engelliyor."
+   },
+   {
+    "id": "T2-OT-1",
+    "klass": "other",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "SA-RK-4 kararının kendisi: 'birim bildirilmişse tek okuma' IR değerinin o birimde sayıldığını varsayıyor; varsayım tutmayınca iki yönde de hata: T2-RK-2'deki haksız retlerin aynası olarak '%0.2' yanlış cevabı CORRECT",
+    "repro": "R3f: evaluate r, verilen '1000*(1 + r) = 1200', units '%', payload '%0.2'.",
+    "expected": "INCORRECT ya da UNKNOWN (doğru cevap %20; %0.2 = 0.002).",
+    "actual_branch": "CORRECT (düz okuma 0.2 = r).",
+    "actual_base": "INCORRECT; ilk tur (d2e6dbf) UNKNOWN.",
+    "math": "r = 0.2 = %20 ≠ %0.2 = 0.002. Faiz oranı 0.2 bulunup '%0,2' yazılması gerçekçi bir dönüşüm hatası.",
+    "mechanism": "ProblemIR.units serbest metin (\"'' if none\"), çıkarıcı kılavuzu yüzdeyi kesir yazdırıyor ('%25 -> 25/100') ve SymPy'nin trig/ters trig değerleri radyan: units alanı IR sayısının biçimini garanti etmiyor. Tek düz okuma, IR'ın kesir/radyan olduğu her durumda doğru cevabı reddediyor (T2-RK-2) ve düz sayıyı birimli yazan yanlış cevabı onaylıyor (R3f). Öneri: düz okuma yalnız IR değerinin o birimde olduğu kanıtlıyken (ifade açıkça ×100 / ×180/π, angle() hedefi, deg()/° içeren ilişki); aksi hâlde G1RK-3'ün iki okuması (ayrışırsa UNKNOWN), adımlarda her zaman iki okuma (T2-RK-1). Yanlış onay merceğine de bildirilmeli."
+   }
+  ],
+  "probes_run": 625,
+  "summary": "wip/son-adim (0dfadd9) ile 0e93ed5 iki kopyada, ilk tur için d2e6dbf de, ~625 sonda koşusuyla karşılaştırıldı (sonda.py 12 grup, sonda2.py r/a/q/v/g/h/k grupları; çıktılar <W>/probes/out_{dal,base,t1}.jsonl, W = scratchpad/son_denetim/son-adim-t2/ret-kapsama; kopyalar silindi). Doğru cevaplar mpmath 50 basamakla bağımsız doğrulandı.\n\nAna gerileme ikinci turun SA-RK-4 'bildirilen birim tek okuma' değişikliğinde.\n- T2-RK-1 (yüksek): units %/yüzde/derece iken adımdaki her birim işareti düz sayı okunuyor. '10/50 = %20', '(1 + %20)(1 − %20) = 0.96', 'sin(30°) = 1/2', 'cos(60°) = 1/2' çürütülüyor. Tabanda CORRECT olan ders kitabı çözümleri dalda INCORRECT.\n- T2-RK-2 (yüksek): IR'ın değeri kesir (kılavuzun '%25 -> 25/100' biçimi) ya da radyan olunca doğru '%20', '180°', '60°', '45°' INCORRECT. Radyan durumu angles_in_radians'ın kaçırdığı ters trig bileşkesi, 2x, x = acos(1/2), extremum. İlk turda bunlar UNKNOWN, tabanda CORRECT idi.\n- T2-OT-1: aynı karar, '%0.2' yanlış cevabını CORRECT yapıyor. Karar düzeyinde sorun.\n\nDiğer bulgular:\n- T2-RK-3 (orta): tek değer soran solve_equation'da 'x = 6' şıkkı, doğru harf ve doğru değer verilse de INCORRECT. G1RK-1 ile ilk turda geldi; önceki denetimde yakalanmamıştı.\n- T2-RK-4 (orta, süre): sınır kuralının seçenek çarpımı eşitsizliği yeniden yazan her adımla ikiye katlanıyor. Bu döngüde adım bütçesi işlemiyor: k=10'da 57 s, k=12'de 265 s; tabanda 1.6 s.\n- T2-RK-5 (orta, tabanda da var): G1RK-2 sınır kuralı trig ve üstel eşitsizliklerde tetiklenmiyor. Sebep: periyodik küme çözülmüyor, log(8)/log(2) sadeleşmiyor.\n- T2-RK-6 (düşük): toleranslı çoktan seçmelide _META_OPTION en yaygın yazımları kaçırıyor: 'Yukarıdakilerden hiçbiri', büyük harf 'HİÇBİRİ' (Türkçe İ'nin küçük harfe çevrilmesi), 'Hiçbiri değildir', 'Belirsiz', 'Bilinemez'.\n\nSorun görülmeyenler: payda kökü ve sınır kuralının ders kitabı eşitsizlik vakaları (rasyonel, karekök, log, mutlak değer, sayım) dalda doğru CORRECT. Şık okuyucusunun katı modunda ve meta olmayan pencere vakalarında gerileme yok, yalnız iyileşme var. Çökme görülmedi."
+ },
+ {
+  "file": "/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-adim-t2/bulgular.json",
+  "verdicts": [
+   {
+    "id": "SA2-YO-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "'C = 2*B' refuted (70 ≠ 140), 'B = C' verified, çözüm INCORRECT (D6: doğru cevaba yanlış adımla varan çözüm INCORRECT). İki okuması ayrışan 'A = 40°' unknown kalabilir ama birimli okumasıyla öncül havuzuna girmemeli. Kardeşler: 'A + B = 100°' (110), '5*B = 180' (150), 'b - a = 15' (10) refuted, INCORRECT.",
+    "note": "Ölçüldü (dogrulama/p/k1.py): dal v1, v2, v2b, v3, v4 CORRECT, sonraki adımlar 'premises_inconsistent_or_unsolved'; taban hepsi INCORRECT; işaretsiz kontrol v1p dalda INCORRECT. Yanlış son cevap (v5) iki kopyada INCORRECT: açık yalnız adım katmanında (D6 sınıfı) ama ° adımlı her geometri çözümünde adım katmanını susturuyor."
+   },
+   {
+    "id": "SA2-YO-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "UNKNOWN (options_within_declared_tolerance): √99'da 10 (göreli 5.04e-3) ve 9,95 (1.26e-5) pencerede; π'de 22/7 ve 3,14; √2'de 7/5 ve 1,41 (≤ 0.02). Ondalık virgüllü şık pencerede 'fail' sayılmamalı (okunmuyorsa None, engel). Aynı şıklar ondalık noktayla yazılınca dal zaten UNKNOWN veriyor.",
+    "note": "Ölçüldü (p/k2.py): dal d1, d1L, d2 (abs 0.1), d3 (π), d4 (√2, yalnız harf) CORRECT, options_in_window'da virgüllü şık 'fail'; kontrol d1dot ('9.95') dalda UNKNOWN. Taban hepsi CORRECT. Yan: '[7, 8]' şıkkı da 'fail' (d5). Hesap mpmath 50 basamak."
+   },
+   {
+    "id": "SA2-YO-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "UNKNOWN (ir_inconsistent), CORRECT değil: iddia 1/4 hiçbir şıkkın sayısına (3, 4, 5, 6, 8) eşit değil; doğru cevap 1/(1/6 + 1/12) = 4. Aynı IR çıplak sayı şıklarla (g1n) ve units 'gün' ile (g1u) dalda zaten UNKNOWN (ir_inconsistent). Kardeş a = 6, şıklar 4/8/10 cm: UNKNOWN.",
+    "note": "Ölçüldü (p/k3.py): dal g1 ve w2 CORRECT; taban UNKNOWN (ir_inconsistent). Harfli g1L dalda UNKNOWN (mc). Doğru IR g3 dalda CORRECT (kapsama kazancı), tabanda UNKNOWN. Gerçekçilik çıkarıcı ile çözücünün aynı hatayı yapmasına bağlı (ölçülmedi, kredi)."
+   },
+   {
+    "id": "SA2-YO-4",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "(a) '50/250 = %0.2' yanlış (0.2 ≠ 0.002): verified olmamalı; tutarlı tek okuma refuted (INCORRECT). G1RK-3 iki okumasıyla unknown kalırsa verdict CORRECT olur; bu karar sınırında kabul edilebilir, verified değil. (b) oran değerli IR (0.2), units '%': '%0.2' CORRECT olmamalı, INCORRECT ya da UNKNOWN (units IR sayısının yüzde sayısı olduğunu garanti etmiyor). Ayna '%20' INCORRECT olmamalı (T2-RK-2).",
+    "note": "Ölçüldü (p/k4.py): dal y4a CORRECT [verified, verified], y4b CORRECT, y4b2 '%20' INCORRECT; taban y4a INCORRECT [verified, refuted], y4b INCORRECT, y4b2 CORRECT. (b) T2-OT-1 ile aynı düzenek: yanlış son cevap onayı, önem orta. (a)'nın verdict düzeyi G1RK-3'e göre tartışmalı; adım düzeyinde yanlış onay kesin."
+   },
+   {
+    "id": "T2-RK-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "CORRECT (adımlar doğru); en kötü adım unknown, asla refuted. Trig argümanındaki ° açı birimidir (sin 30° = 1/2, cos 60° = 1/2); '10/50 = %20' ve '(1 + %20)(1 − %20) = 0.96' birim okumasında doğru özdeşliklerdir.",
+    "note": "Ölçüldü (p/k4.py, p/k7.py): dal r1a, r1e, r2a, e4, r6a, r5a, r5d INCORRECT (adım refuted); taban hepsi CORRECT. Kontrol: e4n (° adımsız) dalda CORRECT; r5n (units yok) dalda CORRECT, yani units bildirmek kararı bozuyor; r5w ('sin(30°) = 1/3') iki kopyada INCORRECT. sin(30 rad) = −0.988 (mpmath)."
+   },
+   {
+    "id": "T2-RK-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "CORRECT ya da en az UNKNOWN; asla INCORRECT: '%20' = 1/5 = r; '180°' = π = atan1 + atan2 + atan3; '90°' = π/2; '60°' = π/3 (2·asin(1/2), 2x, acos(1/2)); '45°' = π/4 (argmax). Dalda r9a'da doğru cevabın hiçbir derece yazımı ('45°', '45') kabul edilmiyor, yalnız 'pi/4'.",
+    "note": "Ölçüldü (p/k4.py, p/k5.py): dal r3a, r3b, r3c, r7a, r7b, u4, u5, r8a, g1, r9a INCORRECT; taban CORRECT. Kontrol: r3e '0.2' ve u6 '120°' iki kopyada CORRECT. Çıkarıcı istemi '%25 -> 25/100' diyor, units serbest metin: IR sayısının birimde sayıldığı garanti değil. Değerler mpmath ile kesin."
+   },
+   {
+    "id": "T2-RK-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT ya da en az UNKNOWN: şık 'x = 6' ('x=6') denklemin tek çözümünü adlandırıyor; 2x + 3 = 15 ⇒ 6, √(x + 2) = 3 ⇒ 7, log₂x + log₂(x − 2) = 3 ⇒ 4 (−2 tanım dışı). 'x = 6' iddiası + B: en az UNKNOWN.",
+    "note": "Ölçüldü (p/k5.py): dal x5b, x9, x12, x13, x15, x16 INCORRECT (mc.consistency fail, read_as_claim fail); taban x5b/x12/x13/x15/x16 CORRECT, x9 UNKNOWN. Kontrol: düz şıklar (x5n) ve shape set (x5s) iki kopyada CORRECT; yanlış x5w iki kopyada INCORRECT; yalnız harf x5 iki kopyada INCORRECT (önceden var)."
+   },
+   {
+    "id": "T2-RK-4",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "Süre adım bütçesiyle (60 s) sınırlı olmalı: aşınca adım 'step_time_budget_exceeded' unknown; karar aynı kalır (doğru (2, 5] CORRECT). Aynı kritik kümeyi paylaşan yeniden yazımlarda üstel büyüme olmamalı.",
+    "note": "Ölçüldü (p/vtime.py, yük ~3.3): dal k=4 1.6 s, 6 2.9 s, 8 12.0 s, 11 122.7 s; k=11'de tek _boundary_premises çağrısı 120.3 s (_STEP_BUDGET 60 s), son adım gerekçesi bütçe değil 'claim_holds_nowhere…'. Taban k=4/10/12 1.2–1.4 s (INCORRECT, eski haksız ret). Gerçekçi çözümde (k ≤ 6) birkaç saniye."
+   },
+   {
+    "id": "T2-RK-5",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT (en az UNKNOWN): sin x = 1/2 ve x = π/6 ∨ 5π/6, cos x = 0 ve x = π/2 ∨ 3π/2, 2^x = 8 ve x = 3 eşitsizliğin sınır denklemi ve noktalarıdır (G1RK-2); sınırda doğrular, refuted olmamalı.",
+    "note": "Ölçüldü (p/k6.py): q1, v1, v3, v2 iki kopyada INCORRECT (adımlar refuted; v2'de dalda '2**x = 8' unknown, 'x = 3' refuted); adımsız kontroller q1n, v3n, v2n CORRECT; log (v5) ve polinom (p2) dalda CORRECT, tabanda INCORRECT. Kümeler sympy solveset ile doğrulandı."
+   },
+   {
+    "id": "T2-RK-6",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "CORRECT: ±%1 penceresinde ([7.00036, 7.14178]) yalnız 7.07 var; 'Yukarıdakilerden hiçbiri', 'HİÇBİRİ', 'Hiçbiri değildir/değil', 'Belirsiz', 'Bilinemez' değer adlandırmaz.",
+    "note": "Ölçüldü (p/k2.py w0–w7): dal w0–w5 UNKNOWN (E: None), w6 'Hiçbiri' ve w7 'Yukarıdakilerin hiçbiri' CORRECT; taban hepsi CORRECT. Python'da 'HİÇBİRİ'.lower() birleşik nokta (U+0307) taşıyor, uzunluk 10. Kapsama kaybı; yanlış karar yok."
+   },
+   {
+    "id": "T2-OT-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "INCORRECT ya da UNKNOWN: r = 0.2 = %20, '%0.2' = 0.002. units '%' IR sayısının yüzde sayısı olduğunu garanti etmiyor (çıkarıcı istemi '%25 -> 25/100'; units serbest metin). Düz okuma ancak IR değerinin o birimde olduğu kanıtlıyken.",
+    "note": "Ölçüldü (p/k4.py r3f): dal CORRECT, taban INCORRECT. Kontrol r3fn (units yok) dalda UNKNOWN (unit_convention), tabanda INCORRECT. T2-RK-2 ile aynı düzenek (SA-RK-4'ün tek düz okuması) ve SA2-YO-4(b) ile aynı sınıf."
+   }
+  ]
+ }
+]

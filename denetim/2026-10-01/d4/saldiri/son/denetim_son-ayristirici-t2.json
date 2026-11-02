@@ -1,0 +1,307 @@
+[
+ {
+  "findings": [
+   {
+    "id": "YO-T2-1",
+    "klass": "false_accept",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "LaTeX fonksiyon argümanı ayraçlanırken '(' grup sayılmıyor. '\\sin 2(x + \\frac{\\pi}{4})' sin(2x+π/4), '\\ln 3(x-1)' ln(3x−1) diye okunuyor, yani parantezin dağılması düşüyor. Sonuç: yanlış öteleme cevabı CORRECT, yanlış şık CORRECT, yanlış özdeşlik adımı verified.",
+    "repro": "Çalışma dizini .../son-ayristirici-t2/yanlis-onay/sonda; komut: run.py c_dist.py ve c_dist2.py. IR: simplify_expression {expr:'sin(2*x + pi/4)'}, vars [x real], shape expression. Cevap '$\\sin 2(x + \\frac{\\pi}{4})$' (AYT yatay ötelemenin klasik hatası: π/8 yerine π/4 kaydırma). Aynı kalıp şunlarda da var: 'sin(2*x+1)' ile '$\\sin 2(x+1)$'; 'log(3*x-1)' ile '$\\ln 3(x-1)$' (ters fonksiyon); 'cos(3*x-2)' ile '$\\cos 3(x-2)$'; 'log(2*x+3,2)' ile '$\\log_2 2(x+3)$'; 'tan(2*x-1)' ile '$\\tan 2(x - 1)$'; 'sin(x/2+pi)' ile '$\\sin \\frac{1}{2}(x + \\pi)$'; derivative '-cos(2*x+1)/2' ile '$\\sin 2(x+1)$'. Çoktan seçmeli: şıklar A '$\\sin(2x + \\frac{\\pi}{4})$', B '$\\sin 2(x + \\frac{\\pi}{4})$', C, D, E; yalnız harf B. Ayrıca şık A '$\\sin 2(x+\\frac{\\pi}{4})$' iken harf A ve yük 'sin(2*x + pi/4)'. Adımlar: compute ya da eq '$\\sin 2(x + \\frac{\\pi}{4}) = \\sin(2x + \\frac{\\pi}{4})$', ayrıca compute '$\\sin 2(x+1) = \\sin(2x + 1)$'.",
+    "expected": "Yazarın okuması sin(2(x+π/4)) = cos 2x, bu da gerçek sonuç sin(2x+π/4) değil: INCORRECT (en kötü durumda UNKNOWN). Yanlış özdeşlik adımı refuted olmalı. B şıkkı INCORRECT olmalı.",
+    "actual_branch": "d9527f7 ve 73af3c0'da sonuç aynı: D1–D7, E1–E3, türev T1, çoktan seçmeli M1 (harf A + yük), M2 (yalnız harf A) ve M4 (yalnız harf B, yanlış şık) hepsi CORRECT. E4, E5, E6'daki yanlış özdeşlik adımı 'verified', çözüm CORRECT. Kontrollerde '\\sin 2\\left(x+\\frac{\\pi}{4}\\right)' ve '\\sin(2(x+\\frac{\\pi}{4}))' INCORRECT çıkıyor. Ters yönde de hata var: gerçek sonuç yazarın okumasına eşitken (cos 2x, sin(2x+2), ln(3x−3)) doğru cevap INCORRECT, yani haksız ret.",
+    "actual_base": "0e93ed5'te hepsi INCORRECT (sin(2x+2) okuması), adımlar refuted. Gerçek sonuç yazarın okuması olduğunda (D1r, D2r, D3r) CORRECT.",
+    "math": "sin(2(x+π/4)) = sin(2x+π/2) = cos 2x. x=0.3'te cos(0.6)=0.825336 ama sin(0.6+π/4)=0.982863. x=1.1'de −0.588501 ile 0.155560. ln(3(x−1)) x=2'de ln 3 = 1.098612, ln(3x−1) ise ln 5 = 1.609438. sin(2(x+1)) − sin(2x+1) x=0'da sin 2 − sin 1 = 0.0678. Bu iki ifade eşit değil.",
+    "mechanism": "693d2cc'nin _bracket_function_arguments işlevi _function_argument_span ile argümanı \\left(…\\right) içine alıyor. Döngü '{' ve '['yi grup olarak atlıyor, ama argüman ortasındaki '('yi sıradan karakter sayıyor ve açık parantezin içindeki ilk '+', '−' ya da ')'da duruyor. Böylece '\\sin 2(x + \\frac{\\pi}{4})' dengesiz '\\sin \\left(2(x\\right) + \\frac{\\pi}{4})' oluyor, latex2sympy de bunu sin(2x+π/4) okuyor. Aynı yoldan '\\sin 2 (1 + x)' sin(x+3), '\\ln 2 (1+1)' ln 4, '\\sin \\frac{\\pi}{2}(1+x)' cos x, '\\sin x (1 + \\cos x)' ise sin(x(1)+cos x) oluyor (tanımsız fonksiyon, UNKNOWN). _function_argument_divides da '('yi grup saymıyor. Düzeltme: iki işlevde '(' (ve '|…|') _latex_group_end ile grup olarak atlanmalı. Aralık açık bir parantezin içinde biterse ayraçlama yapılmamalı; latex2sympy'nin okuması kalmalı ya da UNKNOWN verilmeli. Teste bağlanacak vakalar: D1, D3, M4, E4."
+   },
+   {
+    "id": "YO-T2-2",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Öncüllerin hiç karmaşık çözümü yoksa (bütün kökler payda kutbu) 'kanıtlı sonuç' boşlukla veriliyor. Her açık compute adımının çürütmesi bayraksız geri çekiliyor ve yanlış özdeşlik içeren ∅ çözümü CORRECT oluyor (SA-YO-1'in kalan kardeşi).",
+    "repro": "Komut: run.py c_steps.py (S1, S2, S2b, S2c, S3) ve c_steps2.py (S2, S6, S7). YKS rasyonel denklemi, IR: solve_equation '(x**2 - 4)/(x - 2) = 4', shape set. Adımlar: [compute 'x**2 - 4 = (x - 2)*(x + 4)', eq 'x + 2 = 4', eq 'x = 2'], cevap '∅'. Diğer vakalar: 'x/(x - 1) = 1/(x - 1)' ile compute 'x/(x - 1) - 1/(x - 1) = (x + 1)/(x - 1)'; '2*x/(x - 3) = 6/(x - 3)' ile compute '2*x/(x - 3) - 6/(x - 3) = 2*(x + 3)/(x - 3)'; '(x**2 - 1)/(x - 1) = 2' ile compute 'x**2 - 1 - 2*(x - 1) = x**2 - 2*x - 1'; count_roots '(x**2 - 1)/(x - 1) - 2' ile compute 'x**2 - 1 = (x - 1)**2', cevap 0.",
+    "expected": "Adım yanlış bir özdeşlik. Taban gibi INCORRECT olmalı, en azından karar (iii) gereği step_reading_undecided bayrağı ile UNKNOWN. Hiçbir durumda CORRECT olmamalı.",
+    "actual_branch": "d9527f7 ve 73af3c0'da yedi vakanın hepsi CORRECT. Adımlar 'unknown', bayrak yok, certify.algebra/counting pass.",
+    "actual_base": "0e93ed5'te yedisi de INCORRECT, compute adımı refuted (steps.refute:fail).",
+    "math": "(x−2)(x+4) = x²+2x−8 ≠ x²−4 (x=0'da −8 ile −4). Öncülün payı x²−4−4(x−2) = (x−2)², paydası x−2. Tek aday x=2 kutup, dolayısıyla çözüm kümesi ℝ'de de ℂ'de de ∅. Doğru cevap ∅, ama adım yanlış özdeşlik.",
+    "mechanism": "_empty_premise_reading payların EBOB'unu (sqf_part) alıyor, payda kutuplarını ve '!=' koşullarını bölüyor. Ardından 'if P.degree() <= 0: return \"consequence\"' çalışıyor (çok değişkende Groebner == [1] de böyle). Öncüllerin hiç karmaşık çözümü yoksa 'adım hepsinde tutuyor' önermesi boş yere doğru oluyor. Bu, karar (i)'nin harfine uyuyor ama amacına uymuyor: SA-YO-1 kimlik okuması ile türetme okumasının ayrılamadığı durumu (iii)'e, yani bayrağa bırakmıştı. Burada tam olarak o durum var. _multiple_of_premise gerçek bir sonuç verdiği için sorun değil. Düzeltme: P.degree() <= 0 ve Groebner [1] için None dönülmeli (compute adımında step_reading_undecided). 'consequence' yalnız _multiple_of_premise ile ya da P.degree() >= 1 iken rem == 0 olduğunda verilmeli. M1–M4 (x²+1=0'ın katı ya da kökte sıfırlanan adım) karar (i) gereği, bulgu değil."
+   },
+   {
+    "id": "YO-T2-3",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Argüman ayraçlaması, argümandan sonra yan yana yazılan çarpanı (e^x, \\sqrt{…}) argümanın içine alıyor, '|…|'da ise argümanı kesiyor. latex2sympy'nin kendi okuması tersine dönüyor: çarpım kuralıyla bulunan doğru türevler INCORRECT, '\\sin x \\sqrt{2}' sin(√2x) okunup yanlış bir türev CORRECT.",
+    "repro": "Komut: run.py c_latex.py ve c_dist2.py. Haksız ret vakaları: derivative exp(x)*sin(x) ile '$\\sin x e^x + \\cos x e^x$' (L2); derivative sin(x)*sqrt(x) ile '$\\cos x \\sqrt{x} + \\frac{\\sin x}{2\\sqrt{x}}$' (L3); derivative -sqrt(2)*cos(x) ile '$\\sin x \\sqrt{2}$' (L4); derivative cos(x)*exp(x) ile '$-\\sin x e^x + \\cos x e^x$' (L6). Yanlış onay tarafı: derivative -cos(sqrt(2)*x)/sqrt(2) ile '$\\sin x \\sqrt{2}$' (L4w). Ayrıca '$\\ln 2|x|$' (E9, E9b).",
+    "expected": "L2, L3, L4 ve L6 tabandaki gibi CORRECT olmalı. Gelenek tartışmalıysa claim_ambiguous_juxtaposition ile UNKNOWN. L4w CORRECT olmamalı.",
+    "actual_branch": "d9527f7 ve 73af3c0'da L2, L3, L4, L6 INCORRECT, L4w CORRECT. '\\ln 2|x|' ln2·|x| okunuyor (E9 CORRECT, E9b INCORRECT). '\\sin x (1+\\cos x)' x(1) gibi tanımsız bir fonksiyon üretiyor (UNKNOWN, yaklaşık 9 s).",
+    "actual_base": "0e93ed5'te L2, L3, L4, L6 CORRECT, L4w INCORRECT, E9 INCORRECT, E9b CORRECT.",
+    "math": "(e^x sin x)' = e^x(sin x + cos x). Dalın okuması sin(x e^x) + cos(x e^x); x=1'de 0.3218 çıkıyor, doğru değer 3.7560. (sin x·√x)' = √x cos x + sin x/(2√x); dalın okuması cos(x^{3/2}) + …",
+    "mechanism": "_function_argument_span yalnız işleçte, kapanan ayraçta ya da bir sonraki fonksiyon makrosunda duruyor. Bu yüzden e^x, \\sqrt{…} ve diğer atomlar \\left(…\\right) içine giriyor. Oysa latex2sympy argümanı \\sqrt ve e^x'te bitiriyordu. '|' ise aralığı kesiyor. EK 3'teki karar bu aralığı yalnız '/' denetimi için tanımladı. Okumayı yeniden yazmak kararın dışında kalıyor, ve okuma yazarın geleneğine bağlı. Öneri: ayraçlama yalnız bir işleçte (\\cdot, \\times, +, −) ya da bir sonraki fonksiyonda biten argümana uygulansın. Argümandan sonra yan yana çarpan geliyorsa ya latex2sympy'nin okuması kalsın ya da UNKNOWN verilsin."
+   },
+   {
+    "id": "YO-T2-4",
+    "klass": "other",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "İzin sözlüğündeki kuşku sözcükleri ('muhtemel', 'olası', 'mümkün', 'tahmin edilen') kuşkulu cevabı temizleyip CORRECT veriyor. Aynı anda 'muhtemelen 5' ve '5 olabilir' payload_negated oluyor: kuşku ilkesi tutarsız.",
+    "repro": "Komut: run.py c_sanit.py. IR: evaluate '2 + 3'. Yükler: '5 muhtemel', '5 (muhtemel)', '5 muhtemel cevaptır', '5 muhtemel değerdir', '5 (tahmin edilen değer)', '5 tahmin edilen değerdir', '5 olası', '5 olası cevap', '5 mümkün', '5, muhtemel'.",
+    "expected": "25 Eylül kuşku ilkesine göre ('belki 5', 'muhtemelen 5' payload_negated) UNKNOWN.",
+    "actual_branch": "Bu yüklerin hepsi CORRECT (payload_cleaned). '5 muhtemelen', '5 muhtemeldir', '5 tahminen' ve '5 olabilir' UNKNOWN.",
+    "actual_base": "Hepsi CORRECT. Tek fark '5, muhtemel': tabanda INCORRECT (demet okuması). 1ea9b43'te (birinci tur) _NEGATION 'muhtemel'i içeriyordu; ikinci turda 'muhtemelen'e daraltıldı.",
+    "math": "Değer doğru (5). Sorun, kuşkulu bir iddianın kanıtlanmış iddia gibi onaylanması.",
+    "mechanism": "_TAIL_ALLOWED 'muhtemel', 'olası' ve 'mümkün'ü tek sözcük olarak içeriyor. _AFFIRMATIVE_PHRASES 'olası' ve 'tahmin edilen/edildiği'yi olumsuzluk denetiminden önce siliyor. SA-RK-3 kararı 'muhtemel'i '36 muhtemel durum' (sayma) için olumlu saymıştı. Tek başına ya da 'muhtemel cevap/değer' içinde ise kuşku bildiriyor. Öneri: yalnız 'muhtemel/olası durum' öbeği kalsın, tek başına 'muhtemel', 'olası', 'mümkün' ve 'tahmin edilen' çıkarılsın. Bunu karar düzeyinde yeniden ele almak gerekiyor."
+   },
+   {
+    "id": "YO-T2-5",
+    "klass": "other",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "base",
+    "title": "Tanım kümesi önekleri ('Tanım kümesi ∅', 'T.K. = ∅', 'D(f) = ∅') her görev türünde boş çözüm kümesi okunuyor. Çözüm kümesi sorusunda 'tanım kümesi boş' gibi farklı ve yanlış bir şık CORRECT oluyor.",
+    "repro": "Komut: run.py c_nosol.py, R2 ve N grupları. IR: solve_equation 'sqrt(x) = -1' (tanım kümesi [0,∞), çözüm kümesi ∅). Şıklar: A '{-1, 1}', B '{1}', C '{0}', D 'Tanım kümesi ∅', E '{2}'. Yalnız harf D. Ayrıca x**2 + 1 = 0 için D şıkkı 'D(f) = ∅', 'T.K. = ∅' ya da 'Tanım kümesi boş kümedir'.",
+    "expected": "Çözüm kümesi sorusunda tanım kümesi önermesi cevabın kendisi değil: UNKNOWN. Burada önerme yanlış da olduğu için INCORRECT olabilir.",
+    "actual_branch": "CORRECT (mc.consistency pass, certify.algebra pass).",
+    "actual_base": "CORRECT. '{∅}', '∅ ∪ {0}' ve 'Ç = {∅}' tabanda CORRECT idi, dalda INCORRECT ya da UNKNOWN: bunlar düzelmiş.",
+    "math": "√x = −1'in tanım kümesi [0,∞), boş değil. Dolayısıyla 'Tanım kümesi ∅' yanlış bir önerme. Çözüm kümesinin ∅ olması o şıkkı doğru yapmıyor.",
+    "mechanism": "_NO_SOLUTION_PREFIX (tanım kümesi, T.K./TK, D(f)) task.kind'e bakmıyor. SA-RK-2 kararı bu önekleri domain_of soruları için kabul etmişti. Öneri: tanım kümesi önekleri yalnız domain_of'ta ∅ okunsun, başka görevlerde UNKNOWN verilsin."
+   },
+   {
+    "id": "YO-T2-6",
+    "klass": "other",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "Birleşik dalda iki okumalı birim kuralına bir istisna: izin sözlüğü 'radyan' ve 'rad' birim sözcüklerini düzyazı sayıp atıyor. Kural uygulanmadan '30 radyan', düz değeri 30 olan bir açıya CORRECT alıyor; '30 derece' ise UNKNOWN.",
+    "repro": "Komut: run.py c_unit.py. IR: evaluate '30' (açının derece cinsinden düz değeri, örneğin x+2x+3x=180). Yük '30 radyan'. Karşılaştırma: aynı IR'da '30 derece' ve '$30^\\circ$'.",
+    "expected": "G1RK-3'e göre birim okuması (30 rad) ile düz okuma (30) ayrışıyor: UNKNOWN (unit_convention).",
+    "actual_branch": "73af3c0'da '30 radyan' CORRECT, oysa '30 derece', '30°' ve '$30^\\circ$' UNKNOWN. d9527f7'de '30 radyan' CORRECT.",
+    "actual_base": "CORRECT (taban her düzyazı kuyruğunu atıyordu).",
+    "math": "30 rad = 1718.87°, 30° değil. İki okuma birbirinden ayrışıyor.",
+    "mechanism": "_TAIL_ALLOWED 'radyan' ve 'rad'ı içeriyor. Ctx.open_unit_marks bu sözcükleri birim işareti saymıyor, '%' ve '°'yi (birleşikte 'derece'yi de) sayıyor. Temizlenen yük düz sayı olarak tek okumayla sertifikalanıyor. Öneri: 'radyan/rad' (ve 'yüzde') open_unit_marks'a eklensin ya da izin sözlüğünden çıkarılsın."
+   }
+  ],
+  "probes_run": 1230,
+  "summary": "Yanlış onay merceği, wip/son-ayristirici ikinci tur. Her vaka üç kopyada ölçüldü: 0e93ed5, d9527f7 ve birleşik 73af3c0. Yaklaşık 590 verify koşusu ve 640 ayrıştırıcı okuması yapıldı. Kopyalar silindi; sondalar ve çıktılar .../son-ayristirici-t2/yanlis-onay/sonda altında.\n\nDalın getirdiği iki yanlış onay var:\n\n(1) YÜKSEK, gerçekçi (693d2cc). _bracket_function_arguments argümanın ortasındaki '('yi grup saymıyor ve açık parantezin içindeki '+'/'−'de kesiyor.\n- '\\sin 2(x + \\frac{\\pi}{4})' sin(2x+π/4), '\\ln 3(x-1)' ln(3x−1), '\\log_2 2(x+3)' log₂(2x+3) okunuyor.\n- AYT yatay öteleme hatası CORRECT oluyor; yanlış şık yalnız harfle seçilince de CORRECT.\n- 'sin 2(x+π/4) = sin(2x+π/4)' gibi yanlış özdeşlik adımı verified.\n- Taban bunları INCORRECT veriyor. Ters yönde de etki var: doğru cevaplar haksız yere reddediliyor.\n\n(2) ORTA, gerçekçi (SA-YO-1'in kalan kardeşi). _empty_premise_reading, öncüllerin hiç karmaşık çözümü yokken (bütün kökler kutup: (x²−4)/(x−2)=4, x/(x−1)=1/(x−1)) 'consequence' döndürüyor.\n- Her yanlış compute özdeşliği bayraksız geri çekiliyor ve ∅ ya da 0 cevabı CORRECT oluyor; taban INCORRECT veriyor.\n- Karar (iii)'nin amacına aykırı. Önerilen düzeltme: bu boş durumda None dönülsün, compute adımına step_reading_undecided bayrağı konsun.\n\nMercek dışı ama ölçüldü (3): argüman ayraçlaması e^x ve \\sqrt{…} gibi yan yana çarpanları argümana katıyor. '\\sin x e^x + \\cos x e^x' ve '\\cos x \\sqrt{x} + …' doğru türevleri INCORRECT oluyor (tabanda CORRECT); '\\sin x \\sqrt{2}' sin(√2x) okunuyor.\n\nDüşük öncelikli, karar ya da ilke tutarlılığı (4–6):\n- Kuşku sözcükleri ('5 muhtemel', '5 olası', '5 (tahmin edilen değer)') CORRECT oluyor.\n- Tanım kümesi önekleri çözüm kümesi sorusunda ∅ okunuyor.\n- '30 radyan' iki okumalı birim kuralını atlıyor.\n\nBulgu çıkmayan alanlar:\n- İzin sözlüğünde olumsuz anlamlı bir sözcük ya da Türkçe olumsuz ekli biçim bulunamadı. Denenen: -maz/-mez, -madı, -mamalı, -mamakta, değil, yok, olmayan. Enjeksiyon sözcükleri ('ignore', 'above') yalnız kurgusal yüklerde geçiyor.\n- Rakamsız etiket kuralı π, ∞, i, e simgelerini atmıyor (π ve ∞ _MATHY'de, i/e tek harf olarak UNKNOWN).\n- _NO_SOLUTION genişlemesi '{∅}', 'Ç = {0}', 'Ç = {∅}', '∅ ∪ {0}', '∅'dir değil' çeldiricilerini boş saymıyor; dalda INCORRECT ya da UNKNOWN, tabanda bazıları CORRECT idi.\n- '\\log_2 5' ile '\\log_5 2', '\\ln 2x', '\\sin^2 x', '\\frac' ve '\\sqrt' ders kitabı yazımları doğru okunuyor.\n- Karmaşık çözüm süzgecinde gerçek kökü olan öncül ya da sıfıra bölmeyle sahte 'consequence' bulunamadı. M1–M4 (öncülün katı ya da kökte sıfırlanan adım) karar (i) gereği.\n\nBulgu dışı gözlemler:\n- '\\log^2_2 8' üç kopyada da (log₁₀8)² okunuyor.\n- '\\sin 30^\\circ' 0e93ed5 ve d9527f7'de sin(30 rad) okunuyor; 73af3c0'da UNKNOWN."
+ },
+ {
+  "findings": [
+   {
+    "id": "RK-T2-1",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "LaTeX'te çıplak fonksiyon argümanından sonra yan yana yazılan e^x / e^{..} / \\sqrt{..} çarpanı argümana katılıyor: doğru türev cevapları INCORRECT oluyor, doğru adımlar refuted",
+    "repro": "Sondalar: .../ret-kapsama/sonda1.py (LX grubu), sonda4.py (LS grubu); çıktılar s1_dal/s1_taban/s1_bir, s4_dal/s4_taban/s4_bir. IR derivative f, var x, answer_shape expression. (1) f = exp(x)*(sin(x)-cos(x))/2, iddia '$\\sin x e^x$' (ve '$\\sin x e^{x}$'). (2) f = exp(x)*sin(x), iddia '$\\sin x e^x + \\cos x e^x$'. (3) f = exp(x)*cos(x), iddia '$\\cos x e^x - \\sin x e^x$'. (4) f = exp(x)*log(x), iddia '$\\ln x e^{x} + \\frac{e^{x}}{x}$'. (5) f = 2*x**(3/2)*log(x)/3 - 4*x**(3/2)/9, iddia '$\\ln x \\sqrt{x}$'. (6) f = -sqrt(2)*cos(x), iddia '$\\sin x \\sqrt{2}$'. Adımlar: trig_solve exp(x)*sin(x) = 0 ve [0, 2π) için cevap {0, π}, eq adımı '$\\sin x e^x = 0$'; trig_solve sqrt(2)*sin(x) = 1 için cevap {π/4, 3π/4}, adım '$\\sin x \\sqrt{2} = 1$'; evaluate sqrt(2)*sin(pi/4) için cevap 1, compute adımı '$\\sin \\frac{\\pi}{4} \\sqrt{2} = 1$'; evaluate log(8,2)*sqrt(4) için cevap 6, adım '$\\log_2 8 \\sqrt{4} = 6$'.",
+    "expected": "CORRECT. Hepsi doğru: f' değerleri mpmath'te 50 basamakla x = 0.7'de doğrulandı (iddianın ders kitabı okuması ile f' arasındaki fark ≤ 6e-51). Adımlar doğru: e^π·sin π = 0, sin(π/4)·√2 = 1, log₂8·√4 = 6.",
+    "actual_branch": "(1)–(6): INCORRECT (certify.calculus fail). Adımlar refuted: '\\sin x e^x = 0' (st=['refuted','verified']), '\\sin x \\sqrt{2} = 1', '\\sin \\frac{\\pi}{4}\\sqrt{2} = 1', '\\log_2 8 \\sqrt{4} = 6'; hepsinde INCORRECT. Birleşik 73af3c0'da aynı sonuç (s1_bir 69/69, s4_bir 15/15 dalla aynı).",
+    "actual_base": "(1)–(6) CORRECT; dört adım verified ve çözüm CORRECT.",
+    "math": "Dalın okumaları: sin(x·e^x), sin(x·e^x)+cos(x·e^x), cos(x·e^x)−sin(x·e^x), ln(x·e^x)+e^x/x, ln(x^{3/2}), sin(√2·x). x = 0.7'de doğru f''den farkları sırasıyla −0.310, −1.069, +1.062, −0.237, −0.075 (mpmath, 50 basamak). Adımlarda dalın okuması: sin(π·e^π) = −0.4277 ≠ 0, sin(√2·π/4) = 0.8960 ≠ 1, log₂(8·√4) = 4 ≠ 6. Bu yüzden refuted.",
+    "mechanism": "normalize/parse.py `_bracket_function_arguments` / `_function_argument_span` (3868076/693d2cc) çıplak argümanı ilk işlece (+, −, =, \\cdot, sağ ayraç) ya da sonraki fonksiyon makrosuna kadar okuyor. Harf, '^{..}', \\sqrt ve \\frac argüman sayılıyor; bu yüzden '\\sin x e^x' metni '\\sin\\left(x e^x\\right)' olarak yeniden yazılıyor. latex2sympy tabanda e^x'i ve \\sqrt{..}'yu ayrı çarpan okuyordu, doğru okuma buydu. Kararın lafzı 'ilk işlece kadar okunur' diyor; ama bu karar '/' belirsizliğini tespit etmek için yazıldı. Okumayı yeniden yazmak düzelticinin kardeş düzeltmesi ('argüman ayraç içine alınır'). Bu hâliyle tek bir okumayı kesinmiş gibi seçiyor ve tabanda doğru okunan yazımları tersine çeviriyor. Fail-closed seçenek: argümanın ilk atomundan sonra yan yana yazılmış başka türden bir çarpan (e^, \\sqrt, \\frac, bir makro) varsa ya latex2sympy'nin okuması korunmalı ya da ifade belirsiz sayılmalı (UNKNOWN). Okunmayan argüman ise bilerek uzatılmamalı. '\\cdot' içeren yazımlar artık düzeldi (tabanda INCORRECT olan '2\\sin x \\cdot \\cos x' dalda CORRECT); bunlar korunmalı."
+   },
+   {
+    "id": "RK-T2-2",
+    "klass": "coverage_loss",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "İç içe fonksiyon makrosu (\\ln \\frac{1}{\\cos x}, \\cos \\frac{\\ln 1}{2}, \\ln \\sqrt{\\sin x}, \\cos x e^{\\sin x}) LaTeX okumasını bozuyor: iddia okunmuyor, adım malformed_step_claim, çözüm UNKNOWN",
+    "repro": "Sondalar: .../ret-kapsama/sonda8.py, p_parse5.py, sonda1.py, sonda4.py. (a) evaluate log(1/cos(pi/3)), cevap '$\\ln 2$', compute adımı '$\\ln \\frac{1}{\\cos \\frac{\\pi}{3}} = \\ln 2$'. (b) evaluate cos(log(1)/2), cevap 1, adım '$\\cos \\frac{\\ln 1}{2} = \\cos 0 = 1$'. (c) evaluate log(log(8)/log(2), 3), cevap 1, adım '$\\log_3 \\frac{\\ln 8}{\\ln 2} = \\log_3 3 = 1$'. (d) evaluate log(sqrt(sin(pi/2))), cevap 0, adım '$\\ln \\sqrt{\\sin \\frac{\\pi}{2}} = \\ln 1 = 0$'. (e) evaluate log((1+sin(pi/6))/cos(pi/6)), adım '$\\ln \\frac{1 + \\sin \\frac{\\pi}{6}}{\\cos \\frac{\\pi}{6}} = \\ln \\sqrt{3}$'. (f) antiderivative tan(x), 0 < x < π/2, iddia '$\\ln \\frac{1}{\\cos x}$'. (g) derivative exp(sin(x)), iddia '$\\cos x e^{\\sin x}$'; derivative exp(cos(x)), iddia '$-\\sin x e^{\\cos x}$'. (h) derivative exp(sin(x)), adım '$\\frac{d}{dx} e^{\\sin x} = \\cos x e^{\\sin x}$'. Ayrıştırıcı düzeyinde de bozuluyor: '\\ln \\frac{1 + \\sin x}{\\cos x}', '\\ln \\frac{\\sin x}{x}', '\\ln \\frac{1 + \\tan x}{1 - \\tan x}', '\\exp \\sqrt{\\ln x}', '\\sin \\sqrt{\\cos x}'.",
+    "expected": "CORRECT. Her adım doğru bir eşitlik: ln(1/cos(π/3)) = ln 2, cos(0) = 1, log₃(ln8/ln2) = log₃3 = 1, ln√1 = 0, ln((3/2)/(√3/2)) = ln√3. −ln cos x ilkeli tan x'in ilkeli. (e^{sin x})' = cos x·e^{sin x}.",
+    "actual_branch": "(a)–(e): adım 'skipped', bayrak malformed_step_claim, çözüm UNKNOWN. (f), (g): parse_error, UNKNOWN. (h): malformed_step_claim, UNKNOWN. Yanlış '$\\sin x e^{\\cos x}$' INCORRECT'ten UNKNOWN'a düştü. Birleşikte ayrıştırıcı çıktısı aynı (pp5_bir 19/19, pp2_bir 58/58).",
+    "actual_base": "(a)–(e): adım verified, CORRECT. (f), (g), (h): CORRECT. Taban log(1/cos(x)), cos(log(x)/2), log(sqrt(sin(x))), exp(sin(x))*cos(x) okuyordu.",
+    "math": "Kesin değerler: cos(π/3) = 1/2, yani ln 2; ln 1 = 0, yani cos 0 = 1; ln8/ln2 = 3, yani log₃3 = 1; sin(π/2) = 1, yani ln 1 = 0; (1 + 1/2)/(√3/2) = √3. d/dx[−ln cos x] = tan x. d/dx e^{sin x} = cos x·e^{sin x}; mpmath 50 basamakta fark −2.7e−51.",
+    "mechanism": "`_bracket_function_arguments` dış ve iç fonksiyonların aralıklarını (k, e) özgün metinde topluyor, sonra k'ye göre tersten sıralayıp '\\left(' ve '\\right)' ekliyor. İçteki aralık dıştakinin içindeyse önce içteki ekleniyor; bu dış aralığın bitiş indisini kaydırıyor ve dışın '\\right)'ı yanlış yere giriyor. Gözlenen çıktı: '\\cos x e^{\\sin x}' → '\\cos \\left(x e^{\\sin \\l\\right)eft(x\\right)}' ('\\left' ikiye bölünüyor). Sonuç ParseError. Adımda ise malformed_step_claim, ve bu bayrak _BLOCK_POSITIVE_FLAGS'te olduğu için bütün çözüm UNKNOWN oluyor. Düzeltme: iç içe aralıkları atlamak, ya da eklemeleri ofset düzeltmesiyle yapmak (yalnız en dıştakini almak ya da metni ağaç olarak yeniden kurmak)."
+   },
+   {
+    "id": "RK-T2-3",
+    "klass": "crash_or_timeout",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Çarpanlara ayrılmış yazım '\\tan x(1 + \\tan^2 x)', '\\sin x(1+\\cos x)': '(' sıradan karakter sayılıyor, x(1) tanımsız fonksiyon uygulaması oluşuyor, tek iddia 47–58 s sürüyor (taban ~1 s)",
+    "repro": "Sondalar: .../ret-kapsama/sonda6.py, sonda5.py (CO grubu), sonda1.py; çıktılar s6_dal/s6_taban/s6_bir, s5_*. derivative f = tan(x)**2/2, iddia '$\\tan x(1 + \\tan^2 x)$' (ve '$\\tan x (1 + \\tan^2 x)$'). derivative f = -cos(x) - cos(x)**2/2, iddia '$\\sin x(1+\\cos x)$'. derivative f = sin(x)**2 - sin(x), iddia '$\\cos x(2\\sin x - 1)$'. derivative f = x*log(x)**2/2, iddia '$\\ln x(1 + \\frac{1}{2}\\ln x)$'.",
+    "expected": "Doğru cevaplar; CORRECT ya da en kötü hızlı bir UNKNOWN (iki ağaçta da ders kitabı okuması sin x·(1+cos x)). (tan²x/2)' = tan x·sec²x = tan x(1+tan²x); mpmath'te x = 0.7'de fark −2.7e−51.",
+    "actual_branch": "UNKNOWN. Süre: tan durumunda 46.8 s ve 46.7 s (iki ölçüm), birleşik 73af3c0'da 58.2 s ve 58.4 s. Ötekiler 8.1 s, 9.3 s, 2.5 s. Okuma: tan(Function('x')(1) + tan(x)**2). '$\\tan x(\\tan^2 x + 1)$' 0.1 s'de parse_error ile düşüyor.",
+    "actual_base": "INCORRECT (önceden var olan haksız ret: latex2sympy tan(x·(1+tan²x)) okuyordu). Süre 0.66–1.37 s; ötekiler 0.2–0.4 s.",
+    "math": "(tan²x/2)' = tan x·sec²x; (−cos x − cos²x/2)' = sin x + sin x cos x = sin x(1 + cos x); (sin²x − sin x)' = cos x(2 sin x − 1). Hepsi doğru.",
+    "mechanism": "`_function_argument_span` yalnız '{' ve '[' gruplarını bir bütün olarak atlıyor. '(' kırılma karakteri değil, sıradan karakter gibi tüketiliyor. Aralık parantezin içindeki ilk '+'ta bitiyor ve ekleme '\\tan \\left(x(1\\right) + \\tan^2 \\left(x\\right))' oluyor. latex2sympy 'x(1)'i Function('x')(1) okuyor. Değer yalnız ad alanında olması gereken bir iddiaya tanımsız fonksiyon uygulaması giriyor. Sertifikalar ona onlarca saniye harcıyor, sonra karar vermiyor. Karar tabandakinden iyi (INCORRECT yerine UNKNOWN), ama süre 35–60 kat arttı ve ders kitabı okuması yine alınmıyor. Düzeltme: argümandan hemen sonra gelen '(' grubu argümana katılmamalı; ya ayrı çarpan okunmalı ya da belirsiz sayılmalı (hızlı UNKNOWN). Ayrıca AppliedUndef içeren bir iddia sertifikaya gitmeden reddedilmeli."
+   },
+   {
+    "id": "RK-T2-4",
+    "klass": "coverage_loss",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "İzin sözlüğünde boşluklar: '{2, 3} kümesi', '(2, 3) aralığı', '5 tanedir', '5 değerini alır', '5 eder' gibi Türkçe kuyruklar tabanda CORRECT, dalda UNKNOWN",
+    "repro": "Sondalar: .../ret-kapsama/sonda2.py (TL, TLW), sonda7.py (ST, SI); çıktılar s2_*, s7_*. Problemler: x²−5x+6=0 (kind set), ödeme metinleri '{2, 3} kümesi', '{2, 3} kümesidir', '{2, 3} çözüm kümesidir', '{2, 3} kökleri', '{2, 3} çözümleri', '{2, 3} değerleri'. (x−2)(x−3)<0 (kind interval), metinler '(2, 3) aralığı', '(2, 3) aralığıdır', '(2, 3) aralığında', '(2, 3) açık aralığı', '(2, 3) kümesi'. evaluate 2+3, metinler '5 tanedir', '5 metredir', '5 kişidir', '5 birimdir', '5 derecedir', '5 liradır', '5 saattir', '5 gündür', \"5 cm'dir\", '5 değerini alır', '5 eder', '5 çıkar', '5 yapar', '5 olacaktır', '5 oluyor', '5 olarak hesaplanır', '5 metrekare', '5 milimetre', '5 öğrenci', '5 farklı şekilde'.",
+    "expected": "CORRECT. Kuyruk değeri değiştirmiyor, olumsuzlamıyor; sözlükteki sözcüklerin ekli biçimleri ya da eşanlamlıları.",
+    "actual_branch": "Hepsi UNKNOWN (parse_error; kuyruk okunmuyor). Toplam 46 + 13 vaka. Yanlış '6 elma' da INCORRECT'ten UNKNOWN'a düştü. Birleşikte aynı (s2_bir TL/TLW/OT 96 vaka dalla aynı).",
+    "actual_base": "Hepsi CORRECT (payload_cleaned); '6 elma' INCORRECT.",
+    "math": "x²−5x+6 = (x−2)(x−3), kökleri {2, 3}; (x−2)(x−3) < 0 ⇔ 2 < x < 3; 2+3 = 5.",
+    "mechanism": "verifier.py `_tail_reading` / `_TAIL_ALLOWED` (3868076): kuyruğun her sözcüğü sözlükte olmalı, yoksa 'unknown'. Sözlükte tane, metre, kişi, birim, derece, lira, saat, gün, cm, değer, kök, çözüm, olur, bulunur var. Ama Türkçe ek almış biçimleri (tanedir, metredir, cm'dir, kökleri, çözümleri, kümesi, aralığı) yok. 'dir/dır' yalnız ayrı belirteç olarak geçiyor; oysa karar 'değer(dir)' biçimini açıkça örnekliyor. Küme ve aralık cevaplarının en doğal Türkçe kuyrukları ('kümesi', 'aralığı') da eksik. 'Bilinmeyen sözcük UNKNOWN' kuralı karar gereği; derlemde kapsama kaybı 0 ölçülmüş. Bu yüzden gerçekçilik belirsiz. Yine de bunlar kararın kendi listesinin ekli biçimleri; sözlüğe ek-duyarlı kök eşleşmesi (izinli kök + iyelik/ek-fiil ekleri) eklenmesi önerilir. Tek harfli birimler ('5 m', '5 g', '5 s') ve '5 (B)' SA-RK-5 kararı gereği UNKNOWN; bulgu sayılmadı."
+   },
+   {
+    "id": "RK-T2-5",
+    "klass": "other",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "base",
+    "title": "Karar (ii): karmaşık çözümdeki yanlışlık, yalnız gerçel sayılarda geçerli bir çıkarımı da çürütüyor (x²+x+1=0 → x³=1 → x=1, compute)",
+    "repro": "Sondalar: .../ret-kapsama/sonda3.py (ER grubu), p_ev.py; çıktılar s3_dal/s3_taban/s3_t1, pev_*. solve_equation x**2 + x + 1 = 0, cevap '∅'. Adımlar: eq '(x - 1)*(x**2 + x + 1) = 0', eq 'x**3 - 1 = 0', eq 'x**3 = 1', compute 'x = 1', compute '1**2 + 1 + 1 = 3'.",
+    "expected": "CORRECT ya da en kötü UNKNOWN. Gerçel küp kökü tektir, dolayısıyla x³ = 1 ⇒ x = 1 ℝ'de geçerli bir çıkarım; 1 kök olmadığından ∅ doğru. Öncül ℝ'de boş.",
+    "actual_branch": "INCORRECT. compute 'x = 1' refuted; kanıt 'premises_hold_nowhere ...; the step is false at an exact complex solution of them' (ω = −1/2 + i√3/2). Birleşikte aynı. Aynı adım eq olarak yazılınca unknown, çözüm CORRECT.",
+    "actual_base": "INCORRECT (aynı adım, kimlik denetimiyle refuted). Birinci turda (1ea9b43) CORRECT'ti; ikinci tur tabanın davranışını geri getirdi.",
+    "math": "x² + x + 1'in kökleri ω, ω̄ (gerçel değil). ℝ'de x³ = 1 ⇔ x = 1. 1² + 1 + 1 = 3 ≠ 0, yani ∅.",
+    "mechanism": "steps/deterministic.py `_vacuous` → `_empty_premise_reading`: adım öncülün kesin bir karmaşık çözümünde yanlışsa 'refuted'. Gerçel sayılara özgü çıkarımlar (tek dereceli kök tekliği, tek değişkenli kareler toplamı = 0 ⇒ her biri 0) ℂ'de geçerli değil. Bu yüzden karmaşık nokta yanlış kimliği geçerli gerçel çıkarımdan ayırmıyor: ilke 5'teki 'somut karşı örnek' gerçel problemde değil. Böyle bir adım (iii)'deki gibi kararsız sayılmalı (step_reading_undecided → UNKNOWN), çürütülmemeli. Tek değişkenli kareler toplamı adımları ('x - 1 = 0', öncül (x−1)²+(x+1)²=0) eq olarak yazıldığında unknown kalıyor ve CORRECT, yani etki yalnız compute türünde. Gerçekçilik düşük: bir çıkarımın compute olarak işaretlenmesi seyrek."
+   },
+   {
+    "id": "RK-T2-6",
+    "klass": "unjust_reject",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "base",
+    "title": "Rakamsız etiket kuralı, değer taşıyan bir simgeyi (π, e) etiketle sarılı olduğunda hâlâ atıyor: '2 <i>π</i>' 2 okunup INCORRECT",
+    "repro": "Sonda: .../ret-kapsama/sonda7.py (TG grubu); çıktılar s7_*. evaluate 2*pi, metinler '2 <i>π</i>', '2 <b>π</b>', '2 <sub>π</sub>'. evaluate 2*E, metin '2 <i>e</i>'.",
+    "expected": "CORRECT ya da UNKNOWN. Değer 2π ve 2e; etiketin içindeki simge değerin parçası.",
+    "actual_branch": "INCORRECT (payload_cleaned → 2; certify.algebra fail). '2 e' artık UNKNOWN (SA-RK-5 düzeltmesi), ama etiketle sarılı biçim değil.",
+    "actual_base": "INCORRECT (aynı).",
+    "math": "2π ≈ 6.283 ≠ 2; 2e ≈ 5.437 ≠ 2.",
+    "mechanism": "`_is_prose_token` ve ikinci turun `_tail_reading`'i, rakam içermeyen _TAGLIKE belirteçleri ('<i>π</i>') düzyazı sayıp izinli kabul ediyor. Simge denetimi (n in ctx.ns, i/e, tek harf) etiketin içine bakmıyor; π _MATHY'de olmasına rağmen etiket kuralı önce dönüyor. SA-RK-5'in 'simge asla atılmaz' kararı etikete sarılı simgeyi kapsamıyor. Düzeltme: etiketin metin içeriği _MATHY ya da ad alanı simgesi taşıyorsa düzyazı sayılmamalı. Gerçekçilik düşük: HTML etiketli değer LLM çıktısında seyrek."
+   }
+  ],
+  "probes_run": 652,
+  "summary": "Ret, kapsama ve çökme merceğiyle wip/son-ayristirici ikinci turunu (1ea9b43..d9527f7) ölçtüm. Karşılaştırma tabanı 0e93ed5; birleşik 73af3c0'da da ana bulguları denedim. Ölçüm: 367 doğrulayıcı vakası ve 285 ayrıştırıcı metni, hepsi iki kopyada. Ana bulgular birleşikte de aynı çıktı: s1 69/69, s4 15/15, pp2 58/58, pp5 19/19, s2 TL/TLW/OT 96/96 dalla aynı, s6'da süre daha da kötü (58 s).\n\nEn ciddi sorun ikinci turun LaTeX değişikliği (`normalize/parse.py` içindeki `_bracket_function_arguments` / `_function_argument_span`). Üç ayrı kusur var:\n\n1. **RK-T2-1, yüksek, haksız ret.** Çıplak fonksiyon argümanından sonra yan yana yazılan e^x, e^{..} ya da \\sqrt{..} çarpanı argümana katılıyor. Tabanda CORRECT olan doğru cevaplar dalda INCORRECT oluyor; örnekler: '\\sin x e^x', '\\cos x e^x − \\sin x e^x', '\\ln x \\sqrt{x}', '\\sin x \\sqrt{2}', '\\ln x e^{x} + e^x/x'. Doğru adımlar da çürütülüyor: '\\sin x e^x = 0', '\\sin x \\sqrt{2} = 1', '\\sin(π/4)·√2 = 1', '\\log_2 8 \\sqrt{4} = 6'.\n\n2. **RK-T2-2, orta, kapsama kaybı.** Argümanın içinde başka bir fonksiyon olunca eklemeler iç içe giriyor ve indis kayıyor; metin bozuluyor ('\\l\\right)eft'), sonuç ParseError. '\\ln \\frac{1}{\\cos x}', '\\cos \\frac{\\ln 1}{2}', '\\ln \\sqrt{\\sin x}', '\\cos x e^{\\sin x}' tabanda CORRECT, dalda UNKNOWN. Bu yazımlar bir adımda geçince malformed_step_claim bayrağı bütün çözümü UNKNOWN yapıyor.\n\n3. **RK-T2-3, orta, süre.** '(' argümanın içinde sıradan karakter sayılıyor. Çarpanlara ayrılmış ders kitabı yazımı ('\\tan x(1+\\tan^2 x)', '\\sin x(1+\\cos x)') Function('x')(1) olarak okunuyor. Karar tabandaki INCORRECT'ten UNKNOWN'a iyileşti, ama süre ~1 s'den 47 s'ye (birleşikte 58 s) çıktı.\n\nÖteki bulgular:\n\n- **RK-T2-4, orta, kapsama.** İzin sözlüğü kendi sözcüklerinin ekli biçimlerini içermiyor ('tanedir', \"cm'dir\", 'kökleri', 'çözümleri'). Küme ve aralık cevaplarının doğal kuyrukları da eksik ('{2, 3} kümesi', '(2, 3) aralığı'). 59 vaka tabanda CORRECT, dalda UNKNOWN. 'Bilinmeyen sözcük UNKNOWN' kuralı karar gereği ve derlemde kayıp 0 ölçülmüş; bu yüzden gerçekçiliği belirsiz.\n- **RK-T2-5, düşük, other.** Kararın (ii) maddesi, yalnız gerçel sayılarda geçerli bir çıkarımı karmaşık çözümle çürütüyor. Örnek: x²+x+1=0 → x³=1 → x=1, compute türünde. Sonuç tabanla aynı (INCORRECT); birinci tur bunu CORRECT vermişti.\n- **RK-T2-6, düşük, tabanda zaten var.** Etikete sarılı değer simgesi atılıyor: '2 <i>π</i>' 2 okunup INCORRECT oluyor.\n\nKarar gereği olduğu için bulgu yapmadıklarım: tek harfli birimler ('5 m', '5 (B)') UNKNOWN; '1/2%' ve '\\log_2 8/3' belirsiz sayılıyor; √x+1=0'da compute adımlı doğru çözüm step_reading_undecided ile UNKNOWN (tabanda INCORRECT idi).\n\nDalın iyileştirmeleri (tabanda INCORRECT, dalda CORRECT): '\\cdot' içeren trig/log yazımları ('2\\sin x \\cdot \\cos x', '\\log_2 3 \\cdot \\log_3 4' adımı, '\\cos x(2\\sin x − 1) = 0' adımı); ∅ şıkları ('Gerçek çözümü yoktur', 'Reel kökü yoktur', 'Hiçbir gerçek sayı için sağlanmaz', 'Ç.K. = { }'); '5,', '5;', '{3},'; boş öncüllü '0 = 2' ve 'x² = −4' adımları.\n\nÇökme görmedim. Kopyalar silindi. Sondalar ve çıktılar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-ayristirici-t2/ret-kapsama altında: sonda1-8.py, p_parse*.py, s*_dal/taban/bir/t1.txt, pp*_*.txt."
+ },
+ {
+  "file": "/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-ayristirici-t2/bulgular.json",
+  "verdicts": [
+   {
+    "id": "YO-T2-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "Hedef sin(2x+π/4) iken '\\sin 2(x+\\frac{\\pi}{4})' ve kardeşleri (D2–D7, '\\sin \\frac{1}{2}(x+\\pi)', T1) INCORRECT: iki okuma da (sin(2(x+π/4)) = cos 2x; (sin 2)(x+π/4)) hedeften farklı. Yanlış özdeşlik adımı refuted; yanlış şık (M1, M2, M4) INCORRECT. Ters yön: hedef yazarın okumasıyken (cos 2x, sin(2x+2), ln(3x−3)) CORRECT (ders kitabının A sin B(x−C) biçimi) ya da en kötü UNKNOWN; INCORRECT değil.",
+    "note": "d9527f7 ve 73af3c0'da yeniden üretildi: D1–D7, E1, M1, M2, M4, T1 CORRECT; E4–E6 adımları verified; hedef cos 2x ya da sin(2x+2) iken INCORRECT. 0e93ed5'te sonuçlar ters. Ayraçlama çıktısı '\\sin \\left(2(x\\right) + \\frac{\\pi}{4})', okunan sin(2x+π/4). x=0.3'te cos 0.6 − sin(0.6+π/4) = −0.1575."
+   },
+   {
+    "id": "YO-T2-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT olamaz. Karar (iii) gereği compute adımı step_reading_undecided ile unknown kalır ve çözüm UNKNOWN olur. Tabanın INCORRECT'i de savunulabilir, çünkü adım kimlik olarak her x'te yanlış. Aynı yanlış özdeşlik eq adımı olarak yazıldığında dalda ve tabanda CORRECT çıkıyor; bu, karar (iii)'ün 'eq adımı tabandaki gibi unknown' hükmünden geliyor ve bu bulgunun kapsamında değil.",
+    "note": "S1, S2, S3, S6 ve S7 dalda ve 73af3c0'da CORRECT; adımlar bayraksız unknown. Tabanda INCORRECT. Kaynak: _empty_premise_reading'deki 'P.degree() <= 0 -> \"consequence\"'. sympy ℂ'de dört öncülün de çözüm kümesini boş buluyor ve adım farkları sıfır değil (−2/(x−1), −12/(x−3), 2, 2x−2). Kontrol vakası: aynı compute adımı x²−4=0 öncülüyle dalda refuted."
+   },
+   {
+    "id": "YO-T2-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "L2, L3, L4, L6: CORRECT (ders kitabı ve latex2sympy okuması: argüman ilk atomda biter, e^x ve \\sqrt{…} ayrı çarpan). Gelenek tartışmalı sayılırsa claim_ambiguous_juxtaposition ile UNKNOWN; INCORRECT asla. L4w (hedef sin(√2x), iddia '\\sin x \\sqrt{2}') CORRECT olmamalı. '\\ln 2|x|' ln(2|x|) ve (ln 2)|x| arasında gelenek belirsiz: E9 ve E9b için UNKNOWN en güvenlisi. Dalın E9'da CORRECT vermesi tek okumayı kesin sayıyor.",
+    "note": "Dalda ve 73af3c0'da yeniden üretildi; 0e93ed5'te sonuçlar ters. Ayraçlama: '\\sin x e^x' → sin(x·eˣ), '\\sin x \\sqrt{2}' → sin(√2x), '\\ln 2|x|' → log 2·|x|. Bulgudaki sayı yanlış: x=1'de sin e + cos e = −0.5010, 0.3218 değil. Sonuç değişmez (doğru değer 3.7560). RK-T2-1 ile aynı kök."
+   },
+   {
+    "id": "YO-T2-4",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "Şüpheli cevap ilkesi ('belki 5' UNKNOWN) gereği şu yükler UNKNOWN olmalı: '5 muhtemel', '5 (muhtemel)', '5 muhtemel cevaptır/değerdir', '5 olası', '5 olası cevap', '5 mümkün', '5, muhtemel'. '5 (tahmin edilen değer)' kestirim sorularında bir terim (SA-RK-3) ve EK 3 bunu açıkça izinli saydı; tartışmalı, karar gerekiyor. '36 muhtemel durum' gibi sayma öbekleri CORRECT kalır.",
+    "note": "Dalda, 73af3c0'da ve tabanda on yükün hepsi CORRECT (payload_cleaned). Dalda '5 muhtemelen', '5 olabilir' ve '5 tahminen' UNKNOWN; tutarsızlık gerçek. Ama EK 3 kararı 'muhtemel' ve 'tahmin edilen'i izin listesine açıkça koydu ve düzeltici kararı uyguladı, yani değişiklik karar düzeyinde gerekiyor. Değer doğru, yanlış cevap onaylanmıyor."
+   },
+   {
+    "id": "YO-T2-5",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "Çözüm kümesi sorusunda (solve_equation) 'Tanım kümesi ∅', 'D(f) = ∅', 'T.K. = ∅' ya da 'Tanım kümesi boş kümedir' şıkkı ∅ iddiası olarak okunmamalı: UNKNOWN. Önerme yanlış olduğu için (√x'in tanım kümesi [0,∞), x²+1'inki ℝ) INCORRECT de savunulabilir. domain_of sorusunda aynı önekler ∅ okunur ve CORRECT kalır.",
+    "note": "Sekiz vakanın hepsi dalda, 73af3c0'da ve tabanda CORRECT. domain_of kontrolü (sqrt(−x²−1), D='Tanım kümesi ∅') CORRECT; bu doğru. SA-RK-2 kararı önekleri görev türüne bakmadan kabul etti ve düzeltici kararın lafzını uyguladı. Gerçekçi değil."
+   },
+   {
+    "id": "YO-T2-6",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "IR değerinin birimi kanıtlanmamışken '30 radyan' ve '30 rad' UNKNOWN olmalı (EK 8: düz okuma yalnız IR değerinin o birimde olduğu kanıtlıysa yapılır). Bulgunun gerekçesi tam değil: 30 rad sayıca 30 olduğundan iddia tarafındaki iki okuma ayrışmaz. Asıl belirsizlik IR'daki 30'un derece olabilmesi. IR değeri açıkça radyansa karar değişir (hedef pi/6 iken '30 radyan' INCORRECT, bu doğru).",
+    "note": "'30 radyan' ve '30 rad' dalda, 73af3c0'da ve tabanda CORRECT. 73af3c0'da '30 derece', '30°' ve '$30^\\circ$' UNKNOWN. d9527f7'de '30°' INCORRECT ama '$30^\\circ$' CORRECT idi; birleşikte düzelmiş. 30 rad = 1718.87°."
+   },
+   {
+    "id": "RK-T2-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "CORRECT: ders kitabı ve latex2sympy okumasıyla e^x ve \\sqrt{…} ayrı çarpandır. Gelenek tartışmalı sayılırsa claim_ambiguous_juxtaposition ile UNKNOWN; INCORRECT asla. Adımlar en kötü unknown kalmalı, refuted değil, çünkü somut karşı örnek yazarın okumasında bulunmalı. '\\cdot' ile yazılanlardaki düzelme korunmalı.",
+    "note": "Dalda ve 73af3c0'da yeniden üretildi; tabanda CORRECT/verified. mpmath'e göre x=0.7'de iddialar f''ye eşit, dal okumaları farklı. Bulgunun fark listesinde (2) eksik: −1.690. Kalan beş sayı ve adım okumaları (−0.4277, 0.8960, 4) doğrulandı. YO-T2-3 ile aynı kök."
+   },
+   {
+    "id": "RK-T2-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "(a)–(f) ve (h): CORRECT (taban gibi); iç fonksiyon \\frac, \\sqrt ya da e^{…} grubunun içinde, tek okuma var. En azından ayrıştırıcı bozuk LaTeX üretmemeli. (g) '\\cos x e^{\\sin x}' iç içe hata düzelince RK-T2-1 kuralına tabi olur: CORRECT ya da UNKNOWN, INCORRECT değil.",
+    "note": "Dalda ve 73af3c0'da yeniden üretildi: adım skipped/malformed, iddia parse_error, sonuç UNKNOWN; tabanda CORRECT. Ayrıştırıcı çıktısında '\\cos \\left(x e^{\\sin \\l\\right)eft(x\\right)}' görüldü: içteki aralık önce ekleniyor ve dıştakinin bitiş indisini kaydırıyor. Değerler sympy ile kesin olarak doğrulandı."
+   },
+   {
+    "id": "RK-T2-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT (ders kitabı okuması: tan x·(1+tan²x), sin x·(1+cos x)) ya da tabandaki gibi ~1 sn içinde UNKNOWN. Değer-yalnız ad alanında tanımsız fonksiyon uygulaması (x(1)) oluşmamalı; oluşursa iddia sertifikaya gönderilmeden UNKNOWN verilmeli.",
+    "note": "Dalda tan vakası UNKNOWN, 52.4 s (makine yüklüyken; bulguda 46.8 s). sin(1+cos) 9.0 s, cos(2sin−1) 11.4 s, ln vakası 2.7 s; '\\cdot'li yazım 0.3 s'de CORRECT. Taban INCORRECT, 0.2–1.5 s. Okunan ifade tan(x(1)+tan²x); 73af3c0'da da aynı. 73af3c0'nun süresini ölçmedim (ağır iş kuyruğu doluydu)."
+   },
+   {
+    "id": "RK-T2-4",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "Nötr ekli biçimler ve eşanlamlılar CORRECT olmalı: '5 tanedir', '5 kişidir', '5 birimdir', '5 değerini alır', '5 eder', '5 çıkar', '5 olacaktır', '5 oluyor', '5 olarak hesaplanır', '{2, 3} kümesi/kökleri/çözümleri/değerleri/çözüm kümesidir', '(2, 3) aralığı/aralığıdır'. '5 derecedir' UNKNOWN olmalı (G1RK-3/EK 8; 73af3c0'da '5 derece' de UNKNOWN). Birim sözcükleri (metredir, cm'dir, liradır, metrekare) IR'ın units alanı aynı birimi bildirmiyorsa UNKNOWN da kabul edilebilir (SA-YO-1).",
+    "note": "17 temsilî vaka dalda ve 73af3c0'da UNKNOWN (parse_error), tabanda CORRECT. İzin sözlüğü ekli biçimleri tanımıyor; 'dir' yalnız ayrı bir belirteç olarak geçiyor. Yanlış karar yok, kapsama kaybı var. Derlemde 0 ölçüldüğü için önemi düşük. Bulgunun '5 derecedir' için CORRECT beklentisi yanlış."
+   },
+   {
+    "id": "RK-T2-5",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "En güvenlisi UNKNOWN (adım okuması kararsız, step_reading_undecided). Argüman ℝ'de geçerli: çelişkiyle ∅ çıkıyor. Bu yüzden CORRECT de savunulabilir. INCORRECT değil: ω = −1/2 + i√3/2 gerçel bir problemde karşı örnek sayılmaz (ilke 5).",
+    "note": "Dalda, 73af3c0'da ve tabanda compute 'x = 1' refuted, çözüm INCORRECT; eq olarak yazılınca CORRECT. Bu davranış EK 3 karar (ii)'nin lafzı, ama (ii) yanlış bir kimliği ℝ'ye özgü geçerli bir çıkarımdan ayıramıyor; değişiklik karar düzeyinde gerekiyor. ℝ'de x²+x+1 = 0'ın çözümü yok, x³ = 1'in gerçel kökü {1} (sympy)."
+   },
+   {
+    "id": "RK-T2-6",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "medium",
+    "corrected_expectation": "Hedef 2π ya da 2e iken '2 <i>π</i>', '2 <b>π</b>', '2 <sub>π</sub>', '2 <i>e</i>' UNKNOWN olmalı (etiket içindeki simge düzyazı değildir, SA-RK-5); etiket içeriği okunursa CORRECT. Ters yönde de: hedef 2 iken aynı yükler CORRECT olmamalı (UNKNOWN ya da INCORRECT).",
+    "note": "Dalda, 73af3c0'da ve tabanda INCORRECT olarak yeniden üretildi. Ek sonda aynı düzeneğin ters yönde yanlış onay verdiğini gösterdi: hedef 2 iken '2 <i>π</i>', '2 <i>e</i>' ve '2 <b>x</b>' üç ağaçta da CORRECT (payload_cleaned). Bu yüzden önemi düşükten ortaya çıkardım. Gerçekçiliği yine düşük."
+   }
+  ]
+ }
+]
