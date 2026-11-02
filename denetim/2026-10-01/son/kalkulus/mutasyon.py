@@ -214,7 +214,7 @@ MUTATIONS += [
      T + "test_the_derivative_function_at_a_kink_with_a_derivative"),
     ("K62 ilkelin gelenek koşulu istisna sızdırır", CAL,
      "        except AttributeError as e:\n", "        except ZeroDivisionError as e:\n",
-     T + "test_a_convention_of_a_primitive_raises_nothing"),
+     T + "test_a_domain_check_that_cannot_read_a_condition_is_undecided"),
     ("K63 değer denetimi hata verince koşul düşer", PAR,
      "                conds.append(DEFINEDNESS_UNDECIDED)\n                patches = []\n", "                raise\n",
      T + "test_a_failed_value_check_is_undecided"),

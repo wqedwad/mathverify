@@ -845,6 +845,10 @@ SQ36 = _ir("evaluate", {"expr": "sqrt(36)"})                                    
     (_mc(SQ36, {"A": "6 m", "B": "6 cm", "C": "12 cm", "D": "3 cm", "E": "60 cm"}), _sol(None, option="A")),
     (_mc(QI, {"A": "(2, 3) aralığının dışı", "B": "(2, 3)", "C": "[2, 3]"}), _sol(A23, "interval", option="A")),
     (_mc(QI, {"A": "(2, 3) aralığının dışı", "B": "(2, 3)", "C": "[2, 3]"}), _sol(None, "interval", option="A")),
+    # a word the claim reader drops as a neutral tail (SA-RK-3, RK-T2-4) is no filler in the author's option: the letter
+    # alone names no value (final measurement of the merged branch, 2 Nov 2026: mutation S53 survived without these)
+    (_mc(SQ36, {"A": "4", "B": "6 kesinlikle", "C": "8"}), _sol(None, option="B")),
+    (_mc(SQ36, {"A": "4", "B": "6 eder", "C": "8"}), _sol(None, option="B")),
 ])
 def test_sa_yo1_a_word_that_may_carry_meaning_leaves_the_option_unread(q, s):
     """'3 azalır' (the value increases by 3), '5 ten büyük', '6 m' for 6 cm, '(2, 3) aralığının dışı' were read as their

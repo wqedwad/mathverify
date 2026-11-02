@@ -804,6 +804,18 @@ def test_a_convention_of_a_primitive_raises_nothing(f, F):
               _sol(wrong, "expression")) == "INCORRECT"
 
 
+def test_a_domain_check_that_cannot_read_a_condition_is_undecided(monkeypatch):
+    # SK-RK-7's guard: in the merged branch G2RK-10 reads the convention, so no input reaches it any more; a domain
+    # check raising AttributeError is undecided, never a layer exception (mutation K62 survived without this, 2 Nov 2026)
+    from mathverify.certify import calculus as C
+
+    def boom(*a, **k):
+        raise AttributeError("'Contains' object has no attribute 'negated'")
+    monkeypatch.setattr(C, "antiderivative_domain_check", boom)
+    r = verify(_ir("antiderivative", {"integrand": "2*x", "var": "x"}, (), None, "expression"), _sol("x**2", "expression"))
+    assert r.verdict == "UNKNOWN" and "layer_exception" not in r.flags
+
+
 def test_a_failed_value_check_is_undecided(monkeypatch):
     # the check of the value at a zero with a derivative fails closed: a failure there kept no condition at all
     # (the reading as written returned None), so a corner's condition would have been lost

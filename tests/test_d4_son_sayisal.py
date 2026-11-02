@@ -516,6 +516,10 @@ def test_options_that_do_not_pick_a_range_leave_the_convention():
     assert _run(_evc("arg(-1 - I)", none_), "5*pi/4", option="C")[0] == "UNKNOWN"
     deg = {"A": "45°", "B": "135°", "C": "225°", "D": "315°", "E": "270°"}
     assert _run(_evc("arg(-1 - I)", deg), "225°", option="C")[0] != "CORRECT"
+    # the verdict above is UNKNOWN by the units rule too; the options themselves name no range (mutation S37 survived
+    # in the merged branch without this, 2 Nov 2026)
+    from mathverify.verifier import _arg_options_reading
+    assert _arg_options_reading(_evc("arg(-1 - I)", deg)) is None
 
 
 def test_the_options_reading_of_arg():
