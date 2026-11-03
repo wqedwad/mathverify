@@ -48,14 +48,15 @@ eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** `git fetch origin claude/focused-albattani-jlomk1 && git merge --ff-only FETCH_HEAD` (push yalnız oturumun dalına). `wip/*` yalnız konteynerde
-   ve bundle'larda (§6): `git fetch denetim/2026-10-01/d4/wip/<bundle> 'refs/heads/wip/*:refs/heads/wip/*'`, `git worktree add /home/user/wt/<ad> wip/<dal>`; ajan
-   notları `wip/notlar-*.tar.gz` (`-C <scratchpad>`; eski scratchpad yolları yenisine sembolik bağlanır). `--plan` koş. Konteyner oturum sınırında yeniden başlar:
+1. **Yeni sohbet:** `git fetch origin claude/focused-albattani-jlomk1 && git merge --ff-only FETCH_HEAD` (push yalnız oturumun dalına). `wip/*` dalları ve
+   depodaki ara yedekleri 3 Kasım'da silindi: içerikleri `master`da; eski arşivler git geçmişinde (`git show c563096:denetim/2026-10-01/d4/wip/<dosya>`
+   gibi). `--plan` koş. Konteyner oturum sınırında yeniden başlar:
    ajanlar `SendMessage`, iş akışları resume, mutasyon `--kayit` ile sürer.
 2. **A+ kapandı** (§92): son ölçüm ve `--full` temiz, belgeler yazıldı, `--plan` TAMAM.
 3. **`master` birleştirmesi yapıldı** (3 Kasım, kullanıcı onayıyla): yedek kullanıcının yerelinde (`yedek/master-2026-11-03` = `1df0558`, bundle, deneme
    klonu; etiket buluttan doğrulandı), `--plan` TAMAM (`08336f1`), PR #15 → `master` `7dcc979`. Sonraki birleştirmeler aynı yöntemle (§6).
-4. **`franklin` silinsin mi** (kullanıcıya; §4.4 madde 1): koşulu (`fark.py`'nin `karar_farki` yetenekleri) §91'de karşılandı.
+4. **Uzak dalların silinmesi** (kullanıcı kararı, 3 Kasım: "eski gereksizleri sil"): `master`a girmiş 16 dal, `claude/inspiring-franklin-l3cocz` ve
+   `refs/arac/bulut-v1`; bulut başka dal silemiyor (izin denetimi), komutlar kullanıcıya verildi; silinince bu madde ve §6 güncellenir.
 5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 6. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir): önce kalibrasyon (`run_f3 --limit 10
    --workers 3 --max-cost 5`), sonra tam koşu; aynı koşuda SS-OT-1 (çıkarıcının "esas argüman"ı `arg` mı `atan2` mı) ölçülür.
@@ -168,9 +169,8 @@ Doğru cevabı reddedenler: V11, V13, V20 (b). Yanlış onaylar: V1 (çözüm d�
 
 Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15 Ekim, §89); durma kuralı (22 Ekim, §92); PR #15 ile birleştirme (3 Kasım). Açık sorular:
 
-1. Ne zaman silinebilir (sormadan silinmez, §6): yedek etiketleri ve bundle'lar; `refs/arac/bulut-v1` (v2 doğrulandı); `master`a girmiş uzak dallar
-   (`bulut-2026-09-24`, `claude/funny-cray-…`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`, `-keen-ramanujan-…`,
-   `-dreamy-meitner-…`, `-busy-bardeen-…`); `claude/inspiring-franklin-l3cocz` (§74; §3 adım 4); birleşmeden sonra `wip/*` bundle'ları.
+1. Yedek etiketleri ve yerel bundle'lar ne zaman silinebilir (sormadan silinmez, §6)? (Uzak dallar ve `refs/arac/bulut-v1`: silinmesine karar verildi,
+   §3 adım 4.)
 2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? Anahtar yenileme F3/F4 için gerekmiyor (§64).
 3. Çözücü istemi IR sembollerinin anlamını (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli, ölçülen şey değişir)? **Ertelendi**
    (28 Eylül; kod dondurmadan önce sorulur). Etki: yalnız haksız red (86 sorudan 1). Yanlış onay direnci için hangi çözücü?
@@ -224,12 +224,10 @@ adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-a
 
 - **Dallar** (3 Kasım; `git merge-base --is-ancestor`, `git ls-remote`): `master` `7dcc979` (PR #15). **Oturum dalı** `claude/focused-albattani-jlomk1`
   birleşmeden sonra `master`dan yeniden başladı (belge güncellemesi; birleşen hâli `08336f1`); içerdiği eski oturum dalları `claude/amazing-edison-0g21ci`, `-upbeat-mccarthy-ef2oub`, `-trusting-lovelace-vp1boa`.
-  **Yerel `wip/*`** (yalnız bu konteynerde; worktree'ler `/home/user/wt/<ad>`): hepsi oturum dalında (`wip/son-birlesik` `7b8d4f8` ve onun içerdiği
-  `wip/son-{sayisal,integral,adim,ayristirici,kalkulus}`, `wip/yerel`, `birlesik*`, `d4*`, `fark`, `sira`); dal adları kaybolsa da commit'leri oturum dalından
-  erişilebilir.
-- **Ara yedekler** (`denetim/2026-10-01/d4/wip/`, oturum dalında): `son-2026-10-21.bundle`, `son-2026-10-17.bundle`, `wip-2026-10-16b.bundle` +
-  `notlar-2026-10-16b.tar.gz`, daha eskiler (`wip-2026-10-{02,07,09,16}`, `scratch-*`, yamalar); birleşmeden sonra silinebilir (§4.4 madde 1).
-- **Öteki birleşmeyen dal** `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel sürümü; parçası ve testleri taşındı, §73–§74; silinmesi kullanıcıya).
+  **Yerel `wip/*`** ve worktree'ler 3 Kasım'da silindi (17 dal; commit'leri `master`da). **Depodaki ara yedekler** (`denetim/2026-10-01/d4/wip/`, 66 MB:
+  yedi bundle, ajan notu ve scratch arşivleri, yamalar) aynı gün ağaçtan kaldırıldı: bundle'ların 32 ucunun hepsi `master`da (ölçüldü); dosyalar git
+  geçmişinde.
+- **Öteki birleşmeyen dal** `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel sürümü; parçası ve testleri taşındı, §73–§74; silinecek, §3 adım 4).
   Öteki 13 dal `master`da: `claude/loving-bardeen-ninmoo` (`#13`, `#14`), `-sharp-lamport-f9m2w3`, `-inspiring-cori-xcgjld` (`#12`), `-busy-bardeen-ckr5bw`
   (`#11`), `-dreamy-meitner-rvrwlj` (`#9`, `#10`), `-keen-ramanujan-oqseru` (`#8`), `-trusting-curie-76slml`, `-practical-faraday-7a4iy4`,
   `-compassionate-shannon-759r85`, `-funny-cray-bey5o1`, `bulut-2026-09-24`, `denetim-2026-09-20`, `yerel-kalite-2026-09-23`. Araç ref'leri `refs/arac/bulut-v1`
