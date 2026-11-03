@@ -1,9 +1,9 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 3 Kasım 2026 (bulut)**, dal `claude/focused-albattani-jlomk1` (birleşmedi; PR #15 → `master` açık, dalın son hâlini gösterir): `master`
+> **Son güncelleme: 3 Kasım 2026 (bulut)**: **`master` `7dcc979` = PR #15'in birleşmesi** (3 Kasım; yedek `yedek/master-2026-11-03`): `master`
 > (`#14`) + dördüncü denetim (A+ adım i–vii, DECISIONS §89–§90) + yerel kalite (ix, §91) + son saldırı ve düzeltme turları (viii, §92). **A+ bitti:** son
 > saldırının 52 adayı (50 gerçek) ve sekiz bağımsız denetimin bulguları düzeltildi ya da V20'ye kaydedildi; kullanıcının **durma kuralı** (22 Ekim) yeni denetim
-> turu açmadı. Son ölçüm turu ve `--full` temiz (§2, §5). **Sıradaki: `master` birleştirmesi, kullanıcı onayıyla** (§3). Bu belge yalnız **bugünü** taşır
+> turu açmadı. Son ölçüm turu ve `--full` temiz (§2, §5). Oturum dalı `claude/focused-albattani-jlomk1` birleşmeden sonra `master`dan yeniden başladı. Bu belge yalnız **bugünü** taşır
 > (~300 satır); tarihçe `docs/arsiv/HANDOFF-2026-09-26.md` ve `git log -p HANDOFF.md`'de ("HANDOFF §N" göndermesi yazıldığı günündür).
 > **[DOĞRULANMADI]** = ölçülmedi ya da çıkarım; işaretsiz sayı ölçüm.
 
@@ -23,7 +23,8 @@ reddedici, Lean 4 + Mathlib), cevap anahtarı hatta girmez, LLM katmanları kara
 
 ## 2. Durum (3 Kasım 2026)
 
-**Kod.** `master` `1df0558` = `#14`'ün birleşmesi (yedekler §6; PR içerikleri §59–§84). **Oturum dalı** (son kod commit'i `62fb71e`): dördüncü denetim ve A+
+**Kod.** `master` `7dcc979` = `#15`'in birleşmesi (3 Kasım; ağacı ölçülen dal başı `08336f1`'inkiyle aynı; önceki `1df0558` = `#14`; yedekler §6; PR
+içerikleri §59–§92). **Birleşen dal** (son kod commit'i `62fb71e`): dördüncü denetim ve A+
 (§85–§90), yerel kalite (§91), son saldırı (§92; kararlar, raporlar, denetim bulguları `denetim/2026-10-01/d4/saldiri/son/`, EK 1–11). Beş düzeltici dal
 `wip/son-{sayisal,integral,adim,ayristirici,kalkulus}` (ikişer-üçer tur) `wip/son-birlesik`'te birleşti (`7b8d4f8`), o da oturum dalına (`cdc39b4`); kayıtlar
 `b2d4fa6`, son mutasyon ölçümünün üç testi `ca8e31d`, raporların `.txt`'ye çevrilmesi `62fb71e` (§92).
@@ -52,8 +53,8 @@ eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam
    notları `wip/notlar-*.tar.gz` (`-C <scratchpad>`; eski scratchpad yolları yenisine sembolik bağlanır). `--plan` koş. Konteyner oturum sınırında yeniden başlar:
    ajanlar `SendMessage`, iş akışları resume, mutasyon `--kayit` ile sürer.
 2. **A+ kapandı** (§92): son ölçüm ve `--full` temiz, belgeler yazıldı, `--plan` TAMAM.
-3. **`master` birleştirmesi, kullanıcı onayıyla** (§4.4 madde 10); kullanıcıya dalda kalan açıklar (V20; `master`da da olanlar ayrıca) söylenir. Önce yedek
-   kullanıcının yerelinde (etiket + bundle, §6 yöntemi; bulut `master`/etiket push etmez), sonra PR #15 ya da yerel `git merge`; hemen önce `--plan`.
+3. **`master` birleştirmesi yapıldı** (3 Kasım, kullanıcı onayıyla): yedek kullanıcının yerelinde (`yedek/master-2026-11-03` = `1df0558`, bundle, deneme
+   klonu; etiket buluttan doğrulandı), `--plan` TAMAM (`08336f1`), PR #15 → `master` `7dcc979`. Sonraki birleştirmeler aynı yöntemle (§6).
 4. **`franklin` silinsin mi** (kullanıcıya; §4.4 madde 1): koşulu (`fark.py`'nin `karar_farki` yetenekleri) §91'de karşılandı.
 5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 6. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir): önce kalibrasyon (`run_f3 --limit 10
@@ -165,7 +166,7 @@ Doğru cevabı reddedenler: V11, V13, V20 (b). Yanlış onaylar: V1 (çözüm d�
 
 ### 4.4 Kullanıcı kararları (açık sorular)
 
-Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15 Ekim, §89); durma kuralı (22 Ekim, §92). Açık sorular:
+Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15 Ekim, §89); durma kuralı (22 Ekim, §92); PR #15 ile birleştirme (3 Kasım). Açık sorular:
 
 1. Ne zaman silinebilir (sormadan silinmez, §6): yedek etiketleri ve bundle'lar; `refs/arac/bulut-v1` (v2 doğrulandı); `master`a girmiş uzak dallar
    (`bulut-2026-09-24`, `claude/funny-cray-…`, `-compassionate-shannon-…`, `-practical-faraday-…`, `-trusting-curie-…`, `-keen-ramanujan-…`,
@@ -179,7 +180,6 @@ Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
 8. Depo kararı değişirse önce anahtarlar yenilenir; `.env` ve YKS kaynak PDF'leri geçmişten temizlenir (§87).
 9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 8)?
-10. `master` birleştirmesi: son ölçüm temizse V20'nin açıklarıyla birleştirilsin mi; yedek kullanıcının yerelinde; yol PR #15 mi yerel mi (§3 adım 3)?
 
 ### 4.5 Teknik borç
 
@@ -222,8 +222,8 @@ adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-a
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Dallar** (3 Kasım; `git merge-base --is-ancestor`, `git ls-remote`): `master` `1df0558`. **Oturum dalı** `claude/focused-albattani-jlomk1` `ca8e31d` (PR
-  #15 → `master`, 22 Ekim'de kullanıcı açtı); içerdiği eski oturum dalları `claude/amazing-edison-0g21ci`, `-upbeat-mccarthy-ef2oub`, `-trusting-lovelace-vp1boa`.
+- **Dallar** (3 Kasım; `git merge-base --is-ancestor`, `git ls-remote`): `master` `7dcc979` (PR #15). **Oturum dalı** `claude/focused-albattani-jlomk1`
+  birleşmeden sonra `master`dan yeniden başladı (belge güncellemesi; birleşen hâli `08336f1`); içerdiği eski oturum dalları `claude/amazing-edison-0g21ci`, `-upbeat-mccarthy-ef2oub`, `-trusting-lovelace-vp1boa`.
   **Yerel `wip/*`** (yalnız bu konteynerde; worktree'ler `/home/user/wt/<ad>`): hepsi oturum dalında (`wip/son-birlesik` `7b8d4f8` ve onun içerdiği
   `wip/son-{sayisal,integral,adim,ayristirici,kalkulus}`, `wip/yerel`, `birlesik*`, `d4*`, `fark`, `sira`); dal adları kaybolsa da commit'leri oturum dalından
   erişilebilir.
@@ -248,6 +248,7 @@ adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-a
   | yok | `e07d4f7` (PR #4 öncesi); `c2e4fdf`, `622a178` (PR #9, #10); `c0a2caf`, `35af293`, `aa67b20` (PR #12, #13, #14) | alınmadı (kullanıcı kararları: #4 "yalnız belge" gerekçesiyle, PR kod da içeriyordu: DECISIONS §59 Düzeltme; #9–#10 27 Eylül "yedeğe gerek yok", 28 Eylül "birleştir"; #12 29 Eylül, #13 30 Eylül "yedeğe gerek yok"; #14 1 Ekim "yedeksiz, PR ile" → "dalı birleştir") |
   | `yedek/master-2026-09-26-2` | `849b492` (PR #7 öncesi) | `mathverify-master-849b492-2026-09-26.bundle` (kullanıcının betiği: yerel `master` önce ileri sarıldı, `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
   | `yedek/master-2026-09-27` | `5c2f83e` (PR #8 öncesi) | `mathverify-master-5c2f83e-2026-09-27.bundle` (kullanıcının betiği "YEDEK TAMAM" yazdı: `bundle verify` ve deneme klonu geçti; etiket buluttan doğrulandı) |
+  | `yedek/master-2026-11-03` | `1df0558` (PR #15 öncesi) | `mathverify-master-1df0558-2026-11-03.bundle` (kullanıcının betiği: `bundle verify` ve deneme klonu `1df0558`; etiket buluttan doğrulandı) |
   | `yedek/master-2026-09-28` | `2f11c84` (PR #11 öncesi) | `mathverify-master-2f11c84-2026-09-28.bundle` (kullanıcı, 28 Eylül akşam: `bundle verify` "okay", deneme klonu `2f11c84`; etiket buluttan doğrulandı. İlk denemede etiket bayat yerel `master`ı (`5c2f83e`) göstermişti, silinip yeniden kondu) |
 
 - **Yedek yöntemi** (her `master` birleştirmesinden hemen önce, yerel checkout `C:\Users\kullanici\mathverify`'da): (0) `git fetch origin`, `git checkout master`,
