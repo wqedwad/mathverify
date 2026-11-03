@@ -55,8 +55,8 @@ eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam
 2. **A+ kapandı** (§92): son ölçüm ve `--full` temiz, belgeler yazıldı, `--plan` TAMAM.
 3. **`master` birleştirmesi yapıldı** (3 Kasım, kullanıcı onayıyla): yedek kullanıcının yerelinde (`yedek/master-2026-11-03` = `1df0558`, bundle, deneme
    klonu; etiket buluttan doğrulandı), `--plan` TAMAM (`08336f1`), PR #15 → `master` `7dcc979`. Sonraki birleştirmeler aynı yöntemle (§6).
-4. **Uzak dalların silinmesi** (kullanıcı kararı, 3 Kasım: "eski gereksizleri sil"): `master`a girmiş 16 dal, `claude/inspiring-franklin-l3cocz` ve
-   `refs/arac/bulut-v1`; bulut başka dal silemiyor (izin denetimi), komutlar kullanıcıya verildi; silinince bu madde ve §6 güncellenir.
+4. **Uzak dallar silindi** (kullanıcı kararı ve betiği, 3 Kasım): `master`a girmiş 16 dal, `claude/inspiring-franklin-l3cocz` ve `refs/arac/bulut-v1`;
+   GitHub'da yalnız `master`, oturum dalı, `refs/arac/bulut-v2` ve 10 yedek etiketi kaldı (`git ls-remote`).
 5. **Kod dondurmadan önce sorulacak** (§4.4 madde 3): çözücü istemi IR sembollerinin anlamını versin mi (`tyt-say-*`).
 6. **Kod dondurma → F3 baştan, F4 ilk kez** (K1–K3; anahtar yenileme önkoşul değil, §64; Anthropic bakiyesi gerekir): önce kalibrasyon (`run_f3 --limit 10
    --workers 3 --max-cost 5`), sonra tam koşu; aynı koşuda SS-OT-1 (çıkarıcının "esas argüman"ı `arg` mı `atan2` mı) ölçülür.
@@ -169,8 +169,7 @@ Doğru cevabı reddedenler: V11, V13, V20 (b). Yanlış onaylar: V1 (çözüm d�
 
 Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15 Ekim, §89); durma kuralı (22 Ekim, §92); PR #15 ile birleştirme (3 Kasım). Açık sorular:
 
-1. Yedek etiketleri ve yerel bundle'lar ne zaman silinebilir (sormadan silinmez, §6)? (Uzak dallar ve `refs/arac/bulut-v1`: silinmesine karar verildi,
-   §3 adım 4.)
+1. Yedek etiketleri ve yerel bundle'lar ne zaman silinebilir (sormadan silinmez, §6)? (Uzak dallar ve `refs/arac/bulut-v1` 3 Kasım'da silindi.)
 2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? Anahtar yenileme F3/F4 için gerekmiyor (§64).
 3. Çözücü istemi IR sembollerinin anlamını (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli, ölçülen şey değişir)? **Ertelendi**
    (28 Eylül; kod dondurmadan önce sorulur). Etki: yalnız haksız red (86 sorudan 1). Yanlış onay direnci için hangi çözücü?
@@ -186,7 +185,7 @@ Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15
 - **T1.** `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5, 7–16, madde numaraları atlıyor; §2 ve §3.9 bilerek Faz 1 anlık görüntüsü. **T2.** Biçimlendirici
   ve pyflakes dışı stil denetimi yok. **T3.** CI yok. **T5.** `reports/lean_setup.log` eski `stable` kurulumunun (sabitinki `/opt/mathverify-logs/`). **T6.** 26
   Eylül öncesi `check_full.log` başlıklarındaki "commit edilmemiş değişiklik" sayısından 1 düşülür (`3925180`). **T7.** `docs/BULUT.md` ~1070 satır,
-  tarihçe biriktiriyor (§12'de kapanmış üç madde hâlâ `[ ]`); güncel durum + arşiv ayrımı gerekebilir; testler okuyor.
+  tarihçe biriktiriyor (§12'de kapanmış üç madde hâlâ `[ ]`; araç ref tablosundaki `bulut-v1` 3 Kasım'da silindi); güncel durum + arşiv ayrımı gerekebilir; testler okuyor.
 - **T8. Windows** (§59, §61): `eab80f1`'de 24/24, 31 dk; Git Bash donmasının nedeni **[DOĞRULANMADI]**; ölçülmeyen: ebeveyn izleyicisi, `CopyFile2`/junction
   yolu, `--plan`'ın buluttaki `--full`u Windows'ta kabulü. **T9. Kuralın sınırları:** bekçi alt süreçleri ve `os.open(dir_fd=…)`'yu görmez; koşu sırasında
   yapılıp geri alınan değişiklik günlükten anlaşılmaz; günlük düz metin.
@@ -227,11 +226,8 @@ adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-a
   **Yerel `wip/*`** ve worktree'ler 3 Kasım'da silindi (17 dal; commit'leri `master`da). **Depodaki ara yedekler** (`denetim/2026-10-01/d4/wip/`, 66 MB:
   yedi bundle, ajan notu ve scratch arşivleri, yamalar) aynı gün ağaçtan kaldırıldı: bundle'ların 32 ucunun hepsi `master`da (ölçüldü); dosyalar git
   geçmişinde.
-- **Öteki birleşmeyen dal** `claude/inspiring-franklin-l3cocz` `3b030a4` (V14'ün paralel sürümü; parçası ve testleri taşındı, §73–§74; silinecek, §3 adım 4).
-  Öteki 13 dal `master`da: `claude/loving-bardeen-ninmoo` (`#13`, `#14`), `-sharp-lamport-f9m2w3`, `-inspiring-cori-xcgjld` (`#12`), `-busy-bardeen-ckr5bw`
-  (`#11`), `-dreamy-meitner-rvrwlj` (`#9`, `#10`), `-keen-ramanujan-oqseru` (`#8`), `-trusting-curie-76slml`, `-practical-faraday-7a4iy4`,
-  `-compassionate-shannon-759r85`, `-funny-cray-bey5o1`, `bulut-2026-09-24`, `denetim-2026-09-20`, `yerel-kalite-2026-09-23`. Araç ref'leri `refs/arac/bulut-v1`
-  `c6d0cc1`, `-v2` `f90d5e4` (kullanılan).
+- **Uzakta başka dal yok** (3 Kasım'da silindi: `franklin` ve `master`a girmiş 16 dal, commit'leri `master`da; `franklin`'in parçası ve testleri §73'te
+  taşınmıştı). Araç ref'i `refs/arac/bulut-v2` `f90d5e4` (kullanılan); `bulut-v1` silindi (`docs/BULUT.md`'nin v1 satırları bayat, T7).
 - **Yedek etiketleri** (GitHub'da; bundle'lar yalnız `C:\Users\kullanici\mathverify-yedek\`, geri dönüş talimatı orada `OKU.txt`):
 
   | Etiket | `master` | Bundle |
