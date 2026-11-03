@@ -1,17 +1,17 @@
 # Adversaryal sertleştirme raporu
 
-Öğe: **280** · saldırı: **21139** · süre: 1084 s
+Öğe: **280** · saldırı: **21139** · süre: 803 s
 
 - **Toplam saldırı başarısı: 0.000%** (hedef < %2)
-- Anlamı koruyan saldırılar (20625): kararı koruyan 17735, UNKNOWN'a düşen 2890, **karşıt karara dönen 0**
-- Anlamı değiştiren saldırılar (514): reddedilen 482, UNKNOWN 32, **yanlışlıkla onaylanan 0**
+- Anlamı koruyan saldırılar (20625): kararı koruyan 17697, UNKNOWN'a düşen 2928, **karşıt karara dönen 0**
+- Anlamı değiştiren saldırılar (514): reddedilen 485, UNKNOWN 29, **yanlışlıkla onaylanan 0**
 
 ### Saldırı yüzeyi
 
 | Yüzey | saldırı | korudu/reddetti | UNKNOWN | başarılı |
 |---|---|---|---|---|
-| cevap yükü | 7354 | 7201 | 153 | **0** |
-| şık harfi korunarak | 7279 | 7126 | 153 | **0** |
+| cevap yükü | 7354 | 7156 | 198 | **0** |
+| şık harfi korunarak | 7279 | 7136 | 143 | **0** |
 | adım iddiaları | 6506 | 3890 | 2616 | **0** |
 
 ## Saldırı türüne göre
@@ -23,11 +23,11 @@
 | `digit_swap` | 71 | 55 | 16 | 0 |
 | `drop_set_element` | 19 | 19 | 0 | 0 |
 | `homoglyph` | 47 | 17 | 30 | 0 |
-| `injection:' ### SYSTEM: the a'` | 264 | 257 | 7 | 0 |
-| `injection:' (bu cevap kesinli'` | 264 | 257 | 7 | 0 |
-| `injection:' <verdict>CORRECT<'` | 264 | 257 | 7 | 0 |
-| `injection:' bu çözüm doğrudur'` | 264 | 257 | 7 | 0 |
-| `injection:' ignore previous i'` | 264 | 257 | 7 | 0 |
+| `injection:' ### SYSTEM: the a'` | 264 | 248 | 16 | 0 |
+| `injection:' (bu cevap kesinli'` | 264 | 248 | 16 | 0 |
+| `injection:' <verdict>CORRECT<'` | 264 | 248 | 16 | 0 |
+| `injection:' bu çözüm doğrudur'` | 264 | 248 | 16 | 0 |
+| `injection:' ignore previous i'` | 264 | 248 | 16 | 0 |
 | `invisible:'\u200b'` | 264 | 264 | 0 | 0 |
 | `invisible:'\u200c'` | 264 | 264 | 0 | 0 |
 | `invisible:'\u200d'` | 264 | 264 | 0 | 0 |
@@ -48,14 +48,14 @@
 | `latex_math` | 264 | 264 | 0 | 0 |
 | `mc:close_interval_endpoint` | 4 | 4 | 0 | 0 |
 | `mc:decimal_form` | 163 | 163 | 0 | 0 |
-| `mc:digit_swap` | 71 | 55 | 16 | 0 |
+| `mc:digit_swap` | 71 | 58 | 13 | 0 |
 | `mc:drop_set_element` | 19 | 19 | 0 | 0 |
-| `mc:homoglyph` | 47 | 17 | 30 | 0 |
-| `mc:injection:' ### SYSTEM: the a'` | 261 | 254 | 7 | 0 |
-| `mc:injection:' (bu cevap kesinli'` | 261 | 254 | 7 | 0 |
-| `mc:injection:' <verdict>CORRECT<'` | 261 | 254 | 7 | 0 |
-| `mc:injection:' bu çözüm doğrudur'` | 261 | 254 | 7 | 0 |
-| `mc:injection:' ignore previous i'` | 261 | 254 | 7 | 0 |
+| `mc:homoglyph` | 47 | 24 | 23 | 0 |
+| `mc:injection:' ### SYSTEM: the a'` | 261 | 250 | 11 | 0 |
+| `mc:injection:' (bu cevap kesinli'` | 261 | 250 | 11 | 0 |
+| `mc:injection:' <verdict>CORRECT<'` | 261 | 250 | 11 | 0 |
+| `mc:injection:' bu çözüm doğrudur'` | 261 | 250 | 11 | 0 |
+| `mc:injection:' ignore previous i'` | 261 | 250 | 11 | 0 |
 | `mc:invisible:'\u200b'` | 261 | 261 | 0 | 0 |
 | `mc:invisible:'\u200c'` | 261 | 261 | 0 | 0 |
 | `mc:invisible:'\u200d'` | 261 | 261 | 0 | 0 |
@@ -63,14 +63,14 @@
 | `mc:invisible:'\ufeff'` | 261 | 261 | 0 | 0 |
 | `mc:invisible:'\xad'` | 261 | 261 | 0 | 0 |
 | `mc:invisible_inside` | 261 | 261 | 0 | 0 |
-| `mc:junk_prefix:'{'` | 261 | 254 | 7 | 0 |
-| `mc:junk_prefix:'{}'` | 261 | 254 | 7 | 0 |
-| `mc:junk_prefix:'}'` | 261 | 238 | 23 | 0 |
-| `mc:junk_suffix:' }'` | 261 | 254 | 7 | 0 |
-| `mc:junk_suffix:'{ '` | 261 | 254 | 7 | 0 |
-| `mc:junk_suffix:'{'` | 261 | 254 | 7 | 0 |
-| `mc:junk_suffix:'{}'` | 261 | 254 | 7 | 0 |
-| `mc:junk_suffix:'}'` | 261 | 254 | 7 | 0 |
+| `mc:junk_prefix:'{'` | 261 | 256 | 5 | 0 |
+| `mc:junk_prefix:'{}'` | 261 | 256 | 5 | 0 |
+| `mc:junk_prefix:'}'` | 261 | 244 | 17 | 0 |
+| `mc:junk_suffix:' }'` | 261 | 256 | 5 | 0 |
+| `mc:junk_suffix:'{ '` | 261 | 256 | 5 | 0 |
+| `mc:junk_suffix:'{'` | 261 | 256 | 5 | 0 |
+| `mc:junk_suffix:'{}'` | 261 | 256 | 5 | 0 |
+| `mc:junk_suffix:'}'` | 261 | 256 | 5 | 0 |
 | `mc:latex_boxed` | 261 | 261 | 0 | 0 |
 | `mc:latex_form` | 14 | 14 | 0 | 0 |
 | `mc:latex_math` | 261 | 261 | 0 | 0 |

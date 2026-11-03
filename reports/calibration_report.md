@@ -2,15 +2,15 @@
 
 Eğitim 160 öğe (80 geçerli / 80 geçersiz) · önsel log-odds 0.0
 
-Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.07**, **INCORRECT ≤ -0.35**
+Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.07**, **INCORRECT ≤ -0.34**
 
 ## Bölme bazında sonuç (test bölmesi hiçbir uyumda kullanılmadı)
 
 | Bölme | n | Pozitif precision | Negatif precision | Kapsama | fp | fn | UNKNOWN |
 |---|---|---|---|---|---|---|---|
-| train | 160 | 0.971 | 0.972 | 0.881 | 2 | 2 | 19 |
+| train | 160 | 0.985 | 0.973 | 0.881 | 1 | 2 | 19 |
 | val | 66 | 1.000 | 1.000 | 0.879 | 0 | 0 | 8 |
-| test | 54 | 1.000 | 1.000 | 0.870 | 0 | 0 | 7 |
+| test | 54 | 1.000 | 1.000 | 0.889 | 0 | 0 | 6 |
 
 ## Ölçülen sinyal güvenilirlikleri (eğitim bölmesi)
 
@@ -20,10 +20,10 @@ Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.
 | `steps.refute:fail:support` | 49 | 0 | 49 | 0.000 | -3.912 | evet |
 | `certify.algebra:fail:primary` | 17 | 0 | 17 | 0.000 | -2.890 | evet |
 | `certify.calculus:fail:primary` | 7 | 0 | 7 | 0.000 | -2.079 | evet |
+| `mc.consistency:fail:support` | 7 | 0 | 7 | 0.000 | -2.079 | evet |
 | `certify.wordproblem:fail:primary` | 6 | 0 | 6 | 0.000 | -1.946 | evet |
 | `certify.combinatorics:fail:primary` | 5 | 0 | 5 | 0.000 | -1.792 | evet |
 | `certify.geometry_numeric:fail:primary` | 5 | 0 | 5 | 0.000 | -1.792 | evet |
-| `mc.consistency:fail:support` | 4 | 0 | 4 | 0.000 | -1.609 | hayır (destek < eşik) |
 | `certify.counting:fail:primary` | 3 | 0 | 3 | 0.000 | -1.386 | hayır (destek < eşik) |
 | `certify.domain:pass:primary` | 3 | 3 | 0 | 1.000 | +1.386 | hayır (destek < eşik) |
 | `certify.geometry:fail:primary` | 3 | 0 | 3 | 0.000 | -1.386 | hayır (destek < eşik) |
@@ -47,18 +47,18 @@ Seçilen eşikler (doğrulama kümesinde hedef precision 0.98): **CORRECT ≥ 0.
 | `flag:answer_level_only` | 8 | 3 | 5 | 0.375 | -0.406 | evet |
 | `certify.combinatorics:pass:primary` | 7 | 4 | 3 | 0.571 | +0.223 | evet |
 | `certify.geometry_numeric:pass:primary` | 7 | 4 | 3 | 0.571 | +0.223 | evet |
-| `mc.consistency:pass:support` | 138 | 71 | 67 | 0.514 | +0.057 | evet |
+| `mc.consistency:pass:support` | 151 | 78 | 73 | 0.517 | +0.065 | evet |
 | `flag:z3_unsupported` | 2 | 1 | 1 | 0.500 | +0.000 | hayır (destek < eşik) |
 
 ## Abstain eğrisi (test bölmesi)
 
 | Eşik ±z | Kapsama | Pozitif precision | Negatif precision | fp | fn |
 |---|---|---|---|---|---|
-| 0.0 | 1.000 | 0.939 | 1.000 | 2 | 0 |
-| 0.5 | 0.722 | 1.000 | 1.000 | 0 | 0 |
-| 1.0 | 0.463 | 1.000 | 1.000 | 0 | 0 |
-| 1.5 | 0.407 | 1.000 | 1.000 | 0 | 0 |
-| 2.0 | 0.407 | 1.000 | 1.000 | 0 | 0 |
+| 0.0 | 1.000 | 0.969 | 1.000 | 1 | 0 |
+| 0.5 | 0.741 | 1.000 | 1.000 | 0 | 0 |
+| 1.0 | 0.481 | 1.000 | 1.000 | 0 | 0 |
+| 1.5 | 0.426 | 1.000 | 1.000 | 0 | 0 |
+| 2.0 | 0.426 | 1.000 | 1.000 | 0 | 0 |
 | 3.0 | 0.333 | n/a | 1.000 | 0 | 0 |
 | 4.0 | 0.333 | n/a | 1.000 | 0 | 0 |
 | 6.0 | 0.333 | n/a | 1.000 | 0 | 0 |
