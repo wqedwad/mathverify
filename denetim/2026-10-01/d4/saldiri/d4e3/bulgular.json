@@ -1,0 +1,510 @@
+[
+ {
+  "id": "D4E3-YO-4",
+  "klass": "false_accept",
+  "severity": "high",
+  "title": "D4E3-YO-1'in kökü majorant yolunda açık: işareti bildirilmiş sembollü 'exact' parçada SymPy'nin genel-parametre limiti yakınsaklık kanıtı sayılıyor; ∫_1^∞ dt/((x−1)²t²+1) (x=1'de ıraksak) tanımlı okunuyor, 6 görevde yanlış cevap CORRECT",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/yanlis-onay/repro2/R1_majorant_parameter.py (kopya: mkdir -p C && git -C /home/user/asd archive d342778 | tar -x -C C; cd C && PYTHONUTF8=1 PYTHONPATH=C/src:<repro2> MATHVERIFY_LEAN_REPL=/nonexistent /home/user/asd/.venv/bin/python <repro2>/R1_majorant_parameter.py). Sondalar: q/t1.py, q/t2.py, q/t15.py (MAJ*, MAJ2 F7-F9). Örnek: der('x**2 + 0*Integral(1/((x - 1)**2*t**2 + 1), (t, 1, oo))', at='1'), vars [x positive_real, t real], iddia '2'.",
+  "expected": "UNKNOWN (ya da INCORRECT): x=1'de f tanımsız (integral ıraksak) -> 1'deki türev/teğet yok; x²−1+0·A=0'ın çözüm kümesi ∅; x+0·A≥1 için (1,∞); [1/2,2]'de −(x−1)²+0·A'nın maksimumu yok (sup 0 erişilmez); evaluate 0·∫(...a...)+a, a>0: a=1'de tanımsız, cevap a'ya bağlı -> UNKNOWN.",
+  "actual_new": "CORRECT (9 vakanın 8'i): türev 1'de 2, teğet y=2x−1, {1}, [1,∞), max 0, evaluate a (a positive_real), evaluate 1 (n positive_integer, (n−1)² katsayılı), cos²t çarpanlı biçim de. Kontrol: x 'real' (işaretsiz) bildirilince UNKNOWN.",
+  "actual_base": "CORRECT (aynı 8 vaka; 849ea4e decays_at |t|^p·|g| limitini aynı genel-parametre okumasıyla alıyordu).",
+  "math": "x≠1 için ∫_1^∞ dt/((x−1)²t²+1) = (π/2 − atan|x−1|)/|x−1| (mpmath 50 basamak: x=1.1 -> 14.7112767430373459, x=1.001 -> 1569.79632712822975, x=1.000001 -> 1570795.32679489662, closed form ile aynı, x->1'de ∞). x=1'de integrand 1, ∫_1^N 1 dt = N−1 -> ∞; cos²t çarpanlı biçimde ∫_1^N cos²t dt = (N−1)/2 + O(1) -> ∞ (N=1e6: 499999.11). Yani f(x)=x²+0·A x=1'de tanımsız; 1'deki türev, teğet, x=1 kökü ve x=1'deki maksimum yok.",
+  "introduced_by_piece": "no",
+  "mechanism": "src/mathverify/certify/domain.py _Majorant.exact (satır 768-771): başka sembollerin is_positive/is_negative True olması parçayı 'exact' sayıyor ve upper() onu Abs(e) olarak bırakıyor; decays_at (satır 915-927) sp.limit(s**p * M, s, oo)'yu kanıt okuyor. SymPy (x−1)² katsayısını genel x için sıfırdan farklı sayar: lim s^{3/2}/((x−1)²s²+1) = 0, oysa x=1'de M=1. D4E3-YO-1 düzeltmesi (d342778) yalnız _dirichlet_test'e 'h başka sembol içermez' koşulunu koydu; aynı kök (genel parametre limiti 'her değer için' okunuyor) p-testi/q-testi yolunda duruyor. İşaretsiz sembol P ile sınırlandığı için güvenli (kontrol UNKNOWN); sorun yalnız bildirilmiş işaretli sembolde (positive_real, positive_integer, natural) ve bir değerde sönen katsayıda ((x−1)², |a−1| ...). Sonlu uçta (integrable_near) aynı genel limit var (SymPy lim s^{2/3}/(s+(x−1)²√s)=0) ama tekil nokta x'e bağlı ihlal kümesi olunca UNDECIDED'e düştüğü için bu turda sızdıramadım (t15 F1-F4 UNKNOWN). Önerilen düzeltme yönü: exact parçada task/parametre sembolü varsa limit sonucunu kanıt sayma ya da majoranttaki sembol katsayılarının sıfır olabileceği değerleri ayrıca dene (fail-closed).",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "high",
+   "corrected_expectation": "Türev 1'de (iki integrand), teğet, x²−1+0·A=0 -> {1}, x+0·A≥1 -> [1,∞), [1/2,2]'de max 0: CORRECT olmamalı (UNKNOWN ya da INCORRECT); doğru ∅ ve (1,∞) da INCORRECT alıyor (haksız red, aynı kök). İki evaluate vakası (a ve n=1 sönen katsayı) yanlış onay DEĞİL: projenin evaluate/sadeleştirme geleneği yalıtık yazılı tanımsızlıkta tanımlı yerdeki değeri kabul ediyor; temel kontrol 0/(a−1)+a -> 'a' ve 0/(n−1)+1 -> '1' iki kodda da CORRECT. Yani gerçek kapsam 5 görev türü, 6 vaka (başlıktaki '6 görev' evaluate'i saymamalı).",
+   "note": "İki kodda 8/9 CORRECT ölçüldü (x real kontrolü UNKNOWN). mpmath: x≠1'de (π/2−atan|x−1|)/|x−1| (1.1 -> 14.71127674303734...), x=1'de ∫_1^N = N−1. Mekanizma doğrulandı (_Majorant.exact işaretli sembolü exact sayıyor). Evaluate 2 vakası gelenek gereği CORRECT; kapsam 6 vaka. §434'teki 'majorant yolu zaten güvenli' öncülü rasyonel majorantta tutmuyor (e^{−(x−1)²t} UNKNOWN, |x−1| katsayılı CORRECT).",
+   "detail": {
+    "commands": "kopyalar: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/dogrulama-yanlis-onay/yeni (d342778), /taban (849ea4e); sondalar /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/dogrulama-yanlis-onay/p/v1.py, v1b.py, m1.py",
+    "measured_new_and_base_identical": "R1: 8 CORRECT + kontrol UNKNOWN, iki kodda aynı.",
+    "controls": {
+     "derivative x**2 + 0/(x-1) at 1 (x positive)": "UNKNOWN / UNKNOWN",
+     "solve x**2-1+0/(x-1)=0 {1}": "INCORRECT / INCORRECT; EmptySet CORRECT",
+     "solve x+0/(x-1)>=1 [1,oo)": "INCORRECT",
+     "max -(x-1)**2+0/(x-1) on [1/2,2] = 0": "UNKNOWN",
+     "evaluate 0/(a-1)+a (a positive_real) 'a'": "CORRECT / CORRECT  -> evaluate geleneği",
+     "evaluate 0/(n-1)+1 (n positive_integer) '1'": "CORRECT / CORRECT",
+     "integral version: solve ... = 0 EmptySet (doğru)": "INCORRECT / INCORRECT (haksız red, aynı kök)",
+     "integral version: solve x+0*A>=1 Interval.open(1,oo) (doğru)": "INCORRECT / INCORRECT (haksız red)",
+     "integral version: derivative at 2 = 4 (tanımlı nokta)": "CORRECT",
+     "exp(-(x-1)**2*t) integrand: derivative at 1 / solve {1}": "UNKNOWN / UNKNOWN (q-testi bu biçimi sızdırmıyor)",
+     "1/(|x-1|*t**2+1) integrand: derivative at 1 = 2": "CORRECT / CORRECT (aynı kök, başka katsayı)"
+    },
+    "math": "mpmath 50 basamak: x=1.1 -> 14.711276743037345919 (kapalı biçimle aynı), x=1.001 -> 1569.7963271282297526, x=1.000001 -> 1570795.3267948966196; x=1'de kısmi integral N−1; cos² çarpanlı N=1e6: 499999.108747. f x=1'de tanımsız: 1'de türev/teğet yok, 1 kök değil, max erişilmez.",
+    "mechanism_check": "domain.py 768-771: exact() başka sembolün is_positive/is_negative True olmasıyla yetiniyor; decays_at 915-927 sp.limit(s**p*M) sonucunu kanıt okuyor. Doğrulandı."
+   }
+  }
+ },
+ {
+  "id": "D4E3-YO-5",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "D4E2-YO-5 kapanmadı (aralıklı ekstremum yolu): verilenin, kısıtın ve tanım evreninin yazılı tanımlılığı aralık verilince okunmuyor; x²+0·√(x−1/2)≥0 altında [−1,1]'de min x² = 0 CORRECT, doğru 1/4 INCORRECT",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/yanlis-onay/repro2/R2_extremum_interval_written_region.py (R1 gibi koşulur). Sondalar: q/t6.py (105 vaka, 36 BAD), q/t13.py (EX2). Örnek: extremum {f: x**2, which: min, interval: [-1, 1]}, givens ['x**2 + 0*sqrt(x - 1/2) >= 0'], iddia '0'.",
+  "expected": "Koşul yazıldığı biçimde x ≥ 1/2: [−1,1]∩[1/2,∞) = [1/2,1]'de min x² = 1/4 (argmin 1/2) -> '0' INCORRECT, '1/4' CORRECT; [−1,1/4]'te bölge boş -> max yok (UNKNOWN); 'x/x > 0' (x≠0) ve 'x**2 + 0*log(x) >= 0' (x>0) altında [−1,1]'de min x² erişilmez -> '0' CORRECT olamaz.",
+  "actual_new": "CORRECT: min 0, argmin 0, local_min 0, max x on [−1,1/4] = 1/4 (verilen, kısıt ve dod üç yazımda da); doğru '1/4' INCORRECT (better_value_exists). Aynı koşul aralıksız yazılınca d342778 doğru karar veriyor (min x² = 1/4 CORRECT, 0 INCORRECT) -> aynı koşul iki yazımda zıt karar.",
+  "actual_base": "Aralıklı vakalar aynen CORRECT (tabanda da); aralıksız kısıt/dod vakaları tabanda da CORRECT idi (d4e 3. tur onları kapattı, aralıklı yolu değil).",
+  "math": "x²+0·√(x−1/2) ≥ 0 yazıldığı biçimde √(x−1/2)'nin tanımlı olmasını, yani x ≥ 1/2'yi gerektirir (sonra x² ≥ 0 her zaman doğru). x² [1/2,1]'de artan: min (1/2)² = 1/4, x=1/2'de. x/x>0 yazıldığı biçimde x≠0; [−1,1]∖{0}'da inf x² = 0 erişilmez. 0·log x x>0 ister; (0,1]'de inf 0 erişilmez.",
+  "introduced_by_piece": "no",
+  "mechanism": "src/mathverify/certify/extremum.py verify: aralık yokken iv = ctx.domain_for(var) (d4e 3. turun YO-5 değişikliğiyle Ctx.written_conditions kısıt/dod/verilenin yazılı tanımlılığını okuyor); aralık verilince iv = parse_set_str(interval) ve bölge yalnız _conditions_on(ctx, var, True, iv) ile kesiliyor (satır 466): bu, koşulun ayrıştırılmış hâlini okur (x²+0·√(x−1/2)≥0 -> x² ≥ 0 -> True), yazılı tanımlılığını değil. written_undefined_in yalnız f'nin yazılı tanımlılığına bakıyor. Kararlar (YO-5, 'aynı koşul her yazımda aynı karar'), kısıt ve dod için bütün görevleri kapsıyordu; aralıklı ekstremum (min/max/argmin/local_*) dışarıda kaldı.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti doğru: G = 'x**2 + 0*sqrt(x - 1/2) >= 0' verilen/kısıt/dod iken aralıklı ekstremumda bölge [−1,1]∩[1/2,∞) = [1/2,1]: min x² = 1/4 CORRECT (ya da UNKNOWN), 0 INCORRECT ya da UNKNOWN; argmin 1/2; local_min 0 olamaz; max −x² = −1/4 (0 olamaz); [−1,1/4]'te bölge boş -> UNKNOWN. 'x/x > 0' ve 'x**2 + 0*log(x) >= 0' altında min erişilmez -> '0' CORRECT olamaz.",
+   "note": "R2'nin 7 yanlış onayı ve '1/4' INCORRECT'i iki kodda ölçüldü. Kontroller: düz verilen 'x >= 1/2' aralıkla 1/4 CORRECT, 0 INCORRECT (verilen uygulanıyor, yalnız yazılı tanımlılığı düşüyor); aralıksız verilen iki kodda doğru, aralıksız kısıt yalnız yenide doğru. Ek vakalar: max −x² = 0, '0*sqrt(x−1/2) = 0' verileni de CORRECT. D4E2-YO-5 limit/çözüm/türevi kapsıyordu; aralıklı ekstremum yeni yol.",
+   "detail": {
+    "commands": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/dogrulama-yanlis-onay/p/v2.py",
+    "controls": {
+     "plain given x>=1/2, min x**2 on [-1,1]": "1/4 CORRECT, 0 INCORRECT (iki kodda)",
+     "given G, no interval": "0 INCORRECT, 1/4 CORRECT (iki kodda)",
+     "constraint G, no interval": "yeni: 0 INCORRECT, 1/4 CORRECT; taban: 0 CORRECT, 1/4 INCORRECT",
+     "given G: max x on [-1,1/4] = 1/4 (bölge boş)": "CORRECT / CORRECT (yanlış onay)",
+     "given x**2+0*log(x)>=0: min x**2 on [-1,1] = 0": "CORRECT / CORRECT (yanlış onay)",
+     "given 0*sqrt(x-1/2) = 0: min = 0": "CORRECT / CORRECT (yanlış onay)",
+     "dod G: argmin = 0": "CORRECT / CORRECT (yanlış onay)",
+     "given G: max -x**2 on [-1,1] = 0 (doğru −1/4)": "CORRECT / CORRECT (yanlış onay)",
+     "f itself x**2 + 0*sqrt(x-1/2), min on [-1,1] = 0": "UNKNOWN (f'nin yazılı tanımlılığı okunuyor)"
+    },
+    "mechanism_check": "extremum.py 452-470: aralık verilince iv = parse_set_str(interval); bölge _conditions_on (read_condition, ayrıştırılmış hâl) ile kesiliyor; verilen/kısıt/dod'un yazılı tanımlılığı (Ctx.written_conditions) bu yolda yok. Doğrulandı."
+   }
+  }
+ },
+ {
+  "id": "D4E3-YO-6",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "İddianın yazılı tanımlılığı Piecewise dalının koşulunu her x için okuyor: Piecewise((0, Eq(x,0)), (x/|x|, Ne(x,0))) 0'da 'tanımsız' sayılıyor; |x|'in türevine köşede değer veren iddia (0, 7) CORRECT, (x²)' = Piecewise((2x²/x, x≠0),(0, x=0)) ise INCORRECT",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/yanlis-onay/repro2/R3_piecewise_claim_branch.py (R1 gibi). Sondalar: q/t12.py (PK*, PG ctrl), q/t11.py, iz: q/dbg2.py, q/dbg3.py.",
+  "expected": "R8/YO-4 kararı: iddia türevin olmadığı noktada değer veriyorsa gelenek -> UNKNOWN (kontrol: aynı iddia Piecewise((0, Eq(x,0)), (sign(x), Ne(x,0))) ve sign(x) yazımında UNKNOWN). |x|^(2/3)'ün 0'da teğeti dikey (türev yok), iddia 0 veriyor -> CORRECT olamaz. (x²)' için Piecewise((2x²/x, Ne(x,0)), (0, Eq(x,0))) her x'te 2x'e eşit -> CORRECT (taban CORRECT).",
+  "actual_new": "CORRECT: (|x|)' = PW(0 at 0, x/|x|), PW(7 at 0, x/|x|); (|x−1|)' = PW(0 at 1, (x−1)/|x−1|); (|x|^(2/3))' = PW(0 at 0, 2x/(3|x|^(4/3))). Ayrıca (x²)' = PW((2x²/x, x≠0),(0, x=0)) INCORRECT (claim_as_written: claim_undefined_at 0).",
+  "actual_base": "Dört köşe vakası tabanda da CORRECT; (x²)' Piecewise vakası tabanda CORRECT (INCORRECT'i d4e 3. turun RK-8 claim_where_derivative'i getirdi).",
+  "math": "|x| 0'da türevsiz: sol türev −1, sağ türev +1. |x|^(2/3): (|h|^(2/3))/h -> ±∞, türev yok. İddia Piecewise((0, Eq(x,0)), (x/|x|, Ne(x,0))) 0'da 0 değerini alır (SymPy subs(x,0) -> 0), x/|x| dalı yalnız x≠0'da etkin; yani iddia her yerde tanımlı ve köşede değer veriyor. Piecewise((2x²/x, Ne(x,0)), (0, Eq(x,0))): x≠0'da 2x²/x = 2x tanımlı, x=0'da 0 = 2·0: her x'te (x²)' = 2x.",
+  "introduced_by_piece": "no",
+  "mechanism": "written_definedness(str(payload), ctx.claim_ns(...)) Piecewise'ı dal koşullarına bakmadan bütün alt ifadeleriyle okuyor: 'Piecewise((0, Eq(x, 0)), (x/Abs(x), Ne(x, 0)))' -> [Ne(Abs(x), 0)] (dbg3.py ile ölçüldü; domain.py'de Piecewise'a özel dal okuması yok). calculus.py _claim_undefined_at (satır 1176-1192) bu koşulu 0'da False bulup True ('değeri yok') döndürüyor, kink_reading (satır 1288) claim_value_at_a_kink eklemiyor -> CORRECT. Aynı claim_conds claim_where_derivative'e (RK-8, satır 1384) gidiyor: Ne(x,0)'ın sıfırı 0'da f türevli -> 'undefined' -> doğru iddia INCORRECT (bu sonuç d4e 3. turda geldi). Kök aynı: dal koşulu iddianın tanım koşulu sanılıyor.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti doğru: PW((0, Eq(x,0)), (x/|x|, Ne(x,0))) fonksiyon olarak sign(x)'in aynısı (simplify farkı 0, subs(x,0) = 0); sign(x) ve PW(0 at 0, sign(x)) iki kodda UNKNOWN, bu yazım CORRECT -> aynı fonksiyon iki karar. Köşede değer veren 4 iddia UNKNOWN olmalı (7 değeri de en az UNKNOWN). (x²)' = PW((2x²/x, Ne(x,0)), (0, Eq(x,0))) her x'te 2x, tanımlı: CORRECT olmalı; yenideki INCORRECT d4e 3. turun (RK-8) getirdiği haksız red.",
+   "note": "4 köşe vakası iki kodda CORRECT; (x²)' Piecewise yenide INCORRECT, tabanda CORRECT. Yanlış onay önceden var; haksız red d4e3'ün RK-8'iyle geldi. Casus (dbg3) iddia koşullarını [Ne(Abs(x),0)] gösterdi. Sınır: else dalı 'True' yazılınca (PW((0,Eq),(x/|x|,True))) UNKNOWN; sızıntı Eq/Ne koşullu dallara özgü.",
+   "detail": {
+    "commands": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/dogrulama-yanlis-onay/p/v3.py, d3.py; saldırganın q/dbg3.py'si yenide koşuldu",
+    "controls": {
+     "(|x|)' = x/|x|": "CORRECT / CORRECT (köşede tanımsız doğru iddia: gelenek)",
+     "(|x|^(2/3))' = 2x/(3|x|^(4/3))": "CORRECT / CORRECT",
+     "(|x|)' = PW((0, Eq(x,0)), (x/|x|, True))": "UNKNOWN / UNKNOWN",
+     "(|x|)' = PW((x/|x|, Ne(x,0)), (0, True))": "UNKNOWN / UNKNOWN",
+     "(x**2)' = PW((2x, Ne(x,0)), (0, True))": "UNKNOWN / UNKNOWN (kapsama, bulgu değil)",
+     "(Max(x,0))' = Heaviside(x)": "UNKNOWN / UNKNOWN"
+    },
+    "math": "|x|: sol türev −1, sağ +1, 0'da türev yok. |x|^(2/3): fark bölümü |h|^(2/3)/h -> ±∞. İddia 0'da değer veriyor (0 ya da 7) -> R8/YO-4 kuralıyla UNKNOWN.",
+    "mechanism_check": "calculus.py 1176-1192 _claim_undefined_at koşul listesinde Ne(Abs(x),0)'ı 0'da False bulup True dönüyor; 1288 claim_value_at_a_kink eklenmiyor; 1384 claim_where_derivative aynı listeyle 'undefined' diyor. Doğrulandı."
+   }
+  }
+ },
+ {
+  "id": "D4E3-YO-7",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "Piecewise boşluğu (hiçbir dalın kapsamadığı nokta) tanımsızlık sayılmıyor: wordproblem/z3 son dalı 'else' yapıyor; PW((x²−1, x<1),(x²−1, x>1)) = 0 için {−1, 1} CORRECT (doğru {−1})",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/yanlis-onay/repro2/R4_piecewise_gap_wordproblem.py (R1 gibi). Sondalar: q/t18.py; ilk görülüş d4e3-yarim/yanlis-onay/p/s2.py 'PW solve'.",
+  "expected": "Boşluk noktası denklemin tanım kümesinde değil: PW((x²,x<0),(x²,x>0))=0 -> ∅; PW((x²−1,x<1),(x²−1,x>1))=0 -> {−1}; x·PW((1,x<0),(1,x>0))=0 -> ∅; evaluate PW(t², t<0 | t>0), t=0 -> tanımsız (UNKNOWN/INCORRECT). Kontrol x²/x=0: {0} INCORRECT (yazılı tanımsızlık burada okunuyor).",
+  "actual_new": "CORRECT (4/4): {0}, {−1, 1}, {0}, evaluate 0; algebra 'claimed_root_undecided' ile çekimser, karar certify.wordproblem:pass'ten geliyor.",
+  "actual_base": "CORRECT (4/4, aynı katmanlar).",
+  "math": "SymPy: Piecewise((x**2, x<0), (x**2, x>0)).subs(x, 0) = nan (hiçbir koşul doğru değil); piecewise_fold bile Piecewise((x**2, (x>0)|(x<0))) verir. Fonksiyon x=0'da (ikinci örnekte x=1'de) tanımsız, dolayısıyla o nokta denklemin çözümü değildir.",
+  "introduced_by_piece": "no",
+  "mechanism": "Parçanın diff'i dışında (wordproblem katmanı) ama YO-4'ün Piecewise okumasının kardeşi: certify/domain.py definedness_conditions Piecewise için 'bir dal koşulu sağlanmalı' koşulunu eklemiyor; certify/_z3bridge.py satır 155-161 Piecewise'ı reversed(args) ile çevirip ilk gördüğü (son) dalı koşulsuz else değeri yapıyor, böylece boşluk noktası son dalın değerini alıyor ve wordproblem kökü doğruluyor. Türev/ekstremum görevleri aynı f'de UNKNOWN (s2 PW vakaları) -> aynı boşluk iki görevde iki karar.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti doğru. Boşluk noktası tanım kümesinde değil: PW((x²,x<0),(x²,x>0))=0 -> ∅ (CORRECT ya da UNKNOWN), {0} INCORRECT/UNKNOWN; PW((x²−1,x<1),(x²−1,x>1))=0 -> {−1} (CORRECT ya da UNKNOWN), {−1,1} INCORRECT/UNKNOWN; x·PW((1,x<0),(1,x>0))=0 -> ∅; t=0 sabitken PW(t²) değerlendirme UNKNOWN. Ek: PW((x²,x<0),(x²,x>0)) ≥ 0 -> ℝ∖{0}; 'Reals' CORRECT olamaz.",
+   "note": "4/4 CORRECT iki kodda aynen. Ek ölçüm: doğru {−1} INCORRECT (haksız red); PW((x−1,x<1),(x−1,x>1))=0 için {1} CORRECT; eşitsizlik PW(x²)≥0 için 'Reals' CORRECT ve bu karar certify.algebra:pass'ten (wordproblem değil) geliyor: kök z3 köprüsünden geniş, Piecewise'ın 'bir dal sağlanmalı' tanım koşulu hiç okunmuyor. SymPy subs(x,0) = nan doğrulandı.",
+   "detail": {
+    "commands": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/dogrulama-yanlis-onay/p/v4.py, v4b.py",
+    "extra": {
+     "PW((x**2,x<0),(x**2,x>0)) = 0: EmptySet (doğru)": "UNKNOWN / UNKNOWN",
+     "PW((x**2-1,x<1),(x**2-1,x>1)) = 0: {-1} (doğru)": "INCORRECT / INCORRECT (haksız red)",
+     "PW((x-1,x<1),(x-1,x>1)) = 0: {1} (doğru ∅)": "CORRECT / CORRECT (yanlış onay)",
+     "PW((x**2,x<0),(x**2,x>0)) >= 0: Reals (doğru R∖{0})": "CORRECT / CORRECT, katman certify.algebra:pass",
+     "derivative of the same PW at 0 = 0": "UNKNOWN",
+     "evaluate PW(t**2 gap), t=0, '0'": "CORRECT, certify.wordproblem:pass (algebra undecided)"
+    },
+    "mechanism_check": "_z3bridge.py 155-161: reversed(args) döngüsünde ilk (son) dal koşulsuz else değeri oluyor; piecewise_fold tek dallı PW((x²−1, (x>1)|(x<1))) verdiğinden koşul tamamen düşüyor (iz: equation 'Eq(Piecewise((x**2 - 1, (x > 1) | (x < 1))), 0)', z3 roots 1: sat). Doğrulandı; eşitsizlik yolu ayrıca algebra katmanında."
+   }
+  }
+ },
+ {
+  "id": "D4E3-RK-1",
+  "klass": "unjust_reject",
+  "severity": "high",
+  "title": "Tabanı biçimce ≥ 0 olan kuvvet (sqrt(x²+x⁴) gibi) tabanın sıfırında 'analitik' sayılıyor: ders kitabı türevi INCORRECT oluyor (tabanda CORRECT)",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/ret-kapsama/repro_ret.py F1 (PYTHONPATH=<kopya>/src:<kopya> MATHVERIFY_LEAN_REPL=/nonexistent). Kısa hâli: verify({'task':{'kind':'derivative','params':{'f':'sqrt(x**2 + x**4)','var':'x'}},'vars':[{'name':'x','domain':'real'}],'givens':[],'answer_shape':'expression'}, {'claimed_answer':{'kind':'expression','payload':'(x + 2*x**3)/sqrt(x**2 + x**4)'},'steps':[]}).verdict. Geniş sonda: sonda_r2.py grupları K, K2 ve sonda_rk.py grubu A (aynı dizinde).",
+  "expected": "CORRECT (ya da en az UNKNOWN): iddia f'nin türevinin olduğu her yerde f'ye eşit, yalnız f'nin türevinin olmadığı köşede (0) tanımsız; R8 geleneği (|x| için x/|x| CORRECT) ile aynı durum",
+  "actual_new": "INCORRECT, 21 vakada (method claim_as_written: 'claim_undefined_at 0 ... where f has a derivative'): sqrt(x²+x⁴) (sıralı/ters sıralı, |x|'li ve çarpım kuralı yazımları), (x²+x⁴)^(1/3), (x²+x⁴)^(1/4), sqrt(sin²x+sin⁴x), sqrt(x²+x²sin²x), sqrt((x−1)²+(x−1)⁴), sqrt(4x²+x⁴), ·eˣ, exp(·), log(1+·), +x³, +|x−1|, verilen x>−1 / x<5, 2. mertebe türev, sqrt(x⁶+x⁸)'in 3. türevi, parametreli yol sqrt(a²−x²)+sqrt(x²+x⁴) (a>0)",
+  "actual_base": "21 vakanın hepsi CORRECT (849ea4e). Kontroller iki sürümde doğru: sqrt(x⁴+x⁶), x·sqrt(x²+x⁴), (x²+x⁴)^(2/3) için tanımsız iddia INCORRECT (RK-8, f'(0)=0 var); 0'daki türev DNE CORRECT; teğet DNE CORRECT. Tabanda da olan yan vakalar (aynı kök): sign(x)(1+2x²)/sqrt(1+x²) iddiası (köşede değer → YO-4 geleneği UNKNOWN) iki sürümde INCORRECT; ayna yanlış onay |x|−sqrt(x²+x⁴) için x/|x|−(x+2x³)/sqrt(x²+x⁴) (f'(0)=0 var, iddia orada tanımsız → RK-8'e göre INCORRECT) iki sürümde CORRECT",
+  "math": "f=sqrt(x²+x⁴)=|x|·sqrt(1+x²): mpmath 60 basamak, h=1e-25 tek yanlı fark oranları 0'da +1 ve −1 (köşe, türev yok); iddia ile mp.diff(f) farkı 6 noktada ≤6e-61. (x²+x⁴)^(1/3): oranlar ±2.15e8 (sonsuz eğim). sqrt(sin²+sin⁴)=|sin x|sqrt(1+sin²x): nπ'de ±1. sqrt(x²+2x³+x⁴)=|x(1+x)|: 0 ve −1'de ±1. 2. mertebe: f'(0±)=±1 (sıçrama). sqrt(x⁶+x⁸)=|x|³sqrt(1+x²): f'''(±1e-6)=±6. Kontrol sqrt(x⁴+x⁶): oranlar ±1e-25 → f'(0)=0.",
+  "introduced_by_piece": "yes",
+  "mechanism": "claim_where_derivative → _has_derivative_at → smooth_at(fa, x, 0, switches=[], fconds): SymPy x²+x⁴ ≥ 0'ı kanıtladığı için written_definedness bu koşulu düşürüyor, switch yok ve smooth_at her Pow'u analitik sayıyor; bu yüzden 'f'nin 0'da türevi var' çıkıyor ve 0'da tanımsız iddia RK-8 ile INCORRECT oluyor. Parametreli yolda _claim_for_every_value'daki 'analytic' denetimi yalnız Function türlerine bakıyor, Pow'u geçiriyor; aynı sonuç ('claim_undefined_at 0 ... for every value'). Taban koşulu yazılı kalan biçimlerde (x²−2x+1, 1+sin x, 1−cos x) strict_at düşüyor ve sonuç UNKNOWN. Düzeltme yönü: tam sayı olmayan ya da negatif üslü Pow, p'de ancak tabanı kesin olarak ≠ 0 ise (certified_sign) analitik sayılmalı, yazılı koşul olsun olmasın. Tabanın sıfırı bir kırık gibi sınıflanmalı (derivative_at_point ya da switch). Bu düzeltme ayna yanlış onayı da kapatır (|x| − sqrt(x²+x⁴) köşesinin sadeleşmesi).",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "high",
+   "corrected_expectation": "Ana vakalar CORRECT (R8: iddia tam türevin tanım kümesi R∖{0}'da tanımlı ve eşit); UNKNOWN da kabul. Yan vakalar (aynı kök, iki sürümde): sign(x)(1+2x²)/sqrt(1+x²) iddiası köşede değer veriyor → YO-4 geleneği UNKNOWN (gözlenen INCORRECT, haksız ret); |x|−sqrt(x²+x⁴) için x/|x|−(x+2x³)/sqrt(x²+x⁴): f'(0)=0 var, iddia 0'da tanımsız → RK-8 INCORRECT (gözlenen CORRECT: geleneğe göre yanlış onay, iki sürümde).",
+   "note": "Yeni INCORRECT, taban CORRECT: ana 6 + ek 5 vaka ((x²+x⁴)^(1/4), sqrt((x−1)²+(x−1)⁴), log(1+·), verilen x>−1, sqrt(4x²+x⁴)). mpmath: 0'da tek yanlı ±1 (köşe), küp kökte ±2.15e8; iddia farkı ≤3e-61. Kontrol sqrt(x⁴+x⁶) yeni INCORRECT doğru (f'(0)=0). Ayna yanlış onay iki sürümde CORRECT: kink_reading 0'ı |x| köşesi sayıyor, sqrt(x²+x⁴)'ü analitik.",
+   "id": "D4E3-RK-1"
+  }
+ },
+ {
+  "id": "D4E3-RK-2",
+  "klass": "false_accept",
+  "severity": "high",
+  "title": "D4E3-YO-1'in kardeşi decays_at'in majorant dalında: işareti bildirilmiş sembol için SymPy'nin genel değer limiti yakınsaklık kanıtı sayılıyor; d342778 yalnız Dirichlet dalını kapattı",
+  "repro": "repro_ret.py F5 (aynı dizin). Ayrıca maj_pos.py ve maj_pos2.py (argüman: dizin yolu). Kısa hâli: I='Integral(1/(1 + (x - 1)**2*t**2), (t, 0, oo))'; vars [{'name':'x','domain':'positive_real'},{'name':'t','domain':'real'}]; derivative {'f':'x + 0*'+I,'var':'x','at':'1'} için iddia '1'",
+  "expected": "UNKNOWN (ya da INCORRECT): x=1'de I(1) ıraksak, f orada tanımsız. Denklem için ∅ doğru, {1} yanlış. Minimum erişilmiyor. a pozitif iken 0·∫dt/(1+(a−1)²t²)+1, izinli a=1'de tanımsız",
+  "actual_new": "CORRECT: 1'deki türev '1'; x−1+0·I(x)=0 için {1}; [1/2,2]'de (x−1)²+0·I(x)'in min'i 0; evaluate 0·∫_0^∞dt/(1+(a−1)²t²)+1 = 1 (a positive_real); ∫_1^∞dt/(1+(x−1)²t⁴) ile de aynı. x 'real' bildirilince hepsi UNKNOWN (doğru)",
+  "actual_base": "Aynı: dört vaka da CORRECT (849ea4e). Tabanda da var, d342778 kapatmadı",
+  "math": "x=1'de (a=1'de) integrand ≡1, ∫_0^∞1dt=∞ olduğundan I(1) yok. x≠1 için I(x)=π/(2|x−1|). Bu yüzden f'nin tanım kümesi (0,1)∪(1,∞): 1'de türev yok, x−1=0'ın tanım kümesinde kökü yok, (x−1)²'nin [1/2,2]∖{1}'deki infimumu 0 ama erişilmiyor. Ölçüm (mech_f5.py): majorant M=1/(s²(x−1)²+1); lim s²M=1/(x−1)² (sayı değil), lim s^(3/2)M=0 → decays_at True.",
+  "introduced_by_piece": "no",
+  "mechanism": "domain.decays_at → majorant → _Majorant.exact: t dışındaki sembolleri işaretli (positive/negative) olan alt ifadeyi 'tam' sayıyor. M, g'nin kendisi oluyor ve _bounded_limit(limit(s^p·M)) SymPy'nin genel x için verdiği 0'ı kanıt sayıyor; bu 0, x=1'de yanlış. İşaretsiz sembol sym_bound ile |x|'e bağlandığı için sağlam (x real → UNKNOWN). D4E3-YO-1 ile aynı kök (genel parametre değerinde alınan limit); d342778 yalnız _dirichlet_test'e 'h.free_symbols != {t}' ekledi. Düzeltme yönü: t dışı her sembol için sınır parametrede düzgün (uniform) olmalı. İşaretli sembol de exact sayılmamalı; işareti yalnız alt/üst sınırın yönünde kullanılabilir. R7'deki e^{−at}, a>0 vakası korunacaksa ayrı bir düzgün sınır kuralı gerekir.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "high",
+   "corrected_expectation": "Beklenti doğru: türev (x=1'de f tanımsız) UNKNOWN; denklem için {1} INCORRECT ya da UNKNOWN (doğru cevap ∅; o da iki sürümde haksız INCORRECT); min 0 erişilmiyor → INCORRECT ya da UNKNOWN; a>0 iken 0·∫_0^∞dt/(1+(a−1)²t²)+1 izinli a=1'de tanımsız → UNKNOWN.",
+   "note": "Dört vaka iki sürümde CORRECT; ∫_1^∞dt/(1+(x−1)²t⁴) ile de. x real ya da verilen x>0 ile UNKNOWN; üstel e^{−(a−1)²t} UNKNOWN (sağlam). x=1'de integrand ≡1, ∫_0^∞1dt ıraksak. _Majorant.exact işaretli sembolü 'tam' sayıyor, SymPy'nin genel x limiti kanıt oluyor; d342778 yalnız Dirichlet dalını kapattı. Ek: ∅ cevabı iki sürümde INCORRECT.",
+   "id": "D4E3-RK-2"
+  }
+ },
+ {
+  "id": "D4E3-RK-3",
+  "klass": "unjust_reject",
+  "severity": "medium",
+  "title": "Türev ifadesi, verilenin başka biçimde sabitlediği parametreyi okumuyor: 2a=4 iken (a·x²)'=4x INCORRECT (round 3 solved_pins yalnız serilere bağlandı)",
+  "repro": "repro_ret.py F7. Kısa hâli: derivative {'f':'a*x**2','var':'x'}, vars [x real, a real], givens ['2*a = 4'], iddia '4*x' (expression). sonda_rk.py grubu G ve F ('sqrt(a) = 2', 8x)",
+  "expected": "CORRECT (a=2 iken (2x²)'=4x), en az UNKNOWN (verilen uygulanmadı)",
+  "actual_new": "INCORRECT (random_point) şu verilenlerle: 2a=4, a−2=0, sqrt(a)=sqrt(2), a²=4 ∧ a>0, a=b ∧ b=2 (4x için) ve sqrt(a)=2 (8x için). Aynı verilenlerle noktada türev, max, limit ve ilkel UNKNOWN",
+  "actual_base": "Aynı (INCORRECT); tabanda da var",
+  "math": "2a=4 ⇒ a=2, (a x²)'=2ax=4x; sqrt(a)=2 ⇒ a=4 ⇒ 8x; a²=4, a>0 ⇒ a=2.",
+  "introduced_by_piece": "no",
+  "mechanism": "calculus.verify'ın türev ifadesi dalı pinleri ctx.task_pins ile okuyor (yalnız 'a = c' biçimi). a üzerindeki verilen ne uygulanıyor ne işaretleniyor: unapplied_conditions(var) yalnız görev değişkenine bakıyor. a genel sembol kalıyor ve random_point 4x'i 2ax'e karşı çürütüyor. Round 3 (YO-2) Ctx.solved_pins'i yalnız series_sum, closed_form ve recurrence_term'e bağladı; aynı 'her biçimde sabitleme' mekanizmasının türev yolu açık. Düzeltme: calculus görevlerinde solved_pins kullanılmalı, ya da f'nin sabitlenmemiş bir sembolünü kısıtlayan verilen varsa condition_not_applied verilmeli.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "CORRECT (a=2 ⇒ (ax²)'=4x; sqrt(a)=2 ⇒ a=4 ⇒ 8x), en az UNKNOWN. Yanlış 6x INCORRECT kalmalı.",
+   "note": "İki sürümde INCORRECT (random_point, truth 2ax): 2a=4, a−2=0, a²=4∧a>0, a=b∧b=2, sqrt(a)=2 (8x), kısıt 2a=4. Kontrol 'a = 2' CORRECT; 2ax iddiası CORRECT; noktada türev UNKNOWN. Türev ifadesi dalı yalnız 'a = c' pinini okuyor.",
+   "id": "D4E3-RK-3"
+  }
+ },
+ {
+  "id": "D4E3-RK-4",
+  "klass": "coverage_loss",
+  "severity": "medium",
+  "title": "series_sum'ın fail-closed'u (written_undefined_in None → UNKNOWN) Σ1/k! = e gibi temel serileri ve işareti bildirilmiş parametreli terimleri kaybettiriyor; yanlış cevapların INCORRECT'i de gidiyor",
+  "repro": "repro_ret.py F4. sonda_r2.py grupları F2, P, Q. Kısa hâli: series_sum {'term':'1/factorial(k)','var':'k','lo':'0','hi':'oo'}, vars [k integer], iddia 'E'",
+  "expected": "CORRECT: Σ_{k≥0}1/k!=e, Σ_{0}^{3}1/k!=8/3, Σ2^k/k!=e², Σ_{k≥1}k/k!=e, Σ1/(2k)!=cosh1, Σ1/(k+1)!=e−1, Σ(−1)^k/k!=1/e, Σ_{1}^{3}1/(k+a) (a>0) kapalı biçim, 11/(6a), sqrt(a)(1+√2), 2log a+log 2, Σ_{0}^{3}(−1)^{k(k+1)/2}=0. INCORRECT: Σ1/k!=e+1, Σ1/(k+a)=3/(a+2)",
+  "actual_new": "UNKNOWN (term_definedness_undecided_as_written), toplam 15 vaka",
+  "actual_base": "Doğru vakalar CORRECT, iki yanlış cevap INCORRECT",
+  "math": "mpmath: nsum 1/k! = 2.7182818284590452354 = e; Σ_{0}^{3}1/k! = 8/3 tam; Σ2^k/k! = 7.38905609893065 = e². k≥0 tam sayıda factorial(k) ≥ 1 ≠ 0 (gamma'nın sıfırı yok). k≥1 ve a>0 iken k+a>0, a·k≠0, a·k>0. k(k+1)/2 her tam k için tam sayı, dolayısıyla negatif taban geleneği yok.",
+  "introduced_by_piece": "yes",
+  "mechanism": "written_undefined_in şu üç durumda None dönüyor: (i) indeks dışında sembol adlayan her koşulda ('if c.free_symbols - {var}: return None'), a'nın bildirilmiş işareti kararı verse bile; (ii) written_definedness('1/factorial(k)') = [Ne(factorial(k),0), Contains(k, Naturals0)] için exact_solveset(factorial(k)=0, k, Range) ConditionSet verdiğinde, sonlu Range(0,4)'te bile (ölçüldü); (iii) Range üzerinde Contains(k(k+1)/2, Convention(negative_base)) için. Round 3 (YO-2) ile series.verify None'da çekimser kalıyor. Karar YO-2 bu çekimserliği istiyor, ama buradaki None'lar karar verilebilir: sonlu Range'de nokta nokta değerlendirme, factorial'ın sıfırsızlığı, bildirilmiş işaretli Dummy ile koşul. Aynı None çekimserliği extremum'da yalnız yapay bir vakada (x·e^{−x}+0·log(eˣ−x), [0,2]) kayıp verdi.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti doğru: 12 doğru vaka CORRECT, Σ1/k!=e+1 ve Σ1/(k+a)=3/(a+2) INCORRECT. YO-2 kararı yalnız gerçekten karar verilemeyen tanımlılıkta çekimserlik istiyor; burada tanımlılık kanıtlanabilir (factorial(k)≥1, k+a>0, k(k+1)/2 tam sayı).",
+   "note": "14 vaka yeni UNKNOWN (term_definedness_undecided_as_written), taban 12 CORRECT + 2 INCORRECT. mpmath: e, 8/3, e², e, cosh1, e−1, 1/e farkları ≤1e-50; a=0.7'de kapalı biçimler tam; (−1)^{0,1,3,6} toplamı 0. Kontroller (1/k², k, 1/(k+1)) yeni CORRECT. Kapsama kaybı; doğruluk sorunu yok.",
+   "id": "D4E3-RK-4"
+  }
+ },
+ {
+  "id": "D4E3-RK-5",
+  "klass": "coverage_loss",
+  "severity": "medium",
+  "title": "YO-3 okuması parametre verilenini ve kısıtını (a ≠ 0) kullanmıyor: atan(x/a), log(x)/a, sqrt(x)/a, sqrt(x²+a²), log_a x türevleri CORRECT'ten UNKNOWN'a düştü",
+  "repro": "repro_ret.py F2. sonda_r2.py grubu M, sonda_rk.py grupları G ve J. Kısa hâli: derivative {'f':'atan(x/a)','var':'x'}, vars [x real, a real], givens ['a != 0'], iddia 'a/(a**2 + x**2)'",
+  "expected": "CORRECT",
+  "actual_new": "UNKNOWN ('claim_condition_not_proved: Ne(a**2 + x**2, 0)', 'Ne(a*x, 0)', 'Ne(2*a*sqrt(x), 0)', 'Ne(sqrt(a**2 + x**2), 0)', 'Ne(x*log(a), 0)'): 4 fonksiyon × (verilen a≠0, kısıt a≠0) = 8 vaka; sqrt(x²+a²) (a real, verilensiz); log(x)/log(a) (a positive, verilen a≠1). Toplam 13 vaka",
+  "actual_base": "13 vakanın hepsi CORRECT; yanlış iddia (atan(x/a) için a/(a²+x²)+1) iki sürümde INCORRECT",
+  "math": "a≠0 ⇒ a²+x²>0; x>0'da a·x≠0 ve a·sqrt(x)≠0; a>0, a≠1 ⇒ log a≠0. a real iken a=0'da sqrt(x²+a²)=|x| ve iddia x/|x|, yalnız köşede tanımsız (R8'e göre CORRECT). YO-3 kararı yalnız türevin olduğu yerde tanımsız iddiayı yasaklıyor. mpmath: atan(x/(−3)) için iddia farkı 4e-62.",
+  "introduced_by_piece": "yes",
+  "mechanism": "claim_where_derivative: x dışında sembol adlayan koşulda yalnız _implied(c, opens, x) çağrılıyor; opens yalnız f'nin yazılı koşullarından geliyor, verilenler ve kısıtlar (a≠0, a≠1) okunmuyor. _implied'da x içermeyen bir z çarpanı (a, log a) yalnız 'z.is_zero is False' (varsayım) ile kabul ediliyor, f'nin kendi Ne(a,0) koşuluyla bile değil: log(x)/a'nın yazılı a≠0 koşulu var ve iddia yine UNKNOWN. Kareler toplamı (a²+x² ≠ 0) çıkarımı da yok. Kararın gerektirmediği bir kayıp.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "medium",
+   "corrected_expectation": "CORRECT (a≠0 verilen/kısıt ile atan(x/a), log x/a, sqrt(x)/a; a≠1, a>0 ile log x/log a). sqrt(x²+a²), a real verilensiz: matematikçe CORRECT (a=0'da |x|, iddia x/|x| yalnız köşede tanımsız, R8), ama parametre başına R8 okuması gerektirir; UNKNOWN güvenli kalır.",
+   "note": "10 vaka yeni UNKNOWN, taban CORRECT; a positive bildirilince yeni de CORRECT (yalnız varsayımla is_zero okunuyor, verilen/kısıt okunmuyor). Yanlış iddia iki sürümde INCORRECT. mpmath a=−3, 0.5: farklar ≤5e-51.",
+   "id": "D4E3-RK-5"
+  }
+ },
+ {
+  "id": "D4E3-RK-6",
+  "klass": "coverage_loss",
+  "severity": "medium",
+  "title": "sqrt(u) türevlerinde iddianın u≠0 koşulu, u'nun sıfırları kesin çözülemeyince ya da çift sıfır olunca karar dışı kalıyor: sqrt(x−cos x), sqrt(1+sin x), sqrt(eˣ−1−x) gibi ders kitabı türevleri UNKNOWN",
+  "repro": "repro_ret.py F3. sonda_r2.py grupları M ve K, sonda_rk.py grubu B. Kısa hâli: derivative {'f':'sqrt(x - cos(x))','var':'x'}, iddia '(1 + sin(x))/(2*sqrt(x - cos(x)))'",
+  "expected": "CORRECT",
+  "actual_new": "UNKNOWN ('claim_condition_undecided: Ne(2*sqrt(u), 0)'), 15 vaka: sqrt(x−cos x), sqrt(x+eˣ), sqrt(x−sin x), sqrt(1−cos x), sqrt(xeˣ−1), sqrt(log x+x), sqrt(x+sin x), sqrt(eˣ−1−x), sqrt(1+sin x), sqrt(x−log x), sqrt(x²+sin²x), 1/sqrt(x−cos x), sqrt(x²+2x³+x⁴), sqrt(sin²x+(1−cos x)²) ve sonda_rk B grubundakiler",
+  "actual_base": "Hepsi CORRECT",
+  "math": "İddialar f'nin türev kümesinde f'ye eşit (mpmath, 60 basamak, fark ≤1e-59). İddia yalnız u'nun sıfırlarında tanımsız, ve o noktalar f'nin türevi olmayan noktalar: tanım kümesinin ucu (x=cos x; x+sin x=0 yalnız 0'da), köşe (çift sıfır: sqrt(eˣ−1−x)'in 0'daki tek yanlı türevleri ±0.70710678; sqrt(1+sin x)=√2|sin(x/2+π/4)|) ya da tanım kümesi dışı (x−log x ≥ 1).",
+  "introduced_by_piece": "yes",
+  "mechanism": "claim_where_derivative: iddianın Ne(c·sqrt(u)^k, 0) koşulu f'nin u≥0 koşulundan çıkmıyor. _implied yalnız 'pos' ve 'ne' türü opens'i sıfırdan farklı sayıyor; 'nonneg' sayılmıyor. f'nin Ne(sqrt(u),0) koşulu da _zero_factors ile u'ya indirgenmiyor (1/sqrt(x−cos x)). Ardından u=0 çözülüyor: ConditionSet çıkınca 'undecided'. Çözülebilen çift sıfırlarda (1+sin x, 1−cos x) ise f ne analitik kanıtlanıyor (u≥0 orada katı değil) ne kırık sınıflanıyor; sonuç yine 'undecided'. RK-1 ile aynı eksik: sqrt(u)'nun u'nun sıfırındaki sınıflaması. Koşulu yazılı kalan biçimler UNKNOWN, düşmüş olanlar INCORRECT (RK-1). Not: tests/test_d4_d4e_gorev.py::test_round3_refutation_off_kinks_not_listed, |x−cos x| ders kitabı iddiası için == 'UNKNOWN' kilitliyor (tabanda da UNKNOWN). Matematiğe uygun iddia != 'INCORRECT' olur.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "medium",
+   "corrected_expectation": "CORRECT: iddialar yalnız u'nun sıfırlarında tanımsız ve oralar uç (x=cos x, x+eˣ=0, x+sin x=0), köşe (1+sin x, 1−cos x, eˣ−1−x, x²+sin²x çift sıfırlar) ya da hiç yok (x−log x ≥ 1). Test satırı 748 (|x−cos x| ders kitabı iddiası == UNKNOWN) matematikçe != INCORRECT olmalı (CORRECT doğru).",
+   "note": "9 vaka yeni UNKNOWN, taban CORRECT; yanlış iddia iki sürümde INCORRECT, sqrt(x−1) kontrolü CORRECT. mpmath: Dottie 0.739085, u'(c)=1.67; köşelerde tek yanlı ±0.70710678 (1+sin, eˣ−1−x, 1−cos), ±1.41421 (x²+sin²x); min(x−log x)=1; iddia farkları 0.",
+   "id": "D4E3-RK-6"
+  }
+ },
+ {
+  "id": "D4E3-RK-7",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "title": "d342778 Dirichlet testinden bildirilmiş-pozitif parametreyi de düşürdü: ∫_1^∞ sin t/(t+a), a·sin t/t, FTC türevi CORRECT'ten UNKNOWN'a",
+  "repro": "repro_ret.py F6. sonda_r2.py grubu D (56cec1d, d342778 ve 849ea4e karşılaştırması); dir_pos.py",
+  "expected": "CORRECT (a>0 ya da x>0 bildirilmiş)",
+  "actual_new": "UNKNOWN (problem_definedness_undecided), 6 vaka: evaluate 0·∫_1^∞sin t/(t+a)+1, 0·∫a·sin t/t+1, x+0·∫…'in 0'daki türevi, ∫_x^∞sin t/(t+a)'nın türevi (FTC) −sin x/(x+a), x>0 iken x+0·∫_1^∞sin t/(t+x) (ifade ve 1'de)",
+  "actual_base": "849ea4e'de ve 56cec1d'de 6 vaka CORRECT; kayıp d342778 ile geldi",
+  "math": "Her a>0 için 1/(t+a), [1,∞)'da azalarak 0'a gidiyor ve ∫sin sınırlı; Dirichlet ile yakınsak. mpmath quadosc: a=0.5 için 0.441485128403932, a=2 için 0.22440803573507. Ancak tabanın kabulü parametreye bağlı h için sağlam değildi: 849ea4e'de a pozitif iken 0·∫_1^∞ t sin t/((a−1)²t²+1)+1 = 1 CORRECT çıkıyor, a=1'de ∫t sin t ıraksıyor (kısmi integraller 7.5, −87, −562). Yani fail-closed savunulabilir.",
+  "introduced_by_piece": "yes",
+  "mechanism": "_dirichlet_test'teki 'h.free_symbols != {t}' koşulu işaretli sembolleri de dışlıyor. Kapsamayı sağlam biçimde geri almak için sınırın parametrede düzgün olması gerekir: h(t) ≤ C(t) olacak, C parametreden bağımsız, azalan ve 0'a giden (1/(t+a) ≤ 1/t, a>0). Böylece D4E3-YO-1 ve RK-2 türü genel limit hatası önlenir.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "Matematikçe CORRECT (her a>0, x>0 için Dirichlet). Ama d342778'in fail-closed'u bilinçli bir takas: tabanın parametreli h kabulü sağlam değildi (aşağıda). Geri kazanım yalnız parametreden bağımsız azalan majorantla (1/(t+a) ≤ 1/t) yapılmalı.",
+   "note": "6 vaka yeni UNKNOWN (problem_definedness_undecided), taban CORRECT; FTC yanlış işaret tabanda INCORRECT. Bağımsız ölçüm: tabanda 0·∫_1^∞ t·sin t/((a−1)²t²+1)+1 = 1 CORRECT (a=1'de ıraksak: yanlış onay), yenide UNKNOWN. mpmath quadosc a=0.5: 0.441485128403932, a=2: 0.22440803573507.",
+   "id": "D4E3-RK-7"
+  }
+ },
+ {
+  "id": "D4E3-RK-8",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "title": "Aile kırığı yalnız g·|u| biçiminde okunuyor: C¹ olan Max(sin x,0)² ve Max(cos x,0)² için doğru türev CORRECT'ten UNKNOWN'a (kink_undecided)",
+  "repro": "repro_ret.py F8. sonda_r2.py grupları W ve M",
+  "expected": "CORRECT",
+  "actual_new": "UNKNOWN (kink_undecided; families Ne(sin(x),0))",
+  "actual_base": "CORRECT",
+  "math": "Max(s,0)² = (s²+s|s|)/2; türev 2cos x·Max(sin x,0), nπ'de de geçerli (f'(nπ)=0, iddia 0). mpmath farkı 8e-62.",
+  "introduced_by_piece": "yes",
+  "mechanism": "kink_reading'in aile dalı _abs_factor(fa,u) ile yalnız fa = g·|u| tam biçimini okuyor. abs_form ((sin x+|sin x|)/2)² veriyor, g None oluyor ve sonuç kink_undecided. Açılımda h + g|u| (g = sin x/2, g(nπ)=0) değer ailesi olarak sınıflanabilirdi.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "CORRECT: Max(sin x,0)² C¹, türev her yerde 2cos x·Max(sin x,0) (nπ'de 0); Max(cos x,0)² için −2sin x·Max(cos x,0).",
+   "note": "Yeni UNKNOWN (undecided), taban CORRECT; yanlış iddia 2sin x cos x iki sürümde INCORRECT; Max(x,0)² yeni de CORRECT (sonlu değer kırığı okunuyor). mpmath: nπ ve π/2+nπ'de tek yanlı oranlar 0, iddia farkı 0.",
+   "id": "D4E3-RK-8"
+  }
+ },
+ {
+  "id": "D4E3-RK-9",
+  "klass": "crash_or_timeout",
+  "severity": "low",
+  "title": "RK-5 kısmen açık (D4E2-RK-5 tam kapanmadı): |x⁴−10x²+1|·|x³−3x+1| ders kitabı türevinde tek verify 61–73 s; süre random_point'in hücre başına kanıtında",
+  "repro": "repro_ret.py F9 (ayrı koşulur); profil: prof_h.py",
+  "expected": "Tek verify < 60 s (CORRECT ya da bütçeyle UNKNOWN)",
+  "actual_new": "CORRECT ama 63.0 s (yük ~3), önceki koşuda 61.4 s, cProfile altında 73.2 s. Profil: kink_reading 3.7 s; answers_equivalent 63.4 s, bunun 58.1 s'si random_point._cell (sandbox'ta 14 sym_equal, 57.9 s)",
+  "actual_base": "191.1 s, UNKNOWN (yavaşlık tabanda daha kötü; parça iyileştirdi)",
+  "math": "Zamanlama ölçümü; sonuç doğru (7 iç içe kökten kırık, iddia orada tanımsız).",
+  "introduced_by_piece": "no",
+  "mechanism": "RK-5 kararıyla eklenen bütçe (_KINK_BUDGET=3 ve _linear_switch_rule) yalnız kink_reading'i sınırlıyor. Karşılaştırma bölgesi 7 cebirsel kırıkla 8 hücreye bölünüyor ve random_point her hücrede bütçesiz sembolik kanıt (sym_equal) deniyor. Önceki bulgu D4E2-RK-5 bu yolda açık kalıyor.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "Karar CORRECT doğru (7 basit sıfırın (4 + 3, ortak kök yok) hepsi köşe, iddia tam orada tanımsız). 60 s sınırı belgelenmiş bir proje sınırı değil, D4E2-RK-5'in beklentisi; sınırın çok az üstünde ve yüke bağlı. Beklenti: bütçeli hücre kanıtıyla < 60 s ya da bütçe dolarsa UNKNOWN.",
+   "note": "Ölçüm: yeni 64.1 s CORRECT (yük 2.4), cProfile altında 70.0 s: _cell_proof 57.6 s (14 sym_equal 57.7 s), kink_reading 2.8 s. Taban 186.1 s UNKNOWN. Parça iyileştirdi; kalan süre tabanda da olan random_point hücre kanıtında. Marjinal (yük ~1'de 60 s altına inebilir, ölçülmedi).",
+   "id": "D4E3-RK-9"
+  }
+ },
+ {
+  "id": "D4E3-RK-10",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "title": "2. mertebe türevde 4 basit sıfırlı |P|: kırık bütçesi (3) dolunca P''·P/|P| CORRECT'ten UNKNOWN'a",
+  "repro": "repro_ret.py F10. sonda_rk.py grubu D (sonda_r2.py'de 'RD,')",
+  "expected": "CORRECT",
+  "actual_new": "UNKNOWN (kink_budget)",
+  "actual_base": "CORRECT",
+  "math": "P=x(x−1)(x−2)(x−3), P''=12x²−36x+22. Basit sıfırda |P|' 2|P'(p)| kadar sıçrıyor; 2. türev yok ve iddia tam orada tanımsız.",
+  "introduced_by_piece": "yes",
+  "mechanism": "_linear_switch_rule yalnız order == 1'de çalışıyor. 2. mertebede her sıfır bir derivative_at_point çağrısı harcıyor ve 4 sıfır _KINK_BUDGET=3'ü aşıyor. RK-5 kararı 'bütçe dolarsa UNKNOWN' dediği için belgelenmiş bir takas. Tam kural 2. mertebeye limit almadan genişletilebilir: g(p)≠0, u'(p)≠0 ise f' sıçrar.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "Matematikçe CORRECT (P'(0,1,2,3) = −6, 2, −2, 6 ≠ 0: her sıfırda f' sıçrar, f'' yok; iddia tam orada tanımsız). RK-5 kararı 'bütçe dolarsa UNKNOWN' dediği için UNKNOWN belgelenmiş takas; düzeltme isteğe bağlı kapsama işi.",
+   "note": "Yeni UNKNOWN, taban CORRECT; 3 sıfırlı |x(x−1)(x−2)| 2. mertebe yeni CORRECT, 1. mertebe 4 sıfırlı CORRECT, yanlış iddia iki sürümde INCORRECT (yenide claim_value_at_a_kink + kink_budget). mpmath f'' farkı 0.",
+   "id": "D4E3-RK-10"
+  }
+ },
+ {
+  "id": "D4E3-YO-2",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "claim_where_derivative iddianın tanımsız ailesini yalnız n = 0, ±1, 2'de deniyor: x > 10 iken (x²)' = 2x + 0·cot(4x) CORRECT",
+  "repro": "cd /home/user/asd/denetim/2026-10-01/d4/saldiri/d4e3-yarim/yanlis-onay/repro && PYTHONUTF8=1 PYTHONPATH=<kopya>/src:. MATHVERIFY_LEAN_REPL=/nonexistent python R2_family.py (vakalar dosyada; kopya = git archive d342778 ve 849ea4e)",
+  "expected": "RK-8 (proje geleneği claim_as_written): iddia hedefin tanımlı olduğu bir noktada yazıldığı biçimde tanımsızsa INCORRECT. x > 10 bölgesinde cot(4x) x = kπ/4 > 10 noktalarında tanımsız, (x²)' orada tanımlı → 2x + 0·cot(4x) INCORRECT (en az CORRECT değil); (log(x − 20))' = cot(x)tan(x)/(x − 20), x > 30: x = kπ/2 > 30'da tanımsız → INCORRECT; kontrol: 2x·sin x/sin x da INCORRECT; ilkel görevinde x² + 0·cot 4x geleneğe göre (kontrol).",
+  "actual_new": "CORRECT (d342778)",
+  "actual_base": "CORRECT (849ea4e; önceden var)",
+  "math": "Tanımsız aile: cot(4x) için 4x = kπ ⇔ x = kπ/4; x > 10 bölgesi bu aileden sonsuz nokta içerir (k ≥ 13). Saldırganın n ∈ [−12, 12] örneklemesi kanıt değildir; doğru yöntem iddianın tanımsız kümesinin bölgeyle kesişiminin kesin okunması.",
+  "introduced_by_piece": "no",
+  "mechanism": "certify/calculus (claim_where_derivative ya da eşdeğeri) iddianın tanımsız ailesini yalnız n = 0, 1, −1, 2 için bölgede deniyor; bölge [10, ∞) gibi uzaksa ailenin hiçbir denenen üyesi bölgeye düşmüyor ve iddia her yerde tanımlı sayılıyor.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "olcum": {
+    "R2_family.py d342778": "6 vakanın 6'sı CORRECT; kontrol 2x·sin x/sin x (x>10) INCORRECT; ilkel kontrolü INCORRECT",
+    "R2_family.py 849ea4e": "6 vakanın 6'sı CORRECT; kontrol 2x·sin x/sin x da CORRECT (RK-8 tabanda yok); ilkel kontrolü INCORRECT",
+    "kardesler (v2b_sib.py)": {
+     "(x²)', verilen x > 30, 2x·sin x/sin x": "yeni CORRECT, taban CORRECT (kutup 10π ≈ 31.42)",
+     "(x²)', kısıt x > 30, 2x·cos x/cos x": "yeni CORRECT, taban CORRECT (kutup 19π/2 ≈ 29.85 değil; 21π/2 ≈ 32.99)",
+     "(x²)', verilen x < −10, 2x + 0·cot x": "yeni CORRECT, taban CORRECT (kutup −4π ≈ −12.57)",
+     "(x²)', verilen 10 < x < 11, 2x + 0·cot 4x": "yeni CORRECT, taban CORRECT (kutup 13π/4 ≈ 10.2102 içeride)",
+     "kontrol (x²)' tüm R, 2x + 0·cot 4x": "yeni INCORRECT (doğru), taban CORRECT",
+     "kontrol (x²)', 10 < x < 51/5, 2x + 0·cot 4x": "yeni CORRECT, taban CORRECT: DOĞRU karar (3π ≈ 9.42 < 10, 13π/4 ≈ 10.2102 > 10.2: aralıkta kutup yok)"
+    },
+    "mekanizma izi (v2_trace.py, d342778)": "x > 10, 2x + 0·cot(4x): claim_conds = [Ne(sin(4x), 0)]; _in_comparison denenen noktalar 0, ±π/2, π, π/4, 3π/4, −π/4, 5π/4 hepsi False → ('defined', ''). log(x−20), cot·tan: 16 nokta (k ∈ {0,1,−1,2} × aileler) hepsi False → defined. Kontrol 2x·sin x/sin x: 4π (k=2) True → 'undefined' → INCORRECT."
+   },
+   "matematik": "Bağımsız: RK-8 (NOTLAR 3. tur kararları): iddia hedefin tanımlı olduğu noktada yazıldığı biçimde tanımsızsa INCORRECT. mpmath 50 basamak: 13π/4 = 10.2101761…, sin(4·13π/4) ≈ −7.8e−51 (sıfır); 13π/2 = 20.4203…, 7π = 21.9911…, 10π = 31.4159…. Her vakada bölgede (ve hedefin türevli olduğu noktada) iddianın yazılı tanımsız noktası var: x>10/cot 4x: 13π/4; log(x−20)/cot x: 7π; cot·tan/(x−20): 13π/2; sin/(2√(x−20) sin x): 7π; x sin x / tan 4x cot 4x: 4x = π/2 + kπ ve kπ, ör. 13π/4; x>30 / csc x: 10π. Saldırganın beklentisi doğru.",
+   "corrected_expectation": "Saldırganın beklentisi doğru: altı vakanın hepsi RK-8'e göre INCORRECT (en az UNKNOWN; CORRECT asla). Aynı kök nedenli doğal yazımlar da bulguya eklenmeli: (x²)' verilen x > 30 iken 2x·sin x/sin x, kısıt x > 30 iken 2x·cos x/cos x, verilen x < −10 iken 2x + 0·cot x, 10 < x < 11 iken 2x + 0·cot 4x → INCORRECT. Kontrol: 10 < x < 51/5 aralığında 2x + 0·cot 4x CORRECT kalmalı (kutup yok).",
+   "mekanizma_dogrulandi": "Evet. src/mathverify/certify/calculus.py claim_where_derivative (d342778 satır 1384–1427): Ne dalında aile noktası q (tam sayı Dummy n içeren) yalnız k ∈ (0, 1, −1, 2) ile somutlaştırılıyor (satır 1423); hepsi bölge dışındaysa hit = False, state 'defined' kalıyor (fail-open). Düzeltme önerisi: ailenin bölgeyle kesişimini kesin okumak (bölgenin uçlarından k aralığını çözüp bir içteki üyeyi denemek) ya da hiçbir somut üye bölgede değilse ve bölge sınırsız/aile sonsuzsa 'undecided' (fail-closed).",
+   "note": "Yeniden üretildi (yeni+taban CORRECT); iz: k ∈ {0,±1,2} dışında aile üyesi denenmiyor (calculus.py:1423), bölge uzaksa 'defined'. Beklenti RK-8'e göre doğru. Doğal kardeşler: x>30 iken 2x·sin x/sin x, 2x·cos x/cos x; x<−10; 10<x<11 → hepsi CORRECT. Önceden var (RK-8 tabanda yok; d4e3 düzeltmesi eksik)."
+  }
+ },
+ {
+  "id": "D4E3-YO-3",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "Yazılı tanımlılığı kararsız kısıt/tanım evreni/limit verileni koşulsuz okunuyor (written_definedness DEFINEDNESS_UNDECIDED'i düşürüyor)",
+  "repro": "cd /home/user/asd/denetim/2026-10-01/d4/saldiri/d4e3-yarim/yanlis-onay/repro && PYTHONUTF8=1 PYTHONPATH=<kopya>/src:. MATHVERIFY_LEAN_REPL=/nonexistent python R3_undecided.py",
+  "expected": "x kısıtı 0·∫ₓ¹ dt/t ≥ 0 yazıldığı biçimde yalnız x > 0'da tanımlı (∫ₓ¹ dt/t x ≤ 0'da ıraksak) → x² = 1/4 için {−1/2, 1/2} CORRECT olamaz (doğrusu {1/2}; UNKNOWN da kabul); x + 0·tan(acot 2 + acot ½) > 0 hiçbir yerde tanımsız (acot 2 + acot ½ = π/2) → {1/2} CORRECT olamaz; limit/türev vakaları dosyada; kontroller (GIVEN olarak yazılan aynı koşullar) karşılaştırma için.",
+  "actual_new": "CORRECT (d342778)",
+  "actual_base": "CORRECT (849ea4e; önceden var)",
+  "math": "∫ₓ¹ dt/t = −ln x yalnız x > 0'da var; 0·(tanımsız) yazıldığı biçimde tanımsız (ilke 12, proje geleneği). acot a + acot(1/a) = π/2 (a > 0), tan(π/2) tanımsız.",
+  "introduced_by_piece": "no",
+  "mechanism": "domain/base written_definedness: kısıt, tanım evreni ve limit verileninde yazılı tanımlılık kararsız (DEFINEDNESS_UNDECIDED) çıkınca koşul düşüyor ve kısıt/verilen tanımlılık koşulu olmadan okunuyor (fail-open).",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "olcum": {
+    "R3_undecided.py d342778": "7 vakanın 7'si CORRECT; iki kontrol (aynı koşul solve'da GIVEN) UNKNOWN",
+    "R3_undecided.py 849ea4e": "aynı (7 CORRECT, 2 UNKNOWN)",
+    "karar verilebilir ikiz 0·log x ≥ 0 (v3_check.py)": {
+     "solve x²=1/4, kısıt: {−1/2,1/2}": "yeni INCORRECT, taban CORRECT",
+     "solve x²=1/4, kısıt: {1/2}": "yeni CORRECT, taban INCORRECT",
+     "limit |x|/x→0, verilen: DNE": "yeni INCORRECT, taban CORRECT",
+     "limit |x|/x→0, verilen: 1": "yeni CORRECT, taban INCORRECT",
+     "türev |x| 0'da, kısıt: DNE": "yeni UNKNOWN, taban CORRECT",
+     "hiçbir yerde tanımsız ikiz x + 0·log(−x²−1) > 0, kısıt solve {1/2} / dod limit 1": "yeni UNKNOWN / UNKNOWN, taban CORRECT / CORRECT"
+    },
+    "ayna (haksız ret, aynı mekanizma)": {
+     "solve x²=1/4, kısıt G1: {1/2}": "yeni INCORRECT, taban INCORRECT (proje okumasında doğru cevap; kararsızken UNKNOWN olmalı)",
+     "limit |x|/x→0, verilen G1: 1": "yeni INCORRECT, taban INCORRECT (proje okumasında sağdan limit 1 doğru; kararsızken UNKNOWN olmalı)"
+    },
+    "mekanizma izi (v3d_ctx.py, d342778)": "G1 ve G3 için kısıt / limit verileni / dod: Ctx.written_conditions() = ([], set()), written_undecided() = []; aynı metin solve'da GIVEN iken written_undecided() = [metin] (→ UNKNOWN). 0·log x ≥ 0 her konumda [x > 0] veriyor."
+   },
+   "matematik": "Bağımsız: (1) ∫ₓ¹ dt/t: x > 0'da −ln x (mpmath: ε = 1e−10, 1e−30 için ∫_ε^1 = 23.0259, 69.0776 = −ln ε, sınırsız), x ≤ 0'da [x,1] 0'ı içerir ve 1/t 0 civarında integrallenemez → ıraksak: G1 tam olarak x > 0'da tanımlı. (2) ∫₀^∞ e^{−xt} dt = 1/x (x > 0); x = 0'da ∫1 = ∞, x < 0'da ıraksak (x = −1/2: ∫₀^50 = 1.44e11) → G2 tam olarak x > 0'da tanımlı. (3) acot 2 + acot ½ = atan ½ + atan 2 = π/2 (pozitif argümanda (0,π) ve (−π/2,π/2] gelenekleri aynı; mpmath 60 basamakta fark 0, cos = 5.7e−62) → tan tanımsız, G3 hiçbir yerde tanımlı değil. Beklenen kararlar: kısıt G1 ile {−1/2,1/2} CORRECT değil (proje okumasında {1/2}); dod G1 ile [−1,1]'de min x: bölge (0,1], min yok → −1 CORRECT değil; kısıt G2 ile |x|'in 0'daki türevi: 0 bölgenin iç noktası değil → UNKNOWN (G6); verilen G1/G2 ile |x|/x'in 0'daki limiti sağdan 1 → DNE CORRECT değil (G6); G3 kısıt/dod: problem yazıldığı biçimde tanımsız → UNKNOWN.",
+   "corrected_expectation": "Saldırganın beklentisi doğru. Kararsızken çekimser olunmalı: yedi vakanın hepsi en az UNKNOWN (CORRECT asla). Aynı mekanizmanın aynası da düzeltilmeli: kısıt G1 ile {1/2} ve verilen G1 ile limit 1 bugün INCORRECT (haksız ret riski; proje okumasında doğru cevaplar) → UNKNOWN. Ek: tek başına kararsızlık düzeltmesi extremum vakasını kapatmayabilir; ayrı bulgu D4E3-YO-3-EK1.",
+   "mekanizma_dogrulandi": "Evet. src/mathverify/certify/base.py Ctx.written_conditions (d342778 ~satır 1000–1012): 'extra' metinleri (limit verilenleri, bütün vars[].constraints, domain_of_discourse) written_definedness'tan geçiyor ama note(…, 'undecided') yapılmıyor (yalnız srcs için _undefined_constant); domain.py written_definedness (satır 1880–1886) serbest sembolü olmayan koşulları (DEFINEDNESS_UNDECIDED, cos(acot 2 + acot ½) ≠ 0) atıyor. Sonuç: koşul düşüyor, written_undecided boş → fail-open. Düzeltme önerisi: extra metinler için de closed_condition_undecided / _undefined_constant notu ve çağıranlarda written_undecided ile çekimserlik.",
+   "note": "Yeniden üretildi (7 vaka yeni+taban CORRECT). Matematik bağımsız doğrulandı (mpmath). İz: kısıt/limit verileni/dod için written_conditions boş, written_undecided boş; aynı metin solve'da GIVEN iken undecided → UNKNOWN. Ayna: kısıt G1 ile {1/2} ve verilen G1 ile limit 1 INCORRECT (haksız ret). Extremum vakasının ayrıca daha geniş kökü var (EK1)."
+  }
+ },
+ {
+  "id": "D4E3-YO-3-EK1",
+  "klass": "false_accept",
+  "severity": "low",
+  "title": "(Doğrulayıcının bulduğu kardeş, farklı mekanizma) extremum, verilenin/kısıtın/tanım evreninin yazılı tanımlılığını KARAR VERİLEBİLİRKEN de okumuyor: [−1, 1]'de min x, verilen/kısıt/dod 0·log x ≥ 0 iken −1 CORRECT",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/dogrulama-devralinan/sonda/v3b_ext.py ve v3c_ext.py (PYTHONPATH=<kopya>/src:/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4e3/dogrulama-devralinan/sonda)",
+  "expected": "0·log x ≥ 0 yazıldığı biçimde x > 0 der → bölge (0, 1], min x yok (inf 0 erişilmez) → −1 CORRECT değil (proje okumasında INCORRECT; en az UNKNOWN). Kontrol: verilen/kısıt/dod 'x > 0' iken −1 bugün INCORRECT (doğru).",
+  "actual_new": "CORRECT (d342778): verilen, kısıt ve dod 0·log x ≥ 0 üçünde de; dod 0·log x ≥ 0 iken DNE UNKNOWN; verilen 0·∫ₓ¹dt/t ≥ 0 iken UNKNOWN",
+  "actual_base": "CORRECT (849ea4e; aynı)",
+  "math": "log x yalnız x > 0'da tanımlı; [−1,1] ∩ (0,∞) = (0,1]; x orada en küçük değerini almaz. −1 bölgede değil.",
+  "introduced_by_piece": "no",
+  "mechanism": "Ctx.written_conditions verilen için [x > 0] üretiyor (ölçüldü) ama extremum sertifikası aralığı bu koşullarla daraltmıyor; verilen/kısıt/dod yalnız SymPy'nin katladığı biçimde (0·log x → 0, 0 ≥ 0 → doğru) okunuyor. D4E2-YO-5'in ('kısıt ve tanım evreninin yazılı tanımlılığı hiçbir görevde okunmuyor') extremum kısmı kapanmamış; YO-5 kararı yalnız limit ve türevi kapsıyordu.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "olcum": {
+    "v3b_ext.py": "yeni ve taban: dod x>0 → −1 INCORRECT; dod x≥0 → −1 INCORRECT, 0 CORRECT; kısıt 0·log x≥0 → −1 CORRECT; kısıt G1 → −1 CORRECT; verilen 0·log x≥0 → −1 CORRECT; verilen G1 → UNKNOWN; kısıt x>0 → −1 INCORRECT; dod 0·log x≥0 → DNE UNKNOWN",
+    "v3c_ext.py": "yeni ve taban: verilen x>0 → −1 INCORRECT; verilen x + 0·√x > 0 → −1 INCORRECT; f = x + 0·log x → UNKNOWN"
+   },
+   "corrected_expectation": "Verilen/kısıt/dod 0·log x ≥ 0 iken [−1,1]'de min x için −1 INCORRECT (ya da UNKNOWN), DNE CORRECT ya da UNKNOWN. Gelenek: G6/YO-5'teki 'aynı koşul her yazımda aynı karar'; ilke 12.",
+   "note": "Doğrulayıcının bulduğu kardeş (saldırganın üç bulgusundan ayrı). Karar verilebilir 0·log x ≥ 0 bile extremum aralığını daraltmıyor: verilen/kısıt/dod üçünde −1 CORRECT (yeni+taban); 'x > 0' yazımında INCORRECT. D4E2-YO-5'in extremum kısmı açık. Önceden var."
+  }
+ },
+ {
+  "id": "D4E3-KINK",
+  "klass": "other",
+  "severity": "low",
+  "title": "KINK grubu (sonda s3): beş 'kırıkta değer' vakası CORRECT çıktı; saldırgan BAD işaretledi — beklenti hatası mı?",
+  "repro": "/home/user/asd/denetim/2026-10-01/d4/saldiri/d4e3-yarim/yanlis-onay/p/s3.py (çıktı s3_yeni.out: BAD satırları): türev görevi f = Piecewise((exp(x), x > 0), (1 + x, x <= 0)) iddia Piecewise((exp(x), x > 0), (1, x <= 0)); f = Max(x, -x)*Max(x, -x) iddia 2*x; f = Max(x**3, -x**3) iddia 3*x**2*sign(x); f = x*Max(x, -x) iddia 2*Max(x, -x); f = Max(x, -x)**(1/2) iddia sign(x)/(2*sqrt(Abs(x)))",
+  "expected": "Saldırganın beklentisi: kırıkta değer veren iddia gelenek → UNKNOWN. Ana oturumun okuması: hepsi doğru (CORRECT doğru karar): Piecewise(eˣ, 1 + x) 0'da türevli (iki yan türev 1, sürekli); |x|² = x², |x|³ ve x|x| türevli (0'da türev 0); √|x|'in türevi 0'da yok ve iddia da 0'da tanımsız (0/0). Bağımsız olarak doğrula: her vakada f'nin 0'da türevli olup olmadığını ve iddianın her noktada f' ile aynı olup olmadığını hesapla.",
+  "actual_new": "CORRECT (d342778)",
+  "actual_base": "CORRECT (849ea4e; s3_taban.out satır 12, 14, 15, 17, 18 ve kendi koşum)",
+  "math": "bkz. expected",
+  "introduced_by_piece": "unknown",
+  "mechanism": "kırık okuması (kink_reading): türevin var olduğu kırıkta iddia değeri doğruysa CORRECT.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": false,
+   "real": false,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "olcum": {
+    "v4_kink.py d342778": "beş vaka CORRECT; kontroller: sıçrama Piecewise(eˣ, x) iddia Piecewise(eˣ, 1) UNKNOWN; köşe Piecewise(eˣ, 1+2x) iddia Piecewise(eˣ, 2) UNKNOWN; Piecewise(eˣ,1+x) iddia Piecewise(eˣ, 2) INCORRECT; x|x| iddia 2x INCORRECT; |x|³ iddia 3x|x| CORRECT",
+    "v4_kink.py 849ea4e": "beş vaka CORRECT; sıçrama ve köşe kontrolleri CORRECT (tabanda yanlış onay; d4e3 YO-4 düzeltmesi bunları UNKNOWN yaptı); diğerleri yenidekiyle aynı"
+   },
+   "matematik": "Bağımsız (mpmath 60 basamak, h = 1e−15 ve 1e−30 ile sağ/sol fark bölümleri 0'da): (1) Piecewise(eˣ, 1+x): f(0) = 1, sağ (eʰ−1)/h → 1, sol → 1: f'(0) = 1; iddia 0'da 1 (x ≤ 0 dalı) = f'(0); 0 dışında max|iddia − f'| = 3e−35. (2) |x|·|x| = x²: bölümler ±h → 0, f'(0) = 0 = 2·0. (3) |x³| = |x|³: bölümler ±h² → 0, f'(0) = 0; iddia 3·0²·sign(0) = 0 (sign(0) hangi değeri alsa 0 ile çarpılıyor). (4) x|x|: bölümler |h| → 0, f'(0) = 0 = 2|0|. (5) √|x|: bölümler ±1/√h → ±∞, 0'da türev yok; iddia sign(x)/(2√|x|) 0'da yazıldığı biçimde 0/0 tanımsız, 0 dışında f' ile aynı (fark 2e−37). 1–4'te 0 kırık değil (f türevli), iddia her noktada f' ile aynı; 5'te iddia türevin olmadığı noktada değer vermiyor (R8/RK-1 ders kitabı türevi). Beşi de CORRECT olmalı.",
+   "corrected_expectation": "Beşi de CORRECT (doğru karar). 1–4: f 0'da türevli (f'(0) = 1, 0, 0, 0) ve iddia 0'da tam bu değeri veriyor, başka her yerde f' ile aynı: 0 'kırık' değil. 5: √|x| 0'da türevsiz, iddia da 0'da yazıldığı biçimde tanımsız (0/0): R8/RK-1 geleneğiyle CORRECT. s3 sondasında bu beş vakanın beklentisi NOTOK'tan OK'ye (ya da NOTNO'ya) çevrilmeli. YO-4 kuralı yalnız türevin OLMADIĞI noktada değer veren iddiaya uygulanır.",
+   "note": "Yeniden üretildi (yeni+taban CORRECT) ama bulgu gerçek değil: beklenti hatası. mpmath fark bölümleri: 1–4'te f 0'da türevli (1, 0, 0, 0) ve iddia 0'da aynı değeri veriyor; 5'te türev yok ve iddia 0'da 0/0 tanımsız. CORRECT doğru karar. Gerçek sıçrama/köşe kontrolleri yeni kodda UNKNOWN (tabanda CORRECT idi)."
+  }
+ }
+]

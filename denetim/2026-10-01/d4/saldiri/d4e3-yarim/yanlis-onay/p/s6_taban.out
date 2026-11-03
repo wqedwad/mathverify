@@ -1,0 +1,12 @@
+ok  INCORRECT None        1.5s FAMS anti 2*x, given x > 10: x**2 + 0*cot(4*x)  [] ['certify.calculus:fail:antiderivative_not_defined_or_continuous_where_integrand_is']
+ok  INCORRECT None        0.7s FAMS anti 1/(x - 20): log(x - 20) + 0*cot(x)  [] ['certify.calculus:fail:antiderivative_not_defined_or_continuous_where_integrand_is']
+ok  UNKNOWN   None        0.1s FAMS simplify x**2/x, given x > 10: x + 0*cot(4*x)  [] ['certify.algebra:unknown:claim_as_written_undecided: claim_condition_undecided: Ne(sin(4*x), 0) on Union(Intersecti']
+ok  UNKNOWN   None        0.2s FAMS simplify log(x - 20) + 1: log(x - 20) + 1 + 0*tan(x)  [] ['certify.algebra:unknown:claim_as_written_undecided: claim_condition_undecided: Ne(cos(x), 0) on Union(Intersection']
+ok  UNKNOWN   None        0.1s FAMS ctrl simplify x**2/x: x + 0*cot(x)  [] ['certify.algebra:unknown:claim_as_written_undecided: claim_condition_undecided: Ne(sin(x), 0) on Union(Intersection']
+BAD CORRECT   None        0.2s FAM derivative log(x - 20): cot(x)*tan(x)/(x - 20)  [] ['certify.calculus:pass:']
+BAD CORRECT   None        0.2s FAM derivative x*sin(x), given x > 10: sin(x) + x*cos(x)*tan(4*x)*cot(4*x)  [] ['certify.calculus:pass:']
+ok  CORRECT   None        1.0s FAM derivative tan(x), given x > 10: 1 + tan(x)**2 [ctrl right]  [] ['certify.calculus:pass:']
+BAD CORRECT   None        0.2s FAM derivative sin(x)**2, given x > 10: 2*sin(x)**2*cot(x)  [] ['certify.calculus:pass:']
+BAD CORRECT   None        0.2s FAM derivative sin(x)**2, x > 10 constraint: 2*sin(x)**2/tan(x)  [] ['certify.calculus:pass:']
+BAD CORRECT   None        0.1s FAM ctrl derivative sin(x)**2: 2*sin(x)**2*cot(x)  [] ['certify.calculus:pass:']
+11 cases, 5 not as expected, 4 s

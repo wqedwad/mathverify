@@ -40,8 +40,7 @@ import sympy as sp
 from sympy import Matrix, sqrt, pi, acos, Abs
 
 from ..equiv.numeric import to_mp
-from ..normalize.parse import (parse_relation, ParseError, _SAFE_NAMES, preclean, _DEG_NUM_RE,
-                               _DEG_PAREN_RE)
+from ..normalize.parse import parse_relation, ParseError, _SAFE_NAMES, preclean, unit_marks, without_unit_marks
 from ..sandbox import run as sb_run
 from .base import Ctx, Timer, result, unknown
 
@@ -156,14 +155,14 @@ GEO_FUNCS = {
 # degree marks
 # ---------------------------------------------------------------------------
 def has_degree_mark(s: str) -> bool:
-    return isinstance(s, str) and bool(_DEG_NUM_RE.search(s) or _DEG_PAREN_RE.search(s))
+    """A degree mark in any notation the parser converts (`normalize.parse.unit_marks`): 40°, 40 derece, 40^\\circ."""
+    return "°" in unit_marks(s)
 
 
 def strip_degree_marks(s: str) -> str:
-    """`40°` -> `40`, `(a+b)°` -> `(a+b)`: angle() is measured in degrees, so a degree mark is
+    """`40°` -> `40`, `(a+b)°` -> `(a+b)`, `40^\\circ` -> `40`: angle() is measured in degrees, so a degree mark is
     the unit of the plain number, not a conversion to radians."""
-    s = _DEG_PAREN_RE.sub(r"(\1)", s)
-    return _DEG_NUM_RE.sub(r"\1", s)
+    return without_unit_marks(s, {"°"})
 
 
 def _uses_coordinates(texts) -> bool:

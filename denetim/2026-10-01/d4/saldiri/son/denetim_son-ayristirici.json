@@ -1,0 +1,259 @@
+[
+ {
+  "findings": [
+   {
+    "id": "SA-YO-1",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "G4-RK-5: boş öncülde açık compute adımlarının çürütmesi geri çekiliyor; yanlış özdeşlik/hesap adımlı ∅ çözümleri CORRECT oluyor",
+    "repro": "sonda/c7.py ve c4.py (çalışma dizini .../yanlis-onay/sonda; run.py <cases>). Gerçekçi YKS: solve_equation 'x**2 - 2*x + 5 = 0', adımlar [compute 'x**2 - 2*x + 5 = (x - 1)**2 + 6', eq '(x - 1)**2 + 6 = 0', eq '(x - 1)**2 = -6'], cevap '∅'. Ayrıca count_roots x²+x+1 + compute 'x**2 + x + 1 = (x + 1/2)**2 + 1/2' cevap 0; x⁴+x²+1=0 + compute '= (x**2 + 1)**2'; 2^x+3=0 + compute '2**x + 3 = 2**(x + 3)'; x²+2<2x + compute 'x**2 - 2*x + 2 = (x - 1)**2 + 2'; x²+1=0 + compute 'Derivative(x**2, x) = 3*x' ya da 'x**2 + 1 = x**2 - 1'; |x-1|+|x+1|=1 + compute 'Abs(x - 1) + Abs(x + 1) = 2*Abs(x)'.",
+    "expected": "INCORRECT (taban gibi): adım her x ∈ ℝ'de ve her x ∈ ℂ'de yanlış bir hesap (kareye tamamlama/açılım hatası). Projenin eleştirmen istemi de 'yanlış formül ya da özdeşlik, aritmetik kayma: son cevap tutsa bile hata' der.",
+    "actual_branch": "CORRECT (11 vakanın 11'i; adım durumu 'unknown', reason premises_hold_nowhere). Doğru +4 sürümü 'verified', CORRECT (kontrol).",
+    "actual_base": "INCORRECT (11'in 11'i; steps.refute:fail, step_refuted).",
+    "math": "(x−1)²+6 − (x²−2x+5) = 2 ≠ 0 her x'te; (x+1/2)²+1/2 − (x²+x+1) = −1/4; (x²+1)² − (x⁴+x²+1) = x² (öncülün karmaşık köklerinde ≠ 0); d/dx x² = 2x ≠ 3x. Öncüllerin karmaşık köklerinde (1±2i; −1/2±i√3/2; ±i) lhs−rhs sırasıyla −2, 1/4, 1/2∓i√3/2, ±i ≠ 0; korunan vaka 'x**2 = -1' ise ±i'de 0 (p_cplx.py, sympy kesin).",
+    "mechanism": "steps/deterministic.py _compute_status sonuna eklenen 'if not claim.free_symbols: return; return _vacuous(...)': öncüller (verilen+görev ilişkisi+kısıt) ℝ'de boşsa serbest sembollü her compute çürütmesi unknown'a çekiliyor. Kararın kapsamı 'kapalı yanlış ilişki adımı' idi; düzeltici açık compute'u ekledi ama kendi gerekçesi ('kapalı hesap, sonuç değil hesaptır: 0 - 4 = 4 öncül ne olursa olsun yanlış') açık bir yanlış özdeşlik için de geçerli. Aynı dosyadaki _compute_check_on_premises belge dizgisi hâlâ 'No point at all: the identity check stands, as before' diyor; davranış onu sessizce tersine çeviriyor. (eq türündeki yanlış özdeşlik ∅ problemlerinde tabanda da unknown: önceden var, aynı kök.) Önerilen dar düzeltme: geri çekmeden önce adımı öncüllerin (polinom, sonlu, kesin) KARMAŞIK çözümlerinde denetle; orada yanlışsa (cebirsel sonuç değil) çürütme kalsın; 'x**2 = -1', '0 = 2' (ℂ'de de boş) gibi kararın vakaları etkilenmez."
+   },
+   {
+    "id": "SA-YO-2",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "G4YO-3 açık kalan kardeşler: geçmiş/gelecek zaman olumsuzu ve ret kelimeleri temizlenip değer onaylanıyor",
+    "repro": "sonda/c2.py: evaluate '2 + 3', payload sırasıyla '5 sağlamadı', '5 çıkmadı', '5 tutmadı', '5 bulunamadı', '5 sağlamadığından', '5 tutmadığı için', '5 çıkmayacak', '5 sağlamamaktadır', '5 geçersiz(dir)', '5 reddedilir', '5 reddedildi', '5 elenir', '5 hatalı(dır)', '5 (reddedilir)', '5 ✗', '5 ❌', '5 is invalid', '5 is rejected', '5 is extraneous'; solve_equation 'x - 5 = 0' payload '{5} reddedilir' / '{5} sağlamadı'.",
+    "expected": "UNKNOWN (payload_negated): değer metinde reddedilmiş ya da geçersiz sayılmış; 'çözümü 5 değildir' ile aynı anlam.",
+    "actual_branch": "CORRECT (22/22 Türkçe+İngilizce+simge vakası, payload_cleaned). Kontrol: '5 değil', '5 sağlamaz' UNKNOWN.",
+    "actual_base": "CORRECT (aynı 22 vaka); '5 sağlamaz' tabanda da CORRECT idi (dal düzeltti).",
+    "math": "2+3 = 5; iddia metni 5'i reddediyor, doğrulayıcı 5'i onaylıyor.",
+    "mechanism": "verifier._sanitize_payload sondaki düzyazıyı _NEGATION reddedilenler listesiyle süzüyor; dal listeyi genişletti (-maz/-mez, -mıyor, -mayabil, -mamış, -mamalı, olma[dmy]) ama geçmiş zaman olumsuzu -madı/-medi (ve -madığ-), gelecek olumsuzu -mayacak (olma- dışında), -mamakta, ret sözcükleri (geçersiz, redded-, elen-, hatalı), İngilizce invalid/rejected/extraneous ve ✗/❌ yok. Kök neden ret listesi yaklaşımı: atılan düzyazı için izin listesi (bulunur, olur, olarak bulunur, elde edilir, olmalıdır, eşittir, doğrudur, cm, birim, tane, is the answer, sonucuna ulaşılır) ve geri kalan her düzyazıda UNKNOWN fail-closed olur."
+   },
+   {
+    "id": "SA-YO-3",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "G4YO-2 ikizi eksik: LaTeX'te alt indisli log tabanı ve çarpım argümanından sonra '/' fonksiyonun içine okunuyor (\\log_2 8/3, \\sin 2x/2, \\sin 3\\pi/2, \\ln 2x/2)",
+    "repro": "sonda/c1.py: evaluate 'log(8/3, 2)' iddia '$\\log_2 8/3$'; evaluate 'log(9/2, 3)' iddia '$\\log_3 9/2$'; derivative '-cos(x)' iddia '$\\sin 2x/2$'; evaluate 'sin(3*pi/2)' iddia '$\\sin 3\\pi/2$'; derivative 'x*log(x) - x' iddia '$\\ln 2x/2$'; MC şık A='$\\sin 3\\pi/2$', iddia -1 harf A.",
+    "expected": "UNKNOWN (claim_ambiguous_juxtaposition), düzelticinin '\\ln 2/2' ve '\\cos \\pi/3' için verdiği kararla aynı: soldan sağa (log₂8)/3 = 1, (sin 2x)/2, sin(3π)/2 = 0, (ln 2x)/2 da birer okuma.",
+    "actual_branch": "CORRECT (6/6; latex2sympy log(8/3,2), sin(x), sin(3π/2), log(x) okuyor). Aynı yazımlar öteki doğruda INCORRECT (J5, J5c, J7 'sin x cos x = \\sin 2x/2', J8b, J9b, J16).",
+    "actual_base": "aynı (CORRECT 6/6, INCORRECT 6/6).",
+    "math": "log₂(8/3) = 3 − log₂3 ≈ 1.415 ≠ (log₂8)/3 = 1; sin(2x/2) = sin x ≠ (sin 2x)/2 = sin x·cos x; sin(3π/2) = −1 ≠ sin(3π)/2 = 0; ln(2x/2) = ln x ≠ ln(2x)/2.",
+    "mechanism": "normalize/parse._latex_divisor_juxtaposed ikiz denetimi fonksiyon makrosundan sonra tek bir atom bekliyor: '\\log_2'de '_' atom değil (_latex_atom_end None, denetim atlanıyor), '2x' ve '3\\pi' gibi yan yana çarpım argümanında atom '2'de bitiyor ve kalan 'x/2' '/' ile başlamadığı için işaretlenmiyor. Öneri: argümanı fonksiyondan sonraki ilk operatöre (+, -, =, \\cdot, sağ ayraç) kadar oku; '_{…}' / '_d' tabanını atla; yol üstünde ayraçsız '/' varsa işaretle."
+   },
+   {
+    "id": "SA-YO-4",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "G4YO-2'nin bölen sonrası birim/işaret kardeşleri açık: LaTeX '1/2\\%' 50, '$180/2^\\circ$' 90 okunuyor; Unicode eksi '1/−2π' çarpım kuruluyor",
+    "repro": "sonda/c8.py ve c5.py: evaluate '50' iddia '$1/2\\%$' (ayrıca '1/2\\%', '$1/2 \\%$'); evaluate '75' iddia '$3/4\\%$'; evaluate '90' iddia '$180/2^\\circ$'; evaluate '-asin(1)' iddia '1/−2π' (U+2212) ve '1/–2π' (U+2013); evaluate '-sin(pi/3)' iddia '1/−2√3'.",
+    "expected": "UNKNOWN, düz metin kontrolleriyle aynı: dal '1/2%', '180/2°', '1/-2π' için claim_ambiguous_juxtaposition veriyor ve raporda ''1/2%' 50 okunuyordu: artık okunmuyor' diyor.",
+    "actual_branch": "CORRECT (P1, P3, '1/2\\%', '$1/2 \\%$', D1, M1, M4, M5). '$1/2\\%$' doğal okumanın doğrusunda (1/200) INCORRECT (P2, P4).",
+    "actual_base": "aynı (CORRECT; P2/P4 INCORRECT). Düz metin kontrolleri tabanda CORRECT, dalda UNKNOWN: düzeltme yalnız o yazımlar için geçerli.",
+    "math": "(1/2)% = 1/200 ≠ 1/(2%) = 50; (3/4)% = 3/400 ≠ 75; 1/(−2)·π = −π/2 ≠ 1/(−2π).",
+    "mechanism": "(a) LaTeX: _LATEX_NO_FACTOR '%', 'circ' ve 'degree'i 'çarpan başlatmaz' sayıyor; '\\%' _LATEX_MACRO'ya hiç uymuyor (harf değil); _latex_atom_end '^\\circ'da None dönüyor. Sonuçta '1/2\\%' latex2sympy'ye gidip 1/(2/100) okunuyor. Bu, düz metin yolunun yorumunun ('a unit mark is a factor too: 1/2% is not 1/(2/100) = 50') tersi. (b) preclean, _UNI_VALUE_RE.sub(_juxtaposed_product)'ı _UNICODE_MAP'ten ('−' ve '–' → '-') ÖNCE koşuyor; _closes_divisor işaret olarak yalnız '+-'yı tanıyor, bu yüzden '1/−2π' bölen sonrası sayılmıyor ve '2*π' çarpımı kuruluyor; ambiguous_juxtaposition da ham metinde aynı sınamayı yapıyor. Öneri: _closes_divisor işaret kümesine '−–—' eklenmeli; LaTeX'te '\\%' ve '^\\circ'/'^{\\circ}' bölen işleneninin birim eki sayılıp işaretlenmeli."
+   }
+  ],
+  "probes_run": 546,
+  "summary": "Bu inceleme wip/son-ayristirici dalını tabana (0e93ed5) karşı yalnız yanlış onay açısından ölçtü. Dört bulgu var. Dalın kendi getirdiği yanlış onay tek, orta önemde ve gerçekçi (SA-YO-1). Öteki üçü tabanda da var: düzeltmelerin dar yazım listeleri yüzünden açık kalan kardeşler.\n\n**SA-YO-1 (dalın getirdiği).** G4-RK-5 düzeltmesindeki _vacuous, boş öncüllü problemlerde serbest sembollü compute çürütmelerini de geri çekiyor. Bu yüzden yanlış hesap adımı içeren ∅ çözümleri CORRECT oluyor:\n- Örnekler: kareye tamamlama hatası 'x²−2x+5 = (x−1)²+6', '(x+1/2)²+1/2', '(x²+1)²', 'd/dx x² = 3x'.\n- Ölçüm: 11 vakada taban INCORRECT, dal CORRECT.\n- Bu adımlar öncüllerin karmaşık köklerinde de yanlış (sympy ile kesin denetlendi). Kararın korumak istediği 'x² = −1' ise orada doğru. Bu yüzden 'karmaşık köklerde de denetle' ölçütü iki durumu temiz ayırıyor.\n- Belge dizgisi ile davranış çelişiyor: _compute_check_on_premises hâlâ 'no point at all: the identity check stands' diyor.\n\n**SA-YO-2 (tabanda da var).** G4YO-3'ün olumsuzluk listesi '-madı/-medi', '-mayacak', '-mamakta' eklerini ve 'geçersiz', 'reddedilir', 'hatalı', 'invalid', 'rejected', '✗' gibi sözcük ve simgeleri tanımıyor. Ölçülen 22 yazımın 22'si iki kopyada da CORRECT. Kök neden ret listesi yaklaşımı; izin listesiyle fail-closed çözülür.\n\n**SA-YO-3 (tabanda da var).** G4YO-2'nin LaTeX ikiz denetimi iki yazımı kaçırıyor: alt indisli log tabanı ('\\log_2 8/3') ve yan yana çarpım argümanı ('\\sin 2x/2', '\\sin 3\\pi/2', '\\ln 2x/2'). Bunlar hâlâ okunuyor ve iki kopyada da CORRECT ya da INCORRECT karar alıyor.\n\n**SA-YO-4 (tabanda da var).** Bölen sonrası birim ve işaret kardeşleri açık:\n- LaTeX '1/2\\%' 50 okunuyor, '$180/2^\\circ$' 90 okunuyor. Düzeltici düz metin '1/2%' için bunu kapattığını yazmıştı; LaTeX'te _LATEX_NO_FACTOR '%' ve 'circ'i bilerek dışarıda tutuyor.\n- Unicode eksi ve tire ('1/−2π', '1/–2π') reddedilmiyor, çarpım kuruluyor; ASCII '1/-2π' reddediliyor.\n\n**Temiz bulunan yerler:**\n- G4-K-4 kareler tamamlama kanıtı matematikçe doğru. Kontrol edilenler: r = c − bᵀA⁻¹b/4, Sylvester ölçütü, negatif olmayan terim okuması ve çift kök yerine konan negatif olmayan değişken.\n- _premises_proved_empty'nin aslında sağlanabilir öncüle yanlışlıkla 'boş' dediği bir durum bulunamadı. Taranan yollar: karmaşık tanım kümesi (zaten intake'te UNKNOWN), doğal sayı ℕ geleneği, tek kök okuması, solveset'in 34 zor denklemi, tutarsız ya da gerçel noktasız verilenler (hepsi ir_inconsistent ile UNKNOWN).\n- G4YO-1 ∅ şıkkı kısayolu ve 'mention' yolu yanlış onay üretmedi.\n- Ders kitabı yazımları bozulmadı: 2π/3, π/2 ve '\\frac' okunuyor; açık operatörlü '1/2·π' de okunuyor. ASCII '1/2x' ve '1/2 sqrt(x)' iki kopyada da okunmuyor (UNKNOWN).\n\n**Ölçüm koşulları ve sınırlar:**\n- Her vaka iki arşiv kopyasında (dal ve 0e93ed5) ölçüldü; LLM ve Lean kapalıydı (MATHVERIFY_LEAN_REPL=/nonexistent).\n- LLM eleştirmeninin üretimde SA-YO-1'i yakalayıp yakalamadığı ölçülmedi.\n- Raporda 'açık' diye listelenen 'tanımsız değil' DNE kelime testi yeniden bulgu yapılmadı.\n- Kopyalar silindi. Sondalar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-ayristirici/yanlis-onay/sonda altında (run.py, c1–c8.py, p_*.py)."
+ },
+ {
+  "findings": [
+   {
+    "id": "SA-RK-1",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "G4YO-1'in yeniden yazımı MEB terimi 'gerçek'i almadı: 'Gerçek kökü yoktur', 'Denklemin gerçek kökü yoktur', 'Gerçek kökleri yoktur', 'Gerçek sayılarda çözümü yoktur', 'Gerçek çözümü yoktur' şıkkıyla verilen doğru ∅ cevabı iki kopyada da INCORRECT. Aynı düzeltme 'Gerçel/Reel kökü yoktur', 'Kökü yoktur', 'Çözümü yoktur' için INCORRECT'i CORRECT'e çevirdi; 'gerçek' kardeşi kaldı",
+    "repro": "sonda7.py, NS2 grubu. IR: solve_equation {var: x, equation: 'x**2 + 4 = 0'}, vars [x real], answer_shape set, options {A:'{-2, 2}', B:'{2}', C:'{-2}', D:'{0}', E:<metin>}. Çözüm: claimed_answer {kind: set, payload: '∅', option: 'E'}; ayrıca yalnız harf (payload None, option E). E metinleri: 'Gerçek kökü yoktur', 'Denklemin gerçek kökü yoktur', 'Gerçek kökleri yoktur', 'Gerçek sayılarda çözümü yoktur', 'Denklemin gerçek sayılarda çözümü yoktur'. Eşitsizlik: solve_inequality 'x**2 + 1 < 0', shape interval, D='Gerçek sayılarda çözümü yoktur' ya da 'Gerçek çözümü yoktur', payload '∅', option D (sonda3 ve sonda7).",
+    "expected": "CORRECT (ya da en kötü UNKNOWN). Şık tam olarak 'gerçek kök yok' diyor, ∅ doğru.",
+    "actual_branch": "INCORRECT: mc.consistency fail, option_says_DNE_but_a_value_was_claimed. 14 vaka (5 metin x 2 biçim, artı 2 eşitsizlik metni x 2 kopya içinde). Karşılaştırma: aynı dalda 'Gerçel kökü yoktur', 'Reel kökü yoktur', 'Denklemin reel kökü yoktur', 'Kökü yoktur', 'Çözümü yoktur' CORRECT.",
+    "actual_base": "INCORRECT, aynı gerekçe. 'Gerçel/Reel kökü yoktur', 'Kökü yoktur', 'Çözümü yoktur' de INCORRECT'ti.",
+    "math": "x² + 4 ≥ 4 > 0, yani gerçel kök yok. Diskriminant 0² − 4·1·4 = −16 < 0. x² + 1 ≥ 1 > 0 olduğundan x² + 1 < 0'ın çözüm kümesi ∅.",
+    "mechanism": "verifier._NO_SOLUTION_WORDS sıfat olarak yalnız '(?:gerçel|reel)\\s+' alıyor; MEB'in standart terimi 'gerçek' yok, 'gerçek sayılarda' / 'reel sayılarda' öbeği de yok. Bu yüzden metnin bütünü eşleşmiyor. _NO_SOLUTION_MENTION'daki 'kök\\s*yok' iyelik ekli 'kökü yoktur'u görmüyor. Sonuçta mention=False kalıyor, metin genel 'yok' DNE sözcük testine düşüyor ve fail dönüyor. Kök neden eski koddan geliyor, ama dal tam bu kodu yeniden yazıp yalnız 'gerçel/reel' kardeşlerini kapattı. Önerilen onarım: sıfat listesine 'gerçek' ve '(gerçek|gerçel|reel) sayılarda' eklenmeli; MENTION 'kök(ü|leri)?\\s*yok' ile 'çözüm(ü)?' biçimlerini görmeli. En azından MENTION'a düşen metin INCORRECT değil UNKNOWN vermeli."
+   },
+   {
+    "id": "SA-RK-2",
+    "klass": "coverage_loss",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "_NO_SOLUTION yalnız bütün metinde eşleşince 0e93ed5'te CORRECT olan boş küme şıkları UNKNOWN'a düştü: 'Gerçek kök yoktur', 'Gerçek çözüm yoktur', 'Boş küme (∅)', 'Çözüm yok (∅)', 'ÇK = ∅', 'Ç = ∅'dir', 'There is no solution', 'Gerçek/Reel sayılarda çözüm yoktur'. Tanım kümesinde de aynı: 'Tanım kümesi boş kümedir', 'T.K. = ∅', 'TK = ∅', 'D(f) = ∅', 'Tanım kümesi ∅'",
+    "repro": "sonda1.py NS, sonda3.py DOM ve sonda7.py NS2 grupları. IR: solve_equation 'x**2 + 1 = 0' (ya da 'x**2 + 4 = 0'), options D/E=<metin>, payload '∅' ve option, ayrıca yalnız harf. Tanım kümesi: domain_of {expr: 'sqrt(-x**2 - 1)', var: x}, shape set, D=<metin>.",
+    "expected": "CORRECT (0e93ed5'teki gibi). Bu metinlerin hepsi tam olarak 'çözüm kümesi boş' diyor.",
+    "actual_branch": "UNKNOWN: mc.consistency unknown, option_parse_error (metin 'yazıldığı gibi' okunuyor, Türkçe harfler ve 'D(f) =' ayrıştırılamıyor), flag option_claim_undecided. Ölçülen: sonda1'de 9 metin x 2 biçim = 18 gerileme, karşılığında 3 metin x 2 = 6 kazanç ('No real roots', 'Çözüm kümesi { }', 'Ç = { }'). sonda3'te tanım kümesinde 5 metin x 2 = 10 gerileme. sonda7'de 3 metin x 2 = 6 gerileme.",
+    "actual_base": "CORRECT (mc.consistency pass).",
+    "math": "x² + 1 > 0 ve x² + 4 > 0 olduğundan gerçel kök yok. −x² − 1 < 0 olduğundan √(−x² − 1) hiçbir gerçel x için tanımlı değil, tanım kümesi ∅.",
+    "mechanism": "Yeni _NO_SOLUTION metnin bütününü istiyor. ∅'den sonra yalnız '(boş küme)' kabul ediliyor, '(∅)' ile biten yazım kabul edilmiyor. 'Ç.K.' noktasız 'ÇK' olarak, ek almış ''dir', İngilizce 'there is no solution', 'tanım kümesi'/'T.K.'/'D(f)' öneki ve 'gerçek' sıfatı da tutulmuyor. Bu metinler _NO_SOLUTION_MENTION'a düşüyor ve şık okuyucusu bunları okuyamıyor. Düzelticinin raporunda 'listede olmayan düzyazı' kaybı kayıtlı ('Reel sayılarda çözüm yok'). Ancak buradakilerin çoğu düzyazı değil: ∅ taşıyan simgesel yazımlar ('Boş küme (∅)', 'Çözüm yok (∅)', 'ÇK = ∅', 'T.K. = ∅', 'D(f) = ∅') ve ders kitabının kanonik ifadesi ('Gerçek kök yoktur'). Bunların kaybı kaydın kapsamını aşıyor. Bütün-metin ilkesi korunarak önek listesine 'tanım kümesi|t\\.?k\\.?|d\\(f\\)|ç\\.?k\\.?' eklenebilir, '(∅)' son eki ve Türkçe ek ('dir/dır') kabul edilebilir."
+   },
+   {
+    "id": "SA-RK-3",
+    "klass": "coverage_loss",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Genişletilen _NEGATION olumlu ders kitabı ifadelerini olumsuzlama sayıyor, doğru değer CORRECT'ten UNKNOWN'a düşüyor: '5 olabilecek en büyük değerdir', '36 muhtemel durum', '5 (negatif olmayan kök)', '5 (sıfır olmayan değer)', '5 şüphesiz', '5 kuşkusuz', '5 değişmez', '5 (tahmin edilen değer)', '5 (diğer kök tanım kümesine girmez)'",
+    "repro": "sonda1.py NG, sonda3.py NG2, sonda9.py NG3: evaluate {expr: '2 + 3'} (ya da '6*6'), claimed_answer {kind: value, payload: <metin>}. Serbest metin yolu (b), sonda6.py: restructure_deterministic('f(5) = 5.\\nCevap: 5 olabilecek en büyük değerdir', ...), IR extremum {f: '-x**2 + 10*x - 20', which: max}. Aynı yolda 'Cevap: 36 muhtemel durum' (evaluate 6*6), 'Cevap: 5 (negatif olmayan kök)' (evaluate sqrt(25)), 'Cevap: 5 kuşkusuz', 'Sonuç: 5 (diğer kök tanım kümesine girmez)'.",
+    "expected": "CORRECT (0e93ed5'teki gibi). Bu ifadelerin hiçbiri değeri olumsuzlamıyor ya da ondan şüphe etmiyor.",
+    "actual_branch": "UNKNOWN (payload_negated, parse_error). Ölçülen gerileme: sonda1'de 13/22, sonda3'te 3/10, sonda9'da 4/26, yol (b) sonda6'da 6/8. Kontroller değişmedi: '5 tir', '5 olmalıdır', '5 (en büyük değer)', '5 (olası en büyük değer)', '5 (beklendiği gibi)' her iki kopyada CORRECT.",
+    "actual_base": "CORRECT (payload_cleaned)",
+    "math": "2 + 3 = 5. −x² + 10x − 20 = −(x − 5)² + 5 olduğundan en büyük değer 5 (x = 5'te). 6·6 = 36. √25 = 5.",
+    "mechanism": "_NEGATION'daki kökler ve ek kalıpları fazla geniş. 'olabil\\w*' 'olabilecek en büyük değer'i ('mümkün olan en büyük') yakalıyor. 'muhtemel\\w*' sayma/olasılık terimi 'muhtemel durum'u yakalıyor. 'şüphe\\w*' ve 'kuşku\\w*', -siz/-suz yokluk ekiyle anlamı tersine dönen 'şüphesiz/kuşkusuz'u ('kesinlikle') yakalıyor. 'olma[dmy]\\w*' 'negatif olmayan' / 'sıfır olmayan' matematik terimlerini yakalıyor. 'tahmin\\w*' 'tahmin edilen değer'i, kelime içindeki '-maz/-mez' ise 'değişmez'i (sabit) ve başka köke dair 'girmez/sağlamaz'ı yakalıyor. Raporda yalnız '5 bulunur', '5 olmalıdır', '5 cm', '5 eşittir' kontrol olarak geçiyor; bu kayıplar kayıtlı değil. Önerilen onarım: -sız/-siz/-suz/-süz türevleri ayrık tutulmalı, '(negatif|pozitif|sıfır|boş) olmayan' muaf tutulmalı, 'olabilecek/alabileceği en (büyük|küçük)' ile 'muhtemel (durum|sonuç)' kontrol listesine alınmalı."
+   },
+   {
+    "id": "SA-RK-4",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "G4YO-2'nin '\\ln 2/2' kardeşi alt indisli logaritmada kapanmadı: '$\\log_3 2/2$', '$\\log_{3}2/2$', '$\\log_3{2}/2$', '$\\log_2 3/3$', '$\\log_2 9/2$', '$\\log_2 5/2$' latex2sympy'de log_b(x/n) okunuyor ve doğru (log_b x)/n cevabı INCORRECT",
+    "repro": "sonda4.py LOG, sonda7.py LF, sonda6.py yol (b). evaluate {expr: 'log(2)/log(9)'}, claimed_answer value '$\\log_3 2/2$'. evaluate 'log(3)/log(2)' için '$\\log_2 9/2$'. evaluate 'log(5)/log(4)' için '$\\log_2 5/2$'. Yol (b): 'log_9 2 = (log_3 2)/2.\\nCevap: $\\log_3 2/2$'.",
+    "expected": "UNKNOWN (dalın '\\ln 2/2' ve '\\log 2/2' için verdiği gibi: yazanın geleneği, iki okuma da var) ya da soldan sağa okumayla CORRECT. Hiçbir durumda INCORRECT olmamalı.",
+    "actual_branch": "INCORRECT: certify.algebra fail. İddia log(1, 3) = 0, log(9/2, 2) ve log(5/2, 2) okunuyor. Aynı dalda '$\\ln 2/2$' ve '$\\log 2/2$' UNKNOWN (claim_ambiguous_juxtaposition).",
+    "actual_base": "INCORRECT (aynı okuma). '$\\ln 2/2$' ve '$\\log 2/2$' de INCORRECT'ti.",
+    "math": "mpmath 50 basamak. log₃2/2 = 0.31546487678572871854976355717138042714979282006594, okunan log₃1 = 0. log₂9/2 = log₂3 = 1.5849625007211561814537389439478165087598144076925, okunan log₂(9/2) = 2.169925001442312362907477887895633017519628815385. log₂5/2 = 1.1609640474436811739351597147446950879324156965123, okunan log₂(5/2) = 1.3219280948873623478703194294893901758648313930246.",
+    "mechanism": "parse._latex_divisor_juxtaposed'in ikinci döngüsü (fonksiyon argümanı, sonra '/') makrodan hemen sonra _latex_atom_end(s, k) çağırıyor. '\\log_3 2' içinde makrodan sonraki karakter '_'. _latex_atom_end '_' ile başlayan atom tanımadığı için None döndürüyor ve döngü 'continue' ile geçiyor. Alt indis atlanıp argüman hiç incelenmediği için metin _latex_to_sympy'ye ulaşıyor ve latex2sympy bölmeyi argümana katıyor. Onarım: '^' için yapılan atlamanın aynısı '_' (alt indis) için de yapılmalı. Not (öteki mercek): aynı yolla '$\\log_2 8/3$' log(8/3, 2) iddiası olarak iki kopyada da CORRECT. Soldan sağa okumada bu (log₂8)/3 = 1 ediyor; belirsiz bir yazım kabul ediliyor."
+   },
+   {
+    "id": "SA-RK-5",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "Yük temizleyici sondaki tek harfli matematik simgesini (i, e, x) düzyazı sayıp atıyor, kalan farklı değer sertifikalanıyor: '1/2 + √3/2 i' (e^{iπ/3}), '-1 + 3 i', '2 + 3 i', '3 i', '2 e', '2 x' ((x²)') INCORRECT",
+    "repro": "sonda4.py CX, sonda7.py CL, sonda6.py yol (b). evaluate {expr: 'exp(I*pi/3)'}, payload '1/2 + √3/2 i', ayrıca '1/2 + (√3/2) i' ve '$1/2 + \\sqrt{3}/2 i$'. evaluate '(1 + 2*I)*(1 + I)', payload '-1 + 3 i'. evaluate '2 + 3*I', payload '2 + 3 i'. evaluate '3*I', payload '3 i'. evaluate 'exp(1) + exp(1)', payload '2 e'. derivative {f: 'x**2'}, payload '2 x'. Yol (b): 'cis 60° = cos 60° + i sin 60°.\\nCevap: 1/2 + √3/2 i'.",
+    "expected": "CORRECT ya da UNKNOWN. Bu iddiaların hepsi doğru değeri yazıyor.",
+    "actual_branch": "INCORRECT (payload_cleaned). certify.algebra/calculus fail; iddia 1/2 + sqrt(3)/2, 2, 5, 3, 2 ve 2 olarak sertifikalanıyor. '1/2 + √3/2·i', '-1 + 3·i', '2·e' CORRECT.",
+    "actual_base": "INCORRECT (aynı)",
+    "math": "e^{iπ/3} = cos(π/3) + i·sin(π/3) = 0.5 + 0.86602540378443864676372317075293618347140262690519i (mpmath 50 basamak). Temizlenen 1/2 + √3/2 = 1.3660254037844386467637231707529361834714026269052. (1 + 2i)(1 + i) = −1 + 3i, temizlenen 2. 2e = 5.4365636569180904707205749427053249955144941873999, temizlenen 2. (x²)' = 2x, temizlenen 2.",
+    "mechanism": "verifier._sanitize_payload sonda kalan belirteçleri _is_prose_token ile atıyor. _MATHY rakam, işleç, Yunan harfi ve LaTeX makrosu arıyor; Latin harfi aramıyor. Bu yüzden 'i', 'e', 'x' gibi tek harfli bir belirteç 'düzyazı' sayılıp atılıyor ve kalan '1/2 + √3/2' ayrıştırılıp sertifikalanıyor. Bu, ilke 3'ü çiğniyor: iddia karşılaştırılmadan önce başka bir değere yeniden yazılıyor. Dal temizleyicinin yalnız _NEGATION'ına dokundu. Onarım: problemin ad alanındaki bir simge (değişkenler, i/I, e/E) ya da tek harfli bir belirteç asla atılmamalı; atılacaksa çekimser kalınmalı (UNKNOWN)."
+   },
+   {
+    "id": "SA-RK-6",
+    "klass": "unjust_reject",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "Sondaki virgül 1-öğeli demet okunuyor: '5,', '$5,$', '1/2,', '$1/2,$' ve temizleyicinin bıraktığı '5, kesinlikle' / '5, bu yüzden cevap budur' / '5, tam sayıdır' / '{2, 3}, kesinlikle' (5,) ya da FiniteSet(({2, 3},)) diye sertifikalanıp INCORRECT oluyor",
+    "repro": "sonda10.py ve sonda9.py. evaluate {expr: '2 + 3'}, payload '5,' ya da '5, kesinlikle'. evaluate 'sin(pi/6)', payload '1/2,' ya da '$1/2,$'. solve_equation 'x**2 - 5*x + 6 = 0', payload '{2, 3}, kesinlikle'.",
+    "expected": "CORRECT ya da UNKNOWN. Virgül cümle noktalaması, değer 5 / 1/2 / {2, 3}.",
+    "actual_branch": "INCORRECT: certify.algebra fail, iddia (5,) / (1/2,) / FiniteSet(({2, 3},)). 12 vakanın 9'u.",
+    "actual_base": "INCORRECT (aynı)",
+    "math": "2 + 3 = 5. sin(π/6) = 1/2. x² − 5x + 6 = (x − 2)(x − 3), kökler {2, 3}.",
+    "mechanism": "Ayrıştırıcı Python dilbilgisini izliyor: sondaki virgülle 'a,' bir demet oluyor. Temizleyici virgülden sonraki düzyazıyı atınca '5,' kalıyor ve bu ayrıştırılabildiği için payload_cleaned ile kabul ediliyor. Certify de 1-öğeli demeti 5 ile karşılaştırıp reddediyor. '5;' UNKNOWN. Onarım: sondaki ',' / ';' noktalaması temizlenmeli ya da tek öğeli demet okuması reddedilmeli (UNKNOWN)."
+   }
+  ],
+  "probes_run": 513,
+  "summary": "Lens: haksız ret, kapsama kaybı, çökme. wip/son-ayristirici (1ea9b43, src'si f62ed15 ile aynı) 0e93ed5 ile karşılaştırıldı. Her vaka iki ayrı arşiv kopyasında (dal, taban) koşuldu; kopyaların src'si git archive ile birebir doğrulandı. Toplam yaklaşık 513 benzersiz verify vakası koşuldu (sonda1-10, her biri iki kopyada). Ayrıca llm_cache ile evalset'teki 1537 metin ayrıştırma düzeyinde tarandı, yeni ayrıştırıcı yardımcıları ~1.3M rastgele dizgiyle 40 sn bulandırıldı ve uzun girdilerle süre ölçüldü.\n\nDalın getirdiği gerilemeler (CORRECT'ten UNKNOWN'a):\n- SA-RK-2, G4YO-1: bütün-metin _NO_SOLUTION; 'Gerçek kök yoktur', 'Boş küme (∅)', 'Çözüm yok (∅)', 'ÇK = ∅', 'T.K. = ∅', 'D(f) = ∅' vb. 34 gerileme, 6+12 kazanç.\n- SA-RK-3, G4YO-3: _NEGATION'ın fazla geniş kökleri. 'olabilecek en büyük değer', 'muhtemel durum', 'negatif olmayan', 'şüphesiz/kuşkusuz', 'değişmez'; serbest metin yolu (b) dahil 26 gerileme.\n\nDalın kapatmadığı eski haksız INCORRECT'ler:\n- SA-RK-1: MEB terimi 'gerçek' ile 'Gerçek kökü yoktur' gibi şıklar. Dal 'Gerçel/Reel kökü yoktur', 'Kökü yoktur', 'Çözümü yoktur' için düzeltti, 'gerçek' kardeşi kaldı.\n- SA-RK-4: alt indisli '\\log_b x/n' log_b(x/n) okunuyor. G4YO-2'nin '\\ln 2/2' kardeşi alt indiste kapanmadı.\n- SA-RK-5: yük temizleyici sondaki 'i', 'e', 'x' simgesini atıyor; '1/2 + √3/2 i', '2 + 3 i', '2 x' INCORRECT.\n- SA-RK-6: sondaki virgül 1-öğeli demet okunuyor ('5,', '5, kesinlikle').\n\nBulgu çıkmayan alanlar:\n- G4-K-4: 7 tek noktalı verilen ((3,−2), (2,−3), (1,−2), (1,1), (1/2,−1/3), a=b=c, PD3; tam sayı tanım kümesi ve durum ayrımı dahil) altında ~70 doğru eq/compute adımının hiçbiri refuted olmadı. Compute adımları unknown'dan verified'a çıktı (kazanç). _completed_squares'in r = c + bᵀv0/2 formülü ve Sylvester kontrolü elle doğrulandı. Çürütme yalnız asıl öncülleri tam sağlayan noktada yapılıyor, dolayısıyla haksız çürütme yolu bulunmadı.\n- G4-RK-5: yalnız refuted'ı unknown'a çevirdiği için haksız ret üretemez. Ölçülen vakalarda ret ya da süre etkisi yok.\n- G4YO-2 ders kitabı yazımları iki kopyada aynı sonucu verdi: 2π/3, π/2, 3π/2, √3/2, 1/√2, (1/2)π, 1/2·π, %25, 25%, 30°, 90°/3, LaTeX küme/aralık, trig kümeleri. Dağıtıcı şıkta '3/2π' ya da '$3/2\\pi$' bulunması doğru şıkkı bozmuyor. '$\\ln 3/\\ln 2$', '$\\log 3/\\log 2$', '$\\ln 2/2$' tabanda INCORRECT'ti, dalda UNKNOWN (iyileşme). _LATEX_NO_FACTOR'da olmayan \\displaystyle, \\bigr, \\Longrightarrow, \\mathrm{birim} vb. yanyana yazım sayılıyor. Ancak tabanda da yalnız gerçek dışı '$1/2 \\displaystyle$' CORRECT'ti.\n- evalset'in diff'e değen 21 öğesi iki kopyada aynı karar.\n- Süre: kareler toplamı verilenli 10 adımlı çözüm 2.1 sn'den 2.7 sn'ye çıktı (+%30). Öteki çok bilinmeyenli vakalar ±%10 içinde. Tabanda 41 sn süren bir compute adımı dalda 0.45 sn.\n- Bulandırmada istisna ya da >1 sn'lik girdi yok. Uzun girdilerde en kötü 0.09 sn.\n\nKopyalar (.env içerir) silindi. Ana checkout'a dokunulmadı. Sondalar ve çıktılar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-ayristirici/ret-kapsama/ altında (sonda1.py–sonda10.py, s*_dal.txt / s*_taban.txt, karşılaştırma için goster.py)."
+ },
+ {
+  "file": "/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-ayristirici/bulgular.json",
+  "verdicts": [
+   {
+    "id": "SA-YO-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "INCORRECT (taban gibi): açık compute adımı yanlış bir özdeşlikse ve öncüllerin karmaşık köklerinde de tutmuyorsa (x²−2x+5 = (x−1)²+6: farkı her x'te −2; (x+1/2)²+1/2: −1/4; (x²+1)²: −x², köklerde ≠ 0) çürütme kalmalı. G4-RK-5'in vakaları (kapalı '0 = 2', compute/eq 'x**2 = -1': ±i'de 0) çürütülmemeye devam etmeli. Önerilen karmaşık kök süzgeci bu ayrımı veriyor.",
+    "note": "Yeniden üretildi (v1.py): dal 7/7 CORRECT (premises_hold_nowhere), taban 7/7 INCORRECT (refuted). Kontroller: doğru +4 iki kopyada CORRECT, kapalı '0 - 4 = 4' iki kopyada INCORRECT, eq 'x**2 = -1' iki kopyada CORRECT. sympy farkları kesin hesapladı. Kök: _compute_status'ün sonundaki _vacuous, açık compute için."
+   },
+   {
+    "id": "SA-YO-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "UNKNOWN (payload_negated): değeri reddeden ya da geçersiz sayan düzyazıda ('sağlamadı', 'çıkmadı', 'çıkmayacak', 'sağlamamaktadır', 'geçersizdir', 'reddedilir', 'elenir', 'hatalıdır', '✗', '❌', 'is invalid/rejected/extraneous') değer onaylanmaz.",
+    "note": "Yeniden üretildi (v2.py): 19 yazım ve 2 küme yükü iki kopyada da CORRECT (payload_cleaned). Yol (b) 'Cevap: 5 sağlamadı' da CORRECT. Kontrol: '5 değil' iki kopyada UNKNOWN; '5 sağlamaz' dalda UNKNOWN, tabanda CORRECT. G4YO-3 kararının kardeşleri açık kalmış. SA-RK-3 ile birlikte düzeltilmeli: izin listesi."
+   },
+   {
+    "id": "SA-YO-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "UNKNOWN (claim_ambiguous_juxtaposition), dalın '\\ln 2/2' ve '\\cos \\pi/3' kararıyla aynı: '\\log_2 8/3' (log₂(8/3) ≈ 1.415 ya da (log₂8)/3 = 1), '\\sin 3\\pi/2' (−1 ya da 0), '\\sin 2x/2' (sin x ya da sin x·cos x), '\\ln 2x/2' iki okumalı.",
+    "note": "Yeniden üretildi (v3.py): 5 vaka iki kopyada da CORRECT, öteki okumanın doğruları INCORRECT. Dalda '\\ln 2/2' ve '\\cos \\pi/3' UNKNOWN. mpmath ile hesaplandı: log₂(8/3) = 1.41504 ≠ 1, sin(3π)/2 = 0 ≠ −1. Mekanizma SA-RK-4 ile ortak: alt indis '_' ve yan yana çarpım argümanı."
+   },
+   {
+    "id": "SA-YO-4",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "UNKNOWN (claim_ambiguous_juxtaposition), düz metin kardeşleriyle aynı: '$1/2\\%$', '1/2\\%', '$3/4\\%$', '$180/2^\\circ$', '1/−2π' (U+2212), '1/–2π' (U+2013), '1/−2√3'. (1/2)% = 1/200 ≠ 50; 1/(−2)·π = −π/2 ≠ −1/(2π).",
+    "note": "Yeniden üretildi (v3.py): LaTeX ve Unicode eksili yazımlar iki kopyada da CORRECT. '$1/2\\%$' 1/200'e iki kopyada INCORRECT. Düz '1/2%', '180/2°' ve ASCII '1/-2π' dalda UNKNOWN. G4YO-2 düzeltmesi yalnız bu yazımlarda geçerli."
+   },
+   {
+    "id": "SA-RK-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "CORRECT (en kötü UNKNOWN), asla INCORRECT: şık 'Gerçek kökü yoktur', 'Denklemin gerçek kökü yoktur', 'Gerçek kökleri yoktur', 'Gerçek sayılarda çözümü yoktur', 'Gerçek çözümü yoktur', ∅ yükü ya da yalnız harf ile. x²+4 ≥ 4 > 0 (Δ = −16), x²+1 < 0'ın çözümü ∅.",
+    "note": "Yeniden üretildi (v4.py): 4 metin × 2 biçim ve 2 eşitsizlik metni iki kopyada INCORRECT (option_says_DNE_but_a_value_was_claimed). Dalda 'Gerçel/Reel kökü yoktur', 'Kökü yoktur', 'Çözümü yoktur' CORRECT, tabanda INCORRECT. MEB terimi 'gerçek' eksik."
+   },
+   {
+    "id": "SA-RK-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT (0e93ed5'teki gibi): 'Gerçek kök yoktur', 'Gerçek çözüm yoktur', 'Boş küme (∅)', 'Çözüm yok (∅)', 'ÇK = ∅', 'Ç = ∅'dir', 'There is no solution', 'Reel sayılarda çözüm yoktur'. Tanım kümesi için 'Tanım kümesi boş kümedir', 'T.K. = ∅', 'TK = ∅', 'D(f) = ∅', 'Tanım kümesi ∅'. Bütün-metin ilkesi ('{∅}' çeldiricisi) korunarak.",
+    "note": "Yeniden üretildi (v4.py): 8 metin × 2 biçim ve 5 tanım kümesi metni dalda UNKNOWN (option_parse_error, option_claim_undecided), tabanda CORRECT. Kazanç: 'Ç = { }' dalda CORRECT, tabanda UNKNOWN. −x²−1 < 0 olduğundan tanım kümesi ∅ (sympy)."
+   },
+   {
+    "id": "SA-RK-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT (0e93ed5'teki gibi): olumlu ifadeler değeri olumsuzlamaz ('olabilecek en büyük değerdir', 'muhtemel durum', 'negatif/sıfır olmayan', 'şüphesiz', 'kuşkusuz', 'değişmez', 'tahmin edilen değer', başka köke dair 'girmez'). Düzeltme SA-YO-2'nin olumsuzlamalarını da kapatmalı: izin listesi.",
+    "note": "Yeniden üretildi (v2.py, b.py): 9 yazım dalda UNKNOWN (payload_negated), tabanda CORRECT. Yol (b) 4/4 aynı ('36 muhtemel duru' olarak çıkarılıyor). Kontroller iki kopyada CORRECT: '5 tir', '5 olmalıdır', '5 (en büyük değer)'. −x²+10x−20 en büyüğü 5 (sympy)."
+   },
+   {
+    "id": "SA-RK-4",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "UNKNOWN (claim_ambiguous_juxtaposition, '\\ln 2/2' gibi), asla INCORRECT: '$\\log_3 2/2$', '$\\log_{3}2/2$', '$\\log_3{2}/2$', '$\\log_2 9/2$', '$\\log_2 5/2$', '$\\log_2 3/3$'. Soldan sağa okuma doğru: log₃2/2 = log 2/log 9 = 0.3154648767857…",
+    "note": "Yeniden üretildi (v3.py, b.py): 6 yazım iki kopyada INCORRECT (log(1,3), log(9/2,2), log(5/2,2) okunuyor). '\\frac{\\log_3 2}{2}' CORRECT; '\\log 2/2' dalda UNKNOWN. Sayılar mpmath 50 basamak, bulgudakiyle aynı. Kök: alt indis '_' görülünce ikiz denetimi atlanıyor."
+   },
+   {
+    "id": "SA-RK-5",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT ya da UNKNOWN, asla INCORRECT. '-1 + 3 i', '2 + 3 i', '3 i', '2 e', '2 x' doğru değerler. '1/2 + √3/2 i' bölenden sonra yan yana yazım ((√3/2)·i ya da √3/(2i)): UNKNOWN. Tek harfli matematik simgesi (i, e, değişken) atılmaz; atılacaksa UNKNOWN.",
+    "note": "Yeniden üretildi (v2.py, b.py): 6 vaka iki kopyada INCORRECT (payload_cleaned; 1/2+√3/2, 2, 5, 3, 2, 2 sertifikalanıyor). '·i' ve '·e' CORRECT; '-1 + 3i' ve '2x' UNKNOWN. İlke 3 çiğneniyor: iddia başka bir değere yeniden yazılıyor. e^{iπ/3} = 0.5 + 0.8660…i (mpmath)."
+   },
+   {
+    "id": "SA-RK-6",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "CORRECT ya da UNKNOWN, asla INCORRECT: sondaki ',' noktalamadır. 1 öğeli demet okuması değer sayılmamalı. '5,', '$5,$', '5, kesinlikle', '5, tam sayıdır', '1/2,', '$1/2,$', '{2, 3}, kesinlikle'.",
+    "note": "Yeniden üretildi (v2.py): 7/7 iki kopyada INCORRECT; iddialar (5,), (1/2,) ve FiniteSet(({2, 3},)). Kontroller: '5;' UNKNOWN, '5.' CORRECT. x²−5x+6 kökleri {2, 3} (sympy)."
+   }
+  ]
+ }
+]

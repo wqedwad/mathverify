@@ -1,0 +1,22 @@
+--- yeni/src/mathverify/certify/domain.py	2026-10-07 19:03:16.000000000 +0000
++++ yama/src/mathverify/certify/domain.py	2026-10-07 22:49:15.688334445 +0000
+@@ -955,7 +955,7 @@
+         r = sp.simplify(sp.diff(h, t) / h)
+         if not r.is_rational_function(t):
+             continue
+-        if sp.limit(h, t, end) == 0:
++        if (h.free_symbols - {t}) == set() and sp.limit(h, t, end) == 0:
+             return True
+     return False
+ 
+--- yeni/src/mathverify/certify/calculus.py	2026-10-07 19:03:16.000000000 +0000
++++ yama/src/mathverify/certify/calculus.py	2026-10-07 22:49:15.684811538 +0000
+@@ -1420,7 +1420,7 @@
+                     if _no_derivative_at(kr, var, q):
+                         continue
+                     concrete = [q] if not getattr(q, "free_symbols", None) else \
+-                        [q.xreplace({d: k}) for d in q.free_symbols for k in (0, 1, -1, 2)]
++                        [q.xreplace({d: k}) for d in q.free_symbols for k in range(-12, 13)]
+                     hit = False
+                     for qq in concrete:
+                         inside = _in_comparison(dom, loose, var, qq)

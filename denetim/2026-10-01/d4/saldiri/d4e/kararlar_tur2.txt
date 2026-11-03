@@ -1,0 +1,39 @@
+# d4e 2. tur: ana oturumun kararları (6 Ekim 2026, saldırının 15 doğrulanmış bulgusu; R10 gerçek değil)
+Bulgular: d4/saldiri/d4e/bulgular.json (repro, beklenti, mekanizma, doğrulayıcının düzeltilmiş beklentisi).
+Yanlış onaylar (önce bunlar):
+- YO-1 + R9 (high, önceden var): series_sum ve closed_form terimi, sınırları ve iddiayı sabitlenen değerle (task_pins/with_pins)
+  okur; sabitlenen değerde tanımsız terim/iddia → UNKNOWN; 0**0'a dokunan → UNKNOWN (d4a geleneği; yazılı Σ_{k=0} 0**k = 1 de,
+  ayrı kök neden: written_undefined_in 0**k için None). Doğrular CORRECT: a = 2 iken Σ a·k = 12, Σ a^k (k=0..3) = 15, a = 5 iken
+  Σ_{k=1}^{3} 1/(k−a) = −13/12. Asla INCORRECT değil.
+- YO-2 (önceden var): sayı sınırlı integral de yazıldığı biçimde yakınsaklığı kanıtlanmadıkça tanımlı sayılmaz (iç tekillik,
+  sonsuz uç); sadeleşmeyle kaybolan ıraksak integral (0·∫, ∫−∫, ∫/∫, ∫**0) ifadeyi tanımsız kılar → UNKNOWN. Kanıt: kapalı
+  sınırlı aralıkta sürekli integrand → tanımlı; has olmayan → yakınsaklık kanıtı (decays_at vb.).
+- YO-3: Subs/at gövdesinin tanımlılığı Subs'ın kendi noktasında okunur (Subs nokta bağlayıcısı, _outer_nodes); Subs(Derivative(f)) için
+  f o noktanın bir komşuluğunda tanımlı olmalı (_limit_conditions gibi). Tanımsızsa adım unknown.
+- YO-4 (d4e getirdi): sabitlenen değer Sum/Product terimini tanımsız kılınca türev ifadesi ve ilkel UNKNOWN (pin kardeş yolları).
+- YO-5: negatif sabit tabanlı değişken üs ((−1)**x, (−2)**x): gerçel okumada tanımsız, esas karmaşık okumada tanımlı → gelenek →
+  türev, teğet, ilkel, limit UNKNOWN.
+- YO-6 (d4e getirdi): değişkenin bölgesinde (bildirim, kısıt, verilen, dod, sabitlenen parametre) hiçbir yerde tanımsız ifadenin
+  limiti → UNKNOWN (DNE de değer de); bildirim/literal yazımla aynı karar.
+Haksız ret:
+- R8 (önceden var): |u(x)|'in türev ifadesi: türev fonksiyonunun tanım kümesi iki yanlı türevlenebilir noktalar (|x| için ℝ∖{0}).
+  İddia tam bu kümede tanımlı ve eşitse (x/|x|, |x|/x, x/sqrt(x²), Piecewise((1,x>0),(−1,x<0))) CORRECT; iddia kırık noktada da
+  değer veriyorsa (sign(x): sign(0) = 0) gelenek → UNKNOWN; değeri yanlışsa INCORRECT. Karşılaştırma kırık noktada yapılmaz.
+Kapsama (d4e getirdi; yalnız kanıtlı yolla geri kazan):
+- R1: iç nokta yerel kanıtlanır: yazılı koşullar açık (≠, >, <) ve sürekli fonksiyonlarda p'de kesin olarak katıysa p iç noktadır
+  (pencerede global çözüm gerekmez). İfade türevi/ilkel: özdeşlik sembolik ve bölgenin içi boş değilse (katı koşullu bir tanık
+  nokta) CORRECT; tan(x²), sec(x²), tan(eˣ), 1/(x−cos x), 1/(x+eˣ) tabandaki kararlarına döner.
+- R2: işareti bildirilmiş parametre (positive_real, positive_integer): her izinli değerde tanım kümesinin içi boş değilse doğru ifade
+  CORRECT, yanlış INCORRECT (asin(x/a), acos(x/a), √(a²−x²), log(ax+b) a>0, log(kx), log(xⁿ)).
+- R3: bildirilmiş parametreli ilkellerde gerçellik yapısal kanıtla (gerçel semboller, tanım bölgesinde gerçel değerli işlemler):
+  ∫e^{kx}, ∫xⁿ, ∫sin kx (−cos(kx)/k), ∫1/(x²+a²), exp(−ax) → CORRECT.
+- R4: eğriyi yineleyen 'y = g(x)' verileni x üzerinde yalnız g'nin yazılı tanım kümesini koyar (y bildirimsiz gerçel ya da teğetin
+  dep'i): condition_not_applied değil, CORRECT kararı geri.
+- R5: değişken üzerindeki periyodik verilen (cos x > 0): nokta katı koşulla kesin sağlanıyorsa iç nokta (R1 ile aynı yerel kanıt);
+  ilkelde bölge sonsuz çok parçalı, tek sabitli sürekli F (sin x) CORRECT. A1–A4 CORRECT.
+- R6: çok parçalı bölgede iddia edilen F parçalar arasındaki boşlukta sürekli uzanıyorsa (bölgenin kapanışı bir aralık ve F orada
+  sürekli) sabitler süreklilikle bağlıdır → tek sabit, CORRECT. SymPy referansına dayanma gerekmez.
+- R7: sonsuz uçta yakınsaklık: |f| ≤ C·t^{−p} (p > 1, lim t^p·f sonlu, sembolik) ya da pozitif parametreli üstel sönme → kanıtlı;
+  ∫_x^∞ e^{−at} (a > 0), ∫_x^∞ t^{−21/20} CORRECT.
+Gerçek değil: R10 (evaluate Limit(|x|/x, x, 0) bildirimle 1 CORRECT: §73 geleneği; kısıt/verilenle UNKNOWN yalnız kapsama farkı,
+  istenirse aynı kurala bağlanır ama zorunlu değil).

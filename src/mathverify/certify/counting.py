@@ -24,6 +24,7 @@ from ..equiv.numeric import (certified_sign, certified_floor, certified_integer,
                              NONREAL)
 from ..equiv.sets import normalize_set
 from ..sandbox import run as sb_run
+from ..sandbox.exactsets import at_risk
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
 
 LAYER = "certify.counting"
@@ -59,8 +60,10 @@ def count_real_roots(expr, var, lo=-oo, hi=oo, distinct: bool = True) -> int:
 
 
 def _poly_real_roots(num, var):
-    """Sandbox worker: exact real roots of a polynomial, with multiplicity (rationals/CRootOf)."""
-    return list(sp.Poly(num, var).real_roots())
+    """Sandbox worker: exact real roots of a polynomial, with multiplicity (rationals/CRootOf), of a certain
+    degree (`sandbox.exactsets.certified_degree`)."""
+    from ..sandbox.exactsets import certified_degree
+    return list(certified_degree(sp.Poly(num, var)).real_roots())
 
 
 # ---------------------------------------------------------------------------------------------
@@ -93,17 +96,30 @@ def _count_roots(expr, var, lo, hi, distinct: bool, ctx: Ctx, ev: dict) -> tuple
         pn = sp.Poly(num, var)
         pd = sp.Poly(den, var)
     except sp.PolynomialError:
-        return None, "not_a_rational_function_of_var"
-    if not (pn.domain.is_Exact and pd.domain.is_Exact):
-        return None, "inexact_coefficients"
-    if pn.is_zero:
-        # identically zero wherever defined: infinitely many roots unless the domain is finite
-        ev["identically_zero"] = True
-        return None, "identically_zero_expression_infinitely_many_roots"
-    r = sb_run("mathverify.certify.counting:_poly_real_roots", num, var, timeout=ctx.timeout)
-    if not r.ok:
-        return None, f"root_isolation_failed: {r.error}"
-    roots = list(r.value)
+        pn = None
+    if pn is None:
+        # not rational: the exact classes (sandbox.exactsets.class_solveset) give the set of distinct
+        # roots in closed form, exp(2x) - 3e^x + 2 → {0, log 2}; their multiplicities they do not give
+        # (round 5 of part d4b, 2 Oct 2026)
+        if not distinct:
+            return None, "not_a_rational_function_of_var: multiplicities"
+        rc = sb_run("mathverify.sandbox.exactsets:class_solveset", sp.Eq(expr, 0), var,
+                    sp.Interval(lo, hi), timeout=ctx.timeout)
+        if not rc.ok or not (rc.value is S.EmptySet or isinstance(rc.value, sp.FiniteSet)):
+            return None, "not_a_rational_function_of_var"
+        roots = list(rc.value)
+        ev["method_roots"] = "exact_class"
+    else:
+        if not (pn.domain.is_Exact and pd.domain.is_Exact):
+            return None, "inexact_coefficients"
+        if pn.is_zero:
+            # identically zero wherever defined: infinitely many roots unless the domain is finite
+            ev["identically_zero"] = True
+            return None, "identically_zero_expression_infinitely_many_roots"
+        r = sb_run("mathverify.certify.counting:_poly_real_roots", num, var, timeout=ctx.timeout)
+        if not r.ok:
+            return None, f"root_isolation_failed: {r.error}"
+        roots = list(r.value)
     conds = list(definedness_conditions(expr, var))
     conds += [c for c in conds_w if c.free_symbols <= {var} and c not in conds]
     kept: list = []
@@ -297,7 +313,10 @@ def _count_integers(ctx: Ctx, var, ev: dict) -> tuple[int | None, str | None]:
     # one relation at a time: solveset does not accept a conjunction
     for rel in rels_r:
         r = sb_run("mathverify.sandbox.ops:solveset_in", rel, var, S.Reals, timeout=ctx.timeout)
-        if not r.ok or isinstance(r.value, sp.ConditionSet):
+        # a trigonometric relation on ℝ stays a ConditionSet (sandbox.exactsets: SymPy's set was one
+        # period, and 3 was certified for the integers of [0, 10] with sin x > 0, fourth audit G2):
+        # it bounds no candidate, and each candidate's membership is decided at the point
+        if not r.ok or (isinstance(r.value, sp.ConditionSet) and not at_risk(rel, var)):
             return None, "solveset_failed"
         pieces.append(r.value)
     ev["solution_sets"] = [str(p_) for p_ in pieces]
@@ -366,6 +385,77 @@ def _count_integers(ctx: Ctx, var, ev: dict) -> tuple[int | None, str | None]:
         count += 1 if all(holds) else 0
     ev["candidates"] = len(seen)
     return count, None
+
+
+_ZERO_POWER_LIMIT = 2_000           # integers a count over real_power conventions decides one by one
+
+
+def _count_integers_both_readings(ctx: Ctx, var, ev: dict) -> tuple[set | None, str | None]:
+    """The counts of `_count_integers` under the readings of 0**0, when the only conditions the domain did not apply
+    are real_power conventions (`certify.domain.Convention`, x**x): each integer of the givens' bounded range is
+    decided at the point, where b**e is read from the exact values of b and e (an integer e of a nonzero b, a
+    positive rational e of 0: the one value); 0**0 is 1 under one reading and undefined under the other, so the
+    counts are two; any other undecided power (a negative base at a non-integer exponent) decides nothing (None).
+    The count over x**x (2 + sin x) > 0 on -3..3 was UNKNOWN for every claim, the wrong 3 and 6 too: 4 (0**0
+    undefined) or 5 (0**0 = 1) (final attack G1RK-8; the verifier's measure: the condition was never applied)."""
+    from .domain import REAL_POWER, _real_power_holds, in_domain, relation_holds_at
+    rels, unbound = ctx.on_var(ctx.givens(), var)
+    unbound = ctx.unapplied_conditions(var) + unbound
+    conv = [c for c in unbound if isinstance(c, sp.Contains) and c.args[1] == REAL_POWER
+            and isinstance(c.args[0], sp.Tuple) and len(c.args[0]) == 2]
+    if not unbound or len(conv) != len(unbound) or not rels:
+        return None, None
+    try:
+        dom = sp.Union(ctx.domain_for(var), ctx.convention_region(var))
+    except Exception as e:  # noqa: BLE001
+        return None, f"domain_failed: {type(e).__name__}"
+    lows, highs = [], []
+    dlo, dhi = _dom_int_bounds(dom)
+    lows += [dlo] if dlo is not None else []
+    highs += [dhi] if dhi is not None else []
+    solved = []                       # relations solveset reads exactly bound the range; the others are read at points
+    for rel in rels:
+        if any(isinstance(a, sp.Pow) and var in a.exp.free_symbols for a in rel.atoms(sp.Pow)):
+            continue
+        r = sb_run("mathverify.sandbox.ops:solveset_in", real_odd_roots(rel), var, S.Reals, timeout=ctx.timeout)
+        if not r.ok or not isinstance(r.value, Interval):
+            continue
+        a_, b_, ok = _interval_int_bounds(r.value)
+        if not ok:
+            continue
+        lows += [a_] if a_ is not None else []
+        highs += [b_] if b_ is not None else []
+        solved.append(rel)
+    if not lows or not highs:
+        return None, "infinite_or_unsupported_set"
+    lo_c, hi_c = max(lows), min(highs)
+    if hi_c - lo_c + 1 > _ZERO_POWER_LIMIT:
+        return None, "candidate_range_too_large"
+    sure = zero = 0
+    for k in range(lo_c, hi_c + 1):
+        kk = sp.Integer(k)
+        indom = in_domain(dom, kk)
+        if indom is None:
+            return None, f"domain_membership_undecided_at_{k}"
+        if not indom:
+            continue
+        pairs = [c.args[0].xreplace({var: kk}) for c in conv]
+        at_zero = False
+        for b_, e_ in pairs:
+            if _real_power_holds(sp.Tuple(b_, e_)) is sp.true:
+                continue
+            if b_ == 0 and e_ == 0:
+                at_zero = True                   # 0**0: 1 or undefined
+                continue
+            return None, f"power_undecided_at_{k}"
+        holds = [relation_holds_at(r, var, kk) for r in rels]
+        if any(h is None for h in holds):
+            return None, f"undecided_at_{k}"
+        if all(holds):
+            zero += at_zero
+            sure += not at_zero
+    ev["zero_power_readings"] = {"undefined": sure, "one": sure + zero}
+    return {sure, sure + zero}, None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -512,9 +602,22 @@ def verify(ir, solution, ctx: Ctx):
         elif kind == "count_integers":
             var = ctx.sym(p.get("var", "x"))
             truth, why = _count_integers(ctx, var, ev)
+            if truth is None and (why or "").startswith("condition_not_applied"):
+                counts, why2 = _count_integers_both_readings(ctx, var, ev)
+                if counts is not None:
+                    ev["method"] = "integer_points_under_both_readings_of_0**0"
+                    if claimed not in counts:
+                        ev["reason"] = "count_wrong_under_every_reading"
+                        return result(LAYER, "fail", 0.99, True, ev, t.ms, primary=True)
+                    if len(counts) > 1:
+                        return unknown(LAYER, "count_depends_on_the_reading_of_0**0", t.ms, ev,
+                                       flags=["condition_not_applied"])
+                    truth, why = next(iter(counts)), None
+                elif why2:
+                    ev["both_readings"] = why2
             if truth is None:
                 return unknown(LAYER, why or "count_failed", 0, ev, flags=_why_flags(why))
-            ev["method"] = "interval_integer_count"
+            ev.setdefault("method", "interval_integer_count")
         else:  # count_solutions: exact brute force over integer boxes
             syms = ctx.syms()
             bounds = {}
@@ -527,6 +630,12 @@ def verify(ir, solution, ctx: Ctx):
                     return unknown(LAYER, f"non_integer_bounds_for_{v.name}", 0, ev)
                 bounds[v.name] = (lo_b, hi_b)
             rels = ctx.var_constraints() + ctx.givens()
+            nowhere = ctx.written_conditions()[1] & set(syms)
+            if nowhere:
+                # an expression of the problem defined nowhere as written in a variable (sqrt(-x) with
+                # x a positive integer folds away as sqrt(-x) - sqrt(-x)): no tuple counts. The closed
+                # condition never reached var_constraints, and 3 was certified (fourth audit TAN-08)
+                rels = rels + [sp.false]
             # the domain of discourse restricts each variable it mentions; it was not read here, so
             # x + y = 4 on x > 2 counted all 5 pairs of 0..4 (part vi, 30 Sep 2026)
             doms = {s_: d for s_ in syms if (d := ctx.discourse(s_)) != S.Reals}

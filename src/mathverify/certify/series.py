@@ -30,8 +30,9 @@ from sympy import oo, Function, Lambda
 
 from ..equiv import answers_equivalent
 from ..equiv.numeric import num_equal
-from ..normalize.parse import parse_relation, parse_expr_str, ParseError
+from ..normalize.parse import parse_relation, parse_expr_str, ParseError, substitute_free
 from ..sandbox import run as sb_run
+from ..sandbox.exactsets import exact_solveset
 from .base import Ctx, Timer, result, unknown, parse_or_unknown
 
 LAYER = "certify.series"
@@ -73,13 +74,14 @@ def _parse_initial(initial: dict, ns) -> dict[int, Any]:
     return out
 
 
-def _written_conditions(src: str, ns) -> list[Any] | None:
-    """Definedness conditions of the recurrence AS WRITTEN; None when it cannot be read so."""
+def _written_conditions(src: str, ns, pins: dict | None = None) -> list[Any] | None:
+    """Definedness conditions of the recurrence AS WRITTEN, with the values `pins` holds put in; None when
+    it cannot be read so."""
     from ..normalize.parse import parse_as_written
     from .domain import written_definedness
     if parse_as_written(src, ns) is None:
         return None
-    conds, nowhere = written_definedness(src, ns)
+    conds, nowhere = written_definedness(src, ns, pins)
     if nowhere:
         return [sp.false]
     return list(conds)
@@ -210,7 +212,8 @@ def _bad_indices(conds, lo) -> bool | None:
         v = next(iter(syms))
         bad = sp.Eq(c.lhs, c.rhs) if isinstance(c, sp.Ne) else sp.Not(c)
         try:
-            s = sp.solveset(bad, v, sp.S.Reals)
+            # guarded: SymPy reads a trigonometric relation on ℝ on one period (sandbox.exactsets)
+            s = exact_solveset(bad, v, sp.S.Reals)
             s = sp.Intersection(s, sp.Range(lo, oo))
         except Exception:  # noqa: BLE001
             return None
@@ -374,43 +377,16 @@ def certify_series_sum(term, var, lo, hi, claimed, timeout: float = 10.0) -> tup
         ev["method"] = "symbolic+numeric"
         return ok, ev
     if num_val is not None:
-        ok, cev = num_equal(claimed, num_val, rel_tol=1e-15)
-        ev["compare"] = cev
+        # nsum's value is no enclosure: it extrapolates from the first terms. Σ sin(πk/2)/k came out
+        # 263/315 at every precision (the zero terms end its extrapolation early; audit of 29 Sep 2026),
+        # and with one-signed terms and the same value at 30 and 50 digits Σ (1/k² + e^(-(k - 1000)²))
+        # came out π²/6: the term far out was never seen and the true value π²/6 + 1.7726… was refuted
+        # (fourth audit, d4c sibling paths, 6 Oct 2026). A number alone refutes no series.
         ev["method"] = "numeric_only"
-        # nsum refutes only a series it sums reliably: terms that never vanish and keep one sign, and
-        # a value that stands at a higher precision too. Σ sin(πk/2)/k came out 263/315 = 0.8349 at
-        # every precision (the zero terms end its extrapolation early), and π/4 was refuted (audit
-        # of 29 Sep 2026).
-        rt = sb_run("mathverify.certify.series:_one_signed_terms", term, var, lo, timeout=timeout)
-        one_signed = bool(rt.ok and rt.value is True)
-        rn2 = sb_run("mathverify.certify.series:_nsum_worker", term, var, lo, hi, 50, timeout=timeout * 2)
-        num2 = sp.Float(rn2.value, 50) if rn2.ok else None
-        converged = num2 is not None and num_equal(num_val, num2, rel_tol=1e-20)[0] is True
-        ev["numeric_reliable"] = one_signed and converged
-        if ok is False and one_signed and converged:
-            return False, ev
         ev["reason"] = "numeric_only_no_symbolic_confirmation"
         return None, ev
     ev["reason"] = "summation_failed"
     return None, ev
-
-
-def _one_signed_terms(term, var, lo, n=200) -> bool:
-    """Are the first `n` terms nonzero and of one sign (the series nsum sums reliably)?"""
-    if lo == -oo:
-        return False
-    f = sp.lambdify(var, term, "mpmath")
-    sign = 0
-    with mp.workdps(30):
-        for k in range(int(lo), int(lo) + n):
-            v = f(mp.mpf(k))
-            if isinstance(v, mp.mpc) or not mp.isfinite(v) or abs(v) < mp.mpf(10) ** -25:
-                return False
-            s = 1 if v > 0 else -1
-            if sign and s != sign:
-                return False
-            sign = s
-    return True
 
 
 def _summation_worker(term, var, lo, hi):
@@ -471,19 +447,28 @@ def verify(ir, solution, ctx: Ctx):
         ev: dict[str, Any] = {}
         if kind in ("recurrence_term", "closed_form"):
             fname, var = p.get("name", "a"), p.get("var", "n")
+            # a symbol a given or a declared constraint fixes is read as its value in the recurrence, the
+            # initial values, their written conditions and the claim (`Ctx.task_pins`): with c = 0 the claim
+            # c**(n - 1) of a(n) = c*a(n - 1), a(1) = 1, is 0**0 at n = 1 and was certified, and with c = 2
+            # 2**(n - 1) was left undecided (attack on d4e, YO-1); a value fixed in another form (2*c = 0) too
+            # (`Ctx.solved_pins`, round 3 YO-2: c**(n - 1) was certified and the 8 of a(4) with 2*c = 4 refuted)
+            pins = {s_: v for s_, v in ctx.solved_pins(ctx.sym(var)).items() if s_.name != fname}
             try:
                 ns, f, n = _rec_ns(ctx, fname, var)
-                rel = parse_relation(p["recurrence"], ns)
-                initial = _parse_initial(p.get("initial", {}), ns)
+                rel = substitute_free(parse_relation(p["recurrence"], ns), pins)
+                initial = {k: substitute_free(v, pins) for k, v in _parse_initial(p.get("initial", {}), ns).items()}
             except (ParseError, Exception) as e:  # noqa: BLE001
                 return unknown(LAYER, f"parse_error: {e}", flags=["parse_error"])
             if not isinstance(rel, sp.Equality):
                 return unknown(LAYER, "recurrence_not_an_equation")
-            rec_conds = _written_conditions(p["recurrence"], ns)
+            rec_conds = _written_conditions(p["recurrence"], ns, pins)
             if kind == "recurrence_term":
                 if rec_conds is None:
                     return unknown(LAYER, "recurrence_unreadable_as_written", flags=["written_domain"])
                 claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
+                if err:
+                    return err
+                claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)
                 if err:
                     return err
                 try:
@@ -507,6 +492,12 @@ def verify(ir, solution, ctx: Ctx):
                     return unknown(LAYER, iev.get("error", "iteration_failed"), 0, ev, flags=flags)
                 ev["value"] = str(val)
                 ok, cev = answers_equivalent(claimed, val, shape="scalar")
+                # a parameter a given restricts without fixing it (c**2 = 4): refuted at an allowed value only, never
+                # against the general symbol (a(3) = 4 of a(n) = c*a(n - 1) was refuted against c**2; round 4, RK-3)
+                from .calculus import refuted_at_an_allowed_value
+                ok = refuted_at_an_allowed_value(
+                    ctx, n, ok, cev, [claimed, val],
+                    lambda inst: answers_equivalent(claimed.xreplace(inst), val.xreplace(inst), shape="scalar")[0])
                 ev["compare"] = cev
                 conf = 0.99
             else:
@@ -515,15 +506,24 @@ def verify(ir, solution, ctx: Ctx):
                 try:
                     # the index variable only — the sequence symbol itself would let a claim
                     # restate the recurrence (`a(n-1) + 3`) instead of giving a closed form
-                    closed = _pe(str(solution.claimed_answer.payload), claim_ns)
+                    closed = substitute_free(_pe(str(solution.claimed_answer.payload), claim_ns), pins)
                 except Exception as e:  # noqa: BLE001
                     return unknown(LAYER, f"parse_error: {e}", flags=["parse_error"])
                 claim_conds: list | None = []
                 payload = solution.claimed_answer.payload
                 if isinstance(payload, str):
-                    claim_conds = _written_conditions(payload, claim_ns)
+                    claim_conds = _written_conditions(payload, claim_ns, pins)
                 ok, cev = check_closed_form(rel, f, n, initial, closed, rec_conds, claim_conds,
                                             timeout=ctx.timeout)
+                from .calculus import refuted_at_an_allowed_value
+
+                def _at(inst):
+                    return check_closed_form(rel.xreplace(inst), f, n, {k: v.xreplace(inst) for k, v in initial.items()},
+                                             closed.xreplace(inst), [c.xreplace(inst) for c in rec_conds or []],
+                                             None if claim_conds is None else [c.xreplace(inst) for c in claim_conds],
+                                             timeout=ctx.timeout)[0]
+                ok = refuted_at_an_allowed_value(ctx, n, ok, cev, [closed, rel.lhs, rel.rhs] + list(initial.values()),
+                                                 _at)
                 ev.update(cev)
                 rr = sb_run("mathverify.certify.series:_rsolve_worker", rel, f, n, initial, timeout=ctx.timeout)
                 ev["rsolve"] = str(rr.value) if rr.ok else rr.error
@@ -542,6 +542,12 @@ def verify(ir, solution, ctx: Ctx):
             ns2 = dict(ctx.ns)
             var = sp.Symbol(var_name, integer=True)
             ns2[var_name] = var
+            # a symbol a given or a declared constraint fixes is read as its value in the term, the bounds,
+            # the term's written conditions and the claim (`Ctx.task_pins`): with a = 2 the sum 3 of
+            # (k - a)/(k - a) over k = 1..3 (0/0 at k = 2) was certified, and the right 12 of a*k refuted
+            # against 6*a (attack on d4e, YO-1, R9); so is a value the givens fix in any other form (2*a = 4,
+            # a = b with b = 2: `Ctx.solved_pins`, round 3 YO-2)
+            pins = ctx.solved_pins(ctx.sym(var_name))
             term, err = parse_or_unknown(LAYER, parse_expr_str, p["term"], ns2)
             if err:
                 return err
@@ -554,28 +560,49 @@ def verify(ir, solution, ctx: Ctx):
             claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
             if err:
                 return err
+            (term, lo, hi, claimed), err = parse_or_unknown(
+                LAYER, lambda es: tuple(ctx.with_pins(e, pins) for e in es), (term, lo, hi, claimed))
+            if err:
+                return err
             # an upper bound below lo - 1 is SymPy's Karr convention (Σ_{k=1}^{-2} k = 1) or an empty
             # sum (0, certified 30 Sep 2026); the curriculum has neither, and the same sum written as
             # Sum(k, (k, 1, -2)) is not read (normalize.parse._refuse_reversed_ranges)
             if (hi - lo + 1).is_extended_negative is True:
                 return unknown(LAYER, "reversed_bounds", t.ms, {"lo": str(lo), "hi": str(hi)},
                                flags=["reversed_bounds"])
-            # every term as written must exist: k/k parses to 1, so Σ_{k=-1}^{1} k/k was "3"
+            # every term as written must exist: k/k parses to 1, so Σ_{k=-1}^{1} k/k was "3". Not decided is
+            # not defined: a condition naming a free parameter (k - a != 0 with a > 5 or 2*a = 4) or a negative
+            # base (-1)**(k/2) left the sum of the folded term certified (attack on d4e round 2, YO-2). A bound
+            # that is no number reads the terms from the lower bound on (from -oo without one)
             from .domain import written_undefined_in
-            if (lo.is_Integer or lo == -oo) and (hi.is_Integer or hi == oo):
-                if lo.is_Integer and hi.is_Integer:
-                    idx = sp.Range(int(lo), int(hi) + 1)
-                elif lo.is_Integer:
-                    idx = sp.Range(int(lo), oo)
-                elif hi.is_Integer:
-                    idx = sp.Range(-oo, int(hi) + 1)
-                else:
-                    idx = sp.S.Integers
-                und = written_undefined_in(p["term"], ns2, var, idx)
-                if und is True:
-                    return unknown(LAYER, "term_undefined_in_range_as_written", t.ms, {"term": p["term"]},
-                                   flags=["written_domain"])
+            lo_i = int(lo) if lo.is_Integer else -oo
+            hi_i = int(hi) if hi.is_Integer else oo
+            if lo_i == -oo and hi_i == oo:
+                idx = sp.S.Integers
+            elif lo_i == -oo:
+                idx = sp.Range(-oo, hi_i + 1)
+            else:
+                idx = sp.Range(lo_i, hi_i + 1 if hi_i != oo else oo)
+            # a parameter is read with its region's facts (a > 0: k + a != 0 from k = 1 on; round 4, RK-4)
+            from .calculus import _region_dummies
+            params: dict = {}
+            for v in ctx.ir.vars:
+                s_ = ctx.sym(v.name)
+                if v.name != var_name and s_ not in pins:
+                    params.update(_region_dummies(ctx, [s_]) or {})
+            und = written_undefined_in(p["term"], ns2, var, idx, pins, params=params)
+            if und is True:
+                return unknown(LAYER, "term_undefined_in_range_as_written", t.ms, {"term": p["term"]},
+                               flags=["written_domain"])
+            if und is None:
+                return unknown(LAYER, "term_definedness_undecided_as_written", t.ms, {"term": p["term"]},
+                               flags=["written_domain"])
             ok, cev = certify_series_sum(term, var, lo, hi, claimed, timeout=ctx.timeout)
+            from .calculus import refuted_at_an_allowed_value
+            ok = refuted_at_an_allowed_value(
+                ctx, var, ok, cev, [term, lo, hi, claimed],
+                lambda inst: certify_series_sum(term.xreplace(inst), var, lo.xreplace(inst), hi.xreplace(inst),
+                                                claimed.xreplace(inst), timeout=ctx.timeout)[0])
             ev.update(cev)
             conf = 0.99 if ev.get("method") in ("exact_finite", "symbolic+numeric") else 0.95
     if ok is True:

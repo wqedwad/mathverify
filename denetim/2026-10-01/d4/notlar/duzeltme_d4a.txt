@@ -1,0 +1,48 @@
+# d4a NOTLAR (gelenekler + z3)
+
+## Matematik kararları
+- **CAP-C1 / D4-ADIM-K (tek dereceli kök).** Yazılı kök (cbrt, root(·, n tek), real_root, \sqrt[n]{}, ∛) gerçel
+  köktür: ∛(−8) = −2 kesin, 1+√3i INCORRECT. Kuvvet yazımı b**(p/q) (q tek) b < 0'da iki gelenekli (gerçel kök /
+  esas karmaşık değer): değere bağlı karar UNKNOWN; iki okuma aynı kararı veriyorsa (ikisinde de eşit/değil) o karar.
+  Esas değer gerçel bağlamda hiçbir yoldan CORRECT olmaz. Adım: kapalı gelenekli iddia unknown; öncül kümesi iki
+  okumanın birleşimiyle çözülür (x**(1/3) = x: {−1,0,1} ⊇ {0,1}), −1 gelenek bölgesinde → adım unknown.
+  ADIM-K yeniden üretildi (taban: adım verified, örnekler {0,1}); matematik: gerçel {−1,0,1}, esas {0,1}, |−1| ≠ −1.
+- **CAP-N1 (ℕ).** ℕ/N/Naturals (dod ve iddia kümesi) 0 ∈ ℕ'ye bağlı: ℕ⁺ okunur, 0 gelenek noktası (ne tutulur
+  ne düşer). x² = 4 → {2} iki okumada aynı: karar verilir; x² − 3x = 0 → UNKNOWN. İddia kümesi "ℕ": iki okumada
+  ayrı karşılaştırılır, aynıysa karar. Z+/N+/ℕ⁺ = {1,2,…}, N0/ℕ0/Naturals0 = {0,1,…}; IR `natural` ≥ 1 kalır.
+- **CAP-B1 (binom).** C(n, r) yalnız 0 ≤ r ≤ n tam sayılarında müfredat değeri; dışarısı (genelleştirilmiş binom,
+  r > n'de 0) gelenek: o noktalar ne tutulur ne düşer → {−2,3} ve {3} UNKNOWN; {−2} ve ∅ INCORRECT (3 her
+  gelenekte kök). n! negatif tam sayıda kutup: tanımsız kalır.
+- **G13 (0**0).** 0⁰ geleneğe bağlı (1 ya da tanımsız): b**0'da b = 0 gelenek noktası. 0**0, x**0 (x = 0),
+  Sum(0**k, k = 0..) değerine bağlı karar UNKNOWN; 5**0 = 1 ve x > 0'da x**0 = 1 kesin.
+- **CAP-M1 (Mod).** Mod(a, b) b ≤ 0 (ya da işareti kararsız) iken floored/kesik/Öklid ayrışır: UNKNOWN. b > 0'da
+  üçü aynı (floored = Öklid): bugünkü okuma; z3'ün `%`'ü yalnız bölen pozitifliği kanıtlıyken kullanılır.
+- **CAP-D1 (z3 + ℤ evreni).** dod ℤ iken x tam sayıdır: floor(x) + x = 5/2'nin ℤ'de çözümü yok → 3/2 CORRECT
+  olamaz (UNKNOWN ir_inconsistent ya da INCORRECT). z3'e IsInt olarak girer (Complement/Intersection içinde de).
+- **CAP-Z1 (z3 unsat verilen).** Verilenlerin örneği yoksa iddia "çürütülemez" (ilke 5; ex falso): ir_inconsistent,
+  UNKNOWN; payload, şık harfi ve ikisi birlikte aynı karar.
+
+- worktree: /home/user/asd/.claude/worktrees/agent-a4905d9c674dfd6ac (dal worktree-agent-a4905d9c674dfd6ac, taban 1df0558)
+- bulgu özetleri: bulgular.txt (bu dizinde)
+## Plan
+1 C1/ADIM-K tek kök; 2 N1 ℕ; 3 B1 binom; 4 G13 0**0; 5 M1 Mod; 6 D1 z3 dod; 7 Z1 z3 unsat
+Fikir: ForwardSpans (domain.py) altyapısını "gelenek koşulu" olarak genelleştir (nokta: ne tutulur ne düşer).
+## İlerleme
+- (taban 158c220'a ff edildi) sonda önce: 152/239 BAD (olcum/once.txt, taban kopyası d4a/taban/)
+- Uygulandı (commit yok henüz): domain.Convention (odd_root, zero_power, binomial, mod_divisor) + convention_split;
+  Ctx.convention_region (=reversed_region genel); parse _real_root (cbrt/root/real_root/∛/\sqrt[n]); number_set_named;
+  equiv/conventions.py çift okuma (answers_equivalent, scalar_equal); z3: odd root/Mod divisor Unsupported, IsInt;
+  wordproblem _claim_status (unsat → ir_inconsistent); _set_as_relation Integers/Range; verifier ℕ çift okuma;
+  algebra solve_equation convention mode; steps: _solved_both_readings, _verified_where_conventions,
+  _convention_as_written, _range_spans tüm conventions.
+- sonda s3: 0/240 BAD. Sıradaki: Lean gate (statement.py), testler, pyflakes, fark, mutasyon.
+- commit 44c05ef (fix + sonda + mutasyon + test). sonda: taban 173/286 → 0. test d4a 54 (51 tabanda düşer).
+- tam pytest (ilk koşu, kısmen eski kod): eski beklenti değişimleri düzeltildi (c10, Sum 0**k); test_staged_check
+  hatası d4/*.md (158c220'dan, benim dosyam değil) — tabanda da var mı kontrol et.
+- sıradaki: fark f1 (koşuyor), mutasyon, tam pytest yeniden.
+- BİTTİ: commitler 44c05ef, 446537c, 4094515, 20297a6. sonda taban 177/291 → 0. test 62 (58 tabanda düşer).
+  mutasyon 44/44. fark f3: 558 çözüm, karar/adım değişimi 0. tam pytest (446537c): 3185 geçti, 93 atlandı (Lean),
+  1 düştü (test_staged_check: d4/*.md, 158c220'dan gelen, parça dışı). pyflakes: yalnız tabandaki uyarılar.
+- SALDIRI A düzeltmesi: commit 3f199c9. value_convention_region + convention_counterexample (algebra simplify/evaluate saf yol);
+  N değişken/küme çakışması çekimser; sonda limit 'to', extremum 'which'. Sonda 316: 158c220 184, 20297a6 16, sonra 0.
+  Test 79 (158c220'da 65, 20297a6'da 16 düşer). Mutasyon 51/51. fark f4: 0. Tam pytest: yalnız test_staged_check (d4/*.md, önceden).

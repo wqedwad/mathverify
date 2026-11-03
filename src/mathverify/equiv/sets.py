@@ -23,6 +23,19 @@ def scalar_equal(a, b) -> bool | None:
     symbolic battery, tried first before, spent up to its full timeout on every pair of
     different algebraic numbers (measured: 64 s for one cubic with trig-form roots)."""
     from .numeric import exact_equal, has_float
+    from .conventions import closed_readings
+    try:
+        readings = closed_readings(sp.sympify(a), sp.sympify(b))
+    except (sp.SympifyError, TypeError, AttributeError):
+        readings = None
+    if readings is False:
+        return None
+    if readings is not None:
+        # an odd root of a negative number written as a power (equiv.conventions): equal only when
+        # both readings agree, the real root and the principal value
+        (a1, b1), (a2, b2) = readings
+        r1, r2 = scalar_equal(a1, b1), scalar_equal(a2, b2)
+        return r1 if r1 == r2 else None
     try:
         sa, sb = sp.sympify(a), sp.sympify(b)
         exact = not (sa.free_symbols or sb.free_symbols) and not has_float(sa, sb) and not any(
@@ -42,6 +55,10 @@ def scalar_equal(a, b) -> bool | None:
 
 class EndpointsIncomparable(ValueError):
     """Two endpoints of one set could not be ordered exactly."""
+
+
+class TooManyEndpoints(EndpointsIncomparable):
+    """More constant endpoints than `unify_endpoints` compares (`_UNIFY_LIMIT`)."""
 
 
 def _endpoints(s) -> list:
@@ -97,7 +114,7 @@ def unify_endpoints(sets) -> list:
                 continue
             n_const += 1
             if n_const > _UNIFY_LIMIT:
-                raise EndpointsIncomparable(f"more than {_UNIFY_LIMIT} constants to compare")
+                raise TooManyEndpoints(f"more than {_UNIFY_LIMIT} constants to compare")
             ke = _near_key(e)
             for r, kr in zip(reps, keys):
                 if isinstance(e, sp.Rational) and isinstance(r, sp.Rational):
@@ -119,6 +136,39 @@ def unify_endpoints(sets) -> list:
                 reps.append(e)
                 keys.append(ke)
     return [_remap(st, mapping) for st in sets] if mapping else list(sets)
+
+
+def endpoints_apart(sets, cap: int) -> bool:
+    """Are the constant endpoints of `sets` (at most `cap` of them) pairwise 1e-9 apart at 20 digits, the test
+    `unify_endpoints` reads as "certainly different", so that no two of them can be one number written two
+    ways? Found by sorting their values, not by comparing every pair: above `_UNIFY_LIMIT` the window sets of
+    sandbox.exactsets (the 300 zeros of sin(x) on [0, 940]) raised and count_roots was left undecided (round 9
+    of part d4b, RK-3). Real values only; a constant without a 20-digit value fails."""
+    consts: list = []
+    seen: set = set()
+    for st in sets:
+        for e in _endpoints(st):
+            if not _is_const(e) or e in seen:
+                continue
+            seen.add(e)
+            consts.append(e)
+            if len(consts) > cap:
+                return False
+    keyed = []
+    for e in consts:
+        k = _near_key(e)
+        if k is None or k.imag != 0:
+            return False
+        keyed.append((k.real, e))
+    keyed.sort(key=lambda t: t[0])
+    for i, (a, ea) in enumerate(keyed):
+        for b, eb in keyed[i + 1:]:
+            # b >= a: once b - a exceeds the tolerance at b it does for every later b too
+            if b - a > 1e-9 * max(1.0, abs(a), abs(b)):
+                break
+            if not (isinstance(ea, sp.Rational) and isinstance(eb, sp.Rational)):
+                return False
+    return True
 
 
 def _remap(st, mapping: dict):

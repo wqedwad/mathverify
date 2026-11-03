@@ -477,7 +477,10 @@ def test_c9_definedness_is_exact_or_nothing():
         assert strict(e, x) is None, e
     half = sp.Pow(x, sp.Mul(1, sp.Pow(2, -1, evaluate=False), evaluate=False), evaluate=False)
     assert strict(half, x) == [x >= 0]                                      # x**(1/2) as written
-    assert strict(sp.Pow(2, x), x) == [] and strict(sp.Pow(x, sp.pi), x) == [x >= 0]
+    # 0**pi: 0 by the strict rule, undefined read through exp(pi*log x): a convention point, not a value
+    # (round 10 of part d4b, RK-1, DECISIONS §90); a Lean template refuses a convention atom
+    from mathverify.certify.domain import ZERO_POWER_BASE
+    assert strict(sp.Pow(2, x), x) == [] and strict(sp.Pow(x, sp.pi), x) == [x >= 0, sp.Contains(x, ZERO_POWER_BASE)]
     assert _goal(CERTIFIED_WRONG[[c[0][:3] for c in CERTIFIED_WRONG].index("A45")][1], _iv("[0, oo)")) \
         == "∀ x : ℝ, (((x ≥ 0)) ↔ (0 ≤ x))"
 

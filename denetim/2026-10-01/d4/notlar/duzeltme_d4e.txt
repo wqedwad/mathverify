@@ -1,0 +1,202 @@
+# d4e NOTLAR (görev sertifikalarının koşul ve tanımlılık okuması)
+
+## Matematik kararları
+
+- **G6 (limit, koşul yazımı).** Limit değişkenin bütün koşullarının belirlediği bölge R üzerinde alınır (bildirim,
+  kısıt, verilen, tanım evreni; verilenle sabitlenmiş parametre değeriyle). Nokta R'nin kapanışında değilse ya da
+  R'nin yalıtık noktasıysa limit yoktur/soru anlamsız → UNKNOWN (`approach_outside_declared_domain`). Nokta R'nin
+  ucundaysa (bir yandan R'ye giriliyorsa) limit o yandan alınır: |x|/x, x>0 iken 0'da 1 (mpmath 1e-30'da 1); DNE
+  yanlış. Bu, bildirilmiş alanın kapalı ucundaki §73(e) kuralının aynısı; aynı koşul her yazımda aynı karar.
+  ±oo: R yukarıdan/aşağıdan sınırsız değilse UNKNOWN (x>0 iken x→−oo). Serbest parametreli koşul → condition_not_applied.
+- **G6 (türev/teğet).** Türev iki yanlıdır (§78 C(2)): nokta R'nin iç noktası değilse UNKNOWN (`point_not_interior`),
+  verilenle gelen koşul dahil. |x|'in 0'daki türevi verilen x≥0 iken: DNE ve 1 ikisi de UNKNOWN (sağ türev 1, iki yanlı
+  türev bölgede tanımsız; karar geleneğe bağlı). İfade türevinde karşılaştırma R'nin içinde; iç boşsa UNKNOWN.
+- **G4 (extremum aralığının ucu sembol).** Verilen/kısıtla sabitlenmiş sembol d4d'nin bağlamasıyla (binding_issues
+  tutarlılık denetimi dahil) yerine konur: [0,b], b=3 → [0,3], max x = 3 (0 yanlış). [b,1], b=5 boş aralık → ekstremum
+  yok → UNKNOWN. Serbest sembol kalırsa (b positive ya da b>5) → condition_not_applied (UNKNOWN).
+- **TAN-02 (f'deki parametre).** Aynı bağlama f'ye de uygulanır: a=3 iken [0,1]'de a·x'in max'ı 3, argmax 1; a=−3 min −3;
+  x²+a max 4. Serbest parametre → UNKNOWN. Sertifikada değeri sayı olmayan/karşılaştırılamayan aday asla atılmaz:
+  böyle bir aday varsa "aday kümesi tam" EVT kanıtı ve "hiçbir aday eşit değil → not_attained" çıkarımı geçersiz → None.
+- **G12 (ilkel).** İlkel F, f'nin tanımlı olduğu bölgede (Ctx.domain_for: bildirim, kısıt, verilen, dod, yazılı tanımlılık)
+  F' = f sağlayan GERÇEL değerli, sürekli fonksiyondur. x>0 iken log(−x) gerçel değil (log x + iπ) → INCORRECT/UNKNOWN
+  (asla CORRECT); x>0'da x²/2, |x|'in ilkelidir (CORRECT ya da UNKNOWN; INCORRECT haksız); verilen x<0 iken log(−x)
+  1/x'in ilkelidir. Gerçel x'te x + i gerçel değil → CORRECT değil. Bölge ayrık parçalıysa (R∖{0}) F − F₀ her parçada sabit
+  olmalı; parçalar arası farklı sabit (log|x| + sign x) müfredatın tek C'sine uymuyor, geleneğe bağlı → UNKNOWN.
+- **TAN-05 (nokta bağlayıcısı).** at/Subs/Limit/Integral/Derivative'in bağladığı değişken yereldir: tanımlılık okumasında
+  bildirimi taşımaz. d/dx √(−x) |_{x=−1} = −1/2 (mpmath 60 basamak) → y + at(...) = −1/2 için {0} doğru, ∅ yanlış.
+  Limit(√x²/x, x, −oo): −oo civarında √x gerçel değil → tanımsız → UNKNOWN (bildirimsiz kontrolle aynı karar).
+- **TAN-06 (yazılı tanım kümesi).** Türev/teğet yalnız yazılı tanım kümesinin iç noktasında: √x²'nin 0'ı (uç), acos'un 1'i
+  (uç), {0} (yalıtık) → UNKNOWN. Tanım kümesi boş ifade (log x − log x + log(−x) − log(−x)) hiçbir yerde tanımsız → türev,
+  ilkel, sadeleştirme, ekstremum UNKNOWN (`problem_undefined_as_written`). İfade türevi tanım kümesinin içinde
+  karşılaştırılır (|x| + √x − √x için 1 doğru); iç boşsa UNKNOWN.
+- **TAN-07 (sonsuz sınırlı integral).** ∫_{−oo}^{x} dt/t: aralık (−oo, x] 0'ı içerir (ıraksak) ve −oo'da da ıraksak → F hiçbir
+  x>0'da yok → türev UNKNOWN. ∫_x^{oo} dt/(t+1) oo'da ıraksak (log) → UNKNOWN. Sonsuz uçta yakınsaklık kanıtlanmadıkça
+  integral tanımlı sayılmaz (e^{−t}, 1/t² için kanıtlı: CORRECT kalır).
+
+## İlerleme
+- 782431c'ye ff yapıldı. Sonda yazıldı: denetim/2026-10-01/d4e/sonda.py. HEAD'de koşuluyor (once/).
+- (6 Ekim, yeni oturum) Worktree: /home/user/asd/.claude/worktrees/agent-a319902a704bcd11a; dal fe68285'e reset, 67ef480 birleşti (efea825). Betikler yeni yola uyarlandı.
+- (6 Ekim) Kod yeniden yazımı: task_pins/with_pins (base), open_conditions_empty+hold_nowhere (domain, periyodik), written_undefined_in pins, limit/extremum/calculus(türev, teğet, ilkel, belirli integral) pin ve parametreli yazılı koşul -> UNKNOWN; iç nokta pencere-yerel (tan pi/4 kapsama kaybı giderildi). Sonraki: sonda koş, kesif3-5 tekrar.
+- (6 Ekim) Sonda genişletildi (L periyodik TAN-06 + trig kontroller, M parametre kardeşleri, doğrulayıcı varyantları): 536 vaka; 782431c 242, 158c220 248, şimdi 0.
+- (6 Ekim) tests/test_d4_d4e_gorev.py 24 test: şimdi 24 geçer; 782431c'de 19, 158c220'de 20 düşer.
+- (6 Ekim) commit df7fda7 (kod+sonda+test). Sonda 546 vaka: 782 248, 158 254, şimdi 0. Testler 24: 782'de 19, 158'de 20 düşer. Sıradaki: fark, ilgili testler, mutasyon.
+- (6 Ekim) fark df7fda7: taban'a göre karar 0, adım 86 (782431c ile aynı); fark_782431c'ye göre 0/0. Sırada: ölü kod sadeleştirme + ek testler + mutasyon.
+- (6 Ekim) 4a028fa (ölü kod + ek testler), 5dc6353 (mutasyon.py 65). Arka planda: tam takım (tam_4a028fa.log), mutasyon (mutasyon_5dc6353.log).
+- (6 Ekim) 97c6245 ekstremum iddia pin + P18. Mutasyon arka planda (mutasyon_97c6245.log; klonu iş bitmeden durdurursan /tmp/mutasyon-* sil!). Tam takım 4a028fa'da sürüyor.
+- (6 Ekim) 2288362: mutasyon P03/W05/H04 düzeltildi (3/3 öldü). Arka planda: tam takım tam_2288362.log, mutasyon mutasyon_2288362.log. Bu sırada src değiştirme! Sonra: fark + diğer sondalar 2288362'de, kesif13 kapsama ölçümü.
+- (6 Ekim) 29dcf22: tek yanlı parametre (sqrt(x-a) türevi) kapsamı geri. Sonda 550: 782 250, 158 256, şimdi 0. Test 25: 782 20, 158 21 düşer. Arka planda tam takım (tam_29dcf22.log) + mutasyon 69 (mutasyon_29dcf22.log). src DEĞİŞTİRME. Sonra fark + diğer sondalar.
+- (6 Ekim) Mutasyon 29dcf22: 69/69 öldü.
+- (6 Ekim) fark 29dcf22: taban'a göre karar 0 adım 86; 782'ye göre 0/0. Sırada diğer sondalar (others1.sh).
+- (6 Ekim) b6ff80b: gerçellik denetimi kalan sembolü gerçel sabit okur (tam takımda test_e08 düşüyordu; test_d4_d4d...write_one_value_twice 782'de de düşer). Sonda 552: 782 251, 158 257, şimdi 0. Test 25: 782 20, 158 21. Arka planda tam takım tam_b6ff80b.log + diğer sondalar diger_b6ff80b. Sonra mutasyon 71 + fark b6ff80b.
+- (6 Ekim) Tam takım b6ff80b Lean'siz: 3591 geçti, 93 atlandı, 1 düştü (test_review_constraint_and_given_write_one_value_twice; 782431c'de de düşer). Mutasyon b6ff80b arka planda.
+- (6 Ekim) b6ff80b: mutasyon 71/71; sondalar d4a 0/316, d4b 0/275, d4c 0/138, d4d 0/340, d4g 0/229. Sırada fark b6ff80b.
+- (6 Ekim) fark b6ff80b: taban'a göre karar 0 adım 86; 782'ye göre 0/0. pyflakes 6 (taban ile aynı). İŞ BİTTİ, rapor gönderiliyor.
+
+## 2. tur matematik kararları (ana oturum, 6 Ekim; kararlar_tur2.md'den aynen)
+Yanlış onaylar (önce bunlar):
+- YO-1 + R9 (high, önceden var): series_sum ve closed_form terimi, sınırları ve iddiayı sabitlenen değerle (task_pins/with_pins)
+  okur; sabitlenen değerde tanımsız terim/iddia → UNKNOWN; 0**0'a dokunan → UNKNOWN (d4a geleneği; yazılı Σ_{k=0} 0**k = 1 de,
+  ayrı kök neden: written_undefined_in 0**k için None). Doğrular CORRECT: a = 2 iken Σ a·k = 12, Σ a^k (k=0..3) = 15, a = 5 iken
+  Σ_{k=1}^{3} 1/(k−a) = −13/12. Asla INCORRECT değil.
+- YO-2 (önceden var): sayı sınırlı integral de yazıldığı biçimde yakınsaklığı kanıtlanmadıkça tanımlı sayılmaz (iç tekillik,
+  sonsuz uç); sadeleşmeyle kaybolan ıraksak integral (0·∫, ∫−∫, ∫/∫, ∫**0) ifadeyi tanımsız kılar → UNKNOWN. Kanıt: kapalı
+  sınırlı aralıkta sürekli integrand → tanımlı; has olmayan → yakınsaklık kanıtı (decays_at vb.).
+- YO-3: Subs/at gövdesinin tanımlılığı Subs'ın kendi noktasında okunur (Subs nokta bağlayıcısı, _outer_nodes); Subs(Derivative(f)) için
+  f o noktanın bir komşuluğunda tanımlı olmalı (_limit_conditions gibi). Tanımsızsa adım unknown.
+- YO-4 (d4e getirdi): sabitlenen değer Sum/Product terimini tanımsız kılınca türev ifadesi ve ilkel UNKNOWN (pin kardeş yolları).
+- YO-5: negatif sabit tabanlı değişken üs ((−1)**x, (−2)**x): gerçel okumada tanımsız, esas karmaşık okumada tanımlı → gelenek →
+  türev, teğet, ilkel, limit UNKNOWN.
+- YO-6 (d4e getirdi): değişkenin bölgesinde (bildirim, kısıt, verilen, dod, sabitlenen parametre) hiçbir yerde tanımsız ifadenin
+  limiti → UNKNOWN (DNE de değer de); bildirim/literal yazımla aynı karar.
+Haksız ret:
+- R8 (önceden var): |u(x)|'in türev ifadesi: türev fonksiyonunun tanım kümesi iki yanlı türevlenebilir noktalar (|x| için ℝ∖{0}).
+  İddia tam bu kümede tanımlı ve eşitse (x/|x|, |x|/x, x/sqrt(x²), Piecewise((1,x>0),(−1,x<0))) CORRECT; iddia kırık noktada da
+  değer veriyorsa (sign(x): sign(0) = 0) gelenek → UNKNOWN; değeri yanlışsa INCORRECT. Karşılaştırma kırık noktada yapılmaz.
+Kapsama (d4e getirdi; yalnız kanıtlı yolla geri kazan):
+- R1: iç nokta yerel kanıtlanır: yazılı koşullar açık (≠, >, <) ve sürekli fonksiyonlarda p'de kesin olarak katıysa p iç noktadır
+  (pencerede global çözüm gerekmez). İfade türevi/ilkel: özdeşlik sembolik ve bölgenin içi boş değilse (katı koşullu bir tanık
+  nokta) CORRECT; tan(x²), sec(x²), tan(eˣ), 1/(x−cos x), 1/(x+eˣ) tabandaki kararlarına döner.
+- R2: işareti bildirilmiş parametre (positive_real, positive_integer): her izinli değerde tanım kümesinin içi boş değilse doğru ifade
+  CORRECT, yanlış INCORRECT (asin(x/a), acos(x/a), √(a²−x²), log(ax+b) a>0, log(kx), log(xⁿ)).
+- R3: bildirilmiş parametreli ilkellerde gerçellik yapısal kanıtla (gerçel semboller, tanım bölgesinde gerçel değerli işlemler):
+  ∫e^{kx}, ∫xⁿ, ∫sin kx (−cos(kx)/k), ∫1/(x²+a²), exp(−ax) → CORRECT.
+- R4: eğriyi yineleyen 'y = g(x)' verileni x üzerinde yalnız g'nin yazılı tanım kümesini koyar (y bildirimsiz gerçel ya da teğetin
+  dep'i): condition_not_applied değil, CORRECT kararı geri.
+- R5: değişken üzerindeki periyodik verilen (cos x > 0): nokta katı koşulla kesin sağlanıyorsa iç nokta (R1 ile aynı yerel kanıt);
+  ilkelde bölge sonsuz çok parçalı, tek sabitli sürekli F (sin x) CORRECT. A1–A4 CORRECT.
+- R6: çok parçalı bölgede iddia edilen F parçalar arasındaki boşlukta sürekli uzanıyorsa (bölgenin kapanışı bir aralık ve F orada
+  sürekli) sabitler süreklilikle bağlıdır → tek sabit, CORRECT. SymPy referansına dayanma gerekmez.
+- R7: sonsuz uçta yakınsaklık: |f| ≤ C·t^{−p} (p > 1, lim t^p·f sonlu, sembolik) ya da pozitif parametreli üstel sönme → kanıtlı;
+  ∫_x^∞ e^{−at} (a > 0), ∫_x^∞ t^{−21/20} CORRECT.
+Gerçek değil: R10 (evaluate Limit(|x|/x, x, 0) bildirimle 1 CORRECT: §73 geleneği; kısıt/verilenle UNKNOWN yalnız kapsama farkı,
+  istenirse aynı kurala bağlanır ama zorunlu değil).
+
+## 2. tur ilerleme
+- Worktree 7d29714'e ileri sarıldı (b6ff80b + d4b 6. tur + d4f).
+- YO-1: series_sum/closed_form task_pins + with_pins; verifier _claim_pins/_pinned_tree (claim convention, claim without value);
+  written_undefined_in Contains → _violations.
+- YO-2: _integral_conditions sayı sınırlı dalda sonsuz uçta _converges_at, iç tekillikte integrable_near (|t-c|^p|g| sınırlı, p<1);
+  decays_at |g|, AccumBounds üst ucu, log-oran üssü q>1; _integrand_on işareti bildirilmiş parametreyi kabul eder (R7 de).
+- YO-3: _outer_nodes Subs → _subs_conditions: türevsiz gövde noktada yazılı; türevli gövde (p-1,p+1) komşuluğu, aksi DEFINEDNESS_UNDECIDED.
+- YO-4: kök neden binding_issues (4)'te pinned_here = ew.free_symbols evaluate(True) altında Sum gövdesini 1'e indiriyordu;
+  evaluate(False) altında okunuyor → kısıt a = 2 de problem_undefined_as_written.
+- YO-5: Convention("negative_base"): c<0 sayı tabanı, değişken üs; tam sayı üs dışında gelenek. _violations tam sayı aralıkta
+  tam sayı değerli üs için boş; convention_split e == var için (Z, R∖Z); is_value_convention'a eklendi.
+- YO-6: limits.defined_nowhere_in(domain_for, written(pinned)) → expression_undefined_as_written. test_parca7c'de x*log(-x),
+  kısıt x > 0, '+' iddia 0: INCORRECT → UNKNOWN (bildirimle aynı karar; YO-6 kararı).
+- R8: calculus.kink_reading: |u| sıfırları; sonlu: derivative_at_point (value kalır; corner/cusp/discontinuous/infinite çıkarılır,
+  iddia orada değerliyse gelenek → UNKNOWN); sonsuz aile: yalnız f = c|u|, mertebe 1, u'≠0 (basit sıfır) + iddia ailede tanımsız;
+  aile Ne(u,0) ile örneklemeden çıkar, sign(u) → u/|u|. Çözülemeyen kırık → karşılaştırma True/False ikisi de UNKNOWN.
+  Bölge içinde olmayan kırık (uç) atlanır (|x| + sqrt(x) − sqrt(x)).
+- R1: interior_at: pencerede çözülemeyen koşul p'de katı ve sürekli (_CONTINUOUS izin listesi) ise iç nokta (strict_at).
+  İlkel için tek sabit: F meromorf (rasyonel, tam sayı üs, c**x, exp/trig/hiperbolik) ise C∖kutuplar bağlantılı → tek sabit.
+  atan(tan(x²)) − x² gibi parça parça sabit gizleyen iddia meromorf değil (testte != CORRECT).
+- R2: for_every_parameter_value: parametreler _declared_region(givens=True) işaretli Dummy; tek tanık x0 her koşulda katı
+  (varsayımlarla); sym_equal True → CORRECT; örnek parametre değerinde answers_equivalent False → INCORRECT; yoksa UNKNOWN.
+  Kırıklı f/iddia bu yoldan okunmaz.
+- R3: _reality bildirilmiş parametreyi (is_real True olan sembol) olduğu gibi okur; C ve bildirimsiz sembol gerçel Dummy.
+- R4: side_conditions → _curve_given: 'y = g(x)', y 'real' bildirimli kısıtsız, başka hiçbir metinde (verilen, kısıt, parametre,
+  fonksiyon, operatör, dod, unknown_of_interest; teğetin dep'i hariç) geçmiyor → yalnız g'nin yazılı tanım kümesi.
+- R5: verifier _WINDOWED_KINDS (derivative, tangent_line, antiderivative, limit) unsolved_side_conditions ile durmaz;
+  calculus.task_region domain_for'un ConditionSet'ini taban kümesine indirip çözülemeyen periyodik koşulları conds'a ekler
+  (pencerede exactsets çözer); limits.region_side sonlu noktada [p-1,p+1]'de çözer, sonsuzda UNDECIDED.
+- R6: _one_constant: bölgenin kapanışı tek aralık (ardışık parçalar boşluk noktasında birleşiyor) ve F her boşlukta iki yanlı
+  limitleri eşit ve sonlu → tek sabit.
+- Sonda d4e (worktree, commit öncesi): 708 vaka, 0 beklenmeyen. 7d29714'te N 68/102, P 44/54.
+- Test: 39 (25 eski + 14 yeni); 7d29714'te 14 yeni testin 14'ü düşer.
+- (7 Ekim) Konteyner 00:01'de yeniden başladı; YO-2'nin mutlak yakınsaklık okuması d4c'nin Dirichlet vakasını
+  (status None) bozuyordu → domain._dirichlet_test (sin/cos(at+b)·h, h fonksiyonsuz, gerçel, → 0, h'/h rasyonel).
+- Commit'ler: 0ce2bc1 (2. tur kodu+test+sonda+mutasyon), 52153c3 (f1b1c94 birleşmesi, çakışmasız),
+  21a6616 ve 98daab1 (yaşayan mutasyonlara öldürücü vakalar; kod değişmedi).
+- Ölçüm (birleşik hâl, Lean'siz): d4e sonda 708 vaka: 7d29714'te 112 (N 68, P 44), HEAD'de 0. Diğer sondalar 0:
+  d4a 316, d4b 399, d4c 138, d4d 340, d4f 225, d4g 229. Mutasyon 98daab1: 111'den 110 öldü; D02 eşdeğer
+  (d4e/d4f/parça7c testleri mutasyon altında geçer; YO-6 bölge denetimi + limitin yan denetimi kapsıyor).
+  Fark: taban.json'a karşı karar 0 (ilk kötü adım 0, adım 86 — 7d29714'te de 86), 7d29714 dökümüne karşı karar 0,
+  adım 0; 782431c dökümüne karşı 0/0/0. Test: 14 yeni testin 14'ü 7d29714'te düşer.
+- (7 Ekim, 00:45 yeniden başlama sonrası) Tam takım 98daab1'de dosya dosya (suite_chunks.sh, kaldığı yerden sürer):
+  3814 geçti, 93 atlandı (Lean), 1 düştü: test_parca4 L(-1) adım vakası (YO-2 ile girişte durma) → cc7b83b'de ayrı teste.
+- 7d29714 karşılaştırmasında sin(x)|sin x| türevinde kapsama kaybı bulundu (2cos|sin| CORRECT→UNKNOWN) → f1c98d3:
+  aile f = g|u| okuması (g=0: türev var, aile karşılaştırmada; g≠0, u'≠0: köşe). Mutasyon f1c98d3: 112'den 111 (D02 eşdeğer).
+- Bilinen bilinçli değişiklik: |x|'in 2. türevi için iddia 0, 7d29714'te CORRECT, şimdi UNKNOWN (R8 kararı: türevin
+  olmadığı 0'da değer veriyor → gelenek).
+- (7 Ekim 05:00 sonrası) eedd182 (d4c 2. tur) birleşmesi ec62a68: metin çakışması yok, d4c değişiklikleri d4e'nin
+  dokunduğu fonksiyonlardan ayrı. Mutasyon ec62a68: 112'den 111 (D02 eşdeğer). Sondalar d4e 0/708, d4a/b/d/f/g 0.
+  Fark tabanı olarak eedd182 dökümü alındı (fark_eedd; taban.json'a karşı karar 0, adım 86 — 7d29714 ile aynı).
+- SON (ec62a68, eedd182 birleşik): d4e sonda 0/708 (7d29714: 112); d4a 0/316, d4b 0/399, d4c 0/203, d4d 0/340,
+  d4f 0/225, d4g 0/229. Mutasyon 111/112 (D02 eşdeğer). Fark: taban karar 0 (adım 86, önceden var); 7d29714, eedd182,
+  782431c dökümlerine karşı 0/0/0. Tam takım dosya dosya: 3824 geçti, 93 atlandı (Lean), 0 düştü. pyflakes 6 taban.
+  d4e testleri 39; 14 yenisinin 14'ü 7d29714'te düşer. eski7d2/eskieedd/mutcopy silindi.
+
+## 3. tur matematik kararları (ana oturum, 7 Ekim; kararlar_tur3.md'den aynen)
+- YO-1 (önceden var): SymPy limiti yakınsaklık kanıtı değildir (salınan payda: lim t^{3/2}/(1+t²cos²t) yanlışlıkla 0). decays_at /
+  integrable_near: sınırı olmayan argümanlı salınan alt terim (sin, cos, tan ... sınırsız argümanla) varsa limit kanıt sayılmaz; salınan
+  çarpanlar değer aralıklarıyla güvenli yönde sınırlanır (payda ≥ sabit kısım, pay ≤ |katsayı|) ve majorantın sönmesi kanıtlanır;
+  kanıt yoksa UNKNOWN. ∫_0^∞ dt/(1+t²sin²t) ıraksak: 0·∫+1 = 1, ∫−∫ = 0, FTC türevi → UNKNOWN, compute adımı unknown.
+- YO-2 (high, önceden var): series_sum'da yazılı tanımlılık kararsızsa (None) terim tanımlı sayılmaz → UNKNOWN (fail-closed); sabitleme
+  her biçimde okunur (2a = 4, a − 2 = 0, a² = 4 ∧ a > 0, a = b ∧ b = 2, kısıt): d4d'nin bağlama mekanizması (binding/pins) kullanılır.
+- YO-3 (d4e getirdi): türev ifadesinde iddianın yazılı tanım kümesi okunur: izinli bir parametre değerinde ya da türevin tanım kümesinin
+  bir kısmında yazıldığı biçimde tanımsız iddia CORRECT olamaz (UNKNOWN; hedefin tanımlı olduğu noktada tanımsızsa aşağıdaki RK-8 kuralı).
+- YO-4 (d4e getirdi): R8 kırık kuralı yalnız Abs değil bütün parçalı-doğrusal/sıçramalı yapılara: Max, Min, sign, x·sign(x), Heaviside,
+  Piecewise: iddia kırıkta (türevin olmadığı noktada) değer veriyorsa gelenek → UNKNOWN; sign(x)' = 0 iddiası UNKNOWN.
+- YO-5 (önceden var): limit (ve türev) bölgesi verilenlerin, kısıtların ve tanım evreninin yazılı tanımlılığını da okur (verilen
+  'x + 0·√(x−1) > 0' → x ≥ 1): |x−1|/(x−1)'in 1'deki limiti bu bölgede tek yandan 1 (DNE INCORRECT değilse en az UNKNOWN; 1 INCORRECT asla).
+- RK-8 (gelenek tutarlılığı): projenin yerleşik geleneği (simplify 'claim_as_written', ilkel 'not_defined_or_continuous_where_integrand_is'):
+  iddia hedefin tanımlı olduğu bir noktada yazıldığı biçimde tanımsızsa INCORRECT. Türev ifadesi görevi de buna uyar: (x²)' için 2x²/x,
+  2x³/x², 2x+log x−log x, 2(√x)², x²eˣ(2/x+1) → INCORRECT (şimdi CORRECT: yanlış onay). Kilitli INCORRECT'ler (2x²/|x| vb.) kalır, ama
+  gerekçesi yazılı tanımlılık olur (random_point'in 0'daki nan'ı değil). R8'in aynası değildir: orada iddia fazladan değer veriyor.
+Kapsama ve sağlamlık (d4e getirdi; kanıtlı yolla):
+- RK-1: sonlu kırıkta u(p) = 0 ve u'(p) ≠ 0 (kesin) ise gerçek köşe (g·|u| okumasında g(p) ≠ 0 da gerekir): türevin tanım kümesinden
+  çıkar; iddia tam orada tanımsızsa (0/0) ders kitabı türevi CORRECT (|log x|, |√x−1|, x|log x|).
+- RK-2: 'kinks_not_solved' kesin karşı örneği atmasın: bütün Abs argümanlarının sıfırdan farklı olduğu ve f'nin türevli olduğu bir noktada
+  iddia yanlışsa INCORRECT (|tan x|' = 1/cos²x vb.); doğrular kanıtlıysa CORRECT.
+- RK-3: n tam sayı bildirilmişse (integer, natural, positive_integer) negative_base koşulu bildirimden kanıtlıdır: (−1)**n, (−2)**n,
+  (−1)**(2n) ile görevler parameter_condition_not_proved vermesin.
+- RK-4: yakınsaklık kanıtı: e^{−t^α} (α > 0) tipli sönme, görev değişkenini sabit parametre gibi taşıyan integrand (∫e^{−t}(x+t),
+  ∫e^{−t}cos(xt)): majorant e^{−t}(|x| + t), |cos| ≤ 1 ile kanıtlı → CORRECT/INCORRECT.
+- RK-5: kink_reading'in toplam deterministik bütçesi olsun (iç içe kökler 68–186 s); bütçe dolarsa UNKNOWN.
+- RK-6: PYTHONHASHSEED'den bağımsız karar: karşı örnek noktası deterministik seçilsin (küme sırası yok); |log x| + |tan x| türevi 0 → INCORRECT.
+- RK-7: at(diff(f), x, p) compute adımı aşkın/trig koşulda strict_at'in yerel kanıtını kullansın → verified.
+
+## 3. tur
+- (7 Ekim) Yeni ajan; worktree /home/user/asd/.claude/worktrees/agent-a62c3a7247360b6ec, 849ea4e'ye reset. Bulgular d4/saldiri/d4e2/bulgular.json (13, hepsi doğrulandı).
+- 849ea4e kopyası r3/eski849 (önce ölçümü). Sonda Q/R/S yazıldı (r3/sonda_r3.py). Önce (849ea4e): Q 81/120, R 12/28, S sürüyordu.
+- 2fed5e2: YO-2 (series fail-closed + Ctx.solved_pins; closed_form/recurrence_term de), YO-1+RK-4 (domain.majorant). pick.py ile YO-1/YO-2/RK-4 0 beklenmeyen.
+- Önce (849ea4e, r3/once849): Q 81/120, R 12/28, S 46/65 beklenmeyen.
+- fcd9f82: türev ifadesi yeniden (switch_arguments, abs_form, _linear_switch_rule, _KINK_BUDGET=3, claim_where_derivative, _implied, _smooth_witness, _claim_for_every_value), YO-5 (written_conditions: limit verilenleri + kısıt + dod), RK-3 (_parameter_condition Convention olgularla), RK-7 (_subs_conditions strict_at). pick.py: Q/R/S değişen vakalar 0. Tam sonda snap_fcd üzerinde koşuyor (son_fcd). Ölçümler her zaman snapshot kopyasında (canlı worktree değişirken sandbox işçileri yeni kodu okuyabilir).
+- Tam sonda snap_fcd: 16 grup, yalnız P R1 tan(x**2) 2x/cos**2 BAD (34d5cdb _implied çarpanlarla düzeltti). 849ea4e kopyasında 12 round3 testinin 12si düşer.
+- Ana oturum ek işi: d4b8-YO-2 (written_undefined_in None -> extremum/türev noktası/teğet de çekimser). Sonda Q d4b8 vakaları 16, 0 beklenmeyen.
+- Sıradaki: mutasyon listesi güncelle (K02/K03/K05/K06 metinleri değişti, C17 kaldırılacak, M01-M29 yeni), diğer sondalar, fark, ilgili testler.
+- d3e805c (snap_d3e) diğer sondalar: d4a 0/316, d4b 0/436, d4c 0/203, d4d 0/340, d4f 0/335, d4g 0/229. 9afdba2: mutasyon listesi 141 hedef tamam. fark 9afdba2 koşuyor (r3/fark_9af).
+- fark 9afdba2 (r3/fark_9af): taban.json karar 0, adım 86 (849ea4e dökümü r3/fark_849: aynı 86); 849ea4e ve 62a40e9 dökümlerine karşı 0/0/0.
+- SON (9afdba2, src = d3e805c): d4e sonda 942 vaka 0 beklenmeyen (son_fin); 849ea4e (son sonda dosyası, once849f): Q 99/141, R 12/28, S 46/65 = 157/234. floor/frac için smooth_at adım okuması denendi, gözlenemez (849de de UNKNOWN) -> geri alındı. Sırada: tam mutasyon --kayit r3/mut_9afdba2.jsonl, tam takım, 849da yeni 2 test.
+- Mutasyon 9afdba2 (141): 132/141; yaşayanlar W02,W05,W07,I09,D02,M05,M20,M22,M27 -> 98e89cd: W02/W07 ölü kod kaldırıldı (fail-closed sonrası), _in_comparison açık kısım (sqrt(sin x)**3 kapsama kaybını geri aldı), testler eklendi. Mutasyon 98e89cd (140): 136 öldü; 56cec1d: I09 öldü; W05 (certify_extremum sembolde zaten çekimser), D02 (2. turdan), M05 (SymPy işaretsiz sembolde üstelde NotImplementedError, paydada tanımlılık önce çekimser; ölçüldü) eşdeğer.
+- acot(x) türevinde -1/(1+x**2) + 0/x: 849 CORRECT -> INCORRECT (proje arccot (0,pi), 0'da türev var: RK-8). |x - cos x| türevi 1 + sin x: 849 UNKNOWN -> INCORRECT (RK-2 tanığı).
+- Son ölçümler fin_56cec1d altında koşuyor (d4e + diğer sondalar, sonra fark).
+- (21:30, konteyner yeniden başladı; işler bitmişti) fin_56cec1d: d4e sonda 942/0; d4a 0/316, d4b 0/436, d4c 0/203, d4d 0/340, d4f 0/335, d4g 0/229; fark taban karar 0 adım 86. 849ea4e kopyasında d4e test dosyası: 14 round3 testinin 14ü düşer (39 eski geçer). Sırada: tam mutasyon 56cec1d --kayit mut_56cec1d.jsonl, tam takım (r3/suite.sh), pyflakes.
+- Mutasyon 56cec1d (140, --kayit mut_56cec1d.jsonl): 137 öldü; W05, D02, M05 eşdeğer (gerekçeler yukarıda). Sırada tam takım (r3/suite.sh fin_56cec1d/fark/code -> r3/suite_fin).
+- SON (56cec1d): tam takım Lean'siz dosya dosya (fin_56cec1d/fark/code kopyası, r3/suite_fin): 4074 test, 3977 geçti,
+  93 atlandı (Lean, root), 4 düştü: hepsi test_staged_check (kopya git deposu değil); aynı dosya worktree'de 174/174
+  geçer -> gerçek düşen 0. pyflakes src tests: 6 (taban ile aynı).
+- 3. tur ÖZET: Q/R/S + d4b8 234 vaka: 849ea4e 157 beklenmeyen -> 56cec1d 0. d4e sonda 942/0, diğer sondalar 0.
+  14 yeni testin 14'ü 849ea4e'de düşer. Mutasyon 137/140 (W05, D02, M05 eşdeğer). fark: taban karar 0 adım 86;
+  849ea4e dökümüne karşı 0/0/0. İŞ BİTTİ, rapor gönderildi.

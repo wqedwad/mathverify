@@ -1,0 +1,283 @@
+A+ son saldırı (birleşik 7892190; DECISIONS §89–§91) kararları — ana oturum, 16 Ekim 2026. Bulgu metinleri
+son_saldiri/tum_bulgular.json (saldırgan raporları; doğrulayıcı kararları gelince ayrı). Genel ilke değişmedi: yanlış
+olabilecek cevaba CORRECT yok; doğru cevabın haksız reddi de hata; kanıtlanamıyorsa UNKNOWN; gerçekçi bulgu KESİN düzeltilir,
+yapay bulgu DAR fail-closed kuralla kapanır; kapsama kaybı en dar biçimde. Taban: wip/yerel 0e93ed5 (birleşik hâl + yerel kalite).
+
+MERCEK 1 (sayısal işaret)
+- G1YO-1 (yüksek, gerçekçi, A+ getirdi, YANLIŞ ONAY): _sympy_guards.strict_sign, katı evalf'in anlamlı biti olmayan sanal kısmını
+  (0.e-22, 1 bit) "nonreal" sayıyor; yamalı varsayım yedeği gerçel bir karmaşık kuvvete hem pozitif değil hem negatif değil diyor,
+  SymPy is_zero=True çıkarıyor: (1+i√3)³ = 5 CORRECT, De Moivre ailesinde her yanlış cevap/şık/adım onaylanıyor. Karar: bir parçanın
+  işareti yalnız doğruluğu yeterliyse (aynı dosyadaki `_sign` ve numeric._part_state ile aynı eşik, ≥ 20 bit) karar verir; sanal
+  kısım gürültüyse "nonreal" değil, kararsız (None). Aynı katı evalf parçasını okuyan bütün kardeş yollar (strict_value'nun
+  tüketicileri, yamalı is_positive/is_negative/is_zero, Eq kuruluşu, Abs/sqrt/cbrt katlanması) aynı eşikle denetlenir. Beklenen:
+  bulgudaki bütün doğru cevaplar CORRECT, yanlışlar INCORRECT; |(1+i√3)³+30| = 22, ∛(...+35) = 3, max = −7 CORRECT; 'eq' adımı
+  refuted. SymPy düzeyi: (X − 5).is_zero None ya da False, asla True.
+- G1YO-2 (düşük, yapay, d4 öncesi): exactsets._on ilerleme indis aralığını float ile hesaplıyor; pencere ~10^16 periyodu aşınca kök
+  düşüyor. Karar: indis sınırları kesin tam sayı aritmetiğiyle (kesin floor/ceiling) ya da büyüklük float'ın kesin tam sayı
+  aralığını (2^52) aşınca fail-closed (karar yok).
+
+MERCEK 2 (integral, tolerans)
+- G2YO-1 (yüksek, belirsiz-gerçekçi, d4 öncesi, YANLIŞ ONAY + HAKSIZ RET): calculus._switch_points sgn/Abs/Max/Min argümanının yalnız
+  sıfırlarını dal değişim noktası sayıyor; argüman kutuptan geçerken de işaret değiştirir. ∫_{-2}^{4} sgn((x−1)/(x+1)) dx: 0 CORRECT,
+  doğrusu 2 INCORRECT. Karar (kesin): geçiş noktaları argümanın sıfırları VE kutupları (paydanın gerçel sıfırları, tanımsız noktaları);
+  kutupların bulunamadığı/kesin olmadığı durumda TTK karar vermez. Ayrıca definite_integral'ın sayısal çapraz denetimi cval = 0 iken
+  de yapılır (certified_sign(cval) != 0 şartı sıfır değeri denetimsiz bırakıyordu): sayısal değer yakınsamış ve kesin zarf cval'i
+  dışlıyorsa ya da kesin olarak farklıysa sertifika kabul edilmez.
+- G2YO-2 (orta, yapay, A+): sayısal merdiven yakınsamazken (ıraksak) sertifikalı değer tek başına karar veriyor. Karar: kabulden önce
+  cval kesin zarfın içinde olmalı (integral_excludes(integrand, var, a, b, cval) True ise sertifika yanlış: kabul yok); merdiven
+  yakınsamıyor ve zarf kurulamıyorsa CORRECT yok (UNKNOWN). Iraksak ∫ max(x, 1/x) = sonlu iddia CORRECT olmamalı.
+- G2RK-1 (yüksek, gerçekçi, d4 öncesi d4a getirdi, HAKSIZ RET): antiderivative_domain_check F'deki her sign(u)'yu sıçrama sayıp
+  Ne(u, 0) koşulu ekliyor; cbrt ayrıştırması sign(u)|u|^{1/3} olduğundan (3/4)u∛u = (3/4)|u|^{4/3} sürekli ama sıçramalı sayılıyor:
+  ∫∛x dx = (3/4)x∛x ve 12 kardeşi INCORRECT. Karar (kesin): sign(u)'nun sıfırı u0'da F'nin iki yan limiti ve değeri kesin eşitse
+  (sign → ±1 konup u0'da değerlendirilir; kesin) sıçrama yok, koşul eklenmez; eşit değilse sıçrama (bugünkü gibi); kararsızsa UNKNOWN
+  (INCORRECT değil). Beklenen: bulgudaki 13 doğru ilkel CORRECT (en az UNKNOWN), x∛x INCORRECT; d/dx(x∛x) = 4∛x/3 CORRECT.
+- G2RK-7 (orta, gerçekçi, önceden var, ÇÖKME): definite_integral_numeric karmaşık dizgide mp.mpf ValueError → layer_exception;
+  sertifika hiç denenmiyor. Karar: karmaşık/okunamayan sayısal değer "yakınsamadı" (None); sertifika karar verir.
+- G2RK-10 (düşük, gerçekçi, d4 öncesi, ÇÖKME): antiderivative_domain_check Contains koşulunda .negated AttributeError. Karar: gelenek
+  koşulu (Contains) ayrı ele alınır: bölgede kesin boşsa (x > 0 iken odd_root) koşul yok, değilse gerekçeli UNKNOWN; istisna yok.
+- G2YO-3 (düşük, yapay, önceden var): random_point hücre kanıtı kutupları hücre sınırı saymıyor. Karar: kutuplar (paydanın gerçel
+  sıfırları) hücre sınırına eklenir; bulunamazsa "proved" yok.
+- G2YO-4 (düşük, yapay, önceden var): abs_tol kesin okunmuyor (30 basamağa yuvarlama, 1e-20 göreli taban). Karar: |c − v| ≤ abs_tol
+  kesin (tam ya da kesin aralık) karşılaştırılır; yuvarlama payı kabul yönünde kullanılmaz.
+- Kapsama (A+ getirdi; dar yolla geri al, olmuyorsa gerekçeyle kayıt): G2RK-2 (erf/fresnel/Si'li sertifikalı değer toleransla
+  karşılaştırılamıyor: kesin aralık zarfıyla ya da mpmath yüksek hassasiyetle kesin karşılaştırma), G2RK-3 (x > 0 kısıtlı noktasız
+  türev/ilkelde değişken tabanlı gerçel kuvvet UNKNOWN: gelenek kapısı bölge ile çağrılır), G2RK-5 (Piecewise integrand TTK'de
+  kırılma noktasında bölünür), G2RK-9, G2RK-11, G2RK-12 (zarf bütçesi). Önceden var kapsama (G2RK-4, G2RK-6, G2RK-8): yalnız kayıt,
+  G2RK-3'ün düzeltmesi G2RK-4'ü de kapatıyorsa ölçülür.
+
+MERCEK 1/4 (adım, çoktan seçmeli)
+- G1RK-2 (orta, gerçekçi, A+ getirdi, HAKSIZ RET): solve_inequality'nin params.inequality'si adım öncülü olunca (d4h tur 2) kesin
+  eşitsizlikte kritik nokta adımları (x² − 5x + 6 = 0, (x − 2)(x − 3) = 0, x = 2 ∨ x = 3) refuted, doğru (2, 3) INCORRECT. Karar: bir
+  eq adımı eşitsizlik öncülünün (görevin eşitsizliği ya da eşitsizlik verileni) HİÇBİR noktasında sağlanmıyorsa öncülün sonucu
+  olarak okunmaz; öncül yerine onun sınır denklemi (aynı iki taraf, '=') alınıp yeniden denetlenir: orada çürütülürse refuted
+  (x = 5), aksi hâlde unknown (verified asla bu yoldan). Eşitsizlik verilenli biçim (önceden var) de aynı kurala girer.
+- G1RK-3 (yüksek, gerçekçi, önceden var, HAKSIZ RET): '%' ve '°' birim işaretidir. Şıkta ya da iddiada % ya da ° var, karşı taraf
+  (iddia, IR değeri) birimsizse: iki okuma (birimli: %20 = 1/5, 30° = π/6; birimsiz sayı: 20, 30) ile karşılaştır; ikisinde de
+  farklıysa INCORRECT (veto), birinde eşitse UNKNOWN (birim geleneği), hiçbir zaman CORRECT bu yoldan. synthetic_geometry angle(
+  kuralı (25 Eylül) aynen. İddia '%20' ya da '30°' yazılıp IR birimsiz değer verince de aynı.
+- G1RK-1 (orta, gerçekçi, A+ getirdi, KAPSAMA): d4j'nin option_claim_undecided engelleyicisi şık metni ayrıştırılamadığında da
+  CORRECT'i engelliyor; iddia olarak okunan gösterim (log_2 5, log₂5, ln 2, x ∈ (2, 3), ]2, 3[, Ç = {2, 3} …) şık olarak okunmuyor.
+  Karar: şık metni iddiayla AYNI okuyucudan geçer (iddianın ad alanı, answer_shape, gösterim kümeleri); yine okunamazsa engel kalır.
+- G1RK-8 (düşük): her 0⁰ okumasında yanlış olan sayım ('3') INCORRECT kanıtlanabiliyorsa test/sonda beklentisi "INCORRECT ya da
+  UNKNOWN" olur; kod değişikliği yalnız iki okumada da yanlışlık kesin gösterilebiliyorsa.
+- Önceden var kapsama (G1RK-4 çok açılı trig, G1RK-5 parçalı bileşke, G1RK-6 asin/acos/cosh, G1RK-7 basamak integralleri): kayıt;
+  ucuz ve kesin bir yol varsa ölçülerek.
+
+MERCEK 3 (kalkülüs, tanımlılık)
+- SON-G3-YO-1 (yüksek, belirsiz-gerçekçi, önceden var, YANLIŞ ONAY): normalize.parse._written_diff/_differentiability at(diff(·))
+  ve sabitlenmiş diff(·) yolunda Piecewise geçiş noktalarını ve atan2/arg dal kesimini türevsizlik noktası saymıyor: parçalı |x|
+  için f'(0) = 1, sıçrama/köşe f'(1), f''(1) = 0, atan2(x, −1)'(0) = −1 CORRECT. Karar (kesin, certify.calculus'taki ikiz yolla
+  aynı): Piecewise koşul sınırları ve atan2/arg dal kesimi yazılı türevin tanımlılık koşuluna girer; noktada türevin varlığı
+  kanıtlanmadıkça değer yok (derivative_at_point/kink_reading ile aynı ölçüt: iki yan türev ve süreklilik kesin); C¹ birleşimde
+  (her iki yan eşit, sürekli) değer verilir.
+- SON-G3-YO-2 (orta, yapay): tangent_line iddiasının yazılı tanımlılığı okunmuyor. Karar: teğet iddiası yazıldığı biçimde okunur;
+  teğet noktasında ya da bir aralıkta tanımsızsa CORRECT yok (RK-8 aynası: noktada tanımsızsa INCORRECT, kararsızsa UNKNOWN).
+- SON-G3-YO-3, SON-G3-YO-4 (düşük, yapay; D4F2A-YO-5 ve YO-3'ün kardeş yazımları): kapalı ±∞ argümanı limit olarak yazılınca da değer
+  değildir; ℂ söyleminde kapalı sıfıra bölme/kutup bir sarmalayıcıdan geçince de NO_VALUE: mekanizmaya kural, yazıma değil.
+- SON-G3-YO-5 (tartışmalı): karar D4E4-U5'tir (tam sayı bildirilmiş sembolik üs her taban için müfredatın kuvveti; (xⁿ)' = n·x^(n−1)
+  CORRECT kalır). Değişiklik yok, kayıt.
+
+EK (16 Ekim akşam; g3 ikinci saldırganı ve g4 saldırganlarının bulguları)
+- G2YO-5 (orta, belirsiz, önceden var, YANLIŞ ONAY): bildirilen toleranslı çoktan seçmeli soruda pencereye birden çok şık giriyorsa
+  seçilen şık CORRECT olmaz (ayırt edilemez: UNKNOWN). G2YO-7 (orta, belirsiz, önceden var, HAKSIZ RET): toleranslı soruda çözücü kesin
+  değeri yazıp yuvarlanmış doğru şıkkı seçince INCORRECT olmaz: şık–iddia karşılaştırması bildirilen toleransla yapılır (şık kesin
+  değerin penceresindeyse ve iddia kesin değerse tutarlı). (düzeltici: adim)
+- G2YO-6 (düşük, yapay, A+): d4c3 YO-B'nin kardeş yazımı (iddiadaki iptal, aralık aritmetiğinin farkın işaretini kesemediği yer):
+  mekanizmaya kural; kesin işaret yoksa karar yok. (düzeltici: integral)
+- G2RK-13/14/15 (orta, gerçekçi, d4 öncesi d4a getirdi, KAPSAMA): (∛x)' = 1/(3∛x²) gibi ders kitabı türevleri, x > 0 bildirilmişken
+  iddianın kendi tek kök geleneği, kapalı negatif olmayan aralıkta kesirli/irrasyonel kuvvetin ekstremumu UNKNOWN. Karar: gerçel
+  kökün x = 0 kırığı türevin olmadığı yerdir (RK-8: orada değer veren iddia UNKNOWN, tanımsız doğru iddia CORRECT); bildirilen kısıt
+  bölgesinde gelenek noktası yoksa gelenek kapısı durmaz (G2RK-3 ile aynı bölgeli kapı). SON-G3-RK-1 (A+, d4b tur 10 real_power,
+  kısıtsız x'te x^x/x^π türevi ve ilkeli UNKNOWN) aynı kapı: noktasız türev/ilkelde gelenek noktaları sonlu ve iddia orada yazıldığı
+  biçimde değerlendirilebiliyorsa (convention_null_on'un integral kuralı gibi) kapı durmaz. (düzeltici: kalkulus; G2RK-3 integral'de)
+- SON-G3-RK-3 (orta, belirsiz, önceden var, HAKSIZ RET): esas argüman geleneği: [0, 2π) (müfredat) ile (−π, π] (SymPy) farklı. Karar:
+  arg/esas argüman cevabı iki aralıktan birindeki doğru temsilciyse UNKNOWN (gelenek), hiçbirinde değilse ya da 2π katı farkla
+  eşleşmiyorsa INCORRECT; problem aralığı yazıyorsa o aralık. (düzeltici: sayisal)
+- G4YO-1 (orta, gerçekçi, önceden var, YANLIŞ ONAY): '{∅}' (boş kümeyi içeren küme) "çözüm yok" okunmaz: _NO_SOLUTION düzenli ifadesi
+  yalnız boş kümenin kendisini (∅, {}, Ø, "çözüm yok", "boş küme") tanır; '{∅}' ve '{Ø}' bir elemanlı küme olarak ya okunur ya UNKNOWN.
+- G4YO-2 (orta, belirsiz, önceden var, YANLIŞ ONAY): '1/2π', '1/2√x', 'x/2π' gibi bölmeden sonra yan yana yazım belirsizdir (π/2 mi
+  1/(2π) mi): metin bu biçimdeyse iddia okunmaz (UNKNOWN; claim_ambiguous_juxtaposition); LaTeX \frac ve açık parantez etkilenmez.
+- G4YO-3 (düşük, belirsiz, önceden var): yük temizleyici Türkçe olumsuzlama/şüphe eklerini (değildir, yanlıştır, olmayabilir, olamaz,
+  belki, sanırım …) görürse iddia okunmaz (UNKNOWN).
+- G4-RK-5 (orta, gerçekçi, önceden var, HAKSIZ RET): çözümsüz denklemde çelişki adımı ('0 = 2', '1 = 3') geçerli bir türetmedir: öncüller
+  (görevin denklemi) hiçbir noktada sağlanmıyorsa (kanıtlı) kapalı yanlış ilişki adımı çürütülmez (unknown ya da verified: öncül
+  kümesi boşsa her sonuç geçerli); öncül kümesi boş olduğu kanıtlanamazsa bugünkü gibi.
+- G4-K-4 (düşük, gerçekçi, kapsama): tek gerçel noktalı verilende yanlış adım çürütülmüyor: sonlu örnek yolu (_finite_instances)
+  kareler toplamı/√+|·| = 0 verilenini çözebiliyorsa okur; değilse kayıt.
+- Önceden var kapsama (SON-G3-RK-4 Türkçe/LaTeX tanım kümesi yazımları, RK-5 trig ekstremum, RK-6 (−1)ⁿ dizileri, RK-7 logaritmik limitler,
+  RK-8 parçalı kırık noktada 'yok' cevabı, RK-9 trig tanım koşullu noktada türev/teğet/limit, RK-10): kayıt; RK-9 (yüksek kapsama:
+  (ln sin x)'(π/4) = 1 karar almıyor) ve RK-4 ucuz ve kesin yolla düzeltilebiliyorsa ölçerek düzeltilir. SON-G3-RK-2 (A+, U5: n ≥ 2
+  bildirilmiş üste ikinci türev): U5'in dar genişlemesi (n − k ≥ 0 kanıtlıysa taban koşulu yok) ölçülerek.
+
+EK 2 (21 Ekim; wip/son-adim'in bağımsız denetimi, son_denetim/son-adim/bulgular.json; doğrulayıcı 14/14 gerçek)
+- SA-YO-1 (yüksek, gerçekçi, dal getirdi, YANLIŞ ONAY): şık iddianın okuyucusundan geçerken sondaki anlamlı sözcükler atılıyor
+  ('3 azalır', '5 ten büyük', '(2, 3) aralığının dışı', '6 m'). Karar: okuyucu yalnız bilinen süs sözcüklerini (tane, adet, birim
+  olmayan dolgu: "olur", "bulunur", "dır" ekleri vb.) atar; anlamı değiştirebilecek her artık metin (karşılaştırma, yön, "dışı",
+  "değil", birim) şıkkı OKUNMAZ yapar (UNKNOWN, engel kalır). Birim sözcüğü (cm, m, km, kg, sa, km/sa …) yalnız IR'ın units alanı
+  aynı birimi bildiriyorsa atılır; değilse şık okunmaz (SA-RK-3: başka birimde yazılmış şık INCORRECT olmamalı).
+- SA-YO-2, SA-RK-2 (orta, gerçekçi, dal): sınır yolundan unknown kalan adım öncül havuzuna GİRMEZ (sonraki adımların öncülü olamaz).
+- SA-YO-3 (orta, gerçekçi, dal): sınır kuralı yalnız eşitlik adımlarına (Eq ve Eq'lerin Or'u) uygulanır; eşitsizlik adımı
+  ('x ≤ 2 ∨ x ≥ 3', 'x² − 5x + 6 ≥ 0', '2 ≤ x ≤ 3') öncüle karşı normal denetlenir (iç noktada yanlışsa refuted).
+- SA-YO-4 (orta, gerçekçi, dal): sınır kuralı yalnız adımın sembollerini anan bütün öncüller tek değişkenliyken uygulanır;
+  parametreli sistemde (a > 0 ve denklem) eski davranış.
+- SA-RK-1 (yüksek, gerçekçi, dal, HAKSIZ RET): eşitsizlik öncülünün kesin kısmı BOŞSA (çözümü boş eşitsizlik) sınır kuralı
+  uygulanmaz ("hiçbir iç noktada sağlanmıyor" boşuna doğru); öncül kümesi boşsa G4-RK-5'in kuralı (son-ayristirici) geçerlidir.
+- SA-RK-4 (orta, gerçekçi, dal, KAPSAMA): open_unit_marks IR'ın units alanını okur: birim bildirilmişse tek okuma (bildirilen birim).
+- SA-RK-5 (onaylandı): IR'ın kendi trig ilişkisinin (görev ilişkisi ya da verilen; argümanı rasyonel katsayılı kx + c) bağladığı
+  değişkende ° birimdir (trig_solve istisnasının genellemesi).
+- SA-RK-6 (orta, belirsiz, dal): toleranslı çoktan seçmelide sayı olmayan şık ('Hiçbiri', 'Belirlenemez') pencerede sayılmaz;
+  pencere karşılaştırması sertifikanın kesin değerinden bir kez yapılır (her şık için bütün sertifikalar yeniden koşulmaz; süre).
+- SA-RK-7 (önceden var, gerçekçi haksız ret): işaret tablosu kardeşlerinden paydanın kökü (x − 1 = 0, (x − 2)/(x − 1) < 0 için) sınır
+  kuralına girer (kritik nokta denklemi: pay = 0 ve payda = 0); Δ < 0 sınır denklemi, dışarıdaki deneme noktası ve tam sayı
+  değişkende irrasyonel sınır: ucuz ve kesin yol yoksa kayıt.
+- SA-RK-8 (düşük, yapay, önceden var): görevin bilinmeyenini içeren şık ('{x}', 'x') değer değildir: okunmaz (UNKNOWN).
+- SA-RK-9: integral düzelticisinin G2YO-4 kardeşi (definite_integral abs_tol) wip/son-integral'de kapandı; birleşimde doğrulanır.
+- SA-RK-10 (önceden var kapsama): '3 ln 2', bileşik birim, değer sorusunda 'x = 6': kayıt (ucuz yol varsa ölçerek).
+- g3 doğrulayıcısı: 15 bulgunun 14'ü gerçek; SON-G3-YO-5 gerçek değil (kararla aynı: CORRECT doğru cevabı onaylıyor).
+  g4 doğrulayıcısı: 5/5 gerçek.
+
+EK 3 (21 Ekim 14:00) — son-ayristirici iki mercekli bağımsız denetim (wf_878ba78f-c23; bulgular
+son_denetim/son-ayristirici/bulgular.json; hepsi bağımsız doğrulayıcıda yeniden üretildi). Kararlar:
+- SA-YO-1 (dal, orta, gerçekçi, YANLIŞ ONAY) DÜZELT: G4-RK-5 kararının kapsamı kapalı yanlış ilişki adımıydı ('0 = 2'); açık adımlara
+  genişletme şu kuralla daraltılır. Öncüller ℝ'de kanıtlı boş ve kimlik denetimi açık bir eq/compute adımını çürütüyorsa:
+  (i) adım öncülün sonucu kanıtlıysa geri çekilir (unknown): adımın farkı bir öncülün farkının sıfırdan farklı sabit katı, ya da
+      (öncüller ve adım rasyonel fonksiyon) öncüllerin karmaşık çözümleri sonlu ve kesin hesaplanıyor ve adım hepsinde kesin tutuyor;
+  (ii) öncüllerin kesin doğrulanmış bir karmaşık çözümünde (rasyonel durum; kutup değil) adım kesin yanlışsa çürütme durur (karşı örnek o nokta);
+  (iii) karar verilemiyorsa: eq adımı tabandaki gibi unknown; compute adımı çürütülmez ama çözüm CORRECT olamaz (kimlik okumasında yanlış,
+      türetme okumasında boşuna doğru: okuma belirsiz → UNKNOWN; varsa adım düzeyinde CORRECT'i engelleyen mevcut düzenek, yoksa
+      _MEANING_FLAGS'e bir bayrak). '0 = 2' (kapalı), eq/compute 'x**2 = -1', 'sqrt(x) = -1' (sqrt(x)+1=0'dan, (i) sabit kat) çürütülmez.
+- SA-RK-1 (taban, yüksek, gerçekçi, HAKSIZ RET) DÜZELT: 'gerçek' sıfatı ve '(gerçek|gerçel|reel) sayılarda' öbeği _NO_SOLUTION'a;
+  MENTION iyelikli biçimleri ('kökü/kökleri/çözümü yok') görür; yalnız MENTION'a düşen şık metni ∅ iddiasıyla INCORRECT vermez (en kötü UNKNOWN).
+- SA-RK-2 (dal, orta, gerçekçi, KAPSAMA) DÜZELT: bütün-metin ilkesi ({∅} çeldiricisi) korunur; önekler (tanım kümesi, T.K./TK, D(f), Ç.K./ÇK/Ç
+  ile '='), '(∅)' son eki, Türkçe ek ('dir/dır/tir/tır', kesme işaretli), 'There is no solution', 'Gerçek kök/çözüm yoktur', 'Tanım kümesi
+  boş kümedir/∅' kabul.
+- SA-YO-2 (taban, düşük) + SA-RK-3 (dal, orta, gerçekçi, KAPSAMA) DÜZELT, tek düzenek: sondaki düzyazı ret listesiyle değil izin
+  sözlüğüyle atılır: her sözcüğü izinli olumlu/nötr sözcüklerden (projenin kendi derlemlerinde ölçülen kuyruklar + iki merceğin olumlu
+  listeleri: olabilecek, en büyük/küçük, değer(dir), muhtemel, durum, şüphesiz, kuşkusuz, kesinlikle, değişmez, tahmin edilen, negatif/sıfır
+  olmayan (kök/değer niteleyen kalıp olarak), bulunur, olur, elde edilir, olmalıdır, eşittir, doğrudur, birim adları, tane, is the answer...)
+  olan kuyruk atılır; bilinmeyen sözcük → UNKNOWN; olumsuzlama/ret (değil, yok, sağlamadı, çıkmadı, reddedilir, geçersiz, hatalı, elenir,
+  ✗, ❌, invalid, rejected, extraneous, -madı/-mayacak/-mamakta...) → payload_negated. Başka köke dair olumsuz parantez ('diğer kök ...
+  girmez') UNKNOWN kalabilir (değere mi dair, belirsiz). Kapsama kaybı derlemde (fark 558, kap) 0 olmalı; ölçülür.
+- SA-RK-5 (taban, orta, gerçekçi, HAKSIZ RET; ilke 3) DÜZELT: problemin ad alanındaki simge (değişkenler, i/I, e/E) ya da tek harfli
+  Latin belirteç asla düzyazı diye atılmaz; atılmadan okunamıyorsa UNKNOWN. '1/2 + √3/2 i' bölenden sonra yan yana: UNKNOWN.
+- SA-RK-6 (taban, düşük) DÜZELT: sondaki tek ',' / ';' noktalama atılır; başka yoldan çıkan 1 öğeli demet değer sayılmaz (UNKNOWN).
+- SA-YO-3 + SA-RK-4 (taban; düşük/orta gerçekçi haksız ret) DÜZELT: LaTeX fonksiyon makrosunun argümanı ilk işlece (+, −, =, \cdot,
+  sağ ayraç) kadar okunur, '_{…}'/'_d' tabanı atlanır; yol üstünde ayraçsız '/' varsa claim_ambiguous_juxtaposition (UNKNOWN).
+- SA-YO-4 (taban, düşük) DÜZELT: LaTeX '\%', '^\circ' ve Unicode eksi/en tire (U+2212, U+2013) düz metin kardeşleriyle aynı denetimden geçer.
+
+EK 4 (21 Ekim) — son-sayisal iki mercekli bağımsız denetim (wf_2339bf33-97c; son_denetim/son-sayisal/bulgular.json). Kararlar:
+- SS-YO-1 (taban, doğrulayıcıda YÜKSEK, gerçekçi, YANLIŞ ONAY; dal tetiği çoğalttı) DÜZELT: certify.extremum adayları complete'i kuran
+  kümeden alır (rd ∪ tekillikler ∪ kırıklar) ya da critical_points eksik/hatalıysa complete=False; sandbox critical_points hatayı None ile
+  bildirir (boş/kısmi liste değil); is_real'i kararsız nokta 'eksik' demektir (certify_local_extremum, _kinks dahil). Sade ders kitabı
+  tetikleri: x + |sin 2x| [0, π] max = π, |sin x| + x/2 [0, 2π] max = π CORRECT oluyordu.
+- RK-SAY-1 = RK-ARG-CALC (dal, düşük, KAPSAMA) DÜZELT: noktasal görevde (noktada türev, sonlu noktada limit) [0, 2π) okumasının Piecewise'ı
+  noktadaki kesin im(u) işaretiyle yerelde çözülür (2π kayması yerelde sabit); B'nin teknik UNKNOWN'ı anlam bayrağı (arg_convention)
+  değil kanıtlanamadı bayrağı taşır.
+- RK-ARG-STEP (taban, düşük, gerçekçi) DÜZELT: iki okuma INCORRECT'te uyuşunca adım durumları birleştirilir: bir okumada refuted,
+  ötekinde verified/unknown olan adım unknown; first_bad_step iki okumada da çürütülen ilk adım.
+- RK-SAY-2 (taban, orta) DÜZELT: iki okumanın INCORRECT'i ancak gelenekten bağımsız ortak bir başarısızlık varsa (iki okumada da çürütülen
+  bir adım ya da iki okumada da düşen cevap sertifikası) uyuşma sayılır; yoksa UNKNOWN (arg_convention). π/4 gibi iki okumada yanlış cevap
+  INCORRECT kalır.
+- RK-SAY-3 (dal, orta, gerçekçi) DÜZELT: bütün şıklar sayı olarak okunuyor ve okumalardan yalnız birinin değeri şıklarda ise şıklar aralığı
+  bildirmiş sayılır (arg_range_declared'in şık karşılığı); 'Hiçbiri' gibi sayı olmayan şık varsa ya da iki değer de şıklardaysa UNKNOWN.
+  Derece şıkları G1RK-3 birim kararına tabi.
+- SS-OT-1 (doğrulayıcı: gerçek değil): atan2 (−π, π] kalır; KAYIT (F3/F4): çıkarıcının 'esas argüman'ı arg(z) ile mi atan2 ile mi yazdığı
+  krediyle ölçülecek; istem satırı ölçülmeden eklenmez.
+- SS-ND-1 (üretilemedi): #7 sıraya/tohuma bağlı kararlar maddesine gözlem olarak eklenir.
+
+EK 5 (21 Ekim) — son-integral iki mercekli bağımsız denetim (wf_6dabd4af-f45; son_denetim/son-integral/bulgular.json). Kararlar:
+- SI-YO-1 (dal, düşük): birleşimde kapandı. 2bd87f0'da calculus.definite_integral'ın iki tolerans yolu (sertifikalı değer:
+  within_tolerance + zarf yedeği; değersiz: declared_tolerance_by_enclosure) pencereyi rel ve abs ile kaydeder; sonda M 8/8 beklenen
+  (M1–M6, M8 UNKNOWN, M7 CORRECT). Ölçüldü (21 Ekim, son-birlesik 2bd87f0).
+- SI-YO-2 (taban, düşük, yapay: ekilmiş sertifika) DAR FAIL-CLOSED: yarı sonsuz zarf tek başına onay değildir; merdivenin son hata tahmini
+  küçükse (err/ölçek ≤ eşik) ve cval son değere ≥10·err payla yakınsa kabul; ∫_0^2 |x−1|^(−2/3) = 6 CORRECT kalmalı (payı ölç).
+- SI-YO-3 (taban, düşük, yapay) DAR FAIL-CLOSED: duran merdiven istisnası son iki basamağın err/ölçeği ≤ 1e-10 iken; ∫_{-1}^{8} x^{-1/3} = 9/2
+  CORRECT kalır.
+- SON-INT-RK-1 (dal, düşük, KAPSAMA) DÜZELT: within_abs_tol (ve within_rel_tol) NONREAL farkta t² − Re(d)² − Im(d)² kesin > 0 ise True.
+- SON-INT-RK-2 (dal, düşük, süre) DÜZELT: _certificate_check'in zarf bütçesi: sonlu zarf cval'ı içerip daralmayı bırakınca ya da küçük
+  bir hücre bütçesinde durur; kararlar aynı, süre tabana yakın (ölç). 'Sonlu zarf bilgi verir' kararı (G2YO-2) korunur.
+
+EK 6 (21 Ekim) — son-kalkulus iki mercekli bağımsız denetim (wf_fd9cbb14-dc0; son_denetim/son-kalkulus/bulgular.json). Kararlar:
+- YO-K1 = RK-PW-EQ = SK-RK-2 (taban, YÜKSEK, gerçekçi, yanlış onay + haksız ret) DÜZELT: kendi nokta dalı olan Piecewise'ta (Eq(x,p) dalı ya da
+  Ne(x,p) + nokta değeri) p'de seçilen dal iki yandaki dallardan biri değilse SymPy'nin dal dal türevi p'de okunmaz: değer ancak
+  sınıflamanın kanıtladığı türevden (derivative_at_point / _piecewise_rule) alınır, yoksa UNKNOWN. Bütün yollar: at(diff), verilen x = p,
+  şık, f' + f gibi bileşikler, f'(x) = 0 / f'(x) > 0 çözüm kümeleri (p'nin üyeliği kanıtlı türevle ya da kararsız).
+- YO-K2 (dal, YÜKSEK) + SK-RK-3 (taban, orta) DÜZELT, tek sınıf: türev fonksiyonu karşılaştırmasında kırık 'value' sınıflandıysa doğruluk
+  o noktada kuralın kanıtlı eğimini kullanır ya da noktayı dışarıda bırakır (formülün p'deki yanlış değeri — nokta dalının 0'ı, sign(0) = 0 —
+  karşı örnek olmaz). ∛(x³)' = 1, (|x|·sign x)' = 1 CORRECT (en az UNKNOWN).
+- YO-K3 (taban, orta) DÜZELT: yazılı türevin varlık koşulu yazımdan bağımsız: Derivative(...), diff(f, (x, n)), iç içe diff de _written_diff gibi.
+- YO-K4 (dal, orta) DÜZELT: parantezsiz 'R − A ∪ B' (∪/U/\cup; −/∖/\setminus) iki okumalı: iki okuma farklı kümeyse ve biri doğruysa UNKNOWN,
+  ikisi de yanlışsa INCORRECT, ikisi de doğruysa CORRECT. Parantezli 'R − ({2} ∪ {3})' okunsun (kapsama).
+- YO-K5 (taban, düşük) DÜZELT dar: işareti bildirilmemiş tam sayı n'nin n ≥ L koşulu positive_integer bildirimi gibi bölge olarak okunur
+  (aynı iddia iki bildirimde aynı karar).
+- SK-RK-1 = RK-TIME-1 (orta, gerçekçi, süre) DÜZELT: verifier._claim_not_a_value → _same_structure → _structure (parse_structural) süreç
+  içinde sınırsız koşmasın: süre sınırı (sandbox) ya da bu hedefte yapısal okuma atlanır; sınır aşılırsa karar güvenli tarafta (yapısal
+  okuma yok sayılır, iddia değer gibi sertifikaya gider; bunun yanlış onaya yol açmadığı gösterilmeli).
+- SK-RK-6 = RK-COV-1 (dal, düşük, gerçekçi değil) İSTEĞE BAĞLI: |u|'nun çift kuvveti periyodik sıfır ailesinde de pürüzsüz kuralıyla.
+- SK-RK-7 (dal, düşük) DÜZELT: 'Contains' object has no attribute 'negated' istisnası (layer_exception) sızmasın; birleşik hâlde (son-integral
+  G2RK-10 ile) ölçülür.
+- SK-RK-4 (gerçek değil: RK-8 kararının tutarlı uygulaması) KAYIT. SK-RK-5 (dalın UNKNOWN'u beklenti içinde) KAYIT.
+- RK-EXT-1: SS-YO-1 ile aynı; son-sayisal düzelticisinde (EK 4). Kalkülüs düzelticisi ekstremum aday koduna dokunmaz.
+
+EK 7 (22 Ekim, KULLANICI KARARI: "önerini uygula") — DURMA KURALI. Bu turdan (ikinci tur düzeltmeleri ve onların bağımsız denetimleri)
+sonra yeni denetim turu açılmaz. Denetim bulgularından yalnız (a) düzeltici dalın kendi getirdikleri ve (b) gerçekçi + yüksek önemli olanlar
+düzeltilir; geri kalanı HANDOFF'a açık madde, ayrıntısı DECISIONS'a yazılır. Üçüncü tur düzeltmeleri bağımsız denetimden geçmez; düzeltici
+kendi sondası, testleri, mutasyonu ve birleşik son ölçümle doğrular.
+Uygulama: kalkülüs EK 6'dan YO-K3, YO-K5, SK-RK-6 kayıt (yapılmadıysa yapılmaz); SK-RK-3 YO-K2 ile aynı sınıf (birlikte kapanırsa kapanır).
+İntegral EK 5'ten SI-YO-2/3 (taban, düşük, yapay) kayıt (yapılmış ve ölçülmüşse kalır). Adım ikinci tur denetiminin RK2-1..5'i dalın getirdiği:
+düzeltilir.
+
+EK 8 (22 Ekim) — son-adim ikinci tur bağımsız denetimi (wf_fe28ba91-5b5; son_denetim/son-adim-t2/bulgular.json; hepsi doğrulayıcıda
+gerçek). DURMA KURALINA (EK 7) göre:
+- DÜZELTME (EK 2'deki SA-RK-4 kararım yanlıştı): "units bildirilmişse tek okuma (bildirilen birim)" IR'ın sayısının o birimde yazıldığını
+  varsayıyordu; çıkarıcı istemi yüzdeyi kesir yazdırıyor ('%25' -> 25/100), units serbest metin, SymPy trig değerleri radyan. Sonuç iki yönde
+  hata: doğru '%20', '180°', '45°' INCORRECT (T2-RK-2), yanlış '%0.2' CORRECT (T2-OT-1, SA2-YO-4), doğru adımlar ('10/50 = %20',
+  'cos(60°) = 1/2') çürütülüyor (T2-RK-1). Yeni karar:
+  * İddia/şık: düz (tek) okuma yalnız (i) iddianın ya da şıkkın tamamı tek bir işaretli sayıysa VE (ii) IR değerinin o birimde olduğu
+    kanıtlıysa (hedef ifade açıkça ×100 / ×180/π; angle() hedefi; IR ilişkisinde deg()/° ya da pi*C/180 biçimli derece değişkeni).
+    Aksi hâlde G1RK-3'ün iki okuması: ayrışırsa UNKNOWN.
+  * Adım: her zaman iki okuma; adım ancak iki okumada da çürütülürse refuted. Okumaları ayrışan (unknown) adım öncül havuzuna HİÇBİR
+    okumasıyla girmez (SA2-YO-1, yüksek, gerçekçi yanlış onay: 'A = 40°' birimli okumasıyla havuza girip havuzu çelişkili yapıyor, sonraki
+    yanlış adımlar unknown, çözüm CORRECT).
+- Düzeltilir (dalın getirdiği): SA2-YO-1, SA2-YO-2 (ondalık virgüllü ya da başka türde okunan şık pencerede 'fail' değil None: '9,95',
+  '[7, 8]', '7–8'; ikinci turun 'pencere bir kez'i getirdi), SA2-YO-3 (okunmayan şıkların sayıları iddiayı taşımıyorsa wordproblem
+  ir_inconsistent/UNKNOWN; e65a8b4), SA2-YO-4/T2-OT-1/T2-RK-1/T2-RK-2 (yukarıdaki birim kararı), T2-RK-3 ('x = 6' şıkkı scalar solve_equation:
+  okuyucunun Python set'i FiniteSet ya da scalar'da '{k}' normalleştirmesi yok; okuyucu hatası veto üretmez; yalnız harf {{6}} hatası),
+  T2-RK-4 (seçenek çarpımında _tick, aynı kritik kümeyi paylaşan yazımlar tek seçim, üst sınır), T2-RK-6 (_META_OPTION: casefold + Türkçe
+  İ/ı normalleştirmesi, 'yukarıdakiler(in|den) hiçbiri(si)', 'hiçbiri değil(dir)', 'bilinemez', 'belirsiz(dir)').
+- Kayıt (taban, orta): T2-RK-5 (sınır kuralı trig/üstel eşitsizlikte tetiklenmiyor: _nowhere_inside bildirilen aralığı okumuyor, üstel
+  aralık sadeleşmiyor; doğru cevap tabanda da INCORRECT).
+
+EK 9 (22 Ekim) — son-ayristirici ikinci tur bağımsız denetimi (wf_beb898ae-517; son_denetim/son-ayristirici-t2/bulgular.json; hepsi
+doğrulayıcıda gerçek). DURMA KURALINA (EK 7) göre:
+- Düzeltilir (dalın getirdiği): YO-T2-1 (yüksek, yanlış onay: LaTeX argüman ayraçlamasında '(' grup sayılmıyor; '\sin 2(x + \frac{\pi}{4})'
+  sin(2x+π/4) okunuyor), YO-T2-2 (orta, yanlış onay: öncüllerin hiç karmaşık çözümü yoksa — bütün kökler kutup — 'kanıtlı sonuç' boşlukla
+  verilmez; geri çekme yalnız boş olmayan karmaşık çözüm kümesinde), YO-T2-3 = RK-T2-1 (yüksek, haksız ret: argümandan sonra yan yana çarpan
+  e^x, \sqrt{…} argümana katılıyor; |…| argümanı kesiyor), RK-T2-2 (orta, kapsama: iç içe fonksiyon makroları), RK-T2-3 (orta, süre: '\tan x(1 +
+  \tan^2 x)' x(1) tanımsız fonksiyon uygulaması, 47–58 s), RK-T2-4 (düşük, kapsama: '{2, 3} kümesi', '(2, 3) aralığı', '5 tanedir', '5 değerini
+  alır', '5 eder' izin sözlüğüne). İlke: ayraçlama latex2sympy'nin okumasından ancak iki okumanın aynı olduğu ya da doğru olduğu kanıtlı
+  durumda ayrılır; kararsızsa claim_ambiguous_juxtaposition (UNKNOWN).
+- Kayıt (taban): YO-T2-4 (kuşku sözcükleri 'muhtemel', 'olası', 'mümkün', 'tahmin edilen' izin sözlüğünde; tabanda da temizleniyordu),
+  YO-T2-5 (tanım kümesi önekleri her görev türünde ∅; gerçekçi değil), YO-T2-6 ('radyan'/'rad' düzyazı sayılıyor), RK-T2-5 (karar (ii) yalnız
+  gerçelde geçerli çıkarımı çürütüyor; gerçekçi değil), RK-T2-6 ('2 <i>π</i>' etiketli simge atılıyor; gerçekçi değil).
+
+EK 10 (22 Ekim) — son-sayisal ikinci tur bağımsız denetimi (wf_37e619ab-110; son_denetim/son-sayisal-t2/bulgular.json; hepsi doğrulayıcıda
+gerçek). DURMA KURALINA (EK 7) göre:
+- Düzeltilir (dalın getirdiği): SS2-RK-1 (orta, gerçekçi, kapsama: De Moivre/kutupsal çözümde esas değer adımı B okumasında çürütülünce doğru
+  cevap UNKNOWN) ve SS2-RK-2 (orta, gerçekçi, haksız ret: [0, 2π) şıklı soruda esas değeri bulup 2π ekleyen doğru çözüm INCORRECT). Tek kural:
+  bir okumada çürütülüp öteki okumada doğrulanan adım bir gelenek ifadesidir; HER okumada (şıkların bildirdiği aralıkta da) unknown sayılır,
+  çürütme sayılmaz. Cevap sertifikası okuma(lar)da geçiyorsa karar onunla verilir. Yanlış cevaplar ((1−i)^10 = 32i; √3−i için 5π/6) INCORRECT
+  kalır. SS2-CR-1 (düşük: _arg_options_reading şıkları ana süreçte süresiz ayrıştırıyor; '10**10**10' asılıyor): korumalı/süreli okuma, aşımda
+  None. SS2-RK-3 (düşük, kapsama: sonsuzda limit ve verilenle sabitlenen parametrede yerel çözüm yok): ucuzsa (im(u)'nun sonsuzdaki/pinli işareti)
+  yapılır, değilse kayıt.
+- Kayıt (taban): SS2-YO-1 (orta, gerçekçiliği belirsiz YANLIŞ ONAY: certify_local_extremum'un birinci türev testi süreksiz (sign, Heaviside,
+  atan2) fonksiyonda yerel olmayan noktayı yerel minimum onaylıyor: x² + sgn x local_min 0 CORRECT; tabanda da) — HANDOFF'ta açık yanlış onay
+  olarak; SS2-YO-2 (düşük, gerçekçi değil).
+
+EK 11 (23 Ekim) — kalkülüs ikinci tur birleşiminde (188589d) denetçinin 1360 kalkülüs vakası: yanlış onay 0 (cad4874'te 3: RK-EXT-1, sayısal
+dalında kapalı), haksız ret 17 (cad4874'te 25), 13 iyileşme, 0 kötüleşme. Kalan 17: F11–13 ve PR 1–9 RK-8 kararının tutarlı uygulaması (SK-RK-4,
+kayıt); J15 ve D2-5 denetçinin beklentisi yanlış (sympy: |x³−3x+1|'in 0'da türevi −3; x³−3x+|x−5| için x<5'te f' = 3x² − 4, kökler ±2/√3, √2
+değil: INCORRECT doğru karar); T112, N0/4/8/12: 'value' türünde 'Yoktur' yükü şıkla 'option_says_DNE_but_a_value_was_claimed' INCORRECT.
+- KARAR (durma kuralı (b): gerçekçi + yüksek; deterministik yol (b) "Cevap: Yoktur" scalar soruda kind 'value' üretir): yalnız bir DNE sözcüğünden
+  ('Yoktur', 'yok', 'mevcut değil', 'tanımsız', 'DNE', 'does not exist', 'limit yoktur', 'türevi yoktur' …) oluşan 'value' yükü 'dne' iddiası okunur;
+  'dne' türündeki aynı vakalar zaten CORRECT (N1/2/5/6/9/10/13/14). N16 (|x|'in 1'de türevi 'Yoktur') INCORRECT kalır. Düzeltici: son-ayristirici.

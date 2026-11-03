@@ -1,0 +1,301 @@
+[
+ {
+  "id": "d4b9-YO-1",
+  "klass": "false_accept",
+  "severity": "high",
+  "title": "certified_sign, asin/sinh/tanh/erf gibi evalf_table'da olmayan fonksiyonların strict evalf okumasına güveniyor. SymPy bunların argümanını strict olmadan değerlendirip tam hassasiyet bildiriyor; kesin sıfırlar (exact_zero_test'in kendisinin kanıtladıkları dahil) ±1 işaret alıyor. YO-4'ün yeni ayrıştırma sınıfları (floor/ceiling/sign/frac/Mod → jump_value) bu yüzden yanlış değeri sertifikalıyor. Tabanın doğru verdiği vakalar da yanlış CORRECT'e döndü; kısıt, denklem ve adım yollarında da aynı kök var.",
+  "repro": "Sondalar (kopya: git -C /home/user/asd archive fecc2be | tar -x -C K; cd K; PYTHONUTF8=1 PYTHONPATH=K/src:K MATHVERIFY_LEAN_REPL=/nonexistent /home/user/asd/.venv/bin/python <dosya>): /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/yanlis-onay/p/e3.py (F1-F11), e4.py (G1-G4), e1.py (E1-E9), e8.py (N1), e10.py (C4); mekanizma: p4.py, p5.py, p8.py.\nÖz (gerçek bir dosyada):\nfrom mathverify.verifier import verify\nQ = 'log(6) - log(2) - log(3)'; A = 'atan(1/2) + atan(1/3) - pi/4'; P = 'log(4) - 2*log(2)'; L = 'log(8)/log(2) - 3'\nX = {'name': 'x', 'domain': 'real'}\ndef ev(e, g=(), vs=(X,)): return {'task': {'kind': 'evaluate', 'params': {'expr': e}}, 'vars': list(vs), 'givens': list(g), 'answer_shape': 'scalar'}\ndef eqp(e, cons=(), g=(), vs=None): return {'task': {'kind': 'solve_equation', 'params': {'equation': e, 'var': 'x'}}, 'vars': vs or [dict(X, constraints=list(cons))], 'givens': list(g), 'answer_shape': 'set'}\ndef sol(v, k='value', steps=()): return {'claimed_answer': {'kind': k, 'payload': v}, 'steps': [{'id': f's{i+1}', 'kind': a, 'claim': c, 'from': [], 'text': ''} for i, (a, c) in enumerate(steps)]}\nif __name__ == '__main__':\n    print(verify(ev(f'ceiling(asin({Q}))'), sol('1')).verdict)      # yeni CORRECT, taban INCORRECT\n    print(verify(ev(f'ceiling(asin({Q}))'), sol('0')).verdict)      # yeni INCORRECT, taban CORRECT\n    print(verify(ev(f'floor(-sinh({A}))'), sol('-1')).verdict)      # yeni CORRECT, taban INCORRECT\n    print(verify(ev(f'sign(asin({Q}))'), sol('1')).verdict)         # yeni CORRECT (taban -1'e CORRECT)\n    print(verify(ev('ceiling(y)', [f'y = asin({Q})'], ({'name': 'y', 'domain': 'real'},)), sol('1')).verdict)  # yeni CORRECT, taban INCORRECT\n    print(verify(eqp(f'x = ceiling(asin({Q})) + 2'), sol('{3}', 'set')).verdict)   # yeni CORRECT, taban INCORRECT\n    print(verify(ev('x + 1', ['x = 2']), sol('3', steps=[('compute', f'sign(asin({Q})) = 1')])).verdict)  # yeni adım verified; tabanda refuted\n    print(verify(eqp('x**2 = 4', [f'x > 2 + tanh({P})']), sol('{2}', 'set')).verdict)  # ikisinde de CORRECT\n    print(verify(eqp(f'x*asin({Q}) = 0'), sol('{0}', 'set')).verdict)  # ikisinde de CORRECT\n    print(verify(ev(f'ceiling(sinh({L})**2)'), sol('1')).verdict)  # ikisinde de CORRECT\nMekanizma: certified_sign(sp.asin(sp.log(6)-sp.log(2)-sp.log(3))) = 1, exact_zero_test(aynısı) = True; sp.N(aynısı, 15/30/60, strict=True) = -5.8e-129 / +1.25e-147 / -1.6e-201 (p8.py).",
+  "expected": "Q = log 6 − log 2 − log 3, A = atan(1/2) + atan(1/3) − π/4, P = log 4 − 2 log 2 ve L = log 8/log 2 − 3 dördü de tam olarak 0. Bu yüzden asin, sinh ve tanh'leri de tam 0: ceiling(asin Q) = floor(−sinh A) = sign(asin Q) = 0; x = ceiling(asin Q) + 2 → {2}. x > 2 + tanh P, yani x > 2 iken x² = 4 → ∅. x·asin Q = 0, her x için 0 = 0 olduğundan ℝ. ceiling(sinh(L)²) = 0; sign(asin Q) = 1 adımı yanlış. Yanlış iddialar (1, −1, {3}, {2}, {0}) asla CORRECT olmamalı, yanlış adım verified olmamalı. Sıfır kanıtlanabiliyorsa (exact_zero_test bunları kanıtlıyor) INCORRECT, kanıtlanamıyorsa UNKNOWN. Doğru 0 ve {2} iddiaları INCORRECT olmamalı.",
+  "actual_new": "fecc2be'de yanlış CORRECT çıkanlar: ceiling(asin Q)=1, floor(−sinh A)=−1, floor(asin Q)+ceiling(asin Q)=1, sign(asin Q)=1, sign(sinh A)=1, ceiling(y)=1 (y=asin Q verilen), sign(y)=1 (y=sinh A), x=ceiling(asin Q)+2 için {3}, ceiling(tanh(2atan(1/3)−atan(3/4)))=1, sign(asin L)=−1, sign(tanh L)=−1, ceiling(sinh(L)²)=1, floor(asin L)=−1, Mod(tanh P+5,5)=5+tanh P, frac(tanh P)=1+tanh P, LaTeX ⌈sinh(ln8/ln2−3)²⌉=1 (yeni kodda ayrıştırmada 1'e katlanıyor); x>3+sinh L kısıtıyla x²=9 için {3}; x>2+tanh P kısıtıyla (doğrudan ya da verilen a=2+tanh P ile x>a) x²=4 için {2}; x·asin Q=0 için {0}. Adımlar: compute sign(asin Q)=1 ve sign(asin L)=−1 verified. Haksız retler: ceiling(asin Q)=0, floor(−sinh A)=0, sign(asin Q)=0, x=ceiling(asin Q)+2 için {2}, x>asin Q için (0,∞), asin(Q)·x>0 için ∅ INCORRECT. Ayrıştırmada parse_expr_str('ceiling(asin(Q))') = 1, 'sign(asin(Q))' = 1, 'floor(-sinh(A))' = −1 (tabanda 0, −1, 0).",
+  "actual_base": "e03ea1f'de ceiling(asin Q)=1, floor(−sinh A)=−1, sign(sinh A)=1, floor+ceiling=1, ceiling(y)|y=asin Q=1, sign(y)|y=sinh A=1 ve x=ceiling(asin Q)+2 → {3} INCORRECT; doğru 0 ve {2} CORRECT. compute sign(asin Q)=1 adımı refuted. SymPy'nin get_integer_part'ı check_target + equals(0) ile ceiling/floor'u doğru buluyordu. Tabanda da yanlış olanlar: sign(asin Q) ayrıştırmada −1 ve −1 iddiası CORRECT; ceiling(asin(log6/log2−1−log3/log2))=1 CORRECT (yeni kodda INCORRECT). L/P/tanh-2atan vakaları, kısıt vakaları, x·asin Q=0 → {0}, Mod/frac ve LaTeX N1 tabanda da aynı şekilde CORRECT.",
+  "math": "log 6 = log 2 + log 3 olduğundan Q = 0. tan(atan½ + atan⅓) = (½+⅓)/(1−⅙) = 1 olduğundan A = 0. tan(2atan⅓) = (⅔)/(1−1/9) = ¾ olduğundan 2atan⅓ − atan¾ = 0. log 8 = 3 log 2 ve log 4 = 2 log 2 olduğundan L = P = 0. asin, sinh ve tanh 0'da 0 olduğu için ceiling(0) = floor(0) = sign(0) = 0, Mod(5,5) = 0 ve frac(0) = 0. Doğrulayıcının kendi exact_zero_test'i de asin(Q) için True dönüyor. Strict evalf okumasının gürültü olduğu ölçüldü: aynı ifade 15/30/60 basamakta −5.8e−129, +1.25e−147 ve −1.6e−201 veriyor, işareti hassasiyete göre değişiyor; mpmath 80 basamakta L = P = Z = 0.0. x > 2 iken x² = 4'ün çözümü yok. x·0 = 0 her x için doğru. Beklentide belirsizlik yok.",
+  "introduced_by_piece": "yes",
+  "mechanism": "Kök neden: src/mathverify/equiv/numeric.py:_evalf_sign/_evalf_strict, `e.evalf(30, strict=True)` okumasını exact_zero_test'ten ÖNCE ve kanıt sayıyor (certified_sign, satır ~420). SymPy'nin evalf_table'ında yalnız Abs, Piecewise, atan, ceiling, cos, exp, floor, im, log, re, sin, tan var. asin, sinh, tanh, erf ve atan2 için dağıtıcı sympy/core/evalf.py:1490'da `except KeyError` → `x._eval_evalf(prec)` yoluna düşüyor ve `reprec = prec` (tam doğruluk) bildiriyor. Function._eval_evalf argümanı `_to_mpmath` → `evalf(self, prec, {})` ile, yani strict OLMADAN değerlendiriyor (evalf.py:1708, function.py:571). Sonuç: birbirini götüren bir toplamın gürültüsü f(gürültü) olarak 'anlamlı' görünüyor ve check_target'tan geçiyor. Parçanın etkisi: YO-4 için eklenen normalize/parse.py floor/ceiling/frac/sign/Mod sınıfları (_jump_eval → jump_value → certified_sign/_certified_floor) ve LaTeX'teki held_jumps, sabit argümanlı sıçramayı ayrıştırma anında bu okumayla katlıyor. Tabanda SymPy'nin get_integer_part'ı (check_target başarısızsa re_im.equals(0)) ceiling(asin Q)'yu doğru 0 buluyor, simplify yedeği de sign'ı reddediyordu. Bu yollar artık hiç çalışmıyor; katlanmış 1 ya da −1 karşılaştırmaya düz sayı olarak giriyor. Aynı kök, sıralamayı certified_sign ile yapan bütün yolları da etkiliyor: domain_for ve exact_intersection'da kısıt ucu (2+tanh P < 2 okunuyor), _closed_truth, _n2 korumasının kendisi (asin(Q) > 0 → True) ve adım katmanı. 'Never a sign read off rounding noise' sözü tutmuyor: koruma tek yazıma (Z'nin kendi toplamı) konmuş, mekanizmaya konmamış. Düzeltme yönü: tablo dışı fonksiyon düğümünün argümanları strict olarak ayrıca okunmalı, okunamıyorsa karar verilmemeli. Ya da exact_zero_test önce koşulmalı ya da okuma iki farklı hassasiyette kararlı olmalı (gürültü işaret değiştiriyor). Kanıtsız durumda karar UNKNOWN olmalı.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "high",
+   "corrected_expectation": "Beklenti doğru: Q, A, P, L, 2atan(1/3)−atan(3/4) tam 0; ceiling/floor/sign(asin Q, −sinh A, ...) = 0, x = ceiling(asin Q)+2 → {2}, x>2+tanh P iken x²=4 → ∅, x·asin Q=0 → ℝ. Yanlış iddialar CORRECT olamaz, doğru 0/{2} INCORRECT olamaz. İnce ayar: A'lı vakalarda doğrulayıcının exact_zero_test'i A=0'ı kanıtlayamıyor (None), orada beklenen karar UNKNOWN (INCORRECT değil). x>asin Q → (0,∞) ve asin(Q)·x>0 → ∅ haksız retleri tabanda da var (gerileme değil). Gt(asin Q,0) ölçümde False, Lt True çıktı (bulgu 'True' diyor); yön farklı ama yine gürültüden karar.",
+   "note": "Kendi sondalarımla (p/y1.py, y2.py, m1.py) yeniden ürettim. Yeni: ceiling(asin Q)=1, floor(−sinh A)=−1, sign=1, ceiling(y)=1, {3}, adım verified hep CORRECT; doğru 0/{2} INCORRECT. Taban bunları doğru veriyordu. Kök (certified_sign'ın tablo dışı fonksiyonda strict evalf'e güvenmesi) tabanda da var; parça floor/ceiling'i ona bağladı.",
+   "detay": {
+    "kurulum": "fecc2be ve e03ea1f git archive ile ayrı kopyalara açıldı; sondalar p/ altında; kopyalar iş sonunda silindi.",
+    "mekanizma_olcumu (m1.py, yeni=taban)": {
+     "asin(Q)": "certified_sign=1, exact_zero_test=True, strict evalf 15/30/60 dps: -5.77e-129 / +1.25e-147 / -1.63e-201 (işaret hassasiyetle değişiyor)",
+     "sinh(A)": "certified_sign=1, exact_zero_test=None (doğrulayıcı A=0'ı kanıtlayamıyor)",
+     "tanh(P), asin(L), tanh(L)": "certified_sign=-1, exact_zero_test=True",
+     "sinh(L)**2": "certified_sign=1, exact_zero_test=True",
+     "erf(Q)": "certified_sign=1, exact_zero_test=True",
+     "sin(Q), atan(Q) (tabloda olan)": "strict evalf PrecisionExhausted, certified_sign=0 (doğru)",
+     "evalf_table": "Abs, Add, ..., atan, ceiling, cos, exp, floor, im, log, re, sin, tan; asin/sinh/tanh/erf yok (ölçüldü)"
+    },
+    "uctan_uca (y1.py/y2.py) yeni | taban": {
+     "ceiling(asin Q)=1 [yanlış]": "CORRECT | INCORRECT",
+     "ceiling(asin Q)=0 [doğru]": "INCORRECT | CORRECT",
+     "floor(-sinh A)=-1 [yanlış]": "CORRECT | INCORRECT",
+     "floor(-sinh A)=0 [doğru]": "INCORRECT | CORRECT",
+     "sign(asin Q)=1 [yanlış]": "CORRECT | INCORRECT",
+     "sign(asin Q)=-1 [yanlış]": "INCORRECT | CORRECT",
+     "sign(asin Q)=0 [doğru]": "INCORRECT | INCORRECT",
+     "ceiling(y)|y=asin Q =1 [yanlış]": "CORRECT | INCORRECT",
+     "ceiling(y)|y=asin Q =0 [doğru]": "INCORRECT | CORRECT",
+     "x=ceiling(asin Q)+2: {3} [yanlış]": "CORRECT | INCORRECT",
+     "x=ceiling(asin Q)+2: {2} [doğru]": "INCORRECT | CORRECT",
+     "adım compute sign(asin Q)=1 [yanlış adım]": "verified, CORRECT | refuted, INCORRECT",
+     "floor(asin Q)+ceiling(asin Q)=1 [yanlış]": "CORRECT | INCORRECT",
+     "sign(sinh A)=1, sign(y)|y=sinh A =1 [yanlış]": "CORRECT | INCORRECT",
+     "x²=4 | x>2+tanh P: {2} [yanlış]": "CORRECT | CORRECT",
+     "x²=4 | x>2+tanh P: ∅ [doğru]": "INCORRECT | INCORRECT",
+     "x²=9 | x>3+sinh L: {3} [yanlış]": "CORRECT | CORRECT",
+     "x·asin Q=0: {0} [yanlış]": "CORRECT | CORRECT",
+     "x·asin Q=0: ℝ [doğru]": "UNKNOWN | UNKNOWN",
+     "ceiling(sinh(L)²)=1 [yanlış]": "CORRECT | CORRECT",
+     "ceiling(sinh(L)²)=0 [doğru]": "INCORRECT | INCORRECT",
+     "Mod(tanh P+5,5)=5+tanh P, frac(tanh P)=1+tanh P [yanlış]": "CORRECT | CORRECT",
+     "Mod(tanh P+5,5)=0 [doğru]": "INCORRECT | INCORRECT",
+     "LaTeX ⌈sinh(ln8/ln2−3)²⌉=1 [yanlış]": "CORRECT | CORRECT",
+     "sign(asin L)=-1, floor(asin L)=-1 [yanlış]": "CORRECT | CORRECT",
+     "x>asin Q: (0,∞) [doğru]": "INCORRECT | INCORRECT (gerileme değil)",
+     "asin(Q)·x>0: ∅ [doğru]": "INCORRECT | INCORRECT (gerileme değil)",
+     "ceiling(asin(log6/log2−1−log3/log2))=1 [yanlış]": "INCORRECT | CORRECT (yeni kod burada düzeltmiş)"
+    },
+    "ayristirma": "parse_expr_str: ceiling(asin Q) yeni 1 / taban 0; sign(asin Q) yeni 1 / taban -1; floor(-sinh A) yeni -1 / taban 0; ceiling(sinh(L)²) ikisinde 1.",
+    "bagimsiz_matematik": "log 6 = log 2 + log 3 ⇒ Q = 0; atan½, atan⅓ ∈ (0, π/4), toplamın tanjantı (5/6)/(5/6) = 1 ⇒ toplam π/4 ⇒ A = 0; log 4 = 2 log 2, log 8 = 3 log 2 ⇒ P = L = 0; 2atan⅓ ∈ (0, π/2), tan = (2/3)/(8/9) = 3/4 ⇒ = atan¾. asin, sinh, tanh, erf 0'da 0. mpmath 50/100 basamakta değerler çalışma hassasiyeti düzeyinde gürültü (Q: 0.0 / 1.4e-101; A: -1.3e-51 / 0.0), işaret hassasiyetle değişiyor: sıfırla tutarlı. SymPy expand_trig: tan(atan½+atan⅓) = 1, tan(2atan⅓) = 3/4.",
+    "introduced_by_piece_gerekce": "Kök mekanizma (certified_sign → _evalf_strict, tablo dışı fonksiyonda strict evalf'in argümanı strict okumaması) tabanda da var: certified_sign(asin Q) tabanda da 1. Ama parça (YO-4 ayrıştırma sınıfları floor/ceiling/sign/frac/Mod → jump_value → certified_sign) tabanın doğru verdiği floor/ceiling/sign vakalarını yanlış CORRECT'e ve doğru cevapları INCORRECT'e çevirdi; adım katmanında da refuted → verified. Kısıt/denklem/L-P vakaları ise tabanda da aynı (önceden var).",
+    "onceki_bulgularla_iliski": "d4b8-YO-4'ün (gürültüden sıçrama değeri) düzeltmesi certified_sign'a dayandı; bu bulgu o dayanağın tablo dışı fonksiyonlarda çürük olduğunu gösteriyor. Yeniden bildirim değil, yeni mekanizma; d4b8-YO-4'ün kapanışı bu yüzden tam değil."
+   }
+  }
+ },
+ {
+  "id": "d4b9-YO-2",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "_sympy_guards'ın relational._n2 yaması atlanıyor. is_gt/is_ge, _n2 None dönünce is_extended_positive(fark) yedeğine düşüyor; bu yedek strict olmayan evalf(2) ve yalnız _prec != 1 denetimiyle gürültüden karar veriyor. Parçanın kendi Piecewise kardeşi yalnız Z**2 yazımı için kapandı: sin(Z)², atan(Z)², sin(Z²) ve tan(L²) koşullu Piecewise ayrıştırmada 1'e katlanıp CORRECT alıyor.",
+  "repro": "Sondalar: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/yanlis-onay/p/e6.py (K1-K5), e5.py (H1, H3); mekanizma p6.py ve p3.py.\nÖz (gerçek bir dosyada):\nimport sympy as sp\nimport sympy.core.relational as R\nfrom mathverify.verifier import verify\nfrom mathverify.normalize.parse import parse_expr_str\nZ = '(2*atan(tanh(1/2)) - atan(sinh(1)))'\nPW = f'Piecewise((1, sin({Z})**2 > 0), (0, sin({Z})**2 <= 0))'\ndef ev(e): return {'task': {'kind': 'evaluate', 'params': {'expr': e}}, 'vars': [{'name': 'x', 'domain': 'real'}], 'givens': [], 'answer_shape': 'scalar'}\ndef sol(v, k='value', steps=()): return {'claimed_answer': {'kind': k, 'payload': v}, 'steps': [{'id': f's{i+1}', 'kind': a, 'claim': c, 'from': [], 'text': ''} for i, (a, c) in enumerate(steps)]}\nif __name__ == '__main__':\n    z = sp.sympify(Z); e = sp.sin(z)**2\n    print(R._n2(e, sp.S.Zero), e.is_extended_positive, sp.Gt(e, 0))   # None True True (koruma kurulu)\n    print(parse_expr_str(PW))                                          # 1\n    print(verify(ev(PW), sol('1')).verdict)                            # CORRECT (doğrusu 0)\n    print(verify(ev(PW), sol('0')).verdict)                            # INCORRECT\n    print(verify(ev(f'Piecewise((1, atan({Z})**2 > 0), (0, atan({Z})**2 <= 0))'), sol('1')).verdict)  # CORRECT\n    print(verify(ev('x + 1') | {'givens': ['x = 2']}, sol('3', steps=[('compute', f'{PW} = 1')])).verdict)  # adım verified\n    print(verify({'task': {'kind': 'solve_equation', 'params': {'equation': 'x**2 + 1 = 0', 'var': 'x'}}, 'vars': [{'name': 'x', 'domain': 'real'}], 'givens': [], 'answer_shape': 'set'}, sol('Interval(0, -tan((log(8)/log(2) - 3)**2))', 'interval')).verdict)  # CORRECT ([0,0] = {0} iddiası)",
+  "expected": "Z = gd(1) − gd(1) = 0, dolayısıyla sin(Z)² = atan(Z)² = sin(Z²) = 0 ve tan((log8/log2 − 3)²) = tan 0 = 0. 0 > 0 yanlış olduğundan her Piecewise((1, u > 0), (0, u ≤ 0)) 0 değerini alır. 1 iddiası asla CORRECT olmamalı, 0 iddiası asla INCORRECT olmamalı; kanıt yoksa UNKNOWN. 'Pw = 1' adımı verified olmamalı. x = Pw denkleminin {1} iddiası CORRECT olmamalı. Interval(0, −tan(L²)) = [0, 0] = {0}; ∅ olan çözüm kümesine karşı bu iddia INCORRECT ya da UNKNOWN olmalı.",
+  "actual_new": "fecc2be'de üç yazımda (sin(Z)², atan(Z)², sin(Z²)) da Piecewise=1 CORRECT, 0 INCORRECT; tan(L²) yazımında da aynı. compute 'Pw(sin(Z)²) = 1' adımı verified; 5·Pw+2 = 7 CORRECT; x = Pw denkleminde {1} CORRECT. x²+1=0 için Interval(0, −tan(L²)) ve Interval(0, asin(log6−log2−log3)) iddiaları ayrıştırmada EmptySet oluyor ve CORRECT alıyor. Mekanizma ölçümü: _n2(sin(Z)², 0) = None, ama (sin(Z)²).is_extended_positive = True, evalf(2) = 3.6e−307 (_prec 10) ve Gt(sin(Z)², 0) = True. Parçanın düzelttiği tek yazım (Z**2 > 0) UNKNOWN oldu.",
+  "actual_base": "e03ea1f'de aynı vakaların hepsi aynı: Piecewise=1 CORRECT, 0 INCORRECT, adım verified, Interval iddiaları CORRECT. Tabanda Z**2 > 0 yazımı da CORRECT idi (K5). Yani parça yalnız bu yazımı kapattı.",
+  "math": "gd(x) = 2atan(tanh(x/2)) = atan(sinh x) olduğundan Z = 0; mpmath 80 basamakta Z = 0.0 ve sin(Z)² = 0.0. log 8 = 3 log 2 olduğundan L = 0 ve tan(L²) = 0 (mpmath 0.0). Bu koşullarda 0 > 0 yanlış, 0 ≤ 0 doğru, Piecewise = 0. [0, 0] = {0} ≠ ∅. Beklentide belirsizlik yok.",
+  "introduced_by_piece": "no",
+  "mechanism": "src/mathverify/_sympy_guards.py yalnız sympy.core.relational._n2'yi değiştiriyor. SymPy 1.14'te is_ge/is_gt, _n2 None dönünce `is_extended_nonnegative/positive(lhs - rhs)` yedeğine geçiyor (relational.py ~1394 sonrası). Sayılar için bu yedek Expr._eval_is_extended_positive_negative'e varıyor: strict olmayan `self.evalf(2)` ve yalnız `_prec != 1` denetimi. Korumanın docstring'inde adı geçen kusur (bir kuvvet, tabanının 'anlamsız' işaretini kaybeder: (gürültü)² 10 bit taşır) bu yolda aynen duruyor. sin, atan ve tan gibi bir fonksiyon araya girince (sin(Z)², sin(Z²), tan(L²)) Pow'un yapısal pozitiflik kuralı yerine Expr'in sayısal yedeği çalışıyor ve True dönüyor. Piecewise koşulları ayrıştırmada kurulurken değerlendirildiği için Piecewise 1'e katlanıyor; numeric._closed_truth ve steps._jump_undecided ortada bir sıçrama göremiyor. Interval.__new__'deki `(end < start) == True` aynı yoldan EmptySet döndürüyor. Ayrıca _n2'nin kendi strict okuması d4b9-YO-1'in kökünü taşıyor: Gt(asin(Q), 0) _n2 içinden True çıkıyor. Koruma 'yalnız anlamlı farkla karar' iddiasını tutmuyor; tek yazıma (Z**2) konmuş. Düzeltme yönü: is_ge/is_gt yedeği de sarılmalı (sabitler arası ilişki yalnız certified_sign'la, o da d4b9-YO-1 düzeltilince). Ya da ayrıştırmada Piecewise koşulları ve Interval uçları evaluate=False tutulup numeric._closed_truth/certified_sign ile okunmalı.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti doğru: Z = gd(1) − gd(1) = 0, L = 0; sin(Z)², atan(Z)², sin(Z²), tan(L²) hepsi 0, 0 > 0 yanlış, Piecewise = 0. 1 iddiası, 5·Pw+2=7, x=Pw için {1} CORRECT olamaz; 0 ve {0} INCORRECT olamaz; Pw=1 adımı verified olamaz. x²+1=0 gerçelde ∅; Interval(0, −tan(L²)) = [0,0] = {0} ≠ ∅, CORRECT olamaz. Not: Interval(0, asin Q) vakası is_extended yedeğinden değil, _n2'nin kendi strict okumasından (YO-1'in kökü) geçiyor.",
+   "note": "p/y3.py ile yeniden ürettim: yeni ve tabanda sin(Z)², atan(Z)², sin(Z²), tan(L²) Piecewise=1 CORRECT, 0 INCORRECT; adım verified; Interval iddiaları CORRECT. Yeni kodda _n2=None ama is_extended_positive=True, Gt=True. Parça yalnız Z**2 yazımını UNKNOWN'a çekti; gerileme yok, eksik koruma.",
+   "detay": {
+    "mekanizma_olcumu (y3.py, m4.py)": {
+     "yeni": "_n2(sin(Z)²,0)=None, is_extended_positive=True, Gt=True; aynı atan(Z)², sin(Z²), tan(L²) için; Z² için _n2=None, is_ext_pos=None, Gt açık kalıyor",
+     "taban": "_n2(sin(Z)²,0)=3.6e-307, Z² için 6.1e-238 → Gt=True (koruma yok)",
+     "yol": "sin(Z)._eval_evalf(2) = -0.e-106 (_prec 2, 1 değil, denetim geçiyor), sin(Z).evalf(2) = -9.3e-156 (_prec 10) → is_extended_negative=True → (sin Z)² pozitif; strict evalf PrecisionExhausted (yani yalnız strict olmayan yedek karar veriyor)",
+     "jump_value": "yeni kodda değerlendirilmemiş Piecewise((1, sin(Z)²>0),(0, sin(Z)²<=0)) için jump_value = 0 (doğru): katlanma ayrıştırmada, ilişki kurulurken oluyor",
+     "Gt(asin Q,0)": "yeni ve tabanda False, Lt=True (_n2 = -7.4e-127, strict ama tablo dışı fonksiyon gürültüsü); bulgudaki 'True' yönü ölçümle tutmadı, gürültüden karar verildiği tutuyor"
+    },
+    "ayristirma": "parse: Pw(sin(Z)²) yeni/taban 1; Pw(Z²) yeni değerlendirilmemiş, taban 1; Interval(0,−tan(L²)) yeni/taban EmptySet",
+    "uctan_uca yeni | taban": {
+     "Pw(sin(Z)²)=1 [yanlış]": "CORRECT | CORRECT",
+     "Pw(sin(Z)²)=0 [doğru]": "INCORRECT | INCORRECT",
+     "Pw(atan(Z)²)=1 [yanlış]": "CORRECT | CORRECT",
+     "Pw(atan(Z)²)=0 [doğru]": "INCORRECT | INCORRECT",
+     "Pw(sin(Z²))=1 [yanlış]": "CORRECT | CORRECT",
+     "Pw(sin(Z²))=0 [doğru]": "INCORRECT | INCORRECT",
+     "Pw(tan(L²))=1 [yanlış]": "CORRECT | CORRECT",
+     "Pw(tan(L²))=0 [doğru]": "INCORRECT | INCORRECT",
+     "Pw(Z²)=1 [yanlış]": "UNKNOWN | CORRECT",
+     "Pw(Z²)=0 [doğru]": "UNKNOWN | INCORRECT",
+     "adım Pw(sin(Z)²)=1 [yanlış adım]": "verified | verified",
+     "5·Pw+2=7 [yanlış]": "CORRECT | CORRECT",
+     "x=Pw: {1} [yanlış]": "CORRECT | CORRECT",
+     "x=Pw: {0} [doğru]": "INCORRECT | INCORRECT",
+     "x²+1=0: Interval(0,−tan(L²)) [yanlış]": "CORRECT | CORRECT",
+     "x²+1=0: Interval(0, asin Q) [yanlış]": "CORRECT | CORRECT",
+     "x²+1=0: Interval(0,0) [yanlış, kontrol]": "INCORRECT | INCORRECT"
+    },
+    "bagimsiz_matematik": "t = tanh(1/2) ∈ (0,1) ⇒ 2atan t ∈ (0, π/2); tan(2atan t) = 2t/(1−t²) = sinh 1 (sinh 2u = 2tanh u/(1−tanh²u)); atan(sinh 1) ∈ (0, π/2); aynı aralıkta aynı tanjant ⇒ Z = 0. mpmath 50/100 basamakta Z = 0.0, sin(Z)² = 0.0, tan(L²) = 0.0. [0,0] = {0} ≠ ∅ = x²+1=0'ın gerçel çözüm kümesi.",
+    "introduced_by_piece_gerekce": "Bütün vakalar tabanda da aynı; parça yalnız Z**2 yazımını kapattı (taban CORRECT/INCORRECT → yeni UNKNOWN). Eksik koruma, gerileme değil."
+   }
+  }
+ },
+ {
+  "id": "d4b9-RK-1",
+  "klass": "unjust_reject",
+  "severity": "high",
+  "title": "RK-4'ün _defined_at_point'i, değişken üslü kuvvet için aralıkta geçerli 'taban > 0' kuralını bir noktada kesin tanımsızlık sayıyor. Sonlu alanda (-2)^(-2), (-1)^(-1), 0^√2 ve |0|^√2 gibi tanımlı değerlerin olduğu noktalar atılıyor; 0^0 geleneği de 'tanımsız' diye okunuyor. Sonuçta doğru küme INCORRECT, eksik küme CORRECT çıkıyor.",
+  "repro": "Sonda dosyaları /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/ret-kapsama/probes/ altında: p10_negbase.py (Q1 Q2 Q4 Q5), p12_cnt.py (Q6 Q7), p16_zero_irr.py (Q8 Q9 Q10). Bu dosyalar p2_jumps.py'yi içe aktarır. Bağımsız sürüm (PYTHONUTF8=1 PYTHONPATH=<fecc2be>/src:<fecc2be> MATHVERIFY_LEAN_REPL=/nonexistent):\nif __name__ == \"__main__\":\n    from mathverify.verifier import verify\n    X = {\"name\": \"x\", \"domain\": \"real\"}\n    def eq(e, g, dod):\n        return {\"task\": {\"kind\": \"solve_equation\", \"params\": {\"equation\": e, \"var\": \"x\"}}, \"vars\": [X], \"givens\": [g], \"answer_shape\": \"set\", \"domain_of_discourse\": dod}\n    D7 = \"{-3, -2, -1, 0, 1, 2, 3}\"\n    for e, g, dod, c in [\n        (\"(x + 2)*(x - 2) = 0\", \"x**x*(2 + sin(x)) > 0\", D7, \"{-2, 2}\"), (\"(x + 2)*(x - 2) = 0\", \"x**x*(2 + sin(x)) > 0\", D7, \"{2}\"),\n        (\"(x + 1)*(x - 1) = 0\", \"x**x*(2 + sin(x)) < 0\", D7, \"{-1}\"), (\"(x + 1)*(x - 1) = 0\", \"x**x*(2 + sin(x)) < 0\", D7, \"EmptySet\"),\n        (\"x*(x - 2) = 0\", \"x**sqrt(2)*(2 + sin(x)) >= 0\", \"{0, 1, 2, 3}\", \"{0, 2}\"), (\"x*(x - 2) = 0\", \"x**sqrt(2)*(2 + sin(x)) >= 0\", \"{0, 1, 2, 3}\", \"{2}\"),\n        (\"(x + 1)*(x - 3) = 0\", \"Abs(x - 3)**sqrt(2)*(2 + sin(x)) >= 0\", \"{-1, 0, 1, 2, 3}\", \"{-1, 3}\"),\n        (\"(x - 2)*(x - 5) = 0\", \"(x - 4)**x*factorial(x)*(2 + sin(x)) > 0\", \"{1, 2, 3, 4, 5, 6}\", \"{2, 5}\"),\n        (\"x*(x - 2) = 0\", \"x**x*(2 + sin(x)) > 0\", \"{0, 1, 2, 3}\", \"{2}\"), (\"x*(x - 2) = 0\", \"x**x*(2 + sin(x)) > 0\", \"{0, 1, 2, 3}\", \"{0, 2}\")]:\n        print(g, c, verify(eq(e, g, dod), {\"claimed_answer\": {\"kind\": \"set\", \"payload\": c}, \"steps\": []}).verdict)\n    import sympy as sp\n    from mathverify.sandbox.exactsets import _on_points\n    x = sp.Symbol(\"x\", real=True)\n    print(_on_points(sp.Ge(x**sp.sqrt(2)*(2 + sp.sin(x)), 0), x, sp.FiniteSet(-2, -1, 0, 1, 2)))  # [1, 2]: 0 atıldı",
+  "expected": "Q1 {-2,2} CORRECT ya da UNKNOWN, {2} INCORRECT ya da UNKNOWN. Q2 {-1} INCORRECT olamaz, ∅ CORRECT olamaz. Q7 {2,5} INCORRECT olamaz. Q8 {0,2} INCORRECT olamaz, {2} CORRECT olamaz. Q9 {-1,3} INCORRECT olamaz, {-1} CORRECT olamaz. Q4'te x=0 noktası 0^0 (projenin zero_power geleneği: '1 ya da tanımsız'), bu yüzden iki iddia da yalnız UNKNOWN olabilir. _on_points(x^√2(2+sin x) ≥ 0, {-2..2}) sonucu 0'ı içermeli ya da karar yok (None) dönmeli.",
+  "actual_new": "fecc2be'de (PYTHONHASHSEED 0 ve 7 ile aynı): Q1 {-2,2} INCORRECT (certify.algebra claimed_root_invalid: outside_domain_of_discourse), {2} CORRECT. Q2 {-1} INCORRECT, ∅ CORRECT. Q4 {2} CORRECT, {0,2} INCORRECT. Q7 {2,5} INCORRECT. Q8 {0,2} INCORRECT, {2} CORRECT. Q9 {-1,3} INCORRECT, {-1} CORRECT. _on_points [1, 2] döndürüyor; x**x için [3]. Doğrudan ölçülen koşul: definedness_conditions(x**x) = [x > 0], definedness_conditions(x**sqrt(2)) = [x > 0], (x-1)**(x-1) için [x - 1 > 0], Abs(x)**x için [Abs(x) > 0].",
+  "actual_base": "e03ea1f'de Q1, Q2, Q4, Q7, Q8 ve Q9'un hepsi UNKNOWN. Neden: intake.domain given_not_applied; _function_conditions _Unsolved fırlatıyordu, exact_solveset de ConditionSet döndürüyordu. Aynı kökün tabanda zaten var olan kardeşleri: Ctx.domain_for'un yazılı koşulları aynı kuralı kullanıyor. Q5'te ((x-3)^(x+4)·cos(πx) > 0, alan -3..3) doğru {-2} INCORRECT, ∅ CORRECT; bu iki ağaçta da aynı. Q6'da (count_integers, x^x(2+sin x) > 0, -3 ≤ x ≤ 3) '3' CORRECT, '4' INCORRECT; iki ağaçta da aynı. Q10'da (solve_inequality x^√2(2+sin x) ≥ 0, alan {0..3}) doğru {0,1,2,3} INCORRECT; iki ağaçta da aynı.",
+  "math": "Değerler mpmath ile 30 basamakta hesaplandı. (-2)^(-2)·(2+sin(-2)) = 0.27268 > 0 ve 2^2·(2+sin 2) > 0, bu yüzden Q1'in çözümü {-2,2}. (-1)^(-1)·(2+sin(-1)) = -1.15853 < 0 ve 1·(2+sin 1) > 0, bu yüzden Q2'nin çözümü {-1}. Tam sayı üs ve sıfırdan farklı taban tanımlıdır; projenin NEGATIVE_BASE geleneği de negatif tabanı tam sayı üste tanımlı sayar. 0^√2 = 0 tektir ve projenin kendi definedness_conditions_strict yorumu da '0**pi = 0: a positive irrational exponent needs base >= 0' der; bu yüzden Q8 = {0,2} ve Q9 = {-1,3} (|0|^√2 = 0 ≥ 0, 4^√2·(2+sin(-1)) = 8.229 > 0). Q7: x=2'de (-2)^2·2!·(2+sin 2) = 23.27 > 0, x=5'te 1·120·(2+sin 5) = 124.93 > 0, bu yüzden {2,5}. Q4: x=0'da 0^0 var; projenin zero_power geleneği '0**0 is 1 or undefined' dediği için küme geleneğe bağlı ({0,2} ya da {2}) ve karar UNKNOWN olmalı.",
+  "introduced_by_piece": "yes",
+  "mechanism": "RK-4 (sandbox/exactsets.py _on_points + yeni _defined_at_point): _function_conditions _Unsolved fırlatınca (örneğin 'a power whose real domain is not read here: x**x') conds None oluyor. Ardından her nokta için certify.domain.definedness_conditions(e, var) koşulları relation_holds_at ile değerlendiriliyor. Değerlendirme False çıkar ve koşul gelenek değilse nokta 'tanımsız' sayılıp atılıyor. Ancak definedness_conditions, üssü sabit rasyonel olmayan bir Pow için (x**x, x**sqrt(2), (x-4)**x, Abs(x-3)**sqrt(2)) 'taban > 0' veriyor. Bu, aralık üzerinde yeterli bir kural; bir noktada gerekli koşul değil. Projenin definedness_conditions_strict'i bu kuvvetler için kesin kural olmadığını söyleyip None döndürüyor ve 0**irrasyonel durumunu taban ≥ 0'a düzeltiyor. _defined_at_point ise katı olmayan sürümü kullanıyor. Parça, tabanda given_not_applied ile UNKNOWN kalan verilenleri bu yolla 'uygulanmış' saydığı için Ctx.domain_for'daki aynı hatalı yazılı koşul da (Q5, Q6 ve Q10'da zaten var) artık karar üretiyor. Düzeltme önerisi: noktada definedness_conditions_strict kullanılsın (None ise _Unsolved fırlatılsın) ya da kuvvet noktada tam değerlendirilsin. Bu durumda tam sayı üs ve sıfırdan farklı taban tanımlı, 0^(pozitif sayı) = 0, 0^0 ise gelenek sayılıp kararsız bırakılır.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "high",
+   "corrected_expectation": "Bulgunun beklentisi doğru; eklenecekler: Q7 {5} CORRECT olamaz. Q4 ve Q6 (x=0'da 0^0, zero_power geleneği) yalnız UNKNOWN. Q8/Q9/Q10'da 0^√2 için projenin iki okuması çelişiyor: katı kural taban ≥ 0 (0^√2 = 0), girişin yazıldığı biçimdeki okuması 'undefined_as_written' (UNKNOWN). Bu yüzden {0,2} için CORRECT ya da UNKNOWN, {2} için hiçbir zaman CORRECT. Düzeltme notu: noktayı önce yerine koyup tanımlılığa bakmak yetmez. SymPy (x**x).subs(x,0)'ı 1'e çeviriyor ve 0^0 geleneği kayboluyor (ölçüldü).",
+   "note": "Yeni kodda 12 vakadan 12'si yanlış karar (6 yanlış CORRECT, 6 haksız INCORRECT), tabanda 12'si de UNKNOWN. Proje kendisi evaluate x**x'te x=-2 için 1/4'ü, x=-1 için -1'i CORRECT sayıyor (iki ağaçta da), yani noktada tanımlı kabul ediyor. Q5/Q6/Q10 kardeşleri iki ağaçta da aynı ve yanlış (önceden var).",
+   "detay": {
+    "olcum_yeni_fecc2be": {
+     "Q1 {-2,2}": "INCORRECT (certify.algebra claimed_root_invalid: outside_domain_of_discourse)",
+     "Q1 {2}": "CORRECT",
+     "Q2 {-1}": "INCORRECT",
+     "Q2 EmptySet": "CORRECT",
+     "Q4 {2}": "CORRECT",
+     "Q4 {0,2}": "INCORRECT",
+     "Q7 {2,5}": "INCORRECT",
+     "Q7 {5}": "CORRECT",
+     "Q8 {0,2}": "INCORRECT",
+     "Q8 {2}": "CORRECT",
+     "Q9 {-1,3}": "INCORRECT",
+     "Q9 {-1}": "CORRECT",
+     "_on_points(x**sqrt(2)*(2+sin x) >= 0, {-2..3})": "[1, 2, 3] (0 atıldı)",
+     "_on_points(x**x*(2+sin x) > 0, {-2..3})": "[1, 2, 3] (-2 atıldı, 0^0 geleneği 'tanımsız')",
+     "_defined_at_point(x**x, -2 / -1 / 0)": "False / False / False",
+     "_defined_at_point(x**sqrt(2), 0)": "False"
+    },
+    "olcum_taban_e03ea1f": "Q1, Q2, Q4, Q7, Q8 ve Q9'un 12 iddiası UNKNOWN (intake.domain given_not_applied); _on_points ikisinde de None.",
+    "kosullar_iki_agacta": {
+     "x**x": "definedness_conditions [x > 0], strict None",
+     "x**sqrt(2)": "[x > 0], strict [x >= 0]",
+     "(x-4)**x": "[x - 4 > 0], strict None",
+     "Abs(x-3)**sqrt(2)": "[Abs(x - 3) > 0], strict [True]"
+    },
+    "projenin_nokta_okumasi_iki_agacta": {
+     "evaluate x**x, x=-2, iddia 1/4": "CORRECT",
+     "evaluate x**x, x=-1, iddia -1": "CORRECT",
+     "evaluate x**x, x=0, iddia 1": "UNKNOWN (problem_definedness_undecided)",
+     "evaluate x**sqrt(2), x=0, iddia 0": "UNKNOWN (problem_undefined_as_written)"
+    },
+    "kardesler_iki_agacta_ayni": {
+     "Q5 {-2}": "INCORRECT",
+     "Q5 EmptySet": "CORRECT",
+     "Q6 count 3/4/5": "CORRECT/INCORRECT/INCORRECT",
+     "Q10 {0,1,2,3}": "INCORRECT",
+     "Q10 {1,2,3}": "CORRECT"
+    },
+    "matematik_mpmath_50_basamak": "x^x(2+sin x): x=-3 -0.068847, -2 +0.272676, -1 -1.158529, 1 2.841471, 2 11.637190, 3 57.810240. Q7: x=2 23.274379, x=5 124.929087. Q9: x=-1 4^√2(2+sin(-1)) = 8.229024. Q5: x=-2 25, x=3 0. Noktada okuma: Q1 {-2,2}, Q2 {-1}, Q7 {2,5}. Q6: -2, 1, 2, 3 pozitif; 0'da 0^0 var, bu yüzden sayı 4 ya da 5. Yalnız 'x^x'in alanı x>0' okumasıyla 3 çıkıyor, yani üç iddia da yalnız UNKNOWN olabilir. Q4: 0^0, bu yüzden {0,2} ya da {2} (UNKNOWN). 0^√2: analizde 0^a = 0 (a>0) ve projenin katı kuralı da öyle; bazı müfredatlar irrasyonel üssü yalnız pozitif tabanda tanımlıyor. Gelenek tartışmalı olsa bile {2} CORRECT güvenli değil.",
+    "sonda": [
+     "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/dogrulama-ret-kapsama/probes/r1.py",
+     "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/dogrulama-ret-kapsama/probes/r1b.py",
+     "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/dogrulama-ret-kapsama/probes/r1c.py"
+    ],
+    "subs_tuzagi": "(x**x).subs(x, 0) = 1 ve (x**sqrt(2)).subs(x, 0) = 0. definedness_conditions(subs) [] veriyor, bu yüzden önce yerine koyan bir düzeltme 0^0 geleneğini siler. Düzeltme kuvveti yapısıyla okumalı: tam sayı üs ve sıfırdan farklı taban tanımlı; 0^(pozitif) = 0 ya da gelenek; 0^0 zero_power geleneği; negatif taban ve tam sayı olmayan üs ise tanımsız ya da negative_base geleneği."
+   }
+  }
+ },
+ {
+  "id": "d4b9-RK-2",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "title": "Hassasiyet bütçesi (2**16 bit) yalnız sertifikalı okuyuculara değil, katı olmayan her evalf'e, dolayısıyla SymPy'nin varsayım sistemine de PrecisionExhausted fırlatıyor. Abs, Max ve Interval kurulumu düşünce ifadenin tamamı parse_error oluyor; 2 basamakla çürütülebilen iddialar da UNKNOWN kalıyor.",
+  "repro": "Sonda: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/ret-kapsama/probes/p24_budget.py ve p25_escape.py (p2_jumps.py ile). Bağımsız sürüm:\nif __name__ == \"__main__\":\n    from mathverify.verifier import verify\n    E = \"Abs(log(8)/log(2) + exp(-exp(11)) - 3)\"\n    ev = lambda e: {\"task\": {\"kind\": \"evaluate\", \"params\": {\"expr\": e}}, \"vars\": [], \"givens\": [], \"answer_shape\": \"scalar\"}\n    s = lambda p: {\"claimed_answer\": {\"kind\": \"value\", \"payload\": p}, \"steps\": []}\n    for e, c in [(E, \"exp(-exp(11))\"), (E, \"1\"), (\"Max(3, log(8)/log(2) + exp(-exp(11)))\", \"4\")]:\n        r = verify(ev(e), s(c)); print(c, r.verdict, r.layers[-1].evidence.get(\"reason\", \"\")[:60])",
+  "expected": "Tabandaki gibi karar verilmeli: |…| = e^(-e^11) için CORRECT; '1' ve '4' iddiaları için INCORRECT. En azından düşük hassasiyetle çözülen sorular (≠ 1, ≠ 4) için ayrıştırma düşmemeli; bütçe aşımı yalnız o okuyucuda kararsızlık olmalı.",
+  "actual_new": "fecc2be'de altı vakanın hepsi UNKNOWN. 'Abs: e^-e^11', 'Abs: 1', 'Max: E11', 'Max: 4', 'claim' ve 'interval' vakalarında parse_error: 'a working precision of 86396 bits is over the budget of 65536'. given vakasında layer_exception ParseError, step vakasında malformed_step_claim, constraint vakasında constraint_unreadable. SymPy düzeyinde (p1_sympy.py): Abs(E11-3), Max(3, E11), Interval(3, E11), (E11-3).is_positive ve N(E11-3, 5) PrecisionExhausted fırlatıyor; Gt(sin(10**30000), -2) de is_comparable içinde fırlatıyor. verify() dışına istisna sızmıyor.",
+  "actual_base": "e03ea1f'de 'Abs: e^-e^11' CORRECT (1.1 s), 'Abs: 1' INCORRECT, 'Max: E11' CORRECT, 'Max: 4' INCORRECT. given 'x = Abs(…)' ile x+1 → 1 INCORRECT. Adım 'Abs(…) = 0' refuted. Kısıt x ≥ Abs(…) ile x² = 4 → {2} CORRECT. Aralık iddiası (-2, 2+Abs(…)) INCORRECT. Hepsi 0.4–4.4 s sürüyor.",
+  "math": "log 8 = 3 log 2 olduğundan değer e^(-e^11) ≈ 9.7869e-26004 > 0. |e^(-e^11)| = e^(-e^11) ≠ 1. Max(3, 3+e^(-e^11)) = 3+e^(-e^11) ≠ 4. 1+e^(-e^11) ≠ 1. (-2, 2+ε) ≠ (-2, 2). Tabanın kararları doğru.",
+  "introduced_by_piece": "yes",
+  "mechanism": "_sympy_guards._budgeted sympy.core.evalf.evalf'i sarıyor ve hassasiyet 2**16 biti aşınca katı olmayan çağrılarda da PrecisionExhausted fırlatıyor. SymPy'nin Expr._eval_is_extended_positive_negative'i yalnız ValueError yakalıyor. Bu yüzden is_positive, Abs.eval, Max/Min ve Interval.__new__ (relational is_comparable) istisnayı ayrıştırıcıya taşıyor ve guarded parse bütün ifadeyi reddediyor. Modülün belgesindeki 'every certified reader takes it as undecided' ifadesi bu yol için doğru değil: karar okuyucuda değil ayrıştırmada düşüyor. e^(-e^11) kasıtlı olarak bütçe dışında bırakılmış, girdi yapay; bu yüzden şiddet düşük. Not: katı _n2, Sum karşılaştırmalarını da kararsız bırakıyor (Sum(1/k!, k≥0) > 2 ve Sum(1/k², k≥1) > 3/2 değerlendirilmeden kalıyor). Ancak verify düzeyinde etkisi ölçülmedi: U1–U6 vakaları iki ağaçta aynı.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "Beklenti doğru. Tabanın kararları matematikçe doğru: Abs ve Max doğru iddiada CORRECT, '1' ve '4' INCORRECT, given ile x+1 → 1 INCORRECT, adım refuted, kısıtla {2} CORRECT, aralık INCORRECT. Bütçenin bilinçli olarak dışında kalan bir girdide en azından ayrıştırma düşmemeli. Kapsama kaybından öte yanlış karar yok: yeni kodda hepsi UNKNOWN.",
+   "note": "10 vakanın 10'u da yeniden üretildi (yeni: hepsi UNKNOWN, parse_error/layer_exception/malformed_step_claim/constraint_unreadable; taban: 0.4–4.1 s'de doğru karar). SymPy düzeyinde Abs, is_positive, Max, Interval ve N(·,5) PrecisionExhausted fırlatıyor. Bütçe içindeki e^(-e^10) kontrolü iki ağaçta da karar veriyor. Girdi yapay, karar güvenli; şiddet düşük.",
+   "detay": {
+    "olcum_yeni": {
+     "Abs dogru": "UNKNOWN parse_error",
+     "Abs 1": "UNKNOWN parse_error",
+     "Max dogru": "UNKNOWN parse_error",
+     "Max 4": "UNKNOWN parse_error",
+     "given": "UNKNOWN layer_exception ParseError",
+     "step": "UNKNOWN malformed_step_claim",
+     "constraint": "UNKNOWN constraint_unreadable",
+     "interval": "UNKNOWN parse_error",
+     "kontrol Abs(E10-3) 1 / exp(-exp(10))": "INCORRECT / CORRECT"
+    },
+    "olcum_taban": {
+     "Abs dogru": "CORRECT 1.1 s",
+     "Abs 1": "INCORRECT",
+     "Max dogru": "CORRECT",
+     "Max 4": "INCORRECT",
+     "given": "INCORRECT",
+     "step": "INCORRECT (steps.refute fail)",
+     "constraint": "CORRECT 4.1 s",
+     "interval": "INCORRECT (solution_set_differs)",
+     "kontrol": "INCORRECT / CORRECT"
+    },
+    "iki_agacta_ayni": "E11 iddiası 3: UNKNOWN (undecided), 4: INCORRECT",
+    "sympy_taban": "N(E11-3,5) = 9.7869e-26004; Abs, Max ve Interval kuruluyor; is_positive True",
+    "sonda": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/dogrulama-ret-kapsama/probes/r2.py"
+   }
+  }
+ },
+ {
+  "id": "d4b9-RK-3",
+  "klass": "crash_or_timeout",
+  "severity": "low",
+  "title": "Çok periyotlu bir trigonometrik verilen (sin x > 0, 0 ≤ x ≤ 1000) tek bir verify'ı tabanda 106 s, yeni kodda 219 s sürdürüyor. RK-3 kesin küme işlemini 300 uç noktanın ötesine taşıyor ve SymPy'nin O(n²) küme işlemleri koşuyor; ikisi de 60 s'yi aşıyor.",
+  "repro": "Sonda: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/ret-kapsama/probes/p17_bigdom.py, vaka 'M3 cos=0 | sin>0 [0,1000] wrong' (ALARM=285); ayrıca p18_parts.py 1000 ve p18_parts.py 600 only. Bağımsız sürüm: verify({\"task\": {\"kind\": \"solve_equation\", \"params\": {\"equation\": \"cos(x) = 0\", \"var\": \"x\"}}, \"vars\": [{\"name\": \"x\", \"domain\": \"real\", \"constraints\": [\"x >= 0\", \"x <= 1000\"]}], \"givens\": [\"sin(x) > 0\"], \"answer_shape\": \"set\"}, {\"claimed_answer\": {\"kind\": \"set\", \"payload\": \"{pi/2}\"}, \"steps\": []})",
+  "expected": "Tek verify 60 s'nin altında kalmalı (sonuç UNKNOWN da olabilir). İddia {π/2} yanlış, bu yüzden INCORRECT ya da UNKNOWN beklenir.",
+  "actual_new": "UNKNOWN, 218.8 s (certify.algebra given_inequality_not_solvable). exact_solveset(sin(x) > 0, x, [0,1000]) tek başına 171.6 s sürüp 160 aralıklı bir Union döndürüyor.",
+  "actual_base": "UNKNOWN, 106.1 s (intake.domain given_not_applied). exact_solveset 111.9 s sürüp ConditionSet döndürüyor. 300 uç noktanın altında kalan [0,600] penceresinde iki ağaç aynı yolu izliyor: exact_solveset tabanda 52.7 s, yenide 51.1 s.",
+  "math": "sin x > 0, 0 ≤ x ≤ 1000 kümesi (2kπ, (2k+1)π) aralıklarından (k = 0..158) ve (318π, 1000] parçasından oluşuyor: 160 aralık, 320 uç nokta. cos x = 0 olan noktalar π/2 + 2kπ ≤ 1000 için k = 0..158, yani 159 nokta. {π/2} eksik.",
+  "introduced_by_piece": "no",
+  "mechanism": "60 s aşımı tabanda zaten var: exactsets aralık birleşimini SymPy'nin O(n²) Union/Complement işlemleriyle kuruyor; 100 aralığın Complement'i 120 s sürüyor (p6_union.py). Parçanın RK-3'ü (exact_setop'ta TooManyEndpoints olunca endpoints_apart çağrılıp işleme devam ediliyor) 300 uç noktanın üstünde tabanın eskiden erken vazgeçtiği hesabı sürdürüyor ve süreyi yaklaşık iki katına çıkarıyor. Verify düzeyinde süre sınırı yok. Katı _n2 aynı yolda yavaşlık getirmedi ([0,600]'de 52.7 s'ye karşı 51.1 s).",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "Karar beklentisi (INCORRECT ya da UNKNOWN) doğru, iki ağaç da UNKNOWN veriyor. '60 s' projenin kuralı değil: verify düzeyinde süre sınırı yok (_SOLUTION_BUDGET = 300 s yalnız adımlar için). Ama _sympy_guards belgesi ana süreçte 90 s'yi aşan tek bir verify'ı hata sayıyor ve iki ağaç da bunu aşıyor. Parçanın katkısı ölçümümde yaklaşık 1.25 kat, bulgunun dediği yaklaşık 2 kat değil.",
+   "note": "Yeniden üretildi (yük 2.5–3.4): yeni 150.0 s ve 190.5 s (ana süreç CPU 179.1 s), taban 122.8 s ve 145.7 s (CPU 143.3 s). Süre ana süreçte, sandbox sınırı yok. Yavaş yol önceden var; parça CPU'da yaklaşık %25 ekliyor (bulgu 219/106 s dedi, ölçülen oran 1.2–1.3). Matematik doğru: 160 aralık, 159 nokta.",
+   "detay": {
+    "olcum_yeni": [
+     "UNKNOWN 150.0 s certify.algebra given_inequality_not_solvable",
+     "UNKNOWN 190.5 s, os.times user 179.1 s, children 8.2 s"
+    ],
+    "olcum_taban": [
+     "UNKNOWN 122.8 s intake.domain given_not_applied",
+     "UNKNOWN 145.7 s, os.times user 143.3 s, children 0.0 s"
+    ],
+    "matematik": "2kπ < 1000 için k ≤ 159; 159π·2 = 999.03 ve 319π = 1002.2 > 1000. Tam aralıklar k = 0..158 ve (318π, 1000]: 160 aralık. π/2 + 2kπ ≤ 1000 için k ≤ 158.9, yani 159 nokta.",
+    "sonda": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/dogrulama-ret-kapsama/probes/r3.py"
+   }
+  }
+ },
+ {
+  "id": "d4b9-RK-4",
+  "klass": "other",
+  "severity": "low",
+  "title": "Parçanın iki yeni testi, kanıtlanabilir bir karar yerine UNKNOWN'u kilitliyor: FAR kısıtında {-3,3} iddiası (-3, x ≥ 3 kısıtını ihlal ediyor) ve x + 0·atan2(x−1, 0) fonksiyonunun [0,3] üzerindeki maksimumu 3 (her okumada doğru).",
+  "repro": "tests/test_d4_d4b_tur9.py içinde test_an_intersection_that_raises_abstains (assert r.verdict == \"UNKNOWN\") ve test_extremum_away_from_the_origin_convention (ikinci assert == \"UNKNOWN\"). Ölçüm: probes/p14_far.py.",
+  "expected": "{-3,3} için INCORRECT ya da UNKNOWN; test 'CORRECT değil' biçiminde yazılmalı. max_{[0,3]} (x + 0·atan2(x−1,0)) = 3 için CORRECT ya da UNKNOWN; test 'INCORRECT değil' biçiminde yazılmalı.",
+  "actual_new": "İki vaka da UNKNOWN; testler UNKNOWN dışındaki her sonucu düşürüyor. FAR vakaları: constraint_not_applied ['x >= 3'] ya da ['x <= FAR'] (FAR1/FAR2/FAR3/FAR4 hepsi UNKNOWN).",
+  "actual_base": "FAR vakaları tabanda da UNKNOWN (intake.givens given_binding_undecided: TypeError). Ekstremum tabanda membership_condition_on_variable ile UNKNOWN. Gerileme yok.",
+  "math": "x ≥ 3 kısıtı tek başına uygulanabiliyor. Bir kısıt düşürüldüğünde elde kalan alan gerçek alanın üst kümesi ([3, ∞) ⊇ {3}); −3 bu üst kümenin dışında olduğundan çözüm olamaz ve {−3,3} kanıtla yanlış. f(x) = x + 0·atan2(x−1, 0) tanımlı olduğu her yerde x'e eşit. x=1'de f ya tanımsız ya da 1 < 3, bu yüzden [0,3]'te maksimum her okumada x=3'te 3.",
+  "introduced_by_piece": "yes",
+  "mechanism": "Testler parçanın temkinli davranışını (kısıt düşerse girişte UNKNOWN; gelenek noktası aralıktaysa UNKNOWN) eşitlikle sabitliyor. Kanıtlı bir iyileştirme yapılırsa (alanın üst kümesiyle çürütme, ya da gelenek noktasındaki değerin maksimumu değiştirmediğini gösterme) bu testler düşer. d4b6-RK5'teki örüntünün yeni örnekleri.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "Beklenti doğru. FAR testinin karar beklentisi verdict != 'CORRECT' olmalı (gerekçe denetimi yalnız UNKNOWN dönerse). Ekstremum testinin ikinci beklentisi verdict != 'INCORRECT' olmalı. Doğrulayıcı kararında hata yok; ikisi de güvenli UNKNOWN. Sorun yalnız testlerin, kanıtlı bir iyileştirmeyi gerileme sayması (d4b6-RK5'teki örüntü).",
+   "note": "Yeniden üretildi. Yeni: FAR1/FAR2 {-3,3} UNKNOWN (constraint_not_applied); yalnız x≥3 kısıtıyla aynı iddia INCORRECT. Ekstremum [0,3] 3 UNKNOWN (membership_condition_on_variable), [2,3] CORRECT. Taban: FAR UNKNOWN (given_binding_undecided TypeError), ekstremum [2,3] ve [0,3] UNKNOWN. FAR−3 = 0, mpmath 60 basamak; Gudermann özdeşliği.",
+   "detay": {
+    "matematik": "FAR = 3 + gd(1) - gd(1) = 3, çünkü 2·atan(tanh(x/2)) = atan(sinh x). Alan {3}, çözüm {3}. −3, x ≥ 3 kısıtını ihlal ediyor, bu yüzden {−3,3} her durumda yanlış. f = x + 0·atan2(x−1,0): x≠1'de atan2 = ±π/2 ve f = x. x=1'de atan2(0,0) ya tanımsız ya da sonlu bir değer, f(1) ∈ {tanımsız, 1}. Maksimum her okumada 3 (x=3'te).",
+    "sonda": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4b9/dogrulama-ret-kapsama/probes/r4.py"
+   }
+  }
+ }
+]

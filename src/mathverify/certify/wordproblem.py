@@ -6,6 +6,7 @@ reasoning; >= 2 sat -> IR incomplete; 0 sat -> IR wrong / inconsistent question.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import sympy as sp
@@ -26,8 +27,28 @@ def _check(constraints, syms_info, extra, timeout_ms):
     return r.value
 
 
+# the number an option's text starts with, followed by a space or nothing ('6 cm', '1/2 saat', '3 gün'): not '6π cm²',
+# '6√2', a decimal comma (`_leading_number`)
+_LEADING_NUMBER = re.compile(r"^\s*([+-]?\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)?)(?=\s|$)")
+
+
+def _leading_number(text):
+    """The exact number `text` starts with (`_LEADING_NUMBER`), or None."""
+    m = _LEADING_NUMBER.match(str(text))
+    if m is None:
+        return None
+    try:
+        a, _, b = m.group(1).partition("/")
+        den = sp.Rational(b) if b else sp.Integer(1)
+        return None if den == 0 else sp.Rational(a) / den
+    except (ValueError, TypeError, ZeroDivisionError):
+        return None
+
+
 def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_value,
-                           options: dict[str, Any] | None = None, timeout_ms: int = 4000) -> dict[str, Any]:
+                           options: dict[str, Any] | None = None, timeout_ms: int = 4000,
+                           unread_carry: bool = False) -> dict[str, Any]:
+    """`unread_carry`: an option not read (None in `options`) starts with the claimed number ('6 cm' for 6)."""
     out: dict[str, Any] = {"status": "unknown", "claim_sat": None, "other_unsat": None,
                            "sat_options": [], "option_status": {}, "unsupported": None}
     givens = list(givens)
@@ -66,6 +87,14 @@ def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_va
         if any(v == "unknown" for v in out["option_status"].values()):
             out["status"] = "unknown"
             return out
+        if n == 0 and unread_carry and any(v == "unparsed" for v in out["option_status"].values()):
+            # no option READ is satisfiable, and one not read ('6 cm' where the IR declares no unit: the option reader
+            # leaves it, audit of the branch SA-YO-1) starts with the claimed number: the value may be that one, and
+            # the claim is decided on its own, as with no options. When no unread option carries it, the IR is no
+            # formulation of the question the options answer (1/4 for 't = 1/6 + 1/12' beside '3 gün' ... '8 gün':
+            # CORRECT; second audit of the branch, SA2-YO-3): inconsistent, as before
+            out["status"] = _claim_status(out)
+            return out
         if n == 0:
             out["status"] = "ir_inconsistent"
             return out
@@ -77,20 +106,29 @@ def uniqueness_certificate(givens, target, syms_info: dict[str, str], claimed_va
         # 3a + 5b = 41 over positive integers allows a + b ∈ {9, 11, 13}; with options
         # {9, 10, 12} only 9 was satisfiable and "a + b = 9" was certified CORRECT. The claim is
         # certified only when every other value is also excluded (other_unsat).
-        if out["claim_sat"] is True and out["other_unsat"] is True:
-            out["status"] = "certified"
-        elif out["claim_sat"] is True and out["other_unsat"] is False:
-            out["status"] = "not_unique"
-        elif out["claim_sat"] is False:
-            out["status"] = "refuted"
+        out["status"] = _claim_status(out)
         return out
-    if out["claim_sat"] is True and out["other_unsat"] is True:
-        out["status"] = "certified"
-    elif out["claim_sat"] is False:
-        out["status"] = "refuted"
-    elif out["claim_sat"] is True and out["other_unsat"] is False:
-        out["status"] = "not_unique"
+    out["status"] = _claim_status(out)
     return out
+
+
+def _claim_status(out: dict[str, Any]) -> str:
+    """The claim's status from sat(givens ∧ target = claim) and unsat(givens ∧ target ≠ claim). An
+    unsatisfiable claim refutes only when the givens have an instance (the second check found one):
+    with no instance at all (x = 1 and x = 2; x² = 4 and x > 2; a translation the parse read as
+    False) every claim was "refuted" and the payload INCORRECT, while the same answer by its option
+    letter was UNKNOWN (fourth audit of 1 Oct 2026, CAP-Z1). Hypotheses that hold nowhere refute
+    nothing (principle 5): the IR is inconsistent."""
+    if out["claim_sat"] is True and out["other_unsat"] is True:
+        return "certified"
+    if out["claim_sat"] is True and out["other_unsat"] is False:
+        return "not_unique"
+    if out["claim_sat"] is False:
+        if out["other_unsat"] is True:
+            return "ir_inconsistent"
+        if out["other_unsat"] is False:
+            return "refuted"
+    return out.get("status", "unknown")
 
 
 class _DomainUntranslatable(ValueError):
@@ -98,7 +136,22 @@ class _DomainUntranslatable(ValueError):
 
 
 def _set_as_relation(dom, v):
-    """A domain set as a z3-translatable relation in v (finite bounds only)."""
+    """A domain set as a z3-translatable relation in v (finite bounds only). The integers, ℕ and ℕ₀ are
+    the membership `Contains(v, set)`, which the bridge states with IsInt: read as `true` (and dropped
+    from an Intersection), the integrality of the domain of discourse never reached z3, and over ℤ the
+    real solution 3/2 of floor(x) + x = 5/2 was certified (fourth audit of 1 Oct 2026, CAP-D1)."""
+    if dom in (S.Integers, S.Naturals, S.Naturals0):
+        return sp.Contains(v, dom, evaluate=False)
+    if isinstance(dom, sp.Range):
+        if dom.step not in (1, -1):
+            raise _DomainUntranslatable(str(dom))
+        lo, hi = (dom.inf, dom.sup)
+        parts = [sp.Contains(v, S.Integers, evaluate=False)]
+        if lo != -sp.oo:
+            parts.append(sp.Ge(v, lo, evaluate=False))
+        if hi != sp.oo:
+            parts.append(sp.Le(v, hi, evaluate=False))
+        return sp.And(*parts)
     if dom == S.Reals:
         return sp.true
     if dom is S.EmptySet:
@@ -115,12 +168,10 @@ def _set_as_relation(dom, v):
     if isinstance(dom, sp.Union):
         return sp.Or(*[_set_as_relation(a, v) for a in dom.args])
     if isinstance(dom, sp.Intersection):
-        return sp.And(*[_set_as_relation(a, v) for a in dom.args if a not in (S.Integers,)])
+        return sp.And(*[_set_as_relation(a, v) for a in dom.args])
     if isinstance(dom, sp.Complement) and isinstance(dom.args[1], sp.FiniteSet):
         return sp.And(_set_as_relation(dom.args[0], v),
                       *[sp.Ne(v, p, evaluate=False) for p in dom.args[1].args])
-    if dom in (S.Integers,):
-        return sp.true
     raise _DomainUntranslatable(str(dom))
 
 
@@ -210,14 +261,21 @@ def verify(ir, solution, ctx: Ctx):
                 return err
             if isinstance(claimed, sp.Set) or (hasattr(claimed, "free_symbols") and claimed.free_symbols):
                 return unknown(LAYER, "claimed_not_scalar")
+            from ..equiv.conventions import odd_root_powers
+            if odd_root_powers(claimed):
+                # (-8)**(1/3): the real root or the principal value. SymPy reads Eq(x, 2*(-1)**(1/3))
+                # as False for a real x before z3 sees it, and the real root -2 was refuted (part d4a)
+                return unknown(LAYER, "claimed_value_is_a_convention")
             options = None
             if ir.options:
                 options = {}
                 for letter in ir.options:
                     try:
-                        options[letter] = ctx.option_value(letter)
+                        options[letter] = ctx.option_as_claim(letter)      # the claim's reader (G1RK-1)
                     except Exception:
                         options[letter] = None
+                    if options[letter] is not None and odd_root_powers(options[letter]):
+                        options[letter] = None          # a convention: not read (see the claim above)
             try:
                 cons = _constraints(ctx)
             except _DomainUntranslatable as e:
@@ -227,7 +285,10 @@ def verify(ir, solution, ctx: Ctx):
                 for c in definedness_conditions(target, v):
                     if c not in cons:
                         cons.append(c)
-            cert = uniqueness_certificate(cons, target, syms_info, claimed, options)
+            carry = bool(options) and any(v is None and _leading_number(ir.options[k]) is not None
+                                          and sp.simplify(_leading_number(ir.options[k]) - claimed) == 0
+                                          for k, v in options.items())
+            cert = uniqueness_certificate(cons, target, syms_info, claimed, options, unread_carry=carry)
             ev.update({"target": str(target), "claimed": str(claimed), "constraints": [str(c) for c in cons], "z3": cert})
         else:  # solve_equation: each claimed root sat; all-other unsat (completeness by z3)
             var = ctx.sym(p.get("var", "x"))
@@ -308,7 +369,9 @@ def verify(ir, solution, ctx: Ctx):
     if st == "ir_incomplete":
         return unknown(LAYER, "ir_incomplete_multiple_options_sat", t.ms, ev, flags=["ir_incomplete"])
     if st == "ir_inconsistent":
-        return unknown(LAYER, "ir_inconsistent_no_option_sat", t.ms, ev, flags=["ir_inconsistent"])
+        why = "ir_inconsistent_no_option_sat" if ev["z3"].get("sat_options") == [] and ir.options \
+            else "ir_inconsistent_givens_without_an_instance"
+        return unknown(LAYER, why, t.ms, ev, flags=["ir_inconsistent"])
     if st == "not_unique":
         return unknown(LAYER, "target_not_unique", t.ms, ev, flags=["ir_incomplete"])
     if st == "parameters_not_pinned":

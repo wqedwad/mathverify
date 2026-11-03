@@ -1,0 +1,18 @@
+# d4c saldırı notları (bağımsız gözden geçirici, 2 Ekim 2026)
+- kurulum: yeni=ad50fbc, eski=0ed77e2 (archive). sondalar sonda/.
+- BULGU-1 (kritik, haksız ret): dar tepe (sech², gauss) iki karelemede de kaçıyor, mpmath hata tahmini ~0 ama >0,
+  genişlik = 10^-(dps-10)·∫|f| → doğru değer dışlanıyor. enc.py: 51/100, enc2.py: 36 doğru değer dışlandı.
+  verify: dint 'sin x + 2 + sech²(10^6(x-√2/2))' doğru kesin değer → INCORRECT (yeni ve eski);
+  step 'Integral(x²+10^4 sech²(10^4(x-1/3)),(x,0,1)) = 1/3+tanh(20000/3)+tanh(10000/3)' → refuted, evaluate+step INCORRECT.
+- sertifika (cert.py, 50 durum): yanlış sertifika yok. ∫₀¹ (x² sin(1/x²))' = sin 1 (koşullu improper) kabul — gelenek tutarlı.
+- ıraksak 'oo' iddiaları (c_div.py): haksız ret yok.
+- BULGU-2 (d4c getirdi): sonsuz aralıkta zarf (quad_breakpoints end() ile açıldı) tepeyi kaçırıyor:
+  dint 'e^-x + 10^4 sech²(10^4(x-1/3))' [0,oo) doğru '2 + tanh(10^4/3)' → INCORRECT (eski UNKNOWN);
+  dint 'e^-x² + sech²(10^4(x-1/3))' R doğru '√π + 2/10^4' → INCORRECT (eski UNKNOWN); adım hâlleri refuted (eski unknown).
+  Önceden var, d4c düzeltmedi: adım '∫_R e^{-(x-100)²} = √π', '∫_R x² e^{-(x-60)²/2} = 3601√(2π)' refuted, çözüm INCORRECT
+  (zarf: TS 1.96e-1233, GL 7e-2212 'uyuşuyor', genişlik 2e-1230).
+- BULGU-3 (d4c getirdi): dint rel_tol bildirilmiş, SymPy kesin değeri yok → excluded() toleransı yok sayıyor:
+  ∫₀¹ sin(sin x) claim 0.4306 rel_tol 1e-3 → INCORRECT (eski CORRECT; doğru: UNKNOWN). e^cos x claim 2.3416 tol 1e-4 aynı.
+- açı/üstel üreteç (c_angle.py, 30 durum): yanlış sıfır yok. kapsama (c_ident/c_slow): INCORRECT yok; 5 doğru özdeşlik
+  CORRECT→UNKNOWN (Gudermann tipi, log(e^x+e^-x)).
+- uzun toplam (c_hang.py, 10 durum): takılma yok (en uzun 41 s).

@@ -7,6 +7,7 @@ conditions of the ORIGINAL expression, and (c) the original relation itself.
 """
 from __future__ import annotations
 
+import functools
 import itertools
 import threading
 from typing import Any
@@ -19,12 +20,89 @@ from ..equiv.numeric import (num_equal, to_mp, certified_sign, certified_integer
 from ..equiv.symbolic import sym_equal
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
+from ..sandbox.exactsets import _hull, at_risk, exact_solveset
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied, condition_unsolved
 
 LAYER = "certify.domain"
 
 
 # ---------------------------------------------------------------------------
+def _index_symbols(n) -> dict:
+    """The index of a Sum/Product read as what it is: an integer, of the sign its numeric bound gives
+    (k >= 0 for a lower bound 0, k >= 1 for 1). Read as a real number, the term a**k asked a > 0 (a real
+    power), a condition on the problem's symbol that no index needs: the root -1/2 of
+    Sum(x**n, (n, 0, oo)) = 2/3 was dropped and {-1/2} refuted, and with a**2 = 1/4 only a = 1/2 was
+    left, so Sum(a**k, (k, 0, oo)) = 2 was certified (local quality, 16 Oct 2026). A backward range
+    runs over other indices, but its value there is a convention (ForwardSpans) and decides nothing."""
+    out = {}
+    for lim in n.limits:
+        v = lim[0]
+        if not isinstance(v, sp.Symbol):
+            continue
+        kw: dict[str, bool] = {"integer": True}
+        if len(lim) == 3:
+            lo, hi = _evaluated(lim[1]), _evaluated(lim[2])
+            if lo.is_Integer and lo > 0:
+                kw["positive"] = True
+            elif lo.is_Integer and lo == 0:
+                kw["nonnegative"] = True
+            elif hi.is_Integer and hi < 0 and not lo.free_symbols:
+                kw["negative"] = True
+            elif hi.is_Integer and hi == 0 and not lo.free_symbols:
+                kw["nonpositive"] = True
+        out[v] = sp.Symbol(v.name, **kw)
+    return out
+
+
+def with_signed_indices(e):
+    """`e` with the index of every Sum/Product renamed to the integer of its range (`_index_symbols`): the
+    same value (every term has its index in the range), which SymPy's evalf reads where it could not read
+    the parser's plain integer index (Σ_{k>=0} 0**k/k!: no number for k an integer, 1 for k >= 0)."""
+    if not isinstance(e, sp.Basic):
+        return e
+    reps = {}
+    for n in sp.preorder_traversal(e):
+        if isinstance(n, (sp.Sum, sp.Product)) and n not in reps:
+            plain = _index_symbols(n)
+            if plain:
+                reps[n] = n.xreplace(plain)
+    return e.xreplace(reps) if reps else e
+
+
+def _zero_powers_in_range(n, body, plain) -> list:
+    """0**0 inside a Sum/Product: the base b of a power b**e(k), b free of the indices, is a zero_power
+    convention point when e vanishes at an index of the range, or may (a symbolic bound, an exponent that
+    is not linear in one index). Σ_{k=0}^{∞} a**k at a = 0 is 0**0 + 0 + …: 1 or undefined (part d4a);
+    read on an integer index the term has no condition left to say so."""
+    out: list = []
+    idx = set(plain.values())
+    outer = n.free_symbols
+    lims = {plain[lim[0]]: lim for lim in n.limits if lim[0] in plain and len(lim) == 3}
+    for p in sp.preorder_traversal(body):
+        if not isinstance(p, sp.Pow):
+            continue
+        b, e = p.args
+        ks = e.free_symbols & idx
+        if not ks or (b.free_symbols & idx) or not b.free_symbols or b.is_zero is False or e.is_zero is False:
+            continue
+        if not b.free_symbols <= outer:
+            continue                  # the variable of an inner binder (Σ_k ∫_1^2 t**k dt): that binder's own reading
+        if len(ks) == 1 and next(iter(ks)) in lims and e.is_polynomial(*ks):
+            k = next(iter(ks))
+            poly = sp.Poly(e, k)
+            if poly.degree() == 1 and not (set(poly.all_coeffs()[0].free_symbols)
+                                           | set(poly.all_coeffs()[1].free_symbols)):
+                k0 = -poly.all_coeffs()[1] / poly.all_coeffs()[0]
+                lo, hi = _evaluated(lims[k][1]), _evaluated(lims[k][2])
+                if k0.is_integer is False or (k0 - lo).is_extended_negative is True \
+                        or (hi - k0).is_extended_negative is True:
+                    continue
+        c = sp.Contains(b, ZERO_POWER_BASE)
+        if c not in out:
+            out.append(c)
+    return out
+
+
 def _outer_nodes(e, var, add):
     """The nodes of `e` in preorder, a range binder's body excepted: its conditions are taken from
     `definedness_conditions` of the body, and those on the bound variable are dropped (they hold on
@@ -35,6 +113,11 @@ def _outer_nodes(e, var, add):
     stack = [e]
     while stack:
         n = stack.pop()
+        if isinstance(n, (list, tuple)) or (isinstance(n, sp.MatrixBase) and not isinstance(n, sp.Basic)):
+            # a bracketed text ("[1/(1/0), 1]") is a Python list inside the as-written Tuple, a Matrix is no
+            # Basic: their elements are expressions too (fourth audit, CAP-F1; review of d4f, YO-2)
+            stack.extend(reversed(list(n)))
+            continue
         if isinstance(n, (sp.Integral, sp.Sum, sp.Product)) or isinstance(n, sp.Limit):
             if isinstance(n, sp.Limit):
                 body, bound, outer = n.args[0], {n.args[1]}, [n.args[2]]
@@ -47,16 +130,33 @@ def _outer_nodes(e, var, add):
             # read as defined nowhere and the empty solution set of y + ∫… = 2/3 certified (V16,
             # 30 Sep 2026). Conditions on the bound variables are decided by _binder_conditions.
             # (Symbols, not Dummies: an inner binder of the body keeps one cache key across readings.)
-            plain = {v: sp.Symbol(v.name) for v in bound if isinstance(v, sp.Symbol)}
+            # A Sum/Product index is an integer of its range (`_index_symbols`).
+            if isinstance(n, (sp.Sum, sp.Product)):
+                plain = _index_symbols(n)
+            else:
+                plain = {v: sp.Symbol(v.name) for v in bound if isinstance(v, sp.Symbol)}
             with sp.evaluate(False):
                 body = body.xreplace(plain)
             hidden = bound | set(plain.values())
             for c in definedness_conditions(body, plain.get(var, var)):
                 if not (getattr(c, "free_symbols", set()) & hidden):
                     add(c)
+            if isinstance(n, (sp.Sum, sp.Product)):
+                for c in _zero_powers_in_range(n, body, plain):
+                    add(c)
             for c in _binder_conditions(n, var):
                 add(c)
             stack.extend(reversed(outer))
+            continue
+        if isinstance(n, sp.Subs):
+            # at()/Subs: the body is read at its point, not on its bound variable (see _subs_conditions);
+            # its points are walked as usual
+            _subs_conditions(n, var, add)
+            stack.extend(reversed(n.point.args))
+            continue
+        if isinstance(n, sp.Piecewise):
+            # its branches are read where they are taken (`_piecewise_conditions`), not each everywhere
+            _piecewise_conditions(n, var, add)
             continue
         yield n
         if isinstance(n, sp.Basic):
@@ -76,6 +176,39 @@ DEFINEDNESS_UNDECIDED = Ne(definedness_undecided(), 0)
 
 def is_undecided(c) -> bool:
     return c == DEFINEDNESS_UNDECIDED
+
+
+class value_missing(sp.Function):  # noqa: N801 - a marker read by is_no_value
+    """The value of a closed operation that has none as written: see NO_VALUE."""
+    nargs = 0
+
+
+# A condition that stands for "a closed operation of the expression has no value as written": n! off the
+# natural numbers ((-1)!, (1/2)!), a pole of Γ, SymPy's zoo or nan written out. It comes with `false` (the
+# expression is undefined) and says more: an enclosing operation may still be given a value by a reading
+# the curriculum does not have (1/Γ is entire, so 1/(-1)! = 0; P(2, 3) = 2!/(-1)! = 0 counts nothing; SymPy
+# folds 1/zoo to 0), so the expression is not "defined nowhere" either (no solution, an empty domain): the
+# problem is undefined as written and every caller abstains (`Ctx.written_undefined`). Read as a plain
+# `false`, x + 1/(-1)! = 2 would have its empty solution set certified, and the right answer under 1/Γ is
+# {2} (fourth audit, CAP-F1). Closed and left standing by SymPy, like DEFINEDNESS_UNDECIDED.
+NO_VALUE = Ne(value_missing(), 0)
+
+
+def is_no_value(c) -> bool:
+    return c == NO_VALUE
+
+
+def tree_free_symbols(e) -> set:
+    """The free symbols of an as-written tree, whose Tuple may hold a Python list (a bracketed text)."""
+    if isinstance(e, (list, tuple)):
+        return set().union(*(tree_free_symbols(a) for a in e))
+    if isinstance(e, sp.Tuple):
+        return set().union(*(tree_free_symbols(a) for a in e.args))
+    return set(getattr(e, "free_symbols", None) or ())
+
+
+# Γ(z) of a real z has a value off its poles 0, -1, -2, ... (latex2sympy reads \Gamma and \gamma as Γ)
+_GAMMA_DOMAIN = sp.Complement(S.Reals, sp.Range(-oo, 1))
 
 
 class ForwardSpans(sp.Set):
@@ -107,6 +240,238 @@ FORWARD_SPANS = ForwardSpans()
 def is_range_span(c) -> bool:
     """Is `c` the range condition of a Sum/Product (see ForwardSpans)?"""
     return isinstance(c, sp.Contains) and c.args[1] == FORWARD_SPANS
+
+
+class Convention(sp.Set):
+    """The values of an operand where a written operation has the curriculum's one value; elsewhere its
+    value is a convention, not the curriculum's, and such a point is neither in nor out, like a reversed
+    Sum range (ForwardSpans, DECISIONS §80; fourth audit of 1 Oct 2026, part d4a):
+
+    * `odd_root`: the base of b**(p/q), q odd, is >= 0. At a negative base the power is the real root
+      (∛(-8) = -2) or the principal complex value (1 + √3 i); (-8)**(1/3) was certified both ways. The
+      written roots (`cbrt`, `root(·, 3)`, `real_root`, `\\sqrt[3]{}`, ∛) are real roots and parse to
+      sign(b)·|b|**(1/q) (normalize.parse), whose base is never negative.
+    * `zero_power`: the base of b**0 is not 0 (0**0 is 1 or undefined).
+    * `binomial`: r and n - r of C(n, r) are natural numbers with 0 (0 <= r <= n integers); outside, the
+      generalized binomial (C(-2, 2) = 3) and the 0 above n are extensions the curriculum does not have.
+    * `mod_divisor`: the divisor of Mod is positive; below it floored, truncated and Euclidean
+      remainders differ (Mod(7, -5) is -3, 2 or 2).
+    * `integer_bound`: a Sum/Product bound on the problem's symbols is an integer. At a non-integer bound
+      SymPy steps from the lower one (Σ_{k=n}^{n+2} k = 3n + 3 at every real n), the index reading runs
+      over the integers between them (3 at n = 1/2) and the curriculum has no such sum: the value is a
+      convention with another value AND "undefined" among its readings. Held to the integers like an
+      undefined point, a claim equal to the sum on ℤ alone (3n + 3 + sin(πn)) was CORRECT and the root
+      7/3 of Σ_{k=x}^{x+2} k = 10 was dropped, refuting {7/3} and the step 3x + 3 = 10 (review of d4f,
+      YO-3, RK-F1). No comparison is certified while such points exist (`Ctx.integer_bound_region`), and
+      none refutes a claim there.
+    * `negative_base`: the exponent of c**e, c a negative number and e not a number, is an integer. Elsewhere
+      the real reading has no value or the real root ((-1)**(1/3) = -1), the principal one a complex value
+      ((-1)**x = e^(i*pi*x)): x + 0*(-2)**x had the derivative 1 at 1/2, (-1)**x the limit 1 at 0 and
+      x + (-1)**x - (-1)**x the primitive x certified (attack on d4e, YO-5).
+    * `origin`: the operand (y**2 + x**2 of atan2(y, x), u of arg(u)) is not 0: atan2(0, 0) and arg(0)
+      are undefined in mathematics and 0 in some conventions (round 8 of part d4b, YO-1).
+    * `real_power`: the operand is the pair (b, e) of a power b**e whose exponent is a variable of the base's
+      (x**x, (x - 4)**x): where b > 0 it has its one value; elsewhere its definedness is read from the exact
+      values of b and e at the point, BEFORE the power is formed ((x**x).subs(x, 0) is SymPy's 1): an integer
+      e and b != 0, or b = 0 and e a positive rational, have the one value ((-2)**(-2) = 1/4, 0**2 = 0); 0**0,
+      a negative b at a non-integer e (the real root, the principal value or none) are left undecided. The
+      interval rule b > 0 read at a point dropped -2 from {-2, 2}, the solution of (x + 2)(x - 2) = 0 with
+      x**x (2 + sin x) > 0 on {-3, ..., 3}, and certified {2} (round 9 attack on part d4b, RK-1). `zero_power`
+      covers 0**e of an irrational e > 0 too (0**sqrt(2): 0 by the strict rule, undefined as written).
+
+    As `Contains(operand, CONVENTION)` the condition holds where the operand is proved inside and is
+    left standing (undecided) elsewhere, never false: `decide_membership` and `relation_holds_at` leave
+    it undecided at such a point, `closed_condition_undecided` makes every caller abstain on a closed
+    one, and `Ctx.domain_for` keeps only the points where every one holds while `Ctx.convention_region`
+    lists the others, where a candidate is neither kept nor dropped."""
+    is_empty = False
+    is_finite_set = False
+
+    def __new__(cls, kind):
+        return sp.Basic.__new__(cls, kind if isinstance(kind, sp.core.symbol.Str) else sp.core.symbol.Str(kind))
+
+    @property
+    def kind(self) -> str:
+        return str(self.args[0])
+
+    def _contains(self, other):
+        if self.kind == "real_power":
+            return _real_power_holds(other)
+        if not isinstance(other, sp.Expr):
+            return None
+        k = self.kind
+        if k == "odd_root":
+            ok = other.is_extended_nonnegative
+        elif k == "zero_power":
+            # ∞⁰ is an indeterminate form like 0**0: oo**0 = 1 was certified (review of d4f, YO-7)
+            ok = other.is_zero is False and other.is_infinite is False
+        elif k == "origin":
+            ok = other.is_zero is False
+        elif k == "binomial":
+            ok = other.is_integer is True and other.is_nonnegative is True
+        elif k == "mod_divisor":
+            ok = other.is_extended_positive
+        elif k in ("integer_bound", "negative_base"):
+            ok = other.is_integer
+        else:
+            ok = None
+        return sp.true if ok is True else None      # undecided, never false
+
+    def _eval_is_superset(self, other):
+        nonzero = sp.Union(Interval.open(-oo, 0), Interval.open(0, oo))
+        inside = {"odd_root": Interval(0, oo), "binomial": S.Naturals0, "mod_divisor": Interval.open(0, oo),
+                  "zero_power": nonzero, "origin": nonzero, "negative_base": S.Integers,
+                  "integer_bound": S.Integers}.get(self.kind)
+        try:
+            return True if inside is not None and other.is_subset(inside) is True else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _sympystr(self, printer):
+        return f"Convention({self.kind})"
+
+
+ODD_ROOT_BASE = Convention("odd_root")
+ZERO_POWER_BASE = Convention("zero_power")
+BINOMIAL_ARGUMENT = Convention("binomial")
+MOD_DIVISOR = Convention("mod_divisor")
+INTEGER_BOUND = Convention("integer_bound")
+NEGATIVE_BASE_EXPONENT = Convention("negative_base")
+ORIGIN = Convention("origin")
+REAL_POWER = Convention("real_power")
+
+
+def _real_power_holds(pair):
+    """`Convention` `real_power` at the pair (b, e) of a power's base and exponent: true where b**e certainly has its
+    one real value, None (undecided) elsewhere, never false (see `Convention`)."""
+    if not isinstance(pair, sp.Tuple) or len(pair) != 2:
+        return None
+    b, e = pair
+    if not (isinstance(b, sp.Expr) and isinstance(e, sp.Expr)) or e.is_extended_real is not True:
+        return None
+    if b.is_extended_positive is True:
+        ok = True
+    elif b.is_extended_real is True and b.is_zero is False:
+        ok = e.is_integer is True
+    elif b.is_zero is True:
+        ok = e.is_rational is True and e.is_extended_positive is True
+    else:
+        ok = False
+    return sp.true if ok else None
+
+
+def is_convention(c) -> bool:
+    """Is `c` a condition whose failure makes the value a convention rather than undefined: a Sum/Product
+    range (ForwardSpans) or one of the Convention sets?"""
+    return isinstance(c, sp.Contains) and (c.args[1] == FORWARD_SPANS or isinstance(c.args[1], Convention))
+
+
+def is_value_convention(c) -> bool:
+    """Is `c` a convention condition whose other reading is ANOTHER VALUE (a Sum range: Karr's sum or the
+    empty one; an odd root: the real root or the principal value; Mod: floored or Euclidean), not
+    "undefined" (0**0, C(n, r) outside 0 <= r <= n)? A claim refuted with SymPy's value at such a point
+    may be true under the other reading; where the other reading is "undefined" the claim is not true
+    either, so a refutation stands (an undefined claim is no true step, `steps.deterministic`)."""
+    return is_convention(c) and (c.args[1] == FORWARD_SPANS
+                                 or c.args[1].kind in ("odd_root", "mod_divisor", "negative_base", "origin",
+                                                       "integer_bound", "real_power"))
+
+
+def is_undefined_convention(c) -> bool:
+    """Is `c` a convention condition whose other reading is "undefined", not another value: 0**0 and C(n, r)
+    outside 0 <= r <= n (SymPy's value: 1 and 0)?"""
+    return is_convention(c) and c.args[1] != FORWARD_SPANS and not is_value_convention(c)
+
+
+def is_integer_bound(c) -> bool:
+    """Is `c` the condition that a Sum/Product bound is an integer (`Convention` `integer_bound`)? Its other
+    readings are another value AND "undefined": a claim is neither certified nor refuted where it fails."""
+    return isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) and c.args[1].kind == "integer_bound"
+
+
+def convention_split(c, var) -> tuple[sp.Set, sp.Set]:
+    """(the values of `var` where the convention condition `c` holds, those where it does not), over ℝ.
+    A condition this cannot split gives (ℝ, ℝ): every point is undecided. A closed one (a symbol a given
+    fixes, read as its value) holds everywhere or nowhere."""
+    e, s = c.args
+    kind = "range" if s == FORWARD_SPANS else s.kind
+    # guarded (sandbox.exactsets): a trigonometric base (sin(x)**(1/3)) read on one period of ℝ split the
+    # line wrongly; unsolved, it stays a ConditionSet and every point is undecided below
+    solveset = exact_solveset
+    try:
+        if var not in e.free_symbols:
+            held = sp.Contains(e, s)
+            return (S.Reals, S.EmptySet) if held is sp.true else (S.EmptySet, S.Reals)
+        if kind in ("range", "odd_root"):
+            fwd, back = solveset(sp.Ge(e, 0), var, S.Reals), solveset(sp.Lt(e, 0), var, S.Reals)
+        elif kind == "mod_divisor":
+            fwd, back = solveset(sp.Gt(e, 0), var, S.Reals), solveset(sp.Le(e, 0), var, S.Reals)
+        elif kind in ("zero_power", "origin"):
+            fwd, back = solveset(Ne(e, 0), var, S.Reals), solveset(Eq(e, 0), var, S.Reals)
+        elif kind == "negative_base":
+            if e != var:
+                return S.Reals, S.Reals
+            fwd, back = S.Integers, sp.Complement(S.Reals, S.Integers)
+        elif kind == "real_power":
+            # the base's sign splits the line; a point of `back` may still hold (an integer exponent): the
+            # caller reads such a point exactly where `back` is finite (Ctx._forward_ranges)
+            base = e[0]
+            fwd, back = solveset(sp.Gt(base, 0), var, S.Reals), solveset(sp.Le(base, 0), var, S.Reals)
+        elif kind == "binomial":
+            # e = ±var + k with k an integer: an integer exactly where var is one
+            k = e - var if (e - var).free_symbols == set() else e + var
+            if k.free_symbols or k.is_integer is not True:
+                return S.Reals, S.Reals
+            fwd = sp.Intersection(solveset(sp.Ge(e, 0), var, S.Reals), S.Integers)
+            back = sp.Complement(S.Reals, fwd)
+        elif kind == "integer_bound":
+            # e = a*var + b, a and b rational: an integer exactly on the progression (m - b)/a, m in Z
+            a, b = sp.diff(e, var), e.xreplace({var: S.Zero})
+            if not (a.is_Rational and a != 0 and b.is_Rational) or sp.expand(e - a * var - b) != 0:
+                # any other bound: an integer-valued polynomial (n**2, n(n + 1)/2: `_integer_valued`) is an integer
+                # at every integer var, and the rest is left undecided (n**2 at n = √2 too); otherwise (sqrt(n),
+                # n**2/2) no point is proved to read it as an integer, so the domain keeps none and every point is
+                # the convention's. Kept whole (ℝ, ℝ), a comparison on it refuted 3n² + 3 + sin(πn²) for
+                # Σ_{k=n²}^{n²+2} k at a point where n² is no integer (attack on d4f round 2, A-RK-1)
+                if _integer_valued(e, var):
+                    return S.Integers, sp.Complement(S.Reals, S.Integers)
+                return S.EmptySet, S.Reals
+            t = sp.Dummy("m", integer=True)
+            fwd = S.Integers if abs(a) == 1 and b.is_integer else sp.imageset(sp.Lambda(t, (t - b) / a), S.Integers)
+            back = sp.Complement(S.Reals, fwd)
+        else:
+            return S.Reals, S.Reals
+    except Exception:  # noqa: BLE001
+        return S.Reals, S.Reals
+    if fwd.has(sp.ConditionSet) or back.has(sp.ConditionSet):
+        return S.Reals, S.Reals
+    return fwd, back
+
+
+# where a convention condition on the operand u may fail (`convention_split`'s `back`), by kind; an integer exponent
+# or bound and a binomial argument fail between the integers, on every piece of positive length (a Sum's range on the
+# variable comes with its integer bound)
+_MAY_FAIL = {"odd_root": lambda u: sp.Lt(u, 0), "mod_divisor": lambda u: sp.Le(u, 0), "zero_power": lambda u: Eq(u, 0),
+             "origin": lambda u: Eq(u, 0), "real_power": lambda u: sp.Le(u[0], 0)}
+
+
+def convention_null_on(c, var, region) -> bool:
+    """Does the convention condition `c` on `var` (`is_convention`) fail, or stay undecided, at finitely many points of
+    `region` (an integral's [a, b]) at most, for certain (the set exact, sandbox.exactsets)? An integral does not read
+    its integrand on a finite set, where it is an improper integral (the isolated points of `calculus.
+    integrand_undefined_on_a_subinterval`): ∫_0^1 x**x dx, ∫_0^1 x**sqrt(2) dx and ∫_{-1}^{1} x**0 dx are one number
+    whatever 0**0 and 0**sqrt(2) are, and the wrong claim 100 for the first was UNKNOWN (merge of d4b round 10 with d4c
+    round 4). A piece of positive length where the convention fails (x**x on (-1, 0)) is no null set: the integral
+    has two readings there. The operand's own poles are its definedness conditions, not this one's."""
+    st = c.args[1] if isinstance(c, sp.Contains) else None
+    fails = _MAY_FAIL.get(st.kind) if isinstance(st, Convention) else None
+    if fails is None:
+        return False
+    try:
+        pts = exact_solveset(fails(c.args[0]), var, region)
+    except Exception:  # noqa: BLE001 - a set not found exactly proves nothing
+        return False
+    return isinstance(pts, (sp.FiniteSet, type(S.EmptySet)))
 
 
 # The index values of a Sum/Product checked one by one, and the work one top-level reading may spend
@@ -148,12 +513,63 @@ def _named_conditions(body, bound, var):
     return [c for c in definedness_conditions(b, var) if getattr(c, "free_symbols", set()) & dummies], plain
 
 
+def finite_points(region, limit: int = 400):
+    """`region` as a FiniteSet when it is one of at most `limit` points (a FiniteSet, or a finite Range: the
+    integers -3 <= x <= -1 are Range(-3, 0)), else None."""
+    if isinstance(region, sp.FiniteSet):
+        return region if len(region) <= limit else None
+    if isinstance(region, sp.Range):
+        try:
+            if region.is_finite_set is True and int(region.size) <= limit:
+                return sp.FiniteSet(*region)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 def _violations(c, d, region):
     """Where in `region` the condition `c` on `d` fails, computed in the sandbox under a time limit;
     None when that is not known exactly (solveset over a Range of a transcendental condition did not
     return, review of 30 Sep 2026)."""
     if not _spend(_SOLVE_COST):
         return None
+    if isinstance(c, sp.Contains) and isinstance(c.args[1], Convention):
+        # where the value is a convention over the region (C(n, k) with k past n): the binder is
+        # then undecided, never undefined (_range_conditions reads only a failing term as undefined)
+        e, kind = c.args[0], c.args[1].kind
+        if kind == "integer_bound":
+            # an inner bound on an outer index: over integers an integer-valued polynomial is an integer
+            return S.EmptySet if region.is_subset(S.Integers) is True and _integer_valued(e, d) else None
+        if kind == "binomial":
+            # over integers an argument ±d + k (k an integer) is an integer: only its sign is asked
+            k = e - d if (e - d).free_symbols == set() else e + d
+            if k.free_symbols or k.is_integer is not True or region.is_subset(S.Integers) is not True:
+                return None
+            bad = sp.Lt(e, 0)
+        elif kind == "negative_base":
+            # an exponent that is an integer at every index (k, 2k + 1 over a Range): no convention point
+            if region.is_subset(S.Integers) is True and _integer_valued(e, d):
+                return S.EmptySet
+            if e != d:
+                return None
+            out = sp.Complement(region, S.Integers)
+            return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
+        elif kind == "real_power":
+            # x**x: each point of a finite region read exactly (an integer exponent of a nonzero base holds);
+            # elsewhere the base's sign (RK-1)
+            pts = finite_points(region)
+            if pts is not None:
+                return sp.FiniteSet(*[q for q in pts.args if relation_holds_at(c, d, q) is not True])
+            bad = sp.Le(e[0], 0)
+        else:
+            bad = {"odd_root": sp.Lt(e, 0), "zero_power": Eq(e, 0), "mod_divisor": sp.Le(e, 0),
+                   "origin": Eq(e, 0)}.get(kind)
+        if bad is None:
+            return None
+        r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
+        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+            return None
+        return r.value
     if isinstance(c, sp.Contains):
         # a factorial, binomial or gcd argument's set: the argument's values over the region lie in it
         # (1/(k - 1)! from k = 1 was undecided: Not(Contains) is no relation solveset takes)
@@ -170,6 +586,18 @@ def _violations(c, d, region):
             except Exception:  # noqa: BLE001
                 return None
             return None if isinstance(out, (sp.Complement, sp.ConditionSet)) else out
+        # over integers a polynomial in d with integer coefficients (x - 2, 2x - 3) is an integer: only its
+        # sign is asked. (x - 2)! over the positive integers fails at x = 1 alone, and its limit at oo reads
+        # only the tail (G14)
+        e, s = c.args
+        if s in (S.Naturals0, S.Naturals, S.Integers) and region.is_subset(S.Integers) is True \
+                and _integer_valued(e, d):
+            if s == S.Integers:
+                return S.EmptySet
+            bad = sp.Lt(e, 0 if s == S.Naturals0 else 1)
+            r = sb_run("mathverify.sandbox.ops:solveset_in", bad, d, region, timeout=_SOLVE_TIMEOUT)
+            if r.ok and isinstance(r.value, sp.Set) and not r.value.has(sp.ConditionSet):
+                return r.value
         return None
     bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
     # solved for a variable with the facts of the region (an index is an integer, nonnegative on
@@ -200,17 +628,39 @@ def _violations(c, d, region):
     return r.value
 
 
-def _undefined_at(body, index_values: dict, var) -> bool | None:
-    """The term of a Sum/Product at concrete index values, read as written: False when one of its
-    conditions fails there (the term itself is undefined), None otherwise. Only this makes a sum
-    undefined: a condition read on the symbolic body may be merely sufficient (a real power of a
-    symbolic exponent asks base > 0, and (-1)**1 is defined), and turned into `false` it made
-    x + Σ_{k=1}^{3} (-k)**k = 0 "defined nowhere" and its empty solution set certified (review of
+def _integer_valued(e, d) -> bool:
+    """Is `e` a polynomial in `d` alone, an integer at every integer `d`? With rational coefficients it is exactly when
+    it is one at deg + 1 consecutive integers (its coefficients in the binomial basis are integers): k*(k + 1)/2 is,
+    and (-1)**(k*(k + 1)/2) was read as a convention (attack on d4e round 3, D4E3-RK-4)."""
+    if e.free_symbols != {d}:
+        return False
+    try:
+        P = sp.Poly(e, d)
+        if not all(a.is_rational is True for a in P.all_coeffs()):
+            return False
+        return all(P.eval(i).is_integer is True for i in range(P.degree() + 1))
+    except Exception:  # noqa: BLE001 - not a polynomial in d
+        return False
+
+
+def _undefined_at(body, index_values: dict, var) -> list[Any] | None:
+    """The term of a Sum/Product at concrete index values, read as written: the conditions of a binder
+    whose term is undefined there (`_undefined_sum`) when one of its conditions fails, None otherwise.
+    Only this makes a sum undefined: a condition read on the symbolic body may be merely sufficient (a
+    real power of a symbolic exponent asks base > 0, and (-1)**1 is defined), and turned into `false` it
+    made x + Σ_{k=1}^{3} (-k)**k = 0 "defined nowhere" and its empty solution set certified (review of
     30 Sep 2026)."""
     with sp.evaluate(False):
         term = body.xreplace(index_values)
     conds = definedness_conditions(term, var)
-    return False if any(c is sp.false for c in conds) else None
+    return _undefined_sum(conds) if any(c is sp.false for c in conds) else None
+
+
+def _undefined_sum(term_conds) -> list[Any]:
+    """The conditions of a Sum/Product with a term undefined at some index: `false`, and NO_VALUE when the
+    term has a closed operation with no value there (Σ_{k=1}^{4} 1/(k - 3)! is 2 under 1/Γ: not "defined
+    nowhere" either, CAP-F1)."""
+    return [sp.false] + ([NO_VALUE] if any(is_no_value(c) for c in term_conds) else [])
 
 
 def _index_region(lo, hi):
@@ -313,9 +763,29 @@ def _outer_index_conditions(conds, i, bounds, idx) -> list[Any] | None:
     return out
 
 
+def _proved_integer(b) -> bool | None:
+    """`b.is_integer`, with a closed bound SymPy leaves undecided proved an integer exactly when it is one
+    (`certified_integer`): ln 8/ln 2 and log_3 3^4 are 3 and 4, and Σ_{k=1}^{ln 8/ln 2} k = 6 was UNKNOWN (attack on
+    d4f round 2, RK-3; the value reading folds log(27, 3) to 3, not these). Never proved not one here."""
+    r = b.is_integer
+    if r is None and not b.free_symbols and certified_integer(_evaluated(b))[0] is True:
+        return True
+    return r
+
+
 def _one_range_conditions(lo, hi) -> list[Any] | None:
-    """The open conditions of one range (see _range_span_conditions); None when it is reversed or
-    not an integer apart for certain, or not read."""
+    """The open conditions of one range (see _range_span_conditions); None when it is reversed, not an
+    integer apart or not on the integers for certain, or not read.
+
+    The finite bounds themselves are integers: bounds an integer apart that are not (Σ_{k=1/2}^{5/2} k)
+    step from the lower one in SymPy (1/2 + 3/2 + 5/2 = 9/2) and run over the integers between them in
+    the index reading (1 + 2 = 3). The value is a convention, and with a = 1/2 the sum Σ_{k=a}^{a+2} k
+    was certified 9/2 and 3 refuted (fourth audit, TAN-10/C1). A bound not proved an integer, or a gap, is
+    held to the integers as a convention: Contains(n, INTEGER_BOUND) on one of them (the gap ties the other),
+    which holds at an integer and is undecided elsewhere, never false. As Contains(n, Z) it dropped the
+    non-integer points like undefined ones (review of d4f, YO-3, RK-F1). A closed one (1/2 written in nested
+    roots) stays standing: undecided, and a step refuted with SymPy's stepping value of it refutes nothing
+    (review of d4f, YO-1)."""
     span = hi - lo + 1
     if span.has(sp.nan, sp.zoo) or span.is_extended_real is False:
         return None
@@ -324,20 +794,28 @@ def _one_range_conditions(lo, hi) -> list[Any] | None:
         if span.is_extended_negative is True:
             return None
         conds.append(sp.Contains(span, FORWARD_SPANS))
-    if not (lo.has(oo, -oo) or hi.has(oo, -oo)):
+    finite = [b for b in (lo, hi) if not b.has(oo, -oo)]
+    if len(finite) == 2:
         gap = hi - lo
         if gap.is_integer is False:
             return None
-        if gap.is_integer is not True:
-            # on the bound itself when the other one is an integer: a domain reads Contains(n, Z)
-            conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, S.Integers))
+        if _proved_integer(gap) is not True:
+            # on the bound itself when the other one is an integer
+            conds.append(sp.Contains(hi if lo.is_Integer else lo if hi.is_Integer else gap, INTEGER_BOUND))
+    whole = [_proved_integer(b) for b in finite]
+    if False in whole:
+        return None
+    if finite and True not in whole:
+        b = next((b for b in finite if isinstance(b, sp.Symbol)), finite[0])
+        conds.append(sp.Contains(b, INTEGER_BOUND))
     out = []
     for c in conds:
         if c is sp.true:
             continue
-        if c is sp.false or not c.free_symbols:
+        if c is sp.false or (not c.free_symbols and not is_integer_bound(c)):
             return None
-        out.append(c)
+        if c not in out:
+            out.append(c)
     return out
 
 
@@ -375,11 +853,10 @@ def _range_conditions(n, var) -> list[Any]:
             for point in itertools.product(*ranges):
                 with sp.evaluate(False):
                     term = n.function.xreplace({v: sp.Integer(i) for v, i in zip(idx, point)})
-                for c in definedness_conditions(term, var):
-                    if c is sp.false:
-                        return [sp.false]
-                    if c not in out:
-                        out.append(c)
+                term_conds = definedness_conditions(term, var)
+                if any(c is sp.false for c in term_conds):
+                    return _undefined_sum(term_conds)
+                out += [c for c in term_conds if c not in out]
             return out
     if len(limits) != 1:
         return [DEFINEDNESS_UNDECIDED]
@@ -398,9 +875,11 @@ def _range_conditions(n, var) -> list[Any]:
             continue
         if exact and bad.is_finite_set is True:
             points = list(itertools.islice(iter(bad), 5))
-            if points and _spend(len(points)) and any(
-                    _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var) is False for i in points):
-                return [sp.false]
+            if points and _spend(len(points)):
+                for i in points:
+                    failed = _undefined_at(n.function, {idx[0]: sp.Integer(i)}, var)
+                    if failed is not None:
+                        return failed
         return [DEFINEDNESS_UNDECIDED]
     return spans
 
@@ -420,13 +899,18 @@ def _declared_span(v):
 def _reachable(a, b):
     """The points [a, b] can cover when a bound is symbolic: the hull of the values the bounds may
     take, open at 0 when only a strict sign reaches it (x > 0 never makes 0 a bound); R when a
-    bound has no declared sign."""
+    bound has no declared sign. An infinite bound reaches out to its end: it counted as no point at all,
+    so ∫_{-oo}^{x} dt/t with x > 0 was read as running inside (0, oo), its point 0 never reached, and
+    the derivative 1/x of that integral, which exists for no x, was certified (fourth audit TAN-07)."""
     parts = []
+    ends = set()
     for v in (a, b):
-        if v.is_number:
-            if not (v.is_real or v in (oo, -oo)):
+        if v in (oo, -oo):
+            ends.add(v)
+        elif v.is_number:
+            if not v.is_real:
                 return S.Reals
-            parts.append(sp.FiniteSet(v) if v not in (oo, -oo) else S.EmptySet)
+            parts.append(sp.FiniteSet(v))
         elif v.is_positive:
             parts.append(Interval.open(0, oo))
         elif v.is_nonnegative:
@@ -438,8 +922,409 @@ def _reachable(a, b):
         else:
             return S.Reals
     u = sp.Union(*parts)
-    lo, hi = u.inf, u.sup
+    lo = -oo if -oo in ends else u.inf
+    hi = oo if oo in ends else u.sup
     return Interval(lo, hi, left_open=u.contains(lo) is not sp.true, right_open=u.contains(hi) is not sp.true)
+
+
+def _bounded_limit(lim) -> bool:
+    """Is `lim`, SymPy's limit of a nonnegative quantity, a finite real number, or an AccumBounds whose upper
+    end is one (|cos t|/(1 + t**2)·t**2 oscillates in [0, 1] at oo: bounded all the same)?"""
+    if isinstance(lim, sp.AccumBounds):
+        return lim.max.is_number and lim.max.is_finite is True and lim.max.is_real is True
+    return isinstance(lim, sp.Expr) and lim.is_number and lim.is_finite is True and lim.is_real is True \
+        and not lim.has(sp.AccumBounds)
+
+
+# periodic functions: a SymPy limit of an expression holding one of them at an argument without a finite limit is no
+# proof (lim t**(3/2)/(1 + t**2*cos(t)**2) at oo is "0", the values at (n + 1/2)*pi grow without bound), and jumps
+_PERIODIC = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
+_JUMPS = (sp.sign, sp.frac, sp.Heaviside, sp.floor, sp.ceiling, sp.Mod, sp.Piecewise, sp.Max, sp.Min)
+
+
+class _NoBound(Exception):
+    pass
+
+
+class _Majorant:
+    """Bounds near a point of the variable s (a positive Dummy: s -> oo, or s -> 0+): `upper(e)` is an M >= |e|,
+    `ub(e)` >= e and `lb(e)` <= e (e real), each `exact` (no periodic function at an argument without a finite
+    limit there, no jump, no symbol but s), so that SymPy's limit of it can be read. An exact part is kept as it
+    is; a periodic factor is bounded by its range (|sin| <= 1), any other symbol p by |p| <= P (a positive Dummy:
+    the bound holds for every value of p) and by its declared sign on the safe side only (lb(a) = 0 for a >= 0), a
+    denominator by a positive lower bound (1 + s**2*cos(s)**2 >= 1). A symbol of declared sign is no exact part:
+    SymPy's limit of 1/((x - 1)**2*s**2 + 1) is read for a generic positive x, and ∫_1^oo dt/((x - 1)**2*t**2 + 1),
+    which diverges at x = 1, was proved to converge (attack on d4e round 3, D4E3-YO-4 and RK-2). An exponential
+    whose exponent is c*r(s), c of proved sign (c < 0 for every value) and r free of every other symbol with
+    r -> oo, is bounded per value: e**(c*r) <= (N/(e*|c|))**N * r**(-N) (e**(-a*t) with a > 0 declared, R7).
+    The parameters are left in s-free factors only (`parameter_free_terms` reads them). Raises _NoBound when no
+    bound is found."""
+
+    _N = 6                         # the power of r an exponential of proved negative rate is bounded by
+
+    def __init__(self, s, point):
+        self.s, self.point = s, point
+        self.unsigned: dict = {}
+        self._safe: dict = {}
+
+    def _limit(self, e):
+        return sp.limit(e, self.s, 0, "+") if self.point == 0 else sp.limit(e, self.s, oo)
+
+    def exact(self, e) -> bool:
+        if e in self._safe:
+            return self._safe[e]
+        ok = not (e.free_symbols - {self.s})
+        if ok:
+            for n in sp.preorder_traversal(e):
+                if self.s not in n.free_symbols:
+                    continue
+                if isinstance(n, _JUMPS):
+                    ok = False
+                    break
+                if isinstance(n, _PERIODIC):
+                    arg = n.args[0]
+                    if not self.exact(arg):
+                        ok = False
+                        break
+                    try:
+                        lim = self._limit(arg)
+                    except Exception:  # noqa: BLE001
+                        lim = None
+                    if not (isinstance(lim, sp.Expr) and lim.is_number and lim.is_finite is True
+                            and lim.is_real is True and not lim.has(sp.AccumBounds)):
+                        ok = False
+                        break
+        self._safe[e] = ok
+        return ok
+
+    def _constant(self, e) -> bool:
+        """Is e free of s, built of other symbols, and finite for every value they may take (by their assumptions)?"""
+        return self.s not in e.free_symbols and bool(e.free_symbols) and e.is_finite is True and e.is_real is True
+
+    def sym_bound(self, sym):
+        if sym.is_real is not True:
+            raise _NoBound(sym)
+        if sym not in self.unsigned:
+            self.unsigned[sym] = sp.Dummy(f"abs_{sym}", positive=True)
+        return self.unsigned[sym]
+
+    def _decaying_exponential(self, arg):
+        """(the per-value bound of the factors c*r of the exponent `arg`, c < 0 for every value of its symbols and r
+        free of them with r -> oo at the point; the rest of the exponent)."""
+        bound, rest = S.One, []
+        for term in sp.Add.make_args(sp.expand(arg)):
+            c, r = term.as_independent(self.s, as_Add=False)
+            if c.free_symbols and self._constant(c) and c.is_negative is True and r.has(self.s) \
+                    and not (r.free_symbols - {self.s}) and self.exact(r):
+                try:
+                    lim = self._limit(r)
+                except Exception:  # noqa: BLE001
+                    lim = None
+                if lim is oo:
+                    bound *= (self._N / (sp.E * (-c))) ** self._N * r ** (-self._N)
+                    continue
+            rest.append(term)
+        return bound, sp.Add(*rest)
+
+    def upper(self, e):
+        """M >= |e|."""
+        if self.exact(e):
+            return sp.Abs(e)
+        if self._constant(e):
+            return sp.Abs(e)                            # a finite number for each value of its symbols
+        if isinstance(e, sp.Symbol):
+            return self.sym_bound(e)
+        if isinstance(e, sp.Add):
+            return sp.Add(*[self.upper(a) for a in e.args])
+        if isinstance(e, sp.Mul):
+            return sp.Mul(*[self.upper(a) for a in e.args])
+        if isinstance(e, sp.Abs):
+            return self.upper(e.args[0])
+        if isinstance(e, (sp.sin, sp.cos, sp.sign, sp.Heaviside, sp.frac)):
+            if e.args[0].is_real is not True:
+                raise _NoBound(e)
+            return S.One
+        if isinstance(e, (sp.floor, sp.ceiling)):
+            return self.upper(e.args[0]) + 1
+        if isinstance(e, sp.exp):
+            bound, rest = self._decaying_exponential(e.args[0])
+            return bound * sp.exp(self.ub(rest))
+        if isinstance(e, sp.Pow):
+            b, x = e.args
+            if not (x.is_number and x.is_real is True):
+                raise _NoBound(e)
+            if x.is_positive:
+                return self.upper(b) ** x
+            return self.lower_abs(b) ** x
+        raise _NoBound(e)
+
+    def lower_abs(self, e):
+        """L with 0 < L <= |e| near the point."""
+        lo = self.lb(e)
+        if self._positive(lo):
+            return lo
+        hi = self.ub(e)
+        if self._positive(-hi):
+            return -hi
+        for v in (lo, -hi):
+            floor = self._polynomial_floor(v)
+            if floor is not None:
+                return floor
+        raise _NoBound(e)
+
+    def _polynomial_floor(self, v):
+        """(c/2)*s**k with v >= (c/2)*s**k near the point for EVERY value of v's other symbols: v a polynomial in s
+        whose leading term (at oo; its lowest one at 0+) is c*s**k, c a positive number, the others' coefficients
+        s-free (a bound P of |x|): s**2 - P**2 >= s**2/2 from some s on, whatever P is. None otherwise."""
+        if self.s not in v.free_symbols:
+            return None
+        try:
+            poly = sp.Poly(v, self.s)
+        except Exception:  # noqa: BLE001 - not a polynomial in s
+            return None
+        terms = poly.terms()
+        if not terms or any(self.s in c.free_symbols for _, c in terms):
+            return None
+        (k,), c = max(terms) if self.point is oo else min(terms)
+        if certified_sign(c) != 1:
+            return None
+        return c / 2 * self.s ** k
+
+    def _positive(self, e) -> bool:
+        if not self.exact(e):
+            return False
+        if e.is_positive is True:
+            return True
+        try:
+            lim = self._limit(e)
+        except Exception:  # noqa: BLE001
+            return False
+        return lim is oo or (isinstance(lim, sp.Expr) and lim.is_number and lim.is_real is True
+                             and not lim.has(sp.AccumBounds) and certified_sign(lim) == 1)
+
+    def _nonnegative(self, e) -> bool:
+        """e >= 0 by its form: an even power, an Abs, a product of such, an exact part SymPy calls nonnegative, an
+        s-free part nonnegative for every value of its symbols (a declared a > 0)."""
+        if isinstance(e, sp.Abs):
+            return True
+        if isinstance(e, sp.Pow) and e.args[1].is_number and e.args[1].is_even is True:
+            return True
+        if isinstance(e, sp.Mul):
+            return all(self._nonnegative(a) for a in e.args)
+        if self.s not in e.free_symbols and e.is_nonnegative is True:
+            return True
+        return self.exact(e) and e.is_nonnegative is True
+
+    def ub(self, e):
+        """U >= e (e real)."""
+        if self.exact(e):
+            return e
+        if self.s not in e.free_symbols and e.is_nonpositive is True:
+            return S.Zero                               # a declared a <= 0: its sign, never its value
+        if isinstance(e, sp.Add):
+            return sp.Add(*[self.ub(a) for a in e.args])
+        if isinstance(e, (sp.sin, sp.cos)):
+            return S.One
+        if isinstance(e, sp.Mul):
+            c, rest = e.as_coeff_Mul()
+            if c != 1 and c.is_real is True and c.is_zero is False:
+                return c * (self.ub(rest) if c.is_positive else self.lb(rest))
+        return self.upper(e)
+
+    def lb(self, e):
+        """L <= e (e real)."""
+        if self.exact(e):
+            return e
+        if isinstance(e, sp.Add):
+            return sp.Add(*[self.lb(a) for a in e.args])
+        if isinstance(e, (sp.sin, sp.cos)):
+            return -S.One
+        if isinstance(e, sp.Mul):
+            c, rest = e.as_coeff_Mul()
+            if c != 1 and c.is_real is True and c.is_zero is False:
+                return c * (self.lb(rest) if c.is_positive else self.ub(rest))
+            if all(self._nonnegative(a) for a in e.args):
+                return sp.Mul(*[self.lb(a) for a in e.args])
+        if self._nonnegative(e):
+            return S.Zero
+        return -self.upper(e)
+
+
+def majorant(g, t, point, side=None):
+    """(M, s): |g(t)| <= M(s) near `point` (oo or -oo; a finite point c from `side`), t = s (oo), -s (-oo), c + s or
+    c - s with s a positive Dummy (s -> oo, or s -> 0+), M free of every periodic function at an argument without a
+    finite limit there and of jumps, its other symbols in s-free factors only (`_Majorant`); (None, s) when no
+    such M is found. A SymPy limit of M's parameter-free terms is read as a proof (`parameter_free_terms`); one of g
+    is not: lim t**(3/2)/(1 + t**2*sin(t)**2) at oo is "0", and the divergent ∫_0^oo dt/(1 + t**2*sin(t)**2) was
+    proved convergent (attack on d4e round 2, YO-1)."""
+    s = sp.Dummy("s", positive=True)
+    if point in (oo, -oo):
+        gs, at = g.xreplace({t: s if point == oo else -s}), oo
+    else:
+        gs, at = g.xreplace({t: point + s if side == "+" else point - s}), S.Zero
+    try:
+        return _Majorant(s, at).upper(gs), s
+    except _NoBound:
+        return None, s
+    except Exception:  # noqa: BLE001 - a bound SymPy cannot form is none
+        return None, s
+
+
+def parameter_free_terms(M, s) -> list | None:
+    """The terms m_i of M = Σ K_i*m_i with each m_i free of every symbol but s and each K_i free of s; None when M has
+    no such form. A majorant's K_i is finite for every value of its symbols by construction (`_Majorant`: an s-free
+    part is kept only when finite, a bound P of |p| and the exponential's constant are). Then M is bounded near a
+    point, for EVERY value of the parameters, when each m_i is: a limit is taken of the m_i alone, never one with a
+    parameter in it, which SymPy reads for a generic value (D4E3-YO-4: lim s**(3/2)/((x - 1)**2*s**2 + 1) is 0, and
+    at x = 1 the integrand is 1)."""
+    try:
+        E = sp.expand(M)
+    except Exception:  # noqa: BLE001
+        return None
+    out = []
+    for term in sp.Add.make_args(E):
+        K, m = term.as_independent(s, as_Add=False)
+        if m.free_symbols - {s}:
+            return None
+        out.append(m)
+    return out
+
+
+def _without_constant_factor(g, t):
+    """g with its t-free factor dropped when that factor is finite for every value of its symbols: the integral of
+    K*g0 converges where that of g0 does (a*sin(t)/t, a > 0: K = a, round 4 RK-7)."""
+    K, g0 = g.as_independent(t, as_Add=False)
+    if K != 1 and K.is_finite is True and K.is_real is True and g0.has(t):
+        return g0
+    return g
+
+
+def decays_at(g, t, end) -> bool:
+    """Worker: is |g(t)| <= C/|t|**p near `end` (±oo) for some p > 1, for EVERY value of g's other symbols? Then
+    ∫ g converges absolutely at that end. Read off a majorant M of |g| (`majorant`: periodic factors bounded by their
+    range, another symbol by its absolute value and its sign on the safe side, so the task's own variable may stand
+    in the integrand: e^(-t)*(x + t), e^(-t)*cos(x*t); round 3 RK-4), split into parameter-free terms
+    (`parameter_free_terms`), each with a bounded limit of s**p * m (p = 2, 3/2, 11/10) or the exponent q of its
+    decay, q = lim -log m/log s > 1 (m = s**(-q + o(1)): t**(-21/20); review of d4e, R7), or, not absolutely, by
+    Dirichlet's test (`_dirichlet_test`: sin(t)/t). A SymPy limit of an oscillating g is no proof (round 3, YO-1),
+    nor one with a parameter in it (round 4, YO-4). False when none is found (a divergent integral, or one these
+    tests cannot prove: sin(t**2), 1/(1 + t**4*sin(t)**2), 1/((x - 1)**2*t**2 + 1))."""
+    g = _without_constant_factor(g, t)
+    m, s = majorant(g, t, end)
+    terms = parameter_free_terms(m, s) if m is not None else None
+    if terms is not None and all(_term_decays(mi, s) for mi in terms):
+        return True
+    return _dirichlet_test(g, t, end)
+
+
+def _term_decays(m, s) -> bool:
+    """Is |m(s)| <= C/s**p for large s, some p > 1 (m free of every symbol but s)?"""
+    for p in (S(2), sp.Rational(3, 2), sp.Rational(11, 10)):
+        if _bounded_limit(sp.limit(s ** p * m, s, oo)):
+            return True
+    q = sp.limit(-sp.log(m) / sp.log(s), s, oo)
+    if q is oo:
+        return True
+    return isinstance(q, sp.Expr) and q.is_number and q.is_real is True and certified_sign(q - 1) == 1
+
+
+def _dirichlet_test(g, t, end) -> bool:
+    """Dirichlet's test at `end` (±oo): g = sin(a*t + b) * h(t) (or cos), a != 0 a number, h free of every function,
+    real out there, tending to 0 and eventually monotone. Then ∫ g converges there, not absolutely: sin(t)/t,
+    cos(t)/sqrt(t). Read as absolute convergence only, the Dirichlet integral was undefined as written and a true step
+    about it went unchecked (d4c, measured after the attack on d4e, YO-2). sin(t)**2/t is no such product. With h
+    free of every other symbol (its t-free finite factor dropped first: a*sin(t)/t), h'/h a rational function of t
+    has one sign from some point on (t**q times a rational function). With other symbols (t = ±s, s > 0), for EVERY
+    value of them: h >= 0 (or <= 0) and h nonincreasing in s (nondecreasing) for every s > 0 by their assumptions,
+    and |h| <= K*m(s) with m free of them tending to 0 (`parameter_free_terms`): sin(t)/(t + a) with a > 0
+    (1/(s + a) <= 1/s, round 4 RK-7). SymPy's limit of t/(x**2*t**2 + 1) is 0 for a generic x, not at x = 0, where
+    ∫ t*sin(t) diverges (attack on d4e round 3, D4E3-YO-1)."""
+    for osc in g.atoms(sp.sin, sp.cos):
+        arg = osc.args[0]
+        k = sp.diff(arg, t)
+        if not (k.is_number and k.is_real is True and k.is_zero is False and sp.diff(arg, t, 2) == 0):
+            continue
+        h = _without_constant_factor(sp.simplify(g / osc), t)
+        if t not in h.free_symbols or h.atoms(sp.Function):
+            continue
+        side = sp.Dummy("s", positive=True)
+        hs = h.subs(t, side if end == oo else -side)
+        if hs.is_real is not True:
+            continue
+        if h.free_symbols == {t}:
+            r = sp.simplify(sp.diff(h, t) / h)
+            if not r.is_rational_function(t):
+                continue
+            if sp.limit(h, t, end) == 0:
+                return True
+            continue
+        sgn = 1 if hs.is_nonnegative is True else -1 if hs.is_nonpositive is True else 0
+        if not sgn or sp.diff(sgn * hs, side).is_nonpositive is not True:
+            continue
+        try:
+            M = _Majorant(side, oo).upper(sgn * hs)
+        except Exception:  # noqa: BLE001 - _NoBound, or a bound SymPy cannot form
+            continue
+        terms = parameter_free_terms(M, side)
+        if terms is not None and all(sp.limit(mi, side, oo) == 0 for mi in terms):
+            return True
+    return False
+
+
+def integrable_near(g, t, c, side) -> bool:
+    """Worker: is |g(t)| <= C/|t - c|**p on the `side` ('+', '-') of the finite point c for some p < 1, for EVERY
+    value of g's other symbols, read off the parameter-free terms of a majorant M of |g| (`majorant`, t = c ± s,
+    `parameter_free_terms`), each with a bounded limit of s**p * m (p = 0, 1/2, 2/3, 9/10)? Then ∫ g converges
+    absolutely there: 1/sqrt(t) and log(t) at 0 do, 1/t and 1/(t - 1/2) do not (attack on d4e, YO-2), and a SymPy
+    limit of 1/(t**2 + cos(1/t)**2) is no proof (round 3, YO-1)."""
+    g = _without_constant_factor(g, t)
+    m, s = majorant(g, t, c, side)
+    terms = parameter_free_terms(m, s) if m is not None else None
+    if terms is None:
+        return False
+    return all(any(_bounded_limit(sp.limit(s ** p * mi, s, 0, "+"))
+                   for p in (S(0), S.Half, sp.Rational(2, 3), sp.Rational(9, 10))) for mi in terms)
+
+
+def _integrand_on(body, x, d):
+    """The integrand on a real dummy for its bound variable, evaluated; None when it holds an IR function's marker.
+    Another symbol is read for all its values by `majorant` (the task's variable in ∫_0^oo e^(-t)*(x + t), round 3
+    RK-4; one not declared real has no bound) and by `_dirichlet_test` (sin(t)/(t + a), a > 0)."""
+    t = sp.Dummy(d.name, real=True)
+    try:
+        with sp.evaluate(False):
+            g = body.xreplace({x: t})
+        g = _evaluated(g)
+    except Exception:  # noqa: BLE001
+        return None, t
+    if not isinstance(g, sp.Expr) or any(type(m).__name__ == "written_domain" for m in sp.preorder_traversal(g)):
+        return None, t
+    return g, t
+
+
+def _converges_at(body, x, d, end) -> bool:
+    """Is the integral of `body` (as written, in its bound variable `x`) proved to converge at `end` (±oo)? A
+    parameter of declared sign is read with it (e^(-a*t), a > 0)."""
+    if not _spend(_SOLVE_COST):
+        return False
+    g, t = _integrand_on(body, x, d)
+    if g is None:
+        return False
+    if t not in g.free_symbols:
+        return g.is_zero is True                     # a constant converges at an infinite end only if 0
+    r = sb_run("mathverify.certify.domain:decays_at", g, t, end, timeout=_SOLVE_TIMEOUT)
+    return bool(r.ok and r.value is True)
+
+
+def _integrable_at(body, x, d, c, side) -> bool:
+    """Is the integral of `body` proved to converge at its finite point c, from `side`?"""
+    if not _spend(_SOLVE_COST):
+        return False
+    g, t = _integrand_on(body, x, d)
+    if g is None:
+        return False
+    r = sb_run("mathverify.certify.domain:integrable_near", g, t, c, side, timeout=_SOLVE_TIMEOUT)
+    return bool(r.ok and r.value is True)
 
 
 def _integral_conditions(n, var) -> list[Any]:
@@ -450,13 +1335,22 @@ def _integral_conditions(n, var) -> list[Any]:
         return []                                   # an antiderivative: its variable is not bounded
     if len(n.limits) != 1:
         named, _ = _named_conditions(n.function, [lim[0] for lim in n.limits], var)
-        return [DEFINEDNESS_UNDECIDED] if named else []
+        improper = any(len(lim) == 3 and {_evaluated(lim[1]), _evaluated(lim[2])} & {oo, -oo}
+                       and not (_evaluated(lim[1]).is_number and _evaluated(lim[2]).is_number) for lim in n.limits)
+        return [DEFINEDNESS_UNDECIDED] if named or improper else []
     x, a, b = n.limits[0]
     named, plain = _named_conditions(n.function, [x], var)
     d = plain[x]
     region = S.Reals
     a, b = _evaluated(a), _evaluated(b)
     if not (a.is_number and b.is_number):
+        # an infinite bound next to a symbolic one: no value is computed, and a derivative of the integral
+        # is taken by the fundamental theorem, so the integral must be proved to converge at that end.
+        # The derivative -1/(x + 1) of ∫_x^oo dt/(t + 1), which diverges for every x, was certified
+        # (fourth audit TAN-07)
+        for end in (a, b):
+            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):
+                return [DEFINEDNESS_UNDECIDED]
         # a symbolic bound: the integral runs inside the hull of the values the bounds may take by
         # their declarations (∫_0^x √t dt and ∫_1^x ln t dt with x > 0 lie in [0, oo); read over R
         # they were undecided, review of 30 Sep 2026)
@@ -472,10 +1366,24 @@ def _integral_conditions(n, var) -> list[Any]:
         else:
             return [DEFINEDNESS_UNDECIDED] if named else []
     symbolic = not (a.is_number and b.is_number)
+    if not symbolic:
+        # numbers for bounds: the integral exists only when it is proved to converge at an infinite end and at
+        # each point between the bounds where the integrand has no value. It was "the value's business", but
+        # the value is folded away first: 0*∫_1^oo dt/t + 1 = 1, ∫_1^oo dt/t - ∫_1^oo dt/t = 0 and
+        # x + 0*∫_0^1 dt/(t - 1/2) with the derivative 1 were certified (attack on d4e, YO-2)
+        for end in (a, b):
+            if end in (oo, -oo) and not _converges_at(n.function, x, d, end):
+                return [DEFINEDNESS_UNDECIDED]
     for c in named:
         bad = _violations(c, d, region)
         if bad is None or not (bad.is_empty is True or bad.is_finite_set is True):
             return [DEFINEDNESS_UNDECIDED]
+        if not symbolic:
+            for p_ in bad:
+                sides = [s_ for s_, on in (("-", certified_sign(p_ - region.inf) == 1),
+                                            ("+", certified_sign(region.sup - p_) == 1)) if on]
+                if not sides or any(not _integrable_at(n.function, x, d, p_, s_) for s_ in sides):
+                    return [DEFINEDNESS_UNDECIDED]
         if symbolic and bad.is_empty is not True:
             # an improper point is the value's business only when a value is computed: with a
             # symbolic bound the value is SymPy's parametric integral, and a derivative of it is
@@ -534,9 +1442,182 @@ def _limit_conditions(n, var) -> list[Any]:
     return []
 
 
+def _subs_conditions(n, var, add) -> None:
+    """Subs(body, v, p), at(): the body's conditions hold AT the point. Walked into, they stood on the bound
+    variable, which nothing constrains, so Subs(sqrt(x - 2), x, 1)**2 = -1 and Subs(1/(x - 1), x, 1)*0 = 0
+    were verified compute steps (attack on d4e, YO-3). Without a derivative in v the body is read with p
+    written in for v: the same conditions as the text with the point in place. A derivative in v at p needs
+    its function defined on a neighbourhood of p, read as `_limit_conditions` reads one (a condition that
+    fails at p, or next to it, leaves the expression undecided, never undefined: a one-sided derivative or
+    a removable gap is a convention): at(diff(sqrt(x)**2, x), x, -1) = 1 and at(diff(sqrt(x)**2, x), x, 0) = 1
+    were verified."""
+    from ..normalize.parse import substitute_free
+    body, vs, pts = n.expr, tuple(n.variables), tuple(n.point)
+    if not any(set(vs) & set(d_.variables) for d_ in body.atoms(sp.Derivative)):
+        with sp.evaluate(False):
+            at_point = substitute_free(body, dict(zip(vs, pts)))
+        for c in definedness_conditions(at_point, var):
+            add(c)
+        return
+    plain = {v: sp.Dummy(getattr(v, "name", "v")) for v in vs}
+    with sp.evaluate(False):
+        b = body.xreplace(plain)
+    dummies = set(plain.values())
+    for c in definedness_conditions(b, var):
+        named = getattr(c, "free_symbols", set()) & dummies
+        if not named:
+            add(c)
+            continue
+        if len(vs) != 1:
+            add(DEFINEDNESS_UNDECIDED)
+            continue
+        d, p_ = plain[vs[0]], _evaluated(pts[0])
+        if not (isinstance(p_, sp.Expr) and p_.is_number and p_.is_real is True and p_.is_finite is True):
+            add(DEFINEDNESS_UNDECIDED)          # a symbolic point: no neighbourhood is read
+            continue
+        bad = _violations(c, d, Interval.open(p_ - 1, p_ + 1))
+        if bad is None:
+            # not solved near p (x - cos(x) != 0, cos(x**2) != 0): a condition that holds strictly at p, of
+            # operations continuous where defined, holds on a neighbourhood of it (`calculus.strict_at`, R1); the
+            # compute step at(diff(1/(x - cos(x)), x), x, pi) = -1/(pi + 1)**2 was left unknown (round 3, RK-7)
+            from .calculus import strict_at
+            if not strict_at(c, d, p_):
+                add(DEFINEDNESS_UNDECIDED)
+            continue
+        if bad.is_empty is True:
+            continue
+        try:
+            left, right = sp.Intersection(bad, Interval(p_ - 1, p_)), sp.Intersection(bad, Interval(p_, p_ + 1))
+            clear = (left.is_empty is True or certified_sign(p_ - left.sup) == 1) and \
+                (right.is_empty is True or certified_sign(right.inf - p_) == 1)
+        except Exception:  # noqa: BLE001
+            clear = False
+        if not clear:
+            add(DEFINEDNESS_UNDECIDED)
+
+
 _BINDER_CACHE: dict = {}
 _BINDER_CACHE_LOCK = threading.Lock()
 _BINDER_CACHE_SIZE = 512
+
+
+def _piecewise_conditions(pw, var, add) -> None:
+    """The written definedness of a Piecewise, branch by branch: at x the first branch whose condition holds is the
+    value, so its expression must be defined there, each condition up to it too (a condition with no value stops
+    the evaluation), and a point no condition covers has no value at all (SymPy's subs gives nan). Read on every
+    branch alike, Piecewise((0, Eq(x, 0)), (x/|x|, Ne(x, 0))), which is sign(x), had no value at 0: the derivative
+    of |x| with the value 0 at the corner was certified, the right Piecewise((2*x**2/x, Ne(x, 0)), (0, Eq(x, 0)))
+    for (x**2)' refuted (attack on d4e round 3, D4E3-YO-6); and the gap 0 of Piecewise((x**2 - 1, x < 1),
+    (x**2 - 1, x > 1)) was a root (D4E3-YO-7). On one symbol v the set D where it has a value is computed exactly:
+    ℝ ∖ {p, ...} gives v != p, any other set Contains(v, D) (a membership: the certificates abstain on it). A
+    membership of a branch (n!, an odd root) holds as before, on every branch; anything else not read exactly
+    (two symbols, a periodic condition) is DEFINEDNESS_UNDECIDED."""
+    from .base import Ctx
+    branches = []
+    for val, cond in pw.args:
+        vc = definedness_conditions(val, var)
+        cc = [] if cond in (sp.true, sp.false) else definedness_conditions(cond, var)
+        branches.append((cond, vc, cc))
+    if all(not (cond.free_symbols if cond not in (sp.true, sp.false) else set())
+           and not any(getattr(c, "free_symbols", None) for c in cc) for cond, _, cc in branches):
+        _closed_piecewise_conditions(branches, add)
+        return
+    rel: list = []
+    for _, vc, cc in branches:
+        for c in vc + cc:
+            if isinstance(c, sp.Contains) and c.free_symbols:
+                add(c)                                   # a membership or a convention: on every branch, as before
+            elif c is sp.false or c not in rel:
+                rel.append(c)
+    if not rel and branches and branches[-1][0] is sp.true:
+        return                                           # every branch defined wherever it is reached
+    syms = set().union(*[c.free_symbols for c in rel if c is not sp.false],
+                       *[b[0].free_symbols for b in branches if b[0] not in (sp.true, sp.false)])
+    if any(c.free_symbols == set() and c not in (sp.false, sp.true) for c in rel) or len(syms) != 1:
+        add(DEFINEDNESS_UNDECIDED)                       # a closed condition left standing, two symbols, none
+        return
+    (v,) = syms
+
+    def where(conds):
+        out = S.Reals
+        for c in conds:
+            if isinstance(c, sp.Contains):
+                continue                                 # added above
+            st = Ctx.condition_set(c, v)
+            if st is None:
+                return None
+            out = sp.Intersection(out, st)
+        return out
+    covered, D = S.EmptySet, S.EmptySet
+    for cond, vc, cc in branches:
+        Ci = S.Reals if cond is sp.true else S.EmptySet if cond is sp.false else Ctx.condition_set(cond, v)
+        Ec, Ev = where(cc), where(vc)
+        if Ci is None or Ec is None or Ev is None:
+            add(DEFINEDNESS_UNDECIDED)
+            return
+        avail = sp.Complement(S.Reals, covered)
+        sel = sp.Intersection(avail, Ec, Ci)
+        D = sp.Union(D, sp.Intersection(sel, Ev))
+        covered = sp.Union(covered, sp.Complement(avail, Ec), sel)
+    U = sp.Complement(S.Reals, D)
+    if U is S.EmptySet:
+        return
+    if isinstance(U, sp.FiniteSet) and all(p.is_real is True for p in U):
+        for p in U:
+            add(Ne(v, p))
+        return
+    if isinstance(U, (sp.Complement, sp.ConditionSet)) or U.has(sp.ConditionSet):
+        add(DEFINEDNESS_UNDECIDED)
+        return
+    add(sp.Contains(v, D))
+
+
+def _closed_piecewise_conditions(branches, add) -> None:
+    """A Piecewise whose conditions name no symbol (f(2) for a piecewise f, or x = 2 put in): the branch taken is read
+    exactly, condition by condition (`_closed_truth`), each condition up to it having a value; the taken branch's
+    expression has its own conditions (a symbol a given leaves free among them); no branch taken: no value. Read as
+    a Piecewise on one symbol, it was undecided and f(2) = 4 left UNKNOWN (attack on d4e round 4, D4E4-U2)."""
+    for cond, vc, cc in branches:
+        for c in cc:
+            t = _closed_truth(c)
+            if t is None:
+                add(DEFINEDNESS_UNDECIDED)
+                return
+            if t is False:
+                _no_value_off(add, sp.false)             # a condition with no value stops the evaluation
+                return
+        t = _closed_truth(cond)
+        if t is None:
+            add(DEFINEDNESS_UNDECIDED)
+            return
+        if t:
+            for c in vc:
+                add(c)
+            return
+    _no_value_off(add, sp.false)                         # no branch is taken (SymPy's nan)
+
+
+def _closed_truth(c) -> bool | None:
+    """Does the closed condition c hold, by the exact sign of each relation (`certified_sign`: never SymPy's own
+    evaluation, which reads rounding noise)? None when a sign or a membership is not decided."""
+    if c is sp.true or c is sp.false:
+        return c is sp.true
+    if isinstance(c, (sp.And, sp.Or)):
+        parts = [_closed_truth(a) for a in c.args]
+        stop = isinstance(c, sp.Or)                      # the value that decides: True for Or, False for And
+        if any(t is stop for t in parts):
+            return stop
+        return None if any(t is None for t in parts) else not stop
+    if isinstance(c, sp.Not):
+        t = _closed_truth(c.args[0])
+        return None if t is None else not t
+    if not isinstance(c, (Eq, Ne, sp.StrictLessThan, sp.LessThan, sp.StrictGreaterThan, sp.GreaterThan)):
+        return None
+    sg = certified_sign(c.lhs - c.rhs)
+    if sg not in (-1, 0, 1):
+        return None
+    return {Eq: sg == 0, Ne: sg != 0, sp.StrictLessThan: sg < 0, sp.LessThan: sg <= 0,
+            sp.StrictGreaterThan: sg > 0, sp.GreaterThan: sg >= 0}[type(c)]
 
 
 def _binder_conditions(n, var) -> list[Any]:
@@ -580,7 +1661,8 @@ def _binder_conditions(n, var) -> list[Any]:
 
 
 def definedness_conditions(expr, var) -> list[Any]:
-    """Collect conditions under which `expr` is a well-defined real number."""
+    """Collect conditions under which `expr` is a well-defined real number. Never raises: a reading that
+    fails proves nothing and gives DEFINEDNESS_UNDECIDED (see `_definedness_conditions`)."""
     if getattr(_BINDER_STATE, "left", None) is not None:
         return _definedness_conditions(expr, var)
     _BINDER_STATE.left, _BINDER_STATE.undecided, _BINDER_STATE.cut = _BUDGET, False, False
@@ -606,64 +1688,303 @@ def _definedness_conditions(expr, var) -> list[Any]:
             seen.add(c)
             conds.append(c)
 
-    for node in _outer_nodes(sp.sympify(expr), var, add):
-        if type(node).__name__ == "written_domain":
-            # an IR function's declared domain at its call (normalize.parse.written_domain)
-            rel = node.args[1]
-            for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
-                add(c)
-        elif isinstance(node, sp.log):
-            add(node.args[0] > 0)
-            if len(node.args) > 1:
-                add(node.args[1] > 0)
-                add(Ne(node.args[1], 1))
-        elif isinstance(node, sp.Pow):
-            base, ex = node.args
-            ex = _numeric_exponent(ex)
-            if isinstance(ex, sp.Rational) and not ex.is_Integer:
-                if ex.q % 2 == 0:
-                    add(base >= 0 if ex > 0 else base > 0)
-                elif ex < 0:
-                    add(Ne(base, 0))
-            elif ex.is_Integer and ex < 0:
-                add(Ne(base, 0))
-            elif ex.is_number and not ex.is_rational:
-                add(base > 0)
-            elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
-                add(base > 0)          # x^y style real power (var None: every symbol counts)
-        elif isinstance(node, sp.tan):
-            add(Ne(sp.cos(node.args[0]), 0))
-        elif isinstance(node, sp.sec):
-            add(Ne(sp.cos(node.args[0]), 0))
-        elif isinstance(node, sp.cot):
-            add(Ne(sp.sin(node.args[0]), 0))
-        elif isinstance(node, sp.csc):
-            add(Ne(sp.sin(node.args[0]), 0))
-        elif isinstance(node, (sp.asin, sp.acos)):
-            add(node.args[0] >= -1)
-            add(node.args[0] <= 1)
-        elif type(node).__name__ in ("gcd", "lcm"):
-            # normalize.parse.gcd/lcm have a value only at rational numbers: x + gcd(x, 2) - gcd(2, x)
-            # read as x was certified a simplification of x on all of R, and its value at
-            # x = sqrt(2) was certified (30 Sep 2026). No interval rule decides the condition: the
-            # callers abstain unless a point makes it true or false.
-            for a in node.args:
-                add(sp.Contains(a, S.Rationals))
-        elif isinstance(node, sp.factorial):
-            # n! of the curriculum: n a natural number. x + x! - x! at x = -3 was certified -3, and
-            # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026)
-            add(sp.Contains(node.args[0], S.Naturals0))
-        elif isinstance(node, sp.binomial):
-            # C(n, r) of the curriculum, like n!: C(x, 2) at x = -3 was certified while P(x, 2),
-            # built on factorial, was not (review of 30 Sep 2026)
-            for a in node.args:
-                add(sp.Contains(a, S.Naturals0))
-        elif isinstance(node, sp.acosh):
-            add(node.args[0] >= 1)
-        elif isinstance(node, sp.atanh):
-            add(node.args[0] > -1)
-            add(node.args[0] < 1)
+    # A rule that fails while it builds its condition proves nothing: SymPy evaluates Ne((-1)!, 0) and
+    # mpmath raises "gamma function pole", and the callers read the exception as "no condition", so
+    # 1/(-1)! = 0 (SymPy's 1/zoo) was certified and the step "1/factorial(-1) = 0" verified (fourth audit,
+    # CAP-F1). Each failure is DEFINEDNESS_UNDECIDED, never "defined", and the walk goes on: the pole's own
+    # rule (n!: a natural number) then reads the operation as undefined.
+    try:
+        nodes = _outer_nodes(sp.sympify(expr), var, add)
+        while True:
+            try:
+                node = next(nodes)
+            except StopIteration:
+                break
+            try:
+                _node_conditions(node, var, add)
+            except Exception:  # noqa: BLE001 - see above
+                add(DEFINEDNESS_UNDECIDED)
+    except Exception:  # noqa: BLE001 - the walk itself failed: nothing is proved
+        add(DEFINEDNESS_UNDECIDED)
     return conds
+
+
+def _no_number(v) -> bool:
+    """Is the evaluated closed expression `v` SymPy's zoo, nan or ±oo (a pole, not a value)? An infinite bound of
+    a Sum inside it is no pole."""
+    return v in (S.ComplexInfinity, S.NaN, oo, -oo) or (isinstance(v, sp.Basic) and v.has(S.ComplexInfinity, S.NaN))
+
+
+def _no_value_off(add, c):
+    """The condition `c` of an operation that has no value where it fails; a closed operation off it
+    (`c` false) is NO_VALUE too."""
+    add(c)
+    if c is sp.false:
+        add(NO_VALUE)
+
+
+def _plus_one_positive(e) -> bool:
+    """Is e + 1 > 0, read with SymPy's evaluation on (an exponent written n - 1 is an unevaluated sum, and under an
+    as-written reading even e + 1 stays one)?"""
+    with sp.evaluate(True):
+        return (e + 1).is_positive is True
+
+
+_FORM_TYPES = (sp.Limit, sp.Integral, sp.Sum, sp.Product)
+_FORM_VALUE_CACHE: dict = {}
+_FORM_VALUE_LOCK = threading.Lock()
+
+
+def _exact_zero(e) -> bool:
+    """Is the closed expression e exactly 0 (`certified_sign`; 1 + i**2 is)?"""
+    try:
+        return certified_sign(_evaluated(e)) == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def complex_pole(e) -> bool:
+    """Has the as-written tree `e` a closed operation that has no value over ℂ either, wherever it stands: a division
+    by an exact 0 (1/0, 1/(1 + i**2)), a pole of tan, sec (cos = 0), cot, csc (sin = 0), log 0 (or a base 0 or 1)?
+    Their conditions are the plain `false` a real condition gives (sqrt(-4), log(-1)), which the complex reading drops:
+    |1/0| = oo, acot|1/0| = 0, e^{-|1/(1 + i²)|} = 0, acot|tan(π/2)| = 0 and acot|log 0| = 0 were certified over ℂ, only
+    1/(1/0) (`_node_conditions`' reciprocal of a pole) was not (SON-G3-YO-4; the rule of A-YO-3 is on the operation,
+    not on what wraps it)."""
+    for n in sp.preorder_traversal(e):
+        if not isinstance(n, sp.Basic) or not n.args or n.free_symbols:
+            continue
+        try:
+            if isinstance(n, sp.Pow):
+                ex = _numeric_exponent(n.exp)
+                if ex.is_number and ex.is_extended_negative is True and _exact_zero(n.base):
+                    return True
+            elif isinstance(n, (sp.tan, sp.sec)):
+                if _exact_zero(sp.cos(n.args[0])):
+                    return True
+            elif isinstance(n, (sp.cot, sp.csc)):
+                if _exact_zero(sp.sin(n.args[0])):
+                    return True
+            elif isinstance(n, sp.log):
+                if _exact_zero(n.args[0]) or (len(n.args) > 1 and (_exact_zero(n.args[1])
+                                                                   or _exact_zero(n.args[1] - 1))):
+                    return True
+        except Exception:  # noqa: BLE001 - a node not read: no pole proved there
+            continue
+    return False
+
+
+def _form_value_no_number(a) -> bool:
+    """Is the closed expression `a`, holding a closed limit, sum, product or integral, no number by SymPy's value of it
+    (±oo, zoo, nan, or AccumBounds: no limit)? The rule for an infinite argument read oo only where it is written:
+    lim_{x→0} 1/x² holds none, and lim_{x→∞} x is left unevaluated by the as-written reading, so arctan(lim_{x→0}
+    1/x²) = π/2, 0·sin(lim_{x→∞} x) = 0 and 1/lim_{x→0} 1/x² = 0 were certified (SON-G3-YO-3; the rule of A-YO-5 is
+    on the value, not its writing). SymPy's value is taken unconfirmed here: it only ever marks an expression as
+    having no value (the callers abstain); a finite value read wrong marks nothing, as before."""
+    if not isinstance(a, sp.Expr) or a.free_symbols or not any(isinstance(n, _FORM_TYPES)
+                                                                for n in sp.preorder_traversal(a)):
+        return False
+    with _FORM_VALUE_LOCK:
+        hit = _FORM_VALUE_CACHE.get(a)
+    if hit is not None:
+        return hit
+    from ..normalize.parse import unhold
+    from ..sandbox import run as sb_run
+    try:
+        e = _evaluated(a).replace(lambda n: isinstance(n, _FORM_TYPES), unhold)
+        r = sb_run("mathverify.sandbox.ops:doit_expr", e, timeout=8.0)
+        out = bool(r.ok and isinstance(r.value, sp.Basic) and not r.value.free_symbols
+                   and (_no_number(r.value) or r.value.has(sp.AccumBounds)))
+    except Exception:  # noqa: BLE001 - no value read: nothing marked, as before
+        out = False
+    with _FORM_VALUE_LOCK:
+        if len(_FORM_VALUE_CACHE) > 512:
+            _FORM_VALUE_CACHE.clear()
+        _FORM_VALUE_CACHE[a] = out
+    return out
+
+
+def _infinite_argument(node) -> bool:
+    """Is a closed argument of the function `node` (or the exponent of a power) infinite? sin(oo) is no real number
+    (SymPy's AccumBounds: 0*sin(oo) was its 0, and certified), and exp(-oo), atan(oo), 2**(-oo), (1/2)**oo are values
+    only where oo is read as a number, as 1/oo already is not (attack on d4f round 2, A-YO-5). A limit's point and
+    a binder's bound are no arguments; a closed limit (sum, integral) whose value is infinite is one
+    (`_form_value_no_number`, SON-G3-YO-3)."""
+    if isinstance(node, sp.Pow):
+        args = (node.exp,)
+    elif isinstance(node, sp.Function):
+        args = node.args
+    else:
+        return False
+    return any(isinstance(a, sp.Expr) and not a.free_symbols
+               and ((a.has(oo, -oo) and _no_number(_evaluated(a))) or _form_value_no_number(a)) for a in args)
+
+
+def _node_conditions(node, var, add) -> None:
+    """The definedness conditions of one node of the as-written tree (see `_definedness_conditions`)."""
+    if _infinite_argument(node):
+        add(sp.false)
+        add(NO_VALUE)
+    if node is S.ComplexInfinity or node is S.NaN:
+        # SymPy's zoo and nan, written out (`zoo` is in the namespace): no real number, and 1/zoo is
+        # SymPy's 0 (CAP-F1)
+        add(sp.false)
+        add(NO_VALUE)
+    elif type(node).__name__ == "written_domain":
+        # an IR function's declared domain at its call (normalize.parse.written_domain), or where a written
+        # derivative exists (normalize.parse._written_diff)
+        rel = node.args[1]
+        for c in (rel.args if isinstance(rel, sp.And) else (rel,)):
+            if isinstance(c, sp.Contains) and not c.free_symbols and isinstance(c.args[1], Convention):
+                # put at a point unevaluated (at() reads its body with evaluation off): read with its element
+                # evaluated, kept standing unless proved inside (Convention says true only then). Left as it
+                # was, |sin x|'s zeros (sin(x) in ORIGIN) made its derivative undecided at pi/2 too
+                try:
+                    if sp.Contains(_evaluated(c.args[0]), c.args[1]) is sp.true:
+                        continue
+                except Exception:  # noqa: BLE001 - not read: left standing (undecided)
+                    pass
+            add(c)
+    elif isinstance(node, sp.log):
+        add(node.args[0] > 0)
+        if len(node.args) > 1:
+            add(node.args[1] > 0)
+            add(Ne(node.args[1], 1))
+    elif isinstance(node, sp.Pow):
+        base, ex = node.args
+        ex = _numeric_exponent(ex)
+        if ex.is_number and ex.is_extended_negative is True and not base.free_symbols \
+                and (_no_number(_evaluated(base)) or _form_value_no_number(base)):
+            # the reciprocal of a closed pole (1/(1/0), 1/tan(pi/2), 1/log(0)): 0 under a reading that gives
+            # the pole a value (the Riemann sphere, cot = 1/tan), SymPy's 1/zoo: no value, and no "defined
+            # nowhere" either, like 1/(-1)! (review of d4f, RK-F4, YO-6); an infinite limit too (1/lim_{x→0} 1/x²,
+            # SON-G3-YO-3)
+            add(sp.false)
+            add(NO_VALUE)
+        if isinstance(ex, sp.Rational) and not ex.is_Integer:
+            if ex.q % 2 == 0:
+                add(base >= 0 if ex > 0 else base > 0)
+            else:
+                if ex < 0:
+                    add(Ne(base, 0))
+                # a negative base: the real root or the principal value (Convention); a base that
+                # is not real has the principal value only
+                if base.is_extended_real is not False:
+                    add(sp.Contains(base, ODD_ROOT_BASE))
+        elif ex.is_Integer and ex < 0:
+            add(Ne(base, 0))
+        elif ex.is_zero is True:
+            # 0**0: 1 or undefined (Convention); an infinite base (oo*x) is oo**0's convention wherever x is
+            add(sp.Contains(S.Infinity if base.has(S.Infinity, S.NegativeInfinity) else base, ZERO_POWER_BASE))
+        elif ex.is_number and not ex.is_rational:
+            if ex.is_extended_positive is True:
+                # 0**sqrt(2): 0 by the strict rule, undefined as written: a convention point; a negative base
+                # has no real value either way (round 9 attack on part d4b, RK-1)
+                add(base >= 0)
+                add(sp.Contains(base, ZERO_POWER_BASE))
+            else:
+                add(base > 0)
+        elif not ex.is_number and base.free_symbols and (var is None or var in ex.free_symbols):
+            if ex.free_symbols <= base.free_symbols:
+                # x**x: b > 0 is the rule on an interval; at a point the exact base and exponent decide (an
+                # integer exponent of a nonzero base has its value): Convention real_power (RK-1)
+                add(sp.Contains(sp.Tuple(base, ex), REAL_POWER))
+            elif ex.is_integer is not True:
+                add(base > 0)          # x^y style real power (var None: every symbol counts)
+            elif not (ex.is_nonnegative is True or _plus_one_positive(ex) or _evaluated(ex).is_nonnegative is True):
+                # an exponent declared an integer is a power of the curriculum for every base: x != 0 when it may
+                # be negative, nothing when it may not (n a positive integer: (x**2)**n and x**(2*n - 1); an integer
+                # e is >= 0 when e + 1 > 0, which SymPy reads on the unevaluated n - 1 as written). Read as
+                # x > 0, the textbook derivative 2*n*x**(2*n - 1) of (x**2)**n was refuted (attack on d4e round 4,
+                # D4E4-U5). The exponent's sign is read on its evaluated form too: (k + 2) - 2 written out for n - 2 with
+                # n = k + 2 (`calculus._claim_definedness_on_integer_bounds`, SON-G3-RK-2) is k, never negative
+                add(Ne(base, 0))
+        elif not ex.is_number and base.is_number and base.is_zero is False and base.is_positive is not True \
+                and ex.is_integer is not True:
+            # a negative base, a variable exponent: the curriculum's value at an integer exponent only
+            # (Convention negative_base)
+            add(sp.Contains(ex, NEGATIVE_BASE_EXPONENT))
+        elif not ex.is_number and base.is_zero is not False:
+            # 0**k at k = 0 (a Sum's term at its first index): 1 or undefined (Convention, part d4a)
+            add(sp.Contains(ex, ZERO_POWER_BASE))
+    elif isinstance(node, sp.tan):
+        add(Ne(sp.cos(node.args[0]), 0))
+    elif isinstance(node, sp.sec):
+        add(Ne(sp.cos(node.args[0]), 0))
+    elif isinstance(node, sp.cot):
+        add(Ne(sp.sin(node.args[0]), 0))
+    elif isinstance(node, sp.csc):
+        add(Ne(sp.sin(node.args[0]), 0))
+    elif isinstance(node, (sp.asin, sp.acos)):
+        add(node.args[0] >= -1)
+        add(node.args[0] <= 1)
+    elif isinstance(node, (sp.Ci, sp.Chi, sp.li)):
+        add(node.args[0] > 0)                    # complex for x < 0 (a log term), -oo at 0
+        if isinstance(node, sp.li):
+            add(Ne(node.args[0], 1))             # li(1) = -oo
+    elif isinstance(node, sp.Ei):
+        add(Ne(node.args[0], 0))
+    elif isinstance(node, sp.polylog):
+        s_, z = node.args
+        if s_.is_Integer and s_ >= 2:
+            add(z <= 1)                          # real for z <= 1, complex past 1
+        elif s_ == 1:
+            add(z < 1)                           # -log(1 - z)
+        else:
+            add(DEFINEDNESS_UNDECIDED)
+    elif type(node).__name__ in ("gcd", "lcm"):
+        # normalize.parse.gcd/lcm have a value only at rational numbers: x + gcd(x, 2) - gcd(2, x)
+        # read as x was certified a simplification of x on all of R, and its value at
+        # x = sqrt(2) was certified (30 Sep 2026). No interval rule decides the condition: the
+        # callers abstain unless a point makes it true or false.
+        for a in node.args:
+            add(sp.Contains(a, S.Rationals))
+        if type(node).__name__ == "gcd":
+            # gcd(0, 0) has no value in the curriculum (the greatest common divisor of numbers not all 0):
+            # the binding a = gcd(0, 0) + 1 read as a = 1 (review of d4d)
+            add(Ne(sp.Add(*[sp.Abs(a) for a in node.args]), 0))
+    elif isinstance(node, (sp.factorial, sp.factorial2, sp.subfactorial)):
+        # n! of the curriculum: n a natural number. x + x! - x! at x = -3 was certified -3, and
+        # (x + 3)(x - 2) = x! - x! had its root -3 certified (30 Sep 2026). A closed one off them has no
+        # value: (-1)! is a pole of Γ, and 1/(-1)! is 0 only under 1/Γ or SymPy's 1/zoo (CAP-F1). n!! and
+        # !n (SymPy's own, no notation of the parse reads them) are held to the same numbers.
+        _no_value_off(add, sp.Contains(node.args[0], S.Naturals0))
+    elif isinstance(node, sp.gamma):
+        # Γ (LaTeX \Gamma, \gamma): a value off its poles 0, -1, -2, ...; 1/Γ(0) = 0 was certified (CAP-F1)
+        _no_value_off(add, sp.Contains(node.args[0], _GAMMA_DOMAIN))
+    elif isinstance(node, (sp.RisingFactorial, sp.FallingFactorial)):
+        # a polynomial in x when k is a natural number; otherwise a quotient of Γ values with poles
+        _no_value_off(add, sp.Contains(node.args[1], S.Naturals0))
+    elif isinstance(node, sp.binomial):
+        # C(n, r) of the curriculum: 0 <= r <= n integers. C(x, 2) at x = -3 was certified while
+        # P(x, 2), built on factorial, was not (review of 30 Sep 2026); read as undefined there, the
+        # root -2 of C(n, 2) = 3 was dropped and {-2, 3} refuted, while the generalized binomial
+        # (C(-2, 2) = 3) and the 0 above n are conventions (Convention, part d4a)
+        n_, r_ = node.args
+        conds = [sp.Contains(r_, BINOMIAL_ARGUMENT), sp.Contains(n_ - r_, BINOMIAL_ARGUMENT)]
+        for c in conds:
+            add(c)
+        if not node.free_symbols and not all(c is sp.true for c in conds):
+            # outside them the generalized binomial may be a pole of Γ (binomial(-1, 1/2) is zoo): no
+            # value under either reading (CAP-F1)
+            with sp.evaluate(True):
+                v = sp.binomial(_evaluated(n_), _evaluated(r_))
+            if v.has(S.ComplexInfinity, S.NaN, oo, -oo):
+                add(sp.false)
+                add(NO_VALUE)
+    elif isinstance(node, sp.Mod):
+        # a divisor that is not positive: floored, truncated or Euclidean (Convention, part d4a)
+        add(sp.Contains(node.args[1], MOD_DIVISOR))
+    elif isinstance(node, sp.atan2):
+        # atan2(0, 0): undefined, or 0 by some conventions (Convention); (|x| - x)*atan2(x - 1, 0) >= 0 on
+        # x >= 0 had [0, oo) certified (round 8 of part d4b, YO-1)
+        add(sp.Contains(node.args[0] ** 2 + node.args[1] ** 2, ORIGIN))
+    elif isinstance(node, sp.arg):
+        add(sp.Contains(node.args[0], ORIGIN))          # arg(0): undefined, or 0 (Convention)
+    elif isinstance(node, sp.acosh):
+        add(node.args[0] >= 1)
+    elif isinstance(node, sp.atanh):
+        add(node.args[0] > -1)
+        add(node.args[0] < 1)
 
 
 _NUMBER_SETS = (S.Rationals, S.Integers, S.Naturals0, S.Naturals)
@@ -730,15 +2051,30 @@ def _numeric_exponent(ex):
             return sp.simplify(ex)
         except Exception:  # noqa: BLE001
             return ex
+    if isinstance(ex, sp.Expr) and not ex.is_Atom:
+        # an exponent with symbols that is identically 0 (x - x, floor(x) - floor(x), sin(x)**2 + cos(x)**2 - 1) is
+        # 0 as written: 0**(x - x) and oo**(x - x) are the conventions 0**0 and oo**0, and were certified 1 (attack on
+        # d4f round 2, A-YO-2); x**(x - x) is x**0, 2**(x - x) is 2**0 = 1
+        try:
+            if sp.simplify(_evaluated(ex)) == 0:
+                return S.Zero
+        except Exception:  # noqa: BLE001 - not proved 0: the exponent as written
+            pass
     return ex
 
 
 # Functions defined on all of ℝ (no condition), and the ones the rules above bound. Anything
 # else — factorial or gamma of a variable, Mod, atan2, an undefined function, an integral — has a
 # real domain these rules do not describe.
+# The error function family, the sine/hyperbolic sine integrals and the Fresnel integrals are entire and real
+# on ℝ; the cosine integrals and li need x > 0, Ei x ≠ 0, polylog(s, z) (s an integer >= 2) z <= 1. They are
+# the primitives of e^(-x²), sin x/x, log(1+x)/x, ...: without them no fundamental-theorem certificate was
+# built and ∫_R e^(-x²) dx = √π was UNKNOWN (attack on d4c round 2, RK-A/RK-B).
 _TOTAL_FUNCS = (sp.sin, sp.cos, sp.exp, sp.Abs, sp.atan, sp.acot, sp.sinh, sp.cosh, sp.tanh,
-                sp.asinh, sp.floor, sp.ceiling, sp.frac, sp.sign, sp.Max, sp.Min)
-_BOUNDED_FUNCS = (sp.log, sp.tan, sp.sec, sp.cot, sp.csc, sp.asin, sp.acos, sp.acosh, sp.atanh)
+                sp.asinh, sp.floor, sp.ceiling, sp.frac, sp.sign, sp.Max, sp.Min,
+                sp.erf, sp.erfc, sp.erfi, sp.Si, sp.Shi, sp.fresnels, sp.fresnelc)
+_BOUNDED_FUNCS = (sp.log, sp.tan, sp.sec, sp.cot, sp.csc, sp.asin, sp.acos, sp.acosh, sp.atanh,
+                  sp.Ci, sp.Chi, sp.Ei, sp.li, sp.polylog)
 # sets are containers: their elements are checked (an ImageSet's Lambda is not, so it refuses)
 _CONTAINERS = (sp.Tuple, sp.Set, sp.core.relational.Relational, sp.And, sp.Or, sp.Not)
 
@@ -833,19 +2169,22 @@ def _num_relation_holds(rel, var, c) -> bool | None:
         return None
     lhs = real_odd_roots(rel.lhs.subs(var, c))
     rhs = real_odd_roots(rel.rhs.subs(var, c))
+    # an equality of a Float operand within its own precision is no proof (principle 4): Eq(x, 1) "held" at
+    # x = 1.00000000000001 and Ne(x, 1) failed there (fourth audit GAP-NE). A difference beyond it decides
+    tolerant = has_float(lhs, rhs)
     if isinstance(rel, Eq):
         # exact structural first, then numeric
         okS, _ = sym_equal(lhs, rhs)
         if okS:
             return True
         okN, _ = num_equal(lhs, rhs)
-        return okN
+        return None if okN and tolerant else okN
     if isinstance(rel, Ne):
         okS, _ = sym_equal(lhs, rhs)
         if okS:
             return False
         okN, _ = num_equal(lhs, rhs)
-        return None if okN is None else (not okN)
+        return None if okN is None or (okN and tolerant) else (not okN)
     if not has_float(lhs, rhs):
         s = _certified_compare(lhs, rhs)
         if s == NONREAL:
@@ -870,6 +2209,8 @@ def _num_relation_holds(rel, var, c) -> bool | None:
     if isinstance(a, mp.mpc) or isinstance(b, mp.mpc):
         return False                      # non-real value: relation is not satisfied in R
     eq, _ = num_equal(lhs, rhs)
+    if eq and sp.sympify(lhs - rhs).is_zero is not True:
+        return None                       # equal within the Floats' precision only: the order is rounding (GAP-NE)
     if isinstance(rel, sp.StrictLessThan):
         return (a < b) and not eq
     if isinstance(rel, sp.LessThan):
@@ -910,7 +2251,44 @@ def relation_holds_at(rel, var, c) -> bool | None:
         return None
     # never let `rel.subs` auto-evaluate a numeric Eq/inequality: Float rounding would
     # turn a true identity into False. Substitute the sides and compare tolerantly.
-    return _num_relation_holds(rel, var, c)
+    h = _num_relation_holds(rel, var, c)
+    if h is False:
+        return False
+    # a side undefined at the point as written holds nothing there, though its value may fold: 0*acos(4) is
+    # SymPy's 0, and (|x| - x)*acos(2**x + x - 2) <= 0 "held" at x = 2 (round 8 of part d4b, YO-1). The
+    # conventions (an odd root of a negative number, ...) are read where they stand, not here
+    d = _defined_at(rel, var, c)
+    if d is False:
+        return False
+    return None if d is None else h
+
+
+def _defined_at(rel, var, c) -> bool | None:
+    """Is every side of `rel` defined at var = c (its definedness conditions other than the conventions
+    hold there)? None when one is undecided."""
+    undecided = False
+    for side in (rel.lhs, rel.rhs):
+        if var not in getattr(side, "free_symbols", set()):
+            continue
+        for cond in _side_conditions(side, var):
+            if is_convention(cond):
+                continue
+            if is_no_value(cond):
+                return False
+            if is_undecided(cond):
+                undecided = True
+                continue
+            r = relation_holds_at(cond, var, c)
+            if r is False:
+                return False
+            if r is None:
+                undecided = True
+    return None if undecided else True
+
+
+@functools.lru_cache(maxsize=1024)
+def _side_conditions(side, var) -> tuple:
+    return tuple(definedness_conditions(side, var))
 
 
 def _cmp_le(a, b, strict: bool) -> bool | None:
@@ -961,13 +2339,33 @@ def _in_set_certified(dom, c) -> bool | None:
         if is_int is None:
             return None
         return bool(dom.contains(k)) if is_int else False
+    if isinstance(dom, sp.ConditionSet):
+        # a condition Ctx.domain_for could not solve (one with a trigonometric function on ℝ): decided
+        # at the point, with the certified comparisons
+        base = _in_set_certified(dom.base_set, c)
+        if base is False:
+            return False
+        h = relation_holds_at(dom.condition, dom.sym, c)
+        if h is False:
+            return False
+        return True if (base is True and h is True) else None
     return None
 
 
 def in_domain(dom: sp.Set, c) -> bool | None:
     """Membership of a constant in a domain set. SymPy's own `contains` first; where it cannot
     decide, every comparison is certified (see _certified_compare) — the old fallback compared
-    40-digit values, and returned False for any part that was not an Interval."""
+    40-digit values, and returned False for any part that was not an Interval. A domain with a
+    condition no solver could turn into a set (a ConditionSet, Ctx.domain_for) is decided by the
+    certified comparisons only: SymPy reads the condition at the point uncertified, and took
+    cos(arccot(1/2) + arccot(2)) != 0 for true (the cosine is cos(pi/2) = 0; measured 2 Oct 2026)."""
+    if isinstance(dom, sp.Set) and dom.has(sp.ConditionSet):
+        try:
+            if certified_sign(c) == NONREAL:
+                return False
+            return _in_set_certified(dom, c)
+        except Exception:  # noqa: BLE001
+            return None
     try:
         r = dom.contains(c)
     except Exception:
@@ -1023,7 +2421,10 @@ def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, l
         if d is False:
             rejected.append((c, "outside_domain_of_discourse"))
             continue
-        if d is None and membership_undecided(domain, c):
+        if d is None:
+            # no exact check decides it (a number-set membership at pi + E, membership_undecided, or a
+            # comparison: x = 2*(atan(1/3) + ...), pi exactly, against x > pi): the root is neither kept
+            # nor dropped. Kept, {T} was certified and the right {} refuted (fourth audit G10, review B)
             rejected.append((c, "definedness_undecided: membership in the domain"))
             continue
         bad = None
@@ -1048,14 +2449,24 @@ def guard_roots(rel, var, candidates, domain: sp.Set = S.Reals) -> tuple[list, l
     return kept, rejected
 
 
-def written_definedness(src: str, ns: dict[str, Any]) -> tuple[list[Any], set]:
+def written_definedness(src: str, ns: dict[str, Any], pins: dict | None = None) -> tuple[list[Any], set]:
     """Definedness of an IR expression or relation AS WRITTEN (see `parse_as_written`): the open
     conditions, and the symbols of an expression that is defined NOWHERE (a closed condition
-    that fails, e.g. `1/(x - x)`). Empty when the text cannot be read that way."""
-    from ..normalize.parse import parse_as_written
+    that fails, e.g. `1/(x - x)`). Empty when the text cannot be read that way.
+
+    `pins`: symbols a given fixes, put in the written text (unevaluated, never a bound variable) BEFORE
+    its conditions are read. A condition can depend on the value itself: x**a has the condition x > 0
+    while a is free, none once a = 2, and the right (−2, 2) for x**a < 4 was refuted with a = 2 (TAN-09)."""
+    from ..normalize.parse import parse_as_written, substitute_free
     e = parse_as_written(src, ns)
     if e is None:
         return [], set()
+    if pins:
+        try:
+            with sp.evaluate(False):
+                e = substitute_free(e, pins)
+        except Exception:  # noqa: BLE001 - read without the values (the old reading)
+            pass
     conds, nowhere = [], set()
     try:
         found = definedness_conditions(e, None)
@@ -1075,23 +2486,88 @@ def closed_condition_undecided(conds) -> bool:
     cos(arccot(2) + arccot(1/2)) != 0 stays symbolic, carries no symbol, and was dropped, so the
     maximum of x + 0*tan(...) on [0, 1] and the root of x + tan(...) - tan(...) = 1 were certified
     (audit of 29 Sep 2026). The expression may be undefined everywhere; the caller abstains."""
-    from ..equiv.forms import checked_forms, has_closed_form
     for c in conds:
         if isinstance(c, sp.Contains) and not c.free_symbols:
             return True                     # a membership SymPy could not decide (closed, left standing)
-        if isinstance(c, sp.core.relational.Relational) and not c.free_symbols:
-            try:
-                if has_closed_form(c):
-                    # Limit(sin(2x)/x, x, 0) != 0 is read with the limit's confirmed value
-                    c = checked_forms(c)
-                    if c is sp.true:
-                        continue
-                    if c is sp.false:
-                        return True
-                if relation_holds_at(c, sp.Dummy("_closed"), 0) is not True:
-                    return True
-            except Exception:  # noqa: BLE001 - a check that fails (or a form no number confirms) proves nothing
+        if isinstance(c, (sp.core.relational.Relational, sp.And, sp.Or, sp.Not)) and not c.free_symbols:
+            # an And/Or/Not too, part by part: a derivative's condition "v != p or undecided" put at p
+            # (normalize.parse._switch_differentiability) is one, and closed it was no condition at all
+            # (SON-G3-YO-1)
+            if _closed_condition_holds(c) is not True:
                 return True
+    return False
+
+
+def _closed_condition_holds(c) -> bool | None:
+    """Does the closed condition c hold (`closed_condition_undecided`'s reading of a relation: a closed form by its
+    confirmed value, then `relation_holds_at`; an And/Or/Not part by part)? None when not decided."""
+    from ..equiv.forms import checked_forms, has_closed_form
+    if c is sp.true or c is sp.false:
+        return c is sp.true
+    if isinstance(c, (sp.And, sp.Or)):
+        parts = [_closed_condition_holds(a) for a in c.args]
+        stop = isinstance(c, sp.Or)                      # the value that decides: True for Or, False for And
+        if any(t is stop for t in parts):
+            return stop
+        return None if any(t is None for t in parts) else not stop
+    if isinstance(c, sp.Not):
+        t = _closed_condition_holds(c.args[0])
+        return None if t is None else not t
+    if not isinstance(c, sp.core.relational.Relational) or is_undecided(c):
+        return None
+    try:
+        if has_closed_form(c):
+            # Limit(sin(2x)/x, x, 0) != 0 is read with the limit's confirmed value
+            c = checked_forms(c)
+            if c is sp.true or c is sp.false:
+                return c is sp.true
+        return relation_holds_at(c, sp.Dummy("_closed"), 0)
+    except Exception:  # noqa: BLE001 - a check that fails (or a form no number confirms) proves nothing
+        return None
+
+
+def hold_nowhere(cs, s_) -> bool:
+    """Worker: do the relations `cs` on the one symbol `s_` hold nowhere together, PROVED by an exact empty set?
+    On ℝ first; then the periodic ones on one common period, where `sandbox.exactsets` solves them exactly (on
+    ℝ SymPy leaves sin(x) > 0 and -sin(x) > 0 a ConditionSet). A periodic set empty on one period is empty."""
+    from sympy.calculus.util import lcim
+    rel = sp.And(*cs)
+    if rel is sp.false or exact_solveset(rel, s_, S.Reals) is S.EmptySet:
+        return True
+    periodic, periods = [], []
+    for c in cs:
+        try:
+            p_ = sp.periodicity(c.lhs - c.rhs, s_)
+        except Exception:  # noqa: BLE001 - no period found: the relation is left out of this proof
+            p_ = None
+        if p_ is not None and p_.is_positive is True:
+            periodic.append(c)
+            periods.append(p_)
+    if not periodic:
+        return False
+    try:
+        # lcim: None when two periods have no common multiple (2*pi and 1), and then no proof
+        period = lcim(periods) if len(periods) > 1 else periods[0]
+        return exact_solveset(sp.And(*periodic), s_, Interval.Ropen(0, period)) is S.EmptySet
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def open_conditions_empty(conds, timeout: float = 8.0) -> bool:
+    """Do the open definedness conditions on one symbol hold nowhere together? x + log(x) - log(x) + log(-x) -
+    log(-x) needs x > 0 and -x > 0: each alone has points, so no condition fails outright and the expression
+    passed as defined: its derivative 1, the antiderivative x of 1 + ..., the simplification x and its limit
+    1 at 1 were certified or refuted as if it had values (fourth audit TAN-06). Only a proof counts
+    (`hold_nowhere`); the expression is then defined nowhere, like one whose condition fails."""
+    by_sym: dict = {}
+    for c in conds:
+        fs = getattr(c, "free_symbols", set())
+        if isinstance(c, sp.core.relational.Relational) and len(fs) == 1:
+            by_sym.setdefault(next(iter(fs)), []).append(c)
+    for s_, cs in by_sym.items():
+        r = sb_run("mathverify.certify.domain:hold_nowhere", cs, s_, timeout=timeout)
+        if r.ok and r.value is True:
+            return True
     return False
 
 
@@ -1107,11 +2583,32 @@ def written_closed_undecided(src: str, ns: dict[str, Any]) -> bool:
         return False
 
 
-def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> bool | None:
+def _region_facts(d, region):
+    """`d` as a Dummy with the facts of `region` (an index Range: an integer, nonnegative or positive), or `d`
+    itself."""
+    facts = {}
+    try:
+        if region.is_subset(S.Integers) is True:
+            facts["integer"] = True
+            if region.inf.is_positive is True:
+                facts["positive"] = True
+            elif region.inf.is_nonnegative is True:
+                facts["nonnegative"] = True
+        elif region.is_subset(S.Reals) is True:
+            facts["real"] = True
+    except Exception:  # noqa: BLE001
+        return d
+    return sp.Dummy(d.name, **facts) if facts else d
+
+
+def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set, pins: dict | None = None,
+                         params: dict | None = None) -> bool | None:
     """Is the expression, AS WRITTEN, undefined somewhere in `region` (a point set, an interval, an
     index Range)? None when that cannot be decided. Measured 23 Sep 2026 on kinds that keep their
     own domain handling: "(x²/x)' at 0 is 1", "max of x/x − x² on [−1, 1] is 1" (never attained)
-    and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT."""
+    and "Σ_{k=−1}^{1} k/k = 3" were certified CORRECT. `pins`: the values the givens fix
+    (`written_definedness`); without them a condition naming a parameter decided nothing, and with b = 1/2
+    the maximum 1 of x + 0*sqrt(b - x) on [0, 1] was certified (review of d4e)."""
     # the task's interval or point must lie where the variable is declared: with x declared positive
     # the parse folds |x| to x, and on [-1, 1] the minimum of |x| - x**2 was certified to be -2, the
     # derivative of x*|x| at -1 too (-2; it is 2); no reading gives these (second audit of 29 Sep 2026)
@@ -1123,18 +2620,49 @@ def written_undefined_in(src: str, ns: dict[str, Any], var, region: sp.Set) -> b
         inside = None
     if inside is not True:
         return True
-    conds, nowhere = written_definedness(src, ns)
+    conds, nowhere = written_definedness(src, ns, pins)
     if var in nowhere or written_closed_undecided(src, ns):
         return True                    # a closed condition no check proves: the callers abstain
+    d2 = _region_facts(var, region)
     for c in conds:
-        if c.free_symbols - {var}:
-            return None
+        other = c.free_symbols - {var}
+        if other:
+            # a parameter is read with the facts of its region (`params`: Dummies, a > 0 positive) and the variable
+            # with the region's (k >= 1 an integer): k + a != 0 holds for every value. Left undecided, the sums of
+            # 1/(k + a) with a > 0 were UNKNOWN (attack on d4e round 3, D4E3-RK-4)
+            if not params or not other <= set(params) or isinstance(c, sp.Contains) \
+                    or not isinstance(c, sp.core.relational.Relational):
+                return None
+            held = c.xreplace({**params, var: d2})
+            if held is sp.true:
+                continue
+            return True if held is sp.false and var not in c.free_symbols else None
+        if isinstance(c, sp.Contains):
+            # a membership or a convention (0**k at k = 0: 1 or undefined): where it fails over the region
+            # (`_violations`). Read as a relation it was never decided, and Σ_{k=0}^{3} 0**k = 1 and, with
+            # a = 0, Σ_{k=0}^{3} a**k = 1 were certified (attack on d4e, YO-1)
+            bad = _violations(c, var, region)
+            if bad is None:
+                return None
+            if bad.is_empty is not True:
+                return True
+            continue
         bad = Eq(c.lhs, c.rhs) if isinstance(c, Ne) else sp.Not(c)
+        # first with the region's facts (an index k >= 0: factorial(k) != 0 at every one, which exact_solveset left a
+        # ConditionSet even on Range(0, 4); round 4, RK-4)
+        if d2 is not var and bad.xreplace({var: d2}) is sp.false:
+            continue
         try:
-            s = sp.solveset(bad, var, region)
+            # a trigonometric condition is read on the region itself, not on one period of ℝ: the
+            # violations of sin(x) >= 0 on [10, 12] were empty (sandbox.exactsets)
+            s = exact_solveset(bad, var, region)
         except Exception:  # noqa: BLE001
             return None
-        if isinstance(s, sp.ConditionSet):
+        if isinstance(s, sp.ConditionSet) or s.has(sp.ConditionSet):
+            # no proof that the condition holds on the whole region is no proof of definedness: the maximum 0
+            # of -(x - pi)**2 + (x + 1)Q/((x + 1)Q) - 1 on [2, 4] (undefined at pi) was certified (review of
+            # 2 Oct 2026, B5). Undecided: every caller abstains on None as on True (d4e round 3), and a
+            # trigonometric condition read True here added nothing (round 9 of part d4b, mutation K10)
             return None
         if s != S.EmptySet:
             return True
@@ -1149,9 +2677,18 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
         # no domain rather than ℝ (measured 25 Sep 2026: "the domain of factorial(x) is ℝ" CORRECT)
         return None, {"error": "definedness_unknown", "expr": str(expr)}
     ev: dict[str, Any] = {"conditions": [str(c) for c in conds]}
+    if any(is_convention(c) for c in conds):
+        # a point where the value is a convention (x**(1/3) below 0, (x - 1)**0 at 1) is neither in nor
+        # out of the domain; solveset does not read the condition and continuous_domain would decide it
+        ev["error"] = "convention_dependent_domain"
+        return None, ev
     dom = base
     for cond in conds:
-        r = sb_run("mathverify.sandbox.ops:solveset_in", cond, var, S.Reals, timeout=timeout)
+        # a trigonometric condition on a bounded base is solved on it (sandbox.exactsets rebuilds and
+        # checks it there); otherwise on ℝ, where the exact check below reads SymPy's own set (the base
+        # may carry SymPy's mistake: cos(arccot(x) + arccot(2)) != 0 read as x != -2)
+        within = base if at_risk(cond, var) and _hull(base) is not None else S.Reals
+        r = sb_run("mathverify.sandbox.ops:solveset_in", cond, var, within, timeout=timeout)
         if not r.ok or isinstance(r.value, sp.ConditionSet):
             ev["fallback"] = "continuous_domain"
             r2 = sb_run("mathverify.sandbox.ops:continuous_domain", expr, var, base, timeout=timeout)
@@ -1159,7 +2696,7 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
                 return r2.value, ev
             ev["error"] = r.error or r2.error
             return None, ev
-        if _solveset_contradicted(cond, var, r.value):
+        if _solveset_contradicted(cond, var, r.value, within):
             ev["error"] = f"solveset_contradicted_by_exact_check: {cond}"
             return None, ev
         dom = sp.Intersection(dom, r.value)
@@ -1167,14 +2704,31 @@ def domain_of_expression(expr, var, base: sp.Set = S.Reals, timeout: float = 8.0
     return dom, ev
 
 
-def _solveset_contradicted(cond, var, s) -> bool:
+def _probe_points(iv) -> list:
+    """Points inside an interval piece: several, spread over it, and far out on an unbounded side.
+    One point per piece missed a set cut to one period: (0, pi) for sin(x) > 0 left [pi, oo), whose
+    probe pi + 1 fails the condition as it should, though 2*pi + 1 meets it (fourth audit G2)."""
+    lo, hi = iv.inf, iv.sup
+    if lo.is_finite and hi.is_finite:
+        return [lo + (hi - lo) * sp.Rational(k, 8) for k in (1, 3, 4, 5, 7)]
+    steps = (1, 2, 3, 5, 8, 13, 21)
+    if lo.is_finite:
+        return [lo + d for d in steps]
+    if hi.is_finite:
+        return [hi - d for d in steps]
+    return [sp.Integer(0)] + [sp.Integer(d) for d in steps] + [-sp.Integer(d) for d in steps]
+
+
+def _solveset_contradicted(cond, var, s, within=S.Reals) -> bool:
     """Does an exact check contradict SymPy's solution set of `cond`? Each excluded isolated point must
     fail the condition, and a point inside each interval piece must meet it (or fail it, outside).
     solveset reads cos(atan(x) + atan(2)) != 0 as x != -2, where the cosine is 1 (the root is 1/2), and
     that domain was certified (audit of 29 Sep 2026). Only a contradiction counts: an undecided check
-    leaves SymPy's set as it was."""
+    leaves SymPy's set as it was. `within`: the set `s` was solved on (its complement is taken there)."""
+    from ..sandbox.exactsets import sign_range
     try:
-        out = sp.Complement(S.Reals, s)
+        # the set lies in the reals the variable's sign leaves (a positive x: 0 is no point of it)
+        out = sp.Complement(sp.Intersection(within, sign_range(var)), s)
     except Exception:  # noqa: BLE001
         return False
     checks = []
@@ -1186,12 +2740,11 @@ def _solveset_contradicted(cond, var, s) -> bool:
                 # point it wrongly excludes for 1/sin(arccot(x) + arccot(2) + arccot(3))) has is_real
                 # None, went unchecked, and the true domain R minus {-1} was refuted
                 checks += [(q, inside) for q in p if q.is_real or (q.is_number and q.is_real is None)]
-            elif isinstance(p, sp.Interval) and p.measure.is_positive:
-                lo, hi = p.inf, p.sup
-                q = (lo + hi) / 2 if lo.is_finite and hi.is_finite else (hi - 1 if lo.is_infinite and hi.is_finite
-                                                                         else lo + 1 if lo.is_finite else sp.Integer(0))
-                checks.append((q, inside))
-    for q, inside in checks[:24]:
+            elif isinstance(p, sp.Interval) and p.measure.is_extended_positive:
+                # extended: oo.is_positive is False (sympy >= 1.13), and an unbounded piece was
+                # never probed at all
+                checks += [(q, inside) for q in _probe_points(p)]
+    for q, inside in checks[:48]:
         h = relation_holds_at(cond, var, q)
         if h is not None and h is not inside:
             return True
@@ -1221,6 +2774,10 @@ def verify(ir, solution, ctx: Ctx):
             return unknown(LAYER, "domain_undecidable", 0, {"error": "definedness_unknown_as_written"},
                            flags=["cas_failed"])
         base = ctx.domain_for(var)
+        if ctx.unsolved_conditions(var):
+            # the domain is cut by a condition with no closed form on ℝ (sin(x) > 0 given): the
+            # expression's domain within it is no set the comparison can read (fourth audit G2)
+            return condition_unsolved(LAYER, ctx.unsolved_conditions(var), t.ms)
         # the expression's own conditions are what domain_of_expression solves ([a, oo) for √(x − a))
         unbound = ctx.unapplied_conditions(var, enforced=definedness_conditions_strict(expr, var) or ())
         if unbound:

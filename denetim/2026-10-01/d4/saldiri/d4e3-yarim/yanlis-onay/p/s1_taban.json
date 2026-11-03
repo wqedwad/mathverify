@@ -1,0 +1,235 @@
+[
+ {
+  "label": "DIR derivative x + 0*I(x) at 0: 1 [f undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.46
+ },
+ {
+  "label": "DIR tangent x + 0*I(x) at 0: y = x [f undefined at 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "DIR min x**2 + 0*I(x) on [-1, 1]: 0 [not attained]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reasons": [
+   "certify.extremum:unknown:f_undefined_as_written"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "DIR solve x**2 + 0*I(x) = 0: {0} [0 outside the domain]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "DIR evaluate x + 1 + 0*I(x), x = 0: 1 [undefined]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.39
+ },
+ {
+  "label": "DIR evaluate 0*I(a) + 1, a real free: 1 [undefined at a = 0]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.03
+ },
+ {
+  "label": "DIR derivative x + 0*I(x): 1 (expr)",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "DIR derivative x**2 + 0*I(x) at 0: 0 [undefined]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "problem_definedness_undecided"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "FAM derivative x**2, given x > 10: 2*x*sin(x)/sin(x) [undefined at 4pi]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.1
+ },
+ {
+  "label": "FAM derivative x**2, given x > 10: 2*x + 0*cot(x) [undefined at 4pi]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "FAM derivative x**2, given x > 10: 2*x + 0*tan(x) [undefined at 7pi/2]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "FAM derivative x**2, constraint x > 10: 2*x*sin(x)/sin(x) [undefined at 4pi]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "FAM derivative x**2, constraint x > 10: 2*x + 0*cot(x) [undefined at 4pi]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "FAM derivative x**2, constraint x > 10: 2*x + 0*tan(x) [undefined at 7pi/2]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "FAM derivative x**2, dod x > 10: 2*x*sin(x)/sin(x) [undefined at 4pi]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "FAM derivative x**2, dod x > 10: 2*x + 0*cot(x) [undefined at 4pi]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "FAM derivative x**2, dod x > 10: 2*x + 0*tan(x) [undefined at 7pi/2]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "FAM derivative log(x - 20): 1/(x - 20) + 0*cot(x) [undefined at 7pi]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "FAM derivative sqrt(x - 20): 1/(2*sqrt(x - 20))*sin(x)/sin(x)",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.06
+ },
+ {
+  "label": "FAM ctrl derivative x**2: 2*x*sin(x)/sin(x) [undefined at 0]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.01
+ },
+ {
+  "label": "FAM ctrl derivative x**2, given x > 10: 2*x",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.02
+ }
+]

@@ -20,9 +20,11 @@ import sympy as sp
 from sympy import S, Interval, FiniteSet, ConditionSet, oo
 
 from ..equiv import answers_equivalent
-from ..equiv.numeric import num_equal, to_mp
+from ..equiv.numeric import certified_sign, num_equal, to_mp
 from ..equiv.sets import scalar_equal
 from ..sandbox import run as sb_run
+from ..sandbox.pool import CasResult
+from ..sandbox.exactsets import at_risk, exact_solveset
 from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
 
 LAYER = "certify.extremum"
@@ -43,19 +45,28 @@ def _num(v):
         return None
 
 
-def _better(a, b, is_max: bool) -> bool:
-    return a > b if is_max else a < b
-
-
-def _strictly_better(fa, na, fb, nb, is_max: bool) -> bool:
-    """fa beats fb for certain: exact inequality (strict ladder) AND the right direction."""
-    if na is None or nb is None or not _better(na, nb, is_max):
-        return False
+def _strictly_better(fa, na, fb, nb, is_max: bool) -> bool | None:
+    """Does fa beat fb? True or False when certain, None when undecided (a candidate that may beat the
+    claim). Equality is decided by num_equal, the direction by a CERTIFIED sign of fa - fb, never by the
+    40-digit values: 1 + 10^-50 and 1 agree to 40 digits, "not better" was read, and the maximum 1 of
+    1 + x/10^50 on [0, 1] was certified next to the true 1 + 10^-50 (attack on d4c round 2, YO-1)."""
+    if na is None or nb is None:
+        return None
     try:
         eq, _ = num_equal(fa, fb)
     except Exception:  # noqa: BLE001
+        return None
+    if eq is True:
         return False
-    return eq is False
+    if eq is None:
+        return None
+    try:
+        s_ = certified_sign(sp.sympify(fa) - sp.sympify(fb))
+    except Exception:  # noqa: BLE001
+        return None
+    if s_ not in (1, -1):
+        return None
+    return (s_ == 1) == is_max
 
 
 def _classical(e):
@@ -84,6 +95,8 @@ def _kinks(f, var, region, timeout) -> tuple[list, bool]:
             r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(u, 0), var, region, timeout=timeout)
             if r.ok and (r.value is S.EmptySet or isinstance(r.value, FiniteSet)):
                 pts += [p for p in r.value if p.is_number and p.is_real]
+                # a point of undecided realness is not dropped from a complete list (SS-YO-1)
+                complete = complete and all(p.is_number and p.is_real is True for p in r.value)
             else:
                 complete = False
     return list(dict.fromkeys(pts)), complete
@@ -109,6 +122,42 @@ def _scan_better(f, var, lo, hi, cval, is_max, n=2000):
     return None
 
 
+def _strictly_monotone(f, var, lo, hi, depth: int = 6) -> int | None:
+    """+1 (-1) when f is analytic on [lo, hi] and f' > 0 (< 0) there, PROVED by interval arithmetic
+    (`enclosure.iv_eval` with analytic=True: f and f' read as written, every operation inside the open set where it
+    is analytic, so SymPy's f' is f's derivative there) on a bisection of at most 2**depth cells of a box holding
+    [lo, hi]; None otherwise. The extremum of f on [lo, hi] is then at its ends: pi*x**(pi - 1) = 0 is solved by no
+    exact class, and the maximum 2**pi of x**pi on [1, 2] was UNKNOWN (son saldırı G2RK-15)."""
+    from .enclosure import iv_eval
+    try:
+        a_, b_ = iv_eval(sp.sympify(lo), {}), iv_eval(sp.sympify(hi), {})
+        box = mp.iv.mpf([a_.a, b_.b])
+        d = sp.diff(f, var)
+        cells, signs = [box], set()
+        for _ in range(depth + 1):
+            split = []
+            for cell in cells:
+                iv_eval(f, {var: cell}, analytic=True)
+                v = iv_eval(d, {var: cell}, analytic=True)
+                if v.a > 0:
+                    signs.add(1)
+                elif v.b < 0:
+                    signs.add(-1)
+                else:
+                    m = cell.mid
+                    split += [mp.iv.mpf([cell.a, m.b]), mp.iv.mpf([m.a, cell.b])]
+            if len(signs) > 1:
+                return None
+            if not split:
+                return next(iter(signs)) if signs else None
+            if len(split) > 2 ** depth:
+                return None
+            cells = split                     # the cells of one sign are settled; the others are read again
+    except Exception:  # noqa: BLE001 - not proved: no monotonicity, as before
+        return None
+    return None
+
+
 def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: float = 8.0
                      ) -> tuple[bool | None, dict[str, Any]]:
     """which: max | min | argmax | argmin. Returns (True|False|None, evidence).
@@ -121,6 +170,10 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
     f = sp.sympify(f)
     is_max = which in ("max", "argmax")
     r = sb_run("mathverify.sandbox.ops:critical_points", f, var, interval, timeout=timeout)
+    if r.ok and r.value is None:
+        # not found whole: never complete. The zeros are rd's very set (`ops.critical_points`), not a raw solveset's
+        # partial list beside it (SS-YO-1)
+        r = CasResult(ok=False, error="critical points not found whole")
     cands = list(r.value) if r.ok else []
     rd = sb_run("mathverify.sandbox.ops:solveset_in", _classical(sp.diff(f, var)), var, interval, timeout=timeout)
     kinks, kinks_complete = _kinks(f, var, interval, timeout)
@@ -134,13 +187,25 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
     rc = sb_run("mathverify.sandbox.ops:continuous_domain", f, var, interval, timeout=timeout)
     complete = bool(r.ok and rd.ok and (rd.value is S.EmptySet or isinstance(rd.value, FiniteSet))
                     and kinks_complete and rc.ok and rc.value == interval)
+    if not complete and closed:
+        # f strictly monotone on [a, b], proved by intervals: its ends are the only candidates (son saldırı G2RK-15)
+        mono = _strictly_monotone(f, var, interval.inf, interval.sup)
+        if mono is not None:
+            complete = True
+            ev["monotone"] = "increasing" if mono == 1 else "decreasing"
     ev["complete_candidates"] = complete
     vals = []
     for c in cands:
         fc = sp.simplify(f.subs(var, c))
         vals.append((c, fc, _num(fc)))
-    vals = [v for v in vals if v[2] is not None]
     ev["candidates"] = [(str(c), str(fc)) for c, fc, _ in vals]
+    if any(v[2] is None for v in vals):
+        # a candidate whose value is no real number (a symbol a given fixes, b in [0, b], or a*1 with a
+        # free) was dropped, and the rest called the candidate set complete: the maximum 0 of x on
+        # [0, b] with b = 3 was certified and 3 refuted (fourth audit G4, TAN-02). It decides nothing.
+        ev["reason"] = "candidate_value_not_comparable"
+        ev["not_comparable"] = [str(c) for c, _, n in vals if n is None]
+        return None, ev
 
     # the value the claim stands for
     if which in ("max", "min"):
@@ -162,12 +227,18 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
         return (False if getattr(cval, "is_number", False) and cval.is_real is False else None), ev
     wrong = "better_value_exists" if which in ("max", "min") else "argument_does_not_attain_extremum"
 
-    # 1. a candidate point beats the claim
+    # 1. a candidate point beats the claim; one that may (undecided) leaves the EVT route closed
+    undecided = []
     for c, fc, fn_ in vals:
-        if _strictly_better(fc, fn_, cval, cn, is_max):
+        better = _strictly_better(fc, fn_, cval, cn, is_max)
+        if better is True:
             ev["reason"] = wrong
             ev["witness"] = (str(c), str(fc))
             return False, ev
+        if better is None:
+            undecided.append(str(c))
+    if undecided:
+        ev["candidates_undecided"] = undecided
     # 2. an open end whose limit beats the claim: points near it do too
     for end, is_open in ((interval.inf, interval.left_open), (interval.sup, interval.right_open)):
         if not is_open:
@@ -185,27 +256,31 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
                 return False, ev
             continue
         ln = _num(lv)
-        if ln is not None and _strictly_better(lv, ln, cval, cn, is_max):
+        if ln is not None and _strictly_better(lv, ln, cval, cn, is_max) is True:
             ev["reason"] = "better_value_near_open_endpoint"
             return False, ev
     # 3. nothing beats the claim
     strict_rel = (f > cval) if is_max else (f < cval)
     rs = sb_run("mathverify.sandbox.ops:solveset_in", strict_rel, var, interval, timeout=timeout)
     bound = None
+    superlevel = False             # an exact set of points better than the claim, not proved empty
     if rs.ok and not rs.value.has(ConditionSet):
         ev["superlevel_set"] = str(rs.value)
         if rs.value is S.EmptySet:
             bound = True
         else:
+            superlevel = rs.value.is_empty is not True
             from .calculus import _points_of
             for p_ in _points_of(rs.value):
                 fp = sp.simplify(f.subs(var, p_))
-                if _strictly_better(fp, _num(fp), cval, cn, is_max):
+                if _strictly_better(fp, _num(fp), cval, cn, is_max) is True:
                     ev["reason"] = "better_value_exists_symbolic"
                     ev["witness"] = (str(p_), str(fp))
                     return False, ev
-    if bound is None and complete and closed:
-        # EVT: f continuous on [a, b] attains its extremum at a candidate, none of which beats c
+    if bound is None and complete and closed and not undecided and not superlevel:
+        # EVT: f continuous on [a, b] attains its extremum at a candidate, none of which beats c (each
+        # one PROVED not to), and SymPy found no point that does: a non-empty superlevel set, or a
+        # candidate whose comparison is undecided, closed this route (YO-1)
         bound = True
         ev["proof"] = "EVT+complete_critical_set"
     if bound is None and interval.inf.is_number and interval.sup.is_number:
@@ -215,7 +290,7 @@ def certify_extremum(f, var, interval: Interval, which: str, claimed, timeout: f
                     is_max, timeout=timeout)
         if rn.ok and rn.value is not None and interval.contains(rn.value) is sp.true:
             fp = sp.simplify(f.subs(var, rn.value))
-            if _strictly_better(fp, _num(fp), cval, cn, is_max):
+            if _strictly_better(fp, _num(fp), cval, cn, is_max) is True:
                 ev["reason"] = "better_value_found_numerically"
                 ev["numeric_better_point"] = (str(rn.value), str(sp.N(fp, 12)))
                 return False, ev
@@ -288,14 +363,14 @@ def certify_local_extremum(f, var, domain: sp.Set, which: str, claimed, timeout:
     if not kc:
         ev["reason"] = "non_differentiable_points_not_enumerated"
         return None, ev
-    cps = [c for c in rd.value if c.is_real] + kinks
     rs = sb_run("mathverify.sandbox.ops:critical_points", f, var, region, timeout=timeout)
-    if not rs.ok:
+    if not rs.ok or rs.value is None:
         ev["reason"] = "critical_points_failed"
         return None, ev
-    for c in rs.value:
-        if c.is_number and c.is_real:
-            cps.append(c)
+    if not all(c.is_number and c.is_real is True for c in list(rd.value) + list(rs.value)):
+        ev["reason"] = "critical_point_realness_undecided"     # not dropped from a complete list (SS-YO-1)
+        return None, ev
+    cps = list(rd.value) + kinks + list(rs.value)
     cps = sorted(dict.fromkeys(cps), key=lambda c: float(c))
     ev["critical_points"] = [str(c) for c in cps]
     lo = region.inf if region.inf != -oo else None
@@ -342,36 +417,68 @@ def certify_local_extremum(f, var, domain: sp.Set, which: str, claimed, timeout:
     return ok, ev
 
 
-def _conditions_on(ctx: Ctx, var, with_interval: bool) -> tuple[list[sp.Set] | None, list]:
+def _conditions_on(ctx: Ctx, var, with_interval: bool, region=None) -> tuple[list[sp.Set] | None, list]:
     """What the problem says of `var` besides the task, as sets that cut the region the extremum is
     taken over: the given relations that name it and, when the task writes its own interval, the
     variable's declared constraints and the domain of discourse (`Ctx.domain_for` holds these two
     otherwise). An explicit interval was read alone: the maximum 3 of x on [-2, 3] was certified with
     x < 1 as a constraint, a given or the domain of discourse (V18, 30 Sep 2026). A symbol a given fixes
     is read as its value (`Ctx.on_var`); the second item lists what still names a free symbol (the
-    certificate abstains, part vi). None instead of the sets when a relation cannot be solved exactly."""
-    from ..normalize.parse import UndeclaredSymbolError, parse_relation
+    certificate abstains, part vi). None instead of the sets when a relation cannot be solved exactly.
+    A relation with a trigonometric function is solved on `region` (the task's interval), not on ℝ,
+    where SymPy returned one period: sin(x) > 0 was (0, pi), and the maximum 0 of -(x - 7)**2 under it
+    was refuted (fourth audit G2, sandbox.exactsets)."""
+    from ..normalize.parse import read_condition
     srcs = list(ctx.ir.givens)
     if with_interval:
         vd = next((v for v in ctx.ir.vars if v.name == var.name), None)
         srcs = (list(vd.constraints) if vd is not None else []) + srcs
     rels: list = []
+    compound: list = []
     unread: list = []
     for s_ in srcs:
+        # an Or, `x < -3 or x > 1`, `x in (0, 3)`, `x > 0 and x < 3` are read too, and a given read as no
+        # condition is not dropped: Or(x < -3, x > 1) was, and the maximum 0 of -x² on [-5, 5] was
+        # certified (its supremum -1 is not attained; fourth audit G1)
         try:
-            rel = parse_relation(s_, ctx.ns)
-        except UndeclaredSymbolError:
+            rel = read_condition(s_, ctx.ns)
+        except Exception:  # noqa: BLE001 - UndeclaredSymbolError, ParseError: the certificate abstains
             unread.append(s_)
-            continue
-        except Exception:  # noqa: BLE001 - not a relation: nothing to cut (as Ctx.side_conditions)
             continue
         for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
             # parse_relation leaves relations unevaluated: x < 0 with x declared positive is solved to
             # the empty set below
-            if isinstance(r, sp.core.relational.Relational) and var in r.free_symbols:
-                rels.append(r)
+            if var not in getattr(r, "free_symbols", set()):
+                continue
+            (rels if isinstance(r, sp.core.relational.Relational) else compound).append(r)
+    # ... and each of them AS WRITTEN (`written_definedness`, the domain of discourse's too with an interval), as
+    # `Ctx.domain_for` reads them without one: x**2 + 0*sqrt(x - 1/2) >= 0 is x**2 >= 0 after SymPy's fold, and on
+    # [-1, 1] under it the minimum 0 of x**2 was certified and the right 1/4 refuted; under 0*log(x) >= 0 the minimum
+    # -1 of x (attack on d4e round 3, D4E3-YO-5, YO-3-EK1). f's own conditions stay `written_undefined_in`'s.
+    from .domain import written_definedness
+    dod = ctx.ir.domain_of_discourse
+    wsrcs = list(srcs) + ([dod] if with_interval and isinstance(dod, str) and dod.strip() else [])
+    pins = ctx.parameter_pins()
+    nowhere_here = False
+    for s_ in wsrcs:
+        try:
+            wconds, nowhere = written_definedness(s_, ctx.ns, pins)
+        except Exception:  # noqa: BLE001 - not read as written: the certificate abstains
+            unread.append(s_)
+            continue
+        nowhere_here = nowhere_here or var in nowhere
+        for c in wconds:
+            if var in getattr(c, "free_symbols", set()) and c not in rels and c not in compound:
+                (rels if isinstance(c, sp.core.relational.Relational) else compound).append(c)
     kept, unbound = ctx.on_var(rels, var)
-    sets: list[sp.Set] = []
+    sets: list[sp.Set] = [S.EmptySet] if nowhere_here else []
+    ckept, cunbound = ctx.on_var(compound, var)
+    unbound += cunbound
+    for r in ckept:
+        sol = ctx.condition_set(r, var)
+        if sol is None:
+            return None, unbound + unread
+        sets.append(sol)
     if with_interval:
         try:
             ds = ctx.discourse(var)
@@ -383,7 +490,7 @@ def _conditions_on(ctx: Ctx, var, with_interval: bool) -> tuple[list[sp.Set] | N
             sets.append(ds)
     for r in kept:
         try:
-            sol = sp.solveset(r, var, S.Reals)
+            sol = exact_solveset(r, var, region if region is not None and at_risk(r, var) else S.Reals)
         except Exception:  # noqa: BLE001
             return None, unbound + unread
         if isinstance(sol, ConditionSet) or sol.has(ConditionSet):
@@ -412,21 +519,46 @@ def verify(ir, solution, ctx: Ctx):
         f, err = parse_or_unknown(LAYER, ctx.expr, p["f"])
         if err:
             return err
-        from .limits import membership_conditions, written_undefined_everywhere
+        # a symbol a given or a declared constraint fixes is read as its value, in f and in the interval
+        # (`Ctx.solved_pins`, checked by `Ctx.binding_issues`); one nothing fixes leaves the extremum
+        # without a value: with a = 3 the maximum 0 of a*x on [0, 1], with b = 3 the maximum 0 of x on
+        # [0, b] were certified (fourth audit TAN-02, G4)
+        pins = ctx.solved_pins(var)
+        f, err = parse_or_unknown(LAYER, ctx.with_pins, f, pins)
+        if err:
+            return err
+        from .limits import membership_conditions, membership_holds_on, written_undefined_everywhere
         if written_undefined_everywhere(p["f"], ctx.ns):
             # log(-1) - log(-1) + 2 is 2 after parsing: its maximum 2 on [0, 1] was certified
             return unknown(LAYER, "f_undefined_as_written", t.ms, {"f": p["f"]}, flags=["written_domain"])
-        members = membership_conditions(p["f"], f, var, ctx.ns)
+        from ..normalize.parse import parse_set_str
+        iv = parse_set_str(p.get("interval", "Reals"), ctx.ns) if p.get("interval") else ctx.domain_for(var)
+        iv, err = parse_or_unknown(LAYER, ctx.with_pins, iv, pins)
+        if err:
+            return err
+        # read at the values the givens fix; the origin convention of atan2/arg on the interval (atan2(x, y) with
+        # y = 1 on [0, 1]: its operand x**2 + 1 is never 0; round 9 of part d4b, RK-5), the base of a power
+        # x**x or x**sqrt(2) away from 0 and the negative numbers (round 9 attack, RK-1), and an odd root's base
+        # not negative (x**(1/3) on [0, 8]: son saldırı G2RK-15)
+        from .domain import Convention
+        members = [c for c in membership_conditions(p["f"], f, var, ctx.ns, pins)
+                   if not (isinstance(iv, sp.Set) and isinstance(c.args[1], Convention)
+                           and c.args[1].kind in ("origin", "zero_power", "real_power", "odd_root")
+                           and membership_holds_on(c, var, [iv]))]
         if members:
             # x + x! - x! is x after parsing: its maximum -1 on [-3, -1] was certified (30 Sep 2026)
             return unknown(LAYER, "membership_condition_on_variable", t.ms,
                            {"conditions": [str(c) for c in members]}, flags=["membership_condition"])
-        from ..normalize.parse import parse_set_str
-        iv = parse_set_str(p.get("interval", "Reals"), ctx.ns) if p.get("interval") else ctx.domain_for(var)
+        free = sorted({str(s_) for e in [f, iv] for s_ in getattr(e, "free_symbols", set())} - {str(var)})
+        if free:
+            # [0, b] or a*x with b, a free (declared positive, or under b > 5): no value to compare. One in a written
+            # condition alone (x + 0*sqrt(b - x) is x after parsing, review of d4e) leaves the definedness undecided
+            # (`written_undefined_in` None) and the certificate abstains below
+            return condition_not_applied(LAYER, free, t.ms)
         if not p.get("interval") and ctx.unapplied_conditions(var):
             # read on ℝ, the minimum 0 of (x − 1)² was certified under x ≥ b with b free (part vi)
             return condition_not_applied(LAYER, ctx.unapplied_conditions(var), t.ms)
-        cut, unbound = _conditions_on(ctx, var, bool(p.get("interval")))
+        cut, unbound = _conditions_on(ctx, var, bool(p.get("interval")), iv if isinstance(iv, sp.Set) else None)
         if unbound:
             return condition_not_applied(LAYER, unbound, t.ms)
         if cut is None:
@@ -438,13 +570,23 @@ def verify(ir, solution, ctx: Ctx):
         claimed, err = parse_or_unknown(LAYER, ctx.claimed, solution)
         if err:
             return err
+        claimed, err = parse_or_unknown(LAYER, ctx.with_pins, claimed, pins)    # `a` for a*x on [0, 1], a = 3
+        if err:
+            return err
         if isinstance(claimed, sp.Set) or not getattr(claimed, "is_number", False):
             return unknown(LAYER, "claim_is_not_a_number", t.ms)
         # f as written must be defined on the whole interval: x/x − x² parses to 1 − x², whose
         # maximum 1 sits exactly at the point x/x excludes (measured: certified CORRECT)
         from .domain import written_undefined_in
-        if isinstance(iv, sp.Set) and written_undefined_in(p["f"], ctx.ns, var, iv) is True:
+        und = written_undefined_in(p["f"], ctx.ns, var, iv, pins) if isinstance(iv, sp.Set) else False
+        if und is True:
             return unknown(LAYER, "f_undefined_on_interval_as_written", t.ms, {"f": p["f"]},
+                           flags=["written_domain"])
+        if und is None:
+            # not decided is not defined: 2**x + x - 3 >= 0 of sqrt(2**x + x - 3) is solved by no exact class, and
+            # the minimum 0 of x**2 + sqrt(2**x + x - 3) - sqrt(2**x + x - 3) was certified on all of ℝ (attack on
+            # d4b round 8, YO-2; the same root as d4e round 3, YO-2)
+            return unknown(LAYER, "f_definedness_undecided_as_written", t.ms, {"f": p["f"]},
                            flags=["written_domain"])
         if which.startswith("local_"):
             ok, ev = certify_local_extremum(f, var, iv, which, claimed, timeout=ctx.timeout)

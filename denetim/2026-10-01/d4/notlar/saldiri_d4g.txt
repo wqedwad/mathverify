@@ -1,0 +1,19 @@
+# d4g saldırı notları (2 Eki 2026)
+- kurulum tamam: yeni=84673a3, eski=0ed77e2 (archive). sondalar sonda/ altında.
+- W (yanlış adım, beyaz liste) 30 vaka yeni: verified yok. eski: W14,15,17,19,20,25,26 verified (d4g kapattı).
+- R (doğru adım) 31 vaka yeni: refuted yok.
+- B: B1 (iç içe Sum(Sum(0))), B5 (iç içe Product(Product(1))) yeni+eski unknown (B geri çekmesi iç içe aralığı kapsamıyor);
+  B4 Product lambdify edilemiyor (ön-var). B2/B13 m<0'da §80 gereği unknown (kabul).
+- S (tek değerli hücre / nümerik): S1 (değişken kısıtı 3<=x<=3), S3 (x**2=9,x>0 + Limit), S4 (x=3 + Limit),
+  S6 (Derivative) yanlış adım `1 + log(1+exp(-exp(10x))) = 1` VERIFIED yeni ve eski. answers_equivalent {3}'te True.
+- S8 (beyaz liste, x>3, (1+e^-e^e^x)^2 = 1+2e^-e^e^x) >6 dk CPU takıldı; tek tek ölçülüyor.
+- U1/U3/U4/V(exp(-80x)): beyaz listeli analitik, iç noktalı aralık, (1+t)^2 = 1+2t (t ~ 1e-104 ve altı) VERIFIED yeni+eski.
+  Fark t^2 adaptif evalf'in maxprec'ini aşınca "uyum" sayılıyor; A kapısı nümerik uyumu kanıt sayıyor.
+- S8/S11/S12: x>3, t=e^-e^e^x: >400 s (yeni), >200 s (eski); yığın: random_point._definite_nonzero_difference -> sympy N
+  (süreç içi). 60 s bütçe kooperatif, aşılıyor.
+- B14/B16 (üç ayrı aralık sembolü, len(rsyms)>2) ve B1/B15/B5 (iç içe; _symbolic_range_nodes None) ret geri çekiliyor.
+  B16: yanlış özdeşlik + üç Sum(0) => unknown, çözüm CORRECT. Eski de aynı.
+- Z1/Z2/Z4: `case x<0` + compute `Abs(x) = -x` (from c1) REFUTED => INCORRECT (yeni+eski). compute havuzunda vaka
+  varsayımı yok (pool'da my_cases eksik; _undefined_at_premises'te var).
+- Q4/Q6/Q7/Q8/Q10: x**2+y**2=0 (gerçelde tek nokta) altında x/x = 1 VERIFIED (yeni+eski); D/TAN-11 kalıntısı.
+- d4g'nin kapattıkları (eski BAD, yeni ok): W14,15,17,19,20,25,26, O5, R40, R41, Z6, Z8, Q1, Q2.

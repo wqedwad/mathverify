@@ -1,0 +1,24 @@
+# capraz denetim notlari (d4)
+- basladi: kopyalar tamam (yeni=eb3bccc, eski=aa67b20)
+- okundu: fuse/rules.py (_BLOCK_POSITIVE_FLAGS; function_domain_not_applied, constraint_unreadable eklendi), verifier.py erken donusler, prove.py l7_layer (pass primary 0.995), statement.py (TEMPLATES, _ENCODES, _print_lean: Sum/Integral/Limit basilmaz)
+- p01_rev.py: ters aralik evaluate 19 durum hepsi UNKNOWN (z3_unsupported) -> temiz
+- strateji: build_statement(ir, ca) Lean'siz suzgec; yalniz deyim kurulan + det UNKNOWN + engelleyici bayraksiz durumlar Lean'e
+- p02/p03 gcd: BULGU G1 (onceden var, eski kopyada ayni): \mathit{gcd}(120,84), \mathbf, \textit, \textbf, \mathit{lcm} -> 12, CORRECT (regex yakalamiyor). G2: gcd(120,84)*a / +a (sembollu) CORRECT, kapali-degil denetimi tum iddiaya bakiyor (onceden var).
+- p04: binomial genellestirilmis gelenek: C(n,2)=3 icin {-2,3} INCORRECT (gelenek; eski kopyada kontrol edilecek). dod'de Sum -> layer_exception (onceden var, dusuk)
+- p06: tam sayi degiskende kalkulus 33 yazim x2 -> yeni temiz (eski yanlis onaylar kapandi). Integral(cos(pi*n),(n,0,n)) n=2 -> 0 CORRECT dogru (kapsama kazanci)
+- p07/p08: BULGU F1 (onceden var, eski ayni): factorial(5)/factorial(-2)=0, 1/factorial(-1)=0, 1/factorial(-1)+3=3 CORRECT (junk zoo -> 0; written_undefined bolumdeki factorial'i kacirir; factorial(1-3) tek basina yakalanir)
+- p08/p09/p10: BULGU M1 (onceden var): Mod negatif bolen gelenegi: Mod(7,-5)=-3 CORRECT, 2 INCORRECT; z3 a%b Oklid (2), SymPy floored (-3), Lean reddeder (C4). Verilende Mod(n,-5)=-3, 0<n<5 -> dogru(floored) 2 INCORRECT (z3 verilenleri unsat yapip her iddiayi 'refuted').
+- BULGU adayi Z1: evaluate yolunda z3 verilenler unsat ise her iddia refuted (hard fail) -> INCORRECT; solve yolunda givens_without_an_instance var, evaluate'de yok. Sinanacak.
+- h01 harvest 1200 s'de oldu (cikti boruda kayboldu). Yeniden: JSONL artimli + parcali.
+- p11/p12: BULGU C1 (onceden var, eski ayni): tek kok: (-8)**(1/3) icin hem -2 hem 1+sqrt(3)*I CORRECT (algebra ikisini de esit sayiyor); x**(1/3), x=-8 -> 1+sqrt(3)I CORRECT; (-1)**(1/3) -> -1 ve 1/2+sqrt(3)I/2 CORRECT; x**(2/3) x=-8 -> 4 ve -2+2sqrt(3)I CORRECT. Gercel evrende karmasik cevap CORRECT = yanlis onay.
+- p11: BULGU Z1 dogrulandi (onceden var): tutarsiz verilenlerde (x=1,x=2) payload -> INCORRECT, ayni soru sik harfiyle -> UNKNOWN. z3 evaluate yolu 'claim unsat' = refuted, verilenlerin kendisi unsat mi bakmiyor.
+- p13: F1 kok neden: definedness_conditions(1/factorial(-1)) SymPy evalf ValueError('gamma function pole') atiyor; base._undefined_constant except -> False (tanimli sayiliyor, fail-open). evaluate/solve/ineq/simplify/derivative/integral/series/extremum'da 1/factorial(-1) iceren ifade CORRECT. eski ayni.
+- p14 (Q3 yazim tutarliligi, 10 temel x 11 yazim): yalniz Z1 tutarsiz (tutarsiz IR: payload INCORRECT, sik/sik+payload UNKNOWN). "x = v" metni her yerde UNKNOWN (guvenli).
+- p15 adim katmani: C1 adimda da: "(-8)**(1/3) = 1 + sqrt(3)*I" ve "(-8)**(1/3) = -2" ikisi de verified (ayni cozumde); eq "x**(1/3) = 1+sqrt(3)I" refuted (compute/eq tutarsiz). F1: "1/factorial(-1) = 0" verified. M1: "Mod(7,-5) = 2" refuted. Hepsi eski ayni.
+- h02/h03: 1200 harvest cifti (denetim/2026-09-30/*/sonda*.py), 219'unda Lean deyimi kurulu; bunlardan UNKNOWN+engelsiz yalniz 2 (serbest 'a' baglanmamis -> Lean 'unknown identifier' beklenir), 19 UNKNOWN engelli, 52 INCORRECT. Yani #14'un UNKNOWN'larini Lean'e tasiyan sablon pratikte yok (Sum/Integral/Limit basilmiyor; _restrictions_gate).
+- p16: Lean deyimi kurulan kenar durumlar (gcd(0,0), lcm negatif, bos toplam hi=lo-1, Mod pozitif bolen, recurrence n-5) -> l01_cases.json (89) ile Lean'de kosuluyor (l01_run.sh, flock). Cikti l01_out.jsonl.
+- p17: C1 genis: cbrt(-8), root(-8,3), \sqrt[3]{-8}, (-8)**(-1/3), simplify (-8)**(1/3)*x -> (1+sqrt3 I)x ve -2x ikisi CORRECT; solve x=(-8)**(1/3): {-2} layer_contradiction, {1+sqrt3 I} INCORRECT. Cift kok (x**(3/2), (-16)**(1/4)) dogru UNKNOWN.
+- p20/p21: BULGU D1 (onceden var, eski ayni): wordproblem._set_as_relation S.Integers -> true (tamlik dusuyor; Intersection'da da). evaluate x, floor(x)+x=5/2, dod Integers -> 3/2 CORRECT (tam sayi cozum yok); 2x -> 3 CORRECT. solve ayni -> layer_contradiction (z3 {3/2}'i onayliyor).
+- BULGU N1 (gelenek, onceden var): parse_domain 'N'/'ℕ'/'Naturals' -> S.Naturals {1,2,..}; Turk mufredati N={0,1,...}. x^2=0 dod N -> {0} INCORRECT, {} CORRECT; x(x-1)=0 dod ℕ -> 1 CORRECT.
+- l01 Lean (89 durum): Lean yalniz dogru degerlerde UNKNOWN->CORRECT (count_integers Mod pozitif bolen, recurrence n-5); gcd liste iddiasinda L7 pass ama claim_is_not_a_value engelliyor; tutarsiz hipotezler audit_failed. Lean kaynakli yanlis onay 0.
+- SON: bulgular.json yazildi (9 bulgu: C1 F1 D1 M1 Z1 N1 G1 B1 K1); repro/*.py iki kopyada kosuldu (repro/out.txt). Lean: l01 89 kosu, 0 yanlis onay. Sandbox p25: 17 istek, oldurme/takilma yok.

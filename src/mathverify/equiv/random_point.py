@@ -12,6 +12,7 @@ evidence and the caller lowers confidence). Too few evaluable points => None.
 from __future__ import annotations
 
 import random
+import time
 from typing import Any
 
 import mpmath as mp
@@ -21,7 +22,46 @@ from sympy import S, Interval, FiniteSet, Union, Intersection, Complement, Condi
 __all__ = ["random_point_equal", "sample_points"]
 
 
-def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False):
+# Sample points off the decimal grid (attack on d4c round 2, YO-3): 6-decimal rationals and probes at
+# integers, halves and 10^k all make sin(3·10^6·πx) vanish, and x² + sin(3·10^6·πx) was certified equal to
+# x². A sample is a rational with a large prime denominator (exact substitution stays exact) and, past the
+# first `_RATIONAL_POINTS` (the ones the exact difference check reads), shifted by an irrational number, at
+# which no sin(Nπx) with rational N vanishes.
+_PRIMES = (1000003, 999983, 1000033, 999979, 1000037, 999961, 1000039, 999959)
+_SHIFTS = (sp.sqrt(2), sp.sqrt(3), sp.sqrt(5), sp.sqrt(7), sp.pi / 3, sp.E / 2)
+_RATIONAL_POINTS = 8
+
+
+def _off_grid(v: float, rng: random.Random, shift: bool):
+    den = rng.choice(_PRIMES)
+    q = sp.Rational(round(v * den), den)
+    if shift:
+        q += rng.choice(_SHIFTS) / 10 ** rng.choice((5, 6, 7))
+    return q
+
+
+def _inside(iv: Interval, rng: random.Random, shift: bool | None):
+    """An exact point strictly inside the (nonempty, open or closed) interval: lo + (hi - lo)·k/(m + 1) with m a
+    large prime and 0 < k < m (k + an irrational in (0, 1/3) for an identity test past the rational points). A sample
+    rounded onto the grid or shifted left a narrow interval: in (3, 3 + 10^-7) all 30 samples fell on 3, outside
+    it, and 2x - 3 = x was certified there (attack on d4c round 3, YO-C)."""
+    lo, hi = iv.inf, iv.sup
+    m = rng.choice(_PRIMES)
+    frac = sp.Rational(rng.randint(1, m - 1), m + 1)
+    if shift:
+        frac += rng.choice(_SHIFTS) / (10 * (m + 1))
+    if lo != -oo and hi != oo:
+        q = lo + (hi - lo) * frac
+    elif lo != -oo:
+        q = lo + frac
+    elif hi != oo:
+        q = hi - frac
+    else:
+        q = frac
+    return q
+
+
+def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False, shift: bool | None = None):
     lo, hi = iv.inf, iv.sup
     lo_f = -1e3 if lo == -oo else float(lo)
     hi_f = 1e3 if hi == oo else float(hi)
@@ -47,20 +87,22 @@ def _sample_interval(iv: Interval, rng: random.Random, integer: bool = False):
         v = lo_f + (hi_f - lo_f) * 1e-3
     if iv.right_open and hi != oo and v >= hi_f:
         v = hi_f - (hi_f - lo_f) * 1e-3
-    # exact rational sample (6 decimals): substitution into polynomial/rational expressions
-    # is then exact and an identity never fails on Float rounding (measured on
-    # x^2-5x-14 = (x-7)(x+2), which a Float sample 'refuted')
-    q = sp.Rational(f"{v:.6f}")
-    if iv.contains(q) != True:  # noqa: E712  (rounding pushed it onto an open endpoint)
-        q = sp.Rational(f"{(lo_f + hi_f) / 2:.6f}") if (lo != -oo and hi != oo) else q + sp.Rational(1, 1000)
+    # exact sample: substitution into polynomial/rational expressions is then exact and an identity never
+    # fails on Float rounding (measured on x^2-5x-14 = (x-7)(x+2), which a Float sample 'refuted'). A
+    # 6-decimal rational for a counterexample search; off the decimal grid (shift not None: _off_grid) for an
+    # identity test
+    q = sp.Rational(f"{v:.6f}") if shift is None else _off_grid(v, rng, shift)
+    if not _in(iv, q):
+        # rounding or the shift pushed it onto or past an end: a point inside, exactly
+        q = _inside(iv, rng, shift)
     return q
 
 
-def _sample_one(dom, rng: random.Random, depth: int = 0):
+def _sample_one(dom, rng: random.Random, depth: int = 0, shift: bool | None = None):
     if depth > 6:
         return None
     if dom == S.Reals or dom == S.Complexes:
-        return _sample_interval(Interval(-oo, oo), rng)
+        return _sample_interval(Interval(-oo, oo), rng, shift=shift)
     if dom == S.Integers:
         return sp.Integer(rng.randint(-60, 60))
     if dom == S.Naturals:
@@ -68,11 +110,11 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
     if dom == S.Naturals0:
         return sp.Integer(rng.randint(0, 120))
     if isinstance(dom, Interval):
-        return _sample_interval(dom, rng)
+        return _sample_interval(dom, rng, shift=shift)
     if isinstance(dom, FiniteSet):
         return rng.choice(list(dom.args))
     if isinstance(dom, Union):
-        return _sample_one(rng.choice(list(dom.args)), rng, depth + 1)
+        return _sample_one(rng.choice(list(dom.args)), rng, depth + 1, shift)
     if isinstance(dom, sp.Range):
         if dom.is_finite_set:
             return sp.Integer(rng.choice(list(dom)))
@@ -99,7 +141,7 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
         else:
             base = dom.base_set
         for _ in range(50):
-            p = _sample_one(base, rng, depth + 1)
+            p = _sample_one(base, rng, depth + 1, shift)
             if p is None:
                 return None
             try:
@@ -110,7 +152,7 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
         return None
     # unknown set: try membership rejection on reals
     for _ in range(50):
-        p = _sample_interval(Interval(-oo, oo), rng)
+        p = _sample_interval(Interval(-oo, oo), rng, shift=shift)
         try:
             if dom.contains(p) == True:  # noqa: E712
                 return p
@@ -119,19 +161,21 @@ def _sample_one(dom, rng: random.Random, depth: int = 0):
     return None
 
 
-def sample_points(domains: dict, n: int, seed: int, special: bool = False) -> list[dict]:
+def sample_points(domains: dict, n: int, seed: int, special: bool = False, off_grid: bool = False) -> list[dict]:
     """`n` random points of the domains. With special=True, deterministic probe points are
     appended: for each symbol in turn, small integers, half-integers and far points of its
     domain (the others held at the first random point). Random 6-decimal samples essentially
     never land on an integer or a boundary, which is where a wrong strict/non-strict step
-    (`-2 < x` for x² − 5x − 14 ≤ 0) differs from the truth (audit of 25 Sep 2026, D2)."""
+    (`-2 < x` for x² − 5x − 14 ≤ 0) differs from the truth (audit of 25 Sep 2026, D2). With
+    off_grid=True (an identity test) the samples are rationals with large prime denominators, past
+    the first `_RATIONAL_POINTS` shifted by an irrational number (YO-3)."""
     rng = random.Random(seed)
     pts = []
-    for _ in range(n):
+    for i in range(n):
         pt = {}
         ok = True
         for sym, dom in domains.items():
-            v = _sample_one(dom, rng)
+            v = _sample_one(dom, rng, shift=(i >= _RATIONAL_POINTS) if off_grid else None)
             if v is None:
                 ok = False
                 break
@@ -190,6 +234,7 @@ _NONSMOOTH = (sp.Abs, sp.sign, sp.Max, sp.Min, sp.floor, sp.ceiling, sp.frac, sp
               sp.Piecewise, sp.Heaviside, sp.re, sp.im, sp.arg, sp.conjugate)
 _BREAKPOINT_LIMIT = 40
 _CELL_LIMIT = 24
+_CELL_FAILURES = 3           # failed symbolic attempts one cell proof may spend (deterministic: round 4, RK-9)
 _PERIOD_LIMIT = 5000
 
 
@@ -207,15 +252,21 @@ def _in(dom, v) -> bool:
         return False
 
 
-def _special_values(dom, far: bool = False) -> list:
+def _special_values(dom, far: bool = False, irrational: bool = False) -> list:
     """Deterministic probe values: small integers and half-integers and, with far=True, far points
-    (10³ … 10⁶ and their negatives, also with a rational offset), filtered by the domain."""
+    (10³ … 10⁶ and their negatives, also with a rational offset), filtered by the domain; with
+    irrational=True (an identity test) a few irrational points too."""
     vals = [sp.Integer(k) for k in range(-12, 13)]
     vals += [sp.Rational(k, 2) for k in (-5, -3, -1, 1, 3, 5)]
+    if irrational:
+        # and off the grid for an identity test: irrational points (YO-3)
+        vals += [sp.sqrt(2) / 2, -sp.sqrt(3), sp.pi / 7, sp.sqrt(5) / 3, -sp.E / 5]
     if far:
         for v in (10 ** 3, 3 * 10 ** 3, 7 * 10 ** 3, 10 ** 4, 10 ** 5, 10 ** 6):
             v = sp.Integer(v)
             vals += [v, -v, v + sp.Rational(1, 3), -v - sp.Rational(1, 3)]
+        if irrational:
+            vals += [10 ** 3 + sp.sqrt(2), -(10 ** 4) - sp.sqrt(3)]
     return [v for v in vals if _in(dom, v)]
 
 
@@ -233,9 +284,42 @@ def _far_safe(e) -> bool:
     return not any(f.args and f.args[0].free_symbols for f in e.atoms(*bad))
 
 
-def _breakpoints(exprs, sym, dom, timeout: float = 5.0) -> list | None:
+def _argument_edges(g, sym, timeout: float) -> list | None:
+    """The points where the argument `g` of a non-smooth function stops or starts being a real number: its poles
+    (1/(x - 1/3) at 1/3) and the ends of the pieces of ℝ where it has no value, from its exact conditions
+    (`certify.calculus._exact_conditions`); None when that set is not found exactly or not finite. An argument changes
+    sign across a pole without a zero: Max(x, x + 1/(x - 1/3) - 10^6) = x was 'proved' on a cell holding the pole 1/3,
+    with the branch of its far side (son saldırı G2YO-3)."""
+    from ..certify.calculus import _exact_conditions
+    from ..sandbox import run as sb_run
+    conds = _exact_conditions(g, sym)
+    if conds is None:
+        return None
+    out: list = []
+    for c in conds:
+        neg = sp.Eq(c.lhs, c.rhs) if isinstance(c, sp.Ne) else c.negated
+        r = sb_run("mathverify.sandbox.ops:solveset_in", neg, sym, sp.S.Reals, timeout=timeout)
+        if not r.ok or not isinstance(r.value, sp.Set) or r.value.has(sp.ConditionSet):
+            return None
+        try:
+            edge = r.value.boundary
+        except Exception:  # noqa: BLE001 - a set with no boundary SymPy computes
+            return None
+        if not isinstance(edge, (sp.FiniteSet, type(sp.S.EmptySet))):
+            return None
+        for v in edge:
+            if not (getattr(v, "is_number", False) and v.is_real is True and v.is_finite is True):
+                if v in (sp.oo, sp.S.NegativeInfinity):
+                    continue
+                return None
+            out.append(v)
+    return out
+
+
+def _breakpoints(exprs, sym, dom, timeout: float = 5.0, poles: bool = False) -> list | None:
     """Points where a non-smooth function in `exprs` can switch branch (exact, finite), or None
-    when that set cannot be computed (floor/ceiling/Mod on an unbounded domain, a solver failure)."""
+    when that set cannot be computed (floor/ceiling/Mod on an unbounded domain, a solver failure).
+    With `poles`, also where an argument stops being a real number (`_argument_edges`): a cell proof's cells."""
     from ..sandbox import run as sb_run
     eqs = []
     for e in exprs:
@@ -259,7 +343,13 @@ def _breakpoints(exprs, sym, dom, timeout: float = 5.0) -> list | None:
         r = sb_run("mathverify.sandbox.ops:solveset_in", sp.Eq(g, 0), sym, sp.S.Reals, timeout=timeout)
         if not r.ok or not isinstance(r.value, sp.FiniteSet):
             return None
-        for v in r.value.args:
+        found = list(r.value.args)
+        if poles:
+            edges = _argument_edges(g, sym, timeout)
+            if edges is None:
+                return None
+            found += edges
+        for v in found:
             if not getattr(v, "is_number", False) or v.is_real is False:
                 continue
             if not any(v == u for u in pts):
@@ -273,6 +363,26 @@ _FORMS = (sp.Sum, sp.Product, sp.Integral, sp.Limit)
 _MAX_TERMS = 2000
 _FORM_CHECKS = 2          # points per comparison that may take `forms.checked_forms` (see _exact_counterexample)
 _FORM_TIMEOUT = 4.0
+_EVAL_TERMS = 200_000        # terms of finite sums/products lambdify may run through at one point
+_EVAL_BUDGET = 20.0          # seconds of point evaluations per comparison (in this process)
+
+
+def _terms_at(e, syms, pt) -> int:
+    """How many terms the finite Sums/Products of `e` run through at `pt` (nested ones multiply;
+    a range that is not a pair of integers there counts as one term)."""
+    total = 1
+    for n in sp.preorder_traversal(e):
+        if isinstance(n, (sp.Sum, sp.Product)):
+            for lim in n.limits:
+                if len(lim) != 3:
+                    continue
+                try:
+                    lo, hi = (sp.sympify(x_).subs({s_: pt[s_] for s_ in syms}, simultaneous=True) for x_ in lim[1:])
+                except Exception:  # noqa: BLE001
+                    continue
+                if getattr(lo, "is_Integer", False) and getattr(hi, "is_Integer", False) and hi >= lo:
+                    total *= int(hi - lo + 1)
+    return total
 
 
 def _written_out(e):
@@ -299,6 +409,26 @@ def _written_out(e):
     return None if e.has(*_FORMS) else e
 
 
+_POWER_PARTS = 1000          # a rational exponent past it, on a base the point gives, is not written out exactly
+
+
+def _heavy_power_at(e, pt) -> bool:
+    """Does `e` at `pt` raise a base the point gives to a rational exponent with a numerator or denominator past
+    `_POWER_PARTS`? SymPy writes (p/q)**(r/s) out exactly (an integer power p**r, then its root by factoring), and at the
+    sample point 7579840/1000039, x**x held one comparison in this process for over twenty minutes, with no time limit:
+    (x^x)' = x^x·ln x under x > 0 (son saldırı, integral group; positive_real had it before). Read innermost first."""
+    keys = set(pt)
+    try:
+        for n in sp.postorder_traversal(e):
+            if isinstance(n, sp.Pow) and n.base.free_symbols & keys and n.exp.free_symbols & keys:
+                ex = n.exp.xreplace(pt)
+                if isinstance(ex, sp.Rational) and (abs(ex.p) > _POWER_PARTS or ex.q > _POWER_PARTS):
+                    return True
+    except Exception:  # noqa: BLE001 - no reading: let the substitution decide
+        return False
+    return False
+
+
 def _exact_counterexample(a, b, syms, pt, budget: list | None = None) -> dict[str, Any] | None | bool:
     """Is `pt` an EXACT counterexample? dict when it is, False when the two sides are equal
     there (or both undefined), None when undecided.
@@ -311,6 +441,8 @@ def _exact_counterexample(a, b, syms, pt, budget: list | None = None) -> dict[st
     numbers' tolerance."""
     from .numeric import certified_sign, exact_equal, real_odd_roots, to_mp, NONREAL
     via_forms = False
+    if _heavy_power_at(a, pt) or _heavy_power_at(b, pt):
+        return None                     # no exact value written out here: the point decides nothing
     try:
         da = real_odd_roots(a.subs(pt, simultaneous=True))
         db = real_odd_roots(b.subs(pt, simultaneous=True))
@@ -421,7 +553,7 @@ def _cell_proof(a, b, sym, dom, ev) -> bool | None:
     breakpoints every non-smooth function is one analytic branch, so the identity is proved
     there symbolically; at each breakpoint it is checked exactly."""
     from .symbolic import sym_equal
-    bps = _breakpoints([a, b], sym, dom)
+    bps = _breakpoints([a, b], sym, dom, poles=True)
     if bps is None:
         ev["nonsmooth_proof"] = "breakpoints_not_computable"
         return None
@@ -443,6 +575,8 @@ def _cell_proof(a, b, sym, dom, ev) -> bool | None:
             ev["counterexample"] = c
             return False
     edges = [-sp.oo] + bps + [sp.oo]
+    failures = [0]
+    order = [0, 1]               # 0: the plain identity, 1: the one on the cell's parameter
     for lo, hi in zip(edges[:-1], edges[1:]):
         if lo == -sp.oo and hi == sp.oo:
             q = sp.Rational(1, 3)
@@ -475,9 +609,23 @@ def _cell_proof(a, b, sym, dom, ev) -> bool | None:
             xt = lo + t
         else:
             xt = lo + (hi - lo) * t / (1 + t)
-        ok, _ = sym_equal(sa.subs(sym, xt), sb_.subs(sym, xt))
-        if ok is not True:
-            ok, _ = sym_equal(sa, sb_)
+        # the plain identity first (cheap when it holds), the one on the cell's parameter after it; a failed attempt
+        # spends the proof's budget (`_CELL_FAILURES`, a count, not a clock): five cells of |x**4 - 10x**2 + 1| *
+        # |x**3 - 3x + 1| each spent 10 s on a failing parametrised attempt first, 62 s for one verify (attack on d4e
+        # round 3, D4E3-RK-9). The form that proved a cell is tried first on the next ones: 2*log(|x|) for log(x**2)
+        # needs the cell's sign in each of four cells, and four failed plain attempts spent the budget (round 4)
+        ok = None
+        forms = ((sa, sb_), (sa.subs(sym, xt), sb_.subs(sym, xt)))
+        for i in list(order):
+            if failures[0] >= _CELL_FAILURES:
+                ev["nonsmooth_proof"] = "cell_proof_budget"
+                return None
+            ok, _ = sym_equal(*forms[i])
+            if ok is True:
+                if i != order[0]:
+                    order.reverse()
+                break
+            failures[0] += 1
         if ok is not True:
             ev["nonsmooth_proof"] = f"no_symbolic_proof_on_({lo}, {hi})"
             return None
@@ -584,7 +732,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
         ev["error"] = f"unbound symbols {extra}; declare their domains"
         return None, ev
     nonsmooth = bool(_nonsmooth(a) or _nonsmooth(b))
-    pts = sample_points(domains, n, seed)
+    pts = sample_points(domains, n, seed, off_grid=True)
     if len(pts) < max(3, n // 3):
         ev["error"] = "could not sample enough points from domain"
         return None, ev
@@ -597,8 +745,18 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
         return None, ev
     tol = mp.mpf(10) ** (-(dps - 10))
 
+    spent = [0.0]
+
     def disagree(pt) -> tuple[str, dict] | None:
-        va, vb = _eval(fa, syms, pt, dps), _eval(fb, syms, pt, dps)
+        if _terms_at(a, syms, pt) > _EVAL_TERMS or _terms_at(b, syms, pt) > _EVAL_TERMS:
+            # lambdify runs a finite sum term by term in this process: Σ_{k=0}^{100000} x^k/k! held
+            # the verifier for minutes (fourth audit of 1 Oct 2026, S4). Not evaluated, not counted.
+            return "both_undefined", {}
+        t0 = time.monotonic()
+        try:
+            va, vb = _eval(fa, syms, pt, dps), _eval(fb, syms, pt, dps)
+        finally:
+            spent[0] += time.monotonic() - t0
         if va is None and vb is None:
             return "both_undefined", {}
         point = {s_.name: str(pt[s_]) for s_ in syms}
@@ -616,6 +774,9 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     unconfirmed = 0
     budget = [_FORM_CHECKS]
     for pt in pts:
+        if spent[0] > _EVAL_BUDGET:
+            ev["evaluation_time_budget"] = True    # the points left are not evaluated
+            break
         d = disagree(pt)
         if d is not None and d[0] == "both_undefined":
             continue                      # both undefined here: uninformative
@@ -649,7 +810,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     base = pts[0]
     far = _far_safe(a) and _far_safe(b)
     for s_ in syms:
-        vals = _special_values(domains[s_], far=far)
+        vals = _special_values(domains[s_], far=far, irrational=True)
         if nonsmooth and len(syms) == 1:
             bps = _breakpoints([a, b], s_, domains[s_]) or []
             for bp in bps:
@@ -663,6 +824,10 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
             probes.append(pt)
     ev["probes"] = len(probes)
     for pt in probes:
+        if spent[0] > _EVAL_BUDGET:
+            ev["evaluation_time_budget"] = True
+            ev["reason"] = "probes_not_evaluated_in_time"
+            return None, ev
         d = disagree(pt)
         if d is None or d[0] == "both_undefined":
             continue
@@ -689,6 +854,7 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
             ev["reason"] = "nonsmooth_without_proof"
             ev.setdefault("nonsmooth_proof", "multivariate" if len(syms) > 1 else "none")
             return None, ev
+        ev["proved"] = True          # exactly, cell by cell or on one period: no sampling (`answers_equivalent`)
         return True, ev
     # Agreement within tolerance is not yet equality. Evaluating each side and subtracting can
     # only see differences above the working precision; the DIFFERENCE itself, evaluated by
@@ -696,7 +862,16 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     # all. Measured: 1/(x−1) and 1/(x−1) + e^(−1000) agreed at every point (the gap is
     # 1e-435) and were declared equal. A true identity evaluates to 0, or to a zero with no
     # significant bits ("0.e-167", _prec ≈ 1); a real difference carries ~100 bits.
-    witness, unsure = _definite_nonzero_difference(ae - be, syms, pts[:8], a, b, budget)
+    witness, unsure = _definite_nonzero_difference(ae - be, syms, pts[:_RATIONAL_POINTS], a, b, budget)
+    if witness is None:
+        # and at every other point, the shifted samples and the probes: a difference with a certified sign there
+        # is a counterexample too. Read at the rational points alone, 10^-40·sin(Nπx) with N the product of their
+        # prime denominators vanished at all of them and x² + 10^-40·sin(Nπx) = x² was certified on x > 0
+        # (attack on d4c round 3, YO-B)
+        witness, undecided = _nonzero_elsewhere(ae - be, syms, pts[_RATIONAL_POINTS:] + probes, a, b, budget)
+        if undecided:
+            ev["reason"] = "difference_at_the_other_points_not_read"
+            return None, ev
     if witness is not None:
         ev["counterexample"] = witness
         ev["reason"] = "difference_below_working_precision_but_nonzero"
@@ -711,40 +886,123 @@ def random_point_equal(a, b, var, domain, seed: int = 0, n: int = 30, dps: int =
     return True, ev
 
 
+def nonzero_sign_points(d, syms, pts) -> list[int]:
+    """Sandbox worker: the indices of the points where the closed value of `d` has a sign CERTIFIED by interval
+    arithmetic (`certify.enclosure.constant_sign`: outward rounding, up to 240 digits). Strict evalf is no such
+    certificate there: it gave the identity asin(tanh x) = atan(sinh x) a difference of 2.4e-125 at x near 287,
+    stable at 70 digits. A point with no interval extension, or whose interval holds 0, is no witness, and no proof
+    of zero is sought there."""
+    from ..certify.enclosure import constant_sign
+    from .numeric import real_odd_roots
+    out = []
+    for i, pt in enumerate(pts):
+        try:
+            dp = real_odd_roots(d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True))
+            if dp == 0 or dp.has(*_FORMS) or dp.has(sp.zoo, sp.nan, sp.oo, -sp.oo) or dp.free_symbols:
+                continue
+            if constant_sign(dp) is None:
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        out.append(i)
+    return out
+
+
+def point_signs(d, syms, pts) -> tuple[list[int], list[int]]:
+    """Sandbox worker: (the indices of the points where the closed value of `d` has a sign certified by interval
+    arithmetic, read as written or, where that interval holds 0, expanded; the indices of the points not read). A
+    point where `d` has no closed value (a form, no value, a symbol) is no witness, as in `nonzero_sign_points`. The
+    expanded reading makes a cancellation of the claim exact: x² + 10^-300·sin(Nπx) = (x - 1)(x + 1) + 1 was
+    certified on x > 0, the claim's (x - 1)(x + 1) cancelling against x² no closer than 10^-234 at 240 digits, while
+    expanded the difference is 10^-300·sin(Nπx), whose sign the interval certifies (son saldırı G2YO-6, the sibling
+    writing of d4c round 3's YO-B). A point whose interval holds 0 both ways stays no witness: demanding a proof of 0
+    there left five textbook identities undecided (tan(x/2) = sin x/(1 + cos x), the atan addition formulas, measured
+    16 Oct 2026). A point with a base and an exponent of the variable too large to write out is not read."""
+    from ..certify.enclosure import constant_sign
+    from .numeric import real_odd_roots
+    nonzero: list = []
+    unread: list = []
+    for i, pt in enumerate(pts):
+        at = {s_: pt[s_] for s_ in syms}
+        if _heavy_power_at(d, at):
+            unread.append(i)
+            continue
+        try:
+            dp = real_odd_roots(d.subs(at, simultaneous=True))
+            if dp == 0 or dp.has(*_FORMS) or dp.has(sp.zoo, sp.nan, sp.oo, -sp.oo) or dp.free_symbols:
+                continue
+            if constant_sign(dp) is not None:
+                nonzero.append(i)
+                continue
+            ex = sp.expand(dp)
+            if ex != dp and ex != 0 and constant_sign(ex) is not None:
+                nonzero.append(i)
+        except Exception:  # noqa: BLE001
+            continue
+    return nonzero, unread
+
+
+_ELSEWHERE_TIMEOUT = 30.0
+_CONFIRMED_POINTS = 4        # signed points `_nonzero_elsewhere` confirms exactly, the simplest first
+
+
+def _nonzero_elsewhere(d, syms, pts, a, b, budget) -> tuple[dict[str, Any] | None, bool]:
+    """(witness, undecided): a point of `pts` where a and b certainly differ (`point_signs`, confirmed by
+    `_exact_counterexample`), else None; undecided when the points could not be read (the worker failed, a point too
+    large to write out) or a signed point is not confirmed exactly (a difference seen and not refuted is no
+    agreement)."""
+    if not pts:
+        return None, False
+    from ..sandbox import run as sb_run
+    r = sb_run("mathverify.equiv.random_point:point_signs", sp.sympify(d), syms, pts, timeout=_ELSEWHERE_TIMEOUT)
+    if not r.ok or not isinstance(r.value, tuple) or len(r.value) != 2:
+        return None, True
+    nonzero, unread = r.value
+    # the simplest points first, a few of them: each exact confirmation may spend a sign's timeout, and 30 shifted
+    # points of x² + 10^-300·sin(Nπx) held one verify for 70 s before √2/2 confirmed it (G2YO-6); one not confirmed
+    # among them leaves the comparison undecided below
+    order = sorted(nonzero, key=lambda i: (sum(sp.count_ops(v) + len(str(v)) for v in pts[i].values()), i))
+    for i in order[:_CONFIRMED_POINTS]:
+        pt = pts[i]
+        cx = _exact_counterexample(a, b, syms, pt, budget)
+        if isinstance(cx, dict):
+            return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "exact": cx["exact"]}, False
+    return None, bool(nonzero or unread)
+
+
 def _definite_nonzero_difference(d, syms, pts, a, b, budget: list | None = None) -> tuple[dict[str, Any] | None, int]:
-    """(witness, number of unconfirmed points): a point where the difference `d` = a - b, evaluated
-    by SymPy's adaptive evalf, carries significant bits, confirmed by the exact values of a and b
-    there (`_exact_counterexample`). Strict evalf is no proof either: it gave 1.6e-35 for
-    Σ_{k=1}^{436} cos(kπ/2), which is 0, and all six full-period trig sums of the third audit were
-    refuted (30 Sep 2026, N4). A point the exact values call equal is no witness; one they cannot
-    decide is counted, and the caller abstains (principle 5)."""
+    """(witness, number of unconfirmed points): a point where a and b differ, decided by their EXACT
+    values there (`_exact_counterexample`). No evalf of the difference decides anything. Strict evalf
+    gave 1.6e-35 for Σ_{k=1}^{436} cos(kπ/2), which is 0, and all six full-period trig sums of the third
+    audit were refuted (30 Sep 2026, N4). A zero with no significant bits ('0.e-168') is no proof of
+    equality: evalf follows a cancellation only so far, and 1 - tanh(100x) at x = 15 (2e-1303) and
+    Σ_{k=0}^{5000} a^k - 1/(1 - a) came out that way, so tanh(100x) -> 1 and the infinite series' value
+    were certified (fourth audit of 1 Oct 2026, S5); evalf even returns an exact 0 for log(1 + 15/10^600),
+    which rounds to log(1). And evalf of a sum it cannot write out held the verifier for minutes in its
+    own process (S4); the exact check takes such a sum only through `forms.checked_forms`, in the
+    sandbox. A point the exact values call equal is no witness; one they cannot decide is counted, and
+    the caller abstains (principle 5)."""
     try:
         d = sp.sympify(d)
     except (sp.SympifyError, TypeError):
         return None, 0
     unsure = 0
     for pt in pts:
+        if _heavy_power_at(d, pt):
+            unsure += 1                           # no exact value written out here (`_heavy_power_at`)
+            continue
         try:
             dp = d.subs({s_: pt[s_] for s_ in syms}, simultaneous=True)
             if dp.has(*_FORMS):
-                # a finite sum written out is exact, and its evalf is quick (strict evalf of the sum
-                # itself took seconds per point and returned the residue above)
                 w = _written_out(dp)
                 dp = dp if w is None else w
-            v = sp.N(dp, 30)
         except Exception:  # noqa: BLE001
+            unsure += 1
             continue
-        if v == 0 or not getattr(v, "is_number", False):
-            continue
-        prec = getattr(v, "_prec", None)
-        if prec is None:
-            re_, im_ = v.as_real_imag()
-            prec = min(getattr(re_, "_prec", 0) or 0, getattr(im_, "_prec", 0) or 0) \
-                if re_ != 0 and im_ != 0 else getattr(re_ if re_ != 0 else im_, "_prec", 0)
-        if prec and prec >= 50:
-            c = _exact_counterexample(a, b, syms, pt, budget)
-            if isinstance(c, dict):
-                return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "difference": str(v),
-                        "exact": c["exact"]}, unsure
-            unsure += c is None
+        if dp == 0:
+            continue                          # exactly 0 at this point
+        c = _exact_counterexample(a, b, syms, pt, budget)
+        if isinstance(c, dict):
+            return {"point": {s_.name: str(pt[s_]) for s_ in syms}, "exact": c["exact"]}, unsure
+        unsure += c is None
     return None, unsure

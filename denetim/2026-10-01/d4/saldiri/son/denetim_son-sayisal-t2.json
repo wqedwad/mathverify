@@ -1,0 +1,163 @@
+[
+ {
+  "findings": [
+   {
+    "id": "SS2-YO-1",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "certify_local_extremum'un birinci türev testi sıçramalı (sgn, atan2) fonksiyonda yerel olmayan noktayı yerel minimum onaylıyor",
+    "repro": "verify(IR, çözüm). IR: {task:{kind:'extremum',params:{f:'x**2 + sign(x)',var:'x',which:'local_min'}},vars:[{name:'x',domain:'real'}],givens:[],answer_shape:'scalar'}. İddia {kind:'value',payload:'0'}. Aynı kökten gelen öbür vakalar: f='x**3 - 3*x + sign(x - 1)' local_min '-2'; 'x**2 - 4*x + sign(x - 2)' local_min '-4'; '(x - 2)**2 + sign(x - 2)' local_min '0'; 'Abs(x) + 2*sign(x)' local_min '0'; 'Abs(x - 1) - 2*sign(x - 1)' local_min '0'; 'x**3 - 3*x + 2*sign(x - 1)' local_argmin '1'; 'atan2(x, -1) + x + x**2' local_min 'pi'; 'x**2 - 2*sign(x)**2' local_min '0'. Aralık verilse de sonuç aynı ('[-1, 1]'). Ters yön: 'x**2 - 2*sign(x)**2' için local_max '0' iddiası. Sondalar: .../son-sayisal-t2/yanlis-onay/sonda/c_ext.py ve c_ext3.py; koşum h.py/run.sh ile.",
+    "expected": "INCORRECT: istenen türde yerel ekstremum yok ve f(c)'den küçük değerler c'ye keyfi yakın. En azından UNKNOWN. x²−2sgn(x)² için local_max 0 CORRECT (ya da UNKNOWN) olmalı.",
+    "actual_branch": "54aca55'te ve birleşik 00142fe'de: listedeki her local_min/local_argmin iddiası CORRECT (certify.extremum pass, primary). x²−2sgn(x)² için local_max 0 ise INCORRECT (no_local_extremum_of_requested_type).",
+    "actual_base": "0e93ed5'te aynı: hepsi CORRECT, local_max 0 INCORRECT.",
+    "math": "mpmath, 50 basamak. x²+sgn x: f(0)=0, f(−h)=h²−1 → −1 (h=1e−30'da −1,0). x³−3x+sgn(x−1): f(1)=−2, f(1−h) → −3. x²−4x+sgn(x−2): f(2)=−4, f(2−h) → −5. (x−2)²+sgn(x−2): f(2)=0, sol yanda −1. |x|+2sgn x: f(0)=0, sol yanda −2. |x−1|−2sgn(x−1): f(1)=0, sağ yanda −2. x³−3x+2sgn(x−1): f(1)=−2, sol yanda −4. atan2(x,−1)+x+x²: f(0)=π, x<0'da f'<0 ve f → −π. Hiçbirinde iddia edilen nokta yerel minimum değil; yerel minimum hiç yok. x²−2sgn(x)²: f(0)=0, iki yanda −2, yani 0 kesin yerel maksimum.",
+    "mechanism": "extremum.certify_local_extremum adayları (rd ∪ _kinks ∪ ops.critical_points) yalnız klasik f'nin ardışık adaylar arasındaki orta noktalardaki işaretiyle sınıflandırıyor; f'nin o noktada sürekli olup olmadığına bakmıyor. calculus.classical sgn'in DiracDelta terimini siliyor, bu yüzden f' sıçramadan hiç iz taşımıyor (x²+sgn x için f'=2x). sign ve Heaviside _KINKED'de; sıfırları köşe gibi aday yapılıyor ama süreksiz sayılmıyor. atan2 ne _KINKED'de ne _UNENUMERATED'de, kinks_complete True kalıyor. Global yol korunuyor: complete için continuous_domain == interval şartı var, sign'da NotImplementedError ya da 'not trusted' veriyor, G1–G3 ve T1–T6 INCORRECT/UNKNOWN çıktı. Yerel yolda bu şartın karşılığı yok. Dal SS-YO-1'de bu fonksiyona yalnız gerçellik ve None denetimi ekledi; açık tabandan kalıyor. Öneri: sınıflanan her noktada f'nin sürekliliği kanıtlanmalı (sol/sağ limit = f(c)) ya da f sign/Heaviside/atan2 içeriyorsa yerel test kaçınmalı (_UNENUMERATED gibi). Gerçekçilik: sgn eski MEB programında ve hazırlık kitaplarında var ('işaret fonksiyonu'), birinci sınıf kalkülüsünde de. f'=0 → x=0 → f(0) naif hatası, doğrulayıcının yakalaması beklenen tipik çözücü hatası. LaTeX \\operatorname{sgn} ve 'sgn' okunmuyor (UNKNOWN); tetik ancak IR 'sign(x)' yazınca."
+   },
+   {
+    "id": "SS2-YO-2",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "base",
+    "title": "RK-SAY-1 noktasal çözümü: sanal kısım noktada süreksizse [0, 2π) okuması tüm yanda (−π, π]'ye çöküyor, gelenek değeri CORRECT",
+    "repro": "IR: {task:{kind:'limit',params:{expr:'arg(1 + (sign(x) + 1/2)*I)',var:'x',to:'0',side:'-'}},vars:[{name:'x',domain:'real'}],givens:[],answer_shape:'dne_or_scalar'}. İddia '-atan(1/2)'; ikinci iddia '2*pi - atan(1/2)'. Aynısı expr 'arg(1 + (floor(x) + 1/2)*I)' ile. Sonda: .../yanlis-onay/sonda/c_arg.py, P5/P5b/P6/P6b.",
+    "expected": "İki iddia da UNKNOWN (arg_convention): sol limit (−π, π]'de −atan(1/2), [0, 2π)'de 2π−atan(1/2).",
+    "actual_branch": "54aca55'te ve 00142fe'de: '-atan(1/2)' CORRECT (arg_readings_agree), '2*pi - atan(1/2)' INCORRECT. floor sürümü de aynı.",
+    "actual_base": "0e93ed5'te CORRECT / INCORRECT; tabanda iki okuma yok. Dalın ilk turunda (4153cc1) ikisi de UNKNOWN (arg_convention). Yani ikinci tur, ilk turun kapattığı vakayı yeniden açtı.",
+    "math": "x ∈ (−1, 0) için Im u = −1/2: arg(1 − i/2) = −atan(1/2) ≈ −0.46364760900080611621 (−π, π]'de, 5.8195376981787803607 [0, 2π)'de (mpmath, 50 basamak). x = 0'da Im u = sign(0) + 1/2 = 1/2 > 0.",
+    "mechanism": "parse._arg_in_zero_two_pi, noktasal görevde (verifier._arg_point: türevde 'at', limitte 'to') im(u)'nun işaretini YALNIZ noktada okuyor (certified_sign(im_u.xreplace({x: p}))). +1 çıkınca Piecewise'ı tamamen atıp SymPy'nin a'sını döndürüyor, bu x'in her değeri için geçerli oluyor. 'İşaret yerelde sabit' varsayımı im(u)'nun noktada sürekli olmasını gerektiriyor; sign/floor gibi süreksiz sanal kısımda tek yanlı limit öbür yandaki dalı okuyor ve iki okuma yanlış yere uyuşuyor. Dar düzeltme: yerel çözümü im(u) noktada sürekli (sign/floor/ceiling/frac/Piecewise içermeyen) iken uygulamak. Sürekli im ile (polinom, trigonometri) yeni yanlış onay bulunmadı: P1–P4'te özdeşlik adımı 'arg(1 + x*I) = atan(x)' unknown kaldı, nokta dışı sayısal adım reading b'de çürütüldü."
+   }
+  ],
+  "probes_run": 228,
+  "summary": "Yanlış onay merceği, wip/son-sayisal ikinci tur (54aca55). Karşılaştırma 0e93ed5 ile; gerektiğinde 4153cc1 ve birleşik 00142fe de koşuldu. Toplam 228 sonda: yaklaşık 145 verify, yaklaşık 85 mekanizma çağrısı.\n\nDalın getirdiği yeni bir yanlış CORRECT bulunmadı. Açık kalan iki yanlış onay var, ikisi de tabandan.\n\n1. SS2-YO-1 (orta). certify_local_extremum'un birinci türev testi süreklilik denetlemiyor. Sıçramalı fonksiyonda (sign, atan2) yerel olmayan noktayı yerel minimum onaylıyor:\n   - x²+sign x için local_min 0 CORRECT; doğrusu yerel minimum yok.\n   - x³−3x+sign(x−1) için −2, x²−4x+sign(x−2) için −4, |x−1|−2sign(x−1) için 0 da CORRECT.\n   - Ters yönde, x²−2sign(x)²'de gerçek yerel maksimum 0 INCORRECT.\n   - Dalda, tabanda ve 00142fe'de aynı. Global yol sorunsuz: continuous_domain sign'da düşüyor, EVT kullanılmıyor.\n\n2. SS2-YO-2 (düşük, yapay). RK-SAY-1'in noktasal çözümü im(u)'yu yalnız noktada okuyor. Sanal kısım orada süreksizse (sign/floor) iki okuma yanlış yere uyuşuyor: tek yanlı limitte −atan(1/2) CORRECT çıkıyor, oysa [0, 2π)'de değer 2π−atan(1/2). İlk tur (4153cc1) bu vakayı UNKNOWN veriyordu; ikinci tur yeniden açtı. Tabanda zaten CORRECT.\n\nDenetlenip temiz çıkanlar:\n- **critical_points:** tekil noktalar asin/acos bileşimlerinde (asin(2x/(1+x²)), acos((1−x²)/(1+x²)), acos(4x³−3x) vb.) eksiksiz bulundu; bulunamayınca None dönüyor. Açık aralık ucu aday sayılmıyor.\n- **Abs/Max-trig:** 24 vakada (yanlış değer, yerel tepe, 1e−30 kayması, birden çok ekstremum noktası, açık uç) yanlış CORRECT yok.\n- **Şıklarla aralık kuralı:** yanlış şıkkı onaylamıyor. Sayı olmayan ya da birimli şıkta ve iki değer de şıklardaysa kural devreye girmiyor.\n- **INCORRECT birleştirme:** ilk kötü adım ve adım durumları doğru (F1: ilk kötü adım 3. adım, F2: 1. adım). Bir okumada çürütülüp ötekinde doğrulanan adım unknown oluyor, verified kalmıyor.\n- **Sürekli sanal kısımlı noktasal çözüm:** yanlış özdeşlik adımı ya da nokta dışı değer onaylamadı.\n- **İlk tur gürültü kontrolleri:** gerçek küçük sanal ve gerçel kısımlar (1e−60, (1+i/1e20)³) INCORRECT.\n\nBulgu dışı, karar gereği UNKNOWN olanlar:\n- R7: arg(1+xi)'nin 0'daki türevi için iddia 2 artık UNKNOWN (arg_reading_undecided); tabanda INCORRECT idi.\n- R1: soldan limit iddiası 0 dalda da tabanda da UNKNOWN.\n\nKopyalar silindi. Sondalar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal-t2/yanlis-onay/sonda altında: c_ext.py, c_ext2.py, c_ext3.py, c_arg.py, c_arg2.py, mech1.py–mech4.py, truth.py; koşum h.py/run.sh ile, çıktılar batch1.out–batch4.out."
+ },
+ {
+  "findings": [
+   {
+    "id": "SS2-RK-1",
+    "klass": "coverage_loss",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Some De Moivre/polar solutions now drop from CORRECT to UNKNOWN (arg_convention). Their answers do not depend on the arg convention, but a step writes the principal value (-pi, pi] of a lower half-plane number.",
+    "repro": "R=/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal-t2/ret-kapsama; mkdir -p $R/dal && git -C /home/user/asd archive 54aca55 | tar -x -C $R/dal (same for 0e93ed5 -> taban, 00142fe -> birlesik, 4153cc1 -> tur1); $R/kos.sh dal ret2.py PDM PDM_dal.json and $R/kos.sh dal ret.py AB ...; compare with $R/cmp.py. Example: verify(ev('(1 - I)**10', dod='complex'), sol('-32*I', [('eq','Abs(1 - I) = sqrt(2)'), ('eq','arg(1 - I) = -pi/4'), ('eq','(1 - I)**10 = 32*(cos(-5*pi/2) + I*sin(-5*pi/2))')])). 12 measured right answers: (1-i)^10=-32i, (sqrt3-i)^6=-64, (1-i)^8=16, (-1-sqrt3 i)^3=8, (1-i)(sqrt3-i)=(sqrt3-1)-(sqrt3+1)i, (-1-i)^4=-4, (1-sqrt3 i)^6=64, arg((-1-i)(-i))=3pi/4 via principal sum, 1-i = sqrt2(cos(-pi/4)+i sin(-pi/4)), -1-i in trig form (principal), MC C polar -1-i with principal step, d/dx arg(1+xi) at -1 = 1/2 with step arg(1+xi)=atan(x).",
+    "expected": "CORRECT. In both readings the answer certificate (certify.algebra) passes. The only failure is a step that is true in reading a, the notation the solver uses. Wrong answers in the same family (e.g. (1-i)^10 = 32i, (sqrt3-i)^6 = 64) must stay INCORRECT.",
+    "actual_branch": "UNKNOWN on dal 54aca55, on 00142fe (identical) and on 4153cc1, flag arg_convention: with arg in (-pi, pi] CORRECT, with arg in [0, 2pi) INCORRECT. Reading b: hard_fail=['steps.refute'], pass=['certify.algebra'], steps [verified, refuted, verified]. The wrong answers stay INCORRECT.",
+    "actual_base": "0e93ed5: all 12 are CORRECT (steps verified, single principal reading). The same solutions written with [0,2pi) steps were INCORRECT in the base and are UNKNOWN on the branch, which is an improvement.",
+    "math": "mpmath at 50 digits: (1-i)^10 + 32i = 0; (sqrt3-i)^6 + 64 ~ 4e-50; (1-i)^8 - 16 = 0; (-1-sqrt3 i)^3 - 8 ~ 2e-51; (1-i)(sqrt3-i) - ((sqrt3-1)-(sqrt3+1)i) = 0; (-1-i)^4 + 4 = 0; (1-sqrt3 i)^6 - 64 ~ 4e-50; arg((-1-i)(-i)) = arg(-1+i) = 3pi/4 in both conventions; 1-i - sqrt2*e^{-i pi/4} ~ 2e-51; d/dx arg(1+xi) at -1 = 1/2 in both conventions (2pi + atan x when x<0). The principal values -pi/4, -pi/6, -2pi/3, -3pi/4 are exact.",
+    "mechanism": "verifier._verify_arg_readings: v_a=CORRECT and v_b=INCORRECT, so the result is UNKNOWN(arg_convention). In reading b, INCORRECT comes only from the step 'arg(1 - I) = -pi/4', which is false in [0, 2pi). Round 2 (RK-ARG-STEP/RK-SAY-2, _incorrect_in_both) already treats a step refuted in one reading only as 'unknown' and accepts INCORRECT only for a failure that does not depend on the convention. The mixed CORRECT/INCORRECT branch was not covered, so a refutation in one reading only still decides the verdict. The fixer's sonda has no case of this kind, and none of the reports lists it as 'karar gereği'; the round-1 report lists only the 6 single-convention arg *values*. Suggested fix: when one reading is CORRECT and the other's only hard failure is steps.refute, with every step refuted there not refuted in the CORRECT reading, return the CORRECT reading's layers with those steps set to 'unknown' (the same merge as _incorrect_in_both). For an arg-valued answer, the other reading's answer certificate also fails, so its UNKNOWN does not change."
+   },
+   {
+    "id": "SS2-RK-2",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "In an arg question whose options are in [0, 2pi), a correct solution that computes the principal value and adds 2pi is INCORRECT. On the branch the correct principal-value step is now 'refuted' and first_bad_step = 1: the options rule (RK-SAY-3) bypasses the RK-SAY-2 fix.",
+    "repro": "ev('arg(1 - I)', dod='complex', options={'A':'pi/4','B':'3*pi/4','C':'5*pi/4','D':'7*pi/4','E':'3*pi/2'}), sol('7*pi/4', [('eq','arg(1 - I) = -pi/4'), ('eq','-pi/4 + 2*pi = 7*pi/4')], option='D'). Also measured: arg(-1-i) C 5pi/4 (and the variant whose step text says 'Esas değer (-pi, pi] aralığında'), arg(1-sqrt3 i) D 5pi/3, arg(sqrt3-i) D 11pi/6 (with and without the conversion step), arg(z^2) for z = 1-i, E 3pi/2 via the principal step arg(-2i) = -pi/2. Probes: sonda/ret.py group A, sonda/ret2.py group M; per-reading layers: sonda/insp.py.",
+    "expected": "CORRECT. The options fix the range of the answer, and the answer is certified in that reading. The step is true in the principal convention that the solver explicitly uses before converting. Wrong options (e.g. B 5pi/6 for arg(sqrt3 - i)) must stay INCORRECT.",
+    "actual_branch": "dal 54aca55 = 00142fe: INCORRECT, flag arg_range_from_options, steps [refuted, verified], first_bad_step=1 (7 rows). Reading b: hard_fail=['steps.refute'], certify.algebra pass. Reading a: certify.algebra fail, steps verified.",
+    "actual_base": "0e93ed5: also INCORRECT, but the answer was the failure (read in (-pi, pi]): steps [verified, verified], first_bad_step=None. tur1 4153cc1: INCORRECT (arg_readings_agree), steps [verified, verified]. The verdict was already wrong in the base; the branch adds the refuted correct step and the wrong first_bad_step.",
+    "math": "mpmath 50 digits: principal arg(1-i) = -pi/4 and -pi/4 + 2pi = 7pi/4 = the [0,2pi) value; arg(-1-i): -3pi/4 -> 5pi/4; arg(sqrt3-i): -pi/6 -> 11pi/6; arg(1-sqrt3 i): -pi/3 -> 5pi/3. All differences 0 up to 1e-50.",
+    "mechanism": "_verify_arg_readings: _arg_options_reading returns 'b', so only layers_b is returned. In reading b, a step written in the solver's principal notation is judged in [0, 2pi) and refuted. The RK-SAY-2 decision (INCORRECT only on a failure common to both readings) and the RK-ARG-STEP merge (refuted in one reading only means unknown) apply only when no range is declared. The options declare the range of the answer, not the meaning of the solver's intermediate 'arg'. The same holds for (-pi, pi] options with a [0,2pi) step, which was already INCORRECT in the base. Suggested fix: under arg_range_from_options / arg_range_declared, a step refuted only in the declared reading and verified in the other becomes 'unknown', and the verdict comes from the declared reading's other layers."
+   },
+   {
+    "id": "SS2-CR-1",
+    "klass": "crash_or_timeout",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "branch",
+    "title": "_arg_options_reading parses the options in the main process with no time limit. One option with a power tower such as '10**10**10' in an arg MC question hangs verify; the same input takes 1.1 s on 0e93ed5.",
+    "repro": "sonda/big.py optread|mc_arg and sonda/big2.py mc_arg_taban_check, run with kos60.sh (60 s timeout): ev('arg(-1 - I)', dod='complex', options={'A':'pi/4','B':'3*pi/4','C':'5*pi/4','D':'7*pi/4','E':'10**10**10'}), sol('5*pi/4', option='C').",
+    "expected": "A verdict within the verifier's budget, at worst UNKNOWN, for a malformed or oversized option (CLAUDE.md principle 13: input is not code; a malformed input is UNKNOWN).",
+    "actual_branch": "dal: no verdict within 60 s (real 60.0 s, user 57.4 s, CPU-bound). _arg_options_reading alone: user 58.6 s, killed at 60 s.",
+    "actual_base": "0e93ed5: INCORRECT in 1.1 s (single principal reading). On both copies an MC question without arg and the same options gives CORRECT in 1.0 s. A derivative with at='10**10**10' hangs on both copies; that is not counted here.",
+    "math": "10**10**10 is an integer with 10^10 digits; SymPy evaluates it eagerly while parsing.",
+    "mechanism": "verifier._arg_options_reading (87dfb80) calls parse_expr_str(str(o)) on every option, then exact_equal, inside the main process with no sandbox and no timeout. Every other option parse goes through a path that returns in about 1 s. Suggested fix: parse with the sandboxed or guarded parser under a timeout and return None (no range from the options) on a timeout or an oversized number."
+   },
+   {
+    "id": "SS2-RK-3",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "The local resolution for pointwise arg tasks covers only a finite point of the task variable. For a limit at infinity, or with a parameter fixed by a given, a right answer that is the same in both readings is UNKNOWN (arg_reading_undecided), and the wrong answer loses its INCORRECT.",
+    "repro": "sonda/ret5.py, run with kos60.sh on dal, taban and birlesik: lim x->oo arg(1 + x*I) = pi/2; lim x->oo arg(2 + x*I) = pi/2; d/dx arg(1 + a*x*I) at 1 with given a = 2: 2/5; lim x->1 arg(a + x*I) with a = 1: pi/4. Wrong answers: lim x->oo arg(1 + x*I) = 0; derivative 1/5.",
+    "expected": "Right answers CORRECT and wrong ones INCORRECT: the [0, 2pi) shift is constant near the point or eventually.",
+    "actual_branch": "dal = 00142fe: all 6 UNKNOWN, arg_reading_undecided: with arg in (-pi, pi] CORRECT/INCORRECT, with arg in [0, 2pi) UNKNOWN. With the parameter in the coefficient of i instead (arg(x + a*I) at 0, a = 1: -1), the result is CORRECT.",
+    "actual_base": "0e93ed5: the right answers are CORRECT and the wrong ones INCORRECT.",
+    "math": "Principal: atan(x) -> pi/2 as x -> oo. In [0,2pi), im(1 + x i) = x > 0 for large x, so there is no shift and the limit is pi/2. d/dx atan(2x) = 2/(1+4x^2) = 2/5 at x = 1, and im = 2x > 0 near 1. arg(1 + x i) with a = 1 at x = 1 is pi/4 in both conventions.",
+    "mechanism": "verifier._arg_point returns {} for to = +-oo, and its dict holds only the task variable. parse._arg_in_zero_two_pi resolves the Piecewise only when every free symbol of u is in `at`, so a given parameter (a = 2) or a point at infinity leaves Piecewise((a+2pi, im u < 0), (a, True)). Reading b then certifies nothing, and 'UNKNOWN' in (v_a, v_b) gives arg_reading_undecided. This is the rest of RK-SAY-1. Suggested fix: substitute the givens' parameter values into `at`, and at +-oo use the eventual sign of im(u) (the limit of sign(im u) or its leading term)."
+   }
+  ],
+  "probes_run": 560,
+  "summary": "Measured about 560 distinct cases, each on at least two copies (dal 54aca55 and 0e93ed5; most also on the merged 00142fe, the arg groups also on 4153cc1). Copies were made with git archive and deleted afterwards. Probes and outputs are in /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal-t2/ret-kapsama/sonda: ret.py, ret2.py through ret5.py, cp.py, cp2.py, cr3.py, big.py, big2.py, insp.py, objs.py, mpcheck.py, and *_dal/_taban/_birlesik/_tur1.json files.\n\nMain result: the second round introduced no unjust INCORRECT and no crash in the textbook areas named in the task. 30 textbook items (percent, angles, trig equations, sign tables, log options, piecewise, |x|) and 64 extremum variants (Abs and Max-trig, cases with singular points) give the same verdicts on the branch, the base and 00142fe. Across 139 more extremum items the only change is |sin x| + x/2 on [0, 2pi], which the branch fixes (max 5pi/6 + sqrt3/2 is now CORRECT). critical_points now returns None for 11 of 70 textbook functions where the base returned a list. No verdict changed, because in those functions the guarded zero set (rd) is itself a ConditionSet and the EVT route was already closed in the base. Pointwise arg at the branch-cut point (im u = 0), one-sided limits, im u identically 0, arg of powers landing on the real axis, options written in Unicode, LaTeX or with $ signs, malformed option, at and to values, and verify with IR objects: no new crash and no wrong refutation. The 00142fe merge behaves exactly like the branch in every group.\n\nFour findings, all on the arg readings:\n1. SS2-RK-1 (branch, medium, realistic): a principal-value arg step in a question whose answer does not depend on the convention drops 12 right answers from CORRECT to UNKNOWN (De Moivre and polar form).\n2. SS2-RK-2: with [0,2pi) options, a correct solution that goes through the principal value is still INCORRECT. The verdict was already INCORRECT in the base; new on the branch is that the correct step is shown refuted and first_bad_step = 1.\n3. SS2-CR-1 (branch, low, not realistic): parsing the options in the main process hangs verify on a power-tower option.\n4. SS2-RK-3 (branch, low): the RK-SAY-1 local resolution does not cover a limit at infinity or a parameter fixed by a given.\n\nGaps that exist in the base too, not counted as findings: piecewise, floor and integral-of-arg extremum or value is UNKNOWN; local extremum with no interval given is UNKNOWN; a list given as var or at raises layer_exception; at = 10**10**10 hangs on both copies. arg items take about 2 to 3 times longer, which round 1 already reported (e.g. arg(cis(pi/7)^7): 42.8 s vs 20.2 s).\n\nOne correction to my own probe labels: in x + |sin 2x| and |cos x| + x/2 on [0, pi], the endpoint value is not the maximum (5pi/6 + sqrt3/2 and 1 + pi/2). The branch's INCORRECT verdicts there are correct, so I did not report them."
+ },
+ {
+  "file": "/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal-t2/bulgular.json",
+  "verdicts": [
+   {
+    "id": "SS2-YO-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "Doğru (bağımsız mpmath, 50 basamak): listedeki fonksiyonların hiçbirinin yerel minimumu yok; iddia edilen her noktada f(c)'den küçük değerler c'ye keyfi yakın (x²+sgn x: f(0)=0, f(−h)→−1; atan2(x,−1)+x+x²: f(0)=π, sol yanda →−π). Beklenen: her local_min/local_argmin iddiası INCORRECT, en az UNKNOWN; asla CORRECT. x²−2sgn(x)² için 0 kesin yerel maksimum (iki yanda f=−2): local_max 0 CORRECT ya da UNKNOWN, INCORRECT değil.",
+    "note": "Dal 54aca55 ve taban 0e93ed5'te kendim ölçtüm: 10 local_min/argmin iddiası ([-1,1] aralıklı dahil) CORRECT (certify.extremum pass), local_max 0 INCORRECT. Kod: certify_local_extremum f'nin sürekliliğine bakmıyor, classical() DiracDelta'yı siliyor, atan2 _KINKED/_UNENUMERATED'de yok. Heaviside IR'da okunmuyor (UNKNOWN). Açık tabandan."
+   },
+   {
+    "id": "SS2-YO-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "Sol limit geleneğe bağlı: x∈(−1,0)'da Im u=−1/2; (−π,π]'de −atan(1/2)≈−0.46365, [0,2π)'de 2π−atan(1/2)≈5.81954. İki iddia da UNKNOWN (arg_convention) olmalı; floor sürümü de aynı. Sağ limit atan(3/2) iki okumada aynı, CORRECT kalmalı (dalda kalıyor).",
+    "note": "Kendim ölçtüm: dalda sign ve floor sürümünde −atan(1/2) CORRECT (arg_readings_agree), 2π−atan(1/2) INCORRECT; taban aynı; 4153cc1'de dördü UNKNOWN (arg_convention): ikinci tur geri açtı. Kod: _arg_in_zero_two_pi im(u)'nun işaretini yalnız noktada okuyor (x=0'da +1/2). Yapay girdi; doğru cevap bir gelenekte doğru, önem düşük."
+   },
+   {
+    "id": "SS2-RK-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT: cevap sertifikası (certify.algebra) iki okumada da geçiyor; B okumasındaki tek başarısızlık esas değer adımı (arg(1−i)=−π/4). Bu ifade geleneğe bağlı, karşı örnekle çürütülmüş değil; adım 'unknown' olmalı (RK-ARG-STEP ile tutarlı). Aynı ailedeki yanlış cevaplar ((1−i)^10=32i, (√3−i)^6=64) INCORRECT kalmalı; dalda kalıyor.",
+    "note": "Kendim ölçtüm (dal): (1−i)^10=−32i, (√3−i)^6=−64, (−1−i)^4=−4, arg((−1−i)(−i))=3π/4, d/dx arg(1+xi)|−1=1/2 esas değer adımıyla UNKNOWN (a CORRECT, b INCORRECT); 4153cc1 aynı; taban beşi CORRECT. Adımsız sürüm dalda CORRECT. Ek: tabanda yanlış (√3−i)^6=64 de CORRECT çıktı (taban yanlış onayı; dalda kapalı)."
+   },
+   {
+    "id": "SS2-RK-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT (en kötü UNKNOWN, asla INCORRECT): şıklar cevabın aralığını [0,2π) koyuyor ve cevap o okumada sertifikalı (certify.algebra pass). Esas değeri yazıp 2π ekleyen adım (−π/4) (−π,π]'de doğru; yalnız ilan edilen okumada çürüyen adım 'unknown' olmalı. Yanlış şık (√3−i için B 5π/6) INCORRECT kalmalı; dalda cevap sertifikası düştüğü için kalıyor.",
+    "note": "Kendim ölçtüm: dalda arg(1−i) D, arg(−1−i) C, arg(√3−i) D, arg(1−√3i) D esas değer adımıyla INCORRECT, steps [refuted, verified], fbs=1; adımsız ya da 7π/4 adımıyla CORRECT. Taban ve 4153cc1'de de INCORRECT (cevap düşüyor, adımlar verified). Hüküm tabandan beri yanlış; dal gerekçeyi kötüleştirdi (doğru adım çürütüldü, fbs=1)."
+   },
+   {
+    "id": "SS2-CR-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "Bütçe içinde bir karar, en kötü UNKNOWN: aşırı büyük ya da bozuk bir şık şıklardan aralık okumasını düşürmeli (None) ve ana süreçte sınırsız hesap yapılmamalı. Taban aynı girdide 1.2 s'de karar veriyor.",
+    "note": "Kendim ölçtüm: dalda süreç içi alarm olmadan 180 s'de karar yok (user 176 s, exit 124). faulthandler yığını: verifier.py:1025 _arg_options_reading → parse_expr_str → SymPy Integer._eval_power. 50 s'lik SIGALRM orada yutulup UNKNOWN döndü (aynı yer). Taban 1.2 s'de INCORRECT; arg'sız aynı şıklı MC dalda 1.05 s'de CORRECT."
+   },
+   {
+    "id": "SS2-RK-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "Doğru cevaplar CORRECT: lim x→∞ arg(1+xi)=π/2, lim x→∞ arg(2+xi)=π/2, a=2 iken d/dx arg(1+axi)|1=2/5, a=1 iken lim x→1 arg(a+xi)=π/4. Yanlışlar (0, 1/5) INCORRECT. im(u) noktanın yakınında ya da sonsuzda pozitif, [0,2π) kayması yok, iki okuma aynı. UNKNOWN güvenli ama kapsama kaybı.",
+    "note": "Kendim ölçtüm: dalda altısı UNKNOWN (arg_reading_undecided: a CORRECT/INCORRECT, b UNKNOWN); taban 4 CORRECT, 2 INCORRECT. Kontrol: parametresiz arg(1+2xi)|1=2/5 ve lim x→1 arg(1+xi)=π/4 dalda CORRECT. Kod: _arg_point ∞'da {} döndürüyor, sözlükte yalnız görev değişkeni var. Yanlış onay yok, yalnız kapsama kaybı."
+   }
+  ]
+ }
+]

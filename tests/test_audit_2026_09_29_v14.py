@@ -157,8 +157,12 @@ def test_a_closed_gcd_read_as_written_has_its_value_in_a_domain():
     ("log(sin(arccot(x)+arccot(2)))", "Interval.open(-2, oo)", "CORRECT"),
 ])
 def test_arccot_read_as_written_is_one_function(expr, claim, want):
+    """Since the review of d4b (2 Oct 2026) a trigonometric condition whose argument is not linear
+    (sin(arccot(x) + arccot(2)) != 0) gives no exact set: SymPy's own set is no proof of completeness
+    (`sandbox.exactsets`), so the domain is left undecided. What stays: the right domain is never
+    refuted and the wrong one never certified."""
     r = _run(_ir("domain_of", {"expr": expr, "var": "x"}, shape="set"), claim, kind="set")
-    assert r.verdict == want
+    assert r.verdict in ({want, "UNKNOWN"})
 
 
 @pytest.mark.parametrize("kind,rel,claim", [

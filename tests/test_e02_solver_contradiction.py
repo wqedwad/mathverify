@@ -48,7 +48,9 @@ def test_guard_removes_extraneous_sqrt_root():
 def test_solve_guarded_returns_only_true_roots():
     roots, ev = solve_guarded(Eq(log(x - 1) + log(x - 3), log(3)), x)
     assert roots == [4]
-    assert set(ev["solveset"]) == {"0", "4"}     # trap recorded in evidence (stringified)
+    # SymPy's own solveset gave {0, 4} (the trap); since round 5 of part d4b (2 Oct 2026) the guarded
+    # solveset is the class set of a sum of logs, {4}, and SymPy's set is no longer read
+    assert set(ev["solveset"]) == {"4"}
     roots, ev = solve_guarded(Eq(sqrt(x + 4), x - 2), x)
     assert roots == [5]
 

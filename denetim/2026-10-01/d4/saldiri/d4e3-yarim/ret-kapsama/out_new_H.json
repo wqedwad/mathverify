@@ -1,0 +1,119 @@
+[
+ {
+  "group": "H",
+  "label": "derivative order 2 |x**4 - 10*x**2 + 1|: 12x**2-20 times sign [right]",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': [], 'values': [], 'why': ['kink_budget', 'kink_undecided']}}",
+  "s": 51.5
+ },
+ {
+  "group": "H",
+  "label": "derivative order 2 |x**4 - 10*x**2 + 1| + |x**3 - 3*x + 1|: 0 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['CRootOf(x**3 - 3*x + 1, 0)', 'CRootOf(x**3 - 3*x + 1, 1)', 'CRootOf(x**3 - 3*x + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': [], 'values",
+  "s": 42.5
+ },
+ {
+  "group": "H",
+  "label": "derivative |x**4 - 10*x**2 + 1| * |x**3 - 3*x + 1|: textbook",
+  "verdict": "CORRECT",
+  "ok": false,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['CRootOf(x**3 - 3*x + 1, 0)', 'CRootOf(x**3 - 3*x + 1, 1)', 'CRootOf(x**3 - 3*x + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': [], 'values",
+  "s": 61.4
+ },
+ {
+  "group": "H",
+  "label": "derivative sqrt(Abs(x**4 - 10*x**2 + 1)) + sqrt(Abs(x**3 - 3*x + 1)): 0 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['CRootOf(x**3 - 3*x + 1, 0)', 'CRootOf(x**3 - 3*x + 1, 1)', 'CRootOf(x**3 - 3*x + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': [], 'values",
+  "s": 3.5
+ },
+ {
+  "group": "H",
+  "label": "derivative Abs(x**4 - 10*x**2 + 1)/(x**3 - 3*x + 1): textbook",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': [], 'values': [], 'why': []}}",
+  "s": 39.7
+ },
+ {
+  "group": "H",
+  "label": "derivative Max(x**4 - 10*x**2 + 1, x**3 - 3*x + 1): via abs",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['0', 'CRootOf(x**3 - x**2 - 10*x + 3, 0)', 'CRootOf(x**3 - x**2 - 10*x + 3, 1)', 'CRootOf(x**3 - x**2 - 10*x + 3, 2)'], 'families': [], 'values': [], 'why': []}}",
+  "s": 15.8
+ },
+ {
+  "group": "H",
+  "label": "derivative Abs(sin(x)) + Abs(x**4 - 10*x**2 + 1): textbook",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'undecided', 'kinks': {'left_out': ['CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': ['Ne(sin(x), 0)'], 'values': [], 'why': ['kink_undecided']}}",
+  "s": 3.5
+ },
+ {
+  "group": "H",
+  "label": "derivative sin(x)*Abs(sin(x)) + Abs(x**4 - 10*x**2 + 1): textbook",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'undecided', 'kinks': {'left_out': ['CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': ['Ne(sin(x), 0)'], 'values': [], 'why': ['kink_undecided']}}",
+  "s": 3.0
+ },
+ {
+  "group": "H",
+  "label": "derivative Abs(x**5 - x + 1): textbook (CRootOf kink)",
+  "verdict": "CORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['CRootOf(x**5 - x + 1, 0)'], 'families': [], 'values': [], 'why': []}}",
+  "s": 4.3
+ },
+ {
+  "group": "H",
+  "label": "derivative Abs(x**5 - x + 1) order 2: textbook",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['CRootOf(x**5 - x + 1, 0)'], 'families': [], 'values': [], 'why': ['kink_undecided']}}",
+  "s": 8.8
+ },
+ {
+  "group": "H",
+  "label": "derivative Abs(x - cos(x)): textbook",
+  "verdict": "UNKNOWN",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'undecided', 'claim_as_written': 'claim_condition_undecided: Ne(Abs(x - cos(x)), 0)', 'kinks': {'left_out': [], 'families': [], 'values': [], 'why': ['kinks_not_solved']}}",
+  "s": 1.2
+ },
+ {
+  "group": "H",
+  "label": "derivative Abs(x - cos(x)): 1 + sin(x) [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': [], 'families': [], 'values': [], 'why': ['kinks_not_solved']}, 'smooth_witness': '5159/1000000'}",
+  "s": 1.1
+ },
+ {
+  "group": "H",
+  "label": "derivative Abs(exp(x) - 2) * Abs(x**4 - 10*x**2 + 1) order 2: 0 [wrong]",
+  "verdict": "INCORRECT",
+  "ok": true,
+  "flags": [],
+  "reason": "{'method': 'random_point', 'kinks': {'left_out': ['log(2)', 'CRootOf(x**4 - 10*x**2 + 1, 0)', 'CRootOf(x**4 - 10*x**2 + 1, 1)', 'CRootOf(x**4 - 10*x**2 + 1, 2)', 'CRootOf(x**4 - 10*x**2 + 1, 3)'], 'families': [], 'values': [], 'why': ['claim_value_at_a_kink', 'kink_budget', 'kink_undecided']}, 'smoo",
+  "s": 40.9
+ }
+]

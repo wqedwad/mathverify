@@ -1,0 +1,278 @@
+[
+ {
+  "label": "GW limit |x|/x at 0, given x + 0*Integral(1/t, (t, x, 1)) > 0: DNE [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.4
+ },
+ {
+  "label": "GW limit |x|/x at 0, given x + 0*Integral(1/t, (t, x, 1)) > 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint x + 0*Integral(1/t, (t, x, 1)) > 0: DNE [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint x + 0*Integral(1/t, (t, x, 1)) > 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod x + 0*Integral(1/t, (t, x, 1)) > 0: DNE [x > 0 as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "ir_inconsistent"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod x + 0*Integral(1/t, (t, x, 1)) > 0: -1 [x > 0 as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "ir_inconsistent"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW limit |x|/x at 0, given x + 0*Integral(1/sqrt(t), (t, x, 1)) > -1: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.11
+ },
+ {
+  "label": "GW limit |x|/x at 0, given x + 0*Integral(1/sqrt(t), (t, x, 1)) > -1: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint x + 0*Integral(1/sqrt(t), (t, x, 1)) > -1: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint x + 0*Integral(1/sqrt(t), (t, x, 1)) > -1: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod x + 0*Integral(1/sqrt(t), (t, x, 1)) > -1: DNE [x > 0 as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "ir_inconsistent"
+  ],
+  "reasons": [],
+  "s": 0.01
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod x + 0*Integral(1/sqrt(t), (t, x, 1)) > -1: -1 [x > 0 as written]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "ir_inconsistent"
+  ],
+  "reasons": [],
+  "s": 0.02
+ },
+ {
+  "label": "GW limit |x|/x at 0, given 0*Integral(1/t, (t, x, 1)) >= 0: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.02
+ },
+ {
+  "label": "GW limit |x|/x at 0, given 0*Integral(1/t, (t, x, 1)) >= 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint 0*Integral(1/t, (t, x, 1)) >= 0: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint 0*Integral(1/t, (t, x, 1)) >= 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod 0*Integral(1/t, (t, x, 1)) >= 0: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod 0*Integral(1/t, (t, x, 1)) >= 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW limit |x|/x at 0, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "GW limit |x|/x at 0, given x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.09
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.05
+ },
+ {
+  "label": "GW limit |x|/x at 0, constraint x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.09
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: DNE [x > 0 as written]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.limits:pass:"
+  ],
+  "s": 0.04
+ },
+ {
+  "label": "GW limit |x|/x at 0, dod x**2 + 0*Integral(exp(-x*t), (t, 0, oo)) >= 0: -1 [x > 0 as written]",
+  "verdict": "INCORRECT",
+  "status": null,
+  "ok": true,
+  "flags": [],
+  "reasons": [
+   "certify.limits:fail:"
+  ],
+  "s": 0.03
+ },
+ {
+  "label": "GW solve x**2 = 0, given x + 0*Integral(t*sin(t)/(x**2*t**2 + 1), (t, 1, oo)) > -5: {0} [0 excluded]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.18
+ }
+]

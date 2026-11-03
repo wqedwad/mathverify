@@ -178,7 +178,6 @@ def test_a_counterexample_at_a_value_of_the_parameter_still_refutes():
      "unknown"),
     (_simp(LN, [NP, A]), _sol("pi*a", [("compute", f"{LN} = 0")], kind="expression"), "unknown"),
     (_simp(LN, [NP, A]), _sol("pi*a", [("compute", f"{LN} = pi*a")], kind="expression"), "unknown"),
-    (_ev("L(-1)", [X, T], functions=L), _sol("I*pi", [("compute", "L(-1) = I*pi")]), "unknown"),
     # a counterexample at a value of the parameter, and the pins of the givens, of a constraint, of a step
     (_simp(I0A, [A, X]), _sol("a**2/2", [("compute", f"{I0A} = a**2")], kind="expression"), "refuted"),
     (_ev(I0A, [A, X], ["a = 2"]), _sol("2", [("compute", f"{I0A} = 2")]), "verified"),
@@ -194,6 +193,17 @@ def test_a_counterexample_at_a_value_of_the_parameter_still_refutes():
 def test_a_compute_step_with_a_parametric_form(ir, sol, status):
     st = _steps(verify(ir, sol))
     assert st[-1]["status"] == status, [(s["status"], s.get("reason")) for s in st]
+
+
+def test_a_compute_step_where_the_integral_diverges():
+    # L(-1) = ∫_1^{-1} dt/t runs through 0, where 1/t is not integrable: an integral with numbers for bounds is
+    # defined only when it is proved to converge (attack on d4e, YO-2), so the problem stops at the intake
+    # (problem_definedness_undecided) and SymPy's I*pi is never verified as a step; before, the step ran and
+    # stayed unknown
+    r = verify(_ev("L(-1)", [X, T], functions=L), _sol("I*pi", [("compute", "L(-1) = I*pi")]))
+    assert r.verdict == "UNKNOWN"
+    layer = next((la for la in r.layers if la.layer == "steps.refute"), None)
+    assert layer is None or layer.evidence.get("steps", [])[-1]["status"] != "verified"
 
 
 @pytest.mark.parametrize("ir,sol,not_status", [
@@ -241,8 +251,11 @@ def test_checked_forms_takes_a_closed_held_form_by_numbers():
     from mathverify.normalize.parse import HeldIntegral
     x = sp.Symbol("x", real=True)
     assert checked_forms(HeldIntegral(x, (x, 0, 2))) == 2
-    with pytest.raises(UnverifiedForm):        # SymPy's 0 for ∫_{-1}^{1} |cos x| dx: numbers say 2 sin 1
-        checked_forms(HeldIntegral(sp.Abs(sp.cos(x)), (x, -1, 1)))
+    # SymPy's 0 for ∫_{-1}^{1} |cos x| dx is not taken; since the fourth audit (1 Oct 2026, d4c) the
+    # antiderivative certificate gives the true value 2 sin 1 (cos x > 0 there: |cos x| = cos x)
+    assert checked_forms(HeldIntegral(sp.Abs(sp.cos(x)), (x, -1, 1))) == 2 * sp.sin(1)
+    with pytest.raises(UnverifiedForm):        # SymPy's wrong 0 and no certificate (not odd, no antiderivative)
+        checked_forms(HeldIntegral(sp.exp(sp.cos(x)) * sp.Abs(sp.cos(x)) + x, (x, -1, 1)))
 
 
 def test_agreement_at_sample_points_is_no_proof_for_a_parametric_form():

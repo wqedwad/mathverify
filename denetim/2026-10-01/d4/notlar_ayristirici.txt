@@ -1,0 +1,38 @@
+# NOTLAR — d4 ayristirici
+- Kopyalar hazir (yeni=eb3bccc, eski=aa67b20).
+- DECISIONS §75-84, HANDOFF §4.2 okundu.
+## Ilerleme
+- [19:45] harness sonda/harness.py, run.sh, both.sh. Probes: p_f9a (simplify-bypass, L(-1)), p_bound, p_f9b, p_domain.
+- BULGU B1 (false_accept): LaTeX `\lfloor \sum_{\alpha=3}^{\sqrt{1}} \alpha \rfloor` claim -2 CORRECT (yeni). Index not matching [A-Za-z]\w* (\alpha, k_{1}, \theta, j_{0}) + non-literal constant bound. eski: all bound spellings CORRECT; #14 fixed plain names only. pre-existing, fix incomplete.
+- Aday: LaTeX \sum_{k=1/2}^{5/2} k = 9/2 CORRECT (convention-dependent, GKP gives 3). canonical needs k declared retest.
+- Aday: simplify(1*Integral(1/t,(t,1,x))) body -> >90s (eski 65s, yeni 128s) under load; retest alone.
+- BULGU F1 (false_accept, yeni dogrulandi): evaluate `simplify(Limit(a*n*sin(pi/n), n, oo))`, n positive_integer, given a=2, claim 0 -> CORRECT (61 s). simplify() computes plain sp.Limit during eval before hold_parametric. (limit lowercase -> held -> UNKNOWN). p_wrap.py matrix running (log_wrap_*).
+- BULGU D1 aday: LaTeX `x \notin S` -> latex2sympy Not(Eq(x,S)) -> after rebind True -> read_domain_condition returns None (domain dropped). verify-level test pending (p_domain).
+- harness alarm 400s now (alarm inside verify can corrupt results; 90s runs earlier unreliable).
+- BULGU D1 (false_accept + unjust_reject, yeni dogrulandi): LaTeX `x \notin S` -> latex2sympy Not(Eq(x,S)) -> True after IR-symbol rebinding; read as "no restriction": fdomain (read_domain_condition), given side condition (side_conditions skip non-Relational), count_roots, solve_inequality all drop it. {-2,2} CORRECT, {-2} INCORRECT. constraints -> UNKNOWN (unreadable_constraints ok). log_notin_yeni.txt. eski pending.
+- Aday D2: domain "(0, 3), (4, 5)" comma -> intersection (empty). p_domain2.py written.
+- [20:10] D1 eski'de de var (constraints de CORRECT'ti, #14 N5 constraint'i kapatti; fdomain/given hala). F1 yeni: simplify(Limit) a=2 claim 0 CORRECT, 2pi INCORRECT; closed simplify(Limit(n sin(pi/n))) claim 0 CORRECT, pi INCORRECT. ~70-130 s/case (yuk altinda).
+- DoS: Sum(k,(k,1,10**10**10)) parse: yeni >150 s (uninterruptible), eski 40 s alarm; verifier'da alarm yok -> ikisi de asar. pre-existing, dusuk. factorial(10**6) -> verify UNKNOWN ok.
+- chain1.sh: simp 10:38, domain2, intcalc, sets, domain (yeni) running.
+- BULGU C1 (false_accept by §80 convention + unjust reject): Sum with non-integer bounds an integer apart (1/2..5/2, 0.5..2.5, sqrt(2)..sqrt(2)+1, LaTeX \sum_{k=1/2}^{5/2}) read with SymPy stepping: 9/2 CORRECT, 3 (integer-index reading) INCORRECT; step compute verified/refuted. Product same bounds -> UNKNOWN (inconsistent). k undeclared canonical -> UNKNOWN. log: p_frac run (yeni). eski pending.
+- p_inject: no leak, no hang (yeni).
+- BULGU P1 (false_accept, yeni dogrulandi, #14 kaynakli olabilir): given `x = 2` (task variable pinned) collapses F(x)=Integral(t**2,(t,0,x)) to 8/3 in ctx.expr before derivative/antiderivative/tangent/limit certificates: derivative at 2 claim 0 CORRECT (true 4), 4 INCORRECT; antiderivative 8x/3 CORRECT; tangent y=8/3 CORRECT; limit (xF)/x^3 at 0 claim oo CORRECT. canonical/integrate/LaTeX all. out_pinvar_yeni.json. eski pending.
+- P1 genisledi (p_pinvar2, yeni): pins reach variables bound by ENCLOSING operators: Derivative(Integral(t**2,(t,0,x)),x) x=2 -> 0 CORRECT; Derivative(Integral(a*t,(t,0,1)),a) a=2 -> 0 CORRECT; Derivative(Limit(a*sin(x)/x,x,0),a) -> 0 CORRECT; Sum(Integral(t,(t,0,k)),(k,1,2)) k integer + given k=5 -> 25 CORRECT (_integer_indices makes index == ns k); IR fn f(x)=Int + derivative task + given x=2 -> 0 CORRECT; derivative task var a with given a=2 -> 0 CORRECT; step compute verified for these. eski run pending.
+- P1 eski: hepsi dogru (Derivative(...)=4 CORRECT, 0 INCORRECT, adim refuted). => #14 kaynakli, yuksek.
+- F1 eski: closed |cos| simplify, tan, parametric pinned simplify(2*Integral) hepsi eski'de de CORRECT -> pre-existing; #14 F9 fix (lowercase limit/integrate held) simplify'i kapsamiyor.
+- BULGU H1 (false_accept, pre-existing): Matrix([[Limit(a*n*sin(pi/n), n, oo)]]) a=2 claim Matrix([[0]]) CORRECT (yeni+eski), Matrix([[2*pi]]) INCORRECT. _hold_value skips non-Basic containers; eski step verified, yeni step unknown.
+- B1 variants: \sum_{k\,=\,3}^{\sqrt{1}} (spaced plain k) and \mathrm{k} also CORRECT -2.
+- repro/ dir: P1.py F1.py D1.py B1.py C1.py written (not yet run standalone).
+- BULGU D2 (false_accept, yeni): function domain listing intervals/relations with , & and: "(0, 3), (4, 5)", "(-oo, -1), (1, oo)", "x < -1, x > 1", "[-3,-1], [1,3]" -> read as conjunction -> empty domain -> solve f=5 claim {} CORRECT, domain_of f claim {} CORRECT, count_roots 0 CORRECT. eski pending.
+- sets probe: routing ok; my "Reals - Interval(3,R)" expectation wrong (degenerate {3}); no set finding.
+- intcalc: only contrived d & dn declared: \frac{d^2}{dn^2}(n sin(pi n)) claim 0 CORRECT (latex product reading). low.
+- D2 eski: {} INCORRECT (domain dropped) -> D2 #14 kaynakli (yes). repro/D2.py, H1.py ok.
+- H1 genis: closed Matrix([[Limit(n sin(pi/n))]]) de CORRECT 0. Kok: certify/algebra.py:603 sp.simplify(target.subs(sol)) + _hold_value/has_closed_form skip non-Basic Matrix.
+- Aday H2: algebra solve_system sp.simplify(target.subs(s_)) closed plain Limit/Integral'i hesapliyor (scalar, non-binding given a+1=3). p_alg.py running (yeni+eski).
+- PV (divergent principal value integrals): all UNKNOWN in yeni, safe. f9c yeni: no finding (floor(I1)=0 is right).
+- B1/C1/dn: eski'de de var.
+- [21:00] bulgular.json yazildi (P1,F1,D1,D2,B1,H1,C1,I2) via sonda/mk_bulgular.py. repro/I2.py dogrulandi (CORRECT).
+- f9c eski vs yeni: eski'de int 1/(x^2-a)=0 serbest a CORRECT'ti, #14 kapatti; yeni regresyon yok.
+- alg (scalar target + non-binding given): yeni+eski UNKNOWN, bulgu yok.
+- DoS verify-level: yeni Sum(k,(k,1,10**10**10)) 150 s timeout. eski pending (log_dosv.txt).
+- p_setpar.py running: parametric held forms inside set answers (scalar_equal -> sym_equal 'sympy_equals' accepted).

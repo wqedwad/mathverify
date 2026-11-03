@@ -1,0 +1,61 @@
+adim        D4-ADIM-A ?          false_accept         medium known=False A=- B=-
+adim        D4-ADIM-B yarim      false_accept         high   known=False A=(True, True, 'no') B=-
+adim        D4-ADIM-C ?          unjust_reject        high   known=False A=- B=-
+adim        D4-ADIM-D ?          false_accept         low    known=False A=- B=-
+adim        D4-ADIM-E ?          unjust_reject        medium known=False A=- B=-
+adim        D4-ADIM-F ?          crash                medium known=False A=- B=-
+adim        D4-ADIM-G ?          false_accept         high   known=False A=- B=-
+adim        D4-ADIM-H ?          false_accept         low    known=False A=- B=-
+adim        D4-ADIM-I ?          other                low    known=True A=- B=-
+adim        D4-ADIM-J ?          unjust_reject        low    known=False A=- B=-
+adim        D4-ADIM-K ?          false_accept         medium known=False A=- B=-
+ayristirici B1      ?          false_accept         medium known=False A=- B=-
+ayristirici C1      ?          false_accept         low    known=False A=- B=-
+ayristirici D1      ?          false_accept         high   known=False A=- B=-
+ayristirici D2      ?          false_accept         medium known=False A=- B=-
+ayristirici F1      ?          false_accept         high   known=False A=- B=-
+ayristirici H1      ?          false_accept         medium known=False A=- B=-
+ayristirici I2      ?          false_accept         low    known=False A=- B=-
+ayristirici P1      ?          false_accept         high   known=False A=- B=-
+capraz      CAP-B1  DOGRULANDI unjust_reject        low    known=False A=(True, True, 'yes') B=ok
+capraz      CAP-C1  DOGRULANDI false_accept         high   known=False A=(True, True, 'yes') B=ok
+capraz      CAP-D1  DOGRULANDI false_accept         high   known=False A=(True, True, 'yes') B=ok
+capraz      CAP-F1  DOGRULANDI false_accept         high   known=False A=(True, True, 'yes') B=ok
+capraz      CAP-G1  DOGRULANDI other                low    known=False A=(True, True, 'yes') B=ok
+capraz      CAP-K1  ?          other                low    known=False A=- B=-
+capraz      CAP-M1  DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+capraz      CAP-N1  DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+capraz      CAP-Z1  DOGRULANDI unjust_reject        medium known=False A=(True, True, 'yes') B=ok
+gorev       G1      DOGRULANDI false_accept         high   known=False A=(True, True, 'yes') B=ok
+gorev       G10     DOGRULANDI false_accept         low    known=False A=(True, True, 'yes') B=ok
+gorev       G11     DOGRULANDI unjust_reject        low    known=False A=(True, True, 'yes') B=ok
+gorev       G12     DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+gorev       G13     DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+gorev       G14     ?          coverage_regression  low    known=False A=- B=-
+gorev       G2      DOGRULANDI false_accept         high   known=False A=(True, True, 'yes') B=ok
+gorev       G3      DOGRULANDI false_accept         high   known=False A=(True, True, 'yes') B=ok
+gorev       G4      DOGRULANDI false_accept         high   known=False A=(True, True, 'yes') B=ok
+gorev       G5      DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+gorev       G6      DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+gorev       G7      DOGRULANDI false_accept         medium known=False A=(True, True, 'no') B=ok
+gorev       G8      DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+gorev       G9      DOGRULANDI false_accept         medium known=False A=(True, True, 'yes') B=ok
+sifir       S1      ?          false_accept         high   known=False A=- B=-
+sifir       S2      ?          false_accept         high   known=False A=- B=-
+sifir       S3      ?          unjust_reject        high   known=False A=- B=-
+sifir       S4      ?          crash                medium known=False A=- B=-
+sifir       S5      ?          false_accept         high   known=False A=- B=-
+sifir       S6      ?          coverage_regression  low    known=False A=- B=-
+tanimlilik  TAN-01  DOGRULANDI false_accept         high   known=False A=(True, True, 'no') B=ok
+tanimlilik  TAN-02  ?          false_accept         high   known=False A=- B=-
+tanimlilik  TAN-03  ?          false_accept         medium known=False A=- B=-
+tanimlilik  TAN-04  ?          false_accept         medium known=False A=- B=-
+tanimlilik  TAN-05  yarim      false_accept         medium known=False A=- B=ok
+tanimlilik  TAN-06  ?          false_accept         medium known=False A=- B=-
+tanimlilik  TAN-07  ?          false_accept         medium known=False A=- B=-
+tanimlilik  TAN-08  ?          false_accept         medium known=False A=- B=-
+tanimlilik  TAN-09  ?          false_accept         medium known=False A=- B=-
+tanimlilik  TAN-10  ?          false_accept         low    known=False A=- B=-
+tanimlilik  TAN-11  ?          false_accept         low    known=False A=- B=-
+tanimlilik  TAN-12  ?          coverage_regression  low    known=False A=- B=-
+Counter({'?': 36, 'DOGRULANDI': 22, 'yarim': 2})

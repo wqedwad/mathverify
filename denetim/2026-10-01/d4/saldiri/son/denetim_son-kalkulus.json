@@ -1,0 +1,369 @@
+[
+ {
+  "findings": [
+   {
+    "id": "RK-EXT-1",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "Extremum on |sin x|-type functions: the 'complete candidate set' check and the candidate list come from two different solvers, so an interior critical point is missing. The right maximum gets INCORRECT and a wrong maximum gets CORRECT",
+    "repro": "extremum f=Abs(sin(x)), which=max, interval [0, pi], claim 1 -> INCORRECT (evidence: complete_candidates=true, candidates [(0,0),(pi,0)], superlevel_set EmptySet, attained_at [], reason not_attained). Same: Abs(sin(x)) on [0, 2*pi] = 1; Abs(sin(2*x)) on [0, pi/2] = 1; Abs(sin(x)) + 1 on [0, pi] = 2 -> INCORRECT. Mirror false accepts: Abs(sin(x)) + x/10 on [0, pi]: max = pi/10 -> CORRECT, the right value sqrt(99)/10 + acos(-1/10)/10 -> INCORRECT; Abs(sin(x)) - x/10 on [0, pi]: max = 0 -> CORRECT; Abs(sin(2*x)) + x on [0, pi/2]: max = pi/2 -> CORRECT. argmax |sin x| = pi/2 is CORRECT, which is inconsistent with max = 1 being INCORRECT. Case files: vakalar.py groups E/X/Y; results out_base.jsonl / out_dal.jsonl in /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-kalkulus/ret-kapsama/",
+    "expected": "max |sin x| on [0, pi] = 1: CORRECT. pi/10, 0 and pi/2 (the wrong maxima above): INCORRECT. sqrt(99)/10 + acos(-1/10)/10: CORRECT.",
+    "actual_branch": "INCORRECT for 1 (and for 1 on [0, 2pi], for |sin 2x|, for |sin x| + 1 = 2); CORRECT for the wrong values pi/10, 0, pi/2; INCORRECT for the right value 1.16208...",
+    "actual_base": "identical in 0e93ed5 (all 9 Y cases and 20 X cases give the same verdicts)",
+    "math": "mpmath, 50 digits. |sin x| + x/10: f' = cos x + 1/10 = 0 at x0 = acos(-0.1) = 1.67096...; f(x0) = sqrt(0.99) + x0/10 = 1.16208381190226559629... while f(pi) = pi/10 = 0.31415...; a 10001-point scan gives max 1.162083810. |sin x| - x/10: max at acos(0.1), value 0.84792454654... > 0. |sin 2x| + x on [0, pi/2]: f(pi/3) = sqrt(3)/2 + pi/3 = 1.91322295498... > pi/2 = 1.5708. |sin x| on [0, pi]: f(pi/2) = 1.",
+    "mechanism": "certify/extremum.py certify_extremum (lines 169-181 on the branch, not touched by the diff): cands = list(r.value) comes from sandbox ops.critical_points (ops.py:253). There, SymPy's solveset of cos(x)*sign(sin(x)) raises NotImplementedError ('as_set is not implemented for relationals with periodic solutions'), the error is swallowed, and the result is []. complete, however, is judged on rd = solveset_in(f') (the project's exact sets), which returns {0, pi/2, pi}: finite, so complete=True. pi/2 is never added to cands. With complete and closed true, step 4 returns not_attained (line 303), so the right value is INCORRECT. For a wrong claim, when the superlevel solve leaves a ConditionSet, the 'EVT+complete_critical_set' route (line 278) sets bound=True before the numeric scan _scan_better can run, so the wrong claim is CORRECT. Fix direction: add rd's finite points to cands (or require r == rd); only then may complete be true."
+   },
+   {
+    "id": "RK-PW-EQ",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "A Piecewise whose point p has its own branch (Eq(x,p) / x≠p plus a point value): at(diff(f)) gives f'(p) as the derivative of the constant branch, 0. The right value is INCORRECT and 0 is CORRECT; solving f'(x)=0 has the same error",
+    "repro": "evaluate at(diff(f(x), x), x, 2), f = Piecewise((x**3, Ne(x, 2)), (8, Eq(x, 2))): claim 12 -> INCORRECT, claim 0 -> CORRECT. f = Piecewise(((x**2 - 1)/(x - 1), Ne(x, 1)), (2, Eq(x, 1))), at 1: 1 -> INCORRECT, 0 -> CORRECT. f = Piecewise((x**2, x < 1), (2*x - 1, x > 1), (1, Eq(x, 1))), at 1: 2 -> INCORRECT, 0 -> CORRECT. f = Piecewise((x**2, Ne(x, 1)), (1, Eq(x, 1))): 2 -> INCORRECT, 0 -> CORRECT. f = Piecewise((x*exp(x), Ne(x, 0)), (0, Eq(x, 0))): 1 -> INCORRECT, 0 -> CORRECT. solve_equation diff(f(x), x) = 0 with f = x^3 | 8 at 2: {0} -> INCORRECT, {0, 2} -> CORRECT. solve_inequality diff(f(x), x) > 0: R∖{0} -> INCORRECT. (Groups U/O/Z in vakalar.py.)",
+    "expected": "f is x^3, x+1, the C1 junction, x^2 and x*e^x respectively, with no jump at p. The right f'(p) (12, 1, 2, 2, 1) is CORRECT; the claim 0 is INCORRECT; the critical-point set {0} is CORRECT.",
+    "actual_branch": "right f'(p): INCORRECT; claim 0: CORRECT; f'(x)=0 -> {0, 2} CORRECT. Exception: for the (x²−1)/(x−1) variant the branch is UNKNOWN on solve/ineq, but the at(diff) path is still wrong. The derivative task stays UNKNOWN, and steps are right (step 'at(diff(f(x),x),x,2) = 12' verified, '= 0' refuted).",
+    "actual_base": "the same wrong verdicts in 0e93ed5. The base also accepts x·sin(1/x) (point value 0 at 0) with f'(0)=0 CORRECT, which the branch turned into UNKNOWN.",
+    "math": "f(x)=x^3 (x≠2), f(2)=8=2^3, so f ≡ x^3 and f'(2)=12, f'(x)=0 ⇔ x=0. (x^2−1)/(x−1)=x+1 (x≠1), f(1)=2, so f ≡ x+1 and f'(1)=1. x^2|2x−1 with f(1)=1: both one-sided derivatives are 2 and f is continuous, so f'(1)=2. SymPy: diff(Piecewise((x**3, Ne(x,2)), (8, True))) = Piecewise((3*x**2, Ne(x,2)), (0, True)), which is 0 at 2 (measured).",
+    "mechanism": "normalize/parse.py _at (line 378) substitutes p into SymPy's branch-wise derivative. It refuses only sign/Heaviside/DiracDelta with a zero argument. At p the point branch is selected and its derivative (of a constant) is 0. The branch's YO-1 fix (_switch_differentiability, parse.py:2530) classifies p correctly as 'value' (derivative_at_point finds 12; _piecewise_rule returns None here), so it adds no condition, but the value read is still SymPy's 0. This sits inside YO-1's decision ('C¹ birleşimde değer verilir': the value given must be the true derivative). Fix direction: when the branch selected at val is not the branch on either side (a point branch), refuse in _at, or take the one-sided derivative that the classification proved."
+   },
+   {
+    "id": "RK-TIME-1",
+    "klass": "crash_or_timeout",
+    "severity": "low",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "Branch's at(diff) coverage gain exposes a pre-existing in-process 20–48 s structural parse: textbook |polynomial| f'(a) items go from 0.1–1 s UNKNOWN to 19–48 s CORRECT",
+    "repro": "evaluate at(diff(f(x), x), x, a), f an IR function: |x²−4| at 3 = 6 (base 0.11 s UNKNOWN → branch 18.9 s CORRECT); |x²−4| at 1 = −2 (0.17 → 21.6 s); |x²−5x+6| at 4 = 3 (0.28 → 20.2 s); |x²−9| at 4 = 8 (0.40 → 22.6 s); |2x²−8| at 1 = −4 (0.48 → 23.6 s); |x⁴−5x²+4| at 3 = 78 (0.56 → 47.8 s); |x³−3x+2| at 2 = 9 (0.56 → 24.7 s); x|x²−4| at 3 = 23 (0.46 → 19.6 s); |x⁶−64| at 3 = 1458 (22.0 s); |x⁵−x−1| at 2 = 79 (0.9 → 24.3 s); the MC variant with f'(3), f=|x²−4|, takes 20.3 s. The same text without an IR function (at(diff(Abs(x**2-4), x), x, 3)) takes 1.3 s on the branch.",
+    "expected": "A verdict in about 1 s, or at least a work limit under a timeout",
+    "actual_branch": "CORRECT after 19–48 s, all in-process SymPy work with no sandbox timeout",
+    "actual_base": "UNKNOWN in 0.1–1.2 s (intake.definedness problem_definedness_undecided) for these items. The base pays the same cost wherever it reaches the path: |x³−3x+1| at 3 took 31.5 s in the base, and sqrt(x²+9) at 4 took 20.8 s. Calling verifier._structure('at(diff(f(x), x), x, 3)') directly with f=|x²−4| takes 22.8 s on the base and 21.6 s on the branch.",
+    "math": "timings measured, not math; all values checked: e.g. |x⁴−5x²+4| at 3: 81−45+4=40>0, f'=4·27−30=78",
+    "mechanism": "verifier._claim_not_a_value → _same_structure(claim, target) → _structure → formal.statement.parse_structural(strict=True). Under sp.evaluate(False), SymPy's diff of the IR function body with Abs runs assumption queries (exprtools._monotonic_sign → real_roots → expand) with 5.6 M _expand_hint calls (cProfile: 61 s of 63 s). The branch did not change this code. Its definedness fix (_switch_differentiability plus the strict closed And/Or) lets these items past the intake, which used to abstain first."
+   },
+   {
+    "id": "RK-COV-1",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "at(diff) at a member of an infinite zero family of a switch, or at a Piecewise point the limits cannot classify, is now undecided: |cos x|² at π/2 and the textbook x²·sin(1/x) (f(0)=0) at 0 go from CORRECT to UNKNOWN",
+    "repro": "evaluate at(diff(f(x), x), x, pi/2), f = Abs(cos(x))**2, claim 0: base CORRECT → branch UNKNOWN (intake.definedness problem_definedness_undecided). evaluate at(diff(f(x), x), x, 0), f = Piecewise((x**2*sin(1/x), Ne(x, 0)), (0, Eq(x, 0))), claim 0: base CORRECT → branch UNKNOWN. In the whole 923-case comparison these are the only CORRECT→UNKNOWN changes on right answers (4 rows, 2 distinct items).",
+    "expected": "CORRECT. |cos x|² = cos² x is smooth and its derivative −sin 2x is 0 at π/2. x² sin(1/x) has f'(0) = lim x·sin(1/x) = 0.",
+    "actual_branch": "UNKNOWN",
+    "actual_base": "CORRECT, but by unsound paths. The base dropped the closed Or(cos(π/2) ≠ 0, −sin(π/2) = 0), which is in fact False. For x² sin(1/x) it used SymPy's point-branch derivative 0, the same mechanism that makes the base accept x·sin(1/x)'s nonexistent f'(0)=0.",
+    "math": "d/dx cos²x = −sin 2x, which is 0 at π/2. For x² sin(1/x): |f(h)/h| = |h sin(1/h)| ≤ |h| → 0.",
+    "mechanism": "parse._switch_differentiability: for a zero set that is a family (cos x = 0 ⇒ π/2 + nπ), _generic_points returns a term with an integer Dummy, which has free symbols, so the switch gets Contains(cos(x), ORIGIN), undecided at every zero (documented: 'Zeros not solved one by one ... are undecided at each'). The x² sin(1/x) junction: _piecewise_rule needs the branches smooth at p, and derivative_at_point's limits of 2x sin(1/x) − cos(1/x) do not exist, so the result is Contains(x − 0, ORIGIN). Both are fail-closed; the loss is small and the base's CORRECT was unsound. Recorded so the coverage cost is measured. A per-member classification for a family (substitute the family's representative and classify with the integer parameter) would recover |cos x|²."
+   }
+  ],
+  "probes_run": 1890,
+  "summary": "Lens: unjust INCORRECT, coverage loss, crash and time. I wrote 923 cases, each run as verify() on both copies (0e93ed5 and wip/son-kalkulus = 4e2e4d7), so 1846 runs, plus about 40 timing and mechanism scripts. Groups: point derivatives with Abs/Piecewise/cbrt/trig; at(diff) evaluation; f'(x)=0 and f'(x)>0; tangents; limits; extremum; domain_of and inequality set notation (R − {2}, \\setminus, \\cup); textbook pieces (logs, trig equations, percent, complex numbers, a limit as a function argument); derivative functions and antiderivatives; integer parameters; Piecewise boundary, point-branch and equal-branch variants. Cases, scripts and results are in /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-kalkulus/ret-kapsama/ (vakalar.py, kos.py, kar.py, out_base.jsonl, out_dal.jsonl). The copies were deleted.\n\nResult counts (base→branch): CORRECT→CORRECT 555, UNKNOWN→UNKNOWN 199, UNKNOWN→CORRECT 101, INCORRECT→INCORRECT 34, UNKNOWN→INCORRECT 17, CORRECT→UNKNOWN 10, INCORRECT→UNKNOWN 4, INCORRECT→CORRECT 3. No exceptions in either copy.\n- All 17 new INCORRECTs are mathematically right: Piecewise corners and jumps, R − {−2}, R − (2, 3), and so on. The two exceptions are the product-rule forms (x∛x)' = ∛x + x/(3∛x²) and the variant with ∛(x²), which are undefined at 0 where f'(0) = 0 exists. That follows decision RK-8 (DECISIONS: 'x²eˣ(2/x+1) INCORRECT'). It is mathematically defensible, so I did not report it as a finding; the main session may want to know the natural product-rule output is now INCORRECT instead of UNKNOWN.\n- Of the 10 CORRECT→UNKNOWN changes, 8 are fixes of false accepts. Two items on right answers are real losses (RK-COV-1).\n- The fixer's checks hold. RK-9 side effect: acos(cos x)'(−1) = −1, asin(sin x)'(2) = −1 and (4) = −1 are CORRECT, and the opposite sign is INCORRECT; this is analytically right. The x|x| node rule, the C¹ junction values, R − {2} / ℝ∖{2} / \\mathbb{R}\\setminus\\{2\\} / \\cup / R − [2, 3], ℂ poles (31 complex controls: no losses) and YO-3 limit arguments (doit gave no AccumBounds in 18 SymPy checks) all hold. _real_root_rule at r = 1 (cbrt(x)³), r > 1 and g(p) = 0 is correct. The time of the new switch reading is normal apart from RK-TIME-1.\n\nBranch-induced issues: RK-TIME-1, which is pre-existing but reached far more often now (|x²−4|-type f'(a) went from 0.1 s UNKNOWN to 19–48 s CORRECT), and RK-COV-1 (small, fail-closed).\n\nSerious pre-existing faults I found in passing:\n- RK-EXT-1: max |sin x| on [0, π] = 1 is INCORRECT, while pi/10 for |sin x| + x/10 is CORRECT. The candidate list and the completeness check come from different solvers.\n- RK-PW-EQ: for a Piecewise with a point branch, f'(p) is read as 0. The right value is INCORRECT and 0 is CORRECT, also in f'(x) = 0. This falls inside the scope of SON-G3-YO-1's decision; the branch classifies existence correctly but the value at() reads is still SymPy's 0.\n\nOther pre-existing items, not reported as findings:\n- ∫∛x = (3/4)x∛x and siblings are INCORRECT in both copies; this is G2RK-1, the integral branch's.\n- MC option 'Yoktur' given with claim kind 'value' is INCORRECT through mc.consistency; this is an extraction-format issue."
+ },
+ {
+  "findings": [
+   {
+    "id": "YO-K1",
+    "klass": "false_accept",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "Kendi nokta dalı olan Piecewise'ta f'(p) SymPy formülünden 0 okunuyor; yanlış 0 CORRECT, doğru değer INCORRECT (at(diff), x=p verilen ve f'(x)=0 yolları). Dal SON-G3-YO-1'i kapatırken bu yolu açık bıraktı",
+    "repro": "Sondalar sonda/p1.py (pw, rem grupları), p8.py, p10.py. Görev evaluate, expr 'at(diff(f(x), x), x, 1)', vars [x real], functions f = Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1)). İddia '0' CORRECT, '2' INCORRECT. Şıklar {A:0, B:1, C:2, D:3, E:4} ile A=0 CORRECT, C=2 INCORRECT. Aynı davranışı veren öteki fonksiyonlar: PT6 = Piecewise((2*x + 1, x < 1), (3, Eq(x, 1)), (x**2 + 2, x > 1)) için f'(1)=0 C, 2 I. Piecewise(((x**2 - 1)/(x - 1), Ne(x, 1)), (2, Eq(x, 1))) için f'(1)=0 C, 1 I. Piecewise(((x**2 - 4)/(x - 2), Ne(x, 2)), (4, Eq(x, 2))) için f'(2)=0 C, 1 I; MC A=0 C, B=1 I; 'at(diff(f(x), x), x, 2) + f(2)' = 4 C (doğrusu 5). Piecewise((x**2, Ne(x, 1)), (1, Eq(x, 1))) için f'(1)=0 C. Piecewise((x**3, x < 1), (1, Eq(x, 1)), (x**3, x > 1)) için f'(1)=0 C (doğrusu 3). Verilen 'x = 1' ve expr 'diff(f(x), x)' ile PT'de 0 C. solve_equation 'diff(f(x), x) = 0': NE1 ve PT için {0, 1} C, {0} I; PT6 için {1} C (doğrusu ∅); CUBEPT için {0, 1} C, {0} I.",
+    "expected": "Doğru değerler: PT/PT6/NE1'de f'(1) = 2, REM1'de 1, REM2'de f'(2) = 1, CUBEPT'te 3; f'(x) = 0'ın çözümü PT ve NE1'de {0}, PT6'da ∅. Nokta dalının türevi olan 0 hiçbir yolda CORRECT olmamalı (INCORRECT, en kötü UNKNOWN). Doğru değer INCORRECT olmamalı.",
+    "actual_branch": "Dal tabanla aynı: 0 CORRECT, doğru değer INCORRECT (PT, PT6, REM1, REM2, NE1, CUBEPT, verilen x=1, MC, f'+f toplamı). f'(x)=0 kümelerinde sahte kök CORRECT, doğru küme INCORRECT. Dalın kazancı yalnız şu: dalı p'de pürüzsüz olmayan ve limitleri karar vermeyen REM tipleri ((1-cos x)/x, (e^x-1)/x, sin x/x) UNKNOWN oldu; CUBEPT f''(1)=0 de UNKNOWN oldu.",
+    "actual_base": "Aynı: PT, PT6, REM1, REM2, NE1 ve CUBEPT'te f'(p)=0 CORRECT, doğru değer INCORRECT; MC A CORRECT; f'(x)=0'da {0,1} ve {1} CORRECT. Ek olarak tabanda REM2'nin (1-cos x)/x tipi, REM4 f''(0)=0 ve CUBEPT f''(1)=0 de CORRECT.",
+    "math": "mpmath, 50 basamak, h = 1e-10 ve 1e-20 ile tek yanlı fark oranları: PT 2/2, PT6 2/2, REM1 1/1, CUBEPT 3/3, NE1 2/2, Piecewise((x**2,x<2),(4x-4,x>2),(4,Eq(x,2))) için 4/4, REM2 (x+2) 1/1. Her durumda fonksiyon p'de sürekli ve iki yan türev eşit, yani f'(p) var ve 0 değil. PT6' her yerde en az 2 (ızgarada en küçük merkezi fark 2.000…), bu yüzden f'(x)=0'ın çözümü yok. NE1 = x², CUBEPT = x³ olduğundan f'=0'ın çözümü {0}.",
+    "mechanism": "SymPy, nokta dalı (Eq(x,p)) olan bir Piecewise'ı türevlerken o dalın sabitini türevler: diff(PT6) = Piecewise((2, x<1), (0, Eq(x,1)), (2*x, x>1)), x=1'de değeri 0 (p17 ile ölçüldü). normalize.parse._written_diff değeri cur = sp.diff(cur, v)'den alır; _differentiability/_switch_differentiability yalnız türevin VARLIK koşulunu ekler. Dalda _classify_kink içindeki _piecewise_rule ya da limitler p'de 'value' der: türev var, bu doğru. Koşul eklenmez ve at() SymPy formülünün yanlış değerini (0) okur. Kararlar SON-G3-YO-1 'C¹ birleşimde değer verilir' diyor; dal bunu varlıkta doğru uyguluyor ama değeri yanlış veriyor. Adım yolu (deterministic, point_derivative limitlerle) 'f'(1)=0' adımını doğru çürütüyor, nihai cevap yolu çürütmüyor. Düzeltme önerisi: p'de 'value' kararı verildiğinde değer kuraldan okunmalı (dalların p'deki türevi; _real_root_rule'un eğimi önbelleğe koyması gibi) ya da formülün p'deki değeri buna karşı denetlenmeli. Okunamazsa koşul Contains(v - p, ORIGIN), yani kararsız kalmalı."
+   },
+   {
+    "id": "YO-K2",
+    "klass": "false_accept",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Türev fonksiyonu görevinde nokta dallı Piecewise: dalı tek tek türevleyen yanlış iddia (p'de 0) CORRECT, doğru iddia INCORRECT. Dal getirdi, tabanda UNKNOWN",
+    "repro": "Sondalar sonda/p8.py, p10.py, p17.py. derivative görevi {f: 'Piecewise((2*x + 1, x < 1), (3, Eq(x, 1)), (x**2 + 2, x > 1))', var: x}, answer_shape expression. İddia 'Piecewise((2, x < 1), (0, Eq(x, 1)), (2*x, x > 1))' CORRECT. Doğru iddialar 'Piecewise((2, x < 1), (2*x, x >= 1))' ve 'Piecewise((2, x <= 1), (2*x, x > 1))' INCORRECT. Aynısı üç fonksiyonda daha. f = Piecewise((x**2, x < 1), (1, Eq(x, 1)), (2*x - 1, x > 1)): 'Piecewise((2*x, x < 1), (0, Eq(x, 1)), (2, x > 1))' C, 'Piecewise((2*x, x < 1), (2, x >= 1))' I. f = Piecewise((x**2, Ne(x, 1)), (1, Eq(x, 1))): 'Piecewise((2*x, Ne(x, 1)), (0, Eq(x, 1)))' C, '2*x' I. f = Piecewise((x**3, x < 1), (1, Eq(x, 1)), (x**3, x > 1)): 'Piecewise((3*x**2, Ne(x, 1)), (0, Eq(x, 1)))' C, '3*x**2' I.",
+    "expected": "Doğru türev fonksiyonu 2 (x ≤ 1), 2x (x > 1); öteki örneklerde 2x ve 3x². Gerçek türev x=1'de var ve 2 (ya da 3); bu yüzden x=1'de 0 veren iddia yanlış: INCORRECT ya da en kötü UNKNOWN, asla CORRECT değil. Doğru iddia CORRECT ya da UNKNOWN olmalı, INCORRECT değil.",
+    "actual_branch": "Dört fonksiyonda yanlış iddia CORRECT, doğru iddia INCORRECT (8 karar). Kanıt (p17): compare.kinks.values = ['1'], truth = Piecewise((2, x < 1), (0, Eq(x, 1)), (2*x, x > 1)). Doğru iddianın çürütülmesi random_point'in x=1 noktasında (lhs 2, rhs 0, values_differ).",
+    "actual_base": "Sekiz kararın hepsi UNKNOWN (kink_undecided: x=1 karşılaştırmanın dışında, sınıflanmamış).",
+    "math": "mpmath, 50 basamak: PT6 x=1'de sağ ve sol fark oranı 2.000… (h = 1e-10 ve 1e-20). PT 2/2, NE1 2/2, CUBEPT 3/3. Fonksiyon sürekli ve iki yan türev eşit, bu yüzden f'(1) = 2 (CUBEPT'te 3). f(1)=3 bir sabit diye x=1'de türevi 0 yazmak klasik bir hata: fonksiyonun x=1'deki türevi komşu dallardan gelir.",
+    "mechanism": "Dalın yeni _piecewise_rule kuralı (_classify_kink, sıra 1) x=1'i 'value' sınıflar; bu varlık için doğru. kink_reading bunu 'values'a koyar ve karşılaştırma x=1'i içerir. Ama doğru değer (truth) SymPy'nin diff(f) sonucu ve x=1'de nokta dalının türevini (0) taşıyor. _value_holes yalnız formülün değeri OLMAYAN noktaları (nan/zoo) okur, değeri YANLIŞ olan noktayı okumaz. _real_root_rule eğimini cache[p]'ye koyuyor, _piecewise_rule koymuyor. Tabanda x=1 kink_undecided olarak dışarıda kalıyordu. YO-K1 ile kök neden aynı (SymPy'nin nokta dalı türevi), ama yol farklı (certify.calculus türev fonksiyonu) ve tetik dalın getirdiği 'value' sınıflaması. Düzeltme önerisi: _piecewise_rule 'value' dediğinde eğim (dalların p'deki türevi) _value_holes'a verilmeli ve formülün p'deki değeri ona karşı denetlenmeli; ayrıca _piecewise_rule ile 'value' alan her nokta delik sayılmalı."
+   },
+   {
+    "id": "YO-K3",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "Derivative(...) ve diff(f, (x, n)) yazımları köşe noktasında türevin varlık koşulunu atlıyor (SON-G3-YO-1'in ikiz yazımları açık): |x-2|'(2)=0, Max'(1)=0 CORRECT",
+    "repro": "Sondalar sonda/p7.py, p9.py, p13.py. evaluate, expr 'at(Derivative(f(x), x), x, 2)', f = Abs(x - 2): iddia '0' CORRECT. Şıklar {A:-4, B:0, C:4, D:2, E:Yoktur} ile B CORRECT. Aynı biçimde CORRECT olanlar: f = Abs(x**2 - 4) x=2'de 0; Abs(sin(x)) x=pi'de 0; Max(x, 2 - x) x=1'de 0; 'at(Derivative(x*Abs(x), x, 2), x, 0)' ve 'at(Derivative(x*Abs(x), (x, 2)), x, 0)' 0; Abs(x) x=0'da 0; Piecewise((-x, x < 0), (x, x >= 0)) x=0'da 1; Piecewise((x**2, x < 1), (2*x, x >= 1)) x=1'de 2. Verilen 'x = p' ve expr 'Derivative(f(x), x)' ile CORRECT olanlar: |x-2|, |x²-4|, |sin x|, cbrt(x) (0), Max(x, 2-x), Abs(x)+x (1). Piecewise |x|'te 'at(diff(f(x), (x, 1)), x, 0)' = 1 CORRECT; dalda 'at(diff(f(x), x, 1), x, 0)' ise UNKNOWN.",
+    "expected": "Bu noktaların hepsinde türev yok (DNE); verilen değer iddiaları INCORRECT ya da UNKNOWN olmalı, CORRECT değil. Aynı fonksiyonlar 'at(diff(f(x), x), x, p)' yazımında dalda zaten UNKNOWN.",
+    "actual_branch": "Hepsi CORRECT (Derivative yazımı: 12 at() ve 6 sabitlenmiş vaka, MC B CORRECT). diff(f, (x, 1)) yazımı: Piecewise vakaları CORRECT; Abs/Max/cbrt vakaları sign(0)/Heaviside(0) yakalandığı için UNKNOWN.",
+    "actual_base": "Aynı. Tek fark: tabanda düz 'at(diff(f(x), x, 1), x, 0)' de Piecewise |x| ve sıçramada CORRECT idi, dal onu UNKNOWN yaptı ama ikiz yazımları yapmadı.",
+    "math": "mpmath, 50 basamak, h = 1e-15 ve 1e-25 ile sağ/sol fark oranları: |x-2| x=2'de +1/-1; |x²-4| x=2'de +4/-4; |sin x| x=π'de +1/-1; Max(x, 2-x) x=1'de +1/-1; (x|x|)' = 2|x| x=0'da +2/-2. İki yan türev farklı, türev yok.",
+    "mechanism": "normalize.parse._WRITTEN_COMPUTING yalnız 'diff'i _written_diff'e bağlıyor. 'Derivative' (ad alanında var, parse.py:905/945) yazıldığı gibi okumada hiçbir türevlenebilirlik koşulu taşımıyor; değer okumasında Subs(Derivative(Abs(x-2), x), x, 2).doit() sign(0) = 0 veriyor. _written_diff, seq'te demet olunca ((x, 1)) 'not all(isinstance(v, Symbol))' dalına düşüyor ve koşulsuz sp.diff dönüyor. Karar SON-G3-YO-1 'yazılı türevin tanımlılık koşulu' diyor; Derivative ve demet yazımı da yazılı türevdir. Gerçekçilik belirsiz: çıkarıcı istemi diff/at(diff) örnekliyor, llm_cache'te 'Derivative(' 0 dosyada, 'at(diff(' 27 dosyada var. Düzeltme önerisi: Derivative'i ve demet/çok değişkenli diff argümanlarını _written_diff'e yönlendirmek ya da onları yazıldığı gibi okumada kararsız saymak."
+   },
+   {
+    "id": "YO-K4",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "RK-4: 'R − A ∪ B' yazımı R − (A ∪ B) diye okunuyor; soldan sağa okuma (R − A) ∪ B. Belirsiz yazım CORRECT, karşı okumada INCORRECT",
+    "repro": "Sondalar sonda/p1.py (set grubu), p13.py, p18.py. domain_of {expr: '1/((x - 2)*(x - 3))'}, iddia 'R - {2} ∪ {3}' CORRECT. Aynı ifade için 'R - {2} U {3}', '\\mathbb{R} \\setminus \\{2\\} \\cup \\{3\\}' ve '\\mathbb{R} - \\{2\\} \\cup \\{3\\}' de CORRECT. 1/(x**2 - 9) için 'R - {-3} ∪ {3}' ve 'ℝ∖{-3}∪{3}' CORRECT. log(x - 2)/(x - 5) için 'R - (-oo, 2] ∪ {5}' CORRECT. sqrt(x - 1)/(x - 3) için 'R - (-oo, 1) ∪ {3}' CORRECT. Şıklar {A:'R - {2}', B:'R - {3}', C:'R - {2, 3}', D:'R - {2} ∪ {3}', E:'R'} ile D seçimi CORRECT. solve_inequality '(x - 2)*(x - 5) > 0' için 'R - [2, 3] ∪ (3, 5]' CORRECT. Ters yön: aynı yazım soldan sağa okumanın doğru olduğu yerde INCORRECT (1/(x - 2) için 'R - {2} ∪ {3}', sqrt(x - 1) için 'R - (-oo, 1) ∪ {3}', log(x - 2) için 'R - (-oo, 2] ∪ {5}').",
+    "expected": "Fark ve birleşimin önceliği belirtilmemiş bir yazım bu. Bir okumada doğru, ötekinde yanlış olduğu için iddia okunmamalı (UNKNOWN). İki okumada da yanlışsa INCORRECT. CORRECT asla olmamalı.",
+    "actual_branch": "Yukarıdaki 11 vaka CORRECT (MC D dahil). Soldan sağa okumanın doğru olduğu 3 vaka INCORRECT.",
+    "actual_base": "Hepsi UNKNOWN: 'R - …' okunmuyordu, LaTeX \\setminus biçimi set_comparison_undecided veriyordu.",
+    "math": "Küme farkı ve birleşim aynı öncelikte, soldan bağlanır: R − {2} ∪ {3} = (R − {2}) ∪ {3} = R − {2}. Bu, 1/((x−2)(x−3))'ün tanım kümesi R − {2,3} değil, çünkü 3'te payda 0. Yazarın R − ({2} ∪ {3}) kastetmiş olması da olası; yani anlam yazımla belirlenmiyor. Aynı şekilde R − (−∞, 2] ∪ {5} soldan okunursa (2, ∞) olur ve 5'i içerir, oysa log(x−2)/(x−5) 5'te tanımsız.",
+    "mechanism": "parse_set_str: _SET_DIFFERENCE_RE '^R − (.+)$' biçiminde 'R −'den sonraki her şeyi group(2) olarak alıyor ve Complement(whole, parse_set_str(rest)) kuruyor. Böylece sondaki ∪/U/\\cup farktan sıkı bağlanıyor. parse_set_as_written de aynı ayrımı yapıyor. mc.consistency C ve D şıklarının aynı kümeye okunduğunu fark etmiyor. Düzeltme önerisi: fark işaretinden sonra parantezsiz bir birleşim (∪, U, \\cup) varsa yazım okunmamalı (UNKNOWN), ya da iki okuma ayrı ayrı karşılaştırılıp yalnız ikisinde de doğruysa CORRECT verilmeli."
+   },
+   {
+    "id": "YO-K5",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "İşareti bildirilmemiş tam sayı n (n ≥ L koşullu) varken f = x**n'in kendi x ≠ 0 koşulu bölge okunmadan çıkıyor ve iddianın x ≠ 0'ını maskeliyor (RK-2'nin integer-domain kardeşi)",
+    "repro": "Sondalar sonda/p4.py, p6.py, p12.py, p3.py. derivative {f: 'x**n', var: x, order: 1}, vars [x real, n {domain integer, constraints ['n >= 1']}], iddia 'n*x**n/x' CORRECT. Aynı biçimde CORRECT olanlar: 'n*x**(n - 1) + 0/x'; f=x**(n + 1) için '(n + 1)*x**(n + 1)/x'; f=(x - 1)**n için 'n*(x - 1)**n/(x - 1)'; order 2 ve n ≥ 2 integer ile 'n*(n - 1)*x**n/x**2'; order 3 ve n ≥ 2 integer ile 'n*(n - 1)*(n - 2)*x**(n - 3)'. Karşılaştırma: n positive_integer (ya da positive_integer ve n ≥ 2) bildirilince aynı iddialar UNKNOWN.",
+    "expected": "n ≥ 1'de (xⁿ)' x=0'da var (n=1'de 1, n>1'de 0). Yazıldığı biçimde n·xⁿ/x 0'da değersiz (ilke 12, RK-8). Bu yüzden CORRECT değil: INCORRECT ya da UNKNOWN. n ≥ 2 integer ve 3. türevde n=2 için iddia 0·x⁻¹, x=0'da değersiz; oysa (x²)''' = 0 orada var. SON-G3-RK-2 kararı (n − k ≥ 0 kanıtlanmadıkça taban koşulu kalır) bunu CORRECT'e izin vermiyor; positive_integer biçimindeki gibi UNKNOWN beklenir.",
+    "actual_branch": "6 vakanın hepsi CORRECT. p12 kanıtı: compare symbolic structural, truth = SymPy'nin 'n*x**n/x'i; claim_as_written hiç denetlenmemiş.",
+    "actual_base": "Aynı 6 vaka CORRECT.",
+    "math": "written_definedness('x**n') ölçüldü: n integer ise [Ne(x, 0)], n positive_integer ise []. n ≥ 1 için 0ⁿ = 0 tanımlı ve f'(0) var. n·xⁿ/x yazımında 1/x kalıyor, x=0'da değersiz. T3'te n=2: 2·1·0·x⁻¹, x=0'da değersiz.",
+    "mechanism": "x**n'in kendi koşulu U5 kuralıyla 'üs negatif olabilir, öyleyse x ≠ 0' diye, bildirilen n ≥ 1 bölgesi okunmadan çıkıyor (fconds = written_definedness(p['f'], ctx.ns, pins)). claim_where_derivative, f'nin kendi koşuluna eşit bir iddia koşulunu atlıyor ('if c in fconds: continue'). Böylece iddianın x ≠ 0'ı, f'nin türevinin var olduğu x=0'a karşı hiç denetlenmiyor. Dalın _claim_definedness_on_integer_bounds'u yalnız iddiayı n = L + k ile okuyor, fconds'u değil. Gerçekçilik düşük ya da belirsiz: iddialar yapay, T3 ise gelenek sınırında. Düzeltme önerisi: fconds da aynı kaydırmayla okunmalı ya da maskeleme yalnız f'nin koşulunun bölgede gerçekten geçerli olduğu yerde yapılmalı."
+   }
+  ],
+  "probes_run": 944,
+  "summary": "Yanlış onay merceğiyle wip/son-kalkulus (4e2e4d7) ve 0e93ed5 iki kopyada ölçüldü; bu oturumda iki kopyada toplam 944 verify çağrısı yapıldı. Kesinti öncesi koşuların bir kısmının çıktısı kaybolduğu için o gruplar yeniden koşuldu. Kopyalar silindi, sondalar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-kalkulus/yanlis-onay/sonda altında.\n\nBeş bulgu var, en ağırı ortak bir kökten geliyor. SymPy, kendi nokta dalı (Eq(x,p) ya da Ne biçimi) olan bir Piecewise'ı türevlerken p'de o dalın sabitini türevliyor ve 0 veriyor. Dal p'de türevin VAR olduğunu artık doğru söylüyor ama değeri bu yanlış formülden okuyor.\n- YO-K1 (yüksek, taban, dal açık bıraktı): evaluate/at(diff), verilen x=p ve f'(x)=0 yollarında f'(p)=0 CORRECT, doğru değer INCORRECT. Örnekler: PT, PT6, (x²−1)/(x−1)|2, (x²−4)/(x−2)|4, x²|1, x³|1. MC'de 0 şıkkı onaylanıyor.\n- YO-K2 (yüksek, dal getirdi): türev fonksiyonu görevinde dört fonksiyonda dalı tek tek türevleyen yanlış iddia CORRECT, doğru iddia INCORRECT; tabanda hepsi UNKNOWN. Neden: yeni _piecewise_rule 'value' sınıflaması karşılaştırmaya x=p'yi sokuyor, _value_holes ise yalnız değersiz noktaları okuyor.\n- YO-K3 (orta, taban, açık): Derivative(...) ve diff(f,(x,n)) yazımları varlık koşulunu atlıyor; |x−2|'(2)=0, Max'(1)=0, |sin x|'(π)=0, (x|x|)''(0)=0 ve MC B=0 CORRECT. Neden: _WRITTEN_COMPUTING yalnız 'diff'i kapsıyor, demet argümanı koşulsuz sp.diff'e düşüyor.\n- YO-K4 (orta, dal getirdi): RK-4 okuyucusu 'R − A ∪ B'yi R − (A ∪ B) okuyor. 'R − {2} ∪ {3}', 'ℝ∖{−3}∪{3}', 'R − (−∞,2] ∪ {5}' ve MC D şıkkı CORRECT; soldan sağa okumanın doğru olduğu yerde aynı yazım INCORRECT. Belirsiz yazım, UNKNOWN olmalı.\n- YO-K5 (düşük, taban): işareti bildirilmemiş tam sayı n (n ≥ L) varken f=x**n'in kendi x≠0 koşulu iddianın x≠0'ını maskeliyor; n·xⁿ/x ve n ≥ 2'de T3 CORRECT. Dalın RK-2 kaydırması yalnız iddiaya uygulanıyor, f'nin koşuluna değil.\n\nBulgu çıkmayan alanlar (dalda yanlış onay yok):\n- Köşe ve sıçrama (14 fonksiyon × 5), çok değişkenli Contains(v−p, ORIGIN), ikinci türev (C¹ birleşim).\n- x^π/x^√2/x^e türevleri, _real_root_rule (r > 1, g(p) = 0, r = 1), ekstremumda aralık monotonluğu ve odd_root, teğetin yazılı tanımlılığı, kapalı sonsuz limit argümanları, |x²−4|' = 0 ve > 0 kümeleri.\n- RK-9: acos(cos x)'(−1) = −1 CORRECT, 1 INCORRECT ve asin(sin x)'(2) = −1 matematikçe doğru (mpmath 50 basamak, iki yan −1).\n\nHer bulgunun doğru cevabı mpmath ile 50 basamakta tek yanlı fark oranlarından bağımsız hesaplandı. Düzelticinin 'kayıt' maddeleri (U5, xˣ ailesi, RK-5/6/7/10, evaluate köşesinde UNKNOWN) bulgu yapılmadı."
+ },
+ {
+  "findings": [
+   {
+    "id": "SK-RK-1",
+    "klass": "crash_or_timeout",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "f(x)=|x²−4| icin f'(3): dalda her seferinde 13–30 sn (taban cogunlukla 0,2–0,6 sn UNKNOWN). Yavas yol tabanda da var, dal onu her seferinde tetikliyor.",
+    "repro": "IR: evaluate {expr: 'at(diff(f(x), x), x, 3)'}, functions=[f(x)=Abs(x**2 - 4)], iddia '6'. Betikler: son_denetim/son-kalkulus/ret-kapsama/hiz.py ve tohum.sh. Her vaka ayri surec, PYTHONHASHSEED 0..7. Ayni yavaslik: |x²−9| (4'te 8), |2x²−8|, |x³−3x+2|, x|x²−4|, |x²−1|, |x⁶−64|, |x²−4|+|x²−9|, ∛(x²−4) (3'te 2/5^(2/3)), MC 'f'(3)' (A060), ikinci turev (A055).",
+    "expected": "Ders kitabi sorusu: x=3'te x²−4=5>0, yani f'=2x=6. mpmath ile 50 basamakta fark bolumu h=1e-20'de iki yandan 6,0. CORRECT bir saniyenin altinda gelmeli.",
+    "actual_branch": "Dalda deterministik CORRECT, 4 tohumda 13,49–14,22 sn. Diger sureler: |x⁴−5x²+4| 29,6 sn; |x³−6x²+11x−6| (4'te 11) 29,6 sn; |x⁴−10x²+9| 27,4 sn; ∛(x²−4) 13,8 sn; yanlis iddia 7 icin INCORRECT 13,9 sn. Ayni sorunun derivative gorevi bicimi 0,66 sn, harfiyen at(diff(Abs(x**2-4),x),x,3) yazimi 0,85 sn. Butun olcum (1360 vaka): dal 629 sn, taban 431 sn. Makinede yuk ~3/4 CPU idi.",
+    "actual_base": "Taze surecte 8 tohumun 7'sinde UNKNOWN (problem_definedness_undecided), 0,19–0,63 sn. 1 tohumda (seed=3) CORRECT, 14,67 sn. Toplu kosuda A001 CORRECT, 0,11 sn.",
+    "math": "|x²−4| x=3 cevresinde x²−4 olarak acilir, yani f'(3)=6. 50 basamakli fark bolumu: h=1e-10'da 6.0000000001 / 5.9999999999, h=1e-20'de 6.0 / 6.0.",
+    "mechanism": "cProfile (dal, A001): 46,7 sn'nin 45,3'u su zincirde: verifier._claim_not_a_value → _same_structure → _structure → formal.statement.parse_structural. Burada degerlendirmesi kapali (evaluate=False) Abs'in turevi alinir, ardindan Abs._eval_is_zero → _eval_is_algebraic → exprtools._monotonic_sign → Poly(...).real_roots cagrilir; genisletilmis agacta 5,7 milyon _expand_hint cagrisi var. Bu islem surec icinde calisir, zaman siniri yoktur (harness/adversarial: 'The verifier's own work in the worker has no timeout'). _structure tek basina iki kopyada da 12,7–12,9 sn (t_struct2.py), yani kok neden tabanda. Tabanda yazili tanimlilik cogu tohumda kararsiz kalip hizli UNKNOWN donduruyordu; dalin kendi yorumuna gore sebep _positive_negative'den kacan PolynomialError. Dal bunu yakaliyor (_sympy_guards: BasePolynomialError) ve _switch_differentiability kirigi kesin okuyor. Boylece oge her seferinde _claim_not_a_value'ya ulasiyor. Oneri: _structure/_same_structure ya sandbox'ta zaman sinirli kosulmali ya da diff/at iceren hedefte yapisal okuma sinirlanmali."
+   },
+   {
+    "id": "SK-RK-2",
+    "klass": "unjust_reject",
+    "severity": "high",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "Tek noktada ayri tanimli parcali fonksiyonda (giderilmis sureksizlik, Eq dali) f'(p): dogru cevap INCORRECT, 0 CORRECT. YO-1 duzeltmesi at() deger yolunu kapatmiyor.",
+    "repro": "evaluate at(diff(f(x), x), x, p) (vakalar.at1). Ornekler: f=Piecewise(((x**2-1)/(x-1), Ne(x,1)), (2, Eq(x,1))), p=1, iddia '1'; f=Piecewise((x**2, Ne(x,3)), (9, Eq(x,3))), p=3, iddia '6'; f=Piecewise((x**2+1, x<1), (2, Eq(x,1)), (2*x, x>1)), p=1, iddia '2'; f=Piecewise((x**3, Ne(x,2)), (8, Eq(x,2))), p=2, iddia '12'. Ayrica f'(1)+f(1)=3, solve_equation diff(f(x),x)=6 → {3}, diff(f(x),x)=0 → {0} (O000). Gruplar PE, U, O; goster.py U 16.",
+    "expected": "Sirasiyla 1, 6, 2, 12, 3, {3}, {0}: CORRECT. Iddia '0' INCORRECT olmali.",
+    "actual_branch": "Dogru iddialar INCORRECT (PE000, PE004, PE008, PE016, PE020, PE028, PE029, U002, U006, U010, U016, U022, O000). Kanit: certify.algebra fail, target '0'. Iddia 0 CORRECT (PE002, PE018, PE022, U000, U004, U012, U018, U024, O001). Ayni sorular derivative gorevinde UNKNOWN (ikiz yol uyusmuyor). Cozum adimi 'at(diff(f(x),x),x,2) = 12' ise verified (U027).",
+    "actual_base": "Ayni sonuclar: dogru cevap INCORRECT, 0 CORRECT. Yalniz (e^x−1)/x|1 dalda UNKNOWN'a dustu (iyilesme).",
+    "math": "(x²−1)/(x−1) x≠1'de x+1'e esit ve f(1)=2 oldugundan her yerde f=x+1, f'(1)=1. x²|9 icin f=x², f'(3)=6. Uc dalli bicim C¹: iki yandan da (f(1±h)−2)/h → 2. mpmath, 50 basamak, h=1e-20: 1.00000000001 / 0.999999999995; 6.0 / 6.0; 2.0 / 2.0.",
+    "mechanism": "_switch_differentiability noktayi 'value' sayiyor (turev var, dogru; t_eq.py ciktisi: []), bu yuzden kosul eklemiyor. Ama deger SymPy'nin Piecewise turevinin p'deki degerinden aliniyor: diff = Piecewise((3x², Ne(x,2)), (0, True)), p'de 0. Bu, nokta dalindaki sabitin turevi. YO-1 karari 'C¹ birlesimde deger verilir' diyor; verilmesi gereken deger gercek turev (derivative_at_point'in limitleri ya da _piecewise_rule). Yanlis onay yonu (0 CORRECT) ayni kok nedenden. Taban U014'te x²sin(1/x) icin f'(0)=0'i da bu yoldan, sans eseri CORRECT veriyordu: Z035'te var olmayan x·sin(1/x) turevine de 0 CORRECT diyordu."
+   },
+   {
+    "id": "SK-RK-3",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "∛(x³), (∛x)³, ∛((x−1)³), ∛(8x³), |x|·sign(x) icin turev fonksiyonu iddiasi ('1', '2', '1+2x'): INCORRECT",
+    "repro": "derivative {f: 'cbrt(x)**3'} (noktasiz), iddia expression '1'. Ayni sekilde cbrt(x**3) → '1', cbrt(x**3) + x**2 → '1 + 2*x', cbrt((x - 1)**3) → '1', cbrt(8*x**3) → '2', Abs(x)*sign(x) → '1'. CB grubu, I066.",
+    "expected": "CORRECT. Fonksiyon x'in kendisi (ya da 2x, x−1, x+x²); ayni turev noktada sorulunca iki kopyada da CORRECT (CB012, CB014).",
+    "actual_branch": "INCORRECT. Kanit: truth 'sign(x)*sign(x)**3'; random_point'in karsi ornegi x=0 (lhs 1, rhs 0).",
+    "actual_base": "INCORRECT (ayni kanit)",
+    "math": "x reelken ∛(x³)=x, yani f'(x)=1, f'(0) dahil. mpmath: (∛(h³)−0)/h = 1, h=1e-10, 1e-20, 1e-30.",
+    "mechanism": "cbrt, sign(u)·|u|^(1/3) olarak ayristiriliyor. SymPy'nin formulu sign(x)·sign(x)³ x=0'da 0 veriyor (sign(0)=0), yani yanlis bir deger, delik degil. Dalin _real_root_rule'u r=1 ve tek a icin f'(0)=g(p)u'(p)=1 oldugunu biliyor ve bunu onbellege yaziyor. Ancak bu deger yalniz _value_holes'ta, yani SymPy formulunun hic degeri olmayan noktalarda okunuyor. Formulun yanlis degeri oldugu kirik noktada karsilastirma SymPy'nin 0'iyla yapiliyor. G2RK-13'un kardesi: kirikta kural 'value' dediyse karsilastirma o noktada kuralin degerini kullanmali ya da noktayi disarida birakmali."
+   },
+   {
+    "id": "SK-RK-4",
+    "klass": "other",
+    "severity": "low",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Carpim kuralinin sadelestirilmemis cevabi (x∛x)' = ∛x + x/(3∛x²) UNKNOWN'dan INCORRECT'e dondu (RK-8 ile G2RK-13 bir arada)",
+    "repro": "derivative {f: 'x*cbrt(x)'}, iddia 'cbrt(x) + x/(3*cbrt(x)**2)' (F011) ya da 'cbrt(x) + x/(3*cbrt(x**2))' (F012, PR2). Ayrica (x-1)*cbrt(x-1) → 'cbrt(x - 1) + (x - 1)/(3*cbrt((x - 1)**2))' (PR5) ve sin(x)*cbrt(x) → 'cos(x)*cbrt(x) + sin(x)/(3*cbrt(x**2))' (PR9).",
+    "expected": "Karar sorusu. Ders kitabinda carpim kuralinin dogal ciktisi bu; sadelestirilmis 4∛x/3 dalda CORRECT. Ilke 'anlam bir gelenege bagliysa UNKNOWN' dedigine gore, turev formulunun kok tabaninin sifirinda da tutmasinin istenip istenmedigi gelenege bagli sayilip UNKNOWN beklenebilir.",
+    "actual_branch": "INCORRECT. Kanit: claim_as_written: 'claim_undefined_at 0 ..., where f has a derivative'.",
+    "actual_base": "UNKNOWN (kink_undecided). Tabanda ayni kural x∛x², x²∛x ve |x|+x²/|x| (x|x| icin) cevaplarina zaten INCORRECT veriyordu (PR001, PR004, PR006).",
+    "math": "f'(0) = lim h^(4/3)/h = lim ∛h = 0 var (mpmath: h=1e-30'da ±1e-10). Iddia x=0'da yazildigi bicimde tanimsiz (0/0), x≠0'da f''ye esit.",
+    "mechanism": "G2RK-13 dogru calisiyor: r=4/3>1 icin turev var, x=0 artik 'value'. Ardindan RK-8 (DECISIONS: '(x²)' icin 2x²/x INCORRECT') iddianin x=0'daki tanimsizligini kesin hata sayiyor. Kural tutarli uygulaniyor. Sorgulanan sey kararin kendisi: RK-8'in ornekleri yapay delikler (2x²/x, log x − log x). Buradaki delik, kok tabaninin sifirinda carpim kuralinin uygulanamadigi noktada kendiliginden olusuyor. Karar verici bu sinifi (gercel kok kirigindaki delik) RK-8'den ayirip UNKNOWN'a cekebilir."
+   },
+   {
+    "id": "SK-RK-5",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "x²sin(1/x) (x≠0), 0 (x=0) icin f'(0)=0: CORRECT'ten UNKNOWN'a. Tabanin CORRECT'i bozuk bir yoldan geliyordu.",
+    "repro": "evaluate at(diff(f(x), x), x, 0), f=Piecewise((x**2*sin(1/x), Ne(x, 0)), (0, Eq(x, 0))), iddia '0' (U014, Z037)",
+    "expected": "CORRECT (klasik ornek) ya da kanitlanamiyorsa UNKNOWN",
+    "actual_branch": "UNKNOWN (intake.definedness: problem_definedness_undecided). derivative gorevi bicimi de UNKNOWN (U015, Z036).",
+    "actual_base": "CORRECT",
+    "math": "|(h²sin(1/h)−0)/h| ≤ |h| → 0, yani f'(0)=0. mpmath: h=1e-20'de −6,45e-21.",
+    "mechanism": "Tabandaki CORRECT, SK-RK-2'deki mekanizmadan geliyordu: nokta dalinin turevi 0. Taban ayni yoldan x·sin(1/x)'in var olmayan f'(0)'ina da 0 CORRECT diyordu (Z035). Dal kiriği _classify_kink ile okuyor. _piecewise_rule smooth_at'te None donuyor; SymPy'nin Piecewise tek yanli limitleri de karar vermiyor; sonuc Contains(x, ORIGIN) ve UNKNOWN. Bu, fail-closed bir duzeltmenin bedeli. Kapsama |g(h)|≤C|h|·|h| turu bir sikistirma kuraliyla ucuz ve kesin geri alinabilir."
+   },
+   {
+    "id": "SK-RK-6",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "branch",
+    "title": "|cos x|² icin f'(π/2)=0: CORRECT'ten UNKNOWN'a (periyodik anahtarin sifirlari aile olarak ele alininca kesin kurallar denenmiyor)",
+    "repro": "evaluate at(diff(f(x), x), x, pi/2), f=Abs(cos(x))**2, iddia '0' (V007, W032)",
+    "expected": "CORRECT",
+    "actual_branch": "UNKNOWN (problem_definedness_undecided)",
+    "actual_base": "CORRECT",
+    "math": "|cos x|² = cos²x, turevi −sin 2x, π/2'de 0. mpmath fark bolumu: h=1e-20'de ±1e-20.",
+    "mechanism": "_switch_differentiability'de cos x'in sifirlari sonsuz bir aile; _generic_points None donuyor ve her sifir icin Contains(cos(x), ORIGIN) ekleniyor. π/2'de bu kararsiz. Ailede _power_rule (|u|'nun cift kuvveti puruzsuz) gibi kesin kurallar hic denenmiyor. Tabanda SymPy, Abs(cos x)**2'yi cos(x)**2'ye ceviriyor, eski dugum kurali da karar veriyordu. Gercekci kardesleri (|sin x|·sin x, |1−cos x| sifirlarda) iki kopyada da UNKNOWN."
+   },
+   {
+    "id": "SK-RK-7",
+    "klass": "crash_or_timeout",
+    "severity": "low",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "(ax+b)^irrasyonel ilkellerinde onceden var olan G2RK-10 AttributeError'i (layer_exception) dalda yeniden erisilir oldu",
+    "repro": "antiderivative {integrand: '(2*x + 1)**pi'}, iddia '(2*x + 1)**(pi + 1)/(2*(pi + 1)) + C'. Ayrica (x + 1)**sqrt(2), (x + 2)**E, (x/2)**pi, (2*x + 1)**E (IPC grubu, IP023).",
+    "expected": "CORRECT ya da gerekceli UNKNOWN, istisna olmadan",
+    "actual_branch": "UNKNOWN. Sebep: certify.calculus:unknown:layer_exception: AttributeError: 'Contains' object has no attribute 'negated' (5 ilkel)",
+    "actual_base": "UNKNOWN (membership_condition_on_variable; istisna yok)",
+    "math": "d/dx[(2x+1)^(π+1)/(2(π+1))] = (2x+1)^π, yani iddia dogru",
+    "mechanism": "_convention_at_domain_ends (SON-G3-RK-1) uyelik kapisini aciyor ve oge antiderivative_domain_check'e ulasiyor. Orada Contains kosulunda .negated cagrisi patliyor (G2RK-10, onceden var, duzeltmesi son-integral'e verilmisti). Karar degismiyor, ama birlesik hâlde G2RK-10 duzeltmesiyle bu besi yeniden olculmeli. Not (gerileme degil): (x−1)^π ve (3x−2)^π turevi/ilkeli kapida UNKNOWN kaliyor; (1−x)^π ve (2x+1)^π turevi ise CORRECT (tutarsiz kapsama)."
+   }
+  ],
+  "probes_run": 2760,
+  "summary": "Ayni 1360 vaka iki kopyada da kosuldu: wip/son-kalkulus (4e2e4d7) ve 0e93ed5, yani 2720 verify. Buna ek olarak tohumlu ve tek surecli 31 sure olcumu, 3 cProfile ve mpmath (50 basamak) fark bolumleri. Kapsanan konular: turev (noktada ve fonksiyon), at(), teget, limit, ekstremum, f'=0 ve f'>0, tanim kumesi ve esitsizlik gosterimleri (R − {2} vb.), parametreler, ∛ kurallari, acos(cos)/asin(sin), kapali limit argumani, ders kitabi sorulari (yuzde, trig denklemleri, logaritma siklari, parcali fonksiyon degerleri). Istisna yok.\n\nDalin dogru cevaplarda getirdigi haksiz INCORRECT yalniz bir sinifta: carpim kuralinin sadelestirilmemis cevabi, ornegin (x∛x)' = ∛x + x/(3∛x²). Bu RK-8 kararinin tutarli uygulamasi; karar sorusu olarak 'other' sinifinda verildi (SK-RK-4).\n\nTabanda CORRECT olup dalda UNKNOWN'a dusen dogru cevaplar 4 vaka: x²sin(1/x) icin f'(0) (iki vaka) ve |cos x|² icin f'(π/2) (iki vaka). x²sin(1/x)'te tabanin CORRECT'i bozuk bir yoldan geliyordu.\n\nEn belirgin gerileme sure: f(x)=|polinom| icin f'(p) dalda her seferinde 13–30 sn surüyor. Taban cogu tohumda 0,2–0,6 sn'de UNKNOWN veriyor. Kok neden tabandaki zaman sinirsiz _same_structure/parse_structural yolu; dalin dogru duzeltmeleri ogeyi her seferinde oraya goturuyor (SK-RK-1). Butun olcumde toplam sure dal 629 sn, taban 431 sn.\n\nOnceden var olup dalin alanina dusen iki haksiz ret de rapora girdi:\n- SK-RK-2: tek noktada ayri tanimli parcali fonksiyonda at() degeri SymPy'nin nokta dali turevinden aliniyor; dogru f'(1)=1/2/6/12 INCORRECT, 0 CORRECT. YO-1'in 'kesin kapandi' iddiasi bu kardesi kapsamiyor.\n- SK-RK-3: (∛(x³))' = 1 INCORRECT; sebep sign(0)=0.\n\nAyrica dal, onceden var olan G2RK-10 istisnasini (x+1)^√2 gibi ilkellerde yeniden erisilir kildi; verdict UNKNOWN kaliyor (SK-RK-7).\n\nDogru yonde ve gerilemesiz goruneneler: G2RK-13/14/15, SON-G3-RK-1/2/4/9, x|x| dugum kurali, acos(cos x)/asin(sin x) koselerde ve koseler arasinda (dogru deger CORRECT, ters isaret INCORRECT, koselerde UNKNOWN), ℝ∖{2} gosterimleri, monoton ekstremum (ic ekstremumda yanlis 'kesin' gorulmedi), kapali limit argumanlari (sonlu degerler okunmaya devam ediyor).\n\nKopyalar silindi. Betikler ve ham sonuclar: /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-kalkulus/ret-kapsama/ (vakalar.py, out_dal.jsonl, out_base.jsonl, kar.py, hiz.py, tohum.sh, prof.py, prof3.py, t_struct2.py, t_eq.py, t_mp.py)."
+ },
+ {
+  "file": "/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-kalkulus/bulgular.json",
+  "verdicts": [
+   {
+    "id": "YO-K1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "f'(p) gerçek türevdir: PT/PT6/NE1'de 2, REM1'de 1, REM2'de 1, CUBEPT'te 3; f'(x) = 0'ın çözümü PT/NE1/CUBEPT'te {0}, PT6'da ∅. Nokta dalının türevi olan 0 (ve onu içeren küme) hiçbir yolda (at(diff), verilen x = p, şık, f' + f, f' = 0) CORRECT olmaz: INCORRECT ya da UNKNOWN. Doğru değer INCORRECT olmaz: CORRECT ya da UNKNOWN. SK-RK-2 aynı kusurdur (tek düzeltme).",
+    "note": "İki kopyada 27/27 yeniden üretildi (0 CORRECT, doğru değer INCORRECT; şık, f'+f, verilen x=1, f'=0 kümeleri). sympy diff(PT6) = Piecewise((2,x<1),(0,Eq(x,1)),(2x,x>1)), 1'de 0. mpmath 50 basamak, h=1e-10/1e-20: iki yan oranlar 2/2, 1/1, 3/3; PT6'nın merkezi farkı her yerde ≥ 2. Dal kazancı doğrulandı: CUBEPT f''(1)=0 ve (1−cos x)/x|0 f'(0)=0 tabanda CORRECT, dalda UNKNOWN."
+   },
+   {
+    "id": "YO-K2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "Türev fonksiyonu PT6'da 2 (x ≤ 1), 2x (x > 1); PT'de 2x (x < 1), 2 (x ≥ 1); NE1'de 2x; CUBEPT'te 3x². x = 1'de 0 veren iddia CORRECT olmaz (INCORRECT ya da UNKNOWN); doğru iddialar INCORRECT olmaz (CORRECT ya da UNKNOWN). Kırıkta 'value' denince karşılaştırma o noktada kuralın eğimini kullanmalı ya da noktayı dışarıda bırakmalı (tabandaki gibi UNKNOWN).",
+    "note": "Dalda 9/9 (4 yanlış iddia CORRECT, 5 doğru iddia INCORRECT), tabanda 9/9 UNKNOWN: dal getirdi. Kanıt: kinks.values=['1'], truth = Piecewise((2,x<1),(0,Eq(x,1)),(2x,x>1)), doğru iddiada random_point karşı örneği x=1 (lhs 2, rhs 0). mpmath: x=1'de iki yan oran 2/2 (CUBEPT 3/3). Gerçekçi olan yön doğru cevabın reddi."
+   },
+   {
+    "id": "YO-K3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "Bu noktalarda türev yok: Derivative(...) ya da diff(f, (x, n)) yazımında da verilen sayı iddiası CORRECT olmaz (UNKNOWN ya da INCORRECT), aynı fonksiyonun 'at(diff(f(x), x), x, p)' yazımındaki gibi (dalda UNKNOWN). Yazılı türevin tanımlılık koşulu yazımdan bağımsız uygulanmalı.",
+    "note": "İki kopyada 14 vakanın 13'ü CORRECT (|x−2|, |x²−4|, |sin x|, Max, (x|x|)'' iki yazım, |x|, sıçrama, MC B, verilen x=p ile |x−2|, ∛x, |x|+x; pw|x| diff(f,(x,1))). Üretilmeyen: pw|x| 'at(Derivative(f(x),x),x,0)'=1 iki kopyada UNKNOWN. mpmath oranları ±1, ±4, ±1, ±1, ±2; sıçramada sol oran 1e20; ∛x'te sonsuz. Yalnız 'diff' _written_diff'e bağlı (parse.py:2668)."
+   },
+   {
+    "id": "YO-K4",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "'R − A ∪ B' (∪, U, \\cup; −, ∖, \\setminus) parantezsizse öncelik gelenektir: iki okuma ((R − A) ∪ B ve R − (A ∪ B)) farklı kümeyse ve biri doğruysa UNKNOWN; ikisi de yanlışsa INCORRECT; ikisi de doğruysa CORRECT. Şıklı soruda 'R − {2,3}' ile 'R − {2} ∪ {3}' ayrı şıksa D seçimi CORRECT olamaz.",
+    "note": "Dalda 12/12 (9 CORRECT + MC D + eşitsizlik CORRECT; soldan okumanın doğru olduğu 2 vaka INCORRECT), tabanda hepsi UNKNOWN (parse_error). parse_set_str('R - {2} ∪ {3}') = R − {2,3} ölçüldü. SymPy: 6 vakada iki okuma farklı küme, her birinde yalnız biri doğru. Ek: parantezli 'R - ({2} ∪ {3})' iki kopyada parse_error (kapsama)."
+   },
+   {
+    "id": "YO-K5",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "n tam sayı, n ≥ 1 iken (xⁿ)' x = 0'da var; n·xⁿ/x, n·x^(n−1) + 0/x, (n+1)x^(n+1)/x, n(x−1)ⁿ/(x−1), n(n−1)xⁿ/x² yazıldığı biçimde orada tanımsız: RK-8'e göre INCORRECT (en az UNKNOWN), CORRECT değil. n ≥ 2 iken üçüncü türev n(n−1)(n−2)x^(n−3) n = 2'de x = 0'da tanımsız, f''' orada 0: SON-G3-RK-2 gereği CORRECT değil, positive_integer bildirimindeki gibi UNKNOWN.",
+    "note": "İki kopyada 6/6 CORRECT; positive_integer bildirilince aynı iddialar UNKNOWN (2/2), yani bildirim biçimine bağlı tutarsızlık. Kanıt: compare symbolic structural, truth 'n*x**n/x', claim_as_written denetlenmemiş. Matematik: n ≥ 1'de 0ⁿ = 0, f'(0) = 1 (n=1) ya da 0; iddiada 1/x kalır. Yapay iddialar; T3 ders kitabı formülü ama gelenek sınırında."
+   },
+   {
+    "id": "SK-RK-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "f'(3) = 6 CORRECT (7 INCORRECT) ve doğrulayıcının süre bütçesinde (verify'ın 8 s'lik sandbox sınırı düzeyinde; aynı sorunun derivative görevi biçimi 0,07 s), her tohumda. '1 saniyenin altı' kesin bir şart değil; asıl kusur _claim_not_a_value → _structure yolunun süreç içinde sınırsız koşması: süre sınırlanmalı ya da bu hedefte yapısal okuma atlanmalı.",
+    "note": "Dalda 13,2–15,0 s (tohum 0, 1; 7 INCORRECT 13,6 s; |x²−9| 13,2 s), tabanda 4 tohumda 0,21–0,56 s UNKNOWN. cProfile (dal, profil yüküyle): 45,7 s'nin 45,2'si _claim_not_a_value→_same_structure→_structure→parse_structural→Abs._eval_is_zero→_monotonic_sign→real_roots (120 çağrı). Karar doğru; kusur süre. mpmath: x=3'te iki yan oran 6/6."
+   },
+   {
+    "id": "SK-RK-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "f'(1) = 1 (REM1), f'(3) = 6 (x² | 9), f'(1) = 2 (üç dallı C¹), f'(2) = 12 (x³ | 8), f'(1) + f(1) = 3, f' = 6 → {3}, f' = 0 → {0}: CORRECT (en az UNKNOWN), INCORRECT değil; 0 ve {0, 3} CORRECT değil. YO-K1 ile aynı kusur: tek düzeltmede kapanmalı.",
+    "note": "İki kopyada 10/10: doğru değerler INCORRECT (6, 2, 12, f'+f=3, {3} 'does_not_satisfy_original', {0}), 0'lar CORRECT, f'=0 için {0,3} CORRECT. sympy diff(x²|9) = Piecewise((2x,Ne(x,3)),(0,True)), 3'te 0. mpmath iki yan oran 6/6, 2/2, 12/12. YO-K1'in kopyası (aynı kök neden ve yol)."
+   },
+   {
+    "id": "SK-RK-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "CORRECT (en az UNKNOWN): gerçel küp kökle ∛(x³) = (∛x)³ = x, ∛(8x³) = 2x, ∛((x−1)³) = x − 1, |x|·sign(x) = x her x'te; türevleri 1, 2, 1, 1 + 2x, x = 0 dahil. Hiçbir okumada '1' yanlış değil. Kırıkta kural 'value' dediyse karşılaştırma o noktada kuralın eğimini kullanmalı ya da noktayı dışarıda bırakmalı.",
+    "note": "İki kopyada 6/6 INCORRECT. Kanıt: truth 'sign(x)*sign(x)**3', random_point karşı örneği x=0 (lhs 1, rhs 0) yani SymPy formülünün sign(0)=0'dan gelen yanlış değeri. mpmath: x=0'da iki yan oran 1/1 (∛(8x³)'te 2/2), x=−2 ve −1,5'te 1/1. YO-K2 ile aynı sınıf (kırıkta formülün yanlış değeri)."
+   },
+   {
+    "id": "SK-RK-4",
+    "reproduced": true,
+    "math_expected_correct": false,
+    "real": false,
+    "realistic": "yes",
+    "severity": "low",
+    "corrected_expectation": "INCORRECT kalır (RK-8, DECISIONS: iddia hedefin tanımlı olduğu noktada yazıldığı biçimde tanımsızsa INCORRECT; (x²)' için 2x²/x iki kopyada INCORRECT). f'(0) = 0 var, iddia x = 0'da 0/0. Sadeleşmiş 4∛x/3 CORRECT (dal). RK-8 yumuşatılacaksa bütün sınıf için karar olarak, yalnız kök kırığı için değil.",
+    "note": "Dalda 4/4 INCORRECT ('claim_undefined_at 0 ..., where f has a derivative'), tabanda UNKNOWN. mpmath: x∛x ve sin x·∛x için 0'da oranlar ±∛h → 0, yani f'(0)=0 var; iddia 0'da tanımsız. Davranış kayıtlı RK-8 kararının tutarlı uygulaması; bulgu kusur değil karar önerisi. Kayıt yeter."
+   },
+   {
+    "id": "SK-RK-5",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": false,
+    "realistic": "yes",
+    "severity": "low",
+    "corrected_expectation": "CORRECT ya da (kanıt yoksa) UNKNOWN; dalın UNKNOWN'u beklentinin içinde. Sıkıştırma kuralıyla CORRECT'e dönmesi isteğe bağlı kapsama işi. x·sin(1/x) için f'(0) = 0 CORRECT olmamalı (dalda UNKNOWN, doğru).",
+    "note": "Taban CORRECT, dal UNKNOWN (problem_definedness_undecided). Tabanın CORRECT'i bozuk yoldan: aynı tabanda türevi olmayan x·sin(1/x) için f'(0)=0 da CORRECT (yanlış onay; mpmath oranları −0,49/−0,65/−0,09 salınır), dal onu da UNKNOWN yaptı. x²sin(1/x) oranları → 0. Gözlenen beklentiye aykırı değil: kapsama kaybı, kusur değil."
+   },
+   {
+    "id": "SK-RK-6",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "CORRECT (|cos x|² = cos²x gerçel x'te, türevi −sin 2x, π/2'de 0); '1' INCORRECT. Dalın UNKNOWN'u güvenli ama kapsama gerilemesi: |u|'nun çift kuvveti pürüzsüz kuralı periyodik sıfır ailesinde de denenmeli.",
+    "note": "Taban CORRECT (yanlış '1' INCORRECT), dal ikisinde de UNKNOWN (problem_definedness_undecided). Tabanın yolu meşru (SymPy gerçel x'te Abs(cos x)**2'yi cos(x)**2 yapar). mpmath π/2'de oranlar ±h → 0. Yalnız kapsama kaybı, yanlış karar yok; gerçekçi değil."
+   },
+   {
+    "id": "SK-RK-7",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "CORRECT ya da gerekçeli UNKNOWN, istisnasız (G2RK-10 kararı: Contains koşulu ayrı ele alınır). Birleşik hâlde (son-integral'in G2RK-10 düzeltmesiyle) bu beş ilkel yeniden ölçülmeli.",
+    "note": "Dalda 3/3 UNKNOWN 'layer_exception: AttributeError: 'Contains' object has no attribute 'negated'', tabanda membership_condition_on_variable (istisna yok). Karar değişmiyor; istisna sızıntısı dalın açtığı yoldan. Matematik: d/dx[(2x+1)^(π+1)/(2(π+1))] = (2x+1)^π (2x+1 > 0)."
+   }
+  ]
+ }
+]

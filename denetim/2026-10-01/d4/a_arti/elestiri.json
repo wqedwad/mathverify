@@ -1,0 +1,78 @@
+{
+ "challenges": [
+  {
+   "finding_id": "D4F2B-RK-1 / D4F2B-RK-2 / D4F2B-ONCEKI-1 / PRE-RK-4 / PRE-RK-5 (realistic coverage cost of A)",
+   "issue": "This refutes the clause that A's only cost is artificial inputs getting UNKNOWN. Under A, d4f round 3 is never started, so realistic inputs that B's written round-3 plan would make CORRECT stay UNKNOWN or INCORRECT. The inventory's rule column lists them as 'known limit, no rule needed'. Affected: the point labels P/S in geometry and probability; textbook sequence limits; relational multiple-choice options. If d4h round 2 is not finished, the solver forms 'x ∈ {−2,2}' and params.equation steps (PRE-RK-4/5) also fall to fail-closed UNKNOWN instead of CORRECT.",
+   "evidence": "My run on an edison copy (5eb38f8, code d342778): the PQR right triangle with PR=10 returns UNKNOWN (problem_definedness_undecided). The correct option A 'x > -2' for x^3 > -8 returns INCORRECT (mc.consistency fail while certify.algebra passes). Inventory probe wf/d4fhi/probe.py: lim 1/(2^n-1000)=0 is UNKNOWN on all 4 branches; on edison 'x ∈ {-2,2}' is INCORRECT and the PRE-RK-4 step is refuted, while wip/d4h gives CORRECT for both. The B plan with expected CORRECT verdicts is in d4/saldiri/d4f2/kararlar_tur3.txt (B-RK-1, B-RK-2, B-ONCEKI-1). These cases are rated realistic=yes in d4/saldiri/d4f2/bulgular.json and d4h/bulgular.json.",
+   "reproduced": true,
+   "matters_for_A_vs_B": "yes"
+  },
+  {
+   "finding_id": "D1",
+   "issue": "D1 is a realistic false accept that is open on edison, and A's wording may not close it. It is closed only in wip/d4h (a2f5603). Option A wrongly calls d4h rounds 1-2 'already finished': round 2 (1aa422f) is an interrupted interim commit with no full measurement, mutation run or attack. D1 also has no A/B verification, so the step-3 clause 'every verified finding' can skip it. Merging only d4h round 1 closes D1, but it brings D4H-RK-1 (the 'x ∈ ℝ' given becomes UNKNOWN, realistic) and d4h-YO-5 (an introduced false accept).",
+   "evidence": "My edison run: functions[].domain '$x \\notin [0, 3]$' with f(x)=5 gives {-2,2} CORRECT (wrong) and {-2} INCORRECT (right). d4/dogrulama.json D1: status '?', A=None, B=None. kosular.txt:171 says 'd4h2 (1aa422f) kesildi'. HANDOFF.md:65 says '(iv) d4h tur 2 sürüyor'. The 1aa422f message reads '2. tur ara'. The D4H-RK-1 entry in d4/saldiri/d4h/bulgular.json (introduced_by_piece yes).",
+   "reproduced": true,
+   "matters_for_A_vs_B": "yes"
+  },
+  {
+   "finding_id": "D4E4-YO-2 / D4E4-YO-3 (fail-closed rule risk)",
+   "issue": "The inventory proposes fail-closed rules for these two findings and rates their risk 'low'. As worded, both rules would flip realistic correct textbook derivatives to UNKNOWN. The YO-2 rule fires when the base zeros of u^r include a family and the claim is undefined at a base zero; that matches sqrt(1+sin x). The YO-3 rule withholds CORRECT unless the claim's written definedness is proven on g=0; that matches sqrt(x-cos x). Both are D4E3-RK-6 cases rated realistic=yes, and d4e round 4 just recovered them. Each rule must be narrowed: YO-2 to exponent × multiplicity > 1, YO-3 to touching zeros proven via g=g'=0. Under A, nothing checks that narrowing except the single final attack.",
+   "evidence": "My run on a wip/d4e-tur4 copy (8025acb): d/dx sqrt(1+sin x) = cos x/(2 sqrt(1+sin x)) is CORRECT, and d/dx sqrt(x-cos x) = (1+sin x)/(2 sqrt(x-cos x)) is CORRECT. In both, the claim is undefined at the base zeros, which form a family for 1+sin x and an unsolvable set for x-cos x. Rule texts are in the inventory entries D4E4-YO-2 and D4E4-YO-3.",
+   "reproduced": true,
+   "matters_for_A_vs_B": "yes"
+  },
+  {
+   "finding_id": "D4B10-LINEAR, D4E4-YO-1, D4E4-YO-2, D4D-WP (realistic=no / unverified labels)",
+   "issue": "I tried to build realistic versions of open false accepts labelled 'no' or unverified and found none open, so the conclusion survives on this point. One side result: realistic composite word-problem givens give UNKNOWN even for the right answer, a realistic coverage limit (GAP-WORDPROBLEM) that neither option fixes.",
+   "evidence": "Edison run. Hidden-1 log bases: (log 2+log 5)^(x-3)=1 → {3}, (log2 6-log2 3)^x=1 → {0}, and x(log2 6-log2 3-1)=0 → {0} are all INCORRECT. Composite givens 'x**2 = 9 ve x < 0', 'x ∈ (-oo, 0)' and 'x > y ve y > 0' give UNKNOWN (layer_exception) for both wrong and right claims. Run on wip/d4e-tur4: forgetting the absolute value, sqrt|x-cos x|' claimed as (1+sin x)/(2 sqrt(x-cos x)), is INCORRECT. |x-cos x|' = 1+sin x is INCORRECT. (sin^2 x)^(3/4) with the chain-rule claim (0/0 at kπ) is UNKNOWN.",
+   "reproduced": true,
+   "matters_for_A_vs_B": "no"
+  },
+  {
+   "finding_id": "Claim (3): 'B's rounds keep introducing new false accepts'",
+   "issue": "By count the clause is true. But since 7 Oct every introduced false accept has been rated 'no' or 'unclear', so it is a cost and termination argument, not a realistic-soundness argument against B. The same rate also applies to A's remaining fix batches, and A attacks those only once (or never, for step-4 fixes). That covers about 1,700 inserted src lines in rounds that were never attacked: d4b round 10 (fecc2be..9d60d17, +845/−64), d4c round 4 (443e078..c32cdad, +348/−55) and d4h round 2 (88d68df..1aa422f, +496/−57). It also covers the step-3 rules and the step-4 fixes.",
+   "evidence": "From introduced_by_piece in saldiri/*/bulgular.json: d4b6, d4b7, d4b8, d4b9, d4c2, d4c3, d4e, d4e2, d4f, d4f2 and d4h each contain ≥1 false accept introduced by their own round. d4e3's main file has 0, but d4e3-yarim found D4E3-YO-1 (DECISIONS.md:440). Rounds known only from notes: d4a, d4b1, d4b5 and d4d yes; d4c1 and d4g no. In total, 16 of 18 attacked rounds introduced at least one. The last introduced false accept rated realistic=yes is D4C2-YO-4 (kosular.txt:84). Since then the introduced ones are d4b7/8/9 (no), d4c3-YO-A (unclear), d4e2-YO-3/4 (unclear), d4e3-YO-1, d4e4-YO-1, d4f2 A-YO-1/B-YO-1 and d4h-YO-5 (all no).",
+   "reproduced": true,
+   "matters_for_A_vs_B": "yes"
+  },
+  {
+   "finding_id": "Late preexisting false accepts (D4E3-YO-7, D4E2-RK-8)",
+   "issue": "The per-part rounds had not run out of preexisting false accepts. A realistic preexisting false accept was found only on d4e's third attack, so 'A loses no realistic soundness' is an extrapolation. On the other side, the last four attacks found no realistic=yes false accept.",
+   "evidence": "Preexisting false accepts found per round: d4b8 3, d4c2 3, d4e 3, d4e2 3, d4e3 8, d4f 5, d4f2 4, d4h 4, d4b9 1. D4E3-YO-7 (piecewise gap, realistic=yes, kosular.txt:128-131) is open on edison; the inventory's wf/d4e/probe/p_k.py gives {1} CORRECT on edison. D4E2-RK-8 (realistic=yes) came from d4e's second attack. The attacks after 8 Oct 14:44 (d4h, d4f2, d4b9, d4e4) found no realistic=yes false accept. Finding counts per attack are not falling: d4b 8, 5, 10, 6; d4e 16, 13, 18, 9+; d4c 3, 11, 8.",
+   "reproduced": false,
+   "matters_for_A_vs_B": "unclear"
+  },
+  {
+   "finding_id": "Final-attack scope",
+   "issue": "One merged attack is weaker than per-part rounds where the history is worst. d4c round 4 is unattacked, and the numeric-tolerance path is where introduced false accepts have been most realistic (D4C2-YO-4 yes, D4C3-YO-A unclear). d4b round 10 rewrites the process-wide SymPy guards and certified_sign, and all six attacked d4b rounds each introduced a false accept. But A's merged attack is stronger than B for d4d round 2 and d4g round 2. Neither was ever attacked, and B's part list (d4b, d4c, d4e, d4f, d4h, d4i) never revisits them. A's final attack should therefore run part-focused lenses on the merged state, not one generic pass.",
+   "evidence": "kosular.txt:43 (d4g round 2 merged, no attack afterwards) and kosular.txt:54 (d4d round 2 merged, no attack afterwards). Attack workflow arguments take a part diff and a focus (kosular.txt line on 15:15, 6 Oct). DECISIONS.md:455 records the d4b round-9 attack. Diff sizes are from git diff --shortstat on wip.git.",
+   "reproduced": true,
+   "matters_for_A_vs_B": "yes"
+  },
+  {
+   "finding_id": "A step (4) leaves artificial false accepts",
+   "issue": "Step 4 fixes only the realistic false accepts the final attack finds. Any artificial ones it finds stay CORRECT on wrong answers, which contradicts the project's top principle and DECISIONS §87 proposal (2), where remaining artificial classes are fail-closed. So A's cost is not only 'UNKNOWN instead of CORRECT' on artificial inputs. Unless step 4 also fail-closes artificial hits, A can ship known artificial false accepts.",
+   "evidence": "Option A text, step (4). CLAUDE.md: 'doğrulayıcı yanlış olabilecek hiçbir cevaba CORRECT demez'. DECISIONS.md:447 (§87, proposal (2)).",
+   "reproduced": false,
+   "matters_for_A_vs_B": "yes"
+  },
+  {
+   "finding_id": "D4E4-U2 / D4H-RK-1 (merge conditions)",
+   "issue": "Merging d4e round 4 and d4h round 1 under A brings realistic coverage regressions their own rounds introduced. U2: evaluating a piecewise function at a point (f(2)), among the most common YKS question types, is CORRECT on edison and UNKNOWN on wip. D4H-RK-1: the given 'x ∈ ℝ' is no longer read. Before merging, A's condition 'their own introduced bugs are closed' must include these coverage regressions, not only false accepts.",
+   "evidence": "Inventory D4E4-U2 (measured with wf/d4e/probe/p_u.py: edison CORRECT, wip UNKNOWN via intake.definedness). The D4H-RK-1 entry in d4/saldiri/d4h/bulgular.json: CORRECT on 62a40e9, UNKNOWN on a2f5603, across 20 cases.",
+   "reproduced": false,
+   "matters_for_A_vs_B": "yes"
+  },
+  {
+   "finding_id": "CAP-K1 (d4i skipped), D4G-BUTCE, D4C-T4-PI",
+   "issue": "Three items with no reasonable autonomous fail-closed rule. CAP-K1 is latent: convention flags are not in _BLOCK_POSITIVE_FLAGS, so a future primary layer could flip them; today no layer does. D4G-BUTCE needs a person to decide, because a hard time limit conflicts with locked D3. D4C-T4-PI's rule ('random-point agreement is never proof') would kill realistic identity CORRECTs (rule risk high), but the finding is artificial. Neither A nor B removes any of the three, so none of them separates A from B.",
+   "evidence": "src/mathverify/fuse/rules.py:108-137 in edison. d4/dogrulama.json CAP-K1: 89 Lean runs gave 3 UNKNOWN→CORRECT flips, all with correct values. d4/saldiri/d4c2/kararlar_tur3.txt:1 (D3: no time limit). scr/d4/duzeltme/d4c/NOTLAR.md:216.",
+   "reproduced": false,
+   "matters_for_A_vs_B": "no"
+  }
+ ],
+ "realistic_soundness_gap_under_A": "Unclear, leaning no. Three realistic false accepts are open on edison: D4C2-YO-4 (rel_tol 5 or 1 accepts any claim), D4E3-YO-7 (piecewise gap) and D1 (domain written 'x ∉ [0,3]'; I measured it: {-2,2} CORRECT). A closes all three only if it merges d4c round 4 and d4e round 4, and either finishes d4h round 2 or fail-closes D1 explicitly. D1 has no A/B verification, and A's text wrongly calls d4h round 2 finished, so D1 is the item A's wording can drop. My realistic variants of open false accepts labelled 'no' were all rejected or UNKNOWN: D4B10-LINEAR with hidden-1 log bases, D4E4-YO-1 with a forgotten absolute value, D4E4-YO-2 with sin² base, and D4D-WP with composite givens. Against that, per-part rounds were still finding preexisting false accepts (8 in d4e's third attack, including the realistic YO-7). Under A, about 1,700 inserted src lines that were never attacked (d4b round 10, d4c round 4, d4h round 2), plus d4d and d4g round 2, get one merged attack. 'No gap' is therefore plausible but not established.",
+ "realistic_coverage_gap_under_A": "Inputs where B, through its written plans, gives CORRECT or avoids an unjust INCORRECT and A does not:\n- Point and item labels P and S in geometry and probability (D4F2B-RK-1): UNKNOWN on edison (measured).\n- Textbook sequence limits such as 1/(2^n−1000), ln n/(n−ln n), 1/⌊n/2⌋ (D4F2B-RK-2): UNKNOWN.\n- Relational multiple-choice options 'x > −2', 'x ≥ 1' (D4F2B-ONCEKI-1): INCORRECT on edison (measured); A makes them UNKNOWN, d4f round 3 plans CORRECT.\n- If d4h round 2 is not finished: PRE-RK-5 ('x ∈ {−2,2}', 'x = ±2') and PRE-RK-4 (steps derived from params.equation) become UNKNOWN instead of CORRECT.\n- If d4e round 4 or d4h round 1 merge without their own regressions fixed: D4E4-U2 (piecewise f(2), CORRECT→UNKNOWN) and D4H-RK-1 ('x ∈ ℝ' given, CORRECT→UNKNOWN).\n- The fail-closed rules proposed for D4E4-YO-2 and YO-3 would, as worded, turn the CORRECT verdicts on sqrt(1+sin x)' and sqrt(x−cos x)' into UNKNOWN (measured CORRECT on wip/d4e-tur4).\nComposite word-problem givens (GAP-WORDPROBLEM) and the composite ℕ domain 'x ∈ N ve x < 10' stay UNKNOWN under both options.",
+ "b_side_risks": "- Introduced false accepts: in 16 of 18 attacked rounds the round's own fix introduced at least one false accept, but none rated realistic=yes since D4C2-YO-4 (7 Oct); the later ones are 'no' or 'unclear'.\n- Introduced realistic regressions: nearly every round introduced a realistic coverage loss or unjust reject that the next round had to repair. Examples: d4b6-RK1, d4b8-RK-1, D4C2-RK-A, D4C3R-KK-1, D4E3-RK-1 (high-severity unjust reject on edison today), D4F2B-RK-1/RK-2, D4H-RK-1, D4E4-U2. Whenever B stops, the last round's regressions and its unattacked last fix remain, exactly as under A.\n- No convergence: per-attack finding counts are not falling (d4b 8, 5, 10, 6; d4e 16, 13, 18, 9+), so 'until attacks dry up' has not been approached in any part. Attack workflows took about 75% of tokens (DECISIONS §87), and the weekly limit was hit on 2 Oct and 9 Oct.\n- Unattacked rounds: B's part list never re-attacks d4d round 2 or d4g round 2, which have never been attacked; A's merged attack would cover them.",
+ "overall": "The draft conclusion does not survive as stated.\n1. Soundness: 'no realistic soundness loss under A' is plausible but not shown. It holds only if A merges d4c round 4 and d4e round 4 and explicitly closes D1. D1 is a realistic false accept open on edison (I measured it). It has no A/B verification, and it is fixed only in d4h, whose round 2 A wrongly calls finished. My attempts to build realistic versions of the open false accepts labelled 'no' found none, but per-part rounds were still finding preexisting false accepts late.\n2. Cost: 'A's only cost is artificial inputs getting UNKNOWN' is false. A leaves realistic inputs UNKNOWN or INCORRECT where B's written d4f round 3 and d4h round 2 plans give CORRECT (P/S labels, textbook sequence limits, relational options, 'x ∈ {−2,2}'). Two of A's proposed fail-closed rules, as worded, would hit realistic textbook derivatives. Step 4 can leave artificial false accepts that the final attack finds.\n3. Introduction rate: 'B keeps introducing false accepts' is true by count (16/18 rounds), but those have all been artificial since 7 Oct. The same rate applies to A's own unattacked fixes.\n4. Final attack: A's single attack is weaker for d4c round 4 and d4b round 10. It is stronger than B for d4d and d4g round 2, which B never re-attacks.\nFive runs in total; both code copies deleted. Probe file: /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/wf/skeptik/probe.py."
+}

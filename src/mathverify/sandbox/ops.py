@@ -49,6 +49,25 @@ def equals(a, b):
         return None
 
 
+def equals_false_at_every_seed(a, b, seeds=(0, 1, 2)) -> bool:
+    """Does SymPy's `equals` say False at every one of `seeds`? Its numeric tests draw random points, and it said
+    False at some seeds for the identity atan(x) - atan(x/2) = atan(x/(x**2 + 2)) on the real line (measured 7 Oct
+    2026): one False is no fact about the two expressions, a False that stands at every seed is taken as one."""
+    import sympy.core.random as sympy_random     # the generator `equals` draws from
+    state = sympy_random.rng.getstate()
+    try:
+        for seed in seeds:
+            sympy_random.seed(seed)
+            try:
+                if a.equals(b) is not False:
+                    return False
+            except Exception:  # noqa: BLE001
+                return False
+        return True
+    finally:
+        sympy_random.rng.setstate(state)
+
+
 def zero_test_battery(d):
     """Try several cheap canonicalisers on `d`; return True if any proves d == 0.
 
@@ -82,7 +101,18 @@ def solveset_in(rel, var, domain=S.Reals):
     # it (certify.domain.DEFINEDNESS_UNDECIDED, and cos(acot(2) + acot(1/2)) != 0; 30 Sep 2026)
     if isinstance(rel, sp.core.relational.Relational) and not rel.free_symbols:
         return sp.ConditionSet(var, rel, domain)
-    return sp.solveset(rel, var, domain)
+    # a relation with a trigonometric function: SymPy's set may be one period only, or lose roots
+    # (sandbox.exactsets); the guarded set is rebuilt and checked, or left a ConditionSet
+    from .exactsets import exact_solveset
+    return exact_solveset(rel, var, domain)
+
+
+def solveset_principal(rel, var, domain=S.Reals):
+    """`solveset_in` under the principal reading of an odd root (sandbox.exactsets.principal_solveset)."""
+    if isinstance(rel, sp.core.relational.Relational) and not rel.free_symbols:
+        return sp.ConditionSet(var, rel, domain)
+    from .exactsets import principal_solveset
+    return principal_solveset(rel, var, domain)
 
 
 def solve_system(rels, syms, dict_=True):
@@ -106,6 +136,15 @@ def doit_expr(expr):
     return expr.doit()
 
 
+def series_convergent(series):
+    """SymPy's convergence test of a closed infinite Sum/Product: True, False, or None when it gives none."""
+    try:
+        r = series.is_convergent()
+    except Exception:  # noqa: BLE001 - no test applies
+        return None
+    return True if r is sp.true or r is True else False if r is sp.false or r is False else None
+
+
 def diff_expr(expr, var, n=1):
     return sp.diff(expr, var, n)
 
@@ -114,6 +153,21 @@ def integrate_symbolic(expr, var, a=None, b=None):
     if a is None:
         return sp.integrate(expr, var)
     return sp.integrate(expr, (var, a, b))
+
+
+def antiderivatives(expr, var):
+    """SymPy's antiderivatives of `expr`: the default one and the manual (rule-based) one, without
+    unevaluated integrals. The manual one is the textbook form where the default is a Meijer-G
+    Piecewise (ln x/√x). Each is a CAS answer to be checked by differentiation."""
+    out = []
+    for kw in ({}, {"manual": True}):
+        try:
+            F = sp.integrate(expr, var, **kw)
+        except Exception:  # noqa: BLE001
+            continue
+        if not F.has(sp.Integral) and not any(F == G for G in out):
+            out.append(F)
+    return out
 
 
 def limit_two_sided(expr, var, point):
@@ -185,26 +239,38 @@ def breakpoints_of(expr, var, a, b):
 
 def continuous_domain(expr, var, domain=S.Reals):
     from sympy.calculus.util import continuous_domain as cd
+    from .exactsets import continuity_set, oscillates
+    if oscillates(expr, var):
+        # SymPy solves the conditions of a trigonometric expression on one period, both ways wrong
+        # (sandbox.exactsets.continuity_set): rebuilt and checked, or refused
+        out = continuity_set(expr, var, domain)
+        if out is None:
+            raise ValueError("continuous domain of a trigonometric expression not trusted")
+        return out
     return cd(expr, var, domain)
 
 
 def critical_points(expr, var, interval):
+    """The points of `interval` where expr' is 0 (the guarded solver's set of the classical derivative: the one
+    certify.extremum calls complete) or singular (|x|**(2/3), sqrt(x) at 0), or None when either set is not found
+    whole as a finite set of numbers. SymPy's raw solveset of expr' raised (sign(sin(x))*cos(x): NotImplementedError;
+    x + 2*cos(x) with a complex-written coefficient: an invalid comparison of a number with an imaginary part of
+    noise), and the empty or partial list that was left lost the interior critical points while the extremum
+    certificate called its candidates complete: the endpoint value 2 of x + 2*cos(x) on [0, pi] and pi of
+    x + |sin 2x| on [0, pi] were certified maxima, the true ones refuted (son-sayisal audit, SS-YO-1)."""
+    from sympy.calculus.singularities import singularities
+    from ..certify.calculus import classical
+    from .exactsets import exact_solveset
     d = sp.diff(expr, var)
+    try:
+        sets = (exact_solveset(classical(d), var, interval), singularities(d, var, interval))
+    except Exception:
+        return None
     cps = []
-    try:
-        for c in sp.solveset(d, var, interval):
-            if c.is_number:
-                cps.append(c)
-    except Exception:
-        pass
-    # points where derivative is undefined (e.g. |x|, cbrt)
-    try:
-        from sympy.calculus.singularities import singularities
-        for s_ in singularities(d, var, interval):
-            if s_.is_number:
-                cps.append(s_)
-    except Exception:
-        pass
+    for s_ in sets:
+        if not (s_ is S.EmptySet or isinstance(s_, sp.FiniteSet)) or not all(c.is_number for c in s_):
+            return None
+        cps += list(s_)
     return cps
 
 
@@ -236,6 +302,17 @@ def numeric_value(expr, dps=30):
     mp.mp.dps = dps
     v = sp.N(expr, dps)
     return str(v)
+
+
+def numeric_value_bits(expr, dps=30):
+    """(str(value), significant bits) of SymPy's evalf, or None when it gives no number. evalf
+    reports its own accuracy in the result's precision: the Dirichlet integral came out '-0.e+0'
+    with 1 bit and ∫_0^oo sin²x/x² as '1.6' with 9 bits, each read before as a 40-digit value."""
+    mp.mp.dps = dps
+    v = sp.N(expr, dps)
+    if not isinstance(v, sp.Float):
+        return (str(v), None) if v.is_Integer else None
+    return str(v), int(v._prec)
 
 
 # ----------------------------------------------------------------------------

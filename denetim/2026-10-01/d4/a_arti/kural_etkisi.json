@@ -1,0 +1,303 @@
+{
+ "rules": [
+  {
+   "rule": "R01 Constraint-given intersection: any exception keeps the constraint as constraint_not_applied, verdict UNKNOWN (d4b8-YO-1; implemented in f05d5c2, inside wip/d4b-tur9 9d60d17)",
+   "trigger_used": "The IR has a restricting constraint (interval param, domain_of_discourse, an inequality given, or a non-real var domain) and also something to intersect it with (an equation given, or a definedness cut from log/sqrt/tan/division). The rule really fires only when that intersection throws, which a static scan cannot see, so this count is the upper bound. Subset with irrational endpoints (trig intervals [0,2π) and [0,π)): EV 11, K4 11, TB 1.",
+   "evalset_items_hit": 59,
+   "k4_solutions_hit": 59,
+   "currently_correct_hit": "CORRECT among hits: EV 32, K4 55, TB 13. Would lose CORRECT: 0, measured. The 782431c→9d60d17 verdict diff on all 558 corpus solutions is 0/0/0/0 (scr/d4/duzeltme/d4b/NOTLAR.md:257).",
+   "textbook_hit": "20 of 89 hit (13 CORRECT). 0 lost: 13 textbook cases run on a 9d60d17 copy were identical to edison (wf/realist/probe_tb.py).",
+   "examples": "ayt-trig-001 cos 2x = 1/2 on [0,2π); tyt-esf-002 (x−1)/(x+2) ≥ 0; tyt-den-005 m > 0 with (m+1)²−16 = 0; ayt-tur-005 x+4/x on (0,∞)"
+  },
+  {
+   "rule": "R02 Extreme-value path: extremum candidates are compared only exactly (rational or certified sign), otherwise UNKNOWN (d4b8-YO-3; d4c round 3 three-valued _strictly_better, in c32cdad)",
+   "trigger_used": "Task kind extremum. Tighter subset: a candidate value that is irrational. Only one hit has that: textbook x·e^−x on [0,5], with candidates 0, 1/e and 5e^−5; exp is in the evalf table, so the comparison is certifiable.",
+   "evalset_items_hit": 7,
+   "k4_solutions_hit": 7,
+   "currently_correct_hit": "CORRECT among hits: EV 5, K4 7, TB 3. Would lose CORRECT: 0, measured. Diff 782431c→c32cdad is 0/0/0/0 (scr/d4/duzeltme/d4c/NOTLAR.md:281-282). Probe on a c32cdad copy: evalset ayt-tur-001/005/006/011 and k4 ayt-tur-001/005/006 all SAME (verdict, first bad step and step statuses).",
+   "textbook_hit": "5 hit (3 CORRECT). Max √x, max x/(x²+1), max x·e^−x and the Piecewise max gave the same verdicts on c32cdad as on edison.",
+   "examples": "ayt-tur-001 max of x³−3x on [−2,3]; ayt-tur-005 min of x+4/x; ayt-tur-006 local max; TB max x·e^−x on [0,5]"
+  },
+  {
+   "rule": "R03 floor/ceiling/sign/frac/Mod/Heaviside/%/// with a constant argument: value read only from a certified sign or integer part, and SymPy's automatic folding is strict (d4b8-YO-4, D4B10-S2; 4ffcc84 and 9d60d17 interim 9)",
+   "trigger_used": "Such a call with a constant argument anywhere in the IR or the solution. Loss is possible only when an argument is irrational. Every hit has integer arguments: Mod(5**100, 7), Mod(5**6, 7), Mod(120, 84).",
+   "evalset_items_hit": 3,
+   "k4_solutions_hit": 2,
+   "currently_correct_hit": "CORRECT among hits: EV 2, K4 2. Irrational-argument hits: 0. Would lose CORRECT: 0, also measured (9d60d17 diff 0/0/0/0, d4b NOTLAR.md:257).",
+   "textbook_hit": "0",
+   "examples": "tyt-say-006/014 Mod(5**100, 7); tyt-say-010 step Mod(120, 84)"
+  },
+  {
+   "rule": "R04 Deterministic budgets: exact set operations (SET_PIECES=32), rejection sampling, _family_members capped before the range is built, _value_holes budget, parse_structural time budget (d4b8-RK-6, d4b9-RK-3, D4E4-U3 unverified, D4E4-U4 unverified, PRE-RK-7)",
+   "trigger_used": "An answer or solution set with more than 32 pieces, or a closed form inside a matrix. The corpus maximum is 4 pieces ({π/6, 5π/6, 7π/6, 11π/6}).",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0 hits, so 0 CORRECT lost. The budgets already implemented were measured with diff 0: SET_PIECES in 9d60d17, the cell-proof budget in 9561c9a (scr/d4/duzeltme/d4e/NOTLAR.md:349).",
+   "textbook_hit": "0",
+   "examples": "none in the corpus (the triggering cases are 160-interval sin x > 0 on [0,1000] and 10^9-wide regions)"
+  },
+  {
+   "rule": "R05 Special functions outside SymPy's evalf table (asin, acos, sinh, tanh, erf, gamma, atan2, cot, sec, sign, ...): read only when the argument is certified 0 or rational with two-precision agreement, otherwise UNKNOWN. Covers counterexample confirmation and atan2/arg (d4b9-YO-1, D4C-T4-CS8, D4B9-E2-R1 unverified; 1d5e7e7 and cd6f1e6, in 9d60d17)",
+   "trigger_used": "The name of any non-evalf_table function in the IR or the solution. The evalf table, measured on SymPy 1.14, has sin, cos, tan, atan, exp, log, floor, ceiling, Abs, Pow, Piecewise, re, im.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "Corpus: 0 hits. Would lose CORRECT: 0. The 9d60d17 diff is also 0/0/0/0.",
+   "textbook_hit": "5 hit (4 CORRECT: asin x′; ∫1/√(1−x²) = asin x; |x|^(3/2)′ and |x|^(4/3)′, whose answers contain sign; 1 INCORRECT: acos(1−2x²)′). Probe on a 9d60d17 copy: all 5 verdicts equal edison, so 0 lost.",
+   "examples": "TB der asin x; TB antider 1/sqrt(1−x²); TB der |x|^(3/2) = 3·sign(x)·√|x|/2"
+  },
+  {
+   "rule": "R06 Relations between constants, Piecewise conditions and Interval endpoints decided only through certified_sign (no SymPy is_extended_positive fallback); exactsets reads a linear coefficient only when it is certified nonzero (d4b9-YO-2, D4B10-LINEAR; 1d5e7e7 and c462197, in 9d60d17)",
+   "trigger_used": "Piecewise anywhere; an interval param with an irrational endpoint; or a step relation between two constants involving pi, E, sqrt, log, exp or trig, such as 'pi > 0' or 'sqrt(5) > 0'.",
+   "evalset_items_hit": 11,
+   "k4_solutions_hit": 17,
+   "currently_correct_hit": "CORRECT among hits: EV 5, K4 17, TB 4. Would lose CORRECT: 0, measured. 9d60d17 diff 0/0/0/0, and the 4 CORRECT textbook Piecewise cases were identical on a 9d60d17 copy.",
+   "textbook_hit": "12 hit (4 CORRECT, 7 already UNKNOWN, 1 INCORRECT). Piecewise derivative, limit and smooth-join cases unchanged on 9d60d17.",
+   "examples": "ayt-trig-* intervals [0,2π) and [0,π) (11 EV, 11 K4); K4 ayt-diz-004 steps 'sqrt(5) > 0'; K4 ayt-int-004 step 'pi > 0'"
+  },
+  {
+   "rule": "R07 A point of a finite domain whose definedness cannot be decided exactly (variable-exponent power, 0^0, 0^√2) is undecided, verdict UNKNOWN instead of INCORRECT (d4b9-RK-1; in progress in 9d60d17). This can only soften an INCORRECT.",
+   "trigger_used": "A power whose base and exponent both contain an integer-domain variable, in a finite-domain task (count, evaluate on an integer domain). Limit, series and recurrence tasks excluded.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0 hits. It cannot remove a CORRECT by construction, and no INCORRECT is affected.",
+   "textbook_hit": "0",
+   "examples": "none; the trigger case is x^x = 1/4 for integer x, and (1+1/n)^n in uni-003 is a limit task"
+  },
+  {
+   "rule": "R08 Random-point agreement is never a proof on any path; only a symbolic identity counts (D4C-T4-PI; open, rated high risk)",
+   "trigger_used": "An expression-shaped comparison with free symbols: derivative without an evaluation point, antiderivative, simplify_expression, evaluate with an expression answer. For each currently CORRECT hit, a pure-SymPy replica of sym_equal (structural check, the 8-step zero_test_battery, then equals) and of the antiderivative residual was run with real=True symbols (wf/realist/probe_rp.py).",
+   "evalset_items_hit": 13,
+   "k4_solutions_hit": 13,
+   "currently_correct_hit": "CORRECT among hits: EV 6, K4 13. Would lose CORRECT on the corpus: 0. All 19 CORRECT units are proved symbolically (antiderivative residual 0, structural equality, or the battery), and none needed SymPy equals.",
+   "textbook_hit": "45 hit (38 CORRECT). 2 of the 38 currently rest on random-point agreement: sqrt(x³)′ = 3√x/2 and (x³)^(1/3)′ = 1 with x > 0. A naive rule (symbolic identity over all of ℝ) loses both. If the identity is instead proved on the comparison region by substituting x = t with t > 0, as _cell_proof already does, both simplify to 0, so 0 lost. Nonsmooth cases already go through the per-cell symbolic proof.",
+   "examples": "Corpus: ayt-tur-004 2x/(x²+1) (structural); tyt-kap-010/011 (battery); ayt-int-001 x·log x − x (residual). TB losses under the naive rule: der sqrt(x^3), der (x^3)^(1/3) with x positive."
+  },
+  {
+   "rule": "R09 Eq/Ne decided only exactly: a tolerance-based equality with a Float operand gives None, so neither Ne→False nor Eq→True (D4D-NE unverified, GAP-NE unverified)",
+   "trigger_used": "A decimal literal (\\d+\\.\\d+) in the IR or the solution.",
+   "evalset_items_hit": 1,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "1 hit: EV uni-la-006, answer Matrix([[-2,1],[1.5,-0.5]]), currently CORRECT. As worded the rule covers Eq/Ne inside relation_holds_at and _num_relation_holds, not the comparison of the answer, so 0 lost. If it were widened to answer comparison: 1 EV lost.",
+   "textbook_hit": "0",
+   "examples": "evalset uni-la-006 (inverse matrix written with decimals)"
+  },
+  {
+   "rule": "R10 The wordproblem layer does not pass (abstains) when a given is compound (chained inequality, And/Or, ∈) or unreadable (D4D-WP unverified)",
+   "trigger_used": "Compound-given trigger: 0 hits in evalset and K4. Wider upper bound: givens that apply a function and might be unreadable (P(3) = 0, f(1) = −3, at(diff(f(x),x),x,1) = 0, Mod(n,2) = 0) in evaluate or solve_equation tasks.",
+   "evalset_items_hit": 8,
+   "k4_solutions_hit": 8,
+   "currently_correct_hit": "Compound trigger: 0. Wider trigger: CORRECT among hits EV 5, K4 4. Would lose CORRECT: 0. On all 8 K4 hits, the 2026-09-28 traces show certify.algebra also passing as a primary layer, so the verdict stands without wordproblem (reports/arsiv/2026-09-28/solver_meta_results.json, field 'trace').",
+   "textbook_hit": "0",
+   "examples": "ayt-tur-007 (f′(1) = 0, f(1) = −3); tyt-esf-006 (P(3) = 0); tyt-say-004 (Mod(n,2) = 0)"
+  },
+  {
+   "rule": "R11 Hard wall-clock limit on each verify call, UNKNOWN when exceeded (D4G-BUTCE unverified, GAP-D4G-BUTCE unverified). It conflicts with locked decision D3 ('no time limit'), so it needs the user's decision.",
+   "trigger_used": "Total verify time from the K4 traces ('Toplam süre', 2026-09-28 code). Correction: the scanner first used the record's 'ms' field, which is the solver's API call time (up to 141 s), not verify time; that number was discarded.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 14,
+   "currently_correct_hit": "K4 verify times: maximum 18.9 s (ayt-int-017); 14 solutions above 10 s, 0 above 20 s, all 14 CORRECT. In those 14 the time is spent in the non-primary steps.refute layer; primary certificates finish in under 1 s. Evalset mean is 223 ms per item (reports/eval_report.md). Would lose CORRECT: 0 with a limit of 20 s or more; 14 K4 with a 10 s limit on the whole call.",
+   "textbook_hit": "0 (all 89 under 2 s in kap_eski.txt and kap2_eski.txt)",
+   "examples": "K4 ayt-int-017 18.9 s, ayt-int-006 15.5 s, uni-006 13.5 s (|x−1|+|x+2| integrals, ∫log x/√x)"
+  },
+  {
+   "rule": "R12a Restrict RK-6's skip ('the u > 0 condition drops only at zeros of u') to root and power keys, not Abs(u) keys; UNKNOWN if the claim's as-written condition is not proved on the u < 0 half (D4E4-YO-1; a bug only in wip/d4e-tur4 0c68242 and 7ad2593)",
+   "trigger_used": "Derivative task whose f contains Abs(u) with a non-polynomial u.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "Corpus: 0 hits. Would lose CORRECT: 0. The rule restores edison's behaviour for Abs keys.",
+   "textbook_hit": "1 hit: |sin x|′ = cos x·sin x/|sin x|, CORRECT on edison (which has no RK-6 Abs extension) and on d4e4, so not lost. The d4e4 gain |x − cos x|′ is not among the 89.",
+   "examples": "TB der |sin x|"
+  },
+  {
+   "rule": "R12b No CORRECT for a derivative of a fractional power u^r when the base's zeros include a family or the break classification is incomplete and the claim is undefined at a base zero (D4E4-YO-2). Same for the open part of an unsolvable ≥ condition when the claim's definedness on g = 0 is not proved (D4E4-YO-3). Both open; rules not implemented anywhere.",
+   "trigger_used": "Derivative task with sqrt, root or (·)^(p/q) whose base is periodic (family of zeros), mixes polynomial and transcendental terms (unsolvable), or contains a parameter.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "Corpus: 0 hits. Textbook, as the rule is worded: √(sin x)′ = cos x/(2√sin x) is CORRECT on edison and d4e4 and certainly becomes UNKNOWN (zeros kπ form a family and the claim's denominator is 0 there), so 1 edison CORRECT lost. √(1+cos x)′ (UNKNOWN on edison, CORRECT on d4e4) becomes UNKNOWN, so the d4e4 coverage gain D4E3-RK-6 is lost. √(a²−x²)′ and √(x−a)′ (both CORRECT): unclear, depends on whether a parametric zero counts as fully classified. Narrower exact alternative: classify each zero by its order (u′ ≠ 0 means a simple zero, so with r < 1 the claim being undefined there is correct). That keeps √(sin x).",
+   "textbook_hit": "4 hit (3 CORRECT on edison, 4 CORRECT on d4e4): 1 certain edison loss, 1 certain d4e4-gain loss, 2 unclear. Realistic (textbook derivative exercises).",
+   "examples": "TB der sqrt(sin x); TB der sqrt(1+cos x); TB der sqrt(a^2−x^2); TB der sqrt(x−a)"
+  },
+  {
+   "rule": "R12c Softening rules (INCORRECT→UNKNOWN only): a rejection that rests only on random_point 'defined_on_one_side_only' where SymPy's derivative is nan at a base zero (D4E4-RK-1); integer-declared symbolic exponents do not create a base > 0 condition (D4E4-U5 unverified)",
+   "trigger_used": "Derivative task with a fractional or symbolic power in f.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "Cannot remove a CORRECT by construction. Corpus: 0 hits. Textbook hits: 0 INCORRECT, so 0 changes.",
+   "textbook_hit": "17 hit (15 CORRECT, 2 UNKNOWN, 0 INCORRECT): no verdict change",
+   "examples": "TB der sqrt(x), der x^x, der a^x (unaffected)"
+  },
+  {
+   "rule": "R13 Matrix operations are held (not computed) when an entry contains a zero-exponent power, a sub-expression with its own definedness or convention condition, or a closed Limit, Integral or Sum (D4F2A-YO-1; H1, implemented in wip/d4h a2f5603)",
+   "trigger_used": "Matrix(...) whose entries contain division by a symbol, sqrt, log, **0, a negative exponent, or Integral/Sum/Limit/Product.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0 hits; all corpus matrices have integer or rational entries. The one candidate (EV uni-014 step Matrix([[2−t,1],[1,2−t]])) has only a free symbol, no condition-bearing entry. d4h round 1 diff: all 0 (scr/d4/duzeltme/d4h/NOTLAR.md:94).",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R14 A power with base 0 or ±∞ and a non-constant exponent (or one that simplifies to 0) is a zero_power convention, UNKNOWN (D4F2A-YO-2)",
+   "trigger_used": "Regex (0|oo)**<non-constant exponent> in the IR or the solution.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R15 With a complex domain of discourse, only real-specific conditions are dropped; NO_VALUE and convention conditions stay, giving UNKNOWN (D4F2A-YO-3)",
+   "trigger_used": "domain_of_discourse or var domain is complex. The corpus only has 'x > 0' (ayt-tur-005/009/015).",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R16 A total function (sin, cos, floor, sign, frac) of ±∞ or an AccumBounds value is NO_VALUE, UNKNOWN, except in limit tasks (D4F2A-YO-5)",
+   "trigger_used": "sin/cos/tan/floor/ceiling/sign/frac/Mod with oo in the argument, outside limit tasks, or AccumBounds anywhere.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0. The K4 Limit(...) steps inside series tasks contain no total function of oo.",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R17 A Sum or Product bound that is non-linear or not provably an integer means convention_split cannot build the region, UNKNOWN (D4F2A-RK-1; can only soften)",
+   "trigger_used": "A Sum/Product/series_sum bound containing **, a product of symbols, or a division.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0. The corpus bounds are 1..10, 1..n, 1..oo.",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R18 No evalf of a closed Integral/Sum/Product/Limit during parsing; a closed form that is the argument of a deciding node (floor, ceiling, Mod, %, //, comparison, Interval, Piecewise, Max/Min, at/subs) or of a format wrapper (simplify, expand, factor) gives UNKNOWN (F1, D4H-YO-1, D4H-EK-SPIKE; a2f5603 and 1aa422f in progress)",
+   "trigger_used": "STRICT: a closed form nested inside one of those calls (including Ne/Eq calls). WIDE (upper bound): a closed form as either side of any step relation, such as 'Integral(...) = 4'.",
+   "evalset_items_hit": 44,
+   "k4_solutions_hit": 55,
+   "currently_correct_hit": "STRICT: K4 2 hits, both CORRECT (ayt-lim-003/009, step 'Ne(Limit(..,dir=+),Limit(..,dir=−)) = True'), step level only. Would lose CORRECT: 0; the 1aa422f probe gave SAME (verdict and step statuses). WIDE: EV 44 (24 CORRECT) and K4 55 (55 CORRECT), all in step claims, so 0 CORRECT lost directly. But the wide reading would un-refute 17 refuted steps in 16 wrong evalset solutions, 6 of them cell D (correct answer, wrong step: ayt-diz-019, ayt-diz-020, ayt-int-017, ayt-int-018, ayt-lim-012, uni-017). Those would flip INCORRECT→CORRECT, i.e. new false accepts. The narrow in-progress implementation on 1aa422f keeps all 9 probed wrong solutions INCORRECT with the same first bad step.",
+   "textbook_hit": "0",
+   "examples": "Strict: K4 ayt-lim-003 s11. Wide, cell D: evalset ayt-int-017 s1 'Integral(-2*x - 1, (x, -3, -2)) = 5' (refuted)."
+  },
+  {
+   "rule": "R19 Claim or step text with a keyword-argument call (f(name=...)) is not read: UNKNOWN or step unknown (D4H-YO-3; 1aa422f in progress)",
+   "trigger_used": "A '=' at parenthesis depth ≥ 1 preceded by an identifier.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 4,
+   "currently_correct_hit": "K4 4 hits, all CORRECT (ayt-lim-003/006/009/014, steps using Limit(..., dir='+')), step level only. Would lose CORRECT: 0; ayt-lim-003/006/009/014 were SAME on 1aa422f, including step statuses.",
+   "textbook_hit": "0",
+   "examples": "K4 ayt-lim-003 s11: Ne(Limit(Abs(x)/x, x, 0, dir='+'), ...) = True"
+  },
+  {
+   "rule": "R20 A declared symbol d or d<var>, together with a LaTeX \\frac{d^k…}{(dv)^k}, gives UNKNOWN (I2, D4H-YO-2)",
+   "trigger_used": "A var named d, dx, dn or dv, plus a LaTeX d-fraction in a claim.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0. No var is named d in the corpus; the only LaTeX claim is EV tyt-kap-011 '\\frac{2x+1}{x^2+x}', which is not a d-fraction and was SAME on 1aa422f. Realistic but absent from the corpus: arithmetic-sequence questions with common difference d.",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R21 Domain or given text that names the variable but collapses to constant True/False, or is a multi-piece interval/set list (union vs intersection ambiguous), gives UNKNOWN (D1, D2, D4H-YO-4)",
+   "trigger_used": "function domain, given or discourse text containing ∉/\\notin/∈/\\in, or a comma-separated list of interval or set pieces.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0. The only function domain in the corpus is 'x != 1' (tyt-esf-005/013).",
+   "textbook_hit": "0",
+   "examples": "none; 'x ∉ [0,3]' as a domain is realistic but absent"
+  },
+  {
+   "rule": "R22 A trig family index name that also appears in a given or constraint, or two or more family parameters in a claim, gives UNKNOWN (D4H-YO-5, G11)",
+   "trigger_used": "trig_solve answer containing k, m, n or t: index named in the givens, or two or more distinct indices.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0. All family answers in evalset and K4 use the single index k, as in {π/6+2kπ, 5π/6+2kπ}. Realistic but absent: an AI writing k and n for two families.",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R23 A claimed answer that computes gcd/lcm or the target's own operation (floor, Mod, ...) is claim_is_not_a_value (CAP-G1, GAP-LFLOOR unverified)",
+   "trigger_used": "Answer payload (not steps) containing gcd, lcm, floor, ceiling, Mod, factorial, binomial, det, trace, Integral, Sum, Limit, diff or at.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0. gcd(84,120) appears only in steps.",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R24 A relation-shaped claim with a side other than the bare task variable is not solved with as_set, UNKNOWN (D4H2-EK-ASSET; 1aa422f removed the as_set branch)",
+   "trigger_used": "Answer payload that is a top-level relation or Or/And/Contains where one side is neither the bare variable nor a constant.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0. All corpus set answers are {..}, interval or Union forms; K4 tyt-kap-004 (Union answer) and tyt-den-004 were SAME on 1aa422f.",
+   "textbook_hit": "0",
+   "examples": "none"
+  },
+  {
+   "rule": "R25 Softening (INCORRECT→UNKNOWN only): a claim the intake reads as containing the unknown or not a value gets UNKNOWN instead of a hard rejection (PRE-RK-5; 1aa422f)",
+   "trigger_used": "Answer payload that names the task variable in a solve, count or evaluate task.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "0 hits in the corpus; cannot remove a CORRECT by construction.",
+   "textbook_hit": "5 hit (parametric answers with a), all already UNKNOWN",
+   "examples": "none in the corpus"
+  },
+  {
+   "rule": "R26 params.equation and params.inequality enter the step premise pool; otherwise the refutation is withdrawn (PRE-RK-4; 1aa422f). Can only gain or soften.",
+   "trigger_used": "solve_equation or solve_inequality with params.equation or params.inequality.",
+   "evalset_items_hit": 2,
+   "k4_solutions_hit": 2,
+   "currently_correct_hit": "CORRECT among hits: EV 1, K4 2. Would lose CORRECT: 0. Evalset tyt-esf-005/013 and K4 tyt-esf-005/013 were SAME on 1aa422f (013 stays INCORRECT, first bad step 3).",
+   "textbook_hit": "0",
+   "examples": "tyt-esf-005 equation 'f(x) = 5' with f = (2x+3)/(x−1)"
+  },
+  {
+   "rule": "R27 _convention_as_written: unreadable written text is not a convention; a refutation is withdrawn only if the value reading has a convention node (D4F2B-YO-1; closed in 9d60d17). Can only add refutations.",
+   "trigger_used": "Rough: step text with LaTeX, ' U ', 'dir=', ' in ' or '!'. This is a crude proxy for 'unreadable as written'.",
+   "evalset_items_hit": 14,
+   "k4_solutions_hit": 13,
+   "currently_correct_hit": "CORRECT among hits: EV 7, K4 13. Would lose CORRECT: 0, measured. The 9d60d17 diff is 0/0/0/0, including first bad step and step statuses (d4b NOTLAR.md:257).",
+   "textbook_hit": "0",
+   "examples": "K4 tyt-kap-001 'x in Interval(3, oo)'; evalset tyt-den-* steps"
+  },
+  {
+   "rule": "R28 mc.consistency vetoes only when the option text is read as the answer's type; for FiniteSet(relation), Tuple or a decimal comma it abstains (D4F2B-ONCEKI-1; open). It relaxes a veto.",
+   "trigger_used": "Options with a decimal comma, a relation, a tuple, or plain text.",
+   "evalset_items_hit": 10,
+   "k4_solutions_hit": 10,
+   "currently_correct_hit": "CORRECT among hits: EV 6, K4 10. Cannot remove a CORRECT (it only stops a veto). Decimal-comma and relation options: 0; the hits are tuple options (uni-la-004 family) and 'limit yoktur' text options (ayt-lim-*). evalset uni-la-004 and K4 uni-la-004 were SAME on 1aa422f.",
+   "textbook_hit": "0",
+   "examples": "uni-la-004 options '(16, 14)'; ayt-lim-001 option E 'limit yoktur'"
+  },
+  {
+   "rule": "R29 Fuse: every abstention flag of a non-primary layer blocks a later CORRECT by default; only the listed 'not provable' kind (membership undecided, no certificate) does not block (CAP-K1 unverified; d4i not started)",
+   "trigger_used": "A meaning or convention abstention on a solution that a later primary layer (Lean, L7) then passes.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "Corpus: 0. The verdict dump (fark_782431c.json) was made without Lean, and Lean can only turn UNKNOWN into CORRECT. Harvest upper bound: 3 of 89 Lean runs went UNKNOWN→CORRECT, all with correct values (count_integers with positive Mod divisor, recurrence (n−5)², n−5). These are what the rule could block (denetim/2026-10-01/d4/dogrulama.json, CAP-K1 actual_now).",
+   "textbook_hit": "not applicable (no Lean in the textbook runs)",
+   "examples": "harvest only, not corpus"
+  },
+  {
+   "rule": "X1 Exact wip fixes with no fail-closed rule (rule '-'), recorded with their measured effect: D4C2-YO-1, D4C2-YO-2, D4C2-YO-3, D4C2-YO-4, D4C2-YO-5, D4C2-RK-A, D4C2-RK-B, D4C2-RK-F, D4C2-RK-C, D4C2-RK-E, D4C3-YO-A, D4C3-YO-B, D4C3-YO-C, D4C3R-YO-1, D4C3R-RET-1, D4C3R-KK-1, D4C3R-SG-1, D4C3R-KK-2, BIRLESIK-1, D4C-T3-CS, D4C-T3-EQ (d4c, c32cdad); D4E3-YO-2, D4E3-YO-3, D4E3-YO-3-EK1, D4E3-YO-4, D4E3-RK-2, D4E3-YO-5, D4E3-YO-6, D4E3-YO-7, D4E3-RK-1, D4E3-RK-3, D4E3-RK-4, D4E3-RK-5, D4E3-RK-6, D4E3-RK-7, D4E3-RK-8, D4E3-RK-9, D4E3-RK-10 (d4e, 8025acb / src 1a82e0c); d4b9-RK-4 (tests only); D4H-RK-3 (not_real: a wrong expectation in a probe, not a code bug)",
+   "trigger_used": "None (exact fixes, no fail-closed rule). Measured with full verdict diffs plus targeted probes.",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "Would lose CORRECT: 0, measured. Diff 782431c→c32cdad 0/0/0/0 (scr/d4/duzeltme/d4c/NOTLAR.md:281-282). Diff 782431c→9561c9a 0/0/0/0 (scr/d4/duzeltme/d4e/NOTLAR.md:349); 8025acb's src equals 1a82e0c, and 9561c9a/8025acb changed tests only.",
+   "textbook_hit": "d4e: 89 textbook cases, 0 lost and 3 gained (log_a x′, Σ1/k! = e, √(1+cos x)′), measured on d7b0367 and 1a82e0c (d4e NOTLAR.md:334-335, 363). One more change there: acos(1−2x²)′, a correct claim, goes from wrongly INCORRECT to UNKNOWN; the wrong claim acos(1−x⁴)′ goes INCORRECT→UNKNOWN (a coverage loss on a wrong answer, not a CORRECT lost). d4c: my c32cdad probe of 18 integral and series textbook cases: 17 same, 1 gained (∫₀^∞ sin t/t = π/2, UNKNOWN→CORRECT).",
+   "examples": "D4C3R-KK-1 basic integrals (∫_{−2}^{−1} dx/x) restored in round 4; D4E3-RK-4 Σ1/k! = e gained"
+  },
+  {
+   "rule": "X2 No rule needed: already UNKNOWN (coverage loss or known limit), to be recorded as a known limit: d4b8-RK-1, d4b8-RK-2, d4b8-RK-3, d4b8-RK-4, d4b8-RK-5, d4b9-RK-2, D4D-KAPSAMA-KALAN, D4D-XA, D4E4-U1 (unverified), D4E4-U2 (unverified; a small exact fix would be a gain), D4F2B-RK-1, D4F2B-RK-2, D4F2B-RK-3, D4F2B-RK-4, D4F2B-RK-5, D4H-RK-1, D4H-RK-2, PRE-RK-8, V20-G14-YUK, V20-GAUSS, GAP-WORDPROBLEM (unverified), GAP-XA, GAP-LIMABS, GAP-RANK (unverified)",
+   "trigger_used": "None (no fail-closed rule).",
+   "evalset_items_hit": 0,
+   "k4_solutions_hit": 0,
+   "currently_correct_hit": "Not applicable (0 by definition). For the coverage losses introduced by the d4 fixes that are already on edison, the diffs when they were introduced were 0 on the 558 solutions (for example d4f round 2 e0983d0, denetim/2026-10-01/d4/kosular.txt:89), so the corpus contains none of them.",
+   "textbook_hit": "D4E4-U1: the parametric improper integrals among the 89 (∫e^{−at}, ∫1/(t²+a²), ∫t²e^{−at}, ∫t·e^{−at}, ∫e^{−t}(x+t)) are UNKNOWN on edison too, so no loss relative to edison. D4E4-U2: 'pw eval' (Piecewise f at x = 2) and 'pw eval log branch' are UNKNOWN on both edison and d4e4.",
+   "examples": "V20-GAUSS ∫_ℝ e^{−x²}: textbook 'int e^-t^2' is CORRECT on edison through the evaluate path; D4F2B-RK-1 point names P and S"
+  }
+ ],
+ "method": "Corpus: all 280 evalset items (IR plus reference solution; current verdicts from denetim/2026-10-01/d4/fark_782431c.json: 155 CORRECT, 125 INCORRECT) and the 278 recorded K4 AI solutions (reports/arsiv/2026-09-28/solver_meta_results.json, read the way fark.py reads them; 274 CORRECT, 4 INCORRECT). It contains only 86 distinct IRs. I also used the 89 'ders kitabı' (textbook) cases of d4e round 4 (scr/d4/duzeltme/d4e/r4/q/kap.py and kap2.py). Their current verdicts come from kap_eski.txt and kap2_eski.txt, measured on a0a0829, whose src is identical to edison's (git diff a0a0829 edison -- src is empty): 64 CORRECT, 23 UNKNOWN, 2 INCORRECT. The d4e4 verdicts come from kap_now.txt and kap2_now.txt.\n\nThe ~95 inventory findings were deduplicated into 29 candidate rules plus 2 no-rule rows (X1 exact wip fixes, X2 already-UNKNOWN), and each finding ID appears in exactly one row. Each rule got a static trigger (regex with paren-aware call parsing over IR params, givens, functions, options, answer payloads and step claims) in /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/wf/realist/scan.py. Output is in /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/wf/realist/scan_out.json and /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/wf/realist/scan_final.txt. Hits are counted as unique evalset items, K4 solutions and textbook cases, with the current verdict of each hit.\n\n'Would lose CORRECT' was settled in three ways:\n(a) For rules already implemented in a wip branch, the recorded full verdict diffs of the 558 solutions against 782431c (all 0/0/0/0): 9d60d17 (d4b NOTLAR.md:257), c32cdad (d4c NOTLAR.md:281-282), 9561c9a (d4e NOTLAR.md:349), a2f5603 (d4h NOTLAR.md:94).\n(b) Seven targeted probe runs, each in its own git-archive copy, all deleted afterwards. probe_rp.py is a pure-SymPy replica of sym_equal and zero_test_battery on every currently CORRECT expression-shaped unit. probe_tb.py ran 13 textbook cases on 9d60d17 and 18 plus 4 on c32cdad. probe_units.py ran 41 corpus units on 1aa422f (d4h round 2 is not diff-measured; verdict, first bad step and step statuses were compared with fark_782431c) and 7 extremum units on c32cdad. Every probed unit gave the same result as edison, except one gain: ∫₀^∞ sin t/t on c32cdad.\n(c) For unimplemented rules, analysis of the trigger hits. Examples: the K4 traces show certify.algebra also passing where wordproblem passes; verify time comes from the trace field 'Toplam süre', not the record's 'ms', which is solver API time.\n\nBottom line: on the 558 realistic corpus solutions, no candidate rule removes a currently CORRECT verdict in the form already implemented or in the narrow reading of its wording.\nTextbook costs exist only for broad variants:\n- D4E4-YO-2 as worded: −1 edison CORRECT (√(sin x)′), −1 d4e4 gain (√(1+cos x)′), 2 unclear (parametric cases).\n- D4C-T4-PI if implemented naively: −2 (√(x³)′ and (x³)^(1/3)′ with x > 0); 0 if the symbolic identity is proved on the comparison region.\n- Hard timeout: 0 at a limit of 20 s or more; 14 K4 at 10 s.\nThe wide reading of D4H-YO-1 would also create 6 new false CORRECTs on cell-D evalset items, which is a soundness risk, not a coverage one.",
+ "caveats": "1. Static triggers are approximations. Several rules fire only on internal events (an exception in an intersection, a budget running out, an unreadable as-written text) that regex cannot see, so those counts are upper bounds; R27's trigger is especially crude. Rows with 0 hits can also mean my pattern missed a form, but every 0-hit class was also spot-checked against claims_dump.txt.\n2. The corpus is narrow: 86 distinct IRs, about 25 problem templates, and K4 comes from one solver model (muse-spark-1.3) whose answers are almost all set, interval or number forms with sympy-syntax steps and no LaTeX. A 0 here means 'not in this corpus', not 'not realistic'. Realistic classes absent from it: chained or compound givens (0 < x < 3), domain lists or 'x ∉ [a,b]', arithmetic-sequence 'd', AI general solutions with two family indices, decimal-comma options, √ of trig in a derivative, parametric improper integrals.\n3. Textbook verdicts are from the recorded kap files, not re-run on edison. The d4e4 column (kap_now) for acos(1−2x²)′ is stale: d7b0367 gives INCORRECT, while 1a82e0c gives UNKNOWN per d4e NOTLAR.md:335-337.\n4. K4 verify times come from the 2026-09-28 traces (older code, cloud machine); current code may be slower. The evalset figure is the 223 ms mean from reports/eval_report.md, not per item.\n5. d4h round 2 (1aa422f) and d4b round 10 (9d60d17) are in progress. 9d60d17 has a full diff (0); 1aa422f has only my 41-unit targeted probe, all SAME, not a full diff.\n6. D4E4-YO-2/YO-3 (R12b), D4C-T4-PI naive vs region proof (R08), R09 widened, R10 and R29 are analytical judgments about rules that do not exist in code. For R12b the two parametric textbook cases are marked unclear because the rule wording does not say whether a parametric zero counts as classified.\n7. probe_rp.py replicates the verifier's symbolic path in plain SymPy 1.14 with real=True symbols. It does not run the verifier's own kink_reading/_sign_off pipeline, so a CORRECT reached through another internal route could be misclassified. The 2 'random point needed' cases were cross-checked: simplify(diff − claim) ≠ 0 over ℝ, and = 0 after substituting x = t with t > 0.\n8. I used 7 of the 8 allowed runs (counting the pure-SymPy probe). All copies were removed; nothing was written outside /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/wf/realist/, and nothing was pushed."
+}

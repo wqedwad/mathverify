@@ -22,8 +22,9 @@ from sympy import S, Interval, FiniteSet, Union, ImageSet, Lambda, oo
 from ..equiv.numeric import num_equal, to_mp
 from ..equiv.sets import set_equal
 from ..sandbox import run as sb_run
-from .base import Ctx, Timer, result, unknown, parse_or_unknown
-from .domain import definedness_conditions, relation_holds_at, written_definedness
+from ..sandbox.exactsets import set_periods
+from .base import Ctx, Timer, result, unknown, parse_or_unknown, condition_not_applied
+from .domain import definedness_conditions, in_domain, relation_holds_at, written_definedness
 
 LAYER = "certify.trig"
 
@@ -38,66 +39,6 @@ def detect_period(expr, var, timeout: float = 8.0):
 def _periodicity(expr, var):
     from sympy.calculus.util import periodicity
     return periodicity(expr, var)
-
-
-def _numeric_roots(expr, var, lo, hi, n: int = 4000) -> list[str]:
-    """Worker: real roots of expr on [lo, hi) found numerically (sign changes and near-zero
-    minima of |expr|, refined, then confirmed with |expr| < 1e-20 at 40 digits). Evidence against
-    a CAS solution set that missed a root; it proves nothing when it finds none."""
-    f = sp.lambdify(var, expr, "mpmath")
-    roots: list = []
-
-    def real_val(t):
-        try:
-            v = f(t)
-            if isinstance(v, mp.mpc):
-                if abs(v.imag) > mp.mpf(10) ** -20 * max(1, abs(v.real)):
-                    return None
-                v = v.real
-            v = mp.mpf(v)
-            return v if mp.isfinite(v) else None
-        except Exception:  # noqa: BLE001
-            return None
-
-    def confirm(t):
-        with mp.workdps(40):
-            v = real_val(t)
-            return v is not None and abs(v) < mp.mpf(10) ** -20
-
-    with mp.workdps(30):
-        lo_, hi_ = mp.mpf(str(lo)), mp.mpf(str(hi))
-        step = (hi_ - lo_) / n
-        xs = [lo_ + step * k for k in range(n)]
-        vs = [real_val(t) for t in xs]
-        seeds = []
-        for k in range(n):
-            v = vs[k]
-            if v is None:
-                continue
-            if v == 0:
-                seeds.append((xs[k], None))
-                continue
-            if k + 1 < n and vs[k + 1] is not None and v * vs[k + 1] < 0:
-                seeds.append((xs[k], xs[k + 1]))
-            if 0 < k < n - 1 and vs[k - 1] is not None and vs[k + 1] is not None \
-                    and abs(v) <= abs(vs[k - 1]) and abs(v) <= abs(vs[k + 1]) and abs(v) < mp.mpf("1e-3"):
-                seeds.append((xs[k], None))
-        for a, b in seeds:
-            try:
-                with mp.workdps(40):
-                    if b is None:
-                        r = a if real_val(a) == 0 else mp.findroot(f, a)
-                    else:
-                        r = mp.findroot(f, (a, b), solver="anderson")
-                if isinstance(r, mp.mpc):
-                    if abs(r.imag) > mp.mpf(10) ** -15:
-                        continue
-                    r = r.real
-            except Exception:  # noqa: BLE001
-                continue
-            if lo_ <= r < hi_ and confirm(r) and not any(abs(r - q) < mp.mpf("1e-8") for q in roots):
-                roots.append(r)
-    return [mp.nstr(r, 25) for r in roots]
 
 
 def _progressions(cand) -> list[tuple[Any, Any]] | None:
@@ -132,6 +73,22 @@ def _rational_multiple(a, P):
     return q if isinstance(q, sp.Rational) else None
 
 
+def _k_range(lo_v, hi_v):
+    """(ceiling(lo_v), floor(hi_v)) as Python ints, each read from a CERTIFIED floor, or None. SymPy's floor of a
+    constant reads it off rounding noise (round 9 of part d4b, YO-4): an index at the window's edge was lost or
+    added where c/a is an integer written as an exact 0 no evaluation separates."""
+    from ..equiv.numeric import certified_floor
+    f_hi, f_lo = certified_floor(hi_v), certified_floor(-lo_v)
+    if f_hi is None or f_lo is None:
+        return None
+    return -int(f_lo), int(f_hi)
+
+
+def _certain(rel) -> bool | None:
+    """The truth of a relation of two numbers, or None when undecided."""
+    return True if rel is sp.true else False if rel is sp.false else None
+
+
 def _enumerate_on_window(progs, W) -> FiniteSet | None:
     elems = []
     for c, a in progs:
@@ -139,29 +96,36 @@ def _enumerate_on_window(progs, W) -> FiniteSet | None:
             elems.append(c)
             continue
         # n range such that 0 <= c + a n < W
-        lo = sp.ceiling(-c / a) if a > 0 else sp.ceiling((W - c) / a)
-        hi = sp.floor((W - c) / a) if a > 0 else sp.floor(-c / a)
-        try:
-            lo_i, hi_i = int(lo), int(hi)
-        except TypeError:
+        ks = _k_range(-c / a, (W - c) / a) if a > 0 else _k_range((W - c) / a, -c / a)
+        if ks is None:
             return None
+        lo_i, hi_i = ks
         if hi_i - lo_i > 10000:
             return None
         for k in range(lo_i, hi_i + 1):
             v = sp.simplify(c + a * k)
-            if v == W or (v.is_number and (v < 0 or v >= W)):
+            if v == W:
                 continue
+            if v.is_number:
+                out = [_certain(sp.Lt(v, 0)), _certain(sp.Ge(v, W))]
+                if True in out:
+                    continue
+                if None in out:
+                    return None           # an edge no comparison decides
             elems.append(v)               # exact; nsimplify would snap it
     return FiniteSet(*elems)
 
 
-def _true_solutions(rel, var, window, conds, timeout) -> tuple[Any, dict[str, Any]]:
+def _true_solutions(rel, var, window, conds, timeout, region=S.Reals) -> tuple[Any, dict[str, Any]]:
     """The equation's solution set on a bounded window, as a FiniteSet, or None.
 
-    SymPy's set is filtered: every condition of the equation's definedness (as written and as
-    parsed) must hold and both sides must be real there. It is then cross-checked: each element
-    must satisfy the equation, and a numeric root search on the window must find no root that
-    SymPy's set lacks (measured: solveset loses x = pi of sqrt(3) sin x - cos x = 1)."""
+    The set is the guarded solveset's (sandbox.exactsets): exact only for the classes whose zeros are
+    known in closed form, a ConditionSet otherwise (SymPy's own set loses x = pi of sqrt(3) sin x -
+    cos x = 1, and a numeric root search misses the multiple root of its cube: no proof either).
+    It is filtered: every condition of the equation's definedness (as written and as parsed) must hold
+    and both sides must be real there; each element must satisfy the equation. A root outside
+    `region` (what the problem says of the variable besides the equation, `_region`) is dropped; one
+    whose membership is undecided makes the set unknown."""
     ev: dict[str, Any] = {}
     r = sb_run("mathverify.sandbox.ops:solveset_in", rel, var, window, timeout=timeout)
     if not r.ok or not (r.value is S.EmptySet or isinstance(r.value, FiniteSet)):
@@ -181,6 +145,12 @@ def _true_solutions(rel, var, window, conds, timeout) -> tuple[Any, dict[str, An
                 drop = True
                 break
         if not drop:
+            m = in_domain(region, e)
+            if m is None:
+                ev["error"] = f"membership in the variable's region undecided at {e}"
+                return None, ev
+            drop = m is False
+        if not drop:
             try:
                 l_, r_ = to_mp(rel.lhs.subs(var, e), 40), to_mp(rel.rhs.subs(var, e), 40)
             except Exception:  # noqa: BLE001
@@ -197,28 +167,14 @@ def _true_solutions(rel, var, window, conds, timeout) -> tuple[Any, dict[str, An
             ev.setdefault("dropped", []).append(str(e))
         else:
             kept.append(e)
-    lo, hi = window.inf, window.sup
-    if lo.is_finite and hi.is_finite:
-        rn = sb_run("mathverify.certify.trig:_numeric_roots", rel.lhs - rel.rhs, var,
-                    sp.N(lo, 30), sp.N(hi, 30), timeout=timeout * 2)
-        if not rn.ok:
-            ev["error"] = "numeric root search failed"
-            return None, ev
-        missed = [q for q in rn.value
-                  if not any(abs(mp.mpf(q) - to_mp(e, 30)) < mp.mpf("1e-6") for e in raw)
-                  and window.contains(sp.Float(q, 25)) is sp.true]
-        ev["numeric_roots"] = rn.value
-        if missed:
-            ev["error"] = f"solveset missed numeric root(s) {missed}"
-            return None, ev
     return FiniteSet(*kept), ev
 
 
-def _combined_period(P, conds, var, timeout):
-    """A common period of the equation and of its definedness conditions, or None."""
+def _combined_period(P, conds, var, timeout, periods=()):
+    """A common period of the equation, of its definedness conditions and of `periods` (those of the
+    variable's region, `sandbox.exactsets.set_periods`), or None."""
     L = sp.Integer(1)
-    for c in conds:
-        Pc = detect_period(c.lhs - c.rhs, var, timeout)
+    for Pc in [detect_period(c.lhs - c.rhs, var, timeout) for c in conds] + list(periods):
         if Pc is None:
             return None
         q = _rational_multiple(Pc, P)
@@ -228,8 +184,8 @@ def _combined_period(P, conds, var, timeout):
     return L * P
 
 
-def periodic_solution_set_equal(rel, var, candidate, window=None, timeout: float = 8.0, conds=()
-                                ) -> tuple[bool | None, dict[str, Any]]:
+def periodic_solution_set_equal(rel, var, candidate, window=None, timeout: float = 8.0, conds=(),
+                                region=S.Reals, region_periods=()) -> tuple[bool | None, dict[str, Any]]:
     ev: dict[str, Any] = {"candidate": str(candidate)}
     expr = rel.lhs - rel.rhs if isinstance(rel, sp.Equality) else rel
     if not isinstance(rel, sp.Equality):
@@ -239,7 +195,7 @@ def periodic_solution_set_equal(rel, var, candidate, window=None, timeout: float
         if not isinstance(window, Interval) or not (window.inf.is_finite and window.sup.is_finite):
             ev["error"] = "window_not_a_bounded_interval"
             return None, ev
-        truth, tev = _true_solutions(rel, var, window, conds, timeout)
+        truth, tev = _true_solutions(rel, var, window, conds, timeout, region)
         ev.update(tev)
         if truth is None:
             return None, ev
@@ -261,13 +217,14 @@ def periodic_solution_set_equal(rel, var, candidate, window=None, timeout: float
     if P is None:
         # not periodic: compare solution sets on the reals if finite
         r = sb_run("mathverify.sandbox.ops:solveset_in", rel, var, S.Reals, timeout=timeout)
-        if r.ok and isinstance(r.value, FiniteSet) and isinstance(candidate, FiniteSet) and not conds:
+        if r.ok and isinstance(r.value, FiniteSet) and isinstance(candidate, FiniteSet) and not conds \
+                and region == S.Reals:
             ok, sev = set_equal(candidate, r.value)
             ev["compare"] = sev
             return ok, ev
         return None, ev
     # the conditions may repeat with a longer period than the parsed equation
-    Pw = _combined_period(P, conds, var, timeout)
+    Pw = _combined_period(P, conds, var, timeout, region_periods)
     if Pw is None:
         ev["error"] = "definedness_conditions_not_periodic"
         return None, ev
@@ -292,7 +249,7 @@ def periodic_solution_set_equal(rel, var, candidate, window=None, timeout: float
         L = sp.Rational(sp.ilcm(L.p, abs(q.p)), sp.igcd(L.q, q.q))
     W = sp.simplify(L * Pw)
     ev["window"] = str(W)
-    truth, tev = _true_solutions(rel, var, Interval.Ropen(0, W), conds, timeout)
+    truth, tev = _true_solutions(rel, var, Interval.Ropen(0, W), conds, timeout, region)
     ev.update(tev)
     if truth is None:
         return None, ev
@@ -317,12 +274,18 @@ def _enumerate_window_of_interval(progs, window: Interval):
             if window.contains(c) == True:  # noqa: E712
                 elems.append(c)
             continue
-        klo = sp.ceiling((lo - c) / a) if a > 0 else sp.ceiling((hi - c) / a)
-        khi = sp.floor((hi - c) / a) if a > 0 else sp.floor((lo - c) / a)
-        for k in range(int(klo), int(khi) + 1):
+        ks = _k_range((lo - c) / a, (hi - c) / a) if a > 0 else _k_range((hi - c) / a, (lo - c) / a)
+        if ks is None:
+            return None
+        if ks[1] - ks[0] > 10000:
+            return None
+        for k in range(ks[0], ks[1] + 1):
             v = sp.simplify(c + a * k)         # exact; nsimplify would snap it
-            if window.contains(v) == True:  # noqa: E712
+            inside = window.contains(v)
+            if inside == True:  # noqa: E712
                 elems.append(v)
+            elif inside != False:  # noqa: E712
+                return None                    # an edge no comparison decides
     return FiniteSet(*elems)
 
 
@@ -330,20 +293,99 @@ def _enumerate_window_of_interval(progs, window: Interval):
 _FAMILY_NAMES = ("n", "k", "m")
 
 
+def _one_family(e, ints: list):
+    """c + g·j (j over the integers) for an element c + a_1·t_1 + ... + a_r·t_r whose parameters t_i run over
+    the integers independently and whose coefficients are rational multiples of one another: the lattice
+    a_1·ℤ + ... + a_r·ℤ is g·ℤ with g = gcd(r_1, ..., r_r)·a for a_i = r_i·a (exact; {nπ + kπ} is πℤ,
+    {nπ/2 + kπ/3} is (π/6)ℤ). None for anything else (a parameter in a coefficient, a power of one,
+    incommensurable coefficients such as π and 1): no single family states it."""
+    # affine in the parameters: each derivative free of them (a power, a product, |n|, floor(n/2) keep one)
+    coeffs = [sp.diff(e, t) for t in ints]
+    if any(c.free_symbols & set(ints) for c in coeffs):
+        return None
+    c0 = e.subs({t: 0 for t in ints})
+    nonzero = [c for c in coeffs if c != 0]
+    if not nonzero:
+        return c0, None
+    ratios = [sp.cancel(c / nonzero[0]) for c in nonzero]
+    if not all(isinstance(r, sp.Rational) for r in ratios):
+        return None
+    g = sp.Rational(sp.gcd_list([r.p for r in ratios]), sp.lcm_list([r.q for r in ratios]))
+    return c0, g * nonzero[0]
+
+
+def _problem_names(ir, ctx: Ctx) -> set:
+    """The names the problem's givens (its equation among them when it is givens[0]) and its variables' constraints
+    use, read off their parses. A text that does not parse adds none: an unread given leaves the problem's region
+    not applied (`condition_not_applied`) and an unread constraint stops the intake (`constraint_unreadable`), so
+    the claim is never decided with it (measured on round 2 of d4h: its identifiers, once added here, changed no
+    verdict and no layer's)."""
+    names: set = set()
+    for src in list(ir.givens) + [c for v in ir.vars for c in v.constraints]:
+        try:
+            names |= {s_.name for s_ in ctx.rel(src).free_symbols}
+        except Exception:  # noqa: BLE001 - unread: the problem is not decided (above)
+            continue
+    return names
+
+
 def general_solution_from_claim(claimed, ns) -> Any:
-    """Turn a claimed set whose elements contain the integer symbol n/k into ImageSets."""
+    """Turn a claimed set whose elements contain the integer symbol n/k into ImageSets. An element with two or
+    more family parameters is one family only when the lattice they span is (`_one_family`); otherwise None
+    (the certificate abstains). The first of them in `free_symbols` order was taken, a hash order: with
+    Symbol("n") as the family's variable, (nπ + kπ).subs(k, n) merged the two into 2πn, so {nπ + kπ} was
+    INCORRECT for sin x = 0 and CORRECT for cos x = 1 depending on PYTHONHASHSEED (fourth audit G11)."""
     if not isinstance(claimed, FiniteSet):
         return claimed
     parts = []
+    nn = sp.Symbol("n", integer=True)
     for e in claimed.args:
-        ints = [s_ for s_ in e.free_symbols if s_.name in _FAMILY_NAMES]
-        if ints:
-            n = ints[0]
-            nn = sp.Symbol("n", integer=True)
-            parts.append(ImageSet(Lambda(nn, e.subs(n, nn)), S.Integers))
+        ints = sorted((s_ for s_ in e.free_symbols if s_.name in _FAMILY_NAMES), key=lambda s_: s_.name)
+        if len(ints) > 1:
+            fam = _one_family(e, ints)
+            if fam is None:
+                return None
+            c0, step = fam
+            parts.append(FiniteSet(c0) if step is None else ImageSet(Lambda(nn, c0 + step * nn), S.Integers))
+        elif ints:
+            parts.append(ImageSet(Lambda(nn, e.subs(ints[0], nn)), S.Integers))
         else:
             parts.append(FiniteSet(e))
     return Union(*parts) if len(parts) > 1 else parts[0]
+
+
+def _region(ctx: Ctx, var, eq_src: str) -> tuple[sp.Set | None, list]:
+    """What the problem says of the variable besides the equation, as a set: its declared domain,
+    constraints, the domain of discourse and the written definedness of the problem (`domain_for`),
+    cut by every other given on it (another equation, an inequality). The certificate read only the
+    interval: all four roots of cos 2x = 1/2 on [0, 2*pi) were certified with the given x > pi, {n*pi}
+    for sin x = 0 with x positive or 0 < x < 4, and {0, pi} for sin x + log(-1 - x**2) - log(-1 - x**2)
+    = 0, which is defined nowhere (fourth audit G3, TAN-08). None, with the conditions, when one names
+    a symbol no given fixes or cannot be solved."""
+    unbound = list(ctx.unapplied_conditions(var))
+    dom = ctx.domain_for(var)
+    if var in written_definedness(eq_src, ctx.ns)[1]:
+        dom = S.EmptySet                       # the equation as written is defined nowhere
+    rels: list = []
+    for g in ctx.ir.givens:
+        if g == eq_src:
+            continue
+        try:
+            rel = ctx.rel(g)
+        except Exception:  # noqa: BLE001 - a given the certificate cannot read is not applied
+            return None, unbound + [g]
+        for r in (rel.args if isinstance(rel, sp.And) else (rel,)):
+            if not isinstance(r, sp.core.relational.Relational):
+                return None, unbound + [g]
+            if var in r.free_symbols:
+                rels.append(r)
+    kept, unb = ctx.on_var(rels, var)
+    if unbound or unb:
+        return None, unbound + unb
+    region = ctx.cut_by(var, dom, kept)
+    if region is None:
+        return None, kept
+    return region, []
 
 
 def verify(ir, solution, ctx: Ctx):
@@ -389,10 +431,39 @@ def verify(ir, solution, ctx: Ctx):
         conds = [c for c in written_definedness(eq_src, ctx.ns)[0] if c.free_symbols == {var}]
         conds += [c for c in definedness_conditions(rel, var)
                   if getattr(c, "free_symbols", set()) == {var} and c not in conds]
+        if window is None:
+            # a family name the problem itself uses (a given pins m = 1/2, a constraint restricts it) is an index
+            # of the claim or that quantity: {mπ + kπ} was the lattice πℤ (CORRECT for
+            # sin x = 0) with m = 1/2 given, where m read as the given's m it is π/2 + πℤ (attack on d4h, YO-5)
+            taken = sorted({s_.name for s_ in getattr(claimed, "free_symbols", set()) if s_.name in _FAMILY_NAMES}
+                           & _problem_names(ir, ctx))
+            if taken:
+                return unknown(LAYER, f"family_name_is_a_problem_symbol: {taken}", t.ms, {"claimed": str(claimed)})
         claimed_g = general_solution_from_claim(claimed, ns2) if window is None else claimed
+        if claimed_g is None:
+            return unknown(LAYER, "family_parameters_not_one_family", t.ms, {"claimed": str(claimed)})
+        region, unapplied = _region(ctx, var, eq_src)
+        if region is None:
+            return condition_not_applied(LAYER, unapplied, t.ms)
+        periods: list = []
+        if window is None and region != S.Reals:
+            periods = set_periods(region)
+            if periods is None:
+                # a region with no period (x > 0, 0 < x < 4, x an integer): a general solution is no
+                # answer there; a finite claim is compared on the region's bounded hull
+                try:
+                    lo, hi = region.inf, region.sup
+                    bounded = lo.is_finite and hi.is_finite and lo.is_number and hi.is_number
+                except Exception:  # noqa: BLE001
+                    bounded = False
+                if not bounded or not (claimed_g is S.EmptySet or isinstance(claimed_g, FiniteSet)):
+                    return condition_not_applied(LAYER, [region], t.ms)
+                window = Interval(lo, hi)
+                periods = []
         ok, ev = periodic_solution_set_equal(rel, var, claimed_g, window=window, timeout=ctx.timeout,
-                                             conds=conds)
+                                             conds=conds, region=region, region_periods=periods)
         ev["conditions"] = [str(c) for c in conds]
+        ev["region"] = str(region)
     if ok is True:
         return result(LAYER, "pass", 0.99, True, ev, t.ms, primary=True)
     if ok is False:

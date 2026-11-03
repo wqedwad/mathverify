@@ -177,6 +177,28 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
 
     claimed, truth = sp.sympify(claimed), sp.sympify(truth)
     free = claimed.free_symbols | truth.free_symbols
+    # an odd root of a negative number written as a power: the real root or the principal value
+    # (equiv.conventions); compared under both readings, decided only when they agree
+    from .conventions import closed_readings, open_odd_root_bases
+    readings = closed_readings(claimed, truth)
+    if readings is False:
+        ev["method"] = "odd_root_convention_undecided"
+        return None, ev
+    if readings is not None:
+        (c1, t1), (c2, t2) = readings
+        r1, ev1 = answers_equivalent(c1, t1, shape, domain, var, rel_tol, abs_tol, seed)
+        r2, ev2 = answers_equivalent(c2, t2, shape, domain, var, rel_tol, abs_tol, seed)
+        ev.update({"method": "odd_root_convention", "real_root": ev1, "principal_value": ev2})
+        return (r1 if r1 == r2 else None), ev
+    if free:
+        dom_map = domain if isinstance(domain, dict) else (
+            None if domain is None else {s_: domain for s_ in free})
+        open_bases = open_odd_root_bases((claimed, truth), dom_map)
+        if open_bases:
+            # a base that may be negative where the sides are compared: the value there is a convention
+            ev["method"] = "odd_root_convention_on_the_domain"
+            ev["bases"] = [str(b) for b in open_bases]
+            return None, ev
     if not free:
         okS, sev = sym_equal(claimed, truth)
         ev["symbolic"] = sev
@@ -226,6 +248,17 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         domain = {s_: domain.get(s_, S.Reals) for s_ in syms}
     okR, rev = random_point_equal(claimed, truth, syms, domain, seed=seed)
     ev["random_point"] = rev
+    if okR is True and not rev.get("proved") and (sev.get("equals") or {}).get("value") is False \
+            and all(domain[s_] == S.Reals for s_ in syms) and _equals_false_stands(claimed, truth):
+        # SymPy's `equals` says the two differ on the real line: agreement at sample points does not overrule it
+        # (it sampled x² + sin(3·10^6·πx) = x² on a grid where the sine vanishes; attack on d4c round 2, YO-3). A
+        # counterexample still refutes; agreement alone decides nothing. On a smaller domain `equals` (which
+        # does not know it) is no contradiction: log(x - 1) + log(x - 3) = log((x - 1)(x - 3)) holds for x > 3.
+        # Nor is it against an exact proof (the cells of |x|, sign(x)): SymPy's `equals` reads x as complex there,
+        # and 3*x**2*sign(x) for Max(x**3, -x**3)' and Piecewise((2*x**2/x, Ne(x, 0)), (0, Eq(x, 0))) for (x**2)',
+        # proved on each cell, were left undecided (merge of d4c round 4 with d4e round 4)
+        okR = None
+        ev["conflict"] = "sympy_equals_false"
     if okR is True and parametric:
         # agreement at sample values of a parameter is no proof of a parametric integral's or limit's
         # value (DECISIONS §80, principle 4); a counterexample at one value still refutes
@@ -233,6 +266,14 @@ def answers_equivalent(claimed, truth, shape: str = "scalar", domain=None, var=N
         ev["parametric_form"] = "agreement at sample points not taken"
     ev["method"] = "random_point" if okR is not None else "undecided"
     return okR, ev
+
+
+def _equals_false_stands(a, b) -> bool:
+    """SymPy's `equals` False at every one of three random seeds (`sandbox.ops.equals_false_at_every_seed`): one
+    False alone is no fact (it said False at some seeds for a true identity)."""
+    from ..sandbox import run as sb_run
+    r = sb_run("mathverify.sandbox.ops:equals_false_at_every_seed", a, b, timeout=10.0)
+    return bool(r.ok and r.value is True)
 
 
 def _equation_equivalent(claimed, truth, domain, var, seed, ev):

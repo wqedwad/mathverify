@@ -1,0 +1,484 @@
+[
+ {
+  "id": "d4h-YO-1",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "F1' koruması yalnız adlandırılmış yardımcılarda: //, <,>,<=,>= işleçleri, Interval/Intersection kurulumu ve at() (.subs) kapalı formu hâlâ evalf ile karara bağlayıp siliyor",
+  "repro": "P=/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/yanlis-onay/p; mkdir -p $T && git -C /home/user/asd archive a2f5603 | tar -x -C $T; cd $P && PYTHONUTF8=1 PYTHONPATH=$T/src:$T:$P MATHVERIFY_LEAN_REPL=/nonexistent /home/user/asd/.venv/bin/python run.py bulgular YO1  (vakalar: 'YO1 evaluate SPK // 1', '-((-SPK) // 1)', 'Piecewise((1, SPK > 1), (0, SPK <= 1))', 'Interval(1, SPK)', 'Intersection(Interval(1,2), {SPK})', 'at(floor(SPKt), x, 1/3)', 'at(Max(SPKt, 1), x, 1/3)', 'count_roots x**2 - (SPK // 1)', 'step SPK // 1 = 0'; SPK = Integral(1000*exp(-1000000*(x - 1/3)**2), (x, -1, 1)))",
+  "expected": "Hepsi UNKNOWN (adım: verified değil). Doğru değerler: SPK//1 = 1, tavan 2, Piecewise 1, Interval(1, SPK) boş değil, SPK ∈ [1,2], at(floor) = 1, at(Max) = SPK ≈ 1.7725, x² − 1 = 0'ın 2 kökü.",
+  "actual_new": "a2f5603: 9 vakanın hepsi CORRECT (0, 1, 0, EmptySet, EmptySet, 0, 1, 1 kök), adım 'SPK // 1 = 0' verified. Kontrol: floor(SPK) için 0 artık UNKNOWN (yalnız ad yolu kapandı).",
+  "actual_base": "62a40e9: aynı 9 vaka CORRECT/verified; floor(SPK) de CORRECT.",
+  "math": "mpmath 60 basamak: SPK = √π(erf(2000/3)+erf(4000/3))/2 = 1.77245385090551602729816748334114518279754945612 (kuadratür, tepe 1/3'te kırılarak, erf formuyla aynı); SymPy evalf 2.9e-834 veriyor. floor = 1, ceil = 2, floor(2SPK/3) = 1, SPK > 1 doğru. at(...) için SPKt(x=1/3) = SPK.",
+  "introduced_by_piece": "no",
+  "mechanism": "_form_unevaluated yalnız ad alanındaki floor/ceiling/Max/Gt.. çağrılarını sarıyor; rebuilt yalnız substitute_free/hold_parametric/_integer_indices'te. Ama ayrıştırmada Python işleçleri SymPy'nin değerlendirmeli yollarına gidiyor: Expr.__floordiv__ → floor(...) değerlendirmeli; '>'/'<=' → StrictGreaterThan, is_extended_positive → Expr._eval_is_extended_positive_negative → evalf(2) → False; Interval.__new__ (end < start) ve Intersection/FiniteSet üyeliği aynı evalf kararını veriyor; _at ise e.subs(v, val) ile floor/Max'i değerlendirmeli yeniden kuruyor. Form karardan önce silindiği için checked_forms onu hiç görmüyor (SPK'nın değeri sayılarla doğrulanamadığından tek başına UNKNOWN olurdu). Koruma mekanizmaya değil yazıma (ada) konmuş.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti dogru: dokuz vakanin hepsi UNKNOWN, adim verified degil. Ek (ayni kok): dogru deger iddiasi SPK//1 = 1 yeni ve tabanda INCORRECT (hakli olmayan ret); o da UNKNOWN olmali.",
+   "note": "Yeni ve tabanda 9/9 CORRECT/verified yeniden uretildi; floor(SPK) kontrolu yenide UNKNOWN, tabanda CORRECT. mpmath: SPK=1.7724538509055160273 (kuadratur=erf), SymPy evalf 2.9e-834; floor 1, tavan 2. Kod: _form_unevaluated yalniz ad yolunda, // > <= Interval Intersection ve _at'in subs'u korunmuyor.",
+   "detail": {
+    "measured_new": "a2f5603: SPK//1 claim0 CORRECT; claim1 (dogru) INCORRECT; -((-SPK)//1) claim1 CORRECT; Piecewise((1,SPK>1),(0,SPK<=1)) claim0 CORRECT; Interval(1,SPK) EmptySet CORRECT; Intersection([1,2],{SPK}) EmptySet CORRECT; at(floor(SPKt),x,1/3) 0 CORRECT; at(Max(SPKt,1),x,1/3) 1 CORRECT; count_roots x^2-(SPK//1) 1 CORRECT; adim 'SPK // 1 = 0' verified; floor(SPK) claim0 UNKNOWN parse_error.",
+    "measured_base": "62a40e9: ayni; floor(SPK) claim0 CORRECT.",
+    "math_independent": "mpmath dps=60: quad (tepe 1/3'te kirilarak) = sqrt(pi)(erf(2000/3)+erf(4000/3))/2 = 1.772453850905516027298167483341145182798; floor=1, ceil=2, SPK>1. SymPy Integral.evalf(15) = 2.90825767413118e-834.",
+    "code_check": "parse.py _form_unevaluated (yalniz ad alanindaki cagri sarili), _at: e.subs(v, val) degerlendirmeli yeniden kurar. Operatorler (Expr.__floordiv__, __gt__) ve Interval/Intersection kurulumunu hicbir koruma gormuyor.",
+    "repro": "Bagimsiz kopya: dogrulama-yanlis-onay/{yeni=a2f5603, taban=62a40e9} (git archive); kendi sondam dogrulama-yanlis-onay/p/vrun.py + cases*.py; mpmath 60 basamak: p/mathchk.py. python vrun.py cases YO1"
+   },
+   "id": "d4h-YO-1"
+  }
+ },
+ {
+  "id": "d4h-YO-2",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "I2 Leibniz koruması metin regex'i: \\frac{d}{d\\,x}, d{n}, (dn)^2, {d}^2 yazımları kaçıyor; d bildirilince türev çarpım okunup yanlış cevap CORRECT",
+  "repro": "aynı düzenek: run.py bulgular YO2 (vakalar: simplify_expression \\frac{d}{d\\,x}(x^2) vars x,d(real) iddia 'x'; evaluate aynı ifade, verilen x = 3, iddia 3; \\frac{d^{2}}{d\\,n^{2}}(n \\sin(\\pi n)) vars n(pozitif tam), x, d iddia 0; \\frac{d^2}{d{n}^2}(...) iddia 0; adım 'eq' \\frac{d}{d\\,x}(x^2) = x). Ek yazımlar c3.py/c11.py: \\dfrac, d\\;n, \\mathrm{d}\\,n, (dn)^2 ve dn\\,dn (dn bildirili), {d}^2.",
+  "expected": "I2 kararı (d ya da dn bildirilmişken türev biçimli LaTeX kesri belirsiz): UNKNOWN; adım verified değil. Türev okumasıyla (x²)' = 2x, x = 3'te 6; (n sin πn)'' = 2π(−1)^n.",
+  "actual_new": "a2f5603: hepsi CORRECT ('x', 3, 0, 0), adım verified. Yalnız d ile dn'nin ikisi de bildirilmiş ve boşluksuz 'dn^2' yazımı UNKNOWN.",
+  "actual_base": "62a40e9: aynı vakalar CORRECT/verified (koruma yoktu).",
+  "math": "mpmath: d/dx x² at 3 = 6.0; d²/dn²(n sin πn) n=1,2,3'te −6.2832, 6.2832, −6.2832 = 2π(−1)^n. Çarpım okuması: d·x²/(d·x) = x; d²·n·sin(πn)/(d·n²) = d·sin(πn)/n = 0 (tam sayı n).",
+  "introduced_by_piece": "no",
+  "mechanism": "_refuse_leibniz_products paydayı yalnız beyaz boşluğu silerek _LEIBNIZ_DEN = d([A-Za-z]\\w*?)(^..)? ile eşliyor; '\\,', '\\;', '{n}', '(dn)', 'dn\\,dn' eşleşmiyor, '{d}^2' paya uymuyor → None → reddedilmiyor. Ayrıca adların HEPSİNİN (d ve dn) bildirilmesini istiyor; latex2sympy 'd\\,x'i d·x okuyunca yalnız d bildirilmiş olması yetiyor (_check_symbols_declared geçiyor). Karar metni 'd ya da dn bildirilmişken' diyor, uygulama 've' ile ve tek yazımla sınırlı. Yaygın tipografi \\frac{d}{d\\,x} ve d doğal bir değişken adı (uzaklık, ortak fark).",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti dogru (I2 karari): d (ya da dn) bildirilmisken turev bicimli LaTeX kesri UNKNOWN, adim verified degil. Turev okumasiyla 2x olan iddia da INCORRECT cikiyor (hakli olmayan ret): o da UNKNOWN olmali. Kapsama: \\mathrm{d}\\,n, \\dfrac, d\\;n, {d}^2 (d,dn bildirili), (dn)^2, dn\\,dn.",
+   "note": "Yeni ve tabanda yeniden uretildi: \\frac{d}{d\\,x}(x^2) [x,d] 'x' CORRECT ('2x' INCORRECT), x=3'te 3 CORRECT, d^{2}/d\\,n^{2} ve d{n}^2 0 CORRECT, adim verified. Yenide yalniz d ve dn ikisi bildirili 'dn^2' UNKNOWN. {d}^2 yalniz d bildiriliyken UNKNOWN (yeniden uretilmedi), d,dn ile CORRECT. mpmath: 6.0, 2pi(-1)^n.",
+   "detail": {
+    "measured_new": "CORRECT: \\frac{d}{d\\,x}(x^2)->'x'; evaluate x=3 ->3; \\frac{d^{2}}{d\\,n^{2}}(n sin pi n)->0; \\frac{d^2}{d{n}^2}->0; \\dfrac{d^2}{d\\,n^2}->0; d\\;n->0; \\frac{d^2}{(dn)^2} [d,dn]->0; \\frac{{d}^2}{d n^2} [d,dn]->0; \\frac{d^2}{dn\\,dn} [d,dn]->0; \\frac{d^2}{\\mathrm{d}\\,n^2} [d]->0; \\frac{\\mathrm{d}^2}{\\mathrm{d}\\,n^2} [d]->0; adim eq \\frac{d}{d\\,x}(x^2) = x verified. INCORRECT: '2x' iddiasi. UNKNOWN: dn^2 [d,dn] (yeni; tabanda CORRECT), d n^2 [d], {d}^2 d n^2 [d], d yokken.",
+    "measured_base": "62a40e9: ayni, ayrica dn^2 [d,dn] CORRECT.",
+    "math_independent": "mpmath diff: (x^2)' x=3'te 6.0; (n sin pi n)'' n=1,2,3'te -6.28318530717959, 6.28318530717959, -6.28318530717959 = 2pi(-1)^n. Carpim okumasi d*x^2/(d*x)=x; d^2 n sin(pi n)/(d n^2)=0 tam n'de.",
+    "code_check": "parse.py _leibniz_names: yalniz \\s silinir, _LEIBNIZ_DEN fullmatch 'd\\,x', 'd{n}^2', '(dn)^2', 'dn\\,dn' icin None; _refuse_leibniz_products all(...) ile butun adlarin bildirilmesini istiyor.",
+    "repro": "Bagimsiz kopya: dogrulama-yanlis-onay/{yeni=a2f5603, taban=62a40e9} (git archive); kendi sondam dogrulama-yanlis-onay/p/vrun.py + cases*.py; mpmath 60 basamak: p/mathchk.py. python vrun.py cases YO2; python vrun.py cases2"
+   },
+   "id": "d4h-YO-2"
+  }
+ },
+ {
+  "id": "d4h-YO-3",
+  "klass": "false_accept",
+  "severity": "medium",
+  "title": "_form_kept yalnız konumsal argümana bakıyor: simplify(expr=...), expand(e=...), nsimplify(expr=...) adımda SymPy'nin yanlış değerini veriyor; yanlış adım verified",
+  "repro": "aynı düzenek: run.py bulgular YO3 (adım compute 'simplify(expr=2*Integral(Abs(cos(x)), (x, -1, 1))) = 0'; kontrol 'simplify(2*Integral(...)) = 0'; 'expand(e=simplify(expr=2*Integral(...))) = 0'). Ayrıca c15.py: simplify(expr=Limit(n*sin(pi/n), n, oo)) = 0 adımı 41 s'de verified.",
+  "expected": "Adım refuted (konumsal yazımdaki gibi) ya da en az unknown; asla verified.",
+  "actual_new": "a2f5603: üç anahtar kelimeli adım verified (Limit'li olan 41 s); konumsal kontrol refuted (düzeltme yalnız konumsal yazımda tutuyor).",
+  "actual_base": "62a40e9: hepsi verified, konumsal kontrol da.",
+  "math": "2∫_{-1}^{1}|cos x|dx = 4 sin 1 = 3.36588393923158602661000928652 (mpmath kuadratürü aynı); lim n·sin(π/n) = π (n = 1e12'de 3.14159265358979323846...). SymPy simplify ikisine de 0 diyor.",
+  "introduced_by_piece": "no",
+  "mechanism": "_form_kept.call: 'if args and contains_form(list(args))' yalnız *args'ı denetliyor; ifade anahtar kelimeyle (expr=, e=, f=) verilince args boş, fn(**kwargs) SymPy'nin simplify'ını (sonunda doit) çalıştırıp yanlış 0'ı üretiyor. Cevap düzeyinde problem metni 'expr' bilinmeyen tanımlayıcısıyla reddediliyor, ama adım ayrıştırması anahtar kelimeyi kabul ediyor. Aynı açık _form_unevaluated için ölçülmedi (floor/Max anahtar kelime kabul etmiyor).",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "Beklenti dogru: anahtar kelimeli yanlis adim refuted ya da unknown, asla verified. Ek (ayni kok, daha agir): dogru adim 'simplify(expr=2*COS) = 4*sin(1)' yeni ve tabanda refuted, dogru cozum INCORRECT (konumsal yazimi yenide verified/CORRECT); o da en az unknown olmali.",
+   "note": "Yeni ve tabanda yeniden uretildi: simplify(expr=2COS)=0 ve expand(e=simplify(expr=2COS))=0 verified, simplify(expr=LIM)=0 38 s'de verified; konumsal kontrol yenide refuted. nsimplify(expr=)/factor(f=) refuted (acik degil). Cevap duzeyinde problem metni parse_error/layer_exception: acik yalniz adimda. mpmath: 4 sin 1=3.3658839, pi.",
+   "detail": {
+    "measured_new": "verified: simplify(expr=2COS)=0 (CORRECT), expand(e=simplify(expr=2COS))=0 (CORRECT), simplify(expr=LIM)=0 (38.4 s, CORRECT). refuted: simplify(2COS)=0 (dogru), simplify(expr=2COS)=4*sin(1) (YANLIS ret -> INCORRECT), nsimplify(expr=2COS)=0, factor(f=2COS)=0 (29 s). Konumsal dogru adim simplify(2COS)=4*sin(1) verified/CORRECT. evaluate simplify(expr=2COS) -> UNKNOWN parse_error; verilen b=simplify(expr=...) -> UNKNOWN layer_exception.",
+    "measured_base": "62a40e9: anahtar kelimeli uc adim verified, konumsal 0 adimi da verified; konumsal ve anahtar kelimeli 4*sin(1) adimi refuted (INCORRECT).",
+    "math_independent": "mpmath quad 2*int_{-1}^{1}|cos x| = 3.36588393923158602661000928652 = 4 sin 1; n sin(pi/n), n=1e12: 3.141592653589793238462638.",
+    "code_check": "parse.py _form_kept.call: 'if args and contains_form(list(args))' kwargs'a bakmiyor.",
+    "repro": "Bagimsiz kopya: dogrulama-yanlis-onay/{yeni=a2f5603, taban=62a40e9} (git archive); kendi sondam dogrulama-yanlis-onay/p/vrun.py + cases*.py; mpmath 60 basamak: p/mathchk.py. python vrun.py cases YO3; python vrun.py cases3"
+   },
+   "id": "d4h-YO-3"
+  }
+ },
+ {
+  "id": "d4h-YO-4",
+  "klass": "false_accept",
+  "severity": "low",
+  "title": "D2 kardeş yolları: boş liste reddi yalnız tek argümanlı fonksiyonda; iki argümanlı alan 'x < -1, x > 1' ve küme listeli verilen 'x in (0, 3), x in (1, 5)' hâlâ kesişim okunuyor",
+  "repro": "aynı düzenek: run.py bulgular YO4 (f(x, y) = x + y, alan 'x < -1, x > 1': solve_equation f(x, 1) = 3 iddia {} ve count_roots iddia 0; verilen 'x in (0, 3), x in (1, 5)' (tek dize), solve_equation x = 4 iddia {}). Ek alan yazımları c12.py ('x < -1 and x > 1', '(x < -1) & (x > 1)', 'x < -1, y > 0, x > 1').",
+  "expected": "D2 kararıyla UNKNOWN: alan için 'hiçbir sayının sağlamadığı liste okunmaz' kuralı argüman sayısından bağımsız; küme listesi birleşim de olabilir. Birleşim okumasıyla f(x, 1) = 3'ün çözümü {2} (2 > 1), kök sayısı 1; verilende (0, 5) ile {4}.",
+  "actual_new": "a2f5603: üçü de CORRECT ({}, 0, {}). Aynı alan tek argümanlı fonksiyonda UNKNOWN (doğru).",
+  "actual_base": "62a40e9: aynı üçü CORRECT.",
+  "math": "x + 1 = 3 → x = 2; x < -1 ∨ x > 1 altında 2 alanda, ∧ altında alan boş. x = 4: (0,3) ∪ (1,5) = (0,5) içinde değil → aslında birleşimle de {}! Düzeltme: x = 4 ∉ (0,5); bu verilen vakası birleşimle de {} verir, bu yüzden yanlış onay DEĞİL. Geçerli verilen örneği için x = 4 yerine x = 4 olmayan bir nokta gerekir: (0,3) ∪ (1,5) = (0,5), kesişim (1,3); x = 1/2 (birleşimle {1/2}, kesişimle {}) — ölçülmedi. Kesin bulgu yalnız iki argümanlı alan vakaları.",
+  "introduced_by_piece": "no",
+  "mechanism": "read_domain_condition: '_refuse_empty_list' yalnız 'len(pieces) > 1 and len(argsyms) == 1' iken çağrılıyor; iki argümanda x koşulları boş olsa da _conjunction boş alanı kabul ediyor. Verilen yolu (read_condition) _refuse_set_lists'i hiç çağırmıyor; tek dizedeki küme listesini kesişim okuyor. Verilen vakası için seçtiğim nokta (x = 4) iki okumada da {} veriyor, yanlış onayı kanıtlamıyor; yalnız iki argümanlı alan vakası kanıtlı.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "Gercek kisim yalniz iki argumanli alan: f(x,y), alan 'x < -1, x > 1' (ve 'and', '&' yazimlari): f(x,1)=3 {} ve count 0 UNKNOWN olmali (birlesimle {2}, 1 kok). Verilen kismi yanlis onay degil: x=4 iki okumada da {} (4 notin (0,5)); x=1/2 icin olctum ({} CORRECT) ama verilen listesi gelenekce baglactir (her verilen tutar), D2 karari yalniz alan metni icin.",
+   "note": "Yeni ve tabanda yeniden uretildi: iki argumanli alan 'x < -1, x > 1', 'x < -1 and x > 1', '(x < -1) & (x > 1)' ile {} CORRECT, {2} INCORRECT, count 0 CORRECT; tek argumanlida yenide UNKNOWN (tabanda CORRECT). Kod: _refuse_empty_list yalniz len(argsyms)==1. Verilen vakasi (x=4) her iki okumada {}: yanlis onay degil.",
+   "detail": {
+    "measured_new": "2 arg: 'x < -1, x > 1' {} CORRECT, {2} INCORRECT, count 0 CORRECT; 'x < -1 and x > 1' {} CORRECT; '(x < -1) & (x > 1)' {} CORRECT; 'x in (-oo,-1), x in (1,oo)' UNKNOWN; '(-oo,-1), (1,oo)' UNKNOWN. 1 arg: hepsi UNKNOWN parse_error. Verilen 'x in (0, 3), x in (1, 5)': x=4 {} CORRECT; x=1/2 {} CORRECT, {1/2} INCORRECT; x=2 {2} UNKNOWN (layer_exception); ayri dizeler ['x in (0,3)','x in (1,5)'] x=1/2 {} CORRECT; 'x < -1, x > 1' verilen -> ir_inconsistent UNKNOWN.",
+    "measured_base": "62a40e9: iki argumanli ve tek argumanli alan vakalari CORRECT (tek arg '(-oo,-1), (1,oo)' CORRECT, iki arg UNKNOWN); verilen vakalari yenideki gibi.",
+    "math_independent": "x+1=3 -> x=2; 2 in (-oo,-1) U (1,oo), kesisim bos. (0,3) U (1,5) = (0,5), kesisim (1,3); 4 ikisinde de yok.",
+    "code_check": "parse.py read_domain_condition: 'if len(pieces) > 1 and len(argsyms) == 1: _refuse_empty_list(...)'.",
+    "repro": "Bagimsiz kopya: dogrulama-yanlis-onay/{yeni=a2f5603, taban=62a40e9} (git archive); kendi sondam dogrulama-yanlis-onay/p/vrun.py + cases*.py; mpmath 60 basamak: p/mathchk.py. python vrun.py cases YO4; python vrun.py cases4"
+   },
+   "id": "d4h-YO-4"
+  }
+ },
+ {
+  "id": "d4h-YO-5",
+  "klass": "false_accept",
+  "severity": "low",
+  "title": "G11 _one_family: bildirilmiş ve verilenle 1/2'ye sabitlenmiş gerçel m, aile parametresi sayılıp kafese indiriliyor; {mπ + kπ} sin x = 0 için CORRECT (önceden UNKNOWN)",
+  "repro": "aynı düzenek: run.py bulgular YO5 (trig_solve var x, verilenler ['sin(x) = 0', 'm = 1/2'], vars x, m(real); iddialar '{m*pi + k*pi}' ve '{pi*n + m*pi}'). Serbest gerçel m ile de CORRECT (c9.py).",
+  "expected": "UNKNOWN: verilen m = 1/2 iken iddia {π/2 + kπ} = π/2 + πℤ, sin x = 0'ın çözümü πℤ değil; m'nin indis mi problemin değişkeni mi olduğu belirsiz.",
+  "actual_new": "a2f5603: iki iddia da CORRECT, deterministik (m, k ya da n, m aynı kafes πℤ).",
+  "actual_base": "62a40e9: UNKNOWN (enumeration_failed) ya da hash sırasına göre INCORRECT; hiç CORRECT değil.",
+  "math": "π/2 + πℤ ∩ πℤ = ∅; sin(π/2) = 1 ≠ 0. Kafes indirgemesi {an + bk} = gcd(a,b)ℤ yalnız iki parametrenin de bütün tam sayıları gezdiği durumda doğru.",
+  "introduced_by_piece": "yes",
+  "mechanism": "trig.verify iddiayı n/k ve bildirilmişse m'yi integer=True aile sembolü olarak okuyor (V17, DECISIONS §74: 'IR bildiriminden bağımsız'); verilenler (eq_src dışındakiler) trig sertifikasında hiç uygulanmıyor. _one_family iki parametreli öğeyi artık deterministik kafese indirdiği için, önce çekimser kalan durum CORRECT oldu. §74 kuralı bildirilmiş tam sayı alanları için yazılmıştı; aynı adı tam sayı olmayan bir değere sabitleyen verilen bu kuralın kapsamında mı belirsiz, o yüzden düşük önem. Önerilen en temkinli okuma: aile adı bir verilenle sabitlenmişse UNKNOWN.",
+  "verdict": {
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "Beklenti dogru: bir verilen m'yi tam sayi olmayan bir degere (m = 1/2) sabitlerken iddiadaki m'yi aile indisi okumak secimdir; UNKNOWN. Ayni kok tek aileli {m*pi} (tabanda da CORRECT) ve {m*pi + 2*k*pi} icin de gecerli. Serbest bildirilmis m (verilen yok) V17 karariyla tam sayi indis: bulgu degil.",
+   "note": "Yeni: {m*pi+k*pi}, {pi*n+m*pi}, {m*pi+2*k*pi} m=1/2 ile CORRECT, tohum 0-2 ayni. Taban: bu iki aileli iddialar UNKNOWN/INCORRECT; ama tek aileli {m*pi} m=1/2 ile tabanda da CORRECT: kok (claim ad alaninda m'nin verilen yok sayilip integer okunmasi, V17) d4h'den once; d4h iki parametreli bicime genisletti.",
+   "detail": {
+    "measured_new": "PYTHONHASHSEED 0,1,2: {m*pi+k*pi} CORRECT, {pi*n+m*pi} CORRECT, {m*pi} CORRECT, {pi/2+k*pi} INCORRECT (dogru), m serbest {m*pi+k*pi} CORRECT, m bildirilmemis UNKNOWN; {m*pi+2*k*pi} CORRECT; sin(x - m*pi)=0, m=1/2 vakalari UNKNOWN.",
+    "measured_base": "62a40e9: {m*pi+k*pi} UNKNOWN (3 tohum), {pi*n+m*pi} INCORRECT/INCORRECT/UNKNOWN (tohuma bagli), {m*pi} CORRECT (3 tohum), {m*pi+2*k*pi} UNKNOWN.",
+    "math_independent": "m=1/2 okumasi: pi/2 + pi Z; sin(pi/2)=1 != 0, cozum kumesi pi Z ile kesisimi bos. Indis okumasi: {m+k}pi = pi Z (gcd 1). {m*pi + 2k*pi}: m=1/2 ile pi/2 + 2pi Z (yanlis), indis okumasiyla pi Z.",
+    "code_check": "trig.py: family = {nm: Symbol(nm, integer=True) ... isinstance(ns2.get(nm), Symbol)} verilenden bagimsiz; verilenler yalniz var'i iceriyorsa uygulaniyor (m = 1/2 yok sayiliyor).",
+    "repro": "Bagimsiz kopya: dogrulama-yanlis-onay/{yeni=a2f5603, taban=62a40e9} (git archive); kendi sondam dogrulama-yanlis-onay/p/vrun.py + cases*.py; mpmath 60 basamak: p/mathchk.py. PYTHONHASHSEED=0..2 python vrun.py cases YO5; python vrun.py cases5"
+   },
+   "id": "d4h-YO-5"
+  }
+ },
+ {
+  "id": "D4H-RK-1",
+  "klass": "coverage_loss",
+  "severity": "medium",
+  "title": "LaTeX verilen `x \\in \\mathbb{R}` (bütün doğru) artık okunmuyor: tabanda kanıtlı CORRECT olan 4 görev türü UNKNOWN",
+  "repro": "Sonda: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p2.py, grup R (40 vaka, 20'si farklı), ayrıca p15.py V0. Koşu: PYTHONUTF8=1 PYTHONPATH=<a2f5603 kopyası>/src:<kopya> MATHVERIFY_LEAN_REPL=/nonexistent .venv/bin/python probe/p2.py R out.json. Tek vaka:\nfrom mathverify.verifier import verify\nir={\"task\":{\"kind\":\"count_roots\",\"params\":{\"expr\":\"x**2 - 4\",\"var\":\"x\"}},\"vars\":[{\"name\":\"x\",\"domain\":\"real\"}],\"givens\":[r\"$x \\in \\mathbb{R}$\"],\"answer_shape\":\"count\"}\nprint(verify(ir,{\"claimed_answer\":{\"kind\":\"count\",\"payload\":\"2\"},\"steps\":[]}).verdict)\n# ayrıca: from mathverify.normalize.parse import read_condition, build_namespace -> read_condition(r'$x \\in \\mathbb{R}$', ns) ParseError",
+  "expected": "CORRECT (x gerçel bildirilmiş; x ∈ ℝ hiçbir şeyi kısıtlamaz: x²−4'ün 2 gerçel kökü, x²<4 ⇔ (−2, 2), min(x²−2x) = −1, √(x−1)'in tanım kümesi [1, ∞))",
+  "actual_new": "UNKNOWN (intake.domain given_not_applied / certify.extremum condition_not_applied): read_condition '... names a variable but reads as True: not read'",
+  "actual_base": "CORRECT (Contains(x, Reals) olarak okunup uygulanıyordu): count_roots, solve_inequality, extremum, domain_of × 5 yazım (`$x \\in \\mathbb{R}$`, `x \\in \\mathbb{R}`, `$x\\in\\mathbb{R}$`, `$x \\in (-\\infty, \\infty)$`, `$x \\in (-\\infty, 0) \\cup [0, \\infty)$`) = 20 vaka; ayrıca `$a \\in \\mathbb{R}$`, a = 3 ile count (V0)",
+  "math": "x gerçel sembol; ℝ'ye üyelik özdeş olarak doğru, yani True'ya çökme bu metinde YANLIŞ OKUMA değil doğru okumadır (d4d'nin not_collapsed ilkesi `\\notin`'in yanlışlıkla True'ya çökmesini yakalamak içindi). x²−4 = 0 ⇔ x = ±2 (2 kök); x² < 4 ⇔ −2 < x < 2; x²−2x = (x−1)²−1 ≥ −1, eşitlik x = 1; √(x−1) tanımlı ⇔ x ≥ 1. Tabanın kararları doğru; yenideki UNKNOWN'un matematik gerekçesi yok (NOTLAR bunu 'küçük kapsama kaybı' diye not etmiş, karar olarak gerekçelendirmemiş).",
+  "introduced_by_piece": "yes",
+  "mechanism": "parse.py `_latex_membership` → `_set_relations(S.Reals, x)` → `_interval_conditions` [] → And() = True. `read_condition`'ın LaTeX dalı `not_collapsed(_condition_atom(True))` ile ParseError verir (metin x'i anıyor). Tabanda latex2sympy'nin Eq(x, Reals)'i `_condition_atom` Eq-küme dalında Contains(x, Reals) oluyordu (d4h bu dalı sildi). Fonksiyon tanım kümesi yolu (`read_domain_condition` → `_conjunction(True)` = None) etkilenmiyor; yalnız verilenler. Öneri: küme ℝ'yi kapsıyorsa `_latex_membership` Contains(el, S.Reals, evaluate=False) döndürsün (tabandaki gibi) ya da read_condition LaTeX üyeliğinin ℝ'ye çöktüğü durumu 'kısıt yok' saysın; Complement'in ∅ verdiği (`x \\notin \\mathbb{R}`) durum okunmamaya devam etsin.",
+  "verdict": {
+   "id": "D4H-RK-1",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "medium",
+   "corrected_expectation": "Bildirim gerçel x için LaTeX `x \\in \\mathbb{R}` (ve ℝ'yi kapsayan aralık/birleşim yazımları) kısıt koymaz: x²−4 sayım 2 CORRECT / 1 INCORRECT, x²<4 → (−2,2) CORRECT, min(x²−2x) = −1 CORRECT / 0 INCORRECT, √(x−1) tanım kümesi [1,∞) CORRECT. Düzeltme gerçel olmayan (complex) bildirimde x ∈ ℝ'yi kısıt olarak tutmalı (Contains(x, Reals) tabandaki gibi bunu sağlar; 'True'yu kısıt yok say' sağlamaz).",
+   "note": "Yeni a2f5603: 5 LaTeX yazımda count_roots/solve_inequality/domain_of, extremum ve 'a ∈ ℝ, a=3' UNKNOWN (given_not_applied/condition_not_applied); read_condition ParseError 'reads as True'. Taban 62a40e9: hepsi doğru karar (CORRECT ve yanlış iddiada INCORRECT). Düz metin 'x in Reals', 'x ∈ ℝ' yenide de CORRECT. Evalset'te bu yazım 0. Hem doğru hem yanlış iddiada karar kaybı.",
+   "detail": {
+    "probes": [
+     "probe/v1.py",
+     "probe/v1b.py"
+    ],
+    "outputs": [
+     "out_v1_yeni.json",
+     "out_v1_taban.json",
+     "out_v1b_yeni.json",
+     "out_v1b_taban.json"
+    ],
+    "measured_new": "5 yazım × (count 2, count 1, ineq (-2,2)) + domain_of × 5 = 20 UNKNOWN; extremum min x²−2x: -1 ve 0 UNKNOWN (condition_not_applied); `$a \\in \\mathbb{R}$` + a=3, count x²−4: 2 ve 1 UNKNOWN. read_condition: 5 yazım ParseError; `$x \\notin \\mathbb{R}$` → Contains(x, EmptySet) → ir_inconsistent UNKNOWN; `$x \\in \\mathbb{Z}$`, `$x \\in [0, \\infty)$`, 'x > -100' etkilenmiyor.",
+    "measured_base": "Aynı vakalar: count 2 CORRECT, count 1 INCORRECT, (-2,2) CORRECT, domain_of [1,oo) CORRECT, extremum -1 CORRECT / 0 INCORRECT, a∈ℝ count 2 CORRECT / 1 INCORRECT. read_condition: Contains(x, Reals) / Contains(x, Interval(-oo, oo)) / Contains(x, Union(...)).",
+    "math_independent": "x gerçel: {x : x ∈ ℝ} = ℝ, kısıt yok. x²−4=(x−2)(x+2) → 2 gerçel kök; x²<4 ⇔ |x|<2; x²−2x=(x−1)²−1 ≥ −1 (x=1'de eşit), sınırsız üstten → min −1; √(x−1) ⇔ x ≥ 1.",
+    "scope_notes": "Fonksiyon tanım kümesi okuyucusu (read_domain_condition) bu metni None (kısıt yok) okuyor — etkilenmiyor. Ölçüt: kapsama kaybı, yanlış karar değil; evalset'te 0 öğe."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ },
+ {
+  "id": "D4H-RK-2",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "title": "D2: birleşim ve kesişim okumaları AYNI kararı verdiğinde de tanım kümesi listesi reddediliyor (19 vakada tabanın doğru kararı UNKNOWN)",
+  "repro": "Sonda: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p5.py (grup D, D0–D20). Tek vaka:\nfrom mathverify.verifier import verify\nir={\"task\":{\"kind\":\"solve_equation\",\"params\":{\"equation\":\"f(x) = 5\",\"var\":\"x\"}},\"vars\":[{\"name\":\"x\",\"domain\":\"real\"}],\"givens\":[],\"answer_shape\":\"set\",\"functions\":[{\"name\":\"f\",\"expr\":\"x**2 + 1\",\"args\":[\"x\"],\"domain\":\"(0, 3), (1, 5)\"}]}\nprint(verify(ir,{\"claimed_answer\":{\"kind\":\"set\",\"payload\":\"{2}\"},\"steps\":[]}).verdict)",
+  "expected": "{2} CORRECT, {} INCORRECT, sayım 1 CORRECT (iki okumada da aynı)",
+  "actual_new": "UNKNOWN (read_domain_condition ParseError: 'lists a set next to another condition')",
+  "actual_base": "CORRECT / INCORRECT / CORRECT (doğru kararlar)",
+  "math": "f(x) = x²+1 = 5 ⇔ x = ±2. Ölçülen listeler ve iki okuma: '(0, 3), (1, 5)' birleşim (0,5) → {2}, kesişim (1,3) → {2}; 'x in (0, 3), x in (1, 5)' aynı; '(0, 3), x > 1' birleşim (0,∞) → {2}, kesişim (1,3) → {2}; '[0, 5], [1, 3]' → {2}/{2}; '(-3, 3), (-5, 5)' → {−2,2}/{−2,2}; 'x > 1, (0, 3)' → {2}/{2}; sayımlar aynı. '(0, oo), x <= 5' için {2} okumaya bağlı (birleşim ℝ → {−2,2}) ama {} iki okumada da yanlış → INCORRECT kanıtlı. Gelenek cevabı değiştirmiyorsa karar kanıtlanabilir; NOTLAR'ın kendi ilkesi de 'okuma ikisinde de aynı → karar verilebilir' (yalnız özdeş parça durumu uygulanmış). Ayrıca sonda.py E grubu '(0, 3), (1, 5)' için {2}'yi '[union reading]' diye etiketleyip UNK bekliyor: {2} kesişim okumasının da cevabı; test_a_list_of_sets_or_an_empty_list_is_no_domain bu listeyi ParseError olarak sabitliyor.",
+  "introduced_by_piece": "yes",
+  "mechanism": "parse.py `_refuse_set_lists` küme parçası + aynı argümanda başka (özdeş olmayan, yalnız dışlama olmayan) parça görünce okuma sonucuna bakmadan ParseError veriyor. Öneri: iki okumayı (birleşim, kesişim) kurup karar ikisinde aynıysa karar vermek; değilse UNKNOWN (D2 kararının özü korunur: (-oo,-1),(1,oo)'da {} birleşimde yanlış, kesişimde doğru → UNKNOWN).",
+  "verdict": {
+   "id": "D4H-RK-2",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "Birleşim ve kesişim okumalarında karar aynıysa karar verilebilir: '(0,3),(1,5)', 'x in (0,3), x in (1,5)', '(0,3), x>1', '[0,5],[1,3]', 'x>1,(0,3)' için f(x)=x²+1=5 → {2} CORRECT, {−2,2} ve {} INCORRECT, sayım 1 CORRECT / 2 INCORRECT; '(−3,3),(−5,5)' → {−2,2} CORRECT. Ayrışan iddialar UNKNOWN kalır ('(0,oo), x<=5' için {2}/{−2,2}; '(−oo,−1),(1,oo)' için {}, {−2,2}, sayım 0/2). Ayrıca '(−oo,−1),(1,oo)' için {2} ve sayım 1 iki okumada da yanlış → INCORRECT kanıtlı (bulgu bunu saymamış).",
+   "note": "Yeni: ölçtüğüm 7 karışık/aralık listesinin 35 vakasının hepsi UNKNOWN (ParseError 'lists a set next to another condition'); tabanda 31'i iki okumada da aynı ve doğru karar. Matematik doğru, kayıp yalnız kapsama (yanlış karar yok). Sonda E grubunun '(0,3),(1,5)' {2} '[union reading]' etiketi yanıltıcı: kesişimin de cevabı.",
+   "detail": {
+    "probes": [
+     "probe/v2.py"
+    ],
+    "outputs": [
+     "out_v2_yeni.json",
+     "out_v2_taban.json"
+    ],
+    "measured_new": "(0,3),(1,5) | x in (0,3), x in (1,5) | (0,3), x>1 | [0,5],[1,3] | (-3,3),(-5,5) | x>1,(0,3) | (0,oo), x<=5 | (-oo,-1),(1,oo): {2}, {-2,2}, {}, sayım 1, sayım 2 → hepsi UNKNOWN. Kontroller '(0,3)', '(0,3),(0,3)', 'x>0, x<3' karar veriyor.",
+    "measured_base": "Uyumlu 6 listede 30/30 doğru karar; '(0,oo), x<=5' {} INCORRECT (iki okumada doğru), {2} CORRECT (okumaya bağlı: tabanın yanlış onay riski, yeni UNKNOWN doğru); '(-oo,-1),(1,oo)' {} CORRECT (D2'nin kökü, yenide UNKNOWN doğru).",
+    "math_independent": "x²+1=5 ⇔ x=±2. Birleşim/kesişim: (0,3)∪(1,5)=(0,5), ∩=(1,3) → her ikisinde {2}; (0,3)∪(1,∞)=(0,∞), ∩=(1,3) → {2}; [0,5]∪[1,3]=[0,5], ∩=[1,3] → {2}; (−3,3)∪(−5,5)=(−5,5), ∩=(−3,3) → {−2,2}; (0,∞)∪(−∞,5]=ℝ → {−2,2}, ∩=(0,5] → {2} (ayrışır); (−∞,−1)∪(1,∞) → {−2,2}, ∩=∅ → ∅ (ayrışır; {2} ve sayım 1 ikisinde de yanlış).",
+    "uncertainty": "Liste için üçüncü bir okuma (ör. 'tanım, değer kümesi') akla gelebilir; tek argümanlı f için zorlama, bu yüzden low.",
+    "gates": "denetim/2026-10-01/d4h/sonda.py cases_e '(0, 3), (1, 5)' {2} ve sayım 1 için UNK bekliyor; tests/test_d4_d4h_ayristirici.py::test_a_list_of_sets_or_an_empty_list_is_no_domain '(0, 3), (1, 5)'i ParseError olarak sabitliyor. Düzeltme bunları güncellemeli."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ },
+ {
+  "id": "D4H-RK-3",
+  "klass": "other",
+  "severity": "low",
+  "title": "Sonda beklentisi matematiği: Max(SPK, 1) için 'sqrt(pi)' [right] etiketli ve NOTNO; SPK ≠ √π",
+  "repro": "denetim/2026-10-01/d4h/sonda.py cases_c: (f\"Max({SPK}, 1)\", \"1\", \"sqrt(pi)\") → \"F1' evaluate Max(SPK, 1): sqrt(pi) [right]\" NOTNO. Ölçüm: /tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p17.py",
+  "expected": "Beklenti NOTOK (ya da UNK): 'sqrt(pi)' kesin değer olarak yanlış",
+  "actual_new": "UNKNOWN (canlı hata yok; yalnız sonda CORRECT'e de izin veriyor)",
+  "actual_base": "INCORRECT",
+  "math": "SPK = ∫_{-1}^{1} 1000·e^{-10⁶(x−1/3)²} dx = (√π/2)·(erf(2000/3) + erf(4000/3)) (SymPy de bunu veriyor). mpmath (60 basamak): √π − SPK = (√π/2)(erfc(2000/3) + erfc(4000/3)) = 1.274459375e−193023 > 0. Max(SPK, 1) = SPK ≠ √π; ilke 4'e göre kesin sayı kesin karşılaştırılır, 'sqrt(pi)' iddiasına CORRECT yanlış onay olur, ama sonda bunu 'ok' sayar.",
+  "introduced_by_piece": "yes",
+  "mechanism": "Sondanın 'right' sütunu yaklaşık değeri (√π) doğru cevap sanmış; NOTNO kümesi CORRECT'i kabul ettiği için ileride bu vakada doğacak bir yanlış onayı sonda yakalamaz. floor/ceiling/sign beklentileri (1, 2, 1) doğru.",
+  "verdict": {
+   "id": "D4H-RK-3",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "yes",
+   "severity": "low",
+   "corrected_expectation": "sonda.py cases_c'de Max(SPK, 1) için 'sqrt(pi)' [right] NOTNO yerine [wrong] NOTOK olmalı. Doğru kesin değer √π(erf(2000/3)+erf(4000/3))/2 (≈ √π − 1.27e−193023); bunun için NOTNO kurulabilir (bugün yenide UNKNOWN, tabanda erf bilinmeyen ad → UNKNOWN). floor=1, ceiling=2, sign(SPK−1)=1 beklentileri doğru.",
+   "note": "Sonda satırı a2f5603'te var (cases_c, satır 120/127). mpmath 60 basamak: SPK = √π/2·(erf(2000/3)+erf(4000/3)), quad aynı; √π − SPK = 1.274459375e−193023 > 0, Max(SPK,1)=SPK ≠ √π. Canlı karar doğru (yeni UNKNOWN; taban INCORRECT); kusur yalnız kapı: CORRECT'e izin veriyor.",
+   "detail": {
+    "probes": [
+     "probe/v3.py"
+    ],
+    "outputs": [
+     "out_v3_yeni.json",
+     "out_v3_taban.json"
+    ],
+    "measured_new": "Max(SPK,1): sqrt(pi) UNKNOWN, 1 UNKNOWN, kesin erf biçimi UNKNOWN; floor 1, ceiling 2, sign 1 UNKNOWN ('a closed form with no confirmed value').",
+    "measured_base": "Max(SPK,1): sqrt(pi) INCORRECT, 1 CORRECT (tabanın yanlış onayı, d4h'nin kapattığı F1'), erf biçimi UNKNOWN (erf bilinmeyen ad); floor 1 INCORRECT, ceiling 2 INCORRECT (tabanın haksız retleri), sign 1 UNKNOWN.",
+    "math_independent": "u = 1000(x−1/3): ∫_{−4000/3}^{2000/3} e^{−u²} du = (√π/2)(erf(2000/3)+erf(4000/3)). erfc(2000/3) ≈ e^{−444444.4}/(666.7·√π) ≈ 1e−193023, erfc(4000/3) ihmal edilebilir. SPK ∈ (1, 2) → floor 1, ceiling 2, sign(SPK−1)=1."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ },
+ {
+  "id": "PRE-RK-4",
+  "klass": "unjust_reject",
+  "severity": "high",
+  "title": "(Önceden var) solve_equation'da denklem params.equation'dayken denklemden türeyen doğru eq adımları çürütülüyor → doğru çözüm INCORRECT",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p22.py. Tek vaka:\nfrom mathverify.verifier import verify\nir={\"task\":{\"kind\":\"solve_equation\",\"params\":{\"equation\":\"x**2 - x - 2 = 0\",\"var\":\"x\"}},\"vars\":[{\"name\":\"x\",\"domain\":\"real\"}],\"givens\":[],\"answer_shape\":\"set\"}\nprint(verify(ir,{\"claimed_answer\":{\"kind\":\"set\",\"payload\":\"{-1, 2}\"},\"steps\":[{\"id\":\"s1\",\"kind\":\"eq\",\"claim\":\"x + 2 = x**2\",\"from\":[],\"text\":\"\"}]}).verdict)",
+  "expected": "CORRECT (adım denklemin denk yeniden yazımı)",
+  "actual_new": "INCORRECT (s1 refuted, step_refuted)",
+  "actual_base": "INCORRECT (aynı)",
+  "math": "x²−x−2 = 0 ⇔ x + 2 = x² ⇔ (x−2)(x+1) = 0 ⇔ x ∈ {−1, 2}. 'x + 2 = x**2' adımı denklemin kendisine denk; 'x = 2' adımı √(x+2) = x'in tek çözümü (x = −1: √1 = 1 ≠ −1). Aynı IR'da denklem givens'a yazılınca adımlar verified ve karar CORRECT. Ölçülen: params-poly {−1,2} + 'x + 2 = x**2' INCORRECT; params-poly {2}... ; √(x+2) = x, {2} + 'x + 2 = x**2' INCORRECT; 'x**2 - x - 2 = 0', 'x = 2' dizisinde s2 refuted.",
+  "introduced_by_piece": "no",
+  "mechanism": "steps/deterministic öncül havuzu görevin params.equation'ını içermiyor (yalnız givens, tanım kümesi kısıtları ve önceki eq adımları); öncülsüz ya da yalnız tanım kısıtlı havuzda özdeşlik olmayan adım rastgele noktada çürütülüyor. SOLVER_FORMAT 'solve_equation | var, opsiyonel equation (yoksa givens[0])' diyor; evalset'in 14 solve_equation öğesinin hepsi givens biçiminde olduğu için fark.py görmüyor. d4h'nin değiştirdiği kodla ilgisiz; ayrı parça önerisi: params.equation (ve inequality) öncül havuzuna eklenmeli.",
+  "verdict": {
+   "id": "PRE-RK-4",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "high",
+   "corrected_expectation": "params.equation biçimi givens[0] biçimine denk olmalı (SOLVER_FORMAT ve IR istemi ikisini de veriyor): x²−x−2=0, {−1,2} + adım 'x + 2 = x**2' CORRECT; √(x+2)=x, {2} + 'x + 2 = x**2' CORRECT (kare alma sonucu, denklemden çıkar); 'x**2 - x - 2 = 0', 'x = 2' dizisi CORRECT (x=2 özgün denklemden çıkar). Yanlış adım ('x + 2 = x**3') iki biçimde de çürütülmeli (bugün öyle).",
+   "note": "Yeni ve tabanda aynı: params biçiminde s1 refuted → INCORRECT (fbs 1/2); aynı IR givens biçiminde s1/s2 verified → CORRECT. Ctx.givens() yalnız ir.givens'ı döndürüyor (certify/base.py:1210); öncül havuzu params.equation'ı almıyor. Karşı örnek denklemi sağlamayan bir nokta: ilke 5'e aykırı. Sıklık ölçülmedi (evalset 14/14 givens biçiminde).",
+   "detail": {
+    "probes": [
+     "probe/v4.py"
+    ],
+    "outputs": [
+     "out_v4_yeni.json",
+     "out_v4_taban.json"
+    ],
+    "measured_new": "params: {-1,2}+'x + 2 = x**2' INCORRECT (s1 refuted); '(x - 2)*(x + 1) = 0' CORRECT (s1 skipped); √(x+2)=x {2}+'x + 2 = x**2' INCORRECT; ['x**2 - x - 2 = 0','x = 2'] INCORRECT (s2 refuted). givens: hepsi CORRECT (verified). Kontrol 'x + 2 = x**3' iki biçimde INCORRECT.",
+    "measured_base": "Birebir aynı kararlar.",
+    "math_independent": "x²−x−2 = (x−2)(x+1); x+2 = x² ⇔ x²−x−2 = 0 (denk). √(x+2)=x ⇒ x+2=x², x≥0 → x=2 (x=−1 yabancı). Adımlar denklem altında doğru; çürütme ancak denklemi sağlamayan noktada mümkün.",
+    "mechanism_confirmed": "src/mathverify/certify/base.py Ctx.givens() = [self.rel(g) for g in self.ir.givens]; steps/deterministic.py öncülleri givens + var_constraints + önceki adımlardan kuruyor (satır ~2603-2740). extract/prompts.py satır 41 IR çıkarıcıya 'equation optional, else givens[0]' diyor: üretimde gerçek yol."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ },
+ {
+  "id": "PRE-RK-5",
+  "klass": "unjust_reject",
+  "severity": "medium",
+  "title": "(Önceden var) 'x ∈ S', 'x = ±2', 'x ≠ 1', '1 ≤ x ≤ 3' biçimli doğru cevaplar INCORRECT; intake 'bilinmeyeni içeriyor' (UNKNOWN) dediği hâlde sert ret kazanıyor",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p1.py grup L (L27, L30–L33, L35–L38) ve p13.py C3, C8, p7.py E1, E7, E12. Tek vaka: solve_equation x**2 = 4 (params), claim kind set payload r\"$x \\in \\{-2, 2\\}$\" → verify(...).verdict",
+  "expected": "UNKNOWN (değer biçiminde değil) ya da S olarak okunup CORRECT",
+  "actual_new": "INCORRECT (intake.claim unknown 'still contains the unknown(s) [x]' + certify.algebra fail claimed_root_invalid / sampling_counterexample)",
+  "actual_base": "INCORRECT (aynı)",
+  "math": "x² = 4 ⇔ x ∈ {−2, 2}; x²−4x+3 ≤ 0 ⇔ x ∈ [1, 3]; x²+1 > 0 her x için (ℝ); 1/(x−1) tanımlı ⇔ x ≠ 1; √(x−1) tanımlı ⇔ x ∈ [1, ∞). Hepsinde iddia edilen küme doğru; yalnız yazım 'x ∈ …' / ilişki biçiminde.",
+  "introduced_by_piece": "no",
+  "mechanism": "parse_set_str 'x \\in S' metnini FiniteSet(ilişki) olarak okuyor (tabanda FiniteSet(Eq(x, S)), d4h'den sonra FiniteSet(And(...))); sertifika bu tek 'elemanı' köke koyup reddediyor; intake.claim'in claim_is_not_a_value UNKNOWN'u yalnız CORRECT'i engelliyor, sert INCORRECT'i durdurmuyor. d4h `x \\in S`'i artık ilişkiye çevirdiği için 'x ∈ S' iddiasını S kümesi olarak okumak kolaylaştı; en azından intake bayrağı varken sert ret UNKNOWN'a inmeli.",
+  "verdict": {
+   "id": "PRE-RK-5",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "DECISIONS (iddia okuma maddesi) 'x ∈ {2, 3}', 'x >= 3' gösterimini küme/aralık olarak okur; LaTeX yazımı da öyle okunmalı ya da en azından UNKNOWN olmalı, asla INCORRECT değil: `$x \\in \\{-2, 2\\}$` ve `$x = \\pm 2$` (x²=4) CORRECT/UNKNOWN; `$1 \\leq x \\leq 3$`, `$x \\in [1, 3]$` (x²−4x+3≤0) CORRECT/UNKNOWN; `$x \\in \\mathbb{R}$` (x²+1>0) CORRECT/UNKNOWN; `$x \\neq 1$`, `$x \\in \\mathbb{R} \\setminus \\{1\\}$` (1/(x−1)) ve `$x \\geq 1$`, `$x \\in [1, \\infty)$` (√(x−1)) CORRECT/UNKNOWN. Yanlış kümeler (`$x \\in \\{-3, 3\\}$`, `$x \\in [1, 4]$`) INCORRECT kalır.",
+   "note": "Yeni ve tabanda aynı: yalnız LaTeX yazımda doğru küme INCORRECT (11 vaka ölçüldü; interval kind'da intake bayrağı bile yok). Düz metin 'x in {-2, 2}', 'x ∈ [1, 3]', '1 <= x <= 3', 'x >= 1' CORRECT; '1 ≤ x ≤ 3', 'x ≠ 1', 'x = ±2' düz metinde UNKNOWN. Başlıktaki biçimlerin INCORRECT olanı LaTeX olanları.",
+   "detail": {
+    "probes": [
+     "probe/v5.py",
+     "probe/v5b.py",
+     "probe/v5c.py"
+    ],
+    "outputs": [
+     "out_v5_*.json",
+     "out_v5b_*.json",
+     "out_v5c_*.json"
+    ],
+    "measured_new": "INCORRECT: `$x \\in \\{-2, 2\\}$` (set ve value), `$x = \\pm 2$`, `$1 \\leq x \\leq 3$`, `$x \\in [1, 3]$` (set ve interval), `$x \\in \\mathbb{R}$` (x²+1>0), `$x \\neq 1$`, `$x \\in \\mathbb{R} \\setminus \\{1\\}$`, `$x \\geq 1$`, `$x \\in [1, \\infty)$` (set ve interval). parse_set_str yenide FiniteSet(Or(Eq..)) / FiniteSet(And(..)).",
+    "measured_base": "Aynı kararlar; parse_set_str FiniteSet(Eq(x, FiniteSet(-2, 2))) / FiniteSet(Eq(x, Interval(1, 3))).",
+    "math_independent": "x²=4 ⇔ x=±2; x²−4x+3=(x−1)(x−3) ≤ 0 ⇔ 1≤x≤3; x²+1 ≥ 1 > 0 her gerçel x; 1/(x−1) ⇔ x≠1; √(x−1) ⇔ x≥1."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ },
+ {
+  "id": "PRE-RK-6",
+  "klass": "crash_or_timeout",
+  "severity": "medium",
+  "title": "(Önceden var) 'S = {…}' / '$S = (-2, 2)$' / 'S = [1, 2]' iddiası verify'dan SympifyError istisnası olarak sızıyor",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p8.py. Tek vaka:\nfrom mathverify.verifier import verify\nir={\"task\":{\"kind\":\"solve_equation\",\"params\":{\"equation\":\"x**2 = 4\",\"var\":\"x\"}},\"vars\":[{\"name\":\"x\",\"domain\":\"real\"}],\"givens\":[],\"answer_shape\":\"set\"}\nverify(ir,{\"claimed_answer\":{\"kind\":\"set\",\"payload\":\"S = {-2, 2}\"},\"steps\":[]})  # SympifyError",
+  "expected": "UNKNOWN (okunamayan iddia; ilke 13: biçimi bozuk girdi istisna olarak sızmaz)",
+  "actual_new": "EXC SympifyError: cannot sympify object of type SingletonRegistry",
+  "actual_base": "EXC SympifyError (aynı)",
+  "math": "Matematik dışı: sağlamlık. 'S = {−2, 2}' Türkçe çözümlerde yaygın 'çözüm kümesi S' yazımı.",
+  "introduced_by_piece": "no",
+  "mechanism": "verifier._claim_without_value → parse_set_as_written → parse_as_written: ad alanındaki 'S' SymPy'nin SingletonRegistry'si (`\"S\": S`), sp.Tuple(*out) onu sympify edemiyor; çağrı yolunda bu istisna yakalanmıyor. 'x = {-2, 2}', 'A = {1}', 'y = (0, 1)' UNKNOWN; yalnız 'S' adı çöküyor.",
+  "verdict": {
+   "id": "PRE-RK-6",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "medium",
+   "corrected_expectation": "'S = {-2, 2}', 'S = {-3, 3}', '$S = (-2, 2)$', 'S = [1, 2]' ve evaluate'te 'S = 2' iddiaları istisna sızdırmadan UNKNOWN olmalı (ilke 13; 'A = {-2, 2}', 'x = {-2, 2}', 'N = 2' gibi). Okunursa ancak doğru küme CORRECT, yanlış INCORRECT; S burada SymPy tekil kayıt defteri olarak değil, adlandırılmış küme olarak ele alınmamalı/okunmamalı.",
+   "note": "Yeni ve tabanda aynı: SympifyError verifier._claim_without_value (satır 398) → parse_set_as_written → parse_as_written sp.Tuple(*out) (parse.py:2259 yeni / 1988 taban) yolundan sızıyor. Bulgudan geniş: evaluate'te 'S = 2' de çöküyor. Diğer büyük harfler (A, N, E, Q, I) UNKNOWN.",
+   "detail": {
+    "probes": [
+     "probe/v6.py"
+    ],
+    "outputs": [
+     "out_v6_yeni.json",
+     "out_v6_taban.json"
+    ],
+    "measured_new": "S = {-2, 2}, S = {-3, 3}, $S = (-2, 2)$, S = [1, 2] (interval), S = 2 (evaluate): EXC SympifyError. A=, x=, y=, Ç=, Ç.K.=, N=, E=, Q=, I=: UNKNOWN.",
+    "measured_base": "Aynı.",
+    "math_independent": "Matematik dışı (sağlamlık)."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ },
+ {
+  "id": "PRE-RK-7",
+  "klass": "crash_or_timeout",
+  "severity": "low",
+  "title": "(Önceden var) evaluate det(Matrix([[Integral(x, (x, 0, 2)), 1], [1, 1]])) tek verify 132–149 s",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p10.py (ilk vaka) ve p11.py (parse_structural / parse_as_written süreleri); p1.py X1",
+  "expected": "CORRECT, 60 s altında",
+  "actual_new": "CORRECT, 132.2 s ve 149.3 s (katman süreleri toplam ~0.5 s)",
+  "actual_base": "CORRECT, 134.9 s",
+  "math": "det = ∫_0^2 x dx · 1 − 1·1 = 2 − 1 = 1 (karar doğru; sorun süre).",
+  "introduced_by_piece": "no",
+  "mechanism": "Katman dışı intake: parse_structural ve parse_as_written hedefi evaluate(False) altında okurken det(Matrix(...Integral...)) her biri ~23 s sürüyor (p11 ölçümü), birkaç kez çağrılıyor. Integral − 1 doğrudan yazılınca 0.0 s.",
+  "verdict": {
+   "id": "PRE-RK-7",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "Karar CORRECT doğru (det = 2·1 − 1·1 = 1); beklenen yalnız makul süre. '60 s altında' kesin bir proje eşiği değil, ama 137–142 s'lik tek verify parse_as_written'ın ~23 s'lik tekrarlı çağrılarından geliyor; parse_expr_str 0.0 s.",
+   "note": "Yeni: CORRECT 137.0 s; taban: CORRECT 141.5 s (tek koşu, yük ~2.7–3.0). Yenide parse_as_written(hedef) tek başına 22.7 s ve None döndürüyor; parse_expr_str 0.0 s. Kök neden ölçümle doğrulandı (birkaç çağrı × ~23 s); d4h'den bağımsız.",
+   "detail": {
+    "probes": [
+     "probe/v7.py"
+    ],
+    "outputs": [
+     "out_v7_full_yeni.json",
+     "out_v7_full_taban.json",
+     "out_v7_parts_yeni.json"
+    ],
+    "measured_new": "verify 137.0 s CORRECT; parse_as_written 22.7 s → None; parse_expr_str 0.0 s → -1 + Integral(x, (x, 0, 2)).",
+    "measured_base": "verify 141.5 s CORRECT.",
+    "math_independent": "∫_0^2 x dx = 2; det [[2,1],[1,1]] = 2 − 1 = 1."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ },
+ {
+  "id": "PRE-RK-8",
+  "klass": "coverage_loss",
+  "severity": "low",
+  "title": "(Önceden var) Yapısal okuması kurulamayan hedefte doğru değer 'soruyu yeniden yazıyor' sayılıyor (eigmax → 2 + sqrt(2) UNKNOWN)",
+  "repro": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/ret-kapsama/probe/p1.py X5: evaluate eigmax(Matrix([[2, 1, 0], [1, 2, 1], [0, 1, 2]])), claim '2 + sqrt(2)'",
+  "expected": "CORRECT",
+  "actual_new": "UNKNOWN (intake.claim 'restates the question'; certify.algebra pass)",
+  "actual_base": "UNKNOWN (aynı)",
+  "math": "Karakteristik polinom (2−λ)((2−λ)²−2) → özdeğerler 2, 2±√2; en büyüğü 2+√2.",
+  "introduced_by_piece": "no",
+  "mechanism": "_same_structure → parse_structural evaluate(False) ile kurulamayınca değerlendirilmiş okumaya düşüyor (2+√2); iddianın yapısı bu değerle aynı olduğu için §28 yeniden yazım kuralı tetikleniyor. d4h'nin `_structure`'ı yalnız LaTeX tarafını değiştirdi; bu davranış tabanda da var.",
+  "verdict": {
+   "id": "PRE-RK-8",
+   "reproduced": true,
+   "math_expected_correct": true,
+   "real": true,
+   "introduced_by_piece": "no",
+   "severity": "low",
+   "corrected_expectation": "eigmax(M) için '2 + sqrt(2)' ve 'sqrt(2) + 2' CORRECT; eigmin(M) için '2 - sqrt(2)' CORRECT (M = [[2,1,0],[1,2,1],[0,1,2]]). §28 yeniden yazım kuralı yalnız iddia hedefin işlemini (eigmax(...)) tekrar ettiğinde tetiklenmeli; hedefin hesaplanmış değeriyle aynı yapı yeniden yazım değildir.",
+   "note": "Yeni ve tabanda aynı: UNKNOWN 'restates the question' (certify.algebra pass). parse_structural('eigmax(M)') değerlendirmesiz bile Add(sqrt(2), 2) döndürüyor; iddianın srepr'ı aynı → _same_structure True. Tam sayı sonuçta (diag eigmax=3) tetiklenmiyor (yaprak hedef dışlanıyor). Yanlış iddialar INCORRECT; yalnız kapsama kaybı.",
+   "detail": {
+    "probes": [
+     "probe/v8.py",
+     "probe/v8b.py"
+    ],
+    "outputs": [
+     "out_v8_yeni.json",
+     "out_v8_taban.json"
+    ],
+    "measured_new": "eigmax: '2 + sqrt(2)', 'sqrt(2) + 2' UNKNOWN (restates); '3.41421356237', '2', '2 - sqrt(2)' INCORRECT; eigmin '2 - sqrt(2)' UNKNOWN (restates), '2 + sqrt(2)' INCORRECT; det 4 CORRECT; diag eigmax 3 CORRECT.",
+    "measured_base": "Aynı.",
+    "math_independent": "charpoly = (λ−2)(λ²−4λ+2) → λ = 2, 2±√2; max 2+√2, min 2−√2 (SymPy eigenvals ile de)."
+   },
+   "copies": {
+    "yeni": "a2f5603",
+    "taban": "62a40e9"
+   },
+   "probe_dir": "/tmp/claude-0/-home-user-asd/0a3a0f70-84de-519b-bab3-552b100d2487/scratchpad/d4/saldiri/d4h/dogrulama-ret-kapsama/probe"
+  }
+ }
+]

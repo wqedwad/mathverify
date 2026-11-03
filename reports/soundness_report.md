@@ -1,9 +1,9 @@
 # Metamorfik sağlamlık taraması (SymPy üretimli yanlış ve eşdeğer cevaplar)
 
-Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 73 s
+Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 76 s
 
-- **Yanlış cevap varyantı: 457** — yanlış onay (CORRECT): **0** (hedef 0) · UNKNOWN: 0
-- **Eşdeğer cevap varyantı: 214** — yanlış red (INCORRECT): **0** (hedef 0) · UNKNOWN (kaybedilen kapsama): 0
+- **Yanlış cevap varyantı: 467** — yanlış onay (CORRECT): **0** (hedef 0) · UNKNOWN: 0
+- **Eşdeğer cevap varyantı: 224** — yanlış red (INCORRECT): **0** (hedef 0) · UNKNOWN (kaybedilen kapsama): 0
 
 ## Adım düzeyi: geçerli dönüşüm hata değildir, bozulan adım yakalanmalıdır
 
@@ -23,8 +23,10 @@ Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 73 s
 | Varyant | n | CORRECT | INCORRECT | UNKNOWN |
 |---|---|---|---|---|
 | `equiv:decimal` | 3 | 3 | 0 | 0 |
+| `equiv:endpoint_written_otherwise` | 5 | 5 | 0 | 0 |
 | `equiv:expanded` | 5 | 5 | 0 | 0 |
 | `equiv:factored` | 5 | 5 | 0 | 0 |
+| `equiv:member_written_otherwise` | 5 | 5 | 0 | 0 |
 | `equiv:moved_to_one_side` | 3 | 3 | 0 | 0 |
 | `equiv:nsimplified` | 59 | 59 | 0 | 0 |
 | `equiv:permuted` | 3 | 3 | 0 | 0 |
@@ -40,14 +42,16 @@ Problem: **86** (A/B öğelerinin tekil IR'ları) · süre: 73 s
 | `non_answer:latex_integral` | 4 | 0 | 0 | 4 |
 | `non_answer:limit_call` | 6 | 0 | 0 | 6 |
 | `non_answer:own_function` | 5 | 0 | 0 | 5 |
-| `non_answer:restates_target` | 23 | 0 | 10 | 13 |
+| `non_answer:restates_target` | 23 | 0 | 2 | 21 |
 | `non_answer:sum_object` | 2 | 0 | 0 | 2 |
 | `wrong:doubled` | 61 | 0 | 61 | 0 |
 | `wrong:dropped_member` | 3 | 0 | 3 | 0 |
+| `wrong:endpoint_written_otherwise_flipped` | 5 | 0 | 5 | 0 |
 | `wrong:entry_plus_one` | 2 | 0 | 2 | 0 |
 | `wrong:extra_member` | 5 | 0 | 5 | 0 |
 | `wrong:left_endpoint_flipped` | 3 | 0 | 3 | 0 |
 | `wrong:left_endpoint_shifted` | 3 | 0 | 3 | 0 |
+| `wrong:member_perturbed_1e-12` | 5 | 0 | 5 | 0 |
 | `wrong:minus_one` | 59 | 0 | 59 | 0 |
 | `wrong:negated` | 58 | 0 | 58 | 0 |
 | `wrong:perturbed_1e-9` | 59 | 0 | 59 | 0 |

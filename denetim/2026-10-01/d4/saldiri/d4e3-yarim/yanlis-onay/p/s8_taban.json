@@ -1,0 +1,72 @@
+[
+ {
+  "label": "DIRP derivative x**3 + 0*I5(x) at 1, x positive_real: 3 [undefined at 1]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 1.3
+ },
+ {
+  "label": "DIRP tangent x**3 + 0*I5(x) at 1, x positive_real: y = 3*x - 2",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.calculus:pass:"
+  ],
+  "s": 0.08
+ },
+ {
+  "label": "DIRP solve x**2 - 1 + 0*I5(x) = 0, x > 0 declared: {1} [1 undefined]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.algebra:pass:",
+   "certify.wordproblem:pass:"
+  ],
+  "s": 0.07
+ },
+ {
+  "label": "DIRP max -(x - 1)**2 + 0*I5(x) on [0, 2], x positive_real: 0",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.extremum:pass:"
+  ],
+  "s": 0.08
+ },
+ {
+  "label": "DIRP evaluate 0*I(a) + 1, a positive_real: 1 [undefined at a = 1]",
+  "verdict": "CORRECT",
+  "status": null,
+  "ok": false,
+  "flags": [],
+  "reasons": [
+   "certify.wordproblem:unknown:no_givens",
+   "certify.algebra:pass:"
+  ],
+  "s": 0.72
+ },
+ {
+  "label": "DIRP series k + 0*I(k), k=1..3, k positive integer: 6 [k = 1 undefined]",
+  "verdict": "UNKNOWN",
+  "status": null,
+  "ok": true,
+  "flags": [
+   "written_domain"
+  ],
+  "reasons": [
+   "certify.series:unknown:term_undefined_in_range_as_written"
+  ],
+  "s": 0.74
+ }
+]

@@ -1,0 +1,139 @@
+[
+ {
+  "findings": [
+   {
+    "id": "SI-YO-1",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "definite_integral artık abs_tol okuyor: toleranslı çoktan seçmelide pencerede iki şık varken seçilen şık CORRECT (dal tek başına G2YO-5 sınıfını abs_tol'e açıyor; son-adim ile birleşince kapanıyor)",
+    "repro": "IR definite_integral x**2 [0,1], abs_tol '0.01', options {A:0.33,B:0.34,C:0.5,D:1,E:2}, iddia '0.34' şık B. İkinci vaka: exp(-x**2) [0,1], abs_tol '1e-3', options {A:0.746,B:0.747,C:0.75,D:0.8,E:1}, iddia '0.746' şık A. Sonda: probes/sonda1.py M (out_M_dal.json, out_M_taban.json, out_M_birlesim.json). Birleşim kopyası = wip/son-integral arşivi + wip/son-adim (d59d282) 8 src dosyası (dosya kümeleri ayrık).",
+    "expected": "UNKNOWN (karar G2YO-5: bildirilen toleranslı çoktan seçmelide pencereye birden çok şık giriyorsa seçilen şık ayırt edilemez)",
+    "actual_branch": "M1 CORRECT, M4 CORRECT (mc.consistency pass, certify.calculus pass)",
+    "actual_base": "M1 INCORRECT, M4 INCORRECT (taban definite_integral abs_tol'ü hiç okumuyordu: kesin karşılaştırma haksız ret). Birleşim kopyasında M1..M6, M8 UNKNOWN, M7 (şıksız) CORRECT.",
+    "math": "∫_0^1 x² = 1/3: |0.33 − 1/3| = 0.00333 ≤ 0.01 ve |0.34 − 1/3| = 0.00667 ≤ 0.01, iki şık da pencerede. ∫_0^1 e^{-x²} = (√π/2)·erf(1) = 0.746824132812427025399 (mpmath 50 basamak): |0.746 − v| = 8.24e-4 ≤ 1e-3, |0.747 − v| = 1.76e-4 ≤ 1e-3; iki şık da pencerede.",
+    "mechanism": "G2YO-4 kardeşi (calculus.verify definite_integral: read_tolerance(abs_tol) + within_tolerance/declared_tolerance_by_enclosure) iddiayı pencere içinde kabul ediyor; dalda mc.consistency'nin pencere belirsizliği kuralı yok (G2YO-5 düzeltmesi son-adim'in verifier._options_in_tolerance'ında). Tabanda abs_tol okunmadığı için bu açık haksız retle örtülüydü. Sonuç: son-integral son-adim'den önce ya da onsuz birleştirilirse abs_tol'lü şıklı integral sorularında yeni yanlış onay doğar; birleşimde ölçüldü, kapanıyor. Öneri: iki dal birlikte birleştirilsin ve birleşimde M sondası koşulsun (SA-RK-9 notu ile aynı)."
+   },
+   {
+    "id": "SI-YO-2",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "base",
+    "title": "_certificate_check yarı sonsuz zarfı 'bilgi veren' sayıyor: merdiven yakınsamazken ıraksak integralin (yanlış) sonlu sertifikası CORRECT; G2YO-2 kapanışı eksik",
+    "repro": "probes/planted.py: calculus.certified_integral_value yamalanıp sabit değer döndürülür, gerçek merdiven koşar. ∫_0^1 1/x dx, sertifika ve iddia 10**6; ∫_0^{1/2} 1/(x·|ln x|) dx, 10; ∫_0^1 −1/x dx, −10**6; ∫_{1/2}^1 1/(1−x) dx, 100. Kontrol: ∫_0^1 1/x, 5 → INCORRECT; ∫_0^1 1/x², 10**6 → INCORRECT.",
+    "expected": "UNKNOWN (karar G2YO-2: merdiven yakınsamıyorsa sertifika yalnız bilgi veren (sonlu) zarfın içindeyse alınır; ıraksak integralde sonlu iddia CORRECT olmaz)",
+    "actual_branch": "H1 CORRECT (zarf [76.15625, +inf], state agrees), H3 CORRECT ([3.10, +inf]), H6 CORRECT ([-inf, -76.16]), H7 CORRECT ([69.90, +inf]); H2 ve H4 INCORRECT (excluded)",
+    "actual_base": "7 vakanın 7'si CORRECT (taban yakınsamayan merdivende sertifikayı tek başına alıyordu)",
+    "math": "∫_0^1 dx/x = +∞; ∫_0^{1/2} dx/(x|ln x|) = lim [−ln|ln x|] → +∞ (ln ln hızında); ∫_0^1 −dx/x = −∞; ∫_{1/2}^1 dx/(1−x) = +∞. Hiçbirinin sonlu değeri yok.",
+    "mechanism": "calculus._certificate_check: `if enc is None or not (mp.isfinite(enc[0]) or mp.isfinite(enc[1]))` yalnız İKİ uç da sonsuzsa 'unconfirmed' der. Ixraksak integralin zarfı (L, +inf) olur; L'nin üstündeki her cval 'agrees' olur, '10^-6 içine incelt' hedefi sonsuz uçla hiç tutmaz. Gerçek (yamalı olmayan) bir yanlış sertifika bulamadım (TTK ~250 gerçekçi vakada sağlam), bu yüzden savunma katmanı açığı. Dikkat: doğru ∫_0^2 1/∛((x−1)²) = 6 bugün tam bu yarı sonsuz zarfla ([4.847, +inf]) CORRECT oluyor. Basamakları 5.99999999997, …99520, …999 (err 2e-12, 2e-19, 2e-28). Öneri: yarı sonsuz zarf yalnız merdivenin son hata tahmini küçükse (örn. err/scale ≤ 1e-10) ve c son değere err içinde yakınsa kabul edilsin; 1/x'in basamakları 79, 125, 194 (err 1.0) reddedilir."
+   },
+   {
+    "id": "SI-YO-3",
+    "klass": "false_accept",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "base",
+    "title": "Duran merdiven istisnası mpmath'in kendi hata tahminini okumuyor: tek/PV-ıraksak integrallerde başarısız karelemenin '0.0' dizisi (err 2.0) 'yerleşmiş' sayılıyor ve yanlış 0 sertifikası CORRECT",
+    "repro": "probes/planted2.py (sertifika 0 olarak yamalanır, gerçek merdiven koşar): ∫_{-1}^{1} 1/x, ∫_{-1}^{1} x^{-3}, ∫_{-2}^{2} x/(x²−1), ∫_{-1}^{1} sign(x)/|x|^{3/2}; iddia 0. Merdivenin kendisi probes/quadz.py ile okunur.",
+    "expected": "UNKNOWN",
+    "actual_branch": "P1, P2, P3, P9 CORRECT; certificate_check {'stable_ladder': True, 'state': 'agrees'}; merdiven [(30,'0.0',err 2.0),(50,'0.0',0.2),(80,'0.0',2.0)]. P4–P8 (tan, 1/(x−1), PV ln 2 ekilmiş) UNKNOWN.",
+    "actual_base": "P1–P9'un 9'u da CORRECT (sertifika tek başına)",
+    "math": "Dördü de 0'da (ya da ±1'de) integrallenemez tekillik taşır: ∫_0^1 dx/x = ∫_0^1 dx/x³ = ∫_0^1 dx/x^{3/2} = +∞; yalnız Cauchy esas değeri 0. Uygunsuz integral olarak tanımsız, 0 yanlış. Aynı '0.0' çıktısı ∫_{-1}^{2} 1/x için de geliyor (PV = ln 2), yani bu değer değil, karelemenin başarısızlık çıktısı.",
+    "mechanism": "calculus._stable_ladder_holds yalnız son iki basamağın değerlerine (fark 0 ≤ 1e-20) ve c ∈ [v ± r] koşuluna bakıyor, basamakların err alanını hiç okumuyor. mpmath quad simetrik ıraksak integrandı [a, 0, b] üzerinde her hassasiyette '0.0' ve err 2.0/0.2 ile döndürüyor. Gerçek bir yanlış 0 sertifikası bulamadım: tek simetri sertifikası mutlak integrallenebilirlik istiyor, TTK iç kutbu reddediyor. Bu yüzden savunma katmanı açığı. Meşru vaka ∫_{-1}^{8} x^{-1/3} = 9/2 err 1.1e-35, 1.1e-60, 1.1e-104 taşıyor. Öneri: istisna son iki basamağın err/scale değeri küçükken (örn. ≤ 1e-10) uygulansın; 9/2 kalır, err 2.0'lık başarısızlık düşer."
+   }
+  ],
+  "probes_run": 463,
+  "summary": "Ölçtüğüm her bulguyu wip/son-integral (3afddba) ve 0e93ed5 kopyalarında koştum; tolerans–şık etkileşimini ayrıca son-integral + son-adim (d59d282) birleşim kopyasında da koştum. Yaklaşık 463 sonda yaptım: verify çağrıları ve işaret sondaları; mpmath doğruluk örneklemesi bu sayıya dahil değil.\n\nSonuç: dalın tek başına getirdiği gerçekçi bir yanlış onay bulamadım. Yalnız tolerans–şık etkileşimi (SI-YO-1) dalın kendi getirdiği yeni bir açık, o da son-adim ile birleşince kapanıyor (ölçüldü).\n\nTemiz çıkan alanlar (dalda her biri yanlış iddiayı INCORRECT/UNKNOWN, doğruyu CORRECT/UNKNOWN verdi):\n- **G2YO-1, kutuplu geçişler (S, 29 vaka):** sign(tan), sign(cot), sgn((x−1)/(x+1)), sign(log x²), 1/x'li Max/Abs ve sonsuz aralıklı sgn((x−1)/(x+2))e^{−|x|}. Tabanın S2w/S13w yanlış onayları dalda kapandı.\n- **TTK tuzakları (W, 23):** −2 = ∫1/x², Weierstrass 0'ları, sec², tan ve PV değerleri.\n- **x^x (Z, 13), çift kök uçları G2RK-7 (E, 17), gelenek bölgeleri G2RK-3/4 (R, 23):** x>0 ve x<0 kısıtlı ilkel ve türev.\n- **sign sıçraması G2RK-1 (A, 20):** sıçramalı, kaldırılabilir süreksiz ve tek/çift karışık ilkeller INCORRECT.\n- **Piecewise TTK G2RK-5 (P 24 + Q 32):** dalsız bölge, Eq/Ne noktaları, iç kutup, örtüşen koşullar, Abs'li ve 1/x'li koşullar, sonsuz aralık.\n- **Sonsuz aralık istisnası (I, 50):** salınan ve ıraksak iddiaların hiçbiri CORRECT olmadı. Gerçek bir yanlış TTK limiti bulamadım.\n- **Aralık uzantıları ve tolerans (T, V, cs):** erf/erfc/Si/Fresnel tolerans sınırları ve abs_tol (1e-50'ye kadar) doğru çıktı. mpmath'in 45 basamaklı değerlerinin hatası 1e-5 ile 1e3 aralığında ve her işaret/büyüklükte payın 1e-12'sinden küçük; constant_sign hiçbir karmaşık sayıya işaret vermedi.\n- **atan2/arg:** _exact_conditions None döndürdüğü için sertifika üretilmiyor (fail-closed).\n\nBulgular:\n- **SI-YO-1:** dalda definite_integral abs_tol okunuyor. Şıklı soruda iki şık pencereye girince seçilen şık CORRECT oluyor (M1, M4); tabanda INCORRECT, birleşimde UNKNOWN. İki dal birlikte birleştirilmeli.\n- **SI-YO-2 ve SI-YO-3:** G2YO-2'nin savunma katmanı eksik. Bunları yamalı (yanlış) sertifikalarla gösterdim; gerçek bir yanlış sertifika bulamadım.\n  - Yarı sonsuz zarf \"bilgi veren\" sayılıyor; ıraksak ∫1/x'e 10^6 CORRECT oluyor.\n  - Duran merdiven err'i okumuyor; mpmath'in \"0.0\" ve err 2.0 başarısızlık çıktısı yerleşmiş sayılıyor, ∫_{-1}^{1} 1/x = 0 CORRECT oluyor.\n  - Taban bu vakaların hepsini kabul ediyordu. Önerilen dar kurallar (err/scale ≤ 1e-10) meşru 9/2 ve 6 vakalarını koruyor.\n\nKopyaları sildim (.env içeriyorlardı). Sondalar ve çıktılar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-integral/yanlis-onay/probes altında."
+ },
+ {
+  "findings": [
+   {
+    "id": "SON-INT-RK-1",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "abs_tol beyan edilmiş karmaşık değerli yaklaşık iddia artık hiç kabul edilmiyor: within_abs_tol NONREAL dalında yalnız çürütüyor",
+    "repro": "evaluate, vars x real, givens yok: (a) expr 'exp(I*pi/3)', abs_tol '0.001', iddia '0.5 + 0.866*I'; (b) expr '2*exp(I*pi/4)', abs_tol '0.01', iddia '1.41 + 1.41*I'; (c) expr 'exp(I)', abs_tol '0.0001', iddia '0.5403 + 0.8415*I'; (d) (c) ile aynı, ayrıca rel_tol '0.0001'. Fonksiyon düzeyinde: num_equal(1/2 + 0.866*I, exp(I*pi/3), abs_tol=Rational(1,1000)). Sonda: sonda2.py C ve C2 grupları ile m/cplx.py (çalışma dizini /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-integral/ret-kapsama).",
+    "expected": "Dördü de CORRECT: |iddia − değer| sırasıyla 2.54e-5 ≤ 1e-3, 5.96e-3 ≤ 1e-2 ve 2.91e-5 ≤ 1e-4 (bu son değer (d)'de de geçerli).",
+    "actual_branch": "Dördü de UNKNOWN (certify.algebra: undecided). num_equal → (None, 'exact_declared_tolerance_undecided').",
+    "actual_base": "Dördü de CORRECT (certify.algebra: pass). num_equal → (True, 'abs_tol'); 30 basamaklık merdivenin |d| değeri toleransın çok altında.",
+    "math": "mpmath 50 basamak: |0.5+0.866i − e^{iπ/3}| = 2.54037844386e-5; |1.41+1.41i − √2(1+i)| = 5.95887705394e-3; |0.5403+0.8415i − e^{i}| = 2.91066727862e-5. Hepsi beyan edilen mutlak toleransın içinde. Gerçel kısmı tam iptal olan durum (sqrt(3) + I ≈ 1.73 + I) dalda CORRECT kalıyor, çünkü orada d gerçel.",
+    "mechanism": "equiv/numeric.py within_abs_tol: sd = _tolerance_sign(c − v) NONREAL olduğunda yalnız |Im d| > t sınanıyor (False döndürmek için); kabul eden yol yok ve fonksiyon None döndürüyor. num_equal'in yeni abs_tol bloğu kapalı (closed) sabitlerde bu None'u doğrudan döndürüyor, eski merdiven yedeğine düşmüyor. within_rel_tol'da da aynı NONREAL kalıbı var (karmaşık rel_tol iki kopyada da UNKNOWN), ama mutlak tolerans tabanda merdivenle karar veriyordu. Önerilen dar düzeltme: NONREAL d için re/im ayrıştırılarak _tolerance_sign(t² − Re(d)² − Im(d)²) == 1 ise True döndürmek. Genel olarak işaret okunamadığında |d| ≤ t, _tolerance_sign(t − d) == 1 ve _tolerance_sign(t + d) == 1 ile de kanıtlanabilir. Şartname (satır 262) karmaşık sayıları kapsamda sayıyor. Ders kitabında yaklaşık karmaşık cevap az görülür; bu yüzden şiddet düşük."
+   },
+   {
+    "id": "SON-INT-RK-2",
+    "klass": "crash_or_timeout",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "Yakınsamayan merdivenli yüksek frekanslı belirli integrallerde zarf denetimi doğrulamayı 5–15 kat (+4…+30 s) yavaşlatıyor",
+    "repro": "definite_integral, iddia SymPy'nin kesin değeri. Taban → dal süreleri: cos(500πx)² [0,1] = 1/2: 1.8 → 19.6 s; cos(1000πx)² [0,1] = 1/2: 1.2 → 18.7 s; sin(2000x)² [0,π] = π/2: 1.8 → 10.3 s; x³cos(2000x) [0,2π] = 3π²/10⁶: 2.0 → 12.0 s; sin(300x)⁴ [0,π] = 3π/8: 1.5 → 10.4 s; cos(x)·e^{200 sin x} [0,π] = 0: 1.1 → 15.7 s; 1/(x²+10⁻⁸) [−1,1] = 20000·atan(10⁴): 0.3 → 4.3 s; e^{−x}sin²(2000x) [0,1] = (−8000001 + cos²2000 − 2000 sin 4000 + 8000000e)e^{−1}/16000001: 12.3 → 42.5 s. Sonda: sonda3.py ve run3s.sh (çıktılar out3_dal.jsonl ve out3_taban.jsonl).",
+    "expected": "Kararlar tabandakiyle aynı (hepsi CORRECT) ve süre artışı belirgin olmamalı.",
+    "actual_branch": "Kararlar aynı (CORRECT), süreler 4–43 s. Kanıt: certificate_check.state = 'agrees'. Zarflar çok geniş, örneğin x³cos(2000x) için [−40.36, 40.36], sin(2000x)² için [1.11, 2.03].",
+    "actual_base": "Kararlar CORRECT, süreler 0.3–12 s (sertifika sayısal denetim olmadan alınıyordu).",
+    "math": "Değerler mpmath (30–50 basamak, alt aralıklara bölünmüş quad) ve SymPy integrate ile bağımsız olarak hesaplandı ve sertifikayla uyuştu. Örnekler: x²cos60x için π/1800; sin(300x)⁴ için 3π/8 = 1.178097245096; e^{−x}sin²(2000x) için 0.31609167064489.",
+    "mechanism": "calculus._certificate_check, merdiven yakınsamadığında ve aralık sonlu olduğunda rigorous_integral'ı inside = cval ± 10⁻⁶(1+|cval|) penceresiyle çağırıyor. Salınan integrant bu pencereye hiç giremediği için zarf 4000 hücrelik bütçenin tamamını (en fazla _ENCLOSURE_SAFETY = 120 s) harcıyor. Sonunda sonlu ama bilgi vermeyen bir zarf cval'ı içerdiği için 'agrees' çıkıyor; yani harcanan süre bu örneklerde kararı değiştirmiyor. G2YO-2 kararının kendisi değil, bu denetimin bütçesi sorunlu: daha küçük bir hücre bütçesi, ya da sonlu zarf cval'ı içerip daralmayı bıraktığında durmak süreyi geri verir. Yan gözlem (yanlış onay merceği için): 'sonlu' zarfı 'bilgi veren' saymak, [−40, 40] gibi pratikte hiçbir şey söylemeyen bir zarfı da kabul gerekçesi yapıyor."
+   }
+  ],
+  "probes_run": 1943,
+  "summary": "Mercek: haksız ret, kapsama kaybı, çökme. wip/son-integral (3afddba) ile 0e93ed5 iki kopyada karşılaştırıldı: 1893 verify sondası ve 50 fonksiyon düzeyi ölçüm. Doğru cevapların matematiği mpmath (30–50 basamak) ya da elle bağımsız olarak hesaplandı. Kapsam:\n- 280 evalset maddesi\n- belirli integraller: ders kitabı, has olmayan, iç tekillikli, sıfır değerli, kök tabanlı uçlar, Piecewise, salınımlı\n- evaluate'te abs_tol/rel_tol: yüzde, faiz, derece trigonometri, log, özdeşlikler, Sum/Integral/Limit formları, özel fonksiyonlar, karmaşık değerler\n- ilkel ve türev fonksiyonu: cbrt/sign, beyan edilmiş bölge\n- simplify'da kutuplu argümanlar, x**x türü kuvvetler, adım reddedici\n\nSonuç:\n- Evalset'te 280 maddenin 280'i iki kopyada aynı (155 CORRECT, 125 INCORRECT).\n- Dalın getirdiği haksız INCORRECT yok; çürütülen doğru adım ya da çökme yok.\n- sonda2'de dal 34 vakayı UNKNOWN'dan, 20 vakayı INCORRECT'ten CORRECT'e çevirdi (abs_tol okuma, Piecewise TTK, cbrt ilkelleri, √ uçları). Tabandaki 1 asılma (der x**x = x**x·log x, 90 s) dalda 0.1 s'de INCORRECT.\n\nBulgular:\n- (1) abs_tol beyanlı karmaşık değerli yaklaşık iddialar CORRECT'ten UNKNOWN'a düştü (4 vaka). Neden: within_abs_tol'un NONREAL dalı yalnız çürütüyor.\n- (2) Yakınsamayan merdivenli yüksek frekanslı integrallerde zarf denetimi süreyi 5–15 kat artırıyor (+4…+30 s), karar değişmiyor.\n\nBulgu yapılmayan, karar gereği gözlemler:\n- G2YO-2'nin 'unconfirmed' kuralı, işaret değiştiren güçlü iç ya da çift uç tekilliklerinde CORRECT'i UNKNOWN yapıyor. Ölçülen 4 vaka: sign(x)|x|^(−4/5) [−1,32] = 5; sign(x)|x|^(−5/6) [−1,64] = 6; sign(x)|x|^(−9/10) [−1,2] = 10(2^(1/10) − 1); x^(−9/10) − (1−x)^(−9/10) [0,1] = 0. Zarf (−∞,∞), merdiven farkları 7e-11 civarı. Karar savunulabilir; bedeli bu sınıftır (−3/4 ve −2/3 üsleri hâlâ CORRECT).\n- Fonksiyon düzeyinde _cell_proof artık argüman kutbunu kesim noktası yapıyor ve dom kutbu içerirse 'defined_on_one_side_only' ile False dönüyor. Örnek: Abs((x²−1)/(x−1)) ile Abs(x+1); tabanda True. Ölçülen hiçbir verify yolunda (simplify, evaluate, ilkel, adım reddedici) tetiklenmedi: hepsi dom'u tanımlılıkla daraltıyor ya da önce sembolik veya doit ile karar veriyor. Gizli bir risk olarak not edildi.\n\nDosyalar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-integral/ret-kapsama altında: sonda.py, sonda2.py, sonda3.py ve out*_dal/taban.jsonl. .env içeren kopyalar silindi."
+ },
+ {
+  "file": "/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-integral/bulgular.json",
+  "verdicts": [
+   {
+    "id": "SI-YO-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "V1 (0.34/B) ve V4 (0.746/A) UNKNOWN olmalı (G2YO-5). Yalnız seçilen şık penceredeyse CORRECT (V7: A=0.3), pencere dışındaysa INCORRECT. Dal tek başına CORRECT veriyor, bu yüzden son-adim ile birlikte birleştirilmeli. son-adim artık 0dfadd9'da ve calculus.py'ye dokunuyor (tolerance_window), bu da metinsel çakışma çıkarıyor. Çakışma, son-integral'in within_tolerance ve declared_tolerance_by_enclosure noktalarına tolerance_window kaydı eklenerek çözülmeli. İki çözümde de (kayıtlı ve kayıtsız) V1–V6 UNKNOWN, V7 CORRECT ölçüldü.",
+    "note": "Yeniden üretildi (dal 3afddba): V1–V5 CORRECT. rel_tol kardeşi V6 tabanda da CORRECT (G2YO-5 önceden vardı). Tabanda abs_tol okunmadığından V1–V5, V7 ve V8 INCORRECT (haksız ret). Birleşimde (dal + son-adim 0dfadd9) V1–V6 UNKNOWN, V7 ve V8 CORRECT, V9 INCORRECT. mpmath 50 basamak: 0.00333 ve 0.00667 ≤ 0.01; 8.24e-4 ve 1.76e-4 ≤ 1e-3."
+   },
+   {
+    "id": "SI-YO-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "Ekilmiş yanlış sonlu sertifika tek yönde ıraksak bir integralle birleşince (H1, H3, H6, H7) sonuç CORRECT olmamalı, UNKNOWN olmalı. Yarı sonsuz zarf tek başına onay sayılmamalı. Düzeltme ∫_0^2 |x−1|^(−2/3) = 6'yı CORRECT tutmalı. Bu integralin zarfı da yarı sonsuz ([4.847, +inf]) ve merdiven kendi hatasını küçümsüyor: 50 basamakta |v−6| = 4.8e-18 iken err 2e-19, 80 basamakta 4.6e-28 iken err 2e-28. Önerilen 'c son değere err içinde' koşulu bu yüzden 6'yı reddeder; bir pay (örn. ≥10·err) gerekir ve ölçülmeli.",
+    "note": "Yeniden üretildi (dal): H1, H3, H6, H7 CORRECT (zarflar [76.16,+inf], [3.10,+inf], [-inf,-76.16], [69.90,+inf]); H2 ve H4 INCORRECT (excluded). Tabanda 6/6 CORRECT. Yama olmadan aynı öğeler UNKNOWN (no_certified_value): gerçek sertifika bunu üretmiyor, açık yapay bir savunma açığı. G2YO-2'nin sözü (zarf dışlamıyorsa kabul) tutuyor, amacı (ıraksakta sonlu CORRECT yok) tutmuyor."
+   },
+   {
+    "id": "SI-YO-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "Ekilmiş 0 ile ∫_{-1}^{1} 1/x, ∫_{-1}^{1} x^{-3}, ∫_{-2}^{2} x/(x²−1) ve ∫_{-1}^{1} sign(x)/|x|^{3/2} UNKNOWN olmalı, hiçbir zaman CORRECT olmamalı: uygunsuz integral ıraksak, yalnız esas değer 0. Duran merdiven istisnası yalnız son iki basamağın err/ölçek değeri küçükken (örn. ≤ 1e-10) uygulanmalı. ∫_{-1}^{8} x^{-1/3} = 9/2 (err 1.1e-35, 1.1e-60, 1.1e-104) CORRECT kalmalı.",
+    "note": "Yeniden üretildi (dal): P1, P2, P3, P9 CORRECT; check {stable_ladder: True}, merdiven 0.0 (err 2.0/0.2/2.0). ∫_{-1}^{2} 1/x de 0.0 veriyor (esas değeri ln 2), yani bu bir değer değil, başarısızlık çıktısı. Tabanda hepsi CORRECT. Yama olmadan dört öğe de UNKNOWN (no_certified_value): gerçek bir yanlış 0 sertifikası yok, açık yapay. Meşru 9/2 dalda CORRECT."
+   },
+   {
+    "id": "SON-INT-RK-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "(a)–(d) CORRECT olmalı: |d| = 2.54e-5 ≤ 1e-3, 5.96e-3 ≤ 1e-2, 2.91e-5 ≤ 1e-4. Her bileşen de t içinde (en büyüğü 4.21e-3 ≤ 1e-2), yani modül ve bileşen okumaları aynı sonucu veriyor ve geleneğe bağlı bir durum yok. Pencere dışındaki 0.5+0.87i (|Im d| = 3.97e-3 > 1e-3) INCORRECT kalmalı. Düzeltme: NONREAL d için t² − Re(d)² − Im(d)² işareti kesin olarak ≥ 0 ise True döndürülmeli.",
+    "note": "Yeniden üretildi: dalda ve birleşimde (son-adim ile) (a)–(d) UNKNOWN (certify.algebra undecided), num_equal None (exact_declared_tolerance_undecided). Tabanda dördü de CORRECT, num_equal True. Kontroller her kopyada aynı: 0.5+0.87i INCORRECT, sqrt(3)+I için 1.73+I CORRECT. Kodda within_abs_tol'un NONREAL dalında True dönüşü yok. Kapsama kaybını dal getirmiş."
+   },
+   {
+    "id": "SON-INT-RK-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "Kararlar aynı kalmalı (CORRECT) ve süre tabana yakın olmalı. Zarf cval'ı içerip daralmayı bıraktığında ya da daha küçük bir bütçeyle denetim durmalı; harcanan süre kararı değiştirmiyor. Ders kitabındaki uygunsuz ya da düşük frekanslı integraller (1/√x, ln x, 1/√(1−x²), sin²(10x), 1/√|x|) merdivende yakınsıyor ve etkilenmiyor (iki kopyada da 0.1–0.3 s).",
+    "note": "Yeniden üretildi (aynı yük, load ~3). Taban → dal: cos²(500πx) 0.7→12.6 s, sin²(2000x) 1.6→6.8 s, x³cos(2000x) 0.8→7.6 s, 1/(x²+1e-8) 0.3→2.7 s; 4–18 kat yavaşlama, 8 s'lik ctx.timeout aşılıyor. Kararlar CORRECT, check agrees; x³cos için zarf [−40.36, 40.36]. Yalnız merdiveni yakınsamayan integrallerde görülüyor; gerçekçiliği düşük."
+   }
+  ]
+ }
+]

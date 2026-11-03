@@ -111,8 +111,6 @@ def test_a_polynomial_lcm_step_is_refuted():
     ("Sum(k*n, (n, 1, k), (k, 1, 3))", 25),    # the second limit binds the first one's bounds
     ("Sum(Sum(k*n, (n, 1, k)), (k, 1, 3))", 25),
     ("Sum(Abs(k), [k, -2, 2])", 6),            # a list limit is a limit
-    # an integer assumption would be wrong here: SymPy sums at 1/2, 3/2, 5/2
-    ("Sum(sin(pi*k), (k, 1/2, 5/2))", 1),
     # what the data uses is unchanged
     ("Sum(1/(k*(k + 1)), (k, 1, oo))", 1), ("Sum(k, (k, 1, 10))", 55), ("Sum(1/factorial(k), (k, 0, oo))", sp.E),
 ])
@@ -151,6 +149,9 @@ def test_a_symbolic_sum_from_zero_keeps_its_first_term():
     "floor(Sum(k, (k, 3, 1)))",
     r"\lfloor \sum_{k=3}^{1} k \rfloor",
     "Sum(k, (k, 1, 7/2))",                      # SymPy: 63/8; stepping from 1: 1 + 2 + 3
+    # limits an integer apart but not integers: SymPy sums at 1/2, 3/2, 5/2 (its value here was 1), the
+    # index reading at 1, 2 (fourth audit TAN-10/C1: read before, its value was asserted here)
+    "Sum(sin(pi*k), (k, 1/2, 5/2))",
     "Sum(pi, (pi, 1, 3))",                      # not a variable
     "Sum(k, (S, 1, 3))",
 ])
@@ -198,9 +199,11 @@ def test_a_bound_variable_decides_the_answer():
     ir = _ir("Sum(Abs(k), (k, -2, 2))", [("k", "positive_integer")])
     assert _verdict(ir, "6").verdict == "CORRECT"          # was INCORRECT
     assert _verdict(ir, "0").verdict == "INCORRECT"        # was CORRECT
+    # 0**0 at k = 0 is 1 or undefined: a convention (fourth audit, part d4a, G13); the bound index is
+    # still read over the range (not k > 0, which made "0" CORRECT before)
     ir = _ir("Sum(0**k, (k, 0, 5))", [("k", "positive_integer")])
-    assert _verdict(ir, "1").verdict == "CORRECT"
-    assert _verdict(ir, "0").verdict == "INCORRECT"
+    assert _verdict(ir, "1").verdict == "UNKNOWN"
+    assert _verdict(ir, "0").verdict != "CORRECT"
 
 
 def test_a_wrong_step_over_a_bound_index_is_refuted():

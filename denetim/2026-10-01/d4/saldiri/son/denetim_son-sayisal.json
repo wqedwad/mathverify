@@ -1,0 +1,197 @@
+[
+ {
+  "findings": [
+   {
+    "id": "RK-ARG-CALC",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "branch",
+    "title": "arg(a + x·i) (x gerçel) türev ve limit görevlerinde iki gelenekte aynı olan değer UNKNOWN'a düşüyor (yanlış cevabın reddi de kayboluyor)",
+    "repro": "vars [{name:x, domain:real}], givens []. (1) task derivative {f:'arg(1 + x*I)', var:x, at:'1'}, iddia '1/2'. (2) aynısı at:'-1', iddia '1/2'. (3) derivative {f:'arg(2 + x*I)', at:'2'}, iddia '1/4'. (4) limit {expr:'arg(1 + x*I)', var:x, to:'1'}, iddia 'pi/4'. (5) (1) ile aynı problem, yanlış iddia '1'. Sonda: /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal/ret-kapsama/sonda/sonda1.py, Y grubu; yalnız B okuması: .../sonda/sonda6.py",
+    "expected": "(1)–(4) CORRECT: değer iki gelenekte de aynı. (5) INCORRECT.",
+    "actual_branch": "(1)–(5) hepsi UNKNOWN (arg_convention). A okuması: CORRECT (certify.calculus pass, certify.limits pass). B okuması ([0, 2π)): certify.calculus 'undecided'; certify.limits 'limit_undecided' ve cas_error.",
+    "actual_base": "(1)–(4) CORRECT, (5) INCORRECT.",
+    "math": "f_A(x) = arg(1+ix) = atan(x) (gerçel kısım 1 > 0). f_B(x) = atan(x) + 2π·[x<0], yani x ≠ 0 için f_B' = f_A' = 1/(1+x²): x = ±1'de 1/2. arg(2+ix)' = 2/(4+x²): x = 2'de 1/4. lim_{x→1} = atan(1) = π/4; B'de x = 1 civarında x > 0 olduğundan değer aynı. mpmath 50 basamakla doğrulandı: A ve B'nin türevi ±1'de 0.5, arg(2+xi)'nin türevi 2'de 0.25, limit 0.785398163397448309615660845819875721...",
+    "mechanism": "normalize.parse._arg_in_zero_two_pi, sembolik u için Piecewise((arg(u)+2π, im(u)<0), (arg(u), True)) kuruyor. Kırılma noktası x = 0 değerlendirme noktasından uzakta olsa da türev ve limit sertifikacıları bu Piecewise'ı çözemiyor. verifier._verify_arg_readings ise iki okumanın her verdict farkını (CORRECT ile B'nin kendi aracından gelen UNKNOWN dahil) gelenek farkı (arg_convention) sayıyor. x'e değer veren evaluate görevleri etkilenmiyor (Piecewise ayrıştırmada çöküyor: 'x = 1: arg(1 + x i) = pi/4' iki kopyada da CORRECT). Raporda kayıtlı olan yalnız 'karmaşık değişkenli arg(z)'; gerçel değişkenli ifade kayıtta yok. Dar düzeltme önerisi: noktasal görevlerde (noktada türev, sonlu noktada limit) Piecewise noktadaki kesin im(u) işaretiyle yerel olarak çözülsün. 2π kayması yerelde sabit olduğundan türevi 0'dır."
+   },
+   {
+    "id": "RK-ARG-STEP",
+    "klass": "unjust_reject",
+    "severity": "low",
+    "realistic": "yes",
+    "introduced": "base",
+    "title": "İki arg okuması INCORRECT'te uyuşunca A okumasının adım durumları aynen dönüyor: müfredat geleneğindeki doğru arg adımı 'refuted' görünüyor, first_bad_step yanlış adımı gösteriyor",
+    "repro": "ev('(-1 - I)**4', domain_of_discourse='complex'), iddia '4', adımlar [eq 'arg(-1 - I) = 5*pi/4', eq '(-1 - I)**4 = 4']. Aynı s1 ile Abs(-1 - I) için iddia '2' de aynı sonucu veriyor. Sonda: .../ret-kapsama/sonda/sonda1.py, F grubu.",
+    "expected": "INCORRECT; s1 'unknown' (sonuç geleneğe bağlı, refuted değil), s2 refuted, first_bad_step = 2.",
+    "actual_branch": "INCORRECT, adımlar ['refuted', 'refuted'], first_bad_step = 1, bayrak arg_readings_agree.",
+    "actual_base": "INCORRECT, ['refuted', 'refuted'], first_bad_step = 1. Taban da aynı; dal bunu düzeltmedi.",
+    "math": "arg(-1-i): [0, 2π) geleneğinde 5π/4 (müfredat), (−π, π] geleneğinde −3π/4. (-1-i)² = 2i, (2i)² = −4 ≠ 4: s2 iki gelenekte de yanlış, s1 ise müfredatta doğru.",
+    "mechanism": "verifier._verify_arg_readings'in uyuşma dalı (v_a == v_b) A okumasının katmanlarını değiştirmeden döndürüyor (return layers, flags + ['arg_readings_agree']). Bir okumada refuted, ötekinde verified olan adım 'unknown' olmalı; first_bad_step iki okumada da çürütülen ilk adım olmalı. Doğru cevaplı çözümde bu durum UNKNOWN'a gidiyor (okumalar uyuşmuyor). Hatalı atıf yalnız iki okumanın da başka bir gerçek hatayla INCORRECT dediği yerde görünüyor; §9'un first_bad_step ölçütünü etkiliyor."
+   }
+  ],
+  "probes_run": 1115,
+  "summary": "wip/son-sayisal (4153cc1) ile 0e93ed5 iki kopyada ölçüldü; her koşu 1 dakikanın altında, aynı anda tek sonda süreci. Eksiksiz liste: evalset'in 280 öğesi, iki kopyada da aynı verdict. Toplam süre 51.2 sn'den 53.2 sn'ye. Bunlara ek olarak her biri iki kopyada koşulan yaklaşık 270 hedefli vaka: arg'ın iki geleneğinin uyuştuğu ve uyuşmadığı durumlar, De Moivre, |z|, eşlenik, i'nin kuvvetleri, Vieta, karmaşık köklü denklemler, casus irreducibilis kübikleri (eşitsizlik ve kök sayımı), trig denklemleri (uzak pencereler ve negatif katsayılı ilerlemeler dahil), log, yüzde, parçalı fonksiyon, işaret tablosu ve De Moivre ailesinde doğru adımlar. SymPy düzeyinde de üç sonda koşuldu: katı değer, strict_sign, varsayım yedeğinin maliyeti. Hiçbir koşuda istisna ya da çökme görülmedi. Gerçel ders kitabı sorularında dalın getirdiği değişiklik yok. Karmaşık sayı sorularında görülen farkların hepsi ya düzeltme ya da karar gereği: Abs((1+i√3)³ − 1) = 9 tabanda INCORRECT, dalda CORRECT. Tabanda '(1+√3i)^9 = 64' adımı verified (yanlış onay), dalda refuted. Gelenekli arg cevapları ve adımları dalda UNKNOWN. Beyan edilen aralık (t ∈ [0, 2π), '0 <= arg < 2π') tabanda UNKNOWN'dı, dalda doğru okunuyor. strict_sign tabanda gerçel sayılara (Cardano kökü, eşlenik toplamları, Euler biçimi) yanlışlıkla 'nonreal' diyordu; dalda None. arg yazan problemlerde süre ×2 ölçüldü (kayıtta var): A grubu 4.3 sn'den 8.3 sn'ye, arg((cos π/9 + i sin π/9)^9) 25.7 sn'den 52.2 sn'ye. İki bulgu var. (1) Dalın getirdiği dar kapsama kaybı: arg(a + x·i) (x gerçel) türev ve limit görevlerinde iki gelenekte aynı olan değer B okumasının Piecewise'ı yüzünden UNKNOWN; yanlış cevabın INCORRECT'i de kayboluyor. (2) Tabandan kalan adım atfı hatası: iki okuma INCORRECT'te uyuşunca A'nın adım durumları dönüyor, müfredat geleneğindeki doğru 'arg(-1-i) = 5π/4' adımı refuted ve first_bad_step = 1. Kopyalar silindi; sonda dosyaları ve çıktıları /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal/ret-kapsama/sonda/ altında."
+ },
+ {
+  "findings": [
+   {
+    "id": "RK-SAY-1",
+    "klass": "coverage_loss",
+    "severity": "low",
+    "realistic": "no",
+    "introduced": "branch",
+    "title": "Gerçel değişkenli arg ifadesinin türevi ve iç noktadaki limiti CORRECT'ten UNKNOWN'a düşüyor (arg_convention), oysa iki okuma da aynı değeri veriyor",
+    "repro": "IR {task:{kind:'derivative',params:{f:'arg(1 + x*I)',var:'x',at:'1'}},vars:[{name:'x',domain:'real'}],givens:[],answer_shape:'scalar'}, çözüm value '1/2', adım yok. Kardeşleri: at '-1' -> '1/2'; f 'arg(2 + x*I)' at '2' -> '1/4'; {kind:'limit',params:{expr:'arg(1 + x*I)',var:'x',to:'1'}} -> 'pi/4'; yanlış '1' (at 1). Sonda: ret-kapsama/sonda/sonda1.py Y grubu (Y_dal.json / Y_taban.json), teşhis sonda6.py (s6_dal.txt).",
+    "expected": "1/2, 1/2, 1/4 ve pi/4 CORRECT; yanlış 1 INCORRECT. x>0 komşuluğunda iki okuma çakışıyor, x=-1 çevresinde ise yalnız sabit 2*pi kadar ayrılıyor; bu yüzden türev ve limit gelenekten bağımsız.",
+    "actual_branch": "Dört doğru cevap da UNKNOWN [arg_convention]; yanlış '1' de UNKNOWN. sonda6: okuma A CORRECT (certify.calculus pass / certify.limits pass); okuma B UNKNOWN (certify.calculus 'undecided'; certify.limits 'limit_undecided', cas_error).",
+    "actual_base": "Dört doğru cevap CORRECT, yanlış '1' INCORRECT.",
+    "math": "Re(1+xi)=1>0 olduğu için arg(1+xi)=atan(x) ve d/dx=1/(1+x^2); x=1'de 1/2, x=-1'de 1/2. arg(2+xi)=atan(x/2), türevi 2/(4+x^2), x=2'de 1/4. lim x->1 = atan(1) = pi/4. mpmath (50 basamak): diff 0.5, 0.5, 0.25; limit - pi/4 = 0. [0,2pi) okuması x<0'da 2*pi ekler; yerel olarak sabit olduğundan türev aynı, x=1 çevresinde ise okumalar özdeş.",
+    "mechanism": "parse._arg_in_zero_two_pi serbest sembollü argümanı Piecewise((arg(u)+2*pi, im(u)<0), (arg(u), True)) olarak okuyor. Kalkülüs ve limit sertifikaları bu Piecewise'ı çözemiyor; okuma B teknik nedenle UNKNOWN kalıyor. verifier._verify_arg_readings A=CORRECT ile B=UNKNOWN'ı 'okumalar uyuşmuyor' sayıp tüm sonucu UNKNOWN yapıyor ve 'arg_convention' bayrağı koyuyor. Oysa anlam ayrılığı yok: bayrak gelenek bağımlılığını değil B'nin karar verememesini gösteriyor. Rapordaki kayıt yalnız karmaşık değişkenli arg(z) için; buradaki vakalar gerçel değişkenli ve cevap bir arg değeri değil. SON-G3-RK-3 kararı da gelenekten bağımsız değeri kapsamıyor."
+   },
+   {
+    "id": "RK-SAY-2",
+    "klass": "unjust_reject",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "Esas değerden geçen çözüm ([0,2pi) cevabı ve (-pi,pi] adımı) iki okumada da INCORRECT; SON-G3-RK-3 düzeltmesi bu yolu kapatmıyor ve bayrak 'arg_readings_agree'",
+    "repro": "M1: IR {task:{kind:'evaluate',params:{expr:'arg(-1 - I)'}},vars:[],givens:[],answer_shape:'scalar',domain_of_discourse:'complex'}, çözüm value '5*pi/4', adımlar [eq 'arg(-1 - I) = -3*pi/4', eq '-3*pi/4 + 2*pi = 5*pi/4']. M4: expr 'arg(1 - I)', adım 'arg(1 - I) = -pi/4', cevap '7*pi/4'. M2 (ters yön): adımlar 'arg(-1 - I) = 5*pi/4', '5*pi/4 - 2*pi = -3*pi/4', cevap '-3*pi/4'. Sonda: ret-kapsama/sonda/sonda7.py M grubu (M_dal.json / M_taban.json), teşhis sonda8.py (s8_dal.txt).",
+    "expected": "UNKNOWN. SON-G3-RK-3 kararına göre iki aralıktan birinde doğru temsilci olan cevap gelenek nedeniyle UNKNOWN olur. M1'in cevabı [0,2pi)'deki doğru temsilci; INCORRECT kararı her okumada geleneğe bağlı bir ifadeye dayanıyor.",
+    "actual_branch": "M1, M2 ve M4 INCORRECT; bayraklar [arg_readings_agree] (M2'de step_refuted). sonda8/M1: okuma A'da certify.algebra fail (5pi/4 != -3pi/4), adımlar verified. Okuma B'de certify.algebra pass, steps.refute fail (s1 'arg(-1 - I) = -3*pi/4' refuted). İki okuma INCORRECT'te 'uyuşuyor'.",
+    "actual_base": "M1, M2 ve M4 INCORRECT. Bu dalın getirdiği bir şey değil, ama dalın kapattığını söylediği SON-G3-RK-3 açığı bu yolda açık kalıyor (raporda '5pi/4 ve -3pi/4 UNKNOWN' yazıyor).",
+    "math": "arg(-1-i): esas değer -3pi/4, [0,2pi)'de 5pi/4 = -3pi/4 + 2pi. mpmath: arg/pi = -0.75, +2pi ile 1.25. arg(1-i): -pi/4 ya da 7pi/4. Çözüm esas değeri bulup 2pi ekleyerek müfredat cevabına geçiyor; yapay zekâ çözümlerinde atan2 -> esas değer -> +2pi sık görülen bir yol.",
+    "mechanism": "_verify_arg_readings çözümün bütününü tek gelenekle okuyor ve yalnız son verdict'leri karşılaştırıyor. A'da cevap geleneğe bağlı olarak yanlış; B'de esas değerli adım geleneğe bağlı olarak 'somut karşı örnekle' çürütülüyor. Sonuçta ikisi de INCORRECT ve 'agree' sayılıyor, ama retler farklı ve her biri gelenek bağımlı. Gelenekten bağımsız bir yanlış yok. Adım yerine atan2 yazılırsa (atan2 iki okumada da (-pi,pi]) karar UNKNOWN olur; yani sonuç adımın arg ile mi atan2 ile mi çıkarıldığına bağlı."
+   },
+   {
+    "id": "RK-SAY-3",
+    "klass": "other",
+    "severity": "medium",
+    "realistic": "yes",
+    "introduced": "branch",
+    "title": "Şıkları tek gelenekte olan çoktan seçmeli arg sorusu: doğru şık UNKNOWN ((-pi,pi] şıklarında CORRECT'ten düşüyor); şıklar aralığı belirliyor ama arg_range_declared yalnız verilenlere bakıyor",
+    "repro": "K3: IR {task:{kind:'evaluate',params:{expr:'arg(-1 - I)'}},vars:[],givens:[],answer_shape:'scalar',domain_of_discourse:'complex',options:{A:'-3*pi/4',B:'-pi/4',C:'pi/4',D:'3*pi/4',E:'pi'}}, çözüm value '-3*pi/4', option 'A'. K1: şıklar {A:'pi/4',B:'3*pi/4',C:'5*pi/4',D:'7*pi/4',E:'3*pi/2'}, çözüm '5*pi/4' C. K4: şıklar derece {45°,135°,225°,315°,270°}, çözüm '225°' C. K5: expr 'arg(1 - sqrt(3)*I)', [0,2pi) şıkları, çözüm '5*pi/3' D. Sonda: ret-kapsama/sonda/sonda7.py K grubu (K_dal.json / K_taban.json), teşhis sonda8.py.",
+    "expected": "K3, K1, K4 ve K5 CORRECT. Sınav sorusunun tam bir doğru şıkkı olur. Bir okumanın değeri hiçbir şıkta yoksa (K3'te 5pi/4, K1'de -3pi/4) o okuma sorunun anlamı olamaz; şıklar aralığı yazmış sayılır, tıpkı verilenlerin bir okumada tutarsız olması (arg_range_declared) gibi. Yanlış şık (K2: pi/4) INCORRECT kalır.",
+    "actual_branch": "K3 UNKNOWN [arg_convention] (okuma A CORRECT, okuma B INCORRECT; mc.consistency iki okumada da pass). K1, K4 ve K5 UNKNOWN [arg_convention]. K2 INCORRECT.",
+    "actual_base": "K3 CORRECT. K1, K4 ve K5 INCORRECT (eski haksız ret). K2 INCORRECT.",
+    "math": "arg(-1-i) = -3pi/4 (esas) ya da 5pi/4 ([0,2pi)). K3 şıkları yalnız (-pi,pi]'de ve 5pi/4 aralarında yok. K1 şıkları yalnız [0,2pi)'de ve -3pi/4 aralarında yok. arg(1-sqrt3 i) = -pi/3 ya da 5pi/3; K5 şıklarında -pi/3 yok. Her soruda yalnız bir okumanın değeri bir şıkla eşleşiyor.",
+    "mechanism": "_verify_arg_readings aralığın bildirildiğini yalnız verilenlerin bir okumada 'ir_inconsistent' çıkmasından anlıyor (arg_range_declared). MC şıkları bu işarete katılmıyor; seçilen şık bir okumada doğru, öbüründe yanlış olunca sonuç UNKNOWN oluyor. Karar metni ('iki aralıktan birindeki doğru temsilciyse UNKNOWN; problem aralığı yazıyorsa o aralık') şıkla belirlenen aralığı anmıyor; düzeltici K3'ü 'karar gereği CORRECT -> UNKNOWN' sınıfına sokmuş. Kararın eksik olduğunu düşünüyorum: şıklar okumalardan birini dışlıyorsa (ve 'Hiçbiri' gibi sayı olmayan şık yoksa) problem aralığı yazmıştır. K1/K4/K5 tipi soru ('esas argüman kaç radyandır? A) pi/4 ... E) 3pi/2') YKS'de yaygın."
+   }
+  ],
+  "probes_run": 654,
+  "summary": "Lens: haksız ret, kapsama kaybı, çökme. 0e93ed5 ile wip/son-sayisal (4153cc1) karşılaştırıldı; her vaka iki kopyada da ölçüldü (git archive kopyaları, Lean yok). Önceki turun 571 vakası: arg, karmaşık sayı, casus irreducibilis, trig/log/yüzde/işaret tablosu, ilerleme pencereleri, De Moivre adımları ve evalset'in 280 öğesi. Bu turda 83 yeni vaka eklendi (karışık gelenekli adım, De Moivre'nin gerçel fonksiyon içinde kullanımı, ders kitabı adımları, çoktan seçmeli arg, çökme taraması) ve sonda6/sonda8 ile okumalar ayrı ayrı teşhis edildi.\n\nÖnemli sonuç: _sympy_guards değişiklikleri (_part_sign, _part_accuracies, _ASKED, _positive_negative) ve exactsets'teki 2^48 sınırı hiçbir yerde kapsama kaybı ya da haksız ret getirmedi.\n- Evalset 280/280 aynı verdict; toplam süre 51.2 s'den 53.2 s'ye çıktı (fark ısınma gürültüsü).\n- T, L, W, S, C, V, R ve Q gruplarında doğru cevaplar korundu.\n- Dal R1 floor(C3/3), R3 |C3+9|=1, R7 log2(C3+10)=1, R8 atan(C3+9)=pi/4, Q14 ve P|C3+30|=22 vakalarını düzeltti.\n- Dalın yeni INCORRECT verdiği tek vaka P '(1 + sqrt(3)*I)**3**2 = 64'. Bu doğru bir ret: sağdan birleşimle (1+√3i)^9 = −512.\n- İstisna yok. E9'daki layer_exception iki kopyada da var (G2RK-7, başka düzelticide).\n\nBulgular arg okuma mekanizmasında:\n- RK-SAY-1: gerçel değişkenli arg'ın türevi ve limiti CORRECT'ten UNKNOWN'a düşüyor. Nedeni okuma B'nin Piecewise'ı; değer gelenekten bağımsız.\n- RK-SAY-2: esas değerden geçen çözüm iki okumada da INCORRECT ('arg_readings_agree'). Bu 0e93ed5'te de var; dal SON-G3-RK-3'ü bu yolda kapatmıyor.\n- RK-SAY-3 (other): tek gelenekte şıkları olan MC'de doğru şık UNKNOWN. (-pi,pi] şıklarında CORRECT'ten düşüyor; şıklar aralığı belirlediği halde arg_range_declared yalnız verilenlere bakıyor.\n\nKayıt ya da karar gereği olduğu için bulgu yapılmayanlar:\n- Tek gelenekli arg değerlerinin CORRECT'ten UNKNOWN'a düşmesi (E4 arg(-1-i)^2, toplam arg(1+i)+arg(1-i), lim arg(x−i) x→∞, arg(e^{5i})).\n- arg yazan problemlerde sürenin ×2 olması (G: 25.7 s → 52.2 s, 10.1 s → 20.4 s).\n\nAna checkout'a dokunulmadı; kopyalar silindi. Sondalar /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal/ret-kapsama/sonda/ altında: sonda1.py, sonda6.py, sonda7.py, sonda8.py ve *_dal.json / *_taban.json çıktıları."
+ },
+ {
+  "findings": [
+   {
+    "id": "SS-YO-1",
+    "klass": "false_accept",
+    "severity": "medium",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "certify.extremum: critical_points silently drops the critical points while 'complete' comes from another solver, so a wrong endpoint value/argmax gets CORRECT through EVT and the true extremum gets INCORRECT (not_attained); the branch adds more inputs that hit this",
+    "repro": "verify(IR extremum: f='(2 + I)*(2 - I)/5*x + 2*cos(x)', var x real, interval '[0, pi]', which max; claim '2') -> CORRECT. On both copies, the same holds with the coefficient written as re((1 + I)**2/(2*I)), as (1 + 2*I)*conjugate(1 + 2*I)/5, or as -(1 + sqrt(3)*I)**3/8 (all equal to exactly 1). For each of these: argmax '0' -> CORRECT; min 'pi - 2' -> CORRECT; the true max 'pi/6 + sqrt(3)' -> INCORRECT (reason not_attained); the true min '5*pi/6 - sqrt(3)' -> INCORRECT. Two cases are new on the branch: (a) argmin of exp(x) + (1 + sqrt(3)*I)**3*x/4 on [0, 2], claim '0' -> CORRECT on the branch, INCORRECT on 0e93ed5; (b) min of x**2 + (1 + sqrt(3)*I)**3*x on [-10, 10], claim '-16' (right), and max of the negated function, claim '16' -> INCORRECT on the branch, CORRECT on 0e93ed5. Another case, on both copies: max of x**3 - 3*((2 + I)*(2 - I))*x/5 on [-3, 3/2] = 2 (right) -> INCORRECT. Probes: probe/cases.py groups y, y2, x, x2; evidence in probe/ext6.py and probe/ext1.py (scratch dir son_denetim/son-sayisal/yanlis-onay).",
+    "expected": "f(x) = x + 2cos x on [0, pi]: max pi/6 + sqrt(3) at pi/6, min 5pi/6 - sqrt(3) at 5pi/6. The claims 2, pi - 2 and argmax 0 should be INCORRECT (or at least not CORRECT); the right values should be CORRECT or UNKNOWN. For e^x - 2x on [0, 2]: min 2 - 2 ln 2 at ln 2, so argmin 0 should be INCORRECT. For x^2 - 8x on [-10, 10]: min -16, so the claim -16 should be CORRECT or UNKNOWN.",
+    "actual_branch": "max=2 CORRECT, argmax=0 CORRECT, min=pi-2 CORRECT, max=pi/6+sqrt(3) INCORRECT. Evidence: candidates [[0,2],[pi,-2+pi]], complete_candidates true, proof 'EVT+complete_critical_set'. argmin e^x+Kx/4 = 0 CORRECT. Quadratic -16 / 16 INCORRECT: candidates [-10, 10] only, reason not_attained.",
+    "actual_base": "For the trigonometric family with the zz/5, re, conj and K coefficients, the verdicts and evidence are the same as on the branch. argmin e^x+Kx/4 = 0 INCORRECT. Quadratic -16 / 16 CORRECT: the candidate -(1+sqrt(3)I)^3/2 was kept. Separately, the base has bugs the branch fixed: min x^2+Kx on [0,10] = 0 (wrong) is CORRECT, and the endpoint values are computed as f(+-10) = 0.",
+    "math": "mpmath at 50 digits: f(pi/6) = 2.25564958316717616660455357205, f(0) = 2, f(5pi/6) = 0.885943070422617071858089811227, f(pi) = 1.14159265358979323846264338328. Since f(pi/6) > 2, the max is not 2 and the argmax is not 0. Since f(5pi/6) < pi - 2, the min is not pi - 2. e^x - 2x: f(ln 2) = 2 - 2 ln 2 = 0.6137056388801093811655... < f(0) = 1. x^2 - 8x: f(4) = -16, f(-10) = 180, f(10) = 20.",
+    "mechanism": "sandbox/ops.critical_points calls raw sp.solveset(d, var, interval). It swallows every exception, including the TypeError from iterating a ConditionSet/Intersection and SymPy's 'Invalid comparison of non-real'. In that case it returns [] or a partial list. certify_extremum (extremum.py:133-147), however, sets complete=True from a different solver: solveset_in -> exactsets.exact_solveset, which returns FiniteSet {pi/6, 5pi/6}, {4} or {log 2}. The candidates are then only the endpoints. For a transcendental f, the superlevel solveset is a ConditionSet (or not ok), so bound stays None. Then 'complete and closed and not undecided and not superlevel' gives bound=True through EVT. The best endpoint is then 'attained', so the wrong claim is CORRECT; the true extremum is in no candidate, so it is 'not_attained' and INCORRECT. The branch's noise guard (_part_sign/_positive_negative no longer reading imaginary-part noise) makes raw SymPy raise on complex-written reals in more places: 'TypeError: Invalid comparison of non-real 4.0 - 4.40467298193548e-25*I' for solveset(2x + (1+sqrt(3)I)^3, x, [-10, 10]). The base kept -K/2 there, so the branch hits this in more cases (cases a and b above). Related, not measured: certify_local_extremum and _kinks filter points with `c.is_real` / `p.is_real`, which drops points of undecided realness without marking the list incomplete. Suggested fix: take the candidates from the same FiniteSet that sets `complete` (rd), or set complete=False unless critical_points contains rd. critical_points should report a failure (None) instead of returning an empty or partial list; an undecided is_real should mean 'incomplete'."
+   },
+   {
+    "id": "SS-OT-1",
+    "klass": "other",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "base",
+    "title": "The two arg readings start only when the text literally contains 'arg(': atan2(b, a), im(log z) and principal roots/logs of lower half-plane numbers keep a single (-pi, pi] reading",
+    "repro": "evaluate atan2(-1, -1): claim -3*pi/4 -> CORRECT, claim 5*pi/4 -> INCORRECT. Multiple choice with options {pi/4, 3pi/4, 5pi/4, 7pi/4, -3pi/4}: E (-3pi/4) -> CORRECT, C (5pi/4) -> INCORRECT. Same for atan2(-sqrt(3), 1), atan2(-1, 0) and atan2(im(1 - sqrt(3)*I), re(1 - sqrt(3)*I)). With dod complex: log(-1 - I) = log(2)/2 - 3*pi*I/4 CORRECT, + 5*pi*I/4 INCORRECT; im(log(-1 - I)) = -3*pi/4 CORRECT, 5*pi/4 INCORRECT; (-8*I)**(1/3) = sqrt(3) - I CORRECT, 2*I INCORRECT; (-I)**(1/2), sqrt(-1 - I) and I**(3/2)*(-I)**(1/2) behave the same way (probe/cases.py groups t, v).",
+    "expected": "By the SON-G3-RK-3 decision, the principal argument of a lower half-plane number has two conventions. If the IR writes 'esas argüman' as atan2(b, a) (the extraction prompt lists neither arg nor atan2), the -3pi/4 / 5pi/4 pair should be UNKNOWN; the arg form arg(-1 - I) already gives UNKNOWN on the branch.",
+    "actual_branch": "atan2: (-pi, pi] value CORRECT, [0, 2pi) value INCORRECT (10/18 rows the same as base). The arg forms are UNKNOWN (fixed). log/roots: 14/14 single reading.",
+    "actual_base": "The same, and in addition the arg forms (arg(-1 - I) etc.) were CORRECT/INCORRECT (14/18 rows).",
+    "math": "arg(-1-i): -3pi/4 in (-pi, pi] and 5pi/4 in [0, 2pi). Log(-1-i) = ln(sqrt 2) + i*Arg; principal cube root of -8i: 2*e^{-i pi/6} = sqrt(3) - i with Arg in (-pi, pi], 2*e^{i pi/2} = 2i with [0, 2pi).",
+    "mechanism": "verifier._verify_arg_readings runs reading B only when _ARG_WRITTEN matches the literal 'arg(' or '\\\\arg'. atan2 is kept at (-pi, pi] by decision (the fixer's report says 'atan2 yalnız (−π, π]'). SymPy's own principal branch (log, rational powers) uses arg internally and never reaches reading B. The decision is right for atan2 as a function. The issue is that the IR extraction prompt (extract/prompts.py) does not say how to write the principal argument, so the verifier cannot tell an atan2 written for 'esas argüman' from atan2 asked as a function. The complex Log/root siblings are university-level; there (-pi, pi] is the usual convention, and in lise the roots are asked as a set. Suggestion: add to the extraction prompt that the principal argument is written arg(z); or treat atan2 with a negative closed second argument (lower half-plane) as two readings, like arg."
+   },
+   {
+    "id": "SS-ND-1",
+    "klass": "nondeterminism",
+    "severity": "low",
+    "realistic": "unclear",
+    "introduced": "unknown",
+    "title": "One run under heavy machine load: 8 right answers to real-variable solve_equation with complex-written equations were INCORRECT ('claimed_root_invalid: outside_domain_of_discourse'); not reproduced afterwards",
+    "repro": "probe/cases.py group e (rows 0-51), run once on the branch at 09:44 while 4 fixers were running. Bad results: im((m-2)+(m^2-4)i)=0, m!=2: {-2}; re((a+3i)/(2-i))=0: {3/2}; im((a+3i)/(2-i))=0: {-6}; |a+4i|=5: {-3,3}; |(1+i)^4+a|=5: {-1,9}; im((a+i)^2)=0: {0}; im((a+i)^4)=0: {-1,0,1}; im((1+ai)^3)=0: {0,+-sqrt3} -> INCORRECT. Later runs of the same sequence: full group on the branch, 0 bad; the 26 rows alone on the branch, 0 bad; e6 with PYTHONHASHSEED 1..20, 0/20 bad; base full group and the rows alone, 0 bad.",
+    "expected": "CORRECT for all 8 (the wrong claims in the same run were INCORRECT, as they should be).",
+    "actual_branch": "1 of 23 runs: 8 right answers INCORRECT (certify.algebra fail claimed_root_invalid: outside_domain_of_discourse + certify.wordproblem refuted); 22 runs: CORRECT.",
+    "actual_base": "2 runs: CORRECT.",
+    "math": "im((m-2)+(m^2-4)i) = m^2-4 -> m = -2 with m != 2; (a+3i)/(2-i) = ((2a-3) + (a+6)i)/5 -> Re=0: a=3/2, Im=0: a=-6; |a+4i|=5 -> a=+-3.",
+    "mechanism": "Not established; the JSON evidence was overwritten by the rerun. For guard_roots to reject all of them, in_domain(ctx.domain_for(var), c) had to be False for every real root, so the domain must have been computed wrong in that run. The likely causes are timing (load-dependent sandbox timeouts) or a state/order effect (SymPy assumption cache, shuffle). It matches the session's open item 'sıraya/tohuma bağlı kararlar'. In this lens it was seen only as an unjust reject; no false CORRECT was observed (the EmptySet claim in the same run was INCORRECT)."
+   }
+  ],
+  "probes_run": 2699,
+  "summary": "Lens: false accept on wip/son-sayisal (4153cc1) vs 0e93ed5. Both copies were created with git archive; the copies containing .env have been deleted. Scripts and logs: /tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal/yanlis-onay (probe/cases.py groups a–z, x2, y2; probe/ext1–6.py; log_*_{dal,taban}.txt). About 2,560 verify calls (≈2,090 branch, ≈470 base; 1,040 of them are seed repeats) plus ≈140 direct function-level checks. Covered: De Moivre, |z|, conjugate, powers of i (including symbolic n), Vieta closed forms, arg's two readings (declared range, MC, givens, negative axis with noise), complex-written reals in every task kind, steps that are relations, far windows (G1YO-2).\n\nResults: G1YO-1, G1YO-2 and SON-G3-RK-3 are closed in this lens. The branch's _sympy_guards changes only make it more conservative: no path was found that turns None/undecided into a CORRECT. In the arg readings, consistent-reading selection (arg_range_declared), agreement and MC all behaved correctly; Lean/L4 cannot pass the arg_convention flag (it is in _MEANING_FLAGS). The base false accepts the branch fixed were confirmed in my probes (exp(log(-(1+i√3)^3)) = -8; f'(1) and lim for Kx², sin(Kx)/x; z1^3+z2^3; the arg sums; min x²+Kx on [0,10] = 0).\n\nNew findings:\n1. SS-YO-1, false accept, present in base, widened by the branch. In certify.extremum, the critical_points sandbox op swallows exceptions from raw solveset and drops the critical points, while `complete` comes from exact_solveset. EVT is then 'proved' over the endpoints alone.\n   - Result: for an extremum with a complex-written coefficient (z·z̄/5, re(...), conj, -(1+i√3)³/8), the wrong endpoint value, argmax and min are CORRECT, and the true extremum is INCORRECT.\n   - New on the branch: argmin e^x+Kx/4 = 0 is CORRECT; the right min -16 of x²+Kx is INCORRECT (the noise guard makes raw SymPy raise TypeError).\n   - Realistic inputs (x+2cos x, cbrt, polynomials, e^x-2x) are fine. The trigger is a complex/unexpanded constant.\n2. SS-OT-1, low/other. The two arg readings start only on the literal 'arg('. atan2 (decision), im(log z) and principal roots/logs keep the single (-π, π] reading. The extraction prompt does not say how to write the principal argument. Suggestion: tell the extractor to write arg(z), or treat atan2 in the lower half-plane with two readings.\n3. SS-ND-1, low nondeterminism, not reproduced (1/23 runs, under load). 8 right answers were INCORRECT (outside_domain_of_discourse). It matches the open item on order/seed-dependent decisions.\n\nOutside the lens (unjust rejects, measured): the polynomial extremum with a z·z̄ coefficient (max of x³-3x on [-3,3/2] = 2) is INCORRECT on both copies, with the same root cause as SS-YO-1. definite_integral and series_sum with complex-written constants give layer_exception → UNKNOWN (G2RK-7, the other branch)."
+ },
+ {
+  "file": "/tmp/claude-0/-home-user-asd/f97a07bd-dea8-5bbe-88dc-ada419b43e01/scratchpad/son_denetim/son-sayisal/bulgular.json",
+  "verdicts": [
+   {
+    "id": "SS-YO-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "high",
+    "corrected_expectation": "Bulgudaki beklenti doğru. Ek: x+|sin 2x| [0,π] max=π ve |sin x|+x/2 [0,2π] max=π / argmax=2π INCORRECT (en azından CORRECT değil); |sin x|+|cos x| [0,π] ve sin x+|cos x| [0,2π] max=√2 CORRECT ya da UNKNOWN. Düzeltme: adaylar complete'i kuran aynı kümeden (rd ∪ tekillikler ∪ kırıklar) alınmalı ya da critical_points hata/eksik verince complete=False; critical_points hatayı None ile bildirmeli. Önem yüksek: sade yazımlı ders kitabı girdisinde yanlış onay, tabanda da var.",
+    "note": "İki kopyada birebir üretildi (adaylar yalnız uçlar, complete true, EVT). Sade yazımlı tetik de var: x+|sin2x| [0,π] max=π CORRECT (doğrusu 5π/6+√3/2≈3.4840), |sin x|+x/2 [0,2π] max=π ve argmax=2π CORRECT, |sin x|+|cos x| max=√2 INCORRECT. sign(sin x)'li türevde ham solveset NotImplementedError, cps=[], rd sonlu. Abs/Max-trig 14 fonksiyonun 11'inde iç nokta kayıp; 36 düz fonksiyonda 0."
+   },
+   {
+    "id": "SS-OT-1",
+    "reproduced": true,
+    "math_expected_correct": false,
+    "real": false,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "Verilen IR için kararlar doğru: atan2(-1,-1) = -3π/4 CORRECT, 5π/4 INCORRECT (atan2'nin tanımı (-π,π]); Log(-1-i), im(log), (-8i)^(1/3), (-i)^(1/2) esas dalda tek okuma standart. Gelenek riski çıkarım tarafında: extract/prompts.py'ye 'esas argüman arg(z) ile yazılır' satırı eklenirse soru iki okuma kapısına girer. atan2'yi alt yarı düzlemde iki okumaya almak güvenli (yalnız kapsama kaybı) ama zorunlu değil.",
+    "note": "Dalda üretildi: atan2 dört yazımda (-π,π] değeri CORRECT, [0,2π) değeri INCORRECT; MC E CORRECT, C INCORRECT; log/kökler tek okuma; arg(-1-I) iki değerde UNKNOWN. Ama IR'daki atan2 için 5π/4 INCORRECT matematiksel olarak doğru; açık doğrulayıcıda değil çıkarım isteminde (arg/atan2 listede yok). Çıkarıcının esas argümanı nasıl yazdığı ölçülmedi (kredi)."
+   },
+   {
+    "id": "SS-ND-1",
+    "reproduced": false,
+    "math_expected_correct": true,
+    "real": false,
+    "realistic": "unclear",
+    "severity": "low",
+    "corrected_expectation": "8 doğru cevap CORRECT (bağımsız: m=-2; a=3/2; a=-6; a=±3; a∈{-1,9}; a=0; a∈{-1,0,1}; a∈{0,±√3}). Kanıt yok: 'sıraya/tohuma bağlı kararlar' açık maddesinin altında, kopyanın kod durumu ve koşu sırası kaydedilerek yeniden denenecek bir gözlem olarak kalır.",
+    "note": "Üretilemedi. 16 satır dalda: 0 kötü; saldırganın tam e grubu (69 satır) kendi dal kopyamda: 0 kötü; verify timeout 0.5/0.1/0.02 s: doğru cevaplar CORRECT ya da UNKNOWN (completeness_uncertified), hiç INCORRECT yok; 'yük altında zaman aşımı' varsayımı ölçümle desteklenmiyor. Kötü koşunun JSON'u ezilmiş, kopyası silinmiş; o koşunun kod durumu doğrulanamıyor."
+   },
+   {
+    "id": "RK-SAY-1",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "no",
+    "severity": "low",
+    "corrected_expectation": "Bulgudaki gibi: 1/2, 1/2, 1/4, π/4 CORRECT; yanlış 1 ve π/2 INCORRECT (okumalar noktanın komşuluğunda özdeş ya da sabit 2π farklı). En azından B'nin UNKNOWN'ı teknik: sonuç bayrağı anlam bayrağı arg_convention değil, kanıtlanamadı türünden olmalı.",
+    "note": "Dalda üretildi: 4 doğru UNKNOWN [arg_convention], yanlış 1 ve π/2 de UNKNOWN; tabanda CORRECT/INCORRECT. Okuma bazında: A certify.calculus/limits pass (yanlışta fail); B certify.calculus 'undecided', certify.limits 'limit_undecided'. B karar veremiyor, anlam ayrılığı yok. mpmath: 0.5, 0.5, 0.25, arg(1+i)-π/4=0."
+   },
+   {
+    "id": "RK-SAY-2",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "unclear",
+    "severity": "medium",
+    "corrected_expectation": "M1 (5π/4), M2 (-3π/4), M4 (7π/4) UNKNOWN: her okumadaki ret geleneğe bağlı (A'da cevap, B'de esas değerli adım); gelenekten bağımsız hata yok ve SON-G3-RK-3 2π katı farkla eşleşen temsilciye UNKNOWN der. Okumalar INCORRECT'te uyuşsa da gerekçeler farklı ve her biri yalnız arg değerine dayanıyorsa UNKNOWN; iki okumada da cevap yanlışsa (π/4) INCORRECT kalır.",
+    "note": "İki kopyada üretildi: M1, M2, M4 INCORRECT (dalda [arg_readings_agree]). Okuma bazında A: algebra fail, adımlar doğrulandı; B: algebra pass, s1 refuted. Dalda aynı cevap adımsız ya da adım atan2 ile yazılınca UNKNOWN [arg_convention]: karar adımın arg/atan2 yazımına bağlı. Yanlış π/4 iki okumada INCORRECT (doğru)."
+   },
+   {
+    "id": "RK-SAY-3",
+    "reproduced": true,
+    "math_expected_correct": true,
+    "real": true,
+    "realistic": "yes",
+    "severity": "medium",
+    "corrected_expectation": "K3, K1, K5 CORRECT: sınav sorusunun tek doğru şıkkı vardır; bir okumanın değeri hiçbir şıkta yoksa o okuma sorunun anlamı olamaz (arg_range_declared'in şık karşılığı), yalnız bütün şıklar sayı olarak okunuyor ve tam bir okumanın değeri şıklardaysa. K2 INCORRECT; iki değeri de şıklarda olan soru UNKNOWN. K4 (derece şıkları): bu kodda B okuması CORRECT, ama G1RK-3 birim kararı birleşince ('°' ile birimsiz IR değeri asla CORRECT değil) K4 UNKNOWN olmalı.",
+    "note": "Dalda üretildi: K1, K3, K4, K5 UNKNOWN [arg_convention], K2 INCORRECT; tabanda K3 CORRECT, K1/K4/K5 INCORRECT. Okuma bazında K3: A CORRECT, B INCORRECT (mc.consistency ikisinde pass). Dal K1/K5'te haksız reddi kaldırdı (INCORRECT→UNKNOWN), K3'te CORRECT→UNKNOWN geriledi. İki değeri de şıklarda olan kontrol (K6) dalda iki şıkta da UNKNOWN: doğru."
+   }
+  ]
+ }
+]

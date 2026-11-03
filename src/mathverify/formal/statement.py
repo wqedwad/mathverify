@@ -22,6 +22,7 @@ import sympy as sp
 from sympy import S
 
 from ..intake.structured import load_problem_ir
+from ..sandbox.exactsets import exact_solveset
 from ..normalize.parse import (ParseError, build_namespace, parse_relation, parse_expr_str,
                                parse_answer, parse_set_str, preclean, strip_presentation,
                                _TRANSFORMS)
@@ -135,13 +136,16 @@ def _safe_mod(node) -> bool:
     return isinstance(d, sp.Integer) and int(d) > 0 and a.is_integer is True
 
 
-def _definedness(expr, var=None) -> list:
+def _definedness(expr, var=None, real_mod: bool = False) -> list:
     """Definedness conditions of `expr`, EXACT or a LeanPrintError (the template abstains).
 
     * `Mod`/`%` is refused (audit 25 Sep 2026, C4) unless `_safe_mod`: Lean's ℤ `%` is Euclidean
       where SymPy's is floored (7 % -2: 1 vs -1), `x % 0 = x` in Lean, and ℝ `%` is Mathlib's
       EuclideanDomain remainder of a field, i.e. identically 0 — "Σ_{k=1}^{4} k mod 2 = 0" and
       "x mod 2 simplifies to 0" were certified. A safe Mod is printed in ℤ (`_print_lean`).
+      With `real_mod` (a question about the DOMAIN only, never about what is printed) a Mod by a
+      positive integer literal of any real dividend is accepted: SymPy's real `Mod(x, d)` is
+      defined wherever x is.
     * any operation whose real domain the rules do not describe (0**x, (-2)**x, factorial(x), …)
       is refused (`certify.domain.definedness_conditions_strict`, C9).
     * a matrix contributes the conditions of its entries."""
@@ -153,20 +157,21 @@ def _definedness(expr, var=None) -> list:
         for node in sp.preorder_traversal(expr):
             if isinstance(node, sp.MatrixBase):
                 for it in node:
-                    out += [c for c in _definedness(it, var) if c not in out]
+                    out += [c for c in _definedness(it, var, real_mod) if c not in out]
         return out
     mods = [n for n in sp.preorder_traversal(expr) if isinstance(n, sp.Mod)]
     back: dict = {}
     extra: list = []
     if mods:
         for m in mods:
-            if not _safe_mod(m):
+            literal = isinstance(m.args[1], sp.Integer) and int(m.args[1]) > 0
+            if not (_safe_mod(m) or real_mod and literal):
                 raise LeanPrintError(f"Mod in {expr}: only an integer mod a positive literal is faithful")
         reps = {}
         for m in mods:
-            dm = sp.Dummy(integer=True)
+            dm = sp.Dummy(integer=True) if _safe_mod(m) else sp.Dummy(real=True)
             reps[m], back[dm] = dm, m
-            extra += [c for c in _definedness(m.args[0], var) if c not in extra]
+            extra += [c for c in _definedness(m.args[0], var, real_mod) if c not in extra]
         with sp.evaluate(False):
             expr = expr.xreplace(reps)                 # a safe Mod is total: its dividend decides
     conds = definedness_conditions_strict(expr, var)
@@ -250,7 +255,9 @@ def _violation_set(c, var, region):
     else:
         return None
     try:
-        s = sp.solveset(bad, var, region)
+        # guarded: SymPy reads a trigonometric relation on one period of ℝ (sandbox.exactsets), and the
+        # violations of sin(x) >= 0 on [10, 12] were empty: a junk value would have been certified
+        s = exact_solveset(bad, var, region)
     except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError):
         return None
     if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):
@@ -659,7 +666,7 @@ def _solve_region(conds, var) -> sp.Set:
         if c.free_symbols - {var}:
             raise LeanPrintError(f"condition {c} is not in {var} alone")
         try:
-            s = sp.solveset(c, var, S.Reals)
+            s = exact_solveset(c, var, S.Reals)        # one period is no region (sandbox.exactsets)
         except (NotImplementedError, TypeError, ValueError, AttributeError, RecursionError) as e:
             raise LeanPrintError(f"cannot solve {c}") from e
         if isinstance(s, (sp.ConditionSet, sp.ImageSet)) or s.has(sp.ConditionSet):
@@ -2376,7 +2383,10 @@ def _functions_faithful(obj, ns) -> None:
         w = _as_written(fd.expr, dict(ns, **dict(zip(fd.args, argsyms))))
         if len(w) != 1:
             raise LeanPrintError(f"function {fd.name} is not one expression")
-        wc, pc = _open(_definedness(w[0])), _open(_definedness(body))
+        # the formal argument is real (parse._make_function), so `Mod(n, 3)` is no `_safe_mod` here:
+        # only the domain is compared, and each call site, with its argument, is checked by the
+        # template's own `_definedness` (V15 L1, DECISIONS §72)
+        wc, pc = _open(_definedness(w[0], real_mod=True)), _open(_definedness(body, real_mod=True))
         if len(fd.args) == 1 and isinstance(argsyms[0], sp.Symbol):
             v = argsyms[0]
             dw, dp = _solve_region(wc, v), _solve_region(pc, v)
@@ -2454,6 +2464,41 @@ def is_trivial(stmt: LeanStatement) -> bool:
     return False
 
 
+def _conventions_gate(obj, ca, ns) -> None:
+    """No statement when a text of the problem or the claim, read as written, holds an operation whose
+    value somewhere is a convention (`certify.domain.Convention`): an odd root written as a power
+    (Lean's rpow gives a junk value at a negative base), b**0 (Lean's 0 ^ 0 = 1), C(n, r) outside
+    0 <= r <= n (Nat.choose 2 5 = 0) or Mod by a divisor that is not positive. The deterministic layer
+    abstains on the value there (DECISIONS §80, part d4a); a template reads the evaluated form, where
+    x**0 is already 1, and would prove the convention."""
+    from ..certify.domain import Convention, definedness_conditions
+    from ..normalize.parse import parse_as_written
+    texts: list = list(obj.givens) + [c for v in obj.vars for c in v.constraints]
+    texts += [f.expr for f in obj.functions]
+    stack: list = [obj.task.params or {}]
+    while stack:
+        o = stack.pop()
+        if isinstance(o, str):
+            texts.append(o)
+        elif isinstance(o, dict):
+            stack.extend(o.values())
+        elif isinstance(o, (list, tuple)):
+            stack.extend(o)
+    payload = ca.get("payload")
+    texts += payload if isinstance(payload, list) else [payload]
+    for txt in texts:
+        if not isinstance(txt, str):
+            continue
+        try:
+            w = parse_as_written(strip_presentation(txt), ns)
+            conds = definedness_conditions(w, None) if w is not None else []
+        except Exception:  # noqa: BLE001 - not read as written: the templates' own checks decide
+            continue
+        # (a Sum range that may run backwards is the series templates' own business: certify.series)
+        if any(isinstance(c, sp.Contains) and isinstance(c.args[1], Convention) for c in conds):
+            raise LeanPrintError(f"{txt!r} has a value that is a convention somewhere")
+
+
 def build_statement(ir: dict[str, Any], claimed_answer: dict[str, Any], name: str = "mv_claim"
                     ) -> LeanStatement | None:
     """Deterministic statement for the claim, or None when the shape is out of F5 scope or the
@@ -2477,6 +2522,7 @@ def build_statement(ir: dict[str, Any], claimed_answer: dict[str, Any], name: st
         _restrictions_gate(obj)
         _functions_faithful(obj, ns)
         _claim_written_ok(obj, claimed_answer, ns)
+        _conventions_gate(obj, claimed_answer, ns)
         st = fn(obj, ns, claimed_answer, name)
     except LeanPrintError:
         return None

@@ -1,0 +1,8 @@
+Timeout is disabled as timeout_seconds is None or <= 0, you must provide                         the logic for timeout interuption yourself to prevent code getting stuck.
+BAD CORRECT   None        1.3s DIRP derivative x**3 + 0*I5(x) at 1, x positive_real: 3 [undefined at 1]  [] ['certify.calculus:pass:']
+BAD CORRECT   None        0.1s DIRP tangent x**3 + 0*I5(x) at 1, x positive_real: y = 3*x - 2  [] ['certify.calculus:pass:']
+BAD CORRECT   None        0.1s DIRP solve x**2 - 1 + 0*I5(x) = 0, x > 0 declared: {1} [1 undefined]  [] ['certify.algebra:pass:', 'certify.wordproblem:pass:']
+BAD CORRECT   None        0.1s DIRP max -(x - 1)**2 + 0*I5(x) on [0, 2], x positive_real: 0  [] ['certify.extremum:pass:']
+BAD CORRECT   None        0.7s DIRP evaluate 0*I(a) + 1, a positive_real: 1 [undefined at a = 1]  [] ['certify.wordproblem:unknown:no_givens', 'certify.algebra:pass:']
+ok  UNKNOWN   None        0.7s DIRP series k + 0*I(k), k=1..3, k positive integer: 6 [k = 1 undefined]  ['written_domain'] ['certify.series:unknown:term_undefined_in_range_as_written']
+6 cases, 5 not as expected, 3 s
