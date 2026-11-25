@@ -1,9 +1,9 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 25 Kasım 2026 (bulut)**, dal `ccr-f30c98d6-n0vp2p`: **yayın sürümü** (DECISIONS §93; kayıt `docs/BASVURU.md`). Depo bir başvuru için herkese
-> açılıyor; geçmiş yayından önce yeniden yazıldı (kimlik bilgileri, gömülü arşivler, kişisel tanımlayıcılar çıkarıldı). Bu dalın özel deponun `master`ıyla ortak
-> atası yoktur ve ona birleştirilmez; **yeni bir herkese açık depoya** konur (§3 adım 1). İçerik: özel `master` `7dcc979` (PR #15: dördüncü denetim, A+, son
-> saldırı; §89–§92) + 3 Kasım'ın belge/temizlik commit'leri + yayın kaydı. Belgelerdeki kısa commit kimlikleri **eski (özel) geçmişindir**; karşılıkları
+> **Son güncelleme: 25 Kasım 2026 (bulut)**, depo `wqedwad/mathverify`, dal `master`: **yayın sürümü** (DECISIONS §93; kayıt `docs/BASVURU.md`). Geçmiş
+> yayından önce yeniden yazıldı (kimlik bilgileri, gömülü arşivler, kişisel tanımlayıcılar çıkarıldı) ve yeni depoya gönderildi; depo henüz özel, herkese
+> açma adımı kullanıcıda (§3 adım 1). İçerik: özel deponun (`wqedwad/asd`) `master`ı `7dcc979` (PR #15: dördüncü denetim, A+, son saldırı; §89–§92) + 3
+> Kasım'ın belge/temizlik commit'leri + yayın kaydı + yeni README. Belgelerdeki kısa commit kimlikleri **eski (özel) geçmişindir**; karşılıkları
 > `docs/yayin-commit-esleme.txt`'te. Bu belge yalnız **bugünü** taşır (~300 satır); tarihçe `docs/arsiv/HANDOFF-2026-09-26.md` ve `git log -p HANDOFF.md`'de
 > ("HANDOFF §N" göndermesi yazıldığı günündür).
 > **[DOĞRULANMADI]** = ölçülmedi ya da çıkarım; işaretsiz sayı ölçüm.
@@ -54,11 +54,11 @@ eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yayın (kullanıcıda; sırayla, `docs/BASVURU.md`):** (a) özel dönemin iki API anahtarını sağlayıcı panellerinden iptal et (Anthropic, Meta), yenisini
-   yalnız yerel `.env`'e yaz; (b) GitHub'da **yeni, boş** bir depo aç (README/lisans ekletme); (c) yerelde `git clone --single-branch --branch
-   ccr-f30c98d6-n0vp2p https://github.com/wqedwad/asd.git yayin && cd yayin && git branch -m master && git remote set-url origin <yeni depo> && git push -u
-   origin master`; (d) yeni depoyu herkese aç. **Mevcut `wqedwad/asd` herkese açılmaz** (etiketleri ve PR ref'leri eski geçmişi taşır). Yeni sohbet yeni
-   depoda başlar; orada ilk kod değişikliğinden önce `check.py --full` (eski günlük eski commit'i gösterir), README'nin "özel depo" cümlesi güncellenir.
+1. **Yayın (`docs/BASVURU.md` §5):** yapıldı: yeniden yazılmış geçmiş `wqedwad/mathverify` `master`ında (25 Kasım; taze kopyada doğrulandı), README
+   yenilendi, iki API anahtarı iptal edildi (kullanıcının bildirimi). **Kalan (kullanıcıda):** depoyu herkese açmak (Settings → Change visibility);
+   "About" açıklaması ve konu etiketleri; lisans kararı (§4.4 madde 4). **Eski `wqedwad/asd` herkese açılmaz** (etiketleri ve PR ref'leri eski geçmişi
+   taşır). Yeni sohbet yeni depoda başlar; orada ilk kod değişikliğinden önce `check.py --full` (eski günlük eski commit'i gösterir). Bulut kurulum
+   betiği ve `docs/BULUT.md` hâlâ `wqedwad/asd`'yi ve onun araç ref'ini anlatır; yeni depoda bulut oturumu açılacaksa uyarlanır (ölçülmedi).
 2. **A+ kapandı** (§92): son ölçüm ve `--full` temiz, belgeler yazıldı, `--plan` TAMAM.
 3. **`master` birleştirmesi yapıldı** (3 Kasım, kullanıcı onayıyla): yedek kullanıcının yerelinde (`yedek/master-2026-11-03` = `1df0558`, bundle, deneme
    klonu; etiket buluttan doğrulandı), `--plan` TAMAM (`08336f1`), PR #15 → `master` `7dcc979`. Sonraki birleştirmeler aynı yöntemle (§6).
@@ -200,7 +200,7 @@ Verilmiş kararlar: depo bir başvuru için herkese açılır (24 Kasım, §93; 
 ### 4.6 Güvenlik
 
 - **S1. Özel dönemin anahtarları (kullanıcıda).** `.env` özel depoda izleniyordu (§35); özel depo (`wqedwad/asd`: `master`, 10 yedek etiketi, 15 PR
-  ref'i) ve yerel bundle'lar o geçmişi taşır, paylaşılmaz; yayından önce iki API anahtarı iptal edilir. Bu dalın geçmişinde değerler yok
+  ref'i) ve yerel bundle'lar o geçmişi taşır, paylaşılmaz. İki API anahtarı 25 Kasım'da iptal edildi (kullanıcının bildirimi; **[DOĞRULANMADI]**). Bu dalın geçmişinde değerler yok
   (`docs/BASVURU.md` §3). `.env` artık izlenmez (`.gitignore`); bulutta anahtar ortamdan gelir (Meta anahtarı ortamın kimlik bilgisinde).
 - **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür; depoda hiç yok). Özel depoyu okutur; yeni depo herkese açıksa kurulum
   belirteçsiz çalışabilir (ölçülmedi). `unset`, root'un `/proc/<pid>/environ` okumasına karşı korumaz (§54). Konteynerde sızıntı taraması yalnız
@@ -232,7 +232,7 @@ adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-a
 
 ## 6. Dallar, etiketler, yedekler
 
-- **Yayın dalı** `ccr-f30c98d6-n0vp2p` (25 Kasım): yeniden yazılmış geçmiş, özel `master`la ortak ata yok; aşağıdaki dal, etiket ve yedek kayıtları **özel depo**
+- **Yayın deposu** `wqedwad/mathverify` `master` (25 Kasım); aynı geçmiş özel depoda `ccr-f30c98d6-n0vp2p` dalında: yeniden yazılmış, özel `master`la ortak ata yok; aşağıdaki dal, etiket ve yedek kayıtları **özel depo**
   `wqedwad/asd` içindir ve eski commit kimlikleriyle yazılıdır. Özelde `claude/focused-albattani-jlomk1` `596f2f7` `master`dan 3 belge/temizlik commit'i ileride.
 - **Dallar** (3 Kasım; `git merge-base --is-ancestor`, `git ls-remote`): `master` `7dcc979` (PR #15). **Oturum dalı** `claude/focused-albattani-jlomk1`
   birleşmeden sonra `master`dan yeniden başladı (belge güncellemesi; birleşen hâli `08336f1`); içerdiği eski oturum dalları `claude/amazing-edison-0g21ci`, `-upbeat-mccarthy-ef2oub`, `-trusting-lovelace-vp1boa`.

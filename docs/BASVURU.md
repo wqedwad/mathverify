@@ -67,7 +67,16 @@ aynıdır.
   belgeler satır satır insan gözüyle okunmadı.
 - `scripts/check.py --full` bu geçmişte koşmadı (§2).
 - Özel depo, etiketleri, PR kayıtları ve yerel yedekleri eski geçmişi taşır; yayımlanmaz. Özel
-  dönemin API anahtarları yayından önce iptal edilir.
+  dönemin iki API anahtarı 25 Kasım 2026'da iptal edildi (kullanıcının bildirimi; buluttan
+  doğrulanmadı).
 - GitHub kullanıcı adı, depo adı, bulut konteynerinin yolları (`/home/user`, scratchpad
   dizinleri), sağlayıcı istek kimlikleri ve maliyet sayıları bilerek bırakıldı: kişiye özel ya da
   gizli değil.
+
+## 5. Yayın (25 Kasım 2026)
+
+Yeniden yazılmış geçmiş yeni bir depoya (`wqedwad/mathverify`, dal `master`) tek ref olarak
+gönderildi; etiket ya da başka dal gönderilmedi. Gönderimden sonra depodan alınan taze, tam
+kopyada dosya ağacı taranan uçla aynıydı, `.env` nesnesi yoktu ve §3'teki anahtar penceresi
+araması 0 isabet verdi. Aynı gün `README.md` yeniden yazıldı (eski hâli
+`docs/arsiv/README-2026-09-27.md`) ve İngilizce özet `README.en.md` eklendi; kod değişmedi.
