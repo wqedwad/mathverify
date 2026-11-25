@@ -137,6 +137,12 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
   `reports/*.json` commit edilmez (anlık görüntüsü `reports/arsiv/` altında); anahtar değeri hiçbir
   çıktıya yazılmaz. Anahtarlar yenilenince `.env` güncellenip commit edilir. Depo herkese açılacak
   ya da paylaşılacaksa önce anahtarlar yenilenir ve `.env` geçmişten temizlenir.
+  **Düzeltme (24 Kasım 2026):** depo herkese açılıyor (kullanıcı kararı, `DECISIONS.md` §93; kayıt
+  `docs/BASVURU.md`). `.env` bütün geçmişten çıkarıldı ve artık **izlenmez** (`.gitignore`); ilk
+  cümle yeniden geçerli: `.env`, `.env.*`, `reports/*.json` ve hiçbir anahtar commit edilmez.
+  Commit kimliği GitHub'ın noreply adresidir (`git log -1 --format='%an <%ae>'`); kişisel e-posta,
+  yerel kullanıcı adı ve oturum bağlantısı (`Claude-Session:` satırı dahil) commit'e, belgeye ya da
+  rapora yazılmaz. Yerel yol `C:\Users\kullanici\…` biçiminde yazılır.
 - Global git ayarını değiştirme. Kimlik gerekirse komut başına `git -c user.name=… -c user.email=…`
   ver; önceki commit'lerin kimliği `git log -1 --format='%an <%ae>'` ile görülür.
 - Kullanıcı istemeden commit etme ya da dal birleştirme. Ana dal `master`; doğrudan onun üzerinde

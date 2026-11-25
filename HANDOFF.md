@@ -1,15 +1,16 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 3 Kasım 2026 (bulut)**: **`master` `7dcc979` = PR #15'in birleşmesi** (3 Kasım; yedek `yedek/master-2026-11-03`): `master`
-> (`#14`) + dördüncü denetim (A+ adım i–vii, DECISIONS §89–§90) + yerel kalite (ix, §91) + son saldırı ve düzeltme turları (viii, §92). **A+ bitti:** son
-> saldırının 52 adayı (50 gerçek) ve sekiz bağımsız denetimin bulguları düzeltildi ya da V20'ye kaydedildi; kullanıcının **durma kuralı** (22 Ekim) yeni denetim
-> turu açmadı. Son ölçüm turu ve `--full` temiz (§2, §5). Oturum dalı `claude/focused-albattani-jlomk1` birleşmeden sonra `master`dan yeniden başladı. Bu belge yalnız **bugünü** taşır
-> (~300 satır); tarihçe `docs/arsiv/HANDOFF-2026-09-26.md` ve `git log -p HANDOFF.md`'de ("HANDOFF §N" göndermesi yazıldığı günündür).
+> **Son güncelleme: 25 Kasım 2026 (bulut)**, dal `ccr-f30c98d6-n0vp2p`: **yayın sürümü** (DECISIONS §93; kayıt `docs/BASVURU.md`). Depo bir başvuru için herkese
+> açılıyor; geçmiş yayından önce yeniden yazıldı (kimlik bilgileri, gömülü arşivler, kişisel tanımlayıcılar çıkarıldı). Bu dalın özel deponun `master`ıyla ortak
+> atası yoktur ve ona birleştirilmez; **yeni bir herkese açık depoya** konur (§3 adım 1). İçerik: özel `master` `7dcc979` (PR #15: dördüncü denetim, A+, son
+> saldırı; §89–§92) + 3 Kasım'ın belge/temizlik commit'leri + yayın kaydı. Belgelerdeki kısa commit kimlikleri **eski (özel) geçmişindir**; karşılıkları
+> `docs/yayin-commit-esleme.txt`'te. Bu belge yalnız **bugünü** taşır (~300 satır); tarihçe `docs/arsiv/HANDOFF-2026-09-26.md` ve `git log -p HANDOFF.md`'de
+> ("HANDOFF §N" göndermesi yazıldığı günündür).
 > **[DOĞRULANMADI]** = ölçülmedi ya da çıkarım; işaretsiz sayı ölçüm.
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§92; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§93, `docs/BASVURU.md`; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (§6); bulut klonunda `git fetch origin master` (yerel `master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. `master`ınki §5 (5 atlama: 3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade).
    Oturum dalı `62fb71e`: 6045 passed / 5 skipped (`--full`, Lean'li, 3 Kasım). Soğuk Lean'le ~17–20 dk (B6); Lean atlaması = Lean hazır değil.
@@ -21,7 +22,12 @@ Türkçe bir matematik sorusu ve bir AI'ın çözümüne **üç değerli** karar
 reddedici, Lean 4 + Mathlib), cevap anahtarı hatta girmez, LLM katmanları kararı yalnız daha temkinli yapar. İlkeler `CLAUDE.md`'de, mimari arşiv §2–§3 ve
 `docs/ARCHITECTURE.md`'de; D1–D6 (§1) sorulmaz. Giriş: `verifier.verify`, `pipeline.run_pipeline` (LLM'li), `scripts/verify_cli.py`; set 280 sentetik öğe.
 
-## 2. Durum (3 Kasım 2026)
+## 2. Durum (3 Kasım 2026; yayın sürümü 25 Kasım)
+
+**Yayın sürümü (24–25 Kasım, §93, `docs/BASVURU.md`).** Geçmiş yeniden yazıldı; anahtar değerleri, kişisel e-posta, yerel kullanıcı adı ve oturum kimliği bu
+geçmişte 0 eşleşme; kod dizinlerinde özel uçla fark 0. Tam takım yeniden yazılmış geçmişin ucunda (bulut, Python 3.14.6, Lean'li): **6045 passed /
+5 skipped**, 2390 s (3 Kasım `--full`uyla aynı sayı). `check.py --full` bu geçmişte koşmadı (§3 adım 1). Aşağıdaki paragraflar 3 Kasım durumudur, commit
+kimlikleri eski geçmişindir.
 
 **Kod.** `master` `7dcc979` = `#15`'in birleşmesi (3 Kasım; ağacı ölçülen dal başı `08336f1`'inkiyle aynı; önceki `1df0558` = `#14`; yedekler §6; PR
 içerikleri §59–§92). **Birleşen dal** (son kod commit'i `62fb71e`): dördüncü denetim ve A+
@@ -48,10 +54,11 @@ eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yeni sohbet:** `git fetch origin claude/focused-albattani-jlomk1 && git merge --ff-only FETCH_HEAD` (push yalnız oturumun dalına). `wip/*` dalları ve
-   depodaki ara yedekleri 3 Kasım'da silindi: içerikleri `master`da; eski arşivler git geçmişinde (`git show c563096:denetim/2026-10-01/d4/wip/<dosya>`
-   gibi). `--plan` koş. Konteyner oturum sınırında yeniden başlar:
-   ajanlar `SendMessage`, iş akışları resume, mutasyon `--kayit` ile sürer.
+1. **Yayın (kullanıcıda; sırayla, `docs/BASVURU.md`):** (a) özel dönemin iki API anahtarını sağlayıcı panellerinden iptal et (Anthropic, Meta), yenisini
+   yalnız yerel `.env`'e yaz; (b) GitHub'da **yeni, boş** bir depo aç (README/lisans ekletme); (c) yerelde `git clone --single-branch --branch
+   ccr-f30c98d6-n0vp2p https://github.com/wqedwad/asd.git yayin && cd yayin && git branch -m master && git remote set-url origin <yeni depo> && git push -u
+   origin master`; (d) yeni depoyu herkese aç. **Mevcut `wqedwad/asd` herkese açılmaz** (etiketleri ve PR ref'leri eski geçmişi taşır). Yeni sohbet yeni
+   depoda başlar; orada ilk kod değişikliğinden önce `check.py --full` (eski günlük eski commit'i gösterir), README'nin "özel depo" cümlesi güncellenir.
 2. **A+ kapandı** (§92): son ölçüm ve `--full` temiz, belgeler yazıldı, `--plan` TAMAM.
 3. **`master` birleştirmesi yapıldı** (3 Kasım, kullanıcı onayıyla): yedek kullanıcının yerelinde (`yedek/master-2026-11-03` = `1df0558`, bundle, deneme
    klonu; etiket buluttan doğrulandı), `--plan` TAMAM (`08336f1`), PR #15 → `master` `7dcc979`. Sonraki birleştirmeler aynı yöntemle (§6).
@@ -167,7 +174,7 @@ Doğru cevabı reddedenler: V11, V13, V20 (b). Yanlış onaylar: V1 (çözüm d�
 
 ### 4.4 Kullanıcı kararları (açık sorular)
 
-Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15 Ekim, §89); durma kuralı (22 Ekim, §92); PR #15 ile birleştirme (3 Kasım). Açık sorular:
+Verilmiş kararlar: depo bir başvuru için herkese açılır (24 Kasım, §93; 8 Ekim'in "açılmayacak" kararının yerine); A+ (15 Ekim, §89); durma kuralı (22 Ekim, §92); PR #15 ile birleştirme (3 Kasım). Açık sorular:
 
 1. Yedek etiketleri ve yerel bundle'lar ne zaman silinebilir (sormadan silinmez, §6)? (Uzak dallar ve `refs/arac/bulut-v1` 3 Kasım'da silindi.)
 2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? Anahtar yenileme F3/F4 için gerekmiyor (§64).
@@ -177,7 +184,7 @@ Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15
 5. Sınırlar: `tyt-prob-018` kuralı F4'ten sonra daraltılsın mı (V1)? Çözücü sembolü adımları sınır mı, sembol tanımı mı (V2)? Çekimserlik yeter mi (V3)?
 6. Başka sağlayıcıyla (GPT/Gemini, `set_client_override`) ölçüm istenir mi?
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
-8. Depo kararı değişirse önce anahtarlar yenilenir; `.env` ve YKS kaynak PDF'leri geçmişten temizlenir (§87).
+8. Yayın (§93): yeni deponun adı ve lisansı (madde 4)? Eski özel depo arşiv olarak kalsın mı, silinsin mi (silinirse PR'lar ve etiketler gider)?
 9. Bulut kurulumu: önyükleyici sınırı 250 → 275 ve Meta için ağ ayarı birlikte mi (§3 adım 8)?
 
 ### 4.5 Teknik borç
@@ -192,10 +199,14 @@ Verilmiş kararlar: depo paylaşılmayacak, açılmayacak (8 Ekim, §87); A+ (15
 
 ### 4.6 Güvenlik
 
-- **S1.** `.env` kullanıcı kararıyla özel depoda izleniyor (§35), değerler git geçmişinde ve GitHub'da; F3/F4 için
-  yenileme gerekmiyor (§64); depo açılırsa önce yenilenir, geçmiş temizlenir. Bulutta Meta anahtarı ortamın kimlik bilgisinde; eskinin iptali kullanıcıda.
-- **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür); sızarsa depoyu ve `.env`'i okutur. `unset`, root'un `/proc/<pid>/environ`
-  okumasına karşı korumaz (§54). Sızıntı taraması yalnız günlüklerde, `/etc/profile.d`'de ve `.git/config`'te yapıldı (0 bulgu); daha geniş tarama yapılmadı.
+- **S1. Özel dönemin anahtarları (kullanıcıda).** `.env` özel depoda izleniyordu (§35); özel depo (`wqedwad/asd`: `master`, 10 yedek etiketi, 15 PR
+  ref'i) ve yerel bundle'lar o geçmişi taşır, paylaşılmaz; yayından önce iki API anahtarı iptal edilir. Bu dalın geçmişinde değerler yok
+  (`docs/BASVURU.md` §3). `.env` artık izlenmez (`.gitignore`); bulutta anahtar ortamdan gelir (Meta anahtarı ortamın kimlik bilgisinde).
+- **S2.** GitHub belirteci Setup script metninde (ortamı kullanan herkes görür; depoda hiç yok). Özel depoyu okutur; yeni depo herkese açıksa kurulum
+  belirteçsiz çalışabilir (ölçülmedi). `unset`, root'un `/proc/<pid>/environ` okumasına karşı korumaz (§54). Konteynerde sızıntı taraması yalnız
+  günlüklerde, `/etc/profile.d`'de ve `.git/config`'te yapıldı (0 bulgu); daha geniş konteyner taraması yapılmadı.
+- **S3. Tarama sınırı** (`docs/BASVURU.md` §4): tarama bilinen biçimler, değerlerle birebir arama, entropi ve sözcük listeleriyledir; belgeler satır satır
+  insan gözüyle okunmadı.
 
 ### 4.7 Doğrulanmamış kayıtlar
 
@@ -221,6 +232,8 @@ adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-a
 
 ## 6. Dallar, etiketler, yedekler
 
+- **Yayın dalı** `ccr-f30c98d6-n0vp2p` (25 Kasım): yeniden yazılmış geçmiş, özel `master`la ortak ata yok; aşağıdaki dal, etiket ve yedek kayıtları **özel depo**
+  `wqedwad/asd` içindir ve eski commit kimlikleriyle yazılıdır. Özelde `claude/focused-albattani-jlomk1` `596f2f7` `master`dan 3 belge/temizlik commit'i ileride.
 - **Dallar** (3 Kasım; `git merge-base --is-ancestor`, `git ls-remote`): `master` `7dcc979` (PR #15). **Oturum dalı** `claude/focused-albattani-jlomk1`
   birleşmeden sonra `master`dan yeniden başladı (belge güncellemesi; birleşen hâli `08336f1`); içerdiği eski oturum dalları `claude/amazing-edison-0g21ci`, `-upbeat-mccarthy-ef2oub`, `-trusting-lovelace-vp1boa`.
   **Yerel `wip/*`** ve worktree'ler 3 Kasım'da silindi (17 dal; commit'leri `master`da). **Depodaki ara yedekler** (`denetim/2026-10-01/d4/wip/`, 66 MB:

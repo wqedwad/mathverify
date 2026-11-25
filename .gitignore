@@ -10,8 +10,9 @@ __pycache__/
 .pytest_cache/
 .hypothesis/
 reports/*.json
-# `.env` itself is tracked: on 2026-09-24 the user decided that this private repository
-# (github.com/wqedwad/asd) carries the API keys so cloud sessions work as-is. Other env files
-# stay ignored.
+# Secrets never enter the repository. `.env` was tracked while the repository was private
+# (2026-09-24 .. 2026-11-24) and was removed from the whole history before publication
+# (docs/BASVURU.md). API keys live in an untracked `.env` or in the environment.
+.env
 .env.*
 llm_cache/*.tmp
