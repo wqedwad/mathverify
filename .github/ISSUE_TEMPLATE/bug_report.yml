@@ -1,0 +1,21 @@
+name: Bug report
+description: A crash, a failing test or gate, or a setup problem.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, what you got. Issues are welcome in English or Turkish.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Python version, whether Lean is installed, and the commit (`git rev-parse --short HEAD`).

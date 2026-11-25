@@ -1,0 +1,57 @@
+name: Wrong verdict
+description: The verifier approved a wrong solution, or rejected a correct one.
+title: "Wrong verdict: "
+labels: ["wrong-verdict"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A wrong approval (CORRECT for a wrong answer or a broken step) is the most serious defect this
+        project can have. A minimal problem IR and solution that reproduce it are the most useful report.
+        Issues are welcome in English or Turkish.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What happened?
+      options:
+        - Wrong approval (CORRECT, but the answer or a step is wrong)
+        - Wrong rejection (INCORRECT, but the solution is correct)
+        - UNKNOWN where a verdict was expected
+    validations:
+      required: true
+  - type: textarea
+    id: ir
+    attributes:
+      label: Problem IR
+      description: The JSON passed as --ir (or the item file).
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution
+      description: The JSON passed as --solution, or the text passed as --text.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Output of `scripts/verify_cli.py` (add --json for the full result).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Why the verdict is wrong
+      description: The correct answer and how you know it.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`.

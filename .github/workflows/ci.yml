@@ -1,0 +1,37 @@
+name: CI
+
+# The test suite without Lean: the Lean tests skip themselves when no local Lean 4 + Mathlib
+# install is found (see docs/LEAN_SETUP.md). The full 24-gate check, Lean included, is
+# `scripts/check.py --full`; its log is committed at reports/check_full.log.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (Python 3.14, no Lean)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the pinned environment
+        run: |
+          uv venv --python 3.14 .venv
+          uv pip install --python .venv/bin/python -r requirements.lock
+          uv pip install --python .venv/bin/python --no-deps -e .
+      - name: pyflakes
+        run: .venv/bin/python scripts/dev/pyflakes_gate.py
+      - name: Tests
+        run: .venv/bin/python -m pytest tests -rs

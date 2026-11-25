@@ -7,6 +7,11 @@ verdicts: `CORRECT`, `INCORRECT` or `UNKNOWN`. It does not recompute the answer 
 **proves or refutes the claim**, with symbolic certificates, concrete counterexamples and Lean 4 +
 Mathlib proofs. When it can do neither, it does not guess; it answers `UNKNOWN`.
 
+[![CI](https://github.com/wqedwad/mathverify/actions/workflows/ci.yml/badge.svg)](https://github.com/wqedwad/mathverify/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)
+![Lean 4 + Mathlib](https://img.shields.io/badge/Lean%204-Mathlib-5e4b8b.svg)
+
 [Türkçe](README.tr.md) · [Architecture](docs/ARCHITECTURE.md) · [Decision log](DECISIONS.md) ·
 [Current status](HANDOFF.md) · [Reports](reports/)
 
@@ -196,6 +201,35 @@ deterministic pipeline needs no key.
 Versions are pinned: SymPy 1.14.0, mpmath 1.3.0, z3-solver 5.1.0, Lean 4.34.0 + Mathlib
 (`requirements.lock`, `lean/PINS`).
 
+## Use as a library
+
+```bash
+pip install "git+https://github.com/wqedwad/mathverify"
+```
+
+```python
+from mathverify.intake import load_problem_ir, load_solution
+from mathverify.verifier import verify
+
+if __name__ == "__main__":   # required: the sandbox starts worker processes
+    problem = load_problem_ir({
+        "task": {"kind": "evaluate", "params": {"expr": "dist(1, 2, 4, 6)"}},
+        "vars": [], "givens": [], "answer_shape": "scalar",
+    })
+    solution = load_solution({
+        "claimed_answer": {"kind": "value", "payload": "5"},
+        "steps": [
+            {"id": "s1", "kind": "compute", "claim": "4 - 1 = 4", "from": []},
+            {"id": "s2", "kind": "compute", "claim": "sqrt(4**2 + 3**2) = 5", "from": ["s1"]},
+        ],
+    })
+    result = verify(problem, solution)
+    print(result.verdict, result.first_bad_step)   # INCORRECT 1
+```
+
+The result also carries `confidence`, `flags`, the per-layer evidence in `layers` and a
+`decision_trace`. The solution format is described in [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md).
+
 ## Repository map
 
 ```
@@ -221,6 +255,25 @@ source comments are in English.
 | [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md) | Structured solution format |
 | [docs/sartname/](docs/sartname/) | The project's original specification |
 | [docs/BASVURU.md](docs/BASVURU.md) | Record of this published version |
+
+## Roadmap
+
+- **Measure the LLM layers end to end.** Automatic IR extraction, cross-family re-solving and the
+  critic have code and offline tests; their full measurement is still owed.
+- **A third model family.** The model family that produced a solution may not judge it; today two
+  families are wired in. Adding another makes the cross-family checks stronger.
+- **Real exam questions.** Measure on the 2025–2026 Turkish university-entrance math papers, with
+  a solver that actually makes mistakes, to test resistance to wrong approvals outside the
+  synthetic set.
+- **Review automation.** Every pull request should be checked against the rule that no change may
+  add a wrong approval.
+
+## Contributing, security, license
+
+The most valuable contribution is a wrong verdict: a wrong solution the verifier approves, or a
+correct one it rejects. See [CONTRIBUTING.md](CONTRIBUTING.md). Vulnerabilities are reported
+privately; the threat model is in [SECURITY.md](SECURITY.md). The project is released under the
+[MIT License](LICENSE).
 
 ## How it was built
 

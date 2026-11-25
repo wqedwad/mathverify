@@ -7,6 +7,11 @@ Türkçe bir matematik sorusu ve bir AI'ın çözümü verilir; mathverify üç 
 **iddiayı kanıtlayarak ya da çürüterek** verilir: sembolik sertifikalar, somut karşı örnekler ve
 Lean 4 + Mathlib ispatları. Kanıtlayamadığında tahmin etmez, `UNKNOWN` der.
 
+[![CI](https://github.com/wqedwad/mathverify/actions/workflows/ci.yml/badge.svg)](https://github.com/wqedwad/mathverify/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)
+![Lean 4 + Mathlib](https://img.shields.io/badge/Lean%204-Mathlib-5e4b8b.svg)
+
 [English](README.md) · [Mimari](docs/ARCHITECTURE.md) · [Kararlar](DECISIONS.md) ·
 [Güncel durum](HANDOFF.md) · [Raporlar](reports/)
 
@@ -192,6 +197,35 @@ okunur (`ANTHROPIC_API_KEY`, `META_MODEL_API_KEY`); deterministik hat anahtarsı
 Sürümler sabittir: SymPy 1.14.0, mpmath 1.3.0, z3-solver 5.1.0, Lean 4.34.0 + Mathlib
 (`requirements.lock`, `lean/PINS`).
 
+## Kütüphane olarak kullanım
+
+```bash
+pip install "git+https://github.com/wqedwad/mathverify"
+```
+
+```python
+from mathverify.intake import load_problem_ir, load_solution
+from mathverify.verifier import verify
+
+if __name__ == "__main__":   # gerekli: sandbox işçi süreçleri başlatır
+    problem = load_problem_ir({
+        "task": {"kind": "evaluate", "params": {"expr": "dist(1, 2, 4, 6)"}},
+        "vars": [], "givens": [], "answer_shape": "scalar",
+    })
+    solution = load_solution({
+        "claimed_answer": {"kind": "value", "payload": "5"},
+        "steps": [
+            {"id": "s1", "kind": "compute", "claim": "4 - 1 = 4", "from": []},
+            {"id": "s2", "kind": "compute", "claim": "sqrt(4**2 + 3**2) = 5", "from": ["s1"]},
+        ],
+    })
+    result = verify(problem, solution)
+    print(result.verdict, result.first_bad_step)   # INCORRECT 1
+```
+
+Sonuç ayrıca `confidence`, `flags`, katman kanıtlarını (`layers`) ve bir `decision_trace` taşır.
+Çözüm formatı: [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md).
+
 ## Depo haritası
 
 ```
@@ -214,6 +248,24 @@ scripts/          check.py (kalite kapıları), verify_cli.py, kurulum betikleri
 | [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md) | Yapısal çözüm formatı |
 | [docs/sartname/](docs/sartname/) | Projenin başlangıç şartnamesi |
 | [docs/BASVURU.md](docs/BASVURU.md) | Bu yayın sürümünün kaydı |
+
+## Yol haritası
+
+- **LLM katmanlarının uçtan uca ölçümü.** Otomatik IR çıkarımı, çapraz aile yeniden çözüm ve
+  kritiğin kodu ve çevrimdışı testleri var; tam ölçümleri henüz koşmadı.
+- **Üçüncü bir model ailesi.** Bir çözümü üreten model ailesi o çözümü yargılayamaz; bugün iki aile
+  bağlı. Bir üçüncüsü çapraz aile denetimlerini güçlendirir.
+- **Gerçek sınav soruları.** 2025–2026 YKS matematik sorularında, gerçekten hata yapan bir
+  çözücüyle ölçüm: sentetik setin dışında yanlış onaya karşı direnç.
+- **İnceleme otomasyonu.** Her değişiklik isteği "hiçbir değişiklik yanlış onay ekleyemez" kuralına
+  göre denetlenmeli.
+
+## Katkı, güvenlik, lisans
+
+En değerli katkı yanlış bir karardır: doğrulayıcının onayladığı yanlış bir çözüm ya da reddettiği
+doğru bir çözüm. Ayrıntı [CONTRIBUTING.md](CONTRIBUTING.md)'de (İngilizce). Güvenlik açıkları özel
+olarak bildirilir; tehdit modeli [SECURITY.md](SECURITY.md)'de. Proje [MIT lisansı](LICENSE) ile
+yayımlanır.
 
 ## Nasıl geliştirildi
 
