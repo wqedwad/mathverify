@@ -79,4 +79,5 @@ Yeniden yazılmış geçmiş yeni bir depoya (`wqedwad/mathverify`, dal `master`
 gönderildi; etiket ya da başka dal gönderilmedi. Gönderimden sonra depodan alınan taze, tam
 kopyada dosya ağacı taranan uçla aynıydı, `.env` nesnesi yoktu ve §3'teki anahtar penceresi
 araması 0 isabet verdi. Aynı gün `README.md` yeniden yazıldı (eski hâli
-`docs/arsiv/README-2026-09-27.md`) ve İngilizce özet `README.en.md` eklendi; kod değişmedi.
+`docs/arsiv/README-2026-09-27.md`). Depo ana sayfası `README.md` İngilizcedir (kullanıcı isteği); aynı içeriğin
+Türkçesi `README.tr.md`'dedir. Kod değişmedi.

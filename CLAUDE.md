@@ -9,7 +9,9 @@ Bu dosya yalnız **kalıcı** kuralları taşır; geçici durum buraya yazılmaz
 ## Kullanıcıyla çalışma
 
 - Kullanıcıyla Türkçe konuşulur. Belgeler, raporlar, karar izleri ve commit mesajları Türkçe;
-  kod, tanımlayıcılar ve `src/` içindeki yorumlar İngilizce.
+  kod, tanımlayıcılar ve `src/` içindeki yorumlar İngilizce. Tek istisna depo ana sayfası:
+  `README.md` İngilizcedir, Türkçesi `README.tr.md`'dir ve ikisi birlikte güncellenir (kullanıcı
+  isteği, 25 Kasım 2026).
 - Kullanıcı en kaliteli, kapsamlı ve özerk işi ister. "Emin ol" ya da "tek eksik bu mu" soruları
   harfiyen kastedilir: önceki cevabı tekrarlama, yeni ve sistematik bir denetim yap. Krediye bağlı
   olmayan bir açık bulunursa aynı turda düzelt.

@@ -1,43 +1,43 @@
 # mathverify
 
-**Bir yapay zekânın matematik çözümüne "doğru" demeden önce kanıt isteyen doğrulayıcı.**
+**A verifier that asks for proof before it calls an AI's math solution correct.**
 
-Türkçe bir matematik sorusu ve bir AI'ın çözümü verilir; mathverify üç karardan birini döndürür:
-`CORRECT`, `INCORRECT` ya da `UNKNOWN`. Karar, cevabı yeniden hesaplayıp karşılaştırarak değil,
-**iddiayı kanıtlayarak ya da çürüterek** verilir: sembolik sertifikalar, somut karşı örnekler ve
-Lean 4 + Mathlib ispatları. Kanıtlayamadığında tahmin etmez, `UNKNOWN` der.
+Given a math question in Turkish and a solution written by an AI, mathverify returns one of three
+verdicts: `CORRECT`, `INCORRECT` or `UNKNOWN`. It does not recompute the answer and compare. It
+**proves or refutes the claim**, with symbolic certificates, concrete counterexamples and Lean 4 +
+Mathlib proofs. When it can do neither, it does not guess; it answers `UNKNOWN`.
 
-[English summary](README.en.md) · [Mimari](docs/ARCHITECTURE.md) · [Kararlar](DECISIONS.md) ·
-[Güncel durum](HANDOFF.md) · [Raporlar](reports/)
+[Türkçe](README.tr.md) · [Architecture](docs/ARCHITECTURE.md) · [Decision log](DECISIONS.md) ·
+[Current status](HANDOFF.md) · [Reports](reports/)
 
-| Ölçüt | Sonuç |
+| Measure | Result |
 |---|---|
-| Yanlış cevaba verilen onay | **0** (467 üretilmiş yanlış cevap, 21 139 adversaryal saldırı, gerçek bir modelin 278 çözümü) |
-| Eşdeğer yazıma ve geçerli adım dönüşümüne verilen ret | **0** (224 eşdeğer cevap, 184 adım dönüşümü) |
-| Lean'de denetlenmiş formal sertifika | 121 / 280 öğe; yanlış cevaplı öğede kanıt **0** |
-| Test | 6045 geçti / 5 atlandı; 24 kalite kapısının 24'ü geçti |
+| Wrong answers approved | **0** (467 generated wrong answers, 21,139 adversarial attacks, 278 solutions from a real model) |
+| Equivalent rewrites and valid step transformations rejected | **0** (224 equivalent answers, 184 step transformations) |
+| Audited formal certificates in Lean | 121 of 280 items; proofs on wrong-answer items: **0** |
+| Tests | 6045 passed, 5 skipped; 24 of 24 quality gates passed |
 
-Sayılar 3 Kasım 2026 tarihli tam kontrol koşusundandır ve [reports/](reports/) altındaki
-üretilmiş raporlardan okunur. Değerlendirme seti sentetiktir; bunun ne anlama geldiği
-[Sınırlar](#sınırlar) bölümünde.
+The numbers come from the full check run of 3 November 2026 and are read from the generated reports
+in [reports/](reports/). The evaluation set is synthetic; what that means is under [Limits](#limits).
 
-## Neden
+## Why
 
-Dil modelleri matematik çözümlerini puanlarken iki yönde de yanılır: kendinden emin yazılmış yanlış
-bir çözümü onaylar, alışılmadık ama doğru bir çözümü reddeder. Bir cevap anahtarıyla karşılaştırmak
-da yetmez: `1/2` ile `0.5`, `{2, 3}` ile `x = 2 ∨ x = 3` aynı cevaptır, `x/x = 1` ise `x = 0`'da
-doğru değildir.
+Language models grade math in both wrong directions: they approve a confident wrong solution and
+reject an unusual correct one. Comparing against an answer key is not enough either: `1/2` and `0.5`
+are the same answer, so are `{2, 3}` and `x = 2 ∨ x = 3`, and `x/x = 1` is not true at `x = 0`.
 
-mathverify'ın tasarım kuralı tektir: **yanlış olabilecek hiçbir cevaba `CORRECT` denmez.** Bunun
-bedeli kapsamadır; sorunun anlamı bir geleneğe bağlıysa ya da kanıt bulunamıyorsa karar `UNKNOWN`
-olur.
+The design has one rule: **no answer that could be wrong is called `CORRECT`.** The price is
+coverage. If the meaning of the question depends on a convention, or no proof is found, the verdict
+is `UNKNOWN`.
 
-## Üç karar, üç örnek
+## Three verdicts, three examples
 
-Aşağıdaki çıktılar bu depodaki kodun gerçek çıktılarıdır (katman satırları kısaltıldı).
+These are real outputs of the code in this repository, with some layer lines removed. The tool's
+trace messages are in Turkish.
 
-**1. Cevap doğru, yol yanlış → `INCORRECT`.** Soru: A(1, 2) ve B(4, 6) arasındaki uzaklık. Çözüm
-"4 − 1 = 4, 6 − 2 = 3, √(4² + 3²) = 5" diyor. Son cevap doğru, ilk adım yanlış:
+**1. Right answer, wrong path → `INCORRECT`.** The question asks for the distance between A(1, 2)
+and B(4, 6). The solution says "4 − 1 = 4, 6 − 2 = 3, √(4² + 3²) = 5". The final answer is right,
+the first step is wrong, and the verdict names that step:
 
 ```console
 $ python scripts/verify_cli.py --item evalset/items/ayt-ana-017.json
@@ -48,8 +48,8 @@ flags: step_refuted
 Deterministik red: steps.refute. Verdict INCORRECT (conf=0.97).
 ```
 
-**2. İki bağımsız kanıt → `CORRECT`.** Soru: f(x) = x²·eˣ için f′(0). Sembolik sertifika geçer,
-ardından aynı iddia Lean 4'te ispatlanır:
+**2. Two independent proofs → `CORRECT`.** The question asks for f′(0) where f(x) = x²·eˣ. The
+symbolic certificate passes, and the same claim is then proved in Lean 4:
 
 ```console
 $ python scripts/verify_cli.py --item evalset/items/ayt-tur-002.json --lean
@@ -60,115 +60,118 @@ flags: lean_proved
 Birincil sertifika(lar) geçti: certify.calculus, formal.lean. Verdict CORRECT (conf=0.995).
 ```
 
-**3. Anlam geleneğe bağlı → `UNKNOWN`.** "xˣ'in türevi xˣ(ln x + 1)" iddiası x ≤ 0'da neyin
-kastedildiğine bağlıdır. Kısıt verilmemişse karar yok; soru `x > 0` diyorsa aynı cevap `CORRECT`:
+**3. Meaning depends on a convention → `UNKNOWN`.** The claim "the derivative of xˣ is
+xˣ(ln x + 1)" depends on what is meant for x ≤ 0. With no constraint there is no verdict; if the
+question says `x > 0`, the same answer is `CORRECT`:
 
 ```console
 VERDICT: UNKNOWN   confidence=0.000   first_bad_step=None
 Hiçbir deterministik sertifika karar veremedi -> UNKNOWN. certify.calculus: membership_condition_on_variable
 ```
 
-## Nasıl çalışır
+## How it works
 
 ```mermaid
 flowchart TD
-    Q["Soru (Türkçe) + AI çözümü"] --> N["normalize<br/>sayı biçimi, LaTeX, birim, korumalı ayrıştırma"]
-    N --> IR["Problem IR + yapısal çözüm<br/>(cevap anahtarı bu hatta girmez)"]
-    IR --> C["certify<br/>sembolik sertifikalar"]
-    IR --> S["steps<br/>adım reddedici: yalnız somut karşı örnek"]
+    Q["Question (Turkish) + AI solution"] --> N["normalize<br/>number formats, LaTeX, units, guarded parsing"]
+    N --> IR["Problem IR + structured solution<br/>(the answer key never enters this path)"]
+    IR --> C["certify<br/>symbolic certificates"]
+    IR --> S["steps<br/>step rejecter: concrete counterexamples only"]
     IR --> L["formal<br/>Lean 4 + Mathlib"]
-    IR -.-> M["LLM katmanları<br/>yeniden çözüm, metamorfik test, kritik"]
-    C --> F["fuse<br/>sert veto + birleştirme + çekimserlik"]
+    IR -.-> M["LLM layers<br/>re-solve, metamorphic test, critic"]
+    C --> F["fuse<br/>hard veto + combination + abstention"]
     S --> F
     L --> F
-    M -.->|"yalnız daha temkinli yapabilir"| F
+    M -.->|"can only make the verdict more cautious"| F
     F --> V(["CORRECT / INCORRECT / UNKNOWN"])
 ```
 
-| Katman | Ne yapar | Yetkisi |
+| Layer | What it does | Authority |
 |---|---|---|
-| `certify/` | İddia edilen cevabı sınar: cebir, analiz, limit, ekstremum, trigonometri, geometri, kombinatorik, seri, lineer cebir, sözel problem | `CORRECT` ve `INCORRECT` verebilir |
-| `steps/` | Çözümün adımlarını tek tek dener | Yalnız karşı örnek bulursa reddeder; kanıtlayamadığı adımı cezalandırmaz |
-| `formal/` | Lean ifadesini IR'dan şablonla üretir, Mathlib taktikleriyle ispatlar | Yalnız pozitif kanıt; hiçbir kararı ters çeviremez |
-| `resolve/`, `meta/`, `critic/` | Başka model ailesinden sinyaller | `CORRECT`'i engelleyebilir, sertifikayı ezemez |
-| `fuse/` | Sinyalleri birleştirir | Tek bir sert ret yeter |
+| `certify/` | Tests the claimed answer: algebra, calculus, limits, extrema, trigonometry, geometry, combinatorics, series, linear algebra, word problems | May return `CORRECT` and `INCORRECT` |
+| `steps/` | Tries each step of the solution | Rejects only when it finds a counterexample; a step it cannot prove is not penalised |
+| `formal/` | Builds the Lean statement from the problem IR by template and proves it with Mathlib tactics | Positive proof only; cannot overturn a verdict |
+| `resolve/`, `meta/`, `critic/` | Signals from another model family | May block `CORRECT`; cannot overturn a certificate |
+| `fuse/` | Combines the signals | One hard rejection is enough |
 
-Tasarımın dayandığı ilkelerden birkaçı (tamamı [CLAUDE.md](CLAUDE.md) ve
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)'de):
+Some of the principles the design rests on (all of them are in [CLAUDE.md](CLAUDE.md) and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
 
-- **Cevap anahtarı doğrulama hattına girmez.** Anahtar benzeri bir alan girdiye sızarsa hat
-  `LeakageError` ile durur; bunun kendi testi vardır.
-- **Sayısal yakınlık kanıt değildir.** Kesin sayılar kesin karşılaştırılır; iddia karşılaştırılmadan
-  önce yuvarlanmaz ya da yeniden yazılmaz.
-- **Tanımlılık, ifadenin yazıldığı biçimden okunur.** SymPy `x/x`'i 1'e sadeleştirir ve tanımsız
-  noktayı siler; doğrulayıcı tanımlılığı sadeleşmemiş biçimden okur.
-- **Lean ifadesini model yazmaz.** İfade IR'dan deterministik şablonla üretilir; her ispat `sorry`,
-  aksiyom, boş doğruluk ve kullanılmayan hipotez denetiminden geçer.
-- **Lean'in "junk" değerleri sertifika üretemez.** Lean'de `x/0 = 0`, `Real.sqrt (−3) = 0`,
-  `Real.log 0 = 0`'dır. Bu tanımlara dokunan ifadeler formal sertifika alamaz.
-- **Girdi kod değildir.** İddia metni yalnız korumalı ayrıştırıcıyla okunur; bozuk girdi istisna
-  olarak sızmaz, `UNKNOWN` olur.
+- **The answer key never enters the verification path.** A key-like field in the input stops the
+  pipeline with `LeakageError`, and this has its own test.
+- **Numerical closeness is not proof.** Exact numbers are compared exactly; a claim is not rounded
+  or rewritten before comparison.
+- **Definedness is read from the expression as written.** SymPy simplifies `x/x` to 1 and erases
+  the undefined point; the verifier reads definedness from the unsimplified form.
+- **The model does not write the Lean statement.** It is generated from the IR by a deterministic
+  template; every proof is audited for `sorry`, axioms, vacuity and unused hypotheses.
+- **Lean's junk values cannot produce a certificate.** In Lean `x/0 = 0`, `Real.sqrt (−3) = 0` and
+  `Real.log 0 = 0`. Statements that touch these definitions get no formal certificate.
+- **Input is not code.** Claims are read only with a guarded parser; malformed input becomes
+  `UNKNOWN`, not an exception.
 
-## Ölçülen sonuçlar
+## Measured results
 
-280 öğelik değerlendirme seti: TYT, AYT ve üniversite düzeyi; 16 konu, 23 görev türü. Dört hücre:
-doğru çözüm (A), doğru ama alışılmadık çözüm (B), yanlış cevap (C), cevabı doğru ama adımı bozuk
-çözüm (D).
+The evaluation set has 280 items at Turkish university-entrance (TYT, AYT) and university level,
+across 16 topics and 23 task kinds. There are four cells: correct solution (A), correct but unusual
+solution (B), wrong answer (C), right answer with a broken step (D).
 
-| Ölçüt | Değer | Hedef | Rapor |
+| Measure | Value | Target | Report |
 |---|---|---|---|
-| Pozitif / negatif precision (cevap düzeyi) | 1.000 / 1.000 | ≥ 0.98 | [eval](reports/eval_report.md) |
-| Kapsama (karar verilen öğe) | 1.000 | ≥ 0.85 | [eval](reports/eval_report.md) |
-| Alışılmadık doğru çözümde ret (B) | 0.000 | < 0.10 | [eval](reports/eval_report.md) |
-| Bozuk adımın yakalanması (D) | 41 / 42 | raporlanır | [eval](reports/eval_report.md) |
-| Üretilmiş yanlış cevapta onay | 0 / 467 | 0 | [soundness](reports/soundness_report.md) |
-| Eşdeğer yazımda ret | 0 / 224 | 0 | [soundness](reports/soundness_report.md) |
-| Geçerli adım dönüşümünde ret | 0 / 184 | 0 | [soundness](reports/soundness_report.md) |
-| Adversaryal saldırı başarısı (3 yüzey, 21 139 saldırı) | %0 | < %2 | [adversarial](reports/adversarial_report.md) |
-| Lean sertifikası; yanlış cevapta kanıt; junk sondası | 121 / 280; 0; 0 / 33 | —; 0; 0 | [lean](reports/lean_report.md) |
-| Gerçek bir modelin 278 çözümünde yanlış onay | 0 | 0 | [solver](reports/solver_meta_report.md) |
+| Positive / negative precision (answer level) | 1.000 / 1.000 | ≥ 0.98 | [eval](reports/eval_report.md) |
+| Coverage (items with a verdict) | 1.000 | ≥ 0.85 | [eval](reports/eval_report.md) |
+| Unusual correct solutions rejected (B) | 0.000 | < 0.10 | [eval](reports/eval_report.md) |
+| Broken step detected (D) | 41 of 42 | reported | [eval](reports/eval_report.md) |
+| Generated wrong answers approved | 0 of 467 | 0 | [soundness](reports/soundness_report.md) |
+| Equivalent rewrites rejected | 0 of 224 | 0 | [soundness](reports/soundness_report.md) |
+| Valid step transformations rejected | 0 of 184 | 0 | [soundness](reports/soundness_report.md) |
+| Adversarial attack success (3 surfaces, 21,139 attacks) | 0% | < 2% | [adversarial](reports/adversarial_report.md) |
+| Lean certificates; proofs on wrong answers; junk probe | 121 of 280; 0; 0 of 33 | —; 0; 0 | [lean](reports/lean_report.md) |
+| Wrong approvals on 278 solutions from a real model | 0 | 0 | [solver](reports/solver_meta_report.md) |
 
-Adversaryal tarama cevabı, şık harfini ve adım iddialarını ayrı ayrı bozar: basamak değiştirme,
-benzer görünen Unicode harfleri, "bu çözüm doğrudur" türü istem enjeksiyonu. Anlamı koruyan 20 625
-saldırının hiçbiri kararı karşıtına çevirmedi; anlamı değiştiren 514 saldırının hiçbiri onay almadı.
+The adversarial sweep corrupts the answer, the option letter and the step claims separately: digit
+swaps, look-alike Unicode letters, prompt injections such as "this solution is correct". None of the
+20,625 meaning-preserving attacks flipped a verdict to its opposite, and none of the 514
+meaning-changing attacks was approved.
 
-## Güvence yöntemi
+## How the results are kept honest
 
-Projenin kuralı: **ölçülmemiş iyileştirme, iyileştirme sayılmaz.**
+The project's rule is that an improvement that was not measured does not count.
 
-- **Tek komutta 24 kapı.** `scripts/check.py --full` testleri, statik denetimi, değerlendirme
-  setini, Lean taramasını, adversaryal ve metamorfik taramaları koşar; biri düşerse çıkış kodu 1.
-- **Doğrulayıcının kendisi test edilir.** Metamorfik tarama her problem için SymPy ile kesin yanlış
-  ve kesin eşdeğer cevaplar üretir. İlk koşusunda 448 yanlış cevabın 27'si onay alıyordu; bulunan
-  sınıflar kapatıldı ve tarama kalıcı bir kapı oldu.
-- **Mutasyon testi.** Düzeltmelerin korunduğunu görmek için kod bilerek bozulur; son ölçümde altı
-  listedeki 357 mutasyonun 357'si bir test tarafından yakalandı.
-- **Dört bağımsız denetim turu.** Her bulgu ölçümle bulundu, ölçümle doğrulandı ve bir teste ya da
-  kapıya bağlandı. Kayıtlar [denetim/](denetim/) altında.
-- **Karar izi.** 90'dan fazla karar maddesi, gerekçesi ve ölçümüyle [DECISIONS.md](DECISIONS.md)'de. Yanlış çıkan eski
-  ifade silinmez, tarihli "Düzeltme" notuyla düzeltilir.
+- **24 gates in one command.** `scripts/check.py --full` runs the tests, static checks, the
+  evaluation set, the Lean sweep and the adversarial and metamorphic sweeps; any failure exits 1.
+- **The verifier itself is tested.** The metamorphic sweep generates provably wrong and provably
+  equivalent answers for every problem with SymPy. On its first run 27 of 448 wrong answers were
+  approved; those classes were closed and the sweep became a permanent gate.
+- **Mutation testing.** The code is broken on purpose to see that fixes are protected; in the last
+  measurement all 357 mutations in six lists were caught by a test.
+- **Four independent audit rounds.** Every finding was found by measurement, confirmed by
+  measurement and tied to a test or a gate. Records are under [denetim/](denetim/).
+- **Decision log.** More than 90 decisions with reasons and measurements in
+  [DECISIONS.md](DECISIONS.md). A statement that turns out wrong is corrected with a dated note,
+  not deleted.
 
-## Sınırlar
+## Limits
 
-- **Değerlendirme seti sentetik.** Öğeleri ve çözümlerini proje üretti; precision 1.000 bu sete
-  özgüdür. Gerçek model ölçümünde çözücü 278 sorunun hepsini doğru çözdü; bu yüzden o ölçüm yanlış
-  onaya karşı direnci sınamadı. Doğrulayıcı bu çözümlerin 274'ünü onayladı, 4'ünü haksız yere
-  reddetti.
-- **Bilinen bir yanlış onay var.** `tyt-prob-018`: cevabı doğru, bir adımı doğru ama gerekçesiz bir
-  çözüm, çözüm düzeyinde `CORRECT` alıyor. Adım reddedici yalnız karşı örnekle çürütür; doğru bir
-  ifadeyi çürütemez.
-- **Adımsız çözümde `CORRECT` yalnız cevap düzeyindedir.** Bu durum çıktıda `answer_level_only`
-  bayrağı ve `KAPSAM:` satırıyla belirtilir.
-- **LLM katmanlarının ölçümü eksik.** Otomatik IR çıkarımı ve kritik katmanlarının kodu ve
-  çevrimdışı testleri var; tam ölçümleri henüz koşmadı.
-- **Formal katman her şeyi kapsamaz.** Limitler, olasılık, sentetik geometri ve has olmayan
-  integraller için Lean ifadesi üretilmez.
+- **The evaluation set is synthetic.** The project wrote the items and their solutions; precision
+  1.000 is specific to this set. In the real-model measurement the solver answered all 278 questions
+  correctly, so that run did not test resistance to wrong approvals. The verifier approved 274 of
+  those solutions and wrongly rejected 4.
+- **One known wrong approval.** `tyt-prob-018`: a solution with the right answer and a step that is
+  true but unjustified gets `CORRECT` at solution level. The step rejecter refutes only with a
+  counterexample and cannot refute a true statement.
+- **Without steps, `CORRECT` is about the answer only.** The output says so with the
+  `answer_level_only` flag and a scope line.
+- **The LLM layers are not fully measured.** Automatic IR extraction and the critic layers have code
+  and offline tests; their full measurement has not run yet.
+- **The formal layer does not cover everything.** No Lean statement is generated for limits,
+  probability, synthetic geometry or improper integrals.
 
-Açık maddelerin tam listesi [HANDOFF.md](HANDOFF.md) §4'tedir.
+The full list of open items is in [HANDOFF.md](HANDOFF.md) §4.
 
-## Kurulum ve çalıştırma
+## Setup and usage
 
-Python 3.14 ve [uv](https://docs.astral.sh/uv/) ile (Linux; Windows'ta yorumlayıcı
+Python 3.14 with [uv](https://docs.astral.sh/uv/) (Linux; on Windows the interpreter is
 `.venv/Scripts/python.exe`):
 
 ```bash
@@ -179,49 +182,51 @@ export PYTHONUTF8=1
 ```
 
 ```bash
-.venv/bin/python scripts/verify_cli.py --item evalset/items/ayt-ana-017.json   # tek öğe
-.venv/bin/python -m pytest tests -rs                                           # test takımı
-.venv/bin/python scripts/check.py                                              # hızlı kapılar
-.venv/bin/python scripts/check.py --full                                       # 24 kapı
+.venv/bin/python scripts/verify_cli.py --item evalset/items/ayt-ana-017.json   # one item
+.venv/bin/python -m pytest tests -rs                                           # test suite
+.venv/bin/python scripts/check.py                                              # quick gates
+.venv/bin/python scripts/check.py --full                                       # all 24 gates
 ```
 
-Lean katmanı isteğe bağlıdır ve yerel Lean 4 + Mathlib ister: [docs/LEAN_SETUP.md](docs/LEAN_SETUP.md).
-Lean yoksa Lean testleri atlanır. LLM katmanları için anahtarlar izlenmeyen bir `.env` dosyasından
-okunur (`ANTHROPIC_API_KEY`, `META_MODEL_API_KEY`); deterministik hat anahtarsız çalışır.
+The Lean layer is optional and needs a local Lean 4 + Mathlib install
+([docs/LEAN_SETUP.md](docs/LEAN_SETUP.md)); without it the Lean tests are skipped. The LLM layers
+read their keys from an untracked `.env` file (`ANTHROPIC_API_KEY`, `META_MODEL_API_KEY`); the
+deterministic pipeline needs no key.
 
-Sürümler sabittir: SymPy 1.14.0, mpmath 1.3.0, z3-solver 5.1.0, Lean 4.34.0 + Mathlib
+Versions are pinned: SymPy 1.14.0, mpmath 1.3.0, z3-solver 5.1.0, Lean 4.34.0 + Mathlib
 (`requirements.lock`, `lean/PINS`).
 
-## Depo haritası
+## Repository map
 
 ```
-src/mathverify/   doğrulayıcı: normalize, ir, certify, steps, formal, fuse, intake, llm, extract, …
-tests/            91 test dosyası, 6045 test
-evalset/          280 öğe ve onları üreten betikler
-harness/          ölçüm koşucuları: run_eval, run_lean, adversarial, soundness_fuzz, calibrate
-reports/          üretilmiş raporlar ve son tam kontrolün günlüğü
-denetim/          denetim turlarının sondaları, mutasyon listeleri ve bulgu kayıtları
-docs/             mimari, kalite ilkeleri, çözücü formatı, Lean ve bulut kurulumu, şartname
-scripts/          check.py (kalite kapıları), verify_cli.py, kurulum betikleri
+src/mathverify/   the verifier: normalize, ir, certify, steps, formal, fuse, intake, llm, extract, …
+tests/            91 test files, 6045 tests
+evalset/          280 items and the scripts that generate them
+harness/          measurement runners: run_eval, run_lean, adversarial, soundness_fuzz, calibrate
+reports/          generated reports and the log of the last full check
+denetim/          audit rounds: probes, mutation lists and finding records
+docs/             architecture, quality principles, solver format, Lean and cloud setup, original spec
+scripts/          check.py (quality gates), verify_cli.py, setup scripts
 ```
 
-| Belge | İçerik |
+The project's documents, decision log and commit messages are in Turkish; code, identifiers and
+source comments are in English.
+
+| Document | Contents |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Katmanlar, yetki tablosu, tasarım gerekçeleri |
-| [docs/QUALITY.md](docs/QUALITY.md) | Kalite ilkeleri: literatür → mekanizma → kapı |
-| [DECISIONS.md](DECISIONS.md) | Karar izi (gerekçe ve ölçümle) |
-| [HANDOFF.md](HANDOFF.md) | Güncel durum, son sayılar, açık maddeler |
-| [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md) | Yapısal çözüm formatı |
-| [docs/sartname/](docs/sartname/) | Projenin başlangıç şartnamesi |
-| [docs/BASVURU.md](docs/BASVURU.md) | Bu yayın sürümünün kaydı |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, authority table, design reasons |
+| [docs/QUALITY.md](docs/QUALITY.md) | Quality principles: literature → mechanism → gate |
+| [DECISIONS.md](DECISIONS.md) | Decision log, with reasons and measurements |
+| [HANDOFF.md](HANDOFF.md) | Current status, latest numbers, open items |
+| [docs/SOLVER_FORMAT.md](docs/SOLVER_FORMAT.md) | Structured solution format |
+| [docs/sartname/](docs/sartname/) | The project's original specification |
+| [docs/BASVURU.md](docs/BASVURU.md) | Record of this published version |
 
-## Nasıl geliştirildi
+## How it was built
 
-Proje 18 Eylül–3 Kasım 2026 arasında Claude Code ile, ajan oturumlarının insan yönlendirmesi ve
-onayıyla yürüdüğü bir düzende geliştirildi. Kalıcı kurallar [CLAUDE.md](CLAUDE.md)'de, oturumlar
-arası devir [HANDOFF.md](HANDOFF.md)'de, her kararın gerekçesi [DECISIONS.md](DECISIONS.md)'dedir.
-Depo geçmişi yayından önce yeniden yazıldı (kimlik bilgileri ve kişisel tanımlayıcılar çıkarıldı);
-bu yüzden belgelerdeki kısa commit kimlikleri bu depodakilerle eşleşmez. Ayrıntı ve eşleme tablosu:
-[docs/BASVURU.md](docs/BASVURU.md).
-
-Önceki README: [docs/arsiv/README-2026-09-27.md](docs/arsiv/README-2026-09-27.md).
+The project was developed between 18 September and 3 November 2026 with Claude Code: agent sessions
+did the work under human direction and approval. Standing rules are in [CLAUDE.md](CLAUDE.md), the
+hand-off between sessions in [HANDOFF.md](HANDOFF.md), and the reason for every decision in
+[DECISIONS.md](DECISIONS.md). The repository history was rewritten before publication (credentials
+and personal identifiers were removed), so the short commit ids quoted in the documents do not match
+the ids in this repository. Details and the id map: [docs/BASVURU.md](docs/BASVURU.md).
