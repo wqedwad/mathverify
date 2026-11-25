@@ -22,8 +22,8 @@ Mathlib proofs. When it can do neither, it does not guess; it answers `UNKNOWN`.
 | Audited formal certificates in Lean | 121 of 280 items; proofs on wrong-answer items: **0** |
 | Tests | 6045 passed, 5 skipped; 24 of 24 quality gates passed |
 
-The numbers come from the full check run of 3 November 2026 and are read from the generated reports
-in [reports/](reports/). The evaluation set is synthetic; what that means is under [Limits](#limits).
+The numbers come from the full check run of 25 November 2026 on this repository
+([log](reports/check_full.log)) and are read from the generated reports in [reports/](reports/). The evaluation set is synthetic; what that means is under [Limits](#limits).
 
 ## Why
 

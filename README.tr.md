@@ -22,8 +22,8 @@ Lean 4 + Mathlib ispatları. Kanıtlayamadığında tahmin etmez, `UNKNOWN` der.
 | Lean'de denetlenmiş formal sertifika | 121 / 280 öğe; yanlış cevaplı öğede kanıt **0** |
 | Test | 6045 geçti / 5 atlandı; 24 kalite kapısının 24'ü geçti |
 
-Sayılar 3 Kasım 2026 tarihli tam kontrol koşusundandır ve [reports/](reports/) altındaki
-üretilmiş raporlardan okunur. Değerlendirme seti sentetiktir; bunun ne anlama geldiği
+Sayılar bu depoda 25 Kasım 2026'da koşan tam kontroldendir ([günlük](reports/check_full.log)) ve
+[reports/](reports/) altındaki üretilmiş raporlardan okunur. Değerlendirme seti sentetiktir; bunun ne anlama geldiği
 [Sınırlar](#sınırlar) bölümünde.
 
 ## Neden

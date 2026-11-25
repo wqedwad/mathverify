@@ -81,3 +81,22 @@ kopyada dosya ağacı taranan uçla aynıydı, `.env` nesnesi yoktu ve §3'teki 
 araması 0 isabet verdi. Aynı gün `README.md` yeniden yazıldı (eski hâli
 `docs/arsiv/README-2026-09-27.md`). Depo ana sayfası `README.md` İngilizcedir (kullanıcı isteği); aynı içeriğin
 Türkçesi `README.tr.md`'dedir. Kod değişmedi.
+
+## 6. Depo donatımı ve bu depodaki ilk tam kontrol (25 Kasım 2026)
+
+Depo herkese açıldı (kullanıcı). Eklenenler: MIT lisansı (`LICENSE`), GitHub Actions CI
+(`.github/workflows/ci.yml`: Python 3.14, `requirements.lock`, pyflakes kapısı ve Lean'siz test
+takımı), `SECURITY.md` (özel bildirim, tehdit modeli), `CONTRIBUTING.md`, issue formları, PR şablonu
+(`docs/pull_request_template.md`), paket üst verisi ve README'de kütüphane kullanımı ile yol
+haritası. Doğrulayıcı kodu değişmedi.
+
+| Ölçüm (commit `45445f4`) | Sonuç |
+|---|---|
+| `scripts/check.py --full` (bulut, Python 3.14.6, Lean'li; 65 dk) | 24/24 kapı; 6045 passed / 5 skipped |
+| GitHub Actions CI (Lean'siz, Python 3.14.4; 43 dk) | 5952 passed / 98 skipped (96 Lean yok, 1 isteğe bağlı indirme, 1 kapsam dışı ifade) |
+| README'deki Python örneği; temiz ortama kütüphane kurulumu | `INCORRECT 1`; aynı çıktı |
+
+§2'deki not artık eskidi: `reports/check_full.log` bu depodaki `45445f4` koşusunu gösterir ve
+`scripts/check.py --plan` onu kabul eder. `45445f4` öncesine ait kısa commit kimlikleri yine eski
+geçmişindir.
+

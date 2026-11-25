@@ -1,19 +1,19 @@
 # HANDOFF — mathverify (güncel durum)
 
-> **Son güncelleme: 25 Kasım 2026 (bulut)**, depo `wqedwad/mathverify`, dal `master`: **yayın sürümü** (DECISIONS §93; kayıt `docs/BASVURU.md`). Geçmiş
-> yayından önce yeniden yazıldı (kimlik bilgileri, gömülü arşivler, kişisel tanımlayıcılar çıkarıldı) ve yeni depoya gönderildi; depo henüz özel, herkese
-> açma adımı kullanıcıda (§3 adım 1). İçerik: özel deponun (`wqedwad/asd`) `master`ı `7dcc979` (PR #15: dördüncü denetim, A+, son saldırı; §89–§92) + 3
-> Kasım'ın belge/temizlik commit'leri + yayın kaydı + yeni README. Belgelerdeki kısa commit kimlikleri **eski (özel) geçmişindir**; karşılıkları
+> **Son güncelleme: 25 Kasım 2026 (bulut)**, depo `wqedwad/mathverify` (**herkese açık**), dal `master`: **yayın sürümü** (DECISIONS §93–§94; kayıt
+> `docs/BASVURU.md`). Geçmiş yayından önce yeniden yazıldı (kimlik bilgileri, gömülü arşivler, kişisel tanımlayıcılar çıkarıldı). İçerik: özel deponun
+> (`wqedwad/asd`) `master`ı `7dcc979` (PR #15; §89–§92) + yayın kaydı + İngilizce README + MIT lisansı, CI, güvenlik politikası ve katkı rehberi (§94).
+> Bu depoda `check.py --full` 24/24 (`45445f4`) ve CI yeşil. Belgelerdeki `45445f4` öncesi kısa commit kimlikleri **eski (özel) geçmişindir**; karşılıkları
 > `docs/yayin-commit-esleme.txt`'te. Bu belge yalnız **bugünü** taşır (~300 satır); tarihçe `docs/arsiv/HANDOFF-2026-09-26.md` ve `git log -p HANDOFF.md`'de
 > ("HANDOFF §N" göndermesi yazıldığı günündür).
 > **[DOĞRULANMADI]** = ölçülmedi ya da çıkarım; işaretsiz sayı ölçüm.
 
 ## 0. İlk 10 dakika
 
-1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§93, `docs/BASVURU.md`; bulutta oturum başı bloğu ve `docs/BULUT.md`.
+1. `CLAUDE.md` (kurallar) → bu belge → `DECISIONS.md` §63–§94, `docs/BASVURU.md`; bulutta oturum başı bloğu ve `docs/BULUT.md`.
 2. `git status`, `git log --oneline -5`, `git ls-remote origin` (§6); bulut klonunda `git fetch origin master` (yerel `master` bayat olabilir).
 3. Takım: `PYTHONUTF8=1 .venv/bin/python -m pytest tests -rs`. `master`ınki §5 (5 atlama: 3 root salt okunur dizin, 1 isteğe bağlı indirme, 1 kapsam dışı ifade).
-   Oturum dalı `62fb71e`: 6045 passed / 5 skipped (`--full`, Lean'li, 3 Kasım). Soğuk Lean'le ~17–20 dk (B6); Lean atlaması = Lean hazır değil.
+   Bu depoda `45445f4`: 6045 passed / 5 skipped (`--full`, Lean'li, 25 Kasım); CI Lean'siz 5952 / 98. Lean atlaması = Lean hazır değil (B6).
 4. Hangi kontrol gerekli: `scripts/check.py --plan`. Sonra §3'teki ilk iş. Tekrar denenmeyecekler: arşiv §4.
 
 ## 1. Proje (kısaca)
@@ -45,8 +45,9 @@ d4f 335, d4g 229, d4h 657, d4j 298); beş son sondası 0 (adım 407, sayısal 35
 S53, S37, K62, birleşimde başka korumayla örtülüyordu; testleri `ca8e31d`'de). Belirlenim: |x² − 4|'(3) ailesi 8 vaka × 12 tohum 96/96 aynı; C3 vakaları 16 tohumda
 kararlı. **Bilinen açıklar:** V20 (a) (gerçekçi denen yok), V21.
 
-**Son `check.py --full`.** **24/24**, `62fb71e` (raporlar `978ae7f`), bulutta 3 Kasım 01:14–02:30 UTC, ~76 dk (ısınma 567 s, pytest 2790 s, adversaryal
-803 s), 6045 passed / 5 skipped; `--plan` TAMAM. `master`ın kodunda 24/24 (`1775b3f`, 1 Ekim; §83); Windows `eab80f1` 24/24.
+**Son `check.py --full`.** **24/24**, bu depoda `45445f4` (raporlar `97a0861`), bulutta 25 Kasım 18:40–19:45 UTC, 65 dk (ısınma 35 s, pytest 2658 s,
+adversaryal 788 s), 6045 passed / 5 skipped; sayılar 3 Kasım koşusununkiyle (özel `62fb71e`, 24/24) aynı. **CI** (GitHub Actions, Lean'siz, Python 3.14.4)
+aynı commit'te yeşil: 5952 passed / 98 skipped, 43 dk (§94). Özel `master`ın kodunda 24/24 (`1775b3f`, 1 Ekim; §83); Windows `eab80f1` 24/24.
 
 **Fazlar.** F0–F2, F5 (Lean), F6 (adversaryal + kalibrasyon), F7 (Lean şablonları): tamam, ölçüldü. F3 (LLM ön yüzü, L4, L5): kod tamam, **ölçüm yarım ve
 eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam, çevrimdışı testli, **hiç koşmadı**. **K4** (Muse Spark 1.3, `776e5b4`; §63): 278
@@ -54,11 +55,12 @@ eski** (18 Eylül, 218 öğenin 64'ü). F4 (kritik + meta-doğrulama): kod tamam
 
 ## 3. Sıradaki adımlar (sırayla)
 
-1. **Yayın (`docs/BASVURU.md` §5):** yapıldı: yeniden yazılmış geçmiş `wqedwad/mathverify` `master`ında (25 Kasım; taze kopyada doğrulandı), README
-   yenilendi, iki API anahtarı iptal edildi (kullanıcının bildirimi). **Kalan (kullanıcıda):** depoyu herkese açmak (Settings → Change visibility);
-   "About" açıklaması ve konu etiketleri; lisans kararı (§4.4 madde 4). **Eski `wqedwad/asd` herkese açılmaz** (etiketleri ve PR ref'leri eski geçmişi
-   taşır). Yeni sohbet yeni depoda başlar; orada ilk kod değişikliğinden önce `check.py --full` (eski günlük eski commit'i gösterir). Bulut kurulum
-   betiği ve `docs/BULUT.md` hâlâ `wqedwad/asd`'yi ve onun araç ref'ini anlatır; yeni depoda bulut oturumu açılacaksa uyarlanır (ölçülmedi).
+1. **Yayın (`docs/BASVURU.md` §5, DECISIONS §94):** yapıldı: depo herkese açık (kullanıcı, 25 Kasım), iki API anahtarı iptal edildi (kullanıcının
+   bildirimi), MIT lisansı, CI, `SECURITY.md`, `CONTRIBUTING.md`, issue formları ve PR şablonu eklendi, `--full` 24/24. **Kalan (kullanıcıda):** "About"
+   açıklaması ve konu etiketleri; Settings → Advanced Security → Private vulnerability reporting (`SECURITY.md` o forma bağlanır); isteğe bağlı ilk sürüm
+   etiketi (bulut etiket push etmez). **Eski `wqedwad/asd` herkese açılmaz.** Açık: CI'daki `actions/checkout@v4` ve `setup-uv@v6` Node 20 uyarısı
+   veriyor (sürüm yükseltilecek); README'nin yol haritası (üçüncü model ailesi, PR inceleme otomasyonu) henüz kodda yok; bulut kurulum betiği ve
+   `docs/BULUT.md` hâlâ `wqedwad/asd`'yi ve onun araç ref'ini anlatır, yeni depoda bulut oturumu açılacaksa uyarlanır (ölçülmedi).
 2. **A+ kapandı** (§92): son ölçüm ve `--full` temiz, belgeler yazıldı, `--plan` TAMAM.
 3. **`master` birleştirmesi yapıldı** (3 Kasım, kullanıcı onayıyla): yedek kullanıcının yerelinde (`yedek/master-2026-11-03` = `1df0558`, bundle, deneme
    klonu; etiket buluttan doğrulandı), `--plan` TAMAM (`08336f1`), PR #15 → `master` `7dcc979`. Sonraki birleştirmeler aynı yöntemle (§6).
@@ -180,7 +182,7 @@ Verilmiş kararlar: depo bir başvuru için herkese açılır (24 Kasım, §93; 
 2. Anthropic bakiyesi ne zaman, ne kadar (F3 ~10 $, F4 ~15–25 $; kod dondurulunca)? Anahtar yenileme F3/F4 için gerekmiyor (§64).
 3. Çözücü istemi IR sembollerinin anlamını (öncülleri) versin mi (`tyt-say-*`; istem değişirse 280 öğe yeniden ücretli, ölçülen şey değişir)? **Ertelendi**
    (28 Eylül; kod dondurmadan önce sorulur). Etki: yalnız haksız red (86 sorudan 1). Yanlış onay direnci için hangi çözücü?
-4. Lisans ve CI (özel `wqedwad/asd`; CI ve LICENSE yok; CI açılırsa hızlı `check.py` koşar).
+4. Lisans MIT (ajanın seçimi, kullanıcı "ekle" dedi; §94): başka lisans istenir mi? CI Lean'siz test takımını koşar; Lean'li CI istenir mi (~10 GB araç)?
 5. Sınırlar: `tyt-prob-018` kuralı F4'ten sonra daraltılsın mı (V1)? Çözücü sembolü adımları sınır mı, sembol tanımı mı (V2)? Çekimserlik yeter mi (V3)?
 6. Başka sağlayıcıyla (GPT/Gemini, `set_client_override`) ölçüm istenir mi?
 7. Uygulamanın adı ve ayrıntıları (ne depoda ne şartnamede).
@@ -190,7 +192,7 @@ Verilmiş kararlar: depo bir başvuru için herkese açılır (24 Kasım, §93; 
 ### 4.5 Teknik borç
 
 - **T1.** `DECISIONS.md` bölüm sırası 1, 2, 3, 6, 4, 5, 7–16, madde numaraları atlıyor; §2 ve §3.9 bilerek Faz 1 anlık görüntüsü. **T2.** Biçimlendirici
-  ve pyflakes dışı stil denetimi yok. **T3.** CI yok. **T5.** `reports/lean_setup.log` eski `stable` kurulumunun (sabitinki `/opt/mathverify-logs/`). **T6.** 26
+  ve pyflakes dışı stil denetimi yok. **T3.** CI Lean'siz (96 Lean testi orada atlanır; §94). **T5.** `reports/lean_setup.log` eski `stable` kurulumunun (sabitinki `/opt/mathverify-logs/`). **T6.** 26
   Eylül öncesi `check_full.log` başlıklarındaki "commit edilmemiş değişiklik" sayısından 1 düşülür (`3925180`). **T7.** `docs/BULUT.md` ~1070 satır,
   tarihçe biriktiriyor (§12'de kapanmış üç madde hâlâ `[ ]`; araç ref tablosundaki `bulut-v1` 3 Kasım'da silindi); güncel durum + arşiv ayrımı gerekebilir; testler okuyor.
 - **T8. Windows** (§59, §61): `eab80f1`'de 24/24, 31 dk; Git Bash donmasının nedeni **[DOĞRULANMADI]**; ölçülmeyen: ebeveyn izleyicisi, `CopyFile2`/junction
@@ -213,11 +215,11 @@ Verilmiş kararlar: depo bir başvuru için herkese açılır (24 Kasım, §93; 
 - §6'daki işaretli yedekler (`572ef57`, `18fd298` bundle'ları; `ee7b2dd`'nin yerel yedeği); 26 Eylül 01:06'da düşen testin adı; arşiv §4'ün "önce" ölçümleri
   (7/7, 54 çift, 0.990…); önyükleyici metninin içeriği (yalnız uzunluk: 843); B1, B6, B10, K4, V20, V21'deki işaretliler; 30 Eylül kopya silinmesi (§73).
 
-## 5. Son ölçülen sayılar (kapılar, oturum dalı `62fb71e`, `--full` 3 Kasım; `master` `1775b3f` ile karşılaştırmalı)
+## 5. Son ölçülen sayılar (kapılar, bu depo `45445f4`, `--full` 25 Kasım; özel `master` `1775b3f` ile karşılaştırmalı)
 
 | Kapı | Değer | Hedef |
 |---|---|---|
-| Birim testleri (`62fb71e` bulut, `--full`; `master` `1775b3f`; `d914dbc` Windows) | 6045 passed / 5 skipped; 3212 / 5; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
+| Birim testleri (`45445f4` bulut, `--full`; `master` `1775b3f`; `d914dbc` Windows) | 6045 passed / 5 skipped; 3212 / 5; 2064 passed / 106 skipped (+4 ortam) | hepsi geçer |
 | pyflakes | 0 bulgu | 0 |
 | Cevap düzeyi pozitif / negatif precision; kapsama | 1.000 / 1.000; 1.000 | ≥ 0.98; ≥ 0.85 |
 | B hücresi yanlış red; anahtar sızma testi | 0.000; geçti | < 0.10; zorunlu |
@@ -228,7 +230,7 @@ Verilmiş kararlar: depo bir başvuru için herkese açılır (24 Kasım, §93; 
 | Nedeni açıklanmayan kaçırılan bozuk adım; adım lokalizasyonu | 0/6; 75/120 (önce 74) | 0; raporlanır |
 
 Raporlar `reports/*.md` (üretilir), günlük `reports/check_full.log`. Ara ölçümler: sağlamlık kapısı 0/467 yanlış onay, 0/224 yanlış red (`afab1ac`, §91);
-adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-ayristirici` `3b08689`). Süre: `--full` ~25–40 dk (Windows 31 dk), hızlı ~7 dk.
+adversaryal 100 öğe / 7115 saldırıda flipped 0, accepted_wrong 0 (`wip/son-ayristirici` `3b08689`). Süre: `--full` bulutta 65–76 dk (25 ve 3 Kasım; Windows 31 dk, `eab80f1`); CI 43 dk.
 
 ## 6. Dallar, etiketler, yedekler
 
